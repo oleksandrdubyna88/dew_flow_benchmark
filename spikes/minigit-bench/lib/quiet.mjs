@@ -29,14 +29,16 @@ export async function quietWindow({ thresholds, sampleOnce, sleep, windowMs = th
 /**
  * Check, and re-check after `recheckMs`, until quiet or `maxWaitMs` is spent. `check()` runs one window and resolves to its verdict.
  * `onRetry({ attempt, verdict, waitedMs, nextCheckInMs })` is called before each sleep, so a long wait is never silent (review G4).
+ * A `signal` that aborts ends the wait at once: `{ quiet: false, aborted: true, ... }` (cancelled; never read as quiet or as gave-up; review M7).
  * -> `{ quiet: true, waitedMs, verdict }` or `{ quiet: false, gaveUp: true, waitedMs, verdict }` (the last verdict, naming what failed).
  */
-export async function waitForQuiet({ check, maxWaitMs, recheckMs, now, sleep, onRetry = () => {} }) {
+export async function waitForQuiet({ check, maxWaitMs, recheckMs, now, sleep, onRetry = () => {}, signal }) {
   const start = now();
   let attempt = 0;
   for (;;) {
     const verdict = await check();
     const waitedMs = now() - start;
+    if (signal?.aborted) return { quiet: false, aborted: true, waitedMs, verdict };
     if (verdict.quiet) return { quiet: true, waitedMs, verdict };
     if (waitedMs >= maxWaitMs) return { quiet: false, gaveUp: true, waitedMs, verdict };
     attempt += 1;

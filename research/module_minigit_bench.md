@@ -596,7 +596,7 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 | Quiet | `lib/cpu-sampler.mjs`, `lib/quiet.mjs`, `inputs/quiet.json` | the machine-quiet check, the phase sampler, the spin probe |
 
 **Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`) |
-4 usage or configuration (including every guard refusal) | 5 the runner or the scorer failed | 130 / 143 cancelled by SIGINT / SIGTERM (the sessions that ran are recorded as interrupted harness voids).
+4 usage or configuration (including every guard refusal) | 5 the runner or the scorer failed | 130 / 143 cancelled by SIGINT / SIGTERM. A cancel DURING a launch records the sessions that ran as interrupted harness voids; a cancel anywhere else (between steps, in a gate, in the quiet wait, while scoring) launches nothing and voids nothing, so no re-run is spent (`runLoop` checks the signal before every step and in the gates, the quiet wait ends at once; review M7).
 
 **The outcome table** (`bareOutcome`, first match wins; a † row is a registered extension of parent 11.1). A class is decided by how the session ended, never by the exit code and never
 by a scorer fault.

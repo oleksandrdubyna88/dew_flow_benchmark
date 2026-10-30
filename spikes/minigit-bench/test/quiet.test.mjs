@@ -198,3 +198,13 @@ test('Every_retry_of_the_wait_is_reported_with_its_verdict_the_time_waited_and_t
   await waitForQuiet({ check: async () => { c.advance(60_000); return bad; }, maxWaitMs: 100_000, recheckMs: 60_000, now: c.now, sleep: c.sleep, onRetry: x => giveUp.push(x) });
   assert.equal(giveUp.length, 1, 'the window that gives up is the result, not a retry: nothing is promised for after it');
 });
+
+test('A_signal_ends_the_wait_at_once_without_a_verdict_for_the_next_phase', async () => {
+  const c = clock();
+  const ctl = new AbortController();
+  const bad = { quiet: false, failures: [{ condition: 'host-cpu', detail: 'x' }] };
+  const r = await waitForQuiet({ check: async () => { c.advance(60_000); ctl.abort(); return bad; }, maxWaitMs: 1_800_000, recheckMs: 60_000, now: c.now, sleep: c.sleep, signal: ctl.signal });
+  assert.equal(r.quiet, false);
+  assert.equal(r.aborted, true, 'cancelled, not gave up and not quiet');
+  assert.equal(c.now(), 60_000, 'no sleep after the signal');
+});

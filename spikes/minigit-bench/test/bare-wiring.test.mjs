@@ -223,3 +223,17 @@ test('A_wait_for_a_quiet_machine_tells_the_operator_each_retry_through_the_outpu
   assert.ok(told.length >= 1, 'the operator was told while it waited');
   assert.ok(told.every(l => /not quiet/.test(l) && /foreign-agent/.test(l) && /waited \d+ s/.test(l) && /next check in \d+ s/.test(l)), told.join('\n'));
 });
+
+test('A_cancel_during_the_quiet_wait_of_the_real_wiring_ends_it_at_once', async () => {
+  const w = await wiring({ quiet: { intervalMs: 1000, windowMs: 60000, recheckMs: 60000, maxWaitMs: 1800000, spinIterations: 1000 } });
+  const procApi = busyHost([], 'claude\0-p\0someone elses session');
+  const built = await buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home, procApi } });
+  assert.equal(built.ok, true, built.reason);
+  const ctl = new AbortController();
+  setTimeout(() => ctl.abort(), 150);
+  const started = Date.now();
+  const r = await built.value.deps.quiet({ phase: 'v1', v1Quiet: null, cellIds: [], say: () => {}, signal: ctl.signal });
+  assert.ok(Date.now() - started < 5000, `the 60 s window and the 30 min wait were cut short (${Date.now() - started} ms)`);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /cancelled/);
+});

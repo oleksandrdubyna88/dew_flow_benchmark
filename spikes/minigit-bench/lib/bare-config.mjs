@@ -27,6 +27,13 @@ import { retireStale } from './session-state.mjs';
 export const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 export const REPO = path.resolve(SPIKE, '..', '..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/** A sleep that a signal cuts short: the quiet wait is up to 30 minutes and a Ctrl-C must not wait for it. */
+const abortableSleep = (ms, signal) => new Promise(resolve => {
+  if (signal?.aborted) { resolve(); return; }
+  const timer = setTimeout(done, ms);
+  function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
+  signal?.addEventListener('abort', done, { once: true });
+});
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
 /** One real sampler of this machine (no series cells, this process as the harness), for `init`'s calibration window. -> `async () => sample`. */
@@ -51,12 +58,13 @@ function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now, procAp
     liveSessions: () => liveSessionDirs(rsdRoot), spin, now, patterns: thresholds.agentPatterns,
   });
   return {
-    async quiet({ phase, v1Quiet, cellIds = [], say = () => {} }) {
+    async quiet({ phase, v1Quiet, cellIds = [], say = () => {}, signal }) {
       const sampler = await build(cellIds);
-      const check = () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep });
+      const check = () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep: ms => abortableSleep(ms, signal) });
       const secs = ms => Math.round(ms / 1000);
       const onRetry = ({ verdict, waitedMs, nextCheckInMs }) => say(`the machine is not quiet (${verdict.failures.map(f => `${f.condition}: ${f.detail}`).join('; ')}); waited ${secs(waitedMs)} s of ${secs(thresholds.maxWaitMs)} s; next check in ${secs(nextCheckInMs)} s`);
-      const waited = await waitForQuiet({ check, maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep, onRetry });
+      const waited = await waitForQuiet({ check, maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep: ms => abortableSleep(ms, signal), onRetry, signal });
+      if (waited.aborted) return fail('cancelled while waiting for a quiet machine');
       if (waited.quiet) return ok({ quiet: true, flags: [], numbers: waited.verdict.numbers, waitedMs: waited.waitedMs });
       if (!acceptNoisy) return fail(`the machine was not quiet for ${Math.round(waited.waitedMs / 60000)} min: ${waited.verdict.failures.map(f => `${f.condition} (${f.detail})`).join('; ')}`, { verdict: waited.verdict });
       const o = noisyOverride({ phase, v1Quiet, reason: acceptNoisy });

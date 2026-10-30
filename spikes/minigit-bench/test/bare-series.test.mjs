@@ -239,3 +239,37 @@ test('Whether_the_v1_phase_started_quiet_is_kept_in_the_run_map_so_the_noisy_rul
   assert.equal(resumed.exit, EXIT.halt);
   assert.deepEqual(seen, ['v2:true'], 'a fresh process reads it from the run-map: --accept-noisy is still refused for this v2');
 });
+
+// ---- an abort outside a launch (review M7) ------------------------------------------------------------------------------------------
+
+test('An_abort_while_scoring_exits_without_launching_the_next_phase_and_uses_no_re_run', async () => {
+  const ctl = new AbortController();
+  const t = harness({ score: async () => { ctl.abort(); return { kind: 'scored', score: SCORE }; } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map, signal: ctl.signal });
+  assert.equal(r.exit, 130, r.message);
+  assert.equal(t.launched.length, 2, 'only the v1 pair launched: the v2 pair was not started under an aborted signal');
+  const sessions = Object.values(readRunMap(t.ctx.runMapFile).value.sessions);
+  assert.equal(sessions.length, 2, 'no session was planned or voided for the v2 phase');
+  assert.ok(sessions.every(s => s.attempt === 1 && s.class === 'completed'), 'no interrupted void, so no re-run is spent by a Ctrl-C that came between phases');
+});
+
+test('An_abort_in_a_gate_stops_before_the_launch_and_leaves_the_sessions_planned', async () => {
+  for (const gate of ['guard', 'quiet']) {
+    const ctl = new AbortController();
+    const t = harness({ [gate]: async () => { ctl.abort(); return gate === 'guard' ? { ok: true } : { ok: true, value: { quiet: true, flags: [] } }; } });
+    const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map, signal: ctl.signal });
+    assert.equal(r.exit, 130, `${gate}: ${r.message}`);
+    assert.deepEqual(t.launched, [], `${gate}: nothing launched after the abort`);
+    assert.ok(Object.values(readRunMap(t.ctx.runMapFile).value.sessions).every(s => s.status === 'planned'), `${gate}: planned again, not voided`);
+  }
+});
+
+test('An_abort_before_the_loop_starts_launches_nothing', async () => {
+  const ctl = new AbortController();
+  ctl.abort();
+  const t = harness();
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map, signal: ctl.signal });
+  assert.equal(r.exit, 130);
+  assert.deepEqual(t.launched, []);
+  assert.deepEqual(t.events.filter(e => e.startsWith('guard')), [], 'not even the gates ran');
+});
