@@ -25,8 +25,22 @@ const REDIRECT = /^\d*(?:<<-?|[<>]+)&?/;
 const isPathWord = w => w !== '' && !w.startsWith('-') && !isRooted(w);
 const isPlaceable = w => resolvable(w) && !w.includes('://') && !ASSIGNMENT.test(w);
 
-/** The relative path words of a simple command: its arguments less options, redirections and what is no path (a variable, a url, an assignment). The rooted words are the tokenizer's (leak.mjs). */
-const relativeWords = step => step.words.slice(1).map(w => unquote(w.replace(REDIRECT, ''))).filter(w => isPathWord(w) && isPlaceable(w));
+const GLOB = /[*?[]/;
+const isGlobWord = w => GLOB.test(w) && !/[$`(){}]/.test(w);
+
+/**
+ * The relative path words of a simple command: its arguments less options, redirections and what is no path (a variable, a url, an assignment). The rooted words are the tokenizer's (leak.mjs). A glob word (`ho*`) is
+ * a path word only for a walk: it is judged as the walk of its fixed prefix (`fixedPrefix`); a plain listing of it was never judged.
+ */
+const relativeWords = (step, walks) => step.words.slice(1).map(w => unquote(w.replace(REDIRECT, ''))).filter(w => isPathWord(w) && (isPlaceable(w) || (walks && isGlobWord(w))));
+
+/** The fixed prefix of a glob path, the directory a walk of it starts from: the glob `/*` gives `/`, `/home/*` gives `/home`, and `/home/j*` plus a tail gives `/home`; a path with no glob is itself. */
+function fixedPrefix(p) {
+  const at = p.search(GLOB);
+  if (at < 0) return p;
+  const cut = p.lastIndexOf('/', at);
+  return cut <= 0 ? '/' : p.slice(0, cut);
+}
 
 // `//`, `///`, `/*`, `/**`: a comment mark. In a quoted string (`grep -rn "a // b" src`) it is text, never the path `/`; in a word position (`find // -name x`) it is a path.
 const QUOTED = /"[^"]*"|'[^']*'/g;
@@ -41,10 +55,10 @@ const lostWord = (step, walks, words) => (step.cwd === null && walks ? words[0] 
 
 /** The reaches of one simple command, its relative words resolved from the directory it runs in (leak.mjs: `cwd`, `paths`); each says whether THIS command walks. */
 function stepReaches(step, call, opts) {
-  const words = relativeWords(step);
   const walks = segmentWalks(step.segment);
+  const words = relativeWords(step, walks);
   const piece = { agent: call.agent, tool: call.tool, input: { command: step.segment }, cwd: step.cwd, paths: step.cwd === null ? [] : words };
-  const found = findOutsideAccesses([piece], opts).filter(f => !isQuotedMark(step.segment, f)).map(f => ({ ...f, walks }));
+  const found = findOutsideAccesses([piece], opts).filter(f => !isQuotedMark(step.segment, f)).map(f => ({ ...f, walks, resolved: walks ? fixedPrefix(f.resolved) : f.resolved }));
   const lost = lostWord(step, walks, words);
   return lost === undefined ? found : [...found, unplaced(call, lost)];
 }

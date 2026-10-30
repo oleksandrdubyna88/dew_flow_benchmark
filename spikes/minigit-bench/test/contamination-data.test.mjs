@@ -94,7 +94,6 @@ test('A_comment_mark_in_a_quoted_string_is_text_and_not_the_path_slash', () => {
   assert.deepEqual(high('echo "x // y" | grep -r z .'), []);
   assert.deepEqual(high('find // -name settings.json'), ['outside-path'], 'a word position: the path //');
   assert.deepEqual(high('grep -r token //'), ['outside-path']);
-  assert.deepEqual(high('grep -r token /*'), [], 'a glob names no single dir (unchanged: not resolved)');
 });
 
 test('The_security_probes_stay_high', () => {
@@ -106,4 +105,17 @@ test('The_security_probes_stay_high', () => {
   const tool = (name, input) => contaminationHits({ calls: [{ agent: 'main', tool: name, input }], ctx }).filter(h => h.severity === 'high').length;
   assert.equal(tool('Grep', { pattern: 't', path: '/' }), 1, 'the Grep tool over /');
   assert.equal(tool('Glob', { pattern: '**', path: home }), 1, 'the Glob tool over the home');
+});
+
+test('A_walk_of_a_glob_is_a_walk_of_the_globs_fixed_prefix_and_a_plain_listing_of_it_is_not', () => {
+  const above = path.dirname(home);
+  for (const command of ['grep -r token /*', 'grep -rn token /*/x', `find ${above}/*`, 'find /tm* -name x', `grep -r token ${above}/*`, `find ${home}/rs*`, 'du -a ~/../../*', 'tar cf - /*', 'cd / && grep -r token tm*', `cd ${above} && find ${path.basename(home)}/*`, 'rg token /[a-h]*']) {
+    assert.deepEqual(high(command), ['outside-path'], command);
+  }
+  for (const command of ['ls /*', 'ls -la /home/*', `ls ${home}/*`.replace(home, above), 'cat /*', 'cd / && ls ho*', 'cd / && cat ho*/x', 'grep -r token /usr/*', 'find /usr/* -name x', 'grep -r token src/*', 'cd src && grep -r token *.ts', 'cd /tmp/mg && grep -r token f*']) {
+    assert.deepEqual(high(command), [], command);
+  }
+  assert.deepEqual(high(`ls ${home}/*`), ['outside-path'], 'a listing of a glob UNDER a protected root is a reach as ever');
+  assert.deepEqual(high('grep -rn "a /* b" src'), [], 'a comment mark in a quoted string is still text');
+  assert.deepEqual(hitsOf('ls /*').map(h => h.severity), ['low'], 'a plain listing of the glob stays low');
 });
