@@ -102,9 +102,9 @@ public sealed class ObjectiveParsersTests
     {
         var rows = DiffStats.Rows("3000000000\t5\tsrc_a/x.cs\n2147483647\t2147483647\tsrc_a/y.cs\n");
 
-        ((long)rows[0].Added).Should().Be(3_000_000_000L, "a count too big for an int is a count, not a zero");
+        rows[0].Added.Should().Be(3_000_000_000L, "a count too big for an int is a count, not a zero");
         var lines = DiffStats.Split(rows);
-        ((long)lines.Src).Should().Be(3_000_000_005L + 4_294_967_294L, "the sums are wide enough for a diff of billions of lines");
+        lines.Src.Should().Be(3_000_000_005L + 4_294_967_294L, "the sums are wide enough for a diff of billions of lines");
     }
 
     [Fact]
