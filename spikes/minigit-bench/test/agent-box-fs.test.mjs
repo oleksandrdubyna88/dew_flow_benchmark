@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { TS_DIR, boxOptions, envFor, hostHas, newSession, probe, probeArgv } from './box-helpers.mjs';
@@ -27,7 +28,7 @@ test('The_agent_box_has_no_operator_home_and_no_key', async t => {
     assert.match(open.out, /secret-bytes/, 'control: with another directory as the hidden home the same key IS readable');
     const real = await probe(layout, `ls -A ${os.homedir()}`);
     for (const entry of ['.config', '.ssh', '.claude', '.claude.json', '.bash_history', '.gitconfig']) assert.equal(real.out.split('\n').includes(entry), false, `the real home shows no ${entry}`);
-    const realToken = path.join(os.homedir(), '.config', 'minigit-bench', 'claude-oauth-token');
+    const realToken = path.join(os.homedir(), ...TOKEN_FILE_PARTS);
     if (existsSync(realToken)) assert.match((await probe(layout, `test -e ${realToken} && echo VISIBLE || echo ABSENT`)).out, /ABSENT/, 'the operator\'s own token file is absent (control: it exists on the host)');
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });
