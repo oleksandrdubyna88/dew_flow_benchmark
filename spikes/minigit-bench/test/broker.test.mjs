@@ -101,6 +101,7 @@ test('A_direct_request_at_zero_budget_leaves_the_upstream_count_unchanged', asyn
     }
     assert.equal(stub.seen.length, 0, 'the upstream saw nothing');
     assert.deepEqual({ forwarded: brokerView(b.lines).forwarded, refused: brokerView(b.lines).refused }, { forwarded: 0, refused: 2 });
+    assert.deepEqual(b.lines.filter(l => l.event === 'refused').map(l => l.reason), ['cap', 'cap'], 'a budget refusal says so');
     assert.equal(b.broker.summary().upstreamRequests, 0);
   } finally {
     await b.close();
@@ -267,13 +268,14 @@ test('The_sse_usage_feeder_handles_events_split_across_chunks_and_crlf', () => {
 test('brokerView_reads_the_ledger_lines', () => {
   const lines = [
     { event: 'forwarding', seq: 1 }, { event: 'settled', seq: 1, model: 'm', usage: { a: 1 }, chargedUsd: 0.1, status: 200, clientClosedEarly: false },
-    { event: 'refused', seq: 2 }, { event: 'forwarding', seq: 3 }, { event: 'summary' },
+    { event: 'refused', seq: 2, reason: 'cap' }, { event: 'refused', seq: 4, reason: 'path' }, { event: 'refused', seq: 5, reason: 'path' }, { event: 'forwarding', seq: 3 }, { event: 'summary' },
   ];
   const v = brokerView(lines);
   assert.equal(v.forwarded, 2);
-  assert.equal(v.refused, 1);
+  assert.equal(v.refused, 3);
+  assert.deepEqual(v.refusedByReason, { cap: 1, path: 2 });
   assert.equal(v.spentUsd, 0.1);
   assert.equal(v.unsettled, 1, 'seq 3 never settled');
   assert.deepEqual(v.settled, [{ seq: 1, model: 'm', usage: { a: 1 }, chargedUsd: 0.1, status: 200, clientClosedEarly: false }]);
-  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, pathRefused: 0, unsettled: 0, spentUsd: 0, settled: [] });
+  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, refusedByReason: { cap: 0, path: 0 }, unsettled: 0, spentUsd: 0, settled: [] });
 });

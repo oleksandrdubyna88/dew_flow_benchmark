@@ -42,7 +42,7 @@ const raw = (socketPath, text) => new Promise(resolve => {
   setTimeout(() => c.end(), 400);
 });
 
-test('A_request_off_the_list_is_answered_403_logged_as_path_refused_and_never_forwarded_or_signed', async () => {
+test('A_request_off_the_list_is_answered_403_logged_as_a_refusal_with_reason_path_and_never_forwarded_or_signed', async () => {
   const stub = await stubUpstream(ok);
   const b = await startBroker({ stub, capUsd: 10 });
   try {
@@ -55,14 +55,16 @@ test('A_request_off_the_list_is_answered_403_logged_as_path_refused_and_never_fo
     assert.match(await raw(b.socketPath, 'POST http://api.anthropic.com/v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\n{}'), /^HTTP\/1\.1 403 /, 'absolute-form POST of an allowed path');
     await sleep(100);
     assert.equal(stub.seen.length, 0, 'nothing reached the upstream, so nothing was signed');
-    const refused = b.lines.filter(l => l.event === 'path-refused');
+    const refused = b.lines.filter(l => l.event === 'refused');
+    assert.ok(refused.every(l => l.reason === 'path'), 'every one carries reason path');
     assert.equal(refused.length, 7);
     assert.ok(refused.every(l => typeof l.method === 'string' && typeof l.path === 'string' && Array.isArray(l.headerNames)));
     assert.equal(b.lines.some(l => l.event === 'forwarding'), false);
     assert.equal(b.broker.summary().upstreamRequests, 0);
-    assert.equal(b.broker.summary().pathRefused, 7);
+    assert.deepEqual(b.broker.summary().refusedByReason, { cap: 0, path: 7 });
+    assert.equal(b.broker.summary().refused, 7, 'the total is the sum of the reasons');
     assert.equal(b.broker.summary().reservedUsd, 0, 'a path refusal holds no reservation');
-    assert.equal(brokerView(b.lines).pathRefused, 7);
+    assert.deepEqual(brokerView(b.lines).refusedByReason, { cap: 0, path: 7 });
     assert.equal(JSON.stringify(b.lines).includes(b.token), false);
   } finally {
     await b.close();
@@ -76,20 +78,20 @@ test('The_two_allowed_paths_are_forwarded_verbatim_with_their_query', async () =
   try {
     for (const p of ['/v1/messages?beta=true', '/v1/messages/count_tokens?beta=true', '/v1/messages']) assert.equal((await viaSocket(b.socketPath, { path: p })).status, 200, p);
     assert.deepEqual(stub.seen.map(s => `${s.method} ${s.url}`), ['POST /v1/messages?beta=true', 'POST /v1/messages/count_tokens?beta=true', 'POST /v1/messages']);
-    assert.equal(b.lines.filter(l => l.event === 'path-refused').length, 0);
+    assert.equal(b.lines.filter(l => l.event === 'refused').length, 0);
   } finally {
     await b.close();
     await stub.close();
   }
 });
 
-test('A_refused_path_at_zero_budget_is_a_path_refusal_not_a_budget_one', async () => {
+test('A_refused_path_at_zero_budget_is_a_path_refusal_and_not_a_budget_one', async () => {
   const stub = await stubUpstream(ok);
   const b = await startBroker({ stub, capUsd: 0 });
   try {
     assert.equal((await viaSocket(b.socketPath, { method: 'GET', path: '/api/oauth/profile', body: '' })).status, 403);
     assert.equal((await viaSocket(b.socketPath)).status, 429);
-    assert.deepEqual(b.lines.filter(l => l.event === 'path-refused' || l.event === 'refused').map(l => l.event), ['path-refused', 'refused']);
+    assert.deepEqual(b.lines.filter(l => l.event === 'refused').map(l => l.reason), ['path', 'cap']);
   } finally {
     await b.close();
     await stub.close();

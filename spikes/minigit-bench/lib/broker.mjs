@@ -62,6 +62,11 @@ function readJsonBody(chunks) {
 /** The reason a finished answer was not billed, or null: an error status with the API's JSON error body (an overloaded or rate-limited call is free). */
 const unbilledAnswer = (status, apiError) => (status >= 400 && apiError ? 'upstream error' : null);
 
+/** Refusals by their fixed reason word: `cap` (the cell's budget) and `path` (off the route list). A line with another reason is counted under it. */
+export const REFUSAL_REASONS = Object.freeze(['cap', 'path']);
+const refusedByReason = lines => lines.filter(l => l.event === 'refused')
+  .reduce((acc, l) => ({ ...acc, [l.reason]: (acc[l.reason] ?? 0) + 1 }), Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])));
+
 /** The ledger read out of `broker.ndjson` lines: the 4th cost view `B`, beside E, O and T. */
 export function brokerView(lines) {
   const settled = lines.filter(l => l.event === 'settled');
@@ -71,7 +76,7 @@ export function brokerView(lines) {
     present: lines.length > 0,
     forwarded: forwarded.length,
     refused: lines.filter(l => l.event === 'refused').length,
-    pathRefused: lines.filter(l => l.event === 'path-refused').length,
+    refusedByReason: refusedByReason(lines),
     unsettled: forwarded.filter(l => !done.has(l.seq)).length,
     spentUsd: settled.reduce((a, l) => a + l.chargedUsd, 0),
     settled: settled.map(l => ({ seq: l.seq, model: l.model, usage: l.usage, chargedUsd: l.chargedUsd, status: l.status, clientClosedEarly: l.clientClosedEarly })),
@@ -87,18 +92,20 @@ const listen = (server, socketPath) => new Promise((resolve, reject) => { server
 function makeLedger({ budget, prices, cliVersion, log }) {
   let state = openState();
   let seq = 0;
-  const counts = { upstreamRequests: 0, refused: 0, pathRefused: 0 };
+  const counts = { upstreamRequests: 0, refusedByReason: Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])) };
+  const refusedTotal = () => Object.values(counts.refusedByReason).reduce((a, n) => a + n, 0);
+  const refuse = reason => { counts.refusedByReason = { ...counts.refusedByReason, [reason]: (counts.refusedByReason[reason] ?? 0) + 1 }; };
   const emit = line => {
     try { log({ t: new Date().toISOString(), ...line }); } catch (e) { process.stderr.write(`broker: the log sink failed: ${e.message}\n`); }
   };
   return {
     emit,
-    summary: () => ({ ...counts, ...state, ...capStatus({ spentUsd: state.spentUsd, capUsd: budget.capUsd }), capUsd: budget.capUsd, overCapFactor: OVER_CAP_FACTOR }),
+    summary: () => ({ ...counts, refused: refusedTotal(), ...state, ...capStatus({ spentUsd: state.spentUsd, capUsd: budget.capUsd }), capUsd: budget.capUsd, overCapFactor: OVER_CAP_FACTOR }),
     /** A request off the route list: counted and logged with its own seq, no reservation, nothing forwarded -> the seq. */
     refusePath(req, names, why) {
       seq += 1;
-      counts.pathRefused += 1;
-      emit({ seq, event: 'path-refused', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why });
+      refuse('path');
+      emit({ seq, event: 'refused', reason: 'path', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why });
       return seq;
     },
     /** Admit or refuse the next request -> `{ entry } | { refusal: { seq, why } }`. An admitted one holds a reservation until it settles. */
@@ -106,8 +113,8 @@ function makeLedger({ budget, prices, cliVersion, log }) {
       seq += 1;
       const verdict = admit({ ...state, reserveUsd: budget.reserveUsd, capUsd: budget.capUsd });
       if (!verdict.admit) {
-        counts.refused += 1;
-        return { refusal: { seq, why: verdict.why, spentUsd: state.spentUsd, reservedUsd: state.reservedUsd } };
+        refuse('cap');
+        return { refusal: { seq, reason: 'cap', why: verdict.why, spentUsd: state.spentUsd, reservedUsd: state.reservedUsd } };
       }
       state = reserve(state, budget.reserveUsd);
       counts.upstreamRequests += 1;
