@@ -46,6 +46,12 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
 (async () => {
   say({ type: 'system', subtype: 'init', cwd: process.cwd(), session_id: 'stub-session', tools, mcp_servers: [], model: 'claude-sonnet-5-5', permissionMode: 'default', apiKeySource: 'none', claude_code_version: '2.1.310', memory_paths: { auto: process.env.CLAUDE_CONFIG_DIR + '/projects/-p/memory/' } });
   if (process.env.STUB_SLEEP_FOREVER === '1') { setInterval(() => {}, 1000); return; }
+  if (process.env.STUB_ABANDON === '1') { // send the request and leave without reading the answer: the upstream keeps streaming to a client that is gone
+    const u = new URL(process.env.ANTHROPIC_BASE_URL);
+    const req = http.request({ host: u.hostname, port: u.port, path: '/v1/messages?beta=true', method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN } });
+    req.on('error', () => {}); req.end('{"model":"claude-sonnet-5-5","stream":true}');
+    setTimeout(() => process.exit(0), 150); return;
+  }
   const r = await post(process.env.ANTHROPIC_BASE_URL + '/v1/messages?beta=true', '{"model":"claude-sonnet-5-5","stream":true}', { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN, 'anthropic-beta': 'oauth-2025-04-20' });
   await post(process.env.OTEL_EXPORTER_OTLP_ENDPOINT + '/v1/logs', ${JSON.stringify(otlpBody)}, {});
   fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p', { recursive: true });
@@ -165,7 +171,7 @@ const INIT = over => ({
 const RESULT = { type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.01 };
 
 /** Fake deps. Each server pushes its name to `order` when closed; `script(child, layout)` plays the box. */
-function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null } = {}) {
+function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null, drain = async () => ({ drained: true, inFlight: 0, reservedUsd: 0 }) } = {}) {
   const server = (name, extra = {}) => ({ ...extra, close: async () => { order.push(name); if (closeThrows === name) throw new Error(`${name} close failed`); } });
   const child = fakeChild();
   const spawned = [];
@@ -173,7 +179,7 @@ function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null } = 
     spawned, child,
     deps: {
       startReceiver: async () => { if (throwOn.receiver) throw new Error('listen EADDRINUSE: receiver'); return server('receiver', { port: 1, misconfigured: 0, undecodable: 0, liveSum: () => { if (throwOn.liveSum) throw new Error('liveSum threw'); return { usd: 0, requests: 0, lastAt: 0 }; } }); },
-      brokerServer: async () => server('broker', { summary: () => ({ spentUsd: 0, reservedUsd: 0, upstreamRequests: 0, refused: 0, overCap: false, overshootUsd: 0 }) }),
+      brokerServer: async () => server('broker', { drain, summary: () => ({ spentUsd: 0, reservedUsd: 0, upstreamRequests: 0, refused: 0, overCap: false, overshootUsd: 0 }) }),
       egressProxy: async () => { if (throwOn.proxy) throw new Error('listen EADDRINUSE: proxy socket'); return server('proxy'); },
       spawnBox: (argv, env) => { spawned.push({ argv, env }); setImmediate(() => script(child, layout)); return child; },
       endCell: async a => { order.push('endCell'); child.finish(143, null); return { cellId: a.cellId }; },
@@ -214,6 +220,34 @@ test('Every_exit_path_runs_every_disposer_once', async () => {
       assert.equal(result.exit, 5, name);
     }
   }
+});
+
+test('The_collection_drains_the_broker_before_it_writes_broker_json_and_records_what_stayed_unsettled', async () => {
+  const layout = newSession();
+  const seen = [];
+  const drain = async ms => { seen.push({ ms, brokerJsonYet: existsSync(layout.files.broker) }); return { drained: false, inFlight: 2, reservedUsd: 0.1 }; };
+  const order = [];
+  const fake = fakeDeps(order, layout, { script: (c, l) => { say(c, goodInit(l), RESULT); c.finish(0); }, drain });
+  const result = await launchSession(planFor(layout, { settleMs: 0, drainMs: 777 }), fake.deps);
+  assert.equal(result.ok, true, result.reason);
+  assert.deepEqual(seen, [{ ms: 777, brokerJsonYet: false }], 'drained once, with the plan\'s ceiling, before broker.json existed');
+  assert.deepEqual(result.value.meta.unsettledAtClose, { count: 2, reservedUsd: 0.1 });
+  assert.deepEqual(JSON.parse(readFileSync(layout.files.broker, 'utf8')).unsettledAtClose, { count: 2, reservedUsd: 0.1 });
+  assert.equal(order.includes('broker'), true, 'and the broker was closed after (the disposers run after the collection)');
+});
+
+test('A_request_the_cli_abandoned_is_settled_before_the_meta_is_written', async t => {
+  if (!sandboxGate(t)) return;
+  const layout = newSession();
+  const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 4), 250)); // about 750 ms of stream after the client is gone
+  t.after(() => stub.close());
+  const plan = planFor(layout, { claudeBinary: stubClaude(tmpDir('stub-ab')), upstream: stub.upstream, envExtra: { STUB_ABANDON: '1' }, settleMs: 50 });
+  const result = await launchSession(plan, {});
+  assert.equal(result.ok, true, result.reason);
+  const { meta } = result.value;
+  assert.equal(meta.broker.spentUsd, 0.009232, 'the abandoned request was drained and priced, not left as 0 spent');
+  assert.deepEqual(meta.unsettledAtClose, { count: 0, reservedUsd: 0 });
+  assert.equal(JSON.parse(readFileSync(layout.files.broker, 'utf8')).unsettled, 0);
 });
 
 test('A_disposer_that_throws_does_not_stop_the_next_and_its_failure_is_in_meta_cleanup', async () => {

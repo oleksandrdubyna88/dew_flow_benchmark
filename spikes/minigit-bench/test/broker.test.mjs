@@ -260,6 +260,43 @@ test('An_error_status_without_a_json_error_body_and_a_2xx_with_nothing_parsed_ke
   }
 });
 
+test('Drain_waits_for_a_request_the_client_walked_away_from_until_the_broker_has_read_the_upstream_to_its_end', async () => {
+  const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 6), 120));
+  const b = await startBroker({ stub });
+  try {
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    assert.equal(b.broker.summary().inFlight, 1, 'the client is gone and the upstream is still streaming: the request is in flight');
+    assert.equal(b.lines.some(l => l.event === 'settled'), false, 'not settled yet: a collector that wrote broker.json now would record 0 spent');
+    const drained = await b.broker.drain(5000);
+    assert.deepEqual([drained.drained, drained.inFlight, drained.reservedUsd], [true, 0, 0]);
+    assert.equal(b.broker.summary().spentUsd, 0.009232, 'the stream was read to its end and priced in full');
+    assert.equal(b.lines.find(l => l.event === 'settled').clientClosedEarly, true);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
+test('Drain_returns_at_once_when_nothing_is_in_flight_and_at_the_ceiling_when_something_never_ends', async () => {
+  const stub = await stubUpstream((_q, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('event: ping\ndata: {"type":"ping"}\n\n'); });
+  const b = await startBroker({ stub });
+  try {
+    const idle = Date.now();
+    assert.equal((await b.broker.drain(5000)).drained, true);
+    assert.ok(Date.now() - idle < 500, 'an idle broker drains immediately');
+    viaSocket(b.socketPath, { abortAfterFirstChunk: true }).catch(() => {});
+    await sleep(150);
+    const started = Date.now();
+    const stuck = await b.broker.drain(300);
+    assert.equal(stuck.drained, false);
+    assert.deepEqual([stuck.inFlight, stuck.reservedUsd], [1, 0.05], 'the unsettled request and its reservation are reported');
+    assert.ok(Date.now() - started >= 290 && Date.now() - started < 2000, `it waited the ceiling and no longer (${Date.now() - started} ms)`);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('The_socket_is_private_and_close_removes_it', async () => {
   const stub = await stubUpstream((_q, res) => json(res, 200, OK_JSON));
   const b = await startBroker({ stub });

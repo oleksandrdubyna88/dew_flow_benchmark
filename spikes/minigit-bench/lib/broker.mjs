@@ -10,6 +10,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { routeDecision } from './broker-routes.mjs';
 import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from './budget.mjs';
 
+export const DRAIN_MS = 120_000;
 export const DEFAULT_UPSTREAM = Object.freeze({ host: 'api.anthropic.com', port: 443, tls: true });
 const UPSTREAM_IDLE_MS = 120_000;
 /** Request headers never forwarded: the credential (replaced), the hop-by-hop ones, and accept-encoding (so the usage parser reads plain SSE). */
@@ -94,6 +95,7 @@ const listen = (server, socketPath) => new Promise((resolve, reject) => { server
 function makeLedger({ budget, prices, cliVersion, log }) {
   let state = openState();
   let seq = 0;
+  const idleWaiters = new Set();
   const counts = { upstreamRequests: 0, refusedByReason: Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])) };
   const refusedTotal = () => Object.values(counts.refusedByReason).reduce((a, n) => a + n, 0);
   const refuse = reason => { counts.refusedByReason = { ...counts.refusedByReason, [reason]: (counts.refusedByReason[reason] ?? 0) + 1 }; };
@@ -123,12 +125,23 @@ function makeLedger({ budget, prices, cliVersion, log }) {
       counts.upstreamRequests += 1;
       return { entry: { seq, reserveUsd, startedAt: Date.now(), settled: false }, inFlight: state.inFlight, reservedUsd: state.reservedUsd };
     },
+    /** Resolve `{ drained, inFlight, reservedUsd }` once no request is in flight, or at `timeoutMs` with what is still unsettled. */
+    drain(timeoutMs) {
+      const now = () => ({ drained: state.inFlight === 0, inFlight: state.inFlight, reservedUsd: state.reservedUsd });
+      if (state.inFlight === 0) return Promise.resolve(now());
+      return new Promise(resolve => {
+        const done = () => { clearTimeout(timer); idleWaiters.delete(done); resolve(now()); };
+        const timer = setTimeout(done, timeoutMs);
+        idleWaiters.add(done);
+      });
+    },
     /** Settle once; a second call for the same entry is a no-op. */
     settle(entry, model, usage, note, waive = null) {
       if (entry.settled) return;
       entry.settled = true;
       const r = settle({ state, entry, usage, model, table: prices, cliVersion, waive });
       state = r.state;
+      if (state.inFlight === 0) { idleWaiters.forEach(wake => wake()); idleWaiters.clear(); }
       emit({ seq: entry.seq, event: 'settled', ...r.line, elapsedMs: Date.now() - entry.startedAt, ...note });
     },
   };
@@ -187,7 +200,8 @@ function answer(upRes, res, entry, ledger) {
 }
 
 /**
- * Start the broker -> `{ server, summary(), close() }`. `token` is a value; `budget` is `{ capUsd, reserveUsd }`; `prices` a loaded table;
+ * Start the broker -> `{ server, summary(), drain(timeoutMs), close() }`. `drain` waits until nothing is in flight: the upstream bills a request
+ * whatever the client does, so a collector must wait for it before it records what the cell spent. `token` is a value; `budget` is `{ capUsd, reserveUsd }`; `prices` a loaded table;
  * `log(line)` receives every ledger line. `upstream` is injectable so tests run a local stub; the smoke runs the real one.
  */
 export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTREAM, budget, prices, cliVersion, log, timeoutMs = UPSTREAM_IDLE_MS }) {
@@ -217,7 +231,7 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
   chmodSync(socketPath, 0o600);
   let closed = false;
   return {
-    server, summary: ledger.summary,
+    server, summary: ledger.summary, drain: ledger.drain,
     close: async () => {
       if (closed) return;
       closed = true;
