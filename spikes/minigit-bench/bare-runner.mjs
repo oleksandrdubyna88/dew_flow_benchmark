@@ -139,7 +139,12 @@ async function finishInit({ plan, inputsDir, write }) {
   return done.ok ? EXIT.done : EXIT.config;
 }
 
-async function cmdInit(v, write) {
+/** The series `init` writes is a PAID series: the same rule as run and resume (review N17), asked before anything is read; a dry run writes nothing and may read any folder. -> a sentence or null. */
+const initRefusal = (v, seams) => (v['dry-run'] ? null : foreignInputsRefusal({ v, verb: 'init', seams }));
+
+async function cmdInit(v, write, seams = {}) {
+  const refused = initRefusal(v, seams);
+  if (refused) return refuse(write, refused);
   const prepared = await prepareInit(v);
   if (!prepared.ok) return refuse(write, prepared.reason);
   describePlan(prepared.value.plan).forEach(write);
@@ -221,7 +226,7 @@ function parseRun(v, resume) {
 }
 
 /** A PAID series reads the registered inputs of THIS repository and no copy of them (review N17): the guard compares the repository's blobs with the tag, so a folder it does not look at could carry other thresholds. -> a sentence or null. */
-function foreignInputsRefusal({ v, verb, seams }) {
+export function foreignInputsRefusal({ v, verb, seams }) {
   const own = seams.ownInputs ?? path.join(SPIKE, 'inputs');
   const foreign = v['inputs-dir'] && !sameFolder(inputsDirOf(v), own);
   return foreign ? `${verb} refused: --inputs-dir ${inputsDirOf(v)} is not the repository's own inputs folder (${own}): a paid run reads the registered inputs of this repository only; --inputs-dir is for dry runs and tests` : null;
@@ -358,7 +363,7 @@ export async function main(argv, write = line => process.stdout.write(`${line}\n
   let values;
   try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { write(`usage error: ${e.message}`); return EXIT.config; }
   const table = {
-    init: () => cmdInit(values, write), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }, seams), resume: () => cmdRun(values, write, { resume: true }, seams),
+    init: () => cmdInit(values, write, seams), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }, seams), resume: () => cmdRun(values, write, { resume: true }, seams),
     'seed-commit': () => { const r = commitSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${values['seed-file'] ?? defaults().seedFile} (mode 600)` : `seed-commit: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
     'seed-reveal': () => { const r = revealSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
   };

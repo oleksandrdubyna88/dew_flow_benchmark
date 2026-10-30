@@ -2,10 +2,10 @@
 import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { afterStopRefusal, main, parseWhat } from '../bare-runner.mjs';
+import { afterStopRefusal, foreignInputsRefusal, main, parseWhat } from '../bare-runner.mjs';
 import { ridOf, maskFor } from '../lib/bare-plan.mjs';
 import { openSeries, writeRunMap } from '../lib/run-map.mjs';
 import { appendLedger } from '../lib/ledger.mjs';
@@ -118,4 +118,20 @@ test('The_seed_commands_write_the_hash_to_inputs_and_the_seed_outside_git', asyn
   const r = await run(['seed-reveal', '--seed-file', seedFile, '--inputs-dir', inputs]);
   assert.equal(r.code, 0, r.out);
   assert.equal(existsSync(path.join(inputs, 'seed.txt')), true);
+});
+
+test('Init_of_a_real_series_refuses_an_inputs_dir_that_is_not_the_repositorys_own_and_a_dry_run_and_a_link_to_the_own_folder_do_not', async () => {
+  const own = inputsDir(); // stands for the repository's own folder: a seam, so no real tag or series is touched
+  const copy = inputsDir();
+  const link = path.join(tmpDir('inputs-link'), 'inputs');
+  symlinkSync(own, link);
+  const init = async (argv) => { const lines = []; const code = await main(['init', '--series-id', 's-20261030-ab12', '--series-root', tmpDir('roots'), ...argv], l => lines.push(l), { ownInputs: own }); return { code, out: lines.join('\n') }; };
+  const refused = await init(['--inputs-dir', copy]);
+  assert.equal(refused.code, 4);
+  assert.match(refused.out, /init refused: --inputs-dir .* is not the repository's own inputs folder/, 'a paid series reads this repository\'s registered inputs only (N17, as run and resume)');
+  assert.match(refused.out, /dry run/, 'and says that --inputs-dir is for dry runs and tests');
+  assert.doesNotMatch((await init(['--inputs-dir', copy, '--dry-run'])).out, /own inputs folder/, 'a dry run writes nothing and may read any folder');
+  assert.equal(foreignInputsRefusal({ v: { 'inputs-dir': link }, verb: 'init', seams: { ownInputs: own } }), null, 'a link that resolves to the own folder is the own folder (a real init is not run here: the rule is asked directly)');
+  assert.equal(foreignInputsRefusal({ v: {}, verb: 'init', seams: { ownInputs: own } }), null, 'no --inputs-dir is the own folder');
+  assert.match(foreignInputsRefusal({ v: { 'inputs-dir': copy }, verb: 'resume', seams: { ownInputs: own } }), /^resume refused: --inputs-dir/, 'one rule for init, run and resume');
 });
