@@ -48,13 +48,18 @@ function kindsOf(f, ctx) {
   };
 }
 
-/** D12: every alias a twin used resolves to the baseline's id (the twins may use different aliases). -> the problems. */
+/**
+ * D12: every alias a twin used resolves to the baseline's id (the twins may use different aliases). -> the problems, `{ text, stop }`: only DRIFT (an alias that resolves to another id, or an alias check that says stop)
+ * is a stop; a twin with no alias record, or an alias used that the baseline does not hold, is reported (NO GO) and stops nothing.
+ */
 function aliasProblems(f, ctx) {
   const used = leaf(f.record, 'cost', 'aliases');
   const base = ctx.baseline?.aliases ?? {};
-  if (!used) return [`${f.rid}: no alias record`];
-  const drifted = Object.entries(used.aliases ?? {}).filter(([a, id]) => base[a] !== undefined && base[a] !== id).map(([a, id]) => `${a} -> ${id} (baseline ${base[a]})`);
-  return [...drifted.map(d => `${f.rid}: alias drift: ${d}`), ...(used.check?.verdict === 'stop' ? [`${f.rid}: the alias check says stop`] : [])];
+  if (!used) return [{ text: `${f.rid}: no alias record`, stop: false }];
+  const entries = Object.entries(used.aliases ?? {});
+  const drifted = entries.filter(([a, id]) => base[a] !== undefined && base[a] !== id).map(([a, id]) => ({ text: `${f.rid}: alias drift: ${a} -> ${id} (baseline ${base[a]})`, stop: true }));
+  const absent = entries.filter(([a]) => base[a] === undefined).map(([a, id]) => ({ text: `${f.rid}: alias ${a} -> ${id} is not in the baseline`, stop: false }));
+  return [...drifted, ...absent, ...(used.check?.verdict === 'stop' ? [{ text: `${f.rid}: the alias check says stop`, stop: true }] : [])];
 }
 
 const missingKinds = (f, ctx) => Object.entries(kindsOf(f, ctx)).filter(([, there]) => !there).map(([k]) => k);
@@ -64,8 +69,8 @@ export function g7(ctx) {
   const aliases = ctx.aa.flatMap(f => aliasProblems(f, ctx));
   const row = { id: 'G-7', title: 'the same record kinds for each twin; aliases per D12' };
   if (ctx.aa.length < 2) return { ...row, verdict: 'not exercised', observed: `the A/A needs two twins, found ${ctx.aa.length}` };
-  const problems = [...kinds.map(k => `${k.rid} lacks ${k.missing.join(', ')}`), ...aliases];
-  return { ...row, verdict: problems.length === 0 ? 'holds' : 'refuted', observed: problems.join('; ') || 'both twins carry stream, envelope, O, T, audit, broker, egress with bytes, CPU and spin samples, packages, a score with every step known and a ledger line; every alias resolves to the baseline', stopIfRefuted: aliases.length > 0 };
+  const problems = [...kinds.map(k => `${k.rid} lacks ${k.missing.join(', ')}`), ...aliases.map(a => a.text)];
+  return { ...row, verdict: problems.length === 0 ? 'holds' : 'refuted', observed: problems.join('; ') || 'both twins carry stream, envelope, O, T, audit, broker, egress with bytes, CPU and spin samples, packages, a score with every step known and a ledger line; every alias resolves to the baseline', stopIfRefuted: aliases.some(a => a.stop) };
 }
 
 // ---- G-9: recorded, never gating ----------------------------------------------------------------------------------------------

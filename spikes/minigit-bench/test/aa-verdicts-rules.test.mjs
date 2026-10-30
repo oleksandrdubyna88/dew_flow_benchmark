@@ -104,3 +104,22 @@ test('G11_refutes_a_gap_over_the_registered_interval_plus_a_one_second_jitter_an
   assert.equal(g11(6100).verdict, 'refuted', '6.1 s is not every 5 s (the old rule allowed 10 s)');
   assert.match(g11(7000).observed, /gap of 7000 ms.*interval is 5000 ms/);
 });
+
+// ---- G-7: aliases ---------------------------------------------------------------------------------------------------------------
+
+const usedAliases = aliases => ({ cost: { aliases: known({ aliases, internal: [], fallbacks: [], unresolved: [], check: { verdict: 'ok', reasons: [] } }) } });
+
+test('G7_a_missing_alias_record_or_an_alias_the_baseline_lacks_is_NO_GO_and_only_drift_is_a_STOP', () => {
+  const noRecord = report(makeSeries({ records: { aa0002: { cost: { aliases: { known: false, why: 'no init event' } } } } }));
+  assert.equal(rowOf(noRecord, 'G-7').verdict, 'refuted');
+  assert.match(rowOf(noRecord, 'G-7').observed, /aa0002: no alias record/);
+  assert.equal(rowOf(noRecord, 'G-7').stop, false, 'no record is not drift');
+  assert.equal(noRecord.verdict, 'NO GO');
+  const unknownAlias = report(makeSeries({ records: { aa0001: usedAliases({ opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5' }) } }));
+  assert.equal(rowOf(unknownAlias, 'G-7').verdict, 'refuted');
+  assert.match(rowOf(unknownAlias, 'G-7').observed, /aa0001.*alias haiku.*not in the baseline/, 'the alias is named');
+  assert.equal(unknownAlias.verdict, 'NO GO');
+  const drift = report(makeSeries({ records: { aa0001: usedAliases({ opus: 'claude-opus-other' }) } }));
+  assert.equal(drift.verdict, 'STOP', 'drift stays a stop');
+  assert.equal(drift.verdict === 'STOP' && rowOf(drift, 'G-7').stop, true);
+});
