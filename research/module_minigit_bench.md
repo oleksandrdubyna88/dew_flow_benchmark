@@ -254,7 +254,8 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   stay protected). `skeleton` = the directories that only hold those binds (an EXACT reach for one lists nothing the box does not expose): only a directory under a `--tmpfs` of the box, and
   NEVER an ancestor of the harness or net dir nor a directory at or above the operator's home (the box can read below those: `grep -r token ~`, `cd <session> && cat harness/settings.json`). In practice:
   the toolchains folder, the `.nvm/versions/node` chain and the session's `box` dir. A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high.
-  `test/box-skeleton.test.mjs` holds the review's probe commands (every one of them high); `test/bare-collect-allow.test.mjs` replays the pilot's commands.
+  `~`, `$HOME` and `${HOME}` in an agent command are the BOX home (`ctx.boxHome` = `layout.home`, the agent's HOME), not the operator's: `ls ~/.nuget/packages` there is the agent's own cache; the operator's home stays
+  a protected root (`ctx.home`), so an explicit `/home/<operator>/.ssh` is high. `test/box-skeleton.test.mjs` holds the review's probe commands (every one of them high); `test/bare-collect-allow.test.mjs` replays the pilot's commands.
 - **`lib/token-scan.mjs`** — `tokenHits(texts, ownSecrets)`: GitHub and Anthropic credential shapes plus the session's own
   secrets (8 characters or more). A hit is `{ source, kind, offset }`, never the text or a prefix of it; `maskTokens` is the
   same scan as a replacement.

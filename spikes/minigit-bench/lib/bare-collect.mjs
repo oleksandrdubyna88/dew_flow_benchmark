@@ -50,7 +50,7 @@ function contaminationPart({ scan, events, layout, plan, home, partnerDirs, box 
   const shapeHits = scan.hits.filter(h => h.kind !== 'own-value'); // in any file of the session directory, not only the evidence files
   const unscanned = scan.unreadable.filter(u => isEvidence(u.rel)).map(u => ({ source: u.rel, kind: 'unscanned', why: u.why }));
   // `allow` = what the box exposes on purpose (the toolchain it binds, the session's own box dirs): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected.
-  const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: boxReachable({ ...box, layout }), skeleton: boxSkeleton({ ...box, layout }), isLink: isLinkOnHost };
+  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: boxReachable({ ...box, layout }), skeleton: boxSkeleton({ ...box, layout }), isLink: isLinkOnHost };
   return {
     realHits: scan.hits.filter(h => h.kind === 'own-value'),
     contamination: {

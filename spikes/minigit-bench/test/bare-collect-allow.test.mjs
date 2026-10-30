@@ -119,3 +119,10 @@ test('The_paths_the_scan_allows_are_the_binds_the_box_argv_really_builds_less_th
   const skeleton = boxSkeleton(opts);
   assert.deepEqual(skeleton.toSorted(), ['/home/op/.nvm', '/home/op/rsd/s/a/box', '/home/op/t'], 'the parents of the binds only hold them: not the session dir (the harness is below), not the home or above');
 });
+
+test('A_tilde_in_a_command_is_the_boxs_own_home_in_a_collected_session_and_an_explicit_operator_path_is_a_reach', () => {
+  const root = series();
+  const own = run(session(root, 'ad0000'), ['ls ~/.nuget/packages/', 'ls $HOME/.dotnet', 'cat ~/.npmrc', 'ls ~/.claude'], { box: BOX });
+  assert.equal(own.outcome.class, 'completed', JSON.stringify(own.outcome.detail));
+  assert.equal(run(session(root, 'ad1000'), [`cat ${path.join(home, '.ssh', 'id_rsa')}`], { box: BOX }).outcome.class, 'void: contaminated');
+});
