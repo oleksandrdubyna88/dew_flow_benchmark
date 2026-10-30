@@ -44,13 +44,13 @@ export function egressSummary(lines) {
 
 const answer = (socket, status) => socket.end(`HTTP/1.1 ${status} ${STATUS_TEXT[status] ?? 'Error'}\r\nConnection: close\r\n\r\n`);
 
-/** The verdict on what the client sent first, once the 200 is out: `{ ok: true, sni }` or `{ ok: false, reason, why, sni? }`; `null` while the hello is incomplete. */
+/** The verdict on what the client sent first, once the 200 is out: `{ pipe: true, sni }` or `{ pipe: false, reason, why, sni? }`; `null` while the hello is incomplete. */
 export function helloVerdict(buffered, host) {
   const seen = inspectClientHello(buffered);
   if (seen.status === 'incomplete') return null;
-  if (seen.status === 'refused') return { ok: false, reason: seen.reason, why: seen.why };
-  if (seen.sni.toLowerCase() !== host) return { ok: false, reason: 'sni-mismatch', why: `the SNI names a host other than the CONNECT host ${host}`, sni: seen.sni.slice(0, 255) };
-  return { ok: true, sni: seen.sni };
+  if (seen.status === 'refused') return { pipe: false, reason: seen.reason, why: seen.why };
+  if (seen.sni.toLowerCase() !== host) return { pipe: false, reason: 'sni-mismatch', why: `the SNI names a host other than the CONNECT host ${host}`, sni: seen.sni.slice(0, 255) };
+  return { pipe: true, sni: seen.sni };
 }
 
 /**
@@ -73,7 +73,7 @@ function gateAndPipe({ client, upstream, decision, rest, emit, helloTimeoutMs })
     if (settled) return;
     const v = helloVerdict(buffered, decision.host);
     if (v === null) return;
-    if (!v.ok) return refuse(v.reason, v.why, v.sni === undefined ? {} : { sni: v.sni });
+    if (!v.pipe) return refuse(v.reason, v.why, v.sni === undefined ? {} : { sni: v.sni });
     settled = true;
     clearTimeout(timer);
     client.off('data', onData);
