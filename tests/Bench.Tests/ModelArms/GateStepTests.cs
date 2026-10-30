@@ -124,6 +124,7 @@ public sealed class GateStepTests
         var context = bench.GateContext();
 
         await FluentActions.Awaiting(() => new GateRig().Gate(bench, new GateKilledAt(point, 1)).RunAsync(context, Ct)).Should().ThrowAsync<IOException>().WithMessage("killed");
+        File.Exists(bench.Paths.Continue(GateName)).Should().BeTrue("the intent is written before the .done that contradicts it is removed");
         File.ReadAllText(bench.Paths.Continue(GateName)).Should().Be(ContinueMarkers.Write(new ContinueMarker(1, "gate blocked: needs work")));
         File.Exists(bench.Paths.Done(GateName)).Should().Be(point == GatePoint.ContinueWritten);
         bench.Fake.Calls().Should().HaveCount(1);
