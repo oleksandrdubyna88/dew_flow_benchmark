@@ -3,7 +3,9 @@
 > Status: **partial result.** Phase A (server flags) ran 2 of 3 rounds for five options and 1 round for FP8 KV
 > (stopped by the operator on 2026-10-28 11:53). A night run on 2026-10-28 (§ 11, paused by the operator at
 > 23:35) added the production stall check, a phase C run without a verdict, 3 of 5 BF16 draft tuning chunks
-> (not yet tested) and round 1 of the final A/B for `base` only. Phase B2 (int4 keys 24–128) did not run.
+> (not yet tested) and round 1 of the final A/B for `base` only. A second night run on 2026-10-30 (§ 12) gave
+> phase C a valid timer (option 7: tuned Triton tiles −13–14 % at 6, 8 and 16 rows) and finished the BF16 tuning
+> chunks; the final A/B did not resume (another job ran all night). Phase B2 (int4 keys 24–128) did not run.
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -24,8 +26,8 @@ server flags.
 | 2 | `--max-num-batched-tokens 8192` (`mnbt8k`) | **trade-off, fails the rule as written** | time to first token −30 % (8k prompt) and −24 % (32k prompt); decode −1 % / −4 % |
 | 1b | MTP draft tokens = 1 (`mtp1`) | fails | −12 % / −11 %; time per output token +19 % |
 | 5 | FP8 KV cache (`fp8kv`) | fails as a speed option; a capacity switch | KV tokens +56 %; decode −12 % / −12 %; 32k prompt +55 % slower |
-| 7 | Hybrid linear kernel at 6–16 rows | **no verdict** (phase C ran, but its timer measured launch overhead, § 11.3) | the HIP op split into ≤ 5-row chunks was slower than the default at every M ≥ 6 |
-| 3 | Tuned BF16 MoE file for the MTP draft layer | **not measured** (3 of 5 tuning chunks done, § 11.4; no A/B) | the draft layer still uses the default MoE config |
+| 7 | Hybrid linear kernel at 6–16 rows | **kernel gain, no end-to-end test** (§ 12.1, CUDA-graph timer) | tuned Triton tiles −13 % / −14 % / −14 % of linear time at M 6 / 8 / 16, −1 % at M 12; the split HIP op is slower at every M ≥ 6 |
+| 3 | Tuned BF16 MoE file for the MTP draft layer | **not measured** (all 5 tuning chunks done, § 11.4 and § 12.2; no merge, no A/B) | the draft layer still uses the default MoE config |
 | 4 | int4 MoE keys 24, 32, 64, 128 | **not measured** (phase B2 did not run) | — |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
@@ -333,16 +335,21 @@ cross the guard.
 
 ## 9. Next steps
 
-1. § 6.1: test the prefix-cache hypothesis (the same 8k prompt twice by hand; then an A/B with
-   `--no-enable-prefix-caching`). The production check itself is done.
-2. Resume the final A/B on a quiet PC (`harness/night2.sh` resumes it; `fbase-1` is done): `fbase` vs `fcombo`
-   (`mtp3 + tattn`), 3 rounds. `mtp3 + tattn + mnbt8k` was not in the night run.
+1. § 6.1: test the prefix-cache hypothesis (`harness/prefixtest.py`: the same 8k prompt twice, then a changed
+   tail; it runs in each final-A/B arm with `PREFIXTEST=1`; then an A/B with `--no-enable-prefix-caching`). The
+   production check itself is done.
+2. Resume the final A/B on a quiet PC (`harness/night3.sh` resumes it; `fbase-1` is done; the 5 remaining
+   arm-rounds take ~2 h): `fbase` vs `fcombo` (`mtp3 + tattn`), 3 rounds. `mtp3 + tattn + mnbt8k` was not in
+   the night runs.
 3. If the combination passes: start the production server with `-MtpTokens 3 -ExtraArgs
    --attention-backend=TRITON_ATTN` (a `pwsh -File` call binds that as one string, checked 2026-10-28). Do not
    change the defaults in `start-vllm.ps1`: they are for Qwen3.8-27B, not this model.
-4. Phase C again, with a timer that excludes launch overhead (§ 11.3).
-5. Phase B1: chunks bs 4 and bs 12, then merge, a kernel A/B and an end-to-end A/B (§ 11.4). Phase B2: the int4
-   chunks took 1–3.6 h each on 2026-10-26, so keys 24–128 need more than one night.
+4. Option 7 (§ 12.1): a local patch of the Triton tile choice for M 6–16, then an end-to-end A/B — after the
+   final A/B, because the gain depends on M (MTP 3 at 4 requests gives M 16, MTP 2 gives M 12). Upstream idea:
+   the HIP op ends at 5 rows, and the default jumps +48 % from M 5 to M 6.
+5. Phase B1 (§ 12.2): merge the five chunks into one file, then a kernel A/B against the default config and an
+   end-to-end A/B. Phase B2: the int4 chunks took 1–3.6 h each on 2026-10-26, so keys 24–128 need more than one
+   night.
 6. Upstream (only with the operator's approval of the exact text): a vLLM issue that `TRITON_ATTN` beats the
    ROCm default with MTP on gfx1201 for this model family; possibly the prefix-cache stall, if confirmed.
 
@@ -362,6 +369,10 @@ cross the guard.
 | `night-2026-10-28/quality/` | `gsm8k_fbase.json`, `prompts_fbase.json` |
 | `night-2026-10-28/phaseC/` | `linear_bench.json` (50 rows), `linear_bench.log` |
 | `night-2026-10-28/phaseB1/` | The tuned BF16 draft configs per chunk (`<chunk>.json`, keys 1, 2, 256, 1024, 2048) and the tuning logs without progress bars |
+| `night-2026-10-30/phaseC2/` | `linear_bench_graph.json` (50 rows, CUDA-graph timer) and `.log` |
+| `night-2026-10-30/phaseB1/` | `draft-bs-4.json`, `draft-bs-12.json` and their tuning logs without progress bars |
+| `night-2026-10-30/raw/` | `driver_log.txt` (`night3.sh`), `ram_guard.txt` |
+| `harness/` (night 2026-10-30) | `night3.sh` (driver), `linear_bench_graph.py` (phase C2 timer over `linear_bench.py`), `prefixtest.py` (§ 6.1 check), `speed_A.sh` with the `PREFIXTEST` hook |
 
 Reproduce a comparison: `python3 -I harness/harness.py compare quality/prompts_base.json quality/prompts_mtp3.json`
 and `python3 -I harness/harness.py gsm8k-compare quality/gsm8k_base.json quality/gsm8k_mtp3.json`.
@@ -397,7 +408,7 @@ See § 6.1: the production server stalls too, always on the first measured reque
 `base` repeats across days within the spread (c=1 −0.6 %, c=4 −1.2 %; spread 3.35 / 5.41 tok/s). No verdict on
 the combination yet.
 
-### 11.3 Phase C (option 7) — ran, no verdict
+### 11.3 Phase C (option 7) — ran, no verdict (timed again in § 12.1)
 
 `harness/linear_bench.py`: the five quantized linear shapes × M = 1–6, 8, 10, 12, 16; per point the default
 dispatch, Triton with its default tile, the HIP op split into ≤ 5-row chunks, and (at M 6, 8, 12, 16) Triton with
@@ -446,3 +457,63 @@ likely shutting down` after `Completed tuning` and the saved JSON — a shutdown
 Nothing was changed in `start-vllm.ps1`; the production server was restored at 23:35 in the same shape as
 before (no extra arguments). The resume markers (`speedF/done_fbase-1`) live in the WSL temp folder and are lost
 on a WSL restart; all data is in `night-2026-10-28/`.
+
+## 12. Night run of 2026-10-30 (resumed by the operator at 00:10)
+
+Driver: `harness/night3.sh`, 00:12–05:02, the same guards as § 11 (RAM 2 GB, deadline 07:15, one restore at the
+exit). Model loads waited until no coai-exp process ran and `wait_quiet.sh` confirmed a quiet PC; runs that load
+no model went on meanwhile. Before the start, the production server had stopped by itself (exit code 255 at
+00:10:31, empty log; cause unknown).
+
+### 12.1 Phase C2 (option 7) — CUDA-graph timer
+
+`harness/linear_bench_graph.py` runs `linear_bench.py` (same shapes, M values, tile sweep and checks as § 11.3)
+with one change: each call is captured 20 times into one CUDA graph, and the graph replay is timed with CUDA
+events (median of 50 replays). 00:12–00:18, while coai-exp2 ran (graph replay is less sensitive to CPU load than
+eager calls). Random weights.
+
+Sum over the five shapes × their layers, ms per forward:
+
+| M | default dispatch | Triton, default tile | split HIP (≤ 5-row chunks) | Triton, best of 144 tiles |
+|---|---|---|---|---|
+| 1 | 2.48 (HIP) | 4.97 | 2.79 | — |
+| 4 | 2.95 (HIP) | 4.73 | 3.27 | — |
+| 5 | 3.31 (HIP) | 4.45 | 3.63 | — |
+| 6 | 4.91 (Triton) | 4.79 | 5.89 | **4.28 (−13 %)** |
+| 8 | 5.16 | 5.20 | 6.28 | **4.45 (−14 %)** |
+| 10 | 5.14 | 5.05 | 6.87 | — |
+| 12 | 4.42 | 4.46 | 8.94 | 4.39 (−1 %) |
+| 16 | 6.93 | 6.69 | 11.67 | **5.95 (−14 %)** |
+
+- The timer is now plausible: at M = 1 the linear layers take 2.5 ms of an 8.5–8.9 ms decode step.
+- **The split HIP op fails:** slower than the default at every M ≥ 6, by up to 68 % at M 16.
+- **Tuned tiles help at M 6, 8 and 16** (0.6–1.0 ms per forward), not at M 12. Today's production (MTP 2, 4
+  requests) runs at M 12, so it gains nothing; `mtp3` at 4 requests runs at M 16 and could gain ~1 ms per step.
+  The chosen tiles: `BLOCK 16/16/32, 1 warp` for the two QKV input projections, `16/16/128, 4 warps` for
+  `out_proj` / `o_proj` and the shared-expert `gate_up`; the shared-expert `down_proj` varies with M.
+- At M 1–5 the HIP op is ~2× faster than Triton; the default jumps +48 % from M 5 (HIP) to M 6 (Triton). A HIP
+  kernel that also takes 6–8 rows could remove most of that step — upstream kernel work, not a flag.
+- Correctness: tuned tiles 0.0 max abs difference against the default; split ≤ 0.0078 (BF16 rounding).
+- **Not shown:** an end-to-end gain. The next step is a local patch of the tile choice and an end-to-end A/B.
+
+### 12.2 Phase B1 (option 3) — tuning chunks complete
+
+| Chunk | Key | Configs searched (pruned) | Time | Chosen config (`BLOCK_M/N/K`, warps, stages, waves_per_eu) |
+|---|---|---|---|---|
+| `draft-bs-4` | 4 | 1000 | 1554 s | 16/16/256, 4, 2, 1 |
+| `draft-bs-12` | 12 | 1580 | 2511 s | 16/16/256, 2, 2, 2 |
+
+Both ran 00:19–01:27 under coai-exp2 load; both logs end with the same harmless shutdown `ImportError` as
+`draft-bs-2` (§ 11.4). With § 11.4, all five chunks are done (keys 1, 2, 4, 12, 256, 1024, 2048). **Not done:** the
+merge into one `E=256,N=512,device_name=AMD_Radeon_R9700.json`, the kernel A/B, the end-to-end A/B.
+
+### 12.3 Final A/B — did not resume
+
+coai-exp2 kept one process alive the whole night (`run-arm.sh CHH1`, waiting on a usage limit in 15-min sleeps),
+so the gate "no coai-exp process" never opened. At 05:02 the remaining 5 arm-rounds (~2 h) no longer fitted
+before the deadline, and the driver ended. No prefix-cache check ran (it is part of each A/B arm).
+
+### 12.4 State after the run
+
+The production server was restored at 05:02 with no extra arguments (MTP 2, `ROCM_ATTN`). Nothing was changed
+in `start-vllm.ps1`.

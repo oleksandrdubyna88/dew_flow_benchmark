@@ -53,6 +53,9 @@ for round in 1 2 3; do for arm in "${ARMS[@]}"; do
   prefill "$name" "$arm-$round" 32768 | tee -a "$OUT/bench.txt"
   "$W" exec "$name" python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/metrics').read().decode())" 2>&1 \
     | tr -d '\r' | grep -E '^vllm:spec_decode' | sed "s/^/$arm-$round /" >> "$OUT/spec_metrics.txt"
+  # PREFIXTEST=1: the § 6.1 prefix-cache check, after the measurements (so it does not change them).
+  [ "${PREFIXTEST:-0}" = 1 ] && "$W" exec "$name" python3 /work/speed/prefixtest.py http://127.0.0.1:8000 qwen3.6-35b-a3b \
+    "$arm-$round" 2>&1 | tr -d '\r' | tail -2 | tee -a "$OUT/prefixtest.txt"
   if [ "$round" = 1 ]; then
     "$W" exec "$name" python3 /work/harness.py collect --url http://127.0.0.1:8000 --model qwen3.6-35b-a3b \
       --out "/work/speed/prompts_$arm.json" 2>&1 | tr -d '\r' | tail -1
