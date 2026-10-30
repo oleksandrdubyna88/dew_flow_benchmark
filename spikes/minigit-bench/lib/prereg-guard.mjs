@@ -17,7 +17,11 @@ const INPUTS = 'spikes/minigit-bench/inputs';
 export const PREREG_FILES = Object.freeze([
   'statement.md', 'analysis-contract.md', 'checklist.json', 'heldout-prereg.json', 'prediction.md', 'prompts-bare.json', 'cache-recipe.json', 'cache-snapshots.json',
   'package-flags.json', 'quiet.json', 'spend-prior.json', 'seed.sha256', 'crosscheck-policy.json', 'amendments.md',
+  // beyond the plan's S3 table (review M3): the inputs a run reads that decide the treatment and the money
+  'stacks.json', 'prices-2026-10-29.json', 'hashes.txt',
 ]);
+/** The three files above the plan's table. The plan (todo/) is not edited here; a test pins the difference. */
+export const BEYOND_PLAN_TABLE = Object.freeze(['stacks.json', 'prices-2026-10-29.json', 'hashes.txt']);
 const SEED_FILE = 'seed.txt';
 const POLICY_FREE = Object.freeze(['t2', 't3', 'decidedOn', 'reason']);
 const HARNESS_DIRS = Object.freeze(['spikes/minigit-bench/lib', 'spikes/minigit-bench/harness', 'spikes/minigit-bench/capture', 'spikes/minigit-bench/prereg', 'spikes/policy-ab-quick/lib', 'spikes/policy-ab-quick/hooks']);

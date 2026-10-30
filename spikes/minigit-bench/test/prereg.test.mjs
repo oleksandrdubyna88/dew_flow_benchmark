@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PREREG_FILES } from '../lib/prereg-guard.mjs';
+import { BEYOND_PLAN_TABLE, PREREG_FILES } from '../lib/prereg-guard.mjs';
 import { buildPrompts, extractPrompts } from '../prereg/extract-prompts.mjs';
 import { QUOTES, MARKER, extractQuotes, keptTail, renderQuotes } from '../prereg/extract-contract.mjs';
 import { extractPrediction, extractWeakenings, renderPrediction } from '../prereg/extract-prediction.mjs';
@@ -143,7 +143,7 @@ test('The_guard_list_is_the_committed_list', () => {
   const table = plan.slice(plan.indexOf('| File | Content |'), plan.indexOf('**`prediction.md`, the text**'));
   const names = table.split('\n').slice(2).filter(l => l.startsWith('|')).flatMap(l => [...l.split('|')[1].matchAll(/`([^`]+)`/g)].map(m => m[1]));
   assert.ok(names.length >= 10, 'the scan still finds the table rows');
-  assert.deepEqual([...names].sort(), [...PREREG_FILES].sort());
+  assert.deepEqual([...names, ...BEYOND_PLAN_TABLE].sort(), [...PREREG_FILES].sort(), 'the guard list is the plan\'s S3 table plus the three named inputs the plan leaves out (review M3)');
 });
 
 test('The_prereg_names_no_heldout_case', t => {

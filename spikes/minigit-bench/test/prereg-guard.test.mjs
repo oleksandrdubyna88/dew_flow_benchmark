@@ -174,3 +174,16 @@ test('The_sdk_check_reads_every_sentence_of_the_csharp_prompts_and_ignores_the_n
   assert.match(sdkProblem({ prompts: JSON.parse(promptsText('10.0.114')), stacks: {} }), /no pins\.dotnetSdk/, 'a missing pin is a refusal, never a pass');
   assert.equal(sdkCheckOfTexts({ promptsText: 'not json', stacksText: stacksText('10.0.114') }).ok, false);
 });
+
+test('Every_input_the_run_reads_and_the_plan_calls_frozen_is_a_registered_file', async () => {
+  for (const file of ['stacks.json', 'prices-2026-10-29.json', 'hashes.txt']) {
+    assert.ok(PREREG_FILES.includes(file), `${file} is registered: the toolchain pins, the price table and the input hashes decide the treatment and the money`);
+    const f = await pinned(fixture());
+    assert.equal((await guard(f)).ok, true, `control: ${file} as tagged`);
+    write(f.repo, `${INPUTS}/${file}`, file === 'stacks.json' ? `${JSON.stringify({ pins: { claude: '9.9.9', dotnetSdk: '10.0.114' } })}\n` : `edited after the tag ${file}\n`);
+    commit(f.repo, `edit ${file}`);
+    const refused = await guard(f);
+    assert.equal(refused.ok, false, `${file} edited after the tag`);
+    assert.match(refused.reason, new RegExp(`${file.replace('.', '\\.')} differs from the tagged commit`));
+  }
+});
