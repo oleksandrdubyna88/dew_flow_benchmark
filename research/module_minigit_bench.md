@@ -421,6 +421,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | No hop-by-hop header reaches the upstream, including `upgrade`, `http2-settings` and every name listed in `Connection` | `broker.test.mjs` |
 | A `2xx` `count_tokens` answer is charged 0 with the reason in the ledger line (before: the 0.05 reservation) | `broker.test.mjs` |
 | A request still streaming at the drain limit makes B = settled + unsettled reservations with `lowerBound: true`, its upstream request is destroyed, and no ledger line is written after `broker.json` and the meta (before: a settlement line landed after both) | `broker.test.mjs`, `session-launch.test.mjs` |
+| An `error` event on the response (a client that resets mid-write) cannot end the broker, and the request is still read to its end and charged (before: an unhandled `error` event on `res`) | `broker.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 

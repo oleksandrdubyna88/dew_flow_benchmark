@@ -250,6 +250,7 @@ function answer(upRes, res, entry, ledger, progress, countTokens) {
   progress.partial = () => (sse ? parser.result() : { model: null, usage: null });
   let clientClosedEarly = false;
   res.on('close', () => { if (!res.writableFinished) clientClosedEarly = true; }); // the upstream is billed whatever the client does: keep reading it
+  res.on('error', () => { clientClosedEarly = true; });
   res.writeHead(status, upRes.headers);
   upRes.on('data', chunk => {
     if (sse) parser.feed(chunk); else chunks.push(chunk);
@@ -277,6 +278,9 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
   const ledger = makeLedger({ budget, prices, cliVersion, log });
   const live = new Set(); // the upstream requests in flight
   const server = http.createServer(async (req, res) => {
+    // a client that resets mid-write makes the response emit `error` (a write to a destroyed socket before it closed); unhandled it would end the broker, and with
+    // it the cell's budget. `answer` also marks the client gone; the upstream is billed either way and stays read to its end.
+    res.on('error', () => {});
     const names = Object.keys(req.headers).sort();
     const route = routeDecision(req.method, req.url);
     if (!route.allow) {

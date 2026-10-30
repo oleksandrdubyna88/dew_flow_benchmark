@@ -477,6 +477,30 @@ test('A_count_tokens_answer_is_free_and_the_ledger_says_why_while_a_messages_ans
   }
 });
 
+test('A_client_that_resets_mid_write_cannot_crash_the_broker_and_the_request_is_still_charged', async () => {
+  const stub = await stubUpstream(async (_q, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); for (const c of chunksOf(sseBody(), 6)) { res.write(c); await sleep(40); } res.end(); });
+  const b = await startBroker({ stub, capUsd: 10 });
+  const crashes = [];
+  const onCrash = e => crashes.push(e.message);
+  process.on('uncaughtException', onCrash);
+  try {
+    // Node emits `error` on a ServerResponse written after its socket was destroyed but before it closed: forced here on every response, a window
+    // the broker's own `close` flag does not cover
+    b.broker.server.on('request', (_req, res) => { setTimeout(() => res.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })), 70); });
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    const drained = await b.broker.drain(3000);
+    assert.equal(drained.drained, true, 'both requests were read to their end');
+    assert.deepEqual(crashes, [], 'an error event on the response is handled, not thrown');
+    assert.equal(b.lines.filter(l => l.event === 'settled').length, 2, 'and both were still settled');
+    assert.equal(b.broker.summary().spentUsd, 0.018464, 'priced in full, as before');
+  } finally {
+    process.off('uncaughtException', onCrash);
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('The_sse_usage_feeder_handles_events_split_across_chunks_and_crlf', () => {
   const f = parseSseUsage();
   const body = sseBody().replaceAll('\n', '\r\n');
