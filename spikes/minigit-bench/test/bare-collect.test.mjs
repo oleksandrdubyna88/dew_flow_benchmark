@@ -85,3 +85,16 @@ test('A_failed_launch_that_left_paid_work_is_a_disposed_harness_void', () => {
   assert.equal(r.outcome.class, 'void: harness (disposed)');
   assert.ok(r.usd > 0, 'its settled spend is still charged');
 });
+
+test('An_alias_that_resolves_to_two_ids_inside_one_session_stops_the_series', () => {
+  const layout = sessionFromFixture();
+  const launch = (id, resolved) => [
+    { type: 'assistant', timestamp: '2026-10-30T10:00:00Z', message: { id: `m${id}`, content: [{ type: 'tool_use', id: `t${id}`, name: 'Agent', input: { model: 'sonnet', description: 'x' } }] } },
+    { type: 'user', timestamp: '2026-10-30T10:00:05Z', tool_use_result: { resolvedModel: resolved, agentId: `a${id}` }, message: { content: [{ type: 'tool_result', tool_use_id: `t${id}`, content: 'done' }] } },
+  ];
+  for (const ev of [...launch(1, 'claude-sonnet-5-5'), ...launch(2, 'claude-sonnet-other')]) appendFileSync(layout.files.stream, `${JSON.stringify(ev)}\n`);
+  const r = collectSession({ layout, plan: PLAN, launched: null, aliasBaseline: { aliases: {}, internal: [] }, ...ctx() });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.value.outcome.class, 'stop: alias drift');
+  assert.match(r.value.outcome.detail.reasons.join(' '), /two ids/);
+});
