@@ -198,6 +198,7 @@ public sealed class GateStepTests
         (await rig.Gate(bench).RunAsync(bench.GateContext(), Ct)).IsDone();
 
         (await File.ReadAllTextAsync(bench.Paths.Before(GateName), Ct)).Trim().Should().Be(head, "the snapshot is HEAD before the first attempt");
+        File.Exists(bench.Paths.Diff(GateName)).Should().BeTrue("a finished gate has its diff");
         (await File.ReadAllTextAsync(bench.Paths.Diff(GateName), Ct)).Should().Contain("g.txt");
 
         using var review = new StepBench();
@@ -212,6 +213,7 @@ public sealed class GateStepTests
 
         (await review.Runner().RunAsync(review.Context("CR", 1), Ct)).IsDone();
 
+        File.Exists(review.Paths.Diff("2-hreview")).Should().BeTrue("a finished reviewer has its diff");
         (await File.ReadAllTextAsync(review.Paths.Diff("2-hreview"), Ct)).Should().Contain("h.txt");
     }
 
