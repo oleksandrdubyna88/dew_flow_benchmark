@@ -6,6 +6,7 @@
 import { chmodSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+import { routeDecision } from './broker-routes.mjs';
 import { OVER_CAP_FACTOR, admit, capStatus, openState, reserve, settle } from './budget.mjs';
 
 export const DEFAULT_UPSTREAM = Object.freeze({ host: 'api.anthropic.com', port: 443, tls: true });
@@ -67,12 +68,14 @@ export function brokerView(lines) {
     present: lines.length > 0,
     forwarded: forwarded.length,
     refused: lines.filter(l => l.event === 'refused').length,
+    pathRefused: lines.filter(l => l.event === 'path-refused').length,
     unsettled: forwarded.filter(l => !done.has(l.seq)).length,
     spentUsd: settled.reduce((a, l) => a + l.chargedUsd, 0),
     settled: settled.map(l => ({ seq: l.seq, model: l.model, usage: l.usage, chargedUsd: l.chargedUsd, status: l.status, clientClosedEarly: l.clientClosedEarly })),
   };
 }
 
+const PATH_ERROR = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: 'broker: this request is not on the broker\'s route list' } });
 const API_ERROR = cap => JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: `broker: the cell's budget (${cap} USD) is spent` } });
 const hostHeader = u => (u.port === 443 || u.port === 80 ? u.host : `${u.host}:${u.port}`);
 const listen = (server, socketPath) => new Promise((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
@@ -81,13 +84,20 @@ const listen = (server, socketPath) => new Promise((resolve, reject) => { server
 function makeLedger({ budget, prices, cliVersion, log }) {
   let state = openState();
   let seq = 0;
-  const counts = { upstreamRequests: 0, refused: 0 };
+  const counts = { upstreamRequests: 0, refused: 0, pathRefused: 0 };
   const emit = line => {
     try { log({ t: new Date().toISOString(), ...line }); } catch (e) { process.stderr.write(`broker: the log sink failed: ${e.message}\n`); }
   };
   return {
     emit,
     summary: () => ({ ...counts, ...state, ...capStatus({ spentUsd: state.spentUsd, capUsd: budget.capUsd }), capUsd: budget.capUsd, overCapFactor: OVER_CAP_FACTOR }),
+    /** A request off the route list: counted and logged with its own seq, no reservation, nothing forwarded -> the seq. */
+    refusePath(req, names, why) {
+      seq += 1;
+      counts.pathRefused += 1;
+      emit({ seq, event: 'path-refused', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why });
+      return seq;
+    },
     /** Admit or refuse the next request -> `{ entry } | { refusal: { seq, why } }`. An admitted one holds a reservation until it settles. */
     open() {
       seq += 1;
@@ -169,6 +179,14 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
   const ledger = makeLedger({ budget, prices, cliVersion, log });
   const server = http.createServer((req, res) => {
     const names = Object.keys(req.headers).sort();
+    const route = routeDecision(req.method, req.url);
+    if (!route.allow) {
+      ledger.refusePath(req, names, route.why);
+      req.resume();
+      res.writeHead(403, { 'content-type': 'application/json', connection: 'close' });
+      res.end(PATH_ERROR);
+      return;
+    }
     const opened = ledger.open();
     if (opened.refusal) {
       ledger.emit({ ...opened.refusal, event: 'refused', method: req.method, path: req.url, headerNames: names });

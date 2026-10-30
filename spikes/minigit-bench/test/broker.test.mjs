@@ -217,5 +217,5 @@ test('brokerView_reads_the_ledger_lines', () => {
   assert.equal(v.spentUsd, 0.1);
   assert.equal(v.unsettled, 1, 'seq 3 never settled');
   assert.deepEqual(v.settled, [{ seq: 1, model: 'm', usage: { a: 1 }, chargedUsd: 0.1, status: 200, clientClosedEarly: false }]);
-  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, unsettled: 0, spentUsd: 0, settled: [] });
+  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, pathRefused: 0, unsettled: 0, spentUsd: 0, settled: [] });
 });
