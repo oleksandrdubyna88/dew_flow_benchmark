@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Launch;
+using ModelArms.Core.Steps;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -46,7 +47,22 @@ public sealed class ModelArmsArchitectureTests
         // E2.S0
         typeof(SchemePositions), typeof(TaskIds),
 
-        // E2
+        // E2.S1
+        typeof(StepClassifier), typeof(LimitWords),
+
+        // E2.S2
+
+        // E2.S3
+
+        // E2.S4
+
+        // E2.S5
+
+        // E2.S6
+
+        // E2.S7
+
+        // E2.S8
 
         // E3
 
