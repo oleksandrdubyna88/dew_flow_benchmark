@@ -37,7 +37,7 @@ function collectOne({ ctx, phase, signal, s }) {
   try {
     return collectSession({
       layout: s.layout, plan: s.plan, launched: s.launched, canaryTokens: s.canary.tokens, aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(s.rid),
-      abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), box: s.plan, table: ctx.table, policy: ctx.policy, home: ctx.home,
+      abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), table: ctx.table, policy: ctx.policy, home: ctx.home,
     });
   } catch (e) {
     return fail(e.message);

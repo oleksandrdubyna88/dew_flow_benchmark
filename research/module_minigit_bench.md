@@ -250,7 +250,8 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   not as a second relative path; `a/../b` resolves lexically (`typescript-7.0.2/../claude-2.1.310` is the bound claude copy) only when no component the `..` leaves is a link (`ctx.isLink`, an `lstat` on the host):
   with one, the real parent is unknown and the path is reported un-normalised, never inside the tree and never allowed.
   `outside-path` does not flag what the agent's box exposes on purpose (E3b, after the Node pilot 9804fc was voided for its own pinned TypeScript toolchain): `ctx.allow` and `ctx.skeleton` are
-  `boxView` of `lib/sandbox.mjs`, read from a bwrap argv. `allow` = the host paths the box binds (the node dir, the toolchains, the claude binary, the session's own box dirs; the harness and net dirs
+  `boxView` of `lib/sandbox.mjs`, read from a bwrap argv: `collectSession` reads the session's OWN `argv.json` (at settle and at re-collection alike: no plan and no context names a box, so a rebuilt
+  record never sees a partial one; a session with no readable `argv.json` allows nothing). `allow` = the host paths the box binds (the node dir, the toolchains, the claude binary, the session's own box dirs; the harness and net dirs
   stay protected). `skeleton` = the directories that only hold those binds (an EXACT reach for one lists nothing the box does not expose): only a directory under a `--tmpfs` of the box, and
   NEVER an ancestor of the harness or net dir nor a directory at or above the operator's home (the box can read below those: `grep -r token ~`, `cd <session> && cat harness/settings.json`). In practice:
   the toolchains folder, the `.nvm/versions/node` chain and the session's `box` dir. A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high.

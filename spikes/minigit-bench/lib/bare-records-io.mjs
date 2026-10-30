@@ -25,7 +25,7 @@ const cacheGrowthOf = ({ ctx, layout }) => (ctx.snapshotBytes == null ? null : t
 function collectAgain({ ctx, entry, layout }) {
   return collectSession({
     layout, plan: { token: ctx.token, dummy: entry.dummy }, launched: null, canaryTokens: entry.canaryTokens ?? [], aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(entry.rid),
-    retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], box: { nodeDir: ctx.nodeDir, toolchains: [ctx.tsDir], claudeBinary: ctx.claudeBinary }, table: ctx.table, policy: ctx.policy, home: ctx.home,
+    retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], table: ctx.table, policy: ctx.policy, home: ctx.home,
   });
 }
 

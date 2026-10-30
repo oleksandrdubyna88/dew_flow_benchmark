@@ -9,7 +9,7 @@ import { contaminationHits } from './contamination.mjs';
 import { seriesStopsOf } from './crosscheck.mjs';
 import { emptyCounts } from './proc-sampler.mjs';
 import { ok } from './result.mjs';
-import { boxReachable, boxSkeleton } from './sandbox.mjs';
+import { boxView } from './sandbox.mjs';
 import { loadSessionDir } from './smoke-load.mjs';
 import { SCAN_LIMITS, scanSessionDir } from './session-scan.mjs';
 import { sessionCost } from './session-cost.mjs';
@@ -46,11 +46,13 @@ function scanPart({ layout, plan, canaryTokens, scanLimits, scanHooks }) {
 }
 
 /** The contamination hits of a session and the real-token hits of its scan (row 2: the real token itself; a hit of any other kind is a credential SHAPE: row 4, review N8). */
-function contaminationPart({ scan, events, layout, plan, home, partnerDirs, box }) {
+function contaminationPart({ scan, events, layout, plan, home, partnerDirs, argv }) {
   const shapeHits = scan.hits.filter(h => h.kind !== 'own-value'); // in any file of the session directory, not only the evidence files
   const unscanned = scan.unreadable.filter(u => isEvidence(u.rel)).map(u => ({ source: u.rel, kind: 'unscanned', why: u.why }));
-  // `allow` = what the box exposes on purpose (the toolchain it binds, the session's own box dirs): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected.
-  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: boxReachable({ ...box, layout }), skeleton: boxSkeleton({ ...box, layout }), isLink: isLinkOnHost };
+  // `allow` and `skeleton` = what the box exposed on purpose (the toolchains it bound, the session's own box dirs), read from the session's OWN argv.json (never a plan or a context: a re-collection has neither the C# nor the
+  // TypeScript box in hand): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected; a session with no readable argv.json allows nothing.
+  const view = boxView({ argv: argv?.bwrap ?? [], layout, home });
+  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: view.allow, skeleton: view.skeleton, isLink: isLinkOnHost };
   return {
     realHits: scan.hits.filter(h => h.kind === 'own-value'),
     contamination: {
@@ -78,10 +80,10 @@ function spendPart({ meta, recomputeUsd, brokerLines, layout }) {
 const collectFlags = ({ seriesStops, incomplete, costCaptured }) => [...seriesStops.map(x => x.rule), ...(incomplete ? ['otel incomplete'] : []), ...(costCaptured ? [] : ['cost not captured'])];
 
 /**
- * `box` = what the agent's box bound (`{ nodeDir, toolchains, claudeBinary, extraRo, extraRw }`, a session's plan has these): the paths the `outside-path` rule does not flag. `launched` is what `launchSession` returned (`ok({ meta })` or `fail`); with a `fail` and a directory that still holds paid work the session is a `disposed` harness void.
+ * The paths the `outside-path` rule does not flag are read from the session's own `argv.json` (the bwrap argv it ran in). `launched` is what `launchSession` returned (`ok({ meta })` or `fail`); with a `fail` and a directory that still holds paid work the session is a `disposed` harness void.
  * -> `{ loaded, views, cost, alias, aliasCheck, outcome, usd, meta, scan }` | `fail(reason)` when the evidence cannot be read.
  */
-export function collectSession({ layout, plan, launched, canaryTokens = [], aliasBaseline, handVerdicts = [], retired = false, abortReason = null, partnerDirs = [], box = {}, table, policy, home = os.homedir(), scanLimits = SCAN_LIMITS, scanHooks = {} }) {
+export function collectSession({ layout, plan, launched, canaryTokens = [], aliasBaseline, handVerdicts = [], retired = false, abortReason = null, partnerDirs = [], table, policy, home = os.homedir(), scanLimits = SCAN_LIMITS, scanHooks = {} }) {
   const loaded = loadSessionDir(layout.dir);
   if (!loaded.ok) return loaded;
   const { events, brokerLines } = loaded.value;
@@ -90,7 +92,7 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   const cost = sessionCost({ E: views.E, O: views.O, T: views.T, table });
   const { alias, aliasCheck } = aliasPart({ events, aliasBaseline });
   const scan = scanPart({ layout, plan, canaryTokens, scanLimits, scanHooks });
-  const { contamination, realHits } = contaminationPart({ scan, events, layout, plan, home, partnerDirs, box });
+  const { contamination, realHits } = contaminationPart({ scan, events, layout, plan, home, partnerDirs, argv: loaded.value.argv });
   const recomputeUsd = cost.known ? cost.usd : null;
   const classed = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: realHits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
   // a check whose policy is `stop` and that breaches is a SERIES stop beside the class (T1, T2, T3 and T5 alike, a breach or, failing closed, evidence that is missing: registered, review M4, N3 and N11): the class is how the session ended and stays, the flag says why the series stopped

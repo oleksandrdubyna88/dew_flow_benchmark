@@ -2,7 +2,7 @@
 // toolchain the box binds read-only and the session's own box dirs are no reach; a partner's dir, the operator's other files, another series and the harness's own dirs stay one.
 import './fake-home.mjs'; // first: the scan reads os.homedir() as the protected home
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -21,6 +21,7 @@ const ts = path.join(toolchains, 'typescript-7.0.2');
 const claudeBinary = path.join(toolchains, 'claude-2.1.310');
 const nodeDir = path.join(home, '.nvm', 'versions', 'node', 'v26.12.1');
 const BOX = Object.freeze({ nodeDir, toolchains: [ts], claudeBinary });
+const NO_TOOLCHAIN = Object.freeze({ nodeDir, toolchains: [], claudeBinary });
 const PLAN = { token: 'sk-ant-oat01-REALREALREALREALREAL0123456789', dummy: 'sk-ant-oat01-dummy-abc123def' };
 
 /** A series under the fake home, where the real ones live: `<home>/rsd/minigit/<series>/s` (outside-path is high only under the home, a partner's dir, or the harness's). */
@@ -37,7 +38,11 @@ function session(root, rid) {
   return layout;
 }
 const toolUse = (command, i) => ({ type: 'assistant', timestamp: '2026-10-30T10:00:00Z', message: { id: `msg-x${i}`, content: [{ type: 'tool_use', id: `tu-x${i}`, name: 'Bash', input: { command } }] } });
-const run = (layout, commands, over = {}) => {
+/** The session's own `argv.json` as the launcher writes it: the bwrap argv of the box it ran in (the allow-list is read from it, never from the plan or the context). */
+const writeArgv = (layout, box) => writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: agentBoxPrefix({ layout, arm: 'bare', operatorHome: home, exists: () => false, ...box }), claude: [], envKeys: [] })}\n`);
+const run = (layout, commands, { box = NO_TOOLCHAIN, argv = true, ...over } = {}) => {
+  if (argv) writeArgv(layout, { ...box, layout });
+  else writeFileSync(layout.files.argv, 'null\n');
   commands.forEach((c, i) => appendFileSync(layout.files.stream, `${JSON.stringify(toolUse(c, i))}\n`));
   const policy = crosscheckPolicyFrom(spikeDir, {});
   assert.equal(policy.ok, true, policy.reason);
@@ -125,4 +130,21 @@ test('A_tilde_in_a_command_is_the_boxs_own_home_in_a_collected_session_and_an_ex
   const own = run(session(root, 'ad0000'), ['ls ~/.nuget/packages/', 'ls $HOME/.dotnet', 'cat ~/.npmrc', 'ls ~/.claude'], { box: BOX });
   assert.equal(own.outcome.class, 'completed', JSON.stringify(own.outcome.detail));
   assert.equal(run(session(root, 'ad1000'), [`cat ${path.join(home, '.ssh', 'id_rsa')}`], { box: BOX }).outcome.class, 'void: contaminated');
+});
+
+test('The_allow_list_is_the_binds_of_the_sessions_own_argv_json_never_the_plan_or_the_contexts_toolchain', () => {
+  const root = series();
+  const ts8 = path.join(toolchains, 'typescript-8.0.0');
+  const bound = { nodeDir, toolchains: [ts8], claudeBinary };
+  assert.equal(run(session(root, 'ae0000'), [`ls ${ts8}/node_modules`], { box: bound }).outcome.class, 'completed', 'ts-8.0.0 is what the session bound');
+  assert.equal(run(session(root, 'ae1000'), [`ls ${ts}/node_modules`], { box: bound }).outcome.class, 'void: contaminated', 'ts-7.0.2 is not bound by this session, whatever the context pins');
+  assert.equal(run(session(root, 'ae2000'), [`ls ${ts8}/node_modules`], { argv: false }).outcome.class, 'void: contaminated', 'a session with no readable argv.json allows nothing');
+});
+
+test('No_caller_of_collectSession_names_a_box_of_its_own', () => {
+  for (const file of ['bare-settle.mjs', 'bare-records-io.mjs']) {
+    const text = readFileSync(path.join(spikeDir, 'lib', file), 'utf8');
+    const call = text.slice(text.indexOf('collectSession({'), text.indexOf('});', text.indexOf('collectSession({')));
+    assert.ok(!/\bbox:/.test(call), `${file}: the box is read from the session's argv.json`);
+  }
 });
