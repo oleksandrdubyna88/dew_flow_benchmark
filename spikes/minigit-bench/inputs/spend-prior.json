@@ -18,9 +18,27 @@
     "evidence": "todo/PLAN_minigit_stack_bench_E2.md (the credential broker section: paid total)"
   },
   {
-    "date": "2026-10-29",
-    "what": "E2.S2 bare-session smoke through the broker",
-    "usd": 0.11484459999999999,
+    "date": "2026-10-30",
+    "what": "E2.S2 bare-session smoke through the broker (the first one)",
+    "usd": 0.114845,
+    "evidence": "research/module_minigit_bench.md (the first smoke, \"Replaced\" note)"
+  },
+  {
+    "date": "2026-10-30",
+    "what": "E2.S2 first re-smoke after the review fixes",
+    "usd": 0.171801,
+    "evidence": "research/module_minigit_bench.md (the first re-smoke)"
+  },
+  {
+    "date": "2026-10-30",
+    "what": "E2.S2 second re-smoke",
+    "usd": 0.114845,
+    "evidence": "research/module_minigit_bench.md (the second re-smoke)"
+  },
+  {
+    "date": "2026-10-30",
+    "what": "E2.S2 third re-smoke, the committed fixture",
+    "usd": 0.10893829999999999,
     "evidence": "spikes/minigit-bench/test/fixtures/real/claude-2.1.310-bare-smoke/meta.json"
   }
 ]

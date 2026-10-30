@@ -151,12 +151,13 @@ test('The_prereg_names_no_heldout_case', t => {
   assert.equal(r.status, 0, `leakcheck exit ${r.status}: ${r.stdout.slice(-300)}`);
 });
 
-test('The_prior_spend_is_read_from_its_evidence_and_adds_up_to_about_43_cents', () => {
+test('The_prior_spend_is_read_from_its_evidence_and_counts_every_paid_instrument_session', () => {
   const derived = spendPrior();
   assert.equal(derived.ok, true, derived.reason);
   assert.deepEqual(JSON.parse(read('spend-prior.json')), derived.value);
+  assert.equal(derived.value.length, 7, 'capture, design run, broker proof, the first smoke, the three re-smokes counted once each (the committed fixture is the last)');
   const total = derived.value.reduce((a, e) => a + e.usd, 0);
-  assert.ok(Math.abs(total - 0.4262) < 0.001, `the plan says about 0.43: ${total}`);
+  assert.ok(total > 0.8 && total < 0.85, `the instrument work before E3b: ${total}`);
   for (const e of derived.value) {
     assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(e.usd > 0 && e.what && e.evidence, JSON.stringify(e));

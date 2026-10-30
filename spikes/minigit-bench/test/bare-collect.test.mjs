@@ -1,6 +1,6 @@
 // Collecting a session back from its directory and classifying how it ended (E3b.S1 steps 5 and 7), over the bare-smoke fixture laid out as a live session dir.
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, cpSync, mkdirSync, rmSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
@@ -42,7 +42,8 @@ test('A_finished_session_dir_is_collected_and_classified_completed_with_its_spen
   const r = collect(sessionFromFixture());
   assert.equal(r.outcome.class, 'completed');
   assert.equal(r.outcome.data, true);
-  assert.ok(Math.abs(r.usd - 0.1148446) < 1e-6, `spend ${r.usd}`);
+  const fixtureUsd = JSON.parse(readFileSync(path.join(FIXTURE, 'meta.json'), 'utf8')).broker.spentUsd;
+  assert.ok(Math.abs(r.usd - fixtureUsd) < 1e-6, `spend ${r.usd} against the fixture's broker ledger ${fixtureUsd}`);
   assert.equal(r.cost.known, true);
   assert.equal(r.scan.hits, 0);
 });

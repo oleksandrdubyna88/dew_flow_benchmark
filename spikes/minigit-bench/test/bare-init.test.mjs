@@ -37,7 +37,7 @@ test('Init_pins_the_cli_copy_and_dry_run_writes_nothing', () => {
   assert.equal(planned.ok, true, planned.reason);
   const lines = describePlan(planned.value).join('\n');
   assert.match(lines, /pinned CLI 2\.1\.310/);
-  assert.match(lines, /ledger seeded with 4 prior line/);
+  assert.match(lines, /ledger seeded with 7 prior line/);
   assert.deepEqual(readdirSync(s.seriesRoot), [], 'the dry run (initPlan + describePlan) writes no file');
   assert.equal(existsSync(path.join(s.toolchainsDir, 'claude-2.1.310')), false);
 
@@ -52,7 +52,7 @@ test('Init_pins_the_cli_copy_and_dry_run_writes_nothing', () => {
   assert.deepEqual(Object.keys(map.snapshots).sort(), ['csharp', 'node']);
   assert.deepEqual([map.caps.capUsd, map.bareBudgetUsd, map.ceilingUsd], [6, 40, 500]);
   const ledger = readLedger(path.join(s.seriesRoot, s.seriesId, 'ledger.ndjson'));
-  assert.equal(ledger.length, 4);
+  assert.equal(ledger.length, 7);
   assert.ok(ledger.every(l => l.kind === 'prior'));
   for (const d of ['s', 'pairs', 'canaries']) assert.ok(existsSync(path.join(s.seriesRoot, s.seriesId, d)));
   assert.equal(applyInit({ plan: planned.value, spin: null }).ok, false, 'a series is initialised once');
