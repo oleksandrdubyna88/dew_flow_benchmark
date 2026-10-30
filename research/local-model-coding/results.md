@@ -120,12 +120,11 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
       the gate cannot be compared from these figures. The first count over-counted every resumed step: a resumed attempt reports the running
       total of its session, and the first script added every attempt. The corrected means are **$15.48 (C), $16.30 (CR) and $17.09 (SRS)**.
       The $17.09 includes SRS3's two subagents ($15.83 if the Opus and Sonnet subagents are left out). The first count had C at $16.63, CR at
-      $16.55 and SRS at $17.16, and a "C is dear because of the limit" reading that was mostly this error. **C has the lowest mean, but no
-      difference between the schemes is measured** with n = 3 (Welch's t 0.55–1.15; the ranges overlap). The spread inside SRS alone
-      ($14.64–$19.11) is larger than any difference between means.
+      $16.55 and SRS at $17.16, and a "C is dear because of the limit" reading that was mostly this error. C has the lowest mean. The ranges of the
+      three runs overlap (C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11), so the order of the means is only what these nine runs gave.
     - **Quality.** The absolute judge gave C 7.67, CR 8.50 and SRS 8.00. CR has the highest observed mean in three runs, with no major
-      finding in any CR arm. But its range overlaps the other schemes, and the gap to C comes from C1 alone (6.5, two real majors). No scheme
-      effect is measured. The Opus review still found 1–2 majors in every arm.
+      finding in any CR arm. But its range overlaps the other schemes, and the gap to C comes from C1 alone (6.5, two real majors). Three runs each: this is what
+      these runs showed, not a scheme effect. The Opus review still found 1–2 majors in every arm.
     - **The coai gate.** It gave 146 code findings: 10 real, 26 partly real, 110 not real (judge's score 2–4 of 10 per arm). The gate agent
       accepted 9 and fixed them (8 real, 1 partly real). The mutation checks did not separate the schemes.
     - **Incidents.** The overnight spend limit stopped round 1 (repaired, [incidents.md](incidents.md) §2g). SRS3's Haiku review-and-fix
@@ -145,8 +144,8 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
       test first. Haiku B found 11 findings about tests (6 major) and none about a CI machine.
     - **Quality and cost.** The Opus review found 1 / 1 / 0 blocking + major (C, CR, SRS: 1.33–1.67). The judge gave 8, 8 and 7; the 7 rests on
       a failing suite test that the hand check did not confirm (load-dependent). Claude-only cost $23.52 / $20.73 / $19.77, mean
-      **$21.34**, which is $5.86 above C and $5.04 above CR (Welch's t 4.76 and 3.95, above the 5 % limits 3.5 and 3.2) and $4.25 above SRS
-      (not measured). The extra cost comes mainly from the step that fixes the Haiku findings ($2.99).
+      **$21.34** (range $19.77–$23.52), against C $14.88–$16.47, CR $15.52–$17.49 and SRS $14.64–$19.11. On this task and this sample, every CHH
+      run cost more than every run of the other three schemes. The extra cost comes mainly from the step that fixes the Haiku findings ($2.99).
     - **The gate and the mutants.** The gate agents accepted 0 of 46 findings (1 real, 8 partly real, 37 not real). All 24 mutants were killed.
     - **Incidents.** CHH1 waited 3 h 16 min for the owner's spend limit; the SDK was upgraded during CHH3's mutation run and the run was
       repeated ([incidents.md](incidents.md) §2i).
@@ -470,10 +469,9 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
       is now only $0.5 above the next review (CR2 and SRS2, $4.76). The resumed attempt added $1.84 to that review. How much of it the
       interruption caused is not known.
   - **What the corrected means say.** C $15.48, CR $16.30, SRS $17.09 ($15.83 without SRS3's subagents). **C has the lowest mean** in
-    either case, by $0.82 (CR) and $1.62 (SRS; $0.35 if SRS3's subagents are left out). With three arms each, **no difference between the
-    schemes is measured**: Welch's t is 1.04 for CR against C, 1.15 for SRS against C, 0.55 for SRS against CR (2.6–3.9 degrees of
-    freedom; the 5 % limit of |t| is 2.8–3.7). The ranges overlap: C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. The spread inside SRS
-    alone ($4.47) is larger than any difference between means.
+    either case, by $0.82 (CR) and $1.62 (SRS; $0.35 if SRS3's subagents are left out). The ranges of the three runs overlap: C $14.88–$16.47,
+    CR $15.52–$17.49, SRS $14.64–$19.11. The range of SRS alone ($4.47) is larger than any difference between means. So the order of the
+    means is what these nine runs gave, and it is not a ranking of the schemes.
   - **Mean cost by role (C / CR / SRS), Claude only.**
     - Sonnet code or split: $8.35 / $9.10 / $3.36.
     - Haiku task coding: — / — / $3.50.
@@ -525,7 +523,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   - **SRS1's false note has a cause in the gate step.** The coai plan round named the partial class. The gate agent saw a code defect and
     merged the two files (`c768433a`). Its brief said not to change the plan file, so the plan's deviation note stayed false. The judge saw
     the final code and the final note.
-  - **CR has the highest observed mean (8.50), in three runs, and no scheme effect is measured.** The CR range (8.0–9.0) overlaps the C2
+  - **CR has the highest observed mean (8.50), in three runs. This is what these runs showed, not a scheme effect.** The CR range (8.0–9.0) overlaps the C2
     and C3 arms (8.5 and 8.0) and every SRS arm (8.0). The gap to C (7.67) comes from C1 alone (6.5, two real majors). No CR arm had a
     major from the judge. In part 5c, the four CR arms also had 0 majors and scored 8 each, so none of the 7 CR arms on two tasks had a
     major. With three arms per scheme, this is a direction and not a measured size.
@@ -567,17 +565,16 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 - **What this shows.** All three schemes deliver the plan on this task. In the objective checks (normal temp folder) all 9 arms build, pass
   the format check and both suites, deliver 43 of 43 scenarios, and every one of 72 mutants was killed.
   - **Cost.** The measured Claude-only means are C $15.48, CR $16.30 and SRS $17.09 ($15.83 without SRS3's subagents). C is the cheapest
-    mean, but with three arms each no difference is measured: Welch's t is 0.55–1.15, and the ranges overlap. The spread inside one
-    scheme is larger than the differences between means. The reviewers' cost in the gate is not measured, so the total cost of a scheme
+    mean. The ranges of the three runs overlap, and the range inside one scheme (SRS $4.47) is larger than the differences between means. The reviewers' cost in the gate is not measured, so the total cost of a scheme
     that ends in the gate is not known.
   - **Time.** SRS needs the most time (190–228 min elapsed against 124–169 for C and CR).
-  - **Quality.** SRS shows no quality gain. CR has the highest judge mean, with no scheme effect measured.
+  - **Quality.** SRS shows no quality gain. CR has the highest judge mean in three runs; the ranges overlap.
   - **The reviews.** The Haiku review-and-fix did not lower the Opus review's major findings, but it found real defects (DeepSeek's key in
     CR2 and SRS1).
   - **The gate.** It costs about $1 of Sonnet per arm. It found a few small real defects (8 accepted and fixed) among many findings that
     are wrong or against the plan (110 of 146).
 - **What it does not show.**
-  - n = 3 per scheme. The ranges overlap, and no cost difference between schemes is measured.
+  - n = 3 per scheme. The cost ranges overlap, so the order of the means is only what these runs gave.
   - One task, one repository.
   - One judge model (Opus, 2 runs). It compresses scores near 8. It scored 8 or 9 for arms with 4–9 minor findings.
   - One judge of the coai findings. It worked in each arm's clone. Commit messages and plan notes were visible, and the scheme words were
@@ -589,7 +586,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 
 | Prediction (recorded before the run, [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md)) | Observed | |
 |---|---|---|
-| P1. Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's | C $14.88–16.47 (all below), CR $15.52–17.49 (all below), SRS $14.64–19.11 (SRS2 and SRS3 in range). CR's mean $16.30 against C's $15.48: $0.82 above, a difference that is not measured (t 1.04) | **wrong** for the cost level (all lower than predicted); the sign of the CR − C gap is as predicted, its size ($0.82) is below the predicted $1–3 and not measured |
+| P1. Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's | C $14.88–16.47 (all below), CR $15.52–17.49 (all below), SRS $14.64–19.11 (SRS2 and SRS3 in range). CR's mean $16.30 against C's $15.48: $0.82 above, with overlapping ranges | **wrong** for the cost level (all lower than predicted); the sign of the CR − C gap is as predicted, its size ($0.82) is below the predicted $1–3 |
 | P2. Elapsed per arm, gate included, 3–6 h; the gate step 30–120 min | Elapsed (rounds 2 and 3): C 142–157 min, CR 124–169, SRS 190–228: 2 of 6 arms in 3–6 h (SRS2, SRS3). Round 1 cannot be read (overnight wait; active time 119–235 min). Gate step 15–37 min: 1 of 9 arms at 30 min or more (C3) | **wrong** (shorter than predicted) |
 | P3. Opus review's blocking + major per arm: C 1–3; CR at most C's; SRS at least C's | C 1 / 1 / 2 (in range), CR mean 1.67 against C's 1.33, SRS 1.67 | C holds, SRS holds, **CR wrong** (CR is above C) |
 | P4. The coai gate's first code round gives ≥ 3 findings in every arm; the judge rates at least half of all coai findings real; in at least 2 of the 3 schemes coai finds a real defect the Opus review did not name | First rounds: 6–18 findings. Real: 10 of 146 (7 %); real or partly: 36 of 146 (25 %); the best arm (C3) 6 of 17. A real finding the Opus review did not name: in C (C2, C3), CR (CR2) and SRS (SRS1, SRS2, SRS3) | parts 1 and 3 hold, **part 2 wrong** |
@@ -643,8 +640,9 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   † CHH1's last fix step hit the owner's spend limit and waited 3 h 16 min ([incidents.md](incidents.md) §2i). Active minutes leave the wait out.
 
   - **CHH costs more than the other three schemes.** The means: C $15.48, CR $16.30, SRS $17.09, CHH $21.34. CHH is $5.86 above C, $5.04
-    above CR and $4.25 above SRS. Welch's t is 4.76 against C and 3.95 against CR (the 5 % limits are 3.5 and 3.2), so those two gaps are
-    larger than the spread of the runs. Against SRS it is 2.46 (limit 2.8): not measured. Three arms each, one task: read these as a direction.
+    above CR and $4.25 above SRS. The ranges: CHH $19.77–$23.52, C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. **On this task and
+    this sample, every CHH run cost more than every run of C, CR and SRS** (the lowest CHH run, $19.77, is above the highest SRS run, $19.11).
+    Three runs each, one task: this says nothing about another task.
   - **Where the extra cost is** (mean per arm, CHH against CR). The two Haiku reviewers cost $0.47 and $0.44. The step that fixes their
     findings costs $2.99 more (Sonnet, 23–58 min). CR's single Haiku step cost $1.06. Sonnet's coding step cost $9.10 (CR $9.10, C $8.35), so it is not an extra.
     The Opus review cost $5.54 (C $4.67, CR $3.89), and the last fix and the gate $1.57 and $1.25.
@@ -713,7 +711,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
     result the briefs were written for, and the hindsight above explains it. It is not a measure of the scheme on a new task.
   - Their findings did not turn into a clear gain later. The Opus review after them found 0–1 majors (mean 0.67; C, CR, SRS: 1.33–1.67).
     The judge's mean is 7.67, the same as C (7.67), below CR (8.50) and SRS (8.00); CHH3's 7 rests on an unconfirmed finding.
-  - The extra cost is large and measured against C and CR: $5.04–$5.86 per arm, mostly from the step that fixes the Haiku findings
+  - On this task and sample the extra cost is $4.25–$5.86 per arm on the means (every CHH run above every run of the others), mostly from the step that fixes the Haiku findings
     ($2.99) and a dearer Opus review ($5.54; why is not known).
   - The coai gate found nothing that its agent fixed. Together with Part 6, after a review and fixes, the judge rated most of the gate's findings as not real.
 - **What it does not show.**

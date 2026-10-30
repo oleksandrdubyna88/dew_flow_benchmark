@@ -71,16 +71,16 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
   suites, and deliver 43 of 43 scenarios, and every one of 72 mutants is killed (inside the arms, one test failed in their own runs because of the long temp folder). The measured
   Claude-only means, **corrected on 2026-10-30**, are **$15.48 (C), $16.30 (CR) and $17.09 (SRS; $15.83 if SRS3's Opus and Sonnet subagents are left out)**. The first count added every attempt of a
   resumed step and over-counted (it gave $16.63, $16.55 and $17.16, and a wrong reading that C was dear because of the spend limit); a resumed attempt reports its session's running total
-  ([incidents.md](incidents.md) §2h). C has the lowest mean, but with three arms each **no cost difference between the schemes is measured** (Welch's t 0.55–1.15), and the spread inside one scheme is as large.
+  ([incidents.md](incidents.md) §2h). C has the lowest mean, but the ranges of the three runs overlap (C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11), so the order of the means is only what these runs gave.
   The coai providers' cost was not measured, so the total cost of a scheme that ends in the gate cannot be compared.
-  The absolute judge gave C 7.67, CR 8.50 (the highest observed mean in three runs; no major finding in any CR arm, but the ranges overlap and no scheme effect is measured) and SRS 8.00; one C arm (6.5, two real majors) makes the gap to C. The Opus review still
+  The absolute judge gave C 7.67, CR 8.50 (the highest observed mean in three runs; no major finding in any CR arm, but the ranges overlap, so this is what these runs showed, not a scheme effect) and SRS 8.00; one C arm (6.5, two real majors) makes the gap to C. The Opus review still
   found 1–2 majors in every arm. The coai gate gave 146 code findings, of which a blind judge rated 10 real, 26 partly real and 110 not real; the
   gate agent accepted and fixed 9 (8 real). An overnight spend limit stopped round 1 (repaired, [incidents.md](incidents.md) §2g), and SRS3's Haiku
   review-and-fix started two subagents on other models, so that step is marked contaminated. n = 3 per scheme: a direction, not a measured size.
 - **Part 7 — CHH, two focused Haiku reviewers, on the same task as Part 6** (3 arms; §7e). **The focuses were drawn from Part 6's misses on this same task, so the test favours CHH.**
   Haiku A named, in each arm, a defect that an arm of Part 6 had shipped (DeepSeek's quota key, a multi-line `AGY_ERROR`, a transient refusal that hides a hopeless one), and the fixer fixed it; Haiku B found 11 findings about tests
   (6 major, mostly tests without teeth) and none about a CI machine. The Opus review then found 1 / 1 / 0 blocking + major; the judge gave 8, 8 and 7 (the 7 rests on a load-dependent suite failure that the hand check did not confirm); all 24 mutants were killed; the gate
-  agents accepted 0 of 46 findings. Claude-only cost $23.52 / $20.73 / $19.77, mean **$21.34**: $5.86 above C and $5.04 above CR (both larger than the spread of the runs) and $4.25 above SRS (not measured).
+  agents accepted 0 of 46 findings. Claude-only cost $23.52 / $20.73 / $19.77, mean **$21.34** (range $19.77–$23.52), against C $14.88–$16.47, CR $15.52–$17.49 and SRS $14.64–$19.11: on this task and this sample every CHH run cost more than every run of the other schemes.
   CHH1 waited 3 h 16 min for the owner's spend limit (active minutes leave it out).
 - **The money is in reading and reviewing**, not writing: Sonnet's cache reads (tens of millions of tokens per arm) and the
   Opus review (25–47 % of an arm in parts 1–4). A cheaper writer did not move those while a Sonnet session still wrote or

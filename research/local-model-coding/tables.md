@@ -504,14 +504,7 @@ How the cost was counted, and what the first count got wrong. The first version 
 | CR | $16.55 | **$16.30** | $15.52–$17.49 |
 | SRS | $17.16 | **$17.09** ($15.83 if SRS3's Opus and Sonnet subagents are left out) | $14.64–$19.11 |
 
-Is any difference in the means measured? Welch's t test on the three arms of each scheme (a |t| below the 5 % limit is a difference that the spread of the runs can make alone):
-
-| Pair (first minus second) | Difference of means | t | df | 5 % limit of \|t\| |
-|---|---|---|---|---|
-| CR − C | +$0.82 | 1.04 | 3.9 | 2.8 |
-| SRS − C | +$1.62 | 1.15 | 2.6 | 3.7 |
-| SRS − CR | +$0.80 | 0.55 | 2.8 | 3.4 |
-| SRS (without SRS3's subagents) − C | +$0.35 | 0.35 | 3.2 | 3.1 |
+The three runs of each scheme overlap: C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. The order of the means is what these nine runs gave; it is not a ranking of the schemes.
 
 ### 10.2 Per step: model, cost, active minutes, attempts (from `data/part6/metrics6.json`)
 
@@ -947,12 +940,6 @@ CHH3's first run (kept as `mutation.attempt1-sdk-upgraded-mid-run.json`): 6 of 8
 | SRS | SRS1, SRS2, SRS3 | $17.09 ($14.64–$19.11) | 238 | 1.67 | 8.00 (8.0 / 8.0 / 8.0) | 1 | 5 / 10 / 45 | 3 / 3 / 3 |
 | CHH | CHH1, CHH2, CHH3 | $21.34 ($19.77–$23.52) | 182 | 0.67 | 7.67 (8.0 / 8.0 / 7.0) | 0 | 1 / 8 / 37 | 3 / 2 / 3 |
 
-Is the extra cost of CHH measured? Welch's t test on the three arms of each scheme (a |t| below the 5 % limit is a difference that the spread of the runs can make alone):
-
-| Pair (first minus second) | Difference of means | t | df | 5 % limit of \|t\| |
-|---|---|---|---|---|
-| CHH − C | +$5.86 | 4.76 | 2.8 | 3.5 |
-| CHH − CR | +$5.04 | 3.95 | 3.1 | 3.2 |
-| CHH − SRS | +$4.25 | 2.46 | 3.9 | 2.8 |
+Cost, observed runs: CHH $19.77–$23.52, C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. On this task and this sample, every CHH run cost more than every run of C, CR and SRS. Three runs per scheme, one task: this says nothing about another task or about a difference of means in general.
 
 CHH's "judge majors after the hand check" is 0: the one major the judge named (CHH3, a failing suite) was not confirmed. SRS3's cost keeps its $3.79 of subagent cost ($15.83 mean for SRS without it).

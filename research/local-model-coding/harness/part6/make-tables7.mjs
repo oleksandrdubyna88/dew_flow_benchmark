@@ -4,7 +4,6 @@
 // ../make-tables.mjs imports part7Tables() and appends the section to ../../tables.md after Part 6's.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tcrit, welch } from './make-tables6.mjs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -221,12 +220,10 @@ export function part7Tables() {
     p(`| ${s} | ${as.join(', ')} | ${usd(mean(costs))} (${usd(Math.min(...costs))}–${usd(Math.max(...costs))}) | ${f(mean(as.map((a) => M[a].active_min)), 0)} | ${f(mean(as.map(rv6)), 2)} | ${f(mean(ov), 2)} (${ov.map((x) => f(x)).join(' / ')}) | ${rmaj} | ${j.reduce((n, x) => n + x.real, 0)} / ${j.reduce((n, x) => n + x.partly, 0)} / ${j.reduce((n, x) => n + x.not, 0)} | ${j.map((x) => x.score).join(' / ')} |`);
   }
   p();
-  p('Is the extra cost of CHH measured? Welch\'s t test on the three arms of each scheme (a |t| below the 5 % limit is a difference that the spread of the runs can make alone):');
-  p();
-  p('| Pair (first minus second) | Difference of means | t | df | 5 % limit of \\|t\\| |');
-  p('|---|---|---|---|---|');
   const cs = Object.fromEntries(SCH.map(([s2, as]) => [s2, as.map((a) => M[a].cost)]));
-  for (const o of ['C', 'CR', 'SRS']) { const r = welch(cs.CHH, cs[o]); p(`| CHH − ${o} | +${usd(r.diff)} | ${f(r.t, 2)} | ${f(r.df, 1)} | ${f(tcrit(r.df), 1)} |`); }
+  const rng = (x) => `${usd(Math.min(...x))}–${usd(Math.max(...x))}`;
+  const allAbove = ['C', 'CR', 'SRS'].every((o) => Math.min(...cs.CHH) > Math.max(...cs[o]));
+  p(`Cost, observed runs: CHH ${rng(cs.CHH)}, C ${rng(cs.C)}, CR ${rng(cs.CR)}, SRS ${rng(cs.SRS)}. ${allAbove ? 'On this task and this sample, every CHH run cost more than every run of C, CR and SRS.' : 'The CHH runs do not all cost more than every run of the other schemes.'} Three runs per scheme, one task: this says nothing about another task or about a difference of means in general.`);
   p();
   p('CHH\'s "judge majors after the hand check" is 0: the one major the judge named (CHH3, a failing suite) was not confirmed. SRS3\'s cost keeps its $3.79 of subagent cost ($15.83 mean for SRS without it).');
   p();

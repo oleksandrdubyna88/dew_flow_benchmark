@@ -14,15 +14,6 @@ const read = (f) => JSON.parse(readFileSync(join(D, f), 'utf8'));
 export const ARMS = ['C1', 'C2', 'C3', 'CR1', 'CR2', 'CR3', 'SRS1', 'SRS2', 'SRS3'];
 export const SCHEMES = [['C', ['C1', 'C2', 'C3']], ['CR', ['CR1', 'CR2', 'CR3']], ['SRS', ['SRS1', 'SRS2', 'SRS3']]];
 const SCHEME_NAME = { C: 'Sonnet codes → Opus reviews → Sonnet fixes → coai gate', CR: 'C + a fresh Haiku review-and-fix before Opus', SRS: 'Sonnet splits → Haiku codes each task → fresh Haiku review-and-fix → Opus → Sonnet fixes → coai gate' };
-export const welch = (xs, ys) => {
-  const m = (a) => a.reduce((n, x) => n + x, 0) / a.length;
-  const v = (a) => a.reduce((n, x) => n + (x - m(a)) ** 2, 0) / (a.length - 1);
-  const se2 = v(xs) / xs.length + v(ys) / ys.length;
-  return { diff: m(xs) - m(ys), t: (m(xs) - m(ys)) / Math.sqrt(se2),
-    df: se2 ** 2 / ((v(xs) / xs.length) ** 2 / (xs.length - 1) + (v(ys) / ys.length) ** 2 / (ys.length - 1)) };
-};
-// two-sided 5 % limit of Student's t, interpolated between the usual table values (df 1 to 6)
-export const tcrit = (df) => { const T = [[1, 12.706], [2, 4.303], [3, 3.182], [4, 2.776], [5, 2.571], [6, 2.447]]; const d = Math.min(Math.max(df, 1), 6); const i = Math.min(Math.floor(d), 5); return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (d - i); };
 const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 const f = (v, d = 1) => (v == null || Number.isNaN(v) ? 'n/a' : Number(v).toFixed(d));
 const usd = (v) => (v == null ? 'n/a' : `$${v.toFixed(2)}`);
@@ -115,19 +106,11 @@ export function part6Tables() {
   }
   p();
   const SC3 = Object.fromEntries(SCHEMES.map(([s2, as]) => [s2, as.map((a) => M[a].cost)]));
-  const srsAdjArr = [M.SRS1.cost, M.SRS2.cost, M.SRS3.cost - subs];
   p('| Scheme | First-count mean | Corrected mean (primary) | Range (corrected) |');
   p('|---|---|---|---|');
   for (const [s2, as] of SCHEMES) p(`| ${s2} | ${usd(mean(as.map((a) => M1[a].cost)))} | **${usd(mean(SC3[s2]))}**${s2 === 'SRS' ? ` (${usd(srsAdj)} if SRS3\'s Opus and Sonnet subagents are left out)` : ''} | ${usd(Math.min(...SC3[s2]))}–${usd(Math.max(...SC3[s2]))} |`);
   p();
-  const w = (x, y) => welch(x, y);
-  const wr = (nm, x, y) => { const r = w(x, y); return `| ${nm} | ${r.diff >= 0 ? '+' : '−'}${usd(Math.abs(r.diff))} | ${f(r.t, 2)} | ${f(r.df, 1)} | ${f(tcrit(r.df), 1)} |`; };
-  p('Is any difference in the means measured? Welch\'s t test on the three arms of each scheme (a |t| below the 5 % limit is a difference that the spread of the runs can make alone):');
-  p();
-  p('| Pair (first minus second) | Difference of means | t | df | 5 % limit of \\|t\\| |');
-  p('|---|---|---|---|---|');
-  p(wr('CR − C', SC3.CR, SC3.C)); p(wr('SRS − C', SC3.SRS, SC3.C)); p(wr('SRS − CR', SC3.SRS, SC3.CR));
-  p(wr('SRS (without SRS3\'s subagents) − C', srsAdjArr, SC3.C));
+  p('The three runs of each scheme overlap: C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. The order of the means is what these nine runs gave; it is not a ranking of the schemes.');
   p();
   p('### 10.2 Per step: model, cost, active minutes, attempts (from `data/part6/metrics6.json`)');
   p();

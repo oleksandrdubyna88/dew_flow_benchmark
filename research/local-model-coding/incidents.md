@@ -190,8 +190,8 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   (SRS without SRS3's two subagents: $15.83, first count $15.90). SRS3's subagent cost ($3.79 of $5.35) is unchanged: that step ran once.
 - **What changed in the conclusions.** The first count made C look dearest, and the write-up first explained that with C1's limit-split
   Opus review and then "adjusted" the C mean to $15.16 and said the C/CR order reverses. That adjustment was mostly this counting error.
-  With the corrected numbers C has the lowest mean and CR the next, SRS the highest, and no difference is measured with three arms each
-  (Welch's t 0.55–1.15). Active minutes, elapsed minutes, quality, findings and mutation results are not touched.
+  With the corrected numbers C has the lowest mean and CR the next, SRS the highest, and the ranges of the three runs overlap (C $14.88–$16.47,
+  CR $15.52–$17.49, SRS $14.64–$19.11), so the order of the means is only what these runs gave. Active minutes, elapsed minutes, quality, findings and mutation results are not touched.
 - **What was changed.** `metrics6.mjs` now takes, per session, the result of the LAST attempt, and sums that over the sessions of a step (a header
   comment says why). The first output is kept as `data/part6/metrics6.v1-summed-attempts.json`. Every Part 6 cost in [results.md](results.md),
   [tables.md](tables.md), [README.md](README.md), this file and [protocol.md](protocol.md) was recomputed from `metrics6.json`.

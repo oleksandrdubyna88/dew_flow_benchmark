@@ -501,7 +501,7 @@ The full design is the end of [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL
   protocol and the write-up worktree). `after7.sh` makes the three arms and runs them. `mutate6.mjs` got the anchors for the CHH arms before any CHH result.
 - **Measured.** As in Part 6, plus the two Haiku reviewers' findings (`notes/hA.json`, `notes/hB.json`) and what the fixer did with each (`notes/hfix.md`).
   Not pre-registered, added after the results: the hand check of the judge's major (CHH3), the check of the renamed S33, the check of the three named defects
-  against the reviewed commits and the final code, and the Welch tests of the cost differences.
+  against the reviewed commits and the final code, and the comparison of the cost ranges.
 
 | # | Prediction (recorded before the run) |
 |---|---|
