@@ -52,8 +52,7 @@ function plantFor({ ctx, item, partner, d }) {
 function sessionPlan({ ctx, item }) {
   return bareSessionPlan({
     layout: item.layout, stack: item.session.stack, phase: item.session.phase, claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir,
-    token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')), prices: ctx.prices, operatorHome: ctx.home, harnessSources: ctx.harnessSources, caps: ctx.caps, envExtra: ctx.envExtra ?? {},
-    ...(ctx.planOver ?? {}),
+    token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')), prices: ctx.prices, operatorHome: ctx.home, harnessSources: ctx.harnessSources, caps: ctx.caps, envExtra: ctx.envExtra ?? {}, over: ctx.planOver ?? {},
   });
 }
 

@@ -107,4 +107,6 @@ test('The_session_plan_carries_the_registered_caps_and_hosts_and_a_neutral_cell_
   assert.equal(plan.prompt, promptFor({ stack: 'csharp', phase: 'v1' }));
   assert.equal(plan.cellId, 'cell-abc123');
   assert.doesNotMatch(JSON.stringify({ cell: plan.cellId }), /csharp|bare|node/);
+  const stubbed = bareSessionPlan({ layout, stack: 'node', phase: 'v2', claudeBinary: '/x/c', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', token: 'real', dummy: 'dummy', prices: {}, operatorHome: '/h', harnessSources: {}, over: { upstream: { host: '127.0.0.1', port: 1, tls: false }, tickMs: 5 } });
+  assert.deepEqual([stubbed.upstream.port, stubbed.tickMs, plan.upstream], [1, 5, undefined], 'the test seam reaches the plan; a real run has no upstream override');
 });

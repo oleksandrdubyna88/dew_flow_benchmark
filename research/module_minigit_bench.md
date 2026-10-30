@@ -1,8 +1,8 @@
 # minigit stack bench — the measurement instruments (epic E1)
 
 > What exists **today**, in `spikes/minigit-bench/`. Epic E1 of `todo/PLAN_minigit_stack_bench.md` is built: three
-> instruments that give correct numbers before any model touches the task. No session has been run through them yet,
-> and nothing here is a result. What is still missing is in [What it does not do yet](#what-it-does-not-do-yet).
+> instruments that give correct numbers before any model touches the task; E2.S1-S2 add the box and the launch, and E3b.S1-S3 (code half) the bare runner
+> (section 6). No paid session has been run through the runner yet, and nothing here is a result. What is still missing is in [What it does not do yet](#what-it-does-not-do-yet).
 >
 > **This repository is public and the sessions it will score have network.** This document, like every file committed
 > in clear, names the held-out suite only by shape: its counts (N1 = 29 cases for v1, N2 = 29 for v2, M = 14 mutants)
@@ -362,6 +362,101 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | `… smoke-session.mjs sanitise --from <dir> --to <fixture dir>` | stages the session into the capture-shaped layout and copies it through the sanitiser, fail-closed | 0 · 5 |
 | `… smoke-session.mjs verdicts --fixture <fixture dir>` | computes `SMOKE.md` (the B-* table) from the fixture | 0 · 3 · 5 |
 
+### 6. The bare runner, the quiet check and the pre-registration code (E3b)
+
+Spec by Opus (`todo/PLAN_minigit_stack_bench_E3_bare.md`, E3b.S1 to S3), coded by Sonnet on `feat/minigit-bench-e3b`. **Built and tested with a stub CLI; no paid session has been
+run through it.** What is still open is listed at the end of this section and in [What it does not do yet](#what-it-does-not-do-yet).
+
+**One command, one pair.** `bare-runner.mjs run --series <dir> --what pair:<k>` runs pair k: C# v1 and TS v1 started in the same tick on their CPU masks, both collected and
+scored (the **barrier**), then both v2 from their own v1 trees; every session is classified by how it ENDED, voids are re-run once by the schedule, and every session and the pair
+get a record. `--what aa` (two identical bare C# v1 twins on masks 0-5 and 8-13) and `--what pilot-node` (one bare Node v1) are the same machinery over a fixed list. The run-map is
+written tmp + rename after every transition, so a crash resumes from what the files say.
+
+| Piece | File | What it decides |
+|---|---|---|
+| CLI | `bare-runner.mjs` | `init`, `snapshot`, `seed-commit`, `seed-reveal`, `run`, `resume`, `status`; `--dry-run` on `init` and `run` writes, claims and spends nothing; re-executes itself under `taskset -c 6,7` (an env marker stops a loop), so its broker, receiver, proxy and sampler sit on core 3 |
+| Loop | `lib/bare-series.mjs` | the gates (guard, `retireStale`, preflight, quiet check, spend gate, in that order), launch, classify and charge, the score step, resume (`reconcile`) |
+| One phase | `lib/bare-phase.mjs` | layouts claimed, workspaces filled, caches seeded, canaries planted (manifest first) and unplanted in a `finally`, same-tick start behind `taskset -c <mask> nice -n 19`, the spawn stamped at the seam, `startSkewMs` |
+| Plan | `lib/bare-plan.mjs` | `ridOf` (`sha256('<seed>:bare:p<pair>:<stack>:<phase>:a<attempt>')[0:6]`), `maskFor` (0-5 / 8-13, swapped each pair, the seed decides pair 1), `firstStack` (a seeded bit per pair and phase), `promptFor` (reads `inputs/prompts-bare.json`), `bareSessionPlan` |
+| Outcome | `lib/bare-outcome.mjs` | the outcome table below, a pure function over records |
+| Schedule | `lib/bare-schedule.mjs` | the barrier and the void / re-run table below |
+| Money | `lib/spend-gate.mjs`, `lib/ledger.mjs`, `policy-ab-quick/lib/spend.mjs` | two limits through one widened `spendDecision(spent, ceiling, caps, { liveUsd, factor, label })`; the stop-rule figure; the cost of an interrupted session |
+| Records | `lib/bare-record.mjs`, `lib/bare-records-io.mjs`, `lib/loc.mjs` | the session, cell and pair records |
+| State | `lib/run-map.mjs`, `lib/amendments.mjs`, `lib/alias-store.mjs` | the run-map and its transitions, the dated amendment lines, the D12 baseline |
+| Scoring | `lib/score-run.mjs` | `score-session.mjs` as a child under `taskset -c 0-13`, bounded as a whole |
+| Caches | `lib/cache-snapshot.mjs`, `lib/packages.mjs`, `inputs/cache-recipe.json`, `inputs/package-flags.json` | the two hashed snapshots and the package list with its flags |
+| Guard | `lib/prereg-guard.mjs` | the pre-registration guard and `harnessIdentity` |
+| Quiet | `lib/cpu-sampler.mjs`, `lib/quiet.mjs`, `inputs/quiet.json` | the machine-quiet check, the phase sampler, the spin probe |
+
+**Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`) |
+4 usage or configuration (including every guard refusal) | 5 the runner or the scorer failed | 130 / 143 cancelled by SIGINT / SIGTERM (the sessions that ran are recorded as interrupted harness voids).
+
+**The outcome table** (`bareOutcome`, first match wins; a † row is a registered extension of parent 11.1). A class is decided by how the session ended, never by the exit code and never
+by a scorer fault.
+
+| # | Evidence | Class | Data? |
+|---|---|---|---|
+| 1 | `checkAliases` says stop | `stop: alias drift` | no |
+| 2 | the real token counted by a sampler or the session scan | `stop: security` | no |
+| 3 | the final failed request answered 401 or 403 | `stop: auth` † | no |
+| 4 | a high contamination hit, a canary, a token-shape hit (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` | no |
+| 5 | `stopped = readback`, or no settled 2xx broker line with parsed usage | `void: harness` | no |
+| 6 | `stopped = cancelled` (the abort reason recorded) or `disposed`, or the state file retired by `retireStale` | `void: harness (interrupted \| disposed)` † | no |
+| 7 | `stopped = cost`, the CLI's `error_max_budget_usd`, or the final failed request a broker refusal with `reason: 'cap'` | `killed: cap`, censored at the stop-rule figure | yes |
+| 8 | `rateLimitSignal` AND the session ended in an error | `void: rate limit` | no |
+| 9 | the final failed request was an upstream 5xx / 529 (or a transport error) | `void: upstream` † | no |
+| 10 | `stopped = wall` or `stall` | `killed: wall \| stall`, censored | yes |
+| 11 | envelope `success`, not an error | `completed` | yes |
+| 12 | anything else after the model answered | `crashed: <subtype>` | yes |
+
+Row 7 comes before row 8 on purpose: the broker answers its cap refusal with HTTP 429 `rate_limit_error`, which `rateLimitSignal` alone would void and pay for twice (the test
+`A_final_cap_refusal_is_a_cap_kill_not_a_rate_limit_void` was watched failing on exactly that reading). Row 7 reads the `reason` field of the broker's refused lines that the E2.S2 review
+adds; a refusal without it is `unknown` and never a cap. Flags, never classes: `broker refused k` (with the summed backoff), `upstream 429 k`, `model_refusal_fallback`, `over cap`,
+`v1 inputs changed`, `start skew` (over 5 s), `foreign load`, `harness core contended`, `started not quiet`, `scored under load`, and the package flags.
+
+**The schedule** (`nextStep`; a void is re-run once, attempt `a2`, fresh rid; re-runs come after the pair's own phases and before the next pair):
+
+| After the v1 phase | Next steps |
+|---|---|
+| both data | the v2 pair |
+| both void | the v1 re-run pair (paired), then v2 for those with data |
+| one void (say C#) | TS v2 alone (`ran unpaired`), C# v1 `a2` alone (`ran unpaired`), C# v2 alone (`ran unpaired`) |
+| a void `a2` | that cell is `missing` and its v2 never runs |
+| one v2 void / both v2 void | that v2 `a2` alone / the v2 re-run pair |
+
+A `stop:` class halts the series; the session is kept. A void session is not scored (there is nothing to score); the barrier waits only for data sessions.
+
+**Resume** (`bare-runner.mjs resume`). First every canary of the manifests is unplanted, then `retireStale` runs, then each `launching` session is settled by what its directory says: `meta.json`
+present means the launch ended (adopted), paid work without it is a `void: harness` charged its settled spend plus unsettled requests at the reservation, nothing paid means planned
+again under the same rid. A changed pin, stacks file, prices file, snapshot hash, prereg tag or seed hash refuses the resume naming it; a changed harness identity is accepted only with
+`--accept-harness <identity> --amendment <date>` and a dated line of `inputs/amendments.md` that names `harness:<12 hex>`; a series stop is never passed (`--after-stop` refuses it).
+
+**The pre-registration guard** (`preregGuard`, before every launch): the tag `prereg/minigit-bare-<date>` is on origin and peels to the run-map's commit; every registered file at HEAD is its
+tagged blob, except `amendments.md` (append-only), `seed.txt` (absent at the tag, hashing to `seed.sha256`, required for a data pair) and `crosscheck-policy.json` (free only in `t2`, `t3` and
+their dated reason); a paid run also needs `git status --porcelain -- spikes/` empty and the harness identity (sha256 over git TREE ids of `lib`, `harness`, `capture`, `prereg`, the spike's top-level
+`*.mjs` and `policy-ab-quick`'s `lib` and `hooks`, never HEAD) to be the pinned or an accepted one.
+
+**The machine-quiet check** (`inputs/quiet.json`). Before a phase, a 60 s window of 5 s samples must show: host CPU minus the harness's own ticks, mean at most 0.5 CPU and no sample over 1.5;
+no foreign `claude -p` / `codex exec` (another user's process counts); `MemAvailable` at least 25 %; no live session of any series under `~/rsd/minigit/*/s/`; and the spin probe median within 1.30 x
+the idle median calibrated at `init`. Not quiet: re-checked every 60 s for 30 min, then exit 3 with the verdict (foreign cmdlines through `maskTokens`). `--accept-noisy <reason>` starts anyway with
+the flag `started not quiet` and is refused for a v2 phase whose v1 was quiet. During a phase the sampler appends a line every 5 s to `pairs/p<k>-<phase>-cpu.ndjson` and **flags**, never kills:
+`foreign load` (a 60 s mean over 1.0 CPU, or a foreign agent), `harness core contended` (the spin median). The foreign-CPU figure is a lower bound. The mask is observed on the cell's inner processes
+(`Cpus_allowed_list`); a miss is an instrument miss, not a class.
+
+**The cache snapshots** (`bare-runner.mjs snapshot --stack csharp|node`). One snapshot per stack, made once through `inputs/cache-recipe.json` inside an agent box behind the egress proxy with the bare
+host list, hashed (`treeHash`: sorted entries, mode without its write bits, content hash; never mtimes), named `cache-<stack>-<hash12>` and made read-only under `~/rsd/minigit/toolchains/`. Every session gets
+BOTH copied in (`box/nuget`, `box/home/.dotnet`, `box/npm`), each part re-hashed against the registered value. After a session `packagesOf` lists every npm tarball in the cache index and every NuGet package,
+those added over the snapshot, and the flags of `inputs/package-flags.json`.
+
+**The pre-registration files** (`inputs/`, written by scripts in `prereg/`, never typed): `prompts-bare.json`, `prediction.md` and the quote half of `analysis-contract.md` are quoted from parent plan commit
+`85c54b7` (an ancestor of origin/main); `heldout-prereg.json` is derived from the manifest, the archive hash and the ids-only calibration with no key read; `spend-prior.json` is read from the capture and
+smoke meta files and the two figures of the E2 plan. `seed-commit` writes only the seed's sha256 to `inputs/seed.sha256` (the seed itself, mode 600, outside git); `seed-reveal` writes `inputs/seed.txt` after
+the A/A and refuses a seed that does not hash to the committed value. Not written by code: `statement.md`, the operationalizations below the marker of `analysis-contract.md`, `checklist.json` (Opus text);
+`cache-snapshots.json` (from the real snapshots) and `seed.sha256` (the operator runs the command).
+
+**Not built, or waiting.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). Waiting on the E2.S2 review fixes in the broker, the egress proxy and `sandbox.mjs`: the broker's `reason` on refused
+lines (row 7 needs it), seam 2 (`BUILD_SERVERS_OFF`: the bare box still runs with the build servers off until the three keys leave `agentEnv`'s fixed list) and seam 3 (bytes per tunnel in the egress log).
+
 ## Entry points
 
 Run from the repository root. `write` goes to stdout; the exit code is the contract. No command takes the held-out key on
@@ -385,6 +480,13 @@ argv or in the environment.
 | `node spikes/minigit-bench/capture/capture-session.mjs run --out <dir outside every git tree> [--dry-run]` | **spends money** (≤ $1.50): one tiny session on an unrelated task with OTel pointed at a raw file sink. The subscription token (from `claude setup-token`) is read ONLY from `~/.config/minigit-bench/claude-oauth-token` (a regular file of mode 600 in a directory of mode 700); an environment variable has no mode to check, so `CLAUDE_CODE_OAUTH_TOKEN` in the shell is ignored. Prints a start line (the out dir and its `capture.log`) before the wait and a final `capture status:` line | 0 done · 3 environment (no token file, a wrong mode, `claude` missing, bad out dir) · 4 usage · 5 the capture failed |
 | `… capture-session.mjs sanitise --from <dir> --to <fixture dir>` | copies the capture through the sanitiser into a sibling staging directory and renames it into place after every write; a leak finding or a failed write leaves nothing in the fixture directory | same |
 | `… capture-session.mjs verdicts --fixture <fixture dir>` | computes the assumption table into `CAPTURE.md` and prints the decisions (`join`, `t3OutputSource`, `OTEL_STAMP_MARKS`, `HOOK_TIME_SOURCE`); nothing typed by hand | same |
+| `node spikes/minigit-bench/bare-runner.mjs init --series-id s-<yyyymmdd>-<4 hex> [--dry-run]` | pins a series: the CLI copy at `~/rsd/minigit/toolchains/claude-<pin>` (mode 0555, sha256), `run-map.json`, the ledger seeded from `inputs/spend-prior.json`, the spin calibration. Needs exactly one `prereg/minigit-bare-*` tag, `inputs/seed.sha256` and `inputs/cache-snapshots.json`. `--dry-run` prints all of it and writes nothing | 0 · 4 configuration |
+| `… bare-runner.mjs snapshot --stack csharp\|node [--out D] [--work-root D]` | makes one cache snapshot from `inputs/cache-recipe.json` in an agent box through the proxy (registries only, free); prints the tree hash, size, parts and packages | 0 · 4 · 5 |
+| `… bare-runner.mjs seed-commit` / `seed-reveal` | the bare seed as commit-reveal: the hash into `inputs/seed.sha256`, the seed to `~/rsd/minigit/seeds/bare.seed` (mode 600); after the A/A the reveal into `inputs/seed.txt` | 0 · 4 |
+| `… bare-runner.mjs run --series <dir> --what aa\|pilot-node\|pair:<1-3> [--dry-run] [--accept-noisy <reason>]` | **spends money** (cap $6 per session; the $40 bare budget and the $500 ceiling are gated before every phase). Drives the loop of section 6. `--dry-run` prints the phase, rids, masks and gate lines and claims, starts and writes nothing | 0 · 2 · 3 · 4 · 5 · 130 · 143 |
+| `… bare-runner.mjs resume --series <dir> [--what …] [--accept-harness <identity> --amendment <date>] [--after-stop <rule> --reason <text>]` | reconciles and continues (section 6, "Resume") | as `run` |
+| `… bare-runner.mjs status --series <dir>` | prints the harness core (`Cpus_allowed_list`, whether the re-exec marker is set), the stop if any, both spend limits and every session | 0 · 4 |
+| `node spikes/minigit-bench/prereg/extract-prompts.mjs\|extract-prediction.mjs\|extract-contract.mjs --parent-commit <sha on origin/main>`, `prereg/heldout-prereg.mjs`, `prereg/spend-prior.mjs` | write the generated pre-registration files in `inputs/` (section 6) | 0 · 4 · 5 |
 
 The counters, the partition and the ledger reader are libraries; their public functions are `sessionCost`, `crosscheck`,
 `aliasRecord`, `checkAliases`, `startReceiver`, `spansFrom`, `partition`, `readLedger`, `ledgerSummary` and `roundsSpans`.
@@ -477,9 +579,10 @@ machine.
 | The treatment itself: the conventions snapshot branch, the one-source templates, the four template branches, the lint gate | E2 (S4) |
 | A flush of the CLI's last OTel batch on a stop: none arrived after a SIGTERM (B-K2), so the broker's ledger, not O, prices a killed session | E3 (the runner) |
 | `EGRESS_HOSTS.process` settled with evidence, a broker or scan for the GitHub PAT, `settingsFor('process')`'s coai entries | E2 (S4) |
-| A **runner**: blocks, barrier, seeded order, voids, re-runs, resume and the spend ceiling; no command yet runs the counters or the partition on a session | E3 (S1) |
+| The **process arm's** runner: blocks, the arm-lead draw, the process pair; E3b built the BARE one (section 6), stub-tested, never run paid | E3 (S1) |
 | The **compliance checker** over GitHub, `coai.db` and the stream, and GitHub's intervals (`ci_wait`, `coderabbit_wait` stay generic `wait` until then); a `delivered` verdict, so a process session's `accepted` reads `unknown` | E3 (S2) |
-| Pre-registration committed before the first paid session, P0 (no model), the model smoke through the bridge | E3 (S3) |
+| The pre-registration's own texts (`statement.md`, the operationalizations of `analysis-contract.md`, `checklist.json`) and its tag; the process scope; P0 (no model), the model smoke through the bridge | E3b.S3 (Opus text, the operator's tag), E3 (S3) |
+| The bare A/A, its `aa-verdicts`, the v2 rehearsal, the Node pilot, the three bare pairs and the interim record (`report`) | E3b.S4, S5 |
 | The A/A and P1 pilots that decide whether **T3 becomes a stop** (`policy.t3` is `investigate` today; the pre-registered fallback is `fallback-t2` with `t2 = stop`), the day-1 price re-read, the draw | E3 (S4) |
 | A **real coai ledger**: the reader's fixtures are synthetic | E3 (S3–S4) |
 | The twelve-cell series, the block-1 by-hand read-back, the blind hand classing of failing held-out cases, the ≥ 20-verdict compliance hand check | E4 (S1–S2) |
@@ -515,6 +618,7 @@ reported by their reasons and are the only skips a complete run may show:
 - `todo/PLAN_minigit_stack_bench.md` — the parent plan (§5 inputs and scoring, §8 the harness, §9 accounting, §10 time) and
   the epics E2–E4 that remain.
 - `todo/PLAN_minigit_stack_bench_E1.md` — the E1 stories with their test ids and the dated amendments.
+- `todo/PLAN_minigit_stack_bench_E3_bare.md` — the bare-first stories E3b.S1 to S5: the runner, the quiet check, the pre-registration, the A/A and the three bare pairs.
 - `spikes/minigit-bench/inputs/UPSTREAM.md` — where the inputs come from and the licence decision.
 - `spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/CAPTURE.md` — the capture's table with observed values.
 - `research/scout-calibration/prices.json` — the earlier dated price table the new one descends from.

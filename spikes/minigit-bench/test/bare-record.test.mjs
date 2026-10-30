@@ -71,6 +71,15 @@ test('A_session_that_was_not_scored_says_so_with_a_reason_and_a_missing_view_is_
   assert.equal(r.cost.aliases.known, false);
 });
 
+test('A_failed_build_has_no_heldout_percent_and_that_is_recorded_as_null_never_zero', () => {
+  // the scorer's shape when the build failed (score-scripts.mjs: { known: true, primary100: false, reason: 'build failed' }): the held-out suite never ran
+  const r = smokeRecord({ score: { ...SCORE, build: { ok: false }, heldout: { known: true, primary100: false, reason: 'build failed' } } });
+  assert.equal(r.quality.buildOk.value, false);
+  assert.equal(r.quality.heldout.known, true);
+  assert.deepEqual(r.quality.heldout.value, { percent: null, defects: null, blocked: null, failed: null, total: null, primary100: false, reason: 'build failed' });
+  assert.deepEqual(badLeaves(r.quality, 'quality'), []);
+});
+
 test('The_turns_are_checked_against_assistant_messages', () => {
   const r = smokeRecord();
   assert.equal(typeof r.time.turns.value.agree, 'boolean');

@@ -7,7 +7,8 @@ import { launchPhase, maskedSpawn } from '../lib/bare-phase.mjs';
 import { context, items, sleep } from './bare-ctx.mjs';
 
 test('A_phase_starts_every_session_on_its_mask_stamps_the_spawn_and_measures_the_skew', async () => {
-  const ctx = context();
+  const ctx = { ...context(), planOver: { tickMs: 7 } };
+  const seenPlans = [];
   const spawns = [];
   const fakeChild = {};
   const deps = {
@@ -17,6 +18,7 @@ test('A_phase_starts_every_session_on_its_mask_stamps_the_spawn_and_measures_the
     listProjectDirs: () => [path.join(ctx.home, '.claude', 'projects', 'p1')],
     // the stub launch: spawns the box through the injected seam, 30 ms after the first for the second, and returns 200 ms later
     launchSession: async (plan, d) => {
+      seenPlans.push(plan);
       if (plan.layout.rid !== items(ctx)[0].rid) await sleep(30);
       d.spawnBox(['bwrap', '--x'], { A: '1' });
       await sleep(200);
@@ -30,6 +32,7 @@ test('A_phase_starts_every_session_on_its_mask_stamps_the_spawn_and_measures_the
   assert.ok(skew >= 25 && skew < 150, `skew ${skew} ms is the gap between the two spawns, not between the two launch calls returning`);
   assert.deepEqual(spawns.map(s => [s.exe, ...s.argv.slice(0, 6)]), [['taskset', '-c', '0-5', 'nice', '-n', '19', 'bwrap'], ['taskset', '-c', '8-13', 'nice', '-n', '19', 'bwrap']]);
   assert.equal(r.value.sessions.length, 2);
+  assert.deepEqual(seenPlans.map(p => p.tickMs), [7, 7], 'the test seam (ctx.planOver) reaches every launch plan');
   for (const s of r.value.sessions) {
     assert.equal(typeof s.stampMs, 'number');
     assert.ok(existsSync(s.layout.dir));

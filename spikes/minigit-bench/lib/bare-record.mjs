@@ -46,15 +46,20 @@ const timePart = ({ views, meta }) => {
   };
 };
 
+/** The held-out measures; a failed build never ran the suite (`{ known: true, primary100: false, reason }`, no totals), so its percent is null, never 0. */
+const heldoutOf = h => (h.totals
+  ? { percent: h.totals.percent, defects: h.defects, blocked: h.totals.blocked, failed: h.totals.failed, total: h.totals.total, primary100: h.primary100 }
+  : { percent: null, defects: null, blocked: null, failed: null, total: null, primary100: h.primary100, reason: h.reason ?? 'the suite reported no totals' });
+
 const qualityPart = score => {
   if (!score) return { buildOk: notCaptured('the session was not scored'), visible: notCaptured('the session was not scored'), heldout: notCaptured('the session was not scored'), upstreamOriginal: notCaptured('the session was not scored'), latency: notCaptured('the session was not scored') };
   const h = score.heldout;
   return {
     buildOk: known(score.build.ok),
     visible: known(score.visible.map(v => ({ script: v.script, passed: v.passed, failed: v.failed, expectedTotal: v.expectedTotal, hundredPercent: hundredPercent(v) }))),
-    heldout: h.known ? known({ percent: h.totals.percent, defects: h.defects, blocked: h.totals.blocked, failed: h.totals.failed, total: h.totals.total, primary100: h.primary100 }) : notCaptured(h.why),
+    heldout: h.known ? known(heldoutOf(h)) : notCaptured(h.why),
     upstreamOriginal: known(score.upstream.map(v => ({ script: v.script, passed: v.passed, expectedTotal: v.expectedTotal }))),
-    latency: h.known && h.latency ? (h.latency.known === false ? notCaptured(h.latency.why) : known(h.latency)) : notCaptured('no held-out latency'),
+    latency: h.known && h.latency ? (h.latency.known === false ? notCaptured(h.latency.why) : known(h.latency)) : notCaptured(h.known ? `the held-out suite did not run: ${h.reason ?? 'no latency'}` : 'no held-out latency'),
   };
 };
 

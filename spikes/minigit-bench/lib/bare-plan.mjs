@@ -46,10 +46,13 @@ export function promptFor({ stack, phase, registered = JSON.parse(readFileSync(R
 /** The pinned input files a workspace of this phase holds, and nothing else (v2 keeps the v1 inputs: the agent's tree already holds them). */
 export const workspaceFiles = phase => (phase === 'v1' ? ['SPEC-v1.txt', 'test-v1.sh'] : ['SPEC-v1.txt', 'test-v1.sh', 'SPEC-v2.txt', 'test-v2.sh']);
 
-/** The plan `launchSession` takes for one bare session (E2.S2's entry point); every value an input of it, none read from the environment. */
-export function bareSessionPlan({ layout, stack, phase, claudeBinary, cliVersion, nodeDir, tsDir, token, dummy, prices, operatorHome, harnessSources, caps = BARE_CAPS, envExtra = {} }) {
+/**
+ * The plan `launchSession` takes for one bare session (E2.S2's entry point); every value an input of it, none read from the environment. `over` is the test seam (a stub upstream,
+ * short ticks) and is spread LAST, so a real run passes none.
+ */
+export function bareSessionPlan({ layout, stack, phase, claudeBinary, cliVersion, nodeDir, tsDir, token, dummy, prices, operatorHome, harnessSources, caps = BARE_CAPS, envExtra = {}, over = {} }) {
   return {
     layout, arm: 'bare', cellId: `cell-${layout.rid}`, prompt: promptFor({ stack, phase }), ...caps,
-    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra,
+    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra, ...over,
   };
 }
