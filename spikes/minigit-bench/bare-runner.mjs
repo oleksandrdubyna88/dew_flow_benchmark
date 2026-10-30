@@ -152,18 +152,29 @@ async function cmdInit(v, write, seams = {}) {
   return finishInit({ ...prepared.value, write });
 }
 
-async function cmdSnapshot(v, write) {
-  if (!['csharp', 'node'].includes(v.stack)) { write('usage error: --stack csharp|node'); return EXIT.config; }
-  const recipe = loadRecipe(JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe.json'), 'utf8')));
-  if (!recipe.ok) { write(recipe.reason); return EXIT.config; }
-  const made = await makeSnapshot({ stack: v.stack, recipe: recipe.value, root: path.resolve(v['work-root'] ?? defaults().workRoot), out: path.resolve(v.out ?? defaults().toolchainsDir) });
-  if (!made.ok) { write(`snapshot: ${made.reason}`); return EXIT.failed; }
-  const s = made.value;
-  write(`snapshot ${v.stack}: ${s.dir}\n  tree sha256 ${s.treeSha256}\n  size ${s.sizeBytes} bytes\n  parts ${JSON.stringify(s.parts)}\n  packages ${s.packages.length}\n  record ${JSON.stringify(snapshotRecord(s))}`);
-  if (!v.register) return EXIT.done;
+/** `ok(recipe)` for `--stack csharp|node` and the registered cache recipe, or `fail(sentence)`. */
+function snapshotRecipe(v) {
+  if (!['csharp', 'node'].includes(v.stack)) return fail('usage error: --stack csharp|node');
+  return loadRecipe(JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe.json'), 'utf8')));
+}
+
+/** The lines `snapshot` prints for a made snapshot. */
+const snapshotLines = (stack, s) => `snapshot ${stack}: ${s.dir}\n  tree sha256 ${s.treeSha256}\n  size ${s.sizeBytes} bytes\n  parts ${JSON.stringify(s.parts)}\n  packages ${s.packages.length}\n  record ${JSON.stringify(snapshotRecord(s))}`;
+
+/** `--register`: write the snapshot's record into inputs/cache-snapshots.json. -> the exit code. */
+function registerMade(v, s, write) {
   const registered = registerSnapshot({ file: path.join(SPIKE, 'inputs', 'cache-snapshots.json'), stack: v.stack, record: snapshotRecord(s), madeOn: new Date().toISOString().slice(0, 10) });
   write(registered.ok ? 'registered in inputs/cache-snapshots.json (commit it with the pre-registration)' : `register: ${registered.reason}`);
   return registered.ok ? EXIT.done : EXIT.config;
+}
+
+async function cmdSnapshot(v, write) {
+  const recipe = snapshotRecipe(v);
+  if (!recipe.ok) return refuse(write, recipe.reason);
+  const made = await makeSnapshot({ stack: v.stack, recipe: recipe.value, root: path.resolve(v['work-root'] ?? defaults().workRoot), out: path.resolve(v.out ?? defaults().toolchainsDir) });
+  if (!made.ok) { write(`snapshot: ${made.reason}`); return EXIT.failed; }
+  write(snapshotLines(v.stack, made.value));
+  return v.register ? registerMade(v, made.value, write) : EXIT.done;
 }
 
 /** A usage or configuration refusal: the sentence is written and the exit code is 4. */
@@ -339,16 +350,26 @@ export function afterStopRefusal(v) {
   return v.reason ? null : `--after-stop ${rule}: needs --reason <text>`;
 }
 
+/** `  rid pair 1 csharp v1 a1 [data] status: class (label)`, one session of `status`. */
+const sessionLine = s => `  ${s.rid} pair ${s.pair} ${s.stack} ${s.phase} a${s.attempt} [${s.kind}] ${s.status}${s.class ? `: ${s.class}` : ''}${s.label ? ` (${s.label})` : ''}`;
+const pinnedNote = () => (process.env.BENCH_RUNNER_PINNED === '1' ? 'set' : 'not set');
+
+/** The lines of `status`: the core, the series, the spend of both limits, every session. */
+function statusLines({ seriesDir, map }) {
+  const allowed = /^Cpus_allowed_list:\s*(\S+)/m.exec(readFileSync('/proc/self/status', 'utf8'))?.[1];
+  const t = spendTotals(readLedger(path.join(seriesDir, 'ledger.ndjson')));
+  return [
+    `harness core: Cpus_allowed_list ${allowed} (re-exec marker ${pinnedNote()})`,
+    `series ${map.seriesId}${map.stopped ? `, STOPPED: ${map.stopped.rule}` : ''}; prereg ${map.preregTag}; harness ${map.harnessIdentity.slice(0, 12)}`,
+    `spend: ceiling-side $${t.ceilingUsd.toFixed(4)} of $${map.ceilingUsd}, bare $${t.bareUsd.toFixed(4)} of $${map.bareBudgetUsd}`,
+    ...Object.values(map.sessions).map(sessionLine),
+  ];
+}
+
 function cmdStatus(v, write) {
   const series = readSeries(v);
   if (!series.ok) return refuse(write, series.reason);
-  const { seriesDir, map } = series.value;
-  const allowed = /^Cpus_allowed_list:\s*(\S+)/m.exec(readFileSync('/proc/self/status', 'utf8'))?.[1];
-  write(`harness core: Cpus_allowed_list ${allowed} (re-exec marker ${process.env.BENCH_RUNNER_PINNED === '1' ? 'set' : 'not set'})`);
-  write(`series ${map.seriesId}${map.stopped ? `, STOPPED: ${map.stopped.rule}` : ''}; prereg ${map.preregTag}; harness ${map.harnessIdentity.slice(0, 12)}`);
-  const t = spendTotals(readLedger(path.join(seriesDir, 'ledger.ndjson')));
-  write(`spend: ceiling-side $${t.ceilingUsd.toFixed(4)} of $${map.ceilingUsd}, bare $${t.bareUsd.toFixed(4)} of $${map.bareBudgetUsd}`);
-  for (const s of Object.values(map.sessions)) write(`  ${s.rid} pair ${s.pair} ${s.stack} ${s.phase} a${s.attempt} [${s.kind}] ${s.status}${s.class ? `: ${s.class}` : ''}${s.label ? ` (${s.label})` : ''}`);
+  statusLines(series.value).forEach(write);
   return EXIT.done;
 }
 
@@ -357,18 +378,40 @@ function sameFolder(a, b) {
   try { return realpathSync(a) === realpathSync(b); } catch { return false; }
 }
 
+/** `--inputs-dir` and `--seed-file` of the seed commands. */
+const seedArgs = v => ({ seedFile: v['seed-file'] ?? defaults().seedFile, inputsDir: inputsDirOf(v) });
+
+function cmdSeedCommit(v, write) {
+  const { seedFile, inputsDir } = seedArgs(v);
+  const r = commitSeed({ seedFile, inputsDir });
+  write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${seedFile} (mode 600)` : `seed-commit: ${r.reason}`);
+  return r.ok ? EXIT.done : EXIT.config;
+}
+
+function cmdSeedReveal(v, write) {
+  const r = revealSeed(seedArgs(v));
+  write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`);
+  return r.ok ? EXIT.done : EXIT.config;
+}
+
+/** The commands, each `(values, write, seams) -> exit code`. */
+const COMMANDS = {
+  init: cmdInit, snapshot: cmdSnapshot, status: cmdStatus, 'seed-commit': cmdSeedCommit, 'seed-reveal': cmdSeedReveal,
+  run: (v, write, seams) => cmdRun(v, write, { resume: false }, seams), resume: (v, write, seams) => cmdRun(v, write, { resume: true }, seams),
+};
+
+/** `ok(values)` for the flags of a command, or `fail(usage error)`. */
+function parseFlags(rest) {
+  try { return ok(parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values); } catch (e) { return fail(`usage error: ${e.message}`); }
+}
+
 /** The whole command; `write` receives each output line. `seams` (`{ repo, home, ownInputs }`) are for tests only: a run uses this repository, the operator's home and this repository's inputs folder. Resolves to the exit code. */
 export async function main(argv, write = line => process.stdout.write(`${line}\n`), seams = {}) {
   const [command, ...rest] = argv;
-  let values;
-  try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { write(`usage error: ${e.message}`); return EXIT.config; }
-  const table = {
-    init: () => cmdInit(values, write, seams), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }, seams), resume: () => cmdRun(values, write, { resume: true }, seams),
-    'seed-commit': () => { const r = commitSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${values['seed-file'] ?? defaults().seedFile} (mode 600)` : `seed-commit: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
-    'seed-reveal': () => { const r = revealSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
-  };
-  if (!Object.hasOwn(table, command ?? '')) { write(`usage error: the commands are ${Object.keys(table).join(', ')}`); return EXIT.config; }
-  return table[command]();
+  const flags = parseFlags(rest);
+  if (!flags.ok) return refuse(write, flags.reason);
+  if (!Object.hasOwn(COMMANDS, command ?? '')) return refuse(write, `usage error: the commands are ${Object.keys(COMMANDS).join(', ')}`);
+  return COMMANDS[command](flags.value, write, seams);
 }
 
 /** Re-execute under `taskset -c 6,7` unless the marker says this IS the re-executed process. */

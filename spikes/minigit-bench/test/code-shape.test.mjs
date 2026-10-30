@@ -1,6 +1,5 @@
 // The shape rule of common.coding-style on the runner's command path (E3b coai-1): a function of `bare-runner.mjs` has fewer than 50 lines and a cyclomatic complexity of at most 4.
-// `runCommand` was 58 lines; it is split into one helper per step. The functions this round did not touch (`cmdSnapshot`, `cmdStatus`, `main`) are listed, so a new function is
-// measured and an old one is not silently widened. The scanner itself is checked on a sample first: a measure that cannot tell a decision from a word in a message proves nothing.
+// The scanner itself is checked on a sample first: a measure that cannot tell a decision from a word in a message proves nothing.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -8,8 +7,11 @@ import { test } from 'node:test';
 import { codeOnly, functionShapes } from './code-shape.mjs';
 import { spikeDir } from './helpers.mjs';
 
-/** Predate this round and are not changed by it. */
-const NOT_TOUCHED = new Set(['cmdSnapshot', 'cmdStatus', 'main']);
+/**
+ * The files E3b owns: the runner and everything the bare arm added around it. Each is measured whole, with no exemption. A file joins the list in the commit that splits its last function.
+ * Files NOT listed are owned by E1 or E2 (the counters, the broker, the egress proxy, the box, the launch, the smoke, the held-out suite) and are left as they are.
+ */
+const E3B_FILES = ['bare-runner.mjs'];
 
 test('The_shape_scanner_counts_decisions_in_code_and_not_words_in_messages', () => {
   const sample = [
@@ -26,9 +28,10 @@ test('The_shape_scanner_counts_decisions_in_code_and_not_words_in_messages', () 
   assert.deepEqual(functionShapes(sample), [{ name: 'a', lines: 7, complexity: 1 + 1 + 1 + 1 + 1 }, { name: 'b', lines: 1, complexity: 1 }], 'a template expression ?: and &&, the if and its && count; ?. and ?? do not');
 });
 
-test('Every_function_of_the_command_path_of_the_runner_has_under_50_lines_and_a_complexity_of_at_most_4', () => {
-  const shapes = functionShapes(readFileSync(path.join(spikeDir, 'bare-runner.mjs'), 'utf8'));
-  assert.ok(shapes.some(s => s.name === 'runCommand'), 'runCommand is still the entry of the run and resume path');
-  const bad = shapes.filter(s => !NOT_TOUCHED.has(s.name) && (s.lines >= 50 || s.complexity > 4));
-  assert.deepEqual(bad, [], 'split the function: one helper per step');
-});
+for (const file of E3B_FILES) {
+  test(`Every_function_of_${file.replace(/\W/g, '_')}_has_under_50_lines_and_a_complexity_of_at_most_4`, () => {
+    const shapes = functionShapes(readFileSync(path.join(spikeDir, file), 'utf8'));
+    assert.ok(shapes.length > 0, `${file} has top-level functions`);
+    assert.deepEqual(shapes.filter(s => s.lines >= 50 || s.complexity > 4), [], 'split the function: one helper per step');
+  });
+}
