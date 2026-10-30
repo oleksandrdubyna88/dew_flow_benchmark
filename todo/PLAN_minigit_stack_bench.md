@@ -1,6 +1,6 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
-> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2–E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
+> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2.S1–S2 (process fixes, the agent sandbox, broker and launch) implemented 2026-10-30; E2.S3–S4, E3, E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
 > (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
 > `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.

@@ -1,6 +1,6 @@
 # PLAN — E2 stories: isolation and the treatment of the minigit stack bench (process fixes, the agent sandbox, coai's box and bridge, the templates)
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: epic E2 of
+> Status: **in progress — E2.S1 and E2.S2 implemented 2026-10-30 (with the amendments below: B-S3 split, SDK 10.0.114); E2.S3 and E2.S4 open.** Pilot spend of the four smokes: $0.115, $0.172, $0.109, $0.109. Scope: epic E2 of
 > [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md) (§15 steps 1, 4–6a) — fixes in `spikes/policy-ab-quick/`, new
 > modules in `spikes/minigit-bench/`, the fork `oleksandrdubyna88/minigit-bench` (template branches, rulesets, settings) and
 > one snapshot branch plus a short boundary plan in `dew_flow_conventions`. Four stories, E2.S1–E2.S4; cornerstone **E2.S2**
