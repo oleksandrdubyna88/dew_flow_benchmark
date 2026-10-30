@@ -1097,7 +1097,7 @@ bound + margin — each takes about ten seconds, the price of the bound; the tim
 finalizers no unobserved fault and no first-chance `ObjectDisposedException` out of the pump may have been seen; it takes about sixteen seconds).
 
 What they do not prove: Windows (a job object is how an escaped descendant would be held there); that the fake's transcript path is the module's own
-(`SessionTranscripts.PathOf` does not exist yet, and the tests read the cwd the fake saw, which hides a symbolic-linked temp folder — E2 §8 item 50, closed by E2.S2: the first transcript test now asserts `PathOf` over the cwd handed to the launcher); the encoding half of E1.S5's criterion 4 (UTF-8 only when a sink is given) — on Linux the default is already UTF-8, so only a Windows run could see it go wrong; that a real
+(the other fake-CLI tests read the cwd the fake saw, which hides a symbolic-linked temp folder; E2 §8 item 50 is closed by E2.S2: the first transcript test asserts `PathOf` over the cwd handed to the launcher); the encoding half of E1.S5's criterion 4 (UTF-8 only when a sink is given) — on Linux the default is already UTF-8, so only a Windows run could see it go wrong; that a real
 claude puts its transcript where the fake does on a host nobody measured; the byte reader (`StreamAsync`) beyond what the shared core does for it.
 
 
