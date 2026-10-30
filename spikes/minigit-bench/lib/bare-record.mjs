@@ -143,3 +143,15 @@ export function pairRecord({ pair, cells, masks, spawnStamps, skewsMs, barrierAt
   }]));
   return { pair, masks, spawnStamps, skewsMs, barrierAtMs, labels, cells, ratios, quality, flags };
 }
+
+/**
+ * The paths under a record section that are neither `{ known: true, value }`, nor `{ known: false, why }` with a reason, nor the string `n/a (bare)`: a bare value, an unknown with no
+ * reason. `[]` means every field is known or says why not. The test of the record and the v2 rehearsal's G-14 both ask this.
+ */
+export function leafProblems(node, at = '') {
+  if (typeof node === 'string') return node === NOT_BARE ? [] : [`${at}: a bare string '${node}'`];
+  if (node === null || typeof node !== 'object' || Array.isArray(node)) return [`${at}: a bare value`];
+  if (node.known === true) return 'value' in node ? [] : [`${at}: known without a value`];
+  if (node.known === false) return typeof node.why === 'string' && node.why !== '' ? [] : [`${at}: unknown without a reason`];
+  return Object.entries(node).flatMap(([k, v]) => leafProblems(v, `${at}.${k}`));
+}

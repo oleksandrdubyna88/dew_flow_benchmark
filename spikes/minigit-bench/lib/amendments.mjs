@@ -1,6 +1,7 @@
 // `inputs/amendments.md` read by code (E3b.S3 header; S4, S5 and the resume check use it). Two kinds of dated line, and nothing else counts:
 //   a by-hand verdict   YYYY-MM-DD | G-<n> | holds|refuted|explained | <rid> | <evidence path> | <who>
 //   an instrument line  YYYY-MM-DD | instrument | harness:<12 hex of the accepted identity> | <reason, with its G-id>
+//   an input amendment YYYY-MM-DD | instrument | input:<file>:<12 hex of the sha256 of the new content> | <reason, with its G-id>   (quiet.json, package-flags.json only; the guard checks it)
 //   a budget raise     YYYY-MM-DD | budget-raise | pair:<k> | n:<re-runs> | usd:<amount> | <reason>      (the ONE permitted raise of the $40; `bare-limits.mjs` checks the amount)
 // A line that starts like one of them and is not valid is REPORTED (`malformed`, with why), never silently dropped and never counted. Prose is ignored.
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -12,8 +13,10 @@ function parseLine(line) {
   const f = line.split(' | ').map(x => x.trim());
   if (!DATE.test(f[0])) return { malformed: 'the line has no valid YYYY-MM-DD date' };
   if (f[1] === 'instrument') {
+    const input = /^input:([A-Za-z0-9_.-]+):([0-9a-f]{12})$/.exec(f[2] ?? '');
+    if (input) return f[3] ? { input: { date: f[0], file: input[1], hash12: input[2], reason: f.slice(3).join(' | ') } } : { malformed: 'an input line is: date | instrument | input:<file>:<12 hex> | reason' };
     const identity = /^harness:([0-9a-f]{12})$/.exec(f[2] ?? '')?.[1];
-    return identity && f[3] ? { instrument: { date: f[0], identity, reason: f.slice(3).join(' | ') } } : { malformed: 'an instrument line is: date | instrument | harness:<12 hex> | reason' };
+    return identity && f[3] ? { instrument: { date: f[0], identity, reason: f.slice(3).join(' | ') } } : { malformed: 'an instrument line is: date | instrument | harness:<12 hex> | reason, or date | instrument | input:<file>:<12 hex> | reason' };
   }
   if (f[1] === 'budget-raise') {
     const [pair, n, usd] = [/^pair:([1-3])$/.exec(f[2] ?? ''), /^n:(\d+)$/.exec(f[3] ?? ''), /^usd:(\d+(?:\.\d+)?)$/.exec(f[4] ?? '')];
@@ -31,6 +34,7 @@ export function parseAmendments(text) {
   return {
     verdicts: parsed.flatMap(p => (p.verdict ? [p.verdict] : [])),
     instrument: parsed.flatMap(p => (p.instrument ? [p.instrument] : [])),
+    inputs: parsed.flatMap(p => (p.input ? [p.input] : [])),
     raises: parsed.flatMap(p => (p.raise ? [p.raise] : [])),
     malformed: parsed.flatMap(p => (p.malformed ? [{ line: p.line, why: p.malformed }] : [])),
   };

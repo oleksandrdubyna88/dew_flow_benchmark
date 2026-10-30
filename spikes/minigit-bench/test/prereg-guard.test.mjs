@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PREREG_FILES, harnessIdentity, preregGuard } from '../lib/prereg-guard.mjs';
 import { sdkCheckOfTexts, sdkProblem } from '../lib/prereg-consistency.mjs';
+import { createHash } from 'node:crypto';
 import { INPUTS, SEED, commit, fixture, git, promptsText, stacksText, write } from './prereg-fixtures.mjs';
 
 async function pinned(f) { f.runMap.harnessIdentity = (await harnessIdentity(f.repo)).value; return f; }
@@ -153,4 +154,36 @@ test('Every_input_the_run_reads_and_the_plan_calls_frozen_is_a_registered_file',
     assert.equal(refused.ok, false, `${file} edited after the tag`);
     assert.match(refused.reason, new RegExp(`${file.replace('.', '\\.')} differs from the tagged commit`));
   }
+});
+
+// ---- quiet.json and package-flags.json: amendable only through a dated line (review m4, contract section 10) -------------------------------
+
+const hash12 = text => createHash('sha256').update(text).digest('hex').slice(0, 12);
+const AMENDED_QUIET = '{"windowMs":60000,"note":"a sampler fix after the A/A"}\n';
+
+test('The_quiet_thresholds_and_the_package_flags_change_only_through_a_dated_amendments_line_naming_the_new_content', async () => {
+  for (const file of ['quiet.json', 'package-flags.json']) {
+    const f = await pinned(fixture());
+    write(f.repo, `${INPUTS}/${file}`, AMENDED_QUIET);
+    commit(f.repo, `edit ${file}`);
+    const bare = await guard(f);
+    assert.equal(bare.ok, false, `${file} edited with no line`);
+    assert.match(bare.reason, new RegExp(`${file.replace('.', '\\.')} differs from the tagged commit.*input:${file.replace('.', '\\.')}:${hash12(AMENDED_QUIET)}`), 'the refusal names the line that would accept it');
+    write(f.repo, `${INPUTS}/amendments.md`, `# Dated amendments\n2026-11-02 | instrument | input:${file}:${hash12(AMENDED_QUIET)} | the spin window was too short (G-11)\n`);
+    commit(f.repo, 'the dated line');
+    assert.equal((await guard(f)).ok, true, `${file}: the dated line naming this content accepts it`);
+    write(f.repo, `${INPUTS}/${file}`, '{"windowMs":1}\n');
+    commit(f.repo, 'edit again after the line');
+    assert.equal((await guard(f)).ok, false, `${file}: a line names ONE content; another edit needs another line`);
+  }
+  const other = await pinned(fixture());
+  write(other.repo, `${INPUTS}/quiet.json`, AMENDED_QUIET);
+  write(other.repo, `${INPUTS}/amendments.md`, `# Dated amendments\n2026-11-02 | instrument | input:package-flags.json:${hash12(AMENDED_QUIET)} | wrong file\n`);
+  commit(other.repo, 'a line for the other file');
+  assert.equal((await guard(other)).ok, false, 'a line names its file');
+  const frozen = await pinned(fixture());
+  write(frozen.repo, `${INPUTS}/statement.md`, 'rewritten\n');
+  write(frozen.repo, `${INPUTS}/amendments.md`, `# Dated amendments\n2026-11-02 | instrument | input:statement.md:${hash12('rewritten\n')} | no\n`);
+  commit(frozen.repo, 'try to amend the statement');
+  assert.equal((await guard(frozen)).ok, false, 'only the instrument inputs are amendable: the statement, the prompts, the prices and the pins are frozen');
 });

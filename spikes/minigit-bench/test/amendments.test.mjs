@@ -39,3 +39,9 @@ test('A_budget_raise_line_is_parsed_and_a_malformed_one_is_reported', () => {
   assert.deepEqual(parsed.raises, [{ date: '2026-11-05', pair: 2, n: 2, usd: 13.2, reason: 'the re-runs of pair 2' }]);
   assert.equal(parsed.malformed.length, 2, 'a pair outside 1-3 and a missing usd: field are reported, never counted');
 });
+
+test('An_input_amendment_line_is_parsed_and_a_malformed_one_is_reported', () => {
+  const parsed = parseAmendments('2026-11-02 | instrument | input:quiet.json:0123456789ab | the sampler window (G-11)\n2026-11-02 | instrument | input:quiet.json:xyz | bad hash\n2026-11-02 | instrument | input:a/b.json:0123456789ab | path');
+  assert.deepEqual(parsed.inputs, [{ date: '2026-11-02', file: 'quiet.json', hash12: '0123456789ab', reason: 'the sampler window (G-11)' }]);
+  assert.equal(parsed.malformed.length, 2);
+});

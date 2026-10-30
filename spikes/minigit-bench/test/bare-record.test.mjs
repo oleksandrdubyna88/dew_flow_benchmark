@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
 import { bareOutcome } from '../lib/bare-outcome.mjs';
-import { MEASURES, NOT_BARE, cellOf, pairRecord, ratioOf, sessionRecord } from '../lib/bare-record.mjs';
+import { MEASURES, NOT_BARE, cellOf, leafProblems, pairRecord, ratioOf, sessionRecord } from '../lib/bare-record.mjs';
 import { countLoc, isTestPath } from '../lib/loc.mjs';
 import { sessionCost } from '../lib/session-cost.mjs';
 import { loadSmoke } from '../lib/smoke-load.mjs';
@@ -44,19 +44,10 @@ function smokeRecord(over = {}) {
   });
 }
 
-/** Every leaf under the record's measured sections: known / not captured (with a reason) / n/a (bare). Returns the paths that are none of those. */
-function badLeaves(node, at = '') {
-  if (typeof node === 'string') return node === NOT_BARE ? [] : [`${at}: a bare string '${node}'`];
-  if (node === null || typeof node !== 'object' || Array.isArray(node)) return [`${at}: a bare value`];
-  if (node.known === true) return 'value' in node ? [] : [`${at}: known without a value`];
-  if (node.known === false) return typeof node.why === 'string' && node.why !== '' ? [] : [`${at}: unknown without a reason`];
-  return Object.entries(node).flatMap(([k, v]) => badLeaves(v, `${at}.${k}`));
-}
-
 test('The_session_record_has_every_field_or_says_why', () => {
   const r = smokeRecord();
-  for (const section of ['run', 'cost', 'time', 'quality', 'process']) assert.deepEqual(badLeaves(r[section], section), []);
-  for (const leaf of ['loc', 'egress', 'packages']) assert.deepEqual(badLeaves(r[leaf], leaf), []);
+  for (const section of ['run', 'cost', 'time', 'quality', 'process']) assert.deepEqual(leafProblems(r[section], section), []);
+  for (const leaf of ['loc', 'egress', 'packages']) assert.deepEqual(leafProblems(r[leaf], leaf), []);
   assert.equal(r.cost.cliTotalUsd.known, true);
   assert.equal(r.cost.brokerUsd.known, true);
   assert.equal(r.cost.stopRuleUsd.known, true);
@@ -84,7 +75,7 @@ test('The_egress_record_carries_bytes_per_host_and_the_cache_growth_beside_it', 
 
 test('A_session_that_was_not_scored_says_so_with_a_reason_and_a_missing_view_is_not_zero', () => {
   const r = smokeRecord({ score: null, packages: null, loc: null, aliasRecord: { ok: false, reason: 'two ids' } });
-  assert.deepEqual(badLeaves(r.quality, 'quality'), []);
+  assert.deepEqual(leafProblems(r.quality, 'quality'), []);
   assert.equal(r.quality.buildOk.known, false);
   assert.match(r.quality.buildOk.why, /not scored/);
   assert.equal(r.packages.known, false);
@@ -97,7 +88,7 @@ test('A_failed_build_has_no_heldout_percent_and_that_is_recorded_as_null_never_z
   assert.equal(r.quality.buildOk.value, false);
   assert.equal(r.quality.heldout.known, true);
   assert.deepEqual(r.quality.heldout.value, { percent: null, defects: null, blocked: null, failed: null, total: null, primary100: false, reason: 'build failed' });
-  assert.deepEqual(badLeaves(r.quality, 'quality'), []);
+  assert.deepEqual(leafProblems(r.quality, 'quality'), []);
 });
 
 test('The_turns_are_checked_against_assistant_messages', () => {

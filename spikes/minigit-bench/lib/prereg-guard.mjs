@@ -3,12 +3,14 @@
 //   the tag      exists on origin (`git ls-remote --tags origin`) and peels to `runMap.preregCommit`
 //   the blobs    every PREREG_FILES blob at HEAD equals its blob at the tagged commit, except `amendments.md` (the tag's text must be a prefix),
 //                `seed.txt` (absent at the tag; when present it must hash to `seed.sha256`; required when `requireSeed`) and `crosscheck-policy.json`
-//                (may differ only in t2, t3 and their dated reason: S4's T3 commit)
+//                (may differ only in t2, t3 and their dated reason: S4's T3 commit); `quiet.json` and `package-flags.json` may differ only through a dated
+//                amendments.md line `input:<file>:<12 hex of the new content's sha256>` (contract section 10: the instrument may change after the A/A)
 //   consistency  a C# prompt names the SDK that stacks.json pins (`prereg-consistency.mjs`)
 //   paid only    `git status --porcelain -- spikes/` is empty (untracked included) and `harnessIdentity` is the run-map's or an accepted one
 // `harnessIdentity` hashes git TREE ids, never HEAD: committing an amendment or the seed leaves it alone, a code change does not.
 import { createHash } from 'node:crypto';
 import { fail, ok } from './result.mjs';
+import { parseAmendments } from './amendments.mjs';
 import { sdkCheckOfTexts } from './prereg-consistency.mjs';
 import { runBounded } from './run.mjs';
 
@@ -22,6 +24,8 @@ export const PREREG_FILES = Object.freeze([
 ]);
 /** The three files above the plan's table. The plan (todo/) is not edited here; a test pins the difference. */
 export const BEYOND_PLAN_TABLE = Object.freeze(['stacks.json', 'prices-2026-10-29.json', 'hashes.txt']);
+/** The registered files that may change after the tag, but only through a dated amendments.md line naming the new content: the instrument inputs (contract section 10: the sampler, the quiet thresholds, the counters). */
+export const AMENDABLE_INPUTS = Object.freeze(['quiet.json', 'package-flags.json']);
 const SEED_FILE = 'seed.txt';
 const POLICY_FREE = Object.freeze(['t2', 't3', 'decidedOn', 'reason']);
 const HARNESS_DIRS = Object.freeze(['spikes/minigit-bench/lib', 'spikes/minigit-bench/harness', 'spikes/minigit-bench/capture', 'spikes/minigit-bench/prereg', 'spikes/policy-ab-quick/lib', 'spikes/policy-ab-quick/hooks']);
@@ -89,12 +93,21 @@ async function consistencyProblems(repo) {
   return r.ok ? [] : [r.reason];
 }
 
+/** An amendable input that differs from the tag needs a dated line of HEAD's amendments.md naming `input:<file>:<12 hex of its sha256>`. */
+async function amendedInputProblem(repo, file) {
+  const [content, amendments] = await Promise.all([textAt(repo, 'HEAD', file), textAt(repo, 'HEAD', 'amendments.md')]);
+  const hash12 = sha256(content ?? '').slice(0, 12);
+  const named = parseAmendments(amendments ?? '').inputs.some(i => i.file === file && i.hash12 === hash12);
+  return named ? null : `${file} differs from the tagged commit and no dated amendments.md line names it: add \`YYYY-MM-DD | instrument | input:${file}:${hash12} | <reason, with its G-id>\``;
+}
+
 async function blobProblems(repo, commit, requireSeed) {
   const special = new Set(['amendments.md', 'crosscheck-policy.json']);
   const plain = await Promise.all(PREREG_FILES.filter(f => !special.has(f)).map(async f => {
     const [tagged, head] = await Promise.all([blobAt(repo, commit, f), blobAt(repo, 'HEAD', f)]);
     if (tagged === null) return `${f} is missing at the tagged commit`;
-    return head === tagged ? null : `${f} ${head === null ? 'is deleted at HEAD' : 'differs from the tagged commit'}`;
+    if (head === tagged) return null;
+    return head === null ? `${f} is deleted at HEAD` : AMENDABLE_INPUTS.includes(f) ? amendedInputProblem(repo, f) : `${f} differs from the tagged commit`;
   }));
   return [...plain, await amendmentsProblem(repo, commit), await policyProblem(repo, commit), await seedProblem(repo, commit, requireSeed), ...await consistencyProblems(repo)].filter(Boolean);
 }
