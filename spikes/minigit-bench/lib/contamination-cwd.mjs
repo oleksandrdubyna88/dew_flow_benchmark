@@ -1,10 +1,12 @@
 // The working directory of a shell command, simple command by simple command: the one ordered pass the contamination scan's path rules (`outside-path`, contamination-reach.mjs) and its link rules
 // (contamination-links.mjs) both read. A `cd` reads nothing: it only moves the directory every LATER relative path word is resolved from. Lexical (nothing is followed on the host), and
-// the same approximation as leak.mjs for what it cannot see: a command is split at `;`, `&`, `|` and a newline, quotes ignored (a heredoc body is a run of segments, a `cd` in it still counts).
+// the same approximation as leak.mjs for what it cannot see: a command is split at `;`, `&`, `|` and a newline, quotes ignored. A heredoc body or here-string is DATA, not commands (contamination-heredoc.mjs): it
+// is no step of its own but one `data` step (`{ segment: '', words: [], data }`), whose text only the link rule reads (a script's `symlink(` call).
 //
 // The directory is an absolute path, or `null` = UNKNOWN: after `cd -`, `popd`, `pushd` with no directory, `cd $OLDPWD`, a variable, a glob, a substitution or `~user`. A relative word cannot be placed then.
 // A `( ... )` group keeps its `cd` to itself: the directory before the group comes back at its `)` (counted at the segment's edges; a `$( ... )` inside a segment is not a group).
 import path from 'node:path';
+import { PLACEHOLDER, stripData } from './contamination-heredoc.mjs';
 
 const posix = path.posix;
 const SEGMENT = /[;&|\n]+/;
@@ -62,10 +64,18 @@ function stepOf(state, segment, ctx) {
   return { state: closeScopes(moved, closesOf(segment)), step: { segment, words, cwd: opened.cwd, cd } };
 }
 
-/** Every simple command of `text`, in order, each with the directory the commands before it left: the tree root to begin with (`ctx.treeRoot`). */
+/** A heredoc body is no command: a step with no words, in the directory it is written in. */
+const dataStep = (state, text) => ({ state, step: { segment: '', words: [], cwd: state.cwd, cd: undefined, data: text } });
+
+/**
+ * Every simple command of `text`, in order, each with the directory the commands before it left: the tree root to begin with (`ctx.treeRoot`). The heredoc bodies and here-string operands are not commands
+ * (contamination-heredoc.mjs): a body is one `data` step.
+ */
 export function shellSteps(text, ctx) {
-  const done = text.split(SEGMENT).reduce((acc, segment) => {
-    const next = stepOf(acc.state, segment, ctx);
+  const { text: commands, data } = stripData(text);
+  const done = commands.split(SEGMENT).reduce((acc, segment) => {
+    const body = PLACEHOLDER.exec(segment.trim());
+    const next = body ? dataStep(acc.state, data[Number(body[1])]) : stepOf(acc.state, segment, ctx);
     return { state: next.state, steps: [...acc.steps, next.step] };
   }, { state: { cwd: ctx.treeRoot, saved: [] }, steps: [] });
   return done.steps;

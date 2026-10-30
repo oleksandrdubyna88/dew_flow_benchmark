@@ -41,7 +41,7 @@ const scriptLinksOf = (segment, cwd, ctx) => [...segment.matchAll(SCRIPT_LINK)].
 });
 
 /** The links one simple command makes: `ln -s`, `cp -s` or a script's symlink call, all resolved from the same working directory. */
-const madeBy = (step, ctx) => [...(makesLink(step.words) ? [linkOf(step.words, step.cwd, ctx)].filter(Boolean) : []), ...scriptLinksOf(step.segment, step.cwd, ctx)];
+const madeBy = (step, ctx) => [...(makesLink(step.words) ? [linkOf(step.words, step.cwd, ctx)].filter(Boolean) : []), ...scriptLinksOf(step.data ?? step.segment, step.cwd, ctx)];
 
 /** The paths a walking simple command names, resolved from the directory it runs in. */
 const namedBy = (step, ctx) => step.words.filter(w => !w.startsWith('-') && resolvable(w)).map(w => absOf(w, step.cwd, ctx)).filter(p => p !== null);
