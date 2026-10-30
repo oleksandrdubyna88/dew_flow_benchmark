@@ -219,8 +219,8 @@ number of accepted sessions per stack and phase is reported. Acceptance is a lab
 
 `lib/spend-gate.mjs` checks both limits before every phase start (A/A, pilot, v1 pair, v2 pair, re-run). Each spend figure is the stop-rule figure of section 5.
 
-1. **Ceiling (parent §13):** settled data + void + pilot spend + the live O sum of running sessions + 1.1 × Σ caps of the sessions about to start ≤ **$500**. The ≈ $0.43 of E1/E2 instrument
-   work before E3b (`inputs/spend-prior.json`) counts here.
+1. **Ceiling (parent §13):** settled data + void + pilot spend + the live O sum of running sessions + 1.1 × Σ caps of the sessions about to start ≤ **$500**. The paid instrument work before E3b counts here: **$0.8263 over 8 paid instrument sessions**, the total of `inputs/spend-prior.json`
+   (read from the capture and smoke meta files, not typed; the token check, $0.010, is approximate; the plan's earlier rough figure is not the registered one, and a test recomputes the total from the file).
 2. **Bare budget:** bare spend (A/A, pilot, data and voids) + 1.1 × Σ caps of the sessions about to start ≤ **$40**. The prior spend does not count here.
 3. **The one permitted raise of the $40:** only to finish the re-runs of a pair already started, only by the worst case of those re-runs (n × 1.1 × $6), and only as a dated line of
    `amendments.md` before the re-runs start: `YYYY-MM-DD | budget-raise | pair:<k> | n:<re-runs> | usd:<n x 1.1 x 6> | <reason>`. The runner accepts one such line, for a pair that has started,

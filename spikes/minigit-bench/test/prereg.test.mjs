@@ -208,3 +208,12 @@ test('The_prior_spend_reads_each_figure_from_its_own_section_not_from_a_mention_
   writeFileSync(path.join(repo, 'research/module_minigit_bench.md'), '#### The bare-session smoke\n> the FIRST smoke\'s (envelope $0.1)\n');
   assert.match(spendPrior(repo).reason, /no longer has a section|no longer says/, 'a section that is gone is a refusal, not a figure read from somewhere else');
 });
+
+test('The_contract_states_the_prior_spend_total_from_spend_prior_json_and_not_a_figure_typed_from_memory', () => {
+  const total = JSON.parse(read('spend-prior.json')).reduce((a, e) => a + e.usd, 0);
+  const figure = `$${total.toFixed(4)}`;
+  const section9 = read('analysis-contract.md').replace(/\s+/g, ' ');
+  assert.ok(section9.includes(`${figure} over ${JSON.parse(read('spend-prior.json')).length} paid instrument sessions`), `section 9 states the registered prior spend ${figure} and the number of sessions it is read from`);
+  assert.equal(/≈ \$0\.43/.test(section9), false, 'the plan\'s about $0.43 is not the registered figure');
+  assert.equal(/\$0\.43\b/.test(section9), false);
+});
