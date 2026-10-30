@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
 using Xunit;
+using ModelArmsApp = ModelArms;
 
 namespace Bench.Tests.ModelArms;
 
@@ -11,11 +12,11 @@ namespace Bench.Tests.ModelArms;
 /// it makes is meant to outlive the test — the owner removes it after the pilot (<c>rm -rf</c> of the two printed <c>testsToDelete-m2-…</c> folders).
 /// <para>
 /// It writes, under the temp folder and outside every checkout: <c>testsToDelete-m2-target-&lt;id&gt;</c> — a git repository on a plan branch holding a tiny .NET solution with an xunit v3 test project (a real <c>dotnet build</c> and a real CTRF), an <c>src_vs_code</c> folder whose <c>npm test</c> is <c>node --test</c>, the target's own lowering wrapper <c>tools/low-priority.mjs</c> inside the rules
-/// repository it holds as the submodule <c>.agents/conventions</c>, all committed (the plan branch's head is <c>target.base</c>); and, beside the target's <c>.git</c>, the files to copy into the root once <c>init</c> has made it: <c>experiment.json</c> (the worked example with this target's paths, one run holding <c>C1</c>, no coai, no isolation, <c>awake: none</c>) and
+/// repository it holds as the submodule <c>.agents/conventions</c>, all committed (the plan branch's head is <c>target.base</c>); and, beside the target's <c>.git</c>, the files to copy into the root once <c>init</c> has made it: <c>experiment.json</c> (the worked example with this target's paths, one run holding <c>C1</c>, a <c>coai</c> block naming a stand-in binary and a key-free <c>{}</c> settings file, no isolation, <c>awake: none</c>) and
 /// <c>scenarios.json</c> (two <c>cs</c> scenarios the scratch suite names and one <c>node</c>). <c>testsToDelete-m2-root-&lt;id&gt;</c> is a NAME only: the root is NOT created — <c>init</c> creates it exclusively. Both files are read through the module's own readers before they are printed, so what the owner copies is known to parse.
 /// </para>
 /// <para>
-/// What this does NOT prove: that the scratch solution builds on the owner's host or that the suite and the node runner print what the readers expect — that is the pilot's own first observation (E3 §5 M2); nor does it run any verb.
+/// Before it prints anything the scaffold runs the host checks it can: <c>validate</c> over a throwaway root (<see cref="ValidatesOnAProbeRootAsync"/>). What this does NOT prove: that the scratch solution builds on the owner's host or that the suite and the node runner print what the readers expect — that is the pilot's own first observation (E3 §5 M2); nor does it run any verb.
 /// </para></summary>
 public sealed class M2PilotScaffold
 {
@@ -30,6 +31,7 @@ public sealed class M2PilotScaffold
     private const string NodeScenario = "a scratch node scenario passes";
 
     [Fact(Explicit = true)]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task Writes_the_scratch_target_and_root_for_the_pilot()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the pilot's scratch target is made with POSIX paths and a real git");
@@ -39,17 +41,20 @@ public sealed class M2PilotScaffold
         try
         {
             var baseSha = await MakeTargetAsync(target);
-            var experiment = Experiment(target, root, baseSha);
-            var scenarios = Scenarios();
             var files = Path.Combine(target, ".git", "m2-pilot");
             Directory.CreateDirectory(files);
+            var settings = await CoaiSettingsAsync(files);
+            var experiment = Experiment(target, root, baseSha, CoaiBinary(), settings);
+            var scenarios = Scenarios();
             await File.WriteAllTextAsync(Path.Combine(files, "experiment.json"), experiment, TestContext.Current.CancellationToken);
             await File.WriteAllTextAsync(Path.Combine(files, "scenarios.json"), scenarios, TestContext.Current.CancellationToken);
 
+            await ValidatesOnAProbeRootAsync(experiment, scenarios, id);
             Directory.Exists(root).Should().BeFalse("the root is a name only: init creates it, exclusively");
             Say($"M2 scaffold — the target: {target}");
             Say($"M2 scaffold — the root (NOT created; init makes it): {root}");
             Say($"M2 scaffold — target.base: {baseSha}");
+            Say($"M2 scaffold — coai.binary: {CoaiBinary()}; coai.settings: {settings} (no key in either file)");
             Say($"M2 scaffold — copy into the root after init: {Path.Combine(files, "experiment.json")} and {Path.Combine(files, "scenarios.json")}");
             Say("M2 scaffold — experiment.json:\n" + experiment);
             Say("M2 scaffold — scenarios.json:\n" + scenarios);
@@ -63,6 +68,83 @@ public sealed class M2PilotScaffold
 
             throw;
         }
+    }
+
+    /// <summary>The host checks the scaffold CAN run, run: <c>validate</c> through the gate over a throwaway root (<c>testsToDelete-m2-probe-&lt;id&gt;</c>, removed in <c>finally</c>) holding the two files, with a PATH of its own — an empty <c>claude</c> and links to the host's <c>git</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c>. It starts none of the target's tools and no claude or coai
+    /// (the executables it resolves are empty files or the host's own, asked only the questions validate asks of git). A file that parses but that <c>validate</c> refuses — a gate step with no coai, a binary under the target, a settings file that is not there — is red HERE, not at the pilot's step 2.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static async Task ValidatesOnAProbeRootAsync(string experiment, string scenarios, string id)
+    {
+        var probe = Path.Combine(Path.GetTempPath(), $"testsToDelete-m2-probe-{id}");
+        try
+        {
+            var root = Directory.CreateDirectory(Path.Combine(probe, "root")).FullName;
+            var bin = Directory.CreateDirectory(Path.Combine(probe, "bin")).FullName;
+            var home = Directory.CreateDirectory(Path.Combine(probe, "home")).FullName;
+            File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            foreach (var (name, text) in new[] { ("experiment.json", experiment), ("scenarios.json", scenarios) })
+            {
+                var path = Path.Combine(root, name);
+                await File.WriteAllTextAsync(path, text, TestContext.Current.CancellationToken);
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(bin, "claude"), string.Empty, TestContext.Current.CancellationToken);
+            File.SetUnixFileMode(Path.Combine(bin, "claude"), (UnixFileMode)Convert.ToInt32("755", 8));
+            foreach (var tool in new[] { "git", "dotnet", "node", "npm" })
+            {
+                File.CreateSymbolicLink(Path.Combine(bin, tool), HostTool(tool));
+            }
+
+            var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+            {
+                environment[(string)entry.Key] = (string?)entry.Value ?? string.Empty;
+            }
+
+            environment.Remove("MODEL_ARMS_EXPERIMENT");
+            environment["HOME"] = home;
+            environment["PATH"] = bin;
+            var line = ModelArmsCommandLine.Split(["validate", "--experiment", root]).Ok();
+            var output = new StringWriter();
+            var error = new StringWriter();
+            var input = new ModelArmsApp.VerbInput(
+                line.Verb, line.Positionals, Bench.Cli.CommandLine.Parse(line.Rest), output, error, environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
+
+            var code = await ModelArmsApp.ExperimentGate.RunAsync(input, ModelArmsApp.Verbs.ValidateVerb.RunAsync, ModelArmsApp.GateSeams.Real);
+
+            code.Should().Be(0, $"the files the owner copies must pass validate on this host (the pilot's step 2): {error}{output}");
+        }
+        finally
+        {
+            if (Directory.Exists(probe))
+            {
+                Directory.Delete(probe, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>The host's own <paramref name="name"/> by its real path, found on the test process's PATH the way the module finds an executable.</summary>
+    private static string HostTool(string name) =>
+        ExecutableResolution.Resolve(name, (System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator), [], ModelArmsApp.Adapters.RootFacts.Host, OperatingSystem.IsWindows()) is ExecutableAnswer.Found found
+            ? found.Real
+            : throw new InvalidOperationException($"{name} must resolve on the PATH this test runs under: the pilot needs it too");
+
+    /// <summary>The coai server's executable the experiment names: <c>M2_COAI_BINARY</c> when set (a PATH, never a key), else the fake CLI's apphost — a stand-in the fake pilot never starts (the gate step's MCP config only NAMES it); an absolute path outside the target and the root, as D17 asks of an executable.</summary>
+    private static string CoaiBinary() =>
+        System.Environment.GetEnvironmentVariable("M2_COAI_BINARY") is { Length: > 0 } named ? Path.GetFullPath(named) : Bench.Tests.Probes.Driver.FakeCli.Executable;
+
+    /// <summary>The key-free settings file the experiment names: <c>M2_COAI_SETTINGS</c> when set, else <c>{}</c> written beside <c>experiment.json</c> (<c>make</c> copies its bytes into each arm; a file holding no key keeps the fake pilot's arms key-free).</summary>
+    private static async Task<string> CoaiSettingsAsync(string files)
+    {
+        if (System.Environment.GetEnvironmentVariable("M2_COAI_SETTINGS") is { Length: > 0 } named)
+        {
+            return Path.GetFullPath(named);
+        }
+
+        var path = Path.Combine(files, "coai-settings.json");
+        await File.WriteAllTextAsync(path, "{}\n", TestContext.Current.CancellationToken);
+        return path;
     }
 
     private static void Say(string text)
@@ -110,7 +192,7 @@ public sealed class M2PilotScaffold
     }
 
     /// <summary>The worked example with this target's values: the example is read, its comments dropped, and the members the pilot changes written; the result is read back through <see cref="ExperimentFile.Read"/> so a file the module would refuse is never printed.</summary>
-    private static string Experiment(string target, string root, string baseSha)
+    private static string Experiment(string target, string root, string baseSha, string coaiBinary, string coaiSettings)
     {
         var example = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "examples", "part6.experiment.json"));
         var tree = JsonNode.Parse(example, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip })!;
@@ -133,12 +215,13 @@ public sealed class M2PilotScaffold
             deny.Remove(entry);
         }
 
-        tree.AsObject().Remove("coai");
+        tree["coai"] = new JsonObject { ["binary"] = coaiBinary, ["settings"] = coaiSettings, ["side"] = "wsl-ubuntu" };
         tree.AsObject().Remove("isolation");
         var home = System.Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
         var text = tree.ToJsonString(Pretty).Replace("//example/home", "/" + home, StringComparison.Ordinal);
         text.Should().NotContain("/example/", "every path of the example is replaced or removed (the deny list's //example/home is the operator's own home)");
-        ExperimentFile.Read(text, new ExperimentLocation(root, home, string.Empty, Cli.Repository.Root)).Ok();
+        var read = ExperimentFile.Read(text, new ExperimentLocation(root, home, string.Empty, Cli.Repository.Root)).Ok();
+        read.Coai.Configured.Should().BeTrue("every kept scheme has a gate step, and a gate step needs the coai server's MCP config — only the KEY is the owner's");
         return text;
     }
 
