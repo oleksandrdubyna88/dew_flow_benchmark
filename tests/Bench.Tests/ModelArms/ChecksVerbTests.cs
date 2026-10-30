@@ -198,20 +198,29 @@ public sealed class ChecksVerbTests
         mcp["failedNew"]!.AsArray().Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task An_objective_folder_swapped_for_a_link_is_refused_and_nothing_is_written_through_it()
+    [Theory]
+    [InlineData("a link to a folder holding a CTRF")]
+    [InlineData("another real folder")]
+    public async Task An_objective_folder_swapped_for_a_link_is_refused_and_nothing_is_written_through_it(string swap)
     {
         using var kit = await ChecksKit.CreateAsync();
         var fixture = kit.Root.Scratch("fixture-objective");
         File.WriteAllText(Path.Combine(fixture, "mcp.ctrf.json"), """{"results":{"tests":[{"name":"Tgt.Tests.Forged.A_scenario","status":"passed"}]}}""");
         var before = Listing(fixture);
-        kit.Bench.Say("suite.hook", $"mv {Sh(kit.Paths.ObjectiveFolder)} {Sh(kit.Paths.ObjectiveFolder + ".aside")}\nln -s {Sh(fixture)} {Sh(kit.Paths.ObjectiveFolder)}\n");
+        var objective = Sh(kit.Paths.ObjectiveFolder);
+        var put = swap.StartsWith("a link", StringComparison.Ordinal) ? $"ln -s {Sh(fixture)} {objective}" : $"mkdir {objective}";
+        kit.Bench.Say("suite.hook", $"mv {objective} {Sh(kit.Paths.ObjectiveFolder + ".aside")}\n{put}\n");
 
         var run = await kit.RunAsync();
 
         run.Code.Should().Be(3, $"{run.Error}\n{run.Output}");
         run.Error.Should().Contain("replaced").And.Contain("no report");
         Listing(fixture).Should().Be(before, "the fixture's listing and bytes are what they were: nothing is written through the swapped name — no stages.json, no log");
+        if (!swap.StartsWith("a link", StringComparison.Ordinal))
+        {
+            Directory.EnumerateFileSystemEntries(kit.Paths.ObjectiveFolder).Should().BeEmpty("a folder the arm's code put at the name holds nothing the harness wrote: not stages.json, not a log");
+        }
+
         File.Exists(kit.Paths.Objective).Should().BeFalse("no report");
         File.Exists(kit.Layout.ObjectiveMarker(kit.Name)).Should().BeFalse("and no marker");
     }
@@ -269,6 +278,26 @@ public sealed class ChecksVerbTests
         File.ReadAllText(Path.Combine(kept[0], "build.log")).Should().Contain("the first run's build").And.NotContain("second", "the first run's evidence is kept");
         File.ReadAllText(kit.Paths.ObjectiveBuildLog).Should().Contain("the second run's build");
         second.Output.Should().Contain("objective.prev-", "the verb says where the earlier folder went");
+    }
+
+    [Fact]
+    public async Task A_link_at_the_objective_folders_name_is_moved_aside_as_a_link_and_never_followed()
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        var outside = kit.Root.Scratch("outside-objective");
+        File.WriteAllText(Path.Combine(outside, "sentinel.txt"), "the operator's own");
+        File.CreateSymbolicLink(kit.Paths.ObjectiveFolder, outside);
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(0, run.Error);
+        Directory.EnumerateFileSystemEntries(outside).Select(Path.GetFileName).Should().Equal(["sentinel.txt"], "nothing was written through the link: no log, no stages.json, no CTRF");
+        File.ReadAllText(Path.Combine(outside, "sentinel.txt")).Should().Be("the operator's own");
+        var kept = Directory.EnumerateFileSystemEntries(kit.Paths.Out, "objective.prev-*").ToList();
+        kept.Should().ContainSingle();
+        new FileInfo(kept[0]).LinkTarget.Should().Be(outside, "the link was renamed as the link it is");
+        new FileInfo(kit.Paths.ObjectiveFolder).LinkTarget.Should().BeNull("the folder the run made is a real one");
+        File.Exists(kit.Paths.ObjectiveStages).Should().BeTrue();
     }
 
     [Fact]
