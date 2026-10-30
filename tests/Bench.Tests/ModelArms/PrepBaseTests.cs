@@ -88,7 +88,7 @@ public sealed class PrepBaseTests
                 break;
             case "a main suite that outlives its wall":
                 bench.Say("suite.sleep", "30\n");
-                seams = seams with { Wall = TimeSpan.FromSeconds(1) };
+                seams = seams with { SuiteWall = TimeSpan.FromSeconds(1) };
                 break;
             case "an extension that printed no summary":
                 bench.Say("ext.out", "✔ a (1ms)\n");
