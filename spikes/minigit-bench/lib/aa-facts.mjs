@@ -29,9 +29,9 @@ function ndjson(file) {
   return readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
 }
 
-/** The phase sampler's samples that fall inside one session's window (`meta.startedAt` to `meta.endedAt`). */
+/** The phase sampler's samples that fall inside one session's window: the wall (`meta.startedAt` to `meta.exitedAt`; `endedAt`, the harness's end, for a meta of an earlier harness). */
 function samplesIn({ seriesDir, entry, meta }) {
-  const [from, to] = [Date.parse(meta?.startedAt), Date.parse(meta?.endedAt)];
+  const [from, to] = [Date.parse(meta?.startedAt), Date.parse(meta?.exitedAt ?? meta?.endedAt)];
   const all = ndjson(path.join(seriesDir, 'pairs', `p${entry.pair}-${entry.phase}-cpu.ndjson`));
   return all.filter(s => s.t >= from && s.t <= to);
 }

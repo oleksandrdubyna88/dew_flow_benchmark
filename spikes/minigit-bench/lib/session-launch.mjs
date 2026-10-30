@@ -142,7 +142,9 @@ function supervise({ plan, d, stack, rec, signal }) {
   const argv = agentBoxArgv({ layout, arm: plan.arm, toolchains: plan.toolchains, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, operatorHome: plan.operatorHome, command: claude });
   const env = agentEnv({ layout, dummyToken: plan.dummy, cellId: plan.cellId, nodeDir: plan.nodeDir, tsDir: plan.tsDir, extra: plan.envExtra });
   writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: argv, claude, envKeys: Object.keys(env).sort(), settingsSha256: rec.settingsSha256, mcpSha256: rec.mcpSha256 }, null, 2)}\n`);
-  const clock = mapClock({ hrAtSpawn: performance.now(), epochAtSpawn: d.now() });
+  const spawnedAtMs = d.now();
+  const clock = mapClock({ hrAtSpawn: performance.now(), epochAtSpawn: spawnedAtMs });
+  rec.startedAtMs = spawnedAtMs; // the wall starts at the spawn (contract section 5): the servers' start-up before it is not in it, and the wall watchdog counts from it
   return new Promise((resolve, reject) => {
     const child = d.spawnBox(argv, env);
     rec.child = child;
@@ -171,7 +173,8 @@ function supervise({ plan, d, stack, rec, signal }) {
     child.stdin.on('error', () => {});
     child.stdin.end(plan.prompt);
     child.on('error', e => reject(new Error(`could not start the box: ${e.message}`)));
-    child.on('close', (code, sig) => { closed = true; timers.forEach(clearInterval); tap.flush(); resolve({ code, signal: sig }); });
+    child.on('exit', () => { rec.exitedAtMs ??= d.now(); }); // the process's own exit: the end of the wall. `close` (below) waits for the pipes and is the fallback stamp
+    child.on('close', (code, sig) => { rec.exitedAtMs ??= d.now(); closed = true; timers.forEach(clearInterval); tap.flush(); resolve({ code, signal: sig }); });
   });
 }
 
@@ -207,8 +210,11 @@ function attempt(rec, what, fn, fallback) {
 
 function metaOf({ plan, d, rec, exit, collected, cleanup }) {
   const live = attempt(rec, 'receiver.liveSum', () => rec.receiver.liveSum(), { usd: null, requests: null });
+  const exitedAtMs = rec.exitedAtMs ?? d.now(); // set by the child's exit; the fallback is for a child that never reported one
   return {
-    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: d.now() - rec.startedAtMs,
+    // `startedAt` is the spawn, `exitedAt` the exit of the CLI process (a killed session: the exit after the kill) and `wallMs` is their difference, the registered wall. `endedAt` is the end of the harness's
+    // own work (the settle, the drain, the seal) and is in no wall.
+    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), exitedAt: new Date(exitedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: exitedAtMs - rec.startedAtMs,
     exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,
@@ -223,7 +229,7 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
 
 const newRecord = (plan, d) => ({
   state: { phase: 'starting', hostPid: process.pid, hostStartTime: processStartTime(process.pid), cell: plan.cellId, startedAt: new Date(d.now()).toISOString(), heartbeatAt: new Date(d.now()).toISOString() },
-  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
+  finalPhase: 'closed', startedAtMs: d.now(), exitedAtMs: null, lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
   samplers: emptyCounts(), errors: [], receiver: null, broker: null, proxy: null, child: null, settings: null, settingsSha256: null, mcpSha256: null,
 });
 
