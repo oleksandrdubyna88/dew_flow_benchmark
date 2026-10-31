@@ -2243,6 +2243,121 @@ Red first against `47b6d9e` for every item (38 red of 41 new or edited cases on 
 
 ## run-arm for the task pipeline (E4.S3)
 
+`run-arm <arm>` for a scheme with a `tasks` block (SRS; `Verbs/TaskPipeline.cs` new, `RunArmWalk.cs`, `RunArmAdmission.cs`, `ArmChoices.cs`, `RunArm.cs`; `Adapters/StepRunner.cs`, `DerivedOutputs.cs`, `ArmFiles.cs`; `Core/Checks/DeadlineSteps.cs`, `Verbs/ChecksReport.cs`, `ArmReport.cs`, `Status.cs`; E4.S3, D14, D21, D22, D25). The walk gives a `tasks` entry to
+`TaskPipeline`, which only ORDERS what exists: the three steps of the block are `StepRunner` runs of a `StepContext` that names them (`Placed`), the worktrees, the pick-back and the re-entry are `TaskWorktrees` (E4.S2), the list is `TasksPlan` and `BatchesFile` (E4.S1). Exit 0 the arm is done; 3 the host (a program not
+found, git cannot answer, a limit still on after every wait); 4 configuration (the list still invalid after its one fix round, `tasks.json` changed after the batches were fixed, a done task without its `.before`, a conflict); 5 stopped and the same command resumes it.
+
+```mermaid
+flowchart TD
+    S["1-split: StepRunner, Placed = split"] --> C["check work/tasks.json: BoundedFile 1 MiB, briefs asked by name, TasksPlan.Validate; out/tasks-plan.log replaced"]
+    C --> B{"work/batches.json present?"}
+    B -- yes --> K{"checked list writes exactly its text?"}
+    K -- no --> X4["stop 4: tasks.json changed after the batches were fixed, NO launch"]
+    K -- yes --> E
+    B -- no --> V{"list valid?"}
+    V -- no --> F["1b-split-fix: Problems = the checker's lines; check again"]
+    F --> V2{"valid now?"}
+    V2 -- no --> X4b["stop 4: the task list is still invalid"]
+    V2 -- yes --> W["batches.json written once"]
+    V -- yes --> W
+    W --> E["each batch i in order; batch-i.done present: skipped"]
+    E --> N["TaskWorktrees.EnterAsync: read every task, then act; a batch of one runs in the clone"]
+    N --> D["task-id.before written once for each task NOT done; a done task never gets one"]
+    D --> R["all coders at once: Task.WhenAll, none cancelled because another stopped"]
+    R --> Q{"any stopped?"}
+    Q -- yes --> X5["after every sibling ended: stop with 4, then 3, then 5"]
+    Q -- no --> P["batch of many: PickBackAsync in task order, then DropAsync for each task"]
+    P --> M["batch-i.done written; next batch"]
+    M --> A["next entry of the scheme: 3-hreview, 4-review, 5-fix, 6-gate"]
+```
+
+**Decisions of the build (E4 §5 E4.S3, §8 items 5–8, 11):**
+
+- **`StepContext.Placed`** (`SchemeEntry.Step? Placed = null`; `Step => Placed ?? <the scheme's entry>`). The block's entry at a position is not a step, so the pipeline places one of its three steps by stem and id (`1-split` with `tasks.split`, `1b-split-fix` with `tasks.splitFix`, `2-<id>-code` with `tasks.taskCode`); everything downstream (`Spec`, the stem every file is named by, the brief) reads `Step`.
+  The ids come from the `tasks` block, never from the names `split`, `splitFix`, `taskCode` (`The_task_pipelines_steps_are_the_three_the_tasks_block_names` renames all three and the block).
+- **Batches fixed earlier come first** (§8 item 8). `work/batches.json` is written ONCE (`WriteOnce`, only from a list the check passed) and on every later entry the list just checked must write exactly its bytes — a list the check refused counts as changed — BEFORE any fix round, because a fix round would rewrite `work/tasks.json` under existing
+  `batch-<i>.done` markers: the silent skip or redo the item forbids. A re-entry whose split and fix are both done and whose list is still invalid stops with exit 4 and NO launch (the fix is `Skip`, the check refuses, the round is spent).
+- **A done task never gets a `.before`.** The `.before` is written once, before the first launch, from the HEAD of the folder the task runs in, for a task whose step is NOT done (a `Fresh` task: E4.S2 deleted the old one with its worktree, §8 item 9; a resumed task has its own). A done task's folder HEAD is the tip of `tmp/<id>`: a `.before` written there makes the pick range empty,
+  `picked-<id>` is written over nothing and the drop deletes the branch — the task's commits lost in silence. A done task without its `.before` stays E4.S2's `Stopped(4, "<id>: out/task-<id>.before is missing — the pick has no range")`, its branch kept.
+- **A batch ends after every task ended, with 4 before 3 before 5** (§8 item 7): `Task.WhenAll` of the runner's runs, each its own context; no sibling is ever cancelled because another stopped (a cancelled healthy sibling is a paid attempt thrown away). Every stopped task is named in the log by the runner's own `stopped` line; the line for 5 is *a task of batch i was interrupted — run me again to resume it*.
+- **One lock, one writer** (§8 item 6): `ArmFiles.AppendTiming` holds one `static readonly Lock`, and the walk wraps the verb's output in `TextWriter.Synchronized` before it builds the `StepLog`, the runner and the gate. The runtime was MEASURED to interleave the append-mode writes of eight threads (below), so the lock is not a precaution.
+- **The coder's head and diff** (`DerivedOutputs`, D21, §8 item 11): from any DONE coder step, finished or ended on its deadline — `CoderHead` = HEAD of the step's own folder + `"\n"`, `CoderDiff` = `out/task-<id>.before` to HEAD under `ArmGit.DiffAsync`'s pins (E2's, where the shell ran a plain `git diff`); present by NAME; regenerated on every entry by the same function (a runner killed between the result line and the files writes them
+  on the next entry: `StepRestartTests`). A coder context with no task id is refused with the step's id and writes nothing.
+- **Admission resolves what the worktrees start.** `ArmTools(Claude, Git, ToolPaths Build)`: only for a scheme with a `tasks` entry `target.lowPriority[0]` (`node`) and `target.build[0]` (`dotnet`) are resolved by `LaunchAdmission.Resolve` and printed under `resolved executables:` as the same real paths `TaskTools` carries to the warm build; another scheme resolves nothing it will not launch (C on a host without
+  `dotnet` runs). Absent is 3, refused is 4, as for `claude` and `git`. `ArmPlan` now carries the scenarios' ids (the checker wants them), `ScenarioCount` is their count.
+- **`stepsOnDeadline` and `status`** (E3 §8 item 20): `DeadlineSteps.Of(scheme, taskIds, done)` lists, at the tasks entry and in the scheme's order, `1-split`, `1b-split-fix` and `2-<id>-code` in the order of `work/batches.json`'s ids; `ChecksReport` reads that file through the bounded road (absent or refused: no coder, one `plan.Warn` line). `ArmReport` prints `1-split`, `1b-split-fix` only when it left a session file, a stream or a marker (each asked by name), then one line per
+  task of `batches.json`; `  tasks: no batches yet` or `  tasks: unreadable — <why>` otherwise. Nothing is listed.
+
+**The checks** run in the clone as the shell's did; the pipeline adds one warning (`t-lib.sh:88`): a split that left changes in the clone says so, and nothing else happens (a git that cannot count is ignored there — the batch's own entry asks git again and stops for it).
+
+### Tests (E4.S3: 1639 → 1657 cases in `Bench.Tests.ModelArms`, 3 skipped as before; `RunArmSrsTests` 12 cases — 11 methods, one theory of two rows — over `SrsKit`)
+
+`SrsKit` is a MADE arm: `MakeKit` over `TargetBench` (the scratch target, `prep-base` run, `make` run — a real clone with the rules submodule and the target's own wrapper), every step's model the fake's at one minute, small limits, and `claude` a shell WRAPPER around the fake. The wrapper saves stdin; on a FRESH call only (`--session-id` in its argv, never `--resume`, D9) it writes
+`<id>.txt` and commits it with the host's git by its real path when its folder is under the arm's `wt/` (the id is the folder's name) or its prompt holds `ONE task, **t<n>**` (a batch of one, in the clone); a RESUMED call commits nothing (the commit is already on the kept `tmp/<id>`, ledger 3.1); every call appends `how cwd HEAD has-file` to `wrapper.log`; a prompt holding the split fix's wording while a staged
+`fix.json` exists copies it over `work/tasks.json`; a per-task script (a pause per line, a hold, a fixture, for the fresh call and for the resume) is selected through `FAKE_CLI_SCRIPT`. Calls are told apart by prompt, folder and pid, never by the fake's call number.
+
+| Test | What it holds |
+|---|---|
+| `A_refused_split_gets_one_fix_round_then_stops_with_exit_4` | 3 tasks → exit 4 *still invalid* / *there are 3 tasks*; calls `x-split`, `x-split-fix` (its prompt holds the checker's line), no coder; `tasks-plan.log` holds the line; no `batches.json`; a second run launches nothing |
+| `A_split_fix_that_repairs_the_list_lets_the_batches_run` | the staged 5 tasks → the fix round, five coders, `ok: 5 tasks in 2 batches`, `batches.json` = `[[t1 t2 t3 t4], [t5]]`, exit 0 |
+| `A_batch_of_many_runs_its_tasks_at_once_each_in_its_worktree` | t1–t4 at 1 s a line: cwd `wt/<id>`, t5 in the clone; in `timing.jsonl` all four `start` lines stand before the first `end`; the arm branch gains `task t1`…`task t5` in task order; `picked-t1`…`t4`, no `picked-t5`, `wt/` holds none, no `tmp/*`, both `batch-<i>.done` |
+| `The_task_coders_brief_carries_its_task_its_brief_its_files_and_its_notes` | `**t1**`, `<work>/t1.md`, `` `src/A.cs`, `src/ATests.cs` ``, `notes/t1-code.md`; `task-t1.before` = the HEAD the batch started from; t5's `.before` is not |
+| `An_interrupted_task_stops_the_arm_and_reentry_resumes_only_it` | t2 ends with no result: exit 5, *a task of batch 0 was interrupted*, t1/t3/t4 done (slow siblings, so a cancel would cut them), nothing picked, `tmp/t2` holds `t2.txt`; run 2: batch 0 has exactly ONE call — `--resume` of run 1's session for t2, cwd `wt/t2`, wrapper line `resume`, HEAD = the tip read between the runs, `t2.txt` there; t5 runs fresh in the clone; all four picked; ONE commit adds `t2.txt` |
+| `Every_task_coder_is_launched_without_the_agent_tool_fresh_and_resumed` | over that scenario's calls: `Agent`, `Task` lead every coder's `--disallowedTools` group and neither is in `--allowedTools`; at least one resume and five fresh launches are among them |
+| `The_task_pipelines_steps_are_the_three_the_tasks_block_names` | `split`→`cut`, `splitFix`→`cutFix`, `taskCode`→`coder`, the block renamed, minutes 2/3/4: the three `start` lines carry `budget_s` 120, 180, 240; the briefs are the configured ones |
+| `A_batch_whose_tasks_stop_differently_ends_with_the_most_severe_code_after_every_sibling_ended` | t1 limited (its resume too), t2 no result, t3/t4 healthy and slow: exit 3, t3/t4 done, both stops in the log |
+| `Tasks_json_changed_after_the_batches_were_fixed_stops_the_arm_with_exit_4` (theory, 2 rows) | after an interrupted run: (a) t4 gains `depends: [t1]` — still valid, batches `[[t1 t2 t3],[t4],[t5]]`; (b) t5 drops t4 — invalid. Exit 4 naming both files, NO call (in (b) not the split fix either), `batches.json` byte-equal, `tasks-plan.log` holds the new list's `ok:` line / its problem |
+| `A_done_task_without_its_before_is_refused_with_exit_4_and_its_branch_is_kept` | `task-t3.before` deleted between the runs: exit 4 *t3: out/task-t3.before is missing — the pick has no range*, no `.before` written, `tmp/t3` at its tip with `t3.txt`, t1 and t2 picked, `t3.txt` not on the arm branch, no `batch-0.done`, no call for t5 |
+| `A_task_coder_that_ended_on_its_deadline_is_in_stepsOnDeadline_and_in_status` | an unlimited 59 s `end` line for `2-t1-code`, t1 held after its first line (a script of its own): the arm completes; `checks SRS1` → `stepsOnDeadline` = `["2-t1-code"]`; `status` says `2-t1-code: done — ended on its deadline`; head and diff exist |
+| `RunArmSchemeTests.An_srs_arm_runs_its_split_its_batches_and_the_steps_after_them` | replaces `An_srs_arm_is_refused_until_the_task_pipeline_exists`: `1-split`, the five coders, both batch markers, `3-hreview`…`6-gate` done, one `arm-done`; the hreview prompt holds the `CODE_NOTES` path |
+| `RunArmSchemeTests.An_srs_arm_resolves_node_and_the_build_and_prints_them_before_the_first_launch` | `  node → <real>` and `  dotnet → <real>` before `[SRS1] 1-split` |
+| `RunArmSchemeTests.An_srs_arm_without_its_build_on_PATH_is_refused_with_exit_3_before_any_launch` | no `dotnet` → 3 naming it, no call, no timing file |
+| `StepRestartTests.A_task_coder_whose_head_and_diff_are_missing_writes_them_on_the_next_entry_from_its_folder` | a coder in a folder of its own killed after its stream: the next entry writes both from THAT folder (not the clone), no second launch, `.done` |
+| `DeadlineStepsTests.The_task_pipelines_stems_are_listed_at_the_tasks_entry_in_batch_order` | ids `[t2, t1]`, `2-t1-code`/`1b-split-fix` hard-deadline → `["1-code","1b-split-fix","2-t1-code","5-gate"]`; the stems asked, in order |
+| `StatusVerbTests.An_srs_arm_lists_its_split_its_fix_and_every_task_coder_by_name` | `1-split`, one line per task of `batches.json`, no `1b-split-fix` while it never ran, every name asked is one `ArmPaths` spells, `tasks: unreadable` for a file that does not parse |
+| `ArmFilesTests.Timing_lines_appended_from_many_threads_at_once_are_each_whole` | 8 threads × 200 lines through 8 `ArmFiles`: 1600 whole lines |
+
+**Red first** (each test against today's code or the stub named, before the build existed). All twelve cases of `RunArmSrsTests` and `RunArmSchemeTests.An_srs_arm_runs…` and `…without_its_build…`: `Expected run.Code to be 0 because model-arms run-arm: SRS1's scheme runs the task pipeline — not built yet, story E4.S3 of todo/PLAN_model_arms.md` (the refused-split row: `Expected run.Error "…not built yet, story E4.S3…" to contain "still invalid"`; the interrupted, coder-policy, changed-`tasks.json` and done-task rows stop in `InterruptedAsync`: `Expected first.Code to be 5 because …E4.S3…`; the most-severe row: `Expected run.Code to be 3 … but found 4`).
+`…resolves_node…`: `Expected run.Output "" to contain "resolved executables:"`. `StepRestartTests…`: `Expected type to be StepOutcome+Done because the step should be done, not Stopped { ExitCode = 5, Why = task outputs are written by the task pipeline (E4.S3) }`. `DeadlineStepsTests…` (a stub that ignored the ids): `Expected listed to be equal to {"1-code", "1b-split-fix", "2-t1-code", "5-gate"} … but {"1-code", "5-gate"} contains 2 item(s) less`.
+`StatusVerbTests…`: `Expected stems to be equal to {"1-split", "2-t1-code", "2-t2-code", "2-t3-code", "3-hreview", …} but {"tasks", "3-hreview", "4-review", "5-fix", "6-gate"} contains 4 item(s) less`. `ArmFilesTests…` WITHOUT the lock, three runs: `Expected written to contain 1600 item(s) … but found 916` / `938` / `892` — the runtime's append DOES cut and join lines, so the lock stays.
+
+**Break-its**, each planted in the finished code (a script copies the file, edits it, builds, runs the classes and puts the copy back by writing it; `cmp` clean afterwards), observed red, restored:
+(1) siblings cancelled when one stops (a linked token cancelled on the first `Stopped`) → `…reentry_resumes_only_it`: `Expected File.Exists(…2-t1-code.done) to be True because t1 was not cancelled because t2 stopped`; `…most_severe…`: `Expected run.Code to be 3 … but found 5`.
+(2) `batches.json` rewritten on every entry (no comparison, `Replace` for `WriteOnce`) → both rows of the changed-`tasks.json` theory red (row (a): exit is not 4; row (b): *the task list is still invalid* after a split-fix launch).
+(3) the coder stem `task-<id>-coder` instead of `2-<id>-code` (in `TaskStems.Coder`) → `DeadlineStepsTests…`, `StatusVerbTests…` and the deadline scenario red (`but {"task-t1-coder"} differs at index 0`; the other two have the literal stems).
+(4) `TASK_FILES` joined raw (no back quotes) → `The_task_coders_brief_carries…`: `Expected string "You are the CODER for ONE task, **t1** …" to contain "`src/A.cs`, `src/ATests.cs`"`.
+(5) the `.before` written after the coders ran → the same test red, but by exit 5 (*a task of batch 0 was interrupted*) and not by the HEAD comparison: a finished coder whose `.before` is missing cannot derive its head and diff (`StepOutputs.Reconcile`: resumable), so the plant is caught one assertion earlier than the story says; the HEAD comparison is the guard for a `.before` written between the launch and the derive, which no plant of this code reaches.
+(6) the `.before` written for a done task too → `A_done_task_without_its_before…`: exit 0 instead of 4 (the `.before` = the tip, an empty range, `picked-t3` over nothing, `tmp/t3` deleted by the drop).
+(7) the comparison after the fix round → row (b) of the changed-`tasks.json` theory red (`the task list is still invalid` after a launch of the split fix); row (a) stays green, as the story says.
+(8) `subagents: true` on `taskCode` (the kit's experiment) → `Every_task_coder_is_launched_without_the_agent_tool…`: `Expected call.Group("--disallowedTools").Take(2) to be equal to {"Agent", "Task"}`.
+(9) the lock out of `AppendTiming` → `ArmFilesTests…` red (`found 915` of 1600).
+
+**Observed numbers** (the host's git 2.53.0, the fake, the shims; 2026-10-31): `Bench.Tests --filter-namespace "*ModelArms*"` 1657 cases, 1654 passed, 3 skipped, 0 failed (1639 before: +18 — `RunArmSrsTests` 12, `RunArmSchemeTests` +2 net, one each in `StepRestartTests`, `DeadlineStepsTests`, `StatusVerbTests`, `ArmFilesTests`); `RunArmSrsTests` ≈ 60 s for its twelve cases (an SRS arm is a real clone, up to four worktrees and the six steps after the block);
+`dotnet build dew_flow_benchmark.slnx -c Release` 0 errors, 0 warnings from this change (the one warning the solution prints is `ASPIRE010` of `hosts/AppHost`); `dotnet format dew_flow_benchmark.slnx --verify-no-changes` exit 0.
+
+### The trust boundary — D26 (a)–(f), `TaskPipeline`
+
+(a) paths: every file the model can write is read through `BoundedFile` (`tasks.json`, `batches.json`: 1 MiB; a refusal is exit 4) or asked for by NAME (`KernelFacts.Present`: a brief — only a name `TasksPlan.IsFileName` accepted as ONE file name is ever probed —, every marker); the pipeline lists no folder. (b) launches: every git is a question on `ArmGit` by the REAL path `run-arm` resolved and printed; the warm build starts the two printed programs,
+under `TargetEnvironment`'s reduced environment. (c) environment: the coders get the arm's child environment as every step does (E4.S0); the pipeline adds none. (d) secrets: every log line passes `ArmMap.Scrub` (the same `StepLog`). (e) writes: `batches.json` once, `tasks-plan.log` replaced, `.before` once, the head and diff once, the markers by `Replace`/`WriteOnce` — never an in-place edit. (f) nothing the model wrote is believed: a changed `tasks.json` is exit 4, a `.before` is never written for a task whose commits it could hide.
+
+### Not proven (said, not hidden)
+
+A real claude splitting a real plan and coding a real task (the fake replays recorded streams and the wrapper commits one file); a cherry-pick of a real multi-hour task; an LFS target's worktree (git-lfs is absent); Windows (the shims and the wrapper are POSIX, every SRS test skips); a git other than the host's 2.53.0 (E4.S2's pilot is owed separately); a model process still running in the clone while the pipeline works (E3 §8 item 17);
+the wall kill of a coder's whole process tree in a worktree (the held coder of the deadline scenario is the fake, killed at its wall, not a tree); the timing assertion of the parallel scenario rests on a one-second pause per line and four processes on this host — a host so loaded that one of the four starts later than the first ended would turn it red, not green.
+
+### Deviations from the story (also E4 §8 items 5–8, 11)
+
+1. **`limits.tries` 0 is not a value the file accepts** (`limits.tries is 0 — it must be greater than zero`): the kit runs `tries: 1, waitSeconds: 1`, and the most-severe row makes the limit stay on by giving t1's RESUME the limit fixture too (`ReplayFor(…, resumedFixture:)`).
+2. **Per-task replays by script, not by `stdoutByPromptContaining`**: the fake's pause (`lineDelayMs`) and hold (`holdAfterLine`) are script-wide, so a task that is slow or held needs a script of its own. The wrapper exports `FAKE_CLI_SCRIPT` for a fresh call of that task (and for its resume when a resume script is staged). Nothing in the fake changed.
+3. **The shipped `hr-review-fix` brief has no `{{SPLIT_NOTES}}`**, so the story's "the prompt holds the `CODE_NOTES` and `SPLIT_NOTES` paths" is asserted for `CODE_NOTES` (the block's own binding) and, for `SPLIT_NOTES`, by the runner's missing-output line *3-hreview: SPLIT_NOTES (notes/split.md) was not written by step split* — the binding is visible to the step after the block, the template just does not use it.
+4. **`ArmChoices.Of` lost its `allowTasks` parameter**: both callers (`run-arm`, `checks`) now pass `true`, so the refusal was dead code (one line in `ChecksAdmission.cs`).
+5. **Existing tests that pinned E4.S3's own text were edited**, each for the sentence the story changes: `DeadlineStepsTests.Only_hard_deadline_markers_are_listed_in_scheme_order` (the stems asked now include `1-split`, `1b-split-fix`), `StatusVerbTests.A_scheme_the_experiment_lacks_and_a_task_entry_are_one_line_each` (`1-split: not started` and `tasks: no batches yet` replace the placeholder line), `StatusKit.NamesAskedFor` (the pipeline's stems and `batches.json` are names the verb may ask),
+   `StepGitTests.The_coder_outputs_of_the_task_pipeline_are_not_written_here` (renamed `…of_a_context_that_names_no_task_are_refused_and_write_nothing`: the refusal that remains). `ChecksVerbTests` and the other `RunArmSchemeTests` are unedited and green.
+6. **Break-it 5 is caught one assertion earlier** than the story says (above).
+7. **The leak guard refuses a file spelled like a scheme** (`src/C.cs` made `TASK_FILES` carry `C`, D15): the kit's third task owns `src/G.cs`. A real plan owning a file named `C.cs` would stop that task's brief with exit 4 naming the field — the guard's existing behaviour, now reachable by a model's plan.
+8. **`out/tasks-plan.log` is written with a trailing newline** (a text file's last line); the story says "the failure's lines or the `Ok` line".
+9. **Where the story is silent:** a `work/tasks.json` or `work/batches.json` the road refuses (a link, a FIFO, past 1 MiB) is exit 4 naming the file; an operator's stop between the pipeline's own steps writes a `stopped` line for the step `tasks` (exit 5); the nodes printed under `resolved executables:` are labelled by the command's own word (`node`, `dotnet`), once each; no marker is added to `ModelArmsArchitectureTests` (`TaskPipeline` is internal, the story's "unless a public static class is added").
+
 ## The task plan (E4.S1)
 
 Story E4.S1: the shell's `tasks-plan.mjs` — the checker of the split's `work/tasks.json` and the batches the tasks run in — as pure functions, **with the shell's own script as the oracle**. Nothing here reads a file or starts a process: the caller (E4.S3) reads `work/tasks.json` through `BoundedFile`, asks for each brief's presence by NAME, and hands the facts in. All of it is in `ModelArms.Core.Tasks`:

@@ -1,5 +1,7 @@
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
+using ModelArms.Core.Steps;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -43,5 +45,38 @@ public sealed class ArmFilesTests
         var thrown = failing.Should().Throw<Exception>("a rename onto a folder fails").Which;
         thrown.Message.Should().NotContain("the-secret-bytes", "a failure never carries the bytes it was writing");
         Directory.EnumerateFileSystemEntries(temp.Combine("keys")).Select(Path.GetFileName).Should().OnlyContain(name => !name!.Contains(".staging-", StringComparison.Ordinal), "a failed rename does not strand a private file holding the secret");
+    }
+
+    /// <summary>The tasks of a batch are parallel <c>Task</c>s of one process, each with its own <see cref="ArmFiles"/> (E4.S3, §8 item 6): every timing line is one append, and eight writers' lines must each be whole. The lock around <c>AppendTiming</c> is process-wide, so eight instances share it; what the
+    /// runtime does WITHOUT the lock is recorded in the module doc, not assumed.</summary>
+    [Fact]
+    public async Task Timing_lines_appended_from_many_threads_at_once_are_each_whole()
+    {
+        using var temp = new TempFolder();
+        var paths = new ArmPaths(temp.Path, "00000000000000a1");
+        const int Threads = 8;
+        const int Lines = 200;
+        var files = Enumerable.Range(0, Threads).Select(_ => new ArmFiles(paths)).ToList();
+        using var start = new Barrier(Threads);
+
+        await Task.WhenAll(files.Select((file, writer) => Task.Factory.StartNew(
+            () =>
+            {
+                start.SignalAndWait();
+                for (var line = 0; line < Lines; line++)
+                {
+                    file.AppendTiming(new TimingLine.Stopped("SRS1", $"2-t{writer}-code", 5, new string('x', 200 + line), new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero)));
+                }
+            },
+            TestContext.Current.CancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default)));
+
+        var text = File.ReadAllText(paths.Timing);
+        var written = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        written.Should().HaveCount(Threads * Lines, "every append wrote its whole line and its newline, none was cut or joined to another");
+        TimingLines.Read(text).Should().HaveCount(Threads * Lines).And.AllBeOfType<TimingLine.Stopped>("every line parses as the line it was written as");
+        written.Select(line => line.Length).Should().OnlyContain(length => length > 200);
+        TimingLines.Read(text).OfType<TimingLine.Stopped>().GroupBy(line => line.Step).Select(group => group.Count()).Should().HaveCount(Threads).And.OnlyContain(count => count == Lines, "each writer's lines are all there");
     }
 }

@@ -141,18 +141,60 @@ public sealed class RunArmSchemeTests
     }
 
     [Fact]
-    public async Task An_srs_arm_is_refused_until_the_task_pipeline_exists()
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task An_srs_arm_runs_its_split_its_batches_and_the_steps_after_them()
     {
-        using var root = new ExperimentRoot();
+        using var kit = await SrsKit.CreateAsync();
+        kit.Plan(kit.Five());
+        kit.Replay("result-success.jsonl");
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        foreach (var stem in new[] { "1-split", "2-t1-code", "2-t5-code", "3-hreview", "4-review", "5-fix", "6-gate" })
+        {
+            File.Exists(kit.Paths.Done(stem)).Should().BeTrue($"{stem} is done");
+        }
+
+        File.Exists(kit.Paths.BatchDone(0)).Should().BeTrue();
+        File.Exists(kit.Paths.BatchDone(1)).Should().BeTrue();
+        kit.Root.ArmDones(SrsKit.Arm).Should().ContainSingle("the arm ran its whole scheme once");
+        var hreview = kit.Fake.Calls().Single(call => BriefOf(call) == "hr-review-fix");
+        hreview.Prompt.Should().Contain(kit.Paths.NotesFile(new OutputBinding("CODE_NOTES", "notes/code.md")), "the block's own binding (CODE_NOTES) reaches the step after it (D25)");
+        (run.Output + run.Error).Should().Contain("3-hreview: SPLIT_NOTES (notes/split.md) was not written by step split", "the split's binding is visible to the steps after the block: the shipped hreview template does not use it, so the runner's own missing-output line is the evidence");
+    }
+
+    [Fact]
+    public async Task An_srs_arm_resolves_node_and_the_build_and_prints_them_before_the_first_launch()
+    {
+        using var root = await new ExperimentRoot().WithTargetAsync();
         using var fake = new FakeCli();
         await root.MakeArmAsync("SRS1", fake);
         Replay(fake, "result-success.jsonl");
 
         var run = await RunAsync(root, "SRS1");
 
-        run.Code.Should().Be(4, run.Output);
-        run.Error.Should().Contain("E4.S3");
-        fake.Calls().Should().BeEmpty();
+        var bin = Path.Combine(root.Temp, "bin");
+        run.Output.Should().Contain("resolved executables:").And.Contain($"  node → {Path.Combine(bin, "node")}").And.Contain($"  dotnet → {Path.Combine(bin, "dotnet")}", "the REAL paths of the two programs the warm build starts (D17 c, d)");
+        run.Output.IndexOf("  node → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[SRS1] 1-split", StringComparison.Ordinal), "they are said before the first launch");
+        run.Output.IndexOf("  dotnet → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[SRS1] 1-split", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_srs_arm_without_its_build_on_PATH_is_refused_with_exit_3_before_any_launch()
+    {
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("SRS1", fake);
+        Replay(fake, "result-success.jsonl");
+        File.Delete(Path.Combine(root.Temp, "bin", "dotnet"));
+
+        var run = await RunAsync(root, "SRS1");
+
+        run.Code.Should().Be(3, run.Error + run.Output);
+        run.Error.Should().Contain("dotnet");
+        fake.Calls().Should().BeEmpty("nothing is launched before every program the arm needs is found");
+        File.Exists(root.PathsOf("SRS1").Timing).Should().BeFalse();
     }
 
     [Fact]

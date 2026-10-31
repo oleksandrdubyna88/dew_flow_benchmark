@@ -6,6 +6,7 @@ using Bench.Tests.Probes.Driver;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 using ModelArms.Verbs;
 using Xunit;
 using ModelArmsApp = ModelArms;
@@ -97,7 +98,7 @@ internal sealed class StatusKit : IDisposable
     public void Dispose() => Root.Dispose();
 
     /// <summary>The names every file of the ROOT'S OWN would be asked by, derived from the spelling members: what a verb that opens by name may ask, for the arms and runs the experiment has and up to <paramref name="attempts"/> streams per step.</summary>
-    public IReadOnlySet<string> NamesAskedFor(IReadOnlyList<string> madeArms, int attempts)
+    public IReadOnlySet<string> NamesAskedFor(IReadOnlyList<string> madeArms, int attempts, IReadOnlyList<string>? taskIds = null)
     {
         var experiment = Root.ExperimentOf();
         var layout = Layout;
@@ -118,10 +119,13 @@ internal sealed class StatusKit : IDisposable
             var paths = Paths(arm);
             var scheme = experiment.Schemes.Single(each => each.Name == ArmNames.SchemeOf(arm).Ok());
             names.Add(paths.Timing);
-            foreach (var step in scheme.Entries.OfType<SchemeEntry.Step>())
+            var stems = scheme.Entries.SelectMany(entry => entry is SchemeEntry.Step step ? [step.Name] : (IEnumerable<string>)[TaskStems.Split, TaskStems.SplitFix, .. (taskIds ?? []).Select(TaskStems.Coder)]);
+            foreach (var stem in stems)
             {
-                names.UnionWith([paths.Done(step.Name), paths.Continue(step.Name), .. Enumerable.Range(1, attempts).Select(n => paths.Stream(step.Name, n))]);
+                names.UnionWith([paths.Done(stem), paths.Continue(stem), .. Enumerable.Range(1, attempts).Select(n => paths.Stream(stem, n))]);
             }
+
+            names.UnionWith([paths.BatchesJson, paths.Session(TaskStems.SplitFix)]);
         }
 
         return names;

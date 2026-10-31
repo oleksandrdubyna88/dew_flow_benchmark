@@ -19,6 +19,9 @@ public sealed class ArmFiles(ArmPaths paths)
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private const UnixFileMode PrivateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
+    /// <summary>One lock for every timing line of the process (E4.S3, §8 item 6): the tasks of a batch are parallel <c>Task</c>s, each with its own <see cref="ArmFiles"/>, and the runtime's append-mode writes of eight threads were MEASURED to cut and join lines (<c>ArmFilesTests</c> without the lock: 892–938 of 1600 lines survived whole).</summary>
+    private static readonly Lock TimingLock = new();
+
     /// <summary>Creates the folders the arm writes under: <c>out</c>, <c>notes</c>, <c>work</c> and the CLI's <c>tmp</c>.</summary>
     public void Prepare()
     {
@@ -158,10 +161,15 @@ public sealed class ArmFiles(ArmPaths paths)
     public void Delete(string path) => File.Delete(path);
 
     /// <summary>One line and a newline, flushed to disk.</summary>
-    public void AppendTiming(TimingLine line) => AppendLine(paths.Timing, TimingLines.Write(line));
+    public void AppendTiming(TimingLine line)
+    {
+        lock (TimingLock)
+        {
+            AppendLine(paths.Timing, TimingLines.Write(line));
+        }
+    }
 
-    /// <summary><paramref name="line"/> and a newline appended to <paramref name="path"/> (created when absent) by a fresh <c>FileMode.Append</c> stream, flushed to disk before it closes: a crash leaves the file whole to its last flushed line. No lock — the timing file's is E4.S3's, wrapped around
-    /// <see cref="AppendTiming"/>; the pick record has ONE writer, the pick in task order.</summary>
+    /// <summary><paramref name="line"/> and a newline appended to <paramref name="path"/> (created when absent) by a fresh <c>FileMode.Append</c> stream, flushed to disk before it closes: a crash leaves the file whole to its last flushed line. No lock of its own — the timing file's is <see cref="AppendTiming"/>'s; the pick record has ONE writer, the pick in task order.</summary>
     public void AppendLine(string path, string line)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

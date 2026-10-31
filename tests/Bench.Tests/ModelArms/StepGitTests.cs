@@ -239,7 +239,7 @@ public sealed class StepGitTests
     }
 
     [Fact]
-    public async Task The_coder_outputs_of_the_task_pipeline_are_not_written_here()
+    public async Task The_coder_outputs_of_a_context_that_names_no_task_are_refused_and_write_nothing()
     {
         using var bench = new StepBench();
         var context = bench.Context("C", 0);
@@ -248,6 +248,7 @@ public sealed class StepGitTests
 
         var outcome = await DerivedOutputs.WriteAsync(context, [DerivedOutput.CoderHead, DerivedOutput.CoderDiff], files, git, Ct);
 
-        outcome.Should().BeOfType<Outcome<IReadOnlyList<DerivedOutput>>.Fail>().Which.Reason.Should().Contain("task outputs are written by the task pipeline (E4.S3)");
+        outcome.Should().BeOfType<Outcome<IReadOnlyList<DerivedOutput>>.Fail>().Which.Reason.Should().Contain("1-code: the coder's context names no task", "E4.S3 writes them for a coder (StepRestartTests); a context with no task has no file to name");
+        Directory.Exists(bench.Paths.Out).Should().BeFalse("nothing was written for it");
     }
 }

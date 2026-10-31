@@ -2,6 +2,7 @@ using Bench.Cli;
 using Bench.Domain;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
+using ModelArms.Core.Launch;
 using ModelArms.Core.Ports;
 
 namespace ModelArms.Verbs;
@@ -12,11 +13,14 @@ internal sealed record ArmChoice(string Arm, Scheme Scheme);
 /// <summary>Where the arm lives: the map that holds its token and the paths that token names.</summary>
 internal sealed record ArmPlaced(ArmChoice Choice, ArmMap Map, ArmPaths Paths);
 
-/// <summary>The two executables <c>run-arm</c> resolved: the REAL paths, printed and launched as one value (D17 c, d).</summary>
-internal sealed record ArmTools(string Claude, string Git);
+/// <summary>The executables <c>run-arm</c> resolved: the REAL paths, printed and launched as one value (D17 c, d). <paramref name="Build"/> holds git and — only for a scheme with a <c>tasks</c> block, whose worktrees get a warm build (E4.S3) — the target's <c>lowPriority[0]</c> (<c>Node</c>) and <c>build[0]</c> (<c>Build</c>); every other member is the empty text.</summary>
+internal sealed record ArmTools(string Claude, string Git, ToolPaths Build);
 
-/// <summary>Everything the walk needs, once admission has let the arm in.</summary>
-internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme, ArmMap Map, ArmPaths Paths, ArmTools Tools, int ScenarioCount);
+/// <summary>Everything the walk needs, once admission has let the arm in: <paramref name="ScenarioIds"/> are the ids of <c>scenarios.json</c> as the gate judged it (the task plan's every scenario must be delivered by a task), their count is what the briefs say.</summary>
+internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme, ArmMap Map, ArmPaths Paths, ArmTools Tools, IReadOnlyList<string> ScenarioIds)
+{
+    public int ScenarioCount => ScenarioIds.Count;
+}
 
 /// <summary>Admission for <c>run-arm</c>: each refusal ends the walk, so a later check never runs on what an earlier one refused and nothing is launched before all of them have passed — the scheme (the arm's letters must be among the experiment's
 /// schemes, and a <c>tasks</c> block waits for E4), the arm's token from <c>arms.map.json</c>, the PATH the child programs inherit and the two executables that PATH resolves, and <c>scenarios.json</c> as the gate judged it. The PATH is judged before the
@@ -40,7 +44,7 @@ internal static class RunArmAdmission
             ? Outcome<IGateLock>.Success(given)
             : FileGateLock.Create(TimeProvider.System, LockPoll).Match(created => Outcome<IGateLock>.Success(created), Outcome<IGateLock>.Failure);
 
-    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb, allowTasks: false);
+    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb);
 
     private static Passage<ArmPlaced> Place(ExperimentInput input, ArmChoice choice)
     {
@@ -68,11 +72,28 @@ internal static class RunArmAdmission
         var refusal = LaunchAdmission.FirstRefusal(environment, roots);
         return refusal.Length > 0
             ? Passage<ArmPlan>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
-            : LaunchAdmission.Resolve(Verb, "claude", environment, roots).Bind(claude => LaunchAdmission.Resolve(Verb, "git", environment, roots).Map(git => Planned(input, placed, new ArmTools(claude, git))));
+            : LaunchAdmission.Resolve(Verb, "claude", environment, roots)
+                .Bind(claude => LaunchAdmission.Resolve(Verb, "git", environment, roots)
+                    .Bind(git => BuildTools(input, placed.Choice.Scheme, git, roots).Map(build => Planned(input, placed, new ArmTools(claude, git, build)))));
+    }
+
+    /// <summary>What the worktrees' warm build starts (E4.S3): the target's wrapper interpreter and its build program, resolved like the others — and only for a scheme that has worktrees. Another scheme resolves nothing it will not launch (a host without <c>dotnet</c> still runs C).</summary>
+    private static Passage<ToolPaths> BuildTools(ExperimentInput input, Scheme scheme, string git, IReadOnlyList<string> roots)
+    {
+        var none = new ToolPaths(git, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+        if (!scheme.Entries.Any(entry => entry is SchemeEntry.Tasks))
+        {
+            return new Passage<ToolPaths>.Through(none);
+        }
+
+        var target = input.Experiment.Target;
+        var environment = input.Verb.Environment;
+        return LaunchAdmission.Resolve(Verb, target.LowPriority[0], environment, roots)
+            .Bind(node => LaunchAdmission.Resolve(Verb, target.Build[0], environment, roots).Map(build => none with { Node = node, Build = build }));
     }
 
     private static ArmPlan Planned(ExperimentInput input, ArmPlaced placed, ArmTools tools) =>
-        new(input, placed.Choice.Arm, placed.Choice.Scheme, placed.Map, placed.Paths, tools, ScenarioCount: 0);
+        new(input, placed.Choice.Arm, placed.Choice.Scheme, placed.Map, placed.Paths, tools, ScenarioIds: []);
 
     /// <summary>D23: the resolved git's version against the floor, before <c>scenarios.json</c> is counted and before the gate lock (which <c>RunArm.WalkAsync</c> takes only after admission) — a git below the floor runs no repository operation.</summary>
     private static async Task<Passage<ArmPlan>> FlooredAsync(ArmPlan plan) =>
@@ -83,7 +104,7 @@ internal static class RunArmAdmission
     {
         var read = await HostFactsReader.ScenariosAsync(plan.Input, GateSeams.Real);
         return read.Bind(scenarios => scenarios.Match(
-            list => new Passage<ArmPlan>.Through(plan with { ScenarioCount = list.Count }),
+            list => new Passage<ArmPlan>.Through(plan with { ScenarioIds = [.. list.Select(scenario => scenario.Id)] }),
             reason => Passage<ArmPlan>.Stop(ExitCodes.Configuration, $"{Name}: {reason}")));
     }
 }
