@@ -2,7 +2,10 @@
 
 > What exists **today**, in `spikes/minigit-bench/`. Epic E1 of `todo/PLAN_minigit_stack_bench.md` is built: three
 > instruments that give correct numbers before any model touches the task; E2.S1-S2 add the box and the launch, and E3b.S1-S3 (code half) the bare runner
-> (section 6). No paid session has been run through the runner yet, and nothing here is a result. What is still missing is in [What it does not do yet](#what-it-does-not-do-yet).
+> (section 6). The bare arm's paid series have run since: their record is
+> [minigit/RESULTS_bare_2026-10-30.md](minigit/RESULTS_bare_2026-10-30.md), built by `research/minigit/tools/` (`extract.mjs`, `render.mjs`), and
+> `research/minigit/tools/replay.mjs` replays the contamination scan over every recorded stream into
+> [minigit/data/replay.json](minigit/data/replay.json). This document describes the instruments; the numbers are in the record. What is still missing is in [What it does not do yet](#what-it-does-not-do-yet).
 >
 > **This repository is public and the sessions it will score have network.** This document, like every file committed
 > in clear, names the held-out suite only by shape: its counts (N1 = 29 cases for v1, N2 = 29 for v2, M = 14 mutants)
@@ -925,6 +928,7 @@ The host must therefore have what these tests need, and a host that lacks one fa
 - `todo/PLAN_minigit_stack_bench.md` — the parent plan (§5 inputs and scoring, §8 the harness, §9 accounting, §10 time) and
   the epics E2–E4 that remain.
 - `todo/PLAN_minigit_stack_bench_E1.md` — the E1 stories with their test ids and the dated amendments.
+- `research/minigit/RESULTS_bare_2026-10-30.md` — the record of the bare arm's four series; `research/minigit/data/replay.json` — the contamination scan replayed over every recorded stream (re-run: `node research/minigit/tools/replay.mjs`).
 - `todo/PLAN_minigit_stack_bench_E3_bare.md` — the bare-first stories E3b.S1 to S5: the runner, the quiet check, the pre-registration, the A/A and the three bare pairs.
 - `spikes/minigit-bench/inputs/UPSTREAM.md` — where the inputs come from and the licence decision.
 - `spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/CAPTURE.md` — the capture's table with observed values.

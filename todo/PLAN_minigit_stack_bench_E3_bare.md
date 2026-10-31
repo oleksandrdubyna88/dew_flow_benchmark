@@ -1,7 +1,12 @@
 # PLAN — E3b stories: bare first — the thin bare-arm runner, the machine-quiet check, the bare pre-registration, the bare A/A and the three bare pairs of the minigit stack bench
 
-> Status: **plan only, nothing implemented yet, 2026-10-30; revised the same day after the coai plan gate and an Opus
-> review.** Scope: the slice of epic E3 of [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md) that D20 pulls
+> Status: **in progress — S1–S4 implemented 2026-10-30; S5's bare pairs ran 2026-10-30/31 in two series; not yet merged or
+> promoted.** Written 2026-10-30 and revised the same day after the coai plan gate and an Opus review. S5: the pairs ran in
+> series `s-20261030-bf89` (stopped by its registered rule, `second void: contaminated`, at pair 3) and in
+> `s-20261030-b82e` (complete: pairs 1–3). The interim record is
+> [`research/minigit/RESULTS_bare_2026-10-30.md`](../research/minigit/RESULTS_bare_2026-10-30.md), built from
+> `research/minigit/tools/` (extract, render, replay); it stands in for the planned `bare-pairs-<date>.md` and
+> `bare-report.mjs`, which were **not built** (see the S5 deviations). Scope: the slice of epic E3 of [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md) that D20 pulls
 > forward — new modules and one CLI in `spikes/minigit-bench/`, three small named changes to E2-owned files (`sandbox.mjs`,
 > `egress.mjs`) and one widening of `spikes/policy-ab-quick/lib/spend.mjs`, the bare-scope pre-registration under
 > `spikes/minigit-bench/inputs/` with its tag, and the paid bare sessions (A/A, one Node pilot, three pairs) run under
@@ -604,6 +609,17 @@ only when); then a computed interim record.
 **Commands.** `node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what pair:1` (then 2, 3; `resume` after any
 halt); `… report --series <dir> --out research/minigit/bare-pairs-<date>.md`; `node spikes/minigit-bench/heldout-tool.mjs
 leakcheck --range origin/main..HEAD`.
+
+**Built (deviations).** (1) `lib/bare-report.mjs`, `bare-runner.mjs report` and `test/bare-report.test.mjs` were **not built**, and
+the record is not `research/minigit/bare-pairs-<date>.md` / `…-data.json`. In their place: `research/minigit/tools/extract.mjs`
+reads the series' files (read-only) into `research/minigit/data/<series>.json`; `render.mjs` rewrites the generated blocks of
+`research/minigit/RESULTS_bare_2026-10-30.md` from those files; `replay.mjs` replays the contamination scan over every recorded
+stream into `data/replay.json`. The tools have no tests beyond `replay.mjs --self-check` and render's own failures on a missing
+file or an unknown block, so the five `bare-report` test rows above are **not covered**; the record's numbers are checked
+by `extract.mjs` against each pair's own `pairs/p<k>.json` instead. (2) The pairs ran in two series, not one: series
+`s-20261030-bf89` stopped at pair 3 by its registered second `void: contaminated` (two false positives of the scan: defect 14,
+fixed after it), and `s-20261030-b82e` ran pairs 1–3 on the fixed instrument; after a pair has started no harness change may be
+accepted in that series. Their classes, flags, cells and the later defects (16–18) are in the record, not repeated here.
 
 **Done when.** Three pairs ran, or a named stop ended the arm and the record says which cells are missing and why; every
 session has `record.json`, every pair `pairs/p<k>.json`; the pair-1 read-back line is in `amendments.md`; the interim record
