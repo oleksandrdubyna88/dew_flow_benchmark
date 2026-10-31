@@ -1,0 +1,17 @@
+2026-10-29 23:45:26,510	WARNING authentication_token_setup.py:85 -- Token authentication is enabled for this Ray cluster. Set RAY_AUTH_MODE=disabled to opt out. For more information, see https://docs.ray.io/en/latest/ray-security/token-auth.html
+2026-10-29 23:45:26,511	INFO authentication_token_setup.py:50 -- Generated new authentication token and saved to /root/.ray/auth_token
+2026-10-29 23:45:29,151	INFO worker.py:2033 -- Started a local Ray instance.
+Namespace(model='/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ', tp_size=1, enable_expert_parallel=False, dtype='auto', use_deep_gemm=False, save_dir='/moe/tune/draft-bs-12', seed=0, batch_size=[12], tune=True, trust_remote_code=True, model_prefix=None)
+Start tuning over 10000 configurations...
+(pid=393) WARNING 10-29 23:45:32 [rocm.py:134] Using CUDA_VISIBLE_DEVICES on ROCm is deprecated and support will be removed in vLLM v0.26.0. Please use HIP_VISIBLE_DEVICES instead.
+(BenchmarkWorker pid=393) /moe/benchmark_moe.py:81: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+(BenchmarkWorker pid=393)   if isinstance(obj, triton.JITFunction):
+Tuning took 2481.28 seconds
+Exception ignored while calling deallocator <function tqdm.__del__ at 0x764697e19900>:
+Traceback (most recent call last):
+  File "/opt/python/lib/python3.14/site-packages/tqdm/std.py", line 1154, in __del__
+  File "/opt/python/lib/python3.14/site-packages/tqdm/std.py", line 1309, in close
+  File "/opt/python/lib/python3.14/site-packages/tqdm/std.py", line 1502, in display
+  File "/opt/python/lib/python3.14/site-packages/tqdm/std.py", line 1157, in __str__
+  File "/opt/python/lib/python3.14/site-packages/tqdm/std.py", line 576, in format_meter
+ImportError: sys.meta_path is None, Python is likely shutting down

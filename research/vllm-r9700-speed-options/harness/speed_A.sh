@@ -14,11 +14,13 @@ export MAXLEN=131072
 export GENCONFIG='C:\Users\strug\vllm\genconfig'
 trap '"$D/restore_server.sh"' EXIT
 arm_args() {
-  local mtp=2; case "$1" in mtp1) mtp=1;; mtp3) mtp=3;; esac
+  # Final A/B (plan "Final A/B"): fbase = base, fcombo = the kept options together (mtp3 + tattn). Own names, so the
+  # round-1 prompts/GSM8K files of phase A are not overwritten.
+  local mtp=2; case "$1" in mtp1) mtp=1;; mtp3|fcombo) mtp=3;; esac
   echo "--generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens $mtp"
   case "$1" in
     mnbt8k) echo "--max-num-batched-tokens 8192";;
-    tattn) echo "--attention-backend TRITON_ATTN";;
+    tattn|fcombo) echo "--attention-backend TRITON_ATTN";;
     fp8kv) echo "--kv-cache-dtype fp8";;
   esac
 }
@@ -36,7 +38,7 @@ for round in 1 2 3; do for arm in "${ARMS[@]}"; do
   [ -f "$OUT/unsupported_$arm" ] && continue
   "$D/disk_gate.sh" check || { echo "STOP: disk gate"; exit 1; }
   name="vllmprtest-sp-$arm-$round"; read -r -a a <<< "$(arm_args "$arm" | tr '\n' ' ')"
-  echo "=== $(date '+%F %T') $arm round $round: ${a[*]}"
+  echo "=== $(date '+%F %T') $arm round $round (WSL load $(cut -d' ' -f1-3 /proc/loadavg)): ${a[*]}"
   if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e VLLM_TUNED_CONFIG_FOLDER=/work/moe/tune/merged -- "${a[@]}"; then
     echo "RETRY: first start failed"; "$W" stop "$name" >/dev/null 2>&1; sleep 60
     if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e VLLM_TUNED_CONFIG_FOLDER=/work/moe/tune/merged -- "${a[@]}"; then
@@ -51,6 +53,9 @@ for round in 1 2 3; do for arm in "${ARMS[@]}"; do
   prefill "$name" "$arm-$round" 32768 | tee -a "$OUT/bench.txt"
   "$W" exec "$name" python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/metrics').read().decode())" 2>&1 \
     | tr -d '\r' | grep -E '^vllm:spec_decode' | sed "s/^/$arm-$round /" >> "$OUT/spec_metrics.txt"
+  # PREFIXTEST=1: the § 6.1 prefix-cache check, after the measurements (so it does not change them).
+  [ "${PREFIXTEST:-0}" = 1 ] && "$W" exec "$name" python3 /work/speed/prefixtest.py http://127.0.0.1:8000 qwen3.6-35b-a3b \
+    "$arm-$round" 2>&1 | tr -d '\r' | tail -2 | tee -a "$OUT/prefixtest.txt"
   if [ "$round" = 1 ]; then
     "$W" exec "$name" python3 /work/harness.py collect --url http://127.0.0.1:8000 --model qwen3.6-35b-a3b \
       --out "/work/speed/prompts_$arm.json" 2>&1 | tr -d '\r' | tail -1
