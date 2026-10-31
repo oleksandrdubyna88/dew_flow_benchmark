@@ -14,6 +14,7 @@
     <!-- The tests stand inside the gate's race window and inside the dispatch through two seams that production code must not be able to build: a
          GateSeams that reads other facts than the host's would skip the trust check. They are internal; only the test assembly sees them. -->
     <InternalsVisibleTo Include="Bench.Tests" />
+    <InternalsVisibleTo Include="lock-crasher" />
   </ItemGroup>
 
   <ItemGroup>

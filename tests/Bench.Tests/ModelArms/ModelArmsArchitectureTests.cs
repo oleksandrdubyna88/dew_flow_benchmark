@@ -97,7 +97,14 @@ public sealed class ModelArmsArchitectureTests
 
         // E4.S3
 
-        // E5
+        // E5.S1
+        typeof(IsolationPlans), typeof(SnapshotFiles), typeof(IsolationRestoreOrder), typeof(RestoreJudgement), typeof(LockDecision), typeof(UnlockDecision),
+
+        // E5.S2
+
+        // E5.S3
+
+        // E5.S4
     ];
 
     [Fact]

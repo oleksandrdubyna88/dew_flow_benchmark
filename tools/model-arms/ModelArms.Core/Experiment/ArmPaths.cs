@@ -27,6 +27,9 @@ public sealed record RootPaths(string Root)
 
     public string PidFile(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".pid");
 
+    /// <summary>The runner's own lock (D13, E5.S1): held by the <c>run-arm</c> process for its life, free the moment it dies — the one answer to whether an arm runs. Never deleted (§4.11): a stale file is not a stale lock.</summary>
+    public string RunnerLock(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".lock");
+
     public string PidLog(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".log");
 
     public string Chain => Path.Combine(Root, "chain");
@@ -45,6 +48,9 @@ public sealed record RootPaths(string Root)
 
     public string GateLock => Path.Combine(Root, ".gate.lock");
 
+    /// <summary>D11's lock over every change of a mode (E5.S1): taken EXCLUSIVE by <c>lock</c> and <c>unlock</c>, held SHARED by every runner for its life, so no runner starts during a restore and no restore starts beside a runner.</summary>
+    public string IsolationLock => Path.Combine(Root, ".isolation.lock");
+
     public string LockedModes => Path.Combine(Root, ".locked-modes");
 
     /// <summary>The second immutable file of D11's two-file state (<c>{"run","digest","verifiedAt"}</c>): present beside <see cref="LockedModes"/> with the same run and digest, the snapshot is <i>applied</i>. Spelled here for the readers (E3.S4, §8 item 2); E5.S1 writes it.</summary>
@@ -58,6 +64,9 @@ public sealed record RootPaths(string Root)
 
     /// <summary>Where <c>unlock</c> moves <see cref="LockedModes"/> to once it has restored the modes; the stamp is UTC, like <c>20261029T101500Z</c>.</summary>
     public string LockedModesRestored(string stamp) => Path.Combine(Root, ".locked-modes.restored-" + ArmPaths.Segment(stamp, "stamp"));
+
+    /// <summary>Where <c>unlock</c> moves <see cref="LockedModesApplied"/> to, beside <see cref="LockedModesRestored"/> (the same stamp rules, a <c>-2</c>… suffix for a second cycle in one second).</summary>
+    public string LockedModesAppliedRestored(string stamp) => Path.Combine(Root, ".locked-modes.applied.restored-" + ArmPaths.Segment(stamp, "stamp"));
 
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
 

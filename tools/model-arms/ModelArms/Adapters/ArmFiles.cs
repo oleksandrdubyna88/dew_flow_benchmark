@@ -88,7 +88,10 @@ public sealed class ArmFiles(ArmPaths paths)
     }
 
     /// <summary>Stages beside the target, flushes to disk and renames over it.</summary>
-    public void Replace(string path, string text) => Commit(path, Utf8.GetBytes(text), createMode: null, betweenStagingAndRename: null);
+    public void Replace(string path, string text) => ReplaceFile(path, text);
+
+    /// <summary><see cref="Replace"/> without an instance (E5.S1): the pid file of a runner, written BY NAME — staged beside, flushed, renamed over — and never through <see cref="WriteFileOnce"/>, whose failure path lists the folder (<c>pids/</c> is at mode 300 while the isolation stands).</summary>
+    public static void ReplaceFile(string path, string text) => Commit(path, Utf8.GetBytes(text), createMode: null, betweenStagingAndRename: null);
 
     /// <summary><see cref="Replace"/> for a file that carries a secret (<c>mcp-coai.json</c> with the vault key, the copied coai settings, the arm map — C15, E2 §8 item 14): the staged file is CREATED at mode <c>0600</c> (<see cref="FileStreamOptions.UnixCreateMode"/>), so no moment exists in which it is readable by other users with the secret already in it — a
     /// create-then-chmod has that moment, and the test looks at the seam between the staged write and the rename. The rename swaps a wider file that was there for this private one: never widened, never kept. A failed write or rename removes the staged file (it holds the secret) and its exception carries the runtime's words and the paths, never the bytes. The mode is a REQUEST to the kernel that a umask can only narrow; whether a file system honours modes is its own affair (<c>ArmFilesTests</c> observes it on the host's).</summary>

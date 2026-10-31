@@ -23,8 +23,8 @@ public static class ModelArmsCommandLine
         Fixed("validate", 0, "validate", "no positional argument", ExperimentFlag),
         Fixed("prep-base", 0, "prep-base", "no positional argument", ExperimentFlag),
         Fixed("make", 0, "make", "no positional argument", ExperimentFlag),
-        Fixed("lock", 0, "lock", "no positional argument", ExperimentFlag),
-        Fixed("unlock", 0, "unlock", "no positional argument", ExperimentFlag),
+        Fixed("lock", 1, "lock <run>", "exactly one argument, the run", ExperimentFlag),
+        Fixed("unlock", 0, "unlock [--force]", "no positional argument", ExperimentFlag, "--force"),
         Fixed("run-arm", 1, "run-arm <arm>", "exactly one argument, the arm", ExperimentFlag),
 
         // --seconds: not named for run-all by any spec yet (E4.S3 specifies the verb); allowed because the command line's own first scenario passes it.

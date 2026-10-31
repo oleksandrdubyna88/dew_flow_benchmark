@@ -50,6 +50,25 @@ internal static class ModelArmsBinary
         }
     }
 
+    /// <summary>The test-only killed lock (<c>tests/LockCrasher</c>), found in its own output folder as the holder is.</summary>
+    public static string CrasherExecutable
+    {
+        get
+        {
+            var testBin = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var tests = testBin.Parent!.Parent!.Parent!.Parent!.FullName;
+            return Path.Combine(tests, "LockCrasher", "bin", testBin.Parent.Name, testBin.Name, OperatingSystem.IsWindows() ? "lock-crasher.exe" : "lock-crasher");
+        }
+    }
+
+    /// <summary>The killed lock run to its end (it ends by its own SIGKILL): <c>lock-crasher &lt;root&gt; &lt;run&gt;</c>. The exit code is the signal's (137 on Linux) or 9 when nothing was proved.</summary>
+    public static async Task<(int Code, string Output, string Error)> RunCrasherAsync(ExperimentRoot root, string run)
+    {
+        var attempt = await ProcessRunner.RunAsync(CrasherExecutable, [root.Root, run], root.Temp, Short, string.Empty, EnvironmentOf(root), TestContext.Current.CancellationToken);
+        var done = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+        return (done.ExitCode, done.StandardOutput, done.StandardError);
+    }
+
     /// <summary>The gate holder started as a task: it takes <paramref name="lockPath"/>, starts <paramref name="childExecutable"/> with <paramref name="childArguments"/> and prints <c>held &lt;pid&gt;</c> and <c>child &lt;pid&gt;</c>.</summary>
     public static Child StartHolder(ExperimentRoot root, string lockPath, string childExecutable, params string[] childArguments) =>
         new(HolderExecutable, [lockPath, childExecutable, .. childArguments], root.Temp, EnvironmentOf(root));

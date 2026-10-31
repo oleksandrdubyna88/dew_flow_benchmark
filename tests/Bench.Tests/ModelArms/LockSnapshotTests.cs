@@ -57,14 +57,14 @@ public sealed class LockSnapshotTests
     public void The_applying_state_names_the_snapshots_time_and_the_applied_state_the_verification_time()
     {
         LockSnapshots.State(Text(Snapshot), Absent).Should().Be(new LockState.Applying("part7", "2026-10-30T10:00:00Z"));
-        LockSnapshots.State(Text(Snapshot), Text(Applied)).Should().Be(new LockState.Applied("part7", "2026-10-30T10:00:05Z"), "it has been applied since the verification said so");
+        LockSnapshots.State(Text(Snapshot), Text(Applied)).Should().Be(new LockState.Applied("part7", "2026-10-30T10:00:05Z", "d1"), "it has been applied since the verification said so — and the closed set it was applied for travels with it");
     }
 
     [Fact]
     public void Each_state_prints_the_one_line_every_verb_but_lock_and_unlock_shows()
     {
         IsolationLine.Of(new LockState.None()).Should().Be("no isolation snapshot");
-        IsolationLine.Of(new LockState.Applied("part7", "2026-10-30T10:00:05Z")).Should().Be("isolation applied for part7 since 2026-10-30T10:00:05Z");
+        IsolationLine.Of(new LockState.Applied("part7", "2026-10-30T10:00:05Z", "d1")).Should().Be("isolation applied for part7 since 2026-10-30T10:00:05Z");
         IsolationLine.Of(new LockState.Applying("part7", "2026-10-30T10:00:00Z")).Should().Be("a lock was interrupted — run `lock part7` or `unlock`");
         IsolationLine.Of(new LockState.Inconsistent("the files disagree")).Should().Be("isolation snapshot inconsistent — the files disagree");
     }

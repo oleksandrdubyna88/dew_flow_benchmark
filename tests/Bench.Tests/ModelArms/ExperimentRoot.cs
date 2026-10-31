@@ -97,8 +97,8 @@ internal sealed class ExperimentRoot : IDisposable
     /// <summary>Makes <paramref name="arm"/> runnable by <c>run-arm</c> the way <c>make</c> will leave it (E2.S8): its token in <c>arms.map.json</c> (the counter is the byte source, so two arms never share one), <c>chain/made-&lt;arm&gt;</c>,
     /// a completed <c>baseline.json</c>, the arm's clone <c>r/&lt;token&gt;/arm</c> as a git repository of one commit, the two MCP configs through <see cref="McpConfig"/>; every step's <c>model</c> is the fake's id and its <c>minutes</c> one;
     /// and <c>&lt;temp&gt;/bin</c> becomes the only <c>PATH</c>, holding <c>claude</c> as a link to the fake's apphost (which resolves its own real path) and <c>git</c> as a link to the host's git. The fake is told to leave a transcript
-    /// (<c>transcripts: true</c>) so a re-entry finds one and resumes; a test that rewrites the script keeps that key (see <see cref="Script"/>). Linux only.</summary>
-    public async Task<ExperimentRoot> MakeArmAsync(string arm, FakeCli fake)
+    /// (<c>transcripts: true</c>) so a re-entry finds one and resumes; a test that rewrites the script keeps that key (see <see cref="Script"/>). Linux only. <paramref name="keepIsolation"/> keeps the example's <c>isolation</c> block; by default it is REMOVED, so a runner whose run has a block does not warn that the isolation is not applied (E5.S1 question 20) in tests that are not about it.</summary>
+    public async Task<ExperimentRoot> MakeArmAsync(string arm, FakeCli fake, bool keepIsolation = false)
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the run-arm scenarios link claude to the fake; links and POSIX paths");
         Assert.False(RealGit.Length == 0, "a git must resolve on the test process's PATH to build the arm's clone");
@@ -116,6 +116,11 @@ internal sealed class ExperimentRoot : IDisposable
             {
                 step.Value!["model"] = fake.Model;
                 step.Value["minutes"] = 1;
+            }
+
+            if (!keepIsolation)
+            {
+                top.AsObject().Remove("isolation");
             }
         });
 

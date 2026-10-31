@@ -104,6 +104,8 @@ public sealed class ModelArmsCommandLineTests
     public static TheoryData<string[]> LegalLines() => new()
     {
         { ["validate", "--experiment", "/r"] },
+        { ["lock", "part6", "--experiment", "/r"] },
+        { ["unlock", "--force", "--experiment", "/r"] },
         { ["gate-lock", "hold", "--seconds", "3", "--experiment", "/r"] },
         { ["checks", "C1", "--parse-only", "--experiment", "/r"] },
         { ["run-all", "C1", "--seconds", "5", "--experiment", "/r"] },
@@ -126,6 +128,7 @@ public sealed class ModelArmsCommandLineTests
             var args = verb switch
             {
                 "run-arm" or "checks" => new[] { verb, "C1", "--experiment", "/r" },
+                "lock" => [verb, "part6", "--experiment", "/r"],
                 "run-all" => [verb, "C1", "--experiment", "/r"],
                 "gate-lock" => [verb, "status", "--experiment", "/r"],
                 _ => [verb, "--experiment", "/r"],
@@ -133,5 +136,15 @@ public sealed class ModelArmsCommandLineTests
 
             ModelArmsCommandLine.Split(args).Failed().Should().BeFalse($"{verb} reads an experiment and takes --experiment");
         }
+    }
+
+    [Theory]
+    [InlineData(new[] { "lock", "--experiment", "/r" }, "lock takes exactly one argument, the run: model-arms lock <run>")]
+    [InlineData(new[] { "lock", "a", "b" }, "lock takes exactly one argument, the run: model-arms lock <run>")]
+    [InlineData(new[] { "unlock", "part6" }, "unlock takes no positional argument: model-arms unlock [--force]")]
+    [InlineData(new[] { "lock", "part6", "--force" }, "'--force' is not a flag of lock")]
+    public void Lock_takes_exactly_a_run_and_unlock_takes_no_run(string[] args, string reason)
+    {
+        ModelArmsCommandLine.Split(args).Reason().Should().Contain(reason);
     }
 }

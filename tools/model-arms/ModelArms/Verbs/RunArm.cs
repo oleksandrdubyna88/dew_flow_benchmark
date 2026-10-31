@@ -13,7 +13,7 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 }
 
 /// <summary><c>run-arm &lt;arm&gt;</c> (D16; plan §4.1) for every sequential scheme — C, CR, CHH: the arm's scheme walked entry by entry over the step contract, one step after the other, and the arm is done when its last step is. The verb knows four kinds
-/// of step and nothing about C, CR or CHH by name; a scheme with a <c>tasks</c> block is refused until E4 (exit 4). Admission is <see cref="RunArmAdmission"/> (the scheme, the token, the two resolved executables and the scenarios — each refusal
+/// of step and nothing about C, CR or CHH by name; a scheme with a <c>tasks</c> block is refused until E4.S3 (exit 4). Admission is <see cref="RunArmAdmission"/> (the scheme, the token, the two resolved executables and the scenarios — each refusal
 /// ends the walk before anything is launched), the walk is <see cref="RunArmWalk"/>. Exit 0 the arm is done; 3 the account is out or the host cannot say (a limit still on after the waits, a CLI that did not start); 4 a wrong configuration; 5 a
 /// step stopped and the same command resumes it (an interrupted attempt, an error that is not a limit, the operator's stop).
 /// <para>
@@ -22,10 +22,14 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 /// <para>
 /// <b>The gate lock's ceiling (E2 §8 items 59 and 61) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> — for each of the other arms of the arm's own round (the largest round of the run that names it; every arm of
 /// <c>arms.map.json</c> only when no run does, and the log says so), the longest gate step's minutes plus the kill grace plus the usage-limit waits the runner may spend under the lock and the floor of each resumed attempt (<c>limits.tries</c> × (<c>limits.waitSeconds</c> + <c>limits.minimumRemainingSeconds</c>)); never less than
-/// one such span. What remains is a wedged holder, which only a heartbeat (E4) tells from a slow one: it is told apart only when the ceiling runs out. E4's <c>run-all</c> sizes its own the same way from the round it starts, or builds the heartbeat.
+/// one such span. What remains is a wedged holder, which only a heartbeat (out of bounds for E5) tells from a slow one: it is told apart only when the ceiling runs out. E5.S3's <c>run-all</c> sizes its own the same way from the round it starts, or builds the heartbeat.
 /// </para>
 /// <para>
-/// What this does NOT do: detach (E4); run the objective checks (E5).
+/// <b>The runner is identified by two locks held for its life</b> (E5.S1, D13): <c>pids/&lt;arm&gt;.lock</c> — the answer to whether the arm runs, free the instant the process dies — and the SHARED <c>.isolation.lock</c>, so no <c>lock</c> or <c>unlock</c> changes a mode while it runs; its pid is written to <c>pids/&lt;arm&gt;.pid</c>. Both are taken by <see cref="RunArmAdmission"/> before anything else and
+/// disposed here after the walk, whatever it came to.
+/// </para>
+/// <para>
+/// What this does NOT do: detach (E5.S3's <c>run-all</c>); run the objective checks (E3.S5's <c>checks</c>).
 /// </para></summary>
 public static class RunArmVerb
 {
@@ -36,7 +40,21 @@ public static class RunArmVerb
     internal static async Task<int> RunAsync(ExperimentInput input, RunArmSeams seams)
     {
         var admitted = await RunArmAdmission.AdmitAsync(input);
-        return await admitted.Match(plan => WalkAsync(plan, seams), stop => Task.FromResult(Refused(input, stop)));
+        return await admitted.Match(plan => HeldAsync(plan, seams), stop => Task.FromResult(Refused(input, stop)));
+    }
+
+    /// <summary>The walk, with the runner's two locks released after it whatever it came to (the kernel releases them when the process dies).</summary>
+    private static async Task<int> HeldAsync(ArmPlan plan, RunArmSeams seams)
+    {
+        try
+        {
+            return await WalkAsync(plan, seams);
+        }
+        finally
+        {
+            plan.RunnerLock.Dispose();
+            plan.IsolationHold.Dispose();
+        }
     }
 
     private static int Refused(ExperimentInput input, Passage<ArmPlan>.Stopped stop) => stop.Print(input.Verb.Error);

@@ -15,7 +15,7 @@ public abstract record LockState
 
     public sealed record Applying(string Run, string Since) : LockState;
 
-    public sealed record Applied(string Run, string Since) : LockState;
+    public sealed record Applied(string Run, string Since, string Digest) : LockState;
 
     public sealed record Inconsistent(string Reason) : LockState;
 }
@@ -53,13 +53,60 @@ public static class LockSnapshots
     private static LockState Joined(Snapshot snapshot, Verified applied) =>
         snapshot.Run != applied.Run ? new LockState.Inconsistent($".locked-modes is for run {snapshot.Run} and .locked-modes.applied for run {applied.Run}")
         : snapshot.Digest != applied.Digest ? new LockState.Inconsistent($".locked-modes holds the closed set {snapshot.Digest} and .locked-modes.applied {applied.Digest}")
-        : new LockState.Applied(snapshot.Run, applied.VerifiedAt);
+        : new LockState.Applied(snapshot.Run, applied.VerifiedAt, snapshot.Digest);
 
     private static LockState Inconsistent(string reason) => new LockState.Inconsistent(reason);
 
+    /// <summary>The snapshot's whole content for a WRITER (<c>lock</c> recovering, <c>unlock</c> restoring): the header <see cref="State"/> reads, and the modes with their kind, mode and — on the kernel road — device and inode. A mode that is not octal, a kind that is neither
+    /// <c>closed</c> nor <c>unlisted</c>, a <c>dev</c> without its <c>ino</c> (or the reverse) is a failure naming the entry. <see cref="State"/> itself reads only the header, so the E3 reader's fixtures — which carry <c>modes</c> without a kind — stay <i>applying</i>; the one header parse is shared.</summary>
+    public static Outcome<SavedSnapshot> Saved(string json) =>
+        JsonRow.Parse(json, ".locked-modes").Match(
+            row => Checked(row, ".locked-modes", Header(row)).Match(header => ModesOf(row, header), Outcome<SavedSnapshot>.Failure),
+            Outcome<SavedSnapshot>.Failure);
+
+    private static Outcome<SavedSnapshot> ModesOf(JsonRow row, Snapshot header)
+    {
+        var rows = row.Rows("modes");
+        if (row.Problem.Length > 0)
+        {
+            return Outcome<SavedSnapshot>.Failure($".locked-modes: {row.Problem}");
+        }
+
+        var modes = new List<SavedMode>();
+        foreach (var (each, index) in rows.Select((each, index) => (each, index)))
+        {
+            var read = One(each, index);
+            if (read is Outcome<SavedMode>.Fail failed)
+            {
+                return Outcome<SavedSnapshot>.Failure(failed.Reason);
+            }
+
+            modes.Add(((Outcome<SavedMode>.Ok)read).Value);
+        }
+
+        return Outcome<SavedSnapshot>.Success(new SavedSnapshot(header.Run, header.Digest, header.Since, modes));
+    }
+
+    private static Outcome<SavedMode> One(JsonRow each, int index)
+    {
+        var where = $".locked-modes: modes[{index}]";
+        var path = each.Text("path", required: true);
+        var kind = each.Text("kind", required: true);
+        var mode = each.Text("mode", required: true);
+        var device = each.ULong("dev");
+        var inode = each.ULong("ino");
+        return each.Problem.Length > 0 ? Outcome<SavedMode>.Failure($"{where}: {each.Problem}")
+            : kind is not ("closed" or "unlisted") ? Outcome<SavedMode>.Failure($"{where}: 'kind' must be closed or unlisted, got '{kind}'")
+            : SnapshotFiles.ModeBits(mode) is Outcome<int>.Fail bad ? Outcome<SavedMode>.Failure($"{where}: {bad.Reason}")
+            : device.HasValue != inode.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'dev' and 'ino' come together or not at all")
+            : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value) : null));
+    }
+
+    private static Snapshot Header(JsonRow row) => new(row.Text("run", required: true), row.Text("digest", required: true), row.Text("since", required: true));
+
     private static Outcome<Snapshot> Parsed(string json, string file) =>
         JsonRow.Parse(json, file).Match(
-            row => Checked(row, file, new Snapshot(row.Text("run", required: true), row.Text("digest", required: true), row.Text("since", required: true))),
+            row => Checked(row, file, Header(row)),
             Outcome<Snapshot>.Failure);
 
     private static Outcome<Verified> Verification(string json) =>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A test-only killed lock (model arms E5.S1): runs the product's own LockVerb over the root it is handed and SIGKILLs ITSELF right after the second chmod, so every
+       descriptor of the half-applied lock dies with the process — the case a recovery in the SAME process can never be (it would still hold them). A separate project,
+       launched from its own output folder like tests/GateHolder and tests/FakeCli — no production code carries a hidden mode for a test. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>lock-crasher</AssemblyName>
+    <RootNamespace>LockCrasher</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\model-arms\ModelArms\ModelArms.csproj" />
+  </ItemGroup>
+
+</Project>
