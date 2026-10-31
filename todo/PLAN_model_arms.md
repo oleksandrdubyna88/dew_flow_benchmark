@@ -4,7 +4,7 @@
 > document gate, the interim path of `common.plan-change-control`; verdict proceed, its six findings taken into the baseline; Narrowed:
 > no) after the stop of 2026-10-29 (`## Plan changes`, epoch 1: entries 1.1–1.3, closed) and the WHOLE plan's revision by the re-review
 > (its record is under `## Plan changes`; §11's last row says what changed) — E2 may start; PR #116 (E1) merged to `main` at `431e759`
-> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2); E2's stories are built — E2.S0–E2.S8 landed (E2.S8, `run-arm`, last, 2026-10-30; M1 observed) and E2 merged to `main` at `5a8b4ce` (#119); E3 built on `feat/model-arms-e3` (E3.S0–E3.S5, 2026-10-30/31; the coai code gate passed, its accepted findings fixed — E3 §8 items 49–51) and delivered to `main` by its PR; **M2 and its key check are the owner's and still open**; **epoch 2 entry 2.1** (the owner, 2026-10-30: macOS and FreeBSD run, not refused — E3.S0) — one change, no stop; E4–E6 not started — see *State after E3* below.** Scope: a new self-contained module
+> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2); E2's stories are built — E2.S0–E2.S8 landed (E2.S8, `run-arm`, last, 2026-10-30; M1 observed) and E2 merged to `main` at `5a8b4ce` (#119); E3 built on `feat/model-arms-e3` (E3.S0–E3.S5, 2026-10-30/31; the coai code gate passed, its accepted findings fixed — E3 §8 items 49–51) and delivered to `main` by its PR; **M2 ran 2026-10-31 (logged); its key check is the owner's and still open**; **epoch 2 entry 2.1** (the owner, 2026-10-30: macOS and FreeBSD run, not refused — E3.S0), then **entries 2.2 and 2.3 (2026-10-31: D19's secret-shaped names, E3 §8 item 50; a git floor at `validate`, D23, item 51) — stopped for re-review** (`## Plan changes`): no E4 code until epoch 3 is approved; E4–E6 not started — see *State after E3* below.** Scope: a new self-contained module
 > `tools/model-arms/` (two projects, a console `model-arms`), tests in `tests/Bench.Tests/ModelArms/`, three files moved out of `hosts/Cli`
 > into a shared host-support project, two widenings of the shared CLI launcher, one widening of `tests/FakeCli`, a `research/module_model_arms.md`
 > and the `research/module_tests.md` rows. It ports the RUN half of the owner's part-6 AND part-7 harness (four schemes: C, CR, SRS, CHH — the
@@ -26,14 +26,14 @@ Written for the session that builds E4–E6. Progress, not a plan change (`commo
   `validate`, `prep-base`, `make`, `status`, `run-arm` (sequential schemes C, CR, CHH), `checks` and `gate-lock` work; `lock`, `unlock`,
   `run-all` and `chain` print *not built yet* with their story ids (E5.S1, E5.S1, E5.S3, E5.S4). The module doc
   (`research/module_model_arms.md`) describes what is built and what is unobserved; E3's deviations are its §8 items 26–51.
-- **The ledger:** epoch 2 has ONE entry (2.1). A second accepted change to this plan stops it for a whole re-review
-  (`common.plan-change-control`). Two proposals wait for the owner and would each be that second entry: **E3 §8 item 50** — the arm's own
+- **The ledger:** epoch 2 had ONE entry (2.1); on 2026-10-31 the two proposals below were recorded as 2.2 and 2.3 (the owner delegated the
+  decision; the question consultants advised it) and **the plan is stopped for re-review** (`common.plan-change-control`). The two: **E3 §8 item 50** — the arm's own
   claude session still receives secret-shaped variables that `IsSecretName` misses (`PGPASSWORD`, `DATABASE_URL`, `*_PAT`, `*_APIKEY`,
   `*_CREDENTIALS`, npm auth tokens), because D19 defines that environment by `IsSecretName`; the proposed fix is one ModelArms.Core
   `IsSecretShaped` helper for both `TargetEnvironment` and `ArmChildEnvironment` (the operator's workaround meanwhile: start `run-arm` from a
   shell without such variables); **E3 §8 item 51** — no git minimum is enforced (`GIT_ALLOW_PROTOCOL` needs git 2.6.1, the filter
   neutralisation 2.31, `GIT_NO_LAZY_FETCH` 2.44, each ignored silently by an older git); a floor at `validate` is a new D23 host check.
-- **Open for the owner, by hand:** **M2** (the attended pilot with `tests/FakeCli` as `claude`) and **M2's key check** (the real `claude`
+- **M2 ran** (the attended pilot with `tests/FakeCli` as `claude`, 2026-10-31 at `a504cfe`, logged in the module doc). **Open for the owner, by hand:** **M2's key check** (the real `claude`
   and `coai-mcp`, the owner's key, a FRESH root) — the exact steps are in `research/module_model_arms.md` under *M2* and E3 §8 item 47; the
   scaffold is `M2PilotScaffold.Writes_the_scratch_target_and_root_for_the_pilot` (run with `--explicit only`). E3's Definition of Done
   keeps the M2 line open until then.
@@ -88,7 +88,7 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
 
   (The coai document gate on the revised plan — the interim path, the branch's plan round having passed — said PROCEED with six findings, all accepted into the baseline: the `tasks` block's contribution to later briefs (D25), one owner for the chain markers (D11, §4.7), the snapshot keyed on the run and the closed set (D11), `chain` without isolation and on Windows (D11, D12), `notes` naming an earlier step's output (D25), the two-file snapshot since nothing overwrites (D11). Not ledger entries: the baseline epoch 2 is approved on.)
 
-> Epoch 2 · approved 2026-10-30 · by reviewers · state: open
+> Epoch 2 · approved 2026-10-30 · by reviewers · state: stopped
 
   (E2.S0's cornerstone spec — Fable, 2026-10-30 at `c8213f3` on `feat/model-arms-e2` — and the two ordered coai RISK consultations the
   E2 plan round's reply asked for (story 2.0, the step contract and the delegation policy; story 2.7, the gate's continue marker; both
@@ -106,6 +106,10 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
 
 - 2.1 · 2026-10-30 · owner · approach, contract — macOS and FreeBSD run instead of being refused (the owner, 2026-10-30: "macOS and FreeBSD are fine [untested]; do not forbid their use"): a fact source with no probed kernel reader takes a declared portable road — the facts the runtime gives are judged, the rest is printed as not verified in one line per verb — and the gate lock's conflict code is measured at construction; E1.S10's decision 4 (refused as unprobed, flagged as the operator's to overturn) overturned; D10, D17 (a) and D26 (a) amended; E3.S0 (Fable, security judgement) carries it; Windows unchanged
   (The first change of epoch 2 — recorded, no stop. The owner's words, in Russian: "macOS and FreeBSD это ок. но запрещать исп не нужно". The honesty rule the story is built on: never claim a check that was not performed; every unmeasured platform path prints one line naming what is not verified; a check that cannot be done never passes as if done. What stays unmeasured is listed in E3.S0 *What it does NOT prove* and in E3 §8 item 25.)
+
+- 2.2 · 2026-10-31 · agent · contract — the arm's own claude session still receives secret-shaped variables `IsSecretName` misses (`PGPASSWORD`, `DATABASE_URL`, `*_PAT`, `*_APIKEY`, `*_CREDENTIALS`, an `npm_config_*` holding `_auth`), because D19 defines that environment by `IsSecretName`: one `ModelArms.Core` predicate, `IsSecretShaped`, for both `TargetEnvironment` and `ArmChildEnvironment`, the latter keeping its `CLAUDE_*` / `ANTHROPIC_*` exception (D19; E3 §8 item 50)
+  (The second change of epoch 2: the plan stopped for re-review here, before any E4 code. Entries 2.2 and 2.3 are independent causes, both found by E3's Opus reviews and proposed to the owner; the owner delegated the decision on 2026-10-31 ("E4–E6 на тебе … если что общайся с консульт"), and the question consultants (codex gpt-6-astra, antigravity gemini-4-argon; vibe refused) both advised recording both now and running ONE re-review before E4.)
+- 2.3 · 2026-10-31 · agent · contract — no git minimum is enforced: `GIT_ALLOW_PROTOCOL` needs git 2.6.1, the filter neutralisation 2.31 and `GIT_NO_LAZY_FETCH` 2.44, each ignored silently by an older git; a git floor becomes a host check at `validate` (D23; E3 §8 item 51)
 
 ## 1. The goal, before any solution
 
