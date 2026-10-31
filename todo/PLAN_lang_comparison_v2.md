@@ -77,10 +77,10 @@ Narrowed: no — against the epoch 2 baseline every revision adds (a limits and 
 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
-| FORMAT.md v1, `d7c73ff` (E1.S8) | `dew_flow_ai_language_comparison`, local, ungated draft | — | pending judge (the Verdict cell takes only `fits`, `cut` or `—`) |
-| spec 01 conforms to FORMAT v1, `28bf777` (E1.S2) | `dew_flow_ai_language_comparison`, local, ungated draft | — | pending judge |
-| pilot spec 05 with four scenario samples, `30af434` (E1.S2, E1.S6) | `dew_flow_ai_language_comparison` branch `docs/spec-05`, local, ungated draft | — | pending judge |
-| pilot spec 04, `0b69a50` (E1.S2) | `dew_flow_ai_language_comparison` branch `docs/spec-04`, local, ungated draft | — | pending judge |
+| FORMAT.md v1, `d7c73ff` (E1.S8) | `dew_flow_ai_language_comparison`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
+| spec 01 conforms to FORMAT v1, `28bf777` (E1.S2) | `dew_flow_ai_language_comparison`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
+| pilot spec 05 with four scenario samples, `30af434` (E1.S2, E1.S6) | `dew_flow_ai_language_comparison` branch `docs/spec-05`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
+| pilot spec 04, `0b69a50` (E1.S2) | `dew_flow_ai_language_comparison` branch `docs/spec-04`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 
 ## 1. The question, before any solution
 
