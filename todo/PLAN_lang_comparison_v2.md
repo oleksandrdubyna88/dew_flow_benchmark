@@ -1,6 +1,11 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet; epoch 2 open since 2026-10-31 with 0 changes.** Epoch 1 was approved
+> Status: **plan only, nothing implemented yet; epoch 2 (opened 2026-10-31) changed three times the same day — 2.1, 2.2
+> and 2.3, the daemon and web limits and timing contract, the agent's scenario runner and grammar, and the `exec`
+> constraint on `run.sh`, all found by FORMAT.md v1 (E1.S8) — so the plan is stopped for re-review
+> (`common.plan-change-control`, epoch 2 `stopped`): no new code starts on any epic, no merge carries its work, until the
+> whole plan is re-reviewed and epoch 3 is approved; two more pilot specs (task 5, task 4) are drafted under FORMAT v1
+> first, so that every gap is found before the step-4 revision.** Epoch 1 was approved
 > 2026-10-31 by the coai plan gate (PROCEED on `aa5e413`, its five findings applied in `8e1a39a` as the baseline), changed
 > twice the same day (1.1 D34 metrics only added; 1.2 the spec-format contract from the pilot spec 01) and closed by a whole
 > re-review (`common.plan-change-control`): consult `68a33be2`, the step-4 revision, the done work judged (both `fits`),
@@ -46,7 +51,24 @@ Narrowed: no — both changes add (a metric-retention rule and a spec-format con
 | pilot spec 01 `todo/tasks/01-descent-to-one.md`, `60e468a` (E1.S2's first spec, not yet gated) | `dew_flow_ai_language_comparison`, local commit, no remote | fits | kept as a draft; brought to `FORMAT.md` (E1.S8) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 | D34 and T-L26, `d8da443` | `dew_flow_benchmark` main (merged in #124, `f369e66`) | fits | kept: merged and compatible with the revised plan (judged by the team lead, Opus, 2026-10-31) |
 
-> Epoch 2 · approved 2026-10-31 · by reviewers · state: open
+> Epoch 2 · approved 2026-10-31 · by reviewers · state: stopped
+
+- 2.1 · 2026-10-31 · agent · contract — the daemon and web limits and timing contract is absent; found by FORMAT.md v1 (`dew_flow_ai_language_comparison` `d7c73ff`, `28bf777`)
+  (One cause: D14 defines limits only for the olympiad kind. §4.1's spec rules say the spec states "the RSS floor for a
+  daemon", but D14 names no daemon or web floor or rule; nothing in D13, §4.3 or T-L4 gives a source for the readiness
+  deadline or the SIGTERM grace period, and no rule exists for scenario-step deadlines. FORMAT v1 used 256 MB as a
+  placeholder RSS floor and made readiness and grace per-task spec values (F-READY `{T}`, F-STOP `{G}`, F-LIMITS-D,
+  F-DEADLINES). The step-4 revision writes the contract for both kinds.)
+- 2.2 · 2026-10-31 · agent · contract — the agent has no scenario runner and no grammar; found by FORMAT.md v1
+  (One cause: D19 and §5's workspace listings put neither a runner nor the grammar in the workspace, while §4.3 says the
+  agent "may run" the samples — for a daemon or web task it cannot. FORMAT v1 made every daemon and web spec copy a
+  reading block of about twenty lines so the agent can read a sample by hand. Also open: where CI's visible-sample runner
+  lives in the task repository (§5), given that D22 makes the suite the bench's, not the repository's. This second change
+  stopped the plan.)
+- 2.3 · 2026-10-31 · agent · contract — the stop and leftover-process checks assume `run.sh` ends with `exec`; found by FORMAT.md v1
+  (One cause: D13's SIGTERM stop and D12's fixed `run.sh` are specified without the constraint that `run.sh` must `exec`
+  the program, so that the signal reaches the program and not a bash parent; E1.S3's templates and F-RUN-D need it
+  stated. Recorded after the stop as the rule asks: independent causes count one each, even when found in one reading.)
 
 ## 1. The question, before any solution
 
