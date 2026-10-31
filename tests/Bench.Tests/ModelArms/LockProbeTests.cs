@@ -29,19 +29,19 @@ public sealed class LockProbeTests
     [Fact]
     public void A_conflict_that_outlives_the_holders_release_is_not_the_lock()
     {
-        var failure = LockProbe.Decide(Io("x", 5), released: Io("io", 5), independent: null);
+        var failure = LockProbe.Decide(Io("x", 5), released: Io("io", 5), independent: null, independentAfter: null);
 
         failure.Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("other than the lock").And.Contain("io");
-        LockProbe.Decide(Io("x", 5), released: null, independent: null).Should().Be(Outcome<int>.Success(5));
+        LockProbe.Decide(Io("x", 5), released: null, independent: null, independentAfter: null).Should().Be(Outcome<int>.Success(5));
     }
 
     [Fact]
     public void A_second_open_that_succeeds_is_inert_and_any_other_fault_carries_its_words()
     {
-        LockProbe.Decide(null, null, null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("inert");
-        LockProbe.Decide(Io("x", 35), null, null).Should().Be(Outcome<int>.Success(35));
-        LockProbe.Decide(new FileNotFoundException(), null, null).Should().BeOfType<Outcome<int>.Fail>("a subclass of IOException is not the conflict");
-        LockProbe.Decide(new UnauthorizedAccessException("denied"), null, null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("denied");
+        LockProbe.Decide(null, null, null, null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("inert");
+        LockProbe.Decide(Io("x", 35), null, null, null).Should().Be(Outcome<int>.Success(35));
+        LockProbe.Decide(new FileNotFoundException(), null, null, null).Should().BeOfType<Outcome<int>.Fail>("a subclass of IOException is not the conflict");
+        LockProbe.Decide(new UnauthorizedAccessException("denied"), null, null, null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("denied");
     }
 
     [Fact]
@@ -49,11 +49,11 @@ public sealed class LockProbeTests
     {
         var exhausted = Io("Too many open files", 24);
 
-        var answer = LockProbe.Decide(Io("x", 11), released: null, independent: exhausted);
+        var answer = LockProbe.Decide(Io("x", 11), released: null, independent: exhausted, independentAfter: null);
 
         answer.Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Be("the probe could not open a second file while holding the first (Too many open files) — descriptors exhausted?; no gate lock is attempted");
-        LockProbe.Decide(null, null, exhausted).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("descriptors exhausted", "an open that got through is not 'inert' either when no other file can be opened: the control comes first");
-        LockProbe.Decide(Io("x", 11), released: null, independent: null).Should().Be(Outcome<int>.Success(11), "with the control through, the conflict code is the measurement it was");
+        LockProbe.Decide(null, null, exhausted, null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("descriptors exhausted", "an open that got through is not 'inert' either when no other file can be opened: the control comes first");
+        LockProbe.Decide(Io("x", 11), released: null, independent: null, independentAfter: null).Should().Be(Outcome<int>.Success(11), "with the control through, the conflict code is the measurement it was");
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class LockProbeTests
             return new IOException("Too many open files") { HResult = 24 };
         });
 
-        opened.Should().Equal([temp.Path], "the control is asked once, of the probe's folder");
+        opened.Should().Equal([temp.Path], "a control that fails ends the probe: the first control is the only one asked, of the probe's folder");
         held.Should().Equal([true], "it runs while the first file exists — and is held");
         answer.Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("descriptors exhausted").And.Contain("Too many open files");
         Directory.EnumerateFileSystemEntries(temp.Path).Should().BeEmpty("the probe file is removed on this road too");
@@ -86,6 +86,45 @@ public sealed class LockProbeTests
 
         Directory.EnumerateFileSystemEntries(temp.Path).Should().Equal([temp.Combine("held")], "the control's file is deleted after");
         LockProbe.IndependentOpen(temp.Combine("absent")).Should().BeOfType<DirectoryNotFoundException>("a control that cannot be made is reported with the runtime's own exception, not swallowed");
+    }
+
+    [Fact]
+    public void A_control_that_fails_after_the_second_open_is_out_of_descriptors_too()
+    {
+        var answer = LockProbe.Decide(Io("x", 11), released: null, independent: null, independentAfter: Io("Too many open files", 24));
+
+        answer.Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("could not open a second file while holding the first (Too many open files)").And.Contain("descriptors exhausted");
+    }
+
+    [Fact]
+    public void The_live_probe_runs_its_control_before_and_after_the_second_open_while_the_first_is_held()
+    {
+        using var temp = new TempFolder();
+        var order = new List<string>();
+        Exception? Second(string _)
+        {
+            order.Add("second");
+            return order.Count(step => step == "second") == 1 ? Io("held", 11) : null;
+        }
+
+        var answer = LockProbe.Measure(temp.Path, Second, _ => { order.Add("control"); return null; });
+
+        order.Should().Equal(["control", "second", "control", "second"], "the second open is bracketed by two controls while the first is held, and the released third open follows: a limit reached by the second open itself is seen by the control after it");
+        answer.Should().Be(Outcome<int>.Success(11));
+        var calls = 0;
+        LockProbe.Measure(temp.Path, s => Io("held", 11), _ => ++calls == 2 ? Io("Too many open files", 24) : null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("descriptors exhausted", "a control that fails only AFTER the second open is read too");
+        Directory.EnumerateFileSystemEntries(temp.Path).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_control_whose_create_failed_deletes_nothing_it_did_not_create()
+    {
+        using var temp = new TempFolder();
+        var existing = temp.File("someone else's file", ".model-arms-lock-probe-control-x");
+
+        LockProbe.Control(existing).Should().BeOfType<IOException>("CreateNew refuses a name that is taken");
+
+        File.ReadAllText(existing).Should().Be("someone else's file", "a control that did not create the file does not remove it");
     }
 
     [Fact]
