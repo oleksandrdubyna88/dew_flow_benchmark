@@ -25,11 +25,15 @@ internal static class HostFactsReader
     public static Task<Passage<HostFacts>> ReadAsync(ExperimentInput input, GateSeams seams) =>
         ScenariosAsync(input, seams).ThenAsync(scenarios => FactsAsync(input, scenarios));
 
+    /// <summary>Which machine this is, from the three facts <see cref="HostKinds.From"/> takes: the operating system, <c>WSL_DISTRO_NAME</c> in the verb's environment map and <c>/proc/version</c>. Read by <see cref="FactsAsync"/> and, for the keep-awake choice, by <c>chain</c> (E5.S2).</summary>
+    internal static async Task<HostKind> HostKindAsync(ExperimentInput input) =>
+        HostKinds.From(OperatingSystem.IsWindows(), input.Verb.Environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
+
     private static async Task<Passage<HostFacts>> FactsAsync(ExperimentInput input, Outcome<IReadOnlyList<Scenario>> scenarios)
     {
         var experiment = input.Experiment;
         var environment = input.Verb.Environment;
-        var host = HostKinds.From(OperatingSystem.IsWindows(), environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
+        var host = await HostKindAsync(input);
         var entries = ExecutableResolution.PathEntries(environment);
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
         var executables = Executables(experiment, host, entries, roots);

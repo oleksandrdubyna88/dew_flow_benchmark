@@ -101,6 +101,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(IsolationPlans), typeof(SnapshotFiles), typeof(IsolationRestoreOrder), typeof(RestoreJudgement), typeof(LockDecision), typeof(UnlockDecision),
 
         // E5.S2
+        typeof(HostAwakeSelection), typeof(WslPaths),
 
         // E5.S3
 

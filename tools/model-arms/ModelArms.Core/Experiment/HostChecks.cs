@@ -217,11 +217,15 @@ public static class HostChecks
     ];
 
     private static IEnumerable<HostProblem> AwakeProblems(AwakeChoice awake, HostKind host) =>
+        AwakeProblem(awake, host) is { Length: > 0 } problem ? [Wrong(problem)] : [];
+
+    /// <summary>The sentence for a named awake adapter the host cannot run (<c>awake "wsl"</c> off WSL, <c>awake "windows"</c> off Windows), or the empty text. One sentence for two callers: <c>validate</c> prints it among its findings and <c>chain</c>, which does not run <c>validate</c>, refuses with it (E5.S2, <see cref="Isolation.HostAwakeSelection"/>).</summary>
+    internal static string AwakeProblem(AwakeChoice awake, HostKind host) =>
         (awake, host) switch
         {
-            (AwakeChoice.Wsl, not HostKind.Wsl) => [Wrong(NeedsHost("wsl", HostKind.Wsl, host))],
-            (AwakeChoice.Windows, not HostKind.Windows) => [Wrong(NeedsHost("windows", HostKind.Windows, host))],
-            _ => [],
+            (AwakeChoice.Wsl, not HostKind.Wsl) => NeedsHost("wsl", HostKind.Wsl, host),
+            (AwakeChoice.Windows, not HostKind.Windows) => NeedsHost("windows", HostKind.Windows, host),
+            _ => string.Empty,
         };
 
     private static string NeedsHost(string awake, HostKind needed, HostKind actual) =>

@@ -3,11 +3,11 @@ using ModelArms.Core.Experiment;
 
 namespace ModelArms;
 
-/// <summary>Where the files that travel with the binary are: the worked example and the shipped briefs, both beside the executable.</summary>
-public sealed record ModuleFiles(string ExampleFile, string ShippedBriefs)
+/// <summary>Where the files that travel with the binary are: the worked example, the shipped briefs and the Windows keep-awake script (E5.S2), all beside the executable.</summary>
+public sealed record ModuleFiles(string ExampleFile, string ShippedBriefs, string KeepAwakeScript)
 {
     public static ModuleFiles Beside(string baseDirectory) =>
-        new(Path.Combine(baseDirectory, "examples", "part6.experiment.json"), Path.Combine(baseDirectory, "briefs"));
+        new(Path.Combine(baseDirectory, "examples", "part6.experiment.json"), Path.Combine(baseDirectory, "briefs"), Path.Combine(baseDirectory, "windows", "keep-awake.ps1"));
 }
 
 /// <summary>Everything a verb is given: its name, its positional words, its flags, the two writers, the environment as a map (never read from the

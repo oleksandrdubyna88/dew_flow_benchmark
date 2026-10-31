@@ -49,6 +49,7 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.LockedModesRestored), Paths.LockedModesRestored("20261029T101500Z"), At(".locked-modes.restored-20261029T101500Z")),
         (nameof(RootPaths.LockedModesAppliedRestored), Paths.LockedModesAppliedRestored("20261031T101500Z"), At(".locked-modes.applied.restored-20261031T101500Z")),
         (nameof(RootPaths.KeepAwakeLog), Paths.KeepAwakeLog, At("keep-awake.log")),
+        (nameof(RootPaths.KeepAwakeErr), Paths.KeepAwakeErr("20261031T101500Z", 2), At("keep-awake.20261031T101500Z.2.err")),
         (nameof(RootPaths.PrepBaseLog), Paths.PrepBaseLog, At("prep-base.log")),
         (nameof(RootPaths.BaseBuildLog), Paths.BaseBuildLog, At("base-build.log")),
         (nameof(RootPaths.BaseNpmLog), Paths.BaseNpmLog(2), At("base-npm-2.log")),
