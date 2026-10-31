@@ -1,15 +1,48 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet, 2026-10-31 (revised the same day for the operator's instructions A–G; the
-> coai plan gate on `aa5e413` returned PROCEED and its five accepted findings are applied — gate-round edits before the
-> operator's approval, so the change ledger does not open yet).**
+> Status: **plan only, nothing implemented yet; approved 2026-10-31 by the coai plan gate (PROCEED on `aa5e413`, its five
+> findings applied in `8e1a39a` as the approved baseline); then changed twice the same day — 1.1 (D34, metrics are only
+> added) and 1.2 (the spec-format contract the pilot spec 01 showed) — so the plan is stopped for re-review
+> (`common.plan-change-control`, epoch 1 `stopped`): no new code starts on any epic, no merge carries its work, until the
+> whole plan is re-reviewed and epoch 2 is approved. The one pilot artefact so far, the spec `01-descent-to-one.md`
+> (`dew_flow_ai_language_comparison` `60e468a`, local), waits for the re-review's sorting.**
 > Scope: a new public GitHub repository `dew_flow_ai_language_comparison` (gated and frozen task specs, task workspaces,
 > visible samples, run bases of the process arm); a conventions parity audit and release in `dew_flow_conventions`
 > (prerequisite, other repository); a new spike `spikes/lang-bench/` in this repository that imports the v1 harness
 > `spikes/minigit-bench/` and extends it for two arms, long sessions, daemons and web APIs; shared black-box acceptance
 > suites with a held-out part and raw records outside every git tree under `~/rsd/lang-v2/`; the series' record under
-> `research/lang-v2/`. The `## Plan changes` ledger opens at this plan's first approval (`common.plan-change-control`);
-> until then the plan has none.
+> `research/lang-v2/`.
+
+## Plan changes
+
+> Epoch 1 · approved 2026-10-31 · by reviewers · state: stopped
+
+- 1.1 · 2026-10-31 · owner · contract — metrics are only added, never replaced or dropped; D34 and T-L26 (commit `d8da443`)
+  (An owner's request counts exactly like one the agent finds. Every v1 metric stays in every v2 record beside the new
+  ones; a v2 table may lead with a new metric and never omits a v1 one.)
+- 1.2 · 2026-10-31 · agent · contract — the spec-format contract, found by the pilot spec 01 (`dew_flow_ai_language_comparison` `todo/tasks/01-descent-to-one.md`, `60e468a`): the format was underdetermined
+  (One cause, three parts. (a) Limits in the spec: the spec states D14's floors — 1 s, 256 MB — and the 3 × / 2 × rule
+  as guarantees; the exact values are registered at calibration and given to the runner, never to the author, so a spec
+  never needs an amendment to carry them; §4.1, §4.3 and the prompts of §4.5 changed. (b) The visible-sample format is
+  fixed now, `samples/<id>.in` and `samples/<id>.out`, and E2.S2's suite case format reads it, so it is no longer decided
+  in E2.S2; E1.S6, E2.S2 and §14 changed. (c) Spec conventions adopted from the pilot: byte-exact output as the series
+  default; stable requirement ids R1…Rn that held-out cases cite; header rows (kind, gate verdict, freeze tag, the frozen
+  sentence, amendments) with "not yet gated" / "none yet" placeholders; no mention that a task is known; frozen-list
+  wording for a stack-neutral spec; the 600 s build bound stated; invalid input "does not occur; unspecified; never
+  tested" unless the task defines errors; no plan story ids in agent-visible text; the `⏎` glyph for sample bytes.
+  This second change stopped the plan.)
+  (Not an entry, recorded here so the diff is explained: §4.3's trap row 1 is a fact fix — the TypeScript trap "`n & 1`
+  truncates to 32 bits" was wrong and is replaced by bitwise halving, dated "consultant claim 2026-10-31, refuted by
+  probe". A corrected fact changes no scope, goal, contract or approach.)
+
+### Re-review for epoch 2
+
+Narrowed: no — both changes add (a metric-retention rule and a spec-format contract); no scope, Definition of Done, merge condition or release got smaller, checked against §9, §16 and the epics
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| pilot spec 01 `todo/tasks/01-descent-to-one.md`, `60e468a` (E1.S2's first spec, not yet gated) | `dew_flow_ai_language_comparison`, local commit, no remote | — | verdict by an Opus judge after the re-review (rule step 5); the `—` stands until then, no code was built on any epic |
+| D34 and T-L26, `d8da443` | `dew_flow_benchmark` main (merged in #124, `f369e66`) | — | plan text only, no code; it is entry 1.1, not work to sort |
 
 ## 1. The question, before any solution
 
@@ -93,7 +126,7 @@ the open questions (§17) name what they do not settle.
 | D11 | **The bare agent's workspace is a copy of one task folder** (`csharp/<task>/` or `node/<task>/`) at a pinned commit of the task repository, fetched and hash-checked as v1's `fetchInputs` does. The repository's root files, the other stack's folder, `tasks/` and `todo/` are never in the bare box. The bare agent gets **no** conventions. **The process agent's workspace is a single-branch clone of its run base `run/<rid>/main`** in the task repository (v1 §4.2), which carries the conventions, the hooks, the frozen spec and both stack folders; its prompt names its stack's folder | this plan |
 | D12 | **Fixed per-stack scripts in every workspace, frozen inputs with hashes:** `build.sh` and `run.sh` (olympiad: reads stdin, writes stdout; daemon and web API: the long-running program, `PORT` and the task's inputs from the environment). The agent fills the code; the harness drives only these two scripts, identically for both stacks. A `PACKAGES.md` lists the offered package set of the stack (D5); the spec tells the agent what is frozen | this plan |
 | D13 | **Scoring per task kind** (§4.3): olympiad — held-out input/expected pairs under calibrated time and memory limits, each case `pass` / `wrong answer` / `time limit` / `memory limit` / `runtime error`; daemon and web API — held-out scenarios driven by the harness, RSS sampled every second, a SIGTERM stop that must end the process within a grace period with no child left. **Accepted** = clean build, every held-out case or scenario passed, memory and stop checks passed. One suite per task runs unchanged against both stacks (D22) | this plan |
-| D14 | **Limits:** time limit per olympiad task = **3 ×** the slower of the two reference solutions' wall, with a floor of 1 s; memory limit = **2 ×** the larger reference peak, with a floor of 256 MB; the RSS bound of a daemon or web API task = **2 ×** the larger reference peak under the task's load scenario. Peak memory is read from the scoring cgroup's `memory.peak` where the host gives it, else from 100 ms RSS samples — never `RLIMIT_AS`. The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
+| D14 | **Limits:** time limit per olympiad task = **3 ×** the slower of the two reference solutions' wall, with a floor of 1 s; memory limit = **2 ×** the larger reference peak, with a floor of 256 MB; the RSS bound of a daemon or web API task = **2 ×** the larger reference peak under the task's load scenario. The spec states the floors and this rule as guarantees; the exact values go to the runner, never into the spec (change 1.2a). Peak memory is read from the scoring cgroup's `memory.peak` where the host gives it, else from 100 ms RSS samples — never `RLIMIT_AS`. The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
 | D15 | **GC and runtime settings, fixed and recorded per stack:** C# `DOTNET_gcServer=0` (Workstation, set explicitly), `DOTNET_TieredCompilation` default, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`; Node: no `--max-old-space-size` flag from the harness (the memory limit is the cgroup's); `NODE_OPTIONS` empty. Every value is in `agentEnv`'s allow-list, the same in the agent box and the scoring box, and in every session record | this plan |
 | D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the session caps per arm, the stall timeouts, the time guesses of §4.1, the limits of D14 and the budget split (D30). Bare pilot: tasks 1, 3 and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3). Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
 | D17 | **Egress:** bare sessions — no registry, no host; the only road out is the broker's API door. Process sessions — the GitHub hosts v1's E2.S4 settles, nothing else; package installs in both arms resolve from the seeded offline caches (D5). A refused CONNECT is flagged `wanted network`, not voided | this plan |
@@ -139,11 +172,26 @@ Sum of the upper guesses: 370 min per stack per bare round; a process round is l
 cell against minutes for bare); the pilot replaces both guesses.
 
 **Spec rules (D4, D19, D21, D25).** One spec per task, `todo/tasks/NN-slug.md` in the task repository, written by the team
-lead, stack-neutral: the required behaviour, the input and output contract, the limits (time, memory, RSS), the start
-contract (`build.sh`, `run.sh`, `PORT`), the frozen list, "hidden tests exist", the visible samples named. A known task is
-paraphrased: no id, no title, no site; the constraints may keep the original numbers. It never names a trap or a language
-specific. The workspace's `STATEMENT.md` is the spec's text plus the stack sentence (as v1's `{STACK_SENTENCE}`), generated,
-byte-identical across the two stacks except that sentence. An original spec is precise enough that two references written
+lead, stack-neutral: the required behaviour, the input and output contract, **the limits as guarantees** (change 1.2a: the
+spec states D14's floors — 1 s of wall time and 256 MB per run, the RSS floor for a daemon — and the registration rule,
+at least 3 × the slower reference's wall and 2 × the larger reference's peak; the exact values are registered at
+calibration, E2.S3, and given to the runner, never to the author, so a spec never needs an amendment to carry them), the
+start contract (`build.sh`, `run.sh`, `PORT`), the frozen list, "hidden tests exist", the visible samples named. A known
+task is paraphrased: no id, no title, no site, **and no mention that the task is known**; the constraints may keep the
+original numbers. It never names a trap or a language specific. The workspace's `STATEMENT.md` is the spec's text plus the
+stack sentence (as v1's `{STACK_SENTENCE}`), generated, byte-identical across the two stacks except that sentence.
+
+**Spec format (change 1.2c, adopted from the pilot spec 01, `dew_flow_ai_language_comparison` `60e468a`), binding for
+all ten:** a header table with the rows kind (what the program is: reads stdin once / a long-running server …), gate
+verdict, freeze tag, the frozen sentence ("frozen: changes only by a dated amendment before the v2 pre-registration") and
+amendments, with the placeholders "not yet gated" and "none yet" until the gate and the tag; every requirement is a
+numbered sentence with a **stable id R1 … Rn**, and held-out cases cite these ids (§4.3, E2.S2) — nothing outside them is
+tested; **byte-exact output is the series default** (compared byte for byte, nothing normalized; a spec that normalizes
+says so in a requirement); the frozen list is written for a stack-neutral spec ("`STATEMENT.md`, `samples/`, `build.sh`,
+`run.sh`, `PACKAGES.md` and the toolchain pin files of the stack"); the **600 s build bound** is stated; invalid input
+"does not occur in any visible or hidden test; what the program does with it is unspecified and never tested" unless the
+task itself defines error behaviour; **no plan story id, epic id or decision id in agent-visible text**; sample bytes are
+shown with the `⏎` glyph for the single line feed, and the same cases exist as files (1.2b). An original spec is precise enough that two references written
 apart agree on every held-out case (E2.S1). **Gate and freeze:** each spec goes through the coai document gate with
 `purposeText` naming who acts on it (the agents under test, in both stacks, and the suite's author), plus a consultant, plus
 the bias review of D25; every finding resolved; then the tag `spec-frozen-<date>`; the spec's sha256 in `inputs/specs.json`
@@ -187,15 +235,19 @@ load scenarios are sized so the reference solutions of both stacks pass them wit
 program under test, not on the driver. The Python version is pinned by checksum at pre-registration.
 
 **Visible part** (`samples/` in the workspace): a few small clean cases per task that the traps do not reach; the agent may
-run them; CI's acceptance job runs them in the process arm. **Held-out part** (outside git, sealed as v1): the cases and
-scenarios that decide `accepted`. Both parts use the same case format and the same runner.
+run them; CI's acceptance job runs them in the process arm. **The format is fixed (change 1.2b): one input file and one
+expected-output file per case, `samples/<id>.in` and `samples/<id>.out`, bytes exact**; for a daemon or web task the same
+two files hold the scenario script and its expected transcript in the suite's scenario notation. **Held-out part** (outside
+git, sealed as v1): the cases and scenarios that decide `accepted`, in the same `<id>.in` / `<id>.out` shape plus a
+per-case line naming the requirement ids (R-ids) it asserts. The Python runner of E2.S2 **reads this format**; it is no
+longer E2.S2's to decide. Both parts use the same case format and the same runner.
 
 All scoring happens on a pristine copy of the result, in a scoring box with no network, offline from the session's own
 caches, with temp HOME, as v1. `build.sh` first (bounded, 600 s; a failure fails every case). Then by kind:
 
 | Kind | The harness does | A case passes when | Also recorded |
 |---|---|---|---|
-| Olympiad | runs `run.sh` once per held-out case with the case's stdin, under the task's time and memory limits in a cgroup | stdout equals the expected bytes (trailing whitespace normalized if the spec says so), exit 0, within limits | per case: wall, CPU, peak memory, verdict class |
+| Olympiad | runs `run.sh` once per held-out case with the case's stdin, under the task's registered time and memory limits in a cgroup | stdout equals the expected bytes **byte for byte** (the series default, change 1.2c; a normalization applies only where a requirement of the spec names it), exit 0, within limits | per case: wall, CPU, peak memory, verdict class |
 | Daemon | starts `run.sh` with the task's environment; waits for readiness (the spec defines it); drives scenarios over TCP (RESP) or stdin; samples RSS every second; sends SIGTERM; waits the grace period | every scenario reply equals the expected one; RSS stays under the bound; the process exits 0 within the grace period; no process of the session is left | RSS over time, exit code and time, stdout/stderr tails |
 | Web API | as daemon, over HTTP; scenario steps are requests with expected status, headers and body; concurrency scenarios send the same request from k clients at once | as daemon; concurrent scenarios check the invariant (one effect per idempotency key, one balance) | as daemon, plus the request log |
 
@@ -210,7 +262,7 @@ that catch it) is sealed with the suites and published after the series.
 
 | # | C# trap | TypeScript trap |
 |---|---|---|
-| 1 | `int` overflow (values reach 5.7e10) | `n & 1` truncates to 32 bits |
+| 1 | `int` overflow (values reach 5.7e10); `int` parsing of the input; `int` arithmetic in `3·v + 1` | **bitwise halving:** `v >> 1` is wrong for v ≥ 2^31 (`2482111348 >> 1` = −906427974); `>>> 1` and `\| 0` are wrong for v ≥ 2^32 (`4294967298 >>> 1` = 1). *Fact fix, not a plan change: the earlier row said "`n & 1` truncates to 32 bits" — a consultant claim of 2026-10-31, refuted by probe the same day: ToInt32 is v mod 2^32, 2^32 is even, so parity survives (Node: `56991483521 & 1` = 1).* |
 | 2 | recursive DFS stack overflow on a snake corridor | the same overflow; `Array.shift()` makes BFS O(n²) |
 | 3 | `long.MinValue / -1` throws even unchecked; `long.Parse("9223372036854775808")` fails | `BigInt.asIntN` cost; recursion stack overflow |
 | 4 | culture-dependent parsing of string arguments (host culture `de-DE`); reflection overload choice and numeric conversion | `__proto__` and inherited member lookup with an observable consequence; `JSON.parse` corrupting 64-bit ids; `Math.round(-1.5)` |
@@ -220,6 +272,10 @@ that catch it) is sealed with the suites and published after the series.
 | 8 | `decimal` rounding mode; a race on the same key | float money; a race on the same key; body limits |
 | 9 | deep reconstruction-tree chains (recursion); memory of auxiliary structures; allocation pressure | the same three |
 | 10 | double semaphore release; unobserved task exceptions; `async void` | an un-cleared `setTimeout` keeps the process alive; unhandled rejections; cycle deadlock |
+
+On task 1 the C# side has more trap points than the TypeScript side (three `int` sites against one bitwise idiom): a
+property of the problem, not of the design, and the trap coverage table reports it per T2 so the task's result is read
+with that difference.
 
 **Calibration before any cell (measurement rule 2):** two references per task, one in C#, one in TypeScript, each pass
 100 % under the registered limits in the scoring box; planted mutants — one per trap per stack, each a plausible version
@@ -259,9 +315,10 @@ as `prompts-lang.json` with sha256 per arm, task and stack. Shape (final wording
 ```
 Implement the program described in STATEMENT.md in this directory, in {STACK}. {STACK_SENTENCE}
 STATEMENT.md, samples/, build.sh, run.sh and PACKAGES.md are frozen inputs: do not change them. The program is built by
-`bash build.sh` and started by `bash run.sh` exactly as STATEMENT.md says. Hidden tests will run it under the limits in
-STATEMENT.md. Only the packages listed in PACKAGES.md are available; there is no network. Work autonomously; nobody
-answers questions. End with a summary of what you built and the checks you ran.
+`bash build.sh` and started by `bash run.sh` exactly as STATEMENT.md says. Hidden tests will run it under time and memory
+limits that are never below the floors STATEMENT.md guarantees. Only the packages listed in PACKAGES.md are available;
+there is no network. Work autonomously; nobody answers questions. End with a summary of what you built and the checks
+you ran.
 ```
 
 **Process** (v1 §4.3's process prompt, with the task slot):
@@ -269,8 +326,8 @@ answers questions. End with a summary of what you built and the checks you ran.
 ```
 Implement the program specified in todo/tasks/{TASK}.md of this repository, in {STACK}, inside {STACK_FOLDER}/. {STACK_SENTENCE}
 The spec, the samples, build.sh, run.sh and PACKAGES.md in that folder are frozen inputs: do not change them. The work is
-done when, from a clean checkout of the base branch, `bash build.sh` succeeds and the visible samples pass under the limits
-the spec names. Hidden tests will run the program the same way.
+done when, from a clean checkout of the base branch, `bash build.sh` succeeds and the visible samples pass within the floors
+the spec guarantees. Hidden tests will run the program the same way, under limits never below those floors.
 Follow this repository's own instructions — its CLAUDE.md, AGENTS.md, .agents/PROJECT.md and the rules they point to — for
 how work is done here, in full: loading the rules, your own plan in todo/, the review gate on the plan and on the code,
 consultants, subagents, tests first, the research/ documents, the pull request, CI and the review that follows it.
@@ -584,7 +641,8 @@ frame; the pilot replaces this guess and the question is open (Q-A).
    specs, each gated (document gate + consultant + bias review) and frozen (tag, hashes); the workspaces with `build.sh`,
    `run.sh`, pins, `PACKAGES.md`; samples; the Node stack rationale in the README; toolchains pinned; the two cache snapshots;
    the process-arm templates, CI, rulesets, PAT and deploy key (E1.S7, built here to v1 §6's design, D32).
-2. **References and suites (E2), in a strict order per task:** the two references **final** (both pass every visible and
+2. **References and suites (E2), in a strict order per task:** the visible samples in the fixed `<id>.in` / `<id>.out`
+   format (E1.S6, change 1.2b) → the two references **final** (both pass every visible and
    held-out case, no spec amendment pending — E2.S1) → the shared suites, mutants and the trap coverage table (E2.S2) → only
    then calibration and **limit registration** (E2.S3, by D14 on the series machine); a spec amendment after a task's
    registration voids that task's limits and its calibration runs again before the pre-registration; the bias review of each
@@ -798,8 +856,11 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   read-only, checksums recorded; Python's checksum; the preflight pins. *Accepted when:* the preflight refuses a box whose
   `dotnet --list-sdks`, `node --version` or Python checksum differs; the checksums are in `inputs/stacks-lang.json`.
 - S6 — the visible samples (`tasks/<task>/samples/`, copied into both workspaces) as the visible part of E2's suites, in the
-  suite's case format. *Accepted when:* the Python runner runs them against both references (E2.S1) and both pass; no
-  sample reaches a trap (the trap table says which cases do, and none is a sample).
+  **fixed format `samples/<id>.in` / `samples/<id>.out`, bytes exact** (change 1.2b; the spec's sample table shows the same
+  bytes with the `⏎` glyph). E2.S2's runner reads this format; this story fixes it, E2.S2 does not choose it. *Accepted
+  when:* every spec's sample table and its `samples/` files hold the same bytes (a test); the Python runner runs them
+  against both references (E2.S1) and both pass; no sample reaches a trap (the trap table says which cases do, and none is
+  a sample).
 - S7 — the process-arm templates in this repository: CI with one job per stack, family checks, PR title; rulesets
   `run-main`, `template-frozen`, tags; the deploy key as the only bypass actor; the PAT; `GitHub settings` as v1 §6 —
   built here to v1 E2.S4's design (D32). *Accepted when:* v1's P0 checks pass here: a run base cut by the deploy key, a direct push
@@ -825,9 +886,11 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   case; every disagreement between them was traced to the spec and, where the spec was at fault, fixed by a dated amendment;
   **no spec amendment is pending** for the task; the dated list and the final mark per task are in `inputs/references.json`.
 - S2 — **the shared suites and the trap coverage table** (cornerstone): per task one Python module (standard library only)
-  with the stdin/stdout, HTTP or TCP/RESP + signals mode; the held-out cases (counts registered); the table task × stack ×
-  trap → cases; mutants one per trap per stack; every case names the spec sentence it asserts (v1's rule). *Accepted when:*
-  T-L8, T-L21; every trap of §4.3 has at least one catching case; every case maps to a spec sentence; the table and the
+  with the stdin/stdout, HTTP or TCP/RESP + signals mode, **reading the fixed case format of E1.S6** (`<id>.in` /
+  `<id>.out`, change 1.2b); the held-out cases (counts registered); the table task × stack × trap → cases; mutants one per
+  trap per stack; **every case cites the requirement ids (R1 … Rn) it asserts** (change 1.2c; v1's "names the spec
+  sentence" rule, now by id). *Accepted when:* T-L8, T-L21; every trap of §4.3 has at least one catching case; every case
+  cites at least one R-id that exists in the frozen spec (a test against `inputs/specs.json`'s id lists); the table and the
   mutants' ids are sealed; no case appears in git in clear.
 - S3 — calibration and limit registration by D14, **only after S1 is final for the task**: reference measurements in the
   scoring box, the formula applied, the limits registered per task in `inputs/limits-lang.json` with the spec hash they were
