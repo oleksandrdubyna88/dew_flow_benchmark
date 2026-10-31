@@ -10,7 +10,7 @@ using ModelArms.Core.Launch;
 namespace ModelArms.Verbs;
 
 /// <summary><c>make</c> (plan §4.1, D4, D5, D27; <c>after6.sh:26-37</c>): the arms of the runs, each copied from <c>base/</c>, branched, warm-built and given its MCP files — and the arm map extended, never re-minted. It crosses the module's trust boundary twice: it launches the target's tools (<c>git</c>, the node that runs the target's lowering wrapper, the build) and it DELETES a
-/// folder (an arm that crashed while being made). <b>In order:</b> (1) <see cref="LaunchAdmission"/> — the PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit, then <c>git</c>, <c>lowPriority[0]</c> and <c>build[0]</c> resolved to their REAL paths and printed as <c>resolved executables:</c> — before anything is made; (2) the isolation snapshot's one line, restoring nothing;
+/// folder (an arm that crashed while being made). <b>In order:</b> (1) <see cref="LaunchAdmission"/> — the PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit, then <c>git</c>, <c>lowPriority[0]</c> and <c>build[0]</c> resolved to their REAL paths, <c>git --version</c> asked of the resolved git and held against the floor (D23, E4.S0: the one launch admission itself makes, from the experiment root, under the hardened environment), and the paths printed as <c>resolved executables:</c> — before anything is made; (2) the isolation snapshot's one line, restoring nothing;
 /// (3) the arms: <see cref="RunArms.Of"/> without those that already have <c>chain/made-&lt;arm&gt;</c> (none left: <i>every arm of every run is made</i>, exit 0); (4) the arm map through <see cref="BoundedFile"/> (absent is the empty map; refused or not a map is exit 4), <see cref="ArmMap.Extend"/>ed with 8 random bytes per new arm and, when it changed, written <c>0600</c>
 /// BEFORE the first folder; (5) each arm by <see cref="ArmMaker"/>, in order, the first stop ending the verb with its exit code. Exit 0 every arm is made; 3 the host or the target could not do it (a tool absent or not started, a base that will not copy or build, git that cannot answer); 4 a wrong configuration or a doubt that touches nothing (a PATH under a forbidden root, a map that does not
 /// read, an arm that ran without its marker, a timing that cannot be read); 5 the operator's stop — the same command resumes: a half-made arm has no marker and is redone whole. Every line passes <see cref="ArmMap.Scrub"/>: no token is printed.
@@ -27,6 +27,7 @@ public static class MakeVerb
     internal static async Task<int> RunAsync(ExperimentInput input, PlatformRoad road)
     {
         var passage = await Task.FromResult(Admitted(input))
+            .ThenAsync(tools => FlooredAsync(input, tools))
             .Then(tools => Announced(input, road, tools))
             .Then(tools => Pending(input, tools))
             .ThenAsync(pending => MadeAsync(input, road, pending));
@@ -63,6 +64,10 @@ public static class MakeVerb
     }
 
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;
+
+    /// <summary>D23, E4.S0: the resolved git's version against the floor — the one launch admission makes, <c>git --version</c> from the experiment root under the hardened environment. A git below it is exit 3 and nothing has been printed.</summary>
+    private static async Task<Passage<ToolPaths>> FlooredAsync(ExperimentInput input, ToolPaths tools) =>
+        (await LaunchAdmission.FloorAsync("make", tools.Git, input.Verb.Environment, input.Root.Root, input.Verb.Stopping)).Map(_ => tools);
 
     /// <summary>The real paths printed before the first launch (D17 c), then the isolation snapshot's one line (D11): read by name, restored never.</summary>
     private static Passage<ToolPaths> Announced(ExperimentInput input, PlatformRoad road, ToolPaths tools)

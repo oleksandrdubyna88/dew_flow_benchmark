@@ -1,0 +1,51 @@
+namespace Bench.Tests.ModelArms;
+
+/// <summary>The kit's recording shim (moved from <c>ArmGitWideningTests</c>, E4.S0): a git that writes one block per call to a marker file and then runs the host's git — <c>CALL &lt;argv&gt;</c>, <c>CWD &lt;pwd&gt;</c> (the folder the launcher started it in: what every "from the experiment root" assertion reads), then <c>ENV name=value</c> for every
+/// <c>GIT_*</c> and for the names the tests care about (<c>PGPASSWORD</c> among them: an assertion that a name is ABSENT is green over any code unless the shim would have recorded it). E4.S2 adds its plant helpers to this file.
+/// <para>
+/// What this does NOT prove: Windows (the shim is a shell script, and <c>$PWD</c> is the shell's logical path, which equals the real one for the scratch folders under <c>/tmp</c> this suite uses).
+/// </para></summary>
+internal static class Sentinel
+{
+    /// <summary>The names, besides <c>GIT_*</c>, whose presence a block records.</summary>
+    private const string RecordedNames = "GIT_*|GITHUB_TOKEN=*|CLAUDE_CODE_OAUTH_TOKEN=*|BENCH_DB=*|SSH_AUTH_SOCK=*|KEEP_ME=*|PGPASSWORD=*";
+
+    /// <summary>The shim's script body (after the shebang): the recording, then — when <paramref name="printed"/> is given — an answer to <c>--version</c> (<c>git version &lt;printed&gt;</c>, exit 0, recorded like every call), then the host's git.</summary>
+    public static string Body(string marker, string? printed = null) =>
+        $"echo \"CALL $*\" >> '{marker}'\necho \"CWD $PWD\" >> '{marker}'\n"
+        + $"/usr/bin/env | while IFS= read -r l; do case \"$l\" in {RecordedNames}) echo \"ENV ${{l%%=*}}=${{l#*=}}\" >> '{marker}';; esac; done\n"
+        + (printed is null ? string.Empty : $"for a; do :; done\nif [ \"$a\" = --version ]; then echo 'git version {printed}'; exit 0; fi\n")
+        + $"exec '{ExperimentRoot.RealGit}' \"$@\"\n";
+
+    /// <summary>A shim body that answers <c>--version</c> with <c>git version &lt;printed&gt;</c> WITHOUT recording it, and appends <c>$*</c> of every other call to <paramref name="marker"/> before the host's git: a marker that is absent proves no repository question was asked (the version question is the only one it lets through unlogged).</summary>
+    public static string LogsAllButVersion(string marker, string printed) =>
+        $"for a; do :; done\nif [ \"$a\" = --version ]; then echo 'git version {printed}'; exit 0; fi\necho \"$*\" >> '{marker}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n";
+
+    /// <summary>The recording shim written at <c>&lt;temp&gt;/bin/recording-git</c>: one block per call appended to <paramref name="marker"/>, then the host's git.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public static string RecordingShim(TempFolder temp, string marker) =>
+        ShimFiles.Write(temp.Combine("bin", "recording-git"), "#!/bin/sh\n" + Body(marker));
+
+    /// <summary>The blocks <paramref name="marker"/> holds, in order: the argv, the folder the call started in and the recorded environment lines.</summary>
+    public static IReadOnlyList<(string Call, string Cwd, IReadOnlyList<string> Env)> Blocks(string marker)
+    {
+        var blocks = new List<(string Call, string Cwd, List<string> Env)>();
+        foreach (var line in File.ReadAllLines(marker))
+        {
+            if (line.StartsWith("CALL ", StringComparison.Ordinal))
+            {
+                blocks.Add((line[5..], string.Empty, []));
+            }
+            else if (line.StartsWith("CWD ", StringComparison.Ordinal))
+            {
+                blocks[^1] = blocks[^1] with { Cwd = line[4..] };
+            }
+            else if (line.StartsWith("ENV ", StringComparison.Ordinal))
+            {
+                blocks[^1].Env.Add(line[4..]);
+            }
+        }
+
+        return [.. blocks.Select(block => (block.Call, block.Cwd, (IReadOnlyList<string>)block.Env))];
+    }
+}

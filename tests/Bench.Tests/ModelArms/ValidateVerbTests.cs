@@ -447,10 +447,10 @@ public sealed class ValidateVerbTests
 
         error.Should().BeEmpty();
         code.Should().Be(0);
-        File.ReadAllLines(root.MarkerFile("git")).Should().Equal("rev-parse", "rev-parse", "rev-parse", "rev-parse");
+        File.ReadAllLines(root.MarkerFile("git")).Should().Equal("-c", "rev-parse", "rev-parse", "rev-parse", "rev-parse");
         var seen = File.ReadAllLines(root.MarkerFile("git.env"));
         seen.Should().Contain(line => line.StartsWith("PATH=", StringComparison.Ordinal), "the dump saw git's environment at all — a test that saw nothing would pass vacuously");
-        seen.Should().NotContain(line => line.StartsWith("GIT_", StringComparison.Ordinal), "no GIT_ variable of the parent reaches git");
+        seen.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal) && line != "GIT_NO_LAZY_FETCH=1" && line != "GIT_ALLOW_PROTOCOL=" && !System.Text.RegularExpressions.Regex.IsMatch(line, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)=")).Should().BeEmpty("no GIT_ variable of the parent reaches git: the version question carries the harness's own switch and allow-list, as MakeVerbTests asserts");
         output.Should().Contain($"  git → {git}");
     }
 
@@ -461,7 +461,7 @@ public sealed class ValidateVerbTests
         using var root = await new ExperimentRoot().WithTargetAsync();
         var git = Path.Combine(Bin(root), "git");
         File.Delete(git);
-        root.ShimScript(git, "echo 'fatal: detected dubious ownership in repository' >&2\nexit 128\n");
+        root.ShimScript(git, $"for a; do :; done\n[ \"$a\" = --version ] && exec '{ExperimentRoot.RealGit}' \"$@\"\necho 'fatal: detected dubious ownership in repository' >&2\nexit 128\n");
 
         var (code, _, error) = await RunAsync(root);
 
@@ -605,49 +605,6 @@ public sealed class ValidateVerbTests
     }
 
     [Fact]
-    public async Task A_scenarios_file_swapped_between_its_trust_check_and_its_read_is_refused_with_exit_4()
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        var scenarios = Path.Combine(root.Root, "scenarios.json");
-        var seams = GateSeams.Real with
-        {
-            AfterRead = path =>
-            {
-                if (path == scenarios && !OperatingSystem.IsWindows())
-                {
-                    var other = Path.Combine(root.Root, "other.json");
-                    File.WriteAllText(other, """[{"id":"S9","kind":"cs","name":"Swapped"}]""");
-                    File.SetUnixFileMode(other, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                    File.Move(other, scenarios, overwrite: true);
-                }
-
-                return Task.CompletedTask;
-            },
-        };
-
-        var (code, error) = await ThroughValidateAsync(root, seams);
-
-        code.Should().Be(4);
-        error.Should().Contain("scenarios.json changed between its trust check and its read").And.Contain("inode");
-    }
-
-    [Fact]
-    public async Task A_scenarios_file_that_stays_as_it_was_judged_is_read_once_and_validates()
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        var reads = new List<string>();
-        var seams = GateSeams.Real with { AfterRead = path => { reads.Add(Path.GetFileName(path)); return Task.CompletedTask; } };
-
-        var (code, error) = await ThroughValidateAsync(root, seams);
-
-        error.Should().BeEmpty();
-        code.Should().Be(0);
-        reads.Should().Contain("scenarios.json", "validate looks at scenarios.json again after reading it, through the gate's own seam");
-    }
-
-    [Fact]
     public async Task The_gate_hands_the_verb_the_facts_it_judged_scenarios_json_by()
     {
         using var root = new ExperimentRoot();
@@ -776,7 +733,7 @@ public sealed class ValidateVerbTests
         problems.Should().HaveCount(4, "the git facts of a source that does not exist are not asked, so they are not reported");
     }
 
-    private static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)
+    internal static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)
     {
         var line = ModelArmsCommandLine.Split(["validate", "--experiment", root.Root]).Ok();
         var error = new StringWriter();
@@ -809,6 +766,7 @@ public sealed class ValidateVerbTests
             CoaiSettingsExists: true)
         {
             Source = new SourceAnswer.Asked(true, true, true, true),
+            Version = new GitVersionAnswer.Read("git version 2.45.0"), // the floor itself: a floor off by one is seen here too
             PathRefusals = [],
             EnvironmentRefusals = [],
             Templates = new Dictionary<string, Outcome<string>>(),

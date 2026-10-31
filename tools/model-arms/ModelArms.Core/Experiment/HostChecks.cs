@@ -42,6 +42,19 @@ public abstract record SourceAnswer
     public sealed record Unanswered(string Reason) : SourceAnswer;
 }
 
+/// <summary>What the resolved git said to <c>--version</c> (D23, E4.S0), or why it was not asked. Closed: <see cref="Read"/> is the first line of stdout, trimmed — whatever it is, <see cref="GitFloor.Admit"/> judges it; <see cref="Unanswered"/> git ran or was started and did not answer (does not start, exits non-zero, timed out) — exit 3; <see cref="NotAsked"/> git is absent or refused,
+/// or PATH or a config folder is refused: a finding whose cause is already printed, mirrored on <see cref="SourceAnswer.NotAsked"/>, exit 3.</summary>
+public abstract record GitVersionAnswer
+{
+    private GitVersionAnswer() { }
+
+    public sealed record Read(string Text) : GitVersionAnswer;
+
+    public sealed record Unanswered(string Reason) : GitVersionAnswer;
+
+    public sealed record NotAsked(string Reason) : GitVersionAnswer;
+}
+
 /// <summary>Everything the console read about the host that <see cref="HostChecks.Decide"/> judges. A fact it could not establish is never a guess: git that did not
 /// answer is <see cref="SourceAnswer.Unanswered"/>, not "no".
 /// <para>
@@ -57,6 +70,8 @@ public sealed record HostFacts(
     bool CoaiSettingsExists)
 {
     public required SourceAnswer Source { get; init; }
+
+    public required GitVersionAnswer Version { get; init; }
 
     public required IReadOnlyList<string> PathRefusals { get; init; }
 
@@ -112,6 +127,7 @@ public static class HostChecks
         .. ExecutableProblems(facts),
         .. facts.PathRefusals.Select(Wrong),
         .. facts.EnvironmentRefusals.Select(Wrong),
+        .. GitFloorProblems(facts),
         .. SourceProblems(experiment.Target, facts),
         .. ScenarioProblems(facts),
         .. CoaiProblems(experiment, facts),
@@ -143,6 +159,19 @@ public static class HostChecks
             ExecutableAnswer.Refused refused => [Wrong(refused.Reason)],
             _ => [],
         };
+
+    /// <summary>D23: the git's version against the floor. Every finding is the environment (exit 3): the host's git is too old, unreadable or unasked. A refusal of a version names the git it is about, by the real path the resolution found.</summary>
+    private static IEnumerable<HostProblem> GitFloorProblems(HostFacts facts) =>
+        facts.Version switch
+        {
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem($"git at {ExecutableRule.Shown(RealGit(facts))}: {reason}", Environment: true)]),
+            GitVersionAnswer.Unanswered unanswered => [new(unanswered.Reason, Environment: true)],
+            GitVersionAnswer.NotAsked notAsked => [new(notAsked.Reason, Environment: true)],
+            _ => [],
+        };
+
+    private static string RealGit(HostFacts facts) =>
+        facts.Executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer is ExecutableAnswer.Found found ? found.Real : "(not resolved)";
 
     private static IEnumerable<HostProblem> SourceProblems(TargetFacts target, HostFacts facts) =>
         facts.Source switch

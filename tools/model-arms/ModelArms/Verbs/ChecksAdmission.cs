@@ -23,7 +23,7 @@ internal sealed record ChecksPlan(ExperimentInput Input, string Arm, Core.Experi
 }
 
 /// <summary>Admission for <c>checks</c> (plan D17 c/d, D18, D26; E3.S5 steps 1–4): each refusal ends the verb before a program is launched — the arm's scheme (a <c>tasks</c> block is allowed: the objective checks measure what the arm left and need no step of the pipeline) and its token from <c>arms.map.json</c> read through <see cref="BoundedFile"/>; the
-/// PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit; <c>git</c> and — for a full run — <c>dotnet</c>, <c>lowPriority[0]</c>, <c>build[0]</c>, <c>suite[0]</c> and <c>extension[0]</c> resolved to REAL paths and printed; the arm's runner, which must not be alive; <c>baseline.json</c> and <c>scenarios.json</c>. Exit 3 is the host (a program that is not there),
+/// PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit; <c>git</c> and — for a full run — <c>dotnet</c>, <c>lowPriority[0]</c>, <c>build[0]</c>, <c>suite[0]</c> and <c>extension[0]</c> resolved to REAL paths, <c>git --version</c> asked of the resolved git and held against the floor (D23, E4.S0: the one launch admission itself makes, from the experiment root, under the hardened environment; <c>--parse-only</c> included), and the paths printed; the arm's runner, which must not be alive; <c>baseline.json</c> and <c>scenarios.json</c>. Exit 3 is the host (a program that is not there),
 /// exit 4 a wrong configuration or a refused file.</summary>
 internal static class ChecksAdmission
 {
@@ -35,7 +35,7 @@ internal static class ChecksAdmission
     public static Task<Passage<ChecksPlan>> AdmitAsync(ExperimentInput input) =>
         Task.FromResult(ArmChoices.Of(input, Verb, allowTasks: true))
             .Then(choice => Place(input, choice))
-            .Then(placed => Equip(input, placed))
+            .ThenAsync(placed => EquipAsync(input, placed))
             .Then(equipped => Idle(equipped))
             .ThenAsync(equipped => ReadAsync(equipped));
 
@@ -54,15 +54,24 @@ internal static class ChecksAdmission
             reason => Passage<Located>.Stop(ExitCodes.Configuration, $"{Name}: arms.map.json is refused: {reason}"));
 
     /// <summary>Step 2: the PATH and the two configuration folders judged, then each executable resolved ONCE to the real path that is printed and launched (D17 c, d); the isolation line printed — nothing is restored.</summary>
-    private static Passage<Resolved> Equip(ExperimentInput input, Located placed)
+    private static async Task<Passage<Resolved>> EquipAsync(ExperimentInput input, Located placed)
     {
         var roots = ExecutableRule.ForbiddenRoots(input.Experiment.Target.Source, input.Experiment.Root);
         var refusal = LaunchAdmission.FirstRefusal(input.Verb.Environment, roots);
         var parseOnly = input.Verb.Flags.Has("parse-only");
-        return refusal.Length > 0
-            ? Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
-            : Resolve(input, roots, Needed(input.Experiment.Target, parseOnly)).Bind(resolved => Printed(input, placed, resolved, parseOnly));
+        if (refusal.Length > 0)
+        {
+            return Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}");
+        }
+
+        return await Task.FromResult(Resolve(input, roots, Needed(input.Experiment.Target, parseOnly)))
+            .ThenAsync(resolved => FlooredAsync(input, resolved))
+            .Then(resolved => Printed(input, placed, resolved, parseOnly));
     }
+
+    /// <summary>D23, E4.S0: the resolved git's version against the floor, <c>--parse-only</c> INCLUDED (git is resolved for it too and the report's git facts are asked of it): the one launch admission itself makes, from the experiment root, under the hardened environment. Nothing is printed before a refusal.</summary>
+    private static async Task<Passage<Dictionary<string, string>>> FlooredAsync(ExperimentInput input, Dictionary<string, string> resolved) =>
+        (await LaunchAdmission.FloorAsync(Verb, resolved["git"], input.Verb.Environment, input.Root.Root, input.Verb.Stopping)).Map(_ => resolved);
 
     /// <summary>Each name resolved in turn, once; the first that does not resolve ends the walk with its sentence (exit 3 absent, 4 refused).</summary>
     private static Passage<Dictionary<string, string>> Resolve(ExperimentInput input, IReadOnlyList<string> roots, IEnumerable<string> names)

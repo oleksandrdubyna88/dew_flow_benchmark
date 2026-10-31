@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using ModelArms.Core.Experiment;
+using ModelArmsApp = ModelArms;
+using RootFacts = ModelArms.Adapters.RootFacts;
 
 namespace Bench.Tests.ModelArms;
 
@@ -11,6 +13,10 @@ internal static class PlatformKit
 
     /// <summary>Linux x86-64 with a working <c>statx</c>: the road this suite's host takes.</summary>
     public static PlatformRoad LinuxRoad { get; } = PlatformRoads.Of(new PlatformFacts(false, true, false, false, true, true, "Linux test host"));
+
+    /// <summary>The gate's seams with the Mac's road handed in (<paramref name="from"/> or the real ones, edited): the portable roads everywhere, and the facts read by that road. Shared by the two classes that drive the gate on the portable road.</summary>
+    public static ModelArmsApp.GateSeams MacSeams(ModelArmsApp.GateSeams? from = null) =>
+        (from ?? ModelArmsApp.GateSeams.Real) with { Road = MacRoad, ReadFacts = (path, kind) => RootFacts.ReadFacts(path, kind, MacRoad) };
 
     [DllImport("libc", EntryPoint = "open", SetLastError = true)]
     private static extern int Open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);

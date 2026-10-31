@@ -13,6 +13,10 @@ namespace ModelArms.Adapters;
 /// The source is asked only through the <c>git</c> that <c>Resolve</c> found, launched by its real path under <see cref="GitEnvironment.Of"/> with the source as its working
 /// directory, and only while PATH is clean and <c>HOME</c> and <c>XDG_CONFIG_HOME</c> are not under a forbidden root (git reads its global config from there); otherwise
 /// the answer says the source was not checked, and why.
+/// </para>
+/// <para>
+/// <b>The git's version (D23, E4.S0)</b> is asked of the same git under the same guard, BEFORE the source and from the experiment root (<c>--version</c> reads no repository; the root exists for every verb once the gate let it in): the source is asked only of a git whose version was read and passes <see cref="GitFloor.Admit"/>, so a git whose guards are unknown is never run over the operator's
+/// checkout and every refusal is still printed at once. D26 (a)–(f) for this fact: (a) no path is judged here — the resolution already did; (b) the real path, <see cref="ArmGit"/>'s environment, the root as cwd; (c) the same guard as the source; (d)–(f) as the source's.
 /// </para></summary>
 internal static class HostFactsReader
 {
@@ -32,9 +36,11 @@ internal static class HostFactsReader
         var refusals = PathRefusals(entries, roots);
         var homes = ConfigFolders.Refusals(environment, roots);
 
+        var version = await VersionAsync(input, executables, refusals, homes);
         var facts = new HostFacts(host, executables, scenarios, File.Exists(experiment.Coai.Settings))
         {
-            Source = await SourceAsync(input, executables, refusals, homes),
+            Source = await SourceAsync(input, executables, refusals, homes, version),
+            Version = version,
             PathRefusals = refusals,
             EnvironmentRefusals = [.. homes.Select(home => home.Refusal)],
             Templates = Templates(input),
@@ -42,10 +48,37 @@ internal static class HostFactsReader
         return new Passage<HostFacts>.Through(facts);
     }
 
-    /// <summary>The source is asked only through a git the resolution FOUND and only while PATH is clean: git looks its own helpers up in PATH, and a refused PATH is exit 4
+    /// <summary>Why git is not asked anything, or nothing when it may be: PATH refused (git looks its own helpers up there, and a refused PATH is exit 4 whatever git says — the cause to name before git's own state), then <c>HOME</c> or <c>XDG_CONFIG_HOME</c> refused (git reads its global config there), then git itself refused or absent.
+    /// One answer for the version and the source, so the two are unasked for the same reason.</summary>
+    private static string? Unasked(IReadOnlyList<ResolvedExecutable> executables, IReadOnlyList<string> refusals, IReadOnlyList<(string Variable, string Refusal)> homes) =>
+        (executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer, refusals.Count) switch
+        {
+            (_, > 0) => "PATH is refused",
+            _ when homes.Count > 0 => $"{string.Join(" and ", homes.Select(home => home.Variable))} {(homes.Count > 1 ? "are" : "is")} refused",
+            (ExecutableAnswer.Found, _) => null,
+            (ExecutableAnswer.Refused, _) => "git is refused",
+            _ => "git is absent",
+        };
+
+    /// <summary>D23: <c>git --version</c> of the git the resolution FOUND, under the same guard as the source, from the experiment root (it reads no repository, and the root exists for every verb once the gate let it in), through <see cref="ArmGit.VersionAsync"/>: the resolved real path, pinned, sealed, one launch.</summary>
+    private static async Task<GitVersionAnswer> VersionAsync(
+        ExperimentInput input, IReadOnlyList<ResolvedExecutable> executables, IReadOnlyList<string> refusals, IReadOnlyList<(string Variable, string Refusal)> homes)
+    {
+        if (Unasked(executables, refusals, homes) is { } cause)
+        {
+            return new GitVersionAnswer.NotAsked($"git's version was not checked: {cause}");
+        }
+
+        var real = RealGit(executables);
+        return (await new ArmGit(real, input.Root.Root, input.Verb.Environment).VersionAsync(input.Verb.Stopping)).Match<GitVersionAnswer>(
+            text => new GitVersionAnswer.Read(text),
+            reason => new GitVersionAnswer.Unanswered($"git --version at {ExecutableRule.Shown(real)} could not be read: {reason}"));
+    }
+
+    /// <summary>The source is asked only through a git the resolution FOUND, whose version was read and passes <see cref="GitFloor.Admit"/> (a git whose guards are unknown is never run over the operator's checkout), and only while PATH is clean: git looks its own helpers up in PATH, and a refused PATH is exit 4
     /// whatever git says (and a PATH that is refused is the cause to name before git's own state). Otherwise the sentence says it was not checked, and why.</summary>
     private static async Task<SourceAnswer> SourceAsync(
-        ExperimentInput input, IReadOnlyList<ResolvedExecutable> executables, IReadOnlyList<string> refusals, IReadOnlyList<(string Variable, string Refusal)> homes)
+        ExperimentInput input, IReadOnlyList<ResolvedExecutable> executables, IReadOnlyList<string> refusals, IReadOnlyList<(string Variable, string Refusal)> homes, GitVersionAnswer version)
     {
         var target = input.Experiment.Target;
         if (!Directory.Exists(target.Source))
@@ -53,16 +86,27 @@ internal static class HostFactsReader
             return new SourceAnswer.Missing();
         }
 
-        var git = executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer;
-        return (git, refusals.Count) switch
+        if (Unasked(executables, refusals, homes) is { } cause)
         {
-            (_, > 0) => new SourceAnswer.NotAsked("the source was not checked: PATH is refused"),
-            _ when homes.Count > 0 => new SourceAnswer.NotAsked($"the source was not checked: {string.Join(" and ", homes.Select(home => home.Variable))} {(homes.Count > 1 ? "are" : "is")} refused"),
-            (ExecutableAnswer.Found found, _) => await SourceFacts.ReadAsync(target, found.Real, GitEnvironment.Of(input.Verb.Environment), RootFacts.RealPathOf, input.Verb.Stopping),
-            (ExecutableAnswer.Refused, _) => new SourceAnswer.NotAsked("the source was not checked: git is refused"),
-            _ => new SourceAnswer.NotAsked("the source was not checked: git is absent"),
-        };
+            return new SourceAnswer.NotAsked($"the source was not checked: {cause}");
+        }
+
+        return ReasonSourceIsNotAsked(version) is { } why
+            ? new SourceAnswer.NotAsked($"the source was not checked: {why}")
+            : await SourceFacts.ReadAsync(target, RealGit(executables), GitEnvironment.Of(input.Verb.Environment), RootFacts.RealPathOf, input.Verb.Stopping);
     }
+
+    /// <summary>The real path of the git the resolution found; the empty text for any other answer (callers ask only after <see cref="Unasked"/> found nothing to object to).</summary>
+    private static string RealGit(IReadOnlyList<ResolvedExecutable> executables) =>
+        executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer is ExecutableAnswer.Found found ? found.Real : string.Empty;
+
+    /// <summary>Why the source must not be asked of this git — its version was refused by the floor (below it, a release candidate, or not git's text: the finding says which) or could not be read — or nothing when the version was read and admitted. Parsed once, by <see cref="GitFloor.Admit"/>.</summary>
+    private static string? ReasonSourceIsNotAsked(GitVersionAnswer version) =>
+        version switch
+        {
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text) is Outcome<GitVersion>.Ok ? null : "git's version is refused",
+            _ => "git's version could not be read",
+        };
 
     private static IReadOnlyList<ResolvedExecutable> Executables(Experiment experiment, HostKind host, IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
         [.. HostChecks.NeededExecutables(experiment, host).Select(needed => new ResolvedExecutable(

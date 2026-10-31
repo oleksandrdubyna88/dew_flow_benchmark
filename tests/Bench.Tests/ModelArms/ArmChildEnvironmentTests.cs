@@ -47,6 +47,45 @@ public sealed class ArmChildEnvironmentTests
         child.Keys.Should().Equal(["HOME", ArmChildEnvironment.TmpDir], "only HOME survives besides the arm's own TMPDIR — every name of this repository, and every other secret-named one, is gone");
     }
 
+    /// <summary>The sixteen names of the parent's E4.S0 test (plan D19, ledger 2.2). The first twelve are the ones <c>CoaiEnvironment.IsSecretName</c> alone MISSES — they are red on the shared rule — and the last four (<c>GITHUB_TOKEN</c>, <c>DB_PASSWORD</c>, <c>AWS_SECRET_ACCESS_KEY</c>, <c>AWS_SESSION_TOKEN</c>) it already strips and are rows to keep so.
+    /// <c>GOOGLE_APPLICATION_CREDENTIALS</c>, <c>AWS_SECRET_ACCESS_KEY</c> and <c>AWS_SESSION_TOKEN</c> are the decided Vertex/Bedrock residual: an arm that logs in through them is not supported (D19, parent §9).</summary>
+    public static TheoryData<string> SecretShapedNames() =>
+    [
+        "PGPASSWORD", "DATABASE_URL", "DOCKER_AUTH_CONFIG", "GITHUB_PAT", "STRIPE_APIKEY", "AWS_CREDENTIALS", "DB_PWD", "DEPLOY_PASSPHRASE", "APP_CONNECTION_STRING", "npm_config__auth", "npm_config_//registry.npmjs.org/:_authToken", "GOOGLE_APPLICATION_CREDENTIALS",
+        "GITHUB_TOKEN", "DB_PASSWORD", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    ];
+
+    [Theory]
+    [MemberData(nameof(SecretShapedNames))]
+    public void A_secret_shaped_name_never_reaches_the_arms_session(string name)
+    {
+        foreach (var spelling in new[] { name, name.ToLowerInvariant(), string.Concat(name.Select((letter, index) => index % 2 == 0 ? char.ToUpperInvariant(letter) : char.ToLowerInvariant(letter))) })
+        {
+            var child = Of(("HOME", "/home/op"), (spelling, "hunter2"));
+
+            child.Keys.Should().Equal(["HOME", ArmChildEnvironment.TmpDir], $"{spelling} is secret-shaped (SecretShaped.IsSecretShaped): the arm's session is the one process that runs arbitrary commands by design");
+        }
+    }
+
+    /// <summary>GREEN on the code before E4.S0 — the exception already existed — so its red is the break-it that deletes the <c>CLAUDE_*</c> / <c>ANTHROPIC_*</c> clause (B2 of E4.S0): the union must not widen the exception away, or claude cannot log in. <c>CLAUDE_X_PAT</c> and <c>ANTHROPIC_CREDENTIALS</c> are names only the union catches and pass under the same exception, by D19's design.</summary>
+    [Fact]
+    public void Claudes_own_names_pass_even_when_secret_shaped()
+    {
+        (string Name, string Value)[] parent =
+        [
+            ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-value"), ("ANTHROPIC_API_KEY", "key-value"), ("ANTHROPIC_AUTH_TOKEN", "auth-value"), ("CLAUDE_X_PAT", "pat-value"), ("ANTHROPIC_CREDENTIALS", "credentials-value"),
+        ];
+
+        var child = Of([.. parent, ("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "1")]);
+
+        foreach (var (name, value) in parent)
+        {
+            child.Should().Contain(new KeyValuePair<string, string>(name, value), $"{name} starts CLAUDE_ or ANTHROPIC_: claude's login travels in such names");
+        }
+
+        child.Keys.Should().NotContain("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "a scout flag, not a secret");
+    }
+
     [Fact]
     public void Tmpdir_is_the_arms_own_whatever_the_parent_holds()
     {

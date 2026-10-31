@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using ModelArms.Core.Checks;
+using ModelArms.Core.Experiment;
 using ModelArms.Verbs;
 using Xunit;
 
@@ -382,7 +383,7 @@ public sealed class ChecksVerbTests
 
         run.Code.Should().Be(4);
         run.Error.Should().Contain($"runner (pid {live.Pid}) is alive").And.Contain("finished or stopped arm");
-        kit.Bench.Recorded().Should().BeEmpty("nothing is launched — not a stage, not even a question to git");
+        kit.Bench.Recorded().Should().OnlyContain(call => call.Tool == "git" && call.Arguments.Last() == "--version", "nothing is launched but the floor's question — not a stage, not even a repository question to git (E4.S0: the version is asked at admission, before the runner is looked for)");
         Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
     }
 
@@ -399,7 +400,7 @@ public sealed class ChecksVerbTests
 
         run.Code.Should().Be(4, text);
         run.Error.Should().Contain("holds no pid");
-        kit.Bench.Recorded().Should().BeEmpty("the arm's code is not run under a runner that may still be writing the clone");
+        kit.Bench.Recorded().Should().OnlyContain(call => call.Tool == "git" && call.Arguments.Last() == "--version", "the arm's code is not run under a runner that may still be writing the clone: only the floor's question (E4.S0) was asked");
     }
 
     [Fact]
@@ -442,6 +443,27 @@ public sealed class ChecksVerbTests
         File.GetLastWriteTimeUtc(marker).Should().BeOnOrAfter(File.GetLastWriteTimeUtc(kit.Paths.Objective));
     }
 
+    /// <summary>The floor at <c>checks</c>' admission, <c>--parse-only</c> included (D23, E4.S0: git is resolved for both roads and the report's git facts are asked of it): exit 3 for each, the recorded git calls exactly two <c>--version</c> calls and no <c>dotnet</c> call, no report folder, nothing printed before the refusal.
+    /// (The test carries <c>MakeVerbTests</c>' name for the parent's one name; the two classes each hold the half of their own verb.)</summary>
+    [Fact]
+    public async Task Make_and_checks_refuse_a_git_below_the_floor_before_any_repository_operation()
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        kit.Bench.Say("git.version", "git version 2.43.3\n");
+
+        var full = await kit.RunAsync();
+        var parseOnly = await kit.RunAsync(parseOnly: true);
+
+        full.Code.Should().Be(3, full.Error + full.Output);
+        parseOnly.Code.Should().Be(3, parseOnly.Error + parseOnly.Output);
+        var calls = kit.Bench.Recorded();
+        calls.Where(call => call.Tool == "git").Select(call => call.Arguments.Last()).Should().Equal("--version", "--version");
+        calls.Should().NotContain(call => call.Tool == "dotnet", "no target tool was launched");
+        Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
+        (full.Output + parseOnly.Output).Should().NotContain("resolved executables:");
+        full.Error.Should().Contain("2.43.3").And.Contain(GitFloor.Sentence).And.Contain($"git at {Path.Combine(kit.Root.Temp, "bin", "git")}: ", "the refusal names the git it is about, by its real path");
+    }
+
     [Fact]
     public async Task Every_git_of_checks_is_the_resolved_one_hardened_with_no_GIT_or_secret_variable()
     {
@@ -456,7 +478,8 @@ public sealed class ChecksVerbTests
         var git = kit.Bench.Recorded().Where(call => call.Tool == "git").ToList();
         git.Should().HaveCountGreaterThanOrEqualTo(6, "the head, the counts, the numstat and shortstat, the grep, the changed files, the filter enumeration — the scan must still find git's calls");
         git.Select(call => call.Executable).Should().OnlyContain(path => path == printed["git"], "every git is the resolved one, by its real path");
-        git.Select(call => call.Cwd).Should().OnlyContain(cwd => cwd == kit.Clone);
+        git.Where(call => call.Arguments.Last() != "--version").Select(call => call.Cwd).Should().OnlyContain(cwd => cwd == kit.Clone);
+        git.Should().ContainSingle(call => call.Arguments.Last() == "--version").Which.Cwd.Should().Be(kit.Root.Root, "the floor's question is asked from the experiment root, which reads no repository (E4.S0)");
         foreach (var call in git)
         {
             call.Arguments.Take(6).Should().Equal(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false"], "no hook and no filesystem monitor of the arm's clone runs on the harness's behalf, and no checkout recurses into a submodule");
