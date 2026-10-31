@@ -1,0 +1,48 @@
+
+> connect-other-ais@0.83.0 test
+> npm run compile && node scripts/run-tests.mjs
+
+
+> connect-other-ais@0.83.0 precompile
+> npm run prepare:gate
+
+
+> connect-other-ais@0.83.0 prepare:gate
+> node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs
+
+✔ the Consultant tab names a row by its display name — in the strip, the picker and a stranded pick's sentence (77.428641ms)
+✔ the Question consultant tab names a row by its display name — in the strip and in each row's picker (45.459606ms)
+✔ a row's effort and system prompt reach the chat model and the run spec built from it (2.735249ms)
+✔ a claude launch carries the row's effort; an empty or refused one sends no flag at all (0.608575ms)
+✔ codex and agy are never handed an effort — the server sends them none either (0.591282ms)
+✔ a Team-server chat sends the row's effort in its request, and nothing when it has none (2.935058ms)
+✔ the system prompt goes before the words on a session's first turn, and is never in argv (0.413253ms)
+✔ a later turn of the same session, or a row with no system prompt, sends the words alone (1.28751ms)
+  ✔ a nested node scenario (0.402ms)
+    ✔ a deeper nested node scenario (0.1ms)
+  ✔ an indented line that is not a scenario (0.3ms)
+✖ a failing node scenario (3.1ms)
+✖ an old flaky node test (0.9ms)
+✖ failing tests:
+
+✖ a failing node scenario (3.1ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal
+ℹ tests 6540
+ℹ suites 0
+ℹ pass 6520
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 20
+ℹ todo 0
+ℹ duration_ms 30755.91154
+✔ chatStoreFile.test.js removes every temp folder it makes (743.420158ms)
+✔ aChatRunsOnItsRowsFastMode.test.js removes every temp folder it makes (118.254009ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1888.209145
+✔ the session-start hook is wired, and points at a file that exists (5.739268ms)

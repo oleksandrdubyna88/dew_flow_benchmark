@@ -8,7 +8,19 @@ internal abstract record Passage<T>
 
     public sealed record Through(T Value) : Passage<T>;
 
-    public sealed record Stopped(int ExitCode, IReadOnlyList<string> Lines) : Passage<T>;
+    public sealed record Stopped(int ExitCode, IReadOnlyList<string> Lines) : Passage<T>
+    {
+        /// <summary>Every line to <paramref name="error"/>, then the exit code.</summary>
+        public int Print(TextWriter error)
+        {
+            foreach (var line in Lines)
+            {
+                error.WriteLine(line);
+            }
+
+            return ExitCode;
+        }
+    }
 
     public static Passage<T> Stop(int exitCode, params string[] lines) => new Stopped(exitCode, lines);
 

@@ -1483,6 +1483,7 @@ check that exists to keep the harness from running an arm's file is itself the f
    module doc. Windows stays `NotPerformed` as today; `RealPath` keeps mapping all three Unix platforms (`realpath` has no layout).
    *This is a judgement the operator may overturn — the alternative is the text reader kept for macOS only, launched as
    `/usr/bin/stat` by absolute path with cwd `/`; it would stay unobserved either way.*
+   *(Overturned by the owner on 2026-10-30 — the parent's ledger entry 2.1: macOS and FreeBSD run, not refused, each printing what it did not verify; E3.S0 carries it. Kept here as the history of the judgement.)*
 5. **The source's git facts: the git `Resolve` FOUND, by its real path, with a replaced environment, cwd = the source — and only while
    PATH is clean.** `ProcessRunner.RunAsync(found.Real, [...], source, 30 s, "", GitEnvironment.Of(environment), ct)` — the shared
    launcher's environment overload (it REPLACES, `ProcessRunner.cs:363`); `GitCommand` (bare `git`, `GitHistory.cs:17`) is no longer

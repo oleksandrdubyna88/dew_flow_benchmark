@@ -41,9 +41,18 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.Executables), Paths.Executables, At("chain/executables.txt")),
         (nameof(RootPaths.GateLock), Paths.GateLock, At(".gate.lock")),
         (nameof(RootPaths.LockedModes), Paths.LockedModes, At(".locked-modes")),
+        (nameof(RootPaths.LockedModesApplied), Paths.LockedModesApplied, At(".locked-modes.applied")),
+        (nameof(RootPaths.RunMarker), Paths.RunMarker("part6", RunStage.Locked), At("chain/part6/locked")),
         (nameof(RootPaths.LockLog), Paths.LockLog, At("lock.log")),
         (nameof(RootPaths.LockedModesRestored), Paths.LockedModesRestored("20261029T101500Z"), At(".locked-modes.restored-20261029T101500Z")),
         (nameof(RootPaths.KeepAwakeLog), Paths.KeepAwakeLog, At("keep-awake.log")),
+        (nameof(RootPaths.PrepBaseLog), Paths.PrepBaseLog, At("prep-base.log")),
+        (nameof(RootPaths.BaseBuildLog), Paths.BaseBuildLog, At("base-build.log")),
+        (nameof(RootPaths.BaseNpmLog), Paths.BaseNpmLog(2), At("base-npm-2.log")),
+        (nameof(RootPaths.BaseSuiteLog), Paths.BaseSuiteLog, At("base-test.log")),
+        (nameof(RootPaths.BaseExtensionLog), Paths.BaseExtensionLog, At("base-ts-test.log")),
+        (nameof(RootPaths.BaseResults), Paths.BaseResults, At("base-results")),
+        (nameof(RootPaths.PrepBasePrevious), Paths.PrepBasePrevious("20261030T101500Z"), At("prep-base.prev-20261030T101500Z")),
     ];
 
     private static readonly (string Member, string Actual, string Expected)[] ArmTable =
@@ -71,6 +80,12 @@ public sealed class ArmPathsTests
         (nameof(ArmPaths.Timing), Arm.Timing, At("r/abc/out/timing.jsonl")),
         (nameof(ArmPaths.ObjectiveFolder), Arm.ObjectiveFolder, At("r/abc/out/objective")),
         (nameof(ArmPaths.Objective), Arm.Objective, At("r/abc/out/objective.json")),
+        (nameof(ArmPaths.ObjectiveBuildLog), Arm.ObjectiveBuildLog, At("r/abc/out/objective/build.log")),
+        (nameof(ArmPaths.ObjectiveSuiteLog), Arm.ObjectiveSuiteLog, At("r/abc/out/objective/mcp-tests.log")),
+        (nameof(ArmPaths.ObjectiveFormatLog), Arm.ObjectiveFormatLog, At("r/abc/out/objective/format.log")),
+        (nameof(ArmPaths.ObjectiveExtensionLog), Arm.ObjectiveExtensionLog, At("r/abc/out/objective/ts-tests.log")),
+        (nameof(ArmPaths.ObjectiveStages), Arm.ObjectiveStages, At("r/abc/out/objective/stages.json")),
+        (nameof(ArmPaths.ObjectivePrevious), Arm.ObjectivePrevious("20261030T101500Z"), At("r/abc/out/objective.prev-20261030T101500Z")),
         (nameof(ArmPaths.TasksPlanLog), Arm.TasksPlanLog, At("r/abc/out/tasks-plan.log")),
         (nameof(ArmPaths.BatchDone), Arm.BatchDone(12), At("r/abc/out/batch-12.done")),
         (nameof(ArmPaths.TaskBefore), Arm.TaskBefore("t2"), At("r/abc/out/task-t2.before")),
@@ -161,6 +176,7 @@ public sealed class ArmPathsTests
             () => Arm.CoaiSettings("."),
             () => Paths.PidFile("../C1"),
             () => Paths.LockedModesRestored("a/b"),
+            () => Paths.PrepBasePrevious("../x"),
             () => Paths.Arm("a/b"),
             () => _ = new ArmPaths(Root, "..").Folder,
         };
@@ -192,7 +208,7 @@ public sealed class ArmPathsTests
         }
 
         var method = type.GetMethod(member)!;
-        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : p.ParameterType == typeof(OutputBinding) ? new OutputBinding("X", "notes/t1.md") : "t1").ToArray();
+        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : p.ParameterType == typeof(OutputBinding) ? new OutputBinding("X", "notes/t1.md") : p.ParameterType == typeof(RunStage) ? RunStage.Locked : "t1").ToArray();
         return (string)method.Invoke(target, arguments)!;
     }
 }

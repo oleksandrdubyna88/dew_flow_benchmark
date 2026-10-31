@@ -10,7 +10,7 @@ namespace Bench.Tests.ModelArms;
 /// test chose — because the defects these guard against (a program looked up in the current directory or on a PATH entry in the target) exist only in a real process, not in
 /// an in-process call. The subject is never doubled; what is placed in the target are marker-writing shims, a program the target could hold.
 /// <para>
-/// What this does NOT prove: any verb but <c>init</c>, <c>validate</c> and <c>prep-base</c> (the others are not built yet; the catalogue says so), the binary on Windows (the shims and links
+/// What this does NOT prove: any verb but <c>init</c>, <c>validate</c> and <c>prep-base</c> (the others are not built yet, or have their own classes; the catalogue says so) — and of <c>prep-base</c> only the refusal: its baseline is <c>PrepBaseTests</c>', the binary on Windows (the shims and links
 /// are POSIX), a launch made by a later story (the structural test in <c>ModelArmsArchitectureTests</c> sees those land), or that the fixture's <c>claude</c>, <c>dotnet</c>,
 /// <c>node</c> and <c>npm</c> run (empty files; only git is launched).
 /// </para></summary>
@@ -80,16 +80,18 @@ public sealed class ModelArmsScenarioTests
     }
 
     [Fact]
-    public async Task Prep_base_through_the_binary_runs_the_same_checks_and_is_refused_until_E4_S4()
+    public async Task Prep_base_through_the_binary_runs_the_same_checks_clones_the_base_and_names_a_rules_submodule_the_target_lacks()
     {
         Posix();
         using var root = await new ExperimentRoot().WithTargetAsync();
 
         var (code, output, error) = await RunBinaryAsync(root, root.Temp, "prep-base");
 
-        code.Should().Be(4);
+        code.Should().Be(4, "the fixture's target has no rules submodule: the clone was made, the configuration is wrong");
         output.Should().Contain("resolved executables:");
-        error.Should().Contain("E4.S4");
+        error.Should().Contain("target.rulesSubmodule .agents/conventions is not a submodule of the target at");
+        Directory.Exists(Path.Combine(root.Root, "base")).Should().BeTrue("the base was cloned before the submodule was asked for");
+        File.Exists(Path.Combine(root.Root, "baseline.json")).Should().BeFalse("no baseline from a base that was not measured");
     }
 
     [Fact]

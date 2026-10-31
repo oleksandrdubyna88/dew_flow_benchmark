@@ -181,6 +181,24 @@ public sealed class ExperimentFileTests
         }
     }
 
+    /// <summary>The CTRF's name is handed to the suite as <c>--report-xunit-ctrf-filename</c> and read back from the results folder: it is one file name, never a path that could leave the folder the harness made.</summary>
+    [Theory]
+    [InlineData("a/b.json")]
+    [InlineData("a\\b.json")]
+    [InlineData("..")]
+    [InlineData(".")]
+    [InlineData("/abs.json")]
+    [InlineData("../x.json")]
+    public void A_ctrf_file_name_with_a_separator_or_a_climbing_segment_is_refused(string name)
+    {
+        PosixPaths();
+
+        var reason = Refused(root => root["target"]!["suite"]!["ctrfFile"] = name);
+
+        reason.Should().Contain("target.suite.ctrfFile").And.Contain("one file name");
+        ExperimentFile.Read(Edited(root => root["target"]!["suite"]!["ctrfFile"] = "results.ctrf.json"), Loc).Ok().Target.Suite.CtrfFile.Should().Be("results.ctrf.json", "a plain name is the legal one");
+    }
+
     [Fact]
     public void A_nul_in_a_member_name_is_echoed_escaped_never_raw()
     {

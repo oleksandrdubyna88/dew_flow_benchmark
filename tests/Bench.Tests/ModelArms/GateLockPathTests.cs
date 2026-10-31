@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -82,6 +83,24 @@ public sealed class GateLockPathTests
         }
 
         GateLockTestKit.RootFiles(root).Should().NotContain(".gate.lock.holder", "no holder was recorded for a lock that was never taken");
+    }
+
+    /// <summary>The Mac's road is handed in on this Linux host (E3 §8 item 25): the units run here, the composition on a real Mac is unobserved.</summary>
+    [Fact]
+    public void On_the_portable_road_a_link_and_a_folder_are_refused_a_regular_file_is_read_by_the_runtime_and_nothing_is_missing()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        var file = temp.File(string.Empty, "lock");
+        var link = temp.Combine("link");
+        File.CreateSymbolicLink(link, file);
+        var folder = temp.Folder("folder");
+        var road = PlatformKit.MacRoad;
+
+        GateLockPath.Of(file, road).Should().BeOfType<GateLockPath.Regular>().Which.Facts.Source.Should().Be(FactsSource.Portable, "the facts of the lock path come from the road's reader");
+        GateLockPath.Of(link, road).Should().BeOfType<GateLockPath.Refused>().Which.Reason.Should().Contain("symbolic link");
+        GateLockPath.Of(folder, road).Should().BeOfType<GateLockPath.Refused>().Which.Reason.Should().Contain("a directory");
+        GateLockPath.Of(temp.Combine("absent"), road).Should().BeOfType<GateLockPath.Missing>();
     }
 
     [Fact]

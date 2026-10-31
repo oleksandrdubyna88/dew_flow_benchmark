@@ -185,18 +185,18 @@ internal sealed class ExperimentRoot : IDisposable
     public string Shim(string path, string name, bool thenRealGit = false) =>
         ShimScript(path, $"echo \"$0 $*\" >> '{MarkerFile(name)}'\n" + (thenRealGit ? $"exec '{RealGit}' \"$@\"\n" : "exit 0\n"));
 
-    /// <summary>A <c>0755</c> shell script with the given body (after the shebang), its folder created.</summary>
+    /// <summary>A <c>0755</c> shell script with the given body (after the shebang), its folder created, written by <see cref="ShimFiles"/> so it is proved startable.</summary>
     public string ShimScript(string path, string body)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         Directory.CreateDirectory(Path.Combine(Temp, "markers"));
-        File.WriteAllText(path, "#!/bin/sh\n" + body);
-        if (!OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("755", 8));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "#!/bin/sh\n" + body);
+            return path;
         }
 
-        return path;
+        return ShimFiles.Write(path, "#!/bin/sh\n" + body);
     }
 
     /// <summary>Where a shim named <paramref name="name"/> writes its marker lines.</summary>

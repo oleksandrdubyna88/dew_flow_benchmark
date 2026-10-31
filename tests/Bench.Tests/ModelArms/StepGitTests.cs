@@ -44,8 +44,9 @@ public sealed class StepGitTests
         using var bench = new StepBench();
         var marker = bench.Combine("markers", "git");
         Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
-        bench.Git = bench.ShimScript(bench.Combine("bin", "git"), $"echo \"$0 $*\" >> '{marker}'\nenv | grep '^GIT_' >> '{marker}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        bench.Git = bench.ShimScript(bench.Combine("bin", "git"), $"echo \"$0 $*\" >> '{marker}'\nenv | grep -E '^(GIT_|GITHUB_TOKEN)' >> '{marker}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
         bench.Parent["GIT_DIR"] = "/nowhere";
+        bench.Parent["GITHUB_TOKEN"] = "ghp_value";
         bench.Replays("result-success.jsonl");
 
         var outcome = await bench.Runner().RunAsync(bench.Context("CR", 1), Ct);
@@ -54,10 +55,13 @@ public sealed class StepGitTests
         var runs = File.Exists(marker) ? File.ReadAllLines(marker) : [];
         runs.Count(line => line.StartsWith(bench.Git + " ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(3, "the shim should record at least three git runs: the .before, the heads and the diff");
         var head = File.ReadAllText(bench.Paths.Before("2-hreview")).Trim();
-        const string Hardened = " -c core.fsmonitor=false";
+        const string Hardened = " -c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false";
         runs.Should().Contain(bench.Git + Hardened + " rev-parse HEAD").And.Contain(bench.Git + Hardened + " rev-parse --short HEAD")
-            .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv {head} HEAD");
-        runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Distinct().Should().Equal(["GIT_NO_LAZY_FETCH=1"], "git runs without any GIT_* variable of the parent's; the one it is given is the harness's own (no lazy fetch from a promisor remote)");
+            .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv --submodule=short {head} HEAD");
+        var gitNames = runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Select(line => line.Split('=')[0]).Distinct().ToList();
+        gitNames.Should().Contain("GIT_NO_LAZY_FETCH", "git runs with the harness's own switch (no lazy fetch from a promisor remote)").And.Contain("GIT_ALLOW_PROTOCOL", "and with the allow-list that refuses every transport (set, empty)");
+        gitNames.Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
+        runs.Where(line => line.StartsWith("GITHUB_TOKEN", StringComparison.Ordinal)).Should().BeEmpty("no secret of the parent's reaches a program git might still run: the class reduces the environment itself");
         head.Should().Be(await bench.HeadAsync());
     }
 

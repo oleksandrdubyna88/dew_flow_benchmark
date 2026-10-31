@@ -23,6 +23,18 @@ internal static partial class PathFields
     public static string Relative(StrictJson json, JsonObject obj, string path, string name, string inside) =>
         CheckRelative(json, json.Text(obj, path, name), StrictJson.Join(path, name), inside);
 
+    /// <summary>One file name: not empty, no separator of either kind, not <c>.</c> or <c>..</c> — a name the harness hands to a tool as a file to write inside a folder of its own.</summary>
+    public static string FileName(StrictJson json, JsonObject obj, string path, string name)
+    {
+        var text = json.Text(obj, path, name);
+        if (text.Length > 0 && (text is "." or ".." || text.AsSpan().IndexOfAny('/', '\\') >= 0 || RootedPattern().IsMatch(text)))
+        {
+            json.Add($"{StrictJson.Join(path, name)} is '{text}' — it must be one file name: no separator, not '.' or '..'");
+        }
+
+        return text;
+    }
+
     /// <summary>An array whose every element is a relative path inside <paramref name="inside"/>.</summary>
     public static IReadOnlyList<string> Relatives(StrictJson json, JsonObject obj, string path, string name, string inside)
     {
