@@ -1872,7 +1872,7 @@ A root a real `lock` isolated — E5.S1 writes the two files; here they are writ
 ```mermaid
 flowchart TD
     A["ChecksAdmission: scheme (a tasks block is allowed) and token (arms.map.json through BoundedFile) → PATH / HOME / XDG judged → git (and, in a full run, dotnet, lowPriority[0], build[0], suite[0], extension[0]) resolved ONCE and printed → the isolation line → pids/arm.pid: a live runner is 4 → baseline.json and scenarios.json → no arm-done: one warning"] --> M{"--parse-only?"}
-    M -- no --> B["ObjectiveRun.Begin: an earlier out/objective RENAMED to objective.prev-stamp (a link is renamed as a link); the new one made exclusively, its device and inode taken; the four logs CreateNew and HELD before the first child"]
+    M -- no --> B["ObjectiveRun.Begin: an earlier out/objective RENAMED to objective.prev-stamp, or -2, -3 … when a move in the same second took the name (a link is renamed as a link); the new one made exclusively, its device and inode taken; the four logs CreateNew and HELD before the first child"]
     B --> S["stages: lowered build → lowered suite (--results-directory out/objective, the CTRF name) → git's changed .cs names → format whitespace then style (not lowered; a verb that does not exit 0 ends the stage; none changed = exit 0, nothing run) → lowered extension. A tool not STARTED is 3, no report"]
     S --> G["ChecksReport.GitAsync (ArmGit): head, uncommitted count, commits since base, numstat, shortstat, one grep -F per scenario; a failure is 3"]
     G --> I{"out/objective still the folder made? (device and inode; portable road: not a link, a folder)"}
@@ -1920,6 +1920,7 @@ flowchart TD
 | `A_link_at_the_objective_folders_name_is_moved_aside_as_a_link_and_never_followed` | a link planted before the run is renamed as the link it is; nothing is written through it |
 | `A_ctrf_that_is_a_link_a_fifo_or_too_big_reads_as_no_tests_and_says_why` | (a link, a FIFO, 64 MiB + 1) → every `cs` scenario `absent`, a line names the file, exit 0 within the wall |
 | `An_earlier_objective_folder_is_kept_aside_not_overwritten` | two runs → `out/objective.prev-<stamp>/build.log` holds the first run's text |
+| `Objective_folders_moved_aside_within_one_second_each_get_their_own_numbered_folder_in_order` | four runs on one clock instant → `objective.prev-<stamp>`, `-2`, `-3`, each holding its run's `build.log`; the verb names the folder used (E3 §8 item 49 (c)) |
 | `Checks_refuses_an_arm_whose_runner_is_alive` | `pids/C1.pid` a live process → 4, nothing launched, not even git |
 | `The_objective_marker_is_written_after_objective_json_and_not_on_a_stop` | a stop during the suite → `OperationCanceledException` (Main's 5), no report, no marker; a normal run: at the moment the report is on disk the marker is not (`ChecksSeams.AfterReport`), then it is, written no earlier |
 | `Every_git_of_checks_is_the_resolved_one_hardened_with_no_GIT_or_secret_variable` | every git call: the printed path, `-c core.fsmonitor=false -c core.hooksPath=` first, the diffs' three guards and `--submodule=short`, `status --ignore-submodules=dirty`, `grep -e`, `GIT_NO_LAZY_FETCH` and only `GIT_CONFIG_*` besides (a planted filter driver exercises it), no secret, no agent socket |

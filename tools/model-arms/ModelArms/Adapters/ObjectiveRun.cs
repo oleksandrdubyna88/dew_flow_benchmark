@@ -88,26 +88,28 @@ internal sealed class ObjectiveRun : IDisposable
         }
     }
 
-    /// <summary>An earlier <c>out/objective</c> — a folder, a file or a link, a dangling one too — renamed to <c>objective.prev-&lt;stamp&gt;</c>, as what it is; the empty text when there was none.</summary>
+    /// <summary>An earlier <c>out/objective</c> — a folder, a file or a link, a dangling one too — renamed to <c>objective.prev-&lt;stamp&gt;</c>, then <c>-2</c>, <c>-3</c> … when a move in the same second took the name (<see cref="BaseLeftovers.FirstFree"/>, the numbering <c>prep-base</c> uses), as what it is; the
+    /// answer is the folder it went to, the empty text when there was none.</summary>
     private static Outcome<string> Aside(ArmPaths paths, string stamp) =>
         KernelFacts.Present(paths.ObjectiveFolder).Bind(present => present ? Moved(paths, stamp) : Outcome<string>.Success(string.Empty));
 
-    private static Outcome<string> Moved(ArmPaths paths, string stamp)
-    {
-        var kept = paths.ObjectivePrevious(stamp);
-        if (KernelFacts.Present(kept) is not Outcome<bool>.Ok { Value: false })
-        {
-            return Outcome<string>.Failure($"{kept} already exists, or the host cannot say — an earlier objective folder was moved aside a moment ago; run again");
-        }
+    private static Outcome<string> Moved(ArmPaths paths, string stamp) =>
+        BaseLeftovers.FirstFree(stamp, name => RenamedTo(paths.ObjectiveFolder, paths.ObjectivePrevious(name))).Map(paths.ObjectivePrevious);
 
+    /// <summary>One rename, the runtime's own refusal of an existing destination deciding (<c>File.Move</c> without overwrite is a <c>link</c> then <c>unlink</c>; <c>Directory.Move</c> a kernel <c>rename</c>, which a non-empty destination refuses): a refusal where the destination is there is <see cref="FolderMade.AlreadyThere"/>, so the
+    /// next number is tried — the look at the destination only classifies a failure that has already happened. The runtime's own check of a folder destination is a look then a rename: a folder made at the name between the two is the residual, which two <c>checks</c> of one arm at the same instant could in theory hit and which nothing here prevents.</summary>
+    private static FolderMade RenamedTo(string from, string to)
+    {
         try
         {
-            BaseLeftovers.Rename(paths.ObjectiveFolder, kept);
-            return Outcome<string>.Success(kept);
+            BaseLeftovers.Rename(from, to);
+            return new FolderMade.Made();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Outcome<string>.Failure($"cannot move {paths.ObjectiveFolder} aside to {kept}: {ex.Message}");
+            return KernelFacts.Present(to) is Outcome<bool>.Ok { Value: true }
+                ? new FolderMade.AlreadyThere()
+                : new FolderMade.Failed($"cannot move {from} aside to {to}: {ex.Message}");
         }
     }
 

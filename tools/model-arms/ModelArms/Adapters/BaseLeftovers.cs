@@ -30,24 +30,33 @@ internal static class BaseLeftovers
         }
 
         var left = present.Where(entry => entry.Is is Outcome<bool>.Ok { Value: true }).Select(entry => entry.Path).ToList();
-        return left.Count == 0 ? Outcome<MovedAside>.Success(new MovedAside(string.Empty, [])) : Moved(left, root, stamp, 1, road);
+        return left.Count == 0 ? Outcome<MovedAside>.Success(new MovedAside(string.Empty, [])) : Moved(left, root, stamp, road);
     }
 
     /// <summary>The folder name of the <paramref name="n"/>th move of one stamp: the stamp itself, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> …</summary>
     private static string Numbered(string stamp, int n) => n == 1 ? stamp : $"{stamp}-{n.ToString(CultureInfo.InvariantCulture)}";
 
-    private static Outcome<MovedAside> Moved(IReadOnlyList<string> left, RootPaths root, string stamp, int n, PlatformRoad road)
+    /// <summary>The one numbering of every archive folder the module keeps (<c>prep-base.prev-&lt;stamp&gt;</c>, <c>out/objective.prev-&lt;stamp&gt;</c>): <paramref name="claim"/> is handed <c>&lt;stamp&gt;</c>, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> … and does the exclusive thing itself — the kernel's <c>mkdir</c>, or the rename that refuses an existing destination — answering
+    /// <see cref="FolderMade.AlreadyThere"/> for a name that is taken, so the next number is tried; the answer is the name that was claimed, or why none could be. Never a look first: the claim IS the decision. At most <see cref="SameSecondMoves"/> names.</summary>
+    internal static Outcome<string> FirstFree(string stamp, Func<string, FolderMade> claim) => FirstFree(stamp, claim, 1);
+
+    private static Outcome<string> FirstFree(string stamp, Func<string, FolderMade> claim, int n)
     {
-        var previous = root.PrepBasePrevious(Numbered(stamp, n));
-        return ExclusiveFolder.Make(previous, road) switch
+        var name = Numbered(stamp, n);
+        return claim(name) switch
         {
-            FolderMade.Made => Moved(left, previous).Map(names => new MovedAside(previous, names)),
-            FolderMade.AlreadyThere when n < SameSecondMoves => Moved(left, root, stamp, n + 1, road),
-            FolderMade.AlreadyThere => Outcome<MovedAside>.Failure($"{previous} and the {(SameSecondMoves - 1).ToString(CultureInfo.InvariantCulture)} numbered folders after it already exist — run again in a second"),
-            FolderMade.Failed failed => Outcome<MovedAside>.Failure($"cannot create {previous}: {failed.Reason}"),
+            FolderMade.Made => Outcome<string>.Success(name),
+            FolderMade.AlreadyThere when n < SameSecondMoves => FirstFree(stamp, claim, n + 1),
+            FolderMade.AlreadyThere => Outcome<string>.Failure($"{name} and the {(SameSecondMoves - 1).ToString(CultureInfo.InvariantCulture)} numbered folders before it already exist — run again in a second"),
+            FolderMade.Failed failed => Outcome<string>.Failure(failed.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
+
+    private static Outcome<MovedAside> Moved(IReadOnlyList<string> left, RootPaths root, string stamp, PlatformRoad road) =>
+        FirstFree(stamp, name => ExclusiveFolder.Make(root.PrepBasePrevious(name), road))
+            .Map(root.PrepBasePrevious)
+            .Bind(previous => Moved(left, previous).Map(names => new MovedAside(previous, names)));
 
     private static Outcome<IReadOnlyList<string>> Moved(IReadOnlyList<string> left, string previous)
     {

@@ -309,6 +309,30 @@ public sealed class ChecksVerbTests
     }
 
     [Fact]
+    public async Task Objective_folders_moved_aside_within_one_second_each_get_their_own_numbered_folder_in_order()
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        var seams = new ChecksSeams(new BenchClock(new DateTimeOffset(2026, 10, 30, 12, 30, 15, TimeSpan.Zero), TimeZoneInfo.Utc), null);
+        var runs = new List<ChecksRun>();
+        foreach (var attempt in new[] { 1, 2, 3, 4 })
+        {
+            kit.Bench.Say("build.out", $"run {attempt}'s build\n");
+            runs.Add(await kit.RunAsync(seams: seams));
+        }
+
+        runs.Select(run => run.Code).Should().Equal([0, 0, 0, 0], string.Join(" | ", runs.Select(run => run.Error)));
+        string[] expected = ["objective.prev-20261030T123015Z", "objective.prev-20261030T123015Z-2", "objective.prev-20261030T123015Z-3"];
+        Directory.EnumerateFileSystemEntries(kit.Paths.Out, "objective.prev-*").Select(Path.GetFileName).Order(StringComparer.Ordinal).Should().Equal(expected, "the first move takes the stamp, the next the stamp and -2, -3: unique, in the order they were made");
+        foreach (var (folder, attempt) in expected.Zip(new[] { 1, 2, 3 }))
+        {
+            File.ReadAllText(Path.Combine(kit.Paths.Out, folder, "build.log")).Should().Contain($"run {attempt}'s build", "each run's own logs are kept, none overwritten by a later one");
+        }
+
+        File.ReadAllText(kit.Paths.ObjectiveBuildLog).Should().Contain("run 4's build");
+        runs[3].Output.Should().Contain("out/" + expected[2], "the verb names the folder it really used (the arm's token is masked in what it prints)");
+    }
+
+    [Fact]
     public async Task A_link_at_the_objective_folders_name_is_moved_aside_as_a_link_and_never_followed()
     {
         using var kit = await ChecksKit.CreateAsync();
