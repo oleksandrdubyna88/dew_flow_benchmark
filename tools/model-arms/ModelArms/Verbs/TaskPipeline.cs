@@ -166,9 +166,11 @@ internal sealed class TaskPipeline
             return null;
         }
 
-        if (refused.Length > 0 && entry is not StepEntry.Skip)
+        if (entry is not StepEntry.Skip)
         {
-            _log.Line("the task list has problems — one fix round: " + OneLine(refused));
+            _log.Line(refused.Length > 0
+                ? "the task list has problems — one fix round: " + OneLine(refused)
+                : "the split fix began and is not done — one fix round: resuming it");
         }
 
         return await _runner.RunAsync(Block(position, TaskStems.SplitFix, _limits.SplitFix, refused), stopping) as StepOutcome.Stopped ?? Check() ?? StillInvalid();
@@ -212,13 +214,18 @@ internal sealed class TaskPipeline
     private StepOutcome.Stopped? Accepted(TaskBatches fixedBatches, string text)
     {
         _batches = fixedBatches;
+        if (fixedBatches.Batches.Count == 0)
+        {
+            return _log.Stop(TaskStems.Split, ExitCodes.Configuration, "work/batches.json holds no batch — start the arm again from a new clone");
+        }
+
         return EveryBatchDone(fixedBatches) || _listing.Match(now => BatchesFile.Write(now, _paths.Work) == text, _ => false)
             ? null
             : _log.Stop(TaskStems.Split, ExitCodes.Configuration, "work/tasks.json changed after the batches were fixed in work/batches.json — restore it, or start the arm again from a new clone");
     }
 
     private bool EveryBatchDone(TaskBatches batches) =>
-        Enumerable.Range(0, batches.Batches.Count).All(index => KernelFacts.Present(_paths.BatchDone(index)) is Outcome<bool>.Ok { Value: true });
+        batches.Batches.Count > 0 && Enumerable.Range(0, batches.Batches.Count).All(index => KernelFacts.Present(_paths.BatchDone(index)) is Outcome<bool>.Ok { Value: true });
 
     // ---- the batches --------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -313,7 +320,7 @@ internal sealed class TaskPipeline
     private async Task<StepOutcome.Stopped?> RunTogetherAsync(int position, int index, IReadOnlyList<BatchPlace.Run> runs, CancellationToken stopping)
     {
         var outcomes = await Task.WhenAll(runs.Select(run => _runner.RunAsync(Coder(position, run.Id, run.Folder), stopping)));
-        var stops = runs.Zip(outcomes, (run, outcome) => (run.Id, Outcome: outcome as StepOutcome.Stopped)).Where(each => each.Outcome is not null).Select(each => (each.Id, Stopped: each.Outcome!)).ToList();
+        var stops = runs.Zip(outcomes).SelectMany(pair => pair.Second is StepOutcome.Stopped stopped ? new[] { (pair.First.Id, Stopped: stopped) } : []).ToList();
         return stops.Count == 0 ? null : Verdict(index, stops);
     }
 
@@ -331,8 +338,8 @@ internal sealed class TaskPipeline
             : string.Join("; ", stops.Where(each => each.Stopped.ExitCode == worst).Select(each => $"{each.Id}: {each.Stopped.Why}")));
     }
 
-    /// <summary>4 outranks 3 outranks 5; a code none of them is outranks all three (a total function: the runner's codes are those three today, and a fourth must not turn a stopped batch into an exception).</summary>
-    internal static int MostSevere(IEnumerable<int> codes) => codes.MinBy(Rank);
+    /// <summary>4 outranks 3 outranks 5; a code none of them is outranks all three, and of several such codes the LOWER value wins — deterministic whatever order the tasks are listed in (a total function: the runner's codes are those three today, and a fourth must not turn a stopped batch into an exception).</summary>
+    internal static int MostSevere(IEnumerable<int> codes) => codes.OrderBy(Rank).ThenBy(code => code).First();
 
     private static int Rank(int code) => Array.IndexOf(Severity, code);
 

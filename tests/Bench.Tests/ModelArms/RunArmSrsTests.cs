@@ -333,10 +333,28 @@ public sealed class RunArmSrsTests
 
         second.Code.Should().Be(0, second.Error + second.Output);
         var later = kit.Fake.Calls().Skip(callsBefore).ToList();
+        second.Output.Should().Contain("one fix round", "the fix runs again (resumed) with a list that passes: the line says so as well");
         later[0].After("--resume").Should().Be(session, "the list passes already, but the fix began and is not done: its session is resumed first, before any batch");
         later[0].Cwd.Should().Be(kit.Clone);
         File.Exists(kit.Paths.Done("1b-split-fix")).Should().BeTrue();
         later.Count(call => call.Prompt.Contains("ONE task, **", StringComparison.Ordinal)).Should().Be(5);
+    }
+
+    [Fact]
+    public async Task A_batches_json_that_holds_no_batch_is_refused_with_exit_4_naming_it()
+    {
+        using var kit = await SrsKit.CreateAsync();
+        kit.Plan(kit.Five());
+        kit.Replay(Success);
+        Directory.CreateDirectory(kit.Paths.Work);
+        File.WriteAllText(kit.Paths.BatchesJson, """{"batches":[],"tasks":{}}""");
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(4, "no batch is not 'every batch is done': " + run.Error + run.Output);
+        run.Error.Should().Contain("work/batches.json").And.Contain("no batch");
+        kit.Coders().Should().BeEmpty();
+        File.Exists(kit.Paths.BatchDone(0)).Should().BeFalse();
     }
 
     [Fact]
@@ -364,6 +382,8 @@ public sealed class RunArmSrsTests
         TaskPipeline.MostSevere([5, 4, 3]).Should().Be(4);
         TaskPipeline.MostSevere([5]).Should().Be(5);
         TaskPipeline.MostSevere([3, 1, 5]).Should().Be(1, "an unranked code is the most severe of all, and the batch still stops with it instead of throwing");
+        TaskPipeline.MostSevere([9, 7, 4]).Should().Be(7, "two unranked codes: the lower value, whatever the order the tasks were listed in");
+        TaskPipeline.MostSevere([7, 9, 4]).Should().Be(7);
     }
 
     [Fact]
