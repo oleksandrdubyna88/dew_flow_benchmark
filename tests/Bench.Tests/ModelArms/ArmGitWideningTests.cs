@@ -275,7 +275,12 @@ public sealed class ArmGitWideningTests : IDisposable
         var marker = _temp.Combine("calls.log");
         var parent = new Dictionary<string, string>(Environment, StringComparer.Ordinal)
         {
-            ["GITHUB_TOKEN"] = "ghp_value", ["CLAUDE_CODE_OAUTH_TOKEN"] = "oauth-value", ["BENCH_DB"] = "Host=db;Password=x", ["SSH_AUTH_SOCK"] = "/run/user/1000/keyring/ssh", ["KEEP_ME"] = "yes", ["GIT_DIR"] = "/nonexistent",
+            ["GITHUB_TOKEN"] = "ghp_value",
+            ["CLAUDE_CODE_OAUTH_TOKEN"] = "oauth-value",
+            ["BENCH_DB"] = "Host=db;Password=x",
+            ["SSH_AUTH_SOCK"] = "/run/user/1000/keyring/ssh",
+            ["KEEP_ME"] = "yes",
+            ["GIT_DIR"] = "/nonexistent",
         };
 
         _ = await new ArmGit(RecordingShim(marker), source, parent).HeadAsync(Ct); // the answer is not the point: what the call was started with is
