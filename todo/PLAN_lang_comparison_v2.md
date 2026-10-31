@@ -125,10 +125,10 @@ the open questions (§17) name what they do not settle.
 | D10 | **Order: six rounds, arms alternating.** A round runs every task once in one arm; the arm of round 1 is drawn from the seed and the arms alternate (B P B P B P or P B P B P B), so after any even number of rounds both arms hold the same n; the task order inside a round is drawn from the seed; a task's second repeat in an arm runs only after every task has run once in that arm. The two cells of a pair (C# ∥ TS, same task, same arm) start in the same tick on masks `0-5` / `8-13`, swapped per pair as `maskFor` does; the two arms never overlap. The ceiling (D7) cuts whole round pairs (one bare + one process), never one task's repeats | this plan, per instruction E4 |
 | D11 | **The bare agent's workspace is a copy of one task folder** (`csharp/<task>/` or `node/<task>/`) at a pinned commit of the task repository, fetched and hash-checked as v1's `fetchInputs` does. The repository's root files, the other stack's folder, `tasks/` and `todo/` are never in the bare box. The bare agent gets **no** conventions. **The process agent's workspace is a single-branch clone of its run base `run/<rid>/main`** in the task repository (v1 §4.2), which carries the conventions, the hooks, the frozen spec and both stack folders; its prompt names its stack's folder | this plan |
 | D12 | **Fixed per-stack scripts in every workspace, frozen inputs with hashes:** `build.sh` and `run.sh` (olympiad: reads stdin, writes stdout; daemon and web API: the long-running program, `PORT` and the task's inputs from the environment). The agent fills the code; the harness drives only these two scripts, identically for both stacks. A `PACKAGES.md` lists the offered package set of the stack (D5); the spec tells the agent what is frozen | this plan |
-| D13 | **Scoring per task kind** (§4.3): olympiad — held-out input/expected pairs under calibrated time and memory limits, each case `pass` / `wrong answer` / `time limit` / `memory limit` / `runtime error`; daemon and web API — held-out scenarios driven by the harness, RSS sampled every second, a SIGTERM stop that must end the process within a grace period with no child left. **Accepted** = clean build, every held-out case or scenario passed, memory and stop checks passed. One suite per task runs unchanged against both stacks (D22) | this plan |
-| D14 | **Limits:** time limit per olympiad task = **3 ×** the slower of the two reference solutions' wall, with a floor of 1 s; memory limit = **2 ×** the larger reference peak, with a floor of 256 MB; the RSS bound of a daemon or web API task = **2 ×** the larger reference peak under the task's load scenario. The spec states the floors and this rule as guarantees; the exact values go to the runner, never into the spec (change 1.2a). Peak memory is read from the scoring cgroup's `memory.peak` where the host gives it, else from 100 ms RSS samples — never `RLIMIT_AS`. The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
+| D13 | **Scoring per task kind** (§4.3): olympiad — held-out input/expected pairs under calibrated time and memory limits, each case `pass` / `wrong answer` / `time limit` / `memory limit` / `runtime error`; daemon and web API — held-out scenarios driven by the harness, RSS sampled every second, a SIGTERM stop that must end the process within a grace period with no child left. **Accepted** = clean build, every held-out case or scenario passed, the stop check passed, and the memory check passed **where the machine can certify it** (cgroup `memory.peak`); on a machine that cannot, the session is still accepted on its functional cases, carries the flag `memory bound not certified`, and the memory claim is excluded from `accepted` and reported apart (§4.3). One suite per task runs unchanged against both stacks (D22) | this plan |
+| D14 | **Limits:** time limit per olympiad task = **3 ×** the slower of the two reference solutions' wall, with a floor of 1 s; memory limit = **2 ×** the larger reference peak, with a floor of 256 MB; the RSS bound of a daemon or web API task = **2 ×** the larger reference peak under the task's load scenario. The spec states the floors and this rule as guarantees; the exact values go to the runner, never into the spec (change 1.2a). Peak memory is read from the scoring cgroup's `memory.peak`; **only that certifies a memory bound**. Where the host does not give it, 100 ms RSS samples are recorded as a descriptive curve and the session is flagged `memory bound not certified` (§4.3) — a sampled peak can miss a short peak, so it never records a memory pass; never `RLIMIT_AS`. The pre-registration names the machines that can certify. The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
 | D15 | **GC and runtime settings, fixed and recorded per stack:** C# `DOTNET_gcServer=0` (Workstation, set explicitly), `DOTNET_TieredCompilation` default, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`; Node: no `--max-old-space-size` flag from the harness (the memory limit is the cgroup's); `NODE_OPTIONS` empty. Every value is in `agentEnv`'s allow-list, the same in the agent box and the scoring box, and in every session record | this plan |
-| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the session caps per arm, the stall timeouts, the time guesses of §4.1, the limits of D14 and the budget split (D30). Bare pilot: tasks 1, 3, **4** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) is in the set so G-16 checks the HTTP driver on a real tree before round 1; one more bare pair (≈ $10–40 at the §12 guess) fits inside the ≈ $150 pilot and re-run reserve of §12, so the pilot option is taken over a hand-check on a reference tree. Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
+| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the session caps per arm, the stall timeouts, the time guesses of §4.1, the limits of D14 and the budget split (D30). Bare pilot: tasks 1, 3, **4**, **5** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) for the HTTP driver, task 5 (the RESP server) for the TCP/RESP driver, task 10 (the DAG scheduler) for the SIGTERM, RSS and timer checks, so G-16 checks every driver on a real tree before round 1; the pilot option is taken over a hand-check on a reference tree. **Pilot cost, re-derived at the §12 guesses:** 10 bare pilot sessions + 2 A/A at $5–20 → $60–240; 4 process pilot sessions at $30–70 → $120–280; **≈ $180–520 in all**, settled before the data share is computed (§12) — not a fixed reserve. Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
 | D17 | **Egress:** bare sessions — no registry, no host; the only road out is the broker's API door. Process sessions — the GitHub hosts v1's E2.S4 settles, nothing else; package installs in both arms resolve from the seeded offline caches (D5). A refused CONNECT is flagged `wanted network`, not voided | this plan |
 | D18 | **Contamination needles for the known tasks** (id, title, site names; `CSES`, `IOI`, `Werewolf`, `RealWorld`, `Conduit`, the public repository's name and URL) join the scan's needle list, in tool inputs and outputs. A hit is **read by hand**: the agent recalling a known problem from memory is a threat of the design (T1), not a void; a fetch or a path reaching outside the box is a void, as v1 | this plan |
 | D19 | **Known-task statements name no source.** The link and the credit live in the task repository's README (D2) and in `tasks/<task>/NOTES.md`; the bare workspace holds the statement, the samples, `PACKAGES.md`, `build.sh`, `run.sh` and the stack's pin files, nothing else | operator, 2026-10-31 (D2); the file list: this plan |
@@ -260,9 +260,18 @@ caches, with temp HOME, as v1. `build.sh` first (bounded, 600 s; a failure fails
 
 | Kind | The harness does | A case passes when | Also recorded |
 |---|---|---|---|
-| Olympiad | runs `run.sh` once per held-out case with the case's stdin, under the task's registered time and memory limits in a cgroup | stdout equals the expected bytes **byte for byte** (the series default, change 1.2c; a normalization applies only where a requirement of the spec names it), exit 0, within limits | per case: wall, CPU, peak memory, verdict class |
-| Daemon | starts `run.sh` with the task's environment; waits for readiness (the spec defines it); drives scenarios over TCP (RESP) or stdin; samples RSS every second; sends SIGTERM; waits the grace period | every scenario reply equals the expected one; RSS stays under the bound; the process exits 0 within the grace period; no process of the session is left | RSS over time, exit code and time, stdout/stderr tails |
+| Olympiad | runs `run.sh` once per held-out case with the case's stdin, under the task's registered time limit, and the registered memory limit where the machine certifies it, in a cgroup | stdout equals the expected bytes **byte for byte** (the series default, change 1.2c; a normalization applies only where a requirement of the spec names it), exit 0, within the time limit, and within the memory limit where certified | per case: wall, CPU, peak memory (certified or sampled), verdict class |
+| Daemon | starts `run.sh` with the task's environment; waits for readiness (the spec defines it); drives scenarios over TCP (RESP) or stdin; samples RSS every second; sends SIGTERM; waits the grace period | every scenario reply equals the expected one; the process exits 0 within the grace period; no process of the session is left; the RSS bound holds where certified | RSS over time, exit code and time, stdout/stderr tails |
 | Web API | as daemon, over HTTP; scenario steps are requests with expected status, headers and body; concurrency scenarios send the same request from k clients at once | as daemon; concurrent scenarios check the invariant (one effect per idempotency key, one balance) | as daemon, plus the request log |
+
+**The memory bound is certified only by cgroup `memory.peak`.** Where the scoring box cannot read it (Q4: this WSL2 host
+is checked first in E3), the harness still samples RSS every 100 ms (olympiad) or every second (daemon, web) and records
+the curve, but a sampled peak cannot certify a bound — a peak shorter than the sample interval is invisible — so **no
+memory pass is recorded**: the session carries the flag `memory bound not certified`, the memory claim is excluded from
+`accepted`, and `accepted` is read on the functional cases, the time limit and the stop check alone. Such a session
+**counts as accepted** on those, and the report says per session and per series which memory claims are certified and
+which are not. The pre-registration names the machines (host, kernel, cgroup version) that can certify; a series run on a
+machine that cannot says so in every table. E3's acceptance checks this (T-L29).
 
 **Measures per session:** `accepted` (D13); `percent` = cases passed / N (a blocked case counts as not passed); `defects` =
 distinct **trap classes** failed, from the trap coverage table (one trap failing in three cases counts once); verdict class
@@ -504,7 +513,7 @@ secondary measure; every session's spawn and exit timestamp (D27).
 ## 9. Pre-registration and analysis (D24, D26, D28, D29)
 
 Committed and tagged `prereg/lang-v2-<yyyymmdd>` **before the pilot** (E4.S3) and amended only by dated lines after it;
-**frozen before any paid data run (D26):** the ten specs' hashes, `FORMAT.md`'s hash and the freeze tag; the suites' hashes and counts; the
+**frozen before any paid data run (D26):** the ten specs' hashes, `FORMAT.md`'s hash and the freeze tag; the suites' hashes and counts; the machines that can certify memory bounds (host, kernel, cgroup version — §4.3); the
 trap coverage table's hash; the limits of D14; the prompts; the pins and checksums (CLI, SDK, Node, TS, Python); the
 package sets and cache hashes; the conventions parity release sha (D23); the ceiling, the caps per arm and the budget split
 (D30, from the pilot, as a dated amendment before round 1); this section as the analysis contract; the outcome classes, the
@@ -617,7 +626,7 @@ replacing evidence), plus:
 | Id | Must show | A miss means | Then |
 |---|---|---|---|
 | G-15 | the olympiad judge by hand: one C# and one TS pilot tree, run by hand on three held-out cases, give the judge's verdicts and times within 10 % | the judge misreads a real tree | fix, re-score (no re-run) |
-| G-16 | the daemon and web drivers **each checked on a real pilot tree**: the pilot's task-10 trees (daemon, TCP/RESP) and task-4 trees (web, HTTP — task 4 is in the bare pilot set for this, D16) driven by hand through one scenario each, including the task-4 concurrency scenario, give the driver's replies; the RSS curve by hand (`ps` every second) agrees within 10 %; SIGTERM by hand ends the process as the driver says; a captured dynamic value (an id from a task-4 reply) is reused by the driver as `FORMAT.md` defines | a driver misreads a real program | fix, re-score |
+| G-16 | the drivers **each checked on the real pilot tree of the task that exercises them** (all three tasks are in the bare pilot set, D16): **task 5** (the RESP server) for the TCP/RESP driver — a partial frame, pipelining and a slow reader, driven by hand, give the driver's replies; **task 10** (the DAG scheduler) for the daemon checks that are its own — the RSS curve by hand (`ps` every second) agrees within 10 %, SIGTERM by hand ends the process within the grace period as the driver says, the virtual-clock and real-time timer scenarios give the driver's final report; **task 4** (the Rule API) for the HTTP driver — one scenario including the concurrency scenario, and a captured dynamic value (an id from a reply) reused as `FORMAT.md` defines | a driver misreads a real program | fix, re-score |
 | G-17 | **calibration order held:** every task's limits were registered only after the joint validation of that task (drafted samples, references and suites run against each other; both references then pass every visible and held-out case — E2.S1 final — with no spec or `FORMAT.md` amendment pending), and no spec or `FORMAT.md` amendment touching that task is dated after its limit registration; both references of every task pass 100 % under the registered limits **in the scoring box on the series machine**, under the quiet check; each mutant fails exactly its cases | a limit was registered before the joint validation, or an amendment voided it, or a limit rejects one runtime's baseline, or a trap is not caught | a spec or `FORMAT.md` amendment after registration **voids that task's limits**: E2.S3 runs again for it and re-registers (dated, both stacks) before the pre-registration; otherwise recompute by D14 or fix the suite; all before round 1 |
 | G-18 | the cap derivation per arm and the budget split (§12) from the pilot's settled costs, written as a dated amendment; the stall timeout per arm larger than the longest quiet gap seen in any pilot session | the caps or stall would cut sessions the task needs | set them from the pilot; before round 1 |
 | G-19 | the process pilot: both pilot pairs delivered (merged, green), every compliance item computable, the frozen spec unchanged in both runs, the plan gate reached `proceed` before any code gate, CPC computed by hand for one pair equals the tool's | the process arm's instruments misread a real run | fix; one more process pilot pair before round 1 |
@@ -635,9 +644,12 @@ it reached, per arm.
 **The split and the caps, derived from the pilot (D30, G-18), pre-registered as a formula:** per arm, per task,
 `cap = min(2 × the larger settled cost of its pilot pair, capMax(arm))` for the piloted tasks; for the others, the piloted
 task of the nearest guess scaled by the ratio of guesses (the process arm has two pilot points, so its scaling is marked
-weaker); `capMax(arm)` is set so that 1.1 × Σ over the arm's 60 sessions of their caps ≤ the arm's share of $850 (the
-ceiling less pilot, A/A and a re-run reserve of ≈ $150); the **share** is proposed as proportional to the arms' expected
-totals from the pilot (so neither arm is starved by the formula), and is the operator's to confirm (Q-A).
+weaker); `capMax(arm)` is set so that 1.1 × Σ over the arm's 60 sessions of their caps ≤ the arm's share of the **data
+share** = $1000 − the settled pilot and A/A spend (16 sessions, ≈ $180–520 at the guesses, D16) − a **re-run reserve** of
+1.1 × 2 × (`cap(bare)` + `cap(process)`) (two void re-runs per arm at the largest derived cap); the **share** is proposed
+as proportional to the arms' expected totals from the pilot (so neither arm is starved by the formula), and is the
+operator's to confirm (Q-A). At the guesses the data share is ≈ $400–800 before the re-run reserve, so the frame check
+below is expected to fire unless the pilot comes in low.
 
 **Deterministic default when the frame breaks** (the cap rule fails — `capMax(arm)` < 1.5 × any pilot cost of that arm —
 or the projected total, Σ expected costs + 1.1 × the re-run reserve, exceeds the ceiling) **and the operator has not
@@ -651,14 +663,15 @@ round-pair cut (D10) applies only inside a frame the operator has accepted.
 
 **Projection, as a guess only:** v1's one-minute bare sessions cost ≈ $0.35 each; v2's bare sessions run 5–75 min with many
 build and test loops, so $5–20 each → 60 bare sessions $300–1200. v1 predicted $30–70 per **process** cell on a far smaller
-task → 60 process sessions $1800–4200 at that rate. Under $1000 the formula will cut rounds or the operator will change the
-frame; the pilot replaces this guess and the question is open (Q-A).
+task → 60 process sessions $1800–4200 at that rate; the pilot itself ≈ $180–520 (D16). Under $1000 the frame check will
+refuse round 1 and wait for the operator's amendment, or the operator changes the frame first; the pilot replaces this
+guess and the question is open (Q-A).
 
 ## 13. Growth
 
 | Surface | Size at this plan's volumes | Retired by / interrupted |
 |---|---|---|
-| Session dirs `~/rsd/lang-v2/<series>/s/<rid>/` with seeded caches (≈ 150–300 MB each), the stream and transcripts (bare ≈ 50–150 MB; process ≈ 300 MB raw as v1 §14 measured for a process cell, plus the coai dir ≤ 20 MB), the scoring copy | bare ≈ 0.4–0.6 GB, process ≈ 0.7–1 GB per session; 120 data + 14 pilot/A/A (one A/A pair, four bare and two process pilot pairs) + re-runs ≈ 140 sessions ≈ **70–110 GB** on `/home` (745 GB free, 2026-10-30); the pilot's measured sizes replace this estimate | `bin/ obj/ node_modules/` shed after scoring (safe-rm under the series root, by name); the rest kept until E6's archive and `retire.mjs` after the record is promoted |
+| Session dirs `~/rsd/lang-v2/<series>/s/<rid>/` with seeded caches (≈ 150–300 MB each), the stream and transcripts (bare ≈ 50–150 MB; process ≈ 300 MB raw as v1 §14 measured for a process cell, plus the coai dir ≤ 20 MB), the scoring copy | bare ≈ 0.4–0.6 GB, process ≈ 0.7–1 GB per session; 120 data + 16 pilot/A/A (one A/A pair, five bare and two process pilot pairs) + re-runs ≈ 145 sessions ≈ **70–110 GB** on `/home` (745 GB free, 2026-10-30); the pilot's measured sizes replace this estimate | `bin/ obj/ node_modules/` shed after scoring (safe-rm under the series root, by name); the rest kept until E6's archive and `retire.mjs` after the record is promoted |
 | Toolchains `~/rsd/lang-v2/toolchains/` (SDK ≈ 1 GB, Node ≈ 100 MB, TS, the CLI copy 292 MB), two cache snapshots (≈ 0.5–1 GB) | ≈ 3 GB | kept for the series; `retire.mjs` |
 | Held-out source, references, mutants `~/rsd/lang-v2/{heldout-src,refs,mutants}/` | MBs | kept (the operator's record); never in git |
 | `spikes/lang-bench/heldout/suite.enc`, `inputs/*`, `research/lang-v2/data/*.json` | a few MB, committed | kept |
@@ -730,6 +743,7 @@ turns host skips into failures).
 | T-L26 | **metric retention (D34):** the v2 record renderer, run over a fixture series, emits every v1 metric column — the four cost views, T1–T5, tokens with the cache split, wall, `model_api`, `active − model_api` **and every category span of the partition**, **visible quality per script** and held-out counts/percent/defects, class, labels, flags, charges, **and the process arm's compliance items** — beside the new ones; a test removes one v1 column from the renderer's list and fails |
 | T-L27 | **undefined CPC ratios (§9):** fixtures for the three cases — C# alone 0 accepted, TS alone 0 accepted, both 0 — each gives the task line `undefined (<stack>: no correct solution, k attempts, spend $x)` with no `≥`/`≤`, the overall median and geometric mean over the defined tasks only with the stated denominator, the count "j of k", the undefined line "C# alone … x, TS alone … y, both … z", and the interaction leaving that task out by name when either arm is undefined; the consultant's example (C# CPC = 2, TS spend 9 with 0 accepted) gives `undefined (TS: no correct solution, spend $9)`, never a bound; a stack with no attempt gives `not run` |
 | T-L28 | **the registered limit, not the floor, judges a run:** a stub program taking 1.2 s against a registered 3 s limit (floor 1 s) passes; the same program against a registered 1 s limit is `time limit`; the limits come from `inputs/limits-lang.json`, never from the spec text |
+| T-L29 | **memory certification (§4.3):** with no readable cgroup `memory.peak` (a fake cgroup root without the file), a session that passes every functional case is `accepted`, carries the flag `memory bound not certified`, and its record holds **no** memory pass (the memory field is `not certified`, the sampled curve is present and labelled descriptive); with `memory.peak` present, the same session records a certified memory pass or a `memory limit` verdict; the series record states the certifying machine or its absence |
 
 Live: the bare smoke (E3.S5), P0 and the model smoke (v1's, on this repository), the A/A and the pilots (E4), the by-hand
 G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
@@ -798,16 +812,18 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
   the visible suites), and the terms under which the known problems may be paraphrased: CSES statements, IOI 2018 Werewolf
   (the IOI's task licence to be read), RealWorld's spec (MIT), Redis's RESP (a protocol; the trademark). v1's D18 found
   upstream files with no licence; v2's credit text is written after these are read.
-- **Q4 Memory limits in the box.** D14 assumes cgroup v2 `memory.max`/`memory.peak` is available to the scorer inside
-  `bwrap` on this WSL2 host. If not, the fallback is RSS sampling with a kill above the limit, which is coarser; E3 checks
-  this first and reports which one the series uses.
+- **Q4 Can this host certify memory bounds?** D14 and §4.3 now settle what happens when cgroup v2 `memory.peak` is not
+  readable inside `bwrap` (the session is accepted on its functional cases with the flag `memory bound not certified`, no
+  memory pass recorded). Open: whether this WSL2 host can certify at all, and if not, whether the operator wants the series
+  run on a host that can, so the memory traps of tasks 7, 9 and 10 are judged and not only described. E3 checks the host
+  first; the pre-registration names the certifying machines.
 - **Q5 The cap formula** of §12 is a proposal; the operator confirms the formula and the share rule or replaces them before
   the pre-registration.
 - **Q6 Any inferential statistic?** §9 reports the median, the geometric mean and the count. A pre-registered sign test over
   the ten task medians is possible as a secondary line with the "chosen set, not a sample" sentence; wanted or not?
-- **Q7 The process pilot's task set.** Bare: tasks 1, 3, 4, 10 (D4, plus task 4 for the web driver's real-tree check —
-  decided, D16 and G-16). Process: tasks 1 and 3 proposed (D16). Adding task 10 to the process pilot would calibrate the
-  dearest process sessions at a high cost. Which process set?
+- **Q7 The process pilot's task set.** Bare: tasks 1, 3, 4, 5, 10 (D4, plus tasks 4 and 5 for the HTTP and RESP drivers'
+  real-tree checks — decided, D16 and G-16). Process: tasks 1 and 3 proposed (D16). Adding task 10 to the process pilot
+  would calibrate the dearest process sessions at a high cost. Which process set?
 - **Q8 Culture for the Rule API (task 4).** The C# behaviour needs the host culture `de-DE` in the **scoring** box (and in
   the agent box, so the agent can meet it?) — setting it in both is the honest treatment; setting it only in scoring is a
   trap the agent could not have seen. Which, and does the spec say the culture is not invariant?
@@ -982,8 +998,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   the compliance checker, P0 and the model smoke on the task repository; `research/module_tests.md`.
 - **Depends on:** E1 workspaces, caches and the repository-side templates, rulesets, PAT and deploy key (E1.S7); E2's sealed
   archive for the stub tests' shape.
-- **Done when:** T-L3 … T-L6, T-L9 … T-L12, T-L14 … T-L16, T-L18 … T-L20, T-L22 … T-L24 green; a stub pair of each kind in
-  each arm runs end to end in real boxes; the bare smoke (task 1, TS, ≤ $0.20) is read by E/O/T/B with T1–T5; P0 passes on
+- **Done when:** T-L3 … T-L6, T-L9 … T-L12, T-L14 … T-L16, T-L18 … T-L20, T-L22 … T-L24, T-L28, T-L29 green; the host's
+  ability to certify memory bounds (cgroup `memory.peak` inside `bwrap`) is checked first and recorded (Q4); a stub pair of
+  each kind in each arm runs end to end in real boxes; the bare smoke (task 1, TS, ≤ $0.20) is read by E/O/T/B with T1–T5; P0 passes on
   the task repository's templates; the model smoke lists the vendors through the bridge; `research/module_tests.md` carries
   the harness's flow catalogue; the module document describes the extension.
 - S1 — the arm, task and round dimensions of the runner: `ridOf` with arm and task and a `single` phase, six alternating
@@ -1005,7 +1022,8 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   sample interval can be missed unless `memory.peak` is present; the stop check sees the session's processes, not threads;
   a case classed ambiguous is a spec matter, not a harness proof. A test (T-L17's shape) asserts that every flow id named in
   the drivers' test files appears in the catalogue.
-- S3 — the stdin/stdout judge with cgroup limits and verdict classes. *Accepted when:* T-L3.
+- S3 — the stdin/stdout judge with cgroup limits and verdict classes; memory certified only by `memory.peak`, else the
+  `memory bound not certified` flag and no memory pass (§4.3). *Accepted when:* T-L3, T-L28, T-L29.
 - S4 — scoring per kind in the pipeline, `accepted`/`percent`/`defects` from the trap table, scoring time recorded; the
   process arm scored on the run base tip or the PR head with the `delivered` mark. *Accepted when:* T-L11; a stub tree of
   each kind in each arm gets a `score.json` with every step known.
@@ -1064,7 +1082,7 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   specs' freeze tag and hashes, the parity release sha, `seed.sha256`. *Accepted when:* v1's prereg tests widened pass
   (verbatim-from-main, derived not typed, seed as hash only, no held-out needle).
 - S3 — the commit and the tag, before any paid session. *Accepted when:* the guard peels the tag to the commit.
-- S4 — the bare A/A, the bare pilot pairs (tasks 1, 3, 4, 10; D16), the process pilot pairs (tasks 1, 3; Q7), G-1 … G-19, the
+- S4 — the bare A/A, the bare pilot pairs (tasks 1, 3, 4, 5, 10; D16), the process pilot pairs (tasks 1, 3; Q7), G-1 … G-19, the
   cap and split derivation (§12), the amendments, the seed reveal. **If the frame breaks** (§12: `capMax(arm)` < 1.5 × a
   pilot cost, or the projection exceeds the ceiling) **and the operator has not answered, the default is fixed:** the
   runner refuses round 1 with exit 3 and halt `budget-frame`, prints the measured numbers and the resume command, cuts
