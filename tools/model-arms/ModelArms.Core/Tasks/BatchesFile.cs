@@ -72,22 +72,20 @@ public static class BatchesFile
 
     private static Outcome<TaskBatches> Shaped(JsonElement root, string workFolder)
     {
-        var unknown = Unknown(root, TopMembers, "batches.json");
         var batches = Batches(JsText.Member(root, "batches"));
         var tasks = Tasks(JsText.Member(root, "tasks"), workFolder);
-        var problems = new List<string>(unknown);
-        problems.AddRange(batches.Match(_ => [], reason => (IReadOnlyList<string>)[reason]));
-        problems.AddRange(tasks.Match(_ => [], reason => (IReadOnlyList<string>)[reason]));
+        var listed = batches.Match(found => found, _ => []);
+        var planned = tasks.Match(found => found, _ => []);
+        List<string> problems = [.. Unknown(root, TopMembers, "batches.json"), .. Reasons(batches), .. Reasons(tasks)];
         if (problems.Count == 0)
         {
-            var ok = (batches as Outcome<IReadOnlyList<IReadOnlyList<string>>>.Ok)!.Value;
-            var planned = (tasks as Outcome<IReadOnlyList<PlannedTask>>.Ok)!.Value;
-            problems.AddRange(Crossed(ok, planned));
-            return problems.Count == 0 ? Outcome<TaskBatches>.Success(new TaskBatches(ok, planned)) : Outcome<TaskBatches>.Failure(string.Join('\n', problems));
+            problems.AddRange(Crossed(listed, planned));
         }
 
-        return Outcome<TaskBatches>.Failure(string.Join('\n', problems));
+        return problems.Count == 0 ? Outcome<TaskBatches>.Success(new TaskBatches(listed, planned)) : Outcome<TaskBatches>.Failure(string.Join('\n', problems));
     }
+
+    private static IEnumerable<string> Reasons<T>(Outcome<T> outcome) => outcome.Match(_ => (IEnumerable<string>)[], reason => [reason]);
 
     private static IEnumerable<string> Unknown(JsonElement obj, string[] known, string who) =>
         obj.EnumerateObject().Select(property => property.Name).Where(name => !known.Contains(name)).Select(name => $"{who} has an unknown member '{name}'");
@@ -100,22 +98,24 @@ public static class BatchesFile
             return Outcome<IReadOnlyList<IReadOnlyList<string>>>.Failure(Shape);
         }
 
-        var batches = lists.EnumerateArray().Select(list => Texts(list)).ToList();
-        return batches.Any(batch => batch is null)
+        var batches = lists.EnumerateArray().Select(list => TextList(list)).ToList();
+        return batches.Any(batch => batch is Outcome<IReadOnlyList<string>>.Fail)
             ? Outcome<IReadOnlyList<IReadOnlyList<string>>>.Failure(Shape)
-            : Outcome<IReadOnlyList<IReadOnlyList<string>>>.Success([.. batches.Select(batch => (IReadOnlyList<string>)batch!)]);
+            : Outcome<IReadOnlyList<IReadOnlyList<string>>>.Success([.. batches.Select(batch => batch.Match(found => found, _ => []))]);
     }
 
-    /// <summary>The texts of an array of texts; <c>null</c> for anything else.</summary>
-    private static string[]? Texts(JsonElement? member)
+    /// <summary>An array of texts, or the failure that says it is not one.</summary>
+    private static Outcome<IReadOnlyList<string>> TextList(JsonElement? member)
     {
         if (member is not { ValueKind: JsonValueKind.Array } array)
         {
-            return null;
+            return Outcome<IReadOnlyList<string>>.Failure("not a list of texts");
         }
 
         var items = array.EnumerateArray().ToList();
-        return items.All(item => item.ValueKind == JsonValueKind.String) ? [.. items.Select(item => item.GetString()!)] : null;
+        return items.All(item => item.ValueKind == JsonValueKind.String)
+            ? Outcome<IReadOnlyList<string>>.Success([.. items.Select(item => item.GetString() ?? string.Empty)])
+            : Outcome<IReadOnlyList<string>>.Failure("not a list of texts");
     }
 
     private static Outcome<IReadOnlyList<PlannedTask>> Tasks(JsonElement? member, string workFolder)
@@ -125,17 +125,11 @@ public static class BatchesFile
             return Outcome<IReadOnlyList<PlannedTask>>.Failure("tasks is missing or not an object");
         }
 
-        var names = tasks.EnumerateObject().Select(property => property.Name).ToList();
-        var problems = new List<string>(names.GroupBy(name => name, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => $"tasks names {group.Key} twice"));
-        var planned = new List<PlannedTask>();
-        foreach (var property in tasks.EnumerateObject().DistinctBy(property => property.Name))
-        {
-            var task = Task(property.Name, property.Value, workFolder);
-            problems.AddRange(task.Match(found => { planned.Add(found); return []; }, reason => (IReadOnlyList<string>)[reason]));
-        }
-
+        var twice = tasks.EnumerateObject().GroupBy(property => property.Name, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => $"tasks names {group.Key} twice");
+        var results = tasks.EnumerateObject().DistinctBy(property => property.Name).Select(property => Task(property.Name, property.Value, workFolder)).ToList();
+        List<string> problems = [.. twice, .. results.SelectMany(Reasons)];
         return problems.Count == 0
-            ? Outcome<IReadOnlyList<PlannedTask>>.Success(planned)
+            ? Outcome<IReadOnlyList<PlannedTask>>.Success([.. results.SelectMany(result => result.Match(found => (IEnumerable<PlannedTask>)[found], _ => []))])
             : Outcome<IReadOnlyList<PlannedTask>>.Failure(string.Join('\n', problems));
     }
 
@@ -146,26 +140,30 @@ public static class BatchesFile
             return Outcome<PlannedTask>.Failure($"tasks.{id} is not an object named by a task id");
         }
 
-        var files = Texts(JsText.Member(value, "files"));
-        var depends = Texts(JsText.Member(value, "depends"));
-        var scenarios = Texts(JsText.Member(value, "scenarios"));
-        var brief = Brief(JsText.Member(value, "brief"), workFolder);
-        var problems = new List<string>(Unknown(value, TaskMembers, id));
-        problems.AddRange(new[] { ("files", files), ("depends", depends), ("scenarios", scenarios) }.Where(list => list.Item2 is null).Select(list => $"{id}'s {list.Item1} is missing or not a list of texts"));
-        problems.AddRange(brief is null ? [$"{id}'s brief is not one file name under {workFolder}/"] : []);
+        var files = TextList(JsText.Member(value, "files"));
+        var depends = TextList(JsText.Member(value, "depends"));
+        var scenarios = TextList(JsText.Member(value, "scenarios"));
+        var brief = Brief(id, JsText.Member(value, "brief"), workFolder);
+        List<string> problems =
+        [
+            .. Unknown(value, TaskMembers, id),
+            .. Reasons(files).Select(_ => $"{id}'s files is missing or not a list of texts"),
+            .. Reasons(depends).Select(_ => $"{id}'s depends is missing or not a list of texts"),
+            .. Reasons(scenarios).Select(_ => $"{id}'s scenarios is missing or not a list of texts"),
+            .. Reasons(brief),
+        ];
         return problems.Count == 0
-            ? Outcome<PlannedTask>.Success(new PlannedTask(id, files!, brief!, depends!, scenarios!))
+            ? Outcome<PlannedTask>.Success(new PlannedTask(id, files.Match(found => found, _ => []), brief.Match(found => found, _ => string.Empty), depends.Match(found => found, _ => []), scenarios.Match(found => found, _ => [])))
             : Outcome<PlannedTask>.Failure(string.Join('\n', problems));
     }
 
-    /// <summary>The file name of a brief written as <c>&lt;workFolder&gt;/&lt;name&gt;</c>; <c>null</c> when it is anything else.</summary>
-    private static string? Brief(JsonElement? member, string workFolder)
+    /// <summary>The file name of a brief written as <c>&lt;workFolder&gt;/&lt;name&gt;</c>; a failure when it is anything else.</summary>
+    private static Outcome<string> Brief(string id, JsonElement? member, string workFolder)
     {
         var prefix = workFolder + "/";
-        return member is { ValueKind: JsonValueKind.String } text && text.GetString()!.StartsWith(prefix, StringComparison.Ordinal)
-            && text.GetString()![prefix.Length..] is { Length: > 0 } name && name is not ("." or "..") && name.IndexOfAny(['/', '\\', '\0']) < 0
-            ? name
-            : null;
+        var text = member is { ValueKind: JsonValueKind.String } written ? written.GetString() ?? string.Empty : string.Empty;
+        var name = text.StartsWith(prefix, StringComparison.Ordinal) ? text[prefix.Length..] : string.Empty;
+        return TasksPlan.IsFileName(name) ? Outcome<string>.Success(name) : Outcome<string>.Failure($"{id}'s brief is not one file name under {prefix}");
     }
 
     /// <summary>Every task in exactly one batch, no empty batch, and every task a batch or a dependency names is one the file holds.</summary>

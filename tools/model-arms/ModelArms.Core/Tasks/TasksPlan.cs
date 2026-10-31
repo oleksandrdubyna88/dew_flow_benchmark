@@ -20,7 +20,7 @@ public sealed record TaskBatches(IReadOnlyList<IReadOnlyList<string>> Batches, I
 /// <summary>The checker the shell ran over the split's <c>work/tasks.json</c> (<c>tasks-plan.mjs:16-49</c>) and the batches it computed (<c>:44-49</c>), as pure functions: every problem is reported at once, in the shell's order, one <c>- &lt;sentence&gt;</c> line each —
 /// the text <c>out/tasks-plan.log</c> holds and the split fix's <c>PROBLEMS</c> is filled with. Values print as JavaScript's template literals print them (<see cref="JsText"/>). The shell's script is the oracle (<c>TasksPlanTests</c>).
 /// <para>
-/// Differences from the shell, each a test: a <c>files</c>, <c>depends</c> or <c>scenarios</c> that is not a list is one sentence, not one problem per character; a <c>brief</c> that is not ONE file name is a missing brief and is never probed (the shell joined the model's text into a path);
+/// Differences from the shell, each a test: a <c>files</c> or <c>depends</c> that is not a list is one sentence, not one problem per character (a <c>scenarios</c> that is not an array is ONE scenario, as the shell's <c>flatMap</c> keeps it); a <c>brief</c> that is not ONE file name is a missing brief and is never probed (the shell joined the model's text into a path);
 /// the bounds and the batch width come from <see cref="TaskLimits"/>; a list holding anything but texts, and an id that is not a text, are refused (the batches hold texts; the shell let an id <c>["t2"]</c> through because JavaScript prints it as <c>t2</c>).
 /// </para></summary>
 public static class TasksPlan
@@ -123,7 +123,7 @@ public static class TasksPlan
             : [$"{draft.Id.Text}'s brief {draft.Brief.Json} does not exist in {facts.WorkFolder}"];
 
     /// <summary>Empty, <c>.</c>, <c>..</c>, anything with a separator or a NUL, and anything rooted is not the name of a file in <c>work/</c>.</summary>
-    private static bool IsFileName(string name) =>
+    internal static bool IsFileName(string name) =>
         name.Length > 0 && name is not ("." or "..") && name.IndexOfAny(['/', '\\', '\0']) < 0 && !Path.IsPathRooted(name);
 
     /// <summary><c>deps = Object.fromEntries(tasks.map(t =&gt; [t.id, new Set(t.depends)]))</c>: keyed by the id's text, the later of two equal keys wins.</summary>

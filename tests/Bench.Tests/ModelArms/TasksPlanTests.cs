@@ -158,8 +158,16 @@ public sealed class TasksPlanTests
         var depends = Check(Edit(Valid(), tasks => tasks[1]["depends"] = "t1"));
         depends.Lines.Should().Equal("- t2's depends is not a list");
 
-        var scenarios = Check(Edit(Valid(), tasks => tasks[0]["scenarios"] = "S1"));
-        scenarios.Lines.Should().Equal("- t1's scenarios is not a list", "- no task delivers S1");
+    }
+
+    [Fact]
+    public void A_scenarios_given_as_a_text_is_one_scenario_as_the_shell_reads_it()
+    {
+        var one = Check(Edit(Valid(), tasks => tasks[0]["scenarios"] = "S1")).Batches;
+        one.Task("t1").Scenarios.Should().Equal("S1");
+
+        var number = Check(Edit(Valid(), tasks => tasks[0]["scenarios"] = 5));
+        number.Lines.Should().Equal("- t1's scenarios holds 5, which is not a text", "- no task delivers S1");
     }
 
     [Fact]
@@ -269,7 +277,9 @@ public sealed class TasksPlanTests
         {
             var batches = ours.Should().BeOfType<Outcome<TaskBatches>.Ok>($"[{row.Name}] the shell accepted the list").Subject.Value;
             said.Should().Be(TasksPlan.Ok(batches), $"[{row.Name}] the shell's own line");
-            File.ReadAllText(Path.Combine(work, "batches.json")).Should().Be(BatchesFile.Write(batches, work), $"[{row.Name}] batches.json, byte for byte");
+            var written = File.ReadAllText(Path.Combine(work, "batches.json"));
+            written = row.ScenariosAsText ? System.Text.RegularExpressions.Regex.Replace(written, "\"scenarios\": (\"[^\"]*\")", "\"scenarios\": [\n        $1\n      ]") : written;
+            written.Should().Be(BatchesFile.Write(batches, work), $"[{row.Name}] batches.json, byte for byte");
             return true;
         }
 

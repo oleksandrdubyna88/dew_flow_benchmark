@@ -23,7 +23,11 @@ internal sealed record PlanChecked(Outcome<TaskBatches> Outcome, string Work)
 }
 
 /// <summary>One list the shell's own checker is asked about as well: its text and the brief files that are NOT in the work folder.</summary>
-internal sealed record PlanRow(string Name, string Json, IReadOnlyList<string> MissingBriefs);
+internal sealed record PlanRow(string Name, string Json, IReadOnlyList<string> MissingBriefs)
+{
+    /// <summary>The shell copies a <c>scenarios</c> that is a text into <c>batches.json</c> as that text; the port writes the list of one.</summary>
+    public bool ScenariosAsText { get; init; }
+}
 
 /// <summary>The lists of E4.S1's tests, built from a small JSON writer: a valid list of <c>n</c> tasks (<c>t1</c>… each owning <c>src/F&lt;i&gt;.cs</c> with its brief <c>t&lt;i&gt;.md</c>, the first three delivering <c>S1</c>–<c>S3</c>, the last owning
 /// the plan and depending on all the others) and the edits that each break one rule. Every refusal test starts from a list the checker ACCEPTS (<c>Batches_are_ready_tasks_in_order_at_most_four_at_a_time</c> asserts it), so a refusal is about the edit and not about the fixture.</summary>
@@ -83,6 +87,14 @@ internal static class TasksPlanKit
             yield return Row("the id is " + name, Edit(Valid(), tasks => tasks[1]["id"] = JsonNode.Parse(literal)));
         }
 
+        yield return Row("ids that are numbers of every layout", Edit(Valid(6), tasks =>
+        {
+            string[] literals = ["1e21", "1.5e-7", "123456789012345680000", "0.000001", "-0", "2.50"];
+            for (var index = 0; index < literals.Length; index++)
+            {
+                tasks[index]["id"] = JsonNode.Parse(literals[index]);
+            }
+        }));
         yield return Row("the id is absent", Edit(Valid(), tasks => tasks[1].Remove("id")));
         yield return Row("two ids absent", Edit(Valid(), tasks => { tasks[1].Remove("id"); tasks[2].Remove("id"); }));
         yield return Row("an empty files", Edit(Valid(), tasks => tasks[1]["files"] = new JsonArray()));
@@ -97,6 +109,7 @@ internal static class TasksPlanKit
         yield return new PlanRow("a brief that is not there and a missing one", Text(Edit(Valid(), tasks => tasks[0].Remove("brief"))), ["t3.md"]);
         yield return new PlanRow("not json", "{\"tasks\": [", []);
         yield return Row("five problems at once", FiveProblems());
+        yield return Row("accepted: scenarios given as a text is one scenario", Edit(Valid(), tasks => tasks[1]["scenarios"] = "S2")) with { ScenariosAsText = true };
         yield return Row("accepted: five tasks in a line", Edit(Valid(), tasks => { for (var index = 1; index < 4; index++) { tasks[index]["depends"] = Texts($"t{index}"); } }));
         yield return Row("accepted: seven tasks in three batches", Valid(7));
         yield return Row("accepted: four independent and the owner", Edit(Valid(5), tasks => tasks[1]["depends"] = Texts("t1")));

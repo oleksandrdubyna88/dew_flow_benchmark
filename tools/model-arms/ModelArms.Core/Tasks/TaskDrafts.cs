@@ -38,7 +38,7 @@ internal static class TaskDrafts
             identities.Value(JsText.Member(task, "brief")),
             identities.List(JsText.Member(task, "files")),
             identities.List(JsText.Member(task, "depends")),
-            identities.List(JsText.Member(task, "scenarios")));
+            identities.List(JsText.Member(task, "scenarios"), single: true));
 
     /// <summary>Numbers the values of one reading, so each object and array is its own (<see cref="JsValue.Identity"/>).</summary>
     private sealed class Identities
@@ -47,11 +47,13 @@ internal static class TaskDrafts
 
         public JsValue Value(JsonElement? element) => new(element?.Clone(), ++_last);
 
-        public ListMember List(JsonElement? member) =>
+        /// <summary>A member that is a list. With <paramref name="single"/> a value that is not a list is the list of that one value (<c>flatMap</c> keeps a string as one item, <c>tasks-plan.mjs:39</c>); otherwise it is the sentence <see cref="ListMember.NotAList"/>.</summary>
+        public ListMember List(JsonElement? member, bool single = false) =>
             member switch
             {
                 null or { ValueKind: JsonValueKind.Null } => new ListMember([], false),
                 { ValueKind: JsonValueKind.Array } array => new ListMember([.. array.EnumerateArray().Select(item => Value(item))], false),
+                _ when single => new ListMember([Value(member)], false),
                 _ => new ListMember([], true),
             };
     }

@@ -560,8 +560,10 @@ verbatim:
 Values print as JavaScript's template literal prints them (`JsText`): absent `undefined`, a string itself, a number or a boolean its JSON
 text, `null`, an array its elements' texts joined by `,`, an object `[object Object]`; two ids are equal when both are JSON strings with
 the same value, or both the same non-string primitive (`===`); an object or array id equals nothing. **Three deviations, each a test
-(§8 item 10):** a `files`, `depends` or `scenarios` member that is not an array reads as `[]` and adds one sentence `<id>'s <member> is not
-a list` (the shell iterated a string's CHARACTERS, `:25`, `:29`, `:32`); a `brief` that is not ONE file name (empty, `.`, `..`, a separator,
+(§8 item 10):** a `files` or `depends` member that is not an array reads as `[]` and adds one sentence `<id>'s <member> is not
+a list` (the shell iterated a string's CHARACTERS, `:25`, `:29`, `:32`); a `scenarios` that is a value and not an array is ONE scenario, as
+`flatMap` keeps it (`:39`: `"scenarios": "S1"` delivers S1 and the shell accepts), and a non-text one is `<id>'s scenarios holds <JSON>,
+which is not a text`; a `brief` that is not ONE file name (empty, `.`, `..`, a separator,
 rooted) is sentence 8 and is never probed (`BriefNames` leaves it out); and nothing else differs.
 
 `Ok` is `:51`'s line. `BatchesFile.Write` is `:50`'s bytes: the object `{"batches": [[…]…], "tasks": {"<id>": {"files": […], "brief":
@@ -1048,10 +1050,14 @@ parent; the claims of the parent found wrong or incomplete against the code are 
 9. **A recreated task has no `.before`.** Recreation (parent §4.6) is from the current HEAD, which may already carry a sibling's picked
    commits; the old `task-<id>.before` would widen the pick range (`task-<id>.before..tmp/<id>`, D22) to commits already on the branch. E4.S2
    removes it with the worktree; E4.S3 writes a fresh one before the task's first attempt (C20).
-10. **E4.S1's three deviations from `tasks-plan.mjs`**, each a test: a non-list `files`/`depends`/`scenarios` is one problem, not one per
-    character (`:25`, `:29`, `:32` iterated a string); a brief that is not one file name is refused and never probed (`:30` joined the
+10. **E4.S1's three deviations from `tasks-plan.mjs`**, each a test: a non-list `files`/`depends` is one problem, not one per
+    character (`:25`, `:29` iterated a string; `scenarios` is NOT one of them — `flatMap` at `:39` keeps a string as one item, so the
+    port reads it as one scenario, as the shell does); a brief that is not one file name is refused and never probed (`:30` joined the
     model's text into a path); the bounds and the batch width come from the `tasks` block (`:13`, `:18`). Everything else is byte for
-    byte, by the oracle.
+    byte, by the oracle, except two named differences: sentence 1 carries the `- ` prefix the other sentences carry (the shell printed it
+    bare; C19 and the test row ask for it), and its reason is the .NET reader's text, not node's (the oracle compares the prefix); and the
+    review's additions (accepted by the planner): an id, or a `files`/`depends`/`scenarios` item, that is not a text is refused, since
+    C19's `PlannedTask` holds texts.
 11. **The coder's head and diff are derived from any DONE step**, `Finished` or `HardDeadline` (D8; `StepOutputs.cs:43-46` asks for them on
     every done `taskCode` step; the shell wrote them after the step whatever it ended on, `t-lib.sh:54`); the diff carries E2's pins
     (`--no-ext-diff --no-textconv --submodule=short`, `ArmGit.cs:76-77`) where the shell ran a plain `git diff` — the E2 deviation, kept.

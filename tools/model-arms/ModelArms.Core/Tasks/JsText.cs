@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using ModelArms.Core.Checks;
 
@@ -104,23 +103,18 @@ internal static class JsText
     private static double Parse(JsonElement number) => double.Parse(number.GetRawText(), NumberStyles.Float, CultureInfo.InvariantCulture);
 
     /// <summary>Number::toString of the specification: the shortest digits that read back as the same double, in plain or exponent form by the exponent.</summary>
-    public static string Number(double value)
+    public static string Number(double value) =>
+        value switch
+        {
+            double.NaN => "NaN",
+            double.PositiveInfinity => "Infinity",
+            double.NegativeInfinity => "-Infinity",
+            0 => "0",
+            _ => Signed(value),
+        };
+
+    private static string Signed(double value)
     {
-        if (double.IsNaN(value))
-        {
-            return "NaN";
-        }
-
-        if (double.IsInfinity(value))
-        {
-            return value > 0 ? "Infinity" : "-Infinity";
-        }
-
-        if (value == 0)
-        {
-            return "0";
-        }
-
         var (digits, exponent) = Digits(Math.Abs(value));
         return (value < 0 ? "-" : string.Empty) + Layout(digits, exponent);
     }
@@ -144,27 +138,16 @@ internal static class JsText
         return (digits.Length == 0 ? "0" : digits, int.Parse(parts[1], CultureInfo.InvariantCulture) + 1);
     }
 
-    private static string Layout(string digits, int n)
-    {
-        var k = digits.Length;
-        if (k <= n && n <= 21)
+    /// <summary>Where the decimal point goes (<c>n</c> is its position among <paramref name="digits"/>): whole, with a point, with leading zeros, or in exponent form.</summary>
+    private static string Layout(string digits, int n) =>
+        (digits.Length, n) switch
         {
-            return digits + new string('0', n - k);
-        }
+            var (k, point) when k <= point && point <= 21 => digits + new string('0', point - k),
+            var (_, point) when 0 < point && point <= 21 => digits[..point] + "." + digits[point..],
+            var (_, point) when -6 < point && point <= 0 => "0." + new string('0', -point) + digits,
+            _ => Exponent(digits, n - 1),
+        };
 
-        if (0 < n && n <= 21)
-        {
-            return digits[..n] + "." + digits[n..];
-        }
-
-        if (-6 < n && n <= 0)
-        {
-            return "0." + new string('0', -n) + digits;
-        }
-
-        var exponent = n - 1;
-        var sign = exponent < 0 ? "-" : "+";
-        var mantissa = k == 1 ? digits : digits[0] + "." + digits[1..];
-        return new StringBuilder(mantissa).Append('e').Append(sign).Append(Math.Abs(exponent).ToString(CultureInfo.InvariantCulture)).ToString();
-    }
+    private static string Exponent(string digits, int exponent) =>
+        (digits.Length == 1 ? digits : digits[0] + "." + digits[1..]) + "e" + (exponent < 0 ? "-" : "+") + Math.Abs(exponent).ToString(CultureInfo.InvariantCulture);
 }
