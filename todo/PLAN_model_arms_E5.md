@@ -4,7 +4,7 @@
 > D16, D17 (c)/(d), D26, D27; §4.7, §4.8, §4.11; §6 step 5; §7's E5 tests; §9; §10), written at `f0d6868` on `feat/model-arms-e5`
 > (E1–E3 on `main`, E4 not built) by the judge role (Opus), as the epic starts — `common.plan-change-control` § *What counts as a
 > change*: writing them is not a change. The parent's epoch 3 holds ONE entry (3.1); a second accepted change stops the plan, so every
-> claim of the parent found wrong or incomplete against the code is LISTED in §8 (items 24–32) for the parent's next change and not
+> claim of the parent found wrong or incomplete against the code is LISTED in §8 (items 24–32; the E5.S1 amendment's items 33–44 settle inside the parent's words) for the parent's next change and not
 > edited there. **No cornerstone** (the parent's ledger is `3 of 3`, spent). **E5.S1 is a security judgement (D11): its scenarios and
 > brief are Fable's, written 2026-10-31** — its section lists the questions that spec must settle; E5.S2–E5.S4 are specified here in full.
 > **Two pull requests** (parent §6 step 5): E5.S1 alone, merged to `main` first (it launches nothing new and may land before E4.S0);
@@ -221,25 +221,27 @@ internal static class RunAllVerb
 ### E5.S1 — Isolation: `lock <run>` / `unlock [--force]`, the two-file snapshot, and the runner's own lock and pid (SECURITY JUDGEMENT — spec by Fable, 2026-10-31)
 
 - **Coder:** sonnet · **Spec:** Fable (security judgement, D11 — outside the cornerstone quota, the parent's `## Epics` E5) · **Review:**
-  Opus, naming D26 (a)–(f) for `PosixFolderIsolation` and `RunnerLiveness`. **`model:`** fable (scenarios and brief), sonnet (code and
+  Opus, naming D26 (a)–(f) for `PosixFolderIsolation`, `RuntimeFolderIsolation` and `RunnerLiveness`. **`model:`** fable (scenarios and brief), sonnet (code and
   tests), opus (review). **Depends on:** E1–E3 (on `main`). **Parallel with:** nothing — **the first pull request, alone**; it may land
-  before or after E4.S0 (§6). **Size:** ≈ 2300 lines (≈ 850 code, 1450 tests) — moved by the spec: D11's table and the plan are pure records with their own theories, and the runner's identity takes seven process tests.
-- **Owns:** D11 as rewritten (both writers, the exclusive `.isolation.lock`, the two-file state, `unlock`'s liveness refusal, the
+  before or after E4.S0 (§6). **Size:** ≈ 3100 lines (≈ 1150 code, 1950 tests) — moved by the spec and its amendment of 2026-10-31 (the plan gate, two risk consultations and an Opus review): D11's table and the plan are pure records with their own theories, a second adapter for the portable road, the runner's identity takes nine process tests, and a real process death takes a helper project.
+- **Owns:** D11 as rewritten (both writers, the exclusive `.isolation.lock` and the runners' SHARED hold of it, the two-file state, `unlock`'s liveness refusal, the
   inconsistent snapshot never read as none, no restore on entry), D27's lock half (`closedArms` through the map, `closed`), D13's runner
   identity (the runner's `pids/<arm>.lock`, its pid in `RunnerPid`'s format, `RunnerLiveness`), F0 and F5 for the writers, E3 §8 item
-  32's writer, C21, C22, the `lock` and `unlock` rows of `research/module_tests.md`.
+  32's writer, C21, C22, `<root>/pids` made by name (the one helper `run-all` and `chain` call too), the `lock` and `unlock` rows of `research/module_tests.md`.
 
-**Goal.** Only `lock` and `unlock` ever change a mode; a half-applied lock is recovered by the next `lock`; a run never executes under
-another run's isolation; the isolation is observed working before it is recorded as applied; `unlock` never restores beside a live
-arm; and every verb can tell, from a lock the runner holds for its life, whether an arm is running.
+**Goal.** Only `lock` and `unlock` ever change a mode; a half-applied lock is recovered by the next `lock` — in a NEW process, whose predecessor's descriptors died with it; a
+failed restore never loses the original modes; a run never executes under another run's isolation; the isolation is observed working before it is recorded as applied,
+and observed again when a `lock` finds it already applied; `unlock` never restores beside a live arm — ATOMICALLY, so no runner can start between the probe and the
+restore; and every verb can tell, from a lock the runner holds for its life, whether an arm is running.
 
-**Scenarios and brief — spec by Fable (2026-10-31).** Written against `0a1a434` on `feat/model-arms-e5`, every file named below opened in this
+**Scenarios and brief — spec by Fable (2026-10-31; amended the same day after the plan gate, two coai risk consultations and an Opus review — the twelve accepted findings are
+written in below, each with its test and its break-it).** Written against `0a1a434` on `feat/model-arms-e5`, every file named below opened in this
 worktree the same day (read-only; the rules `common.plan-change-control`, `common.security`, `common.reliability`, `common.platform-limits`,
 `common.testing`, `csharp.doctrine` read in full). The parent's §7 names are used verbatim. Three facts about the code shape the spec: (i) the
 isolation's READ side is built and is the one reader (`LockSnapshots.State`, `IsolationFiles.State`, `IsolationLine.Of`; `LockSnapshot.cs:36-73`)
 — the writer's parser of the saved modes is that reader widened, never a second one; (ii) `FileGateLock.Take(path, create, note)`
 (`FileGateLock.cs:123-131`) already answers the five facts a probe and a holder need, with the kernel-fact path check and the honoured-lock
-check — both locks of this story consume it unchanged; (iii) `RunArmSchemeTests.cs:507`, `:567` hand a `BusyGateLock` as `RunArmSeams.Lock`,
+check — both locks of this story consume it, and it is widened by ONE member, the shared take (question 8); (iii) `RunArmSchemeTests.cs:507`, `:567` hand a `BusyGateLock` as `RunArmSeams.Lock`,
 so the runner's own lock cannot go through that seam (it is the GATE lock's) or every such test would refuse its runner. Measured for this spec
 (2026-10-31, the same host as §2's table, uid 1000, tmpfs, a scratch folder removed after):
 
@@ -250,8 +252,9 @@ so the runner's own lock cannot go through that seam (it is the GATE lock's) or 
 | S1-3 | at 300: `open(O_RDONLY\|O_DIRECTORY)` is `EACCES` (the open `readdir` needs), a child is read, `stat`-ed, created and renamed by name, and a child's mode is set; `O_PATH` opens it and `fstat` reports 300 |
 | S1-4 | at 000: `open(O_RDONLY\|O_DIRECTORY)` `EACCES`, a child cannot be `stat`-ed or `chmod`-ed (`EACCES`), `faccessat(X_OK, AT_EACCESS)` `EACCES`; `O_PATH` opens it; a FILE at 000 refuses `open(O_RDONLY)` with `EACCES` and opens `O_PATH` |
 | S1-5 | `O_PATH 0x200000`, `O_DIRECTORY 0x10000`, `O_NOFOLLOW 0x20000`, `O_CLOEXEC 0x80000`, `AT_EACCESS 0x200`, `X_OK 1` (x86-64; `KernelFacts.cs:19-24` holds `O_NOFOLLOW`/`O_CLOEXEC` and says aarch64 differs); `sizeof(mode_t)` 4; `/mnt/c` is `9p … aname=drvfs` on this host (M-8's file system) |
+| S1-6 | **.NET's share mode → `flock` on Linux** (SDK 10.0.114, the amendment's probe): a `FileStream` opened `FileAccess.Read`, `FileShare.Read` holds `FLOCK ADVISORY READ` in `/proc/locks` — `LOCK_SH`; a second open of the file with `FileShare.None` (the runtime's `LOCK_EX \| LOCK_NB`) then throws `IOException` with `HResult 0xb` (`EWOULDBLOCK`, the code `FileGateLock`'s probe measures), and a second `FileShare.Read` open succeeds beside the first. `flock` locks belong to the open file description, so the in-process second open answers the cross-process question too (the class doc's `flock(1)` pairs). Read-only access matters: the runtime skips `LOCK_SH` for a WRITE handle on a network file system (`nfs`, `smb`, `cifs` — its source), never for a read handle |
 
-**The eighteen questions, settled.**
+**The twenty questions, settled.**
 
 1. **The plan.** `IsolationPlans.From(config, run, map, root, neverClosed)` (Core, pure, `Outcome<IsolationPlan>`). Entries in this order —
    the shell's (`lock.sh:12-14`) with the run's set between the configured closed and the unlisted: (i) `isolation.closed[i]` as Closed; (ii)
@@ -267,13 +270,15 @@ so the runner's own lock cannot go through that seam (it is the GATE lock's) or 
    stop the run itself. Kinds: Closed may be a file or a folder (part 7 closed `coai-findings.json` and `PROTOCOL.md`, `after7.sh:41-42`);
    Unlisted must be a folder (300 on a file means nothing). Kinds, existence and links are the ADAPTER's facts (question 3), read before
    anything is written: an absent entry is a refusal (`<path> does not exist — named by isolation.unlisted[3]`), never a partial snapshot (the
-   shell's defect, §1). The plan is EMPTY (→ `NoIsolation`) when it has no entry at all: no `isolation` block AND the run has neither
+   shell's defect, §1) — with ONE exception, the module's own folder: an absent `<root>/pids` is MADE by name before the pin, through the same
+   helper the runner uses (question 12: `RootFolders.Pids`), because nothing before the first `run-arm` creates it and a lock before the first
+   run is the chain's order; a `<root>/pids` that is a link or a regular file is still a refusal (4). The plan is EMPTY (→ `NoIsolation`) when it has no entry at all: no `isolation` block AND the run has neither
    `closedArms` nor `closed`; a run with closures but no block is locked (§8 item 33).
 2. **The digest.** `IsolationPlans.DigestOf(entries)`: SHA-256 over the UTF-8 bytes of one line per entry in plan order, `<kind>\t<path>\n`,
    kind `closed` or `unlisted`, the normalised path; written as 64 lower-case hex characters (`Convert.ToHexStringLower`). The snapshot and the
-   applied file carry it; `LockState.Applied.Digest` is the applied file's (equal to the snapshot's by `LockSnapshots.Joined`); E5.S4 compares
-   with `string.Equals(a, b, StringComparison.Ordinal)`.
-3. **The path facts and the window (D26 a).** The adapter PINS every entry before the snapshot is written: `open(path, O_PATH|O_NOFOLLOW|O_CLOEXEC
+   applied file carry it; `LockState.Applied.Digest` is the applied file's (equal to the snapshot's by `LockSnapshots.Joined`); E5.S4 and the
+   runner (question 20) compare with `string.Equals(a, b, StringComparison.Ordinal)`.
+3. **The path facts and the window (D26 a) — the kernel road.** The adapter PINS every entry before the snapshot is written: `open(path, O_PATH|O_NOFOLLOW|O_CLOEXEC
    [| O_DIRECTORY for Unlisted])` through its own P/Invoke (S1-5's constants; `DllImport("libc")` as `KernelFacts.cs:247-256`), then
    `KernelFacts.ReadOpen(fd, path)` for the kind, the 12 permission bits, the device and the inode — a link (S1-2), a FIFO, a device, a file where
    a folder is needed, `ENOENT`, `ELOOP`, `ENOTDIR` are refusals (4) naming the path and its configuration entry; `RealPath.Of(path)` must equal
@@ -282,42 +287,53 @@ so the runner's own lock cannot go through that seam (it is the GATE lock's) or 
    `chmod("/proc/self/fd/<fd>", mode)` (S1-1: `fchmod` is `EBADF` on `O_PATH`; one road, measured, the one systemd's `fchmod_opath` takes) — so
    no path is resolved a second time between the check and the change: a link planted at the leaf after the pin changes nothing it points at
    (break-it 3). The residuals, in the class doc: an ancestor swapped between `RealPath.Of` and the open is followed by the open — only the
-   operator can write the root or `$HOME` (D17); `/proc` absent (a container) makes every chmod `ENOENT` → exit 3 naming `/proc/self/fd`.
-   **The roads.** `ReadOpen` is `statx` and the open flags are x86-64's, so the adapter is constructed only on `PlatformRoad { Trust: Kernel,
-   Bounded: Kernel }` (Linux x86-64 with `statx`, `PlatformRoads.cs:52`). Every other POSIX road gets `NoIsolation` with the reason
-   `isolation by file modes is measured on Linux x86-64 only — on <platform> lock and unlock change nothing; close the folders by hand (chmod
-   000 / 300) if the run needs it`: `lock` exits **3** when the plan is not empty (a block the host cannot apply is said, never passed as done
-   — ledger 2.1's honesty rule), 0 when it is. Windows: `NoIsolation`, exit 0 (D11's words).
+   operator can write the root or `$HOME` (D17); `/proc` absent (a container) makes every chmod `ENOENT` → exit 3 naming `/proc/self/fd`; and the
+   same-user residuals of question 7 (the root at 300 still lets this user create, rename and unlink by NAME under it — a forged or replaced
+   `.locked-modes`, a renamed entry — the class the parent's §9 names: an access constraint, not a boundary against a same-user process).
+   **The roads.** `ReadOpen` is `statx` and the open flags are x86-64's, so `PosixFolderIsolation` is constructed only on `PlatformRoad { Trust: Kernel,
+   Bounded: Kernel }` (Linux x86-64 with `statx`, `PlatformRoads.cs:52`). **Every other POSIX road takes the runtime road** — `RuntimeFolderIsolation`,
+   question 19 (ledger 2.1: the parent's §10 forbids a verb exiting 3 on a POSIX host for want of a kernel reader; the earlier reading of this
+   spec, exit 3 with a platform's name, is withdrawn — §8 item 34). Windows: `NoIsolation`, exit 0 (D11's words).
 4. **The snapshot's shape and durability.** `.locked-modes` = `{"run":"part7","digest":"<64 hex>","since":"2026-10-31T10:00:00Z","modes":[{"path":"/x","kind":"closed","mode":"755","dev":64769,"ino":1234567}, …]}`
    + `\n` (`SnapshotFiles.Snapshot`, Core): `mode` is the 12 permission bits as octal text without a leading zero — `stat -c %a`'s spelling:
    `755`, `2755`, `0`; `dev` is `FileIdentity.Device` (`major << 32 | minor`, `KernelFacts.Decode`) and `ino` the inode, both to tell a folder
-   replaced before `unlock` (question 7). `.locked-modes.applied` = `{"run","digest","verifiedAt"}` + `\n`. Times are
+   replaced before `unlock` (question 7) — **both ABSENT on the runtime road** (question 19: `SavedMode.Identity` is `null` there and the two members are not written; the
+   reader tolerates their absence and refuses one without the other). `.locked-modes.applied` = `{"run","digest","verifiedAt"}` + `\n`. Times are
    `yyyy-MM-dd'T'HH:mm:ss'Z'` to the second (the reader's fixture `LockSnapshotTests.cs:16-17`, `GateHolderNote.Utc`). The reader is the built
    one, widened: `LockSnapshots.Saved(string json) → Outcome<SavedSnapshot>` parses `modes` too and `Parsed` (`LockSnapshot.cs:60-63`) is
    rewritten over it — ONE reader (parent §4.8); `JsonRow` tolerates the members it is not asked for (the E3 fixture already carries `modes`).
    Written through `ArtifactCommit.Stage` (stage, `Flush(flushToDisk: true)`, `File.Move(overwrite: false)`): durable against the DEATH OF THE
    PROCESS before the first mode changes — the threat D11 names (a `lock` killed half-way); a power loss between the rename and the journal
    commit is the file system's ordering, not claimed and said in the class doc (no directory `fsync`: nothing in the repository does one and
-   the design names no such threat).
+   the design names no such threat). **A standing `.locked-modes` is never written over** (finding 2): every road that writes a snapshot first decided
+   the state was `None` under the exclusive lock, and `overwrite: false` is the second guard, not the decision.
 5. **The verification — EVERY entry (§8 item 29).** After the apply, each entry by its PATH (what an arm would do): an Unlisted or a Closed
    folder → `open(path, O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC)` must fail with `EACCES` — the open a `readdir` needs, so "cannot list" is
    exactly this and no name is enumerated even when the probe succeeds (a descriptor that comes back is closed at once); a Closed folder also
    `faccessat(AT_FDCWD, path, X_OK, AT_EACCESS)` must fail `EACCES`; a Closed file → `open(path, O_RDONLY|O_NOFOLLOW|O_CLOEXEC)` must fail
    `EACCES`. Any other answer — a descriptor (root, `CAP_DAC_OVERRIDE`, a file system that ignores modes, M-8), `ENOENT`, `ELOOP` — is one
    sentence per entry (`<path> is still listable by this user` / `… is still readable by this user` / `… vanished during the lock: <errno
-   words>`). Any sentence → every entry restored in reverse through the pinned descriptors, `.locked-modes` moved aside (question 7's name),
+   words>`). Any sentence → every entry rolled back in reverse through the HELD descriptors (question 6's partial-restore rule applies: a roll-back
+   that fails for any entry KEEPS `.locked-modes`), `.locked-modes` moved aside only when the roll-back restored every entry,
    exit **3**: `the lock could not be verified — <sentences, "; "-joined> — the modes were restored (running as root, or a file system that
-   ignores modes, such as a Windows drive under WSL?)`. `geteuid() == 0` (`KernelFacts.EffectiveUid`) is refused BEFORE anything: exit 3
+   ignores modes, such as a Windows drive under WSL?)`. `geteuid() == 0` (`KernelFacts.EffectiveUid`; `Environment.IsPrivilegedProcess` on the runtime road) is refused BEFORE anything: exit 3
    `running as root (uid 0): isolation by file modes does nothing for root — run as the operator`; the verification stays the observation for
-   every other cause. **The live test's listable 300 folder:** the adapter's `SetMode` seam — a stand-in that returns 0 and changes nothing,
-   drvfs's behaviour — on ONE entry of a set the rest of which is real, so the refusal names that one entry and proves every entry is checked;
-   the drvfs folder itself is an opt-in row skipped unless `MODEL_ARMS_DRVFS_SCRATCH` names a writable folder on a `9p` mount (no test writes
+   every other cause. **The live test's listable 300 folder:** the adapter's `SetMode` seam — `(fd, path, mode) → 0 or an errno` (finding 9: the path rides along so a hand can
+   single out `<root>/pids` by NAME; the production chmod ignores it) — a stand-in that returns 0 and changes nothing, drvfs's behaviour — on ONE entry of a set the rest of which is real,
+   so the refusal names that one entry and proves every entry is checked; the drvfs folder itself is an opt-in row skipped unless `MODEL_ARMS_DRVFS_SCRATCH` names a writable folder on a `9p` mount (no test writes
    the operator's Windows drive on its own — `common.test-leftovers`).
 6. **`lock` over each state** (`LockDecision.Of(state, plan, snapshotText)`, Core, a theory). `None` → `Fresh`. `Applying`, for ANY run →
-   `Recover(saved)`: the saved modes restored in reverse through pinned descriptors (an entry gone or replaced is skipped and said, question 7),
-   the old snapshot moved aside, then `Fresh`; an `Applying` whose `modes` do not parse → `RefuseInconsistent`. `Applied` of the same run and
-   digest → `AlreadyLocked(since)`: exit 0, `already locked for part6 since <verifiedAt>`, nothing pinned or touched. `Applied` of another run OR
-   another digest → exit 4, `locked for <run'> with a different closed set — unlock first` (D11's words for both). `Inconsistent` → exit 4,
+   `Recover(saved)`: the saved modes restored in reverse — **pinned ANEW in this process** (finding 1: the killed `lock`'s descriptors died with it; `Restore`,
+   question 7, re-pins each saved path, judges kind and identity, and skips what is gone, replaced or a link, saying so) — then, ONLY when every entry was restored or
+   harmlessly already at its saved mode, the old snapshot moved aside and `Fresh`; a restore with ANY failed or unresolved entry (question 7's words) ends the verb at exit 3 with the
+   old `.locked-modes` KEPT and no fresh snapshot written (finding 2: `a lock was interrupted (snapshot of <run'> since <since>) — restored <k> of <n> — <sentences> — the snapshot is
+   kept; restore by hand, or run lock <run> again`); an `Applying` whose `modes` do not parse → `RefuseInconsistent`. `Applied` of the same run and
+   digest → `AlreadyLocked(since)` — **re-verified, never claimed** (finding 4): `Verify(plan)` by path as question 5; no sentence → exit 0, `already locked for part6 since
+   <verifiedAt>`, nothing pinned or written; sentences → the open entries are re-pinned (kind and identity must equal the saved entry's, else exit 4 naming the replaced entry
+   and asking for `unlock`), the LOCKED mode re-applied through the descriptors to those entries alone (the standing snapshot stays the authority: no new snapshot, no new
+   applied file), verified again — clean → exit 0, `already locked for part6 since <verifiedAt> — re-applied <k> entries that were open (<paths>)`; still open → exit 3,
+   `already locked for part6 since <verifiedAt>, but <sentences> — re-applied and still not verified`, the modes left as re-applied (the operator's state was already "locked").
+   `Applied` of another run OR another digest → exit 4, `locked for <run'> with a different closed set — unlock first` (D11's words for both). `Inconsistent` → exit 4,
    `isolation snapshot inconsistent — <reason> — run unlock (when .locked-modes does not parse, restore the modes by hand and move it aside)`, no
    mode touched. `Fresh` prints `locked — closed <n>, unlisted <m>, verified at <utc>`; `Recover` prints first `a lock was interrupted (snapshot of
    <run'> since <since>) — restored <k> of <n>, now locking afresh`.
@@ -326,57 +342,92 @@ so the runner's own lock cannot go through that seam (it is the GATE lock's) or 
    `.locked-modes` and an applied file (present or refused) → `RenameAppliedAlone`: no mode call, exit 0, `nothing to restore —
    .locked-modes.applied stood alone, moved aside`. A `.locked-modes` present but not parsing, or refused (a link, too big, not UTF-8) →
    `Refuse(reason)`: exit 4 naming the file, both files kept, `--force` or not (the operator restores by hand). The order of work: the exclusive
-   lock; the decision; liveness (question 11) unless `--force`; the restore in reverse (`IsolationRestoreOrder.Of`), each entry pinned anew
-   (`O_PATH|O_NOFOLLOW|O_CLOEXEC`, `ReadOpen`): `ENOENT` → skipped `<path>: gone since the lock`; a link or another kind → skipped `<path>: a
-   link now — not restored`; another device or inode → skipped `<path>: replaced since the lock (inode <old> → <new>) — its mode is left as it
-   is`; else the saved mode through the descriptor, a failure → `<path>: <errno words>` and the walk GOES ON. Then the renames in D11's order:
+   lock (question 8 — a runner alive holds it shared, so the refusal is immediate) unless `--force`; the decision; the liveness probe of every map arm (question 11) unless `--force`, UNDER the
+   exclusive lock, so no runner can start between the probe and the restore (finding 5); the restore in reverse (`IsolationRestoreOrder.Of`) — **`Restore(saved)`, the one road
+   the three callers share** (`unlock`, `lock`'s `Recover`, and `lock`'s own roll-back through held descriptors, question 5): each entry pinned anew
+   (`O_PATH|O_NOFOLLOW|O_CLOEXEC`, `ReadOpen`), and judged in this order — `ENOENT` → skipped, `<path>: not found by this name — if it was renamed, it may still stand at
+   <locked mode> elsewhere; the record is kept in .locked-modes.restored-<utc>` (finding 1: a missing entry means "cannot recover by this name", never "nothing to do");
+   a link or another kind → skipped `<path>: a link now — not restored`; another device or inode (kernel road only) → skipped `<path>: replaced since the lock (inode <old> → <new>)
+   — its mode is left as it is`; **outside the bound** (finding 11 — a forged `.locked-modes` must not steer this user's `chmod`: an entry is restored only when its path is the root,
+   under the root, under `<ExperimentGate.Home>/.claude`, or one of today's `experiment.json` entries for ANY run — `isolation.closed`, `isolation.unlisted`, every run's `closed`,
+   every arm folder of the map) → FAILED, `<path>: not under any folder this experiment names — not restored (by hand: chmod <saved> <path>)`; **the operator's own change** (finding 3:
+   the current mode is neither the SAVED mode nor the LOCKED mode — 0 for Closed, 300 for Unlisted) → UNRESOLVED, left as it is, `<path>: mode <cur> is neither the saved <saved>
+   nor the locked <locked> — changed by hand since the lock; left as it is`; already at the saved mode → restored without a call (a harmless retry, counted);
+   else the saved mode through the descriptor, a failure → FAILED `<path>: <errno words>` — and the walk GOES ON to the last entry. `RestoreReport(Restored, Skipped, Unresolved, Failed)`.
+   Then: **`Failed` empty** → the renames in D11's order:
    `.locked-modes` → `.locked-modes.restored-<utc>`, then `.locked-modes.applied` → `.locked-modes.applied.restored-<utc>` (a crash between leaves
    the applied file alone — §4.11's shape, renamed aside by the next `unlock`); `<utc>` is `yyyyMMdd'T'HHmmss'Z'` (`RootPaths.LockedModesRestored`'s
    doc) and a name already taken (two cycles in one second) gets `-2`, `-3`, … `-9` through `File.Move(overwrite: false)`;
-   `RootPaths.LockedModesAppliedRestored(stamp)` is the new sibling. **A restore that failed for any entry:** the applied file is moved aside,
-   `.locked-modes` is KEPT (the snapshot is the one authority for modes; a kept one is retried; the state reads `applying`, which `lock`
-   recovers and `chain` refuses), exit 3: `restored <k> of <n> — <failures> — the applied file was moved aside; run unlock again, or lock <run>`.
-   Skips alone are not failures: exit 0, `unlocked — restored <k> of <n> (skipped: <sentences>)`. `--force` skips the liveness refusal and
-   nothing else.
-8. **`.isolation.lock`.** Through `FileGateLock` (`Create(TimeProvider.System, 250 ms)`; locking off or inert → exit 3 with its words),
-   `AcquireAnswerAsync(root.IsolationLock, token)` — the holder's note written (`.isolation.lock.holder`, so the refusal names the other process)
-   — under a token linked to the stop with `CancelAfter(IsolationSeams.ExclusiveWait)` = **60 s** (a lock or unlock is seconds of work; the
-   parent's test says the first WAITS): `Busy` at the ceiling → exit 3, `.isolation.lock is held <Describe> — another lock or unlock is running;
-   it was not free within 60 s`; `Refused` → 4; `Unread` → 3; the operator's stop → the cancellation travels (5). Released in `finally` before the
-   verb prints its last line.
-9. **`NoIsolation`.** `FolderIsolations.For(input, plan, road, clock, hands)`: a null or empty plan → `NoIsolation("no isolation configured —
-   nothing to lock")`; Windows → `NoIsolation("isolation by file modes is POSIX only — nothing to lock on Windows")` (D11: `validate` refuses the
-   block there, `lock` says the same without running validate); a POSIX road that is not `Kernel`/`Kernel` → question 3's sentence. `unlock`
-   under `NoIsolation`: a snapshot that stands is restored whatever the configuration (the snapshot is the authority — a block removed from
-   `experiment.json` after a lock must not strand the modes); no snapshot and nothing configured in any run → `no isolation configured — nothing
-   to unlock`, 0. Logged once: the verb's one stdout line and one `lock.log` line.
+   `RootPaths.LockedModesAppliedRestored(stamp)` is the new sibling; exit 0, `unlocked — restored <k> of <n>` with ` (skipped: <sentences>)` and ` (unresolved: <sentences>)` when
+   not empty — an unresolved entry is the operator's and is REPORTED, not retried. **`Failed` not empty — on all three paths alike (finding 2):** the applied file is moved aside
+   (when present), `.locked-modes` is KEPT (the snapshot is the one authority for modes; a kept one is retried; the state reads `applying`, which `lock`
+   recovers and `chain` refuses), no fresh snapshot is ever written over it, exit 3: `restored <k> of <n> — <failures> — the applied file was moved aside; run unlock again, or lock <run>`.
+   **`--force` (D11's meaning kept — the coordinator's ruling 1, 2026-10-31):** it skips BOTH the exclusive take of `.isolation.lock` and the liveness probe, restores, and prints
+   ONE loud line first, on stderr and in `lock.log`: `WARNING: --force skipped the isolation lock and the liveness check — an arm may still be running and lose its
+   isolation mid-run; this race is your choice`. Without `--force`, the exclusive non-blocking take IS the refusal (question 8). Nothing else changes under `--force`: the
+   decision, the bound, the judgement per entry and the partial-restore rule stand.
+8. **`.isolation.lock` — exclusive for the writers, SHARED for every runner (finding 5).** Through `FileGateLock` (`Create(TimeProvider.System, 250 ms)`; locking off or inert → exit 3 with its words).
+   **The writers:** `Take(root.IsolationLock, create: true, note: true)` — `FileShare.None`, the holder's note written (`.isolation.lock.holder`, so a refusal names the other writer) —
+   ONE try, non-blocking: `Busy` → the map's arms are probed (`RunnerLiveness`, question 11; no map → no arms) — any `Alive` → exit **4**, `.isolation.lock is held shared by a
+   running arm (<arm> is alive: <holder>[, …]) — no mode changes while an arm runs; wait for it, or stop it`; none alive → another `lock`/`unlock` has it (its note names it) →
+   wait — **the verb's own loop, not `AcquireAnswerAsync`** (finding 9: that method never answers `Busy`, `FileGateLock.cs:156-169`, and its ceiling would arrive as the same
+   `OperationCanceledException` as the operator's stop): `Take` once per 250 ms (`seams.Clock`) up to `IsolationSeams.ExclusiveWait` = **60 s** (the parent's test says the first
+   WAITS), `stopping.IsCancellationRequested` checked before every try → exit 5 (the stop, said as such), the arms probed again every 5 s of waiting (a runner that started meanwhile
+   is 4 at once), the ceiling → exit 3, `.isolation.lock is held <Describe> — another lock or unlock is running; it was not free within 60 s`; `Refused` → 4; `Unread` → 3.
+   Released in `finally` before the verb prints its last line.
+   **The runners:** `FileGateLock.TakeShared(path)` — the ONE widening of `FileGateLock` this story makes (S1-6 is the measurement it rests on; the alternative, `flock(2)` through a
+   new P/Invoke, would be a second lock road beside the runtime's and is not built): the same `GateLockPath.Of` judgement, `FileMode.OpenOrCreate` ⟶ the same
+   `CreateNew`-then-`Open` dance as `Take`, `FileAccess.Read`, `FileShare.Read` (S1-6: `LOCK_SH`; read access so a network file system does not silently skip the lock), NO holder
+   note (several holders; the note is the exclusive holder's), and the honoured-lock check in the same shape as `Take`'s — a second open of the held file with `FileShare.None`
+   must throw the measured conflict code, else both are dropped and the answer is `Unread` (3). Answers: `Held` (the handle), `Busy` (an exclusive holder — a `lock` or `unlock`
+   is changing the modes), `Refused`, `Unread`. The runner takes it in admission (question 12) under a 2 s ceiling (`AcquireAnswerAsync`'s loop made generic over the take —
+   `AcquireAnswerAsync(path, token, take)`, the existing overload calling it with `Take(create: true, note: true)`) and holds it for its life. On Windows `FileShare.Read` against a
+   `FileShare.None` open is the file system's share check — the same answer, documented, NOT observed.
+   **Why this closes consultation 5.4's race:** a runner cannot pass admission while a writer holds the exclusive lock, and a writer cannot take it while any runner holds the
+   shared one; `unlock`'s probe and restore both happen under the exclusive lock, so "no arm is alive" is true for the whole restore, not for the instant of the probe.
+9. **`NoIsolation` and the adapter.** `FolderIsolations.For(road, seams)` chooses by the PLATFORM ROAD ALONE (finding 7): Windows → `NoIsolation("isolation by file modes is POSIX
+   only — nothing to lock on Windows")` (D11: `validate` refuses the block there, `lock` says the same without running validate); `Kernel`/`Kernel` → `PosixFolderIsolation`;
+   any other POSIX road → `RuntimeFolderIsolation` (question 19). The PLAN decides nothing about the adapter: `lock` answers `NoIsolation("no isolation configured — nothing to lock")`
+   itself when the plan is empty, before the adapter is asked anything; `unlock` never computes a plan — a standing snapshot is restored whatever `experiment.json` says now
+   (a block removed after a lock must not strand the modes), bounded by question 7; no snapshot → `no isolation configured — nothing to unlock` only when no run has an entry,
+   else `nothing locked`, 0. `NoIsolation.Restore` is unreachable with a standing snapshot on a POSIX host (the test `Unlock_restores_a_standing_snapshot_after_the_block_was_removed`).
+   Logged once: the verb's one stdout line and one `lock.log` line.
 10. **`lock.log`.** Appended by `lock` and `unlock` alone, one line per verb run: `<utc> lock <run>: <the printed line without its "model-arms lock
     <run>: " prefix>` / `<utc> unlock: …`, a refusal as `refused (exit <n>) — <words>`. Opened by name, `FileMode.Append`, only when `new
     FileInfo(path).LinkTarget is null` (a link there: one stderr line, nothing appended; the window between the check and the open is the
     residual, in `LockLog`'s doc — the road E5.S2's keep-awake log takes). A failed append never fails the verb (one stderr line).
 11. **`RunnerLiveness.Of(root, arm)`** = `Of(root, arm, PlatformFactsReader.CurrentRoad, FileGateLock.Create(TimeProvider.System, 250 ms))`, a
-    `Create` failure being `Unread(reason)`. `Take(root.RunnerLock(arm), create: false, note: false)`: `Absent` → `Gone`; `Held` → the handle
-    disposed at once → `Gone`; `Busy` → `Alive(holder, believedPid)` (question 14); `Refused` → `Refused` (4); `Unread` → `Unread` (3). It
-    creates nothing and writes nothing (`note: false`). **The race:** a runner starting while a probe momentarily holds its lock would read
+    `Create` failure being `Unread(reason)`. `Take(root.RunnerLock(arm), create: false, note: false)`: `Busy` → `Alive(holder, believedPid)` (question 14); `Refused` → `Refused` (4);
+    `Unread` → `Unread` (3); **`Absent`, or `Held` (the handle disposed at once) → the pid file decides** (finding 11: an unlinked or replaced `pids/<arm>.lock` must not read a
+    live runner as gone — the runner holds the OLD inode): a pid file naming a pid BELIEVED by question 14 (Linux: its command line is this arm's runner; the portable road: a live
+    pid, the reuse residual printed) → `Alive("pid N — its lock file is gone or replaced (unlinked since it started); believed by its command line", N)`; else → `Gone`.
+    It creates nothing and writes nothing (`note: false`). **The race:** a runner starting while a probe momentarily holds its lock would read
     `Busy`, so the runner's acquisition is `AcquireAnswerAsync` under a 2 s ceiling (`RunnerLiveness.RunnerLockWaitMilliseconds`, poll 250 ms;
-    `RunArmSeams` gains nothing) — a real holder holds for hours, a probe for microseconds; `Busy` at the ceiling is D13's refusal (4).
+    `RunArmSeams` gains nothing) — a real holder holds for hours, a probe for microseconds; the ceiling is D13's refusal (4) — it arrives as `OperationCanceledException`
+    (finding 9: `AcquireAnswerAsync` never answers `Busy`), and the runner tells it from the operator's stop by `input.Verb.Stopping.IsCancellationRequested`: true → exit 5, else 4.
     `RunnerLiveness.PortableLine(road)`: `""` on `HolderRoad.ProcTicks`, else `runner liveness on <platform>: the lock decides — a pid is NOT
     checked against its command line here, so a pid reused after a reboot can read as a runner's (D13; ledger 2.1)`, printed once by every verb
     that asks liveness (`unlock` here; `run-all` and `chain` when built).
-12. **The runner's lock.** `RunArmAdmission` takes it as its SECOND step, after `Choose` (a malformed or unknown arm makes no lock file) and
-    before `Place`, `Equip` (PATH, HOME, `claude`, `git`), E4.S0's `git --version` and `CountedAsync` — before any read of the map, any
-    resolution, any git and any write (D13). The lock is ALWAYS the real `FileGateLock`, never `RunArmSeams.Lock` (the gate lock's seam —
-    `RunArmSchemeTests.cs:507`, `:567` hand a `BusyGateLock`, and a runner asking it would refuse itself). `Take(path, create: true, note:
-    true)` through `AcquireAnswerAsync` under question 11's ceiling: `Busy` → exit 4, `model-arms run-arm <arm>: another runner holds
-    <root>/pids/<arm>.lock — <IGateLock.Describe>` (`by pid N since <utc>` or `(holder unknown)`); `Refused` → 4 with its reason; `Unread` or a
-    `Create` failure → 3. The handle rides in `ArmPlan` (a new member, `IDisposable RunnerLock`) and `RunArmVerb.RunAsync` disposes it in
-    `finally` after the walk (the kernel closes it when the process dies — "for its life"). `pids/` is made by the pid write's commit
-    (`Directory.CreateDirectory` of the parent, by name — `ArmFiles.Commit`, `ArmFiles.cs:105`; S1-3: a folder is made by name under a 300 root).
-13. **The pid file.** Written right after the lock is held, before `Place`: `ArmFiles.ReplaceFile(root.PidFile(arm),
+12. **The runner's admission — in this order (findings 5, 6, 10; D13).** `RunArmAdmission`, after `Choose` (a malformed or unknown arm makes no file) and before `Place`, `Equip`
+    (PATH, HOME, `claude`, `git`), E4.S0's `git --version` and `CountedAsync` — before any read of the map, any resolution, any git and any write: (a) **`<root>/pids` made by
+    name** — `RootFolders.Pids(root)` (`Adapters/RootFolders.cs`, new; the one helper `lock` (question 1), `run-all` (E5.S3 step 4) and `chain` (E5.S4) call): `Directory.CreateDirectory(path,
+    UnixFileMode 0700)` then `File.SetUnixFileMode(path, 0700)` as `Init.MakeSubfolder` does (the root's other folders — `Init.cs:37`; off Windows), then `new DirectoryInfo(path).LinkTarget
+    is not null` → exit 4 `<root>/pids is a symbolic link — refused (D17)` (`CreateDirectory` succeeds silently through a link to a folder, so the kind is judged AFTER); a regular file
+    there → the `IOException` → exit 4 `<root>/pids is a regular file, not a directory`; S1-3: a folder is made by name under a 300 root. (b) **The SHARED `.isolation.lock`**
+    (question 8) under the 2 s ceiling (question 11's distinction of the ceiling from the stop): the ceiling → exit 4, `model-arms run-arm <arm>: the isolation is being changed
+    (.isolation.lock is held <Describe>) — start the arm once lock or unlock has returned`; `Refused` → 4; `Unread` or a `Create` failure → 3. (c) **`pids/<arm>.lock`** — ALWAYS the real `FileGateLock`, never `RunArmSeams.Lock` (the gate lock's seam —
+    `RunArmSchemeTests.cs:507`, `:567` hand a `BusyGateLock`, and a runner asking it would refuse itself) — `Take(path, create: true, note: true)` through `AcquireAnswerAsync` under
+    question 11's ceiling: the ceiling → exit 4, `model-arms run-arm <arm>: another runner holds <root>/pids/<arm>.lock — <IGateLock.Describe>` (`by pid N since <utc>` or `(holder
+    unknown)`); `Refused` → 4 with its reason; `Unread` or a `Create` failure → 3. (d) The pid file (question 13). (e) `Place` (the map). (f) **The isolation warning** (question 20 — one line, never a refusal).
+    Then `Equip`, the floor, the count. **Both handles ride in `ArmPlan`** (new members `IDisposable IsolationHold`, `IDisposable RunnerLock`); `RunArmVerb.RunAsync` disposes both in
+    `finally` after the walk (the kernel closes them when the process dies — "for its life"); **and every refusal after (b) releases both before the stop is returned** (finding 10:
+    `AdmitAsync` runs (c)–(f), `Equip`, the floor and the count inside one `try` whose refusal path disposes what was taken — a `Passage.Stop` with a lock still held would block the
+    operator's retry for the life of a process that is about to exit — tested per refusal, `RunnerIdentityTests`).
+13. **The pid file.** Written right after the two locks are held, before `Place`: `ArmFiles.ReplaceFile(root.PidFile(arm),
     Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "\n")` — a new `public static void ReplaceFile(string path, string text)` =
     `Commit(path, bytes, createMode: null, betweenStagingAndRename: null)`, the instance `Replace` calling it (staged beside, flushed, renamed over;
     never `WriteFileOnce`, §8 item 22). Exactly ASCII digits and one `\n`. KEPT at the end: `status` prints `pid N gone` for a finished arm
-    (§4.11's row), `checks` refuses only a live one, and a reused pid reads alive there — the safe direction (parent §9). A failed write is exit 3.
+    (§4.11's row), `checks` refuses only a live one, and a reused pid reads alive there — the safe direction (parent §9). A failed write is exit 3 (both locks released).
 14. **The command-line belief (Linux, `HolderRoad.ProcTicks`).** The pid file through `BoundedFile.Read(root.PidFile(arm), 64, road)` and
     `RunnerPid.Parse`; then `/proc/<pid>/cmdline` read as bytes by name (`FileStream`, at most 64 KiB), split on NUL: believed when some i ≥ 1 has
     `argv[i] == "run-arm"`, `argv[i+1] == <arm>` and `Path.GetFileName(argv[i-1])` is `model-arms`, `model-arms.dll` or `model-arms.exe` (M-6:
@@ -390,27 +441,53 @@ so the runner's own lock cannot go through that seam (it is the GATE lock's) or 
     (`hang`) as its child and the FAKE's pid in the pid file: `Alive` with `BelievedPid == null` and the words naming the fake's command line — a
     stub believing any live pid answers the fake's pid.
 15. **The portable line** (ledger 2.1): question 11's sentence, printed once on stdout by `unlock` before its first liveness answer, and by
-    `run-all` and `chain` when they are built (E5.S3 step 5 and E5.S4 step 2 say so); empty on Linux.
+    `run-all` and `chain` when they are built (E5.S3 step 5 and E5.S4 step 2 say so); empty on Linux. The runtime road's own line is question 19's, printed by `lock` and `unlock`.
 16. **No other verb changes a mode — two tests**, both in `IsolationRecoveryTests`. `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot`:
     a theory over the verbs × the four states, the verbs DERIVED from `ModelArmsCommandLine.Verbs` minus `init`, `version`, `help`, `gate-lock`,
     `lock`, `unlock` (`validate`, `prep-base`, `make`, `run-arm`, `run-all`, `checks`, `status`, `chain` — the two unbuilt ones prove the same
     thing through their *not built yet* row and join for real when built); each run IN PROCESS through `Program.RunAsync` over an `ExperimentRoot`
     whose two files are written by hand in the reader's shape, their `modes` naming a real temp folder the test set to 300, with an EMPTY
-    `PATH` folder so every verb stops at its admission (3 or 4) — the assertion: the folder's mode, both files' bytes and the absence of every
-    `.restored-` name are the same before and after, and a verb whose stdout holds `isolation` printed `IsolationLine.Of(state)`. The companion,
-    `The_only_sites_that_set_a_mode_or_move_a_snapshot_are_the_isolation_adapter_and_the_named_builders`: a scan of `tools/model-arms/**/*.cs`
+    `PATH` folder so every verb stops at its admission (3 or 4) — **the assertions, UNCONDITIONAL for every row** (finding 12): the exit code is 3 or 4; the folder's mode is 300
+    after; both files' bytes are equal before and after; none of the six `.restored-` names exists; and the verb's stdout, when it holds `isolation`, holds `IsolationLine.Of(state)` —
+    asserted as `Assert.True(!stdout.Contains("isolation") || stdout.Contains(line))`, a single boolean, never an `if` around an assertion. **Its break-it (finding 12):** a
+    `File.SetUnixFileMode(root.Pids, 0755)` planted at `Status.cs`'s entry (before its admission) → the `status` rows red, `Expected 300, but found 755` — red against a planted
+    chmod in another verb, so the theory is a control and not a mirror. The companion,
+    `The_only_sites_that_set_a_mode_or_move_a_snapshot_are_the_isolation_adapters_and_the_named_builders`: a scan of `tools/model-arms/**/*.cs`
     for `SetUnixFileMode`, `UnixFileMode |=`, `UnixFileMode =`, `"chmod"`, `/proc/self/fd`, `LockedModesRestored(`, `LockedModesAppliedRestored(`
-    whose files must equal exactly `PosixFolderIsolation.cs` plus the legitimate sites `BaseCopy.cs`, `ArmFiles.cs`, `ArmMaker.cs`, `Init.cs`,
-    `KernelFacts.cs`, `PortableFacts.cs`, `RootFacts.cs`, `ArmPaths.cs` (the spellings) — and asserts the scan finds `PosixFolderIsolation.cs`
-    (a scan that matches nothing passes forever). `Lock_then_run_arm_leaves_the_experiment_locked` is the behavioural proof for the verb that
+    whose files must equal exactly `PosixFolderIsolation.cs`, `RuntimeFolderIsolation.cs`, `SnapshotAside.cs` (the verbs' one aside helper, question 7's renames) plus the legitimate sites — **today's hits, enumerated by the scan
+    before the story (finding 9; `grep -rlE` over the seven spellings on 2026-10-31): `ArmPaths.cs`, `ArmMaker.cs`, `BaseCopy.cs`, `Init.cs`** — and this story's `RootFolders.cs` (question 12's `SetUnixFileMode`);
+    and asserts the scan finds `PosixFolderIsolation.cs` (a scan that matches nothing passes forever). `Lock_then_run_arm_leaves_the_experiment_locked` is the behavioural proof for the verb that
     matters.
 17. **The command line.** `Fixed("lock", 1, "lock <run>", "exactly one argument, the run", ExperimentFlag)`; `Fixed("unlock", 0, "unlock
     [--force]", "no positional argument", ExperimentFlag, "--force")`. The run is checked by `LockVerb.PlanOf` against `experiment.Runs` → 4,
     `model-arms lock: there is no run <run> — the runs are part6, part7` (the prefix is `input.Verb.Verb`'s, so the chain's call says `chain`).
     `RootRequirements` and `ExperimentGate.ArmsOf` unchanged (§8 item 26: a run is not an arm).
-18. **Merging with E4.S0.** E4.S0 adds `FloorAsync` between `Equip` and `CountedAsync`; this story's lock sits between `Choose` and `Place`.
-    Whichever lands second rebases and keeps that order; `RunArmAdmission`'s class doc says it: *the runner's lock is the first thing after the
-    arm's name is known; nothing — the map, PATH, git — is read before it*.
+18. **Merging with E4.S0.** E4.S0 adds `FloorAsync` between `Equip` and `CountedAsync`; this story's locks sit between `Choose` and `Place`.
+    Whichever lands second rebases and keeps that order; `RunArmAdmission`'s class doc says it: *the runner's two locks are the first thing after the
+    arm's name is known; nothing — the map, PATH, git — is read before them, and every refusal after them releases them*.
+19. **The runtime road — `RuntimeFolderIsolation` (finding 8; ledger 2.1).** On a POSIX road that is not `Kernel`/`Kernel` (macOS, FreeBSD, Linux arm64, a Linux without `statx`),
+    the same `IFolderIsolation` over the runtime's facts, no P/Invoke: **kind** by `new FileInfo(path).LinkTarget` / `new DirectoryInfo(path).LinkTarget` (a link is refused without following)
+    then `Directory.Exists` / `File.Exists` (a FIFO or a device reads as a file here — said in the line); **the ancestors** by `RealPath.Of` as the kernel road; **modes** read by
+    `File.GetUnixFileMode(path)` and set by `File.SetUnixFileMode(path, mode)` — BY PATH, so the window between the check and the chmod is open (the line says it); **the snapshot
+    carries no `dev`/`ino`** (question 4), so at `unlock` a replaced entry is not told apart (the line says it) — kind and the mode rule of question 7 are still judged; **the
+    verification, every entry by path**: a folder → `Directory.EnumerateFileSystemEntries(path).GetEnumerator().MoveNext()` must throw `UnauthorizedAccessException` (the runtime's
+    `opendir` fails before a name is enumerated); a Closed folder's traversal is judged by `new FileInfo(Path.Combine(path, ".model-arms-probe")).Length` throwing
+    `UnauthorizedAccessException` (a `stat` of a child under a 000 folder is `EACCES` — S1-4 in the runtime's words; a missing child under an open folder would throw
+    `FileNotFoundException`, which is the "still traversable" answer); a Closed file →
+    `File.OpenRead(path)` must throw `UnauthorizedAccessException`; any other answer is question 5's sentence per entry, the roll-back and exit 3; **root** by
+    `Environment.IsPrivilegedProcess` (refused before anything, question 5's words). **ONE line** on stdout by `lock` and `unlock` on this road, before their first mode call:
+    `isolation on <platform>: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart at unlock; a FIFO or a device
+    reads as a file (ledger 2.1)`. It refuses only an actual inability to apply, verify or recover — never a platform's name. Tested on THIS host through the seam
+    (`IsolationSeams.Road = PlatformKit.MacRoad` selects the runtime adapter, which runs on Linux too), so the composition is observed here and the Mac itself stays unobserved
+    (parent §9's words). It joins question 16's allowed set and the `StatusVerbTests` scan list.
+20. **The runner's isolation WARNING (finding 5, the second half — the coordinator's ruling 3: a refusal would change `run-arm`'s contract; the refusal of the unattended path
+    is the chain's marker reconciliation, epoch 3 H, E5.S4).** Under its shared hold, after `Place` (the map is needed for the digest), the runner reads
+    `IsolationFiles.Read(root, road).State` and the plan of ITS run — `RunSection`'s rule: an arm is in one round of one run (`RunSection.cs:79-104`); an arm no run names, a run
+    whose plan is empty, or a plan `From` refuses (its words on stderr, the arm still runs) → no line; else, when the state is not `Applied` with that run and that digest (ordinal),
+    ONE line on stderr, before `Equip`: `model-arms run-arm <arm>: run <run> has an isolation block and its isolation is not applied (<IsolationLine.Of(state)>) — the arms can
+    list each other's sessions; run \`model-arms lock <run>\``. The arm runs on; exit codes unchanged. Consequence for the kit: `ExperimentRoot.MakeArmAsync(arm, fake,
+    keepIsolation: false)` REMOVES the example's `isolation` block by default, so the line never enters the scheme tests' stderr (`RunArmSchemeTests` and E5.S3's kit run as
+    today, UNEDITED); `IsolationKit` passes `keepIsolation: true`. Break-it 14 is this line's.
 
 **Type shapes** (Core pure unless marked; every new public static class of Core is named in `PureDeciders` under `// E5.S1`).
 
@@ -423,15 +500,18 @@ public static class IsolationPlans
 {
     public static Outcome<IsolationPlan> From(IsolationFacts config, RunSpec run, ArmMap map, string root, IReadOnlyList<string> neverClosed);  // question 1
     public static string DigestOf(IReadOnlyList<IsolationEntry> entries);                                                                      // question 2
+    public static int LockedMode(IsolationKind kind);                                                                                          // 0 for Closed, 0o300 for Unlisted (question 7)
+    public static bool InBound(string path, string root, string home, IReadOnlyList<string> configured);                                       // question 7's bound, pure
 }
 
 // ModelArms.Core/Isolation/SnapshotFiles.cs (new) — the bytes of D11's two files, and the saved modes
-public sealed record SavedMode(string Path, IsolationKind Kind, string Mode /* octal text, %a */, ulong Device, ulong Inode);
+public sealed record FileIdentity(ulong Device, ulong Inode);                                                             // kernel road only
+public sealed record SavedMode(string Path, IsolationKind Kind, string Mode /* octal text, %a */, FileIdentity? Identity);   // Identity null on the runtime road
 public sealed record SavedSnapshot(string Run, string Digest, string Since, IReadOnlyList<SavedMode> Modes);
 public static class SnapshotFiles
 {
     public const string Utc = "yyyy-MM-dd'T'HH:mm:ss'Z'";
-    public static string Snapshot(SavedSnapshot saved);                                   // {"run","digest","since","modes":[{"path","kind","mode","dev","ino"}]}\n
+    public static string Snapshot(SavedSnapshot saved);                                   // {"run","digest","since","modes":[{"path","kind","mode"[,"dev","ino"]}]}\n
     public static string Applied(string run, string digest, string verifiedAt);           // {"run","digest","verifiedAt"}\n
     public static string ModeText(int permissionBits);                                    // 0o755 → "755", 0 → "0", 0o2755 → "2755"
     public static Outcome<int> ModeBits(string text);                                     // the inverse: 1–4 octal digits, else a failure naming the text
@@ -439,6 +519,21 @@ public static class SnapshotFiles
 
 // ModelArms.Core/Isolation/IsolationRestoreOrder.cs (new)
 public static class IsolationRestoreOrder { public static IReadOnlyList<SavedMode> Of(IReadOnlyList<SavedMode> lockOrder); }   // reversed
+
+// ModelArms.Core/Isolation/RestoreJudgement.cs (new) — question 7's per-entry rule, pure: what a re-pinned entry's facts mean against its saved record
+public abstract record EntryVerdict   // closed
+{
+    public sealed record Restore : EntryVerdict;                      // set the saved mode
+    public sealed record AlreadyRestored : EntryVerdict;              // at the saved mode: counted, no call
+    public sealed record Unresolved(string Sentence) : EntryVerdict;  // the operator's mode: left, reported
+    public sealed record Skip(string Sentence) : EntryVerdict;        // gone, a link, replaced
+    public sealed record Fail(string Sentence) : EntryVerdict;        // outside the bound (and, in the adapter, an errno)
+}
+public static class RestoreJudgement
+{
+    public static EntryVerdict Of(SavedMode saved, PinnedFacts? now /* null = ENOENT */, bool inBound);   // a theory
+}
+public sealed record PinnedFacts(bool IsLink, bool IsFolder, bool IsFile, int Mode, FileIdentity? Identity);
 
 // ModelArms.Core/Isolation/LockSnapshot.cs (widened)
 public sealed record Applied(string Run, string Since, string Digest) : LockState;         // C22; IsolationLine.Of prints Run and Since as today
@@ -448,8 +543,8 @@ public static Outcome<SavedSnapshot> Saved(string json);                        
 public abstract record LockStep   // closed
 {
     public sealed record Fresh : LockStep;
-    public sealed record Recover(SavedSnapshot Old) : LockStep;                 // applying, any run: restore Old in reverse, move it aside, then Fresh
-    public sealed record AlreadyLocked(string Since) : LockStep;                // 0
+    public sealed record Recover(SavedSnapshot Old) : LockStep;                 // applying, any run: restore Old (pinned anew); every entry restored → aside, then Fresh; else keep it, exit 3
+    public sealed record AlreadyLocked(string Since) : LockStep;                // re-verify; 0, or re-apply the open entries
     public sealed record RefuseOtherSet(string LockedRun) : LockStep;           // 4
     public sealed record RefuseInconsistent(string Reason) : LockStep;          // 4
 }
@@ -464,27 +559,36 @@ public abstract record UnlockStep // closed
 public static class UnlockDecision { public static UnlockStep Of(LockState state, Read<string> snapshotText, Read<string> appliedText); }
 
 // ModelArms.Core/Ports/IFolderIsolation.cs (new) — the file system's side of D11, mechanical; the VERB decides
-public sealed record RestoreReport(IReadOnlyList<string> Restored, IReadOnlyList<string> Skipped, IReadOnlyList<string> Failed);   // paths; sentences; sentences
+public sealed record RestoreReport(IReadOnlyList<string> Restored, IReadOnlyList<string> Skipped, IReadOnlyList<string> Unresolved, IReadOnlyList<string> Failed);   // paths; sentences ×3
+public sealed record Pinned(IReadOnlyList<SavedMode> Modes);                   // plan order; the adapter keeps the descriptors (kernel road) until Dispose
 public interface IFolderIsolation : IDisposable
 {
-    string Describe { get; }                                                    // "POSIX file modes (Linux x86-64)" · "none — <why>"
+    string Describe { get; }                                                    // "POSIX file modes (Linux x86-64, kernel road)" · "POSIX file modes (<platform>, runtime road)" · "none — <why>"
     bool Applies { get; }                                                       // false for NoIsolation
-    Outcome<IReadOnlyList<SavedMode>> Pin(IsolationPlan plan);                  // step 0: every entry opened O_PATH and judged; the descriptors held until Dispose; a refusal names the entry (exit 4's words)
-    Outcome<string> Apply(IReadOnlyList<SavedMode> pinned, IsolationPlan plan);  // step 2: each mode through its descriptor, plan order; the first failure's sentence (the caller restores)
+    string NotVerifiedLine { get; }                                             // "" on the kernel road; question 19's line on the runtime road
+    Outcome<Pinned> Pin(IsolationPlan plan);                                    // step 0: every entry opened O_PATH (or judged by the runtime) — a refusal names the entry (exit 4's words)
+    Outcome<string> Apply(Pinned pinned, IsolationPlan plan);                   // step 2: each mode through its descriptor (or path), plan order; the first failure's sentence (the caller rolls back)
     IReadOnlyList<string> Verify(IsolationPlan plan);                           // step 3: question 5; empty = verified
-    RestoreReport Restore(IReadOnlyList<SavedMode> reverse);                    // the saved modes, through the held descriptors (lock's recovery and refusals) or pinned anew (unlock)
+    RestoreReport RollBack(Pinned pinned);                                      // the saved modes in reverse through the HELD descriptors — lock's own apply/verify failure, same process
+    RestoreReport Restore(IReadOnlyList<SavedMode> reverse, RestoreBound bound);   // pinned ANEW: unlock, lock's Recover — question 7's judgement per entry
+    Outcome<string> ReApply(IReadOnlyList<SavedMode> open, IsolationPlan plan);    // AlreadyLocked's open entries: re-pinned (identity must match), the locked mode set
 }
+public sealed record RestoreBound(string Root, string Home, IReadOnlyList<string> Configured);   // question 7's bound, computed by the verb from experiment.json and the map
 ```
 
 ```csharp
-// ModelArms/Adapters/PosixFolderIsolation.cs (new, internal sealed class) : IFolderIsolation — Linux x86-64 only (question 3); DllImport("libc"): open, close, chmod, faccessat, SetLastError = true
-internal Func<int, int, int>? SetMode { get; init; }          // a test's hand replacing chmod("/proc/self/fd/<fd>", mode): (fd, mode) → 0 or an errno; production never sets it
-internal Func<int>? Euid { get; init; }                        // a test's hand replacing KernelFacts.EffectiveUid
-internal Action<int, string>? AfterEachMode { get; init; }     // (index, path) after each mode is applied — the killed-half-way seam throws
-internal Action? BeforeApply { get; init; }                    // between the snapshot write and the first mode — the late-snapshot witness
-internal List<string>? Events { get; init; }                   // "pin", "snapshot", "apply <path>", "verify", "restore <path>", "aside <name>", in order
-// ModelArms/Adapters/NoIsolation.cs (new): Describe "none — <why>", Applies false; Pin/Apply/Verify/Restore throw InvalidOperationException (never called: the verb short-circuits on !Applies)
-// ModelArms/Adapters/FolderIsolations.cs (new): internal static IFolderIsolation For(ExperimentInput input, IsolationPlan? plan, PlatformRoad road, TimeProvider clock, Action<PosixFolderIsolation>? hands)
+// ModelArms/Adapters/PosixFolderIsolation.cs (new, internal sealed class) : IFolderIsolation — Linux x86-64, the kernel road (question 3); DllImport("libc"): open, close, chmod, faccessat, SetLastError = true
+// ModelArms/Adapters/RuntimeFolderIsolation.cs (new, internal sealed class) : IFolderIsolation — every other POSIX road (question 19); no P/Invoke
+internal sealed record IsolationHands(                       // the test's hands, handed to EITHER adapter by FolderIsolations.For; production passes null
+    Func<int, string, int, int>? SetMode,                    // (fd — -1 on the runtime road, path, mode) → 0 or an errno, replacing the chmod; the path lets a hand single out one entry by NAME (finding 9)
+    Func<bool>? IsRoot,                                      // replacing KernelFacts.EffectiveUid == 0 / Environment.IsPrivilegedProcess
+    Action<int, string>? AfterEachMode,                      // (index, path) after each mode is applied — the killed-half-way seam throws
+    Action? BeforeApply);                                    // between the snapshot write and the first mode — the late-snapshot witness
+// Events live on IsolationSeams (below), not on the adapter: "snapshot" and "aside <name>" are the VERB's doings (finding 9); the adapter appends "pin", "apply <path>", "verify", "restore <path>", "rollback <path>", "reapply <path>" to the same list
+// ModelArms/Adapters/NoIsolation.cs (new): Describe "none — <why>", Applies false; every other member throws InvalidOperationException (never reached: lock short-circuits on an empty plan or Windows; unlock reaches it on Windows only, where no snapshot can stand — and a standing one there is Refuse(4), said)
+// ModelArms/Adapters/FolderIsolations.cs (new): internal static IFolderIsolation For(PlatformRoad road, IsolationSeams seams)   // by the ROAD alone (question 9)
+// ModelArms/Adapters/RootFolders.cs (new): internal static Outcome<string> Pids(RootPaths root)   // question 12 (a); run-all and chain call it
+// ModelArms/Adapters/FileGateLock.cs (widened by ONE member): public GateLockAnswer TakeShared(string path)   // question 8; and AcquireAnswerAsync(path, token, Func<GateLockAnswer> take)
 // ModelArms/Adapters/IsolationFiles.cs (widened)
 internal sealed record IsolationRead(LockState State, Read<string> Snapshot, Read<string> Applied);
 public static IsolationRead Read(RootPaths root, PlatformRoad road);           // State(root) stays for status, make, checks
@@ -492,43 +596,46 @@ public static IsolationRead Read(RootPaths root, PlatformRoad road);           /
 // ModelArms/Adapters/LockLog.cs (new): internal static void Append(RootPaths root, TimeProvider clock, string line, TextWriter error)   // question 10
 // ModelArms.Core/Experiment/ArmPaths.cs (widened): RootPaths.IsolationLock (".isolation.lock"), RootPaths.RunnerLock(arm) ("pids/<arm>.lock"), RootPaths.LockedModesAppliedRestored(stamp) (".locked-modes.applied.restored-<stamp>")
 
-// ModelArms/Verbs/Lock.cs, Unlock.cs, RunnerLiveness.cs (new) — C21 and C22 exactly, plus:
-internal sealed record IsolationSeams(TimeProvider Clock, PlatformRoad Road, TimeSpan ExclusiveWait, Action<PosixFolderIsolation>? Hands, Func<RootPaths, string, PlatformRoad, RunnerState> Liveness)
-{ public static IsolationSeams Real { get; } }                 // (TimeProvider.System, PlatformFactsReader.CurrentRoad, 60 s, null, (root, arm, road) => RunnerLiveness.Of(root, arm, road, <one FileGateLock>))
+// ModelArms/Verbs/Lock.cs, Unlock.cs, SnapshotAside.cs, RunnerLiveness.cs (new) — C21 and C22 exactly, plus:
+internal sealed record IsolationSeams(TimeProvider Clock, PlatformRoad Road, TimeSpan ExclusiveWait, IsolationHands? Hands, List<string>? Events, Func<RootPaths, string, PlatformRoad, RunnerState> Liveness)
+{ public static IsolationSeams Real { get; } }                 // (TimeProvider.System, PlatformFactsReader.CurrentRoad, 60 s, null, null, (root, arm, road) => RunnerLiveness.Of(root, arm, road, <one FileGateLock>))
 internal static Task<LockOutcome> LockAsync(ExperimentInput input, string run, CancellationToken stopping, IsolationSeams seams);
 internal static Task<UnlockOutcome> UnlockAsync(ExperimentInput input, bool force, CancellationToken stopping, IsolationSeams seams);
+internal static class SnapshotAside { public static Outcome<string> Snapshot(RootPaths root, TimeProvider clock); public static Outcome<string> Applied(RootPaths root, TimeProvider clock); }   // question 7's renames, the one site (question 16's scan)
 public sealed record Alive(string Holder, int? BelievedPid) : RunnerState;                       // C21's Alive, widened (question 14)
 public static RunnerState Of(RootPaths root, string arm, PlatformRoad road, FileGateLock gate);   // C21's Of, the road and the lock handed in
 public static string PortableLine(PlatformRoad road);                                            // question 15
-public const int RunnerLockWaitMilliseconds = 2000;                                              // question 11
+public const int RunnerLockWaitMilliseconds = 2000;                                              // questions 11, 12
+// ModelArms/Verbs/RunArmAdmission.cs: ArmPlan gains IDisposable IsolationHold, IDisposable RunnerLock (question 12); RunArmAdmission.IsolationWarning(plan, error) (question 20)
 ```
 
-`LockVerb.LockAsync`, in order: `PlanOf` (4 on an unknown run or a plan refusal; null → `NoIsolation`) → `FolderIsolations.For` → `!Applies` →
-the `NoIsolation` outcome (0, or 3 on a POSIX road without the adapter when the plan is not empty — question 9) → `Euid() == 0` → `Stopped(3)`
-→ the exclusive lock (question 8) → `IsolationFiles.Read` → `LockDecision.Of` → `AlreadyLocked` / `Stopped(4)`, or `Recover` (restore, aside) then
-`Fresh`: `Pin` (4 on a refusal) → `SnapshotFiles.Snapshot` through `ArtifactCommit.Stage(root.LockedModes, …)` (an `IOException` — a snapshot
-appeared meanwhile — is 4 naming it) → `Apply` (a failure → `Restore(reverse)`, aside, 3) → `Verify` (sentences → `Restore`, aside, 3) →
-`SnapshotFiles.Applied` through `ArtifactCommit.Stage(root.LockedModesApplied, …)` → `Applied`. `stopping` is checked at entry and while
-waiting for the exclusive lock, not between the snapshot and the applied file (the window is milliseconds; a half state is what `applying` is
+`LockVerb.LockAsync`, in order: `PlanOf` (4 on an unknown run or a plan refusal; null → `NoIsolation`, 0) → `RootFolders.Pids` when the plan names `<root>/pids` (4 on a link or a
+file) → `FolderIsolations.For(road, seams)` → `!Applies` (Windows) → the `NoIsolation` outcome (0) → `IsRoot()` → `Stopped(3)` → the exclusive lock (question 8: a runner alive →
+4 at once; another writer → the 60 s wait) → `IsolationFiles.Read` → `LockDecision.Of` → `RefuseOtherSet` / `RefuseInconsistent` → `Stopped(4)`; `AlreadyLocked` → `Verify`, and
+on sentences `ReApply` + `Verify` (question 6); `Recover` → `Restore(reverse(old), bound)` — `Failed` or `Unresolved` not empty → `Stopped(3)`, the old snapshot KEPT; else `SnapshotAside.Snapshot`
+(the applied file, if any, aside too) and on to `Fresh`; `Fresh`: `NotVerifiedLine` printed when not empty → `Pin` (4 on a refusal) → `SnapshotFiles.Snapshot` through
+`ArtifactCommit.Stage(root.LockedModes, …)` (an `IOException` — a snapshot appeared meanwhile — is 4 naming it; the decision above, not this guard, is what keeps a standing one) → `Apply` (a failure →
+`RollBack`, then aside ONLY when `Failed` is empty, 3) → `Verify` (sentences → the same) → `SnapshotFiles.Applied` through `ArtifactCommit.Stage(root.LockedModesApplied, …)` → `Applied`.
+`stopping` is checked at entry and while waiting for the exclusive lock, not between the snapshot and the applied file (the window is milliseconds; a half state is what `applying` is
 for). `RunAsync` prints one line, stdout on 0 and stderr on 3 or 4, prefixed `model-arms lock <run>: ` (`model-arms unlock: `), and appends it
-to `lock.log`. `UnlockVerb.UnlockAsync`: the exclusive lock → `IsolationFiles.Read` → `UnlockDecision.Of` → `Nothing` / `Refuse` /
-`RenameAppliedAlone` (aside, 0), or `Restore`: unless `force`, the map through `BoundedFile` (1 MiB; a refused map is 4; no map → no arms) and
-`seams.Liveness` of every arm in map order — the first `Alive` → `RefusedAlive(arm)` (4: `refused — <arm> is alive (<holder>); unlock once no
-arm is alive, or --force`), `Refused` → 4, `Unread` → 3; `PortableLine` printed once before the first probe when not empty; then
-`isolation.Restore(IsolationRestoreOrder.Of(saved.Modes))` → `Failed` empty: aside both, `Restored(count)`; else aside the applied file alone,
-`Stopped(3, …)`.
+to `lock.log`. `UnlockVerb.UnlockAsync`: `FolderIsolations.For(road, seams)` (Windows: `!Applies` → `NoIsolation`, 0 — or 4 naming a snapshot that stands there, never a restore) → the exclusive lock (question 8) →
+`IsolationFiles.Read` → `UnlockDecision.Of` → `Nothing` / `Refuse` / `RenameAppliedAlone` (aside, 0), or `Restore`: unless `force`, the map through `BoundedFile` (1 MiB; a refused map is 4; no map → no arms) and
+`seams.Liveness` of every arm in map order, UNDER the exclusive lock — the first `Alive` → `RefusedAlive(arm)` (4: `refused — <arm> is alive (<holder>); unlock once no
+arm is alive, or --force`), `Refused` → 4, `Unread` → 3; `PortableLine` and `NotVerifiedLine` printed once each when not empty; the bound from today's `experiment.json` and the map
+(question 7); then `isolation.Restore(IsolationRestoreOrder.Of(saved.Modes), bound)` → `Failed` empty: aside both, `Restored(count)` (the skipped and unresolved sentences in the line);
+else aside the applied file alone, `Stopped(3, …)`.
 
 **Scenarios.** Every test is red FIRST on an assertion against today's code (the verbs print *not built yet*, exit 4) or against the stub
 named; the live classes are Linux only (`Assert.SkipWhen(!OperatingSystem.IsLinux(), "file modes, /proc and O_PATH are measured on Linux")`)
-and skip on a road that is not `Kernel`/`Kernel` with the road's line. The kit — `IsolationKit` (new, `tests/Bench.Tests/ModelArms/IsolationKit.cs`):
+and the kernel-road rows skip on a road that is not `Kernel`/`Kernel` with the road's line (the runtime-road rows run everywhere Linux runs, through the seam). The kit — `IsolationKit` (new, `tests/Bench.Tests/ModelArms/IsolationKit.cs`):
 an `ExperimentRoot` whose example paths EXIST — `<temp>/example/old-experiment` (a folder, 755), the four `~/.claude/*` folders under
-`<temp>/example/home/.claude/`, `<root>/r`, `<root>/pids` (the root is 700 from the fixture, the rest 755); `Modes()` = `File.GetUnixFileMode` of
+`<temp>/example/home/.claude/`, `<root>/r`, `<root>/pids` (the root is 700 from the fixture, the rest 755; one row removes `pids/` to see it made) — and whose `isolation` block is KEPT (`MakeArmAsync(arm, fake, keepIsolation: true)`, question 20); `Modes()` = `File.GetUnixFileMode` of
 every plan entry as `%a` text, in plan order; `Files()` = which of the six spellings are present, by NAME (`.locked-modes`, `.locked-modes.applied`,
-the two `.restored-<stamp>` and `-2` names for the kit's frozen stamp) — never a listing: the root may be at 300; `LockAsync(run, hands?)` /
-`UnlockAsync(force, hands?)` in process through `ExperimentGate.RunAsync(input, …, GateSeams.Real)` with `IsolationSeams.Real with {
-ExclusiveWait = 10 s, Hands = hands }`, returning `(Code, Output, Error)`; `Snapshot()` = `IsolationFiles.Read(root, CurrentRoad)`; `SavedOf()` =
-`LockSnapshots.Saved(text).Ok()`. The part-7 rows edit `runs.part7` to `closedArms: ["C1"]`, `closed: ["<root>/chain/part6"]` over ONE made arm
-(`MakeArmAsync("C1", fake)`) — nine arms would be slow for no extra proof.
+the two `.restored-<stamp>` and `-2` names for the kit's frozen stamp) — never a listing: the root may be at 300; `LockAsync(run, hands?, road?)` /
+`UnlockAsync(force, hands?, road?)` in process through `ExperimentGate.RunAsync(input, …, GateSeams.Real)` with `IsolationSeams.Real with {
+ExclusiveWait = 10 s, Hands = hands, Events = the kit's list, Road = road ?? CurrentRoad }`, returning `(Code, Output, Error)`; `Snapshot()` = `IsolationFiles.Read(root, CurrentRoad)`; `SavedOf()` =
+`LockSnapshots.Saved(text).Ok()`; `StartRunner(arm)` = `ModelArmsBinary.Start(root, "run-arm", arm)` over a made arm whose first step is in `hang`. The part-7 rows edit `runs.part7` to `closedArms: ["C1"]`, `closed: ["<root>/chain/part6"]` over ONE made arm
+(`MakeArmAsync("C1", fake, keepIsolation: true)`) — nine arms would be slow for no extra proof.
 
 `IsolationPlanTests` (pure):
 
@@ -541,44 +648,61 @@ ExclusiveWait = 10 s, Hands = hands }`, returning `(Code, Output, Error)`; `Snap
 | `A_plan_refuses_a_duplicate_a_nested_closed_entry_a_forbidden_closure_and_a_nul_naming_the_entry` | theory: `closed ["/a", "/a/"]` → `isolation.closed[1] … is named twice`; `closed ["/a"]`, `unlisted ["/a/b"]` → `isolation.unlisted[0] … is inside closed /a`; `closed ["/a", "/a/b"]` → inside; `closed ["<root>"]` → `is, or contains, the experiment root — it cannot be closed`; `closed [home]`, `[source]`, `["/x"]` with `neverClosed` `/x/arm` → the same shape; a `\0` → refused; the positives: `unlisted ["/a"]`, `closed ["/a/b"]` ALLOWED; `unlisted ["/a", "/a/b"]` allowed | a stub refusing nothing: `Expected a failure` |
 | `Lock_decision_follows_d11_over_every_state` | theory: `None` → `Fresh`; `Applying(part7)` with a parsing snapshot, plan `part6` → `Recover`; `Applying` whose modes do not parse → `RefuseInconsistent`; `Applied(part6, d1)` plan `part6`/`d1` → `AlreadyLocked`; plan `part6`/`d2` → `RefuseOtherSet("part6")`; `Applied(part7, d1)` plan `part6` → `RefuseOtherSet("part7")`; every `Inconsistent` row of `LockSnapshotTests.Pairs` → `RefuseInconsistent` | a stub reading inconsistent as none: `Expected RefuseInconsistent, but found Fresh` |
 | `Unlock_decision_restores_from_a_parsing_snapshot_renames_an_applied_file_alone_and_refuses_one_that_does_not_parse` | theory over the same rows: `None` → `Nothing`; `Applying`/`Applied` → `Restore(saved, applied present?)`; two runs or two digests → `Restore` (the snapshot parses); the applied file alone, present or refused → `RenameAppliedAlone`; `.locked-modes` refused (a link) or not JSON → `Refuse` | a stub renaming without restoring: `Expected Restore` |
-| `The_snapshot_and_applied_texts_round_trip_through_the_one_reader` | `SnapshotFiles.Snapshot(saved)` → `LockSnapshots.Saved` equals `saved`; with `Applied(run, digest, at)` → `LockSnapshots.State` is `Applied(run, at, digest)`; `ModeText`/`ModeBits` over `0`, `300`, `755`, `2755`, `1777`, `4755`; `"8"`, `"77777"`, `""` refused | a writer omitting `kind`: `Expected Modes[0].Kind` |
+| `The_snapshot_and_applied_texts_round_trip_through_the_one_reader` | `SnapshotFiles.Snapshot(saved)` → `LockSnapshots.Saved` equals `saved`, with and without `Identity` (no `dev`/`ino` written when null; `dev` without `ino` refused); with `Applied(run, digest, at)` → `LockSnapshots.State` is `Applied(run, at, digest)`; `ModeText`/`ModeBits` over `0`, `300`, `755`, `2755`, `1777`, `4755`; `"8"`, `"77777"`, `""` refused | a writer omitting `kind`: `Expected Modes[0].Kind` |
+| `A_restored_entry_is_judged_by_its_kind_identity_and_mode_against_the_record` | theory over `RestoreJudgement.Of` (finding 3, 11): saved `755` closed, now a folder at `0`, same identity → `Restore`; at `755` → `AlreadyRestored`; at `700` → `Unresolved` naming `700`, `755` and `0`; saved unlisted `755`, now `300` → `Restore`, now `500` → `Unresolved`; now a link → `Skip("a link now")`; another identity → `Skip("replaced …")`; `null` → `Skip("not found by this name …")` holding `may still stand at 0 elsewhere`; `inBound: false` → `Fail("not under any folder …")` before every other verdict; identity `null` on both sides (the runtime road) → compared as equal; `InBound`: the root, `<root>/pids`, `<home>/.claude/projects`, a configured `/x/y` and `/x/y/z` → true; `/x`, `/etc/passwd`, `<home>/.ssh` → false | a judgement restoring whatever the mode is: `Expected Unresolved, but found Restore` (break-it 12) |
 
 `LockSnapshotTests` (edited): `The_applying_state_names_the_snapshots_time_and_the_applied_state_the_verification_time` asserts
 `Applied("part7", "2026-10-30T10:00:05Z", "d1")` (red today: two members).
 
-`PosixFolderIsolationTests` (live, Linux x86-64, `IsolationKit`):
+`PosixFolderIsolationTests` (live, Linux x86-64, `IsolationKit`; the kernel road):
 
 | Test | Given / When / Then | Red |
 |---|---|---|
 | `Modes_are_saved_before_the_first_change_and_restored_in_reverse` | `lock part6` → 0; `SavedOf()` holds the eight entries with their `%a` texts (`755`, `700`, …), `kind`, `dev`, `ino`; `Modes()` are `0` and `300`; `unlock` → 0; `Modes()` as before; `Events` show `restore <path>` in REVERSE plan order; `.locked-modes.restored-<stamp>` and `.locked-modes.applied.restored-<stamp>` present; `Snapshot().State` `None` | a stub restoring in plan order: `Expected the restore events to equal [the reverse]` |
 | `The_snapshot_is_durable_before_the_first_mode_changes` | `BeforeApply` reads the root: `.locked-modes` exists and `LockSnapshots.State` is `Applying(part6)`, `Modes()` unchanged; then throws `TestCrash` → the verb lets it travel (the test catches it) → `Modes()` unchanged, state `Applying` | the write moved after the apply: `Expected .locked-modes to exist` (the parent's DoD: watched red against an adapter that wrote its snapshot late) |
 | `A_lock_killed_half_way_is_restored_and_applied_afresh_by_the_next_lock` | `AfterEachMode` throws after index 1 → `Modes()`: entries 0–1 changed, 2–7 original, state `Applying`; a second `lock part6` (no hands) → 0, stdout `a lock was interrupted … restored 8 of 8, now locking afresh` then `locked — closed 1, unlisted 7`; `Modes()` all applied; one `.locked-modes.restored-*`; state `Applied` with the plan's digest | a lock refusing `applying`: `Expected 0, but found 4`; one applying without restoring: no `restore` event |
-| `A_lock_on_an_applied_snapshot_of_the_same_run_and_set_is_a_no_op_that_says_already_locked` | `lock part6` twice → the second 0, stdout `already locked for part6 since <the first's verifiedAt>`, `Events` empty, both files' bytes unchanged | a lock applying again: `Expected Events to be empty` |
+| `A_lock_killed_in_another_process_is_recovered_by_a_new_process_without_its_descriptors` | **finding 1, a REAL death.** `tests/LockCrasher` (new helper project beside `tests/GateHolder`, the same shape: references `ModelArms`, launched from its own output folder, no hidden mode in production code): it runs `LockVerb.LockAsync` over the root it is handed with `AfterEachMode = (i, _) => { if (i == 1) Process.GetCurrentProcess().Kill(); }` — `SIGKILL` to itself right after the SECOND chmod, every descriptor dying with it. After it exits by signal: `Modes()` entries 0–1 changed (`old-experiment` `0`, `<root>` `300`), 2–7 original, state `Applying`. Two halves, each from that state: **(a)** `ModelArmsBinary.RunAsync(root, "lock", "part6")` — a SEPARATE process, the real binary — → 0, stdout `a lock was interrupted (snapshot of part6 since …) — restored 2 of 8, now locking afresh` then `locked — closed 1, unlisted 7`; the archived `.locked-modes.restored-<stamp>` holds the EXACT original modes and the new `.locked-modes` records the same eight `%a` texts (the modes were original again before the fresh apply); `Snapshot().State` `Applied`; `unlock` → `Modes()` original. **(b)** before the retry, `<root>/r` (index 2, untouched by the crash) is replaced by a link to `<temp>/elsewhere` (755) and `~/.claude/projects` (index 4) deleted and made again (a new inode, 755) → the retry: the recovery restores 0–1 and skips the two (`<root>/r: a link now — not restored`; `~/.claude/projects: replaced since the lock (inode A → B) — its mode is left as it is`), archives the old snapshot, then `Pin` refuses the link → exit 4 `<root>/r is a symbolic link`; `.locked-modes` absent, the archived record present; `elsewhere` 755 throughout, `<root>` back at `700`, the new `~/.claude/projects` still 755 | a recovery through the held descriptors: in the new process there are none — `Expected 0, but found 3` with `/proc/self/fd/-1: Bad file descriptor` (break-it 11) |
+| `A_lock_on_an_applied_snapshot_of_the_same_run_and_set_re_verifies_and_re_applies_what_was_opened` | `lock part6` twice → the second 0, stdout `already locked for part6 since <the first's verifiedAt>`, `Events` = `verify` alone, both files' bytes unchanged; then `File.SetUnixFileMode(<root>/pids, 755)` by the test (the operator's `chmod`) and `lock part6` → 0, stdout `already locked for part6 since <t> — re-applied 1 entries that were open (<root>/pids)`, `<root>/pids` at 300 again, `Events` = `verify, reapply <root>/pids, verify`, both files' bytes STILL unchanged (no new snapshot, no new applied file); then `pids/` deleted and made again (a new inode) at 755 and `lock part6` → 4 naming `<root>/pids` as replaced, asking for `unlock`, `pids/` left 755 (**finding 4**) | a lock claiming success: `Expected 300, but found 755` (break-it 13) |
 | `A_lock_for_another_run_or_closed_set_over_an_applied_snapshot_is_refused_asking_for_unlock` | `lock part6`, then `lock part7` → 4, `locked for part6 with a different closed set — unlock first`, `Modes()` unchanged, `Events` empty; then `part6`'s `closed` gains a path (a new digest) and `lock part6` → 4, the same sentence | the digest comparison dropped: `Expected 4, but found 0` (break-it 4) |
 | `The_applied_state_is_a_second_immutable_file_and_a_crash_before_it_reads_as_applying` | `AfterEachMode` throws after the LAST index (every mode applied, no applied file) → `Snapshot().State` `Applying`, `IsolationLine.Of` says `a lock was interrupted — run \`lock part6\` or \`unlock\``, `.locked-modes.applied` absent; then `lock part6` → `Applied`, both files parse | a writer that wrote one file: `Expected Applying, but found Applied` |
 | `Without_an_isolation_block_lock_and_unlock_are_logged_no_ops` | `Edit` removes `isolation`: `lock part6` → 0, stdout `no isolation configured — nothing to lock`, no `.locked-modes`, `lock.log`'s last line holds it; `unlock` → 0, `no isolation configured — nothing to unlock`; the positive: `lock part7` (closedArms, closed) → 0, `locked — closed 2, unlisted 0` (§8 item 33) | a lock refusing the missing block: `Expected 0` |
-| `A_verification_failure_restores_before_refusing` | `SetMode` applies NOTHING → `lock part6` 3; stderr holds `could not be verified`, `<root> is still listable by this user`, `the modes were restored`; `Events` = `pin, snapshot, apply ×8, verify, restore ×8 (reverse), aside .locked-modes.restored-…`; state `None`; `Modes()` unchanged | a refusal before the restore: `Expected "restore …" to precede "aside …"` |
+| `Unlock_restores_a_standing_snapshot_after_the_block_was_removed` | **finding 7:** `lock part6` → 0; `Edit` removes `isolation`; `unlock` → the seven root-and-home entries restored (`<root>`, `<root>/r`, `<root>/pids`, the four `~/.claude/*` — in the bound by place), `old-experiment` FAILED by the bound (`not under any folder this experiment names — not restored (by hand: chmod 755 <path>)`), exit 3, `.locked-modes` KEPT, the applied file aside, state `Applying`, `Modes()` = the seven original and `old-experiment` still `0`; no `InvalidOperationException` anywhere (`NoIsolation.Restore` never reached); then `chmod 755` by the test and `unlock` → 0, `restored 8 of 8` (the eighth a harmless retry), both files aside, state `None` | an adapter chosen by the plan: `InvalidOperationException` from `NoIsolation.Restore` (break-it 15) |
+| `A_verification_failure_restores_before_refusing` | `SetMode` applies NOTHING → `lock part6` 3; stderr holds `could not be verified`, `<root> is still listable by this user`, `the modes were restored`; `Events` = `pin, snapshot, apply ×8, verify, rollback ×8 (reverse), aside .locked-modes.restored-…`; state `None`; `Modes()` unchanged | a refusal before the restore: `Expected "rollback …" to precede "aside …"` |
+| `A_roll_back_that_fails_keeps_the_snapshot_and_the_retry_restores_the_originals` | **finding 2 on the lock's own path:** `SetMode` answering `EPERM` for `<root>/r` on its SECOND call (the apply's succeeds, the roll-back's fails) and applying nothing for `<root>/pids` (so `Verify` fails) → `lock part6` 3, stderr `could not be verified … <root>/pids is still listable … restored 7 of 8 — <root>/r: Operation not permitted — the snapshot is kept`; `.locked-modes` PRESENT (state `Applying`), no `.restored-` name, `<root>/r` still `300`; then `unlock` (no hands) → 0, `Modes()` all original, both files aside | a roll-back that moves the snapshot aside whatever happened: `Expected .locked-modes to exist` (break-it 16) |
 | `A_locked_folder_cannot_be_listed_by_this_user_and_is_still_traversed_by_name` | after `lock part6`: `Directory.EnumerateFileSystemEntries(<root>/pids)` throws `UnauthorizedAccessException`; `File.WriteAllText(<root>/pids/by-name, "x")` succeeds and reads back; `File.GetUnixFileMode(<root>/pids)` is 300; `old-experiment`: `Directory.Exists` true, a child `File.Exists` false and `new FileInfo(child).Length` throws (S1-4) | `lock` leaving 755: `Expected an exception` |
-| `Verification_refuses_when_the_user_can_still_list_it` | `SetMode` applies every entry but `<root>/pids` (one drvfs member among honouring ones, M-8) → 3, stderr names `<root>/pids` and no other entry, `Modes()` restored, state `None`; a second `[Fact]`, `Verification_refuses_a_listable_folder_on_the_windows_drive_when_one_is_named`, skipped unless `MODEL_ARMS_DRVFS_SCRATCH` names a writable folder whose `/proc/mounts` line says `9p`: `unlisted` edited to that folder alone → 3 naming it | the verification probing one folder: `Expected 3, but found 0` (break-it 2) |
+| `Verification_refuses_when_the_user_can_still_list_it` | `SetMode` applies every entry but `<root>/pids` — singled out by the PATH the hand receives (one drvfs member among honouring ones, M-8) → 3, stderr names `<root>/pids` and no other entry, `Modes()` restored, state `None`; a second `[Fact]`, `Verification_refuses_a_listable_folder_on_the_windows_drive_when_one_is_named`, skipped unless `MODEL_ARMS_DRVFS_SCRATCH` names a writable folder whose `/proc/mounts` line says `9p`: `unlisted` edited to that folder alone → 3 naming it | the verification probing one folder: `Expected 3, but found 0` (break-it 2) |
 | `Unlock_is_idempotent_and_says_so_without_a_snapshot` | `unlock` on a fresh root → 0, `nothing locked`; `lock part6`, `unlock`, `unlock` → the third 0, `nothing locked`; exactly one `.restored-` pair | *not built yet* |
-| `Lock_and_unlock_run_under_an_exclusive_file_lock` | `ModelArmsBinary.StartHolder(root, root.IsolationLock, FakeCli.Executable)` (the fake in `hang`), `held` seen → `lock part6` with `ExclusiveWait` 2 s → 3, `.isolation.lock is held by pid <holder> since … — another lock or unlock is running; it was not free within 2 s`, nothing written, `Modes()` unchanged; then with `ExclusiveWait` 20 s: `lock part6` started, the holder killed after 1 s → 0 and `verified at` is after the kill (the first WAITED); `unlock` the same against the holder | the exclusive lock dropped: `Expected 3, but found 0` (break-it 8) |
+| `Lock_and_unlock_run_under_an_exclusive_file_lock` | `ModelArmsBinary.StartHolder(root, root.IsolationLock, FakeCli.Executable)` (the fake in `hang`; an EXCLUSIVE holder with a note, as today), `held` seen → `lock part6` with `ExclusiveWait` 2 s → 3, `.isolation.lock is held by pid <holder> since … — another lock or unlock is running; it was not free within 2 s`, nothing written, `Modes()` unchanged; then with `ExclusiveWait` 20 s: `lock part6` started, the holder killed after 1 s → 0 and `verified at` is after the kill (the first WAITED); `unlock` the same against the holder | the exclusive lock dropped: `Expected 3, but found 0` (break-it 8) |
+| `A_runner_holds_the_isolation_lock_shared_and_a_writer_is_refused_at_once_naming_it` | **finding 5:** `MakeArmAsync(C1, fake, keepIsolation: true)`; `lock part6` → 0; `StartRunner(C1)` (the real binary, its first step in `hang`), `pids/C1.pid` seen; `FileGateLock.Take(.isolation.lock, false, false)` is `Busy` and `/proc/locks` holds a `FLOCK ADVISORY READ` line for the runner's pid (S1-6, the effect observed — never only the share mode sent); `unlock` with `ExclusiveWait` 20 s → 4 **within 2 s** (no wait: a runner is alive), `.isolation.lock is held shared by a running arm (C1 is alive: pid <N>)`; `lock part7` → 4, the same; `Modes()` locked throughout; then `unlock --force` → 0 WHILE the runner lives: stderr and `lock.log` hold `WARNING: --force skipped the isolation lock and the liveness check`, `Modes()` original, the runner still `Alive` (D11's `--force`, the operator's choice); the runner killed | the runner's shared hold dropped: `unlock` without `--force` `Expected 4, but found 0` (break-it 17) |
+| `No_runner_starts_between_the_last_liveness_probe_and_the_restore` | **consultation 5.4's race, both orders:** (a) `unlock` in process with `IsolationSeams.Liveness` a hand that, on its LAST probe (the last arm of the map), starts `StartRunner(C1)` and waits up to 5 s for the runner to exit, then returns `Gone` — the restore is paused exactly after the last probe → the runner EXITS 4 (`the isolation is being changed (.isolation.lock is held by pid <test> …)`), no `pids/C1.pid`, the fake has no call, and `unlock` → 0 restores; (b) the runner first (`StartRunner`, the pid file seen) → `unlock` 4 at once (the row above); never both: in (a) the runner's exit code is 4 and the modes are restored, in (b) the modes stay and the runner lives | the runner taking its shared hold AFTER `Place`: (a) `Expected the fake to have 0 calls, but found 1` (break-it 18) |
 | `An_inconsistent_snapshot_is_never_read_as_none_by_a_writer` | theory, the files by hand: `.locked-modes` `not json`; an applied file alone; two runs; two digests; a non-UTF-8 `.locked-modes` (`FF FE` + text); a `.locked-modes` that is a link to a parsing file — `lock part6` → 4 holding `inconsistent` and the reason, `Events` empty, `Modes()` and both files untouched; `unlock` → two runs / two digests: the parsing snapshot's modes restored, both moved aside, 0; applied alone: moved aside, no `restore` event, 0 `nothing to restore — .locked-modes.applied stood alone, moved aside`; not JSON / not UTF-8 / a link: 4 naming `.locked-modes`, both kept | inconsistent read as none: `Expected 4, but found 0` (break-it 10) |
 | `The_writers_files_are_the_shapes_the_built_reader_parses` | after `lock part6`: `IsolationFiles.State(root)` (E3's reader, the real road) is `Applied("part6", <verifiedAt>, <digest>)`; `StatusVerb` in process prints `isolation: isolation applied for part6 since <verifiedAt>`; `verifiedAt` parses with `SnapshotFiles.Utc` | a writer spelling `verified_at`: `Expected Applied, but found Inconsistent` |
-| `An_entry_that_is_absent_a_link_a_file_where_a_folder_is_needed_or_reached_through_a_link_is_refused_before_anything_is_written` | theory: `old-experiment` removed → 4 `does not exist — named by isolation.closed[0]`; `<root>/pids` a link to a folder → 4 `is a symbolic link`; `<root>/pids` a regular file → 4 `is a regular file, not a directory — only a folder can be unlisted`; `~/.claude/projects` reached through a link at `<home>/.claude` → 4 `reached through a link`; the positive: `old-experiment` a regular FILE → 0 (closed may be a file, and the file is 000 after); in every refusal `.locked-modes` absent, `Modes()` unchanged | a check after the snapshot: `Expected .locked-modes not to exist` |
-| `A_link_planted_after_the_check_never_has_its_target_closed` | `BeforeApply` moves `<root>/pids` to `<temp>/pids-moved` and plants a link `<root>/pids` → `<temp>/elsewhere` (755) → the modes go through the pinned descriptors: `pids-moved` is 300, `elsewhere` stays 755; the verification then fails on `<root>/pids` (`vanished`/a link) and restores → 3; `elsewhere` 755 throughout, `pids-moved` back to 755 | a chmod by path: `Expected elsewhere to be 755, but found 300` (break-it 3) |
-| `Unlock_skips_an_entry_gone_or_replaced_since_the_lock_and_says_so` | `lock part6`; `old-experiment` deleted; `<root>/pids` deleted and made again (a new inode, 755) → `unlock` 0, `unlocked — restored 6 of 8 (skipped: <old-experiment>: gone since the lock; <root>/pids: replaced since the lock (inode A → B) — its mode is left as it is)`; `<root>/pids` stays 755; both files moved aside | an unlock restoring onto the new inode: `Expected 755` |
-| `A_restore_that_fails_half_way_keeps_the_snapshot_moves_the_applied_file_aside_and_exits_3` | `lock part6`; `unlock` with `SetMode` answering `EPERM` for `<root>/r` → 3, `restored 7 of 8 — <root>/r: Operation not permitted — the applied file was moved aside; run unlock again, or lock part6`; `.locked-modes` KEPT, `.locked-modes.applied.restored-*` present, `Snapshot().State` `Applying`; then `unlock` (no hands) → 0 and `Modes()` restored | a verb renaming both: `Expected .locked-modes to exist` |
+| `An_entry_that_is_absent_a_link_a_file_where_a_folder_is_needed_or_reached_through_a_link_is_refused_before_anything_is_written` | theory: `old-experiment` removed → 4 `does not exist — named by isolation.closed[0]`; `<root>/pids` a link to a folder → 4 `is a symbolic link`; `<root>/pids` a regular file → 4 `is a regular file, not a directory`; `~/.claude/projects` reached through a link at `<home>/.claude` → 4 `reached through a link`; the positives: `old-experiment` a regular FILE → 0 (closed may be a file, and the file is 000 after); **`<root>/pids` ABSENT → 0, made at 700 by name (finding 6)**, `SavedOf()` records it `700`; in every refusal `.locked-modes` absent, `Modes()` unchanged | a check after the snapshot: `Expected .locked-modes not to exist`; a lock refusing the absent `pids/`: `Expected 0, but found 4` |
+| `A_link_planted_after_the_check_never_has_its_target_closed` | `BeforeApply` moves `<root>/pids` to `<temp>/pids-moved` and plants a link `<root>/pids` → `<temp>/elsewhere` (755) → the modes go through the pinned descriptors: `pids-moved` is 300, `elsewhere` stays 755; the verification then fails on `<root>/pids` (`vanished`/a link) and rolls back through the HELD descriptors → 3; `elsewhere` 755 throughout, `pids-moved` back to 755 | a chmod by path: `Expected elsewhere to be 755, but found 300` (break-it 3) |
+| `Unlock_skips_an_entry_gone_or_replaced_since_the_lock_and_says_so` | `lock part6`; `old-experiment` deleted; `<root>/pids` deleted and made again (a new inode, 755) → `unlock` 0, `unlocked — restored 6 of 8 (skipped: <old-experiment>: not found by this name — if it was renamed, it may still stand at 0 elsewhere; the record is kept in .locked-modes.restored-<stamp>; <root>/pids: replaced since the lock (inode A → B) — its mode is left as it is)`; `<root>/pids` stays 755; both files moved aside and the archived record still names `old-experiment` | an unlock restoring onto the new inode: `Expected 755` |
+| `An_operators_own_mode_change_survives_unlock_and_is_reported` | **finding 3:** `lock part6` (`<root>/r` saved `755`, locked `300`); `File.SetUnixFileMode(<root>/r, 700)` by the test → `unlock` 0, `unlocked — restored 7 of 8 (unresolved: <root>/r: mode 700 is neither the saved 755 nor the locked 300 — changed by hand since the lock; left as it is)`; `<root>/r` is `700` after; both files aside; the positive: `<root>/pids` set to `755` (= its saved mode) by the test before `unlock` → counted restored without a `restore <root>/pids` event (a harmless retry) | an unlock restoring over the operator's mode: `Expected 700, but found 755` (break-it 12's live half) |
+| `A_restore_that_fails_half_way_keeps_the_snapshot_moves_the_applied_file_aside_and_exits_3` | `lock part6`; `unlock` with `SetMode` answering `EPERM` for `<root>/r` → 3, `restored 7 of 8 — <root>/r: Operation not permitted — the applied file was moved aside; run unlock again, or lock part6`; `.locked-modes` KEPT, `.locked-modes.applied.restored-*` present, `Snapshot().State` `Applying`; then `unlock` (no hands) → 0 and `Modes()` restored; **and the same through `lock`'s `Recover`** (`AfterEachMode` throws after index 1, then `lock part6` with `SetMode` `EPERM` for entry 0) → 3, `restored 1 of 8 — … — the snapshot is kept`, `.locked-modes` the OLD bytes, no fresh snapshot, state `Applying`; `lock part6` (no hands) → 0, `restored 2 of 8, now locking afresh` (finding 2: the same handling on all three paths) | a verb renaming both: `Expected .locked-modes to exist`; a `Recover` writing a fresh snapshot over a failed restore: `Expected the old bytes` |
 | `Two_cycles_in_one_second_keep_both_records` | `IsolationSeams.Clock` a `BenchClock` frozen at one instant: `lock`, `unlock`, `lock`, `unlock` → `.locked-modes.restored-<stamp>`, `…-<stamp>-2` and the applied pair likewise, four files, none overwritten | `File.Move(overwrite: true)`: `Expected 4 files, but found 2` |
-| `Running_as_root_is_refused_before_any_mode_and_a_road_without_the_adapter_says_what_it_cannot_do` | `Euid = () => 0` → `lock part6` 3, `running as root (uid 0)…`, `Events` empty, nothing written; `IsolationSeams.Road = PlatformKit.MacRoad` → 3, `isolation by file modes is measured on Linux x86-64 only — on macOS …`, nothing written; the block removed on the Mac's road → 0, `no isolation configured` | a euid check after the snapshot: `Expected .locked-modes not to exist` |
+| `Running_as_root_is_refused_before_any_mode` | `IsRoot = () => true` → `lock part6` 3, `running as root (uid 0)…`, `Events` empty, nothing written | a euid check after the snapshot: `Expected .locked-modes not to exist` |
+
+`RuntimeFolderIsolationTests` (live, Linux — any architecture; the runtime road through the seam, finding 8):
+
+| Test | Given / When / Then | Red |
+|---|---|---|
+| `On_a_road_without_the_kernel_reader_lock_and_unlock_run_by_path_and_say_what_is_not_verified` | `road: PlatformKit.MacRoad` → `lock part6` 0, stdout's first line `isolation on <platform>: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart at unlock; a FIFO or a device reads as a file (ledger 2.1)`, then `locked — closed 1, unlisted 7, verified at …`; `Modes()` `0` and `300`; `SavedOf()` has eight entries with `Identity == null` and the bytes hold no `dev`; `Directory.EnumerateFileSystemEntries(<root>/pids)` throws; `unlock` (the same road) → 0, the line once, `Modes()` original; the kernel road's `IsolationFiles.State` reads both files as `Applied` in between (one reader, two writers) | a road refusing with the platform's name: `Expected 0, but found 3` (break-it 19) |
+| `The_runtime_road_verifies_every_entry_and_rolls_back_on_a_listable_one` | `road: MacRoad`, `SetMode` applying nothing for `<root>/pids` (by path) → 3 naming `<root>/pids` alone, `Modes()` original, state `None` | the verification by `GetUnixFileMode` instead of a listing attempt: `Expected 3, but found 0` |
+| `The_runtime_road_refuses_a_link_a_wrong_kind_and_root_before_anything_is_written` | theory on `MacRoad`: `<root>/pids` a link → 4 `is a symbolic link`; a regular file → 4; `old-experiment` absent → 4; `IsRoot = () => true` → 3; `.locked-modes` absent in each | a `Directory.Exists` that follows the link: `Expected 4, but found 0` |
+| `The_runtime_road_skips_a_link_and_reports_an_operators_mode_at_unlock` | `lock` on `MacRoad`; `<root>/pids` replaced by a link to `<temp>/elsewhere` (755); `<root>/r` set to `700` by the test → `unlock` 0: `<root>/pids: a link now — not restored`, `<root>/r … left as it is`; `elsewhere` 755, `<root>/r` 700; the replaced-inode case is NOT told apart here: `old-experiment` deleted and made again at 755 → restored to 755 as a harmless retry (the line said so) | a runtime restore following the link: `Expected elsewhere to be 755, but found 300` |
 
 `IsolationRecoveryTests`:
 
 | Test | Given / When / Then | Red |
 |---|---|---|
-| `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot` | question 16's theory: the derived verbs × {none, applying, applied, inconsistent}; `pids` at 300 named in `modes`; `Program.RunAsync([verb, (C1 for run-arm/run-all/checks), "--experiment", root])` with `PATH` = an empty folder; after: `File.GetUnixFileMode(pids)` 300, the two files' bytes equal, no `.restored-` name present; a verb whose stdout holds `isolation` holds `IsolationLine.Of(state)` | green on today's code (nothing restores) — its red is the companion's |
-| `The_only_sites_that_set_a_mode_or_move_a_snapshot_are_the_isolation_adapter_and_the_named_builders` | question 16's scan: the files found equal the allowed set exactly, `PosixFolderIsolation.cs` among them | before the adapter: `Expected the found files to contain PosixFolderIsolation.cs` |
-| `Unlock_is_refused_while_an_arm_of_the_map_is_alive_unless_forced` | `MakeArmAsync(C1)`; `lock part6`; `StartHolder(root, root.RunnerLock("C1"), FakeCli.Executable)` holding → `unlock` 4, `refused — C1 is alive (no pid file yet — the lock is held by pid <holder> since …); unlock once no arm is alive, or --force`, `Modes()` locked, files kept; a stale `pids/C1.pid` naming a DEAD pid beside a FREE lock (the holder killed) → `unlock` 0 (a stale pid is not alive); `lock` again, the holder again, `unlock --force` → 0 and restored | the liveness dropped: `Expected 4, but found 0` (break-it 5) |
-| `Lock_then_run_arm_leaves_the_experiment_locked` | `MakeArmAsync(C1, fake)` (every step one call); `lock part6` → `Applied`; `run-arm C1` in process (as `RunArmSchemeTests.cs:463-467`) → 0, the `arm-done` line present; after: `Snapshot().State` `Applied` with the SAME digest and `verifiedAt`, `Modes()` unchanged (`0`, `300`), `pids/C1.pid` holds the test process's pid, `pids/C1.lock` free; and (F0) the fake's transcript exists by name under the 300 `~/.claude/projects` | the re-review's defect, a `run-arm` restoring on entry: `Expected Applied, but found None` |
+| `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot` | question 16's theory: the derived verbs × {none, applying, applied, inconsistent}; `pids` at 300 named in `modes`; `Program.RunAsync([verb, (C1 for run-arm/run-all/checks), "--experiment", root])` with `PATH` = an empty folder; after, UNCONDITIONALLY: exit 3 or 4; `File.GetUnixFileMode(pids)` 300; the two files' bytes equal; none of the six `.restored-` names present; stdout without `isolation` or with `IsolationLine.Of(state)` | green on today's code (nothing restores); **its break-it (finding 12): a `SetUnixFileMode(root.Pids, 0755)` planted at `Status.cs`'s entry → the four `status` rows `Expected 300, but found 755`** (break-it 20) |
+| `The_only_sites_that_set_a_mode_or_move_a_snapshot_are_the_isolation_adapters_and_the_named_builders` | question 16's scan: the files found equal the allowed set exactly (`PosixFolderIsolation.cs`, `RuntimeFolderIsolation.cs`, `SnapshotAside.cs`, `RootFolders.cs`, `ArmPaths.cs`, `ArmMaker.cs`, `BaseCopy.cs`, `Init.cs`), `PosixFolderIsolation.cs` among them | before the adapter: `Expected the found files to contain PosixFolderIsolation.cs`; and TODAY, with the allowed set as written: green on the four existing hits — the test's own red is the missing adapter |
+| `Unlock_is_refused_while_an_arm_of_the_map_is_alive_unless_forced` | `MakeArmAsync(C1, fake, keepIsolation: true)`; `lock part6`; `StartHolder(root, root.RunnerLock("C1"), FakeCli.Executable)` (a NON-runner holder: no shared `.isolation.lock`) holding → `unlock` 4, `refused — C1 is alive (no pid file yet — the lock is held by pid <holder> since …); unlock once no arm is alive, or --force`, `Modes()` locked, files kept; a stale `pids/C1.pid` naming a DEAD pid beside a FREE lock (the holder killed) → `unlock` 0 (a stale pid is not alive); `lock` again, the holder again, `unlock --force` → 0 and restored — **what `--force` still overrides** (question 7); a RUNNER is the shared-lock row above, which `--force` does not override | the liveness dropped: `Expected 4, but found 0` (break-it 5) |
+| `Lock_then_run_arm_leaves_the_experiment_locked` | `MakeArmAsync(C1, fake, keepIsolation: true)` (every step one call); `lock part6` → `Applied`; `run-arm C1` in process (as `RunArmSchemeTests.cs:463-467`) → 0, the `arm-done` line present; after: `Snapshot().State` `Applied` with the SAME digest and `verifiedAt`, `Modes()` unchanged (`0`, `300`), `pids/C1.pid` holds the test process's pid, `pids/C1.lock` and `.isolation.lock` free; and (F0) the fake's transcript exists by name under the 300 `~/.claude/projects` | the re-review's defect, a `run-arm` restoring on entry: `Expected Applied, but found None` |
+| `A_runner_warns_once_when_its_runs_isolation_is_not_applied_and_still_runs` | **finding 5, question 20 (ruling 3):** `MakeArmAsync(C1, fake, keepIsolation: true)`, no lock → `run-arm C1` in process → **0**, the `arm-done` line present, stderr holds exactly one line `run part6 has an isolation block and its isolation is not applied (no isolation applied) — the arms can list each other's sessions; run \`model-arms lock part6\``; then `runs.part7` edited to `closedArms: []`, `closed: ["<root>/chain/part6"]` and `lock part7` → `run-arm C1` (an arm of `part6`) → 0 with the line (`locked for part7 …` inside the parenthesis); `unlock`, `lock part6` → `run-arm C1` → 0 and stderr EMPTY; the positive without a block: `MakeArmAsync(C1, fake)` and no lock → `run-arm C1` → 0, stderr empty | a runner that does not look: `Expected stderr to contain "is not applied"` (break-it 14) |
 
 `RunnerIdentityTests` (Linux; the console binary as a process — `ModelArmsBinary.Start(root, "run-arm", "C1")` over `MakeArmAsync(C1, fake)`
 with the fake's first step in `hang`, so the runner lives until the test kills it):
@@ -587,11 +711,18 @@ with the fake's first step in `hang`, so the runner lives until the test kills i
 |---|---|---|
 | `The_runner_holds_its_arm_lock_for_its_life_and_writes_its_own_pid` | start; poll ≤ 10 s until `pids/C1.pid` exists and the fake has one call → the file matches `^[1-9][0-9]*\n\z`; `RunnerPid.Parse` of it equals field 4 of `/proc/<fake pid>/stat` (the fake's parent) and is not the test process; `FileGateLock.Take(pids/C1.lock, false, false)` is `Busy`; `RunnerLiveness.Of(root, "C1")` is `Alive("pid N", N)`; the child killed (`DisposeAsync`) → within 5 s `Take` is `Held` (released at once) and `RunnerLiveness` is `Gone` while the pid file still names N | a runner writing no pid: `Expected pids/C1.pid to exist`; a launcher's pid: `Expected N to be the fake's parent` |
 | `A_second_runner_of_the_same_arm_refuses_with_exit_4_naming_the_holder_before_any_step` | the first alive; `<temp>/bin/git` replaced by `Shim(…, "git-second")` → `ModelArmsBinary.RunAsync(root, "run-arm", "C1")` → 4, stderr `another runner holds <root>/pids/C1.lock — by pid N since`; the fake's calls still ONE; `Markers()` empty (no git ran); `Stream(step, 2)` absent by name | the lock after admission: `Expected Markers to be empty` (break-it 6) |
+| `Every_refusal_after_the_locks_releases_them_so_the_next_runner_can_take_them_at_once` | **finding 10, a theory over three refusals**, each over `MakeArmAsync(C1, fake)` in process: `Place` — `arms.map.json` rewritten without `C1` → 4; `Equip` — `PATH` set to a folder under the experiment root (D26 c) → 4; the floor — `<temp>/bin/git` a shim printing `git version 2.39.3` → 3 (E4.S0's `FloorAsync`; the row is `[Fact]`-skipped with the reason until E4.S0 is on the branch — §6, wave A); after each: `FileGateLock.Take(pids/C1.lock, create: false, note: false)` is `Held` and `Take(.isolation.lock, false, false)` is `Held` IMMEDIATELY (both released at once by the test), and a second in-process `run-arm C1` over the repaired root → 0 | the handles dropped only in `RunAsync`'s `finally`: in process the `Passage.Stop` returns with both held — `Expected Held, but found Busy` (break-it 21) |
 | `An_arm_whose_lock_is_held_is_alive_with_or_without_a_pid_file` | `StartHolder(root, pids/C1.lock, FakeCli.Executable)`, no pid file → `Alive("no pid file yet — the lock is held by pid <holder> since …", null)`; then `pids/C1.pid` = the HOLDER's pid → `Alive("pid <holder> is not this arm's runner (its command line is gate-holder …) — read as gone", null)`; killed → `Gone` | a liveness reading the pid file first: `Expected Alive, but found Gone` |
 | `A_live_pid_whose_command_line_is_not_this_arms_runner_reads_as_gone` | the holder with the fake as its child (`child <pid>` printed), `pids/C1.pid` = the FAKE's pid → `Alive(holder, BelievedPid: null)`, `Holder` holds `is not this arm's runner` and the fake's file name; the positive is the first row's `BelievedPid == N` | a liveness believing any live pid: `Expected BelievedPid to be <null>, but found <fake pid>` (break-it 7) |
+| `A_runner_whose_lock_file_was_unlinked_is_still_alive_by_its_believed_pid` | **finding 11:** the runner alive (`pids/C1.pid` seen); `File.Delete(pids/C1.lock)` by the test (the root is the test's, 700) → `RunnerLiveness.Of` is `Alive("pid N — its lock file is gone or replaced (unlinked since it started); believed by its command line", N)`; `unlock` in process (over a locked root) → 4 naming C1; a second `run-arm C1` would take a NEW `pids/C1.lock` and nothing refuses it — the residual this row RECORDS, not fixes (`pids/<arm>.lock` unlinked by this user, parent §9's class; §9 here), so it asserts only the liveness answer and `unlock`'s refusal; the runner killed → `Gone` (the pid dead) | a liveness reading an absent lock as gone: `Expected Alive, but found Gone` (break-it 22) |
 | `On_the_portable_road_the_pid_reuse_residual_is_printed` | the holder with the fake's pid in the pid file; `RunnerLiveness.Of(root, "C1", PlatformKit.MacRoad, gate)` → `Alive("pid <fake> (not checked against its command line on <platform>)", <fake>)`; `PortableLine(MacRoad)` holds `NOT checked against its command line`; `unlock` in process with `IsolationSeams.Real with { Road = MacRoad }` over a locked root prints it once on stdout before its refusal; `PortableLine(CurrentRoad)` is `""` here | a road-blind liveness: `Expected Holder to contain "not checked"` |
-| `RunnerLiveness_creates_nothing_and_releases_a_lock_it_gets` | a root without `pids/` → `Gone` and `pids/` still absent; a free lock file → `Gone`, and a `Take(create: false)` right after is `Held`; `pids/C1.lock` a link → `Refused`; a `FileGateLock` whose `SecondOpen` returns a stream (the honour check fails) → `Unread` | `create: true`: `Expected pids/ not to exist` (break-it 9) |
-| `The_runner_waits_a_moment_for_a_probes_momentary_hold_then_refuses` | a `FileGateLock` in the test holds `pids/C1.lock` for 500 ms, then releases → `run-arm C1` in process → 0; held for 5 s → 4 within 3 s | a `TryAcquire` without the wait: `Expected 0, but found 4` |
+| `RunnerLiveness_creates_nothing_and_releases_a_lock_it_gets` | a root without `pids/` → `Gone` and `pids/` still absent; a free lock file and no pid file → `Gone`, and a `Take(create: false)` right after is `Held`; `pids/C1.lock` a link → `Refused`; a `FileGateLock` whose `SecondOpen` returns a stream (the honour check fails) → `Unread` | `create: true`: `Expected pids/ not to exist` (break-it 9) |
+| `The_runner_waits_a_moment_for_a_probes_momentary_hold_then_refuses` | a `FileGateLock` in the test holds `pids/C1.lock` for 500 ms, then releases → `run-arm C1` in process → 0; held for 5 s → 4 within 3 s; the same two timings for an EXCLUSIVE `.isolation.lock` held by the test → 0, then 4 within 3 s naming `the isolation is being changed` | a `TryAcquire` without the wait: `Expected 0, but found 4` |
+| `The_runner_makes_pids_by_name_and_refuses_a_link_there` | **finding 6:** `MakeArmAsync(C1, fake)`, `pids/` removed → `run-arm C1` in process → 0 and `pids/` exists at `700` with `pids/C1.pid` and `pids/C1.lock` in it; `pids/` a link to `<temp>/elsewhere` → 4 `<root>/pids is a symbolic link — refused (D17)`, `elsewhere` empty, no lock file anywhere; `pids/` a regular file → 4 `is a regular file` | `Directory.CreateDirectory` alone: the link row `Expected 4, but found 0` and `elsewhere` holding `C1.lock` (break-it 23) |
+
+`FileGateLockTests` (edited, +2): `A_shared_take_is_held_beside_another_shared_take_and_refuses_an_exclusive_one` — `TakeShared(path)` twice in process → both `Held`; `Take(path, true, true)`
+beside them → `Busy`; both disposed → `Take` is `Held`; `/proc/locks` holds `FLOCK ADVISORY READ` for this pid while held (S1-6: the EFFECT, not the flag); `A_shared_take_that_is_not_honoured_is_unread`
+— the `SecondOpen` seam returning a stream → `Unread`, nothing held.
 
 Edited classes. `ModelArmsCommandLineTests`: `LegalLines` gains `["lock", "part6", "--experiment", "/r"]` and `["unlock", "--force",
 "--experiment", "/r"]`; `Every_verb_that_reads_an_experiment_takes_the_experiment_flag` gains `"lock" => [verb, "part6", "--experiment",
@@ -599,79 +730,97 @@ Edited classes. `ModelArmsCommandLineTests`: `LegalLines` gains `["lock", "part6
 <run>`; `lock a b` the same; `unlock part6` → `unlock takes no positional argument: model-arms unlock [--force]`; `lock part6 --force` →
 `'--force' is not a flag of lock`. `ArmPathsTests`: `IsolationLock` = `<root>/.isolation.lock`; `RunnerLock("C1")` = `<root>/pids/C1.lock` and
 `RunnerLock("../x")` throws; `LockedModesAppliedRestored("20261031T101500Z")` = `<root>/.locked-modes.applied.restored-20261031T101500Z`.
-`StatusVerbTests`' scan list gains `ModelArms/Verbs/Lock.cs`, `Unlock.cs`, `RunnerLiveness.cs`, `ModelArms/Adapters/PosixFolderIsolation.cs`,
-`NoIsolation.cs`, `FolderIsolations.cs`, `LockLog.cs`. `ModelArmsArchitectureTests`: the four markers (§3) and `typeof(IsolationPlans),
-typeof(SnapshotFiles), typeof(IsolationRestoreOrder), typeof(LockDecision), typeof(UnlockDecision)` under `// E5.S1`.
+`StatusVerbTests`' scan list gains `ModelArms/Verbs/Lock.cs`, `Unlock.cs`, `SnapshotAside.cs`, `RunnerLiveness.cs`, `ModelArms/Adapters/PosixFolderIsolation.cs`,
+`RuntimeFolderIsolation.cs`, `NoIsolation.cs`, `FolderIsolations.cs`, `RootFolders.cs`, `LockLog.cs`. `ModelArmsArchitectureTests`: the four markers (§3) and `typeof(IsolationPlans),
+typeof(SnapshotFiles), typeof(IsolationRestoreOrder), typeof(RestoreJudgement), typeof(LockDecision), typeof(UnlockDecision)` under `// E5.S1`.
 `ModelArmsProgramTests.A_verb_not_built_yet_is_refused_naming_its_epic_with_exit_4` (`:47-54`): its `lock` and `unlock` rows go; `run-all` and
-`chain` stay (E5.S4 removes the helper).
+`chain` stay (E5.S4 removes the helper). `ExperimentRoot.MakeArmAsync` gains `keepIsolation` (default `false`, question 20); `RunArmSchemeTests` UNEDITED.
 
 **Break-its** (each planted in the finished code, the named test watched red with the real symptom, then restored; the summary quotes each
 message): (1) the snapshot written after the apply → `The_snapshot_is_durable_before_the_first_mode_changes`; (2) `Verify` probing the first
 unlisted folder only → `Verification_refuses_when_the_user_can_still_list_it`; (3) the mode set by `File.SetUnixFileMode(path)` instead of the
-pinned descriptor → `A_link_planted_after_the_check_never_has_its_target_closed`; (4) the digest comparison dropped from `LockDecision` →
+pinned descriptor on the kernel road → `A_link_planted_after_the_check_never_has_its_target_closed`; (4) the digest comparison dropped from `LockDecision` →
 `A_lock_for_another_run_or_closed_set_over_an_applied_snapshot_is_refused_asking_for_unlock`; (5) `unlock`'s liveness dropped →
 `Unlock_is_refused_while_an_arm_of_the_map_is_alive_unless_forced`; (6) the runner's lock taken after `Equip` →
 `A_second_runner_of_the_same_arm_refuses_with_exit_4_naming_the_holder_before_any_step`; (7) the command-line check dropped →
 `A_live_pid_whose_command_line_is_not_this_arms_runner_reads_as_gone`; (8) the exclusive lock dropped →
 `Lock_and_unlock_run_under_an_exclusive_file_lock`; (9) `RunnerLiveness` probing with `create: true` →
 `RunnerLiveness_creates_nothing_and_releases_a_lock_it_gets`; (10) `Inconsistent` decided as `Fresh` →
-`An_inconsistent_snapshot_is_never_read_as_none_by_a_writer`.
+`An_inconsistent_snapshot_is_never_read_as_none_by_a_writer`; **(11)** `Recover` restoring through the (dead) held descriptors →
+`A_lock_killed_in_another_process_is_recovered_by_a_new_process_without_its_descriptors`; **(12)** `RestoreJudgement` answering `Restore` whatever the current mode →
+`A_restored_entry_is_judged_by_its_kind_identity_and_mode_against_the_record` and `An_operators_own_mode_change_survives_unlock_and_is_reported`; **(13)** `AlreadyLocked` answering 0
+without `Verify` → `A_lock_on_an_applied_snapshot_of_the_same_run_and_set_re_verifies_and_re_applies_what_was_opened`; **(14)** the runner's isolation warning dropped →
+`A_runner_warns_once_when_its_runs_isolation_is_not_applied_and_still_runs`; **(15)** `FolderIsolations.For` handed the plan and answering `NoIsolation` on an empty one →
+`Unlock_restores_a_standing_snapshot_after_the_block_was_removed`; **(16)** the roll-back moving `.locked-modes` aside whatever its report →
+`A_roll_back_that_fails_keeps_the_snapshot_and_the_retry_restores_the_originals`; **(17)** the runner's shared hold dropped →
+`A_runner_holds_the_isolation_lock_shared_and_a_writer_is_refused_at_once_naming_it`; **(18)** the shared hold taken after `Place` →
+`No_runner_starts_between_the_last_liveness_probe_and_the_restore`; **(19)** the runtime road refusing with the platform's name →
+`On_a_road_without_the_kernel_reader_lock_and_unlock_run_by_path_and_say_what_is_not_verified`; **(20)** a `SetUnixFileMode(root.Pids, 0755)` planted at `Status.cs`'s entry →
+`No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot`; **(21)** the handles disposed in `RunAsync`'s `finally` alone →
+`Every_refusal_after_the_locks_releases_them_so_the_next_runner_can_take_them_at_once`; **(22)** an absent lock file read as `Gone` without the pid →
+`A_runner_whose_lock_file_was_unlinked_is_still_alive_by_its_believed_pid`; **(23)** `Directory.CreateDirectory(root.Pids)` alone →
+`The_runner_makes_pids_by_name_and_refuses_a_link_there`.
 
 **The brief, in order** (a Sonnet coder; nothing below is re-discovered).
 
-1. Read: this section; parent D11, D13, D16, D17 (d), D26, §4.7, §4.8; `LockSnapshot.cs`, `IsolationFiles.cs`, `FileGateLock.cs` (its class
-   doc whole), `GateHolderNote.cs`, `KernelFacts.cs`, `RealPath.cs`, `ArmFiles.cs:90-129`, `ArtifactCommit.cs:69-80`, `RunArm.cs`,
-   `RunArmAdmission.cs`, `RunnerPid.cs`, `Status.cs`, `ModelArmsCommandLine.cs`, `Program.cs`; the tests `LockSnapshotTests.cs`,
+1. Read: this section; parent D11, D13, D16, D17 (d), D26, §4.7, §4.8, §9, §10 (the ledger 2.1 line); `LockSnapshot.cs`, `IsolationFiles.cs`, `FileGateLock.cs` (its class
+   doc whole), `GateHolderNote.cs`, `KernelFacts.cs`, `RealPath.cs`, `PlatformRoads.cs`, `ArmFiles.cs:90-129`, `ArtifactCommit.cs:69-80`, `RunArm.cs`,
+   `RunArmAdmission.cs`, `RunnerPid.cs`, `Status.cs`, `Init.cs:170-215` (the folder modes), `RunSection.cs:79-104`, `ModelArmsCommandLine.cs`, `Program.cs`; the tests `LockSnapshotTests.cs`,
    `FileGateLockTests.cs`, `StatusVerbTests.cs:168-195`, `RunArmSchemeTests.cs:455-520`, `ExperimentRoot.cs`, `ModelArmsBinary.cs`,
-   `tests/GateHolder/Program.cs`, `tests/FakeCli/Program.cs:200-240` (`hang`), `PlatformKit` (`MacRoad`).
-2. Core first, red first: `IsolationPlan.cs`, `SnapshotFiles.cs`, `IsolationRestoreOrder.cs`, `IsolationDecisions.cs`, `IFolderIsolation.cs`;
+   `tests/GateHolder/Program.cs` and its `.csproj` (the shape `tests/LockCrasher` copies), `tests/FakeCli/Program.cs:200-240` (`hang`), `PlatformKit` (`MacRoad`).
+2. Core first, red first: `IsolationPlan.cs`, `SnapshotFiles.cs`, `IsolationRestoreOrder.cs`, `RestoreJudgement.cs`, `IsolationDecisions.cs`, `IFolderIsolation.cs`;
    `LockSnapshot.cs` (`Applied` widened, `Saved`, `Parsed` over it); `ArmPaths.cs` (three members); `ModelArmsCommandLine.cs` (two rows) —
    `IsolationPlanTests`, `LockSnapshotTests`, `ArmPathsTests`, `ModelArmsCommandLineTests`, the architecture markers and the pure list.
-3. Adapters: `PosixFolderIsolation.cs` — the P/Invokes `open`, `close`, `chmod`, `faccessat` spelled as `KernelFacts.cs:247-256` spells its own,
+3. Adapters: `FileGateLock.cs` (`TakeShared`, the generic `AcquireAnswerAsync`; `FileGateLockTests` +2); `RootFolders.cs`; `PosixFolderIsolation.cs` — the P/Invokes `open`, `close`, `chmod`, `faccessat` spelled as `KernelFacts.cs:247-256` spells its own,
    S1-5's constants as `private const` with `KernelFacts.cs:19`'s x86-64 note; the class doc states the atomic operations it rests on (the
    `O_PATH` pin and the `/proc/self/fd` chmod; `ArtifactCommit`'s create-new rename), the residuals (an ancestor swapped between `RealPath.Of`
-   and the open; a power loss after the rename; a same-user process with `chmod` — parent §9) and what it does not do (Windows, the other
-   POSIX roads); `NoIsolation.cs`; `FolderIsolations.cs`; `IsolationFiles.cs` (`Read`); `ArmFiles.cs` (`ReplaceFile`); `LockLog.cs`.
-4. Verbs: `RunnerLiveness.cs`; `Lock.cs`, `Unlock.cs` (C22's shapes, `IsolationSeams`); `Program.cs` (`"lock" => ExperimentGate.RunAsync(input,
-   LockVerb.RunAsync)`, `"unlock" => ExperimentGate.RunAsync(input, UnlockVerb.RunAsync)`); `RunArmAdmission.cs` (the lock step, the pid write,
-   question 18's class doc); `RunArm.cs` (`finally` disposing `ArmPlan.RunnerLock`; its doc lines `:16`, `:25`, `:28` corrected — §8 item 32);
-   `RunnerPid.cs:5` (*written by the runner, E5.S1*). Then `PosixFolderIsolationTests`, `IsolationRecoveryTests`, `RunnerIdentityTests`,
-   `StatusVerbTests` (the list), `ModelArmsProgramTests` (two rows gone).
+   and the open; a power loss after the rename; **the same-user class — a process with `chmod`, a root at 300 that still allows create, rename and unlink by name, a forged or
+   replaced `.locked-modes` bounded by question 7, an unlinked `pids/<arm>.lock`, an inode reused by a new object after a deletion read as the same entry** — parent §9) and what
+   it does not do (Windows; the other POSIX roads are `RuntimeFolderIsolation`'s); `RuntimeFolderIsolation.cs` (question 19; its doc names each thing it does not verify, the
+   same words as its printed line); `NoIsolation.cs`; `FolderIsolations.cs`; `IsolationFiles.cs` (`Read`); `ArmFiles.cs` (`ReplaceFile`); `LockLog.cs`.
+4. Verbs: `RunnerLiveness.cs`; `SnapshotAside.cs`; `Lock.cs`, `Unlock.cs` (C22's shapes, `IsolationSeams`); `Program.cs` (`"lock" => ExperimentGate.RunAsync(input,
+   LockVerb.RunAsync)`, `"unlock" => ExperimentGate.RunAsync(input, UnlockVerb.RunAsync)`); `RunArmAdmission.cs` (question 12's six steps, the release on every refusal,
+   question 20's warning line, question 18's class doc); `RunArm.cs` (`finally` disposing both handles; its doc lines `:16`, `:25`, `:28` corrected — §8 item 32);
+   `RunnerPid.cs:5` (*written by the runner, E5.S1*); `tests/LockCrasher` (the helper project, in the solution file beside `GateHolder`). Then `PosixFolderIsolationTests`,
+   `RuntimeFolderIsolationTests`, `IsolationRecoveryTests`, `RunnerIdentityTests`, `StatusVerbTests` (the list), `ModelArmsProgramTests` (two rows gone), `ExperimentRoot` (`keepIsolation`).
 5. What NOT to change: `IsolationLine.Of` and what `status`, `make`, `checks` print; `RunnerPid.Parse`; `ArmReport`'s and `ChecksAdmission`'s
-   pid reading (parent §9: E3's reading stays); `FileGateLock` (consumed, not widened — `Take`, `AcquireAnswerAsync`, `Describe` suffice);
-   `IGateLock`; `RootRequirements`; `ExperimentGate`; `RunArmSeams` (the gate lock's seam is not the runner's); `KernelFacts` (the adapter's
+   pid reading (parent §9: E3's reading stays); `FileGateLock` beyond the one member and the one generic overload (`Take`, `Describe`, the probe, the honour check as they are);
+   `IGateLock`; `RootRequirements`; `ExperimentGate`; `RunArmSeams` (the gate lock's seam is not the runner's); `RunArmSchemeTests`; `KernelFacts` (the adapter's
    P/Invokes are its own, so `KernelFactsTests` stands); `tests/FakeCli`, `tests/GateHolder`; no chain marker and no write under `chain/`
    anywhere in this story; no listing of a folder in a verb or an adapter (the `StatusVerbTests` scan says where).
 6. Docs. `research/module_model_arms.md` under *Isolation, lock and unlock, the runner's lock (E5.S1)*: what is built (the plan's order and
-   refusals, the two files' bytes, the chmod road and why — S1-1, the verification per entry, the exit codes, the runner's lock and pid); *The
+   refusals, the two files' bytes, the two roads and why — S1-1, S1-6, the verification per entry, the exit codes, the runner's admission order with its two locks and the
+   isolation warning, `--force`'s meaning — D11's, with its loud line); *The
    trust boundary — D26 (a)–(f)* for `PosixFolderIsolation` (a: `statx` on the pinned descriptor, `RealPath.Of` for the ancestors; b: no launch;
    c: a closed `$HOME` refused; d, e: not applicable — the lock file through `FileGateLock`'s `CreateNew`; f: the snapshot's device and inode
-   compared at `unlock`) and `RunnerLiveness` (a: the lock's path through `GateLockPath`; the pid's command line from `/proc`); *Tests*; *Not
+   compared at `unlock`), `RuntimeFolderIsolation` (a: the runtime's `LinkTarget` and `RealPath.Of`, the rest declared in its line; f: not performed, said) and `RunnerLiveness` (a: the lock's path through `GateLockPath`; the pid's command line from `/proc`); *Tests*; *Not
    proven*: root (refused, not observed), a real drvfs member (M-8 is the probe; the test uses a stand-in unless `MODEL_ARMS_DRVFS_SCRATCH`),
-   macOS/FreeBSD (refused with the sentence), a same-user `chmod` beside the module, a power loss between the rename and the journal, a pid
-   reused by a process whose argv happens to read `… model-arms run-arm C1`. `research/module_tests.md:110-111`: `lock`, `unlock` → `covered`,
-   `PosixFolderIsolationTests` / `IsolationRecoveryTests` / `RunnerIdentityTests`, one clause per guarantee above. The four §3 headings and markers.
-   Growth this story adds (for the reader of §9): `.isolation.lock.holder` and `pids/<arm>.lock.holder` (each with its `.tmp`) — holder notes,
-   under 200 bytes, removed by their holders; `lock.log` lines, one per `lock`/`unlock`; the `.restored-<utc>[-n]` pairs as §4.11 projects.
+   macOS/FreeBSD themselves (the runtime road is observed on Linux through the seam), a same-user `chmod` beside the module, a power loss between the rename and the journal, a pid
+   reused by a process whose argv happens to read `… model-arms run-arm C1`, the share mode on Windows (documented, not observed), an inode reused after a deletion. `research/module_tests.md:110-111`: `lock`, `unlock` → `covered`,
+   `PosixFolderIsolationTests` / `RuntimeFolderIsolationTests` / `IsolationRecoveryTests` / `RunnerIdentityTests`, one clause per guarantee above. The four §3 headings and markers.
+   Growth this story adds (for the reader of §9): `.isolation.lock.holder` (the exclusive holder's; `pids/<arm>.lock.holder` the runner's, each with its `.tmp`) — holder notes,
+   under 200 bytes, removed by their holders; `lock.log` lines, one per `lock`/`unlock`; the `.restored-<utc>[-n]` pairs as §4.11 projects; the shared holds of `.isolation.lock` are
+   open descriptors, not files.
 7. Commands: `node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4`; then
    `node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*IsolationPlanTests"`,
-   `"*PosixFolderIsolationTests"`, `"*IsolationRecoveryTests"`, `"*RunnerIdentityTests"`, `"*LockSnapshotTests"`, `"*ModelArmsCommandLineTests"`,
+   `"*PosixFolderIsolationTests"`, `"*RuntimeFolderIsolationTests"`, `"*IsolationRecoveryTests"`, `"*RunnerIdentityTests"`, `"*LockSnapshotTests"`, `"*ModelArmsCommandLineTests"`,
    `"*ArmPathsTests"`, `"*StatusVerbTests"`, `"*ModelArmsArchitectureTests"`, `"*ModelArmsProgramTests"`, `"*RunArmSchemeTests"` (unedited and
-   green — the runner's lock changes nothing they see), `"*FileGateLockTests"`; `--filter-namespace "*ModelArms*"`; the whole suite; `dotnet
-   format --verify-no-changes`; `node .agents/conventions/tools/plan-lifecycle.mjs`. The summary carries every red's message, the ten break-its'
-   messages, the D26 letters per adapter, and the observation that `TempFolder`'s dispose restored every closed folder (a test leaving a 000
+   green — the runner's locks change nothing they see, and the kit's default drops the block), `"*FileGateLockTests"`; `--filter-namespace "*ModelArms*"`; the whole suite; `dotnet
+   format --verify-no-changes`; `node .agents/conventions/tools/plan-lifecycle.mjs`. The summary carries every red's message, the twenty-three break-its'
+   messages, the D26 letters per adapter, the `/proc/locks` line observed for a runner, and the observation that `TempFolder`'s dispose restored every closed folder (a test leaving a 000
    folder behind fails the leftovers sweep).
 
-**Done when.** Every scenario above green and seen red first (the message in the summary); the ten break-its observed;
+**Done when.** Every scenario above green and seen red first (the message in the summary); the twenty-three break-its observed;
 `PosixFolderIsolationTests.A_lock_killed_half_way_is_restored_and_applied_afresh_by_the_next_lock` and
-`The_snapshot_is_durable_before_the_first_mode_changes` red against the late snapshot (the parent's DoD); the verification's refusal observed
-on a listable folder; another run's lock refused; `Lock_then_run_arm_leaves_the_experiment_locked` green under a real 300 root;
+`The_snapshot_is_durable_before_the_first_mode_changes` red against the late snapshot (the parent's DoD); the recovery observed after a REAL process death
+(`A_lock_killed_in_another_process_…`); the race observed closed in both orders (`No_runner_starts_between_…`); the verification's refusal observed
+on a listable folder; another run's lock refused; `Lock_then_run_arm_leaves_the_experiment_locked` green under a real 300 root; the runtime road green on this host through the seam;
 `RunArmSchemeTests`, `StatusVerbTests`' four-state rows and `ChecksVerbTests`' pid tests unedited and green; no chain marker written;
-`RunnerIdentityTests` green; the review names D26 (a)–(f) for `PosixFolderIsolation` and `RunnerLiveness`; the module doc and the two
+`RunnerIdentityTests` green; the review names D26 (a)–(f) for `PosixFolderIsolation`, `RuntimeFolderIsolation` and `RunnerLiveness`; the module doc and the two
 catalogue rows written; merged to `main` alone.
 
 **Out of bounds.** Keep-awake (E5.S2), `run-all` and the detached launch (E5.S3), the chain and its markers (E5.S4); a directory `fsync`; a
-heartbeat on either lock (a file lock dies with its holder — `FileGateLock`'s doc).
+heartbeat on either lock (a file lock dies with its holder — `FileGateLock`'s doc); a `flock(2)` P/Invoke (the runtime's share mode is the one lock road, S1-6); a `fchmodat2` road.
 
 ### E5.S2 — Keep-awake: `HostAwakeSelection` and the three adapters
 
@@ -848,13 +997,14 @@ anything starts:
    this host start each one by hand: setsid <model-arms> run-arm <arm> --experiment <root> < /dev/null >> <root>/pids/<arm>.log 2>&1 &`.
 4. `LaunchAdmission.FirstRefusal` (4); on `Setsid`, `LaunchAdmission.Resolve("run-all", "setsid", …)`; the module:
    `LaunchAdmission.Resolve("run-all", input.Verb.Module.Executable, …)` — an absolute name, judged by D17 (b) and turned into its real
-   path. Printed: `resolved executables:`, `  setsid → <real>`, `  model-arms → <real>`, then `IsolationLine.Of(IsolationFiles.State(root))`.
+   path; then `RootFolders.Pids(root)` — E5.S1's one helper (question 12 (a)): `<root>/pids` made by name at 700, a link or a file there → 4 naming it, before
+   anything starts (the same call `chain` makes, E5.S4). Printed: `resolved executables:`, `  setsid → <real>`, `  model-arms → <real>`, then `IsolationLine.Of(IsolationFiles.State(root))`.
 5. `RunnerLiveness.PortableLine(road)` printed once when not empty (ledger 2.1; E5.S1 question 15), then `Liveness` of EVERY arm of the map: `Refused` → 4, `Unread` → 3; `alive` = the map's arms answering `Alive`.
 6. **The queue** (parent §4.7): `toStart` = the given arms not alive; `atOnce` = `alive ∪ toStart`; `smallest` = the minimum over
    `atOnce` of `GateLockCeiling.QueueOf(experiment.Runs, arm, map.Entries.Count).Arms`, and `which` the first arm (map order) holding it.
    `atOnce.Count > smallest` → 4 `model-arms run-all: <n> arms would be alive at once (<names>), but <which> was sized for a gate queue of
    <smallest> (its own run's largest round) — its gate lock's wait runs out first; start at most <smallest>, or wait for one to end`.
-7. Each given arm in order: `Alive(holder)` → `<arm>: already running (<holder>)`; else `Directory.CreateDirectory(root.Pids)` and
+7. Each given arm in order: `Alive(holder)` → `<arm>: already running (<holder>)`; else
    `launcher.Start(moduleReal, ["run-arm", arm, "--experiment", root.Root], root.PidLog(arm), input.Verb.Environment, root.Root)` (§8
    item 23) → `Started` → `<arm>: started — its runner writes pids/<arm>.pid`, plus ` (it ran before and ended without arm-done: this is
    the resume you asked for)` when the arm's `out/timing.jsonl` (bounded read) has lines and `TimingLines.IsArmDone` is false; `Failed(code,
@@ -873,6 +1023,10 @@ from the test process's PATH as `HostGit` is (`ExperimentRoot.cs:35-37`) and LIN
 `RunnerPidAsync(arm, within)` polls `RunnerLiveness.Of` until `Alive` and `RunnerPid.Parse` of the pid file; `Dispose` kills every runner
 whose lock is still held (its pid's tree) and every fake recorded — no process outlives the test. Refusal rows write the map, the
 `chain/made-<arm>` markers and `baseline.json` by hand (as `MakeArmAsync` does, `:104-107`) and run in process with a recording launcher.
+**The kit's experiment carries no `isolation` block** (`MakeArmAsync`'s default, E5.S1 question 20): a run with isolation makes the detached runner print its one
+warning line into `pids/<arm>.log` until `lock <run>` has been run (it still runs; the refusal of the unattended path is the chain's reconciliation, E5.S4), and `run-all`'s
+rows are about the launch, not the lock. `Run_all_prints_its_resolved_executables_and_the_isolation_line_…` keeps its
+`.locked-modes*` assertion over a root without a snapshot.
 
 **Scenarios** (`DetachedLauncherTests` and `RunAllVerbTests`; the process rows Linux x86-64 only, skipped elsewhere with the reason).
 
@@ -1201,7 +1355,9 @@ parent; items 24–32 are the parent's claims found wrong or incomplete against 
     while another honours it; one folder's refusal to list proves nothing about the rest. S1 question 5. **Ruling: not a change.** Verifying every entry CONTAINS verifying one and satisfies D11's purpose (the verification is the observation, `common.security`); `lock`'s contract — exit 3 when it cannot verify, restored first — is unchanged, and a detail the parent leaves to the stories. The spec builds *every* (question 5); *one unlisted folder* is a wording repair for the next pass.
 30. **Parent claim found incomplete — D13 on macOS and FreeBSD.** `setsid(1)` is a util-linux tool that those systems' base installs do
     not ship (NOT checked on those hosts; no such host here); `run-all` exits 3 there with the manual road (item 20), so ledger 2.1's
-    "macOS and FreeBSD run" does not reach `run-all` or `chain` — for the owner, as a residual. **Ruling: not a change.** D13's `setsid` road stands: E5.S3 `posix_spawn`s the RESOLVED `setsid` with D13's argv (completed per item 25). A host without `setsid(1)`, or without measured launch constants, is refused by E5.S3 with ONE sentence naming the manual road (exit 3) — `common.platform-limits` (an unmeasured ABI fails closed) and D23 (a missing executable is refused by name), neither of which ledger 2.1 overturned: 2.1 is about a host refused for want of a kernel READER, and no verb exits 3 for that. The residual — macOS and FreeBSD do not reach `run-all`/`chain` — is one line for the parent's §9 (wording), flagged to the owner; a launcher without `setsid(1)` (`POSIX_SPAWN_SETSID`, M-5) would be an approach change and is NOT built.
+    "macOS and FreeBSD run" does not reach `run-all` or `chain` — for the owner, as a residual. **Ruling: not a change.** D13's `setsid` road stands: E5.S3 `posix_spawn`s the RESOLVED `setsid` with D13's argv (completed per item 25). A host without `setsid(1)`, or without measured launch constants, is refused by E5.S3 with ONE sentence naming the manual road (exit 3) — `common.platform-limits` (an unmeasured ABI fails closed) and D23 (a missing executable is refused by name), neither of which ledger 2.1 overturned: 2.1 is about a host refused for want of a kernel READER, and no verb exits 3 for that. The residual — macOS and FreeBSD do not reach `run-all`/`chain` — is one line for the parent's §9 (wording), flagged to the owner; a launcher without `setsid(1)` (`POSIX_SPAWN_SETSID`, M-5) would be an approach change and is NOT built. **Amended 2026-10-31 (the plan gate, both consultants, the Opus
+    review):** `lock` and `unlock` DO run on those hosts — the runtime road, E5.S1 question 19 — so the residual for the parent's §9 is `run-all` and `chain` alone, and no
+    verb of this epic exits 3 on a POSIX host for want of a kernel reader (the parent's §10 line holds).
 31. **Parent claim found incomplete — D12's `-File keep-awake.ps1`.** The script ships beside the binary on the WSL file system; Windows'
     `pwsh` needs it named in Windows' spelling (item 9), and the parent names no relaunch bound (item 16). **Ruling: not a change.** `-File keep-awake.ps1` names the script; handing `pwsh.exe` the Windows spelling of that path is how the adapter obeys it on WSL (M-9), and a bound on the relaunch is `common.reliability`'s requirement for every retry loop — both details the parent leaves to the stories.
 32. **Code docs found stale, for the stories to fix:** `RunnerPid.cs:5` (*nothing writes a pid file until E5.S3* — E5.S1 writes it);
@@ -1214,18 +1370,61 @@ parent; items 24–32 are the parent's claims found wrong or incomplete against 
     written; a reviewer should confirm the reading.
 34. **(Fable, E5.S1) The mode is set through a pinned `O_PATH` descriptor by `chmod("/proc/self/fd/<fd>")`**, not `File.SetUnixFileMode(path)`
     (which follows links and resolves the path a second time) and not `fchmod` (`EBADF` on `O_PATH`, S1-1). One road on every Linux with
-    `/proc`; `fchmodat2` (kernel 6.6, no glibc wrapper here) would be a second road and a table. The adapter is constructed on the Linux
-    x86-64 kernel road only (its `statx` and open flags are probed there); every other POSIX road says so in one line and `lock` exits 3 when a
-    block is configured (ledger 2.1's honesty rule, not a refusal of the platform).
-35. **(Fable, E5.S1) The runner's lock is always the real `FileGateLock`**, taken between `ArmChoices` and the map read, under a 2 s wait
-    for a probe's momentary hold; `RunArmSeams.Lock` stays the gate lock's seam (`RunArmSchemeTests` hand a `BusyGateLock` there). The pid file is
+    `/proc`; `fchmodat2` (kernel 6.6, no glibc wrapper here) would be a second road and a table. The kernel adapter is constructed on the Linux
+    x86-64 kernel road only (its `statx` and open flags are probed there). **Amended 2026-10-31:** every other POSIX road (macOS, FreeBSD, Linux arm64, no `statx`) takes
+    `RuntimeFolderIsolation` — kind by `LinkTarget` and the runtime, modes by `File.SetUnixFileMode(path)`, the same per-entry verification by path, root by
+    `Environment.IsPrivilegedProcess`, no `dev`/`ino` in the snapshot, ONE printed line naming what is not verified (E5.S1 question 19). The earlier reading of this item — `lock`
+    exits 3 with a block configured on those roads — is withdrawn: the parent's §10 forbids a verb exiting 3 for want of a kernel reader, and ledger 2.1 says the facts the runtime
+    gives are judged and the rest said. Refused there: only an actual inability to apply, verify or recover.
+35. **(Fable, E5.S1) The runner's lock is always the real `FileGateLock`**, taken between `ArmChoices` and the map read — after `<root>/pids` is made by name and after the
+    SHARED `.isolation.lock` (item 38) — under a 2 s wait for a probe's momentary hold; `RunArmSeams.Lock` stays the gate lock's seam (`RunArmSchemeTests` hand a `BusyGateLock`
+    there). Every refusal after the locks releases them (finding 10 of the amendment). The pid file is
     kept at the runner's end (`status` reads *pid N gone*; a reused pid makes `checks` refuse — the safe direction, parent §9).
-36. **(Fable, E5.S1) `unlock`'s partial restore keeps `.locked-modes`** and moves only the applied file aside (state `applying`: `lock` recovers,
-    `chain` refuses, `unlock` retries), exit 3; entries gone, replaced (device and inode recorded in the snapshot) or turned into links since the
-    lock are skipped and said, never restored onto another object. `unlock` restores a standing snapshot whatever `experiment.json` says now.
+36. **(Fable, E5.S1) A failed restore never loses the original modes — on all three paths** (amended 2026-10-31, finding 2): `unlock`, `lock`'s recovery of an interrupted
+    lock and `lock`'s own roll-back after an apply or verify failure all keep `.locked-modes` when any entry failed, move only the applied file aside (state `applying`: `lock`
+    recovers, `chain` refuses, `unlock` retries), never write a fresh snapshot over it, exit 3; entries gone (said as *cannot recover by this name* — a renamed folder may still
+    stand closed elsewhere, the archived record kept), replaced (device and inode recorded in the snapshot, kernel road) or turned into links since the
+    lock are skipped and said, never restored onto another object. `unlock` restores a standing snapshot whatever `experiment.json` says now, within the bound of item 42.
 37. **(Fable, E5.S1) The pid belief compares the file NAME of the word before `run-arm`** (`model-arms`, `.dll`, `.exe`) and the two words
     after it, never `/proc/<pid>/exe` (under `dotnet model-arms.dll` and in an in-process test that is not this binary — M-6). The residual, said
-    in the module doc: a reused pid whose argv happens to spell the same reads as believed; the lock, not the pid, decides liveness.
+    in the module doc: a reused pid whose argv happens to spell the same reads as believed; the lock, not the pid, decides liveness — except when the lock FILE is gone or
+    replaced under a live runner (item 44).
+38. **(Fable, E5.S1, amended 2026-10-31) Every runner holds `.isolation.lock` SHARED for its life; the writers take it exclusive, non-blocking** (consultation 5.4: a runner
+    could start between `unlock`'s last liveness probe and the restore). Measured, S1-6: .NET's `FileShare.Read` on a read handle is `flock(LOCK_SH)` on Linux, and a
+    `FileShare.None` open against it fails with the code `FileGateLock` already measures — so the shared hold is `FileGateLock.TakeShared`, ONE widening of that class with the
+    same path judgement and honoured-lock check, not a `flock(2)` P/Invoke. A busy exclusive take with any map arm alive is exit 4 at once. **`--force` keeps D11's meaning
+    (the coordinator's ruling 1):** it skips the exclusive take and the liveness probe both, restores, and prints one loud line that runners may still be live — the race is the
+    operator's choice. **Not a parent change (ruling 2):** the runners' shared hold and the waited (2 s) take of `pids/<arm>.lock` (item 35) are an IMPLEMENTATION of D11's
+    *under an exclusive lock* and of the epoch-3 runner lock (§4.7 F) — the lock the writers hold is exclusive exactly as D11 says, and a runner's hold is how "no arm is alive"
+    is made true for the whole restore rather than for the instant of a probe; no decision, scope or merge condition moves.
+39. **(Fable, E5.S1, amended; the coordinator's ruling 3) The runner WARNS, never refuses, when its run has an isolation block whose isolation is not applied** (`RunSection`'s
+    rule names the one run; an arm no run names, or a run whose plan is empty, prints nothing) — one stderr line naming the run and `model-arms lock <run>`, the arm running on
+    (E5.S1 question 20). A refusal there would change `run-arm`'s contract; the refusal of the unattended path is the chain's marker reconciliation (epoch 3 H, E5.S4), which
+    already covers it. Not a parent change. Consequence: the test kit's `MakeArmAsync` drops the example's `isolation` block by default (`keepIsolation: false`), so the line
+    never enters `RunArmSchemeTests`' or E5.S3's kit's stderr and they run as today; `IsolationKit` keeps it.
+40. **(Fable, E5.S1, amended) `<root>/pids` is made by name by ONE helper** (`RootFolders.Pids`: `Directory.CreateDirectory(path, 0700)` then `SetUnixFileMode` as
+    `Init.MakeSubfolder`, a link judged AFTER by `LinkTarget` and refused, a file there refused) — called by `run-arm`'s admission before `pids/<arm>.lock`, by `lock` for an
+    absent `<root>/pids` entry (every other absent entry stays a refusal), by `run-all` (E5.S3 step 4) and by `chain` (E5.S4 says so). Nothing before the first `run-arm` created
+    it, and a lock before the first run is the chain's order.
+41. **(Fable, E5.S1, amended) Recovery re-pins; an applied snapshot is re-verified.** A killed `lock`'s descriptors die with it, so `Recover` (and `unlock`) pin every saved
+    path anew in the new process, judge kind and device/inode against the record before any chmod, and skip what is gone, replaced or a link, saying so; the one same-process
+    roll-back (an apply or verify failure) goes through the held descriptors. A `lock` over an applied snapshot of the same run and set does not claim success: every entry is
+    verified again, open entries are re-pinned (identity must match) and re-applied under the standing snapshot, never a new one. The inode-reuse residual (a new object with
+    the old device and inode after a deletion) is stated in the class doc and in §9.
+42. **(Fable, E5.S1, amended) `unlock`'s chmods are bounded, and the operator's own change survives.** A same-user process can write `.locked-modes` by name under a root at 300,
+    so `unlock` (and `Recover`) restore an entry only when its path is the root, under the root, under `<home>/.claude`, or one of today's `experiment.json` entries for any run
+    (the isolation block, every run's `closed`, the map's arm folders); anything else is FAILED by name with the hand command. An entry whose current mode is neither the saved
+    nor the locked mode is the operator's — left as it is and reported *unresolved*, exit 0; one already at its saved mode is a harmless retry. **Findings 7 and 11
+    reconciled:** after the block is removed, the root-and-home entries are still in the bound and restored; a configured closure outside both (the example's
+    `old-experiment`) is refused by name, restored by hand, and the next `unlock` counts it as the harmless retry — the test says exactly that, exit 3 then 0.
+43. **(Fable, E5.S1, amended) Seams and the scan, corrected by the Opus review.** `SetMode` receives the path as well as the descriptor (a hand singles out one entry by
+    NAME); `Events` live on `IsolationSeams` because `snapshot` and `aside` are the verb's doings; question 16's allowed set is today's hits enumerated by the scan
+    (`ArmPaths`, `ArmMaker`, `BaseCopy`, `Init`) plus this story's `PosixFolderIsolation`, `RuntimeFolderIsolation`, `SnapshotAside`, `RootFolders`; the theory
+    `No_verb_but_lock_and_unlock_…` asserts unconditionally and has a break-it (a chmod planted in `status`); `AcquireAnswerAsync` never answers `Busy`, so the writers run
+    their own non-blocking loop and the runner tells its 2 s ceiling from the operator's stop by the stop token.
+44. **(Fable, E5.S1, amended) An unlinked or replaced `pids/<arm>.lock` does not read a live runner as gone:** when the probe finds the lock free or absent, a pid file
+    naming a pid believed by its command line (Linux) — or live, on the portable road — is `Alive`, said as such. A second runner would take a new lock file and nothing
+    refuses it: the residual, recorded (§9), in the same-user class.
 
 ## 9. Growth
 
@@ -1233,14 +1432,23 @@ parent; items 24–32 are the parent's claims found wrong or incomplete against 
 |---|---|---|---|
 | `pids/<arm>.lock`, `.pid`, `.log` | the parent's §4.11 row: ≤ 0.05 GB | with the root; the lock file never deleted | a killed runner: a stale pid beside a free lock — gone (C21) |
 | `pids/<arm>.lock.holder` (+ `.tmp`) — only if E5.S1 takes the holder note | < 200 bytes each, ≤ 2 per arm, ≤ 4 KB | removed by the holder before release; a stale one overwritten by the next holder (`GateHolderNote.cs:14-15`) | never believed unless it names the live holder |
-| `.locked-modes*`, `.isolation.lock`, `lock.log` | the parent's §4.11 rows (≤ 0.1 MB) | with the root | D11 (E5.S1's spec) |
+| `.locked-modes*`, `.isolation.lock` (+ `.holder`, the exclusive holder's), `lock.log` | the parent's §4.11 rows (≤ 0.1 MB); the runners' shared holds are open descriptors, not files | with the root; the lock file never deleted | D11 (E5.S1's spec); a shared hold dies with its runner |
 | `keep-awake.log` | one line per launch, exit and stop, plus `keep-awake.ps1`'s two lines per launch: a launch per 4 h → ~20 lines per day of chain, < 2 KB | with the root | a torn last line |
 | `keep-awake.<stamp>.<n>.err` | one per launch, normally empty: ≤ 6 per day of chain, bounded per chain process by the relaunch bound only while the child lives a check or more (item 16) — a child that exits at once makes at most 4 | with the root | an empty file |
 | `chain/executables.txt`, `chain/<run>/*` | the parent's rows | with the root | replaced whole at each `chain` start; markers empty |
 
 No table, no database; the processes that outlive a verb are the detached runners (owned by `pids/`, alive by their lock) and, for a
 relay lost without a signal, a Windows keep-awake bounded by its own 14400 s (M-10). Tests: every root and log is under a `TempFolder`;
-`RunAllKit` kills every runner and fake it recorded.
+`RunAllKit` kills every runner and fake it recorded; `tests/LockCrasher` dies by its own `SIGKILL` inside the test that starts it.
+
+**Same-user residuals of the isolation (E5.S1, amended 2026-10-31 — the parent's §9 class: an access constraint, not a boundary against a process with this user's rights),
+stated in `PosixFolderIsolation`'s and `RuntimeFolderIsolation`'s class docs and in the module doc:** (a) a root at 300 still lets this user create, rename and unlink by
+NAME under it — `experiment.json` and `.locked-modes` included; (b) a forged or replaced `.locked-modes` can steer `unlock`'s chmods only within the bound of §8 item 42 and
+only onto entries at their locked or saved mode; (c) an unlinked or replaced `pids/<arm>.lock` lets a second runner of a live arm start (§8 item 44 — liveness still says
+`Alive` from the believed pid); (d) an entry deleted and a new object given the same device and inode reads as the same entry at `unlock` (inode reuse); (e) a `chmod` by any
+same-user process beside the module (the parent's own line); (f) on the runtime road, a link planted between the check and the chmod is followed and a replaced entry is not
+told apart — the printed line; (g) `unlock --force` restores beside a runner that may be live — D11's meaning, the operator's choice, said by its loud line. None is a hole
+the module claims to close; each is one sentence where the operator reads.
 
 ## 10. Risk items for the coai gate
 
@@ -1262,19 +1470,27 @@ relay lost without a signal, a Windows keep-awake bounded by its own 14400 s (M-
       elsewhere with their reason); the added ones of §7 here too; `ModelArmsProgramTests.A_verb_not_built_yet_…` removed with `NotBuilt`.
 - [ ] `PosixFolderIsolationTests.A_lock_killed_half_way_is_restored_and_applied_afresh_by_the_next_lock` watched red against an adapter that
       wrote its snapshot late; `IsolationRecoveryTests.Lock_then_run_arm_leaves_the_experiment_locked` and
-      `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot` green with every verb that reads an experiment among its rows.
+      `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot` green with every verb that reads an experiment among its rows — and the latter watched red
+      against a chmod planted in another verb (E5.S1 break-it 20).
+- [ ] The amendment of 2026-10-31 observed (E5.S1): a `lock` killed by `SIGKILL` in another process recovered by a new process to the exact original modes
+      (`A_lock_killed_in_another_process_…`); a failed restore keeping `.locked-modes` on all three paths and the retry restoring the originals; the operator's own mode
+      surviving `unlock` and reported; `lock` over an applied snapshot re-verifying and re-applying an opened entry; a runner's shared `.isolation.lock` seen in `/proc/locks`
+      and `unlock` refused at once while it holds it (`unlock --force` restoring with its loud line — D11's meaning), the race closed in both orders
+      (`No_runner_starts_between_…`); the runner's one warning line under a missing isolation, exit 0; `pids/` made by name and a
+      link there refused; `unlock` restoring a standing snapshot after the block was removed, within its bound; the runtime road green on this host through the seam with its
+      one line; every refusal after the runner's locks releasing them; an unlinked `pids/<arm>.lock` under a live runner still `Alive`.
 - [ ] `ChainVerbTests.A_chain_that_fails_leaves_the_isolation_applied_stops_no_runner_and_prints_the_recovery` and
       `ChainPlanTests.A_locked_marker_whose_runs_snapshot_is_not_applied_is_refused_never_skipped` green; no root-level chain marker left.
 - [ ] `pids/<arm>.pid` written by the runner, read by the unchanged `RunnerPid.Parse`; `StatusVerbTests` and `ChecksVerbTests` pid tests
       unedited and green; `unlock`, `run-all` and `chain` ask `RunnerLiveness` alone.
 - [ ] `The_module_launches_nothing_by_a_bare_name` green with `SetsidLauncher.cs`, `WindowsLauncher.cs` (its named exception) and
       `WslHostAwake.cs` present; the companion scan green.
-- [ ] Every review names D26 (a)–(f) per adapter (`PosixFolderIsolation`, `RunnerLiveness`, `WslHostAwake`, `SetsidLauncher`, the chain's
+- [ ] Every review names D26 (a)–(f) per adapter (`PosixFolderIsolation`, `RuntimeFolderIsolation`, `RunnerLiveness`, `WslHostAwake`, `SetsidLauncher`, the chain's
       failure path).
 - [ ] `research/module_model_arms.md` describes E5 as built under its four headings, with the residuals (the wedged gate holder, the
       Windows adapters unobserved, the manual road, a lost relay); `research/module_tests.md`'s `lock`, `unlock`, `run-all`, `chain` rows
       cover them.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green (the
       database and service tests aside, as E3 §11 records for this host); `ModelArmsArchitectureTests` green with the four markers.
-- [ ] The parent's claims of §8 items 24–31 taken into its next change, or answered.
+- [ ] The parent's claims of §8 items 24–31 taken into its next change, or answered; items 38–39 ruled inside the parent's words (no parent edit).
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
