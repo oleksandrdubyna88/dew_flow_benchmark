@@ -10,7 +10,7 @@
 > superseded. (3) Q-A — **no total ceiling**: the $1000 is removed, the six rounds of both arms run as planned; a fixed
 > **$50 per-session cap** stays as a runaway guard (a capped session is censored, never hidden); the pilot's cap formula
 > is a reported cross-check (D7; D30 superseded). (4) D35 confirmed: `de_DE.UTF-8` in both boxes, every task, both stacks.
-> Epoch 3 (opened 2026-10-31) changed twice the same day — 3.1, the D40 pre-freeze gate needs the final scoring
+> The third epoch (opened 2026-10-31) changed twice the same day — 3.1, the D40 pre-freeze gate needs the final scoring
 > environment that E3 builds, and the driver↔program network layout is designed nowhere; 3.2, the bench repository is
 > public and its plan carries the §4.3 trap table that a process agent can reach through GitHub — both found by the E1
 > stories writer (`feat/lang-v2-e1` `51a80ba`, §9 OP-1 and OP-12) — and was closed by a whole re-review
