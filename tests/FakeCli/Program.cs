@@ -696,7 +696,12 @@ public static class Events
             ["env"] = new JsonArray([.. Environment.GetEnvironmentVariables().Keys.Cast<object>().Select(k => (JsonNode)JsonValue.Create(k.ToString() ?? string.Empty)).OrderBy(n => n!.GetValue<string>(), StringComparer.Ordinal)]),
         };
 
-        File.WriteAllText(Path.Combine(dir, $"call-{key}-{call:000}-{Environment.ProcessId}-{Guid.NewGuid():N}.json"), record.ToJsonString());
+        // Staged under a name `call-*.json` does not match, then renamed: a reader polling the folder (FakeCli.Calls) sees a whole
+        // record or none — a direct write left an empty or partial file there for a moment, and a poll in that window threw.
+        var name = $"call-{key}-{call:000}-{Environment.ProcessId}-{Guid.NewGuid():N}.json";
+        var staged = Path.Combine(dir, $".{name}.tmp");
+        File.WriteAllText(staged, record.ToJsonString());
+        File.Move(staged, Path.Combine(dir, name));
         return call;
     }
 }
