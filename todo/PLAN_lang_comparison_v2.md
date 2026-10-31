@@ -41,8 +41,8 @@ Narrowed: no — both changes add (a metric-retention rule and a spec-format con
 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
-| pilot spec 01 `todo/tasks/01-descent-to-one.md`, `60e468a` (E1.S2's first spec, not yet gated) | `dew_flow_ai_language_comparison`, local commit, no remote | — | pending judge (rule step 5; the Verdict cell takes only `fits`, `cut` or `—`, so `—` stands until the Opus judge writes it) |
-| D34 and T-L26, `d8da443` | `dew_flow_benchmark` main (merged in #124, `f369e66`) | — | pending judge (plan text only, no code; it is entry 1.1) |
+| pilot spec 01 `todo/tasks/01-descent-to-one.md`, `60e468a` (E1.S2's first spec, not yet gated) | `dew_flow_ai_language_comparison`, local commit, no remote | fits | kept as a draft; brought to `FORMAT.md` (E1.S8) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
+| D34 and T-L26, `d8da443` | `dew_flow_benchmark` main (merged in #124, `f369e66`) | fits | kept: merged and compatible with the revised plan (judged by the team lead, Opus, 2026-10-31) |
 
 ## 1. The question, before any solution
 
