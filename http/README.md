@@ -1,7 +1,7 @@
 # `http/` — the benchmark's contract suite
 
 One folder per route group, per
-[`.claude/rules/shared/common/http-contracts.md`](../.claude/rules/shared/common/http-contracts.md).
+[`.agents/conventions/common/http-contracts.md`](../.agents/conventions/common/http-contracts.md).
 
 | Folder | Routes | Host |
 |---|---|---|
@@ -37,7 +37,7 @@ dotnet run --project hosts/Cli -- prune --db "$CONN" --hit-retention-days 30   #
 ConnectionStrings__bench="$CONN" ASPNETCORE_URLS=http://127.0.0.1:5411 dotnet run --project hosts/Api &
 ConnectionStrings__bench="$CONN" dotnet run --project hosts/Collector &        # binds 5177 itself
 
-node .claude/rules/shared/tools/http-run.mjs --env local --target http://127.0.0.1:5411
+node .agents/conventions/tools/http-run.mjs --env local --target http://127.0.0.1:5411
 ```
 
 The verdict is the exit code — `0` pass · `1` contract regression · `3` environment · `4`

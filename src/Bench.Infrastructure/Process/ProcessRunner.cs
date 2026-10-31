@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 
 namespace Bench.Infrastructure.Process;
 
@@ -27,7 +28,14 @@ public abstract record ProcessAttempt
     public sealed record Completed(ProcessResult Result) : ProcessAttempt;
 
     /// <param name="StandardOutput">What had reached stdout before the kill, alone — a probe keeps it as the attempt's artefact.</param>
-    public sealed record TimedOut(TimeSpan Budget, string Output, string StandardOutput = "", string StandardError = "") : ProcessAttempt;
+    /// <param name="ReadersAbandoned">True when a pipe was STILL OPEN <see cref="ProcessRunner.DrainAfterKill"/> after the kill (a descendant escaped the tree
+    /// kill and holds it): the texts are then what was read up to that moment, and what the child printed after it is missing. False, the default, is the
+    /// whole of what the child printed. An empty text with this set is "nothing arrived yet", not "nothing was printed".</param>
+    public sealed record TimedOut(TimeSpan Budget, string Output, string StandardOutput = "", string StandardError = "", bool ReadersAbandoned = false) : ProcessAttempt
+    {
+        /// <summary>What <see cref="ProcessAttempt.Describe"/> adds when the texts are partial: the absence is stated, never left to read as an empty output.</summary>
+        internal string Partial => ReadersAbandoned ? $" (a pipe was still open {ProcessRunner.DrainAfterKill.TotalSeconds:0.#}s after the kill — what the child printed after that is missing)" : string.Empty;
+    }
 
     public sealed record NotFound(string Executable) : ProcessAttempt;
 
@@ -35,7 +43,7 @@ public abstract record ProcessAttempt
         this switch
         {
             Completed c => $"exit {c.Result.ExitCode}",
-            TimedOut t => $"timed out after {t.Budget.TotalSeconds:0.#}s",
+            TimedOut t => $"timed out after {t.Budget.TotalSeconds:0.#}s{t.Partial}",
             NotFound n => $"'{n.Executable}' is not on PATH",
             _ => "unknown",
         };
@@ -51,6 +59,13 @@ public abstract record ProcessAttempt
 /// </para></summary>
 public static class ProcessRunner
 {
+    /// <summary>How long a launch waits, AFTER it has killed the child's tree, for the two readers to reach the end of their pipes (model arms E2.S3).
+    /// A reader ends when every holder of the pipe's write end has closed it; a descendant that escaped the tree kill (a new session, a double fork) holds
+    /// it for as long as it lives, so an unbounded wait would hold a cancelled or timed-out launch for as long as that descendant does
+    /// (common.reliability: every wait has a ceiling). Past the bound the launch returns or throws as the path does, with what the readers had ended with;
+    /// the readers are left to end by themselves and their faults are observed all the same.</summary>
+    public static readonly TimeSpan DrainAfterKill = TimeSpan.FromSeconds(10);
+
     public static Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
@@ -103,6 +118,31 @@ public static class ProcessRunner
     /// checkpoint) ends the launch the same way — the child is killed, never left spending with nobody reading it — and the sink's
     /// exception is what the caller sees.
     /// </para></summary>
+    public static Task<ProcessAttempt> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        string input,
+        IReadOnlyDictionary<string, string>? environment,
+        Action<string>? stdoutLine,
+        CancellationToken cancellationToken) =>
+        RunAsync(executable, arguments, workingDirectory, timeout, input, environment, stdoutLine, stderrLine: null, cancellationToken);
+
+    /// <summary>The same launch with stderr ALSO handed to <paramref name="stderrLine"/> LINE BY LINE AS IT ARRIVES, beside stdout's sink (model
+    /// arms E1.S5): a step that is paid for while it runs keeps the CLI's warnings on disk the moment they are printed. The whole stderr is
+    /// still returned in <see cref="ProcessResult.StandardError"/> and <see cref="ProcessResult.Output"/>. Either sink may be null.
+    /// <para>
+    /// <b>The wall and the tree kill are unchanged</b>, and a stderr sink that THROWS ends the launch exactly as a stdout sink does: the
+    /// child's tree is killed and the sink's exception is what the caller sees.
+    /// </para>
+    /// <para>
+    /// <b>Both readers are observed on every path</b> (model arms E2.S3): the launch does not return or throw while a sink it started is inside a call, and the
+    /// fault it throws is the stdout reader's if that faulted, else the stderr reader's. After a kill the wait for the readers is bounded by
+    /// <see cref="DrainAfterKill"/> (a descendant that escaped the tree kill holds the pipes open); past it the launch answers as the path does — a timeout carrying what the readers had read so far, marked
+    /// <see cref="ProcessAttempt.TimedOut.ReadersAbandoned"/> because the rest of the output is missing — and the abandoned readers end by themselves. The caller's cancellation is an <see cref="OperationCanceledException"/> carrying the
+    /// CALLER'S token on every path, whatever else happened (a sink's fault, or the wait's own cancellation, is its inner exception).
+    /// </para></summary>
     public static async Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
@@ -111,11 +151,12 @@ public static class ProcessRunner
         string input,
         IReadOnlyDictionary<string, string>? environment,
         Action<string>? stdoutLine,
+        Action<string>? stderrLine,
         CancellationToken cancellationToken)
     {
         var start = StartInfo(executable, arguments, workingDirectory, input, environment);
 
-        if (stdoutLine is not null)
+        if (stdoutLine is not null || stderrLine is not null)
         {
             Utf8(start);
         }
@@ -132,7 +173,7 @@ public static class ProcessRunner
             await WriteAsync(process, input, cancellationToken);
         }
 
-        return await AwaitAsync(process, timeout, stdoutLine, cancellationToken);
+        return await AwaitAsync(process, timeout, stdoutLine, stderrLine, cancellationToken);
     }
 
     /// <summary>The same launch with stdout handed to <paramref name="readStdout"/> as a raw byte STREAM, and stdin written WHILE it is read
@@ -159,7 +200,8 @@ public static class ProcessRunner
         }
 
         var writing = input.Length > 0 ? WriteAsync(process, input, cancellationToken) : Task.CompletedTask;
-        var attempt = await AwaitAsync(process, timeout, budget => ReadAsync(process.StandardOutput.BaseStream, readStdout, budget), cancellationToken);
+        var attempt = await AwaitAsync(
+            process, timeout, budget => new Reading(ReadAsync(process.StandardOutput.BaseStream, readStdout, budget), () => string.Empty), Reader(process.StandardError, line: null), cancellationToken);
         await writing;
 
         return attempt;
@@ -226,32 +268,90 @@ public static class ProcessRunner
     }
 
     private static Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, CancellationToken cancellationToken) =>
-        AwaitAsync(
-            process, timeout,
-            // None, deliberately, and this is the reason rather than an omission: on a timeout the child is
-            // killed and its output is still MERGED into the report below. A cancelled read would throw
-            // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
-            // unavailable at the only moment it matters. The reads end on their own when the pipes close.
-            budget => stdoutLine is null ? process.StandardOutput.ReadToEndAsync(CancellationToken.None) : PumpAsync(process.StandardOutput, stdoutLine, budget),
-            cancellationToken);
+        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, Action<string>? stderrLine, CancellationToken cancellationToken) =>
+        AwaitAsync(process, timeout, Reader(process.StandardOutput, stdoutLine), Reader(process.StandardError, stderrLine), cancellationToken);
 
-    /// <summary>The wait, the wall and the tree kill, over whichever stdout reader the launch chose: buffered text, a line pump, or a byte
-    /// reader (<see cref="StreamAsync"/>) — one copy of the part that must never differ between them.</summary>
-    private static async Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, Func<CancellationTokenSource, Task<string>> readStdout, CancellationToken cancellationToken)
+    /// <summary>A reader of one pipe: <see cref="Ended"/> is the whole text once the pipe closes; <see cref="SoFar"/> is what has been read up to now, which is all a
+    /// launch has of a pipe that never closes (a descendant that escaped the tree kill holds it — <see cref="ProcessRunner.DrainAfterKill"/>). A byte reader keeps no text.</summary>
+    private sealed record Reading(Task<string> Ended, Func<string> SoFar);
+
+    /// <summary>Buffered to the end when no sink is given — None as the token, deliberately, and this is the reason rather than an omission: on a
+    /// timeout the child is killed and its output is still MERGED into the report below. A cancelled read would throw exactly then — leaving
+    /// the one diagnosis anybody wants ("what did it print before it hung?") unavailable at the only moment it matters. The reads end on their
+    /// own when the pipes close — or pumped line by line into the sink, under the wait's budget. Either way the text is kept where
+    /// <see cref="Reading.SoFar"/> can read it.</summary>
+    private static Func<CancellationTokenSource, Reading> Reader(StreamReader pipe, Action<string>? line) =>
+        budget =>
+        {
+            var text = new System.Text.StringBuilder();
+            return new Reading(line is null ? BufferAsync(pipe, text) : PumpAsync(pipe, line, budget, text), () => Snapshot(text));
+        };
+
+    private static string Snapshot(System.Text.StringBuilder text)
     {
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        lock (text)
+        {
+            return text.ToString();
+        }
+    }
+
+    /// <summary>The pipe read to its end as it is — what <c>ReadToEndAsync</c> returned, kept in <paramref name="text"/> as it arrives.</summary>
+    private static async Task<string> BufferAsync(StreamReader pipe, System.Text.StringBuilder text)
+    {
+        var chunk = new char[4096];
+
+        while (await pipe.ReadAsync(chunk.AsMemory(), CancellationToken.None) is var read and > 0)
+        {
+            lock (text)
+            {
+                text.Append(chunk, 0, read);
+            }
+        }
+
+        return Snapshot(text);
+    }
+
+    /// <summary>The wait, the wall and the tree kill, over whichever readers the launch chose for the two pipes: buffered text, a line pump, or
+    /// (stdout only) a byte reader (<see cref="StreamAsync"/>) — one copy of the part that must never differ between them.
+    /// <para>
+    /// <b>No path out of it leaves a reader unobserved</b> (model arms E2.S3): the completed path waits for both readers to end; after a kill — the wall or the
+    /// caller's cancellation — the wait for them is bounded by <see cref="DrainAfterKill"/>, because a descendant that escaped the tree kill holds the pipes open.
+    /// <b>What the caller gets</b>: its own cancellation as an <see cref="OperationCanceledException"/> carrying ITS token, on every cancelled path (the wait's own
+    /// cancellation, or the reader fault it outranked, is the inner exception); a reader's fault otherwise — stdout's if both faulted; <see cref="ProcessAttempt.TimedOut"/>
+    /// at the wall, with what the readers had read (the whole text, or — marked <see cref="ProcessAttempt.TimedOut.ReadersAbandoned"/> — the part read before the bound). The wait's budget source is disposed only after both readers have ended — at once on a normal path, by a
+    /// continuation once an abandoned reader does.
+    /// </para></summary>
+    private static async Task<ProcessAttempt> AwaitAsync(
+        System.Diagnostics.Process process,
+        TimeSpan timeout,
+        Func<CancellationTokenSource, Reading> readStdout,
+        Func<CancellationTokenSource, Reading> readStderr,
+        CancellationToken cancellationToken)
+    {
+        var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeout);
 
         var stdout = readStdout(budget);
-        var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        var stderr = readStderr(budget);
 
         try
         {
-            await process.WaitForExitAsync(budget.Token);
+            return await WaitAsync(process, timeout, budget.Token, stdout, stderr, cancellationToken);
         }
-        catch (OperationCanceledException)
+        finally
+        {
+            DisposeWhenEnded(budget, stdout.Ended, stderr.Ended);
+        }
+    }
+
+    private static async Task<ProcessAttempt> WaitAsync(
+        System.Diagnostics.Process process, TimeSpan timeout, CancellationToken budget, Reading stdout, Reading stderr, CancellationToken caller)
+    {
+        try
+        {
+            await process.WaitForExitAsync(budget);
+        }
+        catch (OperationCanceledException cancelled)
         {
             // The child dies with the wait, WHOEVER cancelled it. This guard used to fire only for the
             // internal timeout, so every external cancellation — the drain's post-grace stop, a Ctrl+C —
@@ -260,21 +360,107 @@ public static class ProcessRunner
             // worktree entry survives that nothing sweeps. Found by review, proven by a red test.
             Kill(process);
 
-            if (cancellationToken.IsCancellationRequested)
-            {
-                // The caller's own signal still surfaces as one — only the orphan is new.
-                throw;
-            }
-
-            var (hungOut, hungErr) = (await stdout, await stderr);
-            return new ProcessAttempt.TimedOut(timeout, Merge(hungOut, hungErr), hungOut.Trim(), hungErr.Trim());
+            return await AfterKillAsync(timeout, stdout, stderr, cancelled, caller);
         }
 
-        var (printed, errors) = (await stdout, await stderr);
+        var (printed, errors) = await BothAsync(stdout.Ended, stderr.Ended, caller);
 
         return new ProcessAttempt.Completed(
             new ProcessResult(process.ExitCode, Merge(printed, errors), printed.Trim(), errors.Trim()));
     }
+
+    /// <summary>What a launch does once it has killed the tree (the wall passed, a sink faulted, or the caller cancelled): wait for the readers up to
+    /// <see cref="DrainAfterKill"/>, then answer as the path does — the caller's own cancellation if it asked to stop, a reader's fault if one faulted, else the timeout.
+    /// Past the bound the readers are not waited for: what the ones that ended hold is the output, and a fault that is already there is still the answer.</summary>
+    private static async Task<ProcessAttempt> AfterKillAsync(
+        TimeSpan timeout, Reading stdout, Reading stderr, OperationCanceledException cancelled, CancellationToken caller)
+    {
+        var drained = await DrainedAsync(stdout.Ended, stderr.Ended);
+        var (hungOut, hungErr) = drained
+            ? await BothAsync(stdout.Ended, stderr.Ended, caller)
+            : Abandoned(stdout, stderr, caller);
+
+        if (caller.IsCancellationRequested)
+        {
+            throw Cancelled(caller, cancelled);
+        }
+
+        return new ProcessAttempt.TimedOut(timeout, Merge(hungOut, hungErr), hungOut.Trim(), hungErr.Trim(), ReadersAbandoned: !drained);
+    }
+
+    /// <summary>The caller's cancellation, in the one form every cancelled path gives it: its own token, and what actually stopped the launch as the inner exception.</summary>
+    private static OperationCanceledException Cancelled(CancellationToken caller, Exception inner) => new(inner.Message, inner, caller);
+
+    /// <summary>Whether both readers ended within <see cref="DrainAfterKill"/>, faulted or not — it only waits; the callers read what the readers hold. The timer is cancelled
+    /// when they do, so a drained launch leaves none behind.</summary>
+    private static async Task<bool> DrainedAsync(Task<string> stdout, Task<string> stderr)
+    {
+        var ended = Task.WhenAll(Settled(stdout), Settled(stderr));
+        using var stop = new CancellationTokenSource();
+        var elapsed = Task.Delay(DrainAfterKill, stop.Token);
+
+        if (await Task.WhenAny(ended, elapsed) != ended)
+        {
+            return false;
+        }
+
+        await stop.CancelAsync();
+        return true;
+    }
+
+    /// <summary>A task that completes, never faulting, when <paramref name="reader"/> does: waiting on it observes nothing, so the fault stays for whoever reads it.</summary>
+    private static Task Settled(Task<string> reader) =>
+        reader.ContinueWith(static _ => { }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    /// <summary>The readers' output past the drain bound: what each has read SO FAR — the whole text of one that ended, the part read of one that did not. A fault already there is the
+    /// answer — the first in argument order — unless the caller asked to stop, whose cancellation outranks it. The faults of the others are observed by
+    /// <see cref="DisposeWhenEnded"/>. The caller marks the result partial (<see cref="ProcessAttempt.TimedOut.ReadersAbandoned"/>).</summary>
+    private static (string Stdout, string Stderr) Abandoned(Reading stdout, Reading stderr, CancellationToken caller)
+    {
+        foreach (var reader in new[] { stdout.Ended, stderr.Ended })
+        {
+            if (reader.IsFaulted && !caller.IsCancellationRequested)
+            {
+                ExceptionDispatchInfo.Throw(reader.Exception!.InnerExceptions[0]);
+            }
+        }
+
+        return (stdout.SoFar(), stderr.SoFar());
+    }
+
+    /// <summary>BOTH readers, to their end (model arms E2.S3, E1 §8 item 15). Awaiting only one would leave the other
+    /// running — a sink still inside its callback after the launch has returned or thrown, a fault nobody observes, a pump whose catch cancels the
+    /// wait's budget after the launch disposed it. <see cref="Task.WhenAll(Task[])"/> waits for every task even when one has faulted and observes every
+    /// fault, and rethrows the first in ARGUMENT order — stdout's if it faulted, else stderr's, never "whichever came first" — with its own stack; the
+    /// other is observed and dropped. The caller's cancellation outranks a fault: once <paramref name="caller"/> has asked to stop, what surfaces is its own
+    /// <see cref="OperationCanceledException"/> (its token, the fault as the inner exception). The waits that follow a kill are bounded by <see cref="DrainAfterKill"/>
+    /// before they come here; a completed child's readers end with its pipes.</summary>
+    private static async Task<(string Stdout, string Stderr)> BothAsync(Task<string> stdout, Task<string> stderr, CancellationToken caller)
+    {
+        try
+        {
+            var both = await Task.WhenAll(stdout, stderr);
+            return (both[0], both[1]);
+        }
+        catch (Exception fault) when (caller.IsCancellationRequested)
+        {
+            throw Cancelled(caller, fault);
+        }
+    }
+
+    /// <summary>Disposes the wait's budget once both readers have ended and observes their faults. On every normal path they have ended already, so this runs at once; past the
+    /// drain bound it is a continuation, so an abandoned pump whose catch cancels the budget never meets a disposed source, and no fault goes unobserved. The continuation
+    /// cannot throw: reading a task's exception and disposing a cancellation source do not.</summary>
+    private static void DisposeWhenEnded(CancellationTokenSource budget, Task<string> stdout, Task<string> stderr) =>
+        _ = Task.WhenAll(stdout, stderr).ContinueWith(
+            ended =>
+            {
+                _ = ended.Exception;
+                budget.Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     private static string Merge(string stdout, string stderr) => (stdout + stderr).Trim();
 
@@ -295,18 +481,20 @@ public static class ProcessRunner
         }
     }
 
-    /// <summary>Stdout read line by line, each line handed to the sink the moment it is read, and the whole text kept. A sink that throws
+    /// <summary>A pipe read line by line, each line handed to the sink the moment it is read, and the whole text kept in <paramref name="text"/>. A sink that throws
     /// cancels the wait's budget — which kills the child's tree in <see cref="AwaitAsync"/> — and its exception travels out of the read.</summary>
-    private static async Task<string> PumpAsync(StreamReader reader, Action<string> stdoutLine, CancellationTokenSource budget)
+    private static async Task<string> PumpAsync(StreamReader reader, Action<string> line, CancellationTokenSource budget, System.Text.StringBuilder text)
     {
-        var text = new System.Text.StringBuilder();
-
         try
         {
-            while (await reader.ReadLineAsync(CancellationToken.None) is { } line)
+            while (await reader.ReadLineAsync(CancellationToken.None) is { } read)
             {
-                text.Append(line).Append('\n');
-                stdoutLine(line);
+                lock (text)
+                {
+                    text.Append(read).Append('\n');
+                }
+
+                line(read);
             }
         }
         catch (Exception)
@@ -316,7 +504,7 @@ public static class ProcessRunner
             throw;
         }
 
-        return text.ToString();
+        return Snapshot(text);
     }
 
     /// <summary>Stdout handed to a byte reader whole, under a token that is never cancelled (the pipe's close is its end, as for the line pump);

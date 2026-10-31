@@ -1,0 +1,9 @@
+{"kind":"start","arm":"CR2","step":"1-code","attempt":1,"how":"fresh","session":"421388c3-71ea-4e86-87ef-4f09a4484b08","model":"sonnet","start_utc":"2026-10-28T12:28:28Z","budget_s":4500,"deadline":"13:43 UTC (14:43 CET)","head":"b4e2ea96","stream":"/home/jinx/git/coai-exp/results/CR2/1-code.a1.jsonl"}
+{"kind":"end","arm":"CR2","step":"1-code","attempt":1,"end_utc":"2026-10-28T12:59:03Z","wall_s":1835,"exit":0,"result":true,"head":"e053e223"}
+{"kind":"start","arm":"CR2","step":"2-hreview","attempt":1,"how":"fresh","session":"5f4bdc5a-14db-419a-81ca-3edd3de14b3e","model":"haiku","start_utc":"2026-10-28T12:59:03Z","budget_s":1800,"deadline":"13:29 UTC (14:29 CET)","head":"e053e223","stream":"/home/jinx/git/coai-exp/results/CR2/2-hreview.a1.jsonl"}
+{"kind":"end","arm":"CR2","step":"2-hreview","attempt":1,"end_utc":"2026-10-28T13:11:00Z","wall_s":717,"exit":0,"result":true,"head":"41749dd0"}
+{"kind":"start","arm":"CR2","step":"3-review","attempt":1,"how":"fresh","session":"f721c825-1e8f-4dd7-ae83-cad8bd50afca","model":"opus","start_utc":"2026-10-28T13:11:00Z","budget_s":1200,"deadline":"13:31 UTC (14:31 CET)","head":"41749dd0","stream":"/home/jinx/git/coai-exp/results/CR2/3-review.a1.jsonl"}
+{"kind":"end","arm":"CR2","step":"3-review","attempt":1,"end_utc":"2026-10-28T13:22:40Z","wall_s":700,"exit":0,"result":true,"head":"41749dd0"}
+{"kind":"start","arm":"CR2","step":"4-fix","attempt":1,"how":"fresh","session":"456ea5f8-6118-47af-9166-601a33e89ca2","model":"sonnet","start_utc":"2026-10-28T13:22:41Z","budget_s":1800,"deadline":"13:52 UTC (14:52 CET)","head":"41749dd0","stream":"/home/jinx/git/coai-exp/results/CR2/4-fix.a1.jsonl"}
+{"kind":"end","arm":"CR2","step":"4-fix","attempt":1,"end_utc":"2026-10-28T13:34:36Z","wall_s":715,"exit":0,"result":true,"head":"78f783d3"}
+{"kind":"arm-done","arm":"CR2","done_utc":"2026-10-28T13:34:36Z"}

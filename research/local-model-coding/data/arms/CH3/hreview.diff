@@ -1,0 +1,57 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 126b3f0e..7c998882 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -183,12 +183,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+     {
+         using var stood = StandIn();
+         string? homeSeen = null;
++        var madeBeforeTheShim = false;
+         var played = new PlayedKimi(new ProcessLauncher())
+         {
++            // An assertion here would be swallowed by the check's own catch (ConsultantCheck.TurnAsync), so the fact is read out and judged below.
+             Turn = (_, request) =>
+             {
+                 homeSeen = After(request.Arguments, AcpWords.HomeFlag);
+-                Directory.Exists(homeSeen).Should().BeTrue("the home is made before the shim starts");
++                madeBeforeTheShim = Directory.Exists(homeSeen);
+ 
+                 return PlayedKimi.Lost(PlayedKimi.Minted);
+             },
+@@ -199,6 +201,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);
+ 
+         homeSeen.Should().NotBeNull();
++        madeBeforeTheShim.Should().BeTrue("the home is made before the shim starts");
+         Path.GetFileName(Path.GetDirectoryName(homeSeen)).Should().Be("own", "the root-less check keeps the home in its scratch's own folder");
+         Path.GetFileName(homeSeen).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+         Directory.Exists(homeSeen).Should().BeFalse("the scratch is gone with the home");
+diff --git a/src_mcp/tests/ConfinementPlannerTests.cs b/src_mcp/tests/ConfinementPlannerTests.cs
+index 9064d05f..5e3447c1 100644
+--- a/src_mcp/tests/ConfinementPlannerTests.cs
++++ b/src_mcp/tests/ConfinementPlannerTests.cs
+@@ -395,11 +395,20 @@ public sealed class ConfinementPlannerTests
+         }
+     }
+ 
+-    /// <summary>S5.6.6: a Kimi plan carries no flag; a plan that does is not one coai made for Kimi, and is refused naming the shim.</summary>
+-    [Fact]
+-    public void APlanWithFlags_IsRefusedForKimi()
++    /// <summary>
++    /// S5.6.6: a Kimi plan carries no argv fragment; a plan that does is not one coai made for Kimi, and is refused naming the shim. Each of the three
++    /// fragments the guard reads is given its own case, so deleting any one of them from the guard turns a case red.
++    /// </summary>
++    [Theory]
++    [InlineData("leading")]
++    [InlineData("flags")]
++    [InlineData("addDirs")]
++    public void APlanWithFlags_IsRefusedForKimi(string fragment)
+     {
+-        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
++        string[] leading = fragment == "leading" ? ["--leading"] : [];
++        string[] flags = fragment == "flags" ? ["--yolo"] : [];
++        string[] addDirs = fragment == "addDirs" ? [RootA] : [];
++        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, leading, flags, CwdKind.Scratch, addDirs, AdmissionFlag.Unconfined);
+         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(flagged) };
+ 
+         FluentActions.Invoking(() => KimiRow().Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");

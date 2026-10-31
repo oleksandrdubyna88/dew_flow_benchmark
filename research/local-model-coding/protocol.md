@@ -296,3 +296,230 @@ is one known case — the instrument must catch it to be trusted).
     after the results were seen, to read the prediction "Haiku's fixes leave more findings open" — whose registered test
     was the mutation checks and the judge. It is reported as post hoc.
   - "Renamed" scenario tests (O2, O3, D1, D2) found by hand; the mutation checks' `killedBy` lists confirm them.
+
+## Part 5b — S and D again, with a fresh Haiku review-and-fix before Opus (SR, DR x4), recorded before they run (2026-10-27T12:00Z)
+
+**Owner's request** (2026-10-27, after the Part 5 results): four more runs of each of the two Part 5 schemes the owner
+picked — S (Sonnet splits) and D (Haiku codes directly) — with ONE change: when Haiku has finished coding, a FRESH Haiku
+session reviews the whole stories and fixes what it found, so Opus reviews code that a Haiku review already passed.
+- **SR1–SR4:** Sonnet splits (`x-split`, unchanged) → Haiku codes each task (`t2-coder`) → **Haiku reviews + fixes**
+  (`hr-review-fix`, fresh session, 30 min) → Opus reviews once (`2-review`, unchanged) → Haiku fixes (`h-fix`, unchanged).
+- **DR1–DR4:** Haiku codes the stories (`d-code`) → **Haiku reviews + fixes** → Opus reviews → Haiku fixes.
+- **The new brief** `hr-review-fix` = the Opus review brief's checklist (the 12 scenarios with "would fail without the change",
+  the decisions, correctness, security, rules, scope) + the Haiku fix brief's working rules (red test first, the suites,
+  commits, notes); findings written to the notes BEFORE any edit. Its diff is kept (`<step>.diff`). The Opus reviewer is not
+  told that a Haiku review ran (its brief is unchanged); the judge's redaction already removes the word "Haiku".
+- **Unchanged and pinned:** base `b4e2ea96`, every other brief, step budgets, tools, models (claude-haiku-5-5,
+  claude-sonnet-5-5, claude-opus-5-5), Claude Code 2.1.310 (the same as Part 5), the judge rubric, the six frozen mutants.
+  The `x-split` brief still says nothing about the extra review (kept byte-identical so the split is the same variable as S).
+- **Order and load:** four rounds of two (SR_n with DR_n) — Part 5 ran rounds of three, so the load per arm is a little lower;
+  wall times are compared with that caveat.
+- **Rule deviations, by the owner's request:** Haiku codes, reviews and fixes (no role in `subagent-models.md`).
+
+**Predictions (before any SR/DR arm runs):**
+1. The Haiku review-and-fix step costs $0.3–1.0 and 10–30 min per arm, so SR $5.5–8.5 per arm and DR $4.5–6.5 — DR stays the
+   cheapest scheme and below the classic band ($6.53–7.85); SR's mean stays inside or below the band.
+2. The Opus review finds fewer blocking+major findings than in S and D (mean lower by at least 1 per arm), most clearly in DR.
+3. Quality (absolute judge): DR has at most 1 of 4 arms below 7 (D had 2 of 4: 6 and 5.5); SR stays at 7.5–8 like S.
+4. The Haiku reviewer does NOT reliably find tests that cannot fail: the mutation checks still show at least one arm of the 8
+   with an intended test that misses its mutant.
+5. In at least 1 of the 8 arms the Haiku review-and-fix changes something the Opus review then flags as a defect it introduced.
+6. Wall time grows by the step's 10–30 min: DR about 60–95 min, SR about 75–135 min.
+
+### Part 5b — operator stop, 2026-10-27 16:19–16:21 UTC (recorded before any SR4/DR4 result)
+
+The owner asked to pause. SR1–SR3 and DR1–DR3 had finished. SR4 (in its first task batch, 2.7 min of Haiku coding, 0 commits) and
+DR4 (in 1-code, 645 s of 75 min) were stopped with SIGINT to their `timeout` processes. **run-arm.sh read that as "stopped at its hard
+deadline" (exit 124) and marked the steps done**, then started the next steps (SR4 t2, DR4 2-hreview, which edited the coder's two
+test files for ~2 min). Those were then killed (SIGKILL). The two arms cannot be resumed cleanly (SR4's task worktrees were already
+removed; DR4's clone mixes the coder's and the reviewer's edits), so **both are re-run from scratch** when the chain is restarted. Their
+aborted data is kept, not deleted: `aborted-2026-10-27-1621/` (clones, results, notes, build logs). Lesson for the harness: to pause an
+arm, kill its whole process group with SIGKILL (no end line is written, so the step resumes), never SIGINT/SIGTERM the `timeout`.
+To restart: `setsid nohup ./after-y.sh >> chain-y.log 2>&1 < /dev/null &` — it remakes SR4 and DR4 from `base` and goes on.
+
+### Part 5b — the chain hung in the mutation step, 2026-10-27 19:02–19:55 UTC (recorded after the checks, the judge and the first two mutation results were read)
+
+`after-y.sh` ran the frozen mutation checks two arms at a time and waited for each pair with a bare `wait`. A bare `wait`
+also waits for the keep-awake guard, which never ends, so the chain stopped after SR1 and DR1. Fixed in the script (it
+waits only for the pair's own jobs) and restarted from its markers at 19:55 UTC; SR1's and DR1's mutation results were
+kept, nothing else re-ran. No arm, check or judge result was affected.
+
+## Part 5c — the classic scheme with a fresh Haiku review-and-fix before Opus (CR, CH x4), recorded before they run (2026-10-28T10:58:52Z)
+
+- **Design (the owner's, 2026-10-28):** the classic arm C unchanged (Sonnet codes, 75 min, brief `1-code` with `arm-C.md`),
+  plus ONE step after Sonnet's code — the same fresh Haiku review-and-fix as Part 5b (`hr-review-fix`, 30 min). Then the
+  Opus review (`2-review`, 20 min, read-only; not told that a Haiku review ran), then the fixes (30 min):
+  - **CR1–CR4:** Sonnet fixes (`3-fix`, as in C).
+  - **CH1–CH4:** Haiku fixes (`h-fix`; it differs from `3-fix` only in the model's name). The owner's second variant.
+- **One change in the harness, for every CR and CH arm:** each arm has its own notes folder, `notes/<arm>/`, so a Haiku
+  reviewer can no longer read another arm's notes (the Part 5b leak, incidents §2e). C had the shared folder; C's coder and
+  fixer never read another arm's notes, so this does not move the baseline.
+- **Order:** four rounds of two (CR_n with CH_n), `after-z.sh`; the same base `b4e2ea96`, the same checks, the absolute judge
+  (only the new arms), the frozen mutation checks.
+- **Baseline (C, C2, C3, C4):** cost $6.53–7.85 (mean $7.21); per step: code $2.6–3.6, review $2.3–3.6, fix $0.9–2.0; work
+  44–62 min; judge 7.75 (7–8); Opus blocking+major 0.75 per arm; the judge's majors 2 in all; 0 weak tests.
+
+| # | Prediction |
+|---|---|
+| 1 | The Haiku step costs $0.3–1.0 and 10–30 min per arm. CR costs $7.5–9.0 (mean above the classic band). CH costs $6.0–8.0 (mean inside the band, about $1 below CR). |
+| 2 | Wall time: CR and CH 60–100 min each (C + the Haiku step). |
+| 3 | The Opus review finds at most 1 blocking+major per arm on average in CR and in CH (C: 0.75); no clear fall from C, as in Part 5b. |
+| 4 | Judge: CR 7.5–8 in all 4 arms. CH: no arm below 7, and CH's mean at most 0.5 below CR's. |
+| 5 | In at least 1 of the 8 arms the Haiku review-and-fix changes something that the Opus review then flags. |
+| 6 | All 48 mutants killed; at most 1 of the 8 arms has an intended test that misses its mutant. |
+
+### Part 5c — other arms' data locked during the run (2026-10-28T11:31Z, CR1 and CH1 in step 1)
+
+- The owner asked whether an arm can read other runs' work and do better. A scan of all 40 earlier arms' tool calls found:
+  most cross-arm reads were tool logs (which format command was used); real reads of another arm's findings were DR3 and
+  DR4 (incidents §2e) and, not recorded before, **T2's fixer read the first 40 lines of `notes/T1-fix.md`** (T1's review
+  findings and fixes); O2 and S2 grepped other arms' fix notes for "generator" / "format". No arm read another arm's
+  clone, branch or transcript. CR1 and CH1 had read nothing outside their own folders up to the lock.
+- On the owner's choice, `lock-others.sh` set mode 000 on everything holding another arm's work (620 paths: the old arm
+  clones, old notes, results, worktrees, judge and mutation folders, RESULTS.md, PROTOCOL.md, fix-outcomes.json,
+  mutate.mjs, the old arms' Claude transcripts) and mode 300 on the folders above them (no listing). The arms run as the
+  same user and `chmod` is not in their allowed tools. Modes saved in `locked-modes.txt`; a watcher runs
+  `unlock-others.sh` once all 8 arms are done, before the objective checks, the judge, the mutation checks and the metrics.
+- Not covered by the lock: the owner's own repositories (`dew_flow_connect_other_ais` with the old arms' remote branches,
+  `dew_flow_benchmark` with the published data). The CR/CH transcripts will be scanned for any read of them.
+
+### Part 5c — after the run (2026-10-28, recorded with the results)
+
+- **The CR2 build check**: the chain's build of CR2's final commit ended with "Fatal error. Internal CLR error.
+  (0x80131506)" and no compiler error. Built again alone with the same command: succeeded, 0 warnings, 0 errors.
+  `objective.json`'s `build` was set to `true` before the judge read it; the chain's original is kept
+  (`data/arms/CR2/objective.json.orig`, `BUILD-RERUN.md`).
+- **The lock held**: a scan of all 8 arms' tool calls found no read of another arm's notes, clone, results or
+  transcripts, nor of the owner's repositories; no tool call was refused by the lock. The unlock ran at 15:59 UTC
+  (625 paths restored) before the objective checks.
+- **A false alarm**: the unlock watcher first reported "chain is gone" at 11:34 UTC. `chain-z.pid` held the PID of
+  `setsid`'s parent, not of the chain; the chain ran without a break. The PID was corrected and the watcher restarted.
+
+## Part 6 — a second task: C, CR and SRS, each ending in the coai code gate (3 x 3 arms), recorded before they run (2026-10-28)
+
+The full design is [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md), copied as written before the run. This is its summary and the
+facts the log adds. Part 6 is a NEW task (not E5.5/E5.6), so its numbers stand apart from parts 1–5c.
+
+- **The task:** issue #878 (a spent model is still launched and runs into its timeout) and the quota part of #765 of
+  `dew_flow_connect_other_ais`. The plan `todo/PLAN_a_spent_quota_cools_the_model_down.md` (written by Fable from a Sonnet code map)
+  passed a coai plan gate (`proceed`, 2 of 2 providers), a consultation (codex-2, every point checked in the code), real `agy 1.4.9` captures
+  taken once by the operator and committed as fixtures, and a second plan gate on the revision (`proceed`). It is frozen at `6786582e`:
+  43 scenarios (39 C#, 4 node), four stories. The operator's commands to split it into epics were declined for this plan (plan §11).
+  Baseline at the base on this host: the whole MCP suite (13,807 tests) and the extension tests pass, 0 failures
+  ([harness/part6/baseline.json](harness/part6/baseline.json)).
+- **Arms:** 3 schemes x 3 runs, in rounds of three at the same time (C_n, CR_n, SRS_n).
+  - **C:** code (Sonnet, 180 min) → review (Opus, 40, read-only) → fix (Sonnet, 60) → coai gate (Sonnet, 150).
+  - **CR:** code (Sonnet, 180) → a fresh Haiku review-and-fix (60) → review (Opus, 40) → fix (Sonnet, 60) → coai gate (Sonnet, 150).
+  - **SRS:** split (Sonnet, 40; 4–7 tasks, checked by `tasks-plan.mjs`) → per task code (Haiku, 45 each; parallel worktrees) → a fresh
+    Haiku review-and-fix (60) → review (Opus, 40) → fix (Sonnet, 60) → coai gate (Sonnet, 150).
+- **The coai gate step:** the arm has its own coai server (its own data folder, a copy of the operator's `settings.json`). A plan round on the
+  frozen plan only unlocks the code gate; its findings are rejected as "frozen". Then code rounds until `proceed`, `good_enough`, rounds
+  spent or `call_human`. Only the gate tools are allowed (not `consult`, not `ask_*`). Gate steps run one arm at a time (a lock), for
+  the providers' quotas.
+- **Isolation:** each arm under `r/<random token>/` (clone, notes, work, results, temp, coai data); the same branch name in every arm; no brief
+  names the arm or its scheme; while the arms run, the old experiment is closed (mode 000) and the folders that would list another arm are
+  mode 300; `Read` of `~/.claude`, the vendors' homes, `/proc`, the old experiment and the coai store is denied. Known open path: a deliberate
+  `/proc` walk through `node` or `ls`. Every stream is scanned afterwards ([incidents.md](incidents.md) §2g).
+- **Limits:** a step that ends on a usage limit, a rate limit or an overload is resumed in its own session after 15 min (up to 40 times); a gate
+  that cannot run is resumed after 30 min (up to 8 times). Waiting is not counted against a budget.
+- **Measured:** what the earlier parts measured (cost, time, the Opus review's findings, the objective checks with the 43 scenarios by name, the
+  absolute blind judge) and, per arm, the coai gate's rounds, verdicts, reviewers, findings (severity, accepted or rejected, fixes). A blind
+  Opus judge rates every coai code finding (real, partly, not real; severity; usefulness) and scores each arm's set from 1 to 10. Mutation
+  checks: designed after the run on the final code, frozen on 2026-10-29 before any was applied. Not pre-registered, added after the results:
+  the hand check of the judge's four major findings, and the per-role cost means.
+
+| # | Prediction (recorded before the run) |
+|---|---|
+| 1 | Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's. |
+| 2 | Elapsed per arm, gate included: 3–6 h. The gate step 30–120 min. |
+| 3 | The Opus review's blocking+major per arm: C 1–3; CR at most C's; SRS at least C's. |
+| 4 | The coai gate's first code round finds ≥ 3 findings in every arm; the blind judge rates at least half of all coai findings real; in at least 2 of the 3 schemes coai finds a real defect the Opus review did not name. |
+| 5 | Absolute judge: C and CR 7–8 in every arm; SRS 6.5–8. |
+| 6 | Scenarios by exact name: C and CR ≥ 40 of 43 in every arm; SRS ≥ 38. |
+
+The mutation prediction was written in the header of `mutate6.mjs` before the run: M1, M2, M3, M7 and M8 killed in all nine arms; survivors most
+likely at M4, M5 or M6; 7–8 of 8 killed per arm; no scheme difference beyond one mutant; at most two not applicable in all.
+
+### Part 6 — the spend limit and its repair (2026-10-28 21:45 UTC – 2026-10-29 08:45 UTC, recorded after the run)
+
+- The arms started at 20:26 UTC (round 1: C1, CR1, SRS1). At 21:45–21:47 UTC the Claude CLI answered "You've hit your individual spend
+  limit · … your session limit resets 1:20am (Europe/Paris)", with `api_error_status` 429. `run-arm.sh`'s limit detector looked for other
+  words and missed this one. Steps that ended in that error were marked done (14 attempts: C1 3, CR1 4, SRS1 7; each of C1's review, CR1's Haiku review and SRS1's task
+  t4 had worked 4–22 min first, the other 11 failed after about 4 s). Round 2 (C2, CR2, SRS2) started at 21:48 UTC and ended in about a minute with no work.
+- The problem was found from the log. `repair-limit-2026-10-28.sh` (kept as the record) removed the `.done` marker of every step whose last result is an error (so its own session
+  resumes), the arm-done line, and what was computed from a bogus step (a `review.json` parsed from an error, before/diff snapshots taken at the wrong commit,
+  SRS1's batch markers and Haiku diffs of t4, t5 and t7). Commits and uncommitted work stayed. Round 2 had no commit and a clean tree, so its out, notes
+  and work folders were reset to a fresh start. The detector was changed to read `api_error_status` and `api_error` first, and an error result is
+  never "done" (it stops the runner for a person to look). The chain restarted at 08:45 UTC and the round-1 sessions resumed with the time left of their budgets.
+- Effect on the data: no step was lost; the work done before the limit is counted once (a resumed session reports its running total; the first count added the attempts and was corrected on 2026-10-30, [incidents.md](incidents.md) §2h: C1 $16.47, CR1 $15.52, SRS1 $14.64 after correction); active minutes leave the wait out; round-1 elapsed times (779–862 min) contain it.
+
+### Part 6 — after the run (2026-10-29, recorded with the results)
+
+- **The chain:** rounds 2 and 3 ran without a break (round 2 ended 13:59 UTC, round 3 at 17:47 UTC). The objective checks ran from 17:47 to 19:27 UTC.
+- **SRS3's Haiku review-and-fix started two subagents** (one on Opus, $2.84, and one on Sonnet, $0.94). Reason: `Agent` is in the runner's tool list for every step
+  that can write. Two earlier `Agent` calls without a model were refused by the project's hook; the retries named `sonnet` and `opus`. It is the only step in the nine arms
+  with a subagent. SRS3's Haiku review result is marked contaminated.
+- **The isolation scan** of the nine arms' tool calls (6,060 calls, plus the 158 calls of SRS3's two subagents): no path of another arm, no other arm's token, no path of the old
+  experiment, the owner's repositories or the vendors' homes. Two things were looked at one by one: SRS1's `readlink /proc/<pid>/cwd` on two process ids (both were its own worktrees), and a
+  failed edit of CR3's Haiku reviewer to a path in the experiment root (the file did not exist; nothing was written there).
+- **A test that fails in the arms, not in the checks:** the arms' own whole-suite runs showed one failing test, `RegularFilesTests.A_fifo_a_socket_and_a_device_…` (a Unix-socket path longer
+  than 108 characters under the arm's temp folder). The brief had said nothing is known to fail. All nine arms show it (1 failed in each own run): the gate notes of C1, C3, CR2, CR3, SRS1, SRS2 and SRS3 name it, and so do the fix notes of C2 and CR1. In the objective checks, with the
+  normal temp folder, it passed, and the suite counts reported in the tables are those of the objective checks.
+- **The operator's commands in the plan round:** every arm's plan round carried the operator's panel commands (split into epics, a Fable/Opus role split, consultants first, a consult
+  cadence). All nine gate agents declined them, with the reason that the plan is frozen and the brief fixes the flow.
+- **C2's Opus review** ran to its hard deadline (50 min, exit 124) after it had written its review. The review is used as written.
+- **The objective check and C1's S14:** C1's test for S14 is named `AnUnknownModel_HasNoGroup_AndEveryKnownOneHasItsKey`. The check found it by name (present) but not as a passing whole-word name,
+  so C1 reads 42 of 43 passing. The test is a theory of 8 cases and all passed. The mutation check found it by its longer name and it caught its mutant. Left as the check reported it.
+- **The judges:** the absolute blind judge, 18 sessions (2 per arm, labels random, the diff redacted; redaction counts 3–13 per arm). The coai findings judge, 9 sessions (one per arm), with the gate agent's decisions
+  and the providers not shown. It worked in each arm's clone, where the scheme was not redacted. The main session then opened the four major findings of the absolute judge in the code
+  ([data/part6/judge-abs/handcheck.json](data/part6/judge-abs/handcheck.json)).
+- **Mutation checks** ran from 19:57 to 20:37 UTC, two arms at a time, 4 test threads each.
+
+### Part 6 — the cost correction (2026-10-30, recorded with the results)
+
+The Part 6 costs in this file's predictions table are unchanged (they are predictions). The observed costs were recomputed after a counting error was found:
+a resumed attempt reports its session's running total, and the first `metrics6.mjs` added every attempt. The corrected means are C $15.48, CR $16.30,
+SRS $17.09 ($15.83 without SRS3's subagents); first count $16.63, $16.55, $17.16. Details: [incidents.md](incidents.md) §2h. Prediction 1 against
+the corrected numbers is in [results.md](results.md) §7d.
+
+## Part 7 — CHH: the classic scheme with two focused Haiku reviewers, on the same task as Part 6 (3 arms), recorded before they run (2026-10-29)
+
+The full design is the end of [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md), copied as written before the run. Summary and the facts the log adds.
+
+- **Design (the owner's, 2026-10-29).** Three arms, CHH1–CHH3, at the same time, on the same task, plan (`6786582e`), base, isolation and limit handling as
+  Part 6. Steps: Sonnet codes (180 min, brief `1-code`) → **Haiku A**, read-only, the decision tracer (40 min, brief `hA-trace`: each plan decision at every
+  site — subclasses, callers, readers and writers, the issue's sample data, mixes and orders, failure paths) → **Haiku B**, read-only, test truth (40 min,
+  brief `hB-tests`: scenario names, does each test fail if its decision breaks, does it pass on every CI job: Linux, Windows, macOS) → **Sonnet fixes both**
+  (60 min, brief `hfix`) → Opus reviews (40, `2-review`) → Sonnet fixes (60, `3-fix`) → the coai code gate (150, `gate`).
+- **Why these two focuses.** coai's code gate ran four roles in Part 6 (Conventions, Architecture, Security & Reliability, UX-DX & Performance). The real
+  defects that it and the Opus review missed fell into two kinds that no role names: a plan decision not held at one site, and a test that does not test
+  what it claims or fails on another CI system.
+- **Bias, stated before the run.** The focuses were chosen after seeing Part 6's misses ON THIS SAME TASK. The briefs name no Part 6 defect and no file, but
+  CHH has a hindsight advantage over C, CR and SRS. A fair test of the focuses needs another task. (The briefs' checklists do describe the defect kinds.)
+- **Changes to the runner.** Read-only steps refuse the `Agent` and `Task` tools. The C, CR and SRS arms are not re-run. `lock.sh` takes an `EXTRA_CLOSED`
+  list: the lock also closes (mode 000) every Part 6 result (the nine arm folders, the judges and hand check, the mutation runs, the metrics, the logs, the
+  protocol and the write-up worktree). `after7.sh` makes the three arms and runs them. `mutate6.mjs` got the anchors for the CHH arms before any CHH result.
+- **Measured.** As in Part 6, plus the two Haiku reviewers' findings (`notes/hA.json`, `notes/hB.json`) and what the fixer did with each (`notes/hfix.md`).
+  Not pre-registered, added after the results: the hand check of the judge's major (CHH3), the check of the renamed S33, the check of the three named defects
+  against the reviewed commits and the final code, and the comparison of the cost ranges.
+
+| # | Prediction (recorded before the run) |
+|---|---|
+| P7-1 | Haiku A reports at least one finding that the later judge rates real in at least 2 of 3 arms. |
+| P7-2 | Haiku B reports at least one CI-portability or no-teeth test finding in at least 2 of 3 arms. |
+| P7-3 | The Opus review after the fix finds 0–1 blocking + major per arm (CR in Part 6: 1 / 2 / 2). |
+| P7-4 | The blind judge scores every CHH arm 8 or more in both runs, with no hand-checked major in at least 2 of 3 arms. |
+| P7-5 | Claude-only cost per arm $17–21 (CR: $15.88–17.49); active time 170–210 min (CR: 119–166). |
+| P7-6 | The coai gate's findings stay mostly not real (judge's score 2–4 per arm). |
+| P7-7 | The mutation checks kill 8 of 8 in every arm (no separation, as in Part 6). |
+
+### Part 7 — after the run (2026-10-30, recorded with the results)
+
+- **Timeline.** The arms started at 21:37 UTC on 2026-10-29. CHH3 ended at 00:18, CHH2 at 00:35 and CHH1 at 04:27 UTC (it waited for the spend limit from
+  00:53 to 04:08). The lock was released at 04:28; the objective checks ran 04:28–05:00; the mutation checks 05:05–05:15 (CHH3 repeated 05:22–05:31, after
+  the SDK upgrade at 05:19:54); the judges ran after the checks.
+- **The limit, the account, the SDK upgrade, the flaky test and the trust warning** are in [incidents.md](incidents.md) §2i.
+- **The data differ from the owner's note** on the start of the limit wait: 00:53 UTC in the streams (the note says 01:38).
+- **The judges.** The absolute blind judge: 6 sessions (2 per arm, redaction counts 2–4). The judge of the coai findings: 3 sessions, one per arm, in the arm's clone
+  (as in Part 6). The hand check of CHH3's major and of CHH1's renamed S33 is in `data/part7/judge-abs/handcheck.json` (the `part7` block) and in
+  [results.md](results.md) §7e.

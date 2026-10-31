@@ -1,0 +1,158 @@
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index 20e14fa1..ebd9bdfe 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -349,7 +349,7 @@
+           "M-K3",
+           "M-K4"
+         ],
+-        "note": "mechanism: none. The shim bounds Read to the working folder, and that folder is EMPTY, but Grep and Glob read the disk directly and the working folder plays no part in it, so the empty folder confines nothing. Says Can read this machine. WebSearch and FetchURL are announced and unmeasured (RESULTS §7); M-K17 decides whether that sentence stays"
++        "note": "kimi 2.1.1: mechanism: none. The shim bounds Read to the working folder, and that folder is EMPTY, but Grep and Glob read the disk directly and the working folder plays no part in it, so the empty folder confines nothing. Says Can read this machine. WebSearch and FetchURL are announced and unmeasured (RESULTS §7); M-K17 decides whether that sentence stays"
+       }
+     },
+     {
+@@ -368,7 +368,7 @@
+           "M-K9",
+           "M-K9 (e)"
+         ],
+-        "note": "mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6). Read stays in it, but Grep and Glob read the disk directly, so the row is unconfined. The roots are copied and never granted, because a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk (M-K9, M-K9 (e)). WebSearch and FetchURL are announced and unmeasured (RESULTS §7)"
++        "note": "kimi 2.1.1: mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6). Read stays in it, but Grep and Glob read the disk directly, so the row is unconfined. The roots are copied and never granted, because a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk (M-K9, M-K9 (e)). WebSearch and FetchURL are announced and unmeasured (RESULTS §7)"
+       }
+     },
+     {
+diff --git a/src_mcp/runners/Kimi/KimiConsultant.cs b/src_mcp/runners/Kimi/KimiConsultant.cs
+index 7b96c4f7..ae2c5ee5 100644
+--- a/src_mcp/runners/Kimi/KimiConsultant.cs
++++ b/src_mcp/runners/Kimi/KimiConsultant.cs
+@@ -47,10 +47,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") :
+     public ReviewerInvocation Build(ConsultantLaunch launch)
+     {
+         ConsultantLaunches.MustBeLaunchable(launch);
+-        if (launch.Confinement is LaunchConfinement.Planned { Plan.Flags.Count: > 0 } planned)
++        if (launch.Confinement is LaunchConfinement.Planned planned && (planned.Plan.Leading.Count > 0 || planned.Plan.Flags.Count > 0))
+         {
+             throw new ArgumentException(
+-                $"a Kimi row's confinement is the shim's, and a plan that carries flags ({string.Join(' ', planned.Plan.Flags)}) is not one coai made for kimi (E5.6 decision 3)",
++                $"a Kimi row's confinement is the shim's, and a plan that carries flags ({string.Join(' ', [.. planned.Plan.Leading, .. planned.Plan.Flags])}) is not one coai made for kimi (E5.6 decision 3)",
+                 nameof(launch));
+         }
+ 
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index fea1f819..1c6547b5 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -141,6 +141,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         using var person = new KimiFixture();
+         using var stood = KimiStandIn.Begin(person);
+         using var homes = TempDir.For("testsToDelete-kimi-check-");
++        using var unlinks = new KimiStandIn.Unlinks();
++        var before = KimiStandIn.PersonFolder(person);
+         using var cancel = new CancellationTokenSource();
+         var started = new TaskCompletionSource();
+         var played = new PlayedKimi(new ProcessLauncher())
+@@ -162,6 +164,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         Text(said, "failureKind").Should().Be("cancelled", "the record says the check was cancelled");
+         Directory.Exists(HomeOf(played)).Should().BeFalse("cancelled or not, the home is disposed junction-first");
+         Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty();
++        unlinks.Seen.Should().BeEmpty("the scratch's deleter never unlinks the Kimi home's junction, cancelled or not");
++        KimiStandIn.PersonFolder(person).Should().Equal(before, "the sign-in and its config are whole after a cancelled check");
+     }
+ 
+     /// <summary>S5.5.4: with no homes root, the home stays in the check's own scratch, and the scratch goes with it, junction-first.</summary>
+@@ -183,5 +187,4 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         Directory.Exists(home).Should().BeFalse();
+         unlinks.Seen.Should().BeEmpty("the junction is unlinked by the Kimi owner before its folder goes");
+     }
+-
+ }
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index e410a288..b855f081 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -97,6 +97,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+ 
+         TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+         var launch = played.Shims.Should().ContainSingle().Subject;
++        launch.Request.StdIn.Should().Contain("Which helper retries an outbound send?", "the question reaches the shim");
+         launch.Request.StdIn.Should().Contain(launch.Request.WorkingDirectory, "the prompt names the copy Kimi reads");
+         launch.Request.StdIn.Should().NotContain(Repo, "never the root, which the row reads only through its copy (D6)");
+         Directory.Exists(Path.GetDirectoryName(KimiStandIn.HomeOf(launch.Request))).Should().BeFalse("the row's folder goes once it answered");
+@@ -111,6 +112,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         using var person = new KimiFixture();
+         using var stood = KimiStandIn.Begin(person);
+         using var unlinks = new KimiStandIn.Unlinks();
++        var before = KimiStandIn.PersonFolder(person);
+         var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+         await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+         var played = new PlayedKimi(_launcher);
+@@ -121,6 +123,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         played.Shims.Should().BeEmpty("a root outside any Git work tree is refused before anything is launched");
+         NothingLeftUnderTheHomesRoot();
+         unlinks.Seen.Should().BeEmpty();
++        KimiStandIn.PersonFolder(person).Should().Equal(before, "the sign-in is whole");
+     }
+ 
+     [Fact]
+@@ -129,6 +132,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         using var person = new KimiFixture();
+         using var stood = KimiStandIn.Begin(person);
+         using var unlinks = new KimiStandIn.Unlinks();
++        var before = KimiStandIn.PersonFolder(person);
+         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+         var played = new PlayedKimi(_launcher)
+         {
+@@ -146,5 +150,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         Directory.Exists(Path.GetDirectoryName(KimiStandIn.HomeOf(launch.Request))).Should().BeFalse("a cancelled row leaves no folder behind");
+         NothingLeftUnderTheHomesRoot();
+         unlinks.Seen.Should().BeEmpty();
++        KimiStandIn.PersonFolder(person).Should().Equal(before, "the sign-in is whole after a cancelled row");
+     }
+ }
+diff --git a/src_mcp/tests/ConfinementPlannerTests.cs b/src_mcp/tests/ConfinementPlannerTests.cs
+index 120e4d0b..6e1f8d6f 100644
+--- a/src_mcp/tests/ConfinementPlannerTests.cs
++++ b/src_mcp/tests/ConfinementPlannerTests.cs
+@@ -526,6 +526,21 @@ public sealed class ConfinementPlannerTests
+         build.Should().Throw<ArgumentException>().WithMessage("*shim*");
+     }
+ 
++    /// <summary>E5.6 decision 3: "ANY flag" includes the leading arguments a plan can carry before its flags — they are refused the same way.</summary>
++    [Fact]
++    public void APlanWithLeadingArguments_IsRefusedForKimi()
++    {
++        var kimi = Adapters().Single(a => a.Runtime == "kimi").Consultant;
++        var leading = Planned("kimi", CapabilityGrant.None) with
++        {
++            Confinement = new LaunchConfinement.Planned(Plan("kimi", CapabilityGrant.None) with { Leading = ["--yolo"] }),
++        };
++
++        var build = () => kimi.Build(leading);
++
++        build.Should().Throw<ArgumentException>().WithMessage("*shim*");
++    }
++
+     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
+     [
+         ("claude", new ClaudeConsultant(new ClaudeRuntime())),
+diff --git a/src_vs_code/src/runtimeCapabilities.generated.ts b/src_vs_code/src/runtimeCapabilities.generated.ts
+index 113db15f..05dbcd74 100644
+--- a/src_vs_code/src/runtimeCapabilities.generated.ts
++++ b/src_vs_code/src/runtimeCapabilities.generated.ts
+@@ -366,7 +366,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+       ],
+-      note: 'mechanism: none. The shim bounds Read to the working folder, and that folder is EMPTY, but Grep and Glob read the disk directly and the working folder plays no part in it, so the empty folder confines nothing. Says Can read this machine. WebSearch and FetchURL are announced and unmeasured (RESULTS §7); M-K17 decides whether that sentence stays',
++      note: 'kimi 2.1.1: mechanism: none. The shim bounds Read to the working folder, and that folder is EMPTY, but Grep and Glob read the disk directly and the working folder plays no part in it, so the empty folder confines nothing. Says Can read this machine. WebSearch and FetchURL are announced and unmeasured (RESULTS §7); M-K17 decides whether that sentence stays',
+     },
+   },
+   {
+@@ -385,7 +385,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K9',
+         'M-K9 (e)',
+       ],
+-      note: "mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6). Read stays in it, but Grep and Glob read the disk directly, so the row is unconfined. The roots are copied and never granted, because a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk (M-K9, M-K9 (e)). WebSearch and FetchURL are announced and unmeasured (RESULTS §7)",
++      note: "kimi 2.1.1: mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6). Read stays in it, but Grep and Glob read the disk directly, so the row is unconfined. The roots are copied and never granted, because a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk (M-K9, M-K9 (e)). WebSearch and FetchURL are announced and unmeasured (RESULTS §7)",
+     },
+   },
+   {

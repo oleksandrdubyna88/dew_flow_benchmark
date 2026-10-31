@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Hosting\Bench.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
     <!-- A CLI verb that builds a container is a host, and a host logs where every other host does:
          coloured to the console, one file per run on disk. -->

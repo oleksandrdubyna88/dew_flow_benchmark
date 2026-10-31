@@ -1,0 +1,22 @@
+{"tasks": [
+  {"id": "t1", "title": "Kimi capability rows: seed, vectors, loader list, generated TS, C# and TS admission tests",
+   "scenarios": ["S5.6.1", "S5.6.2", "S5.6.4", "S5.6.8"],
+   "files": ["shared/runtime-capabilities.json", "shared/capability-matrix-vectors.json", "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs", "src_vs_code/src/runtimeCapabilities.generated.ts", "src_mcp/tests/CapabilityMatrixTests.cs", "src_vs_code/src/test/capabilityAdmission.test.ts"],
+   "depends": [], "brief": "t1.md"},
+  {"id": "t2", "title": "Planner arm for kimi and KimiConsultant refusing a plan that carries flags",
+   "scenarios": ["S5.6.3", "S5.6.5", "S5.6.6"],
+   "files": ["src_mcp/core/QuestionConsult/ConfinementPlanner.cs", "src_mcp/runners/Kimi/KimiConsultant.cs", "src_mcp/tests/ConfinementPlannerTests.cs"],
+   "depends": ["t1"], "brief": "t2.md"},
+  {"id": "t3", "title": "The Kimi consultant check proved: copy, one-shot home, junction-first disposal",
+   "scenarios": ["S5.5.1", "S5.5.2", "S5.5.3", "S5.5.4"],
+   "files": ["src_mcp/tests/AKimiConsultantCheckTests.cs", "src_mcp/src/Server/Consultation/ConsultantCheck.cs", "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"],
+   "depends": [], "brief": "t3.md"},
+  {"id": "t4", "title": "A Kimi disk question row reads its copies and leaves nothing behind",
+   "scenarios": ["S5.6.7"],
+   "files": ["src_mcp/tests/AKimiQuestionRowTests.cs", "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"],
+   "depends": ["t1", "t2"], "brief": "t4.md"},
+  {"id": "t5", "title": "Record E5.5 and E5.6 in the E5 plan and the module notes",
+   "scenarios": [],
+   "files": ["todo/PLAN_vibe_and_kimi_runtimes_E5.md", "research/module_core.md", "research/module_tests.md"],
+   "depends": ["t1", "t2", "t3", "t4"], "brief": "t5.md"}
+]}

@@ -3,6 +3,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 const REPO=process.env.BENCH_REPO||path.resolve(HERE,'../../..').split(path.sep).join('/');
 import {loadStory} from '../lib/story.mjs';
 import {readingKeyFile} from '../lib/reader.mjs';
+import {cliInvocation} from '../lib/proc.mjs';
 const STORY=loadStory(process.env.STORY||'creds-176');
 const CREDS=process.env.CREDS_REPO||STORY.repoClone;
 import fs from 'fs'; import {spawnSync} from 'child_process';
@@ -32,7 +33,9 @@ const ONLY=(process.env.READ_SOURCES||'').split(',').filter(Boolean);
 const out=fs.existsSync(Q+'assess-results.json')?JSON.parse(fs.readFileSync(Q+'assess-results.json','utf8')):{};
 for(const id of Object.keys(key)){if(out[id]?.parsed)continue;if(ONLY.length&&!ONLY.includes(key[id].source))continue;const cwd=Q+'assess/'+id;const t0=Date.now();let attempts=[];let parsed=null;
  for(let a=0;a<2&&!parsed;a++){
-  const r=spawnSync('codex',['exec','--sandbox','read-only','--skip-git-repo-check','-C',cwd,'--ephemeral','-'],{input:prompt(a?'\nYour previous reply was invalid ('+attempts.at(-1).err+'). Output ONLY the JSON object.':''),encoding:'utf8',maxBuffer:1e9,shell:true});
+  const inv=cliInvocation('codex',['exec','--sandbox','read-only','--skip-git-repo-check','-C',cwd,'--ephemeral','-'],{entry:'@openai/codex/bin/codex.js'});
+  const r=spawnSync(inv.exe,inv.args,{input:prompt(a?'\nYour previous reply was invalid ('+attempts.at(-1).err+'). Output ONLY the JSON object.':''),encoding:'utf8',maxBuffer:1e9});
+  if(r.error)throw new Error('codex could not be started: '+r.error.message);
   const raw=r.stdout||'';const c=check(raw);attempts.push({raw,stderrTail:(r.stderr||'').slice(-1500),status:r.status,err:typeof c==='string'?c:null});
   if(typeof c!=='string')parsed=c}
  out[id]={source:key[id].source,attempts,parsed,wallSeconds:(Date.now()-t0)/1000};

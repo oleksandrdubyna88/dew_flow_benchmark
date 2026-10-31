@@ -1,0 +1,4 @@
+#!/bin/sh
+# STUB: a binary that starts a long-lived grandchild and waits for it.
+sleep 300 &
+wait

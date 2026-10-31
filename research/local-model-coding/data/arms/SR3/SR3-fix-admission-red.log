@@ -1,0 +1,19 @@
+failed CoaiMcp.Tests.QuestionAdmissionTests.TheUnconfinedCaveat_DoesNotClaimAShell_BecauseKimiHasNoShell (57ms)
+  Did not expect AdmissionFlag.Unconfined.Caveat() "unconfined: can read this machine — a shell is always there, and no flag removes it" to contain "shell" because Kimi reads the machine through its search tools, and no shell command ever ran.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Primitives.StringAssertions`1.NotContain(String unexpected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.QuestionAdmissionTests.TheUnconfinedCaveat_DoesNotClaimAShell_BecauseKimiHasNoShell() in /home/jinx/git/coai-exp/arm-SR3/src_mcp/tests/QuestionAdmissionTests.cs:51
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-SR3/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 13
+  failed: 1
+  succeeded: 12
+  skipped: 0
+  duration: 1s 495ms

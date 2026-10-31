@@ -1,0 +1,18 @@
+{"verdict": "ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 109,
+   "summary": "S5.5.1 does not pin the paths the table names. The `--home` check (StartsWith `<root>/coai-vh/` and a `kh-` name) also passes for `<root>/coai-vh/kh-…`, which has no `<8>` level. The `--cwd` check only looks for `own/tree` somewhere in the path, not under the check's scratch.",
+   "fix": "Assert that `Path.GetDirectoryName(Path.GetDirectoryName(home))` equals `<root>/coai-vh`, as S5.6.7 does at AKimiQuestionRowTests.cs:182. Assert that `--cwd` equals or starts with `<_temp>/coai-check-*/own/tree`."},
+  {"id": "R2", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1100,
+   "summary": "The S5.6.4 test is named `AdmissionFlagsBothKimiRows_AndRefusesItsWeb_NamingItsRecord`, but the scenario table names it `AdmissionFlagsBothRows`. Deviation 56 uses the new name and does not say it changed. The S5.6.2 rename is recorded, so this one is the only unrecorded difference.",
+   "fix": "Rename the test to the table's name, or add one sentence to deviation 56 (and to the row in module_tests.md) that records the rename."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 205,
+   "summary": "No test run has shown that the S5.6.7 'recorder never invoked' assertion can fail. Deviation 53 says it was not reached in the teeth run. In the 'refused before the launch' arm no junction exists, so that assertion is empty by construction there.",
+   "fix": "Do a temporary break of the junction-first step for the question row only (for example, `OneShotHome.Dispose` on the bare deleter after the one-shot folder check), watch the `answered` and `cancelled mid-turn` rows go red on `_unlinked`, and record the red. Or say in the test that only those two arms can show this."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 60,
+   "summary": "The nested `Scopes` class and `StandIn()` (WindowsStandIn, KimiCredentialsLock.RootFor, KimiSeams.Using) are now in three test classes, copied word for word: AKimiConsultationScenarioTests, AKimiConsultantCheckTests and AKimiQuestionRowTests. This is against the reuse-first rule.",
+   "fix": "Move the scope set to one shared test helper (for example `KimiFixture.StandIn()` that returns an IDisposable) and call it from the three classes."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 534,
+   "summary": "`KimiForRows()` builds the same KimiConsultant that the `kimi` entry of `Adapters()` builds at lines 545–546. The two copies of the seam can drift apart.",
+   "fix": "Make the `kimi` entry of `Adapters()` call `KimiForRows()`."}
+ ]}

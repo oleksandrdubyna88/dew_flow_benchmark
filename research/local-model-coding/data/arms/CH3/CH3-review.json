@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_tests.md", "line": 4421,
+   "summary": "The stories changed code but no research module doc. module_tests.md has a section for E5.3 and one for E5.4 ('The Kimi consultant — E5.4…'), but no entry for AKimiConsultantCheckTests or AKimiQuestionRowTests. module_core.md records 'Vibe's arm' (line 819) but not Kimi's planner arm or that kimi is now the seventh runtime of the table. This goes against knowledge-base.md ('After every code change: update the relevant research/module_[name].md'), the catalogue that scenario-tests.md requires, and the epic DoD.",
+   "fix": "Add an 'E5.5–E5.6' section to research/module_tests.md. Give each S5.5.x and S5.6.x test its row (what it proves, and the red or teeth run of deviations 51–52), and say what these tests do not prove (a played shim, only Linux run). Add Kimi's arm to module_core.md beside Vibe's: no flags, none in Scratch, disk in Snapshot, web refused, both file rows unconfined. Add the check and question-row path to module_server.md where Vibe's is described."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 152,
+   "summary": "Two scenarios do not have the names in the table: S5.6.3 is 'Kimi_None_StandsInAnEmptyScratch_Disk_InACopyOfItsRoots_NoFlagsEver_AndWebIsRefused' and should be 'ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb'; S5.6.4 is 'AdmissionFlagsBothKimiRows' (CapabilityMatrixTests.cs:230) and should be 'AdmissionFlagsBothRows'. Deviation 50 gives their classes but does not record the new names.",
+   "fix": "Rename the two tests to the table's names, or record the renames in deviation 50 so that a search for the scenario name finds its test."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 158,
+   "summary": "S5.6.7's table says that after EACH ending the row's scratch and coai-vh\\<8> are gone. In the 'refused' arm, TheShimWasToldTheCopiesNotTheRoot returns early, so that arm checks only coai-vh and never the row's coai-question-* scratch. If Remove(scratch) were deleted, the refused arm would stay green.",
+   "fix": "Make the refused arm check that the row's scratch is gone too, for example through a scratch-maker seam the test can observe (QuestionRowLaunch.MakeScratch exists). If that cannot be reached through PanelService, record the gap in deviation 56."},
+  {"id": "R4", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 353,
+   "summary": "E5.6 decision 2 says 'Each row's note carries the version (2.1.1)'. None of the three kimi notes names 2.1.1; the version is only in measuredWith.version. Deviation 53 does not record this.",
+   "fix": "Add 'measured on kimi 2.1.1' to the three notes, then regenerate the TS table with its generator. Or record in deviation 53 that measuredWith.version carries the version instead."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "The status line and the deviations heading say E5.5–E5.6 were built on Sonnet. §0 and §0.2 (the plan gate's operator command) say E5.5 and E5.6 are built on Opus. This change of coder model is not recorded as a deviation and does not name who allowed it.",
+   "fix": "Add a deviation that names the operator's decision to build these stories on Sonnet, or have the stories confirmed by the model the plan gate named."}
+ ]}

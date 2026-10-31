@@ -1,0 +1,22 @@
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index b26cfd24..c1b34945 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -171,10 +171,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         }
+ 
+         TheShimsSeen(played, ending, granted, copies);
+-        if (played.Shims.TryPeek(out var shim))
+-        {
+-            Directory.Exists(Path.GetDirectoryName(shim.Request.WorkingDirectory)).Should().BeFalse("the row's scratch, and its copies, are gone once it ended");
+-        }
+ 
+         NothingIsLeft(before);
+     }
+@@ -194,5 +190,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         shim.StdIn.Should().Contain(copy, "the prompt names the copy Kimi can read");
+         shim.StdIn.Should().NotContain(granted, "never the original root, which Kimi's Read cannot read (M-K6)");
+         shim.Arguments.Should().NotContain("--session", "a question row is one shot");
++        Directory.Exists(Path.GetDirectoryName(shim.WorkingDirectory)).Should().BeFalse("the row's scratch, and its copies, are gone once it ended");
+     }
+ }

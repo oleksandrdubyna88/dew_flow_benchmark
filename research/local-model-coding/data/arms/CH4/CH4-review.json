@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_core.md", "line": 783,
+   "summary": "No research doc was updated for E5.5/E5.6. The knowledge-base rule says this is mandatory after every code change, and the scenario-tests rule needs every covering test in the catalogue. module_core.md:783 still says '18 rows (6 runtimes × 3)', but there are now 21 rows over 7 runtimes. module_core.md has no Kimi planner arm next to Vibe's (:819). research/module_tests.md does not name AKimiConsultantCheckTests, AKimiQuestionRowTests or the new Kimi tests in CapabilityMatrixTests and ConfinementPlannerTests.",
+   "fix": "Change the Mermaid label to 21 rows (7 runtimes × 3). Add a 'Kimi's arm (E5.6)' bullet to module_core.md: no flags, none = Scratch, disk = Snapshot, both unconfined (M-K6), web unmeasured. In module_tests.md, add rows for S5.5.1–S5.5.4 and S5.6.1–S5.6.8 with their reds and what they do not prove (the real kimi, any host but the Windows stand-in), as the Vibe rows at :3936–3945 do. Run the plan-lifecycle check again."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/runners/Kimi/KimiConsultant.cs", "line": 62,
+   "summary": "MustCarryNoFlags refuses Leading, Flags and AddDirs, but it accepts a hand-made plan with CwdKind.Root. ConsultantLaunches.Cwd then returns plan.Grant.Roots[0], so Kimi stands in the granted root. That root loads the branch's AGENTS.md, skills and .mcp.json from disk (M-K9). Such a plan is also 'not one coai made for kimi'. The planner cannot produce it, so it cannot be reached today.",
+   "fix": "In the same guard, also refuse `Plan.Cwd == CwdKind.Root` (Kimi stands only in Scratch or Snapshot, D6). Add one InlineData row to APlanWithFlags_IsRefusedForKimi."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 174,
+   "summary": "For the RefusedBeforeTheLaunch arm, TheShims returns early. That arm makes the row's TEMP scratch (MakeScratch) and refuses it after the place fails. The table says 'after each ending the row's scratch … gone', but this arm checks only that coai-vh is empty, not the scratch.",
+   "fix": "For the refused arm, assert that the row's scratch is removed, for example by checking that no new coai question-row scratch folder stays in TEMP after the call. Or record in the deviations why this arm cannot assert it."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/CapabilityMatrixTests.cs", "line": 244,
+   "summary": "TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged still has its old name, but kimi × none and kimi × disk are now flagged Unconfined. The name is no longer true, and the test does not mention kimi.",
+   "fix": "Rename the test, for example to …_KimiUnconfinedOnNoneAndDisk_…, or add the kimi assertion there. The assertion now in AdmissionFlagsBothRows could move there."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "§0.2 and the plan gate's command say E5.5 and E5.6 are built on Opus. The status line says they were built on Sonnet, and deviation 39 says the selected rules were not read in full. The status line records this, but no numbered deviation does, and nothing shows that the operator accepted it (subagent-models rule).",
+   "fix": "Add a numbered deviation for the builder model and get the operator's acknowledgement, or have Opus confirm the work. This review has now checked the tests against the testing, scenario-tests and test-leftovers rules."}
+ ]}

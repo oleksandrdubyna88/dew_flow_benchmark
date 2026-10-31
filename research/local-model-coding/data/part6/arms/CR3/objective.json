@@ -1,0 +1,293 @@
+{
+  "arm": "CR3",
+  "head": "74312833",
+  "commits": 13,
+  "uncommittedFiles": 0,
+  "build": true,
+  "format": true,
+  "mcp": {
+    "exit": 0,
+    "total": 13886,
+    "passed": 13769,
+    "skipped": 117,
+    "failedNew": [],
+    "failedBaseline": []
+  },
+  "ts": {
+    "exit": 0,
+    "total": 6539,
+    "failedNew": []
+  },
+  "scenarios": {
+    "S1": {
+      "name": "ASpentVerdict_IsHopeless_WhateverTheWordsSay",
+      "present": true,
+      "passing": "passed"
+    },
+    "S2": {
+      "name": "ATransientVerdict_ClimbsTheLadder_EvenWhenTheTextSaysExhausted",
+      "present": true,
+      "passing": "passed"
+    },
+    "S3": {
+      "name": "AnUndecidedVerdict_ReadsTheTextAsBefore",
+      "present": true,
+      "passing": "passed"
+    },
+    "S4": {
+      "name": "TheIndividualQuotaLine_IsASpentVerdict",
+      "present": true,
+      "passing": "passed"
+    },
+    "S5": {
+      "name": "TheOlderErrorShape_IsReadToo",
+      "present": true,
+      "passing": "passed"
+    },
+    "S6": {
+      "name": "WithoutTheQuotaSentence_NothingIsSpent",
+      "present": true,
+      "passing": "passed"
+    },
+    "S7": {
+      "name": "TheMonthlySpendLimitEnvelope_IsASpentRateLimit",
+      "present": true,
+      "passing": "passed"
+    },
+    "S8": {
+      "name": "AnotherEnvelope_IsStillAnExit",
+      "present": true,
+      "passing": "passed"
+    },
+    "S9": {
+      "name": "GeminiWeeklySpent_FiveHourDisabled_BlocksUntilTheWeeklyReset_AndThe3pGroupIsAvailable",
+      "present": true,
+      "passing": "passed"
+    },
+    "S10": {
+      "name": "ClaudeAndGptWeeklySpent_UsesThe3pWeeklyBucket",
+      "present": true,
+      "passing": "passed"
+    },
+    "S11": {
+      "name": "WeeklyAvailable_FiveHourSpent_UsesTheFiveHourReset",
+      "present": true,
+      "passing": "passed"
+    },
+    "S12": {
+      "name": "BothActiveBucketsSpent_TheLaterResetWins_AndBothAreNamed",
+      "present": true,
+      "passing": "passed"
+    },
+    "S13": {
+      "name": "ASpentBucketWithoutResetTime_IsUnknown_NeverADate",
+      "present": true,
+      "passing": "passed"
+    },
+    "S14": {
+      "name": "AnUnknownModel_HasNoGroup",
+      "present": true,
+      "passing": "passed"
+    },
+    "S15": {
+      "name": "AProbeThatFails_IsCannotCheck_AndTheCommandIsTheOwners",
+      "present": true,
+      "passing": "passed"
+    },
+    "S16": {
+      "name": "AParkedKey_StandsUntilItsReset_ThenIsBackOnItsOwn",
+      "present": true,
+      "passing": "passed"
+    },
+    "S17": {
+      "name": "TheRecordSurvivesANewStore",
+      "present": true,
+      "passing": "passed"
+    },
+    "S18": {
+      "name": "AnAnsweredLaunch_LiftsTheCooldown",
+      "present": true,
+      "passing": "passed"
+    },
+    "S19": {
+      "name": "ATornFile_ParksNobody_AndSaysSoOnce",
+      "present": true,
+      "passing": "passed"
+    },
+    "S20": {
+      "name": "AnExpiredEntry_IsDroppedAtTheNextWrite_AndTheFileStaysSmall",
+      "present": true,
+      "passing": "passed"
+    },
+    "S21": {
+      "name": "TheGuess_DoublesPerConsecutivePark_AndStopsAtFiveHours",
+      "present": true,
+      "passing": "passed"
+    },
+    "S22": {
+      "name": "ASpentAgyRefusal_AsksQuotaOnce_AndParksTheGroupUntilTheReset",
+      "present": true,
+      "passing": "passed"
+    },
+    "S23": {
+      "name": "WhenQuotaCannotBeRead_TheStatedResetIsAnEstimate",
+      "present": true,
+      "passing": "passed"
+    },
+    "S24": {
+      "name": "AnUndecidedExhaustion_IsParkedOnlyWhenTheGaugeSaysSpent",
+      "present": true,
+      "passing": "passed"
+    },
+    "S25": {
+      "name": "ACodexSpentAllowance_IsParkedOnItsStatedDate_AndAnAnswerLiftsIt",
+      "present": true,
+      "passing": "passed"
+    },
+    "S26": {
+      "name": "ACoolingAgyRow_IsExcluded_WithThisSidesSentence",
+      "present": true,
+      "passing": "passed"
+    },
+    "S27": {
+      "name": "AnotherGroupOnTheSameCli_StillRuns",
+      "present": true,
+      "passing": "passed"
+    },
+    "S28": {
+      "name": "WhenTheResetHasPassed_TheRowRunsAgain_WithoutAnyWrite",
+      "present": true,
+      "passing": "passed"
+    },
+    "S29": {
+      "name": "TheProvidersAnswer_CarriesTheCooldown_AndNothingForARowThatIsNotCooling",
+      "present": true,
+      "passing": "passed"
+    },
+    "S30": {
+      "name": "TheParser_ReadsTheCooldown — present when the server sends it, absent for an older server and for a half",
+      "present": true,
+      "passing": "passed"
+    },
+    "S31": {
+      "name": "AQuotaReset_IsSaidAsDateTimeAndTimeLeft — 2026-10-14T07:19:16Z is 14.10.2026 09:19 in Europe/Paris, 63 h left",
+      "present": true,
+      "passing": "passed"
+    },
+    "S32": {
+      "name": "AnEstimateAndAGuess_SayWhatTheyAre — about … from the error text; reset time unknown, next try",
+      "present": true,
+      "passing": "passed"
+    },
+    "S33": {
+      "name": "TheModelsCard_CarriesTheCooldownLine_AndTheBadge — read off the RUNNING page; nothing for a row that is not cooling",
+      "present": true,
+      "passing": "passed"
+    },
+    "S34": {
+      "name": "ArgonSpent_WithOrdinaryGeminiAvailable_ParksOnlyArgon",
+      "present": true,
+      "passing": "passed"
+    },
+    "S35": {
+      "name": "TwoWriters_InterleavedUnderTheLock_LoseNeitherKey",
+      "present": true,
+      "passing": "passed"
+    },
+    "S36": {
+      "name": "AParkAndALift_InterleavedUnderTheLock_EndWhereTheLastWriteSays",
+      "present": true,
+      "passing": "passed"
+    },
+    "S37": {
+      "name": "AWriteThatCannotHappen_IsRefusedOutLoud_AndParksNothingUnlocked",
+      "present": true,
+      "passing": "passed"
+    },
+    "S38": {
+      "name": "AProvidersAnswerWithACooldown_SerialisesThroughTheGeneratedContext",
+      "present": true,
+      "passing": "passed"
+    },
+    "S39": {
+      "name": "AGapPastExpiry_RestartsTheGuessAtThirtyMinutes",
+      "present": true,
+      "passing": "passed"
+    },
+    "S40": {
+      "name": "TheEdgeCases_AreDecidedAsWritten",
+      "present": true,
+      "passing": "passed"
+    },
+    "S41": {
+      "name": "ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge",
+      "present": true,
+      "passing": "passed"
+    },
+    "S42": {
+      "name": "ACancelledProbe_ParksNothing_AndTheResultsAreStillTheRounds",
+      "present": true,
+      "passing": "passed"
+    },
+    "S43": {
+      "name": "TheRealAnswer_ReadsThreeGroups_AllAvailable",
+      "present": true,
+      "passing": "passed"
+    }
+  },
+  "scenariosPresentCount": 43,
+  "scenariosPassingCount": 43,
+  "diff": {
+    "shortstat": "43 files changed, 2531 insertions(+), 22 deletions(-)",
+    "changedLines": {
+      "tests": 1454,
+      "src": 1039,
+      "docs": 60
+    },
+    "files": [
+      "research/RESULTS_vendor_quota_gauges.md",
+      "research/module_extension.md",
+      "research/module_runners.md",
+      "research/module_server.md",
+      "research/module_tests.md",
+      "src_mcp/runners/Kimi/KimiRuntime.cs",
+      "src_mcp/runners/Reviewers/AgyError.cs",
+      "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+      "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+      "src_mcp/runners/Reviewers/BoundedScheduler.cs",
+      "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+      "src_mcp/runners/Reviewers/CustomRuntime.cs",
+      "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+      "src_mcp/runners/Reviewers/RetryLadder.cs",
+      "src_mcp/runners/Reviewers/ReviewerExecutor.cs",
+      "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+      "src_mcp/src/Server/PanelService.cs",
+      "src_mcp/src/Server/Rounds/RoundEngine.cs",
+      "src_mcp/src/Server/ServerJsonContext.cs",
+      "src_mcp/tests/AClaudeReasonInItsEnvelopeTests.cs",
+      "src_mcp/tests/AClaudeSpendLimitIsASpentQuotaTests.cs",
+      "src_mcp/tests/ACoolingRowStaysOutOfTheRoundTests.cs",
+      "src_mcp/tests/ARoundThatEndsSpentParksTheQuotaTests.cs",
+      "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+      "src_mcp/tests/AStructuredVerdictOutranksTheWordScanTests.cs",
+      "src_mcp/tests/AnAgyQuotaIsReadFromItsStructuredErrorTests.cs",
+      "src_mcp/tests/EveryBudgetInAClockedClassReadsItsClockTests.cs",
+      "src_mcp/tests/QuotaSamples.cs",
+      "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+      "src_mcp/tests/TheRefusalsAreWrittenDownTests.cs",
+      "src_mcp/tests/TheRoundParksAndLiftsTheQuotaTests.cs",
+      "src_mcp/tests/fixtures/antigravity/quota-sample.json",
+      "src_vs_code/src/catalogCss.ts",
+      "src_vs_code/src/cooldownWords.ts",
+      "src_vs_code/src/modelCard.ts",
+      "src_vs_code/src/modelCardWorld.ts",
+      "src_vs_code/src/modelsTab.ts",
+      "src_vs_code/src/providers.ts",
+      "src_vs_code/src/resetWords.ts",
+      "src_vs_code/src/statedReset.ts",
+      "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+      "src_vs_code/src/test/teamServerTab.test.ts",
+      "todo/PLAN_a_spent_quota_cools_the_model_down.md"
+    ]
+  }
+}

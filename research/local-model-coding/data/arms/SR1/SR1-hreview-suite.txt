@@ -1,0 +1,40 @@
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] no pair is carrying a refusal
+[coai-mcp] --pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)
+[coai-mcp] --pairs-keep: the document has no `items` list
+[coai-mcp] --pairs-keep needs --in <decisions.json>
+[coai-mcp] --pairs-keep could not read /tmp/coai-pairmode-1288fd36/decisions.json: 't' is an invalid start of a property name. Expected a '"'. Path: $ | LineNumber: 0 | BytePositionInLine: 2.
+[coai-mcp] --pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)
+[coai-mcp] --pairs-keep needs --in <decisions.json>
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many: there is no rounds database to read, so nothing is known about these rounds
+[coai-mcp] --findings-many takes at most 1000 rounds; it was given 1001
+[coai-mcp] --findings-many could not read its keys file: Could not find a part of the path '/tmp/coai-many-9c773afa/not-there.json'.
+[coai-mcp] --findings-many could not read its keys file: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. Path: $[0].sessionId | LineNumber: 0 | BytePositionInLine: 14.
+[coai-mcp] --findings-many was given no rounds to read
+[coai-mcp] --findings-many needs --keys-file <path> holding a JSON array of {session, stage, number}
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] the rounds database could not be read: SQLite Error 14: 'unable to open database file'.
+[coai-mcp] --check-security reads one JSON object on stdin — {"text": …, "lane": …}: The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.
+[coai-mcp] no session for /tmp/coai-reader-X6SwMQ on main — nothing has been through the gate there
+[coai-mcp] --findings-many: there is no rounds database to read, so nothing is known about these rounds
+[coai-mcp] the rounds database could not be opened; no corpus can be read from it
+[coai-mcp] the rounds database could not be opened; no pair can be read from it
+[coai-mcp] the rounds database could not be opened; no pair can be read from it
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-SR1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 10561
+  failed: 3
+  succeeded: 10474
+  skipped: 84
+  duration: 7m 02s 509ms

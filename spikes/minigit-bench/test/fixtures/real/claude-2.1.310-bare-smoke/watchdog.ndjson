@@ -1,0 +1,2 @@
+{"t":1793337442546,"kill":false,"detail":"broker spent 0.075792, otel unknown, meter 0.071992; quiet for 0 ms","cpuTicks":124}
+{"t":1793337447543,"kill":false,"detail":"broker spent 0.0972293, otel 0.09722929999999999, meter 0.0928093; quiet for 0 ms","cpuTicks":177}

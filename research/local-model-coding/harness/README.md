@@ -9,11 +9,12 @@
 | File | Role |
 |---|---|
 | `prep-base.sh` | Builds and tests the start commit once (the baseline failures) |
-| `run-arm.sh` | One arm, resumable: the classic pipeline (C, V, VT), the skeleton pipeline (Q, H), the task pipeline (T, O, S, through `t-lib.sh`), Haiku directly (D) |
+| `run-arm.sh` | One arm, resumable: the classic pipeline (C, V, VT), the skeleton pipeline (Q, H), the task pipeline (T, O, S, through `t-lib.sh`), Haiku directly (D); with a fresh Haiku review-and-fix before Opus: SR, DR (part 5b), CR, CH (part 5c, each arm its own notes folder) |
 | `t-lib.sh` | The task arms: a split (Opus in T and O, Sonnet in S) → per task Haiku codes (+ a Sonnet review in T only) → batches in parallel worktrees, cherry-picked back → one Opus review → fixes (Sonnet in T, Haiku in O and S) |
 | `tasks-plan.mjs` | Checks Opus's task list (4–6 tasks, one owner per file, no cycles, the plan last, 12 scenarios) and computes the batches |
 | `run-all.sh` | Starts or resumes arms detached (`setsid`) |
-| `after-three.sh`, `after-c34.sh`, `after-q.sh`, `after-h.sh`, `after-t.sh`, `after-x.sh` | The chains of each phase: make arms, start them, run the checks, the judge, the metrics — marker per stage, re-runnable |
+| `after-three.sh`, `after-c34.sh`, `after-q.sh`, `after-h.sh`, `after-t.sh`, `after-x.sh`, `after-y.sh`, `after-z.sh` | The chains of each phase: make arms, start them, run the checks, the judge, the metrics — marker per stage, re-runnable |
+| `lock-others.sh`, `unlock-others.sh` | Part 5c: lock every other arm's data (mode 000, folders 300) while the CR/CH arms run, saving the modes; restore them after the last arm |
 | `mut-all.sh`, `mut-awake.sh` | The mutation checks on all 30 arms, two at a time, after part 5; the keep-awake guard while they run |
 | `watch.sh` | An early watcher of part 1 |
 
@@ -49,6 +50,7 @@
 | `t1-split.template.md`, `t1b-split-fix.template.md`, `t2-coder.template.md`, `t3-task-review.template.md` | the T arms (`t2-coder` also O and S) |
 | `x-split.template.md`, `x-split-fix.template.md` | the O and S splits (T's split briefs with the role and the "after you" sentence changed) |
 | `d-code.template.md`, `h-fix.template.md` | D's coder (the classic brief naming Haiku); the Haiku fixes of O, S and D (the fix brief naming Haiku) |
+| `hr-review-fix.template.md` | Part 5b: a fresh Haiku session reviews the whole stories (the Opus review's checklist) and fixes what it found (the Haiku fix brief's working rules), before the one Opus review of SR and DR |
 | `4-judge.template.md`, `5-judge-abs.template.md` | the group judge, the absolute judge |
 | `superseded/` | an earlier draft of the briefs (2026-10-25), never used by any script — kept as written |
 
@@ -56,3 +58,25 @@
 
 `keep-awake.ps1` (holds Windows out of Modern Standby with `SetThreadExecutionState`, no power settings changed),
 `stop-keep-awake.ps1`, `check-keep-awake.ps1`.
+
+## part6/ — Part 6 and Part 7, the second task and its CHH follow-up (they ran in `/home/jinx/git/coai-exp2`; see [../harness.md](../harness.md) §9)
+
+| File | Role |
+|---|---|
+| `PROTOCOL.md` | The design and the six predictions of Part 6, and (at the end) the design and the seven predictions of Part 7, as written before each run |
+| `exp.env`, `scenarios.json`, `baseline.json` | The experiment's fixed facts (base commit, plan path, branch, scenario count), the 43 scenarios with their test names, the failures known at the base (none) |
+| `prep-base.sh` | Builds and tests the base once |
+| `after7.sh` | Part 7: makes the three CHH arms, locks (with `EXTRA_CLOSED`: every Part 6 result), runs them at the same time, unlocks, runs the objective checks |
+| `after6.sh` | The chain: makes the nine arms, locks, runs the rounds of three, unlocks, runs the objective checks (markers per stage) |
+| `run-arm.sh`, `run-all.sh` | One arm, resumable: C, CR, SRS and CHH (Part 7) with the coai gate step; the starter (detached). The copy here has the fixed limit detector and the read steps that refuse `Agent` and `Task` |
+| `t-lib.sh`, `tasks-plan.mjs` | The SRS arms: the Sonnet split, the check of its task list, the batches in parallel worktrees, the carry-back |
+| `lock.sh` | Closes the old experiment (and, in Part 7, every Part 6 result: `EXTRA_CLOSED`) and unlists the folders that would name another arm, while arms run; restores the modes |
+| `repair-limit-2026-10-28.sh` | The one-off repair after the overnight spend limit ([../incidents.md](../incidents.md) §2g), kept as the record |
+| `objective-checks.sh` | The objective gate of one arm, with the 43 scenarios |
+| `metrics6.mjs` | Cost (Claude only; per session the last attempt's result, corrected 2026-10-30), active time, attempts, span per arm and step |
+| `coai-cost.mjs` | The tokens that the coai server reported in each plan and code round reply |
+| `judge-abs.sh`, `coai-findings.mjs`, `coai-cost.mjs`, `judge-coai.sh` | The absolute blind judge; the coai findings of every gate step; the tokens the coai server reported per round; the blind judge of those findings |
+| `mutate6.mjs` | The eight frozen mutants, with the prediction written in its header |
+| `make-tables7.mjs` | [../tables.md](../tables.md) §11 (Part 7), from [../data/part7/](../data/part7/) and `../data/part6/metrics6.json` |
+| `make-tables6.mjs` | [../tables.md](../tables.md) §10, from [../data/part6/](../data/part6/) only (called by `../make-tables.mjs`) |
+| `briefs/` | `1-code`, `2-review`, `3-fix`, `hr-review-fix`, `x-split`, `x-split-fix`, `t2-coder`, `gate`, `5-judge-abs`, `judge-coai`; Part 7: `hA-trace`, `hB-tests`, `hfix` |

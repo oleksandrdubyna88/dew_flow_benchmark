@@ -1,0 +1,101 @@
+diff --git a/research/module_core.md b/research/module_core.md
+index 637872f4..e1f5a718 100644
+--- a/research/module_core.md
++++ b/research/module_core.md
+@@ -825,6 +825,11 @@ flowchart LR
+   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
+   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
+   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
++- **Kimi's arm (E5.6, 2026-10-27).** `kimi` is the seventh runtime of the table (`RuntimeCapabilities.Runtimes` gains it, and the generated TypeScript).
++  The planner's `kimi` arm carries NO flags, no leading words and no `--add-dir` (decision 1): Kimi's confinement is the shim's (D15), not its argv.
++  `none` stands in an EMPTY `Scratch` folder, `disk` in a `Snapshot` of its roots (`SnapshotSources`), both `Unconfined` — Kimi reads through its
++  working folder only for `Read` (M-K6), so a disk row's roots are copied, never named to Kimi (D6, M-K9 (e)). `web` never reaches the arm: the matrix refuses
++  it, as the Vibe pair is refused. The rows cite `research/RESULTS_kimi_confinement.md` (kimi 2.1.1, 2026-10-13), and `CapabilityMatrixTests` holds them to that record.
+ - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
+   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
+   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
+diff --git a/research/module_runners.md b/research/module_runners.md
+index 7405dc6c..6e5eff3f 100644
+--- a/research/module_runners.md
++++ b/research/module_runners.md
+@@ -3749,5 +3749,9 @@ flowchart LR
+   can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
+   naming D18, as Vibe's rows do.
+ 
++- **No flags in a Kimi plan (E5.6, decision 3).** `KimiConsultant.Build` calls `MustCarryNoPlanFlags` after `MustBeLaunchable`: a planned launch whose
++  plan carries any `Flags`, `Leading` or `AddDirs` is an `ArgumentException` ("a Kimi row's confinement is the shim's …"). The planner's Kimi arm never
++  produces one (`ConfinementPlanner`, the `kimi` arm), so the refusal guards a plan coai did not make for kimi.
++
+ Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
+ (S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
+diff --git a/research/module_tests.md b/research/module_tests.md
+index 8fc4e65f..fdaeb908 100644
+--- a/research/module_tests.md
++++ b/research/module_tests.md
+@@ -4454,3 +4454,27 @@ saw it).
+ 
+ `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
+ what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
++
++### The Kimi check and the Kimi question row, the Kimi rows and the planner's arm — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
++
++`AKimiConsultantCheckTests` runs the real `--check-consultant` path with the real launcher and git; only the shim is played (`PlayedKimi`). `AKimiQuestionRowTests`
++drives the whole `ask_consultants` flow through `PanelService.AskConsultantsAsync`, git for real, the shim played in process. Both stand the fake person and the
++measured host in per async flow (`KimiSeams.Using`). The "Seen red as" column: the green-on-arrival rows are as the plan's item 50 states; every other red is not recorded in this worktree (the task summaries are not in it), so the column says so and names nothing.
++
++| Suite (scenario) | What it holds | Seen red as |
++|---|---|---|
++| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | the check reads its marker in a copy of the scratch's `tree`, on a one-shot home; the scratch goes with the check | green on arrival; teeth by a temporary break (item 50; the break is not in this worktree) |
++| `AKimiConsultantCheckTests.AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, Theory `turnFails`) | whatever ends the check (an answer, a failed turn) the one-shot home is gone, junction first, and the person's folder is whole | green on arrival; teeth by a temporary break (item 50; the break is not in this worktree) |
++| `AKimiConsultantCheckTests.ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | a check cancelled mid-turn still disposes its home and writes a record that says so | green on arrival; teeth by a temporary break (item 50; the break is not in this worktree) |
++| `AKimiConsultantCheckTests.ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | with no homes root the check's home sits in the scratch's `own` folder and is disposed there, junction first | green on arrival; teeth by a temporary break (item 50; the break is not in this worktree) |
++| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind_WhenAnswered` (S5.6.7, 1) | a disk row reads its copies and leaves nothing behind when answered | not in this worktree |
++| `AKimiQuestionRowTests.AKimiDiskRow_RefusedBeforeTheLaunch_LeavesNothingBehind` (S5.6.7, 2) | a row refused before the launch leaves nothing behind | not in this worktree |
++| `AKimiQuestionRowTests.AKimiDiskRow_CancelledMidTurn_LeavesNothingBehind` (S5.6.7, 3) | a row cancelled mid-turn leaves nothing behind | not in this worktree |
++| `AKimiQuestionRowTests.ANoneKimiRow_StandsInAnEmptyFolderBesideItsHome_AndLeavesNothingBehind` (S5.6.7, 4) | a `none` row beyond the table stands in an empty folder beside its home and leaves nothing behind | not in this worktree |
++| `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (`Records`, the Kimi record) | `none` and `disk` `Unconfined` citing `M-K6`, `disk` also `M-K9`; `web` `Unmeasured`; each row version 2.1.1 and cites `RESULTS_kimi_confinement.md` | not in this worktree |
++| `CapabilityMatrixTests.AdmissionFlagsBothRows` | `kimi` × `none` and × `disk` admitted with `Unconfined`; `kimi` × `web` refused naming "not been measured" and the record | not in this worktree |
++| `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` | `none`: `Scratch`, no flags, `Unconfined`; `disk`: `Snapshot` of the roots in `SnapshotSources`, no flags, no `AddDirs`; `web` refused naming the record | not in this worktree |
++| `ConfinementPlannerTests` (InlineData `kimi`, `Web`, "not been measured") and the `gemini` refusal list gaining `kimi` | the matrix's refusal and the runtime list | not in this worktree |
++| `ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | a `none` row's cwd is its empty folder, a `disk` row's is the copy (`RowTree`), no root named to Kimi; each row's one-shot `kh-<10 hex>` home is a child of the row's folder, no `--session`, `KimiEnvironment.Refusal` empty | not in this worktree |
++| `ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi` (S5.6.6, three variants: `--yolo`, `--search`, an added root) | `KimiConsultant.Build` throws `ArgumentException` mentioning "the shim's" for each | not in this worktree |
++| `capabilityAdmission.test.ts` — `kimi rows admit flagged, web refuses naming its record` | `none` and `disk` admitted, flag `unconfined`, caveat "can read this machine"; `web` refused naming "not been measured" and `RESULTS_kimi_confinement.md`; the runtime list ends with `kimi`; `gemini`'s refusal names `kimi` | not in this worktree |
+diff --git a/todo/PLAN_vibe_and_kimi_runtimes_E5.md b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+index 5d6241d3..4e2b07e3 100644
+--- a/todo/PLAN_vibe_and_kimi_runtimes_E5.md
++++ b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+@@ -1,6 +1,6 @@
+ # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
+ 
+-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
++> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5 and E5.6 implemented 2026-10-27 (Sonnet-split tasks, Opus review pending).** E5.1: M-K16 recorded as RESULTS §29
+ > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
+ > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
+ > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+@@ -1086,6 +1086,26 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
+     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
+ 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+ 
++### E5.5–E5.6 as built (2026-10-27)
++
++Numbered from 50, apart from the lists above, as E5.7's were.
++
++50. **E5.5 is a proof, not a change.** The check's path was already generic (E5.3 decision g, E5.4 decision 6): `AKimiConsultantCheckTests`
++    (S5.5.1–S5.5.4) went green on arrival; the table's "expected red" (before E5.4 / before E5.3 g) was stale, so each scenario got teeth by a
++    temporary break instead, named in the test task's summary. No production file changed in E5.5: the commit `e6df9dbd` adds
++    `AKimiConsultantCheckTests.cs` alone, and `ConsultantCheck.cs` and `ConsultCheckScratch.cs` are untouched.
++51. **The three `kimi` rows** (`shared/runtime-capabilities.json`): `none` and `disk` are `unconfined` (cells `M-K6`, `M-K3`, `M-K4`; `disk` also
++    `M-K9`, `M-K9 (e)`), `web` is `unmeasured`; kimi 2.1.1, measured 2026-10-13. `RuntimeCapabilities.Runtimes` and the generated TypeScript
++    gained `kimi`; three vectors in `shared/capability-matrix-vectors.json`. `CapabilityMatrixTests.Records` gained the Kimi record (`M-K` cells).
++52. **The planner arm has no flags**, and `KimiConsultant.Build` refuses a plan that carries `Flags`, `Leading` or `AddDirs` ("a Kimi row's
++    confinement is the shim's …", S5.6.6; three variants tested in `APlanWithFlags_IsRefusedForKimi`). `ConfinementPlanner`'s `kimi` arm is
++    `Snapshot` for `disk` (the roots in `SnapshotSources`, never `AddDirs`) and `Scratch` for `none`, both `Unconfined`.
++53. **S5.6.7 is `AKimiQuestionRowTests`** (four tests: answered, refused before the launch, cancelled, and a `none` row beyond the table), through
++    `PanelService.AskConsultantsAsync` with `PlayedKimi`; its teeth runs are in the task summary.
++54. **Owed after the code (unchanged, J2):** the live three-turn consult, one live question row per admitted capability and one live
++    `--check-consultant`, recorded in RESULTS §31; M-K17 (§30) is still not run, so the `none`/`disk` notes still say `WebSearch` and `FetchURL`
++    are announced and unmeasured.
++
+ ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
+ 
+ The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story

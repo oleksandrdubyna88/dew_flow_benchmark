@@ -1,0 +1,223 @@
+// The records of a bare session and of a pair (E3b.S1 step 9). Pure: the runner computes the views (E1's readers over the session's files) and the score, and
+// hands them here; nothing is typed. Every leaf is `{ known: true, value }`, `{ known: false, why }` (not captured, with the reason) or the string
+// 'n/a (bare)' for a process-only field: an unknown is never rendered as a zero. A pair record gives each ratio WITH and WITHOUT the cells that hold a
+// `ran unpaired` session, and a ratio with a censored side is a BOUND.
+import { hundredPercent } from './score-pipeline.mjs';
+import { stopRuleFigure } from './spend-gate.mjs';
+
+export const NOT_BARE = 'n/a (bare)';
+export const known = value => ({ known: true, value });
+export const notCaptured = why => ({ known: false, why });
+const finite = n => typeof n === 'number' && Number.isFinite(n);
+const notFinite = v => typeof v === 'number' && !Number.isFinite(v);
+const missing = v => v === null || v === undefined || notFinite(v);
+const maybe = (v, why) => (missing(v) ? notCaptured(why) : known(v));
+/** `known(make())` when `ok`, else the unknown with its reason (`make` is not called for an unknown: it may read what is not there). */
+const when = (ok, make, why) => (ok ? known(make()) : notCaptured(why));
+
+/** The three cost bases the stop-rule figure reads: E, the headline recompute and B (null for a basis that is not there). */
+const figuresOf = (E, cost, B) => ({ envelopeUsd: E.known ? E.totalCostUsd : null, recomputeUsd: cost.known ? cost.usd : null, brokerUsd: B?.present ? B.spentUsd : null });
+const censoredPart = outcome => (outcome.class.startsWith('killed') ? maybe(outcome.censoredAtUsd, 'a killed session with no cost figure of any basis') : notCaptured('not censored: the session was not cut short'));
+const perModelPart = cost => (cost.known && cost.perModel ? known(cost.perModel) : notCaptured(cost.known ? 'the cost view has no per-model split' : cost.why));
+const tokensOf = E => Object.fromEntries(Object.entries(E.perModel).map(([m, l]) => [m, { input: l.input, output: l.output, cacheRead: l.cacheRead, cacheWrite: l.cacheWrite ?? null }]));
+
+const costPart = ({ outcome, views, cost, meta }) => {
+  const { E, B } = views;
+  return {
+    headlineUsd: when(cost.known, () => ({ usd: cost.usd, basis: cost.basis ?? null, exact: cost.exact ?? null, flags: cost.flags ?? [] }), cost.why),
+    cliTotalUsd: when(E.known, () => E.totalCostUsd, E.why),
+    brokerUsd: when(B?.present, () => B.spentUsd, 'no broker ledger'),
+    stopRuleUsd: maybe(stopRuleFigure(figuresOf(E, cost, B)), 'no cost figure of any basis'),
+    censoredAtUsd: censoredPart(outcome),
+    perModel: perModelPart(cost),
+    tokens: when(E.known, () => tokensOf(E), E.why),
+    firstTurnCacheRead: maybe(views.S.messages.find(m => m.source === 'main')?.cacheRead, 'no main assistant message in the stream'),
+    checks: known(Object.fromEntries(['t1', 't2', 't3', 't4', 't5'].map(k => [k, { status: views.c[k].status, verdict: views.c[k].verdict }]))),
+    metaBrokerOvershootUsd: maybe(meta.broker?.overshootUsd, 'the launch recorded no overshoot'),
+  };
+};
+
+/** The most children that ran at once, from their reported start and end (ms). A child with no reported end is open to the end of the session and counted in `openEnded`; one with no start is `unknownStart` and not counted. */
+function concurrency(agents) {
+  const timed = agents.filter(a => finite(a.startMs));
+  const edges = timed.flatMap(a => [[a.startMs, 1], [finite(a.endMs) ? a.endMs : Infinity, -1]]).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  let now = 0;
+  let max = 0;
+  for (const [, d] of edges) { now += d; max = Math.max(max, now); }
+  return { maxConcurrent: max, openEnded: timed.filter(a => !finite(a.endMs)).length, unknownStart: agents.length - timed.length };
+}
+
+/** `ok` when the partition is known, else its reason. */
+const partWhy = (part, why) => (part.known ? why : part.why);
+const activeMinusModelApi = (active, modelApi) => (finite(active) && finite(modelApi) ? known(active - modelApi) : notCaptured('needs the partition'));
+const childrenPart = agents => known({ launched: agents.length, ...concurrency(agents), perModel: Object.fromEntries(Object.entries(Object.groupBy(agents, a => a.resolvedModel ?? a.requestedModel ?? 'unresolved')).map(([m, l]) => [m, l.length])) });
+const descriptivePart = (part, E) => known({
+  build_test: part.categories.build_test, other_tool: part.categories.other_tool, durationApiMs: E.known ? maybe(E.durationApiMs, 'the envelope carries no duration_api_ms') : notCaptured(E.why),
+  note: 'descriptive only: a chained Bash call counts as its highest category (V16)',
+});
+
+/** wall, `model_api`, `active` and their difference: the registered time measures. `model_api` is the partition's model category (the O api_request spans), which exists for a killed session too; the envelope's `duration_api_ms` is descriptive only. */
+const timeMeasures = ({ views, meta }) => {
+  const part = views.part;
+  const modelApi = part.known ? part.categories.model_api : null;
+  const active = part.known ? part.active : null;
+  return {
+    wallMs: maybe(meta.wallMs, 'the launch recorded no wall'),
+    modelApiMs: maybe(modelApi, partWhy(part, 'the partition has no model_api category')),
+    activeMs: maybe(active, partWhy(part, '')),
+    activeMinusModelApiMs: activeMinusModelApi(active, modelApi),
+  };
+};
+
+/** The partition, the descriptive categories, the turns and the children. */
+const timeDetail = ({ views }) => {
+  const { part, E } = views;
+  const assistant = new Set(views.S.messages.filter(m => m.source === 'main').map(m => m.id)).size;
+  return {
+    partition: when(part.known, () => ({ categories: part.categories, unattributed: part.unattributed, waits: part.waits }), part.why),
+    descriptive: part.known ? descriptivePart(part, E) : notCaptured(part.why),
+    turns: when(E.known, () => ({ envelope: E.numTurns, assistantMessages: assistant, agree: E.numTurns === assistant }), E.why),
+    children: childrenPart(views.agents),
+  };
+};
+
+const timePart = ({ views, meta }) => ({ ...timeMeasures({ views, meta }), ...timeDetail({ views }) });
+
+/** The held-out measures; a failed build never ran the suite (`{ known: true, primary100: false, reason }`, no totals), so its percent is null, never 0. */
+const heldoutOf = h => (h.totals
+  ? { percent: h.totals.percent, defects: h.defects, blocked: h.totals.blocked, failed: h.totals.failed, total: h.totals.total, primary100: h.primary100 }
+  : { percent: null, defects: null, blocked: null, failed: null, total: null, primary100: h.primary100, reason: h.reason ?? 'the suite reported no totals' });
+
+const UNSCORED = 'the session was not scored';
+const latencyOf = latency => (latency.known === false ? notCaptured(latency.why) : known(latency));
+const latencyPart = h => {
+  if (h.known && h.latency) return latencyOf(h.latency);
+  return notCaptured(h.known ? `the held-out suite did not run: ${h.reason ?? 'no latency'}` : 'no held-out latency');
+};
+
+const qualityPart = score => {
+  if (!score) return { buildOk: notCaptured(UNSCORED), visible: notCaptured(UNSCORED), heldout: notCaptured(UNSCORED), upstreamOriginal: notCaptured(UNSCORED), latency: notCaptured(UNSCORED) };
+  const h = score.heldout;
+  return {
+    buildOk: known(score.build.ok),
+    visible: known(score.visible.map(v => ({ script: v.script, passed: v.passed, failed: v.failed, expectedTotal: v.expectedTotal, hundredPercent: hundredPercent(v) }))),
+    heldout: h.known ? known(heldoutOf(h)) : notCaptured(h.why),
+    upstreamOriginal: known(score.upstream.map(v => ({ script: v.script, passed: v.passed, expectedTotal: v.expectedTotal }))),
+    latency: latencyPart(h),
+  };
+};
+
+/** The `run` section of a session record: what the runner observed. */
+const runPart = run => ({
+  mask: known(run.mask), maskObserved: run.maskObserved === undefined ? notCaptured('the sampler did not observe the mask') : known(run.maskObserved), spawnStampMs: maybe(run.spawnStampMs, 'no spawn was stamped: the launch ended before the box was spawned'),
+  startSkewMs: maybe(run.startSkewMs, 'a session run alone has no partner to skew against'), quiet: maybe(run.quiet, 'no quiet record'), spin: maybe(run.spin, 'no spin record'),
+  harnessIdentity: known(run.harnessIdentity), preregTag: known(run.preregTag), cliVersion: known(run.cliVersion),
+  inputs: maybe(run.inputs, 'the run recorded no hash of quiet.json and package-flags.json'),
+});
+
+const aliasPart = (aliasRecord, aliasCheck) => (aliasRecord?.ok ? known({ ...aliasRecord.value, check: aliasCheck }) : notCaptured(aliasRecord?.reason ?? 'no alias record'));
+const workspacePart = workspace => (workspace ? known({ phase: workspace.phase, excludedDirs: workspace.excludedDirs, note: 'the directories, at any depth, the v2 copy of the v1 tree left out for this stack' }) : notCaptured('a v1 workspace is filled from the pinned inputs: nothing was copied, so nothing was left out'));
+const packagesPart = packages => (packages ? known({ packages: packages.packages, added: packages.added, flagged: packages.flagged }) : notCaptured('the caches were not read'));
+const egressPart = (views, cacheGrowthBytes) => known({ ...views.egress, bytesCaptured: Object.keys(views.egress.allowed).every(h => h in views.egress.bytes), cacheGrowthBytes });
+
+/** One session's record. `discrepancies` lists where a recomputation disagrees with the class the run-map decided (the record never re-classifies). `run` carries what the runner observed (mask, spawn stamp, skew, quiet, spin, harness identity, prereg tag, CLI version). */
+export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null, workspace = null, discrepancies = [], reclassified = null }) {
+  return {
+    ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail, discrepancies, reclassified,
+    run: runPart(run),
+    cost: { ...costPart({ outcome, views, cost, meta }), aliases: aliasPart(aliasRecord, aliasCheck) },
+    time: timePart({ views, meta }),
+    quality: qualityPart(score),
+    loc: loc ? known(loc) : notCaptured('the tree was not counted'),
+    workspace: workspacePart(workspace),
+    egress: egressPart(views, cacheGrowthBytes),
+    packages: packagesPart(packages),
+    process: { compliance: NOT_BARE, coaiRounds: NOT_BARE, codeRabbit: NOT_BARE, ciRuns: NOT_BARE, deliveredBy: NOT_BARE },
+  };
+}
+
+// ---- cells and pairs ------------------------------------------------------------------------------------------------------------
+
+const measureOf = (record, path) => path.reduce((o, k) => o?.[k], record);
+
+const killed = record => record.class.startsWith('killed');
+/** The headline recompute of a cost measure, or null. */
+const headlineOf = (record, measure) => (measure === 'costUsd' && record.cost.headlineUsd.known ? record.cost.headlineUsd.value.usd : null);
+const leafOf = (record, measure) => (measure === 'costUsd' ? record.cost.stopRuleUsd : measureOf(record, ['time', measure]));
+const knownValue = leaf => (leaf?.known ? leaf.value : null);
+
+/** One measure of a session as `{ value, censored }`, or null when it is not known. A killed session's figure is a LOWER bound (`censored`). */
+function sessionMeasure(record, measure) {
+  const headline = headlineOf(record, measure);
+  const value = headline !== null && !killed(record) ? headline : knownValue(leafOf(record, measure));
+  return value === null ? null : { value, censored: killed(record) };
+}
+
+export const MEASURES = Object.freeze(['costUsd', 'wallMs', 'modelApiMs', 'activeMinusModelApiMs']);
+
+/** One measure of a cell: the sum of its two sessions (a lower bound when a side was censored), or unknown. */
+function cellMeasure(v1, v2, m) {
+  const parts = [sessionMeasure(v1, m), sessionMeasure(v2, m)];
+  if (parts.includes(null)) return { known: false, why: `${m} is not known for a session of the cell` };
+  return { known: true, value: Math.round((parts[0].value + parts[1].value) * 1e6) / 1e6, bound: parts.some(p => p.censored) ? '>=' : null };
+}
+
+/**
+ * The cell of one stack: v1 + v2. -> `{ [measure]: { value, bound: null | '>=' }, unpaired, missing }`. A measure with a side that is not known is `{ known: false }`;
+ * a censored side makes the sum a lower bound. `v1` / `v2` are session records (null when the phase is missing).
+ */
+export function cellOf(v1, v2) {
+  if (!v1 || !v2) return { missing: true, unpaired: false, ...Object.fromEntries(MEASURES.map(m => [m, { known: false, why: 'a phase of the cell is missing' }])) };
+  const unpaired = [v1, v2].some(r => r.ids.label === 'ran unpaired');
+  return { missing: false, unpaired, ...Object.fromEntries(MEASURES.map(m => [m, cellMeasure(v1, v2, m)])) };
+}
+
+/** Why a ratio of two cell measures cannot be given, in order, or undefined. */
+const RATIO_CHECKS = [
+  [(c, t) => !c.known || !t.known, 'a side is not known'],
+  [(c, t) => c.bound && t.bound, 'both sides are censored: no bound can be claimed'],
+  [(c, t) => !(t.value > 0), 'the denominator is not positive'],
+];
+const ratioProblem = (c, t) => RATIO_CHECKS.find(([bad]) => bad(c, t))?.[1];
+const ratioBound = (c, t) => (c.bound ? '>=' : t.bound ? '<=' : null);
+
+/** C# over TS for one measure: a value, or a bound (`>=` when only the numerator is censored, `<=` when only the denominator is); both censored claims nothing. */
+export function ratioOf(c, t) {
+  const why = ratioProblem(c, t);
+  return why ? { known: false, why } : { known: true, value: Math.round((c.value / t.value) * 1e6) / 1e6, bound: ratioBound(c, t) };
+}
+
+/**
+ * One pair's record: `cells` are `{ csharp, node }` from `cellOf`. Each ratio is given WITH every cell and WITHOUT the cells that hold a `ran unpaired` session
+ * (then it is unknown when either cell does), beside the unpaired labels, masks, spawn stamps, skews and the quality of each phase.
+ */
+export function pairRecord({ pair, cells, masks, spawnStamps, skewsMs, barrierAtMs, labels, quality, flags = [], v2FromRefutedV1 = [] }) {
+  const ratios = Object.fromEntries(MEASURES.map(m => [m, {
+    with: ratioOf(cells.csharp[m], cells.node[m]),
+    without: cells.csharp.unpaired || cells.node.unpaired ? { known: false, why: 'a cell holds a ran unpaired session' } : ratioOf(cells.csharp[m], cells.node[m]),
+  }]));
+  return { pair, masks, spawnStamps, skewsMs, barrierAtMs, labels, cells, ratios, quality, flags, v2FromRefutedV1 };
+}
+
+const isBare = node => node === null || typeof node !== 'object' || Array.isArray(node);
+/** The problems of a string or a non-object leaf, or null when `node` is an object to look into. */
+function bareProblem(node, at) {
+  if (typeof node === 'string') return node === NOT_BARE ? [] : [`${at}: a bare string '${node}'`];
+  return isBare(node) ? [`${at}: a bare value`] : null;
+}
+/** The two shapes of a leaf: `known: true` needs a value, `known: false` needs a reason. */
+const KNOWN_LEAF = {
+  true: (node, at) => ('value' in node ? [] : [`${at}: known without a value`]),
+  false: (node, at) => (typeof node.why === 'string' && node.why !== '' ? [] : [`${at}: unknown without a reason`]),
+};
+
+/**
+ * The paths under a record section that are neither `{ known: true, value }`, nor `{ known: false, why }` with a reason, nor the string `n/a (bare)`: a bare value, an unknown with no
+ * reason. `[]` means every field is known or says why not. The test of the record and the v2 rehearsal's G-14 both ask this.
+ */
+export function leafProblems(node, at = '') {
+  const bare = bareProblem(node, at);
+  if (bare) return bare;
+  const leaf = KNOWN_LEAF[node.known];
+  return leaf ? leaf(node, at) : Object.entries(node).flatMap(([k, v]) => leafProblems(v, `${at}.${k}`));
+}

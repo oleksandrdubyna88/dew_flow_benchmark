@@ -1,0 +1,23 @@
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index 453c6985..0fb81415 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -152,7 +152,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         }
+     }
+ 
+-    private static void TheRowEndedAs(string ending, JsonElement reply, PlayedKimi played, string granted)
++    private void TheRowEndedAs(string ending, JsonElement reply, PlayedKimi played, string granted)
+     {
+         if (ending == "refused before the launch")
+         {
+@@ -169,6 +169,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         }
+ 
+         request.StdIn.Should().Contain(request.WorkingDirectory, "the prompt names the copy Kimi reads").And.NotContain(granted, "never the root itself (D6)");
+-        Directory.Exists(Path.GetDirectoryName(request.WorkingDirectory)).Should().BeFalse("the row's scratch, with its copies, is gone once it ended");
++        request.StdIn.Should().NotContain(Repo, "never the checkout either: the copies stand in the row's folder (D6)");
++        request.WorkingDirectory.Should().NotStartWith(Repo, "Kimi's working folder is the copy, never the checkout (D6)");
++        Directory.Exists(request.WorkingDirectory).Should().BeFalse("the row's copy is gone once it ended");
+     }
+ }

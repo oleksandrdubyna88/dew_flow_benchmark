@@ -1,0 +1,21 @@
+{"verdict": "ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "A Kimi none or disk row gets the shared Unconfined caveat 'can read this machine — a shell is always there', which is false for Kimi: the shim refuses every shell command (M-K3, M-K4), and it is Grep and Glob that read the disk (M-K6). The same sentence is in capabilityAdmission.ts:60.",
+   "fix": "Make the caveat true for every unconfined runtime (for example 'can read this machine — no flag removes it'), or let the row's note give the reason. Change both halves and the vectors together."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/CapabilityMatrixTests.cs", "line": 230,
+   "summary": "The scenario table names S5.6.4 'AdmissionFlagsBothRows', but the test is named 'AdmissionFlagsBothKimiRows', and no deviation records the rename.",
+   "fix": "Rename the test to the table's name, or record the rename as a deviation."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 400,
+   "summary": "Deviation 54 widens KimiConsultant.MustCarryNoFlag (KimiConsultant.cs:60) to also refuse a plan with Leading or AddDirs, but S5.6.6 tests only Flags. Nothing proves the two added branches work.",
+   "fix": "Make S5.6.6 a Theory with three arms (Flags, Leading, AddDirs), each expecting the ArgumentException that names the shim."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 155,
+   "summary": "S5.6.7 says the row's scratch is gone after each ending. The test checks only that the copy (WorkingDirectory) is gone, and in the 'refused before the launch' arm it checks nothing about the scratch.",
+   "fix": "Record the row's coai-question-* folder through the QuestionRowLaunch.MakeScratch seam or a TEMP listing. Assert it is gone in all three arms."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 113,
+   "summary": "S5.5.1 says --cwd is under <scratch>\\own\\tree. The test checks only that the path contains 'own/tree', not that it is inside the check's own scratch (_temp).",
+   "fix": "Assert that --cwd starts with _temp and ends with Path.Combine(ConsultantCheck.OwnName, \"tree\")."},
+  {"id": "R6", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "§0, §0.2 and the DoD say the plan gate's command is that Opus codes E5.5 and E5.6, and that the same model makes the fixes after review. The status line records Sonnet as the coder, and the review-fix commit 96d935ed is co-authored by Haiku. No deviation gives a reason.",
+   "fix": "Record the model change as a deviation with its reason and the operator's approval, or have Opus re-verify the stories before the DoD item is ticked."}
+ ]}

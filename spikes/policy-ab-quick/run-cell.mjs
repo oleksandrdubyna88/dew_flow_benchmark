@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Launch ONE prepared cell under claude -p and collect stream, stderr, argv names, candidate diff.
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseCli, requireValues } from './lib/args.mjs';
@@ -9,7 +8,7 @@ import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
 import { routeDiff } from './lib/diffsplit.mjs';
 import { buildChildEnv, buildClaudeArgs } from './lib/env.mjs';
 import { AUTHOR_ENV, git, gitEnv } from './lib/git.mjs';
-import { findOnPath, killTree } from './lib/proc.mjs';
+import { findOnPath, killTree, spawnTracked } from './lib/proc.mjs';
 import { parseNdjson } from './lib/summary.mjs';
 import { rateLimitSignal } from './lib/ratelimit.mjs';
 import { CostMeter, outcomeOf, splitLines } from './lib/watchdog.mjs';
@@ -53,18 +52,20 @@ function launch(exe, args, { cwd, env, prompt, streamPath, stderrPath, wallMs, c
   return new Promise((resolve, reject) => {
     const out = fs.createWriteStream(streamPath);
     const err = fs.createWriteStream(stderrPath);
-    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    // spawnTracked: detached on POSIX (the timers below kill the child's process tree), and killed with this process on Ctrl-C.
+    const child = spawnTracked(exe, args, { cwd, env });
+    const stopChild = () => killTree(child.pid, { log: line => process.stderr.write(`run-cell: ${line}\n`) });
     const meter = new CostMeter();
     let timedOut = false;
     let overCap = false;
     let carry = '';
-    const timer = setTimeout(() => { timedOut = true; killTree(child.pid); }, wallMs);
+    const timer = setTimeout(() => { timedOut = true; stopChild(); }, wallMs);
     child.stdout.pipe(out);
     child.stdout.on('data', chunk => {
       const split = splitLines(carry, chunk.toString('utf8'));
       carry = split.carry;
       for (const line of split.lines) meter.feed(line);
-      if (!overCap && meter.overCap(capUsd)) { overCap = true; killTree(child.pid); }
+      if (!overCap && meter.overCap(capUsd)) { overCap = true; stopChild(); }
     });
     child.stderr.pipe(err);
     child.on('error', reject);

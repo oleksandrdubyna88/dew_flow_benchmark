@@ -1,0 +1,29 @@
+skipped CoaiMcp.Tests.AVibeDiskRowSaysWhatItSkippedTests.ARowThatSkippedNoWorktree_PutsNoLimitationInItsPrompt(mode: "windows") (0ms)
+  the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)
+skipped CoaiMcp.Tests.RegularFilesTests.A_host_that_is_not_Linux_answers_with_a_reason_never_a_throw (0ms)
+  the non-Linux answer is not reachable on a Linux host
+skipped CoaiMcp.Tests.AVibeDiskRowSaysWhatItSkippedTests.TheNoteIsRedacted(mode: "windows") (0ms)
+  the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)
+skipped CoaiMcp.Tests.AVibeDiskRowSaysWhatItSkippedTests.AParentWithOneGoodAndOneBrokenRepository_Answers_AndTheRowsNoteNamesTheSkippedOne(mode: "windows") (0ms)
+  the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)
+skipped CoaiMcp.Tests.AVibeDiskRowSaysWhatItSkippedTests.AParentWithOnlyABrokenRepository_IsRefused_AndTheRowsNoteStillNamesIt(mode: "windows") (0ms)
+  the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)
+skipped CoaiMcp.Tests.AVibeDiskRowReadsAParentFolderThroughTheServiceTests.AParentOfTwoRepositories_OneWithVibeHooks_LaunchesInTheCopyTree_SeesBoth_SeesNoVibe_NamesNoOriginal_AndTheCopiesAreGone(mode: "windows") (0ms)
+  the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)
+failed CoaiMcp.Tests.ScenarioTests.TheLadder_Climbs (12ms)
+  Assert.Equal() Failure: Values differ
+failed CoaiMcp.Tests.OtherTests.ASlowCase_TimesOut (12ms)
+  the case did not finish within its budget
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+
+  In process file artifacts produced:
+    - /home/jinx/git/coai-exp2/r/0123456789ab/out/objective/mcp.ctrf.json
+
+Test run summary: Passed! - /home/jinx/git/coai-exp2/r/0123456789ab/arm/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 13894
+  failed: 0
+  succeeded: 13777
+  skipped: 117
+  duration: 8m 16s 827ms

@@ -1,0 +1,18 @@
+failed CoaiMcp.Tests.TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow (177ms)
+  Expected (_assembler.AllChangesAsync(_repo, parent, head, Ct, oneMillisecond)).Failed to be True because and not an empty, successful numstat, but found False.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Primitives.BooleanAssertions`1.BeTrue(String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow() in /home/jinx/git/coai-exp/arm-SR1/src_mcp/tests/TheRoundsNumstatsAreCountedTests.cs:261
+    --- End of stack trace from previous location ---
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-SR1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 10
+  failed: 1
+  succeeded: 9
+  skipped: 0
+  duration: 2s 014ms

@@ -113,6 +113,16 @@ public sealed class Script
     /// transcript (<c>tests/Bench.Tests/Fixtures/probes/</c>) through the real runner; empty = compose.</summary>
     public string StdoutFile => Text("stdoutFile", string.Empty);
 
+    /// <summary>The replay file for THIS call of the model — <c>stdoutByCall.&lt;n&gt;</c>, n being the call number the log gave this launch
+    /// (per model, 1-based) — so one test scripts a step's attempts in order: a limited attempt, then its resume (model arms E2.S3). Chosen
+    /// before every other replay; a call with no entry falls through to them, exactly as before.</summary>
+    public string StdoutForCall(int call) =>
+        (Node("stdoutByCall") as JsonObject)?[call.ToString(CultureInfo.InvariantCulture)]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>When set, a launch whose argv carries <c>--session-id &lt;id&gt;</c> or <c>--resume &lt;id&gt;</c> leaves the empty transcript file claude
+    /// leaves for a session, before it answers (model arms E2.S3, E2 §8 item 36); absent = false, and the fake writes nothing of the kind.</summary>
+    public bool Transcripts => Bool("transcripts", false);
+
     /// <summary>The replay file for THIS prompt — <c>stdoutByPrompt.&lt;sha256 of the prompt&gt;</c> — so every scout cell, all launched
     /// <c>--model opus</c>, replays its own recorded stream; falls back to <see cref="StdoutFile"/>.</summary>
     public string StdoutFor(string prompt) =>
@@ -132,6 +142,11 @@ public sealed class Script
     /// <summary>A replay HOLDS after this many lines (1-based; zero = never): it flushes them, writes <c>held-&lt;pid&gt;</c> into its home
     /// and sleeps until it is killed — a CLI hung mid-stream, or a cell a test kills at a deterministic point.</summary>
     public int HoldAfterLine => Int("holdAfterLine", 0);
+
+    /// <summary>A replay writes these to STDERR, the n-th (flushed) just before its n-th stdout line — a CLI that warns while it streams, for a
+    /// test watching stderr arrive beside stdout (model arms E1.S5). Empty, the default, writes no stderr, as before; a replay holding any
+    /// leaves the one-write fast path and goes line by line.</summary>
+    public IReadOnlyList<string> StderrBeforeLines => [.. (Node("stderrBeforeLines") as JsonArray ?? []).Select(n => n?.GetValue<string>() ?? string.Empty)];
 
     /// <summary>The fake plays the scouts' claim ASSESSOR (codex <c>-o</c>): it reads the blinded rows out of the prompt and writes one verdict
     /// per row to the last-message file — <see cref="AssessVerdicts"/> maps a substring of a row to its verdict (first match wins), anything
@@ -178,15 +193,26 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             Thread.Sleep(script.DelayMs);
         }
 
+        var mode = ModeOf();
+
+        // A launch claude would refuse starts no session; one it accepts leaves its transcript before anything else it does (a hang, a quota marker, an answer).
+        return mode != "refuse" && Transcripts.Enter(script, args) is { Length: > 0 } refusal ? Exit(1, refusal) : Dispatch(mode);
+    }
+
+    private string ModeOf()
+    {
         var mode = (script.QuotaFrom > 0 && call >= script.QuotaFrom, script.HangOnCall == call) switch
         {
             (true, _) => "quota",
             (_, true) => "hang",
             _ => script.Mode,
         };
-        var refused = script.RefuseArgvContaining.Length > 0 && args.Contains(script.RefuseArgvContaining);
 
-        return (refused ? "refuse" : mode) switch
+        return script.RefuseArgvContaining.Length > 0 && args.Contains(script.RefuseArgvContaining) ? "refuse" : mode;
+    }
+
+    private int Dispatch(string mode) =>
+        mode switch
         {
             "refuse" => Exit(script.RefuseExit, script.RefuseText),
             "hang" => Hang(),
@@ -195,7 +221,6 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             "silent" => 0,
             _ => Answer(),
         };
-    }
 
     private static int Exit(int code, string stderr)
     {
@@ -215,6 +240,11 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
         if (script.Assessor && Assessor.LastMessageFile(args) is { Length: > 0 } lastMessage)
         {
             return Assessor.Answer(script, prompt, lastMessage);
+        }
+
+        if (script.StdoutForCall(call) is { Length: > 0 } byCall)
+        {
+            return Replay(byCall);
         }
 
         if (script.StdoutFor(prompt) is { Length: > 0 } replay)
@@ -250,7 +280,7 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
     {
         var text = File.ReadAllText(file).Replace("__CWD__", JsonEscaped(Directory.GetCurrentDirectory()), StringComparison.Ordinal);
 
-        if (script.LineDelayMs == 0 && script.HoldAfterLine == 0)
+        if (script.LineDelayMs == 0 && script.HoldAfterLine == 0 && script.StderrBeforeLines.Count == 0)
         {
             using var stdout = Console.OpenStandardOutput();
             stdout.Write(Encoding.UTF8.GetBytes(text));
@@ -259,6 +289,7 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
         }
 
         var lines = text.Split('\n');
+        var stderr = script.StderrBeforeLines;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -266,6 +297,12 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             {
                 File.WriteAllText(Path.Combine(FakeHome.Of(Program.ModelOf(args)), $"held-{Environment.ProcessId}"), i.ToString(CultureInfo.InvariantCulture));
                 return Hang();
+            }
+
+            if (i < stderr.Count)
+            {
+                Console.Error.Write(stderr[i] + "\n");
+                Console.Error.Flush();
             }
 
             Console.Out.Write(lines[i] + (i < lines.Length - 1 ? "\n" : string.Empty));
@@ -545,6 +582,79 @@ public static class Grammar
     private static string Line(JsonObject o) => o.ToJsonString() + "\n";
 }
 
+/// <summary>The transcript claude leaves for a session (model arms E2.S3, E2 §8 item 36): an EMPTY <c>&lt;home&gt;/projects/&lt;slug&gt;/&lt;id&gt;.jsonl</c>, <c>home</c>
+/// being <c>CLAUDE_CONFIG_DIR</c> when it is set and non-empty, else <c>$HOME/.claude</c> — read from the environment, never from the platform's idea of the user's home, so
+/// a test that forgot to give the fake one cannot reach the developer's own transcripts; with neither set the fake says so on stderr and writes nothing — and <c>slug</c>
+/// this process's working directory with every character outside <c>[A-Za-z0-9]</c> replaced by <c>-</c>. The rule of the module's own path spelling, written a second time
+/// on purpose: the fake references nothing of the module, so a disagreement between the two shows in a test instead of cancelling out.
+/// <para>
+/// The fake accepts no more than claude does: <c>--resume &lt;id&gt;</c> for a session with no transcript is refused with claude's own sentence
+/// (<c>No conversation found with session ID: &lt;id&gt;</c>, exit 1), so a runner that resumes a session it never started goes red here as it would live. A launch the
+/// fake refuses for another reason (<c>refuseArgvContaining</c>) leaves nothing. The other half, MEASURED on claude 2.1.310 on 2026-10-30: <c>--session-id &lt;id&gt;</c> for an id
+/// whose transcript already exists exits 1 with <c>Error: Session ID &lt;id&gt; is already in use.</c> and writes nothing. An existing transcript is left as it is — a resumed session's file is appended to,
+/// never truncated.
+/// </para></summary>
+public static class Transcripts
+{
+    /// <summary>One session argument of a launch: <c>--session-id</c> starts it, <c>--resume</c> continues it.</summary>
+    public sealed record Request(bool Resume, Guid Id);
+
+    /// <summary>Takes the launch in: the sentence claude refuses it with, or empty when it is accepted (the transcript left, or nothing asked for).</summary>
+    public static string Enter(Script script, string[] args)
+    {
+        if (!script.Transcripts || RequestOf(args) is not { } request)
+        {
+            return string.Empty;
+        }
+
+        if (Home() is not { Length: > 0 } home)
+        {
+            Console.Error.Write("fake-cli: transcripts: neither CLAUDE_CONFIG_DIR nor HOME is set; no transcript left\n");
+            return string.Empty;
+        }
+
+        return Admit(request, Path.Combine(home, "projects", Slug(Directory.GetCurrentDirectory()), $"{request.Id:D}.jsonl"));
+    }
+
+    private static string Admit(Request request, string file) =>
+        (request.Resume, File.Exists(file)) switch
+        {
+            (true, false) => $"No conversation found with session ID: {request.Id:D}",
+            (false, true) => $"Error: Session ID {request.Id:D} is already in use.",
+            _ => Leave(file),
+        };
+
+    private static string Leave(string file)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.AppendAllText(file, string.Empty);
+        return string.Empty;
+    }
+
+    /// <summary>The session argument, when its id is a guid (claude refuses anything else, so the fake leaves nothing for it).</summary>
+    public static Request? RequestOf(string[] args)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (IsSessionFlag(args[i]))
+            {
+                return Guid.TryParse(args[i + 1], out var id) ? new Request(args[i] == "--resume", id) : null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsSessionFlag(string argument) => argument is "--session-id" or "--resume";
+
+    private static string Home() =>
+        Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured ? configured
+            : Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home ? Path.Combine(home, ".claude")
+            : string.Empty;
+
+    private static string Slug(string workingDirectory) => Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-");
+}
+
 /// <summary>Where a model's script and call log live when no environment variable names them: a folder per MODEL ID under the
 /// system temp folder. The probe runner launches the CLI under a MINIMAL replaced environment (S2c) — <c>TEMP</c> passes, nothing the
 /// harness owns does — so a test cannot hand the fake a variable at all; the model id the argv pins is the one thing every launch
@@ -586,7 +696,12 @@ public static class Events
             ["env"] = new JsonArray([.. Environment.GetEnvironmentVariables().Keys.Cast<object>().Select(k => (JsonNode)JsonValue.Create(k.ToString() ?? string.Empty)).OrderBy(n => n!.GetValue<string>(), StringComparer.Ordinal)]),
         };
 
-        File.WriteAllText(Path.Combine(dir, $"call-{key}-{call:000}-{Environment.ProcessId}-{Guid.NewGuid():N}.json"), record.ToJsonString());
+        // Staged under a name `call-*.json` does not match, then renamed: a reader polling the folder (FakeCli.Calls) sees a whole
+        // record or none — a direct write left an empty or partial file there for a moment, and a poll in that window threw.
+        var name = $"call-{key}-{call:000}-{Environment.ProcessId}-{Guid.NewGuid():N}.json";
+        var staged = Path.Combine(dir, $".{name}.tmp");
+        File.WriteAllText(staged, record.ToJsonString());
+        File.Move(staged, Path.Combine(dir, name));
         return call;
     }
 }

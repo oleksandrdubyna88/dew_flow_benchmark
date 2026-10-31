@@ -1,0 +1,80 @@
+{
+  "schema": "model-arms/experiment-v2",
+  // The repository the arms work on: its plan branch, the frozen base commit, the plan, the branch every arm commits to.
+  "target": {
+    "source": "/example/target",
+    "planBranch": "docs/plan-a-spent-quota-cools-the-model-down",
+    "base": "6786582e30d3e771549d05ed719478396f8099cd",
+    "plan": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+    "branch": "feat/quota-cooldown",
+    "rulesSubmodule": ".agents/conventions",
+    // Every command is an executable and its arguments. The executable is a name from PATH or an absolute path OUTSIDE the target
+    // (D17); a file under the target may only be an argument — which is why the suite runs as `dotnet <tests>.dll`.
+    "lowPriority": ["node", ".agents/conventions/tools/low-priority.mjs"],
+    "build": ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:4", "--disable-build-servers"],
+    "suite": { "command": ["dotnet", "src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll", "--report-xunit-ctrf"], "ctrfFile": "mcp.ctrf.json", "namePrefix": "CoaiMcp.Tests." },
+    "format": { "solution": "dew_flow_connect_other_ais.slnx", "verbs": ["whitespace", "style"] },
+    "extension": { "directory": "src_vs_code", "command": ["npm", "test"] },
+    "nodeModules": ["src_vs_code/node_modules", ".agents/conventions/node_modules"],
+    "testGlobs": ["src_mcp/tests", "src_vs_code/src/test"]
+  },
+  "scenarios": "scenarios.json",
+  "baseline": "baseline.json",
+  // Said to every coder and reviewer as KNOWN: what fails at the base before any arm touched it.
+  "known": "Nothing is known to fail: at the base commit the whole MCP suite (13,807 tests) and the extension tests pass on this host (Linux, WSL2; tests marked Windows-only skip). A failure you see is yours or a flaky test: re-run that one test alone before you decide.",
+  // One entry per step id: its kind (session · review · gate · taskCode), model, minutes, mode, subagents, brief and bindings. A binding maps a
+  // brief field to a file under the arm folder: outputs (what the step is briefed to write), notes (the field the NOTES brief field names),
+  // verdict (a review) and status (a gate), snapshot and diffFrom (the .before and .diff pair).
+  "steps": {
+    "code":     { "kind": "session", "model": "sonnet", "minutes": 180, "mode": "write", "subagents": false, "brief": "1-code",
+                  "outputs": { "CODE_NOTES": "notes/code.md" }, "notes": "CODE_NOTES" },
+    "hreview":  { "kind": "session", "model": "haiku",  "minutes": 60,  "mode": "write", "subagents": false, "brief": "hr-review-fix",
+                  "outputs": { "HREVIEW_NOTES": "notes/hreview.md" }, "notes": "HREVIEW_NOTES", "snapshot": true, "diffFrom": "hreview" },
+    "review":   { "kind": "review",  "model": "opus",   "minutes": 40,  "mode": "read",  "subagents": false, "brief": "2-review",
+                  "outputs": { "REVIEW": "notes/review.json" }, "verdict": "REVIEW" },
+    "fix":      { "kind": "session", "model": "sonnet", "minutes": 60,  "mode": "write", "subagents": false, "brief": "3-fix",
+                  "outputs": { "FIX_NOTES": "notes/fix.md" }, "notes": "FIX_NOTES" },
+    "gate":     { "kind": "gate",    "model": "sonnet", "minutes": 150, "mode": "gate",  "subagents": false, "brief": "gate",
+                  "outputs": { "GATE_NOTES": "notes/gate.md", "GATE_JSON": "notes/gate.json" }, "notes": "GATE_NOTES", "status": "GATE_JSON", "snapshot": true, "diffFrom": "gate" },
+    "split":    { "kind": "session", "model": "sonnet", "minutes": 40,  "mode": "write", "subagents": false, "brief": "x-split",
+                  "outputs": { "SPLIT_NOTES": "notes/split.md" }, "notes": "SPLIT_NOTES" },
+    "splitFix": { "kind": "session", "model": "sonnet", "minutes": 15,  "mode": "write", "subagents": false, "brief": "x-split-fix",
+                  "outputs": {}, "notes": "SPLIT_NOTES" },
+    "taskCode": { "kind": "taskCode", "model": "haiku", "minutes": 45,  "mode": "write", "subagents": false, "brief": "t2-coder" },
+    "hA":       { "kind": "review",  "model": "haiku",  "minutes": 40,  "mode": "read",  "subagents": false, "brief": "hA-trace",
+                  "outputs": { "HA_JSON": "notes/hA.json" }, "verdict": "HA_JSON", "snapshot": true },
+    "hB":       { "kind": "review",  "model": "haiku",  "minutes": 40,  "mode": "read",  "subagents": false, "brief": "hB-tests",
+                  "outputs": { "HB_JSON": "notes/hB.json" }, "verdict": "HB_JSON" },
+    "hfix":     { "kind": "session", "model": "sonnet", "minutes": 60,  "mode": "write", "subagents": false, "brief": "hfix",
+                  "outputs": { "HFIX_NOTES": "notes/hfix.md" }, "notes": "HFIX_NOTES", "diffFrom": "hA" }
+  },
+  // A scheme is its steps in order, "<file name>:<step id>"; "tasks" is the SRS pipeline (split, one fix round, the batches).
+  "schemes": {
+    "C":   ["1-code:code", "2-review:review", "3-fix:fix", "4-gate:gate"],
+    "CR":  ["1-code:code", "2-hreview:hreview", "3-review:review", "4-fix:fix", "5-gate:gate"],
+    "SRS": ["tasks", "3-hreview:hreview", "4-review:review", "5-fix:fix", "6-gate:gate"],
+    "CHH": ["1-code:code", "2-hA:hA", "3-hB:hB", "4-hfix:hfix", "5-review:review", "6-fix:fix", "7-gate:gate"]
+  },
+  // A run is its rounds: they run one after another, and the arms of a round run at the same time (an arm's scheme is its letters, SRS2 → SRS).
+  // A later part adds a run; closedArms are folders closed (000) while the run's arms work, and closed names more paths to close.
+  "runs": {
+    "part6": { "rounds": [["C1", "CR1", "SRS1"], ["C2", "CR2", "SRS2"], ["C3", "CR3", "SRS3"]] },
+    "part7": { "rounds": [["CHH1", "CHH2", "CHH3"]], "closedArms": ["C1", "CR1", "SRS1", "C2", "CR2", "SRS2", "C3", "CR3", "SRS3"],
+               "closed": ["<root>/judge-abs", "<root>/judge-coai", "<root>/chain/part6"] }
+  },
+  "limits": { "waitSeconds": 900, "tries": 40, "gateWaitSeconds": 1800, "gateTries": 8, "minimumRemainingSeconds": 300, "killGraceSeconds": 600 },
+  // The tasks block names its three step ids, and its outputs are handed to the steps after it, as the shell handed CODE_NOTES to SRS's reviewers
+  // though no SRS step wrote it.
+  "tasks": { "min": 4, "max": 7, "maxParallel": 4, "split": "split", "splitFix": "splitFix", "taskCode": "taskCode", "outputs": { "CODE_NOTES": "notes/code.md" } },
+  // The PERMISSION lists (--allowedTools / --disallowedTools): write and read steps, the gate's own tools, and what no step may read.
+  "tools": {
+    "write": ["Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Agent", "Bash(git *)", "Bash(dotnet *)", "Bash(node *)", "Bash(npm *)", "Bash(npx *)", "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(sed *)", "Bash(awk *)", "Bash(wc *)", "Bash(diff *)", "Bash(mkdir *)", "Bash(cd *)", "Bash(echo *)", "Bash(pwd)", "Bash(sort *)", "Bash(uniq *)", "Bash(tee *)", "Bash(cp *)", "Bash(mv *)", "Bash(test *)", "Bash(date *)", "Bash(timeout *)", "Bash(xargs *)", "Bash(./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests *)"],
+    "read": ["Read", "Glob", "Grep", "TodoWrite", "Bash(git *)", "Bash(dotnet *)", "Bash(node *)", "Bash(npm *)", "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(sed *)", "Bash(awk *)", "Bash(wc *)", "Bash(diff *)", "Bash(cd *)", "Bash(echo *)", "Bash(pwd)", "Bash(sort *)", "Bash(test *)", "Bash(./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests *)"],
+    "gate": ["mcp__coai__providers", "mcp__coai__open", "mcp__coai__review_plan", "mcp__coai__review_code", "mcp__coai__resolve", "mcp__coai__status"],
+    "deny": ["Read(//example/home/.claude/**)", "Read(//example/home/.codex/**)", "Read(//example/home/.gemini/**)", "Read(//example/home/.antigravity/**)", "Read(//example/home/.vibe/**)", "Read(//proc/**)", "Read(//example/old-experiment/**)", "Read(//example/vault/**)"]
+  },
+  "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/vault/connectOtherAis/wsl-ubuntu/settings.json", "side": "wsl-ubuntu" },
+  // Closed (000) and unlisted (300) while the arms run; <root> and ~ are expanded.
+  "isolation": { "closed": ["/example/old-experiment"], "unlisted": ["<root>", "<root>/r", "<root>/pids", "~/.claude/projects", "~/.claude/file-history", "~/.claude/session-env", "~/.claude/shell-snapshots"] },
+  "awake": "auto"
+}

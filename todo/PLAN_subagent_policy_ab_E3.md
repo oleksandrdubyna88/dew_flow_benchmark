@@ -17,7 +17,7 @@ configuration the records say it ran under? So the code stories come first and a
 run the finished verbs once each, read their verdicts from records (never from the model's prose), and hand their streams to E2
 as fixtures.
 
-**Roles** ([subagent-models.md](../.claude/rules/shared/common/subagent-models.md) § *The pipeline*). E3 is **not** a cornerstone
+**Roles** ([subagent-models.md](../.agents/conventions/common/subagent-models.md) § *The pipeline*). E3 is **not** a cornerstone
 area: the parent's ledger names the leak boundary (E2) and the hold-out gate (E4); this epic's two areas — *rule reached* and *the
 child-model and effort audit* — are, in the parent's words, "measured mechanisms, each with a live break-it and a hard go criterion —
 Opus-spec stories". So every **code** story runs: scenarios + brief **Opus** → code + tests **Sonnet** → review **Opus** → fixes
@@ -67,7 +67,7 @@ the exact signatures** — where they change a name, follow them and keep this d
   test seam is a `PolicyVerbServices` record (S3) in the shape of `ScoutVerbServices` (`hosts/Cli/ScoutsInputs.cs:24-28`): the CLI
   word lookup, the variables a TEST adds to the child environment (the fake CLI's home), the **Claude home**
   (`%USERPROFILE%\.claude` in production, a temp folder in every test) and a wall override in seconds for tests.
-- **Exit codes** (`hosts/Cli/ExitCodes.cs:12-28`): 0 pass · 3 a stop, a no-go, a moved pin, a ceiling refusal, the environment ·
+- **Exit codes** (`src/Bench.Hosting/ExitCodes.cs:12-28`): 0 pass · 3 a stop, a no-go, a moved pin, a ceiling refusal, the environment ·
   4 configuration (flags, records, roots) · 5 nothing produced (the launch did not run).
 - **Paths.** The runs root and the artefact root lie outside every git checkout (refused with 4 otherwise — stricter than the
   scouts' git-ignored allowance, `src/Bench.Infrastructure/Scouts/ScoutRoots.cs:13-21`, because a cell tree holds a whole public

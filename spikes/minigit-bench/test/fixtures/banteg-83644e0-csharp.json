@@ -1,0 +1,19 @@
+{
+  "source": {
+    "repo": "banteg/minigit-bench",
+    "sha": "83644e0",
+    "path": "results/results.json",
+    "resultsSha256": "3e7580d500813590dc04f35bf231667b9350d4b5561522ff2dcf5840e0e9089f",
+    "formula": "benchmark.rb:162-167 (codex_cost_usd)",
+    "rates": { "tier": "fast", "input": 5, "cached": 0.5, "output": 30 }
+  },
+  "rows": [
+    { "trial": 1, "phase": "v1", "input_tokens": 173658, "cache_read_tokens": 168320, "output_tokens": 4318, "cost_usd": 1.08199 },
+    { "trial": 1, "phase": "v2", "input_tokens": 352992, "cache_read_tokens": 337920, "output_tokens": 5132, "cost_usd": 2.08788 },
+    { "trial": 2, "phase": "v1", "input_tokens": 296962, "cache_read_tokens": 288384, "output_tokens": 5308, "cost_usd": 1.788242 },
+    { "trial": 2, "phase": "v2", "input_tokens": 206415, "cache_read_tokens": 190080, "output_tokens": 5091, "cost_usd": 1.279845 },
+    { "trial": 3, "phase": "v1", "input_tokens": 113144, "cache_read_tokens": 102656, "output_tokens": 3105, "cost_usd": 0.710198 },
+    { "trial": 3, "phase": "v2", "input_tokens": 209360, "cache_read_tokens": 197632, "output_tokens": 4743, "cost_usd": 1.287906 }
+  ],
+  "totals": { "v1_total_count": 11, "v2_total_count": 30 }
+}

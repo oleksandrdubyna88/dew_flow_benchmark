@@ -59,9 +59,11 @@ flowchart TB
         tr["LiveTrace · FixtureTrace"]
     end
     contracts["Bench.Contracts — wire shapes, depends on nothing"]
+    hosting["Bench.Hosting — CommandLine · ExitCodes · ShutdownSignal<br/>(namespace Bench.Cli, shared by the CLI hosts)"]
     delivered["Bench.Delivered — the delivered-work instrument<br/>cleaned LOC · path fates · the policy trail<br/>a SIBLING LEAF: sees nothing, seen only by app"]
 
     cli --> app
+    cli --> hosting
     apihost --> api
     apihost --> infra
     collector --> api
@@ -79,11 +81,17 @@ flowchart TB
     hook --> contracts
 ```
 
-Two projects depend on **nothing**: `Bench.Domain` and `Bench.Contracts`. That is not tidiness — a wire
-contract able to reference the domain is a contract that leaks it, and a domain able to reference a package
-is a domain whose rules cannot be tested without one.
+`Bench.Hosting` is a project of its own rather than a folder of the CLI because more than one host needs the flag parser, the
+exit-code contract and the root cancellation token, and an exe may not reference an exe
+(`todo/PLAN_model_arms.md` D3); it keeps the namespace `Bench.Cli` so no `using` changed, and it references nothing.
 
-**A third depends on nothing and is not a layer at all: `Bench.Delivered`.** It is the delivered-work
+Two projects depend on **nothing** and are the layers' floor: `Bench.Domain` and `Bench.Contracts`. That is not
+tidiness — a wire contract able to reference the domain is a contract that leaks it, and a domain able to
+reference a package is a domain whose rules cannot be tested without one. `Bench.Hosting` is a third leaf, held by
+its own architecture assertion (`Hosting_references_nothing_beyond_the_runtime`): a host that takes the parser takes
+no layer along.
+
+**A fourth depends on nothing and is not a layer at all: `Bench.Delivered`.** It is the delivered-work
 instrument, ported *mechanism rather than repository* from the operator's `scoreMeter` V2
 (`todo/PLAN_scoremeter_port.md`), and it is a SIBLING LEAF — it may not see `Bench.Domain` either. Two
 architecture assertions hold it there: it references nothing, and nothing outside the Application layer may
@@ -109,7 +117,8 @@ each.
 | Gate | [module_gate.md](module_gate.md) | which reviewer MODEL, on each of coai's three review gates, finds the planted defects — at what cost, how repeatably | nine `gate_*` tables; the artefact root's `runs/` |
 | Probes | [module_probes.md](module_probes.md) | what each CLI build and api vendor can actually do for coai's question consultant — web search, reads outside the working directory, confinement under denied file tools | `probe_runs`, `probe_cells`; the artefact root's `probes/` |
 | Scouts | [module_scouts.md](module_scouts.md) | whether a Sonnet team of ⌈1.5·N⌉ read-only scouts finds the files an Opus team of N finds, without more wrong claims — and how fast, at what price | six `scout_*` tables; the artefact root's `scouts/`; the history-free trees under the trees root |
-| Tests | [module_tests.md](module_tests.md) | not a measurement — the scenario harness (`tests/Bench.Tests/Cli`, real store, real git, `tests/FakeCli` for the paid CLIs) and the flow catalogue derived from the CLI's verbs and the API's routes | none |
+| minigit bench | [module_minigit_bench.md](module_minigit_bench.md) | not a series yet: the instruments a two-stack minigit comparison will be scored with — a sandboxed scorer, a sealed and calibrated held-out suite, cost counters with cross-checks T1–T4, and an exclusive time partition (Node, in `spikes/minigit-bench/`, outside the C# product) | none — Node files; `score/score.json` per session, the sealed `heldout/suite.enc` |
+| Tests | [module_tests.md](module_tests.md) | not a measurement — the scenario harness (`tests/Bench.Tests/Cli`, real store, real git, `tests/FakeCli` for the paid CLIs) and the flow catalogue derived from the CLI's verbs and the API's routes; a second harness, the Node suite of the minigit stack bench's agent sandbox (`spikes/minigit-bench/test`, run by `spikes/minigit-bench/run-tests.mjs`, catalogued by `module-tests-catalog.test.mjs`) | none |
 
 ## The measurement contract
 
