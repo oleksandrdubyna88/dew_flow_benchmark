@@ -34,12 +34,16 @@ export async function registryIntegrity({ version, cacheDir, run = runBounded })
 
 /** Write the integrity into `inputs/explore.json` (text replacement, so the file keeps its shape). A recorded value that differs is a fail: a pin never moves silently. */
 export function recordIntegrity({ file = FILES.explore, integrity }) {
-  const text = readFileSync(file, 'utf8');
   const loaded = loadExplore(file);
   if (!loaded.ok) return loaded;
   const recorded = loaded.value.typescript.integrity;
   if (recorded === integrity) return ok({ changed: false });
   if (recorded !== null) return fail(`explore.json records ${recorded.slice(0, 24)}..., the registry says ${integrity.slice(0, 24)}...: a pin is amended by a dated line, never overwritten`);
+  return fillIntegrity(file, integrity);
+}
+
+function fillIntegrity(file, integrity) {
+  const text = readFileSync(file, 'utf8');
   if (!text.includes('"integrity": null')) return fail('explore.json has no `"integrity": null` to fill');
   writeFileSync(file, text.replace('"integrity": null', `"integrity": "${integrity}"`));
   return ok({ changed: true });
@@ -72,9 +76,7 @@ export async function installToolchain({ explore, home = os.homedir(), preflight
   process.env.npm_config_cache = cache; // the install child inherits it: the operator's ~/.npm is not consulted
   try {
     const pre = await preflightFn({ home: fake, nodeDir: paths.nodeDir, tsDir: paths.tsDir, claudeBinary: paths.claudeBinary, stacks: stacks.value, install: true });
-    if (!pre.ok) return fail(`${pre.reason}: ${(pre.problems ?? []).join('; ')}`);
-    const seen = installedIntegrity(paths.tsDir);
-    return seen === explore.typescript.integrity ? ok({ facts: pre.value.facts, integrity: seen }) : fail(`the installed typescript carries integrity ${seen ?? 'none'}, the recorded one is ${explore.typescript.integrity}`);
+    return pre.ok ? checkedIntegrity({ explore, tsDir: paths.tsDir, facts: pre.value.facts }) : fail(`${pre.reason}: ${(pre.problems ?? []).join('; ')}`);
   } finally {
     if (before === undefined) delete process.env.npm_config_cache; else process.env.npm_config_cache = before;
     rmSync(cache, { recursive: true, force: true });
@@ -82,21 +84,40 @@ export async function installToolchain({ explore, home = os.homedir(), preflight
   }
 }
 
+/** The installed toolchain's integrity against the recorded one. */
+function checkedIntegrity({ explore, tsDir, facts }) {
+  const seen = installedIntegrity(tsDir);
+  return seen === explore.typescript.integrity ? ok({ facts, integrity: seen }) : fail(`the installed typescript carries integrity ${seen ?? 'none'}, the recorded one is ${explore.typescript.integrity}`);
+}
+
 const registeredIn = file => (existsSync(file) ? readJson(file) : {});
 
 /** The directory of a registered snapshot under `toolchains/`: `cache-<stack>-<12 hex>`. */
 const snapshotDir = (stack, record, home) => path.join(toolchainsDir(home), `cache-${stack}-${record.treeSha256.slice(0, 12)}`);
 
+/** A registered snapshot on disk, accepted while it still hashes to its record. */
+function acceptRegistered({ have, dir }) {
+  return treeHash(dir) === have.treeSha256 ? ok({ stack: 'node', record: have, dir, made: false }) : fail(`the registered node snapshot ${dir} no longer hashes to ${have.treeSha256.slice(0, 12)}`);
+}
+
 /** Make the Node snapshot (or accept the one already registered and on disk). -> `ok({ stack, record, dir, made })` | `fail`. */
 export async function nodeSnapshot({ home = os.homedir(), makeFn = makeSnapshot, files = FILES }) {
-  const have = registeredIn(files.snapshots).node;
-  if (have && existsSync(snapshotDir('node', have, home))) {
-    const dir = snapshotDir('node', have, home);
-    return treeHash(dir) === have.treeSha256 ? ok({ stack: 'node', record: have, dir, made: false }) : fail(`the registered node snapshot ${dir} no longer hashes to ${have.treeSha256.slice(0, 12)}`);
-  }
+  const reused = reuseRegistered({ home, files });
+  if (reused) return reused;
   const recipe = loadRecipe(readJson(files.recipe));
-  if (!recipe.ok) return recipe;
-  const made = await makeFn({ stack: 'node', recipe: recipe.value, root: snapshotWorkDir(home), out: toolchainsDir(home) });
+  return recipe.ok ? makeAndRegister({ recipe: recipe.value, home, makeFn, files }) : recipe;
+}
+
+/** The registered node snapshot when it is on disk (accepted while it still hashes to its record), else null. */
+function reuseRegistered({ home, files }) {
+  const have = registeredIn(files.snapshots).node;
+  const dir = have ? snapshotDir('node', have, home) : null;
+  return dir && existsSync(dir) ? acceptRegistered({ have, dir }) : null;
+}
+
+/** Run the recipe in a box and register the result by its tree hash. */
+async function makeAndRegister({ recipe, home, makeFn, files }) {
+  const made = await makeFn({ stack: 'node', recipe, root: snapshotWorkDir(home), out: toolchainsDir(home) });
   if (!made.ok) return made;
   const record = snapshotRecord(made.value);
   const reg = registerSnapshot({ file: files.snapshots, stack: 'node', record, madeOn: new Date().toISOString().slice(0, 10) });
@@ -110,9 +131,12 @@ export function csharpSnapshot({ explore, home = os.homedir(), files = FILES }) 
   const hash = treeHash(dir);
   if (hash !== explore.csharpSnapshot.treeSha256) return fail(`v1's C# snapshot hashes to ${hash.slice(0, 12)}, explore.json pins ${explore.csharpSnapshot.treeSha256.slice(0, 12)}`);
   const have = registeredIn(files.snapshots).csharp;
-  if (have) return ok({ stack: 'csharp', record: have, dir, made: false });
-  const v1 = readJson(files.v1Snapshots).csharp;
-  const { madeOn, ...rest } = v1;
+  return have ? ok({ stack: 'csharp', record: have, dir, made: false }) : registerCsharp({ files, dir, hash });
+}
+
+/** Write v1's C# record, with the re-hash, into the pilot's registered snapshots. */
+function registerCsharp({ files, dir, hash }) {
+  const { madeOn, ...rest } = readJson(files.v1Snapshots).csharp;
   const reg = registerSnapshot({ file: files.snapshots, stack: 'csharp', record: { ...rest, rehashedOn: new Date().toISOString().slice(0, 10), rehashedTreeSha256: hash }, madeOn });
   return reg.ok ? ok({ stack: 'csharp', record: reg.value.csharp, dir, made: true }) : reg;
 }
@@ -141,13 +165,16 @@ async function stepIntegrity({ say, deps }) {
   const cacheDir = scratch('view');
   try {
     const seen = await (deps.registryIntegrity ?? registryIntegrity)({ version: explore.value.typescript.version, cacheDir });
-    if (!seen.ok) return seen;
-    const recorded = recordIntegrity({ file: files.explore, integrity: seen.value });
-    if (recorded.ok) say(`typescript@${explore.value.typescript.version} integrity ${seen.value.slice(0, 24)}... (${recorded.value.changed ? 'recorded' : 'matches the record'})`);
-    return recorded.ok ? ok({ typescriptIntegrity: seen.value }) : recorded;
+    return seen.ok ? recordedStep({ files, version: explore.value.typescript.version, integrity: seen.value, say }) : seen;
   } finally {
     rmSync(cacheDir, { recursive: true, force: true });
   }
+}
+
+function recordedStep({ files, version, integrity, say }) {
+  const recorded = recordIntegrity({ file: files.explore, integrity });
+  if (recorded.ok) say(`typescript@${version} integrity ${integrity.slice(0, 24)}... (${recorded.value.changed ? 'recorded' : 'matches the record'})`);
+  return recorded.ok ? ok({ typescriptIntegrity: integrity }) : recorded;
 }
 
 /** Step 2: the toolchain installed read-only, its integrity compared, the pins probed in a box. */

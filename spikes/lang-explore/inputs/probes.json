@@ -1,15 +1,57 @@
 {
   "measuredOn": "2026-10-31",
   "reason": "Step 1 of the plan's build order: facts about this host that the pilot's judge and boxes rely on, measured before any code depended on them. Values only; no path of the operator's.",
-  "python3": { "path": "/usr/bin/python3", "version": "3.14.4", "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41" },
+  "python3": {
+    "path": "/usr/bin/python3",
+    "version": "3.14.4",
+    "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41"
+  },
   "scope": {
     "path": "systemd-run --user --scope -p MemoryMax=<ML> -p MemorySwapMax=0 -p OOMPolicy=continue -> sh wrapper -> v1's scoring bwrap (scoreBoxArgv) -> bash run.sh; the wrapper reads its own scope's memory.peak and memory.events after the program ended",
     "systemd": "259 (259.5-0ubuntu3.4)",
-    "allocate50MiB": { "memoryMax": 268435456, "peakBytes": 64761856, "oom_kill": 0, "exit": 0, "note": "a 50 MiB allocation: the peak includes node, bwrap and the wrapper" },
+    "allocate50MiB": {
+      "memoryMax": 268435456,
+      "peakBytes": 64761856,
+      "oom_kill": 0,
+      "exit": 0,
+      "note": "a 50 MiB allocation: the peak includes node, bwrap and the wrapper"
+    },
     "allocate400MiBAt256MiB": {
       "defaultOOMPolicy": "the kernel killed the program and systemd stopped the whole scope (SIGTERM) before the wrapper read anything: no peak, no events",
-      "OOMPolicyContinue": { "memoryMax": 268435456, "peakBytes": 268435456, "oom": 1, "oom_kill": 1, "max": 20, "exit": 137 }
+      "OOMPolicyContinue": {
+        "memoryMax": 268435456,
+        "peakBytes": 268435456,
+        "oom": 1,
+        "oom_kill": 1,
+        "max": 20,
+        "exit": 137
+      }
     },
     "decision": "the judge passes -p OOMPolicy=continue, so an over-limit program is a measured `memory limit` (oom_kill > 0) and not a vanished scope"
+  },
+  "locale": {
+    "requested": "de_DE.UTF-8",
+    "hostHas": "de_DE.utf8 (locale -a)",
+    "boxes": [
+      "agent box (agentBoxPrefix, W2)",
+      "scoring box (scoreBoxArgv, W3)"
+    ],
+    "csharp": {
+      "LANG": "de_DE.UTF-8",
+      "LC_ALL": "de_DE.UTF-8",
+      "CurrentCulture": "de-DE"
+    },
+    "node": {
+      "LANG": "de_DE.UTF-8",
+      "LC_ALL": "de_DE.UTF-8",
+      "IntlLocale": "de-DE"
+    },
+    "control": "without the seam the same program sees LANG C.UTF-8 and no LC_ALL",
+    "test": "spikes/lang-explore/test/boxes.test.mjs"
+  },
+  "d38": {
+    "csharp": "bash run.sh ends as the process `dotnet`",
+    "node": "bash run.sh ends as the process `node` (its main thread is named node-MainThread)",
+    "test": "spikes/lang-explore/test/boxes.test.mjs"
   }
 }
