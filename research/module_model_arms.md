@@ -2073,3 +2073,74 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 ## The task worktrees and the pick-back (E4.S2)
 
 ## run-arm for the task pipeline (E4.S3)
+
+## The task plan (E4.S1)
+
+Story E4.S1: the shell's `tasks-plan.mjs` — the checker of the split's `work/tasks.json` and the batches the tasks run in — as pure functions, **with the shell's own script as the oracle**. Nothing here reads a file or starts a process: the caller (E4.S3) reads `work/tasks.json` through `BoundedFile`, asks for each brief's presence by NAME, and hands the facts in. All of it is in `ModelArms.Core.Tasks`:
+
+| Type | What it holds | The shell's lines |
+|---|---|---|
+| `TasksPlan.BriefNames(json)` | the string `brief` values that are ONE file name, each once, in list order (the caller probes `work/<name>`); `[]` when the text is not JSON | `:30` |
+| `TasksPlan.Validate(json, plan, scenarioIds, limits, workFiles, workFolder) → Outcome<TaskBatches>` | the plan, or every problem at once, one `- <sentence>` line each, in the shell's order, joined by `\n` | `:16-49` |
+| `TasksPlan.Ok(batches)` | `ok: 7 tasks in 3 batches: [t1 t2 t3 t4] → [t5 t6] → [t7]` | `:51` |
+| `TaskBatches`, `PlannedTask` | the batches (ready tasks in list order, at most `limits.MaxParallel` at a time) and the tasks; `Task(id)`, `TaskIds` (batch order) | `:44-49` |
+| `BatchesFile.Write(batches, workFolder)`, `.Read(json, workFolder)` | `work/batches.json` in the shell's bytes (two-space indent, `\n`, no trailing newline, `brief` = `<work>/<name>`), and the strict inverse | `:50` |
+| `TaskBriefFields.Files(task)` | `` `a`, `b` `` | `t-lib.sh:42-44` |
+| `TaskStems` | `1-split`, `1b-split-fix`, `Coder(id)` = `2-<id>-code` (an id `TaskIds` refuses throws), `IsPipelineStem(name)` (the three shapes, without regard to case) | `t-lib.sh:80,84,53` |
+| `JsText`, `JsValue`, `TaskDrafts` (internal) | JavaScript's text of a JSON value (template literal, `Array.join`, `JSON.stringify`, `===`, truthiness) and the one reading of `tasks.json` | — |
+
+`SchemeChecks` refuses a scheme entry whose file name `IsPipelineStem` (`schemes.<S>[<i>] — <name> is the task pipeline's own step name`): the stems are not configuration (E4 §8 item 5).
+
+**The twelve sentences** are the table of the story, verbatim; the values print as JavaScript's template literals print them (`JsText`): an absent id is `undefined`, a number its JavaScript text (`1e2` is `100`), `null`, an array its items joined by `,`, an object `[object Object]`; `Array.join` (the plan owner's list) prints `null` and `undefined` as nothing, as the shell does. Two ids are equal when both are JSON strings with the same value or the same non-string primitive; an object or array id equals nothing (but itself). The shell's `owner = {}` is a dictionary keyed by the file's text and a falsy owner owns nothing; `deps` is keyed by the id's text, the later of two equal keys winning — both kept, so a list with an absent id twice reads the way the shell read it.
+
+**The reason of sentence 1** is the .NET reader's, not node's: the oracle compares the prefix. It is the only line when the text does not parse.
+
+### The proof: the shell's own checker, run as the oracle
+
+`TasksPlanTests.The_shells_own_checker_says_the_same_on_every_list` runs `Fixtures/model-arms/tasks/tasks-plan.mjs` — `/home/jinx/git/coai-exp2/tasks-plan.mjs` copied VERBATIM; its sha256 is the parent's §2, `b5f0bcfb…82c8`, asserted first — as the shell ran it: `node <script> <work>` with node by `PinnedConsumer.NodePath`, `COAI_EXP_ROOT` = a temp folder holding `exp.env` (`PLAN=todo/PLAN_x.md`, between two other lines) and `scenarios.json`, the briefs real files in the work folder. 29 lists: one per sentence of the table (the three deviations left out), five problems at once, and six lists the shell accepts (among them a `scenarios` given as a text — the shell writes that text into `batches.json`, the port the list of one, so that row compares after normalising it — and ids that are numbers of every layout: `1e21`, `1.5e-7`, `123456789012345680000`, `0.000001`, `-0`, `2.50`). For a refused list the shell's stdout equals `Validate`'s failure **character for character** (an id holding a newline prints it; an id that is `null` joins as nothing and leaves a trailing space — the runner trims what ends its output, so the ends are compared trimmed); for an accepted one its `ok:` line equals `Ok` and the `batches.json` it wrote equals `BatchesFile.Write` **byte for byte** (a file name holding `"`, `\`, `é`, `—`, `ё` among them). A refused list leaves no `batches.json`. The guard that the comparison compared something: at least three lists were accepted and more than twenty-five rows ran.
+
+### Tests (E4.S1)
+
+`TasksPlanTests` 20 methods (31 cases: the bounds theory's 2, the id theory's 5, the brief theory's 7), `BatchesFileTests` 2, `StepContractTests` +1 (a theory of 4 rows), `TaskStemsTests` 2 (13 cases); `TasksPlanKit` builds the lists (a valid one of *n* tasks and the edits that each break one rule; every refusal test starts from a list `Batches_are_ready_tasks_in_order_at_most_four_at_a_time` proves accepted). The pure list names `TasksPlan`, `BatchesFile`, `TaskStems` and `TaskBriefFields` under `// E4.S1`.
+
+| Test | What it holds |
+|---|---|
+| `Fewer_than_four_or_more_than_seven_tasks_are_refused` | 3 and 8 valid tasks → exactly `- there are N tasks; the brief asks for 4 to 7` |
+| `A_task_id_used_twice_is_refused`, `An_id_not_shaped_t_n_is_refused` | once per later occurrence; `"T1"`, `"t1\n"`, `"x"`, `1`, absent → sentence 4 with `"T1"`, `"t1\n"`, `"x"`, `1`, `undefined` |
+| `A_task_with_no_files_is_refused`, `A_file_owned_by_two_tasks_is_refused_naming_both` | `[]` and absent; `src/F1.cs belongs to both t1 and t3` |
+| `A_dependency_that_does_not_exist_is_refused`, `A_cycle_is_refused` | `t2 depends on t9`; t1→t2→t1 → both cycle lines |
+| `No_task_owning_the_plan_is_refused`, `The_plan_owner_must_depend_on_every_other_task` | sentences 10 and 11 (`t3, t4`) |
+| `A_scenario_nobody_delivers_is_refused`, `A_missing_brief_file_is_refused` | `no task delivers S2`; `t3's brief "t3.md" does not exist in <work>` |
+| `A_brief_that_is_not_one_file_name_is_refused_and_never_probed` | `../x.md`, `/etc/passwd`, `a/b.md`, `a\b.md`, `..`, `.`, empty: sentence 8; `BriefNames` omits each and keeps the others; a caller that lists the name as present is not believed |
+| `A_member_that_is_not_a_list_is_one_problem_not_one_per_character` | `files: "ab"` → `t1 lists no files` and `t1's files is not a list`, nothing per character; the same for `depends` |
+| `A_scenarios_given_as_a_text_is_one_scenario_as_the_shell_reads_it` | `scenarios: "S1"` delivers S1 (the shell's `flatMap` keeps a string as one item); `5` is `t1's scenarios holds 5, which is not a text` |
+| `A_list_holding_a_non_text_item_is_refused_because_the_batches_hold_texts` | a number in `files`, an object in `depends`, an id `["t2"]` (see deviation 2) |
+| `A_tasks_json_that_is_not_json_is_the_only_problem` | one line, starting `- tasks.json is missing or not JSON: ` |
+| `Every_problem_is_reported_at_once_not_the_first` | sentences 2, 3, 5, 7, 12 → all five, in the shell's order |
+| `Batches_are_ready_tasks_in_order_at_most_four_at_a_time` | `[[t1 t2 t3 t4] [t5 t6] [t7]]`, `Ok` text, `maxParallel` 2 → four batches, a dependency holds a task back and the batch fills with the READY ones |
+| `The_limits_come_from_the_tasks_block` | `Max` 5 → 6 tasks refused with `4 to 5`; `Min` 5 → 4 tasks refused with `5 to 7` |
+| `The_shells_own_checker_says_the_same_on_every_list` | the oracle |
+| `BatchesFileTests.Batches_json_reads_back_what_it_writes_and_refuses_anything_else` | the shape of the bytes; `Read(Write(b))` equals `b`; a batch naming `t9`, a task in no batch, in two batches, an empty batch, a brief outside the work folder or with a separator, a member missing, unknown, not a list of texts, a dependency under no task, not JSON, not an object |
+| `BatchesFileTests.The_files_field_is_each_file_in_backquotes_joined_by_a_comma` | `` `src/A.cs`, `src/B.cs` `` |
+| `StepContractTests.A_scheme_entry_may_not_take_a_name_the_task_pipeline_owns` | `1-split`, `1-SPLIT`, `1b-split-fix`, `2-t3-code` refused naming the entry; `2-code` accepted |
+| `TaskStemsTests` | the constants, `Coder("t3")`, a bad id throws; twelve names against `IsPipelineStem` (case, a trailing newline, `2-t-code`, `3-t1-code`) |
+
+**Red first**, against stubs of C19's signatures (`Validate` returned `Success` with one empty batch, `BatchesFile.Read` a Failure, `Write` `{}`, `Files` joined the raw files, `IsPipelineStem` false, `BriefNames` every brief): every class red on an ASSERTION — `TasksPlanTests` 30 of 30 cases: `Expected type to be Bench.Domain.Outcome`1+Fail[[…TaskBatches…]] because the list is refused, but found …Ok[[…` (the refusal tests), `Expected collection {"t1.md", "t2.md", "../x.md", "t4.md", "t5.md"} to not contain "../x.md"` (the brief theory, 7 rows), `Expected seven.Batches to be a collection with 3 item(s), but {{empty}}`, and the oracle `… because [three tasks] the shell refused the list, but found …Ok`; `BatchesFileTests` 2 of 2: `Expected string to start with "{` and `Expected TaskBriefFields.Files(task) to be the same string, but they differ at index 0`; `TaskStemsTests` 7 of 13: `Expected a <System.ArgumentException> to be thrown because 'T3' …, but no exception was thrown` and `Expected TaskStems.IsPipelineStem(name) to be True, but found False`; `StepContractTests` 4 of 4 rows: `Expected boolean to be True because the edited file must be refused, but found False` (the edited experiment was accepted). One stub threw (`JsonReaderException` from the first `BriefNames` stub on the not-JSON text); the stub was made tolerant and the test re-seen red on its assertion.
+
+**Break-its**, each planted in the finished code (a plant function copies the file, edits it with `sed`, builds, runs the classes and puts the copy back; `cmp` and `git diff` empty afterwards), observed red, restored: (1) batches taken from the END of the ready list (`Take` → `TakeLast`) → `Batches_are_ready_tasks_in_order_at_most_four_at_a_time`: `Expected seven.Batches[0][0] to be "t1", but "t3" differs`, and the oracle test (`[accepted: seven tasks in three batches] … differ at index 28`); (2) the problems sorted → `Every_problem_is_reported_at_once_not_the_first` (the five lines reordered, `- no task delivers S3` first), `A_member_that_is_not_a_list…` and the oracle (`[an id used twice] … differ at index 3`); (3) the shared writer's indent at 1 (`ObjectiveJson`) → the oracle: `[accepted: five tasks in a line] batches.json, byte for byte, but they differ on line 2 and column 2 (index 3)`, and `Batches_json_reads_back…` (`Expected string to start with "{`); (4) `IsPipelineStem` case-sensitive → `TaskStemsTests` (`1B-Split-Fix`, `1-SPLIT`, `2-T12-CODE`: `Expected … to be True, but found False`) and the `1-SPLIT` row of the scheme theory: `Expected boolean to be True because the edited file must be refused, but found False`.
+
+**Observed numbers:** `Bench.Tests --filter-namespace "*ModelArms*"` 1353 cases, 1350 passed, 3 skipped, 0 failed; `dotnet build dew_flow_benchmark.slnx -c Release` 0 errors and 0 warnings from this module (the one warning the solution prints is `ASPIRE010` of `hosts/AppHost`, which this story does not touch); `dotnet format --verify-no-changes` exit 0.
+
+### Not proven (said, not hidden)
+
+That a real model writes a `tasks.json` this checker accepts (the pilot, M2); the shell's order of an object's members where a key reads as an array index (`JSON.stringify` puts `"10"` before `"2"`; `JsText.Members` keeps the file's order) — not reachable by an id the checker accepts, only by the text of a refused object printed in a sentence; the bytes of `batches.json` and of a printed JSON string for a file name outside printable BMP text (parsed equal, not byte equal — the writer's residual, `McpConfig`'s); the .NET reader's reason for a text that is not JSON (node's differs; the prefix is the contract); object keys the shell's `{}` inherits: a file named `constructor` or `toString` is refused by the shell (its `owner` object already holds the name) and `depends: ["toString"]` crashes it, where the port accepts both; a `tasks.json` deeper than the reader's 64 levels (a reason, as any other text that does not parse); that E4.S3 reads the file through `BoundedFile`, probes the briefs by name and compares `batches.json` on re-entry (§8 item 8).
+
+### Deviations from the story
+
+1. **The red wording.** The story's reds read `Expected outcome to be Fail`; the helper asserts `BeOfType<Outcome<TaskBatches>.Fail>`, whose text is FluentAssertions' `Expected type to be …Fail… but found …Ok…`. The same assertion, the library's words.
+2. **Two sentences beyond the story's three deviations**, forced by C19's types (a `PlannedTask` holds texts): an id that is not a TEXT is sentence 4 whatever JavaScript prints it as (the shell let the id `["t2"]` pass because the template prints it as `t2`), and a `files`, `depends` or `scenarios` item that is not a text adds `<id>'s <member> holds <JSON>, which is not a text`. The oracle's lists hold neither.
+3. **Sentence 1 carries the `- ` prefix** (the story's table and C19: every line is `- <sentence>`); the shell printed that one line bare. The oracle strips the prefix for it.
+4. **A `null` element of `tasks` is a task with no members** (the shell threw a `TypeError` before printing a word), so its sentences are 4, 5 and 8.
+5. **Where the story is silent:** `<id>'s scenarios holds <JSON>, which is not a text` comes after the plan-owner sentences and before `no task delivers` (the place the shell uses the member); `files` and `depends` print theirs where the shell iterates them. A `scenarios` that is not an array is ONE scenario, as the shell's `flatMap` keeps it (`tasks-plan.mjs:39`) — the story's text said the shell iterated characters there; it did not (review round).
+6. **Beyond the file list:** `TaskDrafts.cs` (internal, the one reading of the text), `TasksPlanKit.cs` and `TaskStemsTests.cs` (2 tests) in the test project, and one test (`A_list_holding_a_non_text_item…`) beyond the story's eighteen — the story's *Done when* counts twenty-one, this has twenty-four. `BatchesFile.Read` refuses more than the story lists (an unknown member, a task twice, an empty batch, a dependency under no task) — all of them things `Write` cannot produce.
+7. **`ModelArmsArchitectureTests`:** the `// E4` marker is replaced by `// E4.S1` with the four types; E4.S0 turns it into its four markers (a trivial merge). `research/module_tests.md` is not touched (the story names no row; the task pipeline's row is E4.S3's).
