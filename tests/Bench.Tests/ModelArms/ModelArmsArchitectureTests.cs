@@ -232,7 +232,7 @@ public sealed class ModelArmsArchitectureTests
 
         arm.Should().ContainSingle("a scan that cannot see the file passes forever");
         var text = File.ReadAllText(arm[0]);
-        text.Should().Contain("ProcessRunner.RunAsync(git,", "the launch goes by the real path run-arm resolved");
+        text.Should().Contain("ProcessRunner.RunAsync(_git,", "the launch goes by the real path run-arm resolved (the field the constructor keeps it in)");
         text.Should().Contain("environment", "and under the environment it was given, GIT_* already taken out by the runner");
         LaunchByName.IsMatch(text).Should().BeFalse();
     }
