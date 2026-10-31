@@ -148,7 +148,10 @@ The suite is **sealed at rest and calibrated before any cell**.
   also a line of `inputs/hashes.txt`.
 - **Clear only in a scoring temp directory.** `withClearSuite` decrypts into a fresh 0700 directory under the operator's
   home (never the temp directory, never inside a git worktree), removes it in a `finally`, and `sweep` removes any a crash
-  left behind. The suite's case repositories are built by the cell's own `init`, `add` and `commit` under a directory the box
+  left behind in `score-tmp` (un-prefixed names only). A `testsToDelete-` entry, under the work root or under `score-tmp`, is
+  listed and never removed, whatever its age: the shared rule's barrier (`common.test-leftovers` § The barrier) forbids an
+  owner-blind sweeper. Remove a listed folder by hand after `bash .agents/conventions/tools/janitor.sh --dry-run` shows it is
+  yours and abandoned. The suite's case repositories are built by the cell's own `init`, `add` and `commit` under a directory the box
   binds, and are removed once the result is written.
 - **Run.** The runner is trusted code on the host (`python3 -I`); it reaches the cell's binary only through the scoring
   box argv it is handed. A case that crashes, times out or finds no command fails; a case whose setup needs a core command
@@ -783,7 +786,7 @@ argv or in the environment.
 | `… heldout-tool.mjs calibrate [--src <clear dir>] [--key-file P] [--out-dir D] [--work-root D] [--inputs-repo U]` | `--src` is the authoring mode (nothing written); without it, decrypts the sealed archive, scores references and mutants through the pipeline, and on success writes `calibration.json` | 0 calibrated · 1 a mismatch · 3 · 4 · 5 |
 | `… heldout-tool.mjs leakcheck [--key-file P] [--out-dir D] [--repo D] [--range A..B] [--work-root D]` | scans the repository and a commit range for the suite's needles | 0 clean · 1 a leak · 3 · 4 · 5 |
 | `… heldout-tool.mjs counts [--key-file P] [--out-dir D] [--work-root D]` | prints the manifest's counts and checks them against the archive | 0 the archive agrees · 1 stale manifest · 3 · 4 · 5 |
-| `… heldout-tool.mjs sweep [--work-root D] [--max-age-hours N]` | removes clear leftovers older than N hours (default 24) | 0 · 1 a removal failed · 4 · 5 |
+| `… heldout-tool.mjs sweep [--work-root D] [--max-age-hours N]` | removes un-prefixed `score-tmp` leftovers older than N hours (default 24); lists every `testsToDelete-` entry and never removes it (the test-leftovers barrier; check with `bash .agents/conventions/tools/janitor.sh --dry-run`) | 0 · 1 a removal failed · 4 · 5 |
 | `node spikes/minigit-bench/adjudicate.mjs packets --series <dir>` | writes the masked blind packets; prints the masking rules | 0 · 1 refused (packets already exist) · 4 · 5 |
 | `… adjudicate.mjs classify --series <dir> --blind <id> --verdict spec-ambiguity\|not-ambiguous --reason <text>` | records a step-1 verdict | 0 · 1 refused (unknown id) · 4 · 5 |
 | `… adjudicate.mjs reveal --series <dir>` | after every packet has a verdict, maps blind ids to case, cell, arm, stack and code path | 0 · 1 refused (a verdict is missing) · 4 · 5 |
@@ -930,6 +933,7 @@ The host must therefore have what these tests need, and a host that lacks one fa
   the epics E2–E4 that remain.
 - `todo/PLAN_minigit_stack_bench_E1.md` — the E1 stories with their test ids and the dated amendments.
 - `research/minigit/RESULTS_bare_2026-10-30.md` — the record of the bare arm's four series; `research/minigit/data/replay.json` — the contamination scan replayed over every recorded stream (re-run: `node research/minigit/tools/replay.mjs`).
+- `research/minigit/data/raw-manifest.tsv` and `raw-manifest.json` — the sha256 of every raw record under `~/rsd/minigit` (held-out sources only as a count and a hash), and `raw-archive.json` — the archive of those records kept outside git; `node research/minigit/tools/manifest.mjs verify` checks a tree against them (record § 13).
 - `todo/PLAN_minigit_stack_bench_E3_bare.md` — the bare-first stories E3b.S1 to S5: the runner, the quiet check, the pre-registration, the A/A and the three bare pairs.
 - `spikes/minigit-bench/inputs/UPSTREAM.md` — where the inputs come from and the licence decision.
 - `spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/CAPTURE.md` — the capture's table with observed values.
