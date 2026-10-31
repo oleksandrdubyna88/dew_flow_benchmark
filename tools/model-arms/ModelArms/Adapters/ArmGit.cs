@@ -12,7 +12,10 @@ namespace ModelArms.Adapters;
 /// bare-name git helper — the architecture scan is red the moment it does.
 /// <para>
 /// <b>What git is kept from running</b> (measured on git 2.53.0, each by a planted program writing a sentinel; the tests keep observing it on the host's git). Every question: <c>-c core.fsmonitor=false</c>; <c>-c core.hooksPath=</c> (<c>status</c> runs <c>post-index-change</c> and <c>checkout -b</c> runs
-/// <c>post-checkout</c>, from the clone's hooks folder or an arm-written <c>core.hooksPath</c>; the empty path stopped both); <c>GIT_NO_LAZY_FETCH=1</c> (a promisor remote's program run by a lazy fetch of a blob the model deleted); and, except for <c>clone</c>, <c>checkout --detach</c> and <c>submodule update</c>
+/// <c>post-checkout</c>, from the clone's hooks folder or an arm-written <c>core.hooksPath</c>; the empty path stopped both); <c>GIT_NO_LAZY_FETCH=1</c> (a promisor remote's program run by a lazy fetch of a blob the model deleted); <c>-c submodule.recurse=false</c> (with <c>submodule.recurse=true</c> in the clone's config, a <c>checkout -q -b x &lt;start&gt;</c> that MOVES a submodule's gitlink ran the submodule's own clean filter — a planted sentinel ran; with the pin it did not. The submodule's config is
+/// the one the enumeration below never sees. <c>checkout --detach</c> moves a gitlink today, <c>NewBranchAsync</c> has no start point yet, and E4's checkouts will); <c>-c protocol.allow=never</c> on every question except <c>clone</c> and <c>submodule update</c> (in a partial clone whose <c>remote.origin.url</c> is <c>ssh://example.invalid/x</c> and whose <c>core.sshCommand</c> is a sentinel, <c>diff --numstat HEAD~1 HEAD</c> WITHOUT
+/// <c>GIT_NO_LAZY_FETCH</c> ran the sentinel (<c>-G -o SendEnv=GIT_PROTOCOL example.invalid</c>, then <c>git-upload-pack '/x'</c>); with <c>GIT_NO_LAZY_FETCH=1</c> it did not; with ONLY the pin it did not either — <c>fatal: transport 'ssh' not allowed</c>, exit 128: it fails closed, and works on git 2.12 and later, where an older git ignores the switch. Both are kept: the switch is the
+/// belt, the pin the braces. The two questions exempt transport from the operator's own source, which D17 trusts; <c>checkout --detach</c> is not exempt — it reads what the clone holds, and prep-base's tests run with the pin); and, except for <c>clone</c>, <c>checkout --detach</c> and <c>submodule update</c>
 /// (they write the base's worktree from the operator's objects — an LFS target's smudge must run there), every filter driver in any scope git itself reads (<c>config --name-only -z --get-regexp ^filter\.</c>: local, worktree, global, system, includes) is neutralised through <c>GIT_CONFIG_COUNT</c>/<c>KEY_n</c>/<c>VALUE_n</c> —
 /// <c>clean</c>, <c>smudge</c>, <c>process</c> empty, <c>required</c> false — because <c>status</c> and <c>checkout -b</c> hash a stat-dirty file and ran its <c>clean</c> and its <c>process</c>. By the variables, not <c>-c</c>: <c>-c</c> splits at the first <c>=</c>, and a driver named <c>a=b</c> passed <c>-c</c> (the program ran)
 /// and was stopped by the variable. <c>status</c> carries <c>--ignore-submodules=dirty</c>: a submodule is a second repository whose config the enumeration does not see, and git spawned a status in it that ran its driver — a changed submodule commit is still a line, an uncommitted edit inside one is not (E3 §8 item 40).
@@ -38,8 +41,13 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
     /// read fails ("unable to read") and the step stops. The environment variable, not <c>--no-lazy-fetch</c>, which older gits refuse.</summary>
     private readonly IReadOnlyDictionary<string, string> _environment = new Dictionary<string, string>(GitEnvironment.Of(TargetEnvironment.Of(environment)), StringComparer.Ordinal) { ["GIT_NO_LAZY_FETCH"] = "1" };
 
-    /// <summary>Every question starts <c>-c core.fsmonitor=false -c core.hooksPath=</c> (the first pair first: tests key on it): the clone is written by the model under test, and its own config and hooks folder must not name a program git runs on the harness's behalf.</summary>
-    private static readonly string[] Hardened = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath="];
+    /// <summary>The pins of every question: <c>-c core.fsmonitor=false -c core.hooksPath=</c> (the first pair first: <c>TargetBench.HarnessGit</c> and the tests key on it) and <c>-c submodule.recurse=false</c>: the clone is written by the model under test, and its own config and hooks folder must not name a program git runs on the harness's behalf, nor may a
+    /// <c>submodule.recurse=true</c> of its config (or of the operator's global one) make a checkout that moves a gitlink run the submodule's own clean filter.</summary>
+    private static readonly string[] Pinned = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false"];
+
+    /// <summary>Every question but two starts <see cref="Pinned"/> and <c>-c protocol.allow=never</c>: no transport program starts for anything these questions do — a lazy fetch from a promisor remote the clone names fails closed ("transport 'ssh' not allowed", exit 128) on any git that knows the key (2.12 and later), where <c>GIT_NO_LAZY_FETCH</c> is ignored by an older one. The two that transport from the operator's own source — <c>clone</c> and <c>submodule update</c> (D17 trusts that source) — start <see cref="Pinned"/> alone: the key would refuse the very transport they exist to make.
+    /// <c>checkout --detach</c> needs none (it reads the objects the clone holds; the lazy-fetch switch is set whatever the question) and is <c>Hardened</c>; prep-base's tests are green with it so.</summary>
+    private static readonly string[] Hardened = [.. Pinned, "-c", "protocol.allow=never"];
 
     public async Task<Outcome<string>> HeadAsync(CancellationToken ct) => Trimmed(await AskAsync([.. Hardened, "rev-parse", "HEAD"], ct));
 
@@ -53,7 +61,7 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
     public async Task<Outcome<string>> CloneAsync(string source, string branch, string destination, CancellationToken ct) =>
         Refusal(branch) is { Length: > 0 } refused
             ? Outcome<string>.Failure(refused)
-            : await AskAsync([.. Hardened, "clone", "-q", "--branch", branch, "--", source, destination], ct, TargetWalls.Clone, smudges: true);
+            : await AskAsync([.. Pinned, "clone", "-q", "--branch", branch, "--", source, destination], ct, TargetWalls.Clone, smudges: true);
 
     /// <summary><c>checkout -q --detach &lt;sha&gt;</c>: <paramref name="sha"/> is a commit id in hex — it came from a file, and a file's text is never handed to git as an option.</summary>
     public async Task<Outcome<string>> DetachAsync(string sha, CancellationToken ct) =>
@@ -70,7 +78,7 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
 
     /// <summary><c>-c protocol.file.allow=always submodule update --init -q -- &lt;path&gt;</c> (<c>prep-base.sh:11</c>), under the clone's wall: the file protocol is allowed for this one command and this one path, whose url the verb has just set to a folder of the operator's own.</summary>
     public async Task<Outcome<string>> SubmoduleUpdateAsync(string path, CancellationToken ct) =>
-        await AskAsync([.. Hardened, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", path], ct, TargetWalls.Clone, smudges: true);
+        await AskAsync([.. Pinned, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", path], ct, TargetWalls.Clone, smudges: true);
 
     /// <summary><c>checkout -q -b &lt;branch&gt;</c> in the folder; a name that starts with <c>-</c> or is empty is refused before git is asked.</summary>
     public async Task<Outcome<string>> NewBranchAsync(string branch, CancellationToken ct) =>

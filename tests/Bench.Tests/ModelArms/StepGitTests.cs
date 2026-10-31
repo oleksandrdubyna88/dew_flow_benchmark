@@ -55,7 +55,7 @@ public sealed class StepGitTests
         var runs = File.Exists(marker) ? File.ReadAllLines(marker) : [];
         runs.Count(line => line.StartsWith(bench.Git + " ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(3, "the shim should record at least three git runs: the .before, the heads and the diff");
         var head = File.ReadAllText(bench.Paths.Before("2-hreview")).Trim();
-        const string Hardened = " -c core.fsmonitor=false -c core.hooksPath=";
+        const string Hardened = " -c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false -c protocol.allow=never";
         runs.Should().Contain(bench.Git + Hardened + " rev-parse HEAD").And.Contain(bench.Git + Hardened + " rev-parse --short HEAD")
             .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv --submodule=short {head} HEAD");
         var gitNames = runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Select(line => line.Split('=')[0]).Distinct().ToList();

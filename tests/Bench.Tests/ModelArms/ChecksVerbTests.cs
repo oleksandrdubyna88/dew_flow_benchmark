@@ -416,7 +416,7 @@ public sealed class ChecksVerbTests
         git.Select(call => call.Cwd).Should().OnlyContain(cwd => cwd == kit.Clone);
         foreach (var call in git)
         {
-            call.Arguments.Take(4).Should().Equal(["-c", "core.fsmonitor=false", "-c", "core.hooksPath="], "no hook and no filesystem monitor of the arm's clone runs on the harness's behalf");
+            call.Arguments.Take(8).Should().Equal(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false", "-c", "protocol.allow=never"], "no hook and no filesystem monitor of the arm's clone runs on the harness's behalf, no checkout recurses into a submodule, and no transport program starts for a lazy fetch");
             var names = call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).ToList();
             names.Should().Contain("GIT_NO_LAZY_FETCH");
             names.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's: only the harness's own driver neutralisation");

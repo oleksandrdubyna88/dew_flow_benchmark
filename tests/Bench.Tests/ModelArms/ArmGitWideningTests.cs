@@ -221,6 +221,11 @@ public sealed class ArmGitWideningTests : IDisposable
         asked.Should().HaveCountGreaterThanOrEqualTo(10).And.OnlyContain(line => line.StartsWith("-c core.fsmonitor=false ", StringComparison.Ordinal), "every question the class asks is hardened");
         asked.Where(line => line.Contains("diff", StringComparison.Ordinal)).Should().OnlyContain(line => line.Contains("-c diff.external= ", StringComparison.Ordinal) && line.Contains("--no-ext-diff --no-textconv", StringComparison.Ordinal), "every diff is the plain patch");
         asked.Where(line => line.Contains("protocol.file.allow", StringComparison.Ordinal)).Should().ContainSingle("the file protocol is allowed for the one submodule update only");
+        asked.Should().OnlyContain(line => line.Contains(" -c submodule.recurse=false ", StringComparison.Ordinal), "no question lets a checkout recurse into a submodule (a recurse=true config would run the submodule's own filters)");
+        var transports = asked.Where(line => line.Contains(" clone ", StringComparison.Ordinal) || line.Contains(" submodule update ", StringComparison.Ordinal)).ToList();
+        transports.Should().HaveCount(2, "the clone and the submodule update are the two questions that transport from the operator's own source (D17 trusts it)");
+        transports.Should().OnlyContain(line => !line.Contains("protocol.allow", StringComparison.Ordinal), "a clone or a submodule update from the operator's own path needs the transport the pin refuses");
+        asked.Except(transports).Should().OnlyContain(line => line.Contains(" -c protocol.allow=never ", StringComparison.Ordinal), "every other question refuses every transport: a lazy fetch from a promisor remote the clone names fails closed, on any git that knows the key");
         lines.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Distinct().Should().Equal(["GIT_NO_LAZY_FETCH=1"], "no GIT_* of the parent's reaches git; the one it is given is the harness's own");
     }
 
@@ -427,5 +432,82 @@ public sealed class ArmGitWideningTests : IDisposable
 
         Ran.Should().BeFalse("the gate's snapshot diff ran a program a submodule's config names");
         patch.Should().MatchRegex("Subproject commit|160000");
+    }
+
+    /// <summary>A partial clone of a two-commit source (<c>--filter=blob:none</c> over <c>file://</c>, the source allowing filters): the second commit's blob is local, the first's is not. The clone's config then names a promisor remote at <c>ssh://example.invalid/x</c> and a <c>core.sshCommand</c> that is the sentinel — a program that appends a
+    /// line and EXITS AT ONCE (one that read its stdin would hang git).</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private async Task<(string Clone, string First, string Second)> PromisorCloneAsync()
+    {
+        var source = _temp.Folder("promisor-source");
+        await TargetBench.GitAsync(source, "init", "--quiet", "--initial-branch", "plan");
+        await TargetBench.GitAsync(source, "config", "uploadpack.allowfilter", "true");
+        _temp.File("one\n", "promisor-source", "f.txt");
+        await CommitAllAsync(source, "first");
+        var first = (await TargetBench.GitAsync(source, "rev-parse", "HEAD")).Trim();
+        _temp.File("two\n", "promisor-source", "f.txt");
+        await CommitAllAsync(source, "second");
+        var second = (await TargetBench.GitAsync(source, "rev-parse", "HEAD")).Trim();
+        var clone = Path.Combine(_temp.Path, "partial");
+        await TargetBench.GitAsync(_temp.Path, "clone", "--quiet", "--no-local", "--filter=blob:none", "file://" + source, clone);
+        var transport = ShimFiles.Write(_temp.Combine("plant", "ssh-transport"), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+        await TargetBench.GitAsync(clone, "config", "remote.origin.url", "ssh://example.invalid/x");
+        await TargetBench.GitAsync(clone, "config", "core.sshCommand", transport);
+        return (clone, first, second);
+    }
+
+    /// <summary>The wall the refusal is asserted under: a question the harness asks of a partial clone must END, with an answer or a refusal, well inside git's own 60 s — a sentinel that waited on stdin would show as a timeout.</summary>
+    private static readonly TimeSpan Wall = TimeSpan.FromSeconds(45);
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_lazy_fetch_from_a_promisor_remote_the_clone_names_never_starts_a_transport_program()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the transport sentinel is a shell script");
+        var (clone, first, _) = await PromisorCloneAsync();
+        await HostGitAsync(clone, "diff", "--numstat", first, "HEAD");
+        Ran.Should().BeTrue("the plant must be proven live with the host's git first (no GIT_NO_LAZY_FETCH in its environment): diffing against a blob the partial clone lacks fetches it from the promisor remote the clone names, through the program its config names");
+        File.Delete(Sentinel);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var numstat = await In(clone).NumstatAsync(first, Ct).WaitAsync(Wall, Ct);
+        var diff = await In(clone).DiffAsync(first, Ct).WaitAsync(Wall, Ct);
+
+        Ran.Should().BeFalse("a lazy fetch for a blob the diff needs started the transport program the clone's config names, on the harness's behalf");
+        numstat.Failed().Should().BeTrue("the blob is not there and nothing may fetch it: the question fails closed");
+        diff.Failed().Should().BeTrue();
+        numstat.Reason().Should().NotContain("timed out", "a refusal, not a hang");
+        clock.Elapsed.Should().BeLessThan(Wall, "both refusals came back at once");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_recursing_checkout_never_runs_a_submodules_own_filter()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the plant is a shell script");
+        var (clone, sub, module) = await WithSubmoduleAsync();
+        var before = (await TargetBench.GitAsync(clone, "rev-parse", "HEAD")).Trim();
+        _temp.File("keep\n", "clone", "sub", "k.txt");
+        await CommitAllAsync(sub, "sub second: k.txt");
+        await CommitAllAsync(clone, "bump the gitlink");
+        AppendConfig(module, $"[filter \"y\"]\n\tclean = {PlantProgram("sub-filter")}\n");
+        AppendAttributes(module, "k.txt filter=y\n");
+        AppendConfig(Path.Combine(clone, ".git"), "[submodule]\n\trecurse = true\n");
+        var kept = Path.Combine(sub, "k.txt");
+        await TargetBench.GitAsync(sub, "update-index", "--refresh");
+        File.SetLastWriteTimeUtc(kept, new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        await TargetBench.GitAsync(sub, "status", "--short"); // records the future time: the entry is racily clean, so every later check hashes it
+        File.Delete(Sentinel);
+        await HostGitAsync(clone, "checkout", "-q", "-b", "probe", before);
+        Ran.Should().BeTrue("the plant must be proven live with the host's git first: with submodule.recurse=true a checkout that moves the gitlink runs the checkout in the submodule, which hashes the racily-clean file through the submodule's own clean filter");
+        await HostGitAsync(clone, "checkout", "-q", "plan");
+        await TargetBench.GitAsync(sub, "status", "--short");
+        File.Delete(Sentinel);
+
+        var detached = await In(clone).DetachAsync(before, Ct);
+
+        Ran.Should().BeFalse("a recursing checkout ran the clean filter of the submodule's own config, which the enumeration of the superproject's drivers never sees");
+        detached.Ok();
+        (await In(clone).HeadAsync(Ct)).Ok().Should().Be(before, "the detach itself still happened: the pin turns the recursion off, not the question");
     }
 }
