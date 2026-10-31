@@ -19,10 +19,11 @@
 > the plan round PROCEED (codex) with its one finding applied (the per-task riskiest-scenario details moved to the private
 > aid's sibling `PLAN-risky-scenarios.md`), the second full reading (the document gate, four reviewers) PROCEED with five
 > findings applied (the isolated bare repository per run, D3 on the memory contract, two more fragments moved, the record's
-> `Narrowed: yes`), and the owner's approval above. Work may start on E0 and E1. Operator actions the E1 stories found, recorded as status (not changes): `locale-gen de_DE.UTF-8` on the
-> series host (today `locale -a` lists only `C`, `C.utf8` and `POSIX`; the boxes bind the host root read-only, so the
-> locale needs root — D35); the licence decision Q1 before any known-task text is pushed; the creation of the public
-> repository `dew_flow_ai_language_comparison` (D2, D31); the fine-grained PAT and the deploy key for the process arm
+> `Narrowed: yes`), and the owner's approval above. Work may start on E0 and E1. Operator actions the E1 stories found, recorded as status (not changes): DONE 2026-10-31 — `locale-gen de_DE.UTF-8`
+> on the series host by the owner (`locale -a` now lists `de_DE.utf8`; D35); the licence decision Q1 for the new
+> repository's own content: MIT (the owner); the public repository `dew_flow_ai_language_comparison` created, MIT, with
+> only its LICENSE commit — the local drafts are pushed through E1.S1's pre-push check, not before (D2, D31). OPEN: the
+> credit terms of the known tasks' sources (the rest of Q1); the fine-grained PAT and the deploy key for the process arm
 > (E1.S7). Epoch 2 (opened 2026-10-31
 > after epoch 1's re-review) changed three times the same day — 2.1, 2.2 and 2.3, the daemon and web limits and timing
 > contract, the agent's scenario runner and grammar, and the `exec` constraint on `run.sh`, all found by FORMAT.md v1
