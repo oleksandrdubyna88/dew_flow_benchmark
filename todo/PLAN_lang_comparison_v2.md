@@ -1,6 +1,16 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet; epoch 3 open since 2026-10-31 with 0 changes.** Epoch 2 (opened 2026-10-31
+> Status: **plan only, nothing implemented yet; epoch 3 (opened 2026-10-31) changed twice the same day — 3.1, the D40
+> pre-freeze gate needs the final scoring environment that E3 builds, and the driver↔program network layout is designed
+> nowhere; 3.2, the bench repository is public and its plan carries the §4.3 trap table that a process agent can reach
+> through GitHub — both found by the E1 stories writer (`feat/lang-v2-e1` `51a80ba`, §9 OP-1 and OP-12) — so the plan is
+> stopped for re-review (`common.plan-change-control`, epoch 3 `stopped`): no new code starts on any epic, no merge
+> carries its work, until the whole plan is re-reviewed and epoch 4 is approved; the team lead consults first on OP-12's
+> options.** Operator actions the E1 stories found, recorded as status (not changes): `locale-gen de_DE.UTF-8` on the
+> series host (today `locale -a` lists only `C`, `C.utf8` and `POSIX`; the boxes bind the host root read-only, so the
+> locale needs root — D35); the licence decision Q1 before any known-task text is pushed; the creation of the public
+> repository `dew_flow_ai_language_comparison` (D2, D31); the fine-grained PAT and the deploy key for the process arm
+> (E1.S7). Epoch 2 (opened 2026-10-31
 > after epoch 1's re-review) changed three times the same day — 2.1, 2.2 and 2.3, the daemon and web limits and timing
 > contract, the agent's scenario runner and grammar, and the `exec` constraint on `run.sh`, all found by FORMAT.md v1
 > (E1.S8) — and was closed by a whole re-review (`common.plan-change-control`): the two further pilot specs (task 5
@@ -86,7 +96,25 @@ Narrowed: no — against the epoch 2 baseline every revision adds (a limits and 
 | pilot spec 05 with four scenario samples, `30af434` (E1.S2, E1.S6) | `dew_flow_ai_language_comparison` branch `docs/spec-05`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 | pilot spec 04, `0b69a50` (E1.S2) | `dew_flow_ai_language_comparison` branch `docs/spec-04`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 
-> Epoch 3 · approved 2026-10-31 · by reviewers · state: open
+> Epoch 3 · approved 2026-10-31 · by reviewers · state: stopped
+
+- 3.1 · 2026-10-31 · agent · build-order, approach — the D40 pre-freeze gate needs the final scoring environment in E1, which the plan builds in E3, and the driver↔program network layout is designed nowhere; found by the E1 stories (`feat/lang-v2-e1` `51a80ba`, §9 OP-1)
+  (One cause: D40, §14 step 1, E1.S2, S2a and S6 run the gate "in the final sandbox environment — the box, D15's
+  environment with the culture, the program's own systemd scope" and need a layout in which the driver reaches a boxed
+  daemon or web program, while the scoring box, the scope, the culture check and the drivers are E3 deliverables (E3.S2,
+  S3, S5; T-L14, T-L30), and the network layout exists in no story: v1's scoring box has no network (`--unshare-net`,
+  `spikes/minigit-bench/lib/bwrap.mjs:15`) and D36 puts the driver outside the program's scope, so a driver outside the
+  box cannot reach the program's port. The options the stories name — a minimal launch layer built in E1 and widened by
+  E3; a narrower E1 gate plus a second execution check in E3; the freeze waiting for E3 — are one change whichever is
+  chosen. Until the step-4 revision, E1 proceeds except the gate run and the freeze.)
+- 3.2 · 2026-10-31 · agent · contract — the bench repository `dew_flow_benchmark` is public and its plan carries the §4.3 trap table, which a process agent can reach through GitHub; found by the E1 stories (§9 OP-12)
+  (One cause: D25 makes the trap list an internal test-design aid, "kept with the held-out material, never in a
+  statement", yet this plan's §4.3 trap table and §4.1's per-task trap rows sit in a public repository — verified
+  2026-10-31 with `gh repo view`: visibility PUBLIC — and are in merged history (#124, #127, #128); the process arm's
+  egress reaches the GitHub hosts by SNI (§6, `EGRESS_HOSTS.langProcess`), so a process agent could read the aid. The
+  options for the step-4 revision — move the aid to a private place and accept that the published history keeps the old
+  rows; route the process agent's GitHub access through a broker that allows only the task repository's paths; accept
+  and disclose it — go to a consult first. This second change stopped the plan.)
 
 ## 1. The question, before any solution
 
