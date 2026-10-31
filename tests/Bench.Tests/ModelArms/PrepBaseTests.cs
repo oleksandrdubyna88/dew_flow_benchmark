@@ -184,7 +184,17 @@ public sealed class PrepBaseTests
         {
             var gitNames = call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).ToList();
             gitNames.Should().Contain("GIT_NO_LAZY_FETCH", "git runs with the harness's own switch");
-            gitNames.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
+            var transports = call.Arguments.Contains("clone") || (call.Arguments.Contains("submodule") && call.Arguments.Contains("update"));
+            if (transports)
+            {
+                gitNames.Should().NotContain("GIT_ALLOW_PROTOCOL", $"git {string.Join(' ', call.Arguments.Take(12))}: the clone and the submodule update transport from the operator's own source, which the allow-list would refuse");
+            }
+            else
+            {
+                gitNames.Should().Contain("GIT_ALLOW_PROTOCOL", $"git {string.Join(' ', call.Arguments.Take(12))}: every other question refuses every transport");
+            }
+
+            gitNames.Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
             call.EnvironmentNames.Should().NotContain(["BENCH_DB", "GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "COAI_CREDS_KEY"]);
         }
     }

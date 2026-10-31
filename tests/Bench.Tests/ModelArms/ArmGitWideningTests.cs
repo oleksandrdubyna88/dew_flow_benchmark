@@ -199,7 +199,7 @@ public sealed class ArmGitWideningTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var (source, first, _) = await SourceAsync();
         var marker = Path.Combine(_temp.Path, "git-calls");
-        var shim = ShimFiles.Write(_temp.Combine("bin", "git"), $"#!/bin/sh\necho \"$*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*) echo \"$l\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        var shim = RecordingShim(marker);
         var clone = Path.Combine(_temp.Path, "clone");
         var environment = GitEnvironment.Of(new Dictionary<string, string>(Environment, StringComparer.Ordinal) { ["GIT_DIR"] = "/nonexistent" });
         var git = new ArmGit(shim, _temp.Path, environment);
@@ -216,17 +216,20 @@ public sealed class ArmGitWideningTests : IDisposable
         await inClone.MentionsAsync("x", ["src"], Ct);
         await inClone.SubmoduleUpdateAsync("nowhere", Ct);
 
-        var lines = File.ReadAllLines(marker);
-        var asked = lines.Where(line => !line.StartsWith("GIT_", StringComparison.Ordinal)).ToList();
-        asked.Should().HaveCountGreaterThanOrEqualTo(10).And.OnlyContain(line => line.StartsWith("-c core.fsmonitor=false ", StringComparison.Ordinal), "every question the class asks is hardened");
-        asked.Where(line => line.Contains("diff", StringComparison.Ordinal)).Should().OnlyContain(line => line.Contains("-c diff.external= ", StringComparison.Ordinal) && line.Contains("--no-ext-diff --no-textconv", StringComparison.Ordinal), "every diff is the plain patch");
-        asked.Where(line => line.Contains("protocol.file.allow", StringComparison.Ordinal)).Should().ContainSingle("the file protocol is allowed for the one submodule update only");
-        asked.Should().OnlyContain(line => line.Contains(" -c submodule.recurse=false ", StringComparison.Ordinal), "no question lets a checkout recurse into a submodule (a recurse=true config would run the submodule's own filters)");
-        var transports = asked.Where(line => line.Contains(" clone ", StringComparison.Ordinal) || line.Contains(" submodule update ", StringComparison.Ordinal)).ToList();
+        var calls = Blocks(marker);
+        calls.Should().HaveCountGreaterThanOrEqualTo(10);
+        calls.Should().OnlyContain(call => call.Call.StartsWith("-c core.fsmonitor=false ", StringComparison.Ordinal), "every question the class asks is hardened");
+        calls.Should().OnlyContain(call => call.Call.Contains(" -c submodule.recurse=false ", StringComparison.Ordinal), "no question lets a checkout recurse into a submodule (a recurse=true config would run the submodule's own filters)");
+        calls.Should().OnlyContain(call => !call.Call.Contains("protocol.allow", StringComparison.Ordinal), "no `-c protocol.allow` pin: a protocol.<name>.allow the clone writes has priority over it, GIT_ALLOW_PROTOCOL is what refuses a transport");
+        calls.Where(call => call.Call.Contains("diff", StringComparison.Ordinal)).Should().OnlyContain(call => call.Call.Contains("-c diff.external= ", StringComparison.Ordinal) && call.Call.Contains("--no-ext-diff --no-textconv", StringComparison.Ordinal), "every diff is the plain patch");
+        calls.Where(call => call.Call.Contains("protocol.file.allow", StringComparison.Ordinal)).Should().ContainSingle("the file protocol is allowed for the one submodule update only");
+        var transports = calls.Where(call => call.Call.Contains(" clone ", StringComparison.Ordinal) || call.Call.Contains(" submodule update ", StringComparison.Ordinal)).ToList();
         transports.Should().HaveCount(2, "the clone and the submodule update are the two questions that transport from the operator's own source (D17 trusts it)");
-        transports.Should().OnlyContain(line => !line.Contains("protocol.allow", StringComparison.Ordinal), "a clone or a submodule update from the operator's own path needs the transport the pin refuses");
-        asked.Except(transports).Should().OnlyContain(line => line.Contains(" -c protocol.allow=never ", StringComparison.Ordinal), "every other question refuses every transport: a lazy fetch from a promisor remote the clone names fails closed, on any git that knows the key");
-        lines.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Distinct().Should().Equal(["GIT_NO_LAZY_FETCH=1"], "no GIT_* of the parent's reaches git; the one it is given is the harness's own");
+        transports.Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).SequenceEqual(new[] { "GIT_NO_LAZY_FETCH=1" }), "the two questions that transport from the operator's own source need the file transport the allow-list refuses");
+        foreach (var call in calls.Except(transports))
+        {
+            call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], $"{call.Call}: no transport is allowed, and no GIT_* of the parent's reaches git");
+        }
     }
 
     private const string Attributes = "info/attributes";
@@ -291,7 +294,7 @@ public sealed class ArmGitWideningTests : IDisposable
         {
             var names = env.Select(line => line.Split('=')[0]).ToList();
             names.Should().Contain("KEEP_ME", $"{call}: a variable no rule names passes").And.NotContain(["GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "BENCH_DB", "SSH_AUTH_SOCK", "GIT_DIR"], $"{call}: the class reduces whatever it is handed, so no secret reaches a program git might still run");
-            env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().Equal(["GIT_NO_LAZY_FETCH=1"], call);
+            env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], call);
         }
     }
 
@@ -514,5 +517,77 @@ public sealed class ArmGitWideningTests : IDisposable
         Ran.Should().BeFalse("a recursing checkout ran the clean filter of the submodule's own config, which the enumeration of the superproject's drivers never sees");
         detached.Ok();
         (await In(clone).HeadAsync(Ct)).Ok().Should().Be(before, "the detach itself still happened: the pin turns the recursion off, not the question");
+    }
+
+    /// <summary>A program a transport can name: it appends a line and EXITS AT ONCE (one that read its stdin would hang git).</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private string TransportSentinel(string name) => ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+
+    [Theory]
+    [InlineData("ssh")]
+    [InlineData("ext")]
+    [InlineData("vcs")]
+    [InlineData("insteadOf")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_per_protocol_allow_the_clone_writes_never_lets_a_lazy_fetch_start_a_transport_program_even_without_the_lazy_fetch_switch(string plant)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the transport sentinels are shell scripts");
+        var (clone, first, _) = await PromisorCloneAsync();
+        var environment = new Dictionary<string, string>(Environment, StringComparer.Ordinal);
+        switch (plant)
+        {
+            case "ssh":
+                await TargetBench.GitAsync(clone, "config", "protocol.ssh.allow", "always");
+                break;
+            case "ext":
+                await TargetBench.GitAsync(clone, "config", "remote.origin.url", $"ext::{TransportSentinel("ext-transport")} %S");
+                await TargetBench.GitAsync(clone, "config", "protocol.ext.allow", "always");
+                break;
+            case "vcs":
+                ShimFiles.Write(_temp.Combine("bin", "git-remote-foo"), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+                environment["PATH"] = _temp.Combine("bin") + ":/usr/bin:/bin";
+                await TargetBench.GitAsync(clone, "config", "remote.origin.url", "/nonexistent");
+                await TargetBench.GitAsync(clone, "config", "remote.origin.vcs", "foo");
+                await TargetBench.GitAsync(clone, "config", "protocol.foo.allow", "always");
+                break;
+            default:
+                await TargetBench.GitAsync(clone, "config", $"url.ext::{TransportSentinel("ext-transport")} %S.insteadOf", "ssh://example.invalid/x");
+                await TargetBench.GitAsync(clone, "config", "protocol.ext.allow", "always");
+                break;
+        }
+
+        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["diff", "--numstat", first, "HEAD"], clone, TimeSpan.FromSeconds(60), string.Empty, environment, Ct);
+        attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe);
+        Ran.Should().BeTrue("the plant must be proven live with the host's git first (no GIT_NO_LAZY_FETCH in its environment): the per-protocol key the clone wrote has priority over protocol.allow");
+        File.Delete(Sentinel);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var numstat = await new ArmGit(ExperimentRoot.RealGit, clone, environment, new ArmGitSeams(LazyFetchSwitch: false)).NumstatAsync(first, Ct).WaitAsync(Wall, Ct);
+
+        Ran.Should().BeFalse("a lazy fetch started a transport program through a protocol.<name>.allow the clone wrote: only the allow-list variable stood in the way here, the lazy-fetch switch was left out");
+        numstat.Failed().Should().BeTrue("the blob is not there and no transport is allowed: the question fails closed");
+        numstat.Reason().Should().Contain("not allowed").And.NotContain("timed out", "a refusal, not a hang");
+        clock.Elapsed.Should().BeLessThan(Wall);
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Under_the_older_git_seam_the_lazy_fetch_switch_is_absent_and_the_transport_allow_list_is_present()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
+        var marker = _temp.Combine("calls.log");
+        var folder = _temp.Folder("anywhere");
+        var shim = RecordingShim(marker);
+
+        _ = await new ArmGit(shim, folder, Environment, new ArmGitSeams(LazyFetchSwitch: false)).HeadAsync(Ct);
+
+        var older = Blocks(marker);
+        older.Should().NotBeEmpty();
+        older.Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).SequenceEqual(new[] { "GIT_ALLOW_PROTOCOL=" }), "without the switch (a git before 2.44 ignores it) the allow-list is still there, set and empty");
+
+        File.Delete(marker);
+        _ = await new ArmGit(shim, folder, Environment, ArmGitSeams.Real).HeadAsync(Ct);
+
+        Blocks(marker).Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).OrderBy(line => line, StringComparer.Ordinal).SequenceEqual(new[] { "GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1" }), "the real seam sets both");
     }
 }

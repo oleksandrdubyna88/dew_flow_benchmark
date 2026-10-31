@@ -467,7 +467,7 @@ public sealed class MakeVerbTests
         foreach (var call in git)
         {
             call.EnvironmentNames.Should().NotContain(["BENCH_DB", "GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "COAI_CREDS_KEY"]);
-            call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).Except(["GIT_NO_LAZY_FETCH"])
+            call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"])
                 .Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
         }
     }

@@ -214,8 +214,8 @@ public sealed class RunArmSchemeTests
         asked.Count(line => line.Contains("rev-parse --short HEAD", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(8, "every start and end line");
         asked.Count(line => line.Contains(" diff ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(1, "the diff of the gate");
         var gitNames = runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Select(line => line.Split('=')[0]).Distinct().ToList();
-        gitNames.Should().Contain("GIT_NO_LAZY_FETCH");
-        gitNames.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
+        gitNames.Should().Contain(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]);
+        gitNames.Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
         File.ReadAllText(root.PathsOf("C1").Before("4-gate")).Trim().Should().Be(await HeadAsync(root.PathsOf("C1").CloneFolder));
     }
 

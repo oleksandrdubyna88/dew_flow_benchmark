@@ -13,9 +13,10 @@ namespace ModelArms.Adapters;
 /// <para>
 /// <b>What git is kept from running</b> (measured on git 2.53.0, each by a planted program writing a sentinel; the tests keep observing it on the host's git). Every question: <c>-c core.fsmonitor=false</c>; <c>-c core.hooksPath=</c> (<c>status</c> runs <c>post-index-change</c> and <c>checkout -b</c> runs
 /// <c>post-checkout</c>, from the clone's hooks folder or an arm-written <c>core.hooksPath</c>; the empty path stopped both); <c>GIT_NO_LAZY_FETCH=1</c> (a promisor remote's program run by a lazy fetch of a blob the model deleted); <c>-c submodule.recurse=false</c> (with <c>submodule.recurse=true</c> in the clone's config, a <c>checkout -q -b x &lt;start&gt;</c> that MOVES a submodule's gitlink ran the submodule's own clean filter — a planted sentinel ran; with the pin it did not. The submodule's config is
-/// the one the enumeration below never sees. <c>checkout --detach</c> moves a gitlink today, <c>NewBranchAsync</c> has no start point yet, and E4's checkouts will); <c>-c protocol.allow=never</c> on every question except <c>clone</c> and <c>submodule update</c> (in a partial clone whose <c>remote.origin.url</c> is <c>ssh://example.invalid/x</c> and whose <c>core.sshCommand</c> is a sentinel, <c>diff --numstat HEAD~1 HEAD</c> WITHOUT
-/// <c>GIT_NO_LAZY_FETCH</c> ran the sentinel (<c>-G -o SendEnv=GIT_PROTOCOL example.invalid</c>, then <c>git-upload-pack '/x'</c>); with <c>GIT_NO_LAZY_FETCH=1</c> it did not; with ONLY the pin it did not either — <c>fatal: transport 'ssh' not allowed</c>, exit 128: it fails closed, and works on git 2.12 and later, where an older git ignores the switch. Both are kept: the switch is the
-/// belt, the pin the braces. The two questions exempt transport from the operator's own source, which D17 trusts; <c>checkout --detach</c> is not exempt — it reads what the clone holds, and prep-base's tests run with the pin); and, except for <c>clone</c>, <c>checkout --detach</c> and <c>submodule update</c>
+/// the one the enumeration below never sees. <c>checkout --detach</c> moves a gitlink today, <c>NewBranchAsync</c> has no start point yet, and E4's checkouts will); <c>GIT_ALLOW_PROTOCOL=</c> (set, empty) on every question except <c>clone</c> and <c>submodule update</c>: git treats the variable, when set, as <c>protocol.allow=never</c> with nothing allowed, overriding every <c>protocol.allow</c> and <c>protocol.&lt;name&gt;.allow</c> of every scope (repo, global, an included file) — a <c>protocol.&lt;name&gt;.allow=always</c> the clone writes has priority over <c>-c protocol.allow=never</c>
+/// (measured on git 2.53.0: <c>protocol.ssh.allow=always</c> ran a <c>core.sshCommand</c> sentinel, <c>protocol.ext.allow=always</c> with an <c>ext::</c> url ran it, <c>remote.origin.vcs=foo</c> with <c>protocol.foo.allow=always</c> ran a planted <c>git-remote-foo</c>, an <c>insteadOf</c> to <c>ext::</c> ran it; under the variable each is <c>fatal: transport '&lt;name&gt;' not allowed</c>, exit 128, at once). The variable is in git since 2.3.10/2.6.1 (release notes; not measured on an old git), the pin only since 2.12 and inert beside the variable, so the pin is gone.
+/// The two exempt questions transport from the operator's own source, which D17 trusts; <c>checkout --detach</c> is not exempt. <c>GIT_NO_LAZY_FETCH=1</c> stays beside it (git 2.44 and later): the switch stops the fetch, the allow-list stops the transport — the test that drops the switch (<see cref="ArmGitSeams"/>) observes the allow-list hold alone. <b>No git floor is enforced</b>: <c>GIT_ALLOW_PROTOCOL</c> needs 2.6.1, the <c>GIT_CONFIG_COUNT</c> neutralisation 2.31, the switch 2.44, each ignored silently by an older git (D23 is the parent's: E3 §8 item 51);
+/// and, except for <c>clone</c>, <c>checkout --detach</c> and <c>submodule update</c>
 /// (they write the base's worktree from the operator's objects — an LFS target's smudge must run there), every filter driver in any scope git itself reads (<c>config --name-only -z --get-regexp ^filter\.</c>: local, worktree, global, system, includes) is neutralised through <c>GIT_CONFIG_COUNT</c>/<c>KEY_n</c>/<c>VALUE_n</c> —
 /// <c>clean</c>, <c>smudge</c>, <c>process</c> empty, <c>required</c> false — because <c>status</c> and <c>checkout -b</c> hash a stat-dirty file and ran its <c>clean</c> and its <c>process</c>. By the variables, not <c>-c</c>: <c>-c</c> splits at the first <c>=</c>, and a driver named <c>a=b</c> passed <c>-c</c> (the program ran)
 /// and was stopped by the variable. <c>status</c> carries <c>--ignore-submodules=dirty</c>: a submodule is a second repository whose config the enumeration does not see, and git spawned a status in it that ran its driver — a changed submodule commit is still a line, an uncommitted edit inside one is not (E3 §8 item 40).
@@ -31,62 +32,80 @@ namespace ModelArms.Adapters;
 /// <c>.gitmodules</c> path query, the submodule's url and <c>submodule update</c> (the one place <c>protocol.file.allow=always</c> is given, for the one path asked); a new branch (a name starting with <c>-</c> is refused); and, over an arm's clone, the
 /// uncommitted count, the changed <c>.cs</c> names, <c>numstat</c>, <c>shortstat</c> and the commit count since a base (every diff <c>-c diff.external= … --no-ext-diff --no-textconv</c>, the base a hex id) and the one <c>grep -l -F</c> that asks whether a text is named under some globs.
 /// </para></summary>
-public sealed partial class ArmGit(string git, string workingDirectory, IReadOnlyDictionary<string, string> environment)
+public sealed partial class ArmGit
 {
+    private readonly string _git;
+    private readonly string _workingDirectory;
+
     private static readonly TimeSpan Budget = TargetWalls.Git;
 
     private const string Filter = "filter.";
 
-    /// <summary>The environment git runs under: the one it was given, reduced here (<c>GitEnvironment.Of(TargetEnvironment.Of(…))</c>: no <c>GIT_*</c>, no secret-named variable, no agent socket), and <c>GIT_NO_LAZY_FETCH=1</c>. A partial clone names a promisor remote and a program to run for it; a blob the model deleted would make git fetch it — and run that program — on the harness's behalf. With this set the
+    /// <summary>The base environment git runs under: the one it was given, reduced here (<c>GitEnvironment.Of(TargetEnvironment.Of(…))</c>: no <c>GIT_*</c>, no secret-named variable, no agent socket), and <c>GIT_NO_LAZY_FETCH=1</c>. A partial clone names a promisor remote and a program to run for it; a blob the model deleted would make git fetch it — and run that program — on the harness's behalf. With this set the
     /// read fails ("unable to read") and the step stops. The environment variable, not <c>--no-lazy-fetch</c>, which older gits refuse.</summary>
-    private readonly IReadOnlyDictionary<string, string> _environment = new Dictionary<string, string>(GitEnvironment.Of(TargetEnvironment.Of(environment)), StringComparer.Ordinal) { ["GIT_NO_LAZY_FETCH"] = "1" };
+    private readonly IReadOnlyDictionary<string, string> _environment;
+
+    /// <summary><see cref="_environment"/> plus <c>GIT_ALLOW_PROTOCOL=</c> (set, EMPTY): the environment of every question that does not transport.</summary>
+    private readonly IReadOnlyDictionary<string, string> _sealed;
+
+    private const string AllowProtocol = "GIT_ALLOW_PROTOCOL";
+
+    public ArmGit(string git, string workingDirectory, IReadOnlyDictionary<string, string> environment)
+        : this(git, workingDirectory, environment, ArmGitSeams.Real)
+    {
+    }
+
+    internal ArmGit(string git, string workingDirectory, IReadOnlyDictionary<string, string> environment, ArmGitSeams seams)
+    {
+        _git = git;
+        _workingDirectory = workingDirectory;
+        var reduced = new Dictionary<string, string>(GitEnvironment.Of(TargetEnvironment.Of(environment)), StringComparer.Ordinal);
+        _environment = seams.LazyFetchSwitch ? new Dictionary<string, string>(reduced, StringComparer.Ordinal) { ["GIT_NO_LAZY_FETCH"] = "1" } : reduced;
+        _sealed = new Dictionary<string, string>(_environment, StringComparer.Ordinal) { [AllowProtocol] = string.Empty };
+    }
 
     /// <summary>The pins of every question: <c>-c core.fsmonitor=false -c core.hooksPath=</c> (the first pair first: <c>TargetBench.HarnessGit</c> and the tests key on it) and <c>-c submodule.recurse=false</c>: the clone is written by the model under test, and its own config and hooks folder must not name a program git runs on the harness's behalf, nor may a
     /// <c>submodule.recurse=true</c> of its config (or of the operator's global one) make a checkout that moves a gitlink run the submodule's own clean filter.</summary>
     private static readonly string[] Pinned = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false"];
 
-    /// <summary>Every question but two starts <see cref="Pinned"/> and <c>-c protocol.allow=never</c>: no transport program starts for anything these questions do — a lazy fetch from a promisor remote the clone names fails closed ("transport 'ssh' not allowed", exit 128) on any git that knows the key (2.12 and later), where <c>GIT_NO_LAZY_FETCH</c> is ignored by an older one. The two that transport from the operator's own source — <c>clone</c> and <c>submodule update</c> (D17 trusts that source) — start <see cref="Pinned"/> alone: the key would refuse the very transport they exist to make.
-    /// <c>checkout --detach</c> needs none (it reads the objects the clone holds; the lazy-fetch switch is set whatever the question) and is <c>Hardened</c>; prep-base's tests are green with it so.</summary>
-    private static readonly string[] Hardened = [.. Pinned, "-c", "protocol.allow=never"];
+    public async Task<Outcome<string>> HeadAsync(CancellationToken ct) => Trimmed(await AskAsync([.. Pinned, "rev-parse", "HEAD"], ct));
 
-    public async Task<Outcome<string>> HeadAsync(CancellationToken ct) => Trimmed(await AskAsync([.. Hardened, "rev-parse", "HEAD"], ct));
-
-    public async Task<Outcome<string>> HeadShortAsync(CancellationToken ct) => Trimmed(await AskAsync([.. Hardened, "rev-parse", "--short", "HEAD"], ct));
+    public async Task<Outcome<string>> HeadShortAsync(CancellationToken ct) => Trimmed(await AskAsync([.. Pinned, "rev-parse", "--short", "HEAD"], ct));
 
     /// <summary><c>diff --no-ext-diff --no-textconv &lt;from&gt; HEAD</c>, stdout verbatim — the plain patch: a <c>diff.external</c> or a <c>textconv</c> driver the clone's config or <c>.gitattributes</c> names would run a program and its output would BE the measured diff. <paramref name="from"/> must be a commit id in hex: it came from a file, and a file's text is never handed to git as an option.</summary>
     public async Task<Outcome<string>> DiffAsync(string from, CancellationToken ct) =>
-        CommitId().IsMatch(from) ? await AskAsync([.. Hardened, "-c", "diff.external=", "diff", "--no-ext-diff", "--no-textconv", "--submodule=short", from, "HEAD"], ct) : Outcome<string>.Failure($"'{from}' is not a commit id — the snapshot file does not hold one");
+        CommitId().IsMatch(from) ? await AskAsync([.. Pinned, "-c", "diff.external=", "diff", "--no-ext-diff", "--no-textconv", "--submodule=short", from, "HEAD"], ct) : Outcome<string>.Failure($"'{from}' is not a commit id — the snapshot file does not hold one");
 
     /// <summary><c>clone -q --branch &lt;branch&gt; -- &lt;source&gt; &lt;destination&gt;</c> (<c>prep-base.sh:7</c>), under the clone's wall; the folder this git runs in must exist and <paramref name="destination"/> must not.</summary>
     public async Task<Outcome<string>> CloneAsync(string source, string branch, string destination, CancellationToken ct) =>
         Refusal(branch) is { Length: > 0 } refused
             ? Outcome<string>.Failure(refused)
-            : await AskAsync([.. Pinned, "clone", "-q", "--branch", branch, "--", source, destination], ct, TargetWalls.Clone, smudges: true);
+            : await AskAsync([.. Pinned, "clone", "-q", "--branch", branch, "--", source, destination], ct, TargetWalls.Clone, smudges: true, transports: true);
 
     /// <summary><c>checkout -q --detach &lt;sha&gt;</c>: <paramref name="sha"/> is a commit id in hex — it came from a file, and a file's text is never handed to git as an option.</summary>
     public async Task<Outcome<string>> DetachAsync(string sha, CancellationToken ct) =>
-        CommitId().IsMatch(sha) ? await AskAsync([.. Hardened, "checkout", "-q", "--detach", sha], ct, smudges: true) : Outcome<string>.Failure(NotACommitId(sha));
+        CommitId().IsMatch(sha) ? await AskAsync([.. Pinned, "checkout", "-q", "--detach", sha], ct, smudges: true) : Outcome<string>.Failure(NotACommitId(sha));
 
     /// <summary><c>config -f .gitmodules --get-regexp ^submodule\..*\.path$</c> (<c>prep-base.sh:9</c>): its lines, or the empty text when the folder has no <c>.gitmodules</c> or none holds a path (git's exit 1).</summary>
     public async Task<Outcome<string>> SubmodulePathsAsync(CancellationToken ct) =>
-        File.Exists(Path.Combine(workingDirectory, ".gitmodules"))
-            ? await AskAsync([.. Hardened, "config", "-f", ".gitmodules", "--get-regexp", @"^submodule\..*\.path$"], ct, Budget, noAnswer: 1)
+        File.Exists(Path.Combine(_workingDirectory, ".gitmodules"))
+            ? await AskAsync([.. Pinned, "config", "-f", ".gitmodules", "--get-regexp", @"^submodule\..*\.path$"], ct, Budget, noAnswer: 1)
             : Outcome<string>.Success(string.Empty);
 
     public async Task<Outcome<string>> SetSubmoduleUrlAsync(string name, string url, CancellationToken ct) =>
-        await AskAsync([.. Hardened, "config", $"submodule.{name}.url", url], ct);
+        await AskAsync([.. Pinned, "config", $"submodule.{name}.url", url], ct);
 
     /// <summary><c>-c protocol.file.allow=always submodule update --init -q -- &lt;path&gt;</c> (<c>prep-base.sh:11</c>), under the clone's wall: the file protocol is allowed for this one command and this one path, whose url the verb has just set to a folder of the operator's own.</summary>
     public async Task<Outcome<string>> SubmoduleUpdateAsync(string path, CancellationToken ct) =>
-        await AskAsync([.. Pinned, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", path], ct, TargetWalls.Clone, smudges: true);
+        await AskAsync([.. Pinned, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", path], ct, TargetWalls.Clone, smudges: true, transports: true);
 
     /// <summary><c>checkout -q -b &lt;branch&gt;</c> in the folder; a name that starts with <c>-</c> or is empty is refused before git is asked.</summary>
     public async Task<Outcome<string>> NewBranchAsync(string branch, CancellationToken ct) =>
-        Refusal(branch) is { Length: > 0 } refused ? Outcome<string>.Failure(refused) : await AskAsync([.. Hardened, "checkout", "-q", "-b", branch], ct);
+        Refusal(branch) is { Length: > 0 } refused ? Outcome<string>.Failure(refused) : await AskAsync([.. Pinned, "checkout", "-q", "-b", branch], ct);
 
     /// <summary>The number of lines <c>status --porcelain</c> prints (<c>objective-checks.sh:13</c>).</summary>
     public async Task<Outcome<int>> UncommittedCountAsync(CancellationToken ct) =>
-        Lines(await AskAsync([.. Hardened, "status", "--porcelain", "--ignore-submodules=dirty"], ct)).Match(lines => Outcome<int>.Success(lines.Count), Outcome<int>.Failure);
+        Lines(await AskAsync([.. Pinned, "status", "--porcelain", "--ignore-submodules=dirty"], ct)).Match(lines => Outcome<int>.Success(lines.Count), Outcome<int>.Failure);
 
     /// <summary>The files added or modified between <paramref name="baseSha"/> and <c>HEAD</c> that end in <c>.cs</c> (<c>objective-checks.sh:19</c>), each name as git has it: read NUL-separated, so a name with a newline or a quote is one name.</summary>
     public async Task<Outcome<IReadOnlyList<string>>> ChangedCsAsync(string baseSha, CancellationToken ct) =>
@@ -104,13 +123,13 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
     public async Task<Outcome<long>> CountSinceAsync(string baseSha, CancellationToken ct) =>
         !CommitId().IsMatch(baseSha)
             ? Outcome<long>.Failure(NotACommitId(baseSha))
-            : (await AskAsync([.. Hardened, "rev-list", "--count", $"{baseSha}..HEAD"], ct)).Match(
+            : (await AskAsync([.. Pinned, "rev-list", "--count", $"{baseSha}..HEAD"], ct)).Match(
                 text => long.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var count) ? Outcome<long>.Success(count) : Outcome<long>.Failure($"git counted '{text.Trim()}' commits"),
                 Outcome<long>.Failure);
 
     /// <summary>Whether <paramref name="text"/> is named, as fixed text, by a file under <paramref name="globs"/> (<c>git grep -l -F -e &lt;text&gt; -- &lt;globs&gt;</c>, <c>objective-checks.sh:37</c>): exit 0 yes, 1 no, anything else git failing to answer.</summary>
     public async Task<Outcome<bool>> MentionsAsync(string text, IReadOnlyList<string> globs, CancellationToken ct) =>
-        (await LaunchAsync([.. Hardened, "grep", "-l", "-F", "-e", text, "--", .. globs], ct, Budget)).Match(
+        (await LaunchAsync([.. Pinned, "grep", "-l", "-F", "-e", text, "--", .. globs], ct, Budget)).Match(
             attempt => attempt switch
             {
                 ProcessAttempt.Completed { Result.ExitCode: 0 } => Outcome<bool>.Success(true),
@@ -122,7 +141,7 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
     /// <summary>A commit-to-commit diff with the harness's three guards: no external diff program, no textconv, the plain patch — the clone's config and attributes are the model's.</summary>
     private Task<Outcome<string>> DiffOf(string baseSha, string[] options, string[] pathspec, CancellationToken ct) =>
         CommitId().IsMatch(baseSha)
-            ? AskAsync([.. Hardened, "-c", "diff.external=", "diff", "--no-ext-diff", "--no-textconv", "--submodule=short", .. options, $"{baseSha}..HEAD", .. pathspec], ct)
+            ? AskAsync([.. Pinned, "-c", "diff.external=", "diff", "--no-ext-diff", "--no-textconv", "--submodule=short", .. options, $"{baseSha}..HEAD", .. pathspec], ct)
             : Task.FromResult(Outcome<string>.Failure(NotACommitId(baseSha)));
 
     private static string NotACommitId(string text) => $"'{text}' is not a commit id — a file holds the id, and a file's text is never handed to git as an option";
@@ -136,8 +155,8 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
 
     private static Outcome<string> Trimmed(Outcome<string> answer) => answer.Match(text => Outcome<string>.Success(text.Trim()), Outcome<string>.Failure);
 
-    private async Task<Outcome<string>> AskAsync(string[] arguments, CancellationToken ct, TimeSpan? budget = null, int? noAnswer = null, bool smudges = false) =>
-        (await LaunchAsync(arguments, ct, budget ?? Budget, smudges)).Match(
+    private async Task<Outcome<string>> AskAsync(string[] arguments, CancellationToken ct, TimeSpan? budget = null, int? noAnswer = null, bool smudges = false, bool transports = false) =>
+        (await LaunchAsync(arguments, ct, budget ?? Budget, smudges, transports)).Match(
             attempt => attempt switch
             {
                 ProcessAttempt.Completed { Result.ExitCode: 0 } done => Outcome<string>.Success(done.Result.StandardOutput),
@@ -148,42 +167,43 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
 
     /// <summary>One launch of the question. Unless <paramref name="smudges"/> — which only the three questions that write the base's worktree from the operator's objects set — the clone's filter drivers are neutralised first (<see cref="EnvironmentForAsync"/>); a clone whose drivers cannot be
     /// listed is the question's failure, never a question asked unguarded.</summary>
-    private async Task<Outcome<ProcessAttempt>> LaunchAsync(string[] arguments, CancellationToken ct, TimeSpan budget, bool smudges = false) =>
-        await (await EnvironmentForAsync(smudges, ct)).Match(
+    private async Task<Outcome<ProcessAttempt>> LaunchAsync(string[] arguments, CancellationToken ct, TimeSpan budget, bool smudges = false, bool transports = false) =>
+        await (await EnvironmentForAsync(smudges, transports, ct)).Match(
             launchEnvironment => LaunchUnderAsync(arguments, launchEnvironment, ct, budget),
             reason => Task.FromResult(Outcome<ProcessAttempt>.Failure(reason)));
 
     private async Task<Outcome<ProcessAttempt>> LaunchUnderAsync(string[] arguments, IReadOnlyDictionary<string, string> launchEnvironment, CancellationToken ct, TimeSpan budget) =>
-        Outcome<ProcessAttempt>.Success(await ProcessRunner.RunAsync(git, arguments, workingDirectory, budget, string.Empty, launchEnvironment, ct));
+        Outcome<ProcessAttempt>.Success(await ProcessRunner.RunAsync(_git, arguments, _workingDirectory, budget, string.Empty, launchEnvironment, ct));
 
     /// <summary>The environment of one question: <see cref="_environment"/>, plus — unless the question writes the base's worktree — one <c>GIT_CONFIG_*</c> quadruple per filter driver git would read, found by <c>config --name-only -z --get-regexp ^filter\.</c> in the folder the question is asked of (every scope git reads,
     /// includes too; exit 1 is none). The enumeration goes through <see cref="_environment"/> directly, never through this method. A failure of it — a timeout, exit 128 — is the question's failure: fail closed.</summary>
-    private async Task<Outcome<IReadOnlyDictionary<string, string>>> EnvironmentForAsync(bool smudges, CancellationToken ct)
+    private async Task<Outcome<IReadOnlyDictionary<string, string>>> EnvironmentForAsync(bool smudges, bool transports, CancellationToken ct)
     {
+        var basis = transports ? _environment : _sealed;
         if (smudges)
         {
-            return Outcome<IReadOnlyDictionary<string, string>>.Success(_environment);
+            return Outcome<IReadOnlyDictionary<string, string>>.Success(basis);
         }
 
-        var listed = await ProcessRunner.RunAsync(git, [.. Hardened, "config", "--name-only", "-z", "--get-regexp", @"^filter\."], workingDirectory, Budget, string.Empty, _environment, ct);
+        var listed = await ProcessRunner.RunAsync(_git, [.. Pinned, "config", "--name-only", "-z", "--get-regexp", @"^filter\."], _workingDirectory, Budget, string.Empty, basis, ct);
         return listed switch
         {
-            ProcessAttempt.Completed { Result.ExitCode: 0 } done => Outcome<IReadOnlyDictionary<string, string>>.Success(Neutralised(done.Result.StandardOutput)),
-            ProcessAttempt.Completed { Result.ExitCode: 1 } => Outcome<IReadOnlyDictionary<string, string>>.Success(_environment),
+            ProcessAttempt.Completed { Result.ExitCode: 0 } done => Outcome<IReadOnlyDictionary<string, string>>.Success(Neutralised(done.Result.StandardOutput, basis)),
+            ProcessAttempt.Completed { Result.ExitCode: 1 } => Outcome<IReadOnlyDictionary<string, string>>.Success(basis),
             _ => Outcome<IReadOnlyDictionary<string, string>>.Failure($"cannot list the clone's filter drivers: {Said(listed)}"),
         };
     }
 
     /// <summary>For each filter driver named by a key (<c>filter.&lt;driver&gt;.&lt;variable&gt;</c>; the driver may be EMPTY (<c>[filter ""]</c> is the key <c>filter..clean</c>) and may hold dots, <c>=</c>, quotes or spaces — the key is used verbatim): <c>clean</c>, <c>smudge</c> and <c>process</c> empty and <c>required</c> false, as four
     /// <c>GIT_CONFIG_KEY_n</c>/<c>VALUE_n</c> pairs counted by <c>GIT_CONFIG_COUNT</c>. Environment variables, not <c>-c</c>: <c>-c</c> splits at the first <c>=</c>, so a driver named <c>a=b</c> slips past it.</summary>
-    private IReadOnlyDictionary<string, string> Neutralised(string names)
+    private static IReadOnlyDictionary<string, string> Neutralised(string names, IReadOnlyDictionary<string, string> basis)
     {
         var drivers = names.Split('\0', StringSplitOptions.RemoveEmptyEntries)
             .Select(name => name.LastIndexOf('.') is var last && last >= Filter.Length ? name[Filter.Length..last] : null)
             .OfType<string>()
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        var launched = new Dictionary<string, string>(_environment, StringComparer.Ordinal);
+        var launched = new Dictionary<string, string>(basis, StringComparer.Ordinal);
         if (drivers.Count == 0)
         {
             return launched;

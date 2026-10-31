@@ -55,12 +55,12 @@ public sealed class StepGitTests
         var runs = File.Exists(marker) ? File.ReadAllLines(marker) : [];
         runs.Count(line => line.StartsWith(bench.Git + " ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(3, "the shim should record at least three git runs: the .before, the heads and the diff");
         var head = File.ReadAllText(bench.Paths.Before("2-hreview")).Trim();
-        const string Hardened = " -c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false -c protocol.allow=never";
+        const string Hardened = " -c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false";
         runs.Should().Contain(bench.Git + Hardened + " rev-parse HEAD").And.Contain(bench.Git + Hardened + " rev-parse --short HEAD")
             .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv --submodule=short {head} HEAD");
         var gitNames = runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Select(line => line.Split('=')[0]).Distinct().ToList();
-        gitNames.Should().Contain("GIT_NO_LAZY_FETCH", "git runs with the harness's own switch (no lazy fetch from a promisor remote)");
-        gitNames.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
+        gitNames.Should().Contain("GIT_NO_LAZY_FETCH", "git runs with the harness's own switch (no lazy fetch from a promisor remote)").And.Contain("GIT_ALLOW_PROTOCOL", "and with the allow-list that refuses every transport (set, empty)");
+        gitNames.Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
         runs.Where(line => line.StartsWith("GITHUB_TOKEN", StringComparison.Ordinal)).Should().BeEmpty("no secret of the parent's reaches a program git might still run: the class reduces the environment itself");
         head.Should().Be(await bench.HeadAsync());
     }

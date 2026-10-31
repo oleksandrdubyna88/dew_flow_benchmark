@@ -459,10 +459,11 @@ public sealed class ChecksVerbTests
         git.Select(call => call.Cwd).Should().OnlyContain(cwd => cwd == kit.Clone);
         foreach (var call in git)
         {
-            call.Arguments.Take(8).Should().Equal(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false", "-c", "protocol.allow=never"], "no hook and no filesystem monitor of the arm's clone runs on the harness's behalf, no checkout recurses into a submodule, and no transport program starts for a lazy fetch");
+            call.Arguments.Take(6).Should().Equal(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=", "-c", "submodule.recurse=false"], "no hook and no filesystem monitor of the arm's clone runs on the harness's behalf, and no checkout recurses into a submodule");
+            call.Arguments.Should().NotContain("protocol.allow=never", "the pin is gone: GIT_ALLOW_PROTOCOL is what refuses a transport");
             var names = call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).ToList();
-            names.Should().Contain("GIT_NO_LAZY_FETCH");
-            names.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's: only the harness's own driver neutralisation");
+            names.Should().Contain(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]);
+            names.Except(["GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL"]).Where(name => !Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's: only the harness's own driver neutralisation");
             call.EnvironmentNames.Should().NotContain(["GITHUB_TOKEN", "COAI_CREDS_KEY", "SSH_AUTH_SOCK", "BENCH_DB", "GIT_DIR"]);
         }
 
