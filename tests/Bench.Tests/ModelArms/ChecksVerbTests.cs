@@ -383,6 +383,7 @@ public sealed class ChecksVerbTests
             await Task.WhenAny(running, Task.Delay(Wall, TestContext.Current.CancellationToken));
         }
 
+        running.IsCompleted.Should().BeTrue("the stopped verb ends within the wall — it is awaited below, so a verb that ignored the stop must not hang the suite");
         var stopped = () => running;
         await stopped.Should().ThrowAsync<OperationCanceledException>("the operator's stop travels up to Main, which maps it to exit 5");
         File.Exists(kit.Paths.Objective).Should().BeFalse("a stopped run has no report");

@@ -38,7 +38,7 @@ public static class StageRecord
                 writer.WriteEndObject();
             });
 
-    /// <summary>The record <paramref name="json"/> holds, or the first thing wrong with it: not JSON, not an object, a stage missing or not an object, an <c>exit</c> that is neither a whole number nor <c>null</c>, <c>seconds</c> or <c>killed</c> missing or of the wrong kind. A torn record is refused, never read as zeros.</summary>
+    /// <summary>The record <paramref name="json"/> holds, or the first thing wrong with it: not JSON, not an object, a stage missing or not an object, an <c>exit</c> that is neither a whole number nor <c>null</c> (a stage with NO <c>exit</c>, or a JSON <c>null</c>, is read as not captured — never as 0), <c>seconds</c> or <c>killed</c> missing or of the wrong kind. A torn record is refused, never read as zeros.</summary>
     public static Outcome<StageRuns> Read(string json)
     {
         try

@@ -22,7 +22,7 @@ internal static class ChecksReport
     private const int CtrfLimit = 64 * 1024 * 1024;
     private const int MarkerLimit = 4 * 1024;
 
-    /// <summary>Step 6: the questions of the report, asked one after the other; the first git cannot answer ends them — the sentence is the verb's exit 3.</summary>
+    /// <summary>Step 6: the questions of the report, all asked (the scenarios' questions stop at the first git cannot answer), then the FIRST failure in the order head, uncommitted, commits, numstat, shortstat, scenarios is the sentence — the verb's exit 3.</summary>
     public static async Task<Outcome<GitFacts>> GitAsync(ChecksPlan plan, ArmGit git, CancellationToken ct)
     {
         var baseSha = plan.Input.Experiment.Target.Base.Value;
@@ -32,7 +32,7 @@ internal static class ChecksReport
         var numstat = await git.NumstatAsync(baseSha, ct);
         var shortstat = await git.ShortstatAsync(baseSha, ct);
         var present = await PresentAsync(plan, git, ct);
-        var unanswered = new[] { Reason(head), Reason(uncommitted), Reason(commits), Reason(numstat), Reason(shortstat), Reason(present) }.FirstOrDefault(reason => reason.Length > 0);
+        var unanswered = new[] { head.Reason(), uncommitted.Reason(), commits.Reason(), numstat.Reason(), shortstat.Reason(), present.Reason() }.FirstOrDefault(reason => reason.Length > 0);
         return unanswered is not null
             ? Outcome<GitFacts>.Failure($"git cannot answer: {unanswered}")
             : Outcome<GitFacts>.Success(new GitFacts(Value(head), Value(commits), Value(uncommitted), Value(numstat), Value(shortstat), Value(present)));
@@ -47,7 +47,7 @@ internal static class ChecksReport
             var mentions = await git.MentionsAsync(scenario.Name, plan.Input.Experiment.Target.TestGlobs, ct);
             if (mentions is not Outcome<bool>.Ok { Value: var named })
             {
-                return Outcome<IReadOnlyDictionary<string, bool>>.Failure($"whether the tests name scenario {scenario.Id}: {Reason(mentions)}");
+                return Outcome<IReadOnlyDictionary<string, bool>>.Failure($"whether the tests name scenario {scenario.Id}: {mentions.Reason()}");
             }
 
             present[scenario.Id] = named;
@@ -156,8 +156,6 @@ internal static class ChecksReport
             BoundedRead.Refused refused => new Read<DoneMarker>.Refused(refused.Reason),
             _ => new Read<DoneMarker>.Absent(),
         };
-
-    private static string Reason<T>(Outcome<T> outcome) => outcome is Outcome<T>.Fail failed ? failed.Reason : string.Empty;
 
     private static T Value<T>(Outcome<T> outcome) => ((Outcome<T>.Ok)outcome).Value;
 }
