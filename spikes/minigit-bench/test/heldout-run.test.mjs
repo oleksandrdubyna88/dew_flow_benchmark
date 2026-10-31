@@ -137,7 +137,7 @@ test('A_wrong_key_or_a_missing_suite_is_a_value_and_leaves_no_directory', async 
   assert.deepEqual(readdirSync(path.join(workRoot, 'score-tmp')), []);
 });
 
-test('Sweep_removes_leftover_clear_directories_older_than_the_limit_only', () => {
+test('Sweep_removes_old_score_tmp_leftovers_only_and_lists_the_testsToDelete_entries_never_removing_them', () => {
   const workRoot = homeDir('sweep');
   const base = path.join(workRoot, 'score-tmp');
   for (const name of ['old-1', 'young-2']) mkdirSync(path.join(base, name), { recursive: true, mode: 0o700 });
@@ -148,11 +148,15 @@ test('Sweep_removes_leftover_clear_directories_older_than_the_limit_only', () =>
   mkdirSync(path.join(workRoot, 'unrelated-keep'), { mode: 0o700 });
   utimesSync(path.join(workRoot, 'testsToDelete-left-over'), longAgo, longAgo);
   utimesSync(path.join(workRoot, 'unrelated-keep'), longAgo, longAgo);
+  mkdirSync(path.join(base, 'testsToDelete-in-score'), { mode: 0o700 });
+  utimesSync(path.join(base, 'testsToDelete-in-score'), longAgo, longAgo);
   const swept = sweepLeftovers({ workRoot, olderThanMs: 24 * 3600 * 1000, nowMs: Date.now() });
-  assert.deepEqual(swept, { removed: ['old-1', 'testsToDelete-left-over'], kept: ['young-2'], failed: [] });
-  assert.equal(existsSync(path.join(workRoot, 'unrelated-keep')), true, 'only the leftover namespaces are touched');
-  assert.deepEqual(readdirSync(base), ['young-2']);
-  assert.deepEqual(sweepLeftovers({ workRoot: homeDir('nothing'), olderThanMs: 1, nowMs: Date.now() }), { removed: [], kept: [], failed: [] });
+  assert.deepEqual(swept, { removed: ['old-1'], kept: ['young-2'], failed: [], listed: ['score-tmp/testsToDelete-in-score', 'testsToDelete-left-over'] });
+  assert.equal(existsSync(path.join(workRoot, 'testsToDelete-left-over')), true, 'a testsToDelete entry is listed, never removed (the test-leftovers barrier)');
+  assert.equal(existsSync(path.join(base, 'testsToDelete-in-score')), true, 'a testsToDelete entry under score-tmp is listed, never removed');
+  assert.equal(existsSync(path.join(workRoot, 'unrelated-keep')), true, 'only the un-prefixed score-tmp entries are touched');
+  assert.deepEqual(readdirSync(base), ['testsToDelete-in-score', 'young-2']);
+  assert.deepEqual(sweepLeftovers({ workRoot: homeDir('nothing'), olderThanMs: 1, nowMs: Date.now() }), { removed: [], kept: [], failed: [], listed: [] });
 });
 
 async function runToy(binary, work, { phase = 'v1', box = [], timeoutS = 5, src } = {}) {

@@ -82,14 +82,22 @@ export async function withClearSuite({ suiteEnc = SUITE_ENC, keyFile = defaultKe
   }
 }
 
-/** Remove leftover clear directories (a crash skipped the `finally`) older than `olderThanMs`. A failure to remove one is reported, not thrown. */
+/**
+ * Remove leftover clear directories (a crash skipped the `finally`) older than `olderThanMs`, from score-tmp/<anything> only: that is this spike's
+ * own scoring temp. An entry named `testsToDelete-…` or `testsToDelete_…` (straight under the work root, or under score-tmp) is LISTED in `listed`
+ * (under score-tmp as `score-tmp/<name>`), never removed, whatever its age, and nothing under it is read: the shared rule's barrier
+ * (common.test-leftovers § The barrier) forbids an owner-blind sweeper, by bare prefix or by age, while other repositories start to make owner-form names.
+ * A listed folder is removed by hand after `bash .agents/conventions/tools/janitor.sh --dry-run` shows it is the caller's and abandoned.
+ * A failure to remove one is reported, not thrown.
+ */
 export function sweepLeftovers({ workRoot = defaultWorkRoot(), olderThanMs = DAY_MS, nowMs = Date.now() } = {}) {
-  const out = { removed: [], kept: [], failed: [] };
-  // two places hold leftovers: score-tmp/<anything> (a crash skipped a `finally`) and testsToDelete-<anything> straight under the root
-  const places = [[scoreTmpOf(workRoot), () => true], [path.resolve(workRoot), n => /^testsToDelete-/i.test(n)]];
-  for (const [base, mine] of places) {
-    if (!existsSync(base)) continue;
-    for (const name of readdirSync(base).filter(mine).sort()) {
+  const out = { removed: [], kept: [], failed: [], listed: [] };
+  const prefixed = n => /^testsToDelete[-_]/i.test(n); // LISTED only, never removed: the barrier scan flags this line, which deletes nothing
+  const root = path.resolve(workRoot), base = scoreTmpOf(workRoot);
+  if (existsSync(root)) out.listed.push(...readdirSync(root).filter(prefixed));
+  if (existsSync(base)) {
+    for (const name of readdirSync(base).sort()) {
+      if (prefixed(name)) { out.listed.push(`score-tmp/${name}`); continue; }
       const target = path.join(base, name);
       if (nowMs - lstatSync(target).mtimeMs <= olderThanMs) { out.kept.push(name); continue; }
       try {
@@ -100,6 +108,7 @@ export function sweepLeftovers({ workRoot = defaultWorkRoot(), olderThanMs = DAY
       }
     }
   }
+  out.listed.sort();
   return out;
 }
 
