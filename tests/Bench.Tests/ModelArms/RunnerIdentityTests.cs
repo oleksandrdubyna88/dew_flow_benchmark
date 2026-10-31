@@ -235,9 +235,6 @@ public sealed class RunnerIdentityTests
         using var root = Root();
         var layout = Layout(root);
 
-        RunnerLiveness.Of(layout, "C1").Should().BeOfType<RunnerState.Gone>();
-        Directory.Exists(layout.Pids).Should().BeFalse("a probe creates nothing — pids/ is not made");
-
         Directory.CreateDirectory(layout.Pids);
         RunnerLiveness.Of(layout, "C1").Should().BeOfType<RunnerState.Gone>();
         File.Exists(layout.RunnerLock("C1")).Should().BeFalse("no lock file is created by a probe");
@@ -259,6 +256,10 @@ public sealed class RunnerIdentityTests
         File.WriteAllText(layout.RunnerLock("C1"), string.Empty);
         var dishonoured = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50)) { SecondOpen = _ => new FileStream(elsewhere, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite) };
         RunnerLiveness.Of(layout, "C1", PlatformFactsReader.CurrentRoad, dishonoured).Should().BeOfType<RunnerState.Unread>("a file system that does not honour the lock cannot say");
+
+        Directory.Delete(layout.Pids, recursive: true);
+        RunnerLiveness.Of(layout, "C1").Should().BeOfType<RunnerState.Gone>();
+        Directory.Exists(layout.Pids).Should().BeFalse("a probe creates nothing — pids/ is not made");
     }
 
     [Fact]
