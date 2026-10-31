@@ -1605,7 +1605,7 @@ NAME under it — `experiment.json` and `.locked-modes` included; (b) a forged o
 only onto entries at their locked or saved mode; (c) an unlinked or replaced `pids/<arm>.lock` lets a second runner of a live arm start (§8 item 44 — liveness still says
 `Alive` from the believed pid); (d) an entry deleted and a new object given the same device and inode reads as the same entry at `unlock` (inode reuse); (e) a `chmod` by any
 same-user process beside the module (the parent's own line); (f) on the runtime road, a link planted between the check and the chmod is followed and a replaced entry is not
-told apart — the printed line; (g) `unlock --force` restores beside a runner that may be live — D11's meaning, the operator's choice, said by its loud line. None is a hole
+told apart — the printed line; (g) `unlock --force` restores beside a runner that may be live — D11's meaning, the operator's choice, said by its loud line. (h) `<root>/arms.map.json` is readable by its fixed name under a 300 root — every token, so a sibling's `r/<token>` and its session folder — and a sibling runner's `/proc/<pid>/cwd` shows its token: both shared with the shell harness; the example's `tools.deny` denies the Read tool on the map by an absolute path the operator fills in (`tools.deny` is passed to the CLI as written, no `<root>` placeholder), and `Bash(cat *)`/`Bash(ls *)` stay allowed, so neither is closed (review round R1). None is a hole
 the module claims to close; each is one sentence where the operator reads.
 
 ## 10. Risk items for the coai gate
