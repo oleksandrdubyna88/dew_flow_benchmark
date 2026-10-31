@@ -192,10 +192,13 @@ public sealed class ArmGitWideningTests : IDisposable
         (await TargetBench.GitAsync(clone, "config", "--get", "submodule.rules.url")).Trim().Should().Be("/some/where");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task Every_question_is_started_hardened_by_the_path_it_was_handed_under_an_environment_with_no_GIT_variable_but_the_lazy_fetch_switch()
+    public async Task Every_question_is_started_hardened_by_the_path_it_was_handed_under_an_environment_with_no_GIT_variable_but_the_lazy_fetch_switch(bool hostHasAGlobalLfsDriver)
     {
+        HostWithGlobalLfsDriver(hostHasAGlobalLfsDriver);
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var (source, first, _) = await SourceAsync();
         var marker = Path.Combine(_temp.Path, "git-calls");
@@ -226,11 +229,48 @@ public sealed class ArmGitWideningTests : IDisposable
         var transports = calls.Where(call => call.Call.Contains(" clone ", StringComparison.Ordinal) || call.Call.Contains(" submodule update ", StringComparison.Ordinal)).ToList();
         transports.Should().HaveCount(2, "the clone and the submodule update are the two questions that transport from the operator's own source (D17 trusts it)");
         transports.Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).SequenceEqual(new[] { "GIT_NO_LAZY_FETCH=1" }), "the two questions that transport from the operator's own source need the file transport the allow-list refuses");
+        var host = Neutralisation(await HostDriversAsync(clone, Environment));
         foreach (var call in calls.Except(transports))
         {
-            call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], $"{call.Call}: no transport is allowed, and no GIT_* of the parent's reaches git");
+            GitVariablesShould(call.Call, call.Env, ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], host, "no transport is allowed, no GIT_* of the parent's reaches git, and the only others are the neutralisation of the drivers the host's own git reads");
         }
     }
+
+    /// <summary>A host whose git has a filter driver in a scope the test does not own: git-lfs installed makes <c>filter.lfs.*</c> appear in the SYSTEM config of a CI runner, and a file in the scratch HOME's XDG config folder has the same effect for git (both scopes are read; the file a test writes itself, <c>~/.gitconfig</c>, is a different one, so a test that removes its own still has the host's). <paramref name="present"/> false leaves the scratch HOME as it was.</summary>
+    private void HostWithGlobalLfsDriver(bool present)
+    {
+        if (present)
+        {
+            Directory.CreateDirectory(Path.Combine(Environment["HOME"], ".config", "git"));
+            File.WriteAllText(Path.Combine(Environment["HOME"], ".config", "git", "config"), "[filter \"lfs\"]\n\tclean = git-lfs clean -- %f\n\tsmudge = git-lfs smudge -- %f\n\tprocess = git-lfs filter-process\n\trequired = true\n");
+        }
+    }
+
+    /// <summary>The filter drivers the HOST's git itself reports in <paramref name="folder"/> under <paramref name="environment"/> — the same HOME, the same PATH, the SYSTEM scope the host has (a CI runner with git-lfs installed has <c>filter.lfs.*</c> there): <c>config --name-only -z --get-regexp ^filter\.</c>, asked of the host's git directly, never through <see cref="ArmGit"/>.</summary>
+    private async Task<IReadOnlyList<string>> HostDriversAsync(string folder, IReadOnlyDictionary<string, string> environment)
+    {
+        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["config", "--name-only", "-z", "--get-regexp", @"^filter\."], folder, TimeSpan.FromSeconds(60), string.Empty, GitEnvironment.Of(environment), Ct);
+        var done = attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe).Subject;
+        done.Result.ExitCode.Should().BeOneOf([0, 1], "git config --get-regexp: 1 is no match");
+        return [.. done.Result.StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(name => name[7..name.LastIndexOf('.')]).Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>The <c>GIT_CONFIG_*</c> lines ArmGit must hand a question for those drivers, as it emits them: four pairs per driver in the order git listed them (<c>clean</c>, <c>smudge</c>, <c>process</c> empty, <c>required</c> false) and their count — none for no driver. Built here from the HOST's list, not copied from ArmGit, so a driver git reads that the neutralisation does not name fails.</summary>
+    private static IReadOnlyList<string> Neutralisation(IReadOnlyList<string> drivers)
+    {
+        string[] variables = ["clean", "smudge", "process", "required"];
+        string[] values = ["", "", "", "false"];
+        var lines = drivers.SelectMany((driver, d) => variables.SelectMany((variable, v) => new[] { $"GIT_CONFIG_KEY_{(d * 4) + v}=filter.{driver}.{variable}", $"GIT_CONFIG_VALUE_{(d * 4) + v}={values[v]}" })).ToList();
+        return drivers.Count == 0 ? [] : [$"GIT_CONFIG_COUNT={drivers.Count * 4}", .. lines];
+    }
+
+    private static bool IsEnumeration(string call) => call.Contains(" config --name-only -z --get-regexp ", StringComparison.Ordinal);
+
+    private static bool Smudges(string call) => call.Contains(" clone ", StringComparison.Ordinal) || call.Contains(" --detach ", StringComparison.Ordinal) || call.Contains(" submodule update ", StringComparison.Ordinal);
+
+    /// <summary>What one recorded call's <c>GIT_*</c> variables must be: <paramref name="fixedLines"/> plus — for a question that is neutralised (not the driver enumeration itself, not a question that writes the base's worktree) — exactly <paramref name="neutralisation"/>, whatever that is on this host.</summary>
+    private static void GitVariablesShould(string call, IEnumerable<string> env, IReadOnlyList<string> fixedLines, IReadOnlyList<string> neutralisation, string because) =>
+        env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(IsEnumeration(call) || Smudges(call) ? fixedLines : [.. fixedLines, .. neutralisation], $"{call}: {because}");
 
     private const string Attributes = "info/attributes";
 
@@ -270,10 +310,13 @@ public sealed class ArmGitWideningTests : IDisposable
         return [.. blocks.Select(block => (block.Item1, (IReadOnlyList<string>)block.Item2))];
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task Every_question_runs_under_the_targets_environment_whatever_the_caller_handed_in()
+    public async Task Every_question_runs_under_the_targets_environment_whatever_the_caller_handed_in(bool hostHasAGlobalLfsDriver)
     {
+        HostWithGlobalLfsDriver(hostHasAGlobalLfsDriver);
         var (source, _, _) = await SourceAsync();
         var marker = _temp.Combine("calls.log");
         var parent = new Dictionary<string, string>(Environment, StringComparer.Ordinal)
@@ -290,11 +333,12 @@ public sealed class ArmGitWideningTests : IDisposable
 
         var calls = Blocks(marker);
         calls.Should().NotBeEmpty();
+        var host = Neutralisation(await HostDriversAsync(source, parent));
         foreach (var (call, env) in calls)
         {
             var names = env.Select(line => line.Split('=')[0]).ToList();
             names.Should().Contain("KEEP_ME", $"{call}: a variable no rule names passes").And.NotContain(["GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "BENCH_DB", "SSH_AUTH_SOCK", "GIT_DIR"], $"{call}: the class reduces whatever it is handed, so no secret reaches a program git might still run");
-            env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], call);
+            GitVariablesShould(call, env, ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], host, "the allow-list and the switch, and the neutralisation of the drivers the host's own git reads");
         }
     }
 
@@ -376,26 +420,33 @@ public sealed class ArmGitWideningTests : IDisposable
         branch.Ok();
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task The_count_names_every_filter_driver_git_would_read_and_nothing_when_there_is_none()
+    public async Task The_count_names_every_filter_driver_git_would_read_and_only_the_hosts_own_when_none_is_planted(bool hostHasAGlobalLfsDriver)
     {
+        HostWithGlobalLfsDriver(hostHasAGlobalLfsDriver);
         var clone = await ClonedAsync();
         var marker = _temp.Combine("calls.log");
         var gitconfig = Path.Combine(Environment["HOME"], ".gitconfig");
-        File.WriteAllText(gitconfig, "[filter \"lfs\"]\n\tclean = /bin/false\n");
+        File.WriteAllText(gitconfig, "[filter \"planted\"]\n\tclean = /bin/false\n");
+        var planted = await HostDriversAsync(clone, Environment);
 
         (await In(clone, RecordingShim(marker)).UncommittedCountAsync(Ct)).Ok();
 
+        planted.Should().Contain("planted", "a driver of the GLOBAL config is read by git too");
         var status = Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.ToList();
-        status.Select(line => line.Split('=')[0]).Should().Contain(["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_KEY_1", "GIT_CONFIG_KEY_2", "GIT_CONFIG_KEY_3", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_VALUE_1", "GIT_CONFIG_VALUE_2", "GIT_CONFIG_VALUE_3"], "a driver of the GLOBAL config is read by git too");
-        status.Should().Contain(["GIT_CONFIG_COUNT=4", "GIT_CONFIG_KEY_0=filter.lfs.clean", "GIT_CONFIG_VALUE_0=", "GIT_CONFIG_KEY_3=filter.lfs.required", "GIT_CONFIG_VALUE_3=false"]);
+        status.Where(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal)).Should().BeEquivalentTo(Neutralisation(planted), "every driver git reads is named: the planted one and the host's own, four pairs each, counted");
+        status.Should().Contain($"GIT_CONFIG_KEY_{(planted.ToList().IndexOf("planted") * 4)}=filter.planted.clean").And.Contain($"GIT_CONFIG_KEY_{(planted.ToList().IndexOf("planted") * 4) + 3}=filter.planted.required").And.Contain($"GIT_CONFIG_COUNT={planted.Count * 4}");
 
         File.Delete(gitconfig);
         File.Delete(marker);
+        var remaining = await HostDriversAsync(clone, Environment);
+        remaining.Should().NotContain("planted", "removing the plant removes the driver git reads");
         (await In(clone, RecordingShim(marker)).UncommittedCountAsync(Ct)).Ok();
 
-        Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.Should().NotContain(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal), "no driver, nothing to neutralise");
+        Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.Where(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal)).Should().BeEquivalentTo(Neutralisation(remaining), "nothing planted: only the neutralisation of the drivers the host's own git reads (none on a host with none)");
     }
 
     [Fact]
@@ -570,10 +621,13 @@ public sealed class ArmGitWideningTests : IDisposable
         clock.Elapsed.Should().BeLessThan(Wall);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task Under_the_older_git_seam_the_lazy_fetch_switch_is_absent_and_the_transport_allow_list_is_present()
+    public async Task Under_the_older_git_seam_the_lazy_fetch_switch_is_absent_and_the_transport_allow_list_is_present(bool hostHasAGlobalLfsDriver)
     {
+        HostWithGlobalLfsDriver(hostHasAGlobalLfsDriver);
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var marker = _temp.Combine("calls.log");
         var folder = _temp.Folder("anywhere");
@@ -581,13 +635,20 @@ public sealed class ArmGitWideningTests : IDisposable
 
         _ = await new ArmGit(shim, folder, Environment, new ArmGitSeams(LazyFetchSwitch: false)).HeadAsync(Ct);
 
+        var host = Neutralisation(await HostDriversAsync(folder, Environment));
         var older = Blocks(marker);
         older.Should().NotBeEmpty();
-        older.Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).SequenceEqual(new[] { "GIT_ALLOW_PROTOCOL=" }), "without the switch (a git before 2.44 ignores it) the allow-list is still there, set and empty");
+        foreach (var call in older)
+        {
+            GitVariablesShould(call.Call, call.Env, ["GIT_ALLOW_PROTOCOL="], host, "without the switch (a git before 2.44 ignores it) the allow-list is still there, set and empty, beside the neutralisation of the drivers the host's own git reads");
+        }
 
         File.Delete(marker);
         _ = await new ArmGit(shim, folder, Environment, ArmGitSeams.Real).HeadAsync(Ct);
 
-        Blocks(marker).Should().OnlyContain(call => call.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).OrderBy(line => line, StringComparer.Ordinal).SequenceEqual(new[] { "GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1" }), "the real seam sets both");
+        foreach (var call in Blocks(marker))
+        {
+            GitVariablesShould(call.Call, call.Env, ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], host, "the real seam sets both");
+        }
     }
 }
