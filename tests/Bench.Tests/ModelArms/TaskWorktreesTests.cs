@@ -67,7 +67,7 @@ public sealed partial class TaskWorktreesTests
         File.Exists(Path.Combine(kit.Wt("t1"), "stray.txt")).Should().BeFalse("the worktree is fresh");
         (await kit.GitAsync(kit.Clone, "rev-parse", "tmp/t1")).Trim().Should().Be(head, "the stranded commit is gone with the branch");
         (await kit.GitAsync(kit.Clone, "worktree", "list", "--porcelain")).Split('\n').Count(line => line == $"worktree {kit.Wt("t1")}").Should().Be(1);
-        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"worktree add -q {kit.Wt("t1")} -b tmp/t1 HEAD");
+        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
         kit.LogLines.Should().Contain("t1: recreated — its worktree and branch were removed (not done, not picked)");
     }
 
@@ -149,12 +149,14 @@ public sealed partial class TaskWorktreesTests
         LockedAndInitialised,
         FolderGoneStillRegistered,
         BranchWithoutWorktree,
+        LockedThenFolderGone,
     }
 
     [Theory]
     [InlineData(Row.LockedAndInitialised)]
     [InlineData(Row.FolderGoneStillRegistered)]
     [InlineData(Row.BranchWithoutWorktree)]
+    [InlineData(Row.LockedThenFolderGone)]
     public async Task Recreation_removes_by_force_prunes_and_deletes_the_branch_before_adding_it_again(Row row)
     {
         using var kit = await KitAsync();
@@ -169,6 +171,10 @@ public sealed partial class TaskWorktreesTests
             case Row.FolderGoneStillRegistered:
                 Directory.Delete(kit.Wt("t1"), recursive: true);
                 break;
+            case Row.LockedThenFolderGone:
+                await kit.GitAsync(kit.Clone, "worktree", "lock", kit.Wt("t1"));
+                Directory.Delete(kit.Wt("t1"), recursive: true);
+                break;
             default:
                 await kit.GitAsync(kit.Clone, "worktree", "remove", "--force", kit.Wt("t1"));
                 break;
@@ -181,8 +187,12 @@ public sealed partial class TaskWorktreesTests
         (await kit.GitAsync(kit.Clone, "rev-parse", "tmp/t1")).Trim().Should().Be(head);
         (await kit.GitAsync(kit.Clone, "worktree", "list", "--porcelain")).Split('\n').Count(line => line == $"worktree {kit.Wt("t1")}").Should().Be(1);
         var calls = kit.Questions();
-        AssertInOrder(calls, "worktree prune", "branch -D tmp/t1", $"worktree add -q {kit.Wt("t1")} -b tmp/t1 HEAD");
-        calls.Any(call => call == "worktree remove --force --force " + kit.Wt("t1")).Should().Be(row == Row.LockedAndInitialised, "a remove only where a folder is there to remove");
+        AssertInOrder(calls, "worktree prune", "branch -D tmp/t1", $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
+        calls.Any(call => call == "worktree remove --force --force " + kit.Wt("t1")).Should().Be(row is Row.LockedAndInitialised or Row.LockedThenFolderGone or Row.FolderGoneStillRegistered, "a remove wherever the worktree is registered (a locked registration whose folder is gone is neither prunable nor deletable otherwise, M-ac)");
+        if (row == Row.LockedThenFolderGone)
+        {
+            AssertInOrder(calls, "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1");
+        }
     }
 
     [Fact]
@@ -222,8 +232,10 @@ public sealed partial class TaskWorktreesTests
         File.ReadAllText(kit.Paths.Timing).Should().Contain("\"2-t1-code\"", "a refusal that names a task writes the task's stop line");
     }
 
-    [Fact]
-    public async Task A_done_task_whose_worktree_is_gone_is_reattached_to_its_branch_without_a_build()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_done_task_whose_worktree_is_gone_is_reattached_to_its_branch_without_a_build(bool locked)
     {
         using var kit = await KitAsync();
         var sut = kit.Sut(kit.Recording());
@@ -231,6 +243,11 @@ public sealed partial class TaskWorktreesTests
         await kit.BeforeAsync("t1");
         await kit.CommitInAsync(kit.Wt("t1"), "work.txt", "work\n", "t1 work");
         var commit = await kit.HeadAsync(kit.Wt("t1"));
+        if (locked)
+        {
+            await kit.GitAsync(kit.Clone, "worktree", "lock", kit.Wt("t1"));
+        }
+
         Directory.Delete(kit.Wt("t1"), recursive: true);
         kit.Set("t1", new StepEntry.Skip());
         var buildsBefore = kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1"));
@@ -245,8 +262,8 @@ public sealed partial class TaskWorktreesTests
         new DirectoryInfo(Path.Combine(kit.Wt("t1"), "src_vs_code", "node_modules")).LinkTarget.Should().NotBeNull("the links are made again");
         kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1")).Should().Be(buildsBefore, "a done task's worktree is not built");
         var calls = kit.Questions();
-        AssertInOrder(calls, "worktree prune", $"worktree add -q {kit.Wt("t1")} tmp/t1");
-        calls.Should().NotContain(call => call == "branch -D tmp/t1" || (call.StartsWith("worktree remove", StringComparison.Ordinal) && call.Contains("/wt/t1", StringComparison.Ordinal)) || call.Contains("-b tmp/t1", StringComparison.Ordinal));
+        AssertInOrder(calls, "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"worktree add -q --no-checkout {kit.Wt("t1")} tmp/t1");
+        calls.Should().NotContain(call => call == "branch -D tmp/t1" || call.Contains("-b tmp/t1", StringComparison.Ordinal));
         kit.LogLines.Should().Contain("t1: reattached to tmp/t1 (its worktree was gone)");
         (await sut.PickBackAsync("t1", Ct)).Should().BeNull();
         (await kit.SubjectsAsync(kit.Clone, kit.BeforeOf("t1"))).Should().Equal("t1 work");
@@ -256,13 +273,14 @@ public sealed partial class TaskWorktreesTests
     [InlineData("both")]
     [InlineData("branch")]
     [InlineData("neither")]
+    [InlineData("locked-folder-gone")]
     public async Task A_picked_task_whose_worktree_or_branch_is_still_there_is_dropped_on_reentry_and_nothing_else_is_touched(string left)
     {
         using var kit = await KitAsync();
         var sut = kit.Sut(kit.Recording());
         await kit.ReadyAsync(sut, "t1", "t2");
         await File.WriteAllTextAsync(kit.Paths.Picked("t1"), string.Empty, Ct);
-        if (left != "both")
+        if (left is "branch" or "neither")
         {
             await kit.GitAsync(kit.Clone, "worktree", "remove", "--force", kit.Wt("t1"));
         }
@@ -270,6 +288,12 @@ public sealed partial class TaskWorktreesTests
         if (left == "neither")
         {
             await kit.GitAsync(kit.Clone, "branch", "-D", "tmp/t1");
+        }
+
+        if (left == "locked-folder-gone")
+        {
+            await kit.GitAsync(kit.Clone, "worktree", "lock", kit.Wt("t1"));
+            Directory.Delete(kit.Wt("t1"), recursive: true);
         }
 
         kit.ForgetCalls();
@@ -400,8 +424,10 @@ public sealed partial class TaskWorktreesTests
         kit.LogLines.Should().Contain("t1: kept — its session resumes in its worktree (1 commit(s) on tmp/t1 past its .before)");
     }
 
-    [Fact]
-    public async Task A_resuming_task_whose_worktree_folder_is_gone_is_pruned_reattached_and_rebuilt_and_the_lost_edits_are_said()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_resuming_task_whose_worktree_folder_is_gone_is_pruned_reattached_and_rebuilt_and_the_lost_edits_are_said(bool locked)
     {
         using var kit = await KitAsync();
         var sut = kit.Sut(kit.Recording());
@@ -410,6 +436,11 @@ public sealed partial class TaskWorktreesTests
         await kit.CommitInAsync(kit.Wt("t1"), "work.txt", "work\n", "t1 work");
         var commit = await kit.HeadAsync(kit.Wt("t1"));
         var before = await File.ReadAllTextAsync(kit.Paths.TaskBefore("t1"), Ct);
+        if (locked)
+        {
+            await kit.GitAsync(kit.Clone, "worktree", "lock", kit.Wt("t1"));
+        }
+
         Directory.Delete(kit.Wt("t1"), recursive: true);
         kit.Set("t1", new StepEntry.Resume(Guid.NewGuid(), 2, 60));
         var buildsBefore = kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1"));
@@ -421,7 +452,7 @@ public sealed partial class TaskWorktreesTests
         (await kit.HeadAsync(kit.Wt("t1"))).Should().Be(commit);
         File.Exists(Path.Combine(kit.Wt("t1"), ".agents", "conventions", "tools", "low-priority.mjs")).Should().BeTrue();
         kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1")).Should().Be(buildsBefore + 1, "the resumed session expects a built tree");
-        AssertInOrder(kit.Questions(), "worktree prune", $"worktree add -q {kit.Wt("t1")} tmp/t1");
+        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"worktree add -q --no-checkout {kit.Wt("t1")} tmp/t1");
         kit.Questions().Should().NotContain(call => call == "branch -D tmp/t1");
         (await File.ReadAllTextAsync(kit.Paths.TaskBefore("t1"), Ct)).Should().Be(before);
         kit.LogLines.Should().Contain("t1: reattached to tmp/t1 (its worktree folder was gone — its uncommitted edits are lost; its 1 commit(s) are on the branch)");

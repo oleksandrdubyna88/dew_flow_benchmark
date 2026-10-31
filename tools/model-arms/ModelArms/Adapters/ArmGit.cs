@@ -169,17 +169,18 @@ public sealed partial class ArmGit
 
     // ---- E4.S2: the questions the task pipeline asks of the arm's clone and its worktrees. Every write of the clone is neutralised (smudges: false); the cherry-pick alone also carries the merge neutralisation and the committer pin. ----
 
-    /// <summary><c>worktree add -q &lt;path&gt; -b &lt;branch&gt; HEAD</c>, under the clone's wall: a new worktree on a new branch from the clone's HEAD. A path or a branch that starts with <c>-</c> is refused before git is asked.</summary>
+    /// <summary><c>worktree add -q --no-checkout &lt;path&gt; -b &lt;branch&gt; HEAD</c>, under the clone's wall: a new worktree on a new branch from the clone's HEAD, with NOTHING checked out — a filter named only under a condition the worktree meets (<c>includeIf</c> <c>onbranch:</c> / <c>gitdir:</c>) is invisible to an enumeration in the clone and
+    /// ran on the worktree's checkout (E4 §8 item 27, M-x); the checkout is <see cref="PopulateAsync"/>, a question asked IN the worktree. A path or a branch that starts with <c>-</c> is refused before git is asked.</summary>
     public async Task<Outcome<string>> WorktreeAddAsync(string path, string branch, CancellationToken ct) =>
         PathRefusal(path) is { Length: > 0 } pathRefused ? Outcome<string>.Failure(pathRefused)
         : BranchRefusal(branch) is { Length: > 0 } refused ? Outcome<string>.Failure(refused)
-        : await AskAsync([.. Pinned, "worktree", "add", "-q", path, "-b", branch, "HEAD"], ct, TargetWalls.Clone);
+        : await AskAsync([.. Pinned, "worktree", "add", "-q", "--no-checkout", path, "-b", branch, "HEAD"], ct, TargetWalls.Clone);
 
-    /// <summary><c>worktree add -q &lt;path&gt; &lt;branch&gt;</c>: a folder attached to the EXISTING branch, HEAD on it (M-t) — only once the registration is clean (a dead one is pruned first; <c>-f</c> is never used, it overrides a live registration too).</summary>
+    /// <summary><c>worktree add -q --no-checkout &lt;path&gt; &lt;branch&gt;</c>: a folder attached to the EXISTING branch, HEAD on it, nothing checked out (see <see cref="WorktreeAddAsync"/>; M-t) — only once the registration is clean (a dead one is pruned first; <c>-f</c> is never used, it overrides a live registration too).</summary>
     public async Task<Outcome<string>> WorktreeAttachAsync(string path, string branch, CancellationToken ct) =>
         PathRefusal(path) is { Length: > 0 } pathRefused ? Outcome<string>.Failure(pathRefused)
         : BranchRefusal(branch) is { Length: > 0 } refused ? Outcome<string>.Failure(refused)
-        : await AskAsync([.. Pinned, "worktree", "add", "-q", path, branch], ct, TargetWalls.Clone);
+        : await AskAsync([.. Pinned, "worktree", "add", "-q", "--no-checkout", path, branch], ct, TargetWalls.Clone);
 
     /// <summary><c>worktree remove --force --force &lt;path&gt;</c>: the second <c>--force</c> removes a worktree the model LOCKED (M-t); a registered worktree whose folder is gone is removed with its registration (exit 0), an unregistered path is git's 128.</summary>
     public async Task<Outcome<string>> WorktreeRemoveAsync(string path, CancellationToken ct) =>
@@ -255,10 +256,47 @@ public sealed partial class ArmGit
     }
 
     /// <summary>The committer a pick is made under: the harness made the commit, so the harness is named (M-p) — it beats <c>committer.*</c> and <c>user.*</c> of the clone's config the model may have written, keeps the source commit's AUTHOR, and a host with no identity never fails a pick.</summary>
+    /// <summary><c>reset -q --hard</c>, asked IN a worktree that was added with <c>--no-checkout</c>: the checkout, with the filter and merge enumeration made in the worktree's own context (its HEAD, its gitdir) — the context the smudge runs in. It fills the index and the tree from HEAD in one step (M-aa), keeps an untracked file (so it is idempotent), moves no ref of
+    /// the clone and runs no hook <c>core.hooksPath=</c> does not already stop.</summary>
+    public async Task<Outcome<string>> PopulateAsync(CancellationToken ct) => await AskAsync([.. Pinned, "reset", "-q", "--hard"], ct, TargetWalls.Clone);
+
+    /// <summary><c>rev-parse --git-path index</c>: git's own answer for where this folder's index lives (absolute for a linked worktree, M-aa); a relative answer is joined to the folder asked, never to the text of a <c>.git</c> file. Absent by name = the checkout never ran.</summary>
+    public async Task<Outcome<string>> IndexPathAsync(CancellationToken ct) =>
+        (await AskAsync([.. Pinned, "rev-parse", "--git-path", "index"], ct)).Match(
+            text => Outcome<string>.Success(Path.GetFullPath(Path.Combine(_workingDirectory, text.Trim()))),
+            Outcome<string>.Failure);
+
+    /// <summary><c>log -1 --no-show-signature --date=raw --format=%P%x00%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%B &lt;sha&gt;</c>: the parents, the author, the committer and the WHOLE message of one commit (the message is the last field, read whole and verbatim, so two commits' messages compare byte for byte). <c>--no-show-signature</c> is a pin: <c>log.showSignature=true</c> and a <c>gpg.program</c> in the clone's config RUN the signer for a source the model signed (M-ab);
+    /// <c>rev-list --format</c> and <c>cat-file</c> do not, but one pinned <c>log</c> is the one-launch answer.</summary>
+    public async Task<Outcome<CommitFacts>> CommitFactsAsync(string sha, CancellationToken ct) =>
+        !CommitId().IsMatch(sha)
+            ? Outcome<CommitFacts>.Failure(NotACommitId(sha))
+            : (await AskAsync([.. Pinned, "log", "-1", "--no-show-signature", "--date=raw", "--format=%P%x00%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%B", sha], ct)).Match(FactsOf, Outcome<CommitFacts>.Failure);
+
+    private static Outcome<CommitFacts> FactsOf(string text)
+    {
+        var fields = text.Split('\0', 7);
+        return fields.Length < 7
+            ? Outcome<CommitFacts>.Failure("git printed a commit in a shape this reader does not know")
+            : Outcome<CommitFacts>.Success(new CommitFacts([.. fields[0].Split(' ', StringSplitOptions.RemoveEmptyEntries)], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6]));
+    }
+
+    internal const string CommitterName = "model-arms";
+
+    internal const string CommitterEmail = "model-arms@model-arms.invalid";
+
     private static readonly IReadOnlyDictionary<string, string> Committer = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["GIT_COMMITTER_NAME"] = "model-arms",
-        ["GIT_COMMITTER_EMAIL"] = "model-arms@model-arms.invalid",
+        ["GIT_COMMITTER_NAME"] = CommitterName,
+        ["GIT_COMMITTER_EMAIL"] = CommitterEmail,
+    };
+
+    /// <summary>The submodule update's environment beyond the file allow-list: no global and no system config. The fresh clone the update makes is a context no enumeration can stand in before it exists (its gitdir <c>.git/worktrees/&lt;n&gt;/modules/&lt;name&gt;</c>, its HEAD the rules repository's default branch while it checks out), and the scopes it reads are system, global — the MODEL's (HOME passes, D19) —
+    /// and its own: a global <c>includeIf</c> on that gitdir or that branch named a smudge that ran (M-z). Closed by removing the two scopes (git 2.32, inside the floor).</summary>
+    private static readonly IReadOnlyDictionary<string, string> NoGlobalConfig = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["GIT_CONFIG_GLOBAL"] = "/dev/null",
+        ["GIT_CONFIG_SYSTEM"] = "/dev/null",
     };
 
     /// <summary><c>-c commit.gpgsign=false cherry-pick --no-edit --allow-empty --keep-redundant-commits &lt;sha&gt;</c>: ONE commit per call, so an abort undoes at most the commit in flight (D22). <c>commit.gpgsign=false</c> alone stops <c>gpg.program</c>, <c>gpg.ssh.program</c> and <c>gpg.x509.program</c> (M-i); <c>--no-edit</c> is a request a one-commit non-interactive pick never needs on git 2.53 (M-j); the
@@ -279,7 +317,7 @@ public sealed partial class ArmGit
     /// <summary><c>submodule update --init --checkout -q -- &lt;path&gt;</c>, the arm's form: <c>GIT_ALLOW_PROTOCOL=file</c> (the narrowest value that admits the local clone, M-a), neutralised like every write of the arm's clone. <c>--checkout</c> on the command line stops <c>submodule.&lt;name&gt;.update=!&lt;program&gt;</c> whatever the name holds (M-b, M-q); a
     /// <c>-c submodule.&lt;name&gt;.update=checkout</c> would split at the name's first <c>=</c>. The base's <see cref="SubmoduleUpdateAsync"/> is the base's form (<c>prep-base</c> only) and is never used in an arm.</summary>
     public async Task<Outcome<string>> ArmSubmoduleUpdateAsync(string path, CancellationToken ct) =>
-        await AskAsync([.. Pinned, "submodule", "update", "--init", "--checkout", "-q", "--", path], ct, TargetWalls.Clone, transport: Transport.File);
+        await AskAsync([.. Pinned, "submodule", "update", "--init", "--checkout", "-q", "--", path], ct, TargetWalls.Clone, transport: Transport.File, extra: NoGlobalConfig);
 
     /// <summary>The names of the filter drivers the clone's config names (the enumeration every neutralised question runs): what the LFS warning reads.</summary>
     public async Task<Outcome<IReadOnlyList<string>>> FilterDriversAsync(CancellationToken ct) =>
@@ -508,3 +546,6 @@ public sealed partial class ArmGit
 
 /// <summary>One registration of <c>worktree list --porcelain</c>: <paramref name="Branch"/> is the full ref (<c>refs/heads/tmp/t1</c>) or empty; <paramref name="Prunable"/> says the folder is gone.</summary>
 public sealed record WorktreeEntry(string Path, string Branch, bool Detached, bool Prunable);
+
+/// <summary>What <c>log -1</c> says of one commit.</summary>
+public sealed record CommitFacts(IReadOnlyList<string> Parents, string AuthorName, string AuthorEmail, string AuthorDate, string CommitterName, string CommitterEmail, string Message);

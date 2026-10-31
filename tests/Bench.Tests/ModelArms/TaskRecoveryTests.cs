@@ -13,8 +13,8 @@ public sealed class TaskRecoveryTests
 {
     private static readonly WorktreeState Folder = new WorktreeState.Registered(FolderPresent: true, OnBranch: true);
 
-    private static TaskState State(TaskStep step, bool picked, bool branch, WorktreeState worktree, bool before = true, bool descends = true) =>
-        new("t1", step, branch, picked, worktree, before, descends);
+    private static TaskState State(TaskStep step, bool picked, bool branch, WorktreeState worktree, bool before = true, bool descends = true, int attempt = 2, int commits = -1) =>
+        new("t1", step, branch, picked, worktree, before, descends, attempt, commits);
 
     private const string Resumes = "t1: ";
 
@@ -35,7 +35,28 @@ public sealed class TaskRecoveryTests
         { State(TaskStep.Done, true, true, new WorktreeState.Gone()), new TaskAction.Drop("t1") },
         { State(TaskStep.Done, true, false, new WorktreeState.Stray()), new TaskAction.Drop("t1") },
         { State(TaskStep.Done, true, false, new WorktreeState.Gone()), new TaskAction.Nothing("t1") },
+        { State(TaskStep.Resume, false, true, new WorktreeState.Registered(true, true, Populated: false)), new TaskAction.Populate("t1", Build: true) },
+        { State(TaskStep.Done, false, true, new WorktreeState.Registered(true, true, Populated: false)), new TaskAction.Populate("t1", Build: false) },
+        { State(TaskStep.Done, false, true, new WorktreeState.Registered(true, false, Populated: false)), new TaskAction.Populate("t1", Build: false) },
+        { State(TaskStep.Fresh, false, true, new WorktreeState.Registered(true, true, Populated: false)), new TaskAction.Recreate("t1") },
+        { State(TaskStep.Done, true, true, new WorktreeState.Registered(true, true, Populated: false)), new TaskAction.Drop("t1") },
+        { State(TaskStep.Unresumable, false, true, Folder, commits: 0), new TaskAction.Recreate("t1") },
+        { State(TaskStep.Unresumable, false, false, new WorktreeState.Gone()), new TaskAction.Recreate("t1") },
     };
+
+    public static TheoryData<TaskState, string> UnresumableRefusals() => new()
+    {
+        { State(TaskStep.Unresumable, false, true, Folder, commits: 3), "its session cannot be resumed (attempt 2: the session file or claude's transcript is unreadable) and tmp/t1 holds 3 commit(s) past its .before — recreating would delete them; pick them back by hand, or remove wt/t1, tmp/t1 and notes/t1-code.md to start the task again, then run me again" },
+        { State(TaskStep.Unresumable, false, true, Folder, before: false), "its session cannot be resumed and out/task-t1.before is missing — the task's commits cannot be told from the branch's; remove wt/t1, tmp/t1 and notes/t1-code.md to start the task again, or restore what is missing, then run me again" },
+        { State(TaskStep.Unresumable, false, true, Folder, descends: false), "its session cannot be resumed and tmp/t1 does not descend from its out/task-t1.before — the task's commits cannot be told from the branch's; remove wt/t1, tmp/t1 and notes/t1-code.md to start the task again, or restore what is missing, then run me again" },
+    };
+
+    [Theory]
+    [MemberData(nameof(UnresumableRefusals))]
+    public void A_task_whose_session_cannot_be_resumed_is_refused_when_deleting_would_lose_commits_or_cannot_be_judged(TaskState state, string why)
+    {
+        TaskRecovery.Decide(state).Should().Be(new TaskAction.Refuse("t1", why));
+    }
 
     [Theory]
     [MemberData(nameof(Rows))]
@@ -80,7 +101,9 @@ public sealed class TaskRecoveryTests
         TaskRecovery.StepOf(new StepEntry.Skip()).Should().Be(TaskStep.Done);
         TaskRecovery.StepOf(new StepEntry.RecoveredDone(new StepEnd.Finished(), 1)).Should().Be(TaskStep.Done);
         TaskRecovery.StepOf(new StepEntry.Resume(Guid.NewGuid(), 2, 60)).Should().Be(TaskStep.Resume);
-        TaskRecovery.StepOf(new StepEntry.Fresh(1, 60)).Should().Be(TaskStep.Fresh);
+        TaskRecovery.StepOf(new StepEntry.Fresh(1, 60)).Should().Be(TaskStep.Fresh, "a session that never started");
+        TaskRecovery.StepOf(new StepEntry.Fresh(2, 60)).Should().Be(TaskStep.Unresumable, "attempt 1 RAN and its session cannot be resumed");
+        TaskRecovery.StepOf(new StepEntry.Fresh(5, 60)).Should().Be(TaskStep.Unresumable);
         TaskRecovery.IsDone(new StepEntry.RecoveredDone(new StepEnd.HardDeadline(), 1)).Should().BeTrue();
         TaskRecovery.IsDone(new StepEntry.Resume(Guid.NewGuid(), 2, 60)).Should().BeFalse();
     }

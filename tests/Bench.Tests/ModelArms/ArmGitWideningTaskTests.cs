@@ -358,22 +358,179 @@ public sealed partial class ArmGitWideningTests
         _ = await git.WorktreeListAsync(Ct);
         _ = await git.CommitPresentAsync(head, Ct);
         _ = await git.IsAncestorAsync(head, "tmp/h", Ct);
+        _ = await new ArmGit(Sentinel.RecordingShim(_temp, marker), wt, parent).PopulateAsync(Ct);
+        _ = await new ArmGit(Sentinel.RecordingShim(_temp, marker), wt, parent).IndexPathAsync(Ct);
+        _ = await git.CommitFactsAsync(head, Ct);
         _ = await git.WorktreeRemoveAsync(wt, Ct);
         _ = await git.WorktreePruneAsync(Ct);
         _ = await git.DeleteBranchAsync("tmp/h", Ct);
 
         var blocks = Sentinel.Blocks(marker);
-        blocks.Should().HaveCountGreaterThan(18, "an assertion over an empty recording is green");
+        blocks.Should().HaveCountGreaterThan(21, "an assertion over an empty recording is green");
         blocks.Should().OnlyContain(block => block.Call.StartsWith("-c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false ", StringComparison.Ordinal));
         var filters = Neutralisation(await HostDriversAsync(clone, Environment));
         foreach (var block in blocks)
         {
             var expected = IsEnumeration(block.Call) ? new[] { "GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1" }
-                : block.Call.Contains(" submodule update ", StringComparison.Ordinal) ? ["GIT_ALLOW_PROTOCOL=file", "GIT_NO_LAZY_FETCH=1", .. filters]
+                : block.Call.Contains(" submodule update ", StringComparison.Ordinal) ? ["GIT_ALLOW_PROTOCOL=file", "GIT_NO_LAZY_FETCH=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", .. filters]
                 : block.Call.Contains(" cherry-pick --no-edit", StringComparison.Ordinal) ? ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1", "GIT_COMMITTER_NAME=model-arms", "GIT_COMMITTER_EMAIL=model-arms@model-arms.invalid", .. filters]
                 : ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1", .. filters];
             block.Env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(expected, block.Call);
             block.Env.Should().NotContain(line => line.StartsWith("PGPASSWORD=", StringComparison.Ordinal), block.Call);
         }
+    }
+
+    [Fact]
+    public async Task Worktree_add_and_attach_check_nothing_out_and_populate_fills_the_tree()
+    {
+        var clone = await ClonedAsync();
+        var git = In(clone);
+        var added = Worktree(clone, "wt-added");
+        var attached = Worktree(clone, "wt-attached");
+
+        (await git.WorktreeAddAsync(added, "tmp/a", Ct)).Ok();
+
+        Directory.GetFileSystemEntries(added).Select(Path.GetFileName).Should().Equal(".git");
+        var index = (await In(added).IndexPathAsync(Ct)).Ok();
+        Path.IsPathRooted(index).Should().BeTrue("git's own answer is absolute");
+        File.Exists(index).Should().BeFalse("nothing is checked out and no index is written (M-aa)");
+        (await In(added).PopulateAsync(Ct)).Ok();
+        File.Exists(Path.Combine(added, "a.txt")).Should().BeTrue();
+        File.Exists(index).Should().BeTrue();
+        File.WriteAllText(Path.Combine(added, "mine.txt"), "mine\n");
+        (await In(added).PopulateAsync(Ct)).Ok();
+        File.Exists(Path.Combine(added, "mine.txt")).Should().BeTrue("a second populate keeps an untracked file");
+        await TargetBench.GitAsync(clone, "worktree", "remove", "--force", "--force", added);
+        (await git.WorktreeAttachAsync(attached, "tmp/a", Ct)).Ok();
+        Directory.GetFileSystemEntries(attached).Select(Path.GetFileName).Should().Equal(".git");
+        (await In(attached).PopulateAsync(Ct)).Ok();
+        File.Exists(Path.Combine(attached, "a.txt")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Index_path_is_gits_answer_for_a_linked_worktree()
+    {
+        var clone = await ClonedAsync();
+        var wt = Worktree(clone, "wt-index");
+        await TargetBench.GitAsync(clone, "worktree", "add", "-q", wt, "-b", "tmp/i", "HEAD");
+
+        var inWorktree = (await In(wt).IndexPathAsync(Ct)).Ok();
+        var inClone = (await In(clone).IndexPathAsync(Ct)).Ok();
+
+        inWorktree.Should().Be((await TargetBench.GitAsync(wt, "rev-parse", "--git-path", "index")).Trim());
+        Path.GetFullPath(inWorktree).Should().EndWith(Path.Combine(".git", "worktrees", "wt-index", "index"));
+        Path.GetFullPath(Path.Combine(clone, inClone)).Should().Be(Path.Combine(clone, ".git", "index"), "a relative answer is joined to the folder asked, never to the .git file's text");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task The_arms_submodule_update_reads_no_global_and_no_system_config()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
+        var (clone, _, _) = await WithSubmoduleAsync();
+        var wt = Worktree(clone, "wt-global");
+        await TargetBench.GitAsync(clone, "worktree", "add", "-q", wt, "-b", "tmp/g", "HEAD");
+        var marker = _temp.Combine("calls.log");
+        var git = new ArmGit(Sentinel.RecordingShim(_temp, marker), wt, Environment);
+
+        _ = await git.ArmSubmoduleUpdateAsync("sub", Ct);
+        _ = await git.HeadAsync(Ct);
+        _ = await git.PopulateAsync(Ct);
+
+        var blocks = Sentinel.Blocks(marker).Where(block => !IsEnumeration(block.Call)).ToList();
+        var update = blocks.Single(block => block.Call.Contains(" submodule update ", StringComparison.Ordinal));
+        update.Env.Should().Contain(["GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"]);
+        blocks.Except([update]).Should().OnlyContain(block => !block.Env.Any(line => line.StartsWith("GIT_CONFIG_GLOBAL", StringComparison.Ordinal) || line.StartsWith("GIT_CONFIG_SYSTEM", StringComparison.Ordinal)), "on that question alone");
+        Sentinel.Blocks(marker).Where(block => IsEnumeration(block.Call)).Should().OnlyContain(block => !block.Env.Any(line => line.StartsWith("GIT_CONFIG_GLOBAL", StringComparison.Ordinal)), "its enumeration still reads the scopes: pairs for keys the fresh clone cannot read are harmless");
+    }
+
+    [Fact]
+    public async Task Commit_facts_name_the_parents_the_author_the_committer_and_the_whole_message()
+    {
+        var clone = await ClonedAsync();
+        var root = (await TargetBench.GitAsync(clone, "rev-list", "--max-parents=0", "HEAD")).Trim();
+        File.WriteAllText(Path.Combine(clone, "f.txt"), "f\n");
+        await TargetBench.GitAsync(clone, "add", "f.txt");
+        const string message = "subject\n\n\"quoted\" body with a trailing space \n\nthird paragraph";
+        await TargetBench.GitAsync(clone, "-c", "user.name=Task Author", "-c", "user.email=author@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "--cleanup=verbatim", "--date=1700000000 +0100", "-m", message);
+        var head = (await TargetBench.GitAsync(clone, "rev-parse", "HEAD")).Trim();
+        var facts = (await In(clone).CommitFactsAsync(head, Ct)).Ok();
+
+        facts.Parents.Should().Equal((await TargetBench.GitAsync(clone, "rev-parse", "HEAD^")).Trim());
+        facts.AuthorName.Should().Be("Task Author");
+        facts.AuthorEmail.Should().Be("author@example.invalid");
+        facts.AuthorDate.Should().Be("1700000000 +0100");
+        facts.CommitterName.Should().NotBeEmpty();
+        facts.Message.Should().Be(await TargetBench.GitAsync(clone, "log", "-1", "--format=%B"), "the whole message as git prints it: paragraphs and quotes kept");
+        facts.Message.Should().Contain("third paragraph");
+        (await In(clone).CommitFactsAsync(root, Ct)).Ok().Parents.Should().BeEmpty("a root commit has no parent");
+        await TargetBench.GitAsync(clone, "checkout", "-q", "-b", "side", root);
+        await CommitInAsync(clone, "side.txt", "side\n", "side");
+        await TargetBench.GitAsync(clone, "checkout", "-q", "plan");
+        await TargetBench.GitAsync(clone, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "merge", "--no-ff", "--quiet", "-m", "merge", "side");
+        (await In(clone).CommitFactsAsync("HEAD", Ct)).Failed().Should().BeTrue("a sha, not a ref");
+        (await In(clone).CommitFactsAsync((await TargetBench.GitAsync(clone, "rev-parse", "HEAD")).Trim(), Ct)).Ok().Parents.Should().HaveCount(2, "a merge commit's two parents");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Commit_facts_run_no_signer_the_clone_names()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "plants are shell scripts");
+        var clone = await ClonedAsync();
+        var signer = PlantProgram("signer", "exit 1");
+        File.WriteAllText(Path.Combine(clone, "s.txt"), "s\n");
+        await TargetBench.GitAsync(clone, "add", "s.txt");
+        var tree = (await TargetBench.GitAsync(clone, "write-tree")).Trim();
+        var parent = (await TargetBench.GitAsync(clone, "rev-parse", "HEAD")).Trim();
+        var unsigned = (await TargetBench.GitAsync(clone, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit-tree", tree, "-p", parent, "-m", "signed")).Trim();
+        var raw = await TargetBench.GitAsync(clone, "cat-file", "commit", unsigned);
+        var signed = raw.Replace("\n\nsigned", "\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n abc\n -----END PGP SIGNATURE-----\n\nsigned", StringComparison.Ordinal);
+        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["hash-object", "-t", "commit", "-w", "--stdin"], clone, TimeSpan.FromSeconds(60), signed, Environment, Ct);
+        var sha = ((Bench.Infrastructure.Process.ProcessAttempt.Completed)attempt).Result.StandardOutput.Trim();
+        AppendConfig(Path.Combine(clone, ".git"), $"[log]\n\tshowSignature = true\n[gpg]\n\tprogram = {signer}\n");
+        await HostGitAsync(clone, "log", "-1", "--format=%an", sha);
+        Ran.Should().BeTrue("the plant is live: the host's log verified the signature with the program the clone names");
+        File.Delete(SentinelFile);
+
+        var facts = await In(clone).CommitFactsAsync(sha, Ct);
+
+        Ran.Should().BeFalse("--no-show-signature");
+        facts.Ok().Message.Should().StartWith("signed");
+    }
+
+    /// <summary>The model under test shares HOME (D19), so a GLOBAL <c>includeIf</c> is the model's. The questions the module asked before E4.S2 enumerate the filter drivers IN the folder they run in, so a condition that holds there is listed and emptied, and one that holds only after the question's own effect (<c>onbranch:</c> of the NEW branch)
+    /// is not read yet. Measured on git 2.53 for each; the base's three forms (<c>clone</c>, <c>checkout --detach</c>, <c>submodule update</c>) run EVERY filter by design (an LFS target's smudge must run there) and are the residual the module doc names.</summary>
+    [Theory]
+    [InlineData("gitdir:**")]
+    [InlineData("onbranch:plan")]
+    [InlineData("onbranch:feat/x")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_global_conditional_include_never_runs_a_filter_for_a_neutralised_question(string condition)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "plants are shell scripts");
+        var clone = await ClonedAsync();
+        var program = PlantProgram("global-filter");
+        var included = _temp.File($"[filter \"g\"]\n\tclean = {program}\n\tsmudge = {program}\n", "global-inc.cfg");
+        AppendAttributes(Path.Combine(clone, ".git"), "*.txt filter=g\n");
+        File.WriteAllText(Path.Combine(Environment["HOME"], ".gitconfig"), $"[includeIf \"{condition}\"]\n\tpath = {included}\n");
+        var git = In(clone);
+        var firstHalf = condition == "onbranch:feat/x" ? null : "the plant is live";
+        if (firstHalf is not null)
+        {
+            Redirty(Path.Combine(clone, "a.txt"));
+            await HostGitAsync(clone, "status", "--porcelain");
+            Ran.Should().BeTrue(firstHalf);
+            File.Delete(SentinelFile);
+        }
+
+        Redirty(Path.Combine(clone, "a.txt"));
+        (await git.UncommittedCountAsync(Ct)).Ok();
+        (await git.DiffAsync((await TargetBench.GitAsync(clone, "rev-parse", "HEAD~1")).Trim(), Ct)).Ok();
+        Redirty(Path.Combine(clone, "a.txt"));
+        (await git.NewBranchAsync("feat/x", Ct)).Ok();
+        (await git.CountSinceAsync((await TargetBench.GitAsync(clone, "rev-parse", "HEAD~1")).Trim(), Ct)).Ok();
+
+        Ran.Should().BeFalse("status, diff, checkout -b and rev-list ran no filter a global conditional include names");
     }
 }

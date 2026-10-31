@@ -14,6 +14,7 @@ public sealed partial class TaskWorktreesTests
     [
         "smudge", "post-checkout", "update-cmd", "submodule-smudge",
         "merge-driver", "merge-default", "core-editor", "sequence-editor", "gpg-program", "gpg-ssh-program", "gpg-x509-program", "post-commit", "merge-driver-named-a=b", "filter-process-on-the-pick",
+        "includeIf-onbranch-add", "includeIf-gitdir-add", "includeIf-onbranch-attach", "includeIf-gitdir-attach", "includeIf-onbranch-pick", "global-includeIf-gitdir-submodule", "global-includeIf-onbranch-submodule",
     ];
 
     private static string Plant(WorktreeKit kit, string name, string body = "exit 0") => Sentinel.PlantProgram(kit.Temp, name, body);
@@ -30,7 +31,7 @@ public sealed partial class TaskWorktreesTests
     public async Task Worktree_add_checkout_and_cherry_pick_of_the_arms_clone_run_no_program_the_clone_names(string row)
     {
         using var kit = await KitAsync();
-        if (row is "smudge" or "post-checkout" or "update-cmd" or "submodule-smudge")
+        if (row is "smudge" or "post-checkout" or "update-cmd" or "submodule-smudge" || row.EndsWith("-add", StringComparison.Ordinal) || row.EndsWith("-attach", StringComparison.Ordinal) || row.EndsWith("-submodule", StringComparison.Ordinal))
         {
             await EnterRowAsync(kit, row);
         }
@@ -40,10 +41,10 @@ public sealed partial class TaskWorktreesTests
         }
     }
 
-    private static async Task LiveWorktreeAsync(WorktreeKit kit, params string[] then)
+    private static async Task LiveWorktreeAsync(WorktreeKit kit, string branch = "live", string? attachBranch = null, params string[] then)
     {
         var live = kit.Temp.Combine("live-wt");
-        string[] add = ["worktree", "add", "-q", live, "-b", "live", "HEAD"];
+        string[] add = attachBranch is null ? ["worktree", "add", "-q", live, "-b", branch, "HEAD"] : ["worktree", "add", "-q", live, attachBranch];
         if (then.Length == 0)
         {
             await ProveLiveAsync(kit, kit.Clone, add);
@@ -55,7 +56,7 @@ public sealed partial class TaskWorktreesTests
         }
 
         await kit.HostGitAsync(kit.Clone, "worktree", "remove", "--force", "--force", live);
-        await kit.HostGitAsync(kit.Clone, "branch", "-D", "live");
+        await kit.HostGitAsync(kit.Clone, "branch", "-D", attachBranch ?? branch);
         File.Delete(Sentinel.Marker(kit.Temp));
     }
 
@@ -77,10 +78,23 @@ public sealed partial class TaskWorktreesTests
                 break;
             case "update-cmd":
                 await ConfigAsync(kit, "submodule..agents/conventions.update", "!" + Plant(kit, "update"));
-                await LiveWorktreeAsync(kit, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", ".agents/conventions");
+                await LiveWorktreeAsync(kit, then: ["-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", ".agents/conventions"]);
+                break;
+            case "includeIf-onbranch-add" or "includeIf-gitdir-add":
+                await IncludeIfFilterAsync(kit, row);
+                await LiveWorktreeAsync(kit, branch: "tmp/live");
+                check = "a.txt";
+                break;
+            case "includeIf-onbranch-attach" or "includeIf-gitdir-attach":
+                await kit.CommitInAsync(kit.Clone, ".gitattributes", "*.txt filter=y\n", "attributes");
+                await AttachSetupAsync(kit);
+                await IncludeIfFilterAsync(kit, row, commitAttributes: false);
+                await kit.HostGitAsync(kit.Clone, "branch", "tmp/live");
+                await LiveWorktreeAsync(kit, attachBranch: "tmp/live");
+                check = "a.txt";
                 break;
             default:
-                await SubmoduleSmudgeAsync(kit);
+                await SubmoduleSmudgeAsync(kit, row);
                 break;
         }
 
@@ -91,16 +105,39 @@ public sealed partial class TaskWorktreesTests
         File.Exists(Path.Combine(kit.Wt("t1"), ".agents", "conventions", "tools", "low-priority.mjs")).Should().BeTrue("the submodule was checked out (--checkout)");
         if (check is not null)
         {
-            File.ReadAllText(Path.Combine(kit.Wt("t1"), check)).Should().Be("the blob\n", "the file's content is the blob's");
+            File.ReadAllText(Path.Combine(kit.Wt("t1"), check)).Should().Be(check == "a.txt" ? "one\ntwo\nthree\n" : "the blob\n", "the file's content is the blob's");
         }
 
-        if (row == "submodule-smudge")
+        if (row.EndsWith("-submodule", StringComparison.Ordinal) || row == "submodule-smudge")
         {
             File.ReadAllText(Path.Combine(kit.Wt("t1"), ".agents", "conventions", "r.md")).Should().Be("rules doc\n");
         }
     }
 
-    private static async Task SubmoduleSmudgeAsync(WorktreeKit kit)
+    /// <summary>A filter the clone names only under a condition its WORKTREE meets (<c>onbranch:tmp/**</c>, <c>gitdir:**/worktrees/**</c>): the enumeration in the clone sees nothing, the checkout in the worktree runs it (M-x).</summary>
+    private static async Task IncludeIfFilterAsync(WorktreeKit kit, string row, bool commitAttributes = true)
+    {
+        if (commitAttributes)
+        {
+            await kit.CommitInAsync(kit.Clone, ".gitattributes", "*.txt filter=y\n", "attributes");
+        }
+
+        var included = kit.Temp.File($"[filter \"y\"]\n\tsmudge = {Plant(kit, "include-smudge", "cat")}\n", "inc.cfg");
+        var condition = row.StartsWith("includeIf-onbranch", StringComparison.Ordinal) ? "onbranch:tmp/**" : "gitdir:**/worktrees/**";
+        File.AppendAllText(Path.Combine(kit.Clone, ".git", "config"), $"[includeIf \"{condition}\"]\n\tpath = {included}\n");
+    }
+
+    /// <summary>t1 entered and done with a commit, its folder removed: the attach road (the registration stays, prunable).</summary>
+    private static async Task AttachSetupAsync(WorktreeKit kit)
+    {
+        await kit.ReadyAsync(kit.Sut(), "t1", "t2");
+        await kit.BeforeAsync("t1");
+        await kit.CommitInAsync(kit.Wt("t1"), "work.txt", "work\n", "t1 work");
+        Directory.Delete(kit.Wt("t1"), recursive: true);
+        kit.Set("t1", new StepEntry.Skip());
+    }
+
+    private static async Task SubmoduleSmudgeAsync(WorktreeKit kit, string row)
     {
         await File.WriteAllTextAsync(Path.Combine(kit.Bench.Rules, ".gitattributes"), "*.md filter=g\n", Ct);
         await File.WriteAllTextAsync(Path.Combine(kit.Bench.Rules, "r.md"), "rules doc\n", Ct);
@@ -112,8 +149,15 @@ public sealed partial class TaskWorktreesTests
         await kit.GitAsync(kit.Clone, "add", ".agents/conventions");
         await kit.CommitStagedAsync(kit.Clone, "bump the rules");
         Directory.CreateDirectory(kit.Root.Environment["HOME"]);
-        await File.WriteAllTextAsync(Path.Combine(kit.Root.Environment["HOME"], ".gitconfig"), $"[filter \"g\"]\n\tsmudge = {Plant(kit, "global-smudge", "cat")}\n", Ct);
-        await LiveWorktreeAsync(kit, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", ".agents/conventions");
+        var smudge = $"[filter \"g\"]\n\tsmudge = {Plant(kit, "global-smudge", "cat")}\n";
+        var global = row switch
+        {
+            "global-includeIf-gitdir-submodule" => $"[includeIf \"gitdir:**/modules/**\"]\n\tpath = {kit.Temp.File(smudge, "global-inc.cfg")}\n",
+            "global-includeIf-onbranch-submodule" => $"[includeIf \"onbranch:main\"]\n\tpath = {kit.Temp.File(smudge, "global-inc.cfg")}\n",
+            _ => smudge,
+        };
+        await File.WriteAllTextAsync(Path.Combine(kit.Root.Environment["HOME"], ".gitconfig"), global, Ct);
+        await LiveWorktreeAsync(kit, then: ["-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q", "--", ".agents/conventions"]);
     }
 
     private static async Task PickRowAsync(WorktreeKit kit, string row)
@@ -175,6 +219,10 @@ public sealed partial class TaskWorktreesTests
             case "post-commit":
                 Hook(kit, "post-commit", Plant(kit, "hook"));
                 break;
+            case "includeIf-onbranch-pick":
+                await kit.CommitInAsync(kit.Clone, ".gitattributes", "*.txt filter=y\n", "attributes");
+                File.AppendAllText(Path.Combine(kit.Clone, ".git", "config"), $"[includeIf \"onbranch:arm\"]\n\tpath = {kit.Temp.File($"[filter \"y\"]\n\tsmudge = {Plant(kit, "include-smudge", "cat")}\n", "inc.cfg")}\n");
+                break;
             default:
                 await kit.CommitInAsync(kit.Clone, ".gitattributes", "*.md filter=zz\n", "attributes");
                 await ConfigAsync(kit, "filter.zz.process", Plant(kit, "process"));
@@ -212,12 +260,14 @@ public sealed partial class TaskWorktreesTests
         Sentinel.Ran(kit.Temp).Should().BeFalse($"{row}: no program the clone names ran under the harness");
         if (merging)
         {
-            if (row != "merge-default")
+            if (row == "merge-default")
             {
-                stopped.Should().NotBeNull($"{row}: the emptied driver is the conflict stop");
-                stopped!.ExitCode.Should().Be(4);
+                stopped.Should().BeNull("an emptied merge.default is git's built-in text merge on 2.53 (line 1 and line 3 do not overlap): the pick succeeds and no program ran — the conflict stop of M-k belongs to the named driver");
+                return;
             }
 
+            stopped.Should().NotBeNull($"{row}: the emptied driver is the conflict stop");
+            stopped!.ExitCode.Should().Be(4);
             return;
         }
 

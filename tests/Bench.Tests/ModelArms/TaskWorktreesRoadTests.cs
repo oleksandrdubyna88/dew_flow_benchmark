@@ -76,7 +76,8 @@ public sealed partial class TaskWorktreesTests
             [.. calls.Where(call => !WorktreeKit.IsEnumeration(call))],
             "worktree list --porcelain",
             "rev-parse --verify -q refs/heads/tmp/t1",
-            $"worktree add -q {kit.Wt("t1")} -b tmp/t1 HEAD",
+            $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD",
+            "reset -q --hard",
             "submodule update --init --checkout -q -- .agents/conventions",
             "rev-parse HEAD",
             "-c commit.gpgsign=false cherry-pick --no-edit --allow-empty --keep-redundant-commits",
@@ -97,7 +98,7 @@ public sealed partial class TaskWorktreesTests
             }
             else if (call.Contains(" submodule update ", StringComparison.Ordinal))
             {
-                expected = ["GIT_ALLOW_PROTOCOL=file", "GIT_NO_LAZY_FETCH=1", .. filters];
+                expected = ["GIT_ALLOW_PROTOCOL=file", "GIT_NO_LAZY_FETCH=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", .. filters];
             }
             else if (call.Contains(" cherry-pick --no-edit", StringComparison.Ordinal))
             {
@@ -112,6 +113,7 @@ public sealed partial class TaskWorktreesTests
             env.Should().NotContain(line => line.StartsWith("GIT_DIR=", StringComparison.Ordinal) || line.StartsWith("GITHUB_TOKEN=", StringComparison.Ordinal) || line.StartsWith("PGPASSWORD=", StringComparison.Ordinal) || line.StartsWith("SSH_AUTH_SOCK=", StringComparison.Ordinal), call);
         }
 
+        blocks.Where(block => block.Call.EndsWith("reset -q --hard", StringComparison.Ordinal)).Select(block => block.Cwd).Should().BeEquivalentTo([kit.Wt("t1"), kit.Wt("t2")], "the checkout is a question asked IN the worktree");
         calls.Should().Contain(call => call.StartsWith("-c commit.gpgsign=false cherry-pick --no-edit --allow-empty --keep-redundant-commits ", StringComparison.Ordinal), "the editor rows' only break-it is the argv (M-j): --no-edit stays");
     }
 

@@ -89,7 +89,7 @@ public sealed class PickBackTests
     {
         var text = IntentLine('a', 'b') + "\n" + IntentLine('c', 'b') + "\n";
 
-        PickRecord.Parse(text).Should().Be(new PickRecordRead.Unreadable(1, "an intent to pick that was never completed, and a later line follows it"));
+        PickRecord.Parse(text).Should().Be(new PickRecordRead.Unreadable(1, "an intent to pick that was never completed — the next line is not its completion or its retry"));
     }
 
     [Fact]
@@ -100,6 +100,34 @@ public sealed class PickBackTests
 
         PickRecord.Parse(retried).Should().BeOfType<PickRecordRead.Lines>().Which.Valid.Should().HaveCount(3);
         PickRecord.Parse(stopped).Should().BeOfType<PickRecordRead.Lines>("a pick that stopped twice leaves two intents: the pipeline's own retry is not an unreadable record");
+    }
+
+    [Fact]
+    public void An_intent_is_settled_only_by_the_very_next_line_its_completion_or_its_retry_from_the_same_head()
+    {
+        var other = IntentLine('a', 'c') + "\n";
+        var moved = IntentLine('a', 'b') + "\n" + other + PickedLine('a', 'd') + "\n";
+        var late = IntentLine('a', 'b') + "\n" + PickedLine('c', 'd') + "\n" + PickedLine('a', 'e') + "\n";
+        var interleaved = IntentLine('a', 'b') + "\n" + IntentLine('c', 'b') + "\n" + PickedLine('c', 'd') + "\n" + PickedLine('a', 'e') + "\n";
+
+        PickRecord.Parse(moved).Should().BeOfType<PickRecordRead.Unreadable>().Which.LineNumber.Should().Be(1, "the branch moved between two intents for one source");
+        PickRecord.Parse(late).Should().BeOfType<PickRecordRead.Unreadable>().Which.LineNumber.Should().Be(1, "a completion lines later, another source's line between");
+        PickRecord.Parse(interleaved).Should().BeOfType<PickRecordRead.Unreadable>().Which.LineNumber.Should().Be(1);
+    }
+
+    [Fact]
+    public void The_shapes_the_pipeline_writes_stay_readable()
+    {
+        foreach (var text in new[]
+        {
+            IntentLine('a', 'b') + "\n" + IntentLine('a', 'b') + "\n" + PickedLine('a', 'c') + "\n",
+            IntentLine('a', 'b') + "\n" + PickedLine('a', 'c') + "\n",
+            PickedLine('a', 'c') + "\n",
+            IntentLine('a', 'b') + "\n" + IntentLine('a', 'b') + "\n",
+        })
+        {
+            PickRecord.Parse(text).Should().BeOfType<PickRecordRead.Lines>(text);
+        }
     }
 
     [Fact]

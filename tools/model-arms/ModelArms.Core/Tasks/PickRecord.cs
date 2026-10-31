@@ -69,7 +69,7 @@ public static partial class PickRecord
             }
         }
 
-        return Unsettled(valid) is { } line ? new PickRecordRead.Unreadable(line, "an intent to pick that was never completed, and a later line follows it") : new PickRecordRead.Lines(valid, tornTail);
+        return Unsettled(valid) is { } line ? new PickRecordRead.Unreadable(line, "an intent to pick that was never completed — the next line is not its completion or its retry") : new PickRecordRead.Lines(valid, tornTail);
     }
 
     /// <summary>The LAST entry when it is an intent (nothing after it can have completed it); otherwise <c>null</c>.</summary>
@@ -103,12 +103,13 @@ public static partial class PickRecord
     /// <summary>Every entry and a newline: the repaired record and the marker's text.</summary>
     public static string Write(IReadOnlyList<PickEntry> entries) => string.Concat(entries.Select(entry => Line(entry) + "\n"));
 
-    /// <summary>The 1-based line number of the first intent that is neither the last entry nor followed by a later entry for the same source (a retry after a stop leaves the earlier intent behind as history).</summary>
+    /// <summary>The 1-based line number of the first intent that is neither the last entry nor settled by the VERY NEXT line: that line is for the same source and is its completion, or its retry from the same <c>headBefore</c> (a pick that did not happen). In a record this pipeline wrote the next line for a source IS the next line — the pipeline settles an open
+    /// intent before it picks anything else — so any other shape is a hand-made or mended record (E4 §8 item 31).</summary>
     private static int? Unsettled(IReadOnlyList<PickEntry> valid)
     {
         for (var index = 0; index < valid.Count - 1; index++)
         {
-            if (valid[index] is PickEntry.Intent intent && !valid.Skip(index + 1).Any(later => SourceOf(later) == intent.Source))
+            if (valid[index] is PickEntry.Intent intent && !Settles(intent, valid[index + 1]))
             {
                 return index + 1;
             }
@@ -117,11 +118,11 @@ public static partial class PickRecord
         return null;
     }
 
-    private static string SourceOf(PickEntry entry) => entry switch
+    private static bool Settles(PickEntry.Intent intent, PickEntry next) => next switch
     {
-        PickEntry.Intent intent => intent.Source,
-        PickEntry.Picked picked => picked.Source,
-        _ => string.Empty,
+        PickEntry.Picked picked => picked.Source == intent.Source,
+        PickEntry.Intent retry => retry.Source == intent.Source && retry.HeadBefore == intent.HeadBefore,
+        _ => false,
     };
 
     private static string WhyNot(string line)
