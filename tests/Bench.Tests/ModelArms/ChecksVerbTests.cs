@@ -333,6 +333,25 @@ public sealed class ChecksVerbTests
     }
 
     [Fact]
+    public async Task When_every_numbered_archive_name_of_one_second_is_taken_the_refusal_names_the_whole_folders()
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        var seams = new ChecksSeams(new BenchClock(new DateTimeOffset(2026, 10, 30, 12, 30, 15, TimeSpan.Zero), TimeZoneInfo.Utc), null);
+        Directory.CreateDirectory(kit.Paths.ObjectiveFolder);
+        Directory.CreateDirectory(Path.Combine(kit.Paths.Out, "objective.prev-20261030T123015Z"));
+        for (var n = 2; n <= 999; n++)
+        {
+            Directory.CreateDirectory(Path.Combine(kit.Paths.Out, $"objective.prev-20261030T123015Z-{n}"));
+        }
+
+        var run = await kit.RunAsync(seams: seams);
+
+        run.Code.Should().Be(3);
+        run.Error.Should().Contain("objective.prev-20261030T123015Z-999", "the last name tried is named whole, with its prefix").And.Contain("objective.prev-20261030T123015Z ", "so is the first");
+        Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeTrue("nothing was moved");
+    }
+
+    [Fact]
     public async Task A_link_at_the_objective_folders_name_is_moved_aside_as_a_link_and_never_followed()
     {
         using var kit = await ChecksKit.CreateAsync();

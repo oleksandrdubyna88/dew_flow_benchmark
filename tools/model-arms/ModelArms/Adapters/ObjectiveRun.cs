@@ -94,10 +94,11 @@ internal sealed class ObjectiveRun : IDisposable
         KernelFacts.Present(paths.ObjectiveFolder).Bind(present => present ? Moved(paths, stamp) : Outcome<string>.Success(string.Empty));
 
     private static Outcome<string> Moved(ArmPaths paths, string stamp) =>
-        BaseLeftovers.FirstFree(stamp, name => RenamedTo(paths.ObjectiveFolder, paths.ObjectivePrevious(name))).Map(paths.ObjectivePrevious);
+        BaseLeftovers.FirstFree(stamp, paths.ObjectivePrevious, kept => RenamedTo(paths.ObjectiveFolder, kept));
 
-    /// <summary>One rename, the runtime's own refusal of an existing destination deciding (<c>File.Move</c> without overwrite is a <c>link</c> then <c>unlink</c>; <c>Directory.Move</c> a kernel <c>rename</c>, which a non-empty destination refuses): a refusal where the destination is there is <see cref="FolderMade.AlreadyThere"/>, so the
-    /// next number is tried — the look at the destination only classifies a failure that has already happened. The runtime's own check of a folder destination is a look then a rename: a folder made at the name between the two is the residual, which two <c>checks</c> of one arm at the same instant could in theory hit and which nothing here prevents.</summary>
+    /// <summary>One rename, the runtime's own refusal of an existing destination deciding: a refusal where the destination is there is <see cref="FolderMade.AlreadyThere"/>, so the next number is tried — the look at the destination only classifies a failure that has already happened. <b>Residuals:</b> <c>rename(2)</c> REPLACES an
+    /// EMPTY destination folder and refuses only a non-empty one (<c>ENOTEMPTY</c>, which the runtime reports as an <see cref="IOException"/> and this reads as taken), so the runtime's own check of a folder destination (<c>Directory.Move</c> looks, then renames) is what stops an empty one, and an empty folder made at the name between the two is swapped; and on a file
+    /// system without hard links <c>File.Move</c> of a file or a link (a <c>link</c> then an <c>unlink</c> where hard links exist) is a look then a rename. Two <c>checks</c> of one arm at the same instant could in theory hit either, and nothing here prevents it; <c>prep-base</c>'s claim, the kernel's <c>mkdir</c>, has no such window.</summary>
     private static FolderMade RenamedTo(string from, string to)
     {
         try

@@ -284,6 +284,26 @@ public sealed class PrepBaseTests
     }
 
     [Fact]
+    public async Task When_every_numbered_archive_name_of_one_second_is_taken_the_refusal_names_the_whole_folders()
+    {
+        using var bench = await TargetBench.CreateAsync();
+        var root = bench.Root.Root;
+        var clock = new BenchClock(new DateTimeOffset(2026, 10, 30, 12, 30, 15, TimeSpan.Zero), TimeZoneInfo.Utc);
+        File.WriteAllText(Path.Combine(root, "prep-base.log"), "an earlier attempt\n");
+        Directory.CreateDirectory(Path.Combine(root, "prep-base.prev-20261030T123015Z"));
+        for (var n = 2; n <= 999; n++)
+        {
+            Directory.CreateDirectory(Path.Combine(root, $"prep-base.prev-20261030T123015Z-{n}"));
+        }
+
+        var run = await bench.PrepBaseAsync(new PrepBaseSeams(clock, null));
+
+        run.Code.Should().Be(3);
+        run.Error.Should().Contain(Path.Combine(root, "prep-base.prev-20261030T123015Z-999"), "the last name tried is named whole, with its folder and its prefix").And.Contain(Path.Combine(root, "prep-base.prev-20261030T123015Z") + " ", "so is the first");
+        File.ReadAllText(Path.Combine(root, "prep-base.log")).Should().Be("an earlier attempt\n", "nothing was moved");
+    }
+
+    [Fact]
     public async Task A_leftover_that_is_a_link_is_moved_as_a_link_and_never_followed()
     {
         using var bench = await TargetBench.CreateAsync();

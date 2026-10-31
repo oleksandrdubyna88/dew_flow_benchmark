@@ -5,7 +5,7 @@ using ModelArms.Core.Experiment;
 namespace ModelArms.Adapters;
 
 /// <summary>What an earlier <c>prep-base</c> attempt left in the root, put out of the way of the next one (plan E3.S2 step 2): a half-made <c>base/</c> is removed whole; the attempt's logs and results folder are RENAMED into <c>prep-base.prev-&lt;utc stamp&gt;/</c> — kept, because a log
-/// is evidence of why the last attempt failed — so the next attempt's exclusive creates succeed (plan gate F1). A second move within the same second takes <c>prep-base.prev-&lt;stamp&gt;-2</c>, a third <c>-3</c>: the kernel's exclusive <c>mkdir</c> decides which name is free, never a look first (E3 §8 item 49 (c)). Everything is by NAME: the names are <see cref="RootPaths"/>'s, the root is never listed, and nothing here follows a link — a link is removed or renamed as a link, and
+/// is evidence of why the last attempt failed — so the next attempt's exclusive creates succeed (plan gate F1). A second move within the same second takes <c>prep-base.prev-&lt;stamp&gt;-2</c>, a third <c>-3</c>: on the kernel road the kernel's exclusive <c>mkdir</c> decides which name is free, never a look first; on the portable road (Windows) <see cref="ExclusiveFolder"/> checks and then creates, best effort, and says so (E3 §8 item 49 (c)). Everything is by NAME: the names are <see cref="RootPaths"/>'s, the root is never listed, and nothing here follows a link — a link is removed or renamed as a link, and
 /// what it points at is never touched.
 /// <para>
 /// What this does not do: tell a half-made <c>base/</c> from one an operator built by hand — the gate has refused a root that holds a baseline, and a root without one that holds a <c>base/</c> is, by D18, the leftover of a crashed <c>prep-base</c>.
@@ -36,26 +36,26 @@ internal static class BaseLeftovers
     /// <summary>The folder name of the <paramref name="n"/>th move of one stamp: the stamp itself, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> …</summary>
     private static string Numbered(string stamp, int n) => n == 1 ? stamp : $"{stamp}-{n.ToString(CultureInfo.InvariantCulture)}";
 
-    /// <summary>The one numbering of every archive folder the module keeps (<c>prep-base.prev-&lt;stamp&gt;</c>, <c>out/objective.prev-&lt;stamp&gt;</c>): <paramref name="claim"/> is handed <c>&lt;stamp&gt;</c>, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> … and does the exclusive thing itself — the kernel's <c>mkdir</c>, or the rename that refuses an existing destination — answering
-    /// <see cref="FolderMade.AlreadyThere"/> for a name that is taken, so the next number is tried; the answer is the name that was claimed, or why none could be. Never a look first: the claim IS the decision. At most <see cref="SameSecondMoves"/> names.</summary>
-    internal static Outcome<string> FirstFree(string stamp, Func<string, FolderMade> claim) => FirstFree(stamp, claim, 1);
+    /// <summary>The one numbering of every archive folder the module keeps (<c>prep-base.prev-&lt;stamp&gt;</c>, <c>out/objective.prev-&lt;stamp&gt;</c>): <paramref name="folderOf"/> spells the whole folder of a name (<c>&lt;stamp&gt;</c>, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> …) and <paramref name="claim"/> is handed that folder and does the
+    /// exclusive thing itself — on the kernel road the kernel's <c>mkdir</c>, or the rename that refuses an existing destination — answering <see cref="FolderMade.AlreadyThere"/> for one that is taken, so the next number is tried; the answer is the folder claimed, or why none could be (naming the first and the last whole folder tried).
+    /// The claim IS the decision, not a look before it. At most <see cref="SameSecondMoves"/> names.</summary>
+    internal static Outcome<string> FirstFree(string stamp, Func<string, string> folderOf, Func<string, FolderMade> claim) => FirstFree(stamp, folderOf, claim, 1);
 
-    private static Outcome<string> FirstFree(string stamp, Func<string, FolderMade> claim, int n)
+    private static Outcome<string> FirstFree(string stamp, Func<string, string> folderOf, Func<string, FolderMade> claim, int n)
     {
-        var name = Numbered(stamp, n);
-        return claim(name) switch
+        var folder = folderOf(Numbered(stamp, n));
+        return claim(folder) switch
         {
-            FolderMade.Made => Outcome<string>.Success(name),
-            FolderMade.AlreadyThere when n < SameSecondMoves => FirstFree(stamp, claim, n + 1),
-            FolderMade.AlreadyThere => Outcome<string>.Failure($"{name} and the {(SameSecondMoves - 1).ToString(CultureInfo.InvariantCulture)} numbered folders before it already exist — run again in a second"),
+            FolderMade.Made => Outcome<string>.Success(folder),
+            FolderMade.AlreadyThere when n < SameSecondMoves => FirstFree(stamp, folderOf, claim, n + 1),
+            FolderMade.AlreadyThere => Outcome<string>.Failure($"{folderOf(stamp)} through {folder} all exist — run again in a second"),
             FolderMade.Failed failed => Outcome<string>.Failure(failed.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
 
     private static Outcome<MovedAside> Moved(IReadOnlyList<string> left, RootPaths root, string stamp, PlatformRoad road) =>
-        FirstFree(stamp, name => ExclusiveFolder.Make(root.PrepBasePrevious(name), road))
-            .Map(root.PrepBasePrevious)
+        FirstFree(stamp, root.PrepBasePrevious, previous => ExclusiveFolder.Make(previous, road))
             .Bind(previous => Moved(left, previous).Map(names => new MovedAside(previous, names)));
 
     private static Outcome<IReadOnlyList<string>> Moved(IReadOnlyList<string> left, string previous)
