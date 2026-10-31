@@ -11,7 +11,7 @@ namespace Bench.Tests.ModelArms;
 /// shims for <c>dotnet</c>; <c>base/</c> is what <c>prep-base</c> made over the scratch target of <see cref="TargetBench"/>.
 /// <para>
 /// What this does NOT prove: that a real <c>dotnet build</c> leaves what the shim leaves (the pilot, M2, is the first real run); that claude hands the stdio server the <c>env</c> member of <c>mcp-coai.json</c> (M2's key check); a Windows host (POSIX shims, modes and links); the portable road on
-/// macOS or FreeBSD (BaseCopyTests hands it in); an arm folder whose <c>out</c> is a link to a folder with no timing (a link in a PARENT folder is the bounded road's stated residual).
+/// macOS or FreeBSD (BaseCopyTests hands it in); an arm folder with a link in a PARENT of <c>r/&lt;token&gt;</c> (the root's own, which the gate judged).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class MakeVerbTests
