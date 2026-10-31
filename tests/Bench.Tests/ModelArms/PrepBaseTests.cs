@@ -252,6 +252,38 @@ public sealed class PrepBaseTests
     }
 
     [Fact]
+    public async Task Attempts_moved_aside_within_one_second_each_get_their_own_numbered_folder_in_order()
+    {
+        using var bench = await TargetBench.CreateAsync();
+        var root = bench.Root.Root;
+        var clock = new BenchClock(new DateTimeOffset(2026, 10, 30, 12, 30, 15, TimeSpan.Zero), TimeZoneInfo.Utc);
+        bench.Say("build.rc", "1\n");
+        var failed = new List<(int Code, string Output, string Error)>();
+        foreach (var attempt in new[] { 1, 2, 3 })
+        {
+            bench.Say("build.out", $"attempt {attempt}'s build\n");
+            failed.Add(await bench.PrepBaseAsync(new PrepBaseSeams(clock, null)));
+        }
+
+        bench.Say("build.out", "attempt 4's build\n");
+        bench.Say("build.rc", "0\n");
+        var retry = await bench.PrepBaseAsync(new PrepBaseSeams(clock, null));
+
+        failed.Select(run => run.Code).Should().Equal([3, 3, 3]);
+        failed.Select(run => run.Error).Should().OnlyContain(error => error.Contains("the base does not build", StringComparison.Ordinal) && !error.Contains("already exists", StringComparison.Ordinal), "each of the three attempts ends at the build — none ends at a refused move aside (the second and the third find the folder of the one before in the same second)");
+        retry.Code.Should().Be(0, $"{retry.Error}\n(a second move in the same second must not end the verb with exit 3 naming the folder that is there)");
+        string[] expected = ["prep-base.prev-20261030T123015Z", "prep-base.prev-20261030T123015Z-2", "prep-base.prev-20261030T123015Z-3"];
+        Directory.EnumerateDirectories(root, "prep-base.prev-*").Select(Path.GetFileName).Order(StringComparer.Ordinal).Should().Equal(expected, "the first move takes the stamp, the next the stamp and -2, -3: unique, and in the order they were made");
+        foreach (var (folder, attempt) in expected.Zip(new[] { 1, 2, 3 }))
+        {
+            File.ReadAllText(Path.Combine(root, folder, "base-build.log")).Should().Contain($"attempt {attempt}'s build", "each attempt's own log is kept, none overwritten by a later one");
+        }
+
+        File.ReadAllText(Path.Combine(root, "base-build.log")).Should().Contain("attempt 4's build");
+        retry.Output.Should().Contain("into " + Path.Combine(root, expected[2]), "the verb names the folder it really used");
+    }
+
+    [Fact]
     public async Task A_leftover_that_is_a_link_is_moved_as_a_link_and_never_followed()
     {
         using var bench = await TargetBench.CreateAsync();

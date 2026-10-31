@@ -21,7 +21,7 @@ internal sealed record PrepBaseRun(ExperimentInput Input, HostFacts Facts, ToolP
 /// <summary><c>prep-base</c> (plan §4.1, D18, D24; <c>prep-base.sh</c>): the baseline — the failures of both of the target's suites at <c>target.base</c>, before any arm touched it — written once as <c>baseline.json</c>. It crosses the module's trust boundary: four executables of the target are launched
 /// (<c>git</c>, the node wrapper's <c>node</c>, <c>dotnet</c> or the suite's own, <c>npm</c>), so each goes by the REAL path validate's checks resolved and printed (D17 c, d), under <see cref="TargetEnvironment"/>, from a folder the verb names, and every log is created exclusively.
 /// <para>
-/// In order: (1) validate's checks — any problem ends the verb with validate's exit and launches nothing; (2) a half-made <c>base/</c> is removed whole, an earlier attempt's logs and results are moved into <c>prep-base.prev-&lt;stamp&gt;</c>; (3) the plan branch cloned and detached at <c>target.base</c>, HEAD asserted;
+/// In order: (1) validate's checks — any problem ends the verb with validate's exit and launches nothing; (2) a half-made <c>base/</c> is removed whole, an earlier attempt's logs and results are moved into <c>prep-base.prev-&lt;stamp&gt;</c> (<c>-2</c>, <c>-3</c> … when a move in the same second took the name); (3) the plan branch cloned and detached at <c>target.base</c>, HEAD asserted;
 /// (4) the rules submodule from the local source; (5) the stages (<see cref="BaseStages"/>); (6) the baseline composed from the two logs — <b>never from a suite that did not run to completion</b> (no summary captured, killed at its wall, an exit with no name: <see cref="BaselineFile.Compose"/> refuses it) — and written. Exit 0 the baseline is written; 3 the host or the
 /// target could not be measured (a tool not started, a base that does not build, a suite that did not complete); 4 a wrong configuration (the rules submodule is not one).
 /// </para>
@@ -76,11 +76,11 @@ public static class PrepBaseVerb
         var stamp = BaseLeftovers.Stamp(run.Seams.Clock.GetUtcNow());
         var moved = BaseLeftovers.MoveAside(run.Root, run.Target.NodeModules.Count, stamp, PlatformFactsReader.CurrentRoad);
         return moved.Match(
-            names =>
+            aside =>
             {
-                if (names.Count > 0)
+                if (aside.Names.Count > 0)
                 {
-                    run.Say($"moved the last attempt's {string.Join(", ", names)} into {run.Root.PrepBasePrevious(stamp)}");
+                    run.Say($"moved the last attempt's {string.Join(", ", aside.Names)} into {aside.Folder}");
                 }
 
                 return (Passage<bool>)new Passage<bool>.Through(true);

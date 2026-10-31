@@ -5,7 +5,7 @@ using ModelArms.Core.Experiment;
 namespace ModelArms.Adapters;
 
 /// <summary>What an earlier <c>prep-base</c> attempt left in the root, put out of the way of the next one (plan E3.S2 step 2): a half-made <c>base/</c> is removed whole; the attempt's logs and results folder are RENAMED into <c>prep-base.prev-&lt;utc stamp&gt;/</c> — kept, because a log
-/// is evidence of why the last attempt failed — so the next attempt's exclusive creates succeed (plan gate F1). Everything is by NAME: the names are <see cref="RootPaths"/>'s, the root is never listed, and nothing here follows a link — a link is removed or renamed as a link, and
+/// is evidence of why the last attempt failed — so the next attempt's exclusive creates succeed (plan gate F1). A second move within the same second takes <c>prep-base.prev-&lt;stamp&gt;-2</c>, a third <c>-3</c>: the kernel's exclusive <c>mkdir</c> decides which name is free, never a look first (E3 §8 item 49 (c)). Everything is by NAME: the names are <see cref="RootPaths"/>'s, the root is never listed, and nothing here follows a link — a link is removed or renamed as a link, and
 /// what it points at is never touched.
 /// <para>
 /// What this does not do: tell a half-made <c>base/</c> from one an operator built by hand — the gate has refused a root that holds a baseline, and a root without one that holds a <c>base/</c> is, by D18, the leftover of a crashed <c>prep-base</c>.
@@ -16,28 +16,38 @@ internal static class BaseLeftovers
     public static Outcome<bool> RemoveBase(string folder) =>
         KernelFacts.Present(folder).Match(present => present ? Removed(folder) : Outcome<bool>.Success(false), Outcome<bool>.Failure);
 
-    /// <summary>Renames what the root holds of the last attempt into <c>prep-base.prev-&lt;stamp&gt;</c>, made exclusively; the answer is the names moved (none: nothing was there and no folder was made). <paramref name="npmLogs"/> is how many <c>base-npm-N.log</c> this configuration
+    /// <summary>The most folders one stamp can take (<c>prep-base.prev-&lt;stamp&gt;</c>, then <c>-2</c> … <c>-N</c>): a bound, so a host whose <c>mkdir</c> answers "there" for every name ends the verb instead of spinning.</summary>
+    internal const int SameSecondMoves = 999;
+
+    /// <summary>Renames what the root holds of the last attempt into <c>prep-base.prev-&lt;stamp&gt;</c> — or <c>-2</c>, <c>-3</c> … when that name is taken — made exclusively; the answer is the folder and the names moved (none: nothing was there and no folder was made, the folder is empty text). <paramref name="npmLogs"/> is how many <c>base-npm-N.log</c> this configuration
     /// will write; the earlier attempt's are probed by name from 1 until one is absent, and at least that many.</summary>
-    public static Outcome<IReadOnlyList<string>> MoveAside(RootPaths root, int npmLogs, string stamp, PlatformRoad road)
+    public static Outcome<MovedAside> MoveAside(RootPaths root, int npmLogs, string stamp, PlatformRoad road)
     {
         var present = Names(root, npmLogs).Select(path => (Path: path, Is: KernelFacts.Present(path))).ToList();
         if (present.Select(entry => entry.Is).OfType<Outcome<bool>.Fail>().FirstOrDefault() is { } unknown)
         {
-            return Outcome<IReadOnlyList<string>>.Failure(unknown.Reason);
+            return Outcome<MovedAside>.Failure(unknown.Reason);
         }
 
         var left = present.Where(entry => entry.Is is Outcome<bool>.Ok { Value: true }).Select(entry => entry.Path).ToList();
-        return left.Count == 0 ? Outcome<IReadOnlyList<string>>.Success([]) : Moved(left, root.PrepBasePrevious(stamp), road);
+        return left.Count == 0 ? Outcome<MovedAside>.Success(new MovedAside(string.Empty, [])) : Moved(left, root, stamp, 1, road);
     }
 
-    private static Outcome<IReadOnlyList<string>> Moved(IReadOnlyList<string> left, string previous, PlatformRoad road) =>
-        ExclusiveFolder.Make(previous, road) switch
+    /// <summary>The folder name of the <paramref name="n"/>th move of one stamp: the stamp itself, then <c>&lt;stamp&gt;-2</c>, <c>-3</c> …</summary>
+    private static string Numbered(string stamp, int n) => n == 1 ? stamp : $"{stamp}-{n.ToString(CultureInfo.InvariantCulture)}";
+
+    private static Outcome<MovedAside> Moved(IReadOnlyList<string> left, RootPaths root, string stamp, int n, PlatformRoad road)
+    {
+        var previous = root.PrepBasePrevious(Numbered(stamp, n));
+        return ExclusiveFolder.Make(previous, road) switch
         {
-            FolderMade.Made => Moved(left, previous),
-            FolderMade.AlreadyThere => Outcome<IReadOnlyList<string>>.Failure($"{previous} already exists — an attempt was moved aside a second ago; run again"),
-            FolderMade.Failed failed => Outcome<IReadOnlyList<string>>.Failure($"cannot create {previous}: {failed.Reason}"),
+            FolderMade.Made => Moved(left, previous).Map(names => new MovedAside(previous, names)),
+            FolderMade.AlreadyThere when n < SameSecondMoves => Moved(left, root, stamp, n + 1, road),
+            FolderMade.AlreadyThere => Outcome<MovedAside>.Failure($"{previous} and the {(SameSecondMoves - 1).ToString(CultureInfo.InvariantCulture)} numbered folders after it already exist — run again in a second"),
+            FolderMade.Failed failed => Outcome<MovedAside>.Failure($"cannot create {previous}: {failed.Reason}"),
             _ => throw new InvalidOperationException("unreachable"),
         };
+    }
 
     private static Outcome<IReadOnlyList<string>> Moved(IReadOnlyList<string> left, string previous)
     {
@@ -109,3 +119,6 @@ internal static class BaseLeftovers
     /// <summary>The UTC stamp of a moved-aside attempt, like <c>20261030T101500Z</c> (<see cref="RootPaths.PrepBasePrevious"/>).</summary>
     public static string Stamp(DateTimeOffset now) => now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
 }
+
+/// <summary>What <see cref="BaseLeftovers.MoveAside"/> did: the folder the last attempt's files went into (empty text when nothing was there) and the names moved.</summary>
+internal sealed record MovedAside(string Folder, IReadOnlyList<string> Names);
