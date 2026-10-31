@@ -133,17 +133,16 @@ public static class HostChecks
         .. CoaiProblems(experiment, facts),
         .. HostProblems(experiment, facts),
         .. TemplateProblems(experiment, facts),
-        .. MapReadProblems(experiment),
     ];
 
-    /// <summary>The isolation leaves <c>arms.map.json</c> readable by its fixed name under a root at 300 — every token, so a sibling's <c>r/&lt;token&gt;</c> (a residual the shell shared). <c>tools.deny</c> reaches the CLI as written, with no <c>&lt;root&gt;</c> placeholder, so the entry that denies the Read tool on THIS root's map is an absolute path the operator writes;
-    /// it is required, not suggested, so a root moved or a template filled in by hand cannot leave it pointing at another root. It does not stop <c>Bash(cat *)</c>, which the tool sets allow — said in the module doc. POSIX roots only (a Windows path has no <c>//</c> form here).</summary>
-    private static IEnumerable<HostProblem> MapReadProblems(Experiment experiment)
+    /// <summary>One WARNING line, never a refusal (validate's contract is unchanged): the isolation leaves <c>arms.map.json</c> readable by its fixed name under a root at 300 — every token, so a sibling's <c>r/&lt;token&gt;</c> (a residual the shell shared) — and <c>tools.deny</c> lacks the entry that denies the Read tool on THIS root's map. <c>tools.deny</c> reaches the CLI as written, with no
+    /// <c>&lt;root&gt;</c> placeholder, so the entry is an absolute path the operator writes (<c>init</c> blanks every value and cannot). It would not stop <c>Bash(cat *)</c>, which the tool sets allow, so even present it narrows the residual and does not close it. POSIX roots only.</summary>
+    public static IReadOnlyList<string> Warnings(Experiment experiment)
     {
         var wanted = $"Read(/{experiment.Root}/arms.map.json)";
-        return Only(
-            experiment.Root.StartsWith('/') && !experiment.Tools.Deny.Contains(wanted, StringComparer.Ordinal),
-            $"tools.deny has no {wanted} — a root at 300 still lets an arm read it by its name (every token, so a sibling's folder); add the entry for THIS root (an absolute path: tools.deny is passed to the CLI as written)");
+        return experiment.Root.StartsWith('/') && !experiment.Tools.Deny.Contains(wanted, StringComparer.Ordinal)
+            ? [$"warning: tools.deny has no {wanted} — a root at 300 still lets an arm read arms.map.json by its name (every token, so a sibling's folder); add the entry for THIS root (an absolute path: tools.deny is passed to the CLI as written) — it narrows the residual, `Bash(cat *)` still reads it"]
+            : [];
     }
 
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;

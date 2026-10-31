@@ -35,7 +35,7 @@ public sealed partial class ExampleExperimentTests
     }
 
     [Fact]
-    public async Task Validate_refuses_a_deny_list_that_does_not_deny_reading_this_roots_arms_map()
+    public async Task Validate_warns_once_about_a_deny_list_that_does_not_deny_reading_this_roots_arms_map()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the worked example and the location use POSIX absolute paths");
         using var root = await new ExperimentRoot().WithTargetAsync();
@@ -50,8 +50,9 @@ public sealed partial class ExampleExperimentTests
 
         var code = await ArmsProgram.RunAsync(["validate", "--experiment", root.Root], new StringWriter(), error, root.Environment, TestContext.Current.CancellationToken);
 
-        code.Should().Be(4, error.ToString());
-        error.ToString().Should().Contain($"tools.deny has no Read(/{root.Root}/arms.map.json)").And.Contain("a root at 300 still lets an arm read it by its name");
+        code.Should().Be(0, "a warning, not a refusal: validate's contract is unchanged — " + error);
+        error.ToString().Should().Contain($"warning: tools.deny has no Read(/{root.Root}/arms.map.json)").And.Contain("a root at 300 still lets an arm read arms.map.json by its name").And.Contain("`Bash(cat *)` still reads it");
+        System.Text.RegularExpressions.Regex.Matches(error.ToString(), "warning: tools.deny").Should().ContainSingle("one line");
     }
 
     [Fact]

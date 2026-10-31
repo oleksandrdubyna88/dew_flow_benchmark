@@ -34,6 +34,11 @@ public static class ValidateVerb
     private static Task<int> Judged(ExperimentInput input, HostFacts facts, Func<HostFacts, Task<int>> whenValid)
     {
         PrintExecutables(input.Verb.Output, facts);
+        foreach (var warning in input.Verb.Verb == "validate" ? HostChecks.Warnings(input.Experiment) : [])
+        {
+            input.Verb.Error.WriteLine($"{Name} validate: {warning}");
+        }
+
         var problems = HostChecks.Decide(input.Experiment, facts);
         if (problems.Count == 0)
         {
