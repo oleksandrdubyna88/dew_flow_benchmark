@@ -28,13 +28,14 @@ public sealed class WslHostAwakeTests
     /// <summary>The fake as <c>pwsh.exe</c>, a root, the output and a tick the test releases; disposing kills whatever the test left alive and removes the folder.</summary>
     private sealed class PwshKit : IAsyncDisposable
     {
-        private readonly TempFolder _temp = new();
+        private readonly TempFolder _temp;
         private int _released;
         private int _entered;
 
         public PwshKit()
         {
             Assert.SkipWhen(OperatingSystem.IsWindows(), "the fake is linked as pwsh.exe and killed by pid; the process rows are Linux only");
+            _temp = new TempFolder();
             Root = new RootPaths(_temp.Folder("root"));
             var pwsh = _temp.Combine("bin", "pwsh.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(pwsh)!);
@@ -54,7 +55,7 @@ public sealed class WslHostAwakeTests
                 environment[name] = System.Environment.GetEnvironmentVariable(name)!;
             }
 
-            Awake = new WslHostAwake(Pwsh, Script, Root.Root, environment, Root, TimeProvider.System, Wait, Output);
+            Awake = new WslHostAwake(Pwsh, Script, Root.Root, environment, Root, TimeProvider.System, Wait, Output) { ScriptLineWithin = TimeSpan.FromMilliseconds(250) };
         }
 
         public RootPaths Root { get; }
@@ -142,7 +143,7 @@ public sealed class WslHostAwakeTests
         var pid = kit.Child;
         await Task.Delay(TimeSpan.FromSeconds(2), Ct);
         WorkerLiveness.ProcessIsAlive(pid).Should().BeTrue("the child is held for the whole scope with no tick released");
-        kit.Output.ToString().Should().Contain($"keep-awake: {kit.Awake.Describe}");
+        kit.Output.ToString().Should().Contain("held, not confirmed", "the fake never prints the script's own line, so the host is not said to be held");
 
         await kit.Awake.DisposeAsync();
 
@@ -221,6 +222,63 @@ public sealed class WslHostAwakeTests
 
         kit.Child.Should().NotBe(pids[^1], "the alive check reset the count, so the fourth exit of the scope is relaunched");
         kit.Log.Should().NotContain("not relaunched again");
+    }
+
+    /// <summary>A shell script as <c>pwsh.exe</c>: <paramref name="body"/> runs under the adapter's three-name environment (builtins only — no PATH tool is on it).</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static async Task<(WslHostAwake Awake, StringWriter Output, TempFolder Temp)> StandInAsync(string body, TimeSpan within)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the stand-in is a POSIX script");
+        var temp = new TempFolder();
+        var pwsh = temp.Executable("bin", "pwsh.exe");
+        await File.WriteAllTextAsync(pwsh, $"#!/bin/sh\n{body}\n", Ct);
+        var output = new StringWriter();
+        var root = new RootPaths(temp.Folder("root"));
+        var environment = new Dictionary<string, string> { ["PATH"] = Path.GetDirectoryName(pwsh)! };
+        return (new WslHostAwake(pwsh, "/s/keep-awake.ps1", root.Root, environment, root, TimeProvider.System, (_, ct) => Task.Delay(Timeout.Infinite, ct), output) { ScriptLineWithin = within }, output, temp);
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task The_host_is_said_to_be_held_once_the_script_has_reported()
+    {
+        var (awake, output, temp) = await StandInAsync("echo 'keep-awake on pid=7 prev=1'\nwhile read -r _l; do :; done", TimeSpan.FromSeconds(30));
+        using var folder = temp;
+        await using var held = awake;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+
+        started.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15), "the script's line ends the wait, not the bound");
+        output.ToString().Should().Contain($"keep-awake: {awake.Describe}").And.NotContain("has not reported").And.NotContain("exited before");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_pwsh_that_exits_at_once_is_said_at_once_and_does_not_fail_the_chain()
+    {
+        var (awake, output, temp) = await StandInAsync("echo 'cannot reach the script' >&2\nexit 1", TimeSpan.FromSeconds(60));
+        using var folder = temp;
+        await using var held = awake;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        awake.Start().Should().BeOfType<Outcome<int>.Ok>("the chain is never failed by its keep-awake");
+
+        started.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), "an exited pwsh ends the wait at once, not at the bound");
+        output.ToString().Should().Contain("exited before the script reported").And.Contain("/s/keep-awake.ps1").And.NotContain($"keep-awake: {awake.Describe}");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_pwsh_that_is_silent_is_said_to_be_held_but_not_confirmed_at_the_bound()
+    {
+        var (awake, output, temp) = await StandInAsync("while read -r _l; do :; done", TimeSpan.FromMilliseconds(300));
+        using var folder = temp;
+        await using var held = awake;
+
+        awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+
+        output.ToString().Should().Contain("has not reported in 0.3 s").And.Contain("held, not confirmed");
     }
 
     public static TheoryData<string, string, string, string> WindowsPaths => new()

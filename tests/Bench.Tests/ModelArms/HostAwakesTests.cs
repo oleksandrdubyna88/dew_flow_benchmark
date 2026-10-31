@@ -90,16 +90,16 @@ public sealed class HostAwakesTests
         await root.WithTargetAsync();
         var argv = Path.Combine(root.Temp, "pwsh-argv.txt");
         var pwsh = Path.Combine(root.Temp, "bin", "pwsh.exe");
-        File.WriteAllText(pwsh, $"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{argv}'\nwhile read -r _line; do :; done\n");
+        File.WriteAllText(pwsh, $"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{argv}'\necho 'keep-awake on pid=1 prev=1'\nwhile read -r _line; do :; done\n");
         var (input, output) = await InputAsync(root, "wsl", new Dictionary<string, string>(root.Environment) { ["WSL_DISTRO_NAME"] = "Ubuntu" });
 
         var passage = await HostAwakes.StartAsync(input, HostKind.Wsl, Ct);
 
-        var awake = passage.Should().BeOfType<ModelArmsApp.Passage<IHostAwake>.Through>(passage.ToString()).Subject.Value;
+        await using var awake = passage.Should().BeOfType<ModelArmsApp.Passage<IHostAwake>.Through>(passage.ToString()).Subject.Value;
         awake.Should().BeOfType<WslHostAwake>();
         var pid = ((WslHostAwake)awake).ChildProcessId!.Value;
         WorkerLiveness.ProcessIsAlive(pid).Should().BeTrue("the stand-in holds its stdin open until the scope ends");
-        output.ToString().Should().Contain("keep-awake: pwsh.exe \\\\wsl.localhost\\Ubuntu").And.Contain("keep-awake.ps1, held, checked every 2 min");
+        output.ToString().Should().Contain("keep-awake: pwsh.exe \\\\wsl.localhost\\Ubuntu").And.Contain("keep-awake.ps1, held, checked every 2 min").And.NotContain("not reported");
 
         await awake.DisposeAsync();
 
