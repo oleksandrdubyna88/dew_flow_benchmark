@@ -9,6 +9,8 @@ import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { loadHeldout } from './heldout.mjs';
 import { loadExplore } from './inputs.mjs';
+import { loadPrompts } from './plan.mjs';
+import { readbackOf } from './readback.mjs';
 import { exploreRoot, REPO } from './paths.mjs';
 import { noteFor, rehearse } from './rehearse.mjs';
 import { loadCalibration, readToken, runPair } from './run.mjs';
@@ -113,6 +115,26 @@ export async function cmdNote(values, io) {
   writeFileSync(out, text);
   io.say(`note written: ${out}`);
   return EXIT.done;
+}
+
+const readbackLines = (session, rb) => [
+  `${session.rid} (${session.stack}): ${rb.ok ? 'ok' : 'REFUTED'}; prompt sha256 planned ${rb.plan.promptSha256.slice(0, 12)}, in the transcript ${rb.transcriptPromptSha256?.slice(0, 12) ?? 'not recorded'}; env keys ${rb.envKeys.length}`,
+  ...rb.checks.map(c => `  ${c.ok === null ? 'n/a ' : c.ok ? 'PASS' : 'FAIL'}  ${c.id}`),
+];
+
+const plannedSessions = (dir, map) => Object.values(map.sessions).filter(s => existsSync(path.join(dir, 's', s.rid, 'plan.json')));
+const allPass = read => read.length > 0 && read.every(x => x.rb.ok);
+const readSession = (dir, s, prompts) => ({ s, rb: readbackOf({ sessionDir: path.join(dir, 's', s.rid), registered: prompts[s.stack] }) });
+
+/** `readback [--series dir]`: what each session was really launched with, against the registered prompt and environment (read back for every session, so one cell per stack is covered). */
+export function cmdReadback(values, io) {
+  const dir = seriesDirOf(values, io.home);
+  if (!dir.ok) return refused(io, dir.reason);
+  const series = loadSeries(dir.value);
+  if (!series.ok) return refused(io, series.reason);
+  const read = plannedSessions(dir.value, series.value.map).map(s => readSession(dir.value, s, loadPrompts().prompts));
+  read.forEach(({ s, rb }) => readbackLines(s, rb).forEach(l => io.say(l)));
+  return allPass(read) ? EXIT.done : EXIT.failed;
 }
 
 const PRUNED = Object.freeze(['box/nuget', 'box/npm', 'box/home/.dotnet', 'score']);

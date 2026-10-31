@@ -122,6 +122,6 @@ test('The_command_line_refuses_an_unknown_command_and_an_unknown_flag_with_the_u
   } finally {
     process.stderr.write = quiet;
   }
-  assert.match(written.join(''), /the commands are prepare, calibrate, rehearse, init, quiet, run, status, note, prune, leakcheck/);
+  assert.match(written.join(''), /the commands are prepare, calibrate, rehearse, init, quiet, run, status, readback, note, prune, leakcheck/);
   assert.match(written.join(''), /usage error/);
 });

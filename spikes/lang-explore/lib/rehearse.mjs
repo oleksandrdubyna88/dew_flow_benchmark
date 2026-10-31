@@ -19,6 +19,7 @@ import { cpcOf } from './records.mjs';
 import { finalizePair, loadCalibration } from './run.mjs';
 import { runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
+import { pinsOk } from './pins.mjs';
 import { createSeries, drawMask, planPair, runMapFileOf } from './series.mjs';
 
 /** The rehearsal's `ctx.fill`: the item's stack workspace with the REFERENCE source on top, so a stub session that changes nothing leaves a correct solution. */
@@ -76,7 +77,8 @@ async function prerequisites({ home, worldFn }) {
   const got = await allOk([() => loadCalibration(home), () => loadHeldout(home), () => worldFn({ home, work: path.join(home, 'rsd', 'lang-v2', 'explore') })]);
   if (!got.ok) return got;
   const [calibration, heldout, world] = got.value;
-  return ok({ calibration, heldout, world: { ...world, calibration } });
+  const pins = pinsOk({ explore: world.explore, home, snapshots: world.snapshots });
+  return pins.ok ? ok({ calibration, heldout, world: { ...world, calibration } }) : pins;
 }
 
 /**

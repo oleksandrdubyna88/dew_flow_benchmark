@@ -14,6 +14,8 @@ import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { statusLines } from '../lib/commands.mjs';
+import { loadPrompts } from '../lib/plan.mjs';
+import { readbackOf } from '../lib/readback.mjs';
 import { createSeries, drawMask, loadSeries } from '../lib/series.mjs';
 import { loadCalibration, runPair } from '../lib/run.mjs';
 import { machineFor, pilotQuiet } from '../lib/machine.mjs';
@@ -53,6 +55,8 @@ test('The_rehearsal_runs_a_pair_end_to_end_for_free_and_every_criterion_holds', 
     assert.equal(s.kind, 'rehearsal');
     assert.match(readFileSync(path.join(dir, 'argv.json'), 'utf8'), /LC_ALL/, 'the locale reached the box\'s environment (argv.json lists the env keys)');
     assert.doesNotMatch(readFileSync(path.join(dir, 'broker.ndjson'), 'utf8'), /claude-oauth-token/);
+    assert.equal(readbackOf({ sessionDir: dir, registered: loadPrompts().prompts[s.stack] }).ok, true, 'what the session was launched with reads back as registered');
+    assert.deepEqual(JSON.parse(readFileSync(path.join(dir, 'record.json'), 'utf8')).egress.value.allowed, {}, 'no host was allowed or reached');
   }
 });
 

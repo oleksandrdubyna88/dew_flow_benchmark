@@ -16,6 +16,7 @@ import { finalizeSessionRecord, missingPaths, pairRecordOf } from './records.mjs
 import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { calibrationFile } from './paths.mjs';
 import { allOk } from './chain.mjs';
+import { pinsOk } from './pins.mjs';
 import { loadSeries, planPair, runMapFileOf } from './series.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -77,7 +78,8 @@ async function prerequisites({ home, series, worldFn, tokenFn }) {
   const got = await allOk([() => loadCalibration(home), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token] = got.value;
-  return ok({ calibration, heldout, world, token });
+  const pins = pinsOk({ explore: world.explore, home, snapshots: world.snapshots });
+  return pins.ok ? ok({ calibration, heldout, world, token }) : pins;
 }
 
 async function runLocked({ series, pair, rerun, io }) {

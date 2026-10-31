@@ -7,6 +7,7 @@
 //   node spikes/lang-explore/explore.mjs init                          creates a series (the mask draw is made and recorded)
 //   node spikes/lang-explore/explore.mjs quiet [--accept-noisy <why>]  the machine-quiet check alone
 //   node spikes/lang-explore/explore.mjs run --pair k [--series <dir>] [--rerun csharp|node] [--accept-noisy <why>]     SPENDS MONEY: one pair
+//   node spikes/lang-explore/explore.mjs readback [--series <dir>]     what each session was launched with, against the registered prompt and environment
 //   node spikes/lang-explore/explore.mjs status [--series <dir>]       node spikes/lang-explore/explore.mjs note [--out <file>]     node spikes/lang-explore/explore.mjs prune [--series <dir>]
 //   node spikes/lang-explore/explore.mjs leakcheck [--range A..B]      v1's leak check with the pilot's held-out outputs as the needles
 //
@@ -18,7 +19,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { calibrateCommand } from './lib/calibrate.mjs';
-import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdRehearse, cmdRun, cmdStatus } from './lib/commands.mjs';
+import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { prepare } from './lib/prepare.mjs';
 import { loadWorld } from './lib/world.mjs';
 
@@ -39,7 +40,7 @@ async function cmdCalibrate(values, io) {
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {

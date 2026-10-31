@@ -14,6 +14,7 @@ import { retireStale } from '../../minigit-bench/lib/session-state.mjs';
 import { ledgerFileOf, runMapFileOf } from './series.mjs';
 import { fillerFor } from './workspace.mjs';
 import { loadPrompts, planForSession } from './plan.mjs';
+import { recordPlan } from './readback.mjs';
 import { stacksOf } from './inputs.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 import { INPUTS, REPO, V1, spinFile } from './paths.mjs';
@@ -52,7 +53,7 @@ function contextOf({ world, calibration, series, seriesDir, kind, pair, token, c
     caps: world.explore.caps, ceilingUsd: NO_TOTAL_USD, bareBudgetUsd: NO_TOTAL_USD, harnessIdentity: identity, preregTag: null, spin: readSpin(home),
     runMapFile: runMapFileOf(seriesDir), ledgerFile: ledgerFileOf(seriesDir), aliasStore: kind === 'rehearsal' ? null : aliasStore(path.join(seriesDir, 'aliases.json')),
     handVerdictsFor: () => [], abortReason: () => abort.reason, abortExit: () => abort.exit, planOver,
-    fill, planFor: planForSession, prompts: loadPrompts(), locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
+    fill, planFor: a => recordPlan(planForSession(a)), prompts: loadPrompts(), locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
   };
 }
 
