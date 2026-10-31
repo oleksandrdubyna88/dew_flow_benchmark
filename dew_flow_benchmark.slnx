@@ -25,5 +25,6 @@
     <Project Path="tests/Bench.Tests/Bench.Tests.csproj" />
     <Project Path="tests/FakeCoai/FakeCoai.csproj" />
     <Project Path="tests/FakeCli/FakeCli.csproj" />
+    <Project Path="tests/GateHolder/GateHolder.csproj" />
   </Folder>
 </Solution>

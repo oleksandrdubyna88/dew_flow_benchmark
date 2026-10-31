@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A test-only holder of the gate lock (model-arms E2.S6): takes the lock through the product's own FileGateLock, starts ONE child by the absolute
+       path it is given, prints what it did and waits to be killed. The test kills the holder (not the child) and asks whether the child kept the lock:
+       the case a close-on-exec descriptor exists for, which no in-process test can reach. A separate project, launched from its own output folder like
+       tests/FakeCli — no production code carries a hidden mode for a test. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>gate-holder</AssemblyName>
+    <RootNamespace>GateHolder</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\model-arms\ModelArms\ModelArms.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,6 @@
-# The eight brief templates are the part-6 shell harness's bytes, pinned by SHA-256 in BriefFillerTests.
+# The eleven brief templates are the shell harness's bytes (part 6's eight, part 7's three), pinned by SHA-256 in BriefFillerTests.
 # A checkout that converts line endings would change them and make the pin fail (or, worse, pass on a different file).
 tools/model-arms/briefs/*.template.md -text
+# The model-arms fixtures are recorded bytes (the part-6 lines and the product's envelopes), pinned by SHA-256 in ClaudeResultEnvelopeTests and StepEndTests.
+# A checkout that converts line endings would change them and make the pin fail (or pass on a different file).
+tests/Bench.Tests/Fixtures/model-arms/** -text

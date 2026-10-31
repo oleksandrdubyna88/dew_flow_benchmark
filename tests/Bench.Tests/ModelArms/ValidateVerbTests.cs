@@ -237,7 +237,7 @@ public sealed class ValidateVerbTests
         var (code, _, error) = await RunAsync(root);
 
         code.Should().Be(4);
-        error.Should().Contain("KNOWN").And.Contain("1-code.template.md").And.Contain("'C'");
+        error.Should().Contain("KNOWN").And.Contain("1-code.template.md at schemes.C[0] (1-code):").And.Contain("'C'");
         error.Should().Contain("D15");
     }
 
@@ -252,11 +252,11 @@ public sealed class ValidateVerbTests
         var (code, _, error) = await RunAsync(root);
 
         code.Should().Be(4);
-        error.Should().Contain("1-code.template.md").And.Contain("'C'");
+        error.Should().Contain("1-code.template.md at schemes.").And.Contain("'C'");
     }
 
     [Fact]
-    public async Task A_template_the_schemes_use_that_cannot_be_found_is_refused_naming_it()
+    public async Task An_override_with_a_field_no_step_provides_is_refused_naming_it_and_its_position()
     {
         Posix();
         using var root = await new ExperimentRoot().WithTargetAsync();
@@ -265,7 +265,20 @@ public sealed class ValidateVerbTests
         var (code, _, error) = await RunAsync(root);
 
         code.Should().Be(4);
-        error.Should().Contain("gate.template.md").And.Contain("{{NO_SUCH_FIELD}}");
+        error.Should().Contain("gate.template.md at schemes.C[3] (4-gate):").And.Contain("{{NO_SUCH_FIELD}}");
+    }
+
+    [Fact]
+    public async Task A_step_whose_brief_stem_exists_nowhere_is_refused_naming_the_template_the_step_and_its_position()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.Edit(top => top["steps"]!["code"]!["brief"] = "nowhere");
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain("nowhere.template.md at schemes.C[0] (1-code): step code:").And.Contain("no brief template 'nowhere.template.md'");
     }
 
     [Fact]
@@ -635,11 +648,11 @@ public sealed class ValidateVerbTests
     }
 
     [Fact]
-    public void Every_step_kind_the_example_runs_has_its_template_rehearsed()
+    public void Every_template_the_example_names_is_rehearsed_at_every_position()
     {
-        var kinds = ModelArmsApp.Core.Briefs.BriefRehearsal.KindsUsed(Example(top => { }));
+        var stems = ModelArmsApp.Core.Briefs.BriefRehearsal.StemsUsed(Example(top => { }));
 
-        kinds.Should().BeEquivalentTo(Enum.GetValues<StepKind>(), "the example's schemes between them run every kind; a kind added without a template fails here");
+        stems.Should().BeEquivalentTo(ModelArmsApp.Core.Briefs.BriefTemplates.Shipped, "the example's schemes between them place a step of every shipped template; a template added without a step fails here");
     }
 
     [Fact]
@@ -668,8 +681,6 @@ public sealed class ValidateVerbTests
     [InlineData("windows-with-isolation", "POSIX only")]
     [InlineData("awake-wsl-off-wsl", "needs a Wsl host")]
     [InlineData("awake-windows-off-windows", "needs a Windows host")]
-    [InlineData("tasks-without-splitfix", "splitFix")]
-    [InlineData("arm-named-twice", "named twice")]
     public void An_unsupported_host_configuration_is_refused_naming_it(string name, string expected)
     {
         var (experiment, host) = name switch
@@ -677,8 +688,6 @@ public sealed class ValidateVerbTests
             "windows-with-isolation" => (Example(top => { }), HostKind.Windows),
             "awake-wsl-off-wsl" => (Example(top => top["awake"] = "wsl"), HostKind.OtherPosix),
             "awake-windows-off-windows" => (Example(top => top["awake"] = "windows"), HostKind.Wsl),
-            "tasks-without-splitfix" => (Example(top => top["steps"]!.AsObject().Remove("splitFix")), HostKind.Wsl),
-            "arm-named-twice" => (Example(top => top["rounds"] = new JsonArray(new JsonArray("C1", "C1"))), HostKind.Wsl),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "a case this theory does not build"),
         };
 
@@ -699,10 +708,22 @@ public sealed class ValidateVerbTests
         Names(experiment, HostKind.Wsl).Should().Contain("pwsh.exe", "awake auto on WSL keeps the machine awake through PowerShell");
         Names(Example(top => top["awake"] = "none"), HostKind.Wsl).Should().NotContain("pwsh.exe");
         Names(Example(top => top["awake"] = "wsl"), HostKind.OtherPosix).Should().Contain("pwsh.exe");
-        Names(Example(top => top["steps"]!["gate"]!["mode"] = "write"), HostKind.OtherPosix)
-            .Should().NotContain(experiment.Coai.Binary, "coai is needed only when a step is a gate step");
+        Names(Example(WithoutGateSteps), HostKind.OtherPosix)
+            .Should().NotContain(experiment.Coai.Binary, "coai is needed only when a scheme places a gate step");
         HostChecks.NeededExecutables(experiment, HostKind.OtherPosix).Select(needed => needed.Role).Should().Equal(
             string.Empty, string.Empty, string.Empty, "target.lowPriority[0]", "target.extension.command[0]", "coai.binary");
+    }
+
+    /// <summary>The example with the gate step taken out of every scheme: a gate step defined under <c>steps</c> that no scheme places needs no coai.</summary>
+    private static void WithoutGateSteps(JsonNode top)
+    {
+        foreach (var scheme in top["schemes"]!.AsObject().Select(member => member.Value!.AsArray()))
+        {
+            foreach (var entry in scheme.Where(entry => entry!.GetValue<string>().EndsWith(":gate", StringComparison.Ordinal)).ToList())
+            {
+                scheme.Remove(entry);
+            }
+        }
     }
 
     [Fact]
@@ -766,6 +787,6 @@ public sealed class ValidateVerbTests
             Source = new SourceAnswer.Asked(true, true, true, true),
             PathRefusals = [],
             EnvironmentRefusals = [],
-            Templates = new Dictionary<StepKind, Outcome<string>>(),
+            Templates = new Dictionary<string, Outcome<string>>(),
         };
 }

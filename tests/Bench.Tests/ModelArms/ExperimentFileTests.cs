@@ -53,14 +53,15 @@ public sealed class ExperimentFileTests
         experiment.Target.Build.Should().Equal("dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:4", "--disable-build-servers");
         experiment.Target.Suite.Command[0].Should().Be("dotnet");
         experiment.Target.Base.Value.Should().Be("6786582e30d3e771549d05ed719478396f8099cd");
-        experiment.Steps[StepKind.Review].Should().Be(new StepSpec(StepKind.Review, "opus", 40, StepMode.Read));
-        experiment.Schemes.Select(s => s.Name).Should().Equal("C", "CR", "SRS");
+        experiment.Steps[new StepId("review")].Should().Be(new StepSpec(
+            new StepId("review"), StepKind.Review, "opus", 40, StepMode.Read, false, "2-review", [new OutputBinding("REVIEW", "notes/review.json")], "", "REVIEW", "", false, ""));
+        experiment.Schemes.Select(s => s.Name).Should().Equal("C", "CR", "SRS", "CHH");
         experiment.Schemes[2].Entries[0].Should().BeOfType<SchemeEntry.Tasks>();
-        experiment.Schemes[0].Entries[1].Should().Be(new SchemeEntry.Step("2-review", StepKind.Review));
-        experiment.Rounds.Should().HaveCount(3);
-        experiment.Rounds[1].Should().Equal("C2", "CR2", "SRS2");
+        experiment.Schemes[0].Entries[1].Should().Be(new SchemeEntry.Step("2-review", new StepId("review")));
+        experiment.Runs.Should().HaveCount(2);
+        experiment.Runs[0].Rounds[1].Should().Equal("C2", "CR2", "SRS2");
         experiment.Limits.KillGraceSeconds.Should().Be(600);
-        experiment.Tasks.Should().Be(new TaskLimits(4, 7, 4));
+        experiment.Tasks.Should().Be(new TaskLimits(4, 7, 4, new StepId("split"), new StepId("splitFix"), new StepId("taskCode"), [new OutputBinding("CODE_NOTES", "notes/code.md")]));
         experiment.Coai.Should().Be(new CoaiFacts("/example/coai/coai-mcp", "/example/vault/connectOtherAis/wsl-ubuntu/settings.json", "wsl-ubuntu"));
         experiment.Awake.Should().Be(AwakeChoice.Auto);
     }
@@ -85,9 +86,9 @@ public sealed class ExperimentFileTests
     public void A_round_naming_an_arm_of_an_unknown_scheme_is_refused_naming_both()
     {
         PosixPaths();
-        var reason = Refused(root => root["rounds"] = new JsonArray(new JsonArray("C1", "XY2")));
+        var reason = Refused(root => root["runs"]!["part6"]!["rounds"] = new JsonArray(new JsonArray("C1", "XY2")));
 
-        reason.Should().Contain("XY2").And.Contain("'XY'").And.Contain("C, CR, SRS");
+        Lines(reason).Should().Contain(line => line.StartsWith("runs.part6.rounds[0][1] names 'XY2'", StringComparison.Ordinal) && line.EndsWith("(C, CR, SRS, CHH)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -203,11 +204,12 @@ public sealed class ExperimentFileTests
     }
 
     [Fact]
-    public void The_schema_member_is_required_and_must_be_exactly_model_arms_experiment_v1()
+    public void The_schema_member_is_required_and_must_be_exactly_model_arms_experiment_v2()
     {
         PosixPaths();
         Refused(root => root.Remove("schema")).Should().Contain("schema is missing");
-        Refused(root => root["schema"] = "model-arms/experiment-v2").Should().Contain("this build reads exactly 'model-arms/experiment-v1'");
+        Refused(root => root["schema"] = "model-arms/experiment-v3").Should().Contain("this build reads exactly 'model-arms/experiment-v2'");
+        Refused(root => root["schema"] = "model-arms/experiment-v1").Should().Contain("this build reads 'model-arms/experiment-v2': steps are keyed by a step id", "the full sentence is StepContractTests'");
     }
 
     [Fact]
@@ -227,9 +229,9 @@ public sealed class ExperimentFileTests
     public void A_step_kind_this_build_does_not_know_is_refused_naming_the_legal_ones()
     {
         PosixPaths();
-        var reason = Refused(root => root["steps"]!["lint"] = new JsonObject { ["model"] = "sonnet", ["minutes"] = 5, ["mode"] = "read" });
+        var reason = Refused(root => root["steps"]!["lint"] = new JsonObject { ["kind"] = "lint", ["model"] = "sonnet", ["minutes"] = 5, ["mode"] = "read", ["brief"] = "1-code" });
 
-        reason.Should().Contain("steps.lint is not a step kind");
+        reason.Should().Contain("steps.lint.kind is 'lint' — legal: ");
         foreach (var kind in Enum.GetValues<StepKind>())
         {
             reason.Should().Contain(StepKinds.Key(kind));
@@ -300,7 +302,8 @@ public sealed class ExperimentFileTests
             root["schemes"]!["C1"] = new JsonArray();
         });
 
-        reason.Should().Contain("schemes.C[3]").And.Contain("gate").And.Contain("schemes.C[4]").And.Contain("schemes.C1");
+        Lines(reason).Should().Contain(line => line.StartsWith("schemes.C[3] is '4-gate:gate' — step id 'gate' is not defined", StringComparison.Ordinal));
+        reason.Should().Contain("schemes.C[4]").And.Contain("schemes.C1");
     }
 
     [Fact]
@@ -324,7 +327,8 @@ public sealed class ExperimentFileTests
             root.Remove("isolation");
         }), Loc).Ok();
 
-        experiment.Tasks.Should().Be(TaskLimits.Shell);
+        experiment.Tasks.Should().Be(TaskLimits.Shell, "the shell's 4 / 7 / 4 and its three step names, none of which is bound; the example still has the three steps");
+        experiment.Tasks.Outputs.Should().BeEmpty();
         experiment.Coai.Should().Be(CoaiFacts.None);
         experiment.Coai.Configured.Should().BeFalse();
         experiment.Isolation.Should().Be(IsolationFacts.None);
@@ -353,6 +357,10 @@ public sealed class ExperimentFileTests
     [InlineData("isolation")]
     [InlineData("steps")]
     [InlineData("schemes")]
+    [InlineData("runs")]
+    [InlineData("runs.part6")]
+    [InlineData("steps.code.outputs")]
+    [InlineData("tasks.outputs")]
     [InlineData("target.suite")]
     [InlineData("target.format")]
     [InlineData("target.extension")]
@@ -398,7 +406,8 @@ public sealed class ExperimentFileTests
     public void An_empty_rounds_steps_or_schemes_is_refused_rather_than_read_as_an_experiment_with_nothing_to_run()
     {
         PosixPaths();
-        Refused(root => root["rounds"] = new JsonArray()).Should().Contain("rounds must name at least one round");
+        Refused(root => root["runs"] = new JsonObject()).Should().Contain("runs is empty — it needs at least one member");
+        Refused(root => root["runs"]!["part6"]!["rounds"] = new JsonArray()).Should().Contain("runs.part6.rounds must be a non-empty array of arrays of arm names");
         Refused(root => root["schemes"] = new JsonObject()).Should().Contain("schemes is empty");
         Refused(root => root["steps"] = new JsonObject()).Should().Contain("steps is empty");
     }

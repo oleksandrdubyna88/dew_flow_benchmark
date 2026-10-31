@@ -6,8 +6,8 @@ using ModelArms.Core.Experiment;
 namespace ModelArms.Adapters;
 
 /// <summary>Where the console finds a brief template: the experiment root's own copy when the operator put one there, else
-/// the one shipped beside the binary. The caller names a step kind, never a file: the name comes from
-/// <see cref="BriefTemplates.NameOf"/>, so no operator text can reach outside the two folders. A template is read whole,
+/// the one shipped beside the binary. The caller names a template stem, never a file: the name comes from
+/// <see cref="BriefTemplates.NameOf"/>, which refuses a separator and <c>..</c>, so no operator text can reach outside the two folders. A template is read whole,
 /// as strict UTF-8. An override that exists and cannot be read is a refusal naming it — never a silent fall back to the
 /// shipped file, which would run an experiment on text the operator did not mean. What a template may contain is the
 /// filler's business.</summary>
@@ -15,7 +15,7 @@ public sealed class BriefTemplateFiles(string shippedDirectory, string overrides
 {
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    public Outcome<string> Read(StepKind kind) => ReadNamed(BriefTemplates.NameOf(kind));
+    public Outcome<string> Read(string stem) => BriefTemplates.NameOf(stem).Match(ReadNamed, Outcome<string>.Failure);
 
     private Outcome<string> ReadNamed(string templateName) =>
         new[] { overridesDirectory, shippedDirectory }

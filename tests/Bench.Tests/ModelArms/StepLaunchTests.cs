@@ -63,15 +63,28 @@ public sealed class StepLaunchTests
 
     private static string Group(string flag, IEnumerable<string> values) => string.Join('\u001f', values.Prepend(flag));
 
+    /// <summary>A step spec at <paramref name="mode"/>; the kind is a session whatever the mode, because the launch reads the mode and the policy and nothing else of it.</summary>
+    private static StepSpec Spec(StepMode mode, bool subagents = false) =>
+        new(new StepId("code"), StepKind.Session, "sonnet", 45, mode, subagents, "1-code", [new OutputBinding("CODE_NOTES", "notes/code.md")], "CODE_NOTES", "", "", false, "");
+
     private static string Spelled(StepMode mode, ToolSets tools)
     {
-        var argv = CliArgv.For(ModelRuntimeKind.CliClaude, "sonnet", StepLaunch.Options(mode, tools, Arm, new StepSession.Fresh(Session)), []).Ok();
+        var argv = CliArgv.For(ModelRuntimeKind.CliClaude, "sonnet", StepLaunch.Options(Spec(mode), tools, Arm, new StepSession.Fresh(Session)), []).Ok();
         return string.Join(" ", argv);
     }
 
     private static StepLaunchRequest Request(StepSession session, IReadOnlyDictionary<string, string>? parent = null) =>
-        new("/usr/bin/claude", new StepSpec(StepKind.Code, "sonnet", 45, StepMode.Write), Tools, Arm, session, "/e/r/tok/arm", "the brief", TimeSpan.FromMinutes(45),
+        new("/usr/bin/claude", Spec(StepMode.Write), Tools, Arm, session, "/e/r/tok/arm", "the brief", TimeSpan.FromMinutes(45),
             parent ?? new Dictionary<string, string> { ["HOME"] = "/home/op" });
+
+    /// <summary>The mode's lists as configured, before the delegation policy: what the shell's three launches passed.</summary>
+    private static (IReadOnlyList<string> Allowed, IReadOnlyList<string> Denied) Configured(StepMode mode, ToolSets tools) =>
+        mode switch
+        {
+            StepMode.Write => (tools.Write, tools.Deny),
+            StepMode.Read => (tools.Read, ["Edit", "Write", "NotebookEdit", .. tools.Deny]),
+            _ => ([.. tools.Write, .. tools.Gate], tools.Deny),
+        };
 
     [Theory]
     [InlineData(StepMode.Write)]
@@ -84,15 +97,15 @@ public sealed class StepLaunchTests
         tools.Read.Should().NotBeEmpty();
         tools.Gate.Should().NotBeEmpty();
         tools.Deny.Should().NotBeEmpty("an empty deny list would leave the order of --disallowedTools unobserved");
+        tools.Write.Should().Contain("Agent", "the configured list keeps the tool, so the policy's strip below is observed and not vacuous");
 
-        var (permission, allowed, denied, mcp) = mode switch
-        {
-            StepMode.Write => ("acceptEdits", tools.Write, tools.Deny, Arm.McpNone),
-            StepMode.Read => ("default", tools.Read, ["Edit", "Write", "NotebookEdit", .. tools.Deny], Arm.McpNone),
-            _ => ("acceptEdits", [.. tools.Write, .. tools.Gate], tools.Deny, Arm.McpCoai),
-        };
+        var (configuredAllowed, configuredDenied) = Configured(mode, tools);
+        var permission = mode == StepMode.Read ? "default" : "acceptEdits";
+        var mcp = mode == StepMode.Gate ? Arm.McpCoai : Arm.McpNone;
+        var denied = new[] { "Agent", "Task" }.Concat(configuredDenied);
+        var allowed = configuredAllowed.Where(tool => tool is not ("Agent" or "Task"));
 
-        var argv = CliArgv.For(ModelRuntimeKind.CliClaude, "sonnet", StepLaunch.Options(mode, tools, Arm, new StepSession.Fresh(Session)), []).Ok();
+        var argv = CliArgv.For(ModelRuntimeKind.CliClaude, "sonnet", StepLaunch.Options(Spec(mode), tools, Arm, new StepSession.Fresh(Session)), []).Ok();
 
         Groups(argv).Should().BeEquivalentTo(
         [
@@ -144,20 +157,58 @@ public sealed class StepLaunchTests
         StepLaunch.Ask(Request(new StepSession.Fresh(Session))).Environment.Variables["PWD"].Should().Be("/e/r/tok/arm");
     }
 
-    [Fact]
-    public void A_resume_carries_the_same_options_with_resume_in_place_of_session_id()
+    [Theory]
+    [InlineData(StepMode.Write, false)]
+    [InlineData(StepMode.Write, true)]
+    [InlineData(StepMode.Read, false)]
+    [InlineData(StepMode.Read, true)]
+    [InlineData(StepMode.Gate, false)]
+    [InlineData(StepMode.Gate, true)]
+    public void No_step_starts_a_subagent_unless_its_spec_says_so(StepMode mode, bool subagents)
     {
-        var tools = Tools;
+        var tools = ExampleTools();
+        var (allowed, denied) = Configured(mode, tools);
+
+        var options = StepLaunch.Options(Spec(mode, subagents), tools, Arm, new StepSession.Fresh(Session));
+
+        if (subagents)
+        {
+            options.DisallowedTools.Should().Equal(denied, "with subagents the policy adds nothing and removes nothing");
+            options.PermittedTools.Should().Equal(allowed, "the mode's list goes out as configured");
+            options.PermittedTools.Contains("Agent").Should().Be(mode != StepMode.Read, "the example's write and gate lists carry the tool, its read list never had it");
+            return;
+        }
+
+        options.DisallowedTools.Take(2).Should().Equal("Agent", "Task");
+        options.DisallowedTools.Skip(2).Should().Equal(denied);
+        options.PermittedTools.Should().NotContain(["Agent", "Task"]);
+        options.PermittedTools.Should().Equal(allowed.Where(tool => tool is not ("Agent" or "Task")));
+        StepLaunch.SubagentTools.Should().Equal("Agent", "Task");
+    }
+
+    [Fact]
+    public void A_resume_is_never_wider_than_the_launch_it_continues()
+    {
+        var tools = ExampleTools();
 
         foreach (var mode in Enum.GetValues<StepMode>())
         {
-            var fresh = StepLaunch.Options(mode, tools, Arm, new StepSession.Fresh(Session));
-            var resumed = StepLaunch.Options(mode, tools, Arm, new StepSession.Resume(Session));
+            foreach (var subagents in new[] { false, true })
+            {
+                var spec = Spec(mode, subagents);
+                var fresh = StepLaunch.Options(spec, tools, Arm, new StepSession.Fresh(Session));
+                var resumed = StepLaunch.Options(spec, tools, Arm, new StepSession.Resume(Session));
 
-            fresh.SessionId.Should().Be(Session);
-            resumed.ResumeSessionId.Should().Be(Session);
-            resumed.SessionId.Should().Be(Guid.Empty);
-            resumed.Should().BeEquivalentTo(fresh, o => o.Excluding(x => x.SessionId).Excluding(x => x.ResumeSessionId), $"{mode}: every other option is the fresh one's");
+                fresh.SessionId.Should().Be(Session);
+                resumed.ResumeSessionId.Should().Be(Session);
+                resumed.SessionId.Should().Be(Guid.Empty);
+                resumed.Should().BeEquivalentTo(fresh, o => o.Excluding(x => x.SessionId).Excluding(x => x.ResumeSessionId), $"{mode}, subagents {subagents}: every other option is the fresh one's");
+                if (!subagents)
+                {
+                    resumed.DisallowedTools.Take(2).Should().Equal("Agent", "Task");
+                    resumed.PermittedTools.Should().NotContain(["Agent", "Task"]);
+                }
+            }
         }
     }
 
@@ -174,6 +225,6 @@ public sealed class StepLaunchTests
         ask.Prompt.Should().Be("the brief");
         ask.Executable.Should().Be("/usr/bin/claude");
         ask.Runtime.Should().Be(ModelRuntimeKind.CliClaude);
-        ask.Options.Should().BeEquivalentTo(StepLaunch.Options(StepMode.Write, request.Tools, Arm, request.Session));
+        ask.Options.Should().BeEquivalentTo(StepLaunch.Options(request.Spec, request.Tools, Arm, request.Session));
     }
 }

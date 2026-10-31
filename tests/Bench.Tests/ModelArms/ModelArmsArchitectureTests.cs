@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Launch;
+using ModelArms.Core.Steps;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -43,7 +44,29 @@ public sealed class ModelArmsArchitectureTests
         // E1.S11
         typeof(ExperimentTemplate),
 
-        // E2
+        // E2.S0
+        typeof(SchemePositions), typeof(TaskIds),
+
+        // E2.S1
+        typeof(StepClassifier), typeof(LimitWords),
+
+        // E2.S2
+        typeof(TimingLines), typeof(DoneMarkers), typeof(ContinueMarkers), typeof(StepBudget), typeof(ResumeNotice), typeof(SessionTranscripts), typeof(StepRecovery), typeof(StepOutputs),
+
+        // E2.S3
+
+        // E2.S4 (no Core decider: the runner, ArmFiles, ArmGit and DerivedOutputs are adapters in ModelArms)
+
+        // E2.S5
+        typeof(ReviewAnswer),
+
+        // E2.S6
+        typeof(GateStatus), typeof(McpConfig),
+
+        // E2.S7
+
+        // E2.S8
+        typeof(GateLockCeiling),
 
         // E3
 
@@ -173,6 +196,20 @@ public sealed class ModelArmsArchitectureTests
     public void The_bare_name_pattern_does_not_match_a_launch_by_a_resolved_path()
     {
         LaunchByName.IsMatch("ProcessRunner.RunAsync(git, arguments, source, Budget, string.Empty, environment, ct)").Should().BeFalse();
+    }
+
+    /// <summary>E2.S4: the step's git is the one place the module asks git a question, and it goes by the path it was handed. The scan above matches a literal and the bare-name helper; this one proves the scan's folder holds the
+    /// file and that the file launches through the shared launcher by a VARIABLE — so renaming <c>ArmGit.cs</c> out of the scanned tree, or going back to the helper, is seen.</summary>
+    [Fact]
+    public void The_steps_git_is_in_the_scanned_tree_and_launches_through_the_shared_launcher_by_a_path_it_was_handed()
+    {
+        var arm = Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, "tools", "model-arms"), "ArmGit.cs", SearchOption.AllDirectories).ToList();
+
+        arm.Should().ContainSingle("a scan that cannot see the file passes forever");
+        var text = File.ReadAllText(arm[0]);
+        text.Should().Contain("ProcessRunner.RunAsync(git,", "the launch goes by the real path run-arm resolved");
+        text.Should().Contain("environment", "and under the environment it was given, GIT_* already taken out by the runner");
+        LaunchByName.IsMatch(text).Should().BeFalse();
     }
 
     private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>
