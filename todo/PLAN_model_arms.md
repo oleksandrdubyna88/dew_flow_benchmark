@@ -1197,6 +1197,7 @@ story that launches a process starts from a `main` that carries it, §6); the re
 use sequential arms). **Done when.** E5's tests of §7 green; the POSIX adapter's live tests green on Linux;
 `Lock_then_run_arm_leaves_the_experiment_locked` green; `WslHostAwakeTests` green with the fake `pwsh.exe`. **Two pull requests**
 (re-review for epoch 3, §6): E5.S1 first, merged to `main` alone; then E5.S2–E5.S4.
+**Stories:** [PLAN_model_arms_E5.md](PLAN_model_arms_E5.md) — E5.S1–E5.S4, written when the epic started (2026-10-31, `f0d6868`, by the judge); no cornerstone (the ledger stays 3 of 3); E5.S1 is a security judgement whose spec is Fable's, to be written; two pull requests, E5.S1 first. Its §8 settles thirty-two points with evidence, items 24–31 being claims of this plan found wrong or incomplete against the code.
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
