@@ -1,0 +1,183 @@
+// The records (E3b.S1 step 9): every field is known, not captured with a reason, or n/a (bare); cells and pairs carry values or bounds, with and without unpaired cells.
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { test } from 'node:test';
+import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
+import { aliasRecord } from '../lib/aliases.mjs';
+import { bareOutcome } from '../lib/bare-outcome.mjs';
+import { MEASURES, NOT_BARE, cellOf, leafProblems, pairRecord, ratioOf, sessionRecord } from '../lib/bare-record.mjs';
+import { countLoc, isTestPath } from '../lib/loc.mjs';
+import { sessionCost } from '../lib/session-cost.mjs';
+import { loadSmoke } from '../lib/smoke-load.mjs';
+import { smokeViews } from '../lib/smoke-verdicts.mjs';
+import { spikeDir } from './helpers.mjs';
+
+const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
+const SCORE = {
+  build: { ok: true }, visible: [{ script: 'test-v1.sh', passed: 10, failed: 0, expectedTotal: 10, summaryCaptured: true, buildFailed: false, exitCode: 0, timedOut: false, signal: null }],
+  heldout: { known: true, primary100: false, totals: { total: 29, passed: 28, failed: 1, blocked: 0, percent: 96.6 }, defects: 1, latency: { known: false, why: 'no latency runs' } },
+  upstream: [{ script: 'upstream/test-v1.sh', passed: 9, expectedTotal: 10 }],
+};
+
+function smokeViewsOf() {
+  const loaded = loadSmoke(FIXTURE);
+  const ctx = crosscheckPolicyFrom(spikeDir, {});
+  return smokeViews(loaded.value, ctx.value);
+}
+
+function smokeRecord(over = {}) {
+  const loaded = loadSmoke(FIXTURE);
+  assert.equal(loaded.ok, true, loaded.reason);
+  const ctx = crosscheckPolicyFrom(spikeDir, {});
+  assert.equal(ctx.ok, true, ctx.reason);
+  const views = smokeViews(loaded.value, ctx.value);
+  const cost = sessionCost({ E: views.E, O: views.O, T: views.T, table: ctx.value.table });
+  const alias = aliasRecord({ events: views.events });
+  const outcome = bareOutcome({
+    meta: loaded.value.meta, events: views.events, brokerLines: loaded.value.brokerLines, aliasCheck: { verdict: 'ok', reasons: [] }, scan: { hits: 0 },
+    contamination: { high: [], canary: [], tokenHits: [] }, handVerdicts: [], retired: false, abortReason: null, recomputeUsd: cost.known ? cost.usd : null,
+  });
+  return sessionRecord({
+    ids: { pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, rid: 'abc123', kind: 'data', label: 'paired' }, outcome,
+    run: { mask: '0-5', maskObserved: true, spawnStampMs: 1, startSkewMs: 30, quiet: { quiet: true }, spin: { medianMs: 20 }, harnessIdentity: 'a'.repeat(64), preregTag: 'prereg/minigit-bare-20261030', cliVersion: '2.1.310' },
+    views, cost, aliasRecord: alias, aliasCheck: { verdict: 'ok' }, score: SCORE, loc: countLoc([{ path: 'Program.cs', text: 'a\nb\n' }]), packages: { packages: [], added: [], flagged: [] }, meta: loaded.value.meta, ...over,
+  });
+}
+
+test('The_session_record_has_every_field_or_says_why', () => {
+  const r = smokeRecord();
+  for (const section of ['run', 'cost', 'time', 'quality', 'process']) assert.deepEqual(leafProblems(r[section], section), []);
+  for (const leaf of ['loc', 'egress', 'packages']) assert.deepEqual(leafProblems(r[leaf], leaf), []);
+  assert.equal(r.cost.cliTotalUsd.known, true);
+  assert.equal(r.cost.brokerUsd.known, true);
+  assert.equal(r.cost.stopRuleUsd.known, true);
+  assert.equal(r.time.wallMs.known, true);
+  assert.equal(r.quality.heldout.value.percent, 96.6);
+  assert.equal(r.quality.visible.value[0].hundredPercent, true);
+  assert.equal(r.process.compliance, NOT_BARE);
+  assert.deepEqual(Object.keys(r.cost.checks.value), ['t1', 't2', 't3', 't4', 't5'], 'every cross-check is in the record');
+  assert.equal(r.class, 'completed');
+});
+
+test('The_egress_record_carries_bytes_per_host_and_the_cache_growth_beside_it', () => {
+  const r = smokeRecord({ cacheGrowthBytes: 4321 });
+  assert.equal(r.egress.value.cacheGrowthBytes, 4321, 'cache bytes after minus the snapshot bytes, the cross-check of the download bytes');
+  assert.deepEqual(r.egress.value.bytes, {}, 'the committed smoke has no tunnel');
+  assert.equal(r.egress.value.bytesCaptured, true, 'no allowed host, so nothing is missing');
+  // a session whose allowed tunnels left no closed line has bytes NOT captured, which is not the same as zero bytes
+  const views = { ...smokeViewsOf(), egress: { allowed: { 'registry.npmjs.org': 2 }, refused: {}, nonConnect: 0, tlsRefused: {}, bytes: {} } };
+  const missing = smokeRecord({ views });
+  assert.equal(missing.egress.value.bytesCaptured, false);
+  const seen = smokeRecord({ views: { ...views, egress: { ...views.egress, bytes: { 'registry.npmjs.org': { up: 10, down: 99 } } } } });
+  assert.equal(seen.egress.value.bytesCaptured, true);
+  assert.deepEqual(smokeRecord({ cacheGrowthBytes: null }).egress.value.cacheGrowthBytes, null, 'unmeasured growth is null, never 0');
+});
+
+test('A_session_that_was_not_scored_says_so_with_a_reason_and_a_missing_view_is_not_zero', () => {
+  const r = smokeRecord({ score: null, packages: null, loc: null, aliasRecord: { ok: false, reason: 'two ids' } });
+  assert.deepEqual(leafProblems(r.quality, 'quality'), []);
+  assert.equal(r.quality.buildOk.known, false);
+  assert.match(r.quality.buildOk.why, /not scored/);
+  assert.equal(r.packages.known, false);
+  assert.equal(r.cost.aliases.known, false);
+});
+
+test('A_failed_build_has_no_heldout_percent_and_that_is_recorded_as_null_never_zero', () => {
+  // the scorer's shape when the build failed (score-scripts.mjs: { known: true, primary100: false, reason: 'build failed' }): the held-out suite never ran
+  const r = smokeRecord({ score: { ...SCORE, build: { ok: false }, heldout: { known: true, primary100: false, reason: 'build failed' } } });
+  assert.equal(r.quality.buildOk.value, false);
+  assert.equal(r.quality.heldout.known, true);
+  assert.deepEqual(r.quality.heldout.value, { percent: null, defects: null, blocked: null, failed: null, total: null, primary100: false, reason: 'build failed' });
+  assert.deepEqual(leafProblems(r.quality, 'quality'), []);
+});
+
+test('The_turns_are_checked_against_assistant_messages', () => {
+  const r = smokeRecord();
+  assert.equal(typeof r.time.turns.value.agree, 'boolean');
+  assert.ok(r.time.turns.value.assistantMessages > 0);
+});
+
+// ---- cells and pairs ------------------------------------------------------------------------------------------------------------
+
+const rec = (phase, costUsd, { cls = 'completed', label = 'paired', wall = 1000, api = 400, active = 700 } = {}) => ({
+  ids: { phase, label }, class: cls,
+  cost: { stopRuleUsd: { known: true, value: costUsd }, headlineUsd: { known: true, value: { usd: costUsd } } },
+  time: { wallMs: { known: true, value: wall }, modelApiMs: { known: true, value: api }, activeMinusModelApiMs: { known: true, value: active - api } },
+});
+
+test('A_censored_side_makes_the_pair_ratio_a_bound', () => {
+  assert.deepEqual(ratioOf({ known: true, value: 6.3, bound: '>=' }, { known: true, value: 3, bound: null }), { known: true, value: 2.1, bound: '>=' });
+  assert.deepEqual(ratioOf({ known: true, value: 6, bound: null }, { known: true, value: 3, bound: '>=' }), { known: true, value: 2, bound: '<=' });
+  assert.equal(ratioOf({ known: true, value: 6, bound: '>=' }, { known: true, value: 3, bound: '>=' }).known, false, 'two lower bounds say nothing about their ratio');
+  const cs = cellOf(rec('v1', 3.15, { cls: 'killed: cap' }), rec('v2', 3.15));
+  assert.deepEqual([cs.costUsd.value, cs.costUsd.bound], [6.3, '>=']);
+  const ts = cellOf(rec('v1', 1.5), rec('v2', 1.5));
+  assert.deepEqual([ts.costUsd.value, ts.costUsd.bound], [3, null]);
+});
+
+test('A_cell_with_a_missing_phase_is_missing_and_every_measure_says_why', () => {
+  const c = cellOf(rec('v1', 1), null);
+  assert.equal(c.missing, true);
+  for (const m of MEASURES) assert.equal(c[m].known, false);
+});
+
+test('Ratios_are_given_with_and_without_unpaired_cells', () => {
+  const cs = cellOf(rec('v1', 3, { label: 'ran unpaired' }), rec('v2', 3, { label: 'ran unpaired' }));
+  const ts = cellOf(rec('v1', 1), rec('v2', 1));
+  assert.equal(cs.unpaired, true);
+  const p = pairRecord({ pair: 1, cells: { csharp: cs, node: ts }, masks: { csharp: '0-5', node: '8-13' }, spawnStamps: {}, skewsMs: {}, barrierAtMs: 5, labels: ['ran unpaired'], quality: {} });
+  assert.deepEqual(p.ratios.costUsd.with, { known: true, value: 3, bound: null });
+  assert.equal(p.ratios.costUsd.without.known, false);
+  assert.match(p.ratios.costUsd.without.why, /ran unpaired/);
+  const paired = pairRecord({ pair: 2, cells: { csharp: cellOf(rec('v1', 3), rec('v2', 3)), node: ts }, masks: {}, spawnStamps: {}, skewsMs: {}, barrierAtMs: 5, labels: [], quality: {} });
+  assert.deepEqual(paired.ratios.wallMs.without, paired.ratios.wallMs.with, 'with no unpaired cell the two sets are equal');
+});
+
+test('The_loc_count_separates_product_from_test_by_path_and_says_it_is_a_heuristic', () => {
+  assert.equal(isTestPath('src/Foo.Tests/FooTests.cs'), true);
+  assert.equal(isTestPath('tests/a.ts'), true);
+  assert.equal(isTestPath('src/a.test.ts'), true);
+  assert.equal(isTestPath('src/protest.ts'), false);
+  const c = countLoc([{ path: 'src/a.ts', text: '1\n2\n3\n' }, { path: 'src/a.test.ts', text: '1\n2\n' }, { path: 'test-v1.sh', text: 'x\n' }, { path: 'SPEC-v1.txt', text: 'long\nlong\n' }, { path: 'obj/x.cs', text: '1\n' }]);
+  assert.deepEqual([c.product, c.test], [3, 2], 'the pinned test script and the spec are not source');
+});
+
+test('model_api_is_the_partitions_model_category_so_a_killed_session_without_an_envelope_keeps_its_time_bounds', () => {
+  const views = smokeViewsOf();
+  assert.equal(views.part.known, true, 'the fixture has a partition');
+  const killed = smokeRecord({ views: { ...views, E: { known: false, why: 'the session was killed: no result envelope' } } });
+  assert.equal(killed.time.modelApiMs.known, true, 'the partition does not need the envelope');
+  assert.equal(killed.time.modelApiMs.value, views.part.categories.model_api, 'the registered measure is the partition model category');
+  assert.equal(killed.time.activeMinusModelApiMs.known, true);
+  assert.equal(killed.time.activeMinusModelApiMs.value, views.part.active - views.part.categories.model_api);
+  assert.equal(killed.time.descriptive.value.durationApiMs.known, false, 'the envelope\'s duration_api_ms is descriptive only, and unknown here');
+  const whole = smokeRecord();
+  assert.equal(whole.time.modelApiMs.value, views.part.categories.model_api, 'with an envelope it is still the partition, never duration_api_ms');
+  assert.equal(whole.time.descriptive.value.durationApiMs.known, true);
+  assert.equal(whole.time.descriptive.value.durationApiMs.value, views.E.durationApiMs);
+});
+
+test('The_record_says_how_many_children_ran_at_once_and_what_it_could_not_capture', () => {
+  const views = smokeViewsOf();
+  const agent = (id, startMs, endMs) => ({ id, agentId: id, startMs, endMs, requestedModel: 'sonnet', resolvedModel: 'claude-sonnet-5-5' });
+  const many = smokeRecord({ views: { ...views, agents: [agent('a', 0, 100), agent('b', 50, 150), agent('c', 60, 70), agent('d', 200, 300)] } });
+  assert.equal(many.time.children.value.launched, 4);
+  assert.equal(many.time.children.value.maxConcurrent, 3, 'a, b and c overlap between 60 and 70');
+  const open = smokeRecord({ views: { ...views, agents: [agent('a', 0, null), agent('b', 10, 20)] } });
+  assert.equal(open.time.children.value.maxConcurrent, 2, 'a child that never reported an end is open to the end of the session');
+  assert.equal(open.time.children.value.openEnded, 1, 'and the record says one end was not captured');
+  assert.equal(smokeRecord({ views: { ...views, agents: [] } }).time.children.value.maxConcurrent, 0);
+});
+
+test('A_stamp_that_was_never_taken_and_a_session_that_was_not_cut_short_are_not_captured_never_null_as_known', () => {
+  const noStamp = smokeRecord({ run: { mask: '0-5', maskObserved: true, spawnStampMs: null, startSkewMs: null, quiet: null, spin: null, harnessIdentity: 'a'.repeat(64), preregTag: 't', cliVersion: '2.1.310' } });
+  assert.equal(noStamp.run.spawnStampMs.known, false);
+  assert.match(noStamp.run.spawnStampMs.why, /no spawn/);
+  const whole = smokeRecord();
+  assert.equal(whole.cost.censoredAtUsd.known, false, 'a completed session is not censored: that is a reason, not a known null');
+  assert.match(whole.cost.censoredAtUsd.why, /not cut short/);
+  const killed = smokeRecord({ outcome: { class: 'killed: wall', data: true, flags: [], detail: {}, censoredAtUsd: 2.5 } });
+  assert.deepEqual([killed.cost.censoredAtUsd.known, killed.cost.censoredAtUsd.value], [true, 2.5]);
+  const noFigure = smokeRecord({ outcome: { class: 'killed: wall', data: true, flags: [], detail: {}, censoredAtUsd: null } });
+  assert.equal(noFigure.cost.censoredAtUsd.known, false, 'a kill with no cost figure of any basis has no censoring point to state');
+});

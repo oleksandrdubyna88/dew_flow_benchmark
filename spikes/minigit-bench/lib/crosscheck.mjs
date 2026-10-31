@@ -35,7 +35,8 @@ export function loadPolicy(json) {
 
 // ---- Check shapes -----------------------------------------------------------------------------------------------------------
 
-export const unchecked = (id, why) => ({ id, status: 'unchecked', verdict: 'unchecked', computed: null, reference: null, gap: null, threshold: null, detail: why, why });
+/** A check that could not run. `byEnding`: the session's own ending explains it (a request the cut-short session never settled), so under a `stop` policy it is not a stop (review N11). */
+export const unchecked = (id, why, { byEnding = false } = {}) => ({ id, status: 'unchecked', verdict: 'unchecked', computed: null, reference: null, gap: null, threshold: null, detail: why, why, ...(byEnding ? { byEnding: true } : {}) });
 
 function decided(id, { computed, reference, threshold, pass, onBreach, detail, why, table }) {
   const gap = Math.abs(computed - reference);
@@ -223,12 +224,37 @@ function t4(T, O, M, policy) {
 function t5(E, B, policy) {
   if (!E?.known) return unchecked('T5', 'no envelope');
   if (!B?.present) return unchecked('T5', 'no broker ledger');
-  if (B.unsettled > 0) return unchecked('T5', `${B.unsettled} request(s) never settled: the session was stopped mid-request, so B (${fmt(B.spentUsd)}) is the price of what it did spend and E is not comparable`);
+  if (B.unsettled > 0) return unchecked('T5', `${B.unsettled} request(s) never settled: the session was stopped mid-request, so B (${fmt(B.spentUsd)}) is the price of what it did spend and E is not comparable`, { byEnding: true });
   return decided('T5', {
     computed: B.spentUsd, reference: E.totalCostUsd, threshold: T5_ABS, pass: Math.abs(B.spentUsd - E.totalCostUsd) <= T5_ABS, onBreach: policy.t5,
     detail: `the broker's ledger ${fmt(B.spentUsd)} against total_cost_usd ${fmt(E.totalCostUsd)} (limit ${T5_ABS}); ${B.forwarded} request(s) forwarded, ${B.refused} refused`,
   });
 }
+
+// ---- series stops -----------------------------------------------------------------------------------------------------------
+
+/** The checks whose policy value can be `stop` (T4 has no policy: it only investigates). One rule for all of them (review N3): a breach under `stop` is a SERIES stop, and so is a check that could not run (N11). */
+const STOPPING_CHECKS = Object.freeze(['t1', 't2', 't3', 't5']);
+/** The series-stop rule names of the checks, as the run-map's `stopped.rule` and the flags carry them: `T<n> breach`, then `T<n> unchecked`. */
+export const CHECK_STOP_RULES = Object.freeze([...STOPPING_CHECKS.map(k => `${k.toUpperCase()} breach`), ...STOPPING_CHECKS.map(k => `${k.toUpperCase()} unchecked`)]);
+
+/** The class prefixes that NAME an ending (review MINOR-7): a session that ended as one of these and wrote no envelope has no evidence to be missing. `crashed: no result` names no ending and is not one. */
+const NAMED_ENDINGS = /^(killed|void|stop):/;
+
+/**
+ * `[{ rule, check, detail }]` for every check of `c` (the `crosscheck` result) that stops the series under `policy` (`crosscheck-policy.json`): a breach under a `stop` policy (verdict `stop`), and
+ * FAIL CLOSED (review N11) a check whose policy is `stop` that could not run for want of evidence (`unchecked`: no OTel, a transcript gap, no broker ledger). Not a stop: an unchecked check whose
+ * session ended with no envelope (`enveloped` false) AND whose class `ended` is one of `killed:*`, `void:*` and `stop:*` (killed, never answered, cancelled: the class says how it ended and there is
+ * no evidence to be missing; `crashed: no result` is not exempt), or whose gap the ending explains (`byEnding`).
+ */
+export const seriesStopsOf = (c, policy = {}, { enveloped = true, ended = '' } = {}) => STOPPING_CHECKS.flatMap(k => {
+  const check = c[k];
+  const id = k.toUpperCase();
+  if (check?.verdict === 'stop' && check.status === 'breach') return [{ rule: `${id} breach`, check: id, detail: check.detail }];
+  const explained = !enveloped && NAMED_ENDINGS.test(ended);
+  const missing = check?.status === 'unchecked' && policy[k] === 'stop' && !explained && check.byEnding !== true;
+  return missing ? [{ rule: `${id} unchecked`, check: id, detail: check.detail }] : [];
+});
 
 /** The five checks and the join that fed T3/T4. `cliVersion` selects the CLI-billed rates (none = published). `B` is the broker's ledger (optional). */
 export function crosscheck({ E, O, T, B = null, table, policy, cliVersion }) {

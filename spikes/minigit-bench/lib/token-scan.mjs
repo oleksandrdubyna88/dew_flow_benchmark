@@ -62,6 +62,21 @@ export function tokenHits(texts = [], ownSecrets = []) {
   return joinStreams(texts).flatMap(({ source, text }) => secretSpans(text, ownSecrets).map(s => ({ source, kind: s.kind, offset: s.start })));
 }
 
+/** The spans of the own values ONLY (no credential shape), found as they stand and with the blanks removed: where a given value really is, whatever shape wins the span in `secretSpans`. */
+function ownSpans(text, ownSecrets) {
+  const own = [...new Set(ownSecrets)].filter(v => typeof v === 'string' && v.length >= MIN_OWN_LENGTH);
+  const plain = own.flatMap(v => spansOfValue(text, v));
+  const { stripped, map } = withoutBlanks(text);
+  const broken = own.flatMap(v => spansOfValue(stripped, v)).map(s => ({ kind: s.kind, start: map[s.start], end: map[s.end - 1] + 1 })).filter(s => !plain.some(f => s.start >= f.start && s.start < f.end));
+  return [...plain, ...broken].sort((a, b) => a.start - b.start);
+}
+
+/**
+ * Pure: `[{ source, kind: 'own-value', offset }]`, the places where one of `ownSecrets` itself stands. `tokenHits` names the SHAPE when a value has one (a real Anthropic token has the
+ * `sk-ant-` shape, and a shape wins the span), so a caller that must tell "this is the credential" from "this looks like a credential" asks here (review N8).
+ */
+export const ownValueHits = (texts = [], ownSecrets = []) => joinStreams(texts).flatMap(({ source, text }) => ownSpans(text, ownSecrets).map(s => ({ source, kind: 'own-value', offset: s.start })));
+
 /** Pure: `text` with every secret span replaced by `[secret]` (what a report excerpt may show). */
 export function maskTokens(text, ownSecrets = []) {
   const value = String(text ?? '');

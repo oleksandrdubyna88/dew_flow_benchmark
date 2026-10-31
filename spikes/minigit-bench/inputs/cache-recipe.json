@@ -1,0 +1,31 @@
+{
+  "decidedOn": "2026-10-30",
+  "reason": "The recipe of the two cache snapshots of E3b.S1 step 2 (parent 7.1: per-session NuGet/npm caches seeded by copy from one pre-warmed snapshot). Run ONCE per stack, before the pre-registration, inside an agent box through the egress proxy with the bare host list; the result is hashed (inputs/cache-snapshots.json) and every session's seed copy must re-hash to that value. Both snapshots are copied into EVERY session, so the box is identical across stacks except the prompt.",
+  "hosts": "bare",
+  "stepTimeoutMs": 900000,
+  "stacks": {
+    "csharp": {
+      "env": {
+        "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",
+        "DOTNET_CLI_USE_MSBUILD_SERVER": "0",
+        "MSBUILDDISABLENODEREUSE": "1",
+        "UseSharedCompilation": "false"
+      },
+      "steps": [
+        { "argv": ["dotnet", "--version"], "expectStdout": "10.0.114" },
+        { "argv": ["dotnet", "new", "console", "--force", "--output", ".", "--name", "snapshotapp"] },
+        { "argv": ["dotnet", "build", "--nologo"] }
+      ],
+      "capture": { "nuget": "box/nuget", "dotnet": "box/home/.dotnet" }
+    },
+    "node": {
+      "resolve": { "TYPES_NODE": { "argv": ["npm", "view", "@types/node@26", "version", "--json"], "pick": "highest" } },
+      "steps": [
+        { "argv": ["node", "--version"], "expectStdout": "v26.12.1" },
+        { "argv": ["npm", "init", "-y"] },
+        { "argv": ["npm", "install", "--no-audit", "--no-fund", "typescript@7.0.2", "@types/node@{TYPES_NODE}"] }
+      ],
+      "capture": { "npm": "box/npm" }
+    }
+  }
+}

@@ -56,8 +56,8 @@ test('The_summary_counts_allowed_and_refused_hosts_and_non_connect_lines', () =>
     { verdict: 'tls-refused', host: 'api.nuget.org', port: 443, reason: 'sni-mismatch' }, { verdict: 'tls-refused', host: 'api.nuget.org', port: 443, reason: 'sni-mismatch' },
     { verdict: 'tls-refused', host: 'registry.npmjs.org', port: 443, reason: 'ech-refused' },
   ];
-  assert.deepEqual(egressSummary(lines), { allowed: { 'api.nuget.org': 2 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 1, tlsRefused: { 'sni-mismatch': 2, 'ech-refused': 1 } });
-  assert.deepEqual(egressSummary([]), { allowed: {}, refused: {}, nonConnect: 0, tlsRefused: {} });
+  assert.deepEqual(egressSummary(lines), { allowed: { 'api.nuget.org': 2 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 1, tlsRefused: { 'sni-mismatch': 2, 'ech-refused': 1 }, bytes: {} });
+  assert.deepEqual(egressSummary([]), { allowed: {}, refused: {}, nonConnect: 0, tlsRefused: {}, bytes: {} });
 });
 
 /** A proxy over a short socket with a local echo server standing in for the upstream (the `dial` seam). */
@@ -98,10 +98,11 @@ test('The_proxy_connects_only_after_the_decision_and_pipes_bytes_both_ways', asy
     const get = await talk(p.socketPath, 'GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n');
     assert.match(get.got, /^HTTP\/1\.1 405 /);
     assert.equal(p.dialed.length, 1, 'a refused request never dials');
-    assert.deepEqual(p.lines.map(l => [l.verdict, l.host ?? null]), [['allowed', 'api.nuget.org'], ['refused', 'example.com'], ['nonConnect', null]]);
+    await sleep(100);
+    assert.deepEqual(p.lines.map(l => [l.verdict, l.host ?? null]).sort((a, b) => String(a[0]).localeCompare(b[0])), [['allowed', 'api.nuget.org'], ['closed', 'api.nuget.org'], ['nonConnect', null], ['refused', 'example.com']], 'the tunnel adds its closed line (E3b seam 3)');
     assert.equal(p.lines[0].sni, 'api.nuget.org');
     assert.ok(p.lines.every(l => typeof l.t === 'string'));
-    assert.equal(p.lines[2].line, 'GET http://example.com/ HTTP/1.1');
+    assert.equal(p.lines.find(l => l.verdict === 'nonConnect').line, 'GET http://example.com/ HTTP/1.1');
   } finally {
     await p.close();
   }
@@ -316,6 +317,58 @@ test('An_upstream_that_never_connects_is_cut_off_after_the_dial_timeout_counted_
     assert.equal(r.got.includes('200'), false, 'no 200 for a tunnel that never opened');
     assert.deepEqual(p.lines.map(l => [l.verdict, l.code]), [['upstream-error', 'ETIMEDOUT']]);
     assert.equal(p.dialed[0].destroyed, true, 'the half-open upstream socket was destroyed');
+  } finally {
+    await p.close();
+  }
+});
+
+test('The_egress_log_counts_bytes_per_tunnel', async () => {
+  // a local upstream that answers 100 KiB once it has received 10 KiB, standing in for the registry (the `dial` seam)
+  const UP = 10 * 1024;
+  const DOWN = 100 * 1024;
+  const hello = withSni(realHello('node-registry.npmjs.org'), 'api.nuget.org');
+  let got = 0;
+  const upstream = net.createServer(c => c.on('data', d => { got += d.length; if (got >= UP) { c.write(Buffer.alloc(DOWN, 1)); c.end(); } }));
+  await new Promise(r => upstream.listen(0, '127.0.0.1', r));
+  const dir = tmpDir('eg-bytes');
+  const socketPath = path.join(dir, 'p.sock');
+  const lines = [];
+  const proxy = await egressProxy({ socketPath, allow: BARE, log: l => lines.push(l), dial: () => net.connect({ host: '127.0.0.1', port: upstream.address().port }) });
+  try {
+    await new Promise(resolve => {
+      const c = net.connect(socketPath);
+      let tunnelled = false;
+      let down = 0;
+      c.on('data', d => {
+        if (!tunnelled) { tunnelled = true; c.write(hello); c.write(Buffer.alloc(UP - hello.length, 2)); return; }
+        down += d.length;
+      });
+      c.on('close', resolve);
+      c.on('error', () => {});
+      c.write('CONNECT api.nuget.org:443 HTTP/1.1\r\n\r\n');
+      setTimeout(() => c.destroy(), 3000).unref();
+    });
+    await sleep(100);
+    const closed = lines.filter(l => l.verdict === 'closed');
+    assert.equal(closed.length, 1, 'one closed line per tunnel');
+    assert.deepEqual([closed[0].host, closed[0].bytesUp, closed[0].bytesDown], ['api.nuget.org', UP, DOWN]);
+    assert.deepEqual(egressSummary(lines).bytes, { 'api.nuget.org': { up: UP, down: DOWN } });
+    // a second tunnel to the same host adds to the host's total
+    assert.deepEqual(egressSummary([...lines, ...closed]).bytes, { 'api.nuget.org': { up: 2 * UP, down: 2 * DOWN } }, 'the summary sums per host');
+  } finally {
+    await proxy.close();
+    upstream.close();
+    upstream.closeAllConnections?.();
+  }
+});
+
+test('A_refused_tunnel_has_no_closed_line_and_no_bytes', async () => {
+  const p = await proxyWithEcho(BARE);
+  try {
+    await talk(p.socketPath, 'CONNECT example.com:443 HTTP/1.1\r\n\r\n');
+    await sleep(50);
+    assert.deepEqual(p.lines.filter(l => l.verdict === 'closed'), []);
+    assert.deepEqual(egressSummary(p.lines).bytes, {});
   } finally {
     await p.close();
   }

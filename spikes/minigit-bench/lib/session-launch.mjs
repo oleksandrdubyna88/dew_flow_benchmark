@@ -41,10 +41,16 @@ const DEFAULT_DEPS = Object.freeze({
   spawnBox: (argv, env) => spawn(argv[0], argv.slice(1), { env, stdio: ['pipe', 'pipe', 'pipe'], detached: true }),
 });
 
-/** Whether the dir holds anything paid: a stream line, an OTel record, or anything in box/out or box/config/projects. */
+/** Whether the broker's log holds a `forwarding` line: a request went (or was about to go) to the provider, so it was reserved against the budget whether or not anything came back. */
+function brokerForwarded(layout) {
+  if (!existsSync(layout.files.brokerLog)) return false;
+  return readFileSync(layout.files.brokerLog, 'utf8').split('\n').some(line => /"event"\s*:\s*"forwarding"/.test(line));
+}
+
+/** Whether the dir holds anything paid: a stream line, an OTel record, anything in box/out or box/config/projects, or a request the broker forwarded. */
 export function holdsPaidWork(layout) {
   const nonEmpty = p => existsSync(p) && (statSync(p).isDirectory() ? readdirSync(p).length > 0 : statSync(p).size > 0);
-  return [layout.files.stream, path.join(layout.otel, 'otel.ndjson'), layout.out, path.join(layout.config, 'projects')].some(nonEmpty);
+  return [layout.files.stream, path.join(layout.otel, 'otel.ndjson'), layout.out, path.join(layout.config, 'projects')].some(nonEmpty) || brokerForwarded(layout);
 }
 
 // ---- startup --------------------------------------------------------------------------------------------------------------------
@@ -136,11 +142,14 @@ function supervise({ plan, d, stack, rec, signal }) {
   const argv = agentBoxArgv({ layout, arm: plan.arm, toolchains: plan.toolchains, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, operatorHome: plan.operatorHome, command: claude });
   const env = agentEnv({ layout, dummyToken: plan.dummy, cellId: plan.cellId, nodeDir: plan.nodeDir, tsDir: plan.tsDir, extra: plan.envExtra });
   writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: argv, claude, envKeys: Object.keys(env).sort(), settingsSha256: rec.settingsSha256, mcpSha256: rec.mcpSha256 }, null, 2)}\n`);
-  const clock = mapClock({ hrAtSpawn: performance.now(), epochAtSpawn: d.now() });
+  const spawnedAtMs = d.now();
+  const clock = mapClock({ hrAtSpawn: performance.now(), epochAtSpawn: spawnedAtMs });
+  rec.startedAtMs = spawnedAtMs; // the wall starts at the spawn (contract section 5): the servers' start-up before it is not in it, and the wall watchdog counts from it
   return new Promise((resolve, reject) => {
     const child = d.spawnBox(argv, env);
     rec.child = child;
     let closed = false;
+    let settled = false;
     let stopping = null;
     const stop = reason => {
       if (rec.stopped === null) { rec.stopped = reason; rec.stoppedAtMs = d.now(); } // the first stop names the reason and the instant
@@ -159,13 +168,22 @@ function supervise({ plan, d, stack, rec, signal }) {
     stack.push('timers', () => timers.forEach(clearInterval));
     stack.push('box', () => (closed ? undefined : stop(rec.stopped ?? 'disposed')));
     const onAbort = () => stop('cancelled');
+    /** The one finalizer: the first of `error` and `close` settles the supervision (every timer cleared, the abort listener removed) and then runs `finish`; a later event does nothing. */
+    const settle = finish => {
+      if (settled) return;
+      settled = true;
+      timers.forEach(clearInterval);
+      signal?.removeEventListener('abort', onAbort);
+      finish();
+    };
     if (signal) { if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }
     child.stdout.on('data', c => tap.push(c));
     child.stderr.on('data', c => appendFileSync(layout.files.stderr, c));
     child.stdin.on('error', () => {});
     child.stdin.end(plan.prompt);
-    child.on('error', e => reject(new Error(`could not start the box: ${e.message}`)));
-    child.on('close', (code, sig) => { closed = true; timers.forEach(clearInterval); tap.flush(); resolve({ code, signal: sig }); });
+    child.on('error', e => settle(() => reject(new Error(`could not start the box: ${e.message}`)))); // no exit instant: a box that never ran has no wall (`exitedAt` is not captured)
+    child.on('exit', () => { if (!settled) rec.exitedAtMs ??= d.now(); }); // the process's own exit: the end of the wall. `close` (below) waits for the pipes and is the fallback stamp
+    child.on('close', (code, sig) => { if (settled) return; rec.exitedAtMs ??= d.now(); closed = true; settle(() => { tap.flush(); resolve({ code, signal: sig }); }); });
   });
 }
 
@@ -201,8 +219,11 @@ function attempt(rec, what, fn, fallback) {
 
 function metaOf({ plan, d, rec, exit, collected, cleanup }) {
   const live = attempt(rec, 'receiver.liveSum', () => rec.receiver.liveSum(), { usd: null, requests: null });
+  if (rec.exitedAtMs === null) rec.errors.push('the exit instant of the box was not captured: exitedAt and wallMs are null'); // absent is not zero, and not the harness's own end either
   return {
-    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: d.now() - rec.startedAtMs,
+    // `startedAt` is the spawn, `exitedAt` the exit of the CLI process (a killed session: the exit after the kill) and `wallMs` is their difference, the registered wall. `endedAt` is the end of the harness's
+    // own work (the settle, the drain, the seal) and is in no wall.
+    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), exitedAt: rec.exitedAtMs === null ? null : new Date(rec.exitedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: rec.exitedAtMs === null ? null : rec.exitedAtMs - rec.startedAtMs,
     exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,
@@ -217,7 +238,7 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
 
 const newRecord = (plan, d) => ({
   state: { phase: 'starting', hostPid: process.pid, hostStartTime: processStartTime(process.pid), cell: plan.cellId, startedAt: new Date(d.now()).toISOString(), heartbeatAt: new Date(d.now()).toISOString() },
-  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
+  finalPhase: 'closed', startedAtMs: d.now(), exitedAtMs: null, lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
   samplers: emptyCounts(), errors: [], receiver: null, broker: null, proxy: null, child: null, settings: null, settingsSha256: null, mcpSha256: null,
 });
 

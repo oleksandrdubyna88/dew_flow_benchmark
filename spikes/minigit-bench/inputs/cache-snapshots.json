@@ -1,0 +1,104 @@
+{
+  "csharp": {
+    "treeSha256": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8",
+    "parts": {
+      "nuget": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dotnet": "b07e994ceef8c2f36ff224f4b782c189bb043bcfbd55cf4fc0829062839b4e47"
+    },
+    "sizeBytes": 1025,
+    "packages": [],
+    "resolved": {},
+    "steps": [
+      {
+        "argv": [
+          "dotnet",
+          "--version"
+        ],
+        "stdout": "10.0.114"
+      },
+      {
+        "argv": [
+          "dotnet",
+          "new",
+          "console",
+          "--force",
+          "--output",
+          ".",
+          "--name",
+          "snapshotapp"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "dotnet",
+          "build",
+          "--nologo"
+        ],
+        "stdout": null
+      }
+    ],
+    "madeOn": "2026-10-30"
+  },
+  "node": {
+    "treeSha256": "39dbc8f2aaf4f873512c0ef2376992dfaae27c38daa775883003f4bb456b4158",
+    "parts": {
+      "npm": "d68577dc39c125ebf1774d64153791b9203394a0f12ba67949c298ea8b1a702b"
+    },
+    "sizeBytes": 40095863,
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "@typescript/typescript-linux-x64",
+        "version": "7.0.2"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "@types/node",
+        "version": "26.6.6"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "typescript",
+        "version": "7.0.2"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "undici-types",
+        "version": "8.9.0"
+      }
+    ],
+    "resolved": {
+      "TYPES_NODE": "26.6.6"
+    },
+    "steps": [
+      {
+        "argv": [
+          "node",
+          "--version"
+        ],
+        "stdout": "v26.12.1"
+      },
+      {
+        "argv": [
+          "npm",
+          "init",
+          "-y"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "npm",
+          "install",
+          "--no-audit",
+          "--no-fund",
+          "typescript@7.0.2",
+          "@types/node@26.6.6"
+        ],
+        "stdout": null
+      }
+    ],
+    "madeOn": "2026-10-30"
+  }
+}

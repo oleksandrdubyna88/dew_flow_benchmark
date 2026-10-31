@@ -43,14 +43,24 @@ const verdictOf = (ok, observed) => (ok ? holds(observed) : refuted(observed));
 const canonical = n => (n === 'Task' ? 'Agent' : n);
 const names = list => [...new Set(list)].join(', ') || 'none';
 
+/**
+ * The wall a session's partition is cut from: { startMs, endMs } or null when it has none. It is the registered wall, the launcher's spawn to the CLI process's exit (`meta.startedAt` to `meta.exitedAt`), so the time
+ * before the first stream line and after the last one is `unattributed`, as it is. A meta without `exitedAt` (a record of an earlier harness, or none) falls back to the stamped stream's own span.
+ */
+export function partitionWall(meta, stamped) {
+  const [startMs, endMs] = [Date.parse(meta?.startedAt), Date.parse(meta?.exitedAt)];
+  if (endMs > startMs) return { startMs, endMs };
+  const t = stamped.map(s => s.t);
+  return t.length > 1 ? { startMs: Math.min(...t), endMs: Math.max(...t) } : null;
+}
+
 /** Everything the rules read, computed once. */
 export function smokeViews(smoke, ctx) {
   const v = viewsOf({ events: smoke.events, sink: smoke.sink, hooks: smoke.audit, transcripts: smoke.transcripts, meta: smoke.meta, argv: smoke.argv }, ctx);
   const B = brokerView(smoke.brokerLines);
   const c = crosscheck({ E: v.E, O: v.O, T: v.T, B, table: ctx.table, policy: ctx.policy, cliVersion: v.cliVersion });
   const built = spansFrom({ otel: v.O, audit: smoke.audit, stamped: smoke.stamped });
-  const t = smoke.stamped.map(s => s.t);
-  const wall = t.length > 1 ? { startMs: Math.min(...t), endMs: Math.max(...t) } : null;
+  const wall = partitionWall(smoke.meta, smoke.stamped);
   return { ...v, smoke, B, c, built, part: wall ? partition(wall, built.spans) : { known: false, why: 'no stamped stream' }, egress: egressSummary(smoke.egressLines), apiRecords: v.records.filter(r => r.name === 'api_request') };
 }
 

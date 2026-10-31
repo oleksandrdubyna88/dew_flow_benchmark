@@ -1,10 +1,10 @@
 {
   "t1": "stop",
   "t2": "otel-incomplete",
-  "t3": "investigate",
+  "t3": "stop",
   "t5": "investigate",
   "t3OutputSource": "transcript",
   "join": "request_id",
-  "decidedOn": "2026-10-29",
-  "reason": "Pre-registered defaults (E1.S3), with join and t3OutputSource decided by the 2026-10-29 step 0 capture (claude 2.1.310, test/fixtures/real/claude-2.1.310-capture/CAPTURE.md: A-J1 holds so join = request_id, A-T2 holds so t3OutputSource = transcript). t1: the envelope disagreeing with itself is an instrument failure. t2: an O/E gap marks the cell otel-incomplete and keeps it. t3: a breach is investigated until E3 arms it (t3 = stop) after the A/A and P1 show T covering main and subagent with no unmatched transcript message; the pre-registered fallback is t3 = fallback-t2 with t2 = stop. A test pins both values to the capture's verdicts; change them only by a dated commit. t5 (E2.S2): the broker's ledger disagreeing with the envelope is investigated before any cell, since the two price the same tokens from the same table."
+  "decidedOn": "2026-10-30",
+  "reason": "Pre-registered defaults (E1.S3), with join and t3OutputSource decided by the 2026-10-29 step 0 capture (claude 2.1.310, test/fixtures/real/claude-2.1.310-capture/CAPTURE.md: A-J1 holds so join = request_id, A-T2 holds so t3OutputSource = transcript). t1: the envelope disagreeing with itself is an instrument failure. t2: an O/E gap marks the cell otel-incomplete and keeps it. t3: a breach is investigated until E3 arms it (t3 = stop) after the A/A and P1 show T covering main and subagent with no unmatched transcript message; the pre-registered fallback is t3 = fallback-t2 with t2 = stop. A test pins both values to the capture's verdicts; change them only by a dated commit. t5 (E2.S2): the broker's ledger disagreeing with the envelope is investigated before any cell, since the two price the same tokens from the same table. 2026-10-30 (E3b.S4 T3 rule, contract section 11): the A/A of series s-20261030-bf89 shows T's main coverage (G-4 main half: T3 and T4 pass on twins 5f55d0 and 586c41) and the committed E2.S2 smoke fixture (CLI 2.1.310) shows the subagent coverage (B-T1, T3 and T4 pass), so t3 = stop for the bare data cells; aa-verdicts GO, <series>/aa-verdicts.json."
 }

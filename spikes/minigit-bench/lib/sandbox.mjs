@@ -29,12 +29,19 @@ export const dummyToken = rand => `sk-ant-oat01-dummy-${rand}`;
 /** The one literal key list of the agent's environment (a test diffs it against `agentEnv`'s keys; `extra` adds its own). */
 export const AGENT_ENV_KEYS = Object.freeze([
   'ANTHROPIC_BASE_URL', 'BENCH_CELL', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'CLAUDE_CODE_ENABLE_TELEMETRY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR',
-  'DISABLE_AUTOUPDATER', 'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_CLI_USE_MSBUILD_SERVER', 'DOTNET_NOLOGO',
+  'DISABLE_AUTOUPDATER', 'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO',
   'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'GIT_TERMINAL_PROMPT',
-  'HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'LANG', 'MSBUILDDISABLENODEREUSE', 'NO_PROXY', 'NUGET_PACKAGES',
+  'HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'LANG', 'NO_PROXY', 'NUGET_PACKAGES',
   'OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_PROTOCOL', 'OTEL_LOGS_EXPORTER', 'OTEL_LOGS_EXPORT_INTERVAL', 'OTEL_LOG_TOOL_DETAILS', 'OTEL_LOG_USER_PROMPTS',
-  'OTEL_METRICS_EXPORTER', 'OTEL_METRIC_EXPORT_INTERVAL', 'PATH', 'TMPDIR', 'UseSharedCompilation', 'npm_config_cache',
+  'OTEL_METRICS_EXPORTER', 'OTEL_METRIC_EXPORT_INTERVAL', 'PATH', 'TMPDIR', 'npm_config_cache',
 ]);
+
+/**
+ * The three build-server keys, OFF. NOT in the base environment (E3b seam 2): banteg's bare cells ran with the .NET defaults (servers and node reuse on), and the reason to
+ * switch them off, that no cell builds on its partner's node, is already met by the box's own pid and ipc namespaces. An arm that wants them off passes this through `extra`
+ * (the process arm decides in E3; parent section 8). A server left running ends with the box: bwrap's init exits with the command and the pid namespace takes the rest.
+ */
+export const BUILD_SERVERS_OFF = Object.freeze({ DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' });
 
 const RID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -92,8 +99,8 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', DISABLE_AUTOUPDATER: '1',
     ...otelEnv(BOX_OTEL_PORT),
     HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NO_PROXY: '127.0.0.1,localhost',
-    DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_CLI_USE_MSBUILD_SERVER: '0',
-    MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
+    DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1',
+    NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
   };
   // compared in lower case: `https_proxy` is read by curl and others next to `HTTPS_PROXY`, so a different spelling of a base key replaces it as well
@@ -118,6 +125,39 @@ export const writableBinds = (layout, extraRw = []) => Object.freeze([
   { box: '/tmp', host: layout.tmp },
   ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].map(p => ({ box: p, host: p })),
 ]);
+
+const BIND_FLAGS = new Set(['--bind', '--ro-bind']);
+const startsBelow = (p, dir) => p.startsWith(dir === '/' ? '/' : `${dir}/`);
+
+/** The `{ host, box }` pairs a bwrap argv binds (the root bind, which is the whole host, and the `/dev/null` masks, which expose nothing, left out). */
+export const bindPairsOf = argv => argv.flatMap((a, i) => (BIND_FLAGS.has(a) ? [{ host: argv[i + 1], box: argv[i + 2] }] : [])).filter(b => typeof b.host === 'string' && b.host !== '/' && b.host !== '/dev/null');
+
+/** Every proper ancestor directory of the paths, nearest last, `/` left out: `['/a/b/c']` -> `['/a', '/a/b']`. */
+const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`));
+
+/**
+ * What the agent's box shows of the host, read from a bwrap argv (the plan's, or the one a session wrote to its `argv.json`): `allow` = the host paths it binds ON PURPOSE (the node dir, the toolchains, the claude
+ * binary, the session's own box dirs), for the contamination scan; the harness and net dirs are bound as well and stay PROTECTED (a reach for their files is contamination whatever the box shows). `maps` = the binds whose box path is not the host path (the box's `/tmp`). `skeleton` =
+ * the directories that only HOLD those binds: bwrap makes the parent of every bind point, and inside the box a directory under a `--tmpfs` lists nothing but them, so an EXACT reach for one shows nothing the box
+ * does not expose and is no reach. Never an ancestor of the harness or net dir, nor a directory at or above the operator's `home`: the box can read below those (`grep -r token ~`, `cd <session> && cat harness/..`).
+ */
+export function boxView({ argv, layout, home }) {
+  const protectedDirs = [layout.harness, layout.net];
+  const binds = bindPairsOf(argv);
+  const hidden = argv.flatMap((a, i) => (a === '--tmpfs' ? [argv[i + 1]] : []));
+  const holdsOnlyBinds = dir => hidden.some(h => startsBelow(dir, h)) && !protectedDirs.some(p => startsBelow(p, dir)) && dir !== home && !startsBelow(home, dir);
+  return Object.freeze({
+    allow: Object.freeze([...new Set(binds.map(b => b.host).filter(h => !protectedDirs.includes(h)))]),
+    skeleton: Object.freeze([...new Set(ancestorsOf(binds.map(b => b.box)))].filter(holdsOnlyBinds)),
+    boxDir: path.join(layout.dir, 'box'), // the session's own box skeleton dir: under it, what is no bind is nothing the box shows (the scan reads it low, never high)
+    maps: Object.freeze(binds.filter(b => b.box !== b.host).map(b => Object.freeze({ host: b.host, box: b.box }))), // the box's `/tmp` is a host dir: a path the agent names there is judged at its host path
+  });
+}
+
+/** The plan-time view: `boxView` of the argv `agentBoxPrefix` builds for these options (a test diffs it against the binds a session really wrote). */
+const planView = opts => boxView({ argv: agentBoxPrefix({ arm: 'bare', ...opts }), layout: opts.layout, home: opts.operatorHome ?? os.homedir() });
+export const boxReachable = opts => planView(opts).allow;
+export const boxSkeleton = opts => planView(opts).skeleton;
 
 /**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an

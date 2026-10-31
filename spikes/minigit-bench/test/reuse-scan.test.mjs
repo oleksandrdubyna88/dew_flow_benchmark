@@ -40,7 +40,7 @@ test('A_raw_otlp_request_is_turned_into_its_file_line_in_one_place', () => {
 
 test('Case_repositories_of_the_real_suite_are_built_under_the_home_regime_never_in_tmp', () => {
   const realSuite = mjs('test').filter(f => /\bkeyGate\(/.test(code(f)) && !f.endsWith('helpers.mjs'));
-  assert.deepEqual(realSuite.map(f => path.basename(f)).sort(), ['heldout-hostile.test.mjs', 'repo-scan.test.mjs'], 'the scan still finds the tests that decrypt the real suite');
+  assert.deepEqual(realSuite.map(f => path.basename(f)).sort(), ['bare-e2e.test.mjs', 'heldout-hostile.test.mjs', 'prereg.test.mjs', 'rehearse-v2-e2e.test.mjs', 'repo-scan.test.mjs'], 'the scan still finds the tests that decrypt the real suite (the runner\'s and the rehearsal\'s end-to-end tests and the prereg leak check call the scorer and the leak tool, which build their own case repositories under the home regime)');
   assert.deepEqual(where(realSuite, /tmpDir\('[^']*cases'\)/), [], 'a cases directory is where the runner builds case repositories');
   assert.ok(where(realSuite, /homeDir\('[^']*cases'\)/).length >= 1, 'and the scan still finds one built under the home');
 });

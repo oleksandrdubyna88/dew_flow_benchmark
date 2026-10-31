@@ -35,15 +35,16 @@ export function connectDecision(requestLine, allow) {
 
 const bump = (counts, key) => ({ ...counts, [key]: (counts[key] ?? 0) + 1 });
 
-/** The log read as a summary: allowed and refused hosts with counts, the number of non-CONNECT requests, and the TLS refusals by reason. */
+/** The log read as a summary: allowed and refused hosts with counts, the number of non-CONNECT requests, the TLS refusals by reason, and the bytes carried per host (E3b seam 3: the sum of every `closed` line). */
 export function egressSummary(lines) {
   return lines.reduce((acc, l) => {
     if (l.verdict === 'allowed') return { ...acc, allowed: bump(acc.allowed, l.host) };
     if (l.verdict === 'refused') return { ...acc, refused: bump(acc.refused, l.host) };
     if (l.verdict === 'nonConnect') return { ...acc, nonConnect: acc.nonConnect + 1 };
     if (l.verdict === 'tls-refused') return { ...acc, tlsRefused: bump(acc.tlsRefused, l.reason) };
+    if (l.verdict === 'closed') return { ...acc, bytes: { ...acc.bytes, [l.host]: { up: (acc.bytes[l.host]?.up ?? 0) + l.bytesUp, down: (acc.bytes[l.host]?.down ?? 0) + l.bytesDown } } };
     return acc;
-  }, { allowed: {}, refused: {}, nonConnect: 0, tlsRefused: {} });
+  }, { allowed: {}, refused: {}, nonConnect: 0, tlsRefused: {}, bytes: {} });
 }
 
 const answer = (socket, status) => socket.end(`HTTP/1.1 ${status} ${STATUS_TEXT[status] ?? 'Error'}\r\nConnection: close\r\n\r\n`);
@@ -55,6 +56,22 @@ export function helloVerdict(buffered, host) {
   if (seen.status === 'refused') return { pipe: false, reason: seen.reason, why: seen.why };
   if (seen.sni.toLowerCase() !== host) return { pipe: false, reason: 'sni-mismatch', why: `the SNI names a host other than the CONNECT host ${host}`, sni: seen.sni.slice(0, 255) };
   return { pipe: true, sni: seen.sni };
+}
+
+/** E3b seam 3: count what a piped tunnel carries and write ONE `closed` line when it ends (bytes the client sent, bytes the upstream returned). The tunnel's content is never read, only its length. */
+function countBytes({ client, upstream, decision, sentSoFar, emit }) {
+  let bytesUp = sentSoFar;
+  let bytesDown = 0;
+  let written = false;
+  client.on('data', c => { bytesUp += c.length; });
+  upstream.on('data', c => { bytesDown += c.length; });
+  const finish = () => {
+    if (written) return;
+    written = true;
+    emit({ verdict: 'closed', host: decision.host, port: decision.port, bytesUp, bytesDown });
+  };
+  client.once('close', finish);
+  upstream.once('close', finish);
 }
 
 /**
@@ -82,6 +99,7 @@ function gateAndPipe({ client, upstream, decision, rest, emit, helloTimeoutMs })
     clearTimeout(timer);
     client.off('data', onData);
     emit({ verdict: 'allowed', host: decision.host, port: decision.port, sni: v.sni });
+    countBytes({ client, upstream, decision, sentSoFar: buffered.length, emit });
     upstream.write(buffered);
     client.pipe(upstream);
     upstream.pipe(client);

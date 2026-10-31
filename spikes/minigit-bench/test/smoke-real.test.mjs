@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { renderVerdicts, verdictBlockOf } from '../capture/verdicts.mjs';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
-import { readSecretFile } from '../lib/secrets.mjs';
+import { allowRealSecretUnderTest, readSecretFile } from '../lib/secrets.mjs';
 import { scanSessionDir } from '../lib/session-scan.mjs';
 import { loadSmoke } from '../lib/smoke-load.mjs';
 import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts } from '../lib/smoke-verdicts.mjs';
@@ -101,6 +101,7 @@ test('B_S3b_is_retired_and_not_exercised_by_design_whatever_token_txt_holds', ()
 });
 
 test('The_committed_smoke_fixture_holds_neither_the_real_token_nor_the_session_dummy', t => {
+  allowRealSecretUnderTest('this test scans the committed fixture for the operator\'s own token, so it must read it'); // the one runner-side test that may (secrets-opt-in.test.mjs names it)
   const token = readSecretFile({ home: os.homedir(), parts: TOKEN_FILE_PARTS, label: 'token' });
   if (!token.ok) return hostLacks(t, `the operator's token file is unusable on this host (${token.reason}): the scan for it cannot run`);
   // (no dummy hash is asserted any more: the in-model probe that produced token.txt is retired, so the fixture has no token.txt to hash)
