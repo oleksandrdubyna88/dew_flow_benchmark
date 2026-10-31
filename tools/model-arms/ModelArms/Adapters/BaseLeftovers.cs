@@ -94,7 +94,7 @@ internal static class BaseLeftovers
     }
 
     /// <summary>One rename, of a file, a link (live or dangling) or a folder — never a copy, never through a link. The runtime reports a link to a folder as a folder, and renames it as the link it is.</summary>
-    private static void Rename(string from, string to)
+    internal static void Rename(string from, string to)
     {
         if (File.GetAttributes(from).HasFlag(FileAttributes.Directory))
         {

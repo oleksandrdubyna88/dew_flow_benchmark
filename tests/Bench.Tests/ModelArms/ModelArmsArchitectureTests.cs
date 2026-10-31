@@ -86,6 +86,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(StepStatuses), typeof(LockSnapshots), typeof(IsolationLine),
 
         // E3.S5
+        typeof(StageRecord), typeof(DeadlineSteps),
 
         // E4
 

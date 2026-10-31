@@ -91,7 +91,7 @@ internal sealed class TargetBench : IDisposable
         }
     }
 
-    /// <summary>Sets what a shim prints or exits with: <c>build.out</c>, <c>build.rc</c>, <c>suite.out</c>, <c>suite.rc</c>, <c>suite.sleep</c> (seconds, after the output), <c>npm.out</c>, <c>npm.rc</c>, <c>ext.out</c>, <c>ext.rc</c>.</summary>
+    /// <summary>Sets what a shim prints or exits with: <c>build.out</c>, <c>build.rc</c>, <c>suite.out</c>, <c>suite.rc</c>, <c>suite.sleep</c> (seconds, after the output), <c>npm.out</c>, <c>npm.rc</c>, <c>ext.out</c>, <c>ext.rc</c>; and, for the objective checks' trust-boundary scenarios (E3.S5), <c>build.hook</c>, <c>suite.hook</c>, <c>ext.hook</c> — shell text the shim runs after it has printed (the arm's own code, doing what an arm's code can).</summary>
     public void Say(string canned, string text) => File.WriteAllText(Path.Combine(_canned, canned), text);
 
     /// <summary>Every call recorded so far, in order.</summary>
@@ -248,7 +248,7 @@ internal sealed class TargetBench : IDisposable
             Path.Combine(bin, "dotnet"),
             Prelude("dotnet") + """
             case "$1" in
-              build) show build.out; code build.rc; exit "$c" ;;
+              build) show build.out; hook build.hook; code build.rc; exit "$c" ;;
               format) exit 0 ;;
               *)
                 res=''; name=''; prev=''
@@ -258,6 +258,7 @@ internal sealed class TargetBench : IDisposable
                 done
                 if [ -n "$res" ] && [ -n "$name" ]; then printf '%s' '{"results":{"tests":[]}}' > "$res/$name"; fi
                 show suite.out
+                hook suite.hook
                 if [ -f "$CANNED/suite.sleep" ]; then read -r s < "$CANNED/suite.sleep"; /bin/sleep "$s"; fi
                 code suite.rc; exit "$c" ;;
             esac
@@ -268,7 +269,7 @@ internal sealed class TargetBench : IDisposable
             Prelude("npm") + """
             case "$1" in
               ci) show npm.out; code npm.rc; exit "$c" ;;
-              test) show ext.out; code ext.rc; exit "$c" ;;
+              test) show ext.out; hook ext.hook; code ext.rc; exit "$c" ;;
               *) exit 0 ;;
             esac
 
@@ -282,6 +283,7 @@ internal sealed class TargetBench : IDisposable
         CANNED='{{_canned}}'
         show() { if [ -f "$CANNED/$1" ]; then while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$l"; done < "$CANNED/$1"; fi; }
         code() { c=0; if [ -f "$CANNED/$1" ]; then read -r c < "$CANNED/$1"; fi; }
+        hook() { if [ -f "$CANNED/$1" ]; then . "$CANNED/$1"; fi; }
         {
           printf 'CALL {{tool}}\n'
           printf 'ARG0 %s\n' "$0"

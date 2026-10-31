@@ -158,6 +158,21 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string Objective => Under("out", "objective.json");
 
+    /// <summary>The four logs <c>checks</c> keeps in <see cref="ObjectiveFolder"/> (the shell's <c>build.log</c>, <c>mcp-tests.log</c>, <c>format.log</c>, <c>ts-tests.log</c>): each is created exclusively before the first child starts (E3.S5).</summary>
+    public string ObjectiveBuildLog => Under("out", "objective", "build.log");
+
+    public string ObjectiveSuiteLog => Under("out", "objective", "mcp-tests.log");
+
+    public string ObjectiveFormatLog => Under("out", "objective", "format.log");
+
+    public string ObjectiveExtensionLog => Under("out", "objective", "ts-tests.log");
+
+    /// <summary>How each stage ended (<c>{"build":{"exit":0,"seconds":65,"killed":false},…}</c>): what <c>checks --parse-only</c> reads the exits from.</summary>
+    public string ObjectiveStages => Under("out", "objective", "stages.json");
+
+    /// <summary>Where an earlier <see cref="ObjectiveFolder"/> is renamed to before a new run makes its own (kept, never followed); the stamp is UTC, like <c>20261030T101500Z</c>.</summary>
+    public string ObjectivePrevious(string stamp) => Under("out", "objective.prev-" + Segment(stamp, "stamp"));
+
     public string TasksPlanLog => Under("out", "tasks-plan.log");
 
     public string BatchDone(int i) => Under("out", "batch-" + Number(i) + ".done");
