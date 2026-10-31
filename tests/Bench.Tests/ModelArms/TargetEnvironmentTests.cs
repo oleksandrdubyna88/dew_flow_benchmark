@@ -42,6 +42,7 @@ public sealed class TargetEnvironmentTests
         "STRIPE_APIKEY", "stripe_apikey", "OPENAI_API_KEY", "openai_api_key",
         "AWS_CREDENTIALS", "GOOGLE_CREDENTIAL", "google_credentials",
         "REGISTRY_AUTH", "NPM_AUTHTOKEN", "FEED_AUTH_TOKEN", "NODE_AUTH_TOKEN", "NPM_TOKEN",
+        "DB_PWD", "db_pwd", "SVC_PASSWD", "DEPLOY_PASS", "GPG_PASSPHRASE", "APP_SECRETS", "SIGNING_KEYS", "DB_CONNECTION_STRING", "db_connectionstring", "STORAGE_CONNECTIONSTRING", "FEED_AUTH_IDENT", "DOCKER_AUTH_CONFIG", "docker_auth_config", "DISABLE_AUTH",
         "npm_config__auth", "npm_config__authToken", "npm_config__authtoken", "NPM_CONFIG__AUTH", "npm_config_always_auth", "npm_config_//registry.npmjs.org/:_authToken", "npm_config_//registry.example/:_auth", "npm_config_registry_auth_scope",
     ];
 
@@ -56,10 +57,18 @@ public sealed class TargetEnvironmentTests
     }
 
     [Theory]
-    [InlineData("npm_config_cache"), InlineData("npm_config_registry"), InlineData("npm_config_prefix"), InlineData("NODE_PATH"), InlineData("PATHEXT"), InlineData("MY_PATH"), InlineData("AUTHOR"), InlineData("OAUTH_ENABLED"), InlineData("DATABASE_HOST"), InlineData("DOTNET_CLI_TELEMETRY_OPTOUT"), InlineData("NUGET_HTTP_CACHE_PATH")]
+    [InlineData("npm_config_cache"), InlineData("npm_config_registry"), InlineData("npm_config_prefix"), InlineData("NODE_PATH"), InlineData("PATHEXT"), InlineData("MY_PATH"), InlineData("AUTHOR"), InlineData("OAUTH_ENABLED"), InlineData("DATABASE_HOST"), InlineData("DOTNET_CLI_TELEMETRY_OPTOUT"), InlineData("NUGET_HTTP_CACHE_PATH"), InlineData("PWD"), InlineData("OLDPWD"), InlineData("BYPASS"), InlineData("COMPASS"), InlineData("PASS"), InlineData("KEYS")]
     public void A_name_that_only_looks_like_one_of_them_is_kept(string name)
     {
         Of((name, "v")).Should().ContainKey(name, "the rule ends with a name, it does not search one: a variable a build needs is not stripped for a look-alike");
+    }
+
+    /// <summary>What the rule does NOT strip, because a restore or a build needs it (item 8's policy): a proxy or an index url may carry userinfo, a NuGet feed's credentials are read from these names. They pass in the baseline and in every arm's checks alike, and the class doc lists them as the residual.</summary>
+    [Theory]
+    [InlineData("HTTP_PROXY"), InlineData("HTTPS_PROXY"), InlineData("https_proxy"), InlineData("PIP_INDEX_URL"), InlineData("NuGetPackageSourceCredentials_MyFeed"), InlineData("VSS_NUGET_EXTERNAL_FEED_ENDPOINTS")]
+    public void A_name_a_restore_needs_passes_though_its_value_may_carry_a_credential(string name)
+    {
+        Of((name, "https://user:pw@example.invalid/")).Should().ContainKey(name, "stripping it would fail every restore behind a proxy or a private feed, in the baseline and in every arm alike");
     }
 
     [Fact]
