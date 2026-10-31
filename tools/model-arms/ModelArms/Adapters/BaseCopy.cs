@@ -34,13 +34,17 @@ public static class BaseCopy
     {
         try
         {
-            return Folder(new DirectoryInfo(from), to, new Walk(from, road, ceiling, [.. new[] { from }.Concat(alsoKeepOut).Select(Normal)]));
+            return Folder(new DirectoryInfo(from), to, new Walk(from, road, ceiling, KeptOut([from, .. alsoKeepOut])));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return Outcome<long>.Failure($"cannot copy {from} to {to}: {ex.Message}");
         }
     }
+
+    /// <summary>Each folder as NAMED (made absolute) and as it REALLY is (<see cref="RootFacts.RealPathOf"/>, the module's one link-resolving road): a root reached through a linked parent has a real path the gate never spelled, and that is the spelling a tool that resolves links writes into a link. The link's TEXT stays lexical and is never followed; only the folders it is compared with are resolved.</summary>
+    private static IReadOnlyList<string> KeptOut(IEnumerable<string> folders) =>
+        [.. folders.SelectMany(folder => RootFacts.RealPathOf(folder).Match(real => new[] { Normal(folder), Normal(real) }, _ => new[] { Normal(folder) })).Distinct(StringComparer.Ordinal)];
 
     private static string Normal(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 

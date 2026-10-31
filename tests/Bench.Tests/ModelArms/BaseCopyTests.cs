@@ -74,6 +74,28 @@ public sealed class BaseCopyTests
         File.ReadAllText(temp.Combine("root", "base", "obj", "shared.txt")).Should().Be("shared\n");
     }
 
+    [Theory]
+    [InlineData("the-base-by-its-real-path")]
+    [InlineData("the-root-by-its-real-path")]
+    public void A_rooted_link_written_with_the_real_path_is_refused_when_the_root_was_named_through_a_linked_parent(string shape)
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.File("shared\n", "real", "root", "base", "obj", "shared.txt");
+        temp.Folder("real", "root", "r", "other-arm");
+        File.CreateSymbolicLink(temp.Combine("via"), temp.Combine("real"));
+        var named = temp.Combine("via", "root");
+        var target = shape == "the-base-by-its-real-path" ? Path.Combine(RealOf(temp.Combine("real", "root")), "base", "obj") : Path.Combine(RealOf(temp.Combine("real", "root")), "r", "other-arm");
+        File.CreateSymbolicLink(temp.Combine("real", "root", "base", "objlink"), target);
+
+        var copied = BaseCopy.Copy(Path.Combine(named, "base"), temp.Combine("copy"), PlatformKit.LinuxRoad, [named]);
+
+        copied.Should().BeOfType<Bench.Domain.Outcome<long>.Fail>("the link text is the REAL path, which realpath-using tools write: a keep-out that knew only the names the gate gave would copy it").Which.Reason.Should().Contain("objlink");
+        File.ReadAllText(temp.Combine("real", "root", "base", "obj", "shared.txt")).Should().Be("shared\n");
+    }
+
+    private static string RealOf(string path) => RootFacts.RealPathOf(path).Ok();
+
     [Fact]
     public void An_absolute_link_to_somewhere_else_and_a_relative_one_are_still_copied_as_links()
     {
