@@ -29,11 +29,11 @@ internal static class LaunchAdmission
             _ => throw new InvalidOperationException("unreachable"),
         };
 
-    /// <summary>D23, E4.S0: the version of the resolved <paramref name="git"/> read by <see cref="ArmGit.VersionAsync"/> from <paramref name="cwd"/> (the experiment root) and held against <see cref="GitFloor"/>. Below the floor, unparseable, or a git that does not answer is exit 3 prefixed <c>model-arms &lt;verb&gt;:</c>; nothing else has been launched.</summary>
+    /// <summary>D23, E4.S0: the version of the resolved <paramref name="git"/> read by <see cref="ArmGit.VersionAsync"/> from <paramref name="cwd"/> (the experiment root) and held against <see cref="GitFloor"/>. Below the floor, unparseable, or a git that does not answer is exit 3 prefixed <c>model-arms &lt;verb&gt;: git at &lt;real path&gt;:</c> (the refusal names the git it is about); nothing else has been launched.</summary>
     public static async Task<Passage<GitVersion>> FloorAsync(string verb, string git, IReadOnlyDictionary<string, string> environment, string cwd, CancellationToken ct) =>
         (await new ArmGit(git, cwd, environment).VersionAsync(ct)).Match(
             text => GitFloor.Admit(text).Match(
                 version => new Passage<GitVersion>.Through(version),
-                reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: {reason}")),
-            reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git --version at {git} could not be read: {reason}"));
+                reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {git}: {reason}")),
+            reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {git}: `git --version` could not be read: {reason}"));
 }

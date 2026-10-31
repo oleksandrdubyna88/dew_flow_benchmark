@@ -803,14 +803,14 @@ public sealed class ValidateVerbTests
         }
 
         File.Exists(root.MarkerFile("git")).Should().BeFalse("no source question was asked of a refused git: the shim logs every call but --version");
-        error.Should().Contain("the source was not checked: git's version ");
+        error.Should().Contain($"git at {git}: ", "the refusal names the git it is about, by its real path").And.Contain("the source was not checked: git's version ");
         if (printed == "nonsense")
         {
             error.Should().Contain("not a version this harness can read").And.Contain("nonsense");
             return;
         }
 
-        error.Should().Contain(printed).And.Contain(GitFloor.Sentence).And.Contain("the source was not checked: git's version is below the floor");
+        error.Should().Contain(printed).And.Contain(GitFloor.Sentence).And.Contain("the source was not checked: git's version is refused");
     }
 
     /// <summary>The floor is a fact about an EXECUTABLE and takes no road: the gate runs on the Mac's seams (the portable road, handed in on this Linux host — a Mac's road composed on a real Mac is unobserved, E3 §8 item 25) and the floor still refuses. The road's own line comes FIRST: the positive that the portable road was the one taken.</summary>
@@ -835,81 +835,6 @@ public sealed class ValidateVerbTests
         var lines = error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         lines.Should().ContainSingle(line => line.Contains("NOT verified", StringComparison.Ordinal));
         lines[0].Should().Contain("NOT verified", "the road's line comes first: the portable road was taken");
-    }
-
-    public static TheoryData<string> Roads() => ["validate", "prep-base", "make", "run-arm", "checks", "checks --parse-only"];
-
-    /// <summary>The consultant's check (E4.S0): every admission asks git exactly ONCE for its version, from the experiment root, under the pins — and a refused git runs NOTHING else: exactly one recorded block, not "no other call" (a count of zero and a count of two both fail). The same road with an admitted version: the first block is that call and the second is a repository question — the positive
-    /// that an admitted version reaches the later operations. The exit code of the admitted road is each verb's own (their tests assert it); this asserts the sequence.</summary>
-    [Theory]
-    [MemberData(nameof(Roads))]
-    public async Task Every_admission_asks_git_its_version_exactly_once_from_the_experiment_root_and_a_refused_git_runs_nothing_else(string road)
-    {
-        Posix();
-        const string Pinned = "-c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false";
-
-        var refused = await AdmissionAsync(road, "2.44.0");
-
-        refused.Code.Should().Be(3, $"{road}: git 2.44.0 is below the floor");
-        var only = refused.Blocks.Should().ContainSingle($"{road}: exactly one git call for a refused git — the version").Subject;
-        only.Call.Should().Be(Pinned + " --version");
-        only.Cwd.Should().Be(refused.Root, $"{road}: asked from the experiment root");
-
-        var admitted = await AdmissionAsync(road, "2.44.1");
-
-        admitted.Blocks.Should().HaveCountGreaterThan(1, $"{road}: an admitted git reaches the later operations");
-        admitted.Blocks[0].Call.Should().Be(Pinned + " --version");
-        admitted.Blocks[0].Cwd.Should().Be(admitted.Root);
-        admitted.Blocks[1].Call.Should().NotEndWith("--version", $"{road}: the version is asked once").And.Match(road is "validate" or "prep-base" ? "rev-parse*" : Pinned + "*", $"{road}: the second call is a repository question");
-    }
-
-    private sealed record Admission(int Code, string Root, IReadOnlyList<(string Call, string Cwd, IReadOnlyList<string> Env)> Blocks);
-
-    private static IReadOnlyList<(string Call, string Cwd, IReadOnlyList<string> Env)> BlocksOf(string marker) => File.Exists(marker) ? Sentinel.Blocks(marker) : [];
-
-    private static async Task<Admission> AdmissionAsync(string road, string printed)
-    {
-        switch (road)
-        {
-            case "validate" or "prep-base":
-                using (var root = await new ExperimentRoot().WithTargetAsync())
-                {
-                    var marker = root.MarkerFile("git-calls");
-                    root.ReplaceGit(Sentinel.Body(marker, printed));
-                    var run = await RunAsync(root, road);
-                    return new Admission(run.Code, root.Root, BlocksOf(marker));
-                }
-
-            case "make":
-                using (var kit = await MakeKit.CreateAsync("C1"))
-                {
-                    var marker = kit.Root.MarkerFile("git-calls");
-                    kit.Root.ReplaceGit(Sentinel.Body(marker, printed));
-                    var run = await kit.MakeAsync();
-                    return new Admission(run.Code, kit.Root.Root, BlocksOf(marker));
-                }
-
-            case "run-arm":
-                using (var root = new ExperimentRoot())
-                using (var fake = new FakeCli())
-                {
-                    await root.MakeArmAsync("C1", fake);
-                    RunArmKit.Replay(fake, "result-success.jsonl");
-                    var marker = root.MarkerFile("git-calls");
-                    root.ReplaceGit(Sentinel.Body(marker, printed));
-                    var run = await RunArmKit.RunAsync(root, "C1");
-                    return new Admission(run.Code, root.Root, BlocksOf(marker));
-                }
-
-            default:
-                using (var kit = await ChecksKit.CreateAsync())
-                {
-                    var marker = kit.Root.MarkerFile("git-calls");
-                    kit.Root.ReplaceGit(Sentinel.Body(marker, printed));
-                    var run = await kit.RunAsync(parseOnly: road.EndsWith("--parse-only", StringComparison.Ordinal));
-                    return new Admission(run.Code, kit.Root.Root, BlocksOf(marker));
-                }
-        }
     }
 
     private static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)

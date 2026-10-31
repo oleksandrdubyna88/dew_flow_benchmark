@@ -455,7 +455,7 @@ public sealed class MakeVerbTests
         File.Exists(kit.Layout.ArmMapFile).Should().BeFalse("no arm map was written");
         Directory.Exists(kit.Layout.Arms).Should().BeFalse("no arm folder was made");
         run.Output.Should().NotContain("resolved executables:", "refused before printing");
-        run.Error.Should().Contain("2.44.0").And.Contain(GitFloor.Sentence);
+        run.Error.Should().Contain("2.44.0").And.Contain(GitFloor.Sentence).And.Contain($"git at {only.Executable}: ", "the refusal names the git it is about, by its real path");
 
         kit.Bench.Say("git.version", "git version 2.44.1\n");
         File.Delete(kit.Bench.Calls);
