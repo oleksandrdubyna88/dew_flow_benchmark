@@ -127,7 +127,7 @@ Narrowed: no — judged against the epoch 3 baseline: the tasks, the arms, the m
 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
-| the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `51a80ba` (planning, not on main) | `dew_flow_benchmark` branch `feat/lang-v2-e1`, pushed, unmerged | — | pending judge (the Verdict cell takes only `fits`, `cut` or `—`); if `fits`, it is rewritten for S8b, S7a, OP-2 to OP-11 as text, and the D41 rule before its own gate |
+| the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `51a80ba` (planning, not on main) | `dew_flow_benchmark` branch `feat/lang-v2-e1`, pushed, unmerged | fits | kept; rewritten for E1.S8b, E3.S7a, OP-2 to OP-11 as text and the D41 rule (no trap content) before its own gate (judged by the team lead, Opus, 2026-10-31) |
 
 ## 1. The question, before any solution
 
