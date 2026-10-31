@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // The exploratory pilot's command line (plan todo/PLAN_lang_explore_task1.md): task 1 on the v1 bare harness, three C# and TypeScript pairs. Exploratory, not evidence.
 //
+//   node spikes/lang-explore/explore.mjs calibrate                  FREE: both references through the judge at the 30 s ceiling, the limits (TL, ML), every mutant against its predicted cases
 //   node spikes/lang-explore/explore.mjs prepare                    the ONLY step that uses the network: TypeScript 6.0.3, the Node cache snapshot, the C# snapshot re-hashed, the spin calibration
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage or configuration | 5 failed.
 import { parseArgs } from 'node:util';
+import { calibrateCommand } from './lib/calibrate.mjs';
 import { prepare } from './lib/prepare.mjs';
+import { loadWorld } from './lib/world.mjs';
 
 const EXIT = Object.freeze({ done: 0, stop: 2, halt: 3, config: 4, failed: 5 });
 const say = line => process.stdout.write(`${line}\n`);
@@ -17,7 +20,14 @@ async function cmdPrepare() {
   return r.resumable ? EXIT.halt : EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare });
+async function cmdCalibrate() {
+  const r = await calibrateCommand({ say, worldFn: loadWorld });
+  if (r.ok) { say(`calibrated: TL ${r.value.calibration.limits.timeMs} ms, ML ${r.value.calibration.limits.memoryBytes} bytes; written to ${r.value.file}`); return EXIT.done; }
+  say(`calibration stopped: ${r.reason}`);
+  return EXIT.failed;
+}
+
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate });
 
 export async function main(argv) {
   const { positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false });

@@ -158,7 +158,7 @@ test('The_visible_mode_prints_one_PASS_or_FAIL_line_per_case_and_judges_time_aga
 
 /** Run a snippet with the judge loaded as a module (the file stays self-contained: it is read by path, `-I` adds nothing to the import path). */
 async function inJudge(code) {
-  const prog = `import importlib.util as u, sys\nspec = u.spec_from_file_location('judge', ${JSON.stringify(JUDGE)})\nj = u.module_from_spec(spec); spec.loader.exec_module(j)\n${code}`;
+  const prog = `import importlib.util as u, sys\nsys.dont_write_bytecode = True\nspec = u.spec_from_file_location('judge', ${JSON.stringify(JUDGE)})\nj = u.module_from_spec(spec); spec.loader.exec_module(j)\n${code}`;
   const r = await runBounded('python3', ['-I', '-c', prog], { timeoutMs: 60_000 });
   assert.equal(r.ok, true, r.reason);
   assert.equal(r.value.code, 0, r.value.stderr);

@@ -2,8 +2,8 @@
 // score shape (`bare-record.mjs` `qualityPart`) plus the pilot's `explore` section. The judge runs on the host; the cases are piped from there and never enter the box.
 // Failures are values. The one thing this module does not do is run anything inside a session: it scores a finished tree.
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { scoreBoxArgv, scoreEnv } from '../../minigit-bench/lib/bwrap.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
@@ -38,8 +38,8 @@ function isValueOf(argv, overrides, i) {
  * The two scoring box argvs the judge fills in per case: `buildBox` (the tree, a home and a tmp, and the cache copies, read-write) and `runBox` (the tree, a home and a tmp, no cache). Both carry
  * the locale (W3), the pilot's extra environment keys and `tsc` on PATH; neither binds the cases.
  */
-export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, operatorHome = os.homedir(), exists }) {
-  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, operatorHome, locale, ...(exists ? { exists } : {}) };
+export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, operatorHome, exists }) {
+  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, locale, ...(operatorHome ? { operatorHome } : {}), ...(exists ? { exists } : {}) };
   const env = { ...envExtra, PATH: `${scoreEnv({ ...common, toolchainDirs }).PATH}:${tsDir}/node_modules/.bin` };
   return {
     buildBox: withEnv(scoreBoxArgv({ ...common, nugetCache, npmCache }), env),
@@ -129,34 +129,41 @@ export const acceptedOf = score => score.build.ok && score.visible.every(allPass
  * Score a tree end to end. `files` is the frozen workspace (`workspaceFiles`), `sets` the case directories besides the visible samples (`[{ name: 'heldout', dir }]`), `caches` the cache directories to copy for the
  * build. The work directory is created under `work` and removed after. -> `ok(score)` | `fail`.
  */
-export async function scoreTree({ explore, stack, source, files, sets, limits, toolchains, caches, work, traps = [], python, judge, deadlineMs }) {
+export async function scoreTree({ explore, stack, source, files, sets, limits, toolchains, caches, work, traps = [], python, judge, deadlineMs, operatorHome }) {
   const area = path.join(work, 'judge');
-  rmSync(area, { recursive: true, force: true });
+  removeArea(area);
   mkdirSync(area, { recursive: true });
   try {
     const frozen = pristineCopy({ source, dest: path.join(area, 'tree'), stack, files });
-    const config = judgeConfig({ explore, files, sets, limits, toolchains, caches, area });
+    const config = judgeConfig({ explore, files, sets, limits, toolchains, caches, area, operatorHome });
     const judged = await runJudge({ python, judge, config, configFile: path.join(area, 'config.json'), timeoutMs: deadlineMs ?? judgeDeadlineMs({ limits, cases: caseCount(config.sets) }) });
     return judged.ok ? ok(scoreShape({ result: judged.value, traps, frozen })) : judged;
   } finally {
-    rmSync(area, { recursive: true, force: true });
+    removeArea(area);
   }
 }
 
-/** Copy a cache directory (when there is one) into the scoring area; an absent source is an empty cache. */
+/** Remove a scoring area. A seeded cache copy keeps its snapshot's read-only modes, so the tree is made writable first. */
+export function removeArea(dir) {
+  makeWritable(dir);
+  rmSync(dir, { recursive: true, force: true });
+}
+
+/** Copy a cache directory (when there is one) into the scoring area, writable; an absent source is an empty cache. */
 function copyCache(from, to) {
   mkdirSync(to, { recursive: true });
   if (from && existsSync(from)) cpSync(from, to, { recursive: true, verbatimSymlinks: true });
+  makeWritable(to);
   return to;
 }
 
 /** The judge's config for a scoring area: the tree is in `area/tree`; the visible samples, the cache copies and the boxes are made here. */
-export function judgeConfig({ explore, files, sets, limits, toolchains, caches, area }) {
+export function judgeConfig({ explore, files, sets, limits, toolchains, caches, area, operatorHome }) {
   const nugetCache = copyCache(caches.nuget, path.join(area, 'cache-nuget'));
   const npmCache = copyCache(caches.npm, path.join(area, 'cache-npm'));
   const visibleDir = path.join(area, 'visible');
   writeSamples({ files, dir: visibleDir });
-  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra });
+  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra, operatorHome });
   return { work: path.join(area, 'run'), tree: path.join(area, 'tree'), out: path.join(area, 'result.json'), limits, placeholders: PLACE, buildBox: boxes.buildBox, runBox: boxes.runBox, sets: [{ name: 'visible', dir: visibleDir }, ...sets] };
 }
 
