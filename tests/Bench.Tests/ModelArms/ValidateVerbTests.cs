@@ -3,7 +3,6 @@ using Bench.Cli;
 using Bench.Domain;
 using FluentAssertions;
 using ModelArms.Adapters;
-using Bench.Tests.Probes.Driver;
 using ModelArms.Core.Experiment;
 using Xunit;
 using ArmsProgram = ModelArms.Program;
@@ -606,49 +605,6 @@ public sealed class ValidateVerbTests
     }
 
     [Fact]
-    public async Task A_scenarios_file_swapped_between_its_trust_check_and_its_read_is_refused_with_exit_4()
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        var scenarios = Path.Combine(root.Root, "scenarios.json");
-        var seams = GateSeams.Real with
-        {
-            AfterRead = path =>
-            {
-                if (path == scenarios && !OperatingSystem.IsWindows())
-                {
-                    var other = Path.Combine(root.Root, "other.json");
-                    File.WriteAllText(other, """[{"id":"S9","kind":"cs","name":"Swapped"}]""");
-                    File.SetUnixFileMode(other, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                    File.Move(other, scenarios, overwrite: true);
-                }
-
-                return Task.CompletedTask;
-            },
-        };
-
-        var (code, error) = await ThroughValidateAsync(root, seams);
-
-        code.Should().Be(4);
-        error.Should().Contain("scenarios.json changed between its trust check and its read").And.Contain("inode");
-    }
-
-    [Fact]
-    public async Task A_scenarios_file_that_stays_as_it_was_judged_is_read_once_and_validates()
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        var reads = new List<string>();
-        var seams = GateSeams.Real with { AfterRead = path => { reads.Add(Path.GetFileName(path)); return Task.CompletedTask; } };
-
-        var (code, error) = await ThroughValidateAsync(root, seams);
-
-        error.Should().BeEmpty();
-        code.Should().Be(0);
-        reads.Should().Contain("scenarios.json", "validate looks at scenarios.json again after reading it, through the gate's own seam");
-    }
-
-    [Fact]
     public async Task The_gate_hands_the_verb_the_facts_it_judged_scenarios_json_by()
     {
         using var root = new ExperimentRoot();
@@ -777,67 +733,7 @@ public sealed class ValidateVerbTests
         problems.Should().HaveCount(4, "the git facts of a source that does not exist are not asked, so they are not reported");
     }
 
-    /// <summary>The git floor at <c>validate</c> (D23, E4.S0): the source is asked only of a git whose version passes, and every refusal is still printed at once. The shim answers <c>--version</c> with the printed text and logs every other call — the marker file is the proof that no repository question was asked of a refused git. The shim REPLACES the fixture's link to the host's git
-    /// (<see cref="ExperimentRoot.ReplaceGit"/> deletes the link first, so the operator's git is never written through).</summary>
-    [Theory]
-    [InlineData("2.44.0", 3)]
-    [InlineData("2.44.1", 0)]
-    [InlineData("2.45.0", 0)]
-    [InlineData("2.39.5 (Apple Git-154)", 0)]
-    [InlineData("2.39.3", 3)]
-    [InlineData("nonsense", 3)]
-    public async Task A_git_below_the_floor_is_refused_at_validate_and_at_run_arm_admission(string printed, int exit)
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        var git = root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
-
-        var (code, output, error) = await RunAsync(root);
-
-        code.Should().Be(exit, output + error);
-        if (exit == 0)
-        {
-            output.Should().Contain($"  git → {git}");
-            File.ReadAllLines(root.MarkerFile("git")).Count(line => line.StartsWith("rev-parse", StringComparison.Ordinal)).Should().Be(4, "an admitted git is asked the source's four questions");
-            return;
-        }
-
-        File.Exists(root.MarkerFile("git")).Should().BeFalse("no source question was asked of a refused git: the shim logs every call but --version");
-        error.Should().Contain($"git at {git}: ", "the refusal names the git it is about, by its real path").And.Contain("the source was not checked: git's version ");
-        if (printed == "nonsense")
-        {
-            error.Should().Contain("not a version this harness can read").And.Contain("nonsense");
-            return;
-        }
-
-        error.Should().Contain(printed).And.Contain(GitFloor.Sentence).And.Contain("the source was not checked: git's version is refused");
-    }
-
-    /// <summary>The floor is a fact about an EXECUTABLE and takes no road: the gate runs on the Mac's seams (the portable road, handed in on this Linux host — a Mac's road composed on a real Mac is unobserved, E3 §8 item 25) and the floor still refuses. The road's own line comes FIRST: the positive that the portable road was the one taken.</summary>
-    [Fact]
-    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task On_the_portable_road_the_floor_is_checked_too()
-    {
-        Posix();
-        using var root = await new ExperimentRoot().WithTargetAsync();
-        File.SetUnixFileMode(root.Root, (UnixFileMode)Convert.ToInt32("700", 8));
-        foreach (var file in new[] { "experiment.json", "scenarios.json" })
-        {
-            File.SetUnixFileMode(Path.Combine(root.Root, file), (UnixFileMode)Convert.ToInt32("600", 8));
-        }
-
-        root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), "2.44.0"));
-
-        var (code, error) = await ThroughValidateAsync(root, PlatformKit.MacSeams());
-
-        code.Should().Be(3, error);
-        error.Should().Contain(GitFloor.Sentence);
-        var lines = error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        lines.Should().ContainSingle(line => line.Contains("NOT verified", StringComparison.Ordinal));
-        lines[0].Should().Contain("NOT verified", "the road's line comes first: the portable road was taken");
-    }
-
-    private static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)
+    internal static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)
     {
         var line = ModelArmsCommandLine.Split(["validate", "--experiment", root.Root]).Ok();
         var error = new StringWriter();

@@ -1,11 +1,13 @@
 using Bench.Tests.Probes.Driver;
 using FluentAssertions;
+using ModelArms.Core.Experiment;
 using Xunit;
 using ArmsProgram = ModelArms.Program;
+using GateSeams = ModelArms.GateSeams;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The consultant's check of E4.S0 (D23), moved out of <c>ValidateVerbTests</c> (the file limit): the git floor at EVERY admission asks git its version exactly once, from the experiment root, under the pins, and a refused git runs nothing else. One theory over six roads; each road builds its own fixture and replaces <c>&lt;temp&gt;/bin/git</c> by the recording shim (<see cref="ExperimentRoot.ReplaceGit"/> deletes the link first).
+/// <summary>The git floor of E4.S0 (D23), moved out of <c>ValidateVerbTests</c> (the file limit): at <c>validate</c>, on the portable road, and at EVERY admission asks git its version exactly once, from the experiment root, under the pins, and a refused git runs nothing else. One theory over six roads; each road builds its own fixture and replaces <c>&lt;temp&gt;/bin/git</c> by the recording shim (<see cref="ExperimentRoot.ReplaceGit"/> deletes the link first).
 /// <para>
 /// What this does NOT prove: Windows (the shim is a shell script); the exit code of an admitted road — each verb's own tests hold it; a vendor git carrying a version number without the fix (the floor reads a number).
 /// </para></summary>
@@ -22,6 +24,66 @@ public sealed class GitFloorAdmissionTests
         var error = new StringWriter();
         var code = await ArmsProgram.RunAsync([verb, "--experiment", root.Root], output, error, root.Environment, TestContext.Current.CancellationToken);
         return (code, output.ToString(), error.ToString());
+    }
+
+    /// <summary>The git floor at <c>validate</c> (D23, E4.S0): the source is asked only of a git whose version passes, and every refusal is still printed at once. The shim answers <c>--version</c> with the printed text and logs every other call — the marker file is the proof that no repository question was asked of a refused git. The shim REPLACES the fixture's link to the host's git
+    /// (<see cref="ExperimentRoot.ReplaceGit"/> deletes the link first, so the operator's git is never written through).</summary>
+    [Theory]
+    [InlineData("2.44.0", 3)]
+    [InlineData("2.44.1", 0)]
+    [InlineData("2.45.0", 0)]
+    [InlineData("2.39.5 (Apple Git-154)", 0)]
+    [InlineData("2.39.3", 3)]
+    [InlineData("nonsense", 3)]
+    public async Task A_git_below_the_floor_is_refused_at_validate_and_at_run_arm_admission(string printed, int exit)
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var git = root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
+
+        var (code, output, error) = await ValidateAsync(root, "validate");
+
+        code.Should().Be(exit, output + error);
+        if (exit == 0)
+        {
+            output.Should().Contain($"  git → {git}");
+            File.ReadAllLines(root.MarkerFile("git")).Count(line => line.StartsWith("rev-parse", StringComparison.Ordinal)).Should().Be(4, "an admitted git is asked the source's four questions");
+            return;
+        }
+
+        File.Exists(root.MarkerFile("git")).Should().BeFalse("no source question was asked of a refused git: the shim logs every call but --version");
+        error.Should().Contain($"git at {git}: ", "the refusal names the git it is about, by its real path").And.Contain("the source was not checked: git's version ");
+        if (printed == "nonsense")
+        {
+            error.Should().Contain("not a version this harness can read").And.Contain("nonsense");
+            return;
+        }
+
+        error.Should().Contain(printed).And.Contain(GitFloor.Sentence).And.Contain("the source was not checked: git's version is refused");
+    }
+
+    /// <summary>The floor is a fact about an EXECUTABLE and takes no road: the gate runs on the Mac's seams (the portable road, handed in on this Linux host — a Mac's road composed on a real Mac is unobserved, E3 §8 item 25) and the floor still refuses. The road's own line comes FIRST: the positive that the portable road was the one taken.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task On_the_portable_road_the_floor_is_checked_too()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        File.SetUnixFileMode(root.Root, (UnixFileMode)Convert.ToInt32("700", 8));
+        foreach (var file in new[] { "experiment.json", "scenarios.json" })
+        {
+            File.SetUnixFileMode(Path.Combine(root.Root, file), (UnixFileMode)Convert.ToInt32("600", 8));
+        }
+
+        root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), "2.44.0"));
+
+        var (code, error) = await ValidateVerbTests.ThroughValidateAsync(root, PlatformKit.MacSeams());
+
+        code.Should().Be(3, error);
+        error.Should().Contain(GitFloor.Sentence);
+        var lines = error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        lines.Should().ContainSingle(line => line.Contains("NOT verified", StringComparison.Ordinal));
+        lines[0].Should().Contain("NOT verified", "the road's line comes first: the portable road was taken");
     }
 
     public static TheoryData<string> Roads() => ["validate", "prep-base", "make", "run-arm", "checks", "checks --parse-only"];
