@@ -5,6 +5,7 @@ using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Steps;
 using ModelArms.Core.Tasks;
+using ModelArms.Verbs;
 using Xunit;
 using static Bench.Tests.ModelArms.RunArmKit;
 
@@ -24,6 +25,8 @@ public sealed class RunArmSrsTests
 
     /// <summary>A healthy sibling is still streaming (three lines, this long between them) when the task that stops has already ended: what a cancel of siblings would cut.</summary>
     private const int Slow = 400;
+
+    private static int CountOf(string text, string needle) => text.Split(needle).Length - 1;
 
     private static string Briefs(IEnumerable<FakeCliCall> calls) => string.Join(", ", calls.Select(BriefOf));
 
@@ -60,11 +63,13 @@ public sealed class RunArmSrsTests
         calls[1].Prompt.Should().Contain("- there are 3 tasks; the brief asks for 4 to 7", "the fix is told the checker's own sentences");
         File.ReadAllText(kit.Paths.TasksPlanLog).Should().Contain("- there are 3 tasks; the brief asks for 4 to 7");
         File.Exists(kit.Paths.BatchesJson).Should().BeFalse("batches.json is written only from a list the check passed");
+        CountOf(run.Output, "one fix round").Should().Be(1, "the line is printed once, when the fix round starts — not again by the check that follows it");
 
         var again = await kit.RunAsync();
 
         again.Code.Should().Be(4, again.Error);
         again.Error.Should().Contain("still invalid");
+        again.Output.Should().NotContain("one fix round", "the round is spent: no fix runs, so no line says one will");
         kit.Fake.Calls().Should().HaveCount(2, "the round is spent: a re-entry whose split and fix are both done launches nothing");
     }
 
@@ -295,6 +300,7 @@ public sealed class RunArmSrsTests
 
         second.Code.Should().Be(4, second.Error + second.Output);
         second.Error.Should().Contain("work/tasks.json").And.Contain("work/batches.json").And.Contain("changed after");
+        second.Output.Should().NotContain("one fix round", "batches.json exists and no fix follows: the line would promise a round that never runs");
         kit.Fake.Calls().Should().HaveCount(callsBefore, "no launch: not a coder, and in the invalid row not the split fix either — the comparison stands before the fix round");
         File.ReadAllText(kit.Paths.BatchesJson).Should().Be(fixedText, "batches.json is written once and never rewritten");
         var log = File.ReadAllText(kit.Paths.TasksPlanLog);
@@ -306,6 +312,58 @@ public sealed class RunArmSrsTests
         {
             log.Should().Contain("t5 owns the plan but does not depend on t4", "the new list is invalid, and said so");
         }
+    }
+
+    [Fact]
+    public async Task An_interrupted_split_fix_whose_list_already_passes_is_resumed_before_the_batches()
+    {
+        using var kit = await SrsKit.CreateAsync();
+        kit.Plan(kit.Five().Take(3));
+        kit.Stage(kit.Five());
+        kit.Replay(Success);
+        kit.ReplayFix(NoResult);
+        var first = await kit.RunAsync();
+        first.Code.Should().Be(5, "the fix wrote the repaired list and was cut before its result line: " + first.Error + first.Output);
+        File.Exists(kit.Paths.Done("1b-split-fix")).Should().BeFalse();
+        File.Exists(kit.Paths.BatchesJson).Should().BeFalse();
+        var session = File.ReadAllText(kit.Paths.Session("1b-split-fix")).Trim();
+        var callsBefore = kit.Fake.Calls().Count;
+
+        var second = await kit.RunAsync();
+
+        second.Code.Should().Be(0, second.Error + second.Output);
+        var later = kit.Fake.Calls().Skip(callsBefore).ToList();
+        later[0].After("--resume").Should().Be(session, "the list passes already, but the fix began and is not done: its session is resumed first, before any batch");
+        later[0].Cwd.Should().Be(kit.Clone);
+        File.Exists(kit.Paths.Done("1b-split-fix")).Should().BeTrue();
+        later.Count(call => call.Prompt.Contains("ONE task, **", StringComparison.Ordinal)).Should().Be(5);
+    }
+
+    [Fact]
+    public async Task A_tasks_json_edited_after_every_batch_is_done_does_not_stop_the_arm()
+    {
+        using var kit = await SrsKit.CreateAsync();
+        kit.Plan(kit.Five());
+        kit.Replay(Success);
+        (await kit.RunAsync()).Code.Should().Be(0);
+        var tasks = kit.Five().ToList();
+        tasks[3] = tasks[3] with { Depends = ["t1"] };
+        File.WriteAllText(kit.Paths.TasksJson, SrsKit.TasksText(tasks));
+        var callsBefore = kit.Fake.Calls().Count;
+
+        var again = await kit.RunAsync();
+
+        again.Code.Should().Be(0, "nothing is left to run, so a later edit of tasks.json (a fixer's) changes nothing: " + again.Error);
+        kit.Fake.Calls().Should().HaveCount(callsBefore);
+    }
+
+    [Fact]
+    public void The_most_severe_code_of_a_batch_ranks_4_then_3_then_5_and_a_code_none_of_them_is_outranks_all()
+    {
+        TaskPipeline.MostSevere([5, 3]).Should().Be(3);
+        TaskPipeline.MostSevere([5, 4, 3]).Should().Be(4);
+        TaskPipeline.MostSevere([5]).Should().Be(5);
+        TaskPipeline.MostSevere([3, 1, 5]).Should().Be(1, "an unranked code is the most severe of all, and the batch still stops with it instead of throwing");
     }
 
     [Fact]

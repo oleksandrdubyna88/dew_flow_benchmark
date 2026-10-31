@@ -23,7 +23,7 @@ internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme,
 }
 
 /// <summary>Admission for <c>run-arm</c>: each refusal ends the walk, so a later check never runs on what an earlier one refused and nothing is launched before all of them have passed — the scheme (the arm's letters must be among the experiment's
-/// schemes, and a <c>tasks</c> block waits for E4), the arm's token from <c>arms.map.json</c>, the PATH the child programs inherit and the two executables that PATH resolves, and <c>scenarios.json</c> as the gate judged it. The PATH is judged before the
+/// schemes), the arm's token from <c>arms.map.json</c>, the PATH the child programs inherit and the executables that PATH resolves (<c>claude</c> and <c>git</c>; for a scheme with a <c>tasks</c> block also the target's <c>lowPriority[0]</c> and <c>build[0]</c>, E4.S3), and <c>scenarios.json</c> as the gate judged it. The PATH is judged before the
 /// executables are looked up in it: git and claude look their own helpers up there for hours, and <c>validate</c>'s judgement is not carried over by magic. <c>HOME</c> and <c>XDG_CONFIG_HOME</c> are judged next, by the same helper <c>validate</c> uses (D26 c: git reads its global config there and a claude its settings and hooks). The one launch admission itself makes is <c>git --version</c> of the resolved git, from the experiment root, under the hardened environment (<see cref="LaunchAdmission.FloorAsync"/>, D23, E4.S0): a git below the floor is exit 3 before <c>scenarios.json</c> is counted. Exit 3 is the host (a CLI that is not there, a file that cannot be read), exit 4 a wrong configuration.</summary>
 internal static class RunArmAdmission
 {

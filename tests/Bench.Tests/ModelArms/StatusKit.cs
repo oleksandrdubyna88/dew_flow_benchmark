@@ -125,7 +125,10 @@ internal sealed class StatusKit : IDisposable
                 names.UnionWith([paths.Done(stem), paths.Continue(stem), .. Enumerable.Range(1, attempts).Select(n => paths.Stream(stem, n))]);
             }
 
-            names.UnionWith([paths.BatchesJson, paths.Session(TaskStems.SplitFix)]);
+            if (scheme.Entries.Any(entry => entry is SchemeEntry.Tasks))
+            {
+                names.UnionWith([paths.BatchesJson, paths.Session(TaskStems.SplitFix)]);
+            }
         }
 
         return names;

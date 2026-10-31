@@ -8,7 +8,7 @@ namespace ModelArms.Adapters;
 /// <summary>Why the task pipeline stops: the exit code (D16), the words, and the task it names (<c>null</c>: the batch).</summary>
 internal sealed record Halt(int Code, string Why, string? Id);
 
-/// <summary>A step of the pipeline's reading: the value, or the stop. Two cases because a stop carries an exit code and the task it names, which <c>Outcome&lt;T&gt;</c>'s one reason cannot say (the <c>Passage&lt;T&gt;</c> of the gate, with the task).</summary>
+/// <summary>A step of the pipeline's reading: the value, or the stop. A closed hierarchy of two cases (doctrine §5: several meaningful failures) and not <c>Outcome&lt;T&gt;</c>, whose one string reason cannot carry the exit code (3 or 4) and the task a stop names; <c>Passage&lt;T&gt;</c> is the gate's, with lines and no task.</summary>
 internal abstract record Taken<T>
 {
     private Taken()

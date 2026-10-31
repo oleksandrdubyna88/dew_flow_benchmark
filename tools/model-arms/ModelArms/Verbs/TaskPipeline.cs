@@ -25,7 +25,8 @@ internal sealed class TaskPipeline
 {
     private const int ListLimit = 1024 * 1024;
     private const int BeforeLimit = 4 * 1024;
-    private static readonly int[] Severity = [ExitCodes.Configuration, ExitCodes.Environment, 5];
+    private const int InterruptedCode = 5;
+    private static readonly int[] Severity = [ExitCodes.Configuration, ExitCodes.Environment, InterruptedCode];
 
     private readonly ArmPlan _plan;
     private readonly Func<int, StepContext> _contextAt;
@@ -35,7 +36,7 @@ internal sealed class TaskPipeline
     private readonly TaskWorktrees _worktrees;
     private readonly TaskLimits _limits;
     private readonly ArmPaths _paths;
-    private Outcome<TaskBatches>? _listing;
+    private Outcome<TaskBatches> _listing = Outcome<TaskBatches>.Failure("work/tasks.json was not checked");
     private TaskBatches _batches = new([], []);
 
     public TaskPipeline(ArmPlan plan, Func<int, StepContext> contextAt, StepRunner runner, StepLog log, ArmFiles files)
@@ -63,117 +64,161 @@ internal sealed class TaskPipeline
         }
     }
 
+    /// <summary>The split, the check, the list fixed (compared, or one fix round and written), the batches: the first stop ends the walk.</summary>
     private async Task<StepOutcome.Stopped?> WalkAsync(int position, CancellationToken stopping)
     {
-        if (await _runner.RunAsync(Block(position, TaskStems.Split, _limits.Split, string.Empty), stopping) is StepOutcome.Stopped splitStopped)
+        Func<Task<StepOutcome.Stopped?>>[] stages =
+        [
+            () => SplitAsync(position, stopping),
+            () => Task.FromResult(Check()),
+            () => FixedAsync(position, stopping),
+            () => BatchesAsync(position, stopping),
+        ];
+        foreach (var stage in stages)
         {
-            return splitStopped;
+            if (await stage() is { } stopped)
+            {
+                return stopped;
+            }
         }
 
-        if (Check() is { } checkStopped)
-        {
-            return checkStopped;
-        }
-
-        if (await FixedAsync(position, stopping) is { } fixStopped)
-        {
-            return fixStopped;
-        }
-
-        return await BatchesAsync(position, stopping);
+        return null;
     }
+
+    private static readonly Task<StepOutcome.Stopped?> Continue = Task.FromResult<StepOutcome.Stopped?>(null);
+
+    private StepOutcome.Stopped HostStop(string reason) => _log.Stop("tasks", ExitCodes.Environment, reason);
+
+    private Task<StepOutcome.Stopped?> HostHalt(string reason) => Task.FromResult<StepOutcome.Stopped?>(HostStop(reason));
+
+    private async Task<StepOutcome.Stopped?> SplitAsync(int position, CancellationToken stopping) =>
+        await _runner.RunAsync(Block(position, TaskStems.Split, _limits.Split, string.Empty), stopping) as StepOutcome.Stopped;
 
     // ---- the list: check, compare, one fix round, fix once ------------------------------------------------------------------------------------------------------
 
-    /// <summary>Step 2: <c>work/tasks.json</c> checked into <see cref="_listing"/>, <c>out/tasks-plan.log</c> replaced with what the checker said, one log line. A file the road refuses (a link, a FIFO, past 1 MiB) is exit 4.</summary>
-    private StepOutcome.Stopped? Check()
+    /// <summary>Step 2: <c>work/tasks.json</c> checked into <see cref="_listing"/>, <c>out/tasks-plan.log</c> replaced with what the checker said. A file the road refuses (a link, a FIFO, past 1 MiB) is exit 4.</summary>
+    private StepOutcome.Stopped? Check() =>
+        ListText().Match(
+            json => Judge(json),
+            reason => _log.Stop(TaskStems.Split, ExitCodes.Configuration, $"work/tasks.json is refused: {reason}"));
+
+    private Outcome<string> ListText() =>
+        BoundedFile.Read(_paths.TasksJson, ListLimit, PlatformFactsReader.CurrentRoad) switch
+        {
+            BoundedRead.Bytes bytes => Outcome<string>.Success(Encoding.UTF8.GetString(bytes.Value)),
+            BoundedRead.Refused refused => Outcome<string>.Failure(refused.Reason),
+            _ => Outcome<string>.Success(string.Empty),
+        };
+
+    private StepOutcome.Stopped? Judge(string json) =>
+        BriefsThere(TasksPlan.BriefNames(json)).Match(
+            present => Validated(json, present),
+            reason => _log.Stop(TaskStems.Split, ExitCodes.Environment, reason));
+
+    /// <summary>The names among <paramref name="names"/> that are there, each asked by NAME; a kernel that cannot say fails the whole question.</summary>
+    private Outcome<IReadOnlySet<string>> BriefsThere(IEnumerable<string> names)
     {
-        var text = BoundedFile.Read(_paths.TasksJson, ListLimit, PlatformFactsReader.CurrentRoad);
-        if (text is BoundedRead.Refused refused)
+        var there = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
         {
-            return _log.Stop(TaskStems.Split, ExitCodes.Configuration, $"work/tasks.json is refused: {refused.Reason}");
-        }
-
-        var json = text is BoundedRead.Bytes bytes ? Encoding.UTF8.GetString(bytes.Value) : string.Empty;
-        var present = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var name in TasksPlan.BriefNames(json))
-        {
-            var there = KernelFacts.Present(Path.Combine(_paths.Work, name));
-            if (there is Outcome<bool>.Fail failed)
+            var asked = KernelFacts.Present(Path.Combine(_paths.Work, name));
+            if (asked is Outcome<bool>.Fail failed)
             {
-                return _log.Stop(TaskStems.Split, ExitCodes.Environment, failed.Reason);
+                return Outcome<IReadOnlySet<string>>.Failure(failed.Reason);
             }
 
-            if (there is Outcome<bool>.Ok { Value: true })
+            if (asked is Outcome<bool>.Ok { Value: true })
             {
-                present.Add(name);
+                there.Add(name);
             }
         }
 
+        return Outcome<IReadOnlySet<string>>.Success(there);
+    }
+
+    private StepOutcome.Stopped? Validated(string json, IReadOnlySet<string> present)
+    {
         _listing = TasksPlan.Validate(json, _plan.Input.Experiment.Target.Plan, _plan.ScenarioIds, _limits, present, _paths.Work);
         var said = _listing.Match(TasksPlan.Ok, reason => reason);
         _files.Replace(_paths.TasksPlanLog, said + "\n");
-        _log.Line(_listing is Outcome<TaskBatches>.Ok ? said : "the task list has problems — one fix round: " + OneLine(said));
+        if (_listing is Outcome<TaskBatches>.Ok)
+        {
+            _log.Line(said);
+        }
+
         return null;
     }
 
     private static string OneLine(string problems) => string.Join(' ', problems.Split('\n', StringSplitOptions.RemoveEmptyEntries));
 
-    /// <summary>Steps 3–5: the batches fixed earlier win over everything; else one fix round, then the batches are written once.</summary>
-    private async Task<StepOutcome.Stopped?> FixedAsync(int position, CancellationToken stopping)
+    /// <summary>Steps 3–5: the batches fixed earlier win over everything; else the fix round (when one is due), then the batches are written once.</summary>
+    private Task<StepOutcome.Stopped?> FixedAsync(int position, CancellationToken stopping) =>
+        KernelFacts.Present(_paths.BatchesJson).Match(
+            fixedAlready => fixedAlready ? Task.FromResult(Compared()) : RoundAndWriteAsync(position, stopping),
+            reason => HostHalt(reason));
+
+    private async Task<StepOutcome.Stopped?> RoundAsync(int position, CancellationToken stopping)
     {
-        var there = KernelFacts.Present(_paths.BatchesJson);
-        if (there is Outcome<bool>.Fail failed)
+        var entry = _runner.Recover(Block(position, TaskStems.SplitFix, _limits.SplitFix, string.Empty));
+        var refused = _listing.Match(_ => string.Empty, reason => reason);
+        if (refused.Length == 0 && entry is not (StepEntry.Resume or StepEntry.RecoveredDone))
         {
-            return _log.Stop(TaskStems.Split, ExitCodes.Environment, failed.Reason);
+            return null;
         }
 
-        if (there is Outcome<bool>.Ok { Value: true })
+        if (refused.Length > 0 && entry is not StepEntry.Skip)
         {
-            return Compared();
+            _log.Line("the task list has problems — one fix round: " + OneLine(refused));
         }
 
-        if (_listing is Outcome<TaskBatches>.Fail refusedFirst)
-        {
-            if (await _runner.RunAsync(Block(position, TaskStems.SplitFix, _limits.SplitFix, refusedFirst.Reason), stopping) is StepOutcome.Stopped fixStopped)
-            {
-                return fixStopped;
-            }
-
-            if (Check() is { } checkStopped)
-            {
-                return checkStopped;
-            }
-
-            if (_listing is Outcome<TaskBatches>.Fail stillRefused)
-            {
-                return _log.Stop(TaskStems.SplitFix, ExitCodes.Configuration, $"the task list is still invalid: {OneLine(stillRefused.Reason)}");
-            }
-        }
-
-        _batches = ((Outcome<TaskBatches>.Ok)_listing!).Value;
-        _files.WriteOnce(_paths.BatchesJson, BatchesFile.Write(_batches, _paths.Work));
-        return null;
+        return await _runner.RunAsync(Block(position, TaskStems.SplitFix, _limits.SplitFix, refused), stopping) as StepOutcome.Stopped ?? Check() ?? StillInvalid();
     }
 
-    /// <summary>Step 3: <c>work/batches.json</c> exists. The list just checked must write exactly its text; a list the check refused, one whose text differs, and a file that does not read are all "changed after the batches were fixed" — <c>batches.json</c> is written only from a list the check passed.</summary>
-    private StepOutcome.Stopped? Compared()
+    private async Task<StepOutcome.Stopped?> RoundAndWriteAsync(int position, CancellationToken stopping) =>
+        await RoundAsync(position, stopping) ?? Written();
+
+    /// <summary>A list the one fix round left refused ends the arm (exit 4).</summary>
+    private StepOutcome.Stopped? StillInvalid() =>
+        _listing.Match<StepOutcome.Stopped?>(_ => null, problems => _log.Stop(TaskStems.SplitFix, ExitCodes.Configuration, $"the task list is still invalid: {OneLine(problems)}"));
+
+    /// <summary>The list that passed, as the batches: <c>work/batches.json</c> written ONCE.</summary>
+    private StepOutcome.Stopped? Written() =>
+        _listing.Match<StepOutcome.Stopped?>(
+            batches =>
+            {
+                _batches = batches;
+                _files.WriteOnce(_paths.BatchesJson, BatchesFile.Write(batches, _paths.Work));
+                return null;
+            },
+            problems => _log.Stop(TaskStems.SplitFix, ExitCodes.Configuration, $"the task list is invalid: {OneLine(problems)}"));
+
+    /// <summary>Step 3: <c>work/batches.json</c> exists. The list just checked must write exactly its text — unless every batch is done already, when nothing is left to run and a later edit of <c>tasks.json</c> (a fixer's, a reviewer's) changes nothing; a list the check refused, one whose text differs, and a file
+    /// that does not read are all "changed after the batches were fixed" — <c>batches.json</c> is written only from a list the check passed.</summary>
+    private StepOutcome.Stopped? Compared() =>
+        FixedText().Match(
+            text => BatchesFile.Read(text, _paths.Work).Match(
+                fixedBatches => Accepted(fixedBatches, text),
+                reason => _log.Stop(TaskStems.Split, ExitCodes.Configuration, $"work/batches.json is refused: {reason}")),
+            reason => _log.Stop(TaskStems.Split, ExitCodes.Configuration, $"work/batches.json cannot be read: {reason} — start the arm again from a new clone"));
+
+    private Outcome<string> FixedText() =>
+        BoundedFile.Read(_paths.BatchesJson, ListLimit, PlatformFactsReader.CurrentRoad) switch
+        {
+            BoundedRead.Bytes bytes => Outcome<string>.Success(Encoding.UTF8.GetString(bytes.Value)),
+            BoundedRead.Refused refused => Outcome<string>.Failure(refused.Reason),
+            _ => Outcome<string>.Failure("it vanished"),
+        };
+
+    private StepOutcome.Stopped? Accepted(TaskBatches fixedBatches, string text)
     {
-        var fixedText = BoundedFile.Read(_paths.BatchesJson, ListLimit, PlatformFactsReader.CurrentRoad);
-        if (fixedText is not BoundedRead.Bytes bytes)
-        {
-            return _log.Stop(TaskStems.Split, ExitCodes.Configuration, $"work/batches.json cannot be read: {(fixedText as BoundedRead.Refused)?.Reason ?? "it vanished"} — start the arm again from a new clone");
-        }
-
-        var text = Encoding.UTF8.GetString(bytes.Value);
-        if (_listing is not Outcome<TaskBatches>.Ok ok || BatchesFile.Write(ok.Value, _paths.Work) != text)
-        {
-            return _log.Stop(TaskStems.Split, ExitCodes.Configuration, "work/tasks.json changed after the batches were fixed in work/batches.json — restore it, or start the arm again from a new clone");
-        }
-
-        _batches = ok.Value;
-        return null;
+        _batches = fixedBatches;
+        return EveryBatchDone(fixedBatches) || _listing.Match(now => BatchesFile.Write(now, _paths.Work) == text, _ => false)
+            ? null
+            : _log.Stop(TaskStems.Split, ExitCodes.Configuration, "work/tasks.json changed after the batches were fixed in work/batches.json — restore it, or start the arm again from a new clone");
     }
+
+    private bool EveryBatchDone(TaskBatches batches) =>
+        Enumerable.Range(0, batches.Batches.Count).All(index => KernelFacts.Present(_paths.BatchDone(index)) is Outcome<bool>.Ok { Value: true });
 
     // ---- the batches --------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -201,21 +246,21 @@ internal sealed class TaskPipeline
         }
     }
 
-    private async Task<StepOutcome.Stopped?> BatchAsync(int position, int index, CancellationToken stopping)
+    private Task<StepOutcome.Stopped?> BatchAsync(int position, int index, CancellationToken stopping) =>
+        KernelFacts.Present(_paths.BatchDone(index)).Match(
+            done => done ? Skipped(index) : EnteredAsync(position, index, stopping),
+            reason => HostHalt(reason));
+
+    private Task<StepOutcome.Stopped?> Skipped(int index)
+    {
+        _log.Line($"batch {index.ToString(CultureInfo.InvariantCulture)} already done — skipped");
+        return Continue;
+    }
+
+    /// <summary>Re-entry reads before it cleans (E4.S2), the step of every task is read ONCE, and the batch's coders run on what it answered.</summary>
+    private async Task<StepOutcome.Stopped?> EnteredAsync(int position, int index, CancellationToken stopping)
     {
         var batch = _batches.Batches[index];
-        var number = index.ToString(CultureInfo.InvariantCulture);
-        if (Look(_paths.BatchDone(index), out var isDone) is { } doneStop)
-        {
-            return doneStop;
-        }
-
-        if (isDone)
-        {
-            _log.Line($"batch {number} already done — skipped");
-            return null;
-        }
-
         var kept = new Dictionary<string, StepEntry>(StringComparer.Ordinal);
         if (batch.Count == 1)
         {
@@ -223,75 +268,73 @@ internal sealed class TaskPipeline
         }
 
         var entry = await _worktrees.EnterAsync(batch, id => kept[id] = _runner.Recover(Coder(position, id, _paths.Worktree(id))), stopping);
-        if (entry is BatchEntry.Stopped entryStopped)
+        return entry switch
         {
-            return new StepOutcome.Stopped(entryStopped.ExitCode, entryStopped.Why);
-        }
+            BatchEntry.Ready ready => await RanAsync(position, index, ready.Places.OfType<BatchPlace.Run>().ToList(), kept, stopping),
+            BatchEntry.Stopped halted => new StepOutcome.Stopped(halted.ExitCode, halted.Why),
+            _ => throw new InvalidOperationException("a closed set"),
+        };
+    }
 
-        var runs = ((BatchEntry.Ready)entry).Places.OfType<BatchPlace.Run>().ToList();
-        foreach (var run in runs.Where(run => !TaskRecovery.IsDone(kept[run.Id])))
+    private async Task<StepOutcome.Stopped?> RanAsync(int position, int index, IReadOnlyList<BatchPlace.Run> runs, IReadOnlyDictionary<string, StepEntry> kept, CancellationToken stopping) =>
+        await BeforeAllAsync(runs.Where(run => !TaskRecovery.IsDone(kept[run.Id])), stopping)
+        ?? await RunTogetherAsync(position, index, runs, stopping)
+        ?? (_batches.Batches[index].Count == 1 ? Marked(index) : await CarriedAsync(_batches.Batches[index], runs, index, stopping));
+
+    private async Task<StepOutcome.Stopped?> BeforeAllAsync(IEnumerable<BatchPlace.Run> runs, CancellationToken stopping)
+    {
+        foreach (var run in runs)
         {
-            if (await BeforeAsync(run, stopping) is { } beforeStopped)
+            if (await BeforeAsync(run, stopping) is { } stopped)
             {
-                return beforeStopped;
+                return stopped;
             }
         }
 
-        if (await RunTogetherAsync(position, number, runs, stopping) is { } stopped)
-        {
-            return stopped;
-        }
-
-        return batch.Count == 1 ? Marked(index) : await CarriedAsync(batch, runs, index, stopping);
-    }
-
-    /// <summary>Whether <paramref name="path"/> is there, asked by NAME; a kernel that cannot say is the host's stop (exit 3).</summary>
-    private StepOutcome.Stopped? Look(string path, out bool there)
-    {
-        var asked = KernelFacts.Present(path);
-        there = asked is Outcome<bool>.Ok { Value: true };
-        return asked is Outcome<bool>.Fail failed ? _log.Stop("tasks", ExitCodes.Environment, failed.Reason) : null;
-    }
-
-    /// <summary><c>out/task-&lt;id&gt;.before</c> once, from the HEAD of the folder the task runs in, BEFORE the coder's first launch (the pick range starts there). Only for a task whose step is not done — see the class summary.</summary>
-    private async Task<StepOutcome.Stopped?> BeforeAsync(BatchPlace.Run run, CancellationToken stopping)
-    {
-        if (Look(_paths.TaskBefore(run.Id), out var exists) is { } stop)
-        {
-            return stop;
-        }
-
-        if (exists)
-        {
-            return null;
-        }
-
-        var head = await new ArmGit(_plan.Tools.Git, run.Folder, _plan.Input.Verb.Environment).HeadAsync(stopping);
-        if (head is Outcome<string>.Fail failed)
-        {
-            return _log.Stop(TaskStems.Coder(run.Id), ExitCodes.Environment, $"{run.Id}: HEAD of {run.Folder} cannot be read: {failed.Reason}");
-        }
-
-        _files.WriteOnce(_paths.TaskBefore(run.Id), ((Outcome<string>.Ok)head).Value + "\n");
         return null;
     }
 
+    /// <summary><c>out/task-&lt;id&gt;.before</c> once, from the HEAD of the folder the task runs in, BEFORE the coder's first launch (the pick range starts there). Only for a task whose step is not done — see the class summary.</summary>
+    private Task<StepOutcome.Stopped?> BeforeAsync(BatchPlace.Run run, CancellationToken stopping) =>
+        KernelFacts.Present(_paths.TaskBefore(run.Id)).Match(
+            exists => exists ? Continue : WriteBeforeAsync(run, stopping),
+            reason => HostHalt(reason));
+
+    private async Task<StepOutcome.Stopped?> WriteBeforeAsync(BatchPlace.Run run, CancellationToken stopping) =>
+        (await new ArmGit(_plan.Tools.Git, run.Folder, _plan.Input.Verb.Environment).HeadAsync(stopping)).Match<StepOutcome.Stopped?>(
+            head =>
+            {
+                _files.WriteOnce(_paths.TaskBefore(run.Id), head + "\n");
+                return null;
+            },
+            reason => _log.Stop(TaskStems.Coder(run.Id), ExitCodes.Environment, $"{run.Id}: HEAD of {run.Folder} cannot be read: {reason}"));
+
     /// <summary>All the batch's coders at once; none is cancelled because another stopped. After the last ended: the stops, most severe first.</summary>
-    private async Task<StepOutcome.Stopped?> RunTogetherAsync(int position, string number, IReadOnlyList<BatchPlace.Run> runs, CancellationToken stopping)
+    private async Task<StepOutcome.Stopped?> RunTogetherAsync(int position, int index, IReadOnlyList<BatchPlace.Run> runs, CancellationToken stopping)
     {
         var outcomes = await Task.WhenAll(runs.Select(run => _runner.RunAsync(Coder(position, run.Id, run.Folder), stopping)));
-        var stops = runs.Zip(outcomes, (run, outcome) => (run.Id, Outcome: outcome as StepOutcome.Stopped)).Where(each => each.Outcome is not null).ToList();
-        if (stops.Count == 0)
+        var stops = runs.Zip(outcomes, (run, outcome) => (run.Id, Outcome: outcome as StepOutcome.Stopped)).Where(each => each.Outcome is not null).Select(each => (each.Id, Stopped: each.Outcome!)).ToList();
+        return stops.Count == 0 ? null : Verdict(index, stops);
+    }
+
+    /// <summary>The batch's stop: the most severe code among the tasks' (4, then 3, then 5). A code the pipeline does not rank is taken as the most severe of all, and said.</summary>
+    private StepOutcome.Stopped Verdict(int index, IReadOnlyList<(string Id, StepOutcome.Stopped Stopped)> stops)
+    {
+        var worst = MostSevere(stops.Select(each => each.Stopped.ExitCode));
+        if (Rank(worst) < 0)
         {
-            return null;
+            _log.Line($"a task stopped with exit {worst.ToString(CultureInfo.InvariantCulture)}, which the pipeline does not rank — taken as the most severe");
         }
 
-        var code = Severity.First(severe => stops.Any(each => each.Outcome!.ExitCode == severe));
-        var why = code == 5
-            ? $"a task of batch {number} was interrupted — run me again to resume it"
-            : string.Join("; ", stops.Where(each => each.Outcome!.ExitCode == code).Select(each => $"{each.Id}: {each.Outcome!.Why}"));
-        return new StepOutcome.Stopped(code, why);
+        return new StepOutcome.Stopped(worst, worst == InterruptedCode
+            ? $"a task of batch {index.ToString(CultureInfo.InvariantCulture)} was interrupted — run me again to resume it"
+            : string.Join("; ", stops.Where(each => each.Stopped.ExitCode == worst).Select(each => $"{each.Id}: {each.Stopped.Why}")));
     }
+
+    /// <summary>4 outranks 3 outranks 5; a code none of them is outranks all three (a total function: the runner's codes are those three today, and a fourth must not turn a stopped batch into an exception).</summary>
+    internal static int MostSevere(IEnumerable<int> codes) => codes.MinBy(Rank);
+
+    private static int Rank(int code) => Array.IndexOf(Severity, code);
 
     /// <summary>A batch of many, every coder done: each task picked back in task order, then every worktree dropped, then the marker.</summary>
     private async Task<StepOutcome.Stopped?> CarriedAsync(IReadOnlyList<string> batch, IReadOnlyList<BatchPlace.Run> runs, int index, CancellationToken stopping)

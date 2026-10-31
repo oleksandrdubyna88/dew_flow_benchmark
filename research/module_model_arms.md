@@ -1410,13 +1410,13 @@ A real gate model writing `gate.json` (the test writes it — the fake cannot) a
 
 ## run-arm (E2.S8)
 `run-arm <arm> --experiment <root>` (`Verbs/RunArm.cs`, `RunArmAdmission.cs`, `RunArmWalk.cs`; E2.S8) runs ONE arm of ANY scheme without a `tasks` block: C, CR and the part-7 CHH. It walks the scheme's entries over the step contract (C12) — a gate step through `GateStep`, every
-other step through `StepRunner` — and knows four kinds of step and nothing about C, CR or CHH by name. A scheme with a `tasks` block (SRS) is refused until E4 (exit 4, `story E4.S3`). Exit 0 the arm is done; 3 the host or the account (a CLI that is not there, a limit still on after the
+other step through `StepRunner` — and knows four kinds of step and nothing about C, CR or CHH by name. A scheme with a `tasks` block (SRS) is walked by the task pipeline since E4.S3 (see *run-arm for the task pipeline* below); the first version of this verb refused it (exit 4, `story E4.S3`). Exit 0 the arm is done; 3 the host or the account (a CLI that is not there, a limit still on after the
 waits); 4 a wrong configuration; 5 a step stopped and the same command resumes it.
 
 ```mermaid
 flowchart TD
     G["ExperimentGate: root, trust, experiment.json, files the stage needs (arms.map.json, chain/made-ARM, baseline.json)"] --> A1
-    A1["scheme: ARM's letters among the experiment's schemes, no tasks block, else 4"] --> A2["token: arms.map.json, else 3 (unreadable) or 4"]
+    A1["scheme: ARM's letters among the experiment's schemes, else 4"] --> A2["token: arms.map.json, else 3 (unreadable) or 4"]
     A2 --> A3["PATH: every entry judged (D17), the first refusal is 4"] --> A4["claude, then git, by ExecutableResolution.Resolve: absent 3, refused 4"]
     A4 --> A5["scenarios.json as the gate judged it: its count, else 4"] --> P["print: resolved executables, each as name → REAL path (D17 c)"]
     P --> W["walk: entry by entry, the first Stopped ends it"]
@@ -1826,7 +1826,7 @@ The removal is `Directory.Delete(recursive)`, which unlinks a link inside the tr
 
 ## status (E3.S4)
 
-`status --experiment <root>` (`Verbs/Status.cs`, `Verbs/ArmReport.cs`, E3.S4) says where every arm stands and changes nothing. It prints, in this order — the root; `isolation: <IsolationLine>`; one line per run of the experiment (`run part6: locked yes, unlocked no, arms done no`, from `chain/<run>/locked|unlocked|arms-done`); then every arm: the arms of the map in its order, then the arms of the runs that the map lacks (`arm C2 (scheme C): not made`). A mapped arm prints `arm C1 (scheme C): made yes, checked no, runner pid 4312 alive`, one line per step of its scheme (`  1-code: done (finished)`; a `tasks` entry is `  tasks: listed when the task pipeline lands (E4)` until E4.S3), and `  last line: <the arm's last timing line>`. Exit 0 once printed; **4 when `arms.map.json` is refused** — by the road (a link, a FIFO, a file past 1 MiB) or as a map. A root with no map yet is every arm `not made` and exit 0: before `make` that is the answer.
+`status --experiment <root>` (`Verbs/Status.cs`, `Verbs/ArmReport.cs`, E3.S4) says where every arm stands and changes nothing. It prints, in this order — the root; `isolation: <IsolationLine>`; one line per run of the experiment (`run part6: locked yes, unlocked no, arms done no`, from `chain/<run>/locked|unlocked|arms-done`); then every arm: the arms of the map in its order, then the arms of the runs that the map lacks (`arm C2 (scheme C): not made`). A mapped arm prints `arm C1 (scheme C): made yes, checked no, runner pid 4312 alive`, one line per step of its scheme (`  1-code: done (finished)`; a `tasks` entry is the split's line, the split fix's only when it left a session file, a stream or a marker, then one line per task of `work/batches.json`, or `  tasks: no batches yet` / `  tasks: unreadable — <why>`; E4.S3), and `  last line: <the arm's last timing line>`. Exit 0 once printed; **4 when `arms.map.json` is refused** — by the road (a link, a FIFO, a file past 1 MiB) or as a map. A root with no map yet is every arm `not made` and exit 0: before `make` that is the answer.
 
 ```mermaid
 flowchart TD
@@ -2334,6 +2334,21 @@ flowchart TD
 
 **Observed numbers** (the host's git 2.53.0, the fake, the shims; 2026-10-31): `Bench.Tests --filter-namespace "*ModelArms*"` 1657 cases, 1654 passed, 3 skipped, 0 failed (1639 before: +18 — `RunArmSrsTests` 12, `RunArmSchemeTests` +2 net, one each in `StepRestartTests`, `DeadlineStepsTests`, `StatusVerbTests`, `ArmFilesTests`); `RunArmSrsTests` ≈ 60 s for its twelve cases (an SRS arm is a real clone, up to four worktrees and the six steps after the block);
 `dotnet build dew_flow_benchmark.slnx -c Release` 0 errors, 0 warnings from this change (the one warning the solution prints is `ASPIRE010` of `hosts/AppHost`); `dotnet format dew_flow_benchmark.slnx --verify-no-changes` exit 0.
+
+### The review round (E4.S3, Opus review and the coai gate; 1657 → 1660 cases in `Bench.Tests.ModelArms`)
+
+Each behaviour below was written as a test and watched RED against `0ec3559`'s `TaskPipeline`, green against the fix, and red again with the fix planted out.
+
+1. **An interrupted split fix whose list already passes is resumed** (`An_interrupted_split_fix_whose_list_already_passes_is_resumed_before_the_batches`). The fix could be killed after it wrote a valid `tasks.json` and before its result line; the next entry's check passed and the fix was never finished (no `.done`, no derived outputs). Now the fix round runs when the list is refused OR the runner's recovery for `1b-split-fix` is `Resume` or `RecoveredDone` (it began and is not done); a `Fresh` fix with a passing list is not
+   launched (its `PROBLEMS` text is gone, and a fresh brief with none would mislead). Red: `Expected at to be greater than or equal to 0 because call 3's argv should carry --resume` (the third call was a coder); planted out (`refused.Length == 0` alone) the same.
+2. **Every batch done, no comparison** (`A_tasks_json_edited_after_every_batch_is_done_does_not_stop_the_arm`). A finished arm run again, after a fixer or reviewer edited `work/tasks.json`, was refused with exit 4 *changed after* with nothing left to run. The comparison now stands only while a batch is open (the spec does not forbid skipping it). Red: `Expected again.Code to be 0 … but … changed after the batches were fixed`; planted out: the same.
+3. **The *one fix round* line only when a round runs.** It was printed by every check, so twice in one run and again when `batches.json` existed or the round was spent. Now it is printed when the list is refused AND the fix is not `Skip`; asserted in `A_refused_split_gets_one_fix_round_then_stops_with_exit_4` (once in the first run, never in the second) and in row (b) of the changed-`tasks.json` theory. Red: `but found 2`.
+4. **`StatusKit.NamesAskedFor`** adds `batches.json` and the split fix's session file only for an arm whose scheme has a `tasks` entry: `Status_opens_every_file_by_name…` is as strict for C as before.
+5. **Doctrine in `TaskPipeline`**: every method is at most four branches (the walk is a list of stages; the check, the fix round, the comparison and the batch are separate methods), no nullable field with `!` (`_listing` starts as a failure), no casts of an `Outcome` (`Match`), no `as … ?.… ??`, and `Look(…, out bool)` is gone (`KernelFacts.Present(…).Match`).
+6. **Stale text corrected**: `RunArmAdmission`'s class summary, this document's *run-arm (E2.S8)* refusal sentence and its flowchart box, and the `status` paragraph's placeholder line.
+7. **`TaskPipeline.MostSevere` is total** (`The_most_severe_code_of_a_batch_ranks_4_then_3_then_5_and_a_code_none_of_them_is_outranks_all`): 4, then 3, then 5, and a code none of them is outranks all and is said in the log; `Severity.First` threw. Red: `Expected … to be 1 … but found 3`.
+8. **`Taken<T>` kept, not replaced** (coai gate, finding "duplicates `Outcome`"): `Outcome<T>` fails with one string, and the pipeline's stop is a code (3 or 4) and the task it names — the closed hierarchy the doctrine allows when a failure has several meaningful cases. Its summary now says so; a replacement would have to carry a `Halt` in a second type, which is `Taken<T>` again. Proposed to the gate as answered, not rewritten.
+9. **`ArmGitWideningTests` is no longer `partial`**: the questions E4.S2 added are `ArmGitTaskQuestionsTests`; the helpers both classes use (the scratch folder, the environment, the plants, the small repositories) are `ArmGitTestBase`. 58 cases before and after.
 
 ### The trust boundary — D26 (a)–(f), `TaskPipeline`
 

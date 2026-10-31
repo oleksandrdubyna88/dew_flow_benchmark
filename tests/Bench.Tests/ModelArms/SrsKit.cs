@@ -146,6 +146,10 @@ internal sealed class SrsKit : IDisposable
         File.WriteAllText(Path.Combine(Root.Temp, "staged", $"script-{id}.json"), ExperimentRoot.Script(script).ToJsonString());
     }
 
+    /// <summary>The split fix's FRESH call replays <paramref name="fixture"/> (the wrapper recognises it by its wording): the fix a test kills after it wrote a valid list.</summary>
+    public void ReplayFix(string fixture) =>
+        File.WriteAllText(Path.Combine(Root.Temp, "staged", "script-fix.json"), ExperimentRoot.Script(new JsonObject { ["stdoutFile"] = ModelArmsFixtures.Path(fixture) }).ToJsonString());
+
     public void ForgetReplays()
     {
         foreach (var file in Directory.EnumerateFiles(Path.Combine(Root.Temp, "staged"), "script-*.json"))
@@ -264,6 +268,7 @@ internal sealed class SrsKit : IDisposable
             fi
             echo "$how $here $('{{ExperimentRoot.RealGit}}' rev-parse HEAD) $has" >> '{{WrapperLog}}'
             if grep -q 'was checked by a script and has these problems' "$IN" && [ -f '{{staged}}/fix.json' ]; then cp '{{staged}}/fix.json' '{{Paths.TasksJson}}'; fi
+            if grep -q 'was checked by a script and has these problems' "$IN" && [ -f '{{staged}}/script-fix.json' ]; then export FAKE_CLI_SCRIPT='{{staged}}/script-fix.json'; fi
             exec '{{FakeCli.Executable}}' "$@" < "$IN"
             """;
     }
