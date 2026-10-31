@@ -27,11 +27,18 @@ const readLines = file => (existsSync(file) ? readFileSync(file, 'utf8').split('
 const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 const round6 = x => Math.round(x * 1e6) / 1e6;
 
+/** A series id is one path component of the registered shape, so it can neither leave --runs nor name a file outside data/. */
+const SERIES_ID = /^s-\d{8}-[0-9a-f]{4}$/;
+function seriesId(id) {
+  if (!SERIES_ID.test(String(id))) throw new Error(`--series ${JSON.stringify(id)} is not a series id (s-YYYYMMDD-xxxx)`);
+  return id;
+}
+
 function args(argv) {
   const out = { runs: process.env.MINIGIT_RUNS || join(homedir(), 'rsd', 'minigit'), series: [] };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--runs') out.runs = argv[++i];
-    else if (argv[i] === '--series') out.series.push(argv[++i]);
+    else if (argv[i] === '--series') out.series = [...out.series, seriesId(argv[++i])];
     else throw new Error(`unknown argument ${argv[i]}; legal: --runs <dir>, --series <id>`);
   }
   return { ...out, series: out.series.length ? out.series : SERIES };
