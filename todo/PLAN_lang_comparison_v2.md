@@ -1,6 +1,8 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet, 2026-10-31 (revised the same day for the operator's instructions A–G).**
+> Status: **plan only, nothing implemented yet, 2026-10-31 (revised the same day for the operator's instructions A–G; the
+> coai plan gate on `aa5e413` returned PROCEED and its five accepted findings are applied — gate-round edits before the
+> operator's approval, so the change ledger does not open yet).**
 > Scope: a new public GitHub repository `dew_flow_ai_language_comparison` (gated and frozen task specs, task workspaces,
 > visible samples, run bases of the process arm); a conventions parity audit and release in `dew_flow_conventions`
 > (prerequisite, other repository); a new spike `spikes/lang-bench/` in this repository that imports the v1 harness
@@ -72,8 +74,9 @@ task repository; a parity audit of the C# and TypeScript rules in `dew_flow_conv
 ## 3. Decisions
 
 Rows marked "operator, 2026-10-31" are the operator's decisions of that day, recorded as given (D1–D8 from the morning,
-D20–D31 from the afternoon's instructions A–G). Rows marked "this plan" are proposals for the operator's approval; the open
-questions (§17) name what they do not settle.
+D20–D31 from the afternoon's instructions A–G). Rows marked "team lead, 2026-10-31, from the coai plan gate" settle
+questions the gate round on `aa5e413` closed (D32, D33). Rows marked "this plan" are proposals for the operator's approval;
+the open questions (§17) name what they do not settle.
 
 | # | Decision | Who, when |
 |---|---|---|
@@ -108,6 +111,8 @@ questions (§17) name what they do not settle.
 | D29 | **Known and original tasks are shown separately**, and the report discloses that the five public tasks may be familiar to the model | operator, 2026-10-31 (instruction E6) |
 | D30 | **The $1000 is not changed by this plan.** With two arms (120 data sessions) and dearer process sessions, the **split between arms is re-derived from the pilot** (§12); whether $1000 covers both arms or the process arm needs its own limit is **open (Q-A)** | operator, 2026-10-31 (instruction F) |
 | D31 | **The repository name stays `dew_flow_ai_language_comparison`, public from day one.** Held-out material and raw records stay outside git | operator, 2026-10-31 (instruction G) |
+| D32 | **v2 builds the process-arm pieces itself** (E3.S6–S9): the coai box and the stdio↔socket bridge, the process templates, rulesets and PATs (the repository side in E1.S7), the process runner, the compliance checker, P0 and the model smoke. They do not exist: v1's E2.S3, E2.S4 and E3.S1–S3 are not built. **v1 is closed after its bare arm; v2 is the active plan.** v1's parent plan gets only a STATUS line saying its process arm moved to this plan — a status update, not a plan change — as a follow-up outside this commit (§16). v1's design (its §4.2, §5.4, §6, §7.2, §8) stays the specification v2 builds to | team lead, 2026-10-31, from the coai plan gate (closes Q-B) |
+| D33 | **Werewolf I/O: option (a).** The spec `todo/tasks/09-werewolf.md` defines an exact stdin/stdout grammar and the agent implements the parser. There is no frozen helper or adapter code in `csharp/09-*` or `node/09-*`; the workspace holds the same files as every other olympiad task | team lead, 2026-10-31, from the coai plan gate (closes Q3) |
 
 ## 4. Design
 
@@ -126,7 +131,7 @@ calibrated by the pilot (D4). The runtime traps each task is designed around are
 | 6 | K | *RealWorld "Conduit" API subset*: users, JWT, articles, pagination | web API | 30–45 min |
 | 7 | O | *Stream-processor daemon*: an event stream, a sliding window per key, a watermark that expires keys that never return, an RSS limit, graceful SIGTERM; the spec fixes event-time semantics, ordering, bounds, output cadence and EOF | daemon | 30–45 min |
 | 8 | O | *Ledger API with idempotency keys*: money, concurrent retries of the same key | web API | 35–50 min |
-| 9 | K | *Werewolf* (IOI 2018), stdin/stdout adapter identical for both | olympiad | 45–60 min |
+| 9 | K | *Werewolf* (IOI 2018): the spec defines an exact stdin/stdout grammar, identical for both stacks, and the agent implements the parser; no adapter or helper code is supplied (D33) | olympiad | 45–60 min |
 | 10 | O | *DAG job scheduler daemon*: retries with capped backoff, per-job timeouts, cancellation, one process-wide concurrency limit k over overlapping submitted DAGs, cycle detection, failed-dependency propagation, a deterministic final report; a supplied virtual clock and job fixture for deterministic grading plus a real-time smoke | daemon | 45–60 min |
 
 Sum of the upper guesses: 370 min per stack per bare round; a process round is longer (v1 predicted 2–5 h per process
@@ -371,19 +376,20 @@ through named seams with tests. v2 does the same one level up: **new modules in 
 | `aaVerdicts` G-1 … G-14 | **widened** with G-15 … G-19 (§11) |
 | `research/minigit/tools/` extract, render, replay | **widened** to arms, tasks and kinds; CPC and the per-task ratio tables (E6) |
 | Watchdogs | wall per arm from the pilot (bare ≈ 75 min, D4), stall as v1 (45 min, the pilot may change), cost at the derived cap |
-| **v1's process-arm pieces, unbuilt** (coai box + bridge E2.S3; templates, snapshot branch, rulesets, PATs E2.S4; process runner E3.S1; compliance checker E3.S2; P0 and model smoke E3.S3) | **imported when v1 builds them**; v2's E3.S6 adapts them to one repository with two stack folders and adds the spec-unchanged compliance item. If v1's process arm does not land before v2's E3, who builds them is **Q-B** |
+| **v1's process-arm design, never built** (coai box + bridge; templates, snapshot branch, rulesets, PATs; process runner; compliance checker; P0 and model smoke) | **built here (D32):** the repository side in E1.S7, the coai box and bridge in E3.S6, the process runner in E3.S7, the compliance checker with the `spec unchanged` item in E3.S8, P0 and the model smoke in E3.S9 — to v1's design, for one repository with two stack folders |
 
-**Boundary with v1, named here and to be named in v1's parent** (`common.planning-docs` § *a boundary … on BOTH sides*;
-adding the table to v1's approved parent is a plan change there and opens its ledger — Q-B):
+**Boundary with v1** (`common.planning-docs` § *a boundary … on BOTH sides*). By D32 v1 closes after its bare arm, so the
+table below is the division; v1's parent plan gets only a status line pointing here (a status update, not a plan change;
+a follow-up outside this commit, §16):
 
-| Item | v1 builds | v2's part |
+| Item | v1 | v2 |
 |---|---|---|
-| coai box and bridge, templates, rulesets, PATs, process runner, compliance checker, P0, smoke | v1 E2.S3, E2.S4, E3.S1–S3 | import; adapt to two folders in one repository; the `spec unchanged` item |
-| The bare runner's pair, masks, voids, re-run, spend gate | v1 E3b (built) | widen with arm, task, rounds |
-| Minigit's inputs, suite, references, fork | v1 only | none — disjoint |
+| The process arm: coai box and bridge, templates, rulesets, PATs, process runner, compliance checker, P0, smoke | designed (its §4.2, §5.4, §6, §7.2, §8); E2.S3, E2.S4, E3.S1–S3 never built; closed | **built**: E1.S7, E3.S6–S9, to v1's design, plus the `spec unchanged` item |
+| The bare runner's pair, masks, voids, re-run, spend gate | built (E3b) | widened with arm, task, rounds (E3.S1) |
+| Minigit's inputs, suite, references, fork, the bare record | v1 only | none — disjoint |
 | Task specs, shared suites, drivers, judge, CPC analysis, the task repository, the parity audit | none | v2 only — disjoint |
 
-Order: v1's process pieces first, then v2 E3.S6. Launch argv as v1 (`claude -p --model opus … --max-budget-usd <cap> --tools
+Order: E1.S7 (the repository side), then E3.S6–S9. Launch argv as v1 (`claude -p --model opus … --max-budget-usd <cap> --tools
 Task,Bash,Read,Edit,Write,Glob,Grep,TodoWrite[,ToolSearch]`), MCP only in the process arm, effort `high` pinned in the
 session settings file, fresh `CLAUDE_CONFIG_DIR` per session, `gh` in the box only in the process arm.
 
@@ -519,7 +525,7 @@ replacing evidence), plus:
 |---|---|---|---|
 | G-15 | the olympiad judge by hand: one C# and one TS pilot tree, run by hand on three held-out cases, give the judge's verdicts and times within 10 % | the judge misreads a real tree | fix, re-score (no re-run) |
 | G-16 | the daemon and web drivers by hand: the pilot's task-10 trees driven by hand through one scenario each give the driver's replies; the RSS curve by hand (`ps` every second) agrees within 10 %; SIGTERM by hand ends the process as the driver says | a driver misreads a real program | fix, re-score |
-| G-17 | both references of every task pass 100 % under the registered limits **in the scoring box on the series machine**, under the quiet check; each mutant fails exactly its cases | a limit rejects one runtime's baseline, or a trap is not caught | recompute the limit by D14 (dated, both stacks) or fix the suite; before round 1 |
+| G-17 | **calibration order held:** every task's limits were registered only after E2.S1 was final for that task (both references pass every visible and held-out case, no spec amendment pending), and no spec amendment is dated after that task's limit registration; both references of every task pass 100 % under the registered limits **in the scoring box on the series machine**, under the quiet check; each mutant fails exactly its cases | a limit was registered before its references were final, or a spec amendment voided it, or a limit rejects one runtime's baseline, or a trap is not caught | a spec amendment after registration **voids that task's limits**: E2.S3 runs again for it and re-registers (dated, both stacks) before the pre-registration; otherwise recompute by D14 or fix the suite; all before round 1 |
 | G-18 | the cap derivation per arm and the budget split (§12) from the pilot's settled costs, written as a dated amendment; the stall timeout per arm larger than the longest quiet gap seen in any pilot session | the caps or stall would cut sessions the task needs | set them from the pilot; before round 1 |
 | G-19 | the process pilot: both pilot pairs delivered (merged, green), every compliance item computable, the frozen spec unchanged in both runs, the plan gate reached `proceed` before any code gate, CPC computed by hand for one pair equals the tool's | the process arm's instruments misread a real run | fix; one more process pilot pair before round 1 |
 
@@ -538,10 +544,17 @@ it reached, per arm.
 task of the nearest guess scaled by the ratio of guesses (the process arm has two pilot points, so its scaling is marked
 weaker); `capMax(arm)` is set so that 1.1 × Σ over the arm's 60 sessions of their caps ≤ the arm's share of $850 (the
 ceiling less pilot, A/A and a re-run reserve of ≈ $150); the **share** is proposed as proportional to the arms' expected
-totals from the pilot (so neither arm is starved by the formula), and is the operator's to confirm (Q-A). If the pilot's
-costs make `capMax` smaller than 1.5 × any pilot cost in either arm, the operator decides between fewer rounds, a smaller
-task set, a process-arm limit of its own and a raised ceiling **before** the pre-registration is amended — this plan does not
-decide it.
+totals from the pilot (so neither arm is starved by the formula), and is the operator's to confirm (Q-A).
+
+**Deterministic default when the frame breaks** (the cap rule fails — `capMax(arm)` < 1.5 × any pilot cost of that arm —
+or the projected total, Σ expected costs + 1.1 × the re-run reserve, exceeds the ceiling) **and the operator has not
+answered:** the runner **refuses to start round 1**. It exits with the resumable-halt code **3** and the named halt
+`budget-frame`, prints the measured numbers (per arm: every pilot session's settled cost, the derived caps, `capMax`, the
+projected total, the ceiling) and the exact resume command, `lang-runner.mjs resume --series <dir> --amendment <date>`,
+which is accepted only when a dated budget line of that date exists in `amendments.md`. **It never cuts rounds, tasks or
+arms on its own.** Any cut — fewer rounds, a smaller task set, a process-arm limit of its own, a raised ceiling — is the
+operator's dated amendment, applied before round 1 and recorded in the pre-registration's amendments. The gate's own
+round-pair cut (D10) applies only inside a frame the operator has accepted.
 
 **Projection, as a guess only:** v1's one-minute bare sessions cost ≈ $0.35 each; v2's bare sessions run 5–75 min with many
 build and test loops, so $5–20 each → 60 bare sessions $300–1200. v1 predicted $30–70 per **process** cell on a far smaller
@@ -569,12 +582,16 @@ frame; the pilot replaces this guess and the question is open (Q-A).
 1. **Task repository (E1):** the operator creates `dew_flow_ai_language_comparison` (public); the team lead writes the ten
    specs, each gated (document gate + consultant + bias review) and frozen (tag, hashes); the workspaces with `build.sh`,
    `run.sh`, pins, `PACKAGES.md`; samples; the Node stack rationale in the README; toolchains pinned; the two cache snapshots;
-   the process-arm templates, CI, rulesets, PAT and deploy key when v1's E2.S4 shape lands.
-2. **References and suites (E2):** two references per task; the shared suites (visible and held-out), mutants and the trap
-   coverage table; the bias review of each suite; sealed; limits computed by D14 on the series machine; `leakcheck` clean.
-3. **Harness (E3):** `spikes/lang-bench/`; drivers and judge; the runner's arm, task and round dimensions; D15's env; the
-   widened categories and records; CPC in the record; G-15 … G-19; the process-arm import and the `spec unchanged` item;
-   stub tests; a ≤ $0.20 bare smoke on task 1; v1's P0 and model smoke on this repository.
+   the process-arm templates, CI, rulesets, PAT and deploy key (E1.S7, built here to v1 §6's design, D32).
+2. **References and suites (E2), in a strict order per task:** the two references **final** (both pass every visible and
+   held-out case, no spec amendment pending — E2.S1) → the shared suites, mutants and the trap coverage table (E2.S2) → only
+   then calibration and **limit registration** (E2.S3, by D14 on the series machine); a spec amendment after a task's
+   registration voids that task's limits and its calibration runs again before the pre-registration; the bias review of each
+   suite; sealed; `leakcheck` clean.
+3. **Harness (E3):** `spikes/lang-bench/`; drivers and judge, and `research/module_tests.md` updated with their flows; the
+   runner's arm, task and round dimensions; D15's env; the widened categories and records; CPC in the record; G-15 … G-19;
+   the process arm built here (the coai box and bridge, the process runner, the compliance checker with the `spec unchanged`
+   item, P0 and the model smoke — E3.S6–S9, D32); stub tests; a ≤ $0.20 bare smoke on task 1.
 4. **Pre-registration (E4.S3)** committed and tagged before the A/A; then the bare A/A, the bare pilot pairs, the process
    pilot pairs, the cap and split derivation (dated amendment), the seed reveal.
 5. **Series (E5):** six alternating rounds under the gate.
@@ -597,7 +614,7 @@ turns host skips into failures).
 | T-L7 | limit calibration: given two reference measurements, D14's formula gives the registered limits; a reference failing under them is a calibration failure, not a passing suite |
 | T-L8 | trap coverage: every mutant fails exactly its registered cases and no other; both references pass every case; a trap with no catching case is a failure of the table |
 | T-L9 | the order: six rounds with arms strictly alternating and the lead drawn from the seed; every task once per round; rids distinct over arm, task, stack, repeat and attempt; masks swap per pair; a task's second repeat in an arm never precedes another task's first |
-| T-L10 | the spend gate with per-arm caps and the one ceiling; the round rule refuses round k+1 while round k has an unscored pair; the ceiling cuts a round pair whole |
+| T-L10 | the spend gate with per-arm caps and the one ceiling; the round rule refuses round k+1 while round k has an unscored pair; the ceiling cuts a round pair whole; **the budget frame:** pilot costs that break the cap rule or the projection make `run --what round:1` exit 3 with halt `budget-frame`, print every measured number and the resume command, start nothing and cut nothing; `resume --amendment <date>` is accepted only with a dated budget line of that date |
 | T-L11 | the record has every per-kind and per-arm field known, `not captured` with a reason, or `n/a (<kind \| arm>)`; spawn and exit timestamps present |
 | T-L12 | the contamination needles for the known tasks hit in tool inputs and outputs and are reported for a hand reading, never auto-voided |
 | T-L13 | offline caches (effect, in a box): with the registries refused by the proxy, `npm install fastify@5.12.7` and `dotnet restore` of the pinned project succeed; a package outside the set fails naming it |
@@ -609,7 +626,10 @@ turns host skips into failures).
 | T-L19 | **the overall figures:** ten per-task ratios → the median, the geometric mean (a bound enters marked) and the count of C# higher; one task at 100× moves the geometric mean and not the median, and the test asserts both numbers |
 | T-L20 | **the spec-freeze guard:** a session whose spec blob at the run base differs from the frozen tag is refused before launch; a process session whose PR changed the spec gets the compliance item `spec unchanged: not met` and the flag |
 | T-L21 | the Python suite runner runs unchanged against a C# and a TS stub implementation of one fixture task and reports the same case list; it imports nothing outside the standard library (a test greps the imports) |
-| T-L22 | the process-arm compliance checker (v1's, imported) computes 18 items for a synthetic run, the 18th from the spec blob |
+| T-L22 | the process-arm compliance checker (built here, E3.S8) computes 18 items for a synthetic run from GitHub JSON, a `coai.db` copy and a stream, the 18th from the spec blob |
+| T-L23 | the coai bridge refuses a `tools/call` whose `repoPath`, `committedPlan` or `suspectedFiles` resolves outside the session (symlinks and `..` included) with a JSON-RPC error naming the rule, and passes one inside (v1's T-B1) |
+| T-L24 | the process runner: a run base cut from the frozen tag, a session's clone single-branch with a restricted refspec and `--no-tags`, a push outside `run/<rid>/` flagged, `delivered` read from the merge into the base, an undelivered session scored on its PR head and marked |
+| T-L25 | the calibration order: `register-limits` for a task is refused while that task's references are not final or a spec amendment is dated after the last calibration; a spec amendment after registration voids that task's limits in `inputs/limits-lang.json` (a test on the pure function) |
 
 Live: the bare smoke (E3.S5), P0 and the model smoke (v1's, on this repository), the A/A and the pilots (E4), the by-hand
 G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
@@ -637,6 +657,13 @@ G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
       wider than §9.
 - [ ] The public repository holds no secret, transcript, held-out case or link in a workspace (`leakcheck` clean on every
       push and PR); credentials torn down after the series.
+- [ ] `research/module_tests.md` lists the harness's runner command and every scenario flow as covered or not covered with
+      a reason, and says what the harness does not prove (E3.S2).
+- [ ] Limits were registered only after the references were final, and every spec amendment after a registration voided
+      and re-ran that task's calibration before the pre-registration (G-17).
+- [ ] **Follow-up outside this plan's commits:** v1's parent plan [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md)
+      carries a STATUS line saying its process arm moved to this plan (a status update, not a plan change), and v1 is closed
+      after its bare arm (D32).
 - [ ] `research/lang-v2/` and `research/README.md` updated; the module document describes the extension; this plan and its
       stories documents promoted with deviations; the worktree removed.
 
@@ -648,15 +675,13 @@ None yet. Filled at promotion: what shipped differently from this plan, and for 
 
 Not settled by this plan; the operator or the named epic decides. No answer is invented here. Removed by the afternoon's
 instructions: the former Q2 (public from day one — D31; the conventions pin — D23) and the former Q12 (the ceiling cuts
-whole round pairs — D10, now with two arms).
+whole round pairs — D10, now with two arms). Removed by the coai plan-gate round on `aa5e413`: **Q-B** (v2 builds the
+process-arm pieces itself; v1 closes after its bare arm — D32) and **Q3** (Werewolf option (a) — D33). The budget frame's
+default when the operator has not answered is now fixed (§12); Q-A keeps only the operator's choice itself.
 
 - **Q-A Does $1000 cover both arms, or does the process arm need its own limit?** 120 sessions; v1 predicted $30–70 per
   process cell on a smaller task. The pilot gives the numbers; the operator decides between fewer rounds, a smaller task
   set, a separate process limit or a raised ceiling (§12). This plan leaves $1000 as set.
-- **Q-B Who builds v1's process-arm pieces** (coai box and bridge, templates, rulesets, PATs, process runner, compliance
-  checker, P0, smoke — v1 E2.S3, E2.S4, E3.S1–S3, all open)? v2 imports them. If v1's process arm is not built first, v2's
-  E3 builds them under v1's specs, and both plans must say so; adding the boundary table to v1's approved parent opens its
-  change ledger. Who, and in which plan?
 - **Q-C The bias review sends held-out suites to coai's vendors** before sealing (D25). The agents under test never see
   them, but other vendors' models do. Accept the residual, or review the suites by an in-house Opus judge only and send the
   vendors the specs alone?
@@ -669,10 +694,6 @@ whole round pairs — D10, now with two arms).
   the visible suites), and the terms under which the known problems may be paraphrased: CSES statements, IOI 2018 Werewolf
   (the IOI's task licence to be read), RealWorld's spec (MIT), Redis's RESP (a protocol; the trademark). v1's D18 found
   upstream files with no licence; v2's credit text is written after these are read.
-- **Q3 Werewolf's I/O adapter.** IOI 2018 graded through a function interface. "Stdin/stdout adapter identical for both"
-  can mean (a) the spec defines a stdin/stdout format and the agent writes everything, or (b) the workspace ships a frozen
-  adapter per stack that calls the agent's function. (b) adds frozen code per stack to keep symmetric; (a) adds parsing work
-  to the task. Which?
 - **Q4 Memory limits in the box.** D14 assumes cgroup v2 `memory.max`/`memory.peak` is available to the scorer inside
   `bwrap` on this WSL2 host. If not, the fallback is RSS sampling with a kill above the limit, which is coarser; E3 checks
   this first and reports which one the series uses.
@@ -705,7 +726,10 @@ at most Q = ⌈2·E/5⌉ = **3** for E = 7, at most one per epic. The three area
 the bias review — an ambiguous or biased spec makes every failure unadjudicable (E1); (2) the shared suites with the trap
 coverage table and the limit calibration — the acceptance instrument of the whole experiment (E2); (3) the daemon and web
 drivers with RSS and SIGTERM — a new instrument v1 never had (E3). The parity audit (E0) and the pilot's go/no-go (E4) get
-strict specs without a mark. Nothing here or in a stories document names a held-out case, mutant or reference in clear.
+strict specs without a mark. **Recounted after D32:** the process arm adds a fourth cornerstone area to E3 — the coai bridge
+as the boundary on every `tools/call` (v1 named it so) — but E3 already holds its one mark and the ledger is full
+(k = 3 = Q), so E3.S6 gets a strict spec without a mark; a fourth mark is the operator's to grant, as v1's rule says.
+Nothing here or in a stories document names a held-out case, mutant or reference in clear.
 
 Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 
@@ -738,8 +762,8 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   public repository that leaks nothing.
 - **Scope:** D2, D5, D6, D11, D12, D19, D21, D25 (the spec half of the bias review), D31; §4.1, §4.5 (the stack sentences),
   §4.6, §5.
-- **Depends on:** the operator creating the repository; the licence answers (Q1); E0.S3 for the pin; v1 E2.S4's template
-  shape for S7 (Q-B).
+- **Depends on:** the operator creating the repository; the licence answers (Q1); E0.S3 for the pin; v1 §6's template
+  design for S7 (D32: built here, nothing imported).
 - **Done when:** T-L1, T-L2, T-L13, T-L20's guard half green; `workspace-diff` clean on ten tasks; both snapshots hashed; the
   preflight passes inside a box on SDK 10.0.403, Node 26.13.0, TS 7.0.2, the pinned Python; the ten specs carry a gate
   verdict and the freeze tag; the README carries the credits and the Node stack table; `leakcheck` clean.
@@ -762,7 +786,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   `PACKAGES.md`, pin files per stack, the C# `.csproj` skeleton and `nuget.config` offline source, the Node
   `package.json`/lockfile/`tsconfig.json`/`.npmrc offline`/`eslint.config.mjs`. *Accepted when:* in a box with no registry,
   each stack's empty workspace builds and `run.sh` starts a hello program; T-L2; the generated statements equal the frozen
-  spec's text plus the sentence (a test).
+  spec's text plus the sentence (a test); **task 9 (Werewolf, D33):** `csharp/09-*` and `node/09-*` hold exactly the same
+  file set as every other olympiad workspace — no adapter, helper, parser or grader code — and the spec's stdin/stdout
+  grammar is the only I/O contract (a test lists the files and greps for a parser).
 - S4 — the package sets and cache snapshots: the recipes, the exact pinned sets with hashes in the cache manifest,
   `PACKAGES.md` generated from the manifest. *Accepted when:* T-L13; the manifest lists every package and version; a
   package outside the set fails naming it; both hashes in `inputs/cache-snapshots-lang.json`.
@@ -774,9 +800,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   sample reaches a trap (the trap table says which cases do, and none is a sample).
 - S7 — the process-arm templates in this repository: CI with one job per stack, family checks, PR title; rulesets
   `run-main`, `template-frozen`, tags; the deploy key as the only bypass actor; the PAT; `GitHub settings` as v1 §6 —
-  adapted from v1 E2.S4 (Q-B). *Accepted when:* v1's P0 checks pass here: a run base cut by the deploy key, a direct push
+  built here to v1 E2.S4's design (D32). *Accepted when:* v1's P0 checks pass here: a run base cut by the deploy key, a direct push
   with the PAT refused, CI green on a non-default base, a planted violation red per stack, merge blocked until threads
-  resolve.
+  resolve. Built here to v1 §6's design (D32), for one repository with two stack folders.
 - **Cornerstone area:** the specs (S2).
 
 ### E2 — Shared acceptance suites, references, trap coverage, limits, bias review (§14 step 2 · 5 stories)
@@ -786,20 +812,27 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   neither runtime's baseline, and a bias review of each suite.
 - **Scope:** D13, D14, D22, D25 (the test half); §4.3 calibration; the sealed archive; `leakcheck`.
 - **Depends on:** E1.S2 frozen specs, E1.S5 toolchains, E1.S6 samples.
-- **Done when:** T-L7, T-L8, T-L21 green; G-17's conditions hold on the series machine (recorded, re-checked at the pilot);
-  the archive sealed with hashes and counts in `inputs/heldout-prereg-lang.json`; the ten bias-review verdicts recorded;
-  `leakcheck` clean on the branch.
+- **Done when:** T-L7, T-L8, T-L21, T-L25 green; G-17's conditions hold on the series machine (recorded, re-checked at the
+  pilot), including the calibration order; the archive sealed with hashes and counts in `inputs/heldout-prereg-lang.json`;
+  the ten bias-review verdicts recorded; `leakcheck` clean on the branch.
+- **Order inside this epic, strict per task:** S1 final → S2 → S3. S3 registers a task's limits only when S1 is final for that
+  task; a spec amendment dated after a task's registration voids that task's limits, and S3 runs again for it before the
+  pre-registration (G-17).
 - S1 — references: one C# and one TypeScript reference per task, written from the frozen spec only, by two different
-  writers per task where possible. *Accepted when:* both pass every sample and every held-out case; every disagreement
-  between them was traced to the spec and, where the spec was at fault, fixed by a dated amendment before the
-  pre-registration (a dated list).
+  writers per task where possible. *Accepted when (= "final" for that task):* both pass every visible and every held-out
+  case; every disagreement between them was traced to the spec and, where the spec was at fault, fixed by a dated amendment;
+  **no spec amendment is pending** for the task; the dated list and the final mark per task are in `inputs/references.json`.
 - S2 — **the shared suites and the trap coverage table** (cornerstone): per task one Python module (standard library only)
   with the stdin/stdout, HTTP or TCP/RESP + signals mode; the held-out cases (counts registered); the table task × stack ×
   trap → cases; mutants one per trap per stack; every case names the spec sentence it asserts (v1's rule). *Accepted when:*
   T-L8, T-L21; every trap of §4.3 has at least one catching case; every case maps to a spec sentence; the table and the
   mutants' ids are sealed; no case appears in git in clear.
-- S3 — limits by D14: reference measurements in the scoring box, the formula applied, the limits registered per task.
-  *Accepted when:* T-L7; both references pass under the limits in three consecutive runs under the quiet check.
+- S3 — calibration and limit registration by D14, **only after S1 is final for the task**: reference measurements in the
+  scoring box, the formula applied, the limits registered per task in `inputs/limits-lang.json` with the spec hash they were
+  calibrated against. *Accepted when:* T-L7, T-L25; the registration is refused for a task whose S1 is not final; both
+  references pass under the limits in three consecutive runs under the quiet check; a spec amendment after registration
+  voids that task's entry and the re-run re-registers it, before the pre-registration; every registered entry names a spec
+  hash equal to the frozen (or last amended) spec.
 - S4 — the bias review of each suite (D25): spec + suite in clear from a scratch dir to the coai document gate with
   `documentText` and a consultant, the §4.3 question; findings resolved; verdict and notes in `inputs/bias-review/NN.md`
   (no case text). *Accepted when:* ten verdicts, each `proceed`/`good_enough`/`continue_anyway`, every finding
@@ -808,23 +841,38 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   when:* a synthetic series produces packets that show case, output and spec sentence and nothing of the stack or arm.
 - **Cornerstone area:** the suites and the trap table (S2).
 
-### E3 — Harness extension: two arms, long sessions, drivers, judge, scoring per kind, CPC in the record (§14 step 3 · 7 stories)
+### E3 — Harness extension: two arms, long sessions, drivers, judge, scoring per kind, CPC in the record, the process arm built (§14 step 3 · 10 stories)
 
 - **Goal:** one command runs one pair of any task in either arm under the v1 rules, scores it by its kind, computes CPC's
-  inputs, and leaves a record the report can be built from; v1's instruments untouched but for named widenings; v1's
-  process-arm pieces imported, not copied.
-- **Scope:** §6; D10, D15, D17, D18, D24, D27; §11's G-15 … G-19; the smoke; P0 and the model smoke on this repository.
-- **Depends on:** E1 workspaces, caches and templates; E2's sealed archive for the stub tests' shape; v1's process pieces (Q-B).
-- **Done when:** T-L3 … T-L6, T-L9 … T-L12, T-L14 … T-L16, T-L18 … T-L20, T-L22 green; a stub pair of each kind in each arm
-  runs end to end in real boxes; the bare smoke (task 1, TS, ≤ $0.20) is read by E/O/T/B with T1–T5; P0 passes on this
-  repository's templates; the model smoke lists the vendors through the bridge; the module document describes the extension.
+  inputs, and leaves a record the report can be built from; v1's instruments untouched but for named widenings; the
+  process arm **built here to v1's design** (D32), never copied from code that does not exist.
+- **Scope:** §6; D10, D15, D17, D18, D24, D27, D32; §11's G-15 … G-19; the smoke; the coai box and bridge, the process runner,
+  the compliance checker, P0 and the model smoke on the task repository; `research/module_tests.md`.
+- **Depends on:** E1 workspaces, caches and the repository-side templates, rulesets, PAT and deploy key (E1.S7); E2's sealed
+  archive for the stub tests' shape.
+- **Done when:** T-L3 … T-L6, T-L9 … T-L12, T-L14 … T-L16, T-L18 … T-L20, T-L22 … T-L24 green; a stub pair of each kind in
+  each arm runs end to end in real boxes; the bare smoke (task 1, TS, ≤ $0.20) is read by E/O/T/B with T1–T5; P0 passes on
+  the task repository's templates; the model smoke lists the vendors through the bridge; `research/module_tests.md` carries
+  the harness's flow catalogue; the module document describes the extension.
 - S1 — the arm, task and round dimensions of the runner: `ridOf` with arm and task and a `single` phase, six alternating
   rounds from the seed, the pair without barrier, the void schedule without v2 rows, the prereg guard's v2 list and the
   spec-freeze guard, `EGRESS_HOSTS.langBare` / `langProcess`, timestamps in the record. *Accepted when:* T-L9, T-L10,
   T-L12, T-L20; `run --dry-run` prints six rounds with their arms.
 - S2 — **the process, TCP and HTTP drivers with RSS sampling and the SIGTERM check** (cornerstone), as thin wrappers over the
   Python suite runner, in a scoring cgroup (Q4 answered first). *Accepted when:* T-L4, T-L5, T-L6; a driver never leaves a
-  process (the janitor finds none after each test).
+  process (the janitor finds none after each test); **and `research/module_tests.md` is updated** (`common.knowledge-base`,
+  the scenario-tests rule) with: (i) the exact runner command (`node spikes/lang-bench/run-tests.mjs`, with
+  `BENCH_REQUIRE_SANDBOX=1` and the glob for the driver tests); (ii) every scenario flow this epic adds, each marked
+  `covered` or `not covered` with a reason — stdin/stdout case under time and memory limits, each verdict class, HTTP
+  scenario step, HTTP concurrency scenario (k identical requests, one effect), TCP/RESP scenario with partial frames,
+  pipelining and a slow reader, readiness wait, RSS sampling every second, the RSS bound, SIGTERM clean stop within the
+  grace period, a program that ignores SIGTERM, a leftover child, cgroup `memory.peak` against the sampling fallback, the
+  offline cache in the scoring box, the scoring-time record; (iii) **explicit limits on what the harness proves** — it
+  proves a program's observable behaviour against the registered cases and scenarios on this machine under these limits,
+  not correctness in general; a Python driver bounds the load it can apply; RSS is sampled, so a peak shorter than the
+  sample interval can be missed unless `memory.peak` is present; the stop check sees the session's processes, not threads;
+  a case classed ambiguous is a spec matter, not a harness proof. A test (T-L17's shape) asserts that every flow id named in
+  the drivers' test files appears in the catalogue.
 - S3 — the stdin/stdout judge with cgroup limits and verdict classes. *Accepted when:* T-L3.
 - S4 — scoring per kind in the pipeline, `accepted`/`percent`/`defects` from the trap table, scoring time recorded; the
   process arm scored on the run base tip or the PR head with the `delivered` mark. *Accepted when:* T-L11; a stub tree of
@@ -832,13 +880,41 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - S5 — D15's environment, the widened classifier, `aaVerdicts` G-15 … G-19, CPC and the overall figures in the record
   tools, the bare smoke. *Accepted when:* T-L14, T-L15, T-L16, T-L18, T-L19; the smoke's record is complete and its cost is
   in the ledger.
-- S6 — the process arm imported: coai in its own box behind the bridge, the process session verbs, the compliance checker
-  with the 18th item (`spec unchanged`), `github.mjs` for one repository with two folders, P0 and the model smoke here (v1
-  E2.S3, E2.S4, E3.S1–S3; Q-B). *Accepted when:* T-L22; P0 and the smoke pass; the bridge refuses a `consult` whose
-  `repoPath` is this repository.
-- S7 — the module document: the extension described (entry points, exit codes, the drivers' contracts, the judge's classes,
-  the arms). *Accepted when:* every command in it runs as written.
-- **Cornerstone area:** the drivers (S2).
+- S6 — **coai in its own box and the stdio↔socket bridge** (v1 §7.2 and E2.S3's design; a cornerstone area, unmarked —
+  see the recount above): one `coai-mcp` per process session as the operator, in a second `bwrap` that binds only the
+  session directory (ro, plus `<session>/coai` rw), the vendor CLIs' own homes, the coai binary and the toolchains, `/home`
+  and `/mnt` otherwise hidden; `COAI_DATA_DIR=<session>/coai`; the series' coai settings snapshot with `COAI_QCONSULT_ROOTS`
+  unset (v1 D14); the bridge inside the agent box parses each JSON-RPC `tools/call` and refuses any path-shaped argument
+  that does not resolve inside the session directory, answering a JSON-RPC error naming the rule; `--strict-mcp-config` and
+  `mcp.json` pointing at the bridge; `ToolSearch` in the tool list for deferred schemas. *Accepted when:* T-L23; a
+  `providers` call through the bridge from inside the agent box lists the vendors with their own sign-ins while the agent
+  box holds none of them; a `consult` whose `repoPath` is this repository is refused; the held-out key is in neither box's
+  environment (a test reads both `environ`s); a reviewer round runs end to end against a stub repository in the session.
+- S7 — **the process runner**: the process session verbs over v1's bare runner (E3.S1's dimensions) — run base `run/<rid>/main`
+  cut from the frozen tag with the deploy key, the single-branch clone with a restricted refspec and `--no-tags`, the PAT in
+  the session gitconfig through `gh auth git-credential` (never on an argv), `GH_CONFIG_DIR`, `GH_PROMPT_DISABLED=1`, the
+  egress list `langProcess`, `github.mjs` (PRs, checks, merges, intervals for `ci_wait`), `delivered` read from the merge
+  into the base, an undelivered session scored on its PR head and marked, the audit's foreign-namespace rules (pushes and
+  PRs outside `run/<rid>/`, other `run/*` reads), the token scan over pushed files, PR bodies, comments and commit messages,
+  the void `no reviewer`, the open PR of a void session closed with a comment. *Accepted when:* T-L24; a stub process pair
+  runs end to end against the task repository on a `run/smoke-*` base with the stub CLI (free): base cut, clone, a
+  harness-authored PR, CI, merge, `delivered`, the record complete; a direct push with the PAT to a foreign `run/*/main` is
+  refused by the rulesets (read back).
+- S8 — **the compliance checker** over GitHub, `coai.db` and the stream (v1 §5.4's 17 items plus `spec unchanged`), with the
+  stratified hand-check protocol (≥ 20 verdicts, every item and every process cell, every "not met"; a disagreement above
+  1 in 20 fixes the checker before any number). *Accepted when:* T-L22; the checker computes every item for the S7 stub run
+  and for a synthetic run with each item broken once; C#-only items are excluded from the cross-stack score by configuration,
+  not by hand; the hand-check sheet is generated.
+- S9 — **P0 (no model) and the model smoke** on the task repository (v1 §15 step 8's checks, adapted): a harness-authored
+  PR per stack folder to `run/smoke-*/main`, base creation by the deploy key, a direct PAT push refused, CI on a non-default
+  base, a planted lint or analyzer violation red per stack, merge blocked until threads resolve and a thread resolved with
+  the PAT unblocks it, push CI green; from inside the agent box the operator's home and the held-out suite are unreadable;
+  then the model smoke (≈ $0.10): one headless process session whose only prompt is to call coai `providers` through the
+  bridge. *Accepted when:* every P0 check passes on both stack folders and is recorded; the smoke's init event shows coai
+  connected and the vendors listed; the smoke's cost is in the ledger as pilot spend.
+- S10 — the module document: the extension described (entry points, exit codes, the drivers' contracts, the judge's
+  classes, the arms, the bridge's rule, the process verbs). *Accepted when:* every command in it runs as written.
+- **Cornerstone areas:** the drivers (S2, marked); the bridge on every `tools/call` (S6, unmarked — ledger full).
 
 ### E4 — Pre-registration, A/A and the two pilots (§14 step 4 · 4 stories)
 
@@ -857,9 +933,13 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   (verbatim-from-main, derived not typed, seed as hash only, no held-out needle).
 - S3 — the commit and the tag, before any paid session. *Accepted when:* the guard peels the tag to the commit.
 - S4 — the bare A/A, the bare pilot pairs (tasks 1, 3, 10; Q7), the process pilot pairs (tasks 1, 3; Q7), G-1 … G-19, the
-  cap and split derivation (§12, Q-A to the operator if the frame does not hold), the amendments, the seed reveal.
+  cap and split derivation (§12), the amendments, the seed reveal. **If the frame breaks** (§12: `capMax(arm)` < 1.5 × a
+  pilot cost, or the projection exceeds the ceiling) **and the operator has not answered, the default is fixed:** the
+  runner refuses round 1 with exit 3 and halt `budget-frame`, prints the measured numbers and the resume command, cuts
+  nothing; the operator's dated budget amendment is the only way on (Q-A is then the operator's choice, not the runner's).
   *Accepted when:* GO; every amendment is instrument-only, a budget line, or applied to both stacks; the formula's inputs are
-  in the ledger.
+  in the ledger; T-L10's budget-frame case is observed once against the real pilot ledger (`run --what round:1 --dry-run`
+  prints the refusal when the frame is broken, or the go when it holds).
 - **Cornerstone area:** none marked (the go/no-go table is written strictly, as v1's E3).
 
 ### E5 — The paid rounds (§14 step 5 · 2 stories)
