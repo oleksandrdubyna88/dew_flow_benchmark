@@ -1789,7 +1789,7 @@ flowchart TD
     G --> I{"out/objective still the folder made? (device and inode; portable road: not a link, a folder)"}
     I -- no --> X["3 — out/objective was replaced while the arm's code ran — no report; nothing read or written through it"]
     I -- yes --> W["stages.json (ArmFiles.Replace); the suite and extension logs read back from the HELD handles (seek 0, 64 MiB); the CTRF through BoundedFile (64 MiB); the .done markers → stepsOnDeadline"]
-    M -- yes --> R["stages.json through BoundedFile (absent: four exits nobody recorded; refused: 4); the four logs and the CTRF by their paths through BoundedFile; git as above"]
+    M -- yes --> R["out/objective itself judged first (present: a real folder, else 4 — BoundedFile judges only a path's last component); stages.json through BoundedFile (absent: four exits nobody recorded; refused: 4); the four logs and the CTRF by their paths through BoundedFile; git as above"]
     W --> P["ObjectiveReport.Write → out/objective.json; the summary on stdout and in out/objective.out; the marker chain/objective-arm LAST (E3 §8 item 6)"]
     R --> P
 ```
@@ -1815,13 +1815,14 @@ flowchart TD
 
 ### Tests (E3.S5)
 
-`ChecksVerbTests` (30 cases over `ChecksKit` — the scratch target of `TargetBench` plus one made arm: a real clone of the target at `base` with one commit of three files, the real git and node, recording `dotnet` / `npm` shims whose `build.hook`, `suite.hook` and `ext.hook` play the arm's own code), `StageRecordTests` (4 methods, 10 cases), `DeadlineStepsTests` (2), the `ArmPathsTests` rows of the six new members, `ModelArmsProgramTests.A_verb_not_built_yet_…` (now `chain` → E5.S4), `ModelArmsArchitectureTests.Every_core_decider_is_named_in_the_pure_list` (`StageRecord`, `DeadlineSteps` under `// E3.S5`), and `M2PilotScaffold` (explicit: never run by the suite).
+`ChecksVerbTests` (32 cases over `ChecksKit` — the scratch target of `TargetBench` plus one made arm: a real clone of the target at `base` with one commit of three files, the real git and node, recording `dotnet` / `npm` shims whose `build.hook`, `suite.hook` and `ext.hook` play the arm's own code), `StageRecordTests` (4 methods, 10 cases), `DeadlineStepsTests` (2), `ToolLogTests` (2: a log that grows past the limit after its length was checked is refused, not read whole), `Checks`' scaffold validated on a probe root, the `ArmPathsTests` rows of the six new members, `ModelArmsProgramTests.A_verb_not_built_yet_…` (now `chain` → E5.S4), `ModelArmsArchitectureTests.Every_core_decider_is_named_in_the_pure_list` (`StageRecord`, `DeadlineSteps` under `// E3.S5`), and `M2PilotScaffold` (explicit: never run by the suite).
 
 | Test | What it holds |
 |---|---|
 | `Checks_runs_build_suite_format_and_extension_in_order_by_their_resolved_paths` | the shims' log in the shell's order; each `$0` the printed real path; the wrapper the clone's own script with the resolved `dotnet` / `npm` next; the suite's two options; the format files as separate arguments; the report's members; the summary on stdout and in `objective.out`; one warning for a missing `arm-done` |
 | `Every_target_tool_of_checks_is_launched_under_a_built_environment` | no secret name, no `SSH_AUTH_SOCK`, no `GIT_*` in any target tool's environment; `KEEP_ME`, `PATH`, `HOME` kept |
 | `Parse_only_rebuilds_the_report_from_logs_already_there` | no stage runs; `objective.json` byte-equal; with `stages.json` deleted `"build": false`, `"mcp": {"exit": null` |
+| `Parse_only_refuses_an_objective_folder_that_is_a_link_or_not_a_folder` | (a link to a folder holding forged logs; a plain file) planted after a full run → 4 naming `out/objective` and `--parse-only`; the earlier report is not rewritten |
 | `Format_runs_only_over_the_cs_files_changed_since_base_and_passes_when_none_changed` | none changed: no format call, `"format": true`; an added `a b.cs`: ONE argument, two verbs |
 | `A_failed_build_is_recorded_and_the_report_is_still_written` | `"build": false`, the suite and the extension still ran, exit 0 |
 | `A_link_planted_where_a_log_will_be_written_is_never_followed` | the build shim's `ln -s` over `mcp-tests.log` and `stages.json`: the outside files unchanged, the log a regular file holding the suite's output, the record a regular file |
@@ -1847,7 +1848,7 @@ flowchart TD
 
 **Not proven (said, not hidden).** That a real `dotnet`, `npm` or test runner prints and writes what the shims do — the attended pilot, M2, is the first real run of `checks` over real tools (the scratch target's suite, CTRF and node output were run once by hand on this host while the scaffold was written, with no verb of the module in between: three xunit tests, a CTRF naming them, a node spec reporter printing `✔ … (` and `ℹ tests 2`, a clean `git status`); that the report is TRUE (above); Windows (POSIX shims, links, FIFOs — the tests skip); that the portable road's folder check tells anything but a link or a file (observed on the Linux road only); macOS and FreeBSD run it on the portable road E3.S0 says, unobserved; a tool that prints gigabytes (item 18).
 
-### Deviations from the story (also E3 §8 items 44–47)
+### Deviations from the story (also E3 §8 items 44–48; 48 is the review round)
 
 1. `ChecksSeams(Clock, SuiteWall, AfterReport)`: the story's `(TimeProvider Clock, TargetWalls Walls)` cannot be — `TargetWalls` is a static class (C14) — so the seam is `PrepBaseSeams`'s shape (the clock and a wall that REPLACES the suite's), plus a call made when the report is on disk and the marker is not yet (a test sees the marker LAST without comparing two timestamps a coarse clock can make equal).
 2. The folder's identity is checked after git has answered and BEFORE `stages.json` is written (the story's step 5 puts `stages.json` at the end of the stages and step 7 says nothing is written through a replaced folder; the two are ordered so both hold). Git's facts are taken after the stages (the story's order; the shell took `uncommitted` before the build, so a build that leaves an untracked file now counts).
