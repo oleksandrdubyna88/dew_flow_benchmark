@@ -12,7 +12,7 @@ export const short = id => (id ? id.slice(-4) : DASH);
 export const h12 = h => (h ? h.slice(0, 12) : DASH);
 
 export function table(head, rows) {
-  const esc = c => String(c ?? DASH).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const esc = c => String(c ?? DASH).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
   return [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.map(esc).join(' | ')} |`)].join('\n');
 }
 
