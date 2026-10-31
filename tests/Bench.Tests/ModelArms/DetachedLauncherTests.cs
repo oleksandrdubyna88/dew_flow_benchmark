@@ -165,22 +165,74 @@ public sealed class DetachedLauncherTests
     }
 
     [Theory]
-    [InlineData(true, false, System.Runtime.InteropServices.Architecture.X64, "Setsid")]
-    [InlineData(true, false, System.Runtime.InteropServices.Architecture.Arm64, "Unmeasured")]
-    [InlineData(false, true, System.Runtime.InteropServices.Architecture.X64, "Windows")]
-    [InlineData(false, true, System.Runtime.InteropServices.Architecture.Arm64, "Windows")]
-    [InlineData(false, false, System.Runtime.InteropServices.Architecture.X64, "Unmeasured")]
-    [InlineData(false, false, System.Runtime.InteropServices.Architecture.Arm64, "Unmeasured")]
-    public void The_road_is_an_explicit_table_with_no_catch_all(bool linux, bool windows, System.Runtime.InteropServices.Architecture architecture, string expected)
+    [InlineData(false, true, System.Runtime.InteropServices.Architecture.X64, "2.43", "Setsid")]
+    [InlineData(false, true, System.Runtime.InteropServices.Architecture.X64, "2.34", "Setsid")]
+    [InlineData(false, true, System.Runtime.InteropServices.Architecture.X64, "2.33", "Unmeasured")]
+    [InlineData(false, true, System.Runtime.InteropServices.Architecture.X64, "", "Unmeasured")]
+    [InlineData(false, true, System.Runtime.InteropServices.Architecture.Arm64, "2.43", "Unmeasured")]
+    [InlineData(false, false, System.Runtime.InteropServices.Architecture.X64, "", "Unmeasured")]
+    [InlineData(false, false, System.Runtime.InteropServices.Architecture.Arm64, "", "Unmeasured")]
+    [InlineData(true, false, System.Runtime.InteropServices.Architecture.X64, "", "Windows")]
+    [InlineData(true, false, System.Runtime.InteropServices.Architecture.Arm64, "", "Windows")]
+    public void The_road_is_an_explicit_table_keyed_on_system_cpu_and_c_library_with_no_catch_all(bool windows, bool linux, System.Runtime.InteropServices.Architecture architecture, string glibc, string expected)
     {
-        DetachedRoads.For(linux, windows, architecture).ToString().Should().Be(expected, "macOS, FreeBSD and Linux arm64 are not measured: they fail closed, they do not inherit Linux x86-64's constants (common.platform-limits)");
+        DetachedRoads.For(windows, linux, architecture, glibc).ToString().Should().Be(expected, "musl (no glibc version), an old glibc, Linux arm64, macOS and FreeBSD are not measured: they fail closed, they do not inherit glibc x86-64's constants (common.platform-limits)");
     }
 
     [Fact]
-    public void Every_structure_libc_fills_fits_the_buffers_it_is_given()
+    public void This_host_is_the_measured_one_and_names_it_in_the_sentence_every_other_host_reads()
     {
-        PosixSpawn.Capacity.Should().BeGreaterThan(PosixSpawn.LargestMeasured, "80, 336 and 128 bytes measured with a C probe on this host (glibc 2.43, x86-64)");
-        PosixSpawn.LargestMeasured.Should().Be(PosixSpawn.AttributesBytes);
+        RunAllKit.Require();
+        PosixSpawn.GlibcVersion.Should().StartWith("2.", "glibc answers gnu_get_libc_version: 2.43 on the host it was measured on");
+        PosixSpawn.CloseFromAvailable.Should().BeTrue("glibc 2.43 has posix_spawn_file_actions_addclosefrom_np; a libc without it is refused");
+        DetachedRoads.Measured.Should().Contain("x86-64").And.Contain("glibc").And.Contain("Windows");
+    }
+
+    [Fact]
+    public void Each_structure_libc_fills_is_as_large_as_the_calls_make_it_and_fits_the_buffers_it_is_given()
+    {
+        var (actions, attributes, signals) = PosixSpawn.BytesTouched();
+
+        attributes.Should().Be(PosixSpawn.AttributesBytes, "posix_spawnattr_init clears the whole structure: the bytes it changed from a sentinel ARE its size (336 on glibc 2.43, x86-64)");
+        signals.Should().BeInRange(8, PosixSpawn.SigsetBytes, "glibc's sigemptyset and sigaddset change only the 8 bytes the kernel's 64 signals need; the rest of the 128 is the library's padding, left alone");
+        actions.Should().BeInRange(1, PosixSpawn.FileActionsBytes, "the file actions' fixed part (80 bytes) is all libc writes in the buffer; its list is allocated apart");
+        new[] { actions, attributes, signals }.Should().OnlyContain(touched => touched < PosixSpawn.Capacity, "no call reached the end of its 512-byte buffer, let alone past it: the bytes beyond each size are untouched");
+    }
+
+    [Fact]
+    public async Task A_descriptor_the_caller_left_open_does_not_reach_the_runner()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        kit.Script(new JsonObject { ["holdAfterLine"] = 1 });
+        var leaked = Path.Combine(kit.Root.Temp, "leaked.txt");
+        File.WriteAllText(leaked, string.Empty);
+
+        var run = await kit.RunWithLeakedDescriptorAsync(leaked, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        var pid = await kit.RunnerPidAsync("C1", Fast);
+        (await IsolationKit.UntilAsync(() => kit.Fake.Calls().Count > 0, Fast)).Should().BeTrue("the runner started its first step");
+        var held = Directory.EnumerateFileSystemEntries($"/proc/{pid}/fd").Select(entry => RealPathOf(entry)).ToList();
+        held.Should().NotContain(leaked, "run-all's descriptor 3 (open without close-on-exec) is closed in the child: every descriptor from 3 up");
+        var fake = kit.Fake.Calls()[0].Pid;
+        Directory.EnumerateFileSystemEntries($"/proc/{fake}/fd").Select(entry => RealPathOf(entry)).Should().NotContain(leaked, "nor does the CLI the runner starts hold it");
+    }
+
+    [Fact]
+    public async Task A_log_that_is_a_fifo_is_refused_without_blocking_and_nothing_starts()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        MakeKit.Fifo(kit.Layout.PidLog("C1"));
+        var clock = Stopwatch.StartNew();
+
+        var run = await kit.RunAsync("C1");
+
+        run.Code.Should().Be(4, run.Error + run.Output);
+        run.Error.Should().Contain($"{kit.Layout.PidLog("C1")} is a FIFO with no reader — refused");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(20), "the open of a FIFO with no reader did not block the spawn");
+        kit.Fake.Calls().Should().BeEmpty();
+        kit.PidOf("C1").Should().BeNull("no runner started");
     }
 
     private static Dictionary<string, string> ChildEnvironment() => new() { ["PATH"] = "/usr/bin:/bin" };

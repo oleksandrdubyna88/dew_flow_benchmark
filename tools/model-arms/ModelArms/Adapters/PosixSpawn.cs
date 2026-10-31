@@ -47,6 +47,7 @@ internal static class PosixSpawn
     public static int LargestMeasured => Math.Max(FileActionsBytes, Math.Max(AttributesBytes, SigsetBytes));
 
     public const int ELoop = 40;
+    public const int ENxio = 6;
     public const int EChild = 10;
 
     private const int ReadOnly = 0x0;
@@ -54,6 +55,9 @@ internal static class PosixSpawn
     private const int Create = 0x40;
     private const int Append = 0x400;
     private const int NoFollow = 0x20000;
+    private const int NonBlock = 0x800;
+    private const int FirstClosed = 3;
+    private const string CloseFromEntry = "posix_spawn_file_actions_addclosefrom_np";
     private const uint PrivateFile = 0x180;
     private const short SetProcessGroup = 0x02;
     private const short SetSignalsDefault = 0x04;
@@ -64,8 +68,26 @@ internal static class PosixSpawn
     private const int LastCatchable = 31;
     private const string NullDevice = "/dev/null";
 
+    /// <summary>Whether this libc has <c>posix_spawn_file_actions_addclosefrom_np</c> (glibc 2.34 and later; 2.43 here). Without it the runner would inherit every descriptor of this process that is not close-on-exec, so the road is refused (<see cref="DetachedRoads.Current"/>).</summary>
+    public static bool CloseFromAvailable { get; } = NativeLibrary.TryLoad("libc", typeof(PosixSpawn).Assembly, null, out var libc) && NativeLibrary.TryGetExport(libc, CloseFromEntry, out _);
+
+    /// <summary>glibc's version text (<c>2.43</c>) from <c>gnu_get_libc_version</c>, which only glibc exports; empty on any other C library (musl) or when it cannot be asked.</summary>
+    public static string GlibcVersion { get; } = AskGlibc();
+
+    private static string AskGlibc()
+    {
+        try
+        {
+            return Marshal.PtrToStringUTF8(GnuGetLibcVersion()) ?? string.Empty;
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
+        {
+            return string.Empty;
+        }
+    }
+
     /// <summary>Starts <paramref name="program"/> (a path: <c>posix_spawn</c>, never <c>posix_spawnp</c>) with <paramref name="argv"/> and <paramref name="environment"/> (<c>NAME=value</c>) as the leader of a new process group, stdin <c>/dev/null</c>, stdout and stderr the <paramref name="log"/> opened for append, created at 0600 and
-    /// <b>refusing a link</b> (<c>O_NOFOLLOW</c> — D26 a: a log that is a link fails the start with <c>ELOOP</c>), every signal 1–31 but 9 and 19 at its default and the mask empty (without it SIGPIPE, ignored by this runtime, stays ignored across <c>exec</c> — M-3), the working directory <paramref name="workingDirectory"/>.</summary>
+    /// <b>refusing a link</b> (<c>O_NOFOLLOW</c> — D26 a: a log that is a link fails the start with <c>ELOOP</c>) and <b>not waiting on a FIFO</b> (<c>O_NONBLOCK</c>: a FIFO with no reader fails with <c>ENXIO</c> instead of blocking this process inside <c>posix_spawn</c>; on a regular file the flag changes nothing), every descriptor from 3 up closed in the child (no lock or handle of this process crosses into the runner), every signal 1–31 but 9 and 19 at its default and the mask empty (without it SIGPIPE, ignored by this runtime, stays ignored across <c>exec</c> — M-3), the working directory <paramref name="workingDirectory"/>.</summary>
     public static SpawnResult Spawn(string program, IReadOnlyList<string> argv, IReadOnlyList<string> environment, string log, string workingDirectory)
     {
         var buffers = new List<IntPtr>();
@@ -76,8 +98,9 @@ internal static class PosixSpawn
             var prepared = FirstError(
                 () => ActionsInit(actions),
                 () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
-                () => ActionsAddOpen(actions, 1, log, WriteOnly | Append | Create | NoFollow, PrivateFile),
+                () => ActionsAddOpen(actions, 1, log, WriteOnly | Append | Create | NoFollow | NonBlock, PrivateFile),
                 () => ActionsAddDup2(actions, 1, 2),
+                () => ActionsAddCloseFrom(actions, FirstClosed),
                 () => ActionsAddChdir(actions, workingDirectory),
                 () => AttributesInit(attributes),
                 () => AttributesSetFlags(attributes, (short)(SetProcessGroup | SetSignalsDefault | SetSignalMask)),
@@ -100,6 +123,54 @@ internal static class PosixSpawn
             AttributesDestroy(attributes);
             Free(buffers, strings);
         }
+    }
+
+    /// <summary>What a test needs to know about the buffers: how many bytes of a buffer pre-filled with a sentinel each structure's calls changed — the structure's real extent, observed, not a constant compared with a constant. <c>posix_spawnattr_init</c> and <c>sigemptyset</c> clear their whole structure and
+    /// <c>posix_spawn_file_actions_init</c> its fixed part, so each count is the structure's size (336, 128) or its fixed part (≤ 80).</summary>
+    internal static (int Actions, int Attributes, int Sigset) BytesTouched()
+    {
+        const byte sentinel = 0xA5;
+        var buffers = new List<IntPtr>();
+        var strings = new List<IntPtr>();
+        IntPtr actions = Filled(buffers, sentinel), attributes = Filled(buffers, sentinel), signals = Filled(buffers, sentinel);
+        try
+        {
+            FirstError(
+                () => ActionsInit(actions),
+                () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
+                () => ActionsAddDup2(actions, 1, 2),
+                () => ActionsAddCloseFrom(actions, FirstClosed),
+                () => ActionsAddChdir(actions, "/"),
+                () => AttributesInit(attributes),
+                () => AttributesSetFlags(attributes, SetProcessGroup),
+                () => AttributesSetGroup(attributes, 0),
+                () => DefaultSignals(signals),
+                () => AttributesSetDefaults(attributes, signals),
+                () => AttributesSetMask(attributes, signals));
+            return (Touched(actions, sentinel), Touched(attributes, sentinel), Touched(signals, sentinel));
+        }
+        finally
+        {
+            ActionsDestroy(actions);
+            AttributesDestroy(attributes);
+            Free(buffers, strings);
+        }
+    }
+
+    private static IntPtr Filled(List<IntPtr> buffers, byte value)
+    {
+        var buffer = Marshal.AllocHGlobal(Capacity);
+        Marshal.Copy(Enumerable.Repeat(value, Capacity).ToArray(), 0, buffer, Capacity);
+        buffers.Add(buffer);
+        return buffer;
+    }
+
+    /// <summary>One past the last byte that is no longer the sentinel.</summary>
+    private static int Touched(IntPtr buffer, byte sentinel)
+    {
+        var bytes = new byte[Capacity];
+        Marshal.Copy(buffer, bytes, 0, Capacity);
+        return Array.FindLastIndex(bytes, value => value != sentinel) + 1;
     }
 
     /// <summary>One non-blocking <c>waitpid</c> of <paramref name="pid"/>.</summary>
@@ -165,6 +236,9 @@ internal static class PosixSpawn
         strings.ForEach(Marshal.FreeCoTaskMem);
     }
 
+    [DllImport("libc", EntryPoint = "gnu_get_libc_version")]
+    private static extern IntPtr GnuGetLibcVersion();
+
     [DllImport("libc", EntryPoint = "posix_spawn_file_actions_init")]
     private static extern int ActionsInit(IntPtr actions);
 
@@ -176,6 +250,9 @@ internal static class PosixSpawn
 
     [DllImport("libc", EntryPoint = "posix_spawn_file_actions_adddup2")]
     private static extern int ActionsAddDup2(IntPtr actions, int fd, int newFd);
+
+    [DllImport("libc", EntryPoint = "posix_spawn_file_actions_addclosefrom_np")]
+    private static extern int ActionsAddCloseFrom(IntPtr actions, int from);
 
     [DllImport("libc", EntryPoint = "posix_spawn_file_actions_addchdir_np")]
     private static extern int ActionsAddChdir(IntPtr actions, [MarshalAs(UnmanagedType.LPUTF8Str)] string path);

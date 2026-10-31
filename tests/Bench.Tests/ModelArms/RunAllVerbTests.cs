@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Isolation;
 using ModelArms.Core.Steps;
 using ModelArms.Verbs;
@@ -68,6 +69,78 @@ public sealed class RunAllVerbTests
         var start = timing.OfType<TimingLine.Start>().Single(line => line.Step.EndsWith("gate", StringComparison.Ordinal));
         var end = timing.OfType<TimingLine.End>().Single(line => line.Step.EndsWith("gate", StringComparison.Ordinal));
         return (start.StartUtc, end.EndUtc);
+    }
+
+    [Fact]
+    public async Task A_second_run_all_straight_after_the_first_counts_the_arms_the_first_started_and_two_at_once_never_leave_four_alive()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        kit.Script(new JsonObject { ["holdAfterLine"] = 1 });
+
+        var first = await kit.RunAsync("C1", "CR1", "C2");
+        var second = await kit.RunAsync("CR2");
+
+        first.Code.Should().Be(0, first.Error + first.Output);
+        second.Code.Should().Be(4, "the first call returned only when its three runners held their locks, so the second counts them: 3 + 1 > a queue of 3 — " + second.Error + second.Output);
+        second.Error.Should().Contain("4 arms would be alive at once");
+        kit.AliveCount().Should().Be(3);
+        kit.PidOf("CR2").Should().BeNull("the refused arm started nothing");
+    }
+
+    [Fact]
+    public async Task Run_all_holds_its_root_lock_until_each_runner_it_started_has_taken_its_own()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        var started = new System.Collections.Concurrent.ConcurrentDictionary<string, long>();
+        var launcher = new RecordingLauncher(arm => started[arm] = TimeProvider.System.GetTimestamp());
+        var delay = TimeSpan.FromMilliseconds(800);
+        RunnerState Liveness(RootPaths _, string arm) =>
+            started.TryGetValue(arm, out var at) && TimeProvider.System.GetElapsedTime(at) >= delay ? new RunnerState.Alive("pid 4242", 4242) : new RunnerState.Gone();
+        var seams = new RunAllSeams(_ => launcher, Liveness, DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+
+        var first = Task.Run(() => kit.InProcessAsync(seams, "C1", "CR1", "C2"), TestContext.Current.CancellationToken);
+        (await IsolationKit.UntilAsync(() => started.Count == 3, Fast)).Should().BeTrue("the first call started its three arms");
+        var second = await kit.InProcessAsync(seams, "CR2");
+        var done = await first;
+
+        second.Code.Should().Be(4, "the first call is still waiting for its runners to take their locks and holds the root lock: " + second.Error + second.Output);
+        second.Error.Should().Contain("another run-all holds");
+        done.Code.Should().Be(0, done.Error + done.Output);
+        done.Error.Should().NotContain("did not take its lock");
+        started.Keys.Should().BeEquivalentTo("C1", "CR1", "C2");
+        started.Keys.Select(arm => Liveness(kit.Layout, arm)).Should().AllBeOfType<RunnerState.Alive>("the call returned only once every runner it started held its lock");
+    }
+
+    [Fact]
+    public async Task Two_run_all_calls_at_the_same_moment_over_a_queue_of_three_never_start_four_arms()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        kit.Script(new JsonObject { ["holdAfterLine"] = 1 });
+
+        var both = await Task.WhenAll(kit.RunAsync("C1", "CR1", "C2"), kit.RunAsync("CR2"));
+        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
+        both.Select(run => run.Code).Order().Should().Equal([0, 4], "one call wins whichever starts first; the other is refused — by the lock while the first counts, by the count (3 + 1 > 3) once the first has returned");
+        kit.AliveCount().Should().BeLessThanOrEqualTo(3, string.Join(" | ", both.Select(run => run.Error + run.Output)));
+    }
+
+    [Fact]
+    public async Task A_run_all_that_finds_another_run_all_holding_the_root_lock_is_refused_naming_it_and_waits_for_nothing()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var gate = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50));
+        using var held = gate.TryAcquire(kit.Layout.RunAllLock);
+        held.Should().NotBeNull();
+        var launcher = new RecordingLauncher();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(RunAllKit.Seams(launcher, new Dictionary<string, string>()), "C1");
+
+        run.Code.Should().Be(4, run.Error + run.Output);
+        run.Error.Should().Contain(kit.Layout.RunAllLock).And.Contain("another run-all holds");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "the lock is never waited for");
+        launcher.Starts.Should().BeEmpty();
     }
 
     public static TheoryData<string, string, bool, int, string, int> Queues() => new()

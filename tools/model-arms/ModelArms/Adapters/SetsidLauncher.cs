@@ -30,6 +30,7 @@ internal sealed class SetsidLauncher(string setsid, TimeProvider clock) : IDetac
         {
             0 => Reaped(spawned.Pid, log),
             PosixSpawn.ELoop => new DetachedStart.Failed(4, $"{log} is a link — refused (D17), nothing started"),
+            PosixSpawn.ENxio => new DetachedStart.Failed(4, $"{log} is a FIFO with no reader — refused, nothing started"),
             var error => new DetachedStart.Failed(3, $"posix_spawn of {setsid}: {Marshal.GetPInvokeErrorMessage(error)}"),
         };
     }
@@ -40,9 +41,9 @@ internal sealed class SetsidLauncher(string setsid, TimeProvider clock) : IDetac
         var started = clock.GetTimestamp();
         while (clock.GetElapsedTime(started) < DetachCeiling)
         {
-            if (Answer(PosixSpawn.Reap(pid), log) is { } answer)
+            if (PosixSpawn.Reap(pid) is var state and not ReapState.Running)
             {
-                return answer;
+                return Answer(state, log);
             }
 
             Thread.Sleep(DetachPoll);
@@ -51,11 +52,10 @@ internal sealed class SetsidLauncher(string setsid, TimeProvider clock) : IDetac
         return new DetachedStart.Started("setsid did not detach within 10 s — the runner stays a child of this process");
     }
 
-    /// <summary>What a reap says, or <c>null</c> while the intermediate still runs.</summary>
-    private DetachedStart? Answer(ReapState state, string log) =>
+    /// <summary>What a reap that is not <i>still running</i> says.</summary>
+    private DetachedStart Answer(ReapState state, string log) =>
         state switch
         {
-            ReapState.Running => null,
             ReapState.Ended { Exited: true, Code: 0 } => new DetachedStart.Started(),
             ReapState.Ended { Exited: true } ended => new DetachedStart.Failed(3, $"setsid exited {ended.Code} — see {log}"),
             ReapState.Ended ended => new DetachedStart.Failed(3, $"setsid was ended by signal {ended.Signal} — see {log}"),
