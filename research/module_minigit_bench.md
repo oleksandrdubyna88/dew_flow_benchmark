@@ -930,6 +930,7 @@ The host must therefore have what these tests need, and a host that lacks one fa
   the epics E2–E4 that remain.
 - `todo/PLAN_minigit_stack_bench_E1.md` — the E1 stories with their test ids and the dated amendments.
 - `research/minigit/RESULTS_bare_2026-10-30.md` — the record of the bare arm's four series; `research/minigit/data/replay.json` — the contamination scan replayed over every recorded stream (re-run: `node research/minigit/tools/replay.mjs`).
+- `research/minigit/data/raw-manifest.tsv` and `raw-manifest.json` — the sha256 of every raw record under `~/rsd/minigit` (held-out sources only as a count and a hash), and `raw-archive.json` — the archive of those records kept outside git; `node research/minigit/tools/manifest.mjs verify` checks a tree against them (record § 13).
 - `todo/PLAN_minigit_stack_bench_E3_bare.md` — the bare-first stories E3b.S1 to S5: the runner, the quiet check, the pre-registration, the A/A and the three bare pairs.
 - `spikes/minigit-bench/inputs/UPSTREAM.md` — where the inputs come from and the licence decision.
 - `spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/CAPTURE.md` — the capture's table with observed values.

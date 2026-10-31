@@ -28,8 +28,8 @@
 //
 // What it does NOT do: it writes nothing under --runs, opens no file for any reason but its hash, reads no token, ~/.config or score/ contents
 // beyond hashing them as bytes, and prints no held-out path (the private list is the only place one is written, and only where --private says).
-// It records no timestamps, owners or modes, so a copy that keeps the bytes keeps the manifest. A symbolic link's target is hashed as text: a link
-// that points at an absolute path under the operator's home hashes differently once the tree is moved.
+// It records no timestamps, owners or modes, so a copy that keeps the bytes keeps the manifest. A symbolic link's target is hashed as text, and tar
+// keeps that text, so the hash survives a move; a link with an absolute target may then point at nothing, which the manifest does not check.
 // --self-check builds a synthetic runs root and data folder in a temp folder, runs the tool on them, and exits 1 on any unexpected answer.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';

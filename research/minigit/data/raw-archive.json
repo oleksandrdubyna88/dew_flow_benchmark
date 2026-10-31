@@ -1,0 +1,19 @@
+{
+ "file": "minigit-raw-2026-10-31.tar.xz",
+ "bytes": 1417405460,
+ "sha256": "a2dbc1229f51263be15281a9457daa7de3d26cc6a3953928b9eebf1524ee5534",
+ "built": "2026-10-31",
+ "command": "tar --sort=name -C ~/rsd -cf - minigit -C <stage> MANIFEST | xz -T0 -6",
+ "tar": "GNU tar 1.35",
+ "xz": "XZ Utils 5.8.3",
+ "layout": {
+  "minigit/": "the runs root (sockets dropped by tar; FIFOs kept)",
+  "MANIFEST/": "raw-manifest.tsv and raw-manifest.json (equal to research/minigit/data/) and raw-manifest-heldout.tsv (the private list)"
+ },
+ "packs": {
+  "publicSha256": "64076e5d49c4f922163279117ad7f54c299a7a6c90865d2b60b5b12a5c00a77c",
+  "heldoutSha256": "183c0b4a1f712931d818263add3aeb6000f0b04795bfd6d7000ba3c195f8b5ba"
+ },
+ "proof": "2026-10-31: sha256sum -c OK; unpacked copy: manifest.mjs verify --runs <copy>/minigit --manifest <copy>/MANIFEST exit 0; one byte appended to a copied run-map.json: exit 1",
+ "kept": "outside git: ~/rsd/archive/ on the operator machine; a second copy at a place the operator chooses"
+}
