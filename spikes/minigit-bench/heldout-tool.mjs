@@ -107,7 +107,8 @@ function cmdSweep(o, write) {
   if (!Number.isFinite(hours) || hours <= 0) { write('usage error: --max-age-hours must be a positive number'); return EXIT.usage; }
   const s = settings(o);
   const swept = sweepLeftovers({ workRoot: s.workRoot, olderThanMs: hours * 3600 * 1000 });
-  write(`sweep: removed ${swept.removed.length}, kept ${swept.kept.length}, failed ${swept.failed.length}${swept.failed.map(f => ` [${f.name}: ${f.reason}]`).join('')}`);
+  write(`sweep: removed ${swept.removed.length}, kept ${swept.kept.length}, failed ${swept.failed.length}, listed ${swept.listed.length}${swept.failed.map(f => ` [${f.name}: ${f.reason}]`).join('')}`);
+  for (const name of swept.listed) write(`listed: ${path.join(s.workRoot, name)} — not removed (test-leftovers barrier); check with: bash .agents/conventions/tools/janitor.sh --dry-run`);
   return swept.failed.length === 0 ? EXIT.ok : EXIT.check;
 }
 
