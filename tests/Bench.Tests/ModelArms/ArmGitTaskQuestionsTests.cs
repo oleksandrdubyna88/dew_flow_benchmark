@@ -11,7 +11,7 @@ namespace Bench.Tests.ModelArms;
 /// <para>
 /// What this does NOT prove: Windows (shell shims and plants); a git other than the host's (the pilot's log).
 /// </para></summary>
-public sealed partial class ArmGitWideningTests
+public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
 {
     private static string Worktree(string clone, string name) => Path.Combine(Path.GetDirectoryName(clone)!, name);
 
