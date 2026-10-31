@@ -33,9 +33,7 @@ public sealed class ArmGitWideningTests : IDisposable
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private string PlantProgram(string name, string? body = null)
     {
-        var path = _temp.File($"#!/bin/sh\necho \"$0 ran\" >> '{Sentinel}'\n{body ?? "cat"}\n", "plant", name);
-        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        return path;
+        return ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 ran\" >> '{Sentinel}'\n{body ?? "cat"}\n");
     }
 
     /// <summary>Makes <paramref name="file"/> stat-dirty without changing a byte: a distinct, older modification time every call — a repeated one would let a later "no program ran" prove nothing, because git would find the index already refreshed.</summary>
@@ -201,8 +199,7 @@ public sealed class ArmGitWideningTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var (source, first, _) = await SourceAsync();
         var marker = Path.Combine(_temp.Path, "git-calls");
-        var shim = _temp.File($"#!/bin/sh\necho \"$*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*) echo \"$l\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n", "bin", "git");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var shim = ShimFiles.Write(_temp.Combine("bin", "git"), $"#!/bin/sh\necho \"$*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*) echo \"$l\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
         var clone = Path.Combine(_temp.Path, "clone");
         var environment = GitEnvironment.Of(new Dictionary<string, string>(Environment, StringComparer.Ordinal) { ["GIT_DIR"] = "/nonexistent" });
         var git = new ArmGit(shim, _temp.Path, environment);
@@ -241,10 +238,9 @@ public sealed class ArmGitWideningTests : IDisposable
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private string RecordingShim(string marker)
     {
-        var shim = _temp.File(
-            $"#!/bin/sh\necho \"CALL $*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*|GITHUB_TOKEN=*|CLAUDE_CODE_OAUTH_TOKEN=*|BENCH_DB=*|SSH_AUTH_SOCK=*|KEEP_ME=*) echo \"ENV ${{l%%=*}}=${{l#*=}}\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n",
-            "bin", "recording-git");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var shim = ShimFiles.Write(
+            _temp.Combine("bin", "recording-git"),
+            $"#!/bin/sh\necho \"CALL $*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*|GITHUB_TOKEN=*|CLAUDE_CODE_OAUTH_TOKEN=*|BENCH_DB=*|SSH_AUTH_SOCK=*|KEEP_ME=*) echo \"ENV ${{l%%=*}}=${{l#*=}}\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
         return shim;
     }
 
