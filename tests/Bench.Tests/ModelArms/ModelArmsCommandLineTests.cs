@@ -15,16 +15,15 @@ public sealed class ModelArmsCommandLineTests
     [Fact]
     public void The_verb_and_its_positionals_are_taken_first_and_the_rest_reaches_CommandLine_Parse_unchanged()
     {
-        var line = ModelArmsCommandLine.Split(["run-all", "C1", "CR1", "--experiment", "/r", "--seconds", "5"]).Ok();
+        var line = ModelArmsCommandLine.Split(["run-all", "C1", "CR1", "--experiment", "/r"]).Ok();
 
         line.Verb.Should().Be("run-all");
         line.Positionals.Should().Equal("C1", "CR1");
-        line.Rest.Should().Equal("run-all", "--experiment", "/r", "--seconds", "5");
+        line.Rest.Should().Equal("run-all", "--experiment", "/r");
 
         var flags = CommandLine.Parse(line.Rest);
         flags.Verb.Should().Be("run-all");
         flags.Value("experiment").Should().Be("/r");
-        flags.Int("seconds", 0).Should().Be(5);
         flags.Operand(0).Should().BeEmpty("the positionals were taken first; the shared parser sees none");
     }
 
@@ -99,6 +98,7 @@ public sealed class ModelArmsCommandLineTests
         refused.Should().Contain("'--experimnt' is not a flag of validate").And.Contain("--experiment");
         ModelArmsCommandLine.Split(["init", "/r", "--experiment", "/x"]).Reason().Should().Contain("'--experiment' is not a flag of init").And.Contain("no flags");
         ModelArmsCommandLine.Split(["version", "--seconds", "3"]).Failed().Should().BeTrue("version takes no flags");
+        ModelArmsCommandLine.Split(["run-all", "C1", "--seconds", "5", "--experiment", "/r"]).Reason().Should().Contain("'--seconds' is not a flag of run-all").And.Contain("--experiment", "run-all takes --experiment only: a flag accepted and ignored is a silent lie");
     }
 
     public static TheoryData<string[]> LegalLines() => new()
@@ -108,7 +108,7 @@ public sealed class ModelArmsCommandLineTests
         { ["unlock", "--force", "--experiment", "/r"] },
         { ["gate-lock", "hold", "--seconds", "3", "--experiment", "/r"] },
         { ["checks", "C1", "--parse-only", "--experiment", "/r"] },
-        { ["run-all", "C1", "--seconds", "5", "--experiment", "/r"] },
+        { ["run-all", "C1", "CR1", "--experiment", "/r"] },
         { ["init", "/r"] },
         { ["help"] },
     };

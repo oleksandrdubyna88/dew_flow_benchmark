@@ -34,6 +34,15 @@ internal static class ModelArmsBinary
         return (done.ExitCode, done.StandardOutput, done.StandardError);
     }
 
+    /// <summary>The same with <paramref name="input"/> on the child's stdin (so the child's descriptor 0 is a PIPE, not the test host's own — what a start that inherited stdin would show a detached runner).</summary>
+    public static async Task<(int Code, string Output, string Error)> RunWithInputAsync(ExperimentRoot root, string input, params string[] arguments)
+    {
+        var attempt = await ProcessRunner.RunAsync(
+            ExperimentRoot.ConsoleBinary, [.. arguments, "--experiment", root.Root], root.Temp, Short, input, EnvironmentOf(root), TestContext.Current.CancellationToken);
+        var done = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+        return (done.ExitCode, done.StandardOutput, done.StandardError);
+    }
+
     /// <summary>The binary started as a task, its stdout lines kept as they arrive with the instant each came. <see cref="IAsyncDisposable.DisposeAsync"/> kills the child's tree if it still lives and waits for it, so no test
     /// leaves a process behind.</summary>
     public static Child Start(ExperimentRoot root, params string[] arguments) =>
