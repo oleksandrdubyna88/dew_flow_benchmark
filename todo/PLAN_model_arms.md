@@ -1170,6 +1170,7 @@ state table, the sequencer abort, the recreation order, the pick record as JSON 
 (with E3 §8 item 40), E3 §8 item 20. **Depends on.** E2 and E3 (E4.S0 changes E3's `TargetEnvironment`, `HostChecks` and the
 admissions of `make`, `run-arm` and `checks`; E4.S2 widens E3's `ArmGit`). **Done when.** E4's tests of §7 green, `TaskWorktreesTests`
 against real git; E4.S0 merged to `main` in its own pull request before E4.S1–E4.S3 and before any E5 story that launches a process (§6).
+**Stories:** [PLAN_model_arms_E4.md](PLAN_model_arms_E4.md) — E4.S0–E4.S3, written when the epic started (2026-10-31, `ecc890c`, by the judge); no cornerstone (the ledger stays 3 of 3); E4.S0 and E4.S2 are security judgements whose specs are Fable's, to be written; two pull requests, E4.S0 first. Its §8 settles eighteen points with evidence, items 12–14 being claims of this plan found wrong or incomplete against the code.
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
