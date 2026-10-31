@@ -64,6 +64,18 @@ export function overlap(d) {
   );
 }
 
+/** Every data session's quiet check before its phase started, as the run-map recorded it (§ 8 of the contract). */
+export function phaseStarts(d) {
+  return table(
+    ['pair', 'phase', 'rid', 'stack', 'attempt', 'quiet before the start', 'waited s', 'quiet-check flags', 'session flags'],
+    d.sessions.filter(s => s.kind === 'data').map(s => {
+      const q = s.host?.quietBefore;
+      return [s.pair, s.phase, s.rid, stackName(s.stack), `a${s.attempt}`, q ? String(q.quiet) : DASH, q?.waitedMs === null || q?.waitedMs === undefined ? DASH : sec(q.waitedMs),
+        q?.flags?.length ? q.flags.join(', ') : DASH, [...new Set([...(s.flags ?? []), ...(s.mapFlags ?? [])])].join(', ') || DASH];
+    }),
+  );
+}
+
 export function qualitySummary(d) {
   return table(
     ['stack', 'phase', 'data sessions', 'scored', 'not scored', 'held-out percent: median (min)', 'defects: median (max)', 'accepted'],

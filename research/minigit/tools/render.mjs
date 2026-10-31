@@ -74,6 +74,7 @@ const PER_SERIES = {
   'per-stack': P.perStackTable,
   overlap: P.overlap,
   'quality-summary': P.qualitySummary,
+  'phase-starts': P.phaseStarts,
   prediction,
   aa: P.aaTable,
   handcheck: P.handcheck,
@@ -99,7 +100,7 @@ function blocks(ref, replay) {
     'cross-medians': all => crossMedians(crossPairs(all, NOTED)),
     'cross-phases': all => crossPhases(crossPairs(all, NOTED)),
     'cross-quality': crossQuality,
-    defects: () => defects(REPO, ref),
+    defects: all => defects(REPO, ref, all, replay),
     amendments: () => `Read from ${amendmentsSource(REPO, ref)}.\n\n${amendmentLines(REPO, ref)}`,
   };
 }

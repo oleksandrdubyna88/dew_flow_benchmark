@@ -166,6 +166,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55806,
      "meanForeignCpus": 0.1503302192554553,
      "maxForeignCpus": 0.26997335189414867,
      "spinRatio": 1.014494194370699,
@@ -348,6 +349,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55806,
      "meanForeignCpus": 0.1503302192554553,
      "maxForeignCpus": 0.26997335189414867,
      "spinRatio": 1.014494194370699,
@@ -881,6 +883,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55792,
      "meanForeignCpus": 0.18404136304917998,
      "maxForeignCpus": 0.4330627577721075,
      "spinRatio": 0.9892385020447257,

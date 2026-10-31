@@ -7,13 +7,20 @@ const idCols = (d, s) => [short(d.series.seriesId), s.rid, ord(s), stackName(s.s
 const ID_HEAD = ['series', 'rid', 'kind', 'stack', 'phase', 'att.'];
 const rowsOf = (all, f) => all.flatMap(d => d.sessions.filter(paid).map(s => f(d, s)));
 
+/** How a series without a recorded stop stands, read from its sessions and pairs (the run-map has no "abandoned" state). */
+function runState(d) {
+  if (!d.sessions.some(s => s.kind === 'data')) return 'no stop; no data session ran';
+  const done = d.pairs.filter(p => !p.cells.csharp.missing && !p.cells.node.missing && p.cells.csharp.incomplete.length === 0 && p.cells.node.incomplete.length === 0);
+  return done.length === d.pairs.length ? `no stop; pairs ${done.map(p => p.pair).join(', ')} complete` : `no stop; complete pairs: ${done.map(p => p.pair).join(', ') || 'none'} of ${d.pairs.length}`;
+}
+
 export function conditions(all) {
   return table(
     ['series', 'harness at init', 'harness accepted for data', 'prereg tag commit', 'claude', 'node', '.NET SDK', 'TS', 'cap / wall / stall', 'bare budget / ceiling', 'spin median (ms)', 'stopped'],
     all.map(d => {
       const s = d.series;
       const acc = s.harnessAccepted.length ? s.harnessAccepted.map(h12).join(', ') : DASH;
-      const stop = s.stopped ? `${s.stopped.rule} (${s.stopped.at})` : 'no (abandoned or open)';
+      const stop = s.stopped ? `${s.stopped.rule} (${s.stopped.at})` : runState(d);
       return [s.seriesId, h12(s.harnessIdentityAtInit), acc, h12(s.preregCommit), s.pins.claude, s.pins.node, s.pins.dotnetSdk, s.pins.typescript,
         `${usd(s.caps.capUsd, 0)} / ${s.caps.wallMs / 60000} min / ${s.caps.stallMs / 60000} min`, `${usd(s.bareBudgetUsd, 0)} / ${usd(s.ceilingUsd, 0)}`, s.spin.medianMs.toFixed(2), stop];
     }),

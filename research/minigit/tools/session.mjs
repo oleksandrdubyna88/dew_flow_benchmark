@@ -121,7 +121,7 @@ function hostOf(rec, home) {
     mask: known(rec.run.mask),
     maskObserved: known(rec.run.maskObserved),
     startSkewMs: known(rec.run.startSkewMs),
-    quietBefore: quiet ? { quiet: quiet.quiet, flags: quiet.flags, ...quiet.numbers } : null,
+    quietBefore: quiet ? { quiet: quiet.quiet, flags: quiet.flags, waitedMs: quiet.waitedMs ?? null, ...quiet.numbers } : null,
     harnessIdentity: known(rec.run.harnessIdentity),
     loc: known(rec.loc),
     egress: egress ? { allowed: egress.allowed, refused: egress.refused, nonConnect: egress.nonConnect, bytes: egress.bytes, cacheGrowthBytes: egress.cacheGrowthBytes } : null,

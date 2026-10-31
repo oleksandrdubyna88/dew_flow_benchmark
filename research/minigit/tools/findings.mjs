@@ -104,16 +104,45 @@ export function amendmentsSource(repo, ref) {
   return `\`${AMENDMENTS}\` at \`${ref}\` = \`${sha}\``;
 }
 
-export function defects(repo, ref) {
+/**
+ * The proof of a defect, where data can give it: a voided session read again by the replay (data/replay.json, the CURRENT
+ * scan), or a series' charges from the records against its own ledger (data/<series>.json `charges`). A defect with no
+ * triggering session names its tests instead (hand-written: which tests, and that they were watched RED and GREEN).
+ */
+const PROOFS = {
+  1: { replay: [['s-20261030-92a9', '9804fc']] },
+  6: { replay: [['s-20261030-0c1a', 'c9b413']] },
+  14: { replay: [['s-20261030-bf89', 'ebd0b0'], ['s-20261030-bf89', '3407d8']] },
+  16: { replay: [['s-20261030-b82e', '97168d']] },
+  17: { ledger: 's-20261030-b82e' },
+  18: { tests: 'no triggering session (a coai finding). Proof: `spikes/minigit-bench/test/contamination-interpreter.test.mjs`, `A_wrapped_or_path_named_interpreter_reads_its_body_like_the_bare_one` and `A_wrapped_or_path_named_shell_parses_its_body_as_shell`: watched failing on the lib before `1769c95` and passing after (2026-10-31); `A_word_named_like_an_interpreter_that_runs_nothing_leaves_the_body_data` is a guard that passes on both' },
+};
+
+function proofOf(n, all, replay) {
+  const p = PROOFS[n];
+  if (!p) return '—';
+  if (p.tests) return p.tests;
+  if (p.ledger) {
+    const d = all.find(x => x.series.seriesId === p.ledger);
+    return `the records against the ledger (§ 10): ${d.charges.missingFromLedger.length} paid sessions of ${p.ledger} charged in the run-map, the record and the broker alike (${usd(d.charges.missingUsd)}) have no line in its own ledger; disagreements between run-map, record and broker: ${d.charges.disagree.length}`;
+  }
+  return p.replay.map(([series, rid]) => {
+    const v = replay.summary.recordedVoids.find(x => x.series === series && x.rid === rid);
+    if (!v) throw new Error(`replay.json has no recorded void ${series} ${rid}`);
+    return `${series.slice(-4)} \`${rid}\` (recorded \`${v.recordedClass}\`): replay at the current lib, ${v.high} high and ${v.low} low hits`;
+  }).join('; ') + ' (data/replay.json, § 5.5)';
+}
+
+export function defects(repo, ref, all, replay) {
   const amendments = amendmentsText(repo, ref);
   const problems = [];
   const rows = DEFECTS.map((x, i) => {
     for (const c of x.commits) if (!commitExists(repo, c)) problems.push(`commit ${c} not found`);
     if (!amendments.includes(`harness:${x.harness}`)) problems.push(`harness ${x.harness} has no amendment line`);
-    return [i + 1, x.what, x.found, x.commits.map(c => `\`${c}\``).join(', '), `\`${x.harness}\``, x.effect];
+    return [i + 1, x.what, x.found, x.commits.map(c => `\`${c}\``).join(', '), `\`${x.harness}\``, x.effect, proofOf(i + 1, all, replay)];
   });
   if (problems.length) throw new Error(`defect table does not check: ${problems.join('; ')}`);
-  return table(['#', 'defect', 'found by', 'fix commit', 'harness identity line', 'what it would have done to the result'], rows);
+  return table(['#', 'defect', 'found by', 'fix commit', 'harness identity line', 'what it would have done to the result', 'proof'], rows);
 }
 
 /** Every dated instrument line of amendments.md, as registered. */

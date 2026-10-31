@@ -178,6 +178,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55813,
      "meanForeignCpus": 0.3091530056736133,
      "maxForeignCpus": 1.039177726292662,
      "spinRatio": 0.9985413536671649,
@@ -360,6 +361,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55813,
      "meanForeignCpus": 0.3091530056736133,
      "maxForeignCpus": 1.039177726292662,
      "spinRatio": 0.9985413536671649,
@@ -914,6 +916,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55758,
      "meanForeignCpus": 0.17697832471919442,
      "maxForeignCpus": 0.24987929474288348,
      "spinRatio": 0.9892828309423896,
@@ -1096,6 +1099,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55775,
      "meanForeignCpus": 0.14979851059240884,
      "maxForeignCpus": 0.24405029916576548,
      "spinRatio": 0.9728192553217363,
@@ -1278,6 +1282,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55775,
      "meanForeignCpus": 0.14979851059240884,
      "maxForeignCpus": 0.24405029916576548,
      "spinRatio": 0.9728192553217363,
@@ -1476,6 +1481,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55846,
      "meanForeignCpus": null,
      "maxForeignCpus": null,
      "spinRatio": 0.986625002949999,
@@ -1676,6 +1682,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55846,
      "meanForeignCpus": null,
      "maxForeignCpus": null,
      "spinRatio": 0.986625002949999,
@@ -1862,6 +1869,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 519070,
      "meanForeignCpus": 0.3101782575602308,
      "maxForeignCpus": 0.7913265820530017,
      "spinRatio": 0.975360638652311,
@@ -2044,6 +2052,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 519070,
      "meanForeignCpus": 0.3101782575602308,
      "maxForeignCpus": 0.7913265820530017,
      "spinRatio": 0.975360638652311,
@@ -2237,6 +2246,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55946,
      "meanForeignCpus": null,
      "maxForeignCpus": null,
      "spinRatio": 0.9958432456494811,
@@ -2398,6 +2408,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 55946,
      "meanForeignCpus": null,
      "maxForeignCpus": null,
      "spinRatio": 0.9958432456494811,
@@ -2617,6 +2628,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 287589,
      "meanForeignCpus": 0.49973852967432447,
      "maxForeignCpus": 1.3781519268320046,
      "spinRatio": 0.9796607060418978,
@@ -2803,6 +2815,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 635445,
      "meanForeignCpus": 0.176682999820167,
      "maxForeignCpus": 0.3869005825705704,
      "spinRatio": 0.9768654706436944,
@@ -3005,6 +3018,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 635445,
      "meanForeignCpus": 0.176682999820167,
      "maxForeignCpus": 0.3869005825705704,
      "spinRatio": 0.9768654706436944,
@@ -3198,6 +3212,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 171537,
      "meanForeignCpus": 0.15296248822101396,
      "maxForeignCpus": 0.3222636256788483,
      "spinRatio": 0.9599608208568753,
@@ -3393,6 +3408,7 @@
     "quietBefore": {
      "quiet": true,
      "flags": [],
+     "waitedMs": 171537,
      "meanForeignCpus": 0.15296248822101396,
      "maxForeignCpus": 0.3222636256788483,
      "spinRatio": 0.9599608208568753,

@@ -22,7 +22,7 @@ const WAYS = [
   ['without flagged pairs', p => !p.flagged],
   ['neither flagged nor unpaired', p => !p.flagged && !p.unpaired],
   ['series B only (the registered complete series)', p => p.series === 's-20261030-b82e'],
-  ['series B without pair B3 (the operator-noted noisy start; no flag in the records)', p => p.series === 's-20261030-b82e' && !p.noted],
+  ['SENSITIVITY VIEW, not a registered line: series B without pair B3 (the operator gave `--accept-noisy`; the records show a quiet start)', p => p.series === 's-20261030-b82e' && !p.noted],
 ];
 
 export function crossCells(pairs) {
@@ -34,7 +34,7 @@ export function crossCells(pairs) {
       return [p.id, `${p.cells.csharp.v1 ?? DASH} + ${p.cells.csharp.v2 ?? DASH}`, `${p.cells.node.v1 ?? DASH} + ${p.cells.node.v2 ?? DASH}`,
         p.cells.csharp.missing ? 'missing' : usd(p.cells.csharp.values.costUsd), p.cells.node.missing ? 'missing' : usd(p.cells.node.values.costUsd),
         ...MEAS.map(([k]) => (p.ratios[k].known ? ratio(p.ratios[k].value) : DASH)),
-        p.flagged ? `${p.flags.join(', ')} (${p.flaggedBy.join(', ')})` : DASH, p.unpaired ? 'yes' : 'no', p.noted ? `operator-noted noisy start, not in the records${why === DASH ? '' : `; ${why}`}` : why];
+        p.flagged ? `${p.flags.join(', ')} (${p.flaggedBy.join(', ')})` : DASH, p.unpaired ? 'yes' : 'no', p.noted ? `started quiet (run-map); in the sensitivity view only${why === DASH ? '' : `; ${why}`}` : why];
     }),
   );
 }

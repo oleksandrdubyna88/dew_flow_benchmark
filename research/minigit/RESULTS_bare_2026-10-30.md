@@ -89,10 +89,10 @@ Registered in [statement.md](../../spikes/minigit-bench/inputs/statement.md) § 
 <!-- generated:conditions -->
 | series | harness at init | harness accepted for data | prereg tag commit | claude | node | .NET SDK | TS | cap / wall / stall | bare budget / ceiling | spin median (ms) | stopped |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| s-20261030-92a9 | e63941bdbdf9 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.56 | no (abandoned or open) |
-| s-20261030-0c1a | de9091b54e2b | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 21.84 | no (abandoned or open) |
+| s-20261030-92a9 | e63941bdbdf9 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.56 | no stop; no data session ran |
+| s-20261030-0c1a | de9091b54e2b | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 21.84 | no stop; no data session ran |
 | s-20261030-bf89 | 3129eeadfa8d | faaf55b4ecf7 | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 21.69 | second void: contaminated (2026-10-30T20:43:29.386Z) |
-| s-20261030-b82e | 814d82e66e53 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.18 | no (abandoned or open) |
+| s-20261030-b82e | 814d82e66e53 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.18 | no stop; pairs 1, 2, 3 complete |
 <!-- /generated:conditions -->
 
 - **Agent and model:** Claude Code CLI 2.1.310, run from a read-only copy whose sha256 is in the run-map; `--model opus`
@@ -132,13 +132,36 @@ Pair 3's first start halted on the quiet check (a resumable halt, nothing paid).
 and was charged, but the series stopped before it was recorded and scored: it has no `record.json` and no held-out score.
 
 Series B: pairs 1 and 2 ran on 2026-10-30; pair 3 ran on 2026-10-31 (start times in § 10). Pair 1's v2 sessions and the
-re-run `6848b0` carry `foreign load`. **Pair 3 and the noisy start.** The team lead reports that pair 3 was started with
-`--accept-noisy` by the operator's decision, because another session's `dotnet test` run loaded the host. The records do
-not show that: the run-map entries of all four pair-3 sessions hold a quiet check with `quiet: true` and no flag, after a
-wait at each phase; the pair record `pairs/p3.json` has no flag; neither the run-map nor the ledger holds a noisy-start
-reason. Pair 3's v1 sessions carry only `scored under load`, a flag that does not remove a pair. This record follows the
-records (pair 3 is not flagged) and also shows every series-B median without pair 3 (§ 7.3, § 8.2), so both readings are
-on the page.
+re-run `6848b0` carry `foreign load`.
+
+**Pair 3 started quiet, and line (c) follows the records.** The run-map records all four pair-3 sessions as started on a
+quiet machine (`quiet: true`, no quiet-check flag), each after a wait inside the quiet rule's limit (the table below). The
+operator had given the `--accept-noisy` override for pair 3, because another session's `dotnet test` run was loading the
+host (team lead); the runner did not use it, because the quiet check passed within its wait, so no session carries
+`started not quiet` and `pairs/p3.json` holds no flag. The contract's line (c), "without flagged pairs", is computed from
+the records, and pair 3 is in it. The operator's decision is context only. Pair 3's v1 sessions carry `scored under load`,
+a flag that does not remove a pair. A view "without pair B3" is kept in § 8.2 as a labelled **sensitivity view; it is not a
+registered line**.
+
+Every data session of series B, with the quiet check before its phase:
+
+<!-- generated:phase-starts-b82e -->
+| pair | phase | rid | stack | attempt | quiet before the start | waited s | quiet-check flags | session flags |
+|---|---|---|---|---|---|---|---|---|
+| 1 | v1 | 14d81c | TS | a1 | true | 55.8 | — | — |
+| 1 | v1 | 078dcd | C# | a1 | true | 55.8 | — | — |
+| 1 | v2 | 1d2624 | TS | a1 | true | 55.8 | — | foreign load, scored under load |
+| 1 | v2 | ede2a0 | C# | a1 | true | 55.8 | — | foreign load, scored under load |
+| 2 | v1 | f57599 | C# | a1 | true | 519.1 | — | — |
+| 2 | v1 | d79dc1 | TS | a1 | true | 519.1 | — | — |
+| 2 | v2 | ebd0b0 | C# | a1 | true | 55.9 | — | — |
+| 2 | v2 | 97168d | TS | a1 | true | 55.9 | — | — |
+| 2 | v2 | 6848b0 | TS | a2 | true | 287.6 | — | foreign load, scored under load |
+| 3 | v1 | f9cc17 | C# | a1 | true | 635.4 | — | scored under load |
+| 3 | v1 | 922a82 | TS | a1 | true | 635.4 | — | scored under load |
+| 3 | v2 | 96fcf4 | TS | a1 | true | 171.5 | — | — |
+| 3 | v2 | 3407d8 | C# | a1 | true | 171.5 | — | — |
+<!-- /generated:phase-starts-b82e -->
 
 ## 5. Per session
 
@@ -601,8 +624,9 @@ its TypeScript v2 `96fcf4` was never scored. Pair 2's C# v2 is the re-run `d9638
 
 ### 7.3 Ratios over the pairs, three ways
 
-The same three registered lines as § 6.3. Line (c) keeps pair 3 only, because pairs 1 and 2 carry `foreign load`. The
-line "without pair B3", for the operator's noisy start that the records do not show (§ 4), is in § 8.2.
+The same three registered lines as § 6.3. Line (c) keeps pair 3 only, because pairs 1 and 2 carry `foreign load`; pair 3
+is in it because the run-map records its four sessions as started quiet (§ 4). The sensitivity view without pair B3 is not
+a registered line; it is in § 8.2.
 
 <!-- generated:medians-b82e -->
 | way | pairs used | excluded | missing | cost: median C#/TS (range); C# > TS in k of n | wall: median C#/TS (range); C# > TS in k of n | model_api: median C#/TS (range); C# > TS in k of n | active: median C#/TS (range); C# > TS in k of n |
@@ -730,10 +754,13 @@ A pair is named by its series and number (A1 … B3).
 | A3 | f9cc17 + — | 922a82 + 96fcf4 | missing | — | — | — | — | — | — | no | C# missing: no v2 data session (3407d8 void: contaminated; the series stopped before its re-run) |
 | B1 | 078dcd + ede2a0 | 14d81c + 1d2624 | $0.4594 | $0.4975 | 0.92 | 0.93 | 0.83 | 1.70 | foreign load (1d2624, ede2a0) | no | — |
 | B2 | f57599 + ebd0b0 | d79dc1 + 6848b0 | $0.4060 | $0.4555 | 0.89 | 0.91 | 0.86 | 1.29 | foreign load (6848b0) | yes | — |
-| B3 | f9cc17 + 3407d8 | 922a82 + 96fcf4 | $0.5496 | $0.5180 | 1.06 | 0.99 | 0.92 | 1.72 | — | no | operator-noted noisy start, not in the records |
+| B3 | f9cc17 + 3407d8 | 922a82 + 96fcf4 | $0.5496 | $0.5180 | 1.06 | 0.99 | 0.92 | 1.72 | — | no | started quiet (run-map); in the sensitivity view only |
 <!-- /generated:cross-cells -->
 
 ### 8.2 Cell ratios over the pairs
+
+The last row is a sensitivity view, not a registered line: it drops pair B3, which the records show as started quiet
+(§ 4).
 
 <!-- generated:cross-medians -->
 | pairs | used | cost: median (range); C# > TS in k of n | wall: median (range); C# > TS in k of n | model_api: median (range); C# > TS in k of n | active − model_api: median (range); C# > TS in k of n |
@@ -743,7 +770,7 @@ A pair is named by its series and number (A1 … B3).
 | without flagged pairs | A1, B3 | 0.99 (0.92–1.06); 1 of 2 | 1.05 (0.99–1.11); 1 of 2 | 1.02 (0.92–1.11); 1 of 2 | 1.42 (1.12–1.72); 2 of 2 |
 | neither flagged nor unpaired | A1, B3 | 0.99 (0.92–1.06); 1 of 2 | 1.05 (0.99–1.11); 1 of 2 | 1.02 (0.92–1.11); 1 of 2 | 1.42 (1.12–1.72); 2 of 2 |
 | series B only (the registered complete series) | B1, B2, B3 | 0.92 (0.89–1.06); 1 of 3 | 0.93 (0.91–0.99); 0 of 3 | 0.86 (0.83–0.92); 0 of 3 | 1.70 (1.29–1.72); 3 of 3 |
-| series B without pair B3 (the operator-noted noisy start; no flag in the records) | B1, B2 | 0.91 (0.89–0.92); 0 of 2 | 0.92 (0.91–0.93); 0 of 2 | 0.84 (0.83–0.86); 0 of 2 | 1.50 (1.29–1.70); 2 of 2 |
+| SENSITIVITY VIEW, not a registered line: series B without pair B3 (the operator gave `--accept-noisy`; the records show a quiet start) | B1, B2 | 0.91 (0.89–0.92); 0 of 2 | 0.92 (0.91–0.93); 0 of 2 | 0.84 (0.83–0.86); 0 of 2 | 1.50 (1.29–1.70); 2 of 2 |
 <!-- /generated:cross-medians -->
 
 ### 8.3 v1 and v2 separately
@@ -1068,29 +1095,32 @@ Check: the last series' ledger, carried lines included, sums its bare lines to $
 Each fix was an instrument amendment: a dated line naming the accepted harness identity. Defects 1–15 were fixed before
 the series that used them; defects 16–18 were found in or after series B and are fixed on `feat/minigit-bench-e3b-fix2`,
 which no series has run yet. The script checks that every commit below exists and that every harness identity has a dated
-line in the `amendments.md` it reads (§ 11.2).
+line in the `amendments.md` it reads (§ 11.2). The last column is the proof, generated where data gives it: for a defect
+that voided a session, that session read again by the current scan (`data/replay.json`, the `replay-voids` block of
+§ 5.5); for defect 17, the records against the ledger (`charges` in `data/s-20261030-b82e.json`, § 10); for defect 18,
+which no session triggered, the tests that were watched failing before the fix and passing after it.
 
 <!-- generated:defects -->
-| # | defect | found by | fix commit | harness identity line | what it would have done to the result |
-|---|---|---|---|---|---|
-| 1 | TypeScript toolchain flagged as an outside path | Node pilot 9804fc (series 92a9) | `5249048` | `c825944d587d` | every TypeScript session runs `tsc` from the pinned toolchain outside the work tree, so every TS session would be `void: contaminated` while C# (toolchain under /usr) was never flagged: no TS data point, and the second void stops the series. Against TS only. |
-| 2 | contamination skeleton too wide | Opus review of the fix (B1) | `a382519` | `500e09206354` | the allowed skeleton covered an ancestor of the harness dir and the home, so `grep -r` or `cd ../..` could reach the harness with no hit: a contaminated session would count as data. |
-| 3 | `~` and `$HOME` read as the operator home | Opus review of the fix (M1) | `fc6a226` | `500e09206354` | ordinary commands on the box home (package caches) would be high hits; the review judged it C#-leaning. False voids. |
-| 4 | a walk through a symbolic link | coai code round | `653a79c`, `c1bd510` | `20ee8034dddc` | `ln -s ../.. up && grep -r up` reached outside with no hit (false negative). The first fix (ee66350f9112) flagged every link walk, `/usr` links included, which would void sessions of both stacks; the second keeps high only under a protected root. |
-| 5 | a script symlink made after a `cd` | coai code round | `4cb10ce` | `de9091b54e2b` | the link was resolved from the work tree, not from the `cd` target: false negative. |
-| 6 | `cd /` read as a walk from `/` | Node pilot c9b413 (series 0c1a) | `c475c99` | `965745a2adcc` | a clean-up `cd / && rm -rf /tmp/…` voided the pilot. Any session that cleans up this way would be a false void. |
-| 7 | heredoc bodies, `rm -rf` and a `//` in a quoted string read as walks | replay of A/A twin d3f571 after the `cd` fix | `179838c` | `47bbc9f8f642` | a Makefile written by heredoc with `rm -rf` and a C# `//` comment would have voided a C# A/A twin. Mostly against C#. |
-| 8 | a walk of a glob not judged by its prefix | team lead, during the replay | `27966ff` | `7aacd09cee84` | `grep -r token /*` was not seen as a walk of `/`: false negative. |
-| 9 | a walker behind `xargs` (and other wrappers) | coai code round | `244bc47` | `3129eeadfa8d` | `… \| xargs grep …` was not judged by the producer of the pipe: false negative. |
-| 10 | quadratic scan | coai code round | `e5823c2`, `9699634` | `3129eeadfa8d` | heredoc and step building copied per line; a long session would scan slowly. No effect on a value. |
-| 11 | the wall included the 3 s harness settle | A/A of series bf89 (G-6) | `edca65c` | `179624f5fec2` | every wall of 92a9, 0c1a and the bf89 A/A and pilot is about 3 s too long and its `unattributed` too large (G-6). The bf89 data sessions ran after the fix. On a ~45 s session it moves each C#/TS wall ratio towards 1. |
-| 12 | the stub CLI wrote no transcripts | the test suite after the T3 commit 255484e | `4687abe` | `eff387f2f438` | under `t3 = stop` the free v2 rehearsal would end as `T3 unchecked`, a series stop. No paid effect. |
-| 13 | box supervision timers left running | coai code round | `97c9a78` | `faaf55b4ecf7` | a box that failed to start left its timers running. No session hit it. |
-| 14 | per-call `cwd` in the contamination scan | data sessions ebd0b0 (pair 2) and 3407d8 (pair 3), series bf89 | `6b09da2` | `9475b1fed23f` | the scan started every Bash call at the work tree. Both C# v2 sessions ran `cd src` in one call and `cd .. && bash test-v2.sh` in the next, so the scan put `test-v2.sh` one level above the work tree: a high hit and a void. Two false voids, one C# re-run `ran unpaired`, and series bf89 stopped at the second. Against C# in this series. |
-| 15 | the printed "Shell cwd was reset to" line chose the start | coai code round on the `cwd` fix | `52bdec2` | `814d82e66e53` | a command can print that line and choose where the scan thinks it is: false negative. Fixed before series b82e. |
-| 16 | a heredoc run by an interpreter (`python3 - <<'EOF'`) parsed as shell | data session 97168d (pair 2 TS v2), series b82e | `9dac39e` | `198106f80a8b` | the agent edited its TypeScript through an inline Python script; the scan read the script body as shell, and a quoted `"/"` string as a walk of `/`: a high hit and a false void. Its re-run `6848b0` ran unpaired, under `foreign load`. Against TS in this series. Fixed after series B, on `feat/minigit-bench-e3b-fix2`. |
-| 17 | the ledger charged a session once per rid, not once per series and rid | the pair-1 read-back of series b82e (G-1, Opus judge) | `1bdbe75` | `198106f80a8b` | series b82e reused the registered seed, so its rids repeat those of bf89, whose lines `init` had copied in; every b82e session with a repeated rid was not appended to its own ledger, and the money gates read too little (§ 8). No gate was near its limit. The same commit makes a by-hand verdict apply only to the series its evidence names. |
-| 18 | an interpreter or shell launched through a wrapper or by its path did not get the heredoc rule | coai code round on the fix above | `1769c95` | `db8d360cf9a8` | `env python3 - <<EOF` or `/usr/bin/python3 - <<EOF` would still be parsed as shell: the same false void as above. |
+| # | defect | found by | fix commit | harness identity line | what it would have done to the result | proof |
+|---|---|---|---|---|---|---|
+| 1 | TypeScript toolchain flagged as an outside path | Node pilot 9804fc (series 92a9) | `5249048` | `c825944d587d` | every TypeScript session runs `tsc` from the pinned toolchain outside the work tree, so every TS session would be `void: contaminated` while C# (toolchain under /usr) was never flagged: no TS data point, and the second void stops the series. Against TS only. | 92a9 `9804fc` (recorded `void: contaminated`): replay at the current lib, 0 high and 0 low hits (data/replay.json, § 5.5) |
+| 2 | contamination skeleton too wide | Opus review of the fix (B1) | `a382519` | `500e09206354` | the allowed skeleton covered an ancestor of the harness dir and the home, so `grep -r` or `cd ../..` could reach the harness with no hit: a contaminated session would count as data. | — |
+| 3 | `~` and `$HOME` read as the operator home | Opus review of the fix (M1) | `fc6a226` | `500e09206354` | ordinary commands on the box home (package caches) would be high hits; the review judged it C#-leaning. False voids. | — |
+| 4 | a walk through a symbolic link | coai code round | `653a79c`, `c1bd510` | `20ee8034dddc` | `ln -s ../.. up && grep -r up` reached outside with no hit (false negative). The first fix (ee66350f9112) flagged every link walk, `/usr` links included, which would void sessions of both stacks; the second keeps high only under a protected root. | — |
+| 5 | a script symlink made after a `cd` | coai code round | `4cb10ce` | `de9091b54e2b` | the link was resolved from the work tree, not from the `cd` target: false negative. | — |
+| 6 | `cd /` read as a walk from `/` | Node pilot c9b413 (series 0c1a) | `c475c99` | `965745a2adcc` | a clean-up `cd / && rm -rf /tmp/…` voided the pilot. Any session that cleans up this way would be a false void. | 0c1a `c9b413` (recorded `void: contaminated`): replay at the current lib, 0 high and 2 low hits (data/replay.json, § 5.5) |
+| 7 | heredoc bodies, `rm -rf` and a `//` in a quoted string read as walks | replay of A/A twin d3f571 after the `cd` fix | `179838c` | `47bbc9f8f642` | a Makefile written by heredoc with `rm -rf` and a C# `//` comment would have voided a C# A/A twin. Mostly against C#. | — |
+| 8 | a walk of a glob not judged by its prefix | team lead, during the replay | `27966ff` | `7aacd09cee84` | `grep -r token /*` was not seen as a walk of `/`: false negative. | — |
+| 9 | a walker behind `xargs` (and other wrappers) | coai code round | `244bc47` | `3129eeadfa8d` | `… \| xargs grep …` was not judged by the producer of the pipe: false negative. | — |
+| 10 | quadratic scan | coai code round | `e5823c2`, `9699634` | `3129eeadfa8d` | heredoc and step building copied per line; a long session would scan slowly. No effect on a value. | — |
+| 11 | the wall included the 3 s harness settle | A/A of series bf89 (G-6) | `edca65c` | `179624f5fec2` | every wall of 92a9, 0c1a and the bf89 A/A and pilot is about 3 s too long and its `unattributed` too large (G-6). The bf89 data sessions ran after the fix. On a ~45 s session it moves each C#/TS wall ratio towards 1. | — |
+| 12 | the stub CLI wrote no transcripts | the test suite after the T3 commit 255484e | `4687abe` | `eff387f2f438` | under `t3 = stop` the free v2 rehearsal would end as `T3 unchecked`, a series stop. No paid effect. | — |
+| 13 | box supervision timers left running | coai code round | `97c9a78` | `faaf55b4ecf7` | a box that failed to start left its timers running. No session hit it. | — |
+| 14 | per-call `cwd` in the contamination scan | data sessions ebd0b0 (pair 2) and 3407d8 (pair 3), series bf89 | `6b09da2` | `9475b1fed23f` | the scan started every Bash call at the work tree. Both C# v2 sessions ran `cd src` in one call and `cd .. && bash test-v2.sh` in the next, so the scan put `test-v2.sh` one level above the work tree: a high hit and a void. Two false voids, one C# re-run `ran unpaired`, and series bf89 stopped at the second. Against C# in this series. | bf89 `ebd0b0` (recorded `void: contaminated`): replay at the current lib, 0 high and 2 low hits; bf89 `3407d8` (recorded `void: contaminated`): replay at the current lib, 0 high and 1 low hits (data/replay.json, § 5.5) |
+| 15 | the printed "Shell cwd was reset to" line chose the start | coai code round on the `cwd` fix | `52bdec2` | `814d82e66e53` | a command can print that line and choose where the scan thinks it is: false negative. Fixed before series b82e. | — |
+| 16 | a heredoc run by an interpreter (`python3 - <<'EOF'`) parsed as shell | data session 97168d (pair 2 TS v2), series b82e | `9dac39e` | `198106f80a8b` | the agent edited its TypeScript through an inline Python script; the scan read the script body as shell, and a quoted `"/"` string as a walk of `/`: a high hit and a false void. Its re-run `6848b0` ran unpaired, under `foreign load`. Against TS in this series. Fixed after series B, on `feat/minigit-bench-e3b-fix2`. | b82e `97168d` (recorded `void: contaminated`): replay at the current lib, 0 high and 1 low hits (data/replay.json, § 5.5) |
+| 17 | the ledger charged a session once per rid, not once per series and rid | the pair-1 read-back of series b82e (G-1, Opus judge) | `1bdbe75` | `198106f80a8b` | series b82e reused the registered seed, so its rids repeat those of bf89, whose lines `init` had copied in; every b82e session with a repeated rid was not appended to its own ledger, and the money gates read too little (§ 8). No gate was near its limit. The same commit makes a by-hand verdict apply only to the series its evidence names. | the records against the ledger (§ 10): 12 paid sessions of s-20261030-b82e charged in the run-map, the record and the broker alike ($2.8962) have no line in its own ledger; disagreements between run-map, record and broker: 0 |
+| 18 | an interpreter or shell launched through a wrapper or by its path did not get the heredoc rule | coai code round on the fix above | `1769c95` | `db8d360cf9a8` | `env python3 - <<EOF` or `/usr/bin/python3 - <<EOF` would still be parsed as shell: the same false void as above. | no triggering session (a coai finding). Proof: `spikes/minigit-bench/test/contamination-interpreter.test.mjs`, `A_wrapped_or_path_named_interpreter_reads_its_body_like_the_bare_one` and `A_wrapped_or_path_named_shell_parses_its_body_as_shell`: watched failing on the lib before `1769c95` and passing after (2026-10-31); `A_word_named_like_an_interpreter_that_runs_nothing_leaves_the_body_data` is a guard that passes on both |
 <!-- /generated:defects -->
 
 What the list says about the result, in one place:
@@ -1167,8 +1197,9 @@ Read from the working tree's `spikes/minigit-bench/inputs/amendments.md`.
 - **Each series' harness.** 92a9 `e63941bdbdf9`; 0c1a `de9091b54e2b`; bf89 `3129eeadfa8d` (A/A, pilot) and `faaf55b4ecf7`
   (data); b82e `814d82e66e53`. The data numbers of A and B are computed the same way; only the classing differs. Defects
   16–18 are fixed on a harness no series has run.
-- **Flagged pairs and load.** `foreign load` sits on A2, B1 and B2. The operator's noisy start of B3 is not in the records
-  (§ 4); the medians are shown with and without B3 (§ 8.2).
+- **Flagged pairs and load.** `foreign load` sits on A2, B1 and B2. B3 started quiet by the records; the operator's
+  `--accept-noisy` override was given and not used (§ 4). The registered lines follow the records; a sensitivity view
+  without B3 is in § 8.2.
 - **Prompt-cache warmth.** The A/A twins started cold (first-turn cache read, § 5.2); later sessions started warm. The two
   cells of a pair start in the same tick, so warmth meets both stacks alike within a pair.
 - **All cache writes were 1h writes** (§ 5.2), priced at the 1h rate. A tool that prices them at the 5m rate gets a lower
@@ -1187,15 +1218,35 @@ Read from the working tree's `spikes/minigit-bench/inputs/amendments.md`.
 
 ## 13. How to re-run the extraction
 
+**What the committed files alone reproduce.** Every table and number of this file. `tools/render.mjs` reads only
+`research/minigit/data/*.json` (the four series files and `replay.json`) and, for § 11, `spikes/minigit-bench/inputs/amendments.md`
+and `git` (to check that each fix commit exists). It does not read the raw records: run with `~/rsd` hidden (a `bwrap`
+tmpfs over it) and `MINIGIT_RUNS` pointing nowhere, it rewrote this file byte for byte (2026-10-31).
+
+**What needs the raw records.** Making the data files again. `tools/extract.mjs` and `tools/replay.mjs` read the series
+directories `~/rsd/minigit/<series>/`. Those stay outside git as private evidence: they hold the operator's paths, the
+session transcripts and streams, the box trees and the sealed held-out scores. The repository keeps what was drawn from
+them (`data/`), with the sha256 of each series file read (`extractedFrom.sources`) and of each scan file the replay ran
+with (`extractedFrom.lib`).
+
+**Prerequisites.**
+
+- Node 26 (the series ran on 26.12.1); no package install: the tools use only Node's own modules and, for `replay.mjs`,
+  the scan in `spikes/minigit-bench/lib/`.
+- The repository root as the working directory, at a commit that holds `research/minigit/` and `spikes/minigit-bench/`.
+- For `extract.mjs` and `replay.mjs` only: the raw-record root, `~/rsd/minigit` by default. Point both at another root
+  with `--runs <dir>` or the environment variable `MINIGIT_RUNS`; `replay.mjs` also takes `--home <dir>`, the home the
+  scan protects (default: the real home), and `--out <file>`.
+
 ```bash
-# from the repository root; reads ~/rsd/minigit/<series>/ (or $MINIGIT_RUNS), writes research/minigit/data/<series>.json
+# from the repository root
+# 1. the committed data → this file (no raw records needed)
+node research/minigit/tools/render.mjs
+# 2. the raw records → the data files (reads ~/rsd/minigit/<series>/ or --runs / $MINIGIT_RUNS; writes research/minigit/data/)
 node research/minigit/tools/extract.mjs                                 # all four series
 node research/minigit/tools/extract.mjs --series s-20261030-b82e        # one series
-# the contamination scan, current lib, over every stream of every series; writes research/minigit/data/replay.json
-node research/minigit/tools/replay.mjs
+node research/minigit/tools/replay.mjs                                  # the current scan over every stream → data/replay.json
 node research/minigit/tools/replay.mjs --self-check                     # fixture in a fake home: expects 0 and 1 high hits
-# rewrites every generated block of this file from research/minigit/data/; the dated lines come from the named ref
-node research/minigit/tools/render.mjs
 ```
 
 - `tools/extract.mjs` is read-only on the runs root. It reads `run-map.json`, `ledger.ndjson`, `aa-verdicts.json`,
