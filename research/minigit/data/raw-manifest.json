@@ -1,0 +1,109 @@
+{
+ "runsRoot": "~/rsd/minigit",
+ "public": {
+  "entries": 13919,
+  "bytes": 3762266116
+ },
+ "topLevel": {
+  "capture": {
+   "entries": 45,
+   "bytes": 693199,
+   "sha256": "86ef0fe91ac8693d10ad065de41f6d67cbd1a9f9d0a22e305833c68bfda20a93",
+   "skipped": {
+    "socket": 0,
+    "fifo": 0
+   }
+  },
+  "refs-independent": {
+   "entries": 2,
+   "bytes": 12282,
+   "sha256": "fb07a74f24cce9fb1fc7016f1c256a5a0d65102f07311f16db40dd9e14cc95d5",
+   "skipped": {
+    "socket": 0,
+    "fifo": 0
+   }
+  },
+  "s-20261030-0c1a": {
+   "entries": 613,
+   "bytes": 204145334,
+   "sha256": "fea5a824eb27459d9ebf4fefd7a11c9a444a25a90d4e406b39bb8160e3330fc1",
+   "skipped": {
+    "socket": 4,
+    "fifo": 4
+   }
+  },
+  "s-20261030-92a9": {
+   "entries": 618,
+   "bytes": 204811041,
+   "sha256": "22302bcc19d526a9968442ca85df287d29265885383a722e852cbf7c7fa30372",
+   "skipped": {
+    "socket": 4,
+    "fifo": 4
+   }
+  },
+  "s-20261030-b82e": {
+   "entries": 2872,
+   "bytes": 799916012,
+   "sha256": "87a5d77dbc49b7125a2a0ba1906a85978fde000c093872037fb17c607dd99f60",
+   "skipped": {
+    "socket": 16,
+    "fifo": 16
+   }
+  },
+  "s-20261030-bf89": {
+   "entries": 3585,
+   "bytes": 1807047172,
+   "sha256": "9864cf3666e5afe544abe9342a6c85be9b8f20e9be6e088b3bb725fdb7eea9a1",
+   "skipped": {
+    "socket": 18,
+    "fifo": 18
+   }
+  },
+  "seeds": {
+   "entries": 1,
+   "bytes": 20,
+   "sha256": "fcb47a49ae3c1455655729464f30e60736eee64ed640ecac59f40e93a7b4755c",
+   "skipped": {
+    "socket": 0,
+    "fifo": 0
+   }
+  },
+  "smoke": {
+   "entries": 268,
+   "bytes": 4430562,
+   "sha256": "622789cbd636aad5079d549cef5d96a38e165fc7fbee9b739be58af7b737b62b",
+   "skipped": {
+    "socket": 19,
+    "fifo": 0
+   }
+  },
+  "snapshot-work": {
+   "entries": 5200,
+   "bytes": 298848932,
+   "sha256": "4b881a2e6bb2ac34d23fa22d7620bcf9e77007fa039fa3466b623e674845b339",
+   "skipped": {
+    "socket": 0,
+    "fifo": 0
+   }
+  },
+  "toolchains": {
+   "entries": 715,
+   "bytes": 442361562,
+   "sha256": "5f70f4fb5c4a04b43a2f30435ace68d746d9c069a1738780ccb075ec6a8f4d99",
+   "skipped": {
+    "socket": 0,
+    "fifo": 0
+   }
+  }
+ },
+ "publicSha256": "64076e5d49c4f922163279117ad7f54c299a7a6c90865d2b60b5b12a5c00a77c",
+ "heldout": {
+  "entries": 37,
+  "sha256": "183c0b4a1f712931d818263add3aeb6000f0b04795bfd6d7000ba3c195f8b5ba"
+ },
+ "skipped": {
+  "socket": 61,
+  "fifo": 42
+ },
+ "tool": "research/minigit/tools/manifest.mjs"
+}
