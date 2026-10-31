@@ -5,6 +5,7 @@ using ModelArms.Core.Experiment;
 using ModelArms.Core.Isolation;
 using ModelArms.Core.Launch;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -88,7 +89,8 @@ public sealed class ModelArmsArchitectureTests
         // E3.S5
         typeof(StageRecord), typeof(DeadlineSteps),
 
-        // E4
+        // E4.S1
+        typeof(TasksPlan), typeof(BatchesFile), typeof(TaskStems), typeof(TaskBriefFields),
 
         // E5
     ];
