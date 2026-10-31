@@ -1,0 +1,13 @@
+{
+  "archiveSha256": "7ea7819380503bdb2a7fd291521b4e4aaa900ce9d7ca3389f7f80e2dd69d1f6a",
+  "plaintextSha256": "7e9c10d377744212704543c30d4a86adda5cc47cc206ba8fd8ea1e61c7496f8a",
+  "n1": 29,
+  "n2": 29,
+  "m": 14,
+  "sealedOn": "2026-10-29",
+  "calibration": {
+    "file": "heldout/calibration.json",
+    "sha256": "f2277aea326b161a0084634c4a1a69d11d21645060f19960dda557953d65b897"
+  },
+  "note": "counts and hashes only; no case, reference implementation or mutant is named in this repository"
+}

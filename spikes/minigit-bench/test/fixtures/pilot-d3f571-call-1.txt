@@ -1,0 +1,188 @@
+cd @SESSION@/box/work; mkdir -p src
+cat > src/minigit.csproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>minigit</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+    <TieredCompilationQuickJitForLoops>true</TieredCompilationQuickJitForLoops>
+  </PropertyGroup>
+</Project>
+EOF
+cat > src/Program.cs <<'EOF'
+using System.Text;
+
+const string Root = ".minigit";
+string objectsDir = Path.Combine(Root, "objects");
+string commitsDir = Path.Combine(Root, "commits");
+string indexPath = Path.Combine(Root, "index");
+string headPath = Path.Combine(Root, "HEAD");
+
+if (args.Length == 0)
+{
+    Console.WriteLine("Usage: minigit <command>");
+    return 1;
+}
+
+switch (args[0])
+{
+    case "init": return Init();
+    case "add": return args.Length < 2 ? Usage("add <file>") : Add(args[1]);
+    case "commit":
+        return args.Length < 3 || args[1] != "-m" ? Usage("commit -m \"<message>\"") : Commit(args[2]);
+    case "log": return Log();
+    default:
+        Console.WriteLine($"Unknown command: {args[0]}");
+        return 1;
+}
+
+static int Usage(string s)
+{
+    Console.WriteLine($"Usage: minigit {s}");
+    return 1;
+}
+
+int Init()
+{
+    if (Directory.Exists(Root))
+    {
+        Console.WriteLine("Repository already initialized");
+        return 0;
+    }
+    Directory.CreateDirectory(objectsDir);
+    Directory.CreateDirectory(commitsDir);
+    File.WriteAllText(indexPath, "");
+    File.WriteAllText(headPath, "");
+    return 0;
+}
+
+int Add(string file)
+{
+    if (!File.Exists(file))
+    {
+        Console.WriteLine("File not found");
+        return 1;
+    }
+    byte[] data = File.ReadAllBytes(file);
+    string hash = MiniHash(data);
+    string blobPath = Path.Combine(objectsDir, hash);
+    if (!File.Exists(blobPath))
+        File.WriteAllBytes(blobPath, data);
+
+    var entries = ReadIndex();
+    if (!entries.Contains(file))
+        File.AppendAllText(indexPath, file + "\n");
+    return 0;
+}
+
+int Commit(string message)
+{
+    var entries = ReadIndex();
+    if (entries.Count == 0)
+    {
+        Console.WriteLine("Nothing to commit");
+        return 1;
+    }
+
+    string head = ReadHead();
+    var files = entries.Distinct().OrderBy(f => f, StringComparer.Ordinal).ToList();
+    var sb = new StringBuilder();
+    sb.Append($"parent: {(head.Length == 0 ? "NONE" : head)}\n");
+    sb.Append($"timestamp: {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}\n");
+    sb.Append($"message: {message}\n");
+    sb.Append("files:\n");
+    foreach (var f in files)
+    {
+        // Hash the content as of commit time; ensure the blob exists.
+        byte[] data = File.Exists(f) ? File.ReadAllBytes(f) : [];
+        string blob = MiniHash(data);
+        string blobPath = Path.Combine(objectsDir, blob);
+        if (!File.Exists(blobPath))
+            File.WriteAllBytes(blobPath, data);
+        sb.Append($"{f} {blob}\n");
+    }
+
+    string content = sb.ToString();
+    string commitHash = MiniHash(Encoding.UTF8.GetBytes(content));
+    File.WriteAllText(Path.Combine(commitsDir, commitHash), content);
+    File.WriteAllText(headPath, commitHash);
+    File.WriteAllText(indexPath, "");
+    Console.WriteLine($"Committed {commitHash}");
+    return 0;
+}
+
+int Log()
+{
+    string current = ReadHead();
+    if (current.Length == 0)
+    {
+        Console.WriteLine("No commits");
+        return 0;
+    }
+
+    var output = new StringBuilder();
+    bool first = true;
+    while (current.Length > 0 && current != "NONE")
+    {
+        string path = Path.Combine(commitsDir, current);
+        if (!File.Exists(path))
+            break;
+        string parent = "NONE", timestamp = "", message = "";
+        foreach (var line in File.ReadAllLines(path))
+        {
+            if (line.StartsWith("parent: ")) parent = line["parent: ".Length..];
+            else if (line.StartsWith("timestamp: ")) timestamp = line["timestamp: ".Length..];
+            else if (line.StartsWith("message: ")) message = line["message: ".Length..];
+            else if (line == "files:") break;
+        }
+        if (!first) output.Append('\n');
+        first = false;
+        output.Append($"commit {current}\nDate: {timestamp}\nMessage: {message}\n");
+        current = parent;
+    }
+    Console.Write(output.ToString());
+    return 0;
+}
+
+List<string> ReadIndex() =>
+    File.Exists(indexPath)
+        ? File.ReadAllLines(indexPath).Where(l => l.Length > 0).ToList()
+        : [];
+
+string ReadHead() => File.Exists(headPath) ? File.ReadAllText(headPath).Trim() : "";
+
+static string MiniHash(byte[] data)
+{
+    ulong h = 1469598103934665603UL;
+    foreach (byte b in data)
+    {
+        h ^= b;
+        unchecked { h *= 1099511628211UL; }
+    }
+    return h.ToString("x16");
+}
+EOF
+cat > Makefile <<'EOF'
+BUILD_DIR := build
+SRC := src/Program.cs src/minigit.csproj
+
+all: minigit
+
+$(BUILD_DIR)/minigit.dll: $(SRC)
+	DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet publish src/minigit.csproj -c Release -o $(BUILD_DIR) --nologo -v quiet
+
+minigit: $(BUILD_DIR)/minigit.dll
+	printf '#!/usr/bin/env bash\nDIR="$$(cd "$$(dirname "$${BASH_SOURCE[0]}")" && pwd)"\nexec "$$DIR/$(BUILD_DIR)/minigit" "$$@"\n' > minigit
+	chmod +x minigit
+
+clean:
+	rm -rf $(BUILD_DIR) minigit src/bin src/obj
+
+.PHONY: all clean
+EOF
+bash test-v1.sh

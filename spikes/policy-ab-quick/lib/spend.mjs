@@ -6,15 +6,24 @@ export const costOfSummary = summary => Number(summary?.usd ?? summary?.result?.
 
 export const round2 = n => Math.round(n * 100) / 100;
 
+const round9 = n => Math.round(n * 1e9) / 1e9;
+
 /**
- * The stop decision before a cell. `stopAfter` is a CEILING: the next cell may cost up to `cap`, so it is not started when
- * what is spent plus that cap would pass the ceiling.
+ * The stop decision before a cell (or a phase). `stopAfter` is a CEILING: what starts next may cost up to its cap(s), so it is not started when
+ * what is spent plus the live spend of running sessions plus `factor` x every cap about to start would pass the ceiling.
+ * `caps` is one number (today's form: `spentUsd + capUsd`) or an array of caps; `liveUsd` is the running sessions' sum (default 0), `factor`
+ * widens every cap (default 1; the minigit bench uses 1.1, its soft-cap overshoot) and `label` names the limit in the line (default `--stop-after`).
+ * -> `{ stop, totalUsd, line }`.
  */
-export function spendDecision(spentUsd, stopAfterUsd, capUsd = 0) {
-  const stop = spentUsd + capUsd > stopAfterUsd;
-  return { stop, line: stop
-    ? `STOP: spent $${round2(spentUsd)} + cap $${round2(capUsd)} would pass --stop-after $${round2(stopAfterUsd)}; no further cell is started`
-    : `spend so far $${round2(spentUsd)} + cap $${round2(capUsd)} stays within --stop-after $${round2(stopAfterUsd)}` };
+export function spendDecision(spentUsd, stopAfterUsd, caps = 0, { liveUsd = 0, factor = 1, label = '--stop-after' } = {}) {
+  const capList = Array.isArray(caps) ? caps : [caps];
+  const capsUsd = round9(capList.reduce((a, c) => a + factor * c, 0));
+  const totalUsd = round9(spentUsd + liveUsd + capsUsd);
+  const stop = totalUsd > stopAfterUsd;
+  const head = `$${round2(spentUsd)}${liveUsd > 0 ? ` + live $${round2(liveUsd)}` : ''} + ${Array.isArray(caps) ? 'caps' : 'cap'} $${round2(capsUsd)}`;
+  return { stop, totalUsd, line: stop
+    ? `STOP: spent ${head} would pass ${label} $${round2(stopAfterUsd)}; no further cell is started`
+    : `spend so far ${head} stays within ${label} $${round2(stopAfterUsd)}` };
 }
 
 /**

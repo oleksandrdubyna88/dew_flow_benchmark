@@ -1,6 +1,6 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
-> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2.S1–S2 (process fixes, the agent sandbox, broker and launch) implemented 2026-10-30; E2.S3–S4, E3, E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
+> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2.S1–S2 (process fixes, the agent sandbox, broker and launch) implemented 2026-10-30; E3b (the bare arm, D20) S1–S4 implemented 2026-10-30 and its bare pairs run 2026-10-30/31 (interim record: `research/minigit/RESULTS_bare_2026-10-30.md`); E2.S3–S4, E3, E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
 > (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
 > `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.
@@ -61,7 +61,7 @@ first unit test (§12, T-A1).
 | D17 | Effort `high` is pinned in the session's own `--settings` file (`effortLevel` and `modelSettings.{opus,sonnet,fable}.effortLevel`), because `--setting-sources project` and the fresh `CLAUDE_CONFIG_DIR` exclude the user settings where `high` lives today; children's effort is read back from the audit | judge review M2, verified in `~/.claude/settings.json` |
 | D18 | **The task inputs have no licence.** SPEC-v1/v2 and test-v1/v2 were written by Yusuke Endoh (`mame/ai-coding-lang-bench`), banteg's fork is byte-identical, and neither repository carries a licence (checked by `gh api …/license`, the clones and their history). The operator's decision: the files live **only inside the GitHub fork**, relying on GitHub ToS D.5 (public repositories may be viewed and forked on GitHub). Our three test fixes live there too, on a branch `inputs`. `dew_flow_benchmark`, which is not a fork, holds only their hashes and `UPSTREAM.md`; the harness fetches the files from the fork at a pinned sha into a local cache and verifies them. The ToS grants viewing and forking; the fixes inside the fork are the operator's call, recorded here | operator, 2026-10-29; consult `31e740fc` |
 | D19 | **No CodeRabbit in the series** (operator, 2026-10-29: "not needed"). Every CodeRabbit item elsewhere in this plan is void: the process arm's PR cycle is PR → CI → `sleep 300` → read CI → merge; the templates ship no `.coderabbit.yaml` and no `coderabbit-review.yml`; the CodeRabbit review item is dropped and the 300 s item now reads CI (the checklist is k/17); `coderabbit_wait` stays an empty category; P0 and P1 check no CodeRabbit review. The family rule asks for a reviewer bot only "where the repository has one configured", and the fork has none | operator, 2026-10-29 |
-| D20 | **The bare arm runs first** (operator, 2026-10-29): first C# vs TS results in hours, not days. E2.S1 and E2.S2 (process fixes, agent sandbox) are built first and a thin bare-arm runner is pulled forward from E3.S1; the three bare pairs run, after the pre-registration is committed, before the process arm is built. Deviation from §4.1's blocks: the bare pairs do not share time windows with the process pairs, so the process-vs-bare comparison (the interaction) is weaker and the report says so; the C#/TS comparison inside the bare arm keeps its concurrent pairs. Stories: [PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md) (E3b.S1–S5: the thin runner, the machine-quiet check, the bare pre-registration, the bare A/A and Node pilot, the three bare pairs) | operator, 2026-10-29 |
+| D20 | **The bare arm runs first** (operator, 2026-10-29): first C# vs TS results in hours, not days. E2.S1 and E2.S2 (process fixes, agent sandbox) are built first and a thin bare-arm runner is pulled forward from E3.S1; the three bare pairs run, after the pre-registration is committed, before the process arm is built. *Progress, 2026-10-31: E3b.S1–S4 are implemented and the bare pairs ran, in two series (`s-20261030-bf89`, stopped by its rule at pair 3; `s-20261030-b82e`, complete); the interim record is `research/minigit/RESULTS_bare_2026-10-30.md`, which stands in for E3b.S5's planned `bare-pairs-<date>.md` and `bare-report.mjs` (not built).* Deviation from §4.1's blocks: the bare pairs do not share time windows with the process pairs, so the process-vs-bare comparison (the interaction) is weaker and the report says so; the C#/TS comparison inside the bare arm keeps its concurrent pairs. Stories: [PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md) (E3b.S1–S5: the thin runner, the machine-quiet check, the bare pre-registration, the bare A/A and Node pilot, the three bare pairs) | operator, 2026-10-29 |
 | D21 | **The fork's `data` branch holds upstream's generated solutions** (JavaScript, TypeScript, C … — no C#), one `git fetch` away from any session that reaches GitHub, and the same branch is public in `mame/ai-coding-lang-bench`. So the agent box's network is restricted by host, not only audited: the bare arm reaches no GitHub at all; the process arm reaches GitHub and its other reads are audited (§7). Verified 2026-10-29 | E2 stories review |
 | D22 | **The agent box has its own network namespace; egress only through a host-side HTTP CONNECT proxy** with a per-arm host list (bare: `api.anthropic.com`, `registry.npmjs.org`, `api.nuget.org`; process: plus the GitHub hosts S4 settles). In-box forwarders map 127.0.0.1:3128 → the proxy socket and 127.0.0.1:4318 → the OTel receiver socket; `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY=127.0.0.1,localhost` steer claude, node, npm and dotnet. This SUPERSEDES §7.1's shared-network text, its abstract-socket and loopback allow-lists and the resolv.conf bind: in its own namespace the box reaches no host listener and needs no DNS. In the bare arm GitHub (D21's `data` branch included) is PREVENTED, not audited. Verified 2026-10-29 by the E2.S2 design run ($0.112, pilot spend): isolation with controls, the API, OTel (sum = envelope), npm and dotnet restore through the proxy, the token on no command line. Children's effort (D17) is read from O, joined through the audit's agent_id | E2.S2 spec (Fable) |
 | D23 | **The real Claude token never enters the box: a host-side credential broker signs the API traffic** (plan gate E2, 2026-10-29; consult `526c5f3f`; proven by the E2.S2 broker probes, $0.018). The box gets `ANTHROPIC_BASE_URL=http://127.0.0.1:8787` and a per-session DUMMY `CLAUDE_CODE_OAUTH_TOKEN`; the broker overwrites `Authorization` with the file token, forwards `anthropic-beta` verbatim (the OAuth capability), allows no redirect, and holds the cell's own budget (reservations, 429 at the cap) — so a direct Bash call to the API is metered and capped, and its ledger is a 4th cost view `B` (crosscheck T5: B = E). `api.anthropic.com` is on no CONNECT list. This supersedes D16's "passed as `CLAUDE_CODE_OAUTH_TOKEN`" for the box: the token is read from the file by the broker only. The process arm's PAT gets the same shape in S4 | plan gate E2; consult; E2.S2 spec (Fable) |
@@ -77,7 +77,10 @@ first unit test (§12, T-A1).
 - Which arm leads each block: one of the six three-block patterns in which each arm leads at least once, chosen by the
   seed through `drawOrder`'s seeded hash (`spikes/policy-ab-quick/lib/order.mjs:4`) — not `drawBlocks`' independent flips
   (`order.mjs:10-16`), which give one arm all three leads with probability 1/4. A = process, B = bare.
-- `seed.txt` = `mg-` + 16 random hex, committed **after** `prediction.md` and before the draw.
+- `seed.txt` = `mg-` + 16 random hex, committed **after** `prediction.md` and before the draw. The bare arm (D20) has its
+  own seed, committed as a sha256 with its pre-registration and revealed after its A/A
+  ([PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md), E3b.S3–S4); the process draw gets its own
+  seed in E3.
 - CPU: the VM shows 14 vCPUs as 7 cores × 2 SMT threads (`lscpu -e`: core n = CPUs 2n, 2n+1 — the hypervisor's
   topology, not physical cores). The two cells of a pair get `taskset` masks **0-5** and **8-13** (three cores each);
   core 3 (CPUs 6-7) is left to the harness, coai, the vendor CLIs and the OS. Masks swap between blocks — with three
@@ -364,7 +367,8 @@ Bash and PowerShell, and must stay byte-equal for adapter-check; nobody answers 
 (D17). Session persistence ON (transcripts are
 the third count). Env: the scrub, plus `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`,
 `CLAUDE_CODE_ENABLE_TELEMETRY=1` with OTLP to the local receiver, `MSBUILDDISABLENODEREUSE=1`, `UseSharedCompilation=false`,
-`DOTNET_CLI_USE_MSBUILD_SERVER=0` (no cell builds on its partner's node), `BENCH_CELL=<id>` (the janitor's marker),
+`DOTNET_CLI_USE_MSBUILD_SERVER=0` (process arm, decided in E3; the bare arm keeps the build servers at their defaults, as
+banteg ran, registered in E3b.S3 — each box's own pid namespace already keeps a cell off its partner's node, E3b.S1), `BENCH_CELL=<id>` (the janitor's marker),
 `GIT_TERMINAL_PROMPT=0` (a missing credential fails, never hangs), `GIT_CONFIG_GLOBAL=<session>/gitconfig`; process arm
 `GH_TOKEN`, `GH_CONFIG_DIR=<session>/gh`, `GH_PROMPT_DISABLED=1`, and the session gitconfig carries
 `credential.https://github.com.helper = !gh auth git-credential` plus the fixed bench author — so `git push` inside the
@@ -500,6 +504,10 @@ src_mcp/core/Rounds/RoundMachine.cs:404-416`); `contaminated` (a
   v2 (the barrier holds the partner's v2 meanwhile only if both v1s voided). A re-run is paired with a re-run of the
   partner only if the partner also voided, otherwise it runs alone and is labelled `ran unpaired`. A second void of the same
   session leaves the cell missing, reported as such. Void spend counts against the ceiling (§13).
+- **Registered extensions, bare arm (D20):** E3b.S3's analysis contract adds `void: upstream` (a session ended by a final
+  5xx/529), `void: harness` for an interrupted or disposed launch, and `stop: auth` (a 401/403 — the credential, not the
+  stack), and classes a session by how it ENDED (a transient cap refusal or upstream 429 is a flag). The process arm adopts
+  or declines them in E3.S3.
 
 **Prediction (to be committed verbatim, written 2026-10-29 before any cell):**
 *(The ranges below are descriptive expectations about medians and ratios, stated before the run — not effect sizes
@@ -565,7 +573,12 @@ only if data + void + pilot spend + the live O sum of running sessions + **1.1 �
 (fast, provisional); the stop rule reads settled figures, each the larger of the CLI's total and the published recompute
 (§9); the report shows both. At the top of prediction 3 ($70 per process cell) the series needs ≈ $40 + 6 × $70 + $20 ≈
 $480 — inside $500. If even $500 refuses a pair, the series stops there and the report says which cells are missing and
-reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and Actions on public repos do not bill this ceiling.
+reports the process arm at the n it reached (§11). **Bare budget (D20, E3b §5):** the bare arm — A/A, Node pilot, three
+pairs and their re-runs — stops at **$40**; E1/E2's ≈ $0.43 instrument spend counts in the $500, not in the $40. It may be
+raised only to finish the re-runs of a pair already started, by at most their worst case. The squeeze, stated: if the bare
+arm uses its whole $40 and process cells cost prediction 3's top ($70), the 1.1 × gate refuses the v2 phase of the third
+process pair (≈ $430 settled + 1.1 × 2 × $35 > $500) and the process arm reports at n = 2. coai vendors, CodeRabbit and
+Actions on public repos do not bill this ceiling.
 
 ## 14. Growth
 

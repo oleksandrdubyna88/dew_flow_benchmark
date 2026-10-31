@@ -16,6 +16,7 @@ import { dummyToken, sessionLayout, writableBinds } from './sandbox.mjs';
 import { readSecretFile } from './secrets.mjs';
 import { launchSession } from './session-launch.mjs';
 import { scanSessionDir } from './session-scan.mjs';
+import { callsOf } from './stream-calls.mjs';
 import { retireStale } from './session-state.mjs';
 import { tokenHits } from './token-scan.mjs';
 import { tokenTxtFact } from './token-txt.mjs';
@@ -32,12 +33,6 @@ export const SMOKE_CAP_USD = 0.2;
 const SMOKE_WALL_MS = 5 * 60 * 1000;
 const SMOKE_STALL_MS = 2 * 60 * 1000;
 const readJson = p => JSON.parse(readFileSync(p, 'utf8'));
-
-/** The stream's tool_use blocks as the contamination scan's `calls`: `[{ agent, tool, input }]`. */
-export function callsOf(events) {
-  return events.filter(e => e.type === 'assistant').flatMap(e => (e.message?.content ?? [])
-    .filter(b => b.type === 'tool_use').map(b => ({ agent: e.parent_tool_use_id ? 'child' : 'main', tool: b.name, input: b.input ?? {} })));
-}
 
 /** The host-side facts that need a secret to compute, written so the sanitised fixture can hold them without it. */
 export function checksOf({ layout, plan, result }) {

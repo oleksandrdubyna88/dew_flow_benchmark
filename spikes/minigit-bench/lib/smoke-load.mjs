@@ -60,24 +60,38 @@ function parseLines(name, text) {
   return ok(out);
 }
 
-/** A staged (or sanitised) smoke directory as the verdict rules read it. Every read goes through lib/agent-files.mjs: a link or a pipe is refused, never followed. */
-export function loadSmoke(dir) {
-  const missing = REQUIRED_STAGED.filter(f => !existsSync(path.join(dir, f)));
-  if (missing.length > 0) return fail(`${dir} lacks ${missing.join(', ')}`);
+/**
+ * The one loader. `fileOf(flatName)` says where each file lives under `dir`, `required` which flat names must exist, `transcriptsDir` where the transcripts are. Every read
+ * goes through lib/agent-files.mjs: a link or a pipe is refused, never followed.
+ */
+function loadWith(dir, { fileOf, required, transcriptsDir }) {
+  const missing = required.filter(f => !existsSync(path.join(dir, fileOf(f))));
+  if (missing.length > 0) return fail(`${dir} lacks ${missing.map(fileOf).join(', ')}`);
   const names = ['stream.ndjson', 'stream.stamped.ndjson', 'otlp-raw.ndjson', 'broker.ndjson', 'egress.ndjson', 'audit.ndjson', 'watchdog.ndjson'];
   const jsonNames = ['meta.json', 'argv.json', 'readback.json', 'checks.json'];
-  const reads = [...names, ...jsonNames].map(n => [n, readText(dir, n)]);
-  const tdir = path.join(dir, 'transcripts');
+  const reads = [...names, ...jsonNames].map(n => [n, readText(dir, fileOf(n))]);
+  const tdir = path.join(dir, transcriptsDir);
   const entries = existsSync(tdir) ? agentEntries(tdir) : [];
-  const transcriptReads = entries.map(e => [path.join('transcripts', e.rel), e.kind === 'file' ? readText(dir, path.join('transcripts', e.rel)) : { refused: `transcripts/${e.rel}: ${e.kind}` }]);
+  const transcriptReads = entries.map(e => [path.join(transcriptsDir, e.rel), e.kind === 'file' ? readText(dir, path.join(transcriptsDir, e.rel)) : { refused: `${transcriptsDir}/${e.rel}: ${e.kind}` }]);
   const refused = [...reads, ...transcriptReads].filter(([, r]) => r.refused).map(([, r]) => r.refused);
-  if (refused.length > 0) return fail(`the smoke directory holds path(s) that are not plain regular files (${refused.join('; ')}): nothing was loaded`);
+  if (refused.length > 0) return fail(`the directory holds path(s) that are not plain regular files (${refused.join('; ')}): nothing was loaded`);
   const text = Object.fromEntries(reads.map(([n, r]) => [n, r.text]));
   const parsed = names.map(n => [n, parseLines(n, text[n])]);
   const bad = parsed.find(([, p]) => !p.ok);
   if (bad) return bad[1];
   const [events, stamped, sink, brokerLines, egressLines, audit, watchdog] = parsed.map(([, p]) => p.value);
-  const transcripts = transcriptReads.map(([rel, r]) => ({ relPath: path.relative('transcripts', rel).split(path.sep).join('/'), text: r.text }));
+  const transcripts = transcriptReads.map(([rel, r]) => ({ relPath: path.relative(transcriptsDir, rel).split(path.sep).join('/'), text: r.text }));
   const json = n => JSON.parse(text[n] || 'null');
   return ok({ events, stamped, sink, brokerLines, egressLines, audit, watchdog, transcripts, hooks: [], meta: json('meta.json'), argv: json('argv.json'), readback: json('readback.json'), checks: json('checks.json') });
 }
+
+/** A staged (or sanitised) smoke directory as the verdict rules read it. */
+export const loadSmoke = dir => loadWith(dir, { fileOf: n => n, required: REQUIRED_STAGED, transcriptsDir: 'transcripts' });
+
+const REL_OF = Object.freeze(Object.fromEntries(Object.entries(STAGED).map(([rel, flat]) => [flat, rel])));
+
+/**
+ * A LIVE session directory (`<series>/s/<rid>/`, the launcher's own layout) as the same rules read it. Nothing is required: a session cut short has some of these files and not
+ * others, and an absent one is an empty list or null (never a failure, never a zero). `checks` is null (nothing wrote checks.json).
+ */
+export const loadSessionDir = dir => loadWith(dir, { fileOf: n => REL_OF[n], required: [], transcriptsDir: 'transcripts' });
