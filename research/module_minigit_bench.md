@@ -622,8 +622,9 @@ Same copy and the same marking. Each stage's prediction was written before its r
 
 ### 6. The bare runner, the quiet check and the pre-registration code (E3b)
 
-Spec by Opus (`todo/PLAN_minigit_stack_bench_E3_bare.md`, E3b.S1 to S3), coded by Sonnet on `feat/minigit-bench-e3b`. **Built and tested with a stub CLI; no paid session has been
-run through it.** What is still open is listed at the end of this section and in [What it does not do yet](#what-it-does-not-do-yet).
+Spec by Opus (`todo/PLAN_minigit_stack_bench_E3_bare.md`, E3b.S1 to S3), coded by Sonnet on `feat/minigit-bench-e3b`. **Built and tested with a stub CLI, then run paid**: four
+series on 2026-10-30/31, two of them to the bare pairs (`s-20261030-bf89`, stopped by its rule; `s-20261030-b82e`, complete) — the numbers are in
+[minigit/RESULTS_bare_2026-10-30.md](minigit/RESULTS_bare_2026-10-30.md). What is still open is listed at the end of this section and in [What it does not do yet](#what-it-does-not-do-yet).
 
 **One command, one pair.** `bare-runner.mjs run --series <dir> --what pair:<k>` runs pair k: C# v1 and TS v1 started in the same tick on their CPU masks, both collected and
 scored (the **barrier**), then both v2 from their own v1 trees; every session is classified by how it ENDED, voids are re-run once by the schedule, and every session and the pair
@@ -766,7 +767,7 @@ get round it). The test is on the home and runs before any file is looked at, so
 test does not clone it again. `bare-runner.mjs` reads the home at each call (`defaults()`), not when the module loads. Two files keep the real home on purpose, because the real scorer decrypts the held-out suite
 under it: `test/bare-e2e.test.mjs` and `test/rehearse-v2-e2e.test.mjs`; they build their own context with a fake token and import neither `main` nor `buildRun`, and `test/fake-home.test.mjs` checks both.
 
-**Not built.** `aa-verdicts` and `report` (E3b.S4 and S5). `--what rehearse-v2` IS built (review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
+**Not built.** `report` (E3b.S5; the interim record [minigit/RESULTS_bare_2026-10-30.md](minigit/RESULTS_bare_2026-10-30.md), rendered by `research/minigit/tools/`, stands in for it). `aa-verdicts` and `--what rehearse-v2` ARE built (E3b.S4; review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
 
 ## Entry points
 
@@ -890,11 +891,11 @@ machine.
 | The treatment itself: the conventions snapshot branch, the one-source templates, the four template branches, the lint gate | E2 (S4) |
 | A flush of the CLI's last OTel batch on a stop: none arrived after a SIGTERM (B-K2), so the broker's ledger, not O, prices a killed session | E3 (the runner) |
 | `EGRESS_HOSTS.process` settled with evidence, a broker or scan for the GitHub PAT, `settingsFor('process')`'s coai entries | E2 (S4) |
-| The **process arm's** runner: blocks, the arm-lead draw, the process pair; E3b built the BARE one (section 6), stub-tested, never run paid | E3 (S1) |
+| The **process arm's** runner: blocks, the arm-lead draw, the process pair; E3b built the BARE one (section 6), stub-tested and run paid | E3 (S1) |
 | The **compliance checker** over GitHub, `coai.db` and the stream, and GitHub's intervals (`ci_wait`, `coderabbit_wait` stay generic `wait` until then); a `delivered` verdict, so a process session's `accepted` reads `unknown` | E3 (S2) |
-| The pre-registration's own texts (`statement.md`, the operationalizations of `analysis-contract.md`, `checklist.json`) and its tag; the process scope; P0 (no model), the model smoke through the bridge | E3b.S3 (Opus text, the operator's tag), E3 (S3) |
-| The bare A/A, its `aa-verdicts`, the v2 rehearsal, the Node pilot, the three bare pairs and the interim record (`report`) | E3b.S4, S5 |
-| The A/A and P1 pilots that decide whether **T3 becomes a stop** (`policy.t3` is `investigate` today; the pre-registered fallback is `fallback-t2` with `t2 = stop`), the day-1 price re-read, the draw | E3 (S4) |
+| The pre-registration's process scope; P0 (no model), the model smoke through the bridge (the bare scope is tagged `prereg/minigit-bare-20261030`) | E3 (S3) |
+| The bare `report` command (`bare-report.mjs`); the record is rendered by `research/minigit/tools/` meanwhile | E3b.S5 |
+| The process arm's A/A and P1 (the bare A/A set `t3 = stop` for the bare data cells by the dated T3 commit), the day-1 price re-read, the process draw | E3 (S4) |
 | A **real coai ledger**: the reader's fixtures are synthetic | E3 (S3–S4) |
 | The twelve-cell series, the block-1 by-hand read-back, the blind hand classing of failing held-out cases, the ≥ 20-verdict compliance hand check | E4 (S1–S2) |
 | `report.mjs` (the per-session, per-stack × arm and pair-ratio tables, the series report beside this file), credential teardown, archive and `retire.mjs`, publishing the suite's case list beside the report, promotion of the plans | E4 (S3) |
