@@ -8,8 +8,8 @@ namespace ModelArms.Adapters;
 
 /// <summary>The holder's note, <c>.gate.lock.holder</c> (beside <c>.gate.lock</c>, never IN it): who took the lock and when, so <c>gate-lock status</c> can say <c>held by pid N since &lt;utc&gt;</c>. <b>The kernel's lock is the truth and
 /// this file is a hint.</b> It is written by the holder AFTER it has the lock, beside and renamed over (a reader never sees half a note), and removed BEFORE the lock is released (or a next holder's note could be deleted by the last one's
-/// release); a killed holder leaves a stale note, which the next holder overwrites and which <c>status</c> never believes unless it names a LIVE process whose kernel start time (field 22 of <c>/proc/&lt;pid&gt;/stat</c>, an integer in clock ticks) is the one the note recorded (a reused pid does not match). The
-/// note is informational, so a write that fails (a full disk, a permission) does not fail the lock; a note that is not a regular file of its own, bigger than 4 KiB, not JSON or not a live holder reads as <c>holder unknown</c> — it is opened without blocking and read through the descriptor (<see cref="KernelFacts.ReadSmall"/>), so a FIFO, a link or a huge file costs no wait and no memory. Off Linux nothing can be verified, so no holder is ever named.
+/// release); a killed holder leaves a stale note, which the next holder overwrites and which <c>status</c> never believes unless it names a LIVE process whose start time is the one the note recorded — on Linux the kernel's (field 22 of <c>/proc/&lt;pid&gt;/stat</c>, an integer in clock ticks), elsewhere <c>Process.StartTime</c> in whole seconds (<c>start_unix</c>) within two seconds (a reused pid does not match, unless it started within that tolerance of the old one). The
+/// note is informational, so a write that fails (a full disk, a permission) does not fail the lock; a note that is not a regular file of its own, bigger than 4 KiB, not JSON or not a live holder reads as <c>holder unknown</c> — it is read through <see cref="BoundedFile"/> (the kernel's non-blocking open where the road has it, the runtime's under a ceiling elsewhere), so a FIFO, a link or a huge file costs no memory and no unbounded wait. A holder is believed by its road (<see cref="HolderRoad"/>): the kernel's tick on Linux, the process's start second within two seconds on the other POSIX hosts, never on Windows.
 /// <para>
 /// The temporary file has one fixed name, <c>.gate.lock.holder.tmp</c>: only the holder of the lock writes it, so it cannot collide, and a crash between the write and the rename leaves exactly one such file, overwritten by the next
 /// holder (the growth bound: two small files per root).
@@ -47,6 +47,20 @@ internal static class GateHolderNote
         }
     }
 
+    /// <summary>The start second of <paramref name="pid"/> as the runtime reports it (<see cref="Process.StartTime"/>, whole UTC seconds since the epoch), on every platform; <c>null</c> when it cannot be read — a process that ended, one we may not look at.</summary>
+    internal static long? StartUnixOf(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero).ToUnixTimeSeconds();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Field 22 of a <c>/proc/&lt;pid&gt;/stat</c> text. The command name (field 2) is in parentheses and can hold spaces and <c>)</c>, so the fields are counted after the LAST <c>)</c>; a line too short or a field that is not a whole number is <c>null</c>.</summary>
     internal static long? StartTicksFrom(string stat)
     {
@@ -65,7 +79,7 @@ internal static class GateHolderNote
             File.Delete(temporary);
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(stream, new { pid = Environment.ProcessId, start_ticks = StartTicksOf(Environment.ProcessId), since_utc = Format(since) });
+                JsonSerializer.Serialize(stream, new { pid = Environment.ProcessId, start_ticks = StartTicksOf(Environment.ProcessId), start_unix = StartUnixOf(Environment.ProcessId), since_utc = Format(since) });
             }
 
             File.Move(temporary, note, overwrite: true);
@@ -90,23 +104,24 @@ internal static class GateHolderNote
     }
 
     /// <summary>The words <c>status</c> adds after <c>held</c> for a lock somebody has: <c>by pid N since &lt;utc&gt;</c> when the note is a regular file naming a live process that started at the time it says, else <c>(holder unknown)</c>.</summary>
-    public static string Describe(string lockPath) =>
-        Believed(PathFor(lockPath)) is { } note ? $"by pid {note.Pid} since {note.Since}" : "(holder unknown)";
+    public static string Describe(string lockPath) => Describe(lockPath, PlatformFactsReader.CurrentRoad);
+
+    /// <summary><see cref="Describe(string)"/> with the road that believes the note handed in.</summary>
+    public static string Describe(string lockPath, PlatformRoad road) =>
+        Believed(PathFor(lockPath), road) is { } note ? $"by pid {note.Pid} since {note.Since}" : "(holder unknown)";
 
     private sealed record Note(int Pid, string Since);
 
-    private static Note? Believed(string note) =>
-        Read(note) is { } read && IsLiveAndStartedThen(read.Pid, read.StartTicks) ? new Note(read.Pid, read.Since) : null;
+    private static Note? Believed(string note, PlatformRoad road) =>
+        Read(note, road.Bounded) is { } read && IsLiveAndStartedThen(read, road.Holder) ? new Note(read.Pid, read.Since) : null;
 
-    private sealed record Raw(int Pid, long? StartTicks, string Since);
+    /// <summary>What a note says, as parsed: the pid, the kernel's start ticks (Linux writers), the start second (every writer) and the acquisition time.</summary>
+    internal sealed record Raw(int Pid, long? StartTicks, long? StartUnix, string Since);
 
     /// <summary>The note, read through <see cref="KernelFacts.ReadSmall"/>: opened without blocking, judged by the descriptor (a regular file, the same inode the path names; a link is refused at the open by O_NOFOLLOW), never read past 4 KiB. Anything else, or text that is not
     /// a note, is <c>null</c> — never an exception and never a wait.</summary>
-    private static Raw? Read(string note)
-    {
-        var bytes = KernelFacts.ReadSmall(note, NoteLimit);
-        return bytes.Match(Parsed, _ => null);
-    }
+    private static Raw? Read(string note, BoundedRoad road) =>
+        BoundedFile.Read(note, NoteLimit, road) is BoundedRead.Bytes bytes ? Parsed(bytes.Value) : null;
 
     private static Raw? Parsed(byte[] bytes)
     {
@@ -115,7 +130,7 @@ internal static class GateHolderNote
             using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("pid", out var pid) && pid.TryGetInt32(out var number)
-                ? new Raw(number, Ticks(root), Text(root, "since_utc"))
+                ? new Raw(number, Number(root, "start_ticks"), Number(root, "start_unix"), Text(root, "since_utc"))
                 : null;
         }
         catch (JsonException)
@@ -124,15 +139,28 @@ internal static class GateHolderNote
         }
     }
 
-    private static long? Ticks(JsonElement root) =>
-        root.TryGetProperty("start_ticks", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var ticks) ? ticks : null;
+    private static long? Number(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var ticks) ? ticks : null;
 
     private static string Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
 
-    /// <summary>The pid runs AND the kernel's start time of that pid is the one the note recorded (a reused pid has another). A note with no start time, or a platform that cannot read one, is never believed.</summary>
-    private static bool IsLiveAndStartedThen(int pid, long? recorded) =>
-        recorded is not null && WorkerLiveness.ProcessIsAlive(pid) && StartTicksOf(pid) == recorded;
+    private static bool IsLiveAndStartedThen(Raw note, HolderRoad road) =>
+        road != HolderRoad.None && WorkerLiveness.ProcessIsAlive(note.Pid) && Believe(note, alive: true, StartTicksOf(note.Pid), StartUnixOf(note.Pid), road);
+
+    /// <summary>Whether the note names the process that is there now, pure over what was read: <see cref="HolderRoad.ProcTicks"/> — the kernel's start tick equals the one recorded; <see cref="HolderRoad.ProcessStartTime"/> — the start second the process reports now is within
+    /// <see cref="StartTolerance"/> of the one recorded (two readings of one pid differ by milliseconds, so whole seconds with a tolerance; a reused pid started within the tolerance of the old one is not told apart — the note is a hint, D10); <see cref="HolderRoad.None"/> (Windows) — never.
+    /// A note without the fact the road needs is never believed.</summary>
+    internal static bool Believe(Raw note, bool alive, long? liveTicks, long? liveStart, HolderRoad road) =>
+        alive && road switch
+        {
+            HolderRoad.ProcTicks => note.StartTicks is { } recorded && liveTicks == recorded,
+            HolderRoad.ProcessStartTime => note.StartUnix is { } recorded && liveStart is { } now && Math.Abs(now - recorded) <= StartTolerance,
+            _ => false,
+        };
+
+    /// <summary>How far the start second a process reports may be from the one its note recorded, in seconds.</summary>
+    private const int StartTolerance = 2;
 
     private static string Format(DateTimeOffset instant) => instant.ToUniversalTime().ToString(Utc, CultureInfo.InvariantCulture);
 }

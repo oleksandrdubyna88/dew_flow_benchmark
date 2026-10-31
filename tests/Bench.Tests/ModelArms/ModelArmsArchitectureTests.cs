@@ -1,6 +1,8 @@
 using System.Reflection;
 using FluentAssertions;
+using ModelArms.Core.Checks;
 using ModelArms.Core.Experiment;
+using ModelArms.Core.Isolation;
 using ModelArms.Core.Launch;
 using ModelArms.Core.Steps;
 using Xunit;
@@ -68,7 +70,23 @@ public sealed class ModelArmsArchitectureTests
         // E2.S8
         typeof(GateLockCeiling),
 
-        // E3
+        // E3.S0
+        typeof(PlatformRoads),
+
+        // E3.S1
+        typeof(TestLogSummary), typeof(TsTestLog), typeof(CtrfScenarios), typeof(DiffStats), typeof(ObjectiveReport),
+
+        // E3.S2
+        typeof(TargetEnvironment), typeof(TargetArgv), typeof(TargetWalls), typeof(GitModules),
+
+        // E3.S3
+        typeof(RunArms),
+
+        // E3.S4
+        typeof(StepStatuses), typeof(LockSnapshots), typeof(IsolationLine),
+
+        // E3.S5
+        typeof(StageRecord), typeof(DeadlineSteps),
 
         // E4
 
@@ -134,13 +152,20 @@ public sealed class ModelArmsArchitectureTests
     /// <c>..</c> as text, so a second site that read links itself would be a second, wrong, answer. The scan reads whole files, across lines.
     /// <para>
     /// What this does NOT prove: that no other API reads a link (<c>Directory.ResolveLinkTarget</c> is matched; a P/Invoke of <c>readlink</c> is not).
+    /// </para>
+    /// <para>
+    /// <c>BaseCopy.cs</c> (E3.S3) is the second sanctioned site, for a different question: it reads a link's TEXT (<c>LinkTarget</c>) to make the same link in an arm's clone, and resolves nothing — so it may name <c>.LinkTarget</c> and may not name <c>ResolveLinkTarget</c>. That it never follows is
+    /// <c>BaseCopyTests.Links_are_copied_as_links_and_never_followed</c>'s, with outside sentinels.
     /// </para></summary>
     [Fact]
     public void The_module_reads_links_only_through_RootFacts_RealPathOf()
     {
         var sites = FilesReadingLinks(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
 
-        sites.Should().BeSubsetOf(["RootFacts.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect");
+        sites.Should().BeSubsetOf(["RootFacts.cs", "BaseCopy.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect — except where a link is COPIED as the text it holds (BaseCopy)");
+        sites.Should().Contain("BaseCopy.cs", "the scan must still FIND the second sanctioned site — a scan that matches nothing passes forever");
+        var copy = Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, "tools", "model-arms"), "BaseCopy.cs", SearchOption.AllDirectories).ToList();
+        File.ReadAllText(copy.Single()).Should().NotContain("ResolveLinkTarget", "BaseCopy copies the text a link holds and never resolves where it leads");
     }
 
     [Fact]
@@ -207,9 +232,31 @@ public sealed class ModelArmsArchitectureTests
 
         arm.Should().ContainSingle("a scan that cannot see the file passes forever");
         var text = File.ReadAllText(arm[0]);
-        text.Should().Contain("ProcessRunner.RunAsync(git,", "the launch goes by the real path run-arm resolved");
+        text.Should().Contain("ProcessRunner.RunAsync(_git,", "the launch goes by the real path run-arm resolved (the field the constructor keeps it in)");
         text.Should().Contain("environment", "and under the environment it was given, GIT_* already taken out by the runner");
         LaunchByName.IsMatch(text).Should().BeFalse();
+    }
+
+    /// <summary><c>KernelFacts.ReadSmall</c> opens with Linux x86-64's flag values and no longer refuses another platform or architecture (on arm64 <c>0x20000</c> is <c>O_LARGEFILE</c>, so a direct caller would FOLLOW a link): the only caller is <c>BoundedFile</c>, and only on
+    /// <c>BoundedRoad.Kernel</c>, which <c>PlatformRoads</c> grants to Linux x86-64 with a working <c>statx</c> alone. A second caller would walk past the road.
+    /// <para>
+    /// What this does NOT prove: that <c>BoundedFile</c> asks only on the kernel road (its own tests do); a call spelled differently from <c>ReadSmall(</c>.
+    /// </para></summary>
+    [Fact]
+    public void ReadSmall_is_asked_by_BoundedFile_alone_and_only_on_the_kernel_road()
+    {
+        var adapters = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms");
+        var callers = Directory.EnumerateFiles(adapters, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(path), @"\bReadSmall\s*\("))
+            .Select(Path.GetFileName)
+            .Cast<string>()
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        callers.Should().Contain("BoundedFile.cs", "the scan must still find the one sanctioned caller — a scan that matches nothing passes forever");
+        callers.Should().BeSubsetOf(["BoundedFile.cs", "KernelFacts.cs"], "no other adapter may call the kernel-road reader: it is the road's, not a utility");
+        File.ReadAllText(Path.Combine(adapters, "Adapters", "BoundedFile.cs")).Should().Contain("road == BoundedRoad.Kernel ?", "the call sits behind the kernel road");
     }
 
     private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>

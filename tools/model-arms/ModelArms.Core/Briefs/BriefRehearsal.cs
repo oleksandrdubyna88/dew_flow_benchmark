@@ -86,7 +86,7 @@ public static class BriefRehearsal
     /// <summary>The arms the runs name, then <c>&lt;scheme&gt;1</c> for each scheme that no run names an arm of.</summary>
     private static IReadOnlyList<string> ArmsOf(Experiment.Experiment experiment)
     {
-        var named = experiment.Runs.SelectMany(run => run.Rounds).SelectMany(round => round).Distinct(StringComparer.Ordinal).ToList();
+        var named = RunArms.Of(experiment.Runs).ToList();
         return [.. named, .. experiment.Schemes.Where(scheme => !named.Exists(arm => SchemeOf(arm) == scheme.Name)).Select(scheme => scheme.Name + "1")];
     }
 

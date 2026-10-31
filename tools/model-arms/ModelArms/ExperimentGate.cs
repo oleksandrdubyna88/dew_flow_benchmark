@@ -22,7 +22,7 @@ namespace ModelArms;
 /// inode under the name: 101 of 1500 passed with both stats equal before the ctime. It does not close everything: inode numbers can be reused on some
 /// file systems, and a ctime narrows that but does not close it; a swap AFTER the second <c>stat</c> is not seen; and nothing above the root is
 /// judged, so whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can still swap the root or an ancestor and change what is
-/// read. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here (its facts travel on as <see cref="ExperimentInput.JudgedScenarios"/>) and read by the verb, which must
+/// read. <b>On the portable road</b> (macOS, FreeBSD, a Linux without <c>statx</c>; E3.S0) the second look compares the kind, mode, length and write time — there is no inode — and the road's one printed line says so. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here (its facts travel on as <see cref="ExperimentInput.JudgedScenarios"/>) and read by the verb, which must
 /// look at it again as this does — <c>validate</c> does, through <see cref="StillTheSame"/>.
 /// </para></summary>
 public static class ExperimentGate
@@ -48,20 +48,13 @@ public static class ExperimentGate
     private static Task<Passage<ExperimentInput>> Admit(VerbInput input, GateSeams seams) =>
         Task.FromResult(NamedRoot(input))
             .Then(root => Present(input, root))
+            .Then(root => Said(input, root, seams))
             .Then(root => TrustedRoot(input, root, seams))
             .ThenAsync(judged => ReadExperiment(input, judged, seams))
             .Then(admitted => Needed(admitted))
             .Then(admitted => TrustedScenarios(admitted, seams));
 
-    private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop)
-    {
-        foreach (var line in stop.Lines)
-        {
-            input.Error.WriteLine(line);
-        }
-
-        return Task.FromResult(stop.ExitCode);
-    }
+    private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop) => Task.FromResult(stop.Print(input.Error));
 
     /// <summary>Step 1: the root from <c>--experiment</c>, else from <c>MODEL_ARMS_EXPERIMENT</c>, made absolute and normalised.</summary>
     private static Passage<string> NamedRoot(VerbInput input)
@@ -80,6 +73,18 @@ public static class ExperimentGate
     private static Passage<string> Present(VerbInput input, string root) =>
         Unmet(input, RootRequirements.ToRead, root, root);
 
+    /// <summary>Between steps 2 and 3: the road's one line — what this host did NOT verify (E3.S0) — printed ONCE, before any refusal it qualifies, when there is one. Nothing else prints it: not the judgement (it runs for the root and again for
+    /// <c>scenarios.json</c>), not an adapter. Windows' own <i>not performed</i> lines stay where they are.</summary>
+    private static Passage<string> Said(VerbInput input, string root, GateSeams seams)
+    {
+        if (seams.Road.Line is { Length: > 0 } line)
+        {
+            input.Error.WriteLine(line);
+        }
+
+        return new Passage<string>.Through(root);
+    }
+
     /// <summary>Step 3: the root and <c>experiment.json</c> are the operator's own and closed to group and others.</summary>
     private static Passage<Judged> TrustedRoot(VerbInput input, string root, GateSeams seams)
     {
@@ -91,7 +96,8 @@ public static class ExperimentGate
     /// <summary>Step 4: <c>experiment.json</c>, read from the path the trust check judged, looked at again after the read, then through every refusal of D4.</summary>
     private static async Task<Passage<ExperimentInput>> ReadExperiment(VerbInput input, Judged judged, GateSeams seams)
     {
-        var text = await TextOf(judged.Experiment.Path, input.Stopping);
+        input.Stopping.ThrowIfCancellationRequested();
+        var text = TextOf(judged.Experiment.Path, seams.Road.Bounded);
         await seams.AfterRead(judged.Experiment.Path);
         var same = StillTheSame(input, judged.Experiment, seams);
         return text.Match(
@@ -146,23 +152,33 @@ public static class ExperimentGate
     internal static string Home(IReadOnlyDictionary<string, string> environment) =>
         environment.GetValueOrDefault("HOME", string.Empty) is { Length: > 0 } home ? home : environment.GetValueOrDefault("USERPROFILE", string.Empty);
 
-    /// <summary>The file's text, or why the host could not give it. A stop the operator asked for cancels the read.</summary>
-    private static async Task<Outcome<string>> TextOf(string path, CancellationToken ct)
+    /// <summary>The most a root file the harness reads (<c>experiment.json</c>, <c>scenarios.json</c>) may hold: the files are the operator's, hand-written, and far below it; what is bigger is never read whole.</summary>
+    internal const int RootFileLimitBytes = 1024 * 1024;
+
+    /// <summary>The text of a root's own file through <see cref="BoundedFile"/> on <paramref name="road"/> (C16, E3 §3): under the lock an arm can still create a file by name in the root, and on the portable road a FIFO passes "a regular file" because the runtime cannot tell, so
+    /// the read itself must not wait for a writer. A refusal is the words of why — the same exit the unreadable file always had (3, the host could not give it).</summary>
+    internal static Outcome<string> TextOf(string path, BoundedRoad road) =>
+        BoundedFile.Read(path, RootFileLimitBytes, road) switch
+        {
+            BoundedRead.Bytes bytes => Outcome<string>.Success(Decoded(bytes.Value)),
+            BoundedRead.Refused refused => Outcome<string>.Failure($"{path} cannot be read: {WithoutPath(refused.Reason, path)}"),
+            _ => Outcome<string>.Failure($"{path} cannot be read: it is no longer there"),
+        };
+
+    /// <summary>Text as <c>File.ReadAllText</c> reads it: UTF-8 unless a byte order mark says otherwise, the mark itself not part of the text.</summary>
+    private static string Decoded(byte[] bytes)
     {
-        try
-        {
-            return Outcome<string>.Success(await File.ReadAllTextAsync(path, ct));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Outcome<string>.Failure($"{path} cannot be read: {ex.Message}");
-        }
+        using var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
+
+    private static string WithoutPath(string reason, string path) =>
+        reason.StartsWith(path, StringComparison.Ordinal) ? reason[path.Length..].TrimStart(':', ' ') : reason;
 
     /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Shared with the verbs that read a file the gate only judged. Off POSIX nothing was judged, so nothing is compared.</summary>
     internal static Passage<FileFacts> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
     {
-        if (OperatingSystem.IsWindows())
+        if (seams.Road.Trust == TrustRoad.NotPerformed)
         {
             return new Passage<FileFacts>.Through(judged);
         }
@@ -187,15 +203,15 @@ public static class ExperimentGate
                 $"model-arms {input.Verb}: {System.IO.Path.GetFileName(judged.Path)} changed between its trust check and its read ({string.Join(", ", changes)}) — refused (D17)");
     }
 
-    /// <summary>D17 a over <paramref name="files"/>: off POSIX the printed line says the check was not performed and the walk goes on; on POSIX the
-    /// facts are read (a kernel read that fails stops with exit 3), a link or a file of the wrong kind is refused, and the owner and mode
-    /// are judged (exit 4, every problem printed). The answer is the facts that were read, in the order given.</summary>
+    /// <summary>D17 a over <paramref name="files"/>: on a <see cref="TrustRoad.NotPerformed"/> road (Windows) the printed line says the check was not performed and the walk goes on; on the others the
+    /// facts are read through the seam (a read that fails stops with exit 3), a link or a file of the wrong kind is refused, and the mode — and, on the kernel road, the owner — is judged (exit 4, every problem
+    /// printed). The answer is the facts that were read, in the order given.</summary>
     private static Passage<IReadOnlyList<FileFacts>> Judge(VerbInput input, string root, IReadOnlyList<Wanted> files, GateSeams seams)
     {
-        if (OperatingSystem.IsWindows())
+        if (seams.Road.Trust == TrustRoad.NotPerformed)
         {
-            input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(false, 0, [], root)).Line);
-            return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, -1, UnixFileMode.None))]);
+            input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(TrustRoad.NotPerformed, 0, [], root)).Line);
+            return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, null, UnixFileMode.None))]);
         }
 
         return JudgeFacts(input, root, files, RootFacts.CurrentUid(), seams);
@@ -207,7 +223,7 @@ public static class ExperimentGate
 
         var unread = reads.OfType<FactsRead.Unread>().Select(read => read.Reason).ToList();
         var facts = reads.OfType<FactsRead.Read>().Select(read => read.Facts).ToList();
-        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(true, uid, facts, root))];
+        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(seams.Road.Trust, uid, facts, root))];
         if (unread.Count > 0)
         {
             return Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, [.. unread.Concat(refusals).Select(reason => $"model-arms {input.Verb}: {reason}")]);

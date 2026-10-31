@@ -233,10 +233,7 @@ internal sealed class StepBench : IDisposable
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public string ShimScript(string path, string body)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, "#!/bin/sh\n" + body);
-        File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("755", 8));
-        return path;
+        return ShimFiles.Write(path, "#!/bin/sh\n" + body);
     }
 
     public string Combine(params string[] parts) => _temp.Combine(parts);

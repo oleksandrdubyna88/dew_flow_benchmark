@@ -36,7 +36,7 @@ public static class RootRequirements
             Init => [new(string.Empty, false, Init)],
             "validate" => Inputs(scenariosFile),
             PrepBase => [.. Inputs(scenariosFile), new(baselineFile, false, PrepBase)],
-            Make or "chain" => Prepared(scenariosFile, baselineFile),
+            Make or "chain" => [.. Prepared(scenariosFile, baselineFile), new(Name(Layout.Base), true, PrepBase)],
             "run-arm" or "run-all" or "checks" => [.. Prepared(scenariosFile, baselineFile), .. Made(arms)],
             "status" or "lock" or "unlock" or "gate-lock" => ToRead,
             _ => [],

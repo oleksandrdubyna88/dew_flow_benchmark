@@ -22,9 +22,14 @@ public abstract record FactsRead
     /// <summary>The same answer when the file is of the <paramref name="expected"/> kind; otherwise the file is refused naming what it is. A FIFO read as a
     /// file blocks until someone writes to it, and a folder read as a file is an access error: neither is a root or a file the harness may take.</summary>
     public FactsRead MustBe(FileKind expected) =>
-        this is Read { Facts: { } facts } && facts.Identity.Kind != expected
+        this is Read { Facts: { } facts } && !Satisfies(facts, expected)
             ? new Refused($"{facts.Path} is {Describe(facts.Identity.Kind)}, not {Describe(expected)} — refused (D17)")
             : this;
+
+    /// <summary>The kind matches — or the runtime read the facts and cannot tell a regular file from a FIFO or a device (<see cref="FileKind.Unknown"/>, <see cref="FactsSource.Portable"/>): then "a regular file" is satisfied and the road's printed line says the check was not made. A
+    /// directory IS told by the runtime, so an untold kind never satisfies it.</summary>
+    private static bool Satisfies(FileFacts facts, FileKind expected) =>
+        facts.Identity.Kind == expected || (facts is { Source: FactsSource.Portable, Identity.Kind: FileKind.Unknown } && expected == FileKind.Regular);
 
     private static string Describe(FileKind kind) =>
         kind switch
@@ -36,7 +41,7 @@ public abstract record FactsRead
             FileKind.Socket => "a socket",
             FileKind.CharacterDevice => "a character device",
             FileKind.BlockDevice => "a block device",
-            _ => "a file of a type stat did not name",
+            _ => "a file whose type was not told",
         };
 
     /// <summary>The older two-state shape, for the callers that do not care which way it failed.</summary>

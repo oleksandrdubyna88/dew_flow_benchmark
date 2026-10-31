@@ -12,8 +12,7 @@ namespace Bench.Tests.ModelArms;
 /// to keep arms' files from running). The tools are used here only as an independent witness: they are not the subject.
 /// <para>
 /// What this does NOT prove: any file system but the ones this suite ran on (ext4 and the scratch tmpfs here; a file system that omits a basic field is refused, not
-/// observed), a libc older than glibc 2.28 or musl 1.1.24 (no <c>statx</c>: refused, not observed), macOS or FreeBSD (refused as unprobed; the platform test skips
-/// here), or Windows (the trust check is declared not performed).
+/// observed), a libc older than glibc 2.28 or musl 1.1.24 (no <c>statx</c>: refused, not observed), macOS or FreeBSD (they take the portable road, E3.S0, and never this reader), or Windows (the trust check is declared not performed).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class KernelFactsTests
@@ -138,5 +137,45 @@ public sealed class KernelFactsTests
 
         facts.Identity.Inode.Should().Be(ulong.MaxValue);
         facts.Identity.Device.Should().Be(ulong.MaxValue);
+    }
+
+    [Fact]
+    public void Mkdir_refuses_a_taken_name_by_its_presence_not_by_an_errno_and_names_the_words_of_any_other_failure()
+    {
+        Linux();
+        using var temp = new TempFolder();
+        var folder = temp.Folder("folder");
+        var file = temp.File("kept", "file");
+        var dangling = temp.Combine("dangling");
+        File.CreateSymbolicLink(dangling, temp.Combine("nowhere"));
+
+        KernelFacts.MakeFolder(folder).Should().BeOfType<FolderMade.AlreadyThere>();
+        KernelFacts.MakeFolder(file).Should().BeOfType<FolderMade.AlreadyThere>();
+        KernelFacts.MakeFolder(dangling).Should().BeOfType<FolderMade.AlreadyThere>("a dangling link is an entry: the name is taken");
+        File.ReadAllText(file).Should().Be("kept", "a taken name is left exactly as it was");
+        new FileInfo(dangling).LinkTarget.Should().Be(temp.Combine("nowhere"));
+        KernelFacts.MakeFolder(Path.Combine(file, "child")).Should().BeOfType<FolderMade.Failed>().Which.Reason.Should().Contain("Not a directory");
+        KernelFacts.MakeFolder(Path.Combine(temp.Path, "absent", "child")).Should().BeOfType<FolderMade.Failed>().Which.Reason.Should().Contain("No such file");
+
+        var source = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms", "Adapters", "KernelFacts.cs"));
+        source.Should().Contain("Classified(", "the scan must still find the classification it forbids the errno read in favour of");
+        source.Should().NotContain("AlreadyExists").And.NotContain("== 17", "mkdir's failure is classified by the entry's presence, not by EEXIST's number");
+    }
+
+    [Fact]
+    public void Present_on_the_runtimes_road_says_what_the_kernels_does_for_a_dangling_link_a_file_and_nothing()
+    {
+        Linux();
+        using var temp = new TempFolder();
+        var file = temp.File("{}", "f.json");
+        var dangling = temp.Combine("dangling");
+        File.CreateSymbolicLink(dangling, temp.Combine("nowhere"));
+
+        foreach (var statx in new[] { true, false })
+        {
+            KernelFacts.Present(dangling, statx).Ok().Should().BeTrue($"statx {statx}: a dangling link is a directory entry");
+            KernelFacts.Present(file, statx).Ok().Should().BeTrue($"statx {statx}");
+            KernelFacts.Present(temp.Combine("absent"), statx).Ok().Should().BeFalse($"statx {statx}");
+        }
     }
 }

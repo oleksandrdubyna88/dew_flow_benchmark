@@ -26,7 +26,7 @@ internal static class HostFactsReader
         var experiment = input.Experiment;
         var environment = input.Verb.Environment;
         var host = HostKinds.From(OperatingSystem.IsWindows(), environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
-        var entries = PathEntries(environment);
+        var entries = ExecutableResolution.PathEntries(environment);
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
         var executables = Executables(experiment, host, entries, roots);
         var refusals = PathRefusals(entries, roots);
@@ -69,10 +69,6 @@ internal static class HostFactsReader
             needed,
             ExecutableResolution.Resolve(needed.Name, entries, roots, RootFacts.Host, OperatingSystem.IsWindows())))];
 
-    /// <summary>The PATH of the environment map split into its entries, an empty one included; none when the map has no PATH at all.</summary>
-    private static IReadOnlyList<string> PathEntries(IReadOnlyDictionary<string, string> environment) =>
-        environment.TryGetValue("PATH", out var path) ? [.. path.Split(Path.PathSeparator)] : [];
-
     private static IReadOnlyList<string> PathRefusals(IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
         [.. entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).Where(refusal => refusal.Length > 0).Distinct(StringComparer.Ordinal)];
 
@@ -110,21 +106,10 @@ internal static class HostFactsReader
 
     private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ReadScenariosAsync(ExperimentInput input, FileFacts judged, GateSeams seams)
     {
-        var text = await TextOf(judged.Path, input.Verb.Stopping);
+        input.Verb.Stopping.ThrowIfCancellationRequested();
+        var text = ExperimentGate.TextOf(judged.Path, seams.Road.Bounded);
         await seams.AfterRead(judged.Path);
         var same = ExperimentGate.StillTheSame(input.Verb, judged, seams);
         return same.Map(_ => text.Match(ScenariosFile.Read, Outcome<IReadOnlyList<Scenario>>.Failure));
-    }
-
-    private static async Task<Outcome<string>> TextOf(string path, CancellationToken ct)
-    {
-        try
-        {
-            return Outcome<string>.Success(await File.ReadAllTextAsync(path, ct));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Outcome<string>.Failure($"{path} cannot be read: {ex.Message}");
-        }
     }
 }

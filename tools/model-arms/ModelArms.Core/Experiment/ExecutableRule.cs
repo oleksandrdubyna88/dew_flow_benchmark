@@ -54,6 +54,10 @@ public static class ExecutableRule
     /// Every sentence that echoes input the operator typed goes through this.</summary>
     public static string Printable(string text) => string.Concat(text.Select(Escaped));
 
+    /// <summary>At most <paramref name="limit"/> characters of <paramref name="text"/>, never cut inside a surrogate pair. The ONE cut of a model's or a file's text before it is printed: a caller that must not show a token scrubs FIRST (<c>ArmMap.Scrub</c> replaces only a whole token, so
+    /// a cut inside one leaves a part of it) and cuts the scrubbed text.</summary>
+    public static string Cut(string text, int limit) => text.Length <= limit ? text : text[..(char.IsHighSurrogate(text[limit - 1]) ? limit - 1 : limit)];
+
     /// <summary>A NUL is <c>\0</c>; any other <see cref="IsInvisible"/> character (a newline, a tab, U+200B, U+2028, U+00A0) is <c>\uXXXX</c>, so a sentence stays one line and shows what it refused.</summary>
     private static string Escaped(char c) =>
         c == '\0' ? "\\0" : IsInvisible(c) ? $"\\u{(int)c:X4}" : c.ToString();

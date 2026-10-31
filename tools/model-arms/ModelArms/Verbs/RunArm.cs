@@ -39,15 +39,7 @@ public static class RunArmVerb
         return await admitted.Match(plan => WalkAsync(plan, seams), stop => Task.FromResult(Refused(input, stop)));
     }
 
-    private static int Refused(ExperimentInput input, Passage<ArmPlan>.Stopped stop)
-    {
-        foreach (var line in stop.Lines)
-        {
-            input.Verb.Error.WriteLine(line);
-        }
-
-        return stop.ExitCode;
-    }
+    private static int Refused(ExperimentInput input, Passage<ArmPlan>.Stopped stop) => stop.Print(input.Verb.Error);
 
     private static Task<int> WalkAsync(ArmPlan plan, RunArmSeams seams) =>
         RunArmAdmission.LockFor(seams).Match(

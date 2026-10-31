@@ -372,15 +372,4 @@ public sealed class RootFactsTests
 
         outcome.Reason().Should().Contain("absent.json").And.Contain("No such file", "the reason carries the operating system's own words");
     }
-
-    [Fact]
-    public void On_a_platform_without_a_probed_reader_the_facts_are_unread_naming_it()
-    {
-        Assert.SkipUnless(OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD(), "the refusal is for macOS and FreeBSD; this host reads the kernel through statx");
-        using var temp = new TempFolder();
-
-        var read = RootFacts.ReadFacts(temp.Path);
-
-        read.Should().BeOfType<FactsRead.Unread>().Which.Reason.Should().Contain("no probed kernel reader");
-    }
 }
