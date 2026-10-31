@@ -70,6 +70,10 @@ public sealed record RootPaths(string Root)
 
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
 
+    /// <summary>The stderr of the <paramref name="n"/>th launch of the keep-awake child (E5.S2) of the chain that started at <paramref name="stamp"/> (UTC, like <c>20261031T101500Z</c>): one file per launch because the session creates it new (<c>CreateNew</c>).</summary>
+    public string KeepAwakeErr(string stamp, int n) =>
+        Path.Combine(Root, "keep-awake." + ArmPaths.Segment(stamp, "stamp") + "." + n.ToString(CultureInfo.InvariantCulture) + ".err");
+
     /// <summary>What <c>prep-base</c> writes at the root (<c>prep-base.sh:5</c>, <c>:14-17</c>): a line per stage, and each tool's log. An earlier attempt's copies are moved aside into <see cref="PrepBasePrevious"/> before the next attempt creates its own.</summary>
     public string PrepBaseLog => Path.Combine(Root, "prep-base.log");
 

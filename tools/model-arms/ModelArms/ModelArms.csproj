@@ -28,6 +28,8 @@
          story edits this file to add a template or an example. -->
     <Content Include="..\briefs\*.template.md" Link="briefs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\examples\*.json" Link="examples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The Windows keep-awake scripts (E5.S2, D12): byte for byte the harness's three, run by pwsh.exe from WSL. -->
+    <Content Include="windows\*.ps1" Link="windows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

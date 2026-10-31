@@ -300,4 +300,31 @@ public sealed class IsolationPlanTests
     {
         IsolationPlans.InBound(path, RootPath, Home, ["/x/y"]).Should().Be(inside);
     }
+
+    [Theory]
+    [InlineData(AwakeChoice.Auto, HostKind.Windows, AwakeKind.Windows, "")]
+    [InlineData(AwakeChoice.Auto, HostKind.Wsl, AwakeKind.Wsl, "")]
+    [InlineData(AwakeChoice.Auto, HostKind.OtherPosix, AwakeKind.None, "")]
+    [InlineData(AwakeChoice.Windows, HostKind.Windows, AwakeKind.Windows, "")]
+    [InlineData(AwakeChoice.Wsl, HostKind.Wsl, AwakeKind.Wsl, "")]
+    [InlineData(AwakeChoice.None, HostKind.Windows, AwakeKind.None, "")]
+    [InlineData(AwakeChoice.None, HostKind.Wsl, AwakeKind.None, "")]
+    [InlineData(AwakeChoice.None, HostKind.OtherPosix, AwakeKind.None, "")]
+    [InlineData(AwakeChoice.Windows, HostKind.Wsl, AwakeKind.None, "awake \"windows\" needs a Windows host; this host is Wsl")]
+    [InlineData(AwakeChoice.Windows, HostKind.OtherPosix, AwakeKind.None, "awake \"windows\" needs a Windows host; this host is OtherPosix")]
+    [InlineData(AwakeChoice.Wsl, HostKind.Windows, AwakeKind.None, "awake \"wsl\" needs a Wsl host; this host is Windows")]
+    [InlineData(AwakeChoice.Wsl, HostKind.OtherPosix, AwakeKind.None, "awake \"wsl\" needs a Wsl host; this host is OtherPosix")]
+    public void HostAwakeSelection_picks_windows_wsl_or_none_from_the_facts(AwakeChoice choice, HostKind host, AwakeKind expected, string refusal)
+    {
+        var picked = HostAwakeSelection.For(choice, host);
+
+        if (refusal.Length == 0)
+        {
+            picked.Should().BeOfType<Outcome<AwakeKind>.Ok>($"{choice} on {host}").Which.Value.Should().Be(expected);
+        }
+        else
+        {
+            picked.Should().BeOfType<Outcome<AwakeKind>.Fail>($"{choice} on {host}").Which.Reason.Should().Be(refusal, "validate prints this very sentence (HostChecks.AwakeProblem)");
+        }
+    }
 }
