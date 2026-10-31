@@ -320,7 +320,7 @@ internal sealed class TaskPipeline
     private async Task<StepOutcome.Stopped?> RunTogetherAsync(int position, int index, IReadOnlyList<BatchPlace.Run> runs, CancellationToken stopping)
     {
         var outcomes = await Task.WhenAll(runs.Select(run => _runner.RunAsync(Coder(position, run.Id, run.Folder), stopping)));
-        var stops = runs.Zip(outcomes).SelectMany(pair => pair.Second is StepOutcome.Stopped stopped ? new[] { (pair.First.Id, Stopped: stopped) } : []).ToList();
+        List<(string Id, StepOutcome.Stopped Stopped)> stops = [.. runs.Zip(outcomes).Where(pair => pair.Second is StepOutcome.Stopped).Select(pair => (pair.First.Id, Stopped: (StepOutcome.Stopped)pair.Second))];
         return stops.Count == 0 ? null : Verdict(index, stops);
     }
 
@@ -339,7 +339,7 @@ internal sealed class TaskPipeline
     }
 
     /// <summary>4 outranks 3 outranks 5; a code none of them is outranks all three, and of several such codes the LOWER value wins — deterministic whatever order the tasks are listed in (a total function: the runner's codes are those three today, and a fourth must not turn a stopped batch into an exception).</summary>
-    internal static int MostSevere(IEnumerable<int> codes) => codes.OrderBy(Rank).ThenBy(code => code).First();
+    internal static int MostSevere(IEnumerable<int> codes) => codes.MinBy(code => (Rank(code), code));
 
     private static int Rank(int code) => Array.IndexOf(Severity, code);
 
