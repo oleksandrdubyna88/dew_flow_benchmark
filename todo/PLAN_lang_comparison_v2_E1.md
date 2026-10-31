@@ -10,7 +10,8 @@
 > (`model: fable`), the one mark the parent's ledger gives this epic (`Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2`); no further
 > mark is possible. Scope: the public task repository `dew_flow_ai_language_comparison` (created by the owner: MIT, one
 > LICENSE commit), the spike `spikes/lang-bench/` in this repository, and the private area `~/rsd/lang-v2/` outside every git
-> tree. Open points: §9 — one of them (the conventions submodule under D42) may be a change; none is decided here.
+> tree. Open points: §9 — none is a change; OP-A (the conventions submodule under D42) was decided by the team lead as option
+(c), built in E1.S7. Revised 2026-10-31 for the six findings of E1's plan round (PROCEED).
 
 ## 1. The epic, restated (parent § *Epics*, E1)
 
@@ -99,8 +100,13 @@ tasks' sources (the rest of Q1 — the push of a known-task text waits for it, b
 **E1.S1 starts from the remote.** The local skeleton and the drafts reach GitHub only through the pre-push check, one branch
 per push:
 
-1. `git -C <task repo> remote add origin https://github.com/oleksandrdubyna88/dew_flow_ai_language_comparison.git` (HTTPS:
-   SSH to GitHub times out from this host) and `git fetch origin`.
+1. **The remote, idempotently.** `URL=https://github.com/oleksandrdubyna88/dew_flow_ai_language_comparison.git` (HTTPS: SSH to
+   GitHub times out from this host). `git -C <task repo> remote get-url origin`: no `origin` → `git remote add origin "$URL"`;
+   an `origin` with another URL → `git remote set-url origin "$URL"`, the old URL printed; the same URL → nothing. Then `git
+   fetch origin` and check that `origin/main` exists and holds `LICENSE`. Running the step twice changes nothing. **Recovery:**
+   a fetch that fails (network, auth) leaves the local branches untouched — fix the cause and re-run step 1; a wrong remote
+   added by hand is corrected by the same `set-url`; nothing is pushed before step 3 passes, so no step before it needs undoing
+   on GitHub. The bench's `push-check.mjs --setup-remote` does this step and prints what it did.
 2. **Join the two histories without rewriting either:** on a branch `chore/join-remote` from the local `main`,
    `git merge --allow-unrelated-histories origin/main` (it brings `LICENSE`; the local files and the remote's do not overlap,
    so no conflict is expected — if one appears it is resolved by hand and named). Force-push is never used.
@@ -159,7 +165,7 @@ that cannot publish a leak — so every later story fills a skeleton rather than
 |---|---|---|
 | task | `README.md` | rewritten: what this is; the task list in our own titles; the §4.6 Node stack table and the Fastify reasoning; the closing `## Attribution` section with every credit, every link and the pointer to the bench plan — the only place any of them appears |
 | task | `LICENSE` | from the remote's `ed68ce1` (MIT), by the history join of §4 |
-| task | `AGENTS.md`, `CLAUDE.md`, `.agents/PROJECT.md`, `.gitmodules`, `.agents/conventions` | the family's adapters; the conventions submodule at the current `release` sha (provisional; E0.S3 moves it to the parity release on a snapshot branch; how a process box gets it under D42 is §9 OP-A) |
+| task | `AGENTS.md`, `CLAUDE.md`, `.agents/PROJECT.md`, `.gitmodules`, `.agents/conventions` | the family's adapters; the conventions submodule at the current `release` sha (provisional; E0.S3 moves it to the parity release on a snapshot branch; a process clone gets it from a local snapshot, E1.S7, OP-A (c)) |
 | task | `todo/README.md`, `research/architecture.md`, `research/module_tests.md` | the index (FORMAT and the specs, no plan file); stubs as v1's templates; `module_tests.md` names CI's visible-sample job as the repository's scenario harness |
 | task | `runner/.gitkeep`, `tasks/.gitkeep`, `csharp/.gitkeep`, `node/.gitkeep` | the folders of §5 |
 | bench | `spikes/lang-bench/lib/run-base-tree.mjs` | new — `generateRunBaseTree({ repo, ref, out })` (the tree at `ref` minus the README's `## Attribution` section, minus any credit file) and `needleScan({ root, needles })`; S7 commits that tree as the orphan run base |
@@ -178,6 +184,9 @@ that cannot publish a leak — so every later story fills a skeleton rather than
 - *Given* a branch whose new commits hold a known-task spec and no recorded credit terms, *then* `push-check` exits 1 with
   `known-task text without its credit terms`; *given* a leak token or an aid shingle in an old commit of the branch, *then* it
   fails naming the commit and path, never the text.
+- *Given* no `origin`, an `origin` with another URL, or the right `origin` already, *when* `push-check.mjs --setup-remote`
+  runs, *then* it adds, re-points (printing the old URL) or leaves the remote, and a second run changes nothing; *given* a
+  failing fetch, *then* exit 3 with the cause and no local branch changed.
 - *Given* the local `main` and the remote's unrelated `main`, *when* §4 step 2 runs, *then* `chore/join-remote` holds both
   histories and `LICENSE`, and `git push` of it needs no force.
 
@@ -231,7 +240,7 @@ row while S9 is drafted; the runner follows in the same branch and S9 is gated a
 | # | v2 decision | Runner behaviour |
 |---|---|---|
 | V1 | the version: `scenario 2` / `transcript 2` | any other version is a format error naming the file (exit 4); v1 files are re-conformed, never run |
-| V2 | **exact-decimal JSON numbers**: an integer and a decimal compared by exact value (`int`/`Decimal`, never `float`); `-0` equals `0`; `2` equals `2.0` | `json.loads(…, parse_float=Decimal, parse_int=Decimal)`, constants refused, duplicate member names refused |
+| V2 | **exact-decimal JSON numbers**: an integer and a decimal compared by exact value (`int`/`Decimal`, never `float`); `-0` equals `0`; `2` equals `2.0` | `json.loads(text, parse_float=Decimal, parse_int=Decimal, parse_constant=<refuse>, object_pairs_hook=<refuse duplicate names>)` — `NaN`, `Infinity` and `-Infinity` refused, a repeated member name refused; numbers compared by exact numeric value (`Decimal` equality, or after `Decimal.normalize()`), **never by string or by `as_tuple()`** |
 | V3 | **default request headers**: `Host: 127.0.0.1:<PORT>` and, with a body, `Content-Length: <n>`, nothing else; a `header` line whose name equals a default (ASCII case-insensitive) replaces it in place | the serialiser of v1 §4.3 with the replacement rule |
 | V4 | **`connect` retries** a refused connection every 50 ms until its deadline; still refused → `refused <conn>`, the scenario ends | as stated; the readiness probe keeps v1's 50 ms retry within T |
 | V5 | **a closed HTTP connection**: a request that meets a connection the program closed before a single response byte arrived is rewritten once on a new connection within the same step deadline; a second close is `eof <conn> ""` | at most one reconnect per request |
@@ -272,7 +281,9 @@ a malformed sample, a version or T/G mismatch — file and line) · `5` the runn
   states (`noise …`, `timeout …`) at their entries.
 - *Given* the web toy example, *then* PASS; *given* a toy that lets two racing requests on one key make two orders, *then* the
   report of FORMAT §6.3.
-- *Given* two JSON integers that differ only beyond float precision, *then* FAIL; *given* `2.0` against `2`, *then* PASS (V2).
+- *Given* `9007199254740993` against `9007199254740992`, *then* FAIL; `2.0` against `2`, *then* PASS; `-0` against `0`, *then*
+  PASS; a body with a repeated member name, or with `NaN` or `Infinity`, *then* FAIL as `bad-json` naming the member or the
+  token (V2).
 - *Given* a server that closes keep-alive after each reply, *then* the second request on the connection is rewritten once and
   passes; closed twice, *then* `eof` (V5).
 - *Given* `check distinct r*` over three bound tokens of which two are equal, *then* `FAIL … — check: r0 and r2 are equal` (V6).
@@ -292,7 +303,10 @@ now the parent's text) run through it with the expected verdicts; the pinned ver
 shape measured by an AST test; no `float` reaches a comparison (an AST test); green with `BENCH_REQUIRE_SANDBOX=1`.
 
 **Test plan (red, green, red).** (1) `A_float_json_compare_would_equal_two_distinct_large_integers_and_that_is_the_point` — red
-with `json.loads` defaults, green with V2, red with `parse_int=Decimal` removed. (2)
+with `json.loads` defaults, green with V2, red with `parse_int=Decimal` removed; beside it
+`A_repeated_member_name_is_refused`, `Two_and_two_point_zero_are_equal`, `Minus_zero_equals_zero`,
+`NaN_and_Infinity_are_refused`, and `A_string_or_tuple_compare_would_call_2_and_2_point_0_different_and_that_is_the_point`
+(red with `str()` or `as_tuple()` equality, green with numeric equality). (2)
 `A_split_offset_counts_the_joined_bytes_not_the_first_string`. (3) `A_program_that_ignores_SIGTERM_is_killed_with_its_group`
 — red before the group kill (the stub's marker survives in `/proc/*/environ`), green, red with `killpg` replaced by `kill`.
 (4) `An_unread_flood_ends_the_scenario_instead_of_the_runner`. (5) `Every_runner_import_is_standard_library_or_a_sibling`
@@ -337,22 +351,38 @@ identity.mjs}`; `spikes/lang-bench/exec-probe.mjs` (the host probe, printed and 
 (`execLayer: { treeSha256, probedOn, host }`); `spikes/lang-bench/inputs/exec-probe-<date>.json`;
 `test/exec-layer-{netns,isolation,scope,env,exec,cleanup}.test.mjs`; `test/fixtures/exec-stubs/{csharp,node,python}/**`.
 
-**The shape** (the order of the launch is the probe's to settle and record, as D36 and D43 were):
+**The shape — the launch hierarchy validated on this host by the team lead, 2026-10-31, unprivileged** (`ping→PING` passed;
+the program's cgroup was `…/app.slice/run-p…scope`, its netns `net:[4026532221]`, the driver's cgroup `0::/non-systemd` in the
+same netns). Joining works because the holder's user namespace is owned by the same uid. The layer builds exactly this:
 
-- **Namespace holder** — `unshare -rn` started by the layer (owned name), `ip link set lo up` inside, no other interface; it
-  lives for one case and is the anchor both sides join.
-- **Driver** — the runner of S8a, started in the holder's network namespace (`nsenter --target <holder> --user --net
-  --preserve-credentials`), **outside** the program's scope.
-- **Program** — `systemd-run --user --scope --unit=<owned name> -p MemoryMax=<bytes> -p MemorySwapMax=0 -- <join the
-  holder's network namespace> -- bwrap <v2 box> -- bash run.sh`, handed to the runner as `--launch-prefix`, with
-  `--cgroup-of` naming the scope's cgroup directory. The box: v1's binds (`spikes/minigit-bench/lib/bwrap.mjs:10-19`) **without
-  `--unshare-net`** (the namespace is the holder's), with `--unshare-pid --die-with-parent --new-session`, the workspace copy
-  writable, the toolchains of S5 and the caches of S4 read-only, the operator's home, `/mnt` and `/run` hidden.
+1. **Holder** — `unshare -rn bash -c 'ip link set lo up; exec sleep <case wall + margin>'`, started by the layer (owned name in
+   tests); it owns the user and network namespace of one case, which hold `lo` and nothing else.
+2. **Program** — `systemd-run --user --scope --unit=<owned name> -p MemoryMax=<bytes> -p MemorySwapMax=0 nsenter -t <holder>
+   -U -n --preserve-credentials bwrap <v2 box> -- bash run.sh`, handed to the runner as `--launch-prefix` (everything before
+   `bash run.sh`), with `--cgroup-of` naming the scope's cgroup directory. **bwrap runs inside the `nsenter`**, with
+   `--unshare-pid --die-with-parent --new-session` and the binds below, **without `--unshare-net`** (the netns is the holder's).
+3. **Driver** — `nsenter -t <holder> -U -n --preserve-credentials python3 -I runner/run_samples.py …` (the runner of S8a),
+   **outside** the scope and in the same netns.
+
+**The box's binds — no home, nothing broad.** `--tmpfs /` is the base, never `--ro-bind / /`; then read-only only what a program
+needs: `/usr` (with the `/bin`, `/lib`, `/lib64`, `/sbin` links), the locale archive `/usr/lib/locale/locale-archive` (for
+`de_DE.UTF-8`), `/etc/ssl` and `/etc/ca-certificates` only if a stack's runtime reads them at start (the probe says which),
+`/etc/passwd`, `/etc/group`, `/etc/nsswitch.conf`, `/etc/localtime`; the S5 toolchain trees (`dotnet-sdk-10.0.403`,
+`node-v26.13.0-linux-x64`, `typescript-6.0.<p>`) and the S4 cache snapshots at their own full paths; the workspace copy
+writable; `--dev /dev`, `--proc /proc`, a fresh `--tmpfs /tmp`. **No bind of `$HOME` or of any parent of it** (the toolchains
+and caches under `~/rsd/lang-v2/` are bound by their full paths only, so nothing else of the home exists in the box), **no
+`/mnt`, no `/run`** (so no `/run/user/<uid>/bus`, no ssh or gpg agent, no `/run/WSL`), no `/var/tmp`; `WSL_INTEROP` absent from
+the environment and no `/mnt/*` on `PATH` — on this WSL host a box that only hides the home still reads `/mnt/c` and can start
+`cmd.exe` through WSL interop (verified 2026-10-29). The host's abstract unix sockets are out of reach because the netns is the
+holder's fresh one.
 - **Environment** — `env.mjs` builds D15's base (`DOTNET_gcServer=0`, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`,
   `NODE_OPTIONS` empty, `LANG` and `LC_ALL` = `de_DE.UTF-8`, no invariant switch) plus the documented per-stack variables,
   from one allow-list; `--clearenv` then exactly those keys.
-- **Cleanup** — after the case: read `memory.peak`, `memory.events` and `cgroup.procs`, then stop the scope (every descendant
-  ends with it), end the holder, confirm none of the three is left; on a timeout the same path, never a bare "stop waiting".
+- **Cleanup** — after the case, in this order: the driver collects the transcript and the exit status; the layer reads
+  `memory.peak`, `memory.events` and `cgroup.procs`; it stops the scope (`systemctl --user stop <unit>`; every descendant ends
+  with it); then it **kills the holder** (SIGTERM, SIGKILL after 2 s), which ends the case's user and network namespace once the
+  driver has left it; finally it confirms that no process of the case, no scope and no holder is left. A timeout or an exception
+  takes the same path, never a bare "stop waiting".
 - **Certification** — the layer refuses to start a data run when `memory.peak` is not readable (the named halt
   `memory-not-certifiable`, exit 3); a non-data run proceeds with `memory bound not certified` (D13, D36).
 
@@ -361,7 +391,9 @@ identity.mjs}`; `spikes/lang-bench/exec-probe.mjs` (the host probe, printed and 
 - *Given* a driver and a stub program started by the layer, *then* their `/proc/<pid>/ns/net` are equal and differ from the
   host's; `/proc/<pid>/cgroup` puts the program in its scope and the driver not; `lo` is the only interface and the driver
   reaches the program's port on 127.0.0.1 (T-L33) — the same test body for a C#, a TS and a Python stub, the same facts.
-- *Given* a sentinel file only the driver can see, *then* the program cannot read it; *given* a program that forks a child,
+- *Given* a sentinel file only the driver can see, *then* the program cannot read it; *given* a sentinel under `$HOME`, *then*
+  the program cannot read it; inside the box `/mnt/c` does not exist, `cmd.exe` fails to start and `systemd-run --user true`
+  fails (no user bus); *given* a program that forks a child,
   *when* the scope is stopped, *then* both end while the driver survives and collects `memory.peak`, `memory.events`, the exit
   status and the transcript; afterwards no process, scope or namespace of the case exists (T-L34).
 - *Given* a child that allocates past `MemoryMax` while its parent stays small, *then* `memory.events` shows it and the case is
@@ -376,7 +408,8 @@ identity.mjs}`; `spikes/lang-bench/exec-probe.mjs` (the host probe, printed and 
   scope and reported `stop: … killed`.
 
 **Acceptance (parent S8b).** T-L33, T-L34, T-L30, T-L31, T-L32 (scoring-box half) green on the series host with
-`BENCH_REQUIRE_SANDBOX=1` and nothing skipped; the probes identical for both stacks; the layer's identity in
+`BENCH_REQUIRE_SANDBOX=1` and nothing skipped; the program cannot read a sentinel under `$HOME` nor `/mnt/c`, cannot start
+`cmd.exe` and cannot reach the user bus; the probes identical for both stacks; the layer's identity in
 `inputs/specs.json` beside the runner's; `exec-probe.mjs` output recorded with its date and host; the pre-freeze gate of S2
 runs on this layer (D40 not weakened).
 
@@ -385,16 +418,21 @@ runs on this layer (D40 not weakened).
 `A_scope_around_the_driver_would_charge_its_memory_to_the_program_and_that_is_the_point` — red when the driver is launched
 inside the scope (T-L33's cgroup check fails), green, red. (3) `Stopping_the_scope_ends_a_forked_child_and_the_driver_survives`
 — red with a kill of the program's pid only (the child's marker survives), green, red. (4)
+`A_box_that_only_hides_the_home_would_still_show_mnt_c_and_that_is_the_point` — red with `--ro-bind / /` plus a tmpfs over
+`$HOME` (the `/mnt/c` probe succeeds), green with the `--tmpfs /` base and the explicit binds, red again with `--ro-bind / /`
+restored; beside it `The_program_cannot_read_a_sentinel_under_HOME`. (5)
 `The_box_environment_is_the_allow_list_and_nothing_else` beside `The_allow_list_still_carries_LANG` (the scan's companion).
 
 **Docs.** `research/module_lang_bench.md` (the layer, its shape, its probe, its identity, the invalidation rule of parent §6.1);
 `research/module_tests.md` (the layer's flows: shared netns, separate cgroups, sentinel, scope kill, culture, refusal).
 
-**Brief (Sonnet coder).** Branch `feat/lang-v2-e1-s8b`. Start with `exec-probe.mjs`: on this host, try the two launch orders —
-`systemd-run --scope` outermost with `nsenter` into the holder inside it, and `nsenter` first with `systemd-run --user` inside
-the namespace — and record for each whether the scope is created, which pids land in `cgroup.procs`, and whether the driver
-reaches the port; keep the order that passes T-L33 and T-L34 and write the other's failure into the probe record. Reuse v1's
-bwrap primitives as they are (add a `boxArgv` without `--unshare-net`, do not edit `isolation()`); `runBounded`
+**Brief (Sonnet coder).** Branch `feat/lang-v2-e1-s8b`. Build the hierarchy of *The shape* exactly as written — holder; the
+program under `systemd-run --user --scope … nsenter -t <holder> -U -n --preserve-credentials bwrap …`; the driver under `nsenter
+-t <holder> -U -n --preserve-credentials` outside the scope. It is validated, not a choice. `exec-probe.mjs` re-runs that
+validation on the host and records it (both `/proc/<pid>/ns/net`, both `/proc/<pid>/cgroup`, `ping→PING` over 127.0.0.1, the
+bind list, the `$HOME` sentinel, `/mnt/c`, `cmd.exe` and user-bus probes) and exits 3 when any of it fails. Compose the box from
+v1's primitives (`spikes/minigit-bench/lib/bwrap.mjs:10-19`: `tmpfs`, `roBind`, `bind`, `devProc`, `setenvAll`) — **not**
+`roRoot()` and not `isolation()` (it carries `--unshare-net`); do not edit v1's file; `runBounded`
 (`spikes/minigit-bench/lib/run.mjs:35`) for every child with a ceiling; scope and holder names from the owned helper in tests.
 Cleanup is one function called on every path (normal, timeout, exception) and itself never throws; a resource it cannot remove
 stays named and is reported. Commands: `node spikes/lang-bench/exec-probe.mjs`; `BENCH_REQUIRE_SANDBOX=1 node
@@ -539,7 +577,7 @@ it; a build in a box with no registry restores exactly that set and fails naming
 pieces; Node: `fastify@5.12.7`, `@fastify/jwt@10.2.6`, `@fastify/type-provider-typebox@6.3.0`, `@sinclair/typebox@0.34.52`, pino
 as Fastify resolves it, `@types/node` 26.x, `typescript@6.0.<p>` (S5's pin), `typescript-eslint@8.72.x` with its type-aware
 rules, and the lint packages S7's template needs — each with a `purpose` field; `inputs/cache-snapshots-lang.json`,
-`make-snapshots.mjs`, `lib/packages-md.mjs`, `test/{cache-lang,packages-md}.test.mjs`. Private area:
+`make-snapshots.mjs` (with `--prune-superseded`, §8), `lib/packages-md.mjs`, `test/{cache-lang,packages-md}.test.mjs`. Private area:
 `~/rsd/lang-v2/caches/<stack>-<treeSha256>/`.
 
 **Scenarios.** *Given* the recipe, *when* `makeSnapshot` (`spikes/minigit-bench/lib/cache-snapshot.mjs:162`) runs per stack in a
@@ -773,13 +811,32 @@ job per stack; the visible-sample job not required; `branches: [main, 'run/**']`
 (`cutRunBase({ rid, tag })`: S1's `generateRunBaseTree`, the needle scan, `git commit-tree` with no parent, pushed to
 `run/<rid>/main` with the deploy key; `exportRunBase({ rid, out })`: a bundle holding exactly that commit and its tree — the
 seed E3.S7a's per-run bare repository is made from), `lib/github-lang.mjs` (settings and rulesets as data, applied with
-`gh api` and read back), `p0-lang.mjs`, `test/{run-base,github-lang,templates-d42}.test.mjs`.
+`gh api` and read back), `lib/conventions-snapshot.mjs` (OP-A (c), below), `p0-lang.mjs`,
+`test/{run-base,github-lang,templates-d42,conventions-snapshot}.test.mjs`. Private area: `~/rsd/lang-v2/conventions/<sha>.git`
+(read-only).
 
 **What the templates must not assume (D42).** No file of the generated tree tells the agent to reach `github.com` directly, names
 another repository or another run, or carries a remote URL; CI runs on the branch the broker mirrors, so a workflow needs no
 step the box would have to reach GitHub for; the PAT is host-side only (the broker's, then the harness's), never in a box
-environment, argv or file the box can read. How a process box gets `.agents/conventions` without reaching GitHub is open
-(§9 OP-A); this story builds nothing that decides it.
+environment, argv or file the box can read.
+
+**The conventions in the process clone — OP-A, option (c), decided by the team lead (not a change).** The run base keeps its
+gitlink at `.agents/conventions` and `.gitmodules` as committed; the objects reach the clone from the host, never through the
+broker or the network:
+
+1. **Snapshot, once per pinned sha:** `git init --bare ~/rsd/lang-v2/conventions/<sha>.git`, then `git -C <that> fetch
+   https://github.com/oleksandrdubyna88/dew_flow_conventions.git <sha>` (on the host, before any session), a ref
+   `refs/heads/pinned` at `<sha>`, the sha checked, then `chmod -R a-w` — the snapshot path is read-only from then on.
+2. **Seed, per run, before the session starts** (the harness, on the host, in the run's clone): `git submodule init`, then
+   `git config submodule.<name>.url file://<snapshot>` where `<name>` is the `.gitmodules` name of the path `.agents/conventions`
+   (S1 names it `.agents/conventions`, so the key is `submodule..agents/conventions.url`), then
+   `git -c protocol.file.allow=always submodule update --init` — so `.git/modules/<name>` holds the objects and the work tree is
+   at the pinned sha.
+3. **In the box** the agent has no egress and the snapshot is not bound; the submodule is already checked out, so nothing
+   needs fetching, and `.gitmodules` and the tree are unchanged (`git status --porcelain` empty).
+
+`lib/conventions-snapshot.mjs` (`makeConventionsSnapshot({ sha })`, `seedConventions({ clone, snapshot })`) is built here and
+called by E3.S7's process runner; E3.S7a's broker never serves it.
 
 **Scenarios.** *Given* the frozen tag, *when* a run base is cut, *then* `git rev-list run/<rid>/main` has exactly one commit, its
 tree equals the generated tree, and the needle scan over the tree and that one commit finds nothing; **failure case:** a planted
@@ -787,17 +844,24 @@ credit refuses the cut. *Given* the export, *then* the bundle lists one commit a
 repository's `main`. *Given* the PAT, *when* it pushes directly to `run/<rid>/main`, *then* the ruleset refuses (read back).
 *Given* a PR into a run base, *then* CI runs on the non-default base with the stack's job required; a planted lint or analyzer
 violation is red per stack; merge is blocked until threads resolve. *Given* the template tree, *then* no `github.com` URL, other
-repository name or remote appears in it.
+repository name or remote appears in it. *Given* a clone of a run base seeded by `seedConventions`, *when* `git submodule status`
+runs **with no network** (under `unshare -rn`), *then* it shows the pinned sha with no `-` or `+` prefix and `git status
+--porcelain` is empty; **failure cases:** a snapshot whose sha differs from the gitlink is refused before the seed; a writable
+snapshot path is refused.
 
 **Acceptance (parent S7, OP-8 as its text).** v1's P0 checks pass here — a run base cut by the deploy key, a direct push with the
 PAT refused, CI green on a non-default base, a planted violation red per stack, merge blocked until threads resolve — run from
 the harness side (the PAT never in a box); S1's run-base check completed with `git rev-list` of the base (one commit, D39); the
-export holds one commit only; the template tree carries no direct-GitHub assumption.
+export holds one commit only; the template tree carries no direct-GitHub assumption; a seeded clone's `git submodule status`
+shows the pinned sha offline.
 
 **Test plan (red, green, red).** `A_run_base_with_history_would_carry_the_attribution_commit_and_that_is_the_point` (red with a
 normal branch from the tag, green with the orphan commit, red with `commit-tree -p` restored);
 `The_export_holds_exactly_the_run_base_commit`; `The_template_tree_names_no_github_host_or_other_repository` beside its
-companion that still finds a planted URL. The GitHub checks are live, recorded as dated P0 lines.
+companion that still finds a planted URL; `A_clone_without_the_seed_would_have_no_conventions_offline_and_that_is_the_point`
+(red: `git submodule status` shows `-<sha>` and `git submodule update` fails under `unshare -rn`; green after `seedConventions`;
+red again with the URL rewrite removed, the update then reaching for GitHub and failing). The GitHub checks are live, recorded
+as dated P0 lines.
 
 **Docs.** The task repository's `README.md` (CI, the run-base namespace); bench `research/module_lang_bench.md`.
 
@@ -808,6 +872,23 @@ an argv or a long-lived environment variable; nothing of the broker is built her
 
 ---
 
+## 8. Growth: what E1's stores weigh and who retires them (`common.planning-docs`, parent §13)
+
+Volumes: 10 tasks × 2 stacks; one draft reference per task and stack; the D40 gate run at least once per task and again for
+every task gated on an older runner or layer (budgeted at ≤ 5 rounds per task). **Evidence stores are kept; scratch is the run's
+own and is removed by it, then swept by owner and age under `common.test-leftovers` §4.**
+
+| Store (story) | Projected size | Retired by | Interrupted |
+|---|---|---|---|
+| Toolchains `~/rsd/lang-v2/toolchains/` (E1.S5) | ≈ 1.2–1.5 GB (SDK ≈ 1 GB, Node ≈ 100 MB, TypeScript tens of MB); parent §13 puts toolchains, the CLI copy and the two snapshots at ≈ 3 GB | **kept for the series** (evidence: checksums pre-registered); `retire.mjs` after the record is promoted (parent §13) | an install that dies leaves an owned scratch folder, swept; a half-written toolchain directory is never registered (the checksum check refuses it) |
+| Cache snapshots `~/rsd/lang-v2/caches/<stack>-<treeSha256>/` (E1.S4) | two registered, ≈ 0.5–1 GB together (parent §13); each recipe change before the pre-registration adds one superseded snapshot of ≈ 0.25–0.5 GB | the **registered** snapshot of each stack is kept for the series (its hash is pre-registered); a **superseded** one is kept until the pre-registration tag, then removed by `make-snapshots.mjs --prune-superseded` (by its tree hash, never by prefix, never the registered one); `retire.mjs` at the end | an unregistered snapshot directory is scratch: owned name, removed by the run, swept after 10 min when its owner is gone |
+| Conventions snapshot `~/rsd/lang-v2/conventions/<sha>.git` (E1.S7) | a few MB per pinned sha; one or two shas (provisional, then E0's release) | kept for the series (the run bases' conventions come from it); `retire.mjs` | an unfinished snapshot is not chmodded read-only and is refused by `seedConventions`; it is re-made |
+| Draft references `~/rsd/lang-v2/refs/<NN-slug>/{csharp,node}/` (E1.S2a) | sources only, < 5 MB for all 20 (parent §13: "MBs") | **kept** (the operator's record; E2.S1 finalises them; published after the series, E6) — never in git | — |
+| Gate-run scratch: pristine copies with `bin/`, `obj/`, `node_modules/` (E1.S2a, on S8b's layer) | ≈ 0.1–0.3 GB per reference copy; one run at a time, so ≤ 0.6 GB live | **removed by the run** that made it (owned folder, `finally`); never kept | swept at the next run's start by owner and age (`common.test-leftovers` §4); scopes and namespace holders end with the case's cleanup, a lingering one is listed by name |
+| Gate records in `spikes/lang-bench/inputs/references.json` and `inputs/specs.json` (E1.S2a, E1.S2) | ≈ 20 lines per gate round × ≤ 5 rounds = ≤ 100 lines, KB | **kept in git** (append only; a stale record stays, marked `stale`) | a tool that dies writes nothing: the record is written beside the file and moved over (`common.reliability` § *Paid work*) |
+| Execution-layer probes `inputs/exec-probe-<date>.json` (E1.S8b) | KB each, one per probe day | kept in git | — |
+| Spec briefs `~/rsd/lang-v2/test-design/spec-briefs/NN.md` (E1.S2) | KB each, ten | kept with the test-design aid (parent §13) | — |
+
 ## 9. Open points
 
 Classified under `common.plan-change-control`. **Epoch 4 has 0 changes; one recorded change is allowed, a second stops the
@@ -815,7 +896,7 @@ plan.** Nothing below is decided here. Line numbers are of the parent at `0ea0e2
 
 | # | Where | The point | Class |
 |---|---|---|---|
-| OP-A | `:240` (D42: the per-run bare repository holds "only the orphan run-base commit and the run's own refs"), `:225` (D11: the process clone "carries the conventions"), `:542` (§5: `.agents/conventions` pinned as a submodule on a snapshot branch) | **The conventions submodule under D42.** The run base carries a gitlink, not files; with no direct GitHub egress and nothing but the run base in the bare repository, the process agent cannot fetch `.agents/conventions` — and without it the rules, hooks and `pin-check` the process arm measures are absent. Options: (a) the per-run bare repository also carries the pinned conventions commit, the session's gitconfig redirecting the submodule URL to the broker — D42's allowed contents widened; (b) the generated run-base tree vendors the conventions files in place of the gitlink — D39's tree and the pin check change; (c) the harness checks the submodule out into the clone from a host-side read-only snapshot before the session starts, so the agent never fetches it — D42 and D11 as written, one more harness step in E3.S7. | **change** for (a) or (b); (c) reads as not a change (a step that satisfies D11 and D42 as written) — the team lead decides, in doubt a change |
+| OP-A | `:240` (D42: the per-run bare repository holds "only the orphan run-base commit and the run's own refs"), `:225` (D11: the process clone "carries the conventions"), `:542` (§5: `.agents/conventions` pinned as a submodule on a snapshot branch) | **The conventions submodule under D42.** The run base carries a gitlink, not files; with no direct GitHub egress and nothing but the run base in the bare repository, the process agent cannot fetch `.agents/conventions` — and without it the rules, hooks and `pin-check` the process arm measures are absent. Options: (a) the per-run bare repository also carries the pinned conventions commit, the session's gitconfig redirecting the submodule URL to the broker — D42's allowed contents widened; (b) the generated run-base tree vendors the conventions files in place of the gitlink — D39's tree and the pin check change; (c) the harness checks the submodule out into the clone from a host-side read-only snapshot before the session starts, so the agent never fetches it — D42 and D11 as written, one more harness step in E3.S7. | **decided by the team lead, 2026-10-31: option (c), not a change** (it satisfies D11 and D42 as written); built in E1.S7 (`seedConventions`), called by E3.S7 |
 | OP-B | `:942` (T-L32: "in the agent box and the scoring box"), `:1200` (S8b accepted when T-L32 green) | S8b proves T-L32 for the box it launches (the scoring side); the agent box is v1's sandbox, which gets D15's environment in E3.S5 — so T-L32's agent-box half closes in E3, as E3's done-when already lists T-L32. | not a change (reading) |
 | OP-C | `:941` (T-L36), §6.1 (`:610`) | T-L36 is assigned to no story. Read as: the D40-gate half is E1.S2a's (`gate-staleness.mjs`), the registered-limit half E2.S3's. | not a change (a test placed inside the stories) |
 | OP-D | `:1161-1165` (E1.S7: "the PAT"; "a direct push with the PAT refused") against `:240` (D42: the PAT is used by the broker host-side) | Under D42 the PAT never enters a box; S7's P0 checks run from the harness side, which is what they test. | not a change (reading) |
@@ -823,8 +904,7 @@ plan.** Nothing below is decided here. Line numbers are of the parent at `0ea0e2
 | OP-F | §4 here; the remote `main` = `ed68ce1` against the local `main` = `28bf777` | The two histories are unrelated; the first push needs `git merge --allow-unrelated-histories` on a branch, never a force push. | not a change (procedure) |
 | OP-G | `:29-34` (status: the credit terms of the known tasks' sources still open) | A known-task spec cannot be pushed until its credit terms are recorded (§4 step 3); the work on it proceeds locally. | not a change (operator action) |
 
-**Read together:** only OP-A can be a change. If it is resolved as (a) or (b), it is epoch 4's first change and is recorded in
-the parent's ledger in the commit that accepts it.
+**Read together:** none of these is a change; OP-A was resolved as (c). Epoch 4 stays at 0 changes.
 
 ## 10. Risk items (for the gate's `riskItems`)
 
