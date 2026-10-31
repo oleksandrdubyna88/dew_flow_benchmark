@@ -1266,5 +1266,24 @@ node research/minigit/tools/replay.mjs --self-check                     # fixtur
   names the lib files it ran with (`extractedFrom.lib`); run it again after a change of the scan.
 - The data files name the sha256 of each series file they were read from (`extractedFrom.sources`).
 
+**The raw records' manifest and archive.** `data/raw-manifest.tsv` holds the sha256 and size of every raw file under
+`~/rsd/minigit` (a symbolic link: the sha256 of its target text), one line each, sorted by path; `data/raw-manifest.json`
+holds the counts per top-level folder and the sha256 of that list. The held-out sources (`heldout-src/`) are not in git
+in any form: the summary holds only their count and the sha256 of their private list, which lives in the archive.
+Sockets and FIFOs hold no bytes; they are counted (`skipped`), not listed. `verify` also checks that every
+`extractedFrom.sources` hash of the data files is the manifest's hash of that file, so the chain record → data → raw
+records holds. The archive `minigit-raw-2026-10-31.tar.xz` (named, with its size and sha256, in `data/raw-archive.json`)
+is kept outside git; it holds `minigit/` (the runs root) and `MANIFEST/` (the two committed files and the private list).
+
+```bash
+# the live records against the committed manifest
+node research/minigit/tools/manifest.mjs verify
+# an archive: check it, unpack it, verify the copy against the manifest packed in it (which must equal the committed one)
+sha256sum -c minigit-raw-2026-10-31.tar.xz.sha256
+mkdir /tmp/minigit-check && tar -xJf minigit-raw-2026-10-31.tar.xz -C /tmp/minigit-check
+node research/minigit/tools/manifest.mjs verify --runs /tmp/minigit-check/minigit --manifest /tmp/minigit-check/MANIFEST
+node research/minigit/tools/manifest.mjs --self-check                    # synthetic tree: every kind of difference is found
+```
+
 Not built: the plan's `bare-report.mjs` (E3b.S4, "Interim record") does not exist; this extractor and renderer stand in
 for it, and this file stands in for the plan's `research/minigit/bare-pairs-<date>.md`.
