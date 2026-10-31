@@ -71,28 +71,28 @@ const rerunProblem = (map, pair, stack) => {
  * The plan of `run --pair k [--rerun <stack>]`: the run-map with its sessions planned, and what was planned. A new pair plans both stacks (attempt 1, `paired`, the draw's masks); a re-run plans the one stack
  * (attempt 2, `ran unpaired`) and only when its last session is a void. -> `ok({ map, planned })` | `fail(sentence)`.
  */
-export function planPair({ map, pair, pairs, draw, rerun = null, rand = () => randomBytes(4).toString('hex') }) {
+export function planPair({ map, pair, pairs, draw, rerun = null, kind = 'pilot', rand = () => randomBytes(4).toString('hex') }) {
   const refused = barrierProblem({ map, pair, pairs });
   if (refused) return fail(refused);
-  if (rerun !== null) return planRerun({ map, pair, draw, stack: rerun, rand });
+  if (rerun !== null) return planRerun({ map, pair, draw, stack: rerun, kind, rand });
   if (sessionsOf(map, pair).length > 0) return fail(`pair ${pair} has already been run (${stateLine(map, pair)}): a void is re-run with --rerun <stack>`);
-  return planAll({ map, entries: STACK_ORDER.map(stack => ({ stack, attempt: 1, label: 'paired' })), pair, draw, rand });
+  return planAll({ map, entries: STACK_ORDER.map(stack => ({ stack, attempt: 1, label: 'paired' })), pair, draw, kind, rand });
 }
 
-function planRerun({ map, pair, draw, stack, rand }) {
+function planRerun({ map, pair, draw, stack, kind, rand }) {
   if (!STACK_ORDER.includes(stack)) return fail(`--rerun ${stack}: the stacks are ${STACK_ORDER.join(', ')}`);
   const problem = rerunProblem(map, pair, stack);
   if (problem) return fail(problem);
   const attempt = sessionsOf(map, pair, stack).length + 1;
-  return planAll({ map, entries: [{ stack, attempt, label: 'ran unpaired' }], pair, draw, rand });
+  return planAll({ map, entries: [{ stack, attempt, label: 'ran unpaired' }], pair, draw, kind, rand });
 }
 
-function planAll({ map, entries, pair, draw, rand }) {
+function planAll({ map, entries, pair, draw, kind, rand }) {
   let current = map;
   const planned = [];
   for (const e of entries) {
     const rid = pilotRid(rand());
-    const entry = { rid, pair, stack: e.stack, phase: 'v1', attempt: e.attempt, kind: 'pilot', label: e.label, mask: maskOf({ draw, pair, stack: e.stack }) };
+    const entry = { rid, pair, stack: e.stack, phase: 'v1', attempt: e.attempt, kind, label: e.label, mask: maskOf({ draw, pair, stack: e.stack }) };
     const next = planSession(current, entry);
     if (!next.ok) return next;
     current = next.value;

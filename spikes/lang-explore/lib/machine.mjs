@@ -64,12 +64,12 @@ function notQuiet({ waited, acceptNoisy }) {
  * The machine of a run: `quiet({ cellIds, say, signal })` waits for a quiet 60 s window (re-check every 60 s for 30 min, saying each verdict), `startSampler({ pair, cellIds })` writes the phase's CPU
  * file and flags (never kills), `loadFlag({ cellIds })` says whether the machine is loaded now. `calibratedMs` is the idle spin median `prepare` wrote.
  */
-export function machineFor({ thresholds, calibratedMs, seriesDir, acceptNoisy = null, home = os.homedir(), procApi = realProcApi, now = Date.now }) {
+export function machineFor({ thresholds, calibratedMs, seriesDir, acceptNoisy = null, home = os.homedir(), procApi = realProcApi, now = Date.now, samplerFn = samplerFor, sleepFn = null }) {
   const t = { ...thresholds, calibratedMs };
-  const build = cellIds => samplerFor({ thresholds, cellIds, home, procApi, now });
+  const build = cellIds => samplerFn({ thresholds, cellIds, home, procApi, now });
   async function quiet({ cellIds = [], say = () => {}, signal }) {
     const sampler = await build(cellIds);
-    const sleep = ms => abortableSleep(ms, signal);
+    const sleep = sleepFn ?? (ms => abortableSleep(ms, signal));
     const onRetry = ({ verdict, waitedMs, nextCheckInMs }) => say(`the machine is not quiet (${failureList(verdict)}); waited ${secs(waitedMs)} s of ${secs(thresholds.maxWaitMs)} s; next check in ${secs(nextCheckInMs)} s`);
     const waited = await waitForQuiet({ check: () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep }), maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep, onRetry, signal });
     if (waited.aborted) return fail('cancelled while waiting for a quiet machine');
