@@ -1212,6 +1212,7 @@ use sequential arms). **Done when.** E5's tests of §7 green; the POSIX adapter'
 catalogue row; the module is documented as it is; the plan is promoted. **Scope.** D5's compatibility, D28, F2, the docs of §6 step 6,
 M3's pilot. **Depends on.** E2–E5. **Done when.** E6's tests of §7 green; M3's log in `research/module_model_arms.md`; every DoD line
 of §10 ticked.
+**Stories:** [PLAN_model_arms_E6.md](PLAN_model_arms_E6.md) — E6.S1–E6.S3, written when the epic started (2026-10-31, `cc02d09`, by the judge); no cornerstone (the ledger stays 3 of 3), no security judgement; one pull request, no code before E4 and E5 are on `main`. Its §8 settles twenty-five points with evidence, items 3, 6, 11 and 18–21 being claims of this plan found stale or incomplete; the promotion waits for the owner's items (its §11).
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
