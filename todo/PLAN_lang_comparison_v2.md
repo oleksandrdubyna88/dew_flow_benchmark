@@ -1,20 +1,25 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet; epoch 3 (opened 2026-10-31) changed twice the same day — 3.1, the D40
-> pre-freeze gate needs the final scoring environment that E3 builds, and the driver↔program network layout is designed
-> nowhere; 3.2, the bench repository is public and its plan carries the §4.3 trap table that a process agent can reach
-> through GitHub — both found by the E1 stories writer (`feat/lang-v2-e1` `51a80ba`, §9 OP-1 and OP-12) — so the plan is
-> stopped for re-review (`common.plan-change-control`, epoch 3 `stopped`): no new code starts on any epic, no merge
-> carries its work, until the whole plan is re-reviewed and epoch 4 is approved. Consult `16e5f408` answered; the step-4
-> revision is in this text (D41–D43, §6.1, E1.S8b, E3.S7a, T18–T19, G-20, T-L33–T-L36, the trap aid moved to the private
-> area with its sha256 in §4.3; the re-review record for epoch 4 with `Narrowed: no`); the E1 stories judged `fits`
-> (`5995560`); the plan round PROCEED (codex) with its one finding applied — the per-task riskiest-scenario details moved
-> to the private aid's sibling `PLAN-risky-scenarios.md` (D41); the second full reading (the document gate, four
-> reviewers) PROCEED with five findings applied — the broker serves an isolated bare repository per run (D42), D3 aligned
-> with the memory contract, two more fragments moved to the private aid, and the re-review record now says `Narrowed:
-> yes`, because D42 narrows the measured treatment of the process arm. **Awaiting the owner's approval of a narrowed
-> epoch 4 (2026-11-01)**; the owner may instead keep the family's open GitHub access and accept and disclose the residual
-> exposure, or make the bench repository private (Q-F).** Operator actions the E1 stories found, recorded as status (not changes): `locale-gen de_DE.UTF-8` on the
+> Status: **plan only, nothing implemented yet; epoch 4 open since 2026-10-31 with 0 changes, approved by the owner —
+> narrowed: the process arm's GitHub capability (D42, the run-bound broker with an isolated bare repository per run), as
+> the epoch 4 re-review record says.** The owner's four decisions at that approval (2026-10-31, late evening), part of the
+> approved baseline: (1) Q-F — the narrowing approved, D42 as written; every repository stays public, privacy was never
+> the aim; the broker exists because the process agent could otherwise read the trap history in the public bench
+> repository, which the bare agent cannot reach. (2) TypeScript **6.0.x**, not 7.0.2 (D6): the newest line the pinned
+> `typescript-eslint` 8.72.x supports, so the TS agents get type-aware lint at the C# analyzers' strength; 7.0.2
+> superseded. (3) Q-A — **no total ceiling**: the $1000 is removed, the six rounds of both arms run as planned; a fixed
+> **$50 per-session cap** stays as a runaway guard (a capped session is censored, never hidden); the pilot's cap formula
+> is a reported cross-check (D7; D30 superseded). (4) D35 confirmed: `de_DE.UTF-8` in both boxes, every task, both stacks.
+> Epoch 3 (opened 2026-10-31) changed twice the same day — 3.1, the D40 pre-freeze gate needs the final scoring
+> environment that E3 builds, and the driver↔program network layout is designed nowhere; 3.2, the bench repository is
+> public and its plan carries the §4.3 trap table that a process agent can reach through GitHub — both found by the E1
+> stories writer (`feat/lang-v2-e1` `51a80ba`, §9 OP-1 and OP-12) — and was closed by a whole re-review
+> (`common.plan-change-control`): consult `16e5f408`, the step-4 revision (D41–D43, §6.1, E1.S8b, E3.S7a, T18–T19, G-20,
+> T-L33–T-L36, the trap aid moved to the private area with its sha256 in §4.3), the E1 stories judged `fits` (`5995560`),
+> the plan round PROCEED (codex) with its one finding applied (the per-task riskiest-scenario details moved to the private
+> aid's sibling `PLAN-risky-scenarios.md`), the second full reading (the document gate, four reviewers) PROCEED with five
+> findings applied (the isolated bare repository per run, D3 on the memory contract, two more fragments moved, the record's
+> `Narrowed: yes`), and the owner's approval above. Work may start on E0 and E1. Operator actions the E1 stories found, recorded as status (not changes): `locale-gen de_DE.UTF-8` on the
 > series host (today `locale -a` lists only `C`, `C.utf8` and `POSIX`; the boxes bind the host root read-only, so the
 > locale needs root — D35); the licence decision Q1 before any known-task text is pushed; the creation of the public
 > repository `dew_flow_ai_language_comparison` (D2, D31); the fine-grained PAT and the deploy key for the process arm
@@ -104,7 +109,7 @@ Narrowed: no — against the epoch 2 baseline every revision adds (a limits and 
 | pilot spec 05 with four scenario samples, `30af434` (E1.S2, E1.S6) | `dew_flow_ai_language_comparison` branch `docs/spec-05`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 | pilot spec 04, `0b69a50` (E1.S2) | `dew_flow_ai_language_comparison` branch `docs/spec-04`, local, ungated draft | fits | kept as a draft; re-conformed to FORMAT.md v2 (E1.S9) by a fix forward before its gate (judged by the team lead, Opus, 2026-10-31) |
 
-> Epoch 3 · approved 2026-10-31 · by reviewers · state: stopped
+> Epoch 3 · approved 2026-10-31 · by reviewers · state: closed
 
 - 3.1 · 2026-10-31 · agent · build-order, approach — the D40 pre-freeze gate needs the final scoring environment in E1, which the plan builds in E3, and the driver↔program network layout is designed nowhere; found by the E1 stories (`feat/lang-v2-e1` `51a80ba`, §9 OP-1)
   (One cause: D40, §14 step 1, E1.S2, S2a and S6 run the gate "in the final sandbox environment — the box, D15's
@@ -134,6 +139,8 @@ Narrowed: yes — the measured treatment of the process arm got smaller: by D42 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
 | the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `51a80ba` (planning, not on main) | `dew_flow_benchmark` branch `feat/lang-v2-e1`, pushed, unmerged | fits | kept; rewritten for E1.S8b, E3.S7a, OP-2 to OP-11 as text and the D41 rule (no trap content) before its own gate (judged by the team lead, Opus, 2026-10-31) |
+
+> Epoch 4 · approved 2026-10-31 · by owner · state: open
 
 ## 1. The question, before any solution
 
@@ -209,8 +216,8 @@ the open questions (§17) name what they do not settle.
 | D3 | **Tasks: 5 known + 5 original; 4 olympiad, 3 daemons, 3 web APIs; difficulty from a few minutes to about one hour of agent work.** Traps are runtime traps on both sides across the suite. The list is §4.1 (order = expected difficulty; the times are guesses, calibrated by the pilot). Daemons and web APIs are scored by a harness that starts the program, drives held-out scenarios and checks replies, cgroup-accounted memory over time (`memory.peak`; RSS only as a descriptive curve — D13, D14, D36) and a clean SIGTERM stop. Consultant review on 2026-10-31 (codex gpt-6-astra, gemini) shaped the list: CSES 1712 dropped (a one-sided JS trap), CSES 1736 dropped (sums stay below 2^53 at CSES limits, ≈ 4e15, so its JS trap does not fire); gemini's claim that .NET console apps default to Server GC was **rejected** (they default to Workstation GC) — still, the harness fixes GC settings explicitly per stack and records them | operator, 2026-10-31 |
 | D4 | **Method rules from the consultants, adopted:** the agent never sees a CSES/IOI id or title (paraphrased statement only); workspace samples are small and clean and the traps live in held-out tests, so the first-submission pass rate can show a difference; time and memory limits are calibrated on reference solutions in **both** languages, so no limit rejects one runtime's baseline footprint; a **paid pilot (tasks 1, 3, 10 at least)** measures real times before the full series; the bare session wall limit rises from v1's 20 min to **about 75 min**; v1's $6 per-session cap is **re-derived from the pilot** | operator, 2026-10-31 |
 | D5 | **Packages: option A — a pinned offline package cache per stack**, the same discipline as v1's cache snapshots; **the agent has no general network** (the process arm reaches GitHub, as v1's D21–D22) | operator, 2026-10-31 |
-| D6 | **Stacks: both current LTS lines, latest patch, checked 2026-10-31 against the official release indexes.** C#: .NET 10, SDK **10.0.403** (released 2026-10-25; the host has 10.0.114, so it must be upgraded and pinned), runtime 10.0.14, C# 14 (the default for .NET 10; C# 15 ships with .NET 11, RC3 on 2026-10-31, not stable, so out). Web APIs use ASP.NET Core **Minimal API**; daemons the Generic Host (`Microsoft.Extensions.Hosting`); JWT `Microsoft.AspNetCore.Authentication.JwtBearer` 10.x; tests the agent's choice from the cache (xUnit v3 offered). TypeScript: Node **26.13.0** (LTS "Lithium", released 2026-10-28; the host has 26.12.1, so it must be upgraded and pinned), TypeScript **7.0.2** with `strict` (v1's toolchain line). The Node web stack is the team lead's choice, with the reasons recorded (§4.6): **Fastify 5.12.7** with TypeBox 0.34.x (`@fastify/type-provider-typebox`), `@fastify/jwt` 10.x, pino, `node:test`, `node:net`. Toolchains are pinned in read-only copies with checksums (as `~/rsd/minigit/toolchains/`) and recorded in the pre-registration | operator, 2026-10-31 (stacks); team lead, 2026-10-31 (the Node web stack, reasons in §4.6) |
-| D7 | **Budget: $1000** for the paid runs of v2. The spend gate enforces it. (Set for the experiment; with two arms the split between arms is re-derived from the pilot, D30) | operator, 2026-10-31 |
+| D6 | **Stacks: both current LTS lines, latest patch, checked 2026-10-31 against the official release indexes.** C#: .NET 10, SDK **10.0.403** (released 2026-10-25; the host has 10.0.114, so it must be upgraded and pinned), runtime 10.0.14, C# 14 (the default for .NET 10; C# 15 ships with .NET 11, RC3 on 2026-10-31, not stable, so out). Web APIs use ASP.NET Core **Minimal API**; daemons the Generic Host (`Microsoft.Extensions.Hosting`); JWT `Microsoft.AspNetCore.Authentication.JwtBearer` 10.x; tests the agent's choice from the cache (xUnit v3 offered). TypeScript: Node **26.13.0** (LTS "Lithium", released 2026-10-28; the host has 26.12.1, so it must be upgraded and pinned), TypeScript **6.0.x** with `strict` — the newest line the pinned `typescript-eslint` 8.72.x supports (its peer range is `<6.1`), so the TS agents get **type-aware lint at the same strength as the C# analyzers**; this matches the conventions plan's D7 (`dew_flow_conventions · todo/PLAN_node_rule_parity.md`); the exact patch is pinned in E1.S5 from npm. **7.0.2 was the earlier pin (v1's toolchain line), superseded by the owner on 2026-10-31 (D1)**: under 7.0.2 `typescript-eslint` cannot parse `.ts` and the lint runs without types (v1's D4 deviation), which would have handicapped TS in the process arm. The Node web stack is the team lead's choice, with the reasons recorded (§4.6): **Fastify 5.12.7** with TypeBox 0.34.x (`@fastify/type-provider-typebox`), `@fastify/jwt` 10.x, pino, `node:test`, `node:net`. Toolchains are pinned in read-only copies with checksums (as `~/rsd/minigit/toolchains/`) and recorded in the pre-registration | operator, 2026-10-31 (stacks); team lead, 2026-10-31 (the Node web stack, reasons in §4.6) |
+| D7 | **Budget: no total ceiling.** The $1000 total of the morning is **removed by the owner on 2026-10-31 (late evening)**; the six rounds of both arms run as planned (D10, D27). **A per-session cap of $50 stays as a runaway guard**, a fixed owner value ("I don't think $6 is enough; let's do 50"): a session is stopped at $50 and recorded as censored (`killed: cap`, `≥ $50`), never hidden; the pilot's cap formula (§12) is superseded for the cap's value and stays as a reported cross-check that does not bind. Pilot, A/A, data, void and re-run spend are still counted on separate lines. *The $1000 ceiling, the arm split, the `budget-frame` halt over the total and the budget approval step are superseded (D1); their text stays in §12 marked so* | operator, 2026-10-31 (the ceiling, the morning); owner, 2026-10-31 (no ceiling; the $50 cap) |
 | D8 | **Same agent as v1: Claude Code (Opus, effort `high`), CLI pinned.** v1 pinned CLI **2.1.310** (`inputs/stacks.json`); v2 **re-pins at its pre-registration** to the newest CLI version installed on that day, copied read-only as v1's `init` does (today that is still 2.1.310); the v1 pin is not inherited. *Superseded in part by D20: v2 runs two arms, not the bare arm alone* | operator, 2026-10-31; the re-pin shape: this plan |
 | D9 | **Unit of analysis = the task**, with repeated measures: per task, stack and arm, 3 sessions (D20). The 120 sessions are not 120 independent samples (D28) | this plan, per instruction E5 |
 | D10 | **Order: six rounds, arms alternating.** A round runs every task once in one arm; the arm of round 1 is drawn from the seed and the arms alternate (B P B P B P or P B P B P B), so after any even number of rounds both arms hold the same n; the task order inside a round is drawn from the seed; a task's second repeat in an arm runs only after every task has run once in that arm. The two cells of a pair (C# ∥ TS, same task, same arm) start in the same tick on masks `0-5` / `8-13`, swapped per pair as `maskFor` does; the two arms never overlap. The ceiling (D7) cuts whole round pairs (one bare + one process), never one task's repeats | this plan, per instruction E4 |
@@ -219,11 +226,11 @@ the open questions (§17) name what they do not settle.
 | D13 | **Scoring per task kind** (§4.3): olympiad — held-out input/expected pairs under calibrated time and memory limits, each case `pass` / `wrong answer` / `time limit` / `memory limit` / `runtime error`; daemon and web API — held-out scenarios driven by the harness, readiness within T, a SIGTERM stop that must end the process within the grace period G with no child left (D14's series defaults and overrides), the **cgroup-accounted memory bound** certified by the program's own cgroup scope (D36). **Accepted** = clean build, every held-out functional case or scenario passed, every lifecycle check passed (readiness, the SIGTERM stop within G, no process left), **and the certified memory claim** (`memory.peak` of the program's own scope within the registered limit, no `oom_kill`). **One memory contract (D36): for a data session a readable `memory.peak` is a precondition — the runner refuses to start one on a host without it, with the named halt `memory-not-certifiable` — so `accepted` always includes the certified memory claim and no CPC denominator is ever touched by certification.** The flag `memory bound not certified` exists only for **non-data runs** (the smoke, the stub fixtures, and the pilot where the operator runs it on a host that cannot certify — allowed, since pilot sessions are void by D16): such a run is reported on its functional, lifecycle and stop checks with the flag and no memory claim. One suite per task runs unchanged against both stacks (D22) | this plan |
 | D14 | **Limits, by kind (change 2.1).** *Olympiad:* time limit = **3 ×** the slower of the two reference solutions' wall, floor 1 s; memory limit = **2 ×** the larger reference peak, floor 256 MB. *Daemon and web API:* the **cgroup-accounted memory bound** = **2 ×** the larger reference peak over **all** the task's load scenarios (task 5 has two), floor **256 MB** — the same floor as olympiad; §4.1's "memory floor for a daemon" is this. **Semantic bounds live in each spec** (max connections, requests, payload bytes, clock semantics, expiry tolerance — spec 05's R32, R33, R23 are the shape). **Timing has series defaults with explicit per-task overrides:** readiness **T = 10 s**, grace **G = 5 s** (provisional), scenario-step deadlines as `FORMAT.md` defines; a spec states its T and G and may override with a reason. **Validation before the freeze:** T, G, the step deadlines and the semantic bounds are run against both draft references through the runner before the spec freezes (D40); a value a reference cannot meet is changed before the freeze, never after. **Calibration after the freeze:** execution time and memory by this rule (E2.S3). The spec states the floors and the rule as guarantees; the exact values go to the runner, never into the spec (change 1.2a). Peak memory is `memory.peak` of the program's own cgroup scope (D36; cgroup accounting includes page cache and kernel memory); **only that certifies a bound**. RSS is sampled — 100 ms for olympiad, 1 s for daemon and web — as a **descriptive curve only**, the one statement of the sampling rates; never `RLIMIT_AS`. **Where a spec states a tolerance around a time boundary, the held-out checks are placed against that tolerance as the private aid says** (D41; the placement rule moved there). The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
 | D15 | **GC and runtime settings, fixed and recorded per stack:** C# `DOTNET_gcServer=0` (Workstation, set explicitly), `DOTNET_TieredCompilation` default, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`; Node: no `--max-old-space-size` flag from the harness (the memory limit is the cgroup's); `NODE_OPTIONS` empty. **Culture (D35): `LANG=de_DE.UTF-8` and `LC_ALL=de_DE.UTF-8` in both boxes, both stacks, every task; no `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch.** Every value is in `agentEnv`'s allow-list, the same in the agent box and the scoring box, and in every session record. **This row is the source of the base environment:** both stacks get the same base plus these documented per-stack variables; `FORMAT.md`'s "the same for both stacks" sentence follows this row (FORMAT v2, E1.S9) | this plan |
-| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the session caps per arm, the stall timeouts, the time guesses of §4.1, the limits of D14 and the budget split (D30). Bare pilot: tasks 1, 3, **4**, **5** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) for the HTTP driver, task 5 (the RESP server) for the TCP/RESP driver, task 10 (the DAG scheduler) for the SIGTERM, RSS and timer checks, so G-16 checks every driver on a real tree before round 1; the pilot option is taken over a hand-check on a reference tree. **Pilot cost, re-derived at the §12 guesses:** 10 bare pilot sessions + 2 A/A at $5–20 → $60–240; 4 process pilot sessions at $30–70 → $120–280; **≈ $180–520 in all**, settled before the data share is computed (§12) — not a fixed reserve. Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
+| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the stall timeouts, the time guesses of §4.1 and the limits of D14, and they measure real session costs (the formula's cap as a cross-check beside the owner's fixed $50 cap, D7; no split, D30 superseded). Bare pilot: tasks 1, 3, **4**, **5** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) for the HTTP driver, task 5 (the RESP server) for the TCP/RESP driver, task 10 (the DAG scheduler) for the SIGTERM, RSS and timer checks, so G-16 checks every driver on a real tree before round 1; the pilot option is taken over a hand-check on a reference tree. **Pilot cost, re-derived at the §12 guesses:** 10 bare pilot sessions + 2 A/A at $5–20 → $60–240; 4 process pilot sessions at $30–70 → $120–280; **≈ $180–520 in all**, reported as pilot spend (no data share is computed since the owner removed the total ceiling, D7). Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
 | D17 | **Egress:** bare sessions — no registry, no host; the only road out is the API broker's door. Process sessions — **no direct `github.com` egress either (D42)**: `EGRESS_HOSTS.langProcess` is empty and the GitHub operations go through the local GitHub broker's door, bound to the current run; package installs in both arms resolve from the seeded offline caches (D5). A refused CONNECT is flagged `wanted network`, not voided | this plan |
 | D18 | **Contamination needles for the known tasks** (id, title, site names; `CSES`, `IOI`, `Werewolf`, `RealWorld`, `Conduit`, the public repository's name and URL; **for task 5: the product name `Redis`, the protocol name `RESP` with its versions, `redis.io`, `redis-cli`, and the common client libraries `StackExchange.Redis`, `ioredis`, `node-redis`, `redis` as a package name**) join the scan's needle list, in tool inputs and outputs, and are run over every generated run base and its reachable history (D39). A hit is **read by hand**: the agent recalling a known problem from memory is a threat of the design (T1), not a void; a fetch or a path reaching outside the box is a void, as v1 | this plan |
 | D19 | **Known-task statements name no source.** The link and the credit live in the task repository's README (D2), in an attribution section that is **outside every agent-visible tree** (D39); `NOTES.md` is dropped. The bare workspace holds the statement, the samples, `PACKAGES.md`, `build.sh`, `run.sh`, the stack's pin files, **and the read-only runner and grammar (`runner/run_samples.py`, `runner/GRAMMAR.md` — D37, change 2.2)**, nothing else | operator, 2026-10-31 (D2); the file list: this plan |
-| D35 | **One declared non-invariant culture for the whole series: `de_DE.UTF-8`** (`LANG` and `LC_ALL`), in **both** the agent box and the scoring box, for both stacks and every task, and in CI's visible-sample runner. Recorded in the pre-registration and in D15's allow-list; the locale is generated in the box image (`locale -a` lists it). No `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch: a missing `LANG` is not .NET's globalization-invariant mode, and neither is wanted. **Fairness is a declared environment plus the protocol's stated numeric syntax** (spec 04 states its grammar, R15 and 3.6), not equal trap counts. E3's acceptance runs a check inside the actual boxes (T-L32). Closes Q8 | this plan (epoch 3 re-review; consult `3ea9ef36`) |
+| D35 | **One declared non-invariant culture for the whole series: `de_DE.UTF-8`** (`LANG` and `LC_ALL`), in **both** the agent box and the scoring box, for both stacks and every task, and in CI's visible-sample runner — **confirmed by the owner, 2026-10-31** (en_US was considered and `de_DE` kept). Recorded in the pre-registration and in D15's allow-list; the locale is generated in the box image (`locale -a` lists it). No `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch: a missing `LANG` is not .NET's globalization-invariant mode, and neither is wanted. **Fairness is a declared environment plus the protocol's stated numeric syntax** (spec 04 states its grammar, R15 and 3.6), not equal trap counts. E3's acceptance runs a check inside the actual boxes (T-L32). Closes Q8 | this plan (epoch 3 re-review; consult `3ea9ef36`) |
 | D36 | **Memory certification by the program's own systemd user scope, required before launch.** The scorer runs each program in its own `systemd-run --user --scope` with `MemoryMax=<limit>` and `MemorySwapMax=0` (the bound is on memory, never memory plus swap), launched **outside** `bwrap`; the driver and the build run outside that scope. It verifies that the program and every forked child belong to the scope (`cgroup.procs`), and it keeps `memory.peak`, `memory.events` (`oom_kill`, `max`) and the lifecycle evidence before the scope is removed. The host was probed on 2026-10-31: cgroup2 with the memory controller; `systemd-run --user --scope -p MemoryMax=64M` gives a readable `memory.peak` (2,396,160 B) and `memory.max` — **this host can certify**. The pre-registration records the certifying host; **a host that cannot certify runs no data session: the runner's certification probe runs at start and refuses with the named halt `memory-not-certifiable` (exit 3, resumable on a certifying host)** — so for every data session `accepted` includes the certified memory claim (D13). "RSS bound" is replaced by the **cgroup-accounted memory bound** everywhere, calibration included. The flag `memory bound not certified` is for non-data runs only (smoke, fixtures, a pilot the operator allows on a host that cannot certify); T-L29 is the refusal test; T-L30 adds the fixtures | this plan (epoch 3 re-review; the probe by the team lead) |
 | D37 | **The agent has the scenario runner and the grammar.** The visible-sample runner — the bench's own Python standard-library program, **built early in E1 (E1.S8a) and pinned there**, implementing FORMAT v2's grammar and transcript comparison (D22) — and `FORMAT.md`'s grammar sections are in every workspace as read-only frozen files, `runner/run_samples.py` and `runner/GRAMMAR.md`; the task repository carries the pinned copy with its hash in `inputs/specs.json`; CI's visible-sample runner is that same file; FORMAT v2's examples and every pre-freeze check (D40) run through it; E2.S2 reuses it for the held-out suites and owns no runner; the agent may run the samples with it (`python3 -I runner/run_samples.py samples/`). The ~20-line reading block FORMAT v1 put in every daemon and web spec goes once the runner is present (FORMAT v2, E1.S9). Resolves change 2.2 | this plan (epoch 3 re-review) |
 | D38 | **`run.sh` ends with `exec` of the program.** One process: the pid the harness starts is the program's, SIGTERM reaches it, and the stop and leftover checks are about the program. E1.S3's templates carry it; T-L31 checks it. Resolves change 2.3 | this plan (epoch 3 re-review) |
@@ -238,11 +245,11 @@ the open questions (§17) name what they do not settle.
 | D23 | **The conventions are pinned in the new repository, as in the other `dew_flow` repos, at a release that passes a conventions parity audit:** every C#/.NET rule in `dew_flow_conventions` has an equivalent Node/TypeScript rule adapted to Node, and the other way round. The audit **runs now, in parallel** (E0.S1); its result is a prerequisite story: missing counterpart rules are written and released in `dew_flow_conventions` **before the v2 pre-registration** (E0.S2), and the new repository pins that release (E0.S3). Threat T14 names the bias the audit controls | operator, 2026-10-31 (instruction D) |
 | D24 | **Primary metric: cost per correct solution.** For task t, stack s and arm a: `CPC(t, s, a) = Σ cost of all data attempts of (t, s, a) / number of accepted solutions among them`. Beside it: success rate (accepted / attempts), tokens per model and kind, wall, `model_api`, `active − model_api`. A cheap unfinished run never looks like a winner: it adds to the numerator and nothing to the denominator. A (t, s, a) with **0 accepted** shows **"no correct solution"** plus its attempts and its total spend (labelled spend, not CPC) and is **not dropped**; its C#/TS ratio is **undefined** and reported as an outcome, never as a bound (§9, consult `68a33be2`). A second line counts void attempts in the numerator too (§9) | operator, 2026-10-31 (instruction E1); the void line: this plan |
 | D25 | **The same functional requirements and the same checks for both stacks.** Statements describe the required behaviour neutrally. **The trap list is an INTERNAL test-design aid**, kept with the held-out material in the private area (D41), never in a statement **and, from 2026-10-31, never anywhere public before the series ends — not in this plan, a stories document, a review body or a PR description**; **every held-out test checks behaviour the statement requires**. **Review step:** a reviewer — the coai document gate plus a consultant — checks each statement and its tests for a bias toward or against one language's specifics, before the freeze (D21) and before the suite is sealed. The trap table is kept, on the test-design side (§4.3) | operator, 2026-10-31 (instruction E2) |
-| D26 | **Freeze before any paid data run:** tasks (specs), tests (suites, hashes, counts), budgets (ceiling, caps, split), the analysis (§9), the exclusion grounds (voids, stops) and the re-run grounds — all in the pre-registration, tagged. **Every attempt is kept**, including failed, voided and re-run ones, in the records and the report | operator, 2026-10-31 (instruction E3) |
+| D26 | **Freeze before any paid data run:** tasks (specs), tests (suites, hashes, counts), budgets (the $50 per-session cap, D7; no ceiling or split since the owner's decision), the analysis (§9), the exclusion grounds (voids, stops) and the re-run grounds — all in the pre-registration, tagged. **Every attempt is kept**, including failed, voided and re-run ones, in the records and the report | operator, 2026-10-31 (instruction E3) |
 | D27 | **Spread the 6 repeats per task over time:** a seeded random task order per round; the paired concurrent C# ∥ TS start of v1 stays; the CPU masks alternate per pair as v1 did; **bare and process rounds interleave** (D10), so one good or bad API day does not decide the result; the start and end time of every session is recorded | operator, 2026-10-31 (instruction E4) |
 | D28 | **Analysis is per task:** 10 tasks with repeated measures, not 120 independent samples. Each task is shown; the **overall result is the median of the per-task C#/TS ratios** (primary), the **geometric mean of the per-task ratios** beside it, and the **count of tasks where C# is higher** — per arm and per measure; pre-registered. No expensive task may hide the others: no pooled sum across tasks is a headline | operator, 2026-10-31 (instruction E5); the choice of the median as primary: this plan |
 | D29 | **Known and original tasks are shown separately**, and the report discloses that the five public tasks may be familiar to the model | operator, 2026-10-31 (instruction E6) |
-| D30 | **The $1000 is not changed by this plan.** With two arms (120 data sessions) and dearer process sessions, the **split between arms is re-derived from the pilot** (§12); whether $1000 covers both arms or the process arm needs its own limit is **open (Q-A)** | operator, 2026-10-31 (instruction F) |
+| D30 | *Superseded by the owner on 2026-10-31 (D1, D7):* the $1000 total is removed, so no split between arms is derived and Q-A is closed. Was: "The $1000 is not changed by this plan. With two arms (120 data sessions) and dearer process sessions, the split between arms is re-derived from the pilot (§12); whether $1000 covers both arms or the process arm needs its own limit is open (Q-A)." What stays: the pilot still measures real costs and reports the formula's cap as a cross-check beside the owner's $50 | operator, 2026-10-31 (instruction F); superseded by the owner, 2026-10-31 |
 | D31 | **The repository name stays `dew_flow_ai_language_comparison`, public from day one.** Held-out material and raw records stay outside git | operator, 2026-10-31 (instruction G) |
 | D32 | **v2 builds the process-arm pieces itself** (E3.S6–S9): the coai box and the stdio↔socket bridge, the process templates, rulesets and PATs (the repository side in E1.S7), the process runner, the compliance checker, P0 and the model smoke. They do not exist: v1's E2.S3, E2.S4 and E3.S1–S3 are not built. **v1 is closed after its bare arm; v2 is the active plan.** v1's parent plan gets only a STATUS line saying its process arm moved to this plan — a status update, not a plan change — as a follow-up outside this commit (§16). v1's design (its §4.2, §5.4, §6, §7.2, §8) stays the specification v2 builds to | team lead, 2026-10-31, from the coai plan gate (closes Q-B) |
 | D33 | **Werewolf I/O: option (a).** The spec `todo/tasks/09-werewolf.md` defines an exact stdin/stdout grammar and the agent implements the parser. There is no frozen helper or adapter code in `csharp/09-*` or `node/09-*`; the workspace holds the same files as every other olympiad task | team lead, 2026-10-31, from the coai plan gate (closes Q3) |
@@ -475,8 +482,9 @@ and every decision you made.
 ```
 
 Stack sentences: C# — *"Use C# 14 on .NET 10 (SDK 10.0.403 is installed; the project files in this folder are pinned)."*
-TypeScript — *"Use TypeScript 7.0.2 with `strict`, run by Node 26 with native type stripping (no build step), with `tsc
---noEmit` as the type check."* **Web API tasks add a second varying sentence, the framework sentence**, one per stack with the
+TypeScript — *"Use TypeScript 6.0 with `strict`, run by Node 26 with native type stripping (no build step), with `tsc
+--noEmit` as the type check."* (6.0.x by the owner's decision of 2026-10-31, D6; the exact patch from E1.S5 is written into
+the registered sentence) **Web API tasks add a second varying sentence, the framework sentence**, one per stack with the
 same shape: *"Use {FRAMEWORK} ({PACKAGE} {VERSION}, listed in PACKAGES.md) for the HTTP server."* — C#: `ASP.NET Core
 Minimal API` (the shared framework of SDK 10.0.403); TypeScript: `Fastify` (`fastify` 5.12.7). So a web workspace's
 `STATEMENT.md` differs across stacks in exactly two sentences, both registered in `prompts-lang.json` (E4.S2); every other
@@ -512,14 +520,14 @@ exact set (`Microsoft.Extensions.Hosting` 10.0.x, `Microsoft.AspNetCore.Authenti
 test SDK pieces; the ASP.NET Core shared framework comes with the SDK) and captures `NUGET_PACKAGES` and the first-run
 state; `nuget.config` in every C# workspace points at the offline folder only. The Node recipe fills the npm cache with
 `fastify@5.12.7`, `@fastify/jwt@10.2.6`, `@fastify/type-provider-typebox@6.3.0`, `@sinclair/typebox@0.34.52`, `pino` (the
-version Fastify 5.12.7 resolves), `@types/node` for 26.x, `typescript@7.0.2`, and the lint packages the process arm's
+version Fastify 5.12.7 resolves), `@types/node` for 26.x, `typescript@6.0.x` (the exact patch pinned in E1.S5; 7.0.2 superseded, D6), `typescript-eslint@8.72.x` with type-aware rules, and the lint packages the process arm's
 template needs (v1 D4's shape); every Node workspace's `.npmrc` sets `offline=true`. **The exact package set per stack, with
 pinned versions and the hashes in the cache manifest, is E1.S4's deliverable** and is pre-registered. `PACKAGES.md` in each
 workspace lists it (D12).
 
 **Toolchains**, pinned read-only with checksums under `~/rsd/lang-v2/toolchains/` and checked inside the box by the
 preflight: .NET SDK 10.0.403 installed from the official install script into that directory (not apt, so an unattended
-upgrade cannot move it, as happened to v1 on 2026-10-30), Node 26.13.0 from the official tarball, TypeScript 7.0.2, the
+upgrade cannot move it, as happened to v1 on 2026-10-30), Node 26.13.0 from the official tarball, TypeScript 6.0.x (D6), the
 Claude CLI copy (D8), Python 3 by checksum of `/usr/bin/python3` (D22). `global.json` pins `10.0.403` with `rollForward:
 disable`; `package.json` `engines.node` pins 26.13.0; `tsconfig.json` is v1's (`strict`, `noEmit`, `erasableSyntaxOnly`,
 `verbatimModuleSyntax`, `module nodenext`).
@@ -651,7 +659,7 @@ secondary measure; every session's spawn and exit timestamp (D27).
 Committed and tagged `prereg/lang-v2-<yyyymmdd>` **before the pilot** (E4.S3) and amended only by dated lines after it;
 **frozen before any paid data run (D26):** the ten specs' hashes, `FORMAT.md`'s hash and the freeze tag; the suites' hashes and counts; the runner's manifest hash (`runner/`, D37) and the execution layer's identity (D43, §6.1); the GitHub broker's allow-list shape (D42); the private trap aid's sha256 (D41); **the certifying host** (host, kernel, cgroup version, the systemd scope probe — D36) on which every data session runs; the declared culture `de_DE.UTF-8` (D35); the series defaults T = 10 s and G = 5 s with every per-task override (D14); the
 trap coverage table's hash; the limits of D14; the prompts; the pins and checksums (CLI, SDK, Node, TS, Python); the
-package sets and cache hashes; the conventions parity release sha (D23); the ceiling, the caps per arm and the budget split
+package sets and cache hashes; the conventions parity release sha (D23); the owner's fixed per-session cap of $50 and the pilot formula's cross-check cap per arm (D7; no ceiling, no split)
 (D30, from the pilot, as a dated amendment before round 1); this section as the analysis contract; the outcome classes, the
 void (exclusion) grounds and the re-run grounds; `prediction.md`; `seed.sha256`. After the pilot, amendments may change the
 caps, the stall timeouts, the limits (both stacks alike, by D14's formula), the time guesses and the split — never the
@@ -687,7 +695,7 @@ cases, orientation C#/TS fixed:
 | TS 0 accepted, C# ≥ 1 | `undefined (TS: no correct solution, k attempts, spend $x)`; CPC(C#) shown beside it |
 | C# 0 accepted, TS ≥ 1 | `undefined (C#: no correct solution, k attempts, spend $x)`; CPC(TS) shown beside it |
 | both 0 accepted | `undefined (neither: C# spend $x, TS spend $y)` |
-| a stack with no attempt at all (a round that never ran under the ceiling, D10) | `not run`; the task is undefined for that arm and says so; a spend of $0 is "no attempt", never a zero cost |
+| a stack with no attempt at all (a round that did not run — a series stop, never a ceiling since D7) | `not run`; the task is undefined for that arm and says so; a spend of $0 is "no attempt", never a zero cost |
 
 **Per task (D28):** for each arm, the C#/TS ratio of CPC and of every secondary measure where defined, the two success
 rates (k of 3), "C# > TS" per measure. **Overall, per arm and per measure, over the defined ratios only:** the **median of
@@ -726,7 +734,7 @@ and time ranges by a dated line, nothing else):**
 6. Delivery, process: ≥ 24 of 30 process sessions per stack merge into their base; compliance median ≥ 14/18.
 7. Surprises named in advance: TS accepted fewer than C# by 4 or more in either arm; a task where no session of either
    stack and arm is accepted (a floor); a task where every session is accepted (a ceiling, as v1); a bare session killed at
-   the wall; a process session over its cap; the ceiling binding before round 4.
+   the wall; a process session stopped at the $50 cap; the settled total of the series above the morning's $1000.
 
 ## 10. Threats to validity
 
@@ -743,7 +751,7 @@ and time ranges by a dated line, nothing else):**
 | T9 | **Prompt-cache warmth and CPU contention.** The two cells of a pair share the machine and the cache state | Same-tick start; masks swapped per pair; the quiet check; load flagged; first-turn cache read per session. *"Warmth and load meet both stacks of a pair alike; flagged pairs are shown apart."* |
 | T10 | **Floor and ceiling effects.** A task nobody passes or everybody passes separates nothing (v1 was at the ceiling) | The difficulty ladder of §4.1; prediction 7 names both cases; CPC shows "no correct solution" with its cost (D24); `percent` and `defects` carry information where `accepted` is at a floor. *"A task at a floor or a ceiling is reported as such and does not count as a difference."* |
 | T11 | **Time partition limits.** One Bash chain takes its highest category (v1's V16); longer sessions have more chains | The mixed-chain count per session; `build_test` against `other_tool` descriptive only; the primary time measures are wall, `model_api`, `active − model_api`. |
-| T12 | **The time guesses and the caps.** A cap derived from piloted tasks may cut a session of a task the pilot did not run; a process cap set from two piloted tasks is weaker still | §12's formula scales by the guess ratio and sets `capMax` per arm from the split; a `killed: cap` session is a censored data attempt in CPC's numerator, never dropped; the report counts them per stack and arm. *"Capped sessions are reported as bounds on spend; no CPC ratio is derived from a bound."* |
+| T12 | **The time guesses and the cap.** A fixed $50 cap (D7) may cut a long process session of a task the pilot did not run, and cuts both stacks alike only if their session costs are alike | the pilot formula's cap per arm is reported beside $50 as a cross-check (§12, G-18); a `killed: cap` session is a censored data attempt in CPC's numerator, never dropped; the report counts them per stack and arm. *"Capped sessions are reported as bounds on spend; no CPC ratio is derived from a bound."* |
 | T13 | **Public repository, secret or held-out leak.** A link in a workspace or a case in a sample would reach the agent or the public; the process agent's PR bodies are public | D2's rules; `leakcheck` on every push and on every PR body and comment (v1 §7.6 token scan widened); `workspace-diff`; the needles. |
 | T14 | **Rule asymmetry biases the process arm.** v1 measured 34 rules / 331,833 B for C# against 32 / 324,781 B for TS; a rule that exists for one stack and not the other (a build flag, a test runner shape, a logging sink) is a treatment difference the process arm applies to one side only | **The conventions parity audit (D23, E0):** every C#/.NET rule has a Node/TypeScript counterpart and the reverse, released before the pre-registration; rule bytes actually read per session are recorded as v1's V1 asks. *"The process arm compares C#-under-the-family-rules with TS-under-the-family-rules; the rules were audited for parity at release `<sha>`, and the bytes read per session are in the record."* |
 | T15 | **The process arm is a bundle and its wall is mostly waiting** (v1 V1, V3): gates, consultants, CI, `sleep 300`; the bundle's C# half carries the analyzers, `-m:4`, MTP, warnings as errors | The partition; active time beside wall; the compliance score beside `accepted`; the interaction reported with the sentence v1 wrote. *"The process arm's C#/TS difference is C#-under-the-process against TS-under-the-process, not a language effect; process wall time is largely not agent time."* |
@@ -766,21 +774,29 @@ replacing evidence), plus:
 | G-15 | the olympiad judge by hand: one C# and one TS pilot tree, run by hand on three held-out cases, give the judge's verdicts and times within 10 % | the judge misreads a real tree | fix, re-score (no re-run) |
 | G-16 | the drivers **each checked on the real pilot tree of the task that exercises them** (all three tasks are in the bare pilot set, D16): **task 5** (the daemon with a framed TCP protocol) for the TCP driver — the driver's scenario kinds for that task, driven by hand, give the driver's replies; **task 10** (the DAG scheduler) for the daemon checks that are its own — the cgroup `memory.peak` read by hand from the program's scope agrees with the driver's record, the RSS curve by hand (`ps` every second) agrees with the descriptive curve within 10 %, SIGTERM by hand ends the process within G as the driver says, the task's timer scenarios give the driver's final report; **task 4** (the web task) for the HTTP driver — one scenario of each kind the driver has (a concurrency scenario among them), and a captured dynamic value reused as `FORMAT.md` defines; which scenarios, and what they target, is the private aid's (D41); the culture check of T-L32 passes inside both boxes | a driver misreads a real program | fix, re-score |
 | G-17 | **calibration order held:** every task's limits were registered only after the joint validation of that task (drafted samples, references and suites run against each other; both references then pass every visible and held-out case — E2.S1 final — with no spec or `FORMAT.md` amendment pending), and no spec or `FORMAT.md` amendment touching that task is dated after its limit registration; both references of every task pass 100 % under the registered limits **in the scoring box on the series machine**, under the quiet check; each mutant fails exactly its cases | a limit was registered before the joint validation, or an amendment voided it, or a limit rejects one runtime's baseline, or a trap is not caught | a spec or `FORMAT.md` amendment after registration **voids that task's limits**: E2.S3 runs again for it and re-registers (dated, both stacks) before the pre-registration; otherwise recompute by D14 or fix the suite; all before round 1 |
-| G-18 | the cap derivation per arm and the budget split (§12) from the pilot's settled costs, written as a dated amendment; the stall timeout per arm larger than the longest quiet gap seen in any pilot session | the caps or stall would cut sessions the task needs | set them from the pilot; before round 1 |
+| G-18 | the pilot formula's cap per arm (§12) computed from the pilot's settled costs and written beside the owner's fixed **$50** cap as a reported cross-check (D7; no split, no ceiling); the stall timeout per arm larger than the longest quiet gap seen in any pilot session; every pilot session that reached $50 recorded `killed: cap` | the stall would cut sessions the task needs, or the $50 cap was not enforced | set the stall from the pilot; fix the cap enforcement; before round 1 |
 | G-20 | **the GitHub broker in the process pilot (D42):** in both process pilot pairs the clone of the run base, the fetch and push of the run's own branch, the PR creation and update and the reads of its checks and comments all succeeded through the broker (the stream and the broker log agree); the denied probes — a fetch of the bench repository, a read of the task repository's `main` README, a fetch of the other pilot run's branch and PR, a redirect outside the allowed set — were each attempted by the harness from inside a pilot box and refused with the broker's named error; no `github.com` CONNECT appears in the egress log | the broker lets a forbidden read through, or blocks a needed workflow | **stop**; fix (E3.S7a); one more process pilot pair |
 | G-19 | the process pilot: both pilot pairs delivered (merged, green), every compliance item computable, the frozen spec unchanged in both runs, the plan gate reached `proceed` before any code gate, CPC computed by hand for one pair equals the tool's | the process arm's instruments misread a real run | fix; one more process pilot pair before round 1 |
 
 Stops as v1: G-2, G-8, G-12 refuted, and alias drift, stop the series until fixed and an A/A is GO.
 
-## 12. Budget (D7, D30)
+## 12. Budget (D7; D30 superseded)
 
-The ceiling is **$1000** for v2's paid runs: pilot, A/A, data, voids and re-runs, counted on separate lines; the plan does
-not change it. The spend gate before every pair: settled spend + the live O sum of running sessions + 1.1 × Σ caps of the
-two sessions about to start ≤ $1000 (v1's `spendGate`, with the bare budget line replaced by **two arm lines** from the
-split). The ceiling cuts whole round pairs (D10); the report says "rounds 5–6 did not run" and reports every task at the n
-it reached, per arm.
+**The owner's frame (2026-10-31, late evening): no total ceiling; a fixed per-session cap of $50.** The six rounds of both
+arms run as planned. Every session carries the cap **$50** (the broker's budget and the CLI's `--max-budget-usd`, as v1 put
+the cap on both): a session that reaches it is stopped and recorded as **`killed: cap`, censored at `≥ $50`**, a data
+attempt in CPC's numerator (§9), never hidden. Pilot, A/A, data, void and re-run spend stay on separate lines in the
+ledger and the report; the spend gate before every pair keeps only its **per-session** part (the live O sum of a running
+session against its cap) and the **round rule** of D10 (round k+1 starts when round k is scored); it has no ceiling line.
+The pilot's cap formula below is **kept as a cross-check that is reported and does not bind**: the record shows, per arm,
+the formula's cap beside the owner's $50, so a reader can see whether $50 was generous or tight for the task.
 
-**The split and the caps, derived from the pilot (D30, G-18), pre-registered as a formula:** per arm, per task,
+**Superseded (D1; the text stays so the decision's history is readable):** the $1000 total ceiling and the gate's ceiling
+line; the data share and the split between arms; the `budget-frame` halt over the total; the budget approval step and its
+options table. None of them binds anything. The paragraphs below are that history.
+
+*Superseded — the split and the caps, derived from the pilot (D30, G-18), pre-registered as a formula (now a reported
+cross-check only):* per arm, per task,
 `cap = min(2 × the larger settled cost of its pilot pair, capMax(arm))` for the piloted tasks; for the others, the piloted
 task of the nearest guess scaled by the ratio of guesses (the process arm has two pilot points, so its scaling is marked
 weaker); `capMax(arm)` is set so that 1.1 × Σ over the arm's planned data sessions (60 across 6 rounds, or the amended round count of the accepted budget frame) of their caps ≤ the arm's share of the **data
@@ -790,9 +806,9 @@ as proportional to the arms' expected totals from the pilot (so neither arm is s
 operator's to confirm (Q-A). At the guesses the data share is ≈ $400–800 before the re-run reserve, so the frame check
 below is expected to fire unless the pilot comes in low.
 
-**Deterministic default when the frame breaks** (the cap rule fails — `capMax(arm)` < 1.5 × any pilot cost of that arm —
-or the projected total, Σ expected costs + 1.1 × the re-run reserve, exceeds the ceiling) **and the operator has not
-answered:** the runner **refuses to start round 1**. It exits with the resumable-halt code **3** and the named halt
+*Superseded — the deterministic default when the frame breaks* (the cap rule fails — `capMax(arm)` < 1.5 × any pilot
+cost of that arm — or the projected total, Σ expected costs + 1.1 × the re-run reserve, exceeds the ceiling) *and the
+operator has not answered:* the runner **refuses to start round 1**. It exits with the resumable-halt code **3** and the named halt
 `budget-frame`, prints the measured numbers (per arm: every pilot session's settled cost, the derived caps, `capMax`, the
 projected total, the ceiling) and the exact resume command, `lang-runner.mjs resume --series <dir> --amendment <date>`,
 which is accepted only when a dated budget line of that date exists in `amendments.md`. **It never cuts rounds, tasks or
@@ -800,9 +816,10 @@ arms on its own.** Any cut — fewer rounds, a smaller task set, a process-arm l
 operator's dated amendment, applied before round 1 and recorded in the pre-registration's amendments. The gate's own
 round-pair cut (D10) applies only inside a frame the operator has accepted.
 
-**The budget approval step (explicit).** At this plan's own estimates — bare $300–1,200, process $1,800–4,200, pilot and
-A/A $180–520 — six rounds of both arms do **not** fit $1000. So, **after the pilot and before round 1, the operator records
-a dated budget decision** in `amendments.md`: either **(i)** a raised ceiling with its amount, or **(ii)** a named reduction
+*Superseded — the budget approval step.* At this plan's own estimates — bare $300–1,200, process $1,800–4,200, pilot and
+A/A $180–520 — six rounds of both arms did **not** fit $1000; the owner's answer on 2026-10-31 was to remove the total
+(D7), so no decision line is needed and the options below were never exercised. Was: after the pilot and before round 1,
+the operator records a dated budget decision in `amendments.md`: either **(i)** a raised ceiling with its amount, or **(ii)** a named reduction
 — the rounds per arm, the task set, or the arms — or both. The runner's `budget-frame` halt stays the default until that
 line exists; the plan does not pick an option (Q-A). The options and what each does to the analysis:
 
@@ -821,9 +838,10 @@ set and arms, and the new `capMax` per arm.
 
 **Projection, as a guess only:** v1's one-minute bare sessions cost ≈ $0.35 each; v2's bare sessions run 5–75 min with many
 build and test loops, so $5–20 each → 60 bare sessions $300–1200. v1 predicted $30–70 per **process** cell on a far smaller
-task → 60 process sessions $1800–4200 at that rate; the pilot itself ≈ $180–520 (D16). Under $1000 the frame check will
-refuse round 1 and wait for the operator's amendment, or the operator changes the frame first; the pilot replaces this
-guess and the question is open (Q-A).
+task → 60 process sessions $1800–4200 at that rate; the pilot itself ≈ $180–520 (D16). With no total ceiling (D7) the
+projection is information for the owner, not a gate: the record shows the settled spend per arm against it. The $50 cap
+bounds any one session; at the guesses no bare session and few process sessions approach it, so censoring should be
+rare — the pilot shows whether that holds (Q-A closed).
 
 ## 13. Growth
 
@@ -894,7 +912,7 @@ turns host skips into failures).
 | T-L7 | limit calibration: given two reference measurements, D14's formula gives the registered limits; a reference failing under them is a calibration failure, not a passing suite |
 | T-L8 | trap coverage: every mutant fails exactly its registered cases and no other; both references pass every case; a trap with no catching case is a failure of the table |
 | T-L9 | the order: six rounds with arms strictly alternating and the lead drawn from the seed; every task once per round; rids distinct over arm, task, stack, repeat and attempt; masks swap per pair; a task's second repeat in an arm never precedes another task's first |
-| T-L10 | the spend gate with per-arm caps and the one ceiling; the round rule refuses round k+1 while round k has an unscored pair; the ceiling cuts a round pair whole; **the budget frame:** pilot costs that break the cap rule or the projection make `run --what round:1` exit 3 with halt `budget-frame`, print every measured number and the resume command, start nothing and cut nothing; `resume --amendment <date>` is accepted only with a dated budget line of that date |
+| T-L10 | the spend gate with the owner's fixed per-session cap of **$50** for every session of both arms (the runner's one cap constant; the broker's budget and the CLI's `--max-budget-usd` both read it) and **no ceiling line**: a session whose settled spend reaches $50 is stopped and classed `killed: cap`, censored at `≥ $50`, and stays in every table; the round rule refuses round k+1 while round k has an unscored pair; six rounds are planned whatever the settled total; the pilot formula's cap is computed and recorded as a cross-check and binds nothing (a fixture where the formula gives $12 still runs the session to $50) |
 | T-L11 | the record has every per-kind and per-arm field known, `not captured` with a reason, or `n/a (<kind \| arm>)`; spawn and exit timestamps present |
 | T-L12 | the contamination needles for the known tasks hit in tool inputs and outputs and are reported for a hand reading, never auto-voided |
 | T-L13 | offline caches (effect, in a box): with the registries refused by the proxy, `npm install fastify@5.12.7` and `dotnet restore` of the pinned project succeed; a package outside the set fails naming it |
@@ -981,19 +999,13 @@ whole round pairs — D10, now with two arms). Removed by the coai plan-gate rou
 process-arm pieces itself; v1 closes after its bare arm — D32) and **Q3** (Werewolf option (a) — D33). The budget frame's
 default when the operator has not answered is now fixed (§12); Q-A keeps only the operator's choice itself.
 
-- **Q-F (first) Does the owner approve a narrowed epoch 4?** D42 narrows the measured treatment of the process arm: its
-  GitHub access becomes run-bound (an isolated bare repository per run, the broker mirroring the branch and doing the PR
-  operations), so the process-arm result applies to "two stacks under the same run-bound GitHub policy", not under the
-  family's open one. Per `common.plan-change-control` step 8 a narrowed epoch needs the owner's approval first, and the
-  epoch 4 line will say `by owner`. **The alternatives the owner may choose instead:** keep the family's open GitHub access
-  for the process agent and accept and disclose the residual exposure of the public trap history (#124, #127, #128);
-  or make the bench repository private (or rewrite its history), which is the owner's call, not this plan's. Decision
-  expected 2026-11-01.
-- **Q-A Which budget frame?** At the plan's own estimates six rounds of both arms do not fit $1000 (§12). After the pilot
-  and before round 1 the operator records a dated budget decision — a raised ceiling with its amount, a named reduction
-  (rounds per arm, the task set, the arms), or both; §12's table gives each option's effect on n per task and on the
-  analysis. Until that line exists the runner halts with `budget-frame`. **The operator decides in the morning**
-  (2026-11-01); this plan picks no option and leaves $1000 as set.
+- **Q-F — closed by the owner, 2026-10-31: the narrowing is approved; the run-bound GitHub broker (D42) stands as
+  written.** The owner noted that every repository stays public — privacy was never the aim; the broker exists because the
+  process agent could otherwise read the trap history in the public bench repository, which the bare agent cannot reach.
+  Epoch 4 is approved `by owner` (narrowed: the process arm's GitHub capability).
+- **Q-A — closed by the owner, 2026-10-31: no total ceiling.** The $1000 is removed; the six rounds of both arms run as
+  planned; a fixed per-session cap of **$50** stays as a runaway guard (a capped session is censored, never hidden); the
+  pilot's cap formula is a reported cross-check that does not bind (D7, §12).
 - **Q-C The bias review sends held-out suites to coai's vendors** before sealing (D25). The agents under test never see
   them, but other vendors' models do. Accept the residual, or review the suites by an in-house Opus judge only and send the
   vendors the specs alone?
@@ -1080,7 +1092,7 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - **Depends on:** the operator creating the repository; the licence answers (Q1); E0.S3 for the pin; v1 §6's template
   design for S7 (D32: built here, nothing imported).
 - **Done when:** T-L1, T-L2, T-L13, T-L20's guard half green; `workspace-diff` clean on ten tasks; both snapshots hashed; the
-  preflight passes inside a box on SDK 10.0.403, Node 26.13.0, TS 7.0.2, the pinned Python; `FORMAT.md` is gated and its
+  preflight passes inside a box on SDK 10.0.403, Node 26.13.0, TS 6.0.x (the pinned patch), the pinned Python; `FORMAT.md` is gated and its
   three examples run (S8); the ten specs conform to it, carry a gate verdict and the freeze tag; the README carries the credits and the Node stack table; `leakcheck` clean.
 - S1 — repository skeleton: layout of §5, conventions pin (E0.S3), README with credits and the §4.6 table, LICENSE (Q1), the
   `workspace-diff` check. *Accepted when:* the check passes on an empty task pair and fails on a planted difference; the
@@ -1365,7 +1377,7 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - **Scope:** §9, §11, §12; D4, D8 (the CLI re-pin), D16, D26, D30.
 - **Depends on:** E0.S3 (the parity release pinned), E1–E3 complete.
 - **Done when:** the tag `prereg/lang-v2-<date>` exists before the A/A's first launch and after E0's release; `AA.md` says
-  GO; the bare and process pilot pairs ran; the cap, split, stall and limit amendments are dated lines; `seed.txt` revealed;
+  GO; the bare and process pilot pairs ran; the stall and limit amendments are dated lines and the cap cross-check is in the record (the cap itself is the owner's $50, D7); `seed.txt` revealed;
   pilot spend in the ledger per arm.
 - S1 — the day-1 price re-read and the CLI pin copy (D8, Q10). *Accepted when:* `prices-<date>.json` dated that day; the CLI
   copy's sha256 recorded.
@@ -1375,14 +1387,12 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   (verbatim-from-main, derived not typed, seed as hash only, no held-out needle).
 - S3 — the commit and the tag, before any paid session. *Accepted when:* the guard peels the tag to the commit.
 - S4 — the bare A/A, the bare pilot pairs (tasks 1, 3, 4, 5, 10; D16), the process pilot pairs (tasks 1, 3; Q7), G-1 … G-19, the
-  cap and split derivation (§12), the amendments, the seed reveal. **If the frame breaks** (§12: `capMax(arm)` < 1.5 × a
-  pilot cost, or the projection exceeds the ceiling) **and the operator has not answered, the default is fixed:** the
-  runner refuses round 1 with exit 3 and halt `budget-frame`, prints the measured numbers and the resume command, cuts
-  nothing; **the budget approval step of §12** — the operator's dated decision line naming a raised ceiling, a reduction
-  (rounds per arm, the task set, the arms) or both — is the only way on (Q-A is the operator's choice, not the runner's).
-  *Accepted when:* GO; every amendment is instrument-only, a budget line, or applied to both stacks; the formula's inputs are
-  in the ledger; T-L10's budget-frame case is observed once against the real pilot ledger (`run --what round:1 --dry-run`
-  prints the refusal when the frame is broken, or the go when it holds).
+  cap cross-check (§12: the pilot formula's cap per arm reported beside the owner's fixed **$50** cap, D7), the amendments,
+  the seed reveal. There is no total ceiling and no `budget-frame` halt (superseded, D7); the runner's cap constant is
+  **$50** for every session of both arms, and `run --what round:1 --dry-run` prints the six planned rounds with that cap.
+  *Accepted when:* GO; every amendment is instrument-only or applied to both stacks; the pilot's settled costs and the
+  formula's cross-check cap per arm are in the ledger and the record; no pilot session's settled cost exceeded $50
+  without the stop recorded as `killed: cap` (T-L10).
 - **Cornerstone area:** none marked (the go/no-go table is written strictly, as v1's E3).
 
 ### E5 — The paid rounds (§14 step 5 · 2 stories)
