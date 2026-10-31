@@ -1,13 +1,22 @@
 # PLAN — exploratory pilot: language-comparison task 1 on the v1 bare harness, 3 C# ∥ TypeScript pairs, to see v2's cost and time scale early
 
-> Status: **plan only, nothing implemented yet, 2026-10-31.** One unit, no epics. Owner-authorised (2026-10-31), **exploratory, not
+> Status: **plan only, nothing implemented yet; epoch 1 open since 2026-10-31 with 0 changes, approved by the coai plan round
+> (PROCEED from both reviewers on `f858222`, its five findings applied as the baseline).** One unit, no epics. Owner-authorised (2026-10-31), **exploratory, not
 > evidence**: it is NOT part of `todo/PLAN_lang_comparison_v2.md`'s pre-registered series and replaces none of its steps (its D16
 > pilot still runs task 1 on v2's harness). Scope: a new spike `spikes/lang-explore/` that imports `spikes/minigit-bench/`; four
 > named widenings of v1 files (§2.2); held-out cases, references and raw records outside git under `~/rsd/lang-v2/explore/`; one
 > public note `research/lang-v2/EXPLORE_task1_<run date>.md`. Budget: no total set by the owner; **$50 per session**. The coai plan
-> round runs before any code; the change ledger opens at the first approval (`common.plan-change-control`). Updated the same day,
+> round ran before any code; the ledger below opened at that approval (`common.plan-change-control`). Updated the same day,
 > before that round: the v2 plan's epoch 4 is on `main` (#129, `90d0395`); TypeScript pinned at 6.0.3; spec 01 re-pinned at its
-> FORMAT v2 conformance.
+> FORMAT v2 conformance. This pilot touches no approved plan's text: the boundary with v1 and v2 is recorded here only (§9).
+
+## Plan changes
+
+> Epoch 1 · approved 2026-10-31 · by reviewers · state: open
+
+  (The coai plan round on `f858222`, PROCEED from both reviewers. Its five accepted findings are the baseline, applied in the
+  approving commit: a fresh workspace per case, one time-limit definition, a kill path that tolerates a missing unit, the 30 s
+  calibration ceiling, and no edit to the v2 plan. The coder brief at the end restates the approved plan and changes nothing.)
 
 ## 1. The goal, before any solution
 
@@ -69,7 +78,7 @@ or series is affected, and a v1 re-run would need `--accept-harness` as for any 
 | D-X5 | **Locale `de_DE.UTF-8`** (D35; generated on the host — `locale -a` lists `de_DE.utf8`) in the agent box and the scoring box, `LANG` and `LC_ALL`, through W2/W3; D15's other keys (`DOTNET_gcServer=0`, `NODE_OPTIONS` empty) through `extra` |
 | D-X6 | **Workspace per stack, as spec 01's R13 and FORMAT v2 (`1531de8`) require:** `STATEMENT.md` (spec 01's bytes plus the stack sentence, v2 §4.1; the spec carries FORMAT v2's fixed sentences, F-LIMITS-O, F-RUN-O and F-SAMPLES-O among them), `samples/s01…s03.{in,out}` (FORMAT v2 §3.2: raw bytes, no header; the same bytes as the spec's §6 table, §3.4), `runner/` (below), `build.sh`, `run.sh` (last command `exec`, D38), `PACKAGES.md` (spec R13: the SDK or the standard library only), the pins (C#: `global.json` 10.0.114 `rollForward: disable`, `nuget.config` offline, a `src/App.csproj` skeleton; Node: `package.json`, v2 §4.6's `tsconfig.json`, `.npmrc` `offline=true`; `build.sh` = `tsc --noEmit`, `run.sh` = `exec node src/main.ts`). Templates in git (`spikes/lang-explore/templates/`); the spec and FORMAT texts are read from the local repository at their pinned sha256 and never committed here. **`runner/`**: `GRAMMAR.md` = FORMAT v2's sections 3 to 5, verbatim (its §0 rule); `run_samples.py` = the pilot's one judge (§4), byte-identical to the harness's copy, **olympiad only** — `python3 -I runner/run_samples.py samples/` builds with `bash build.sh` and prints one `PASS`/`FAIL` line per case (FORMAT v2 §3.1, §5.6), time judged against the 1 s floor, no memory. It is **not** v2's E1.S8a runner (not built; §9) |
 | D-X7 | **Prompt:** v2 §4.5's bare prompt as written (its `runner/` sentence holds, D-X6); v2's stack sentences with SDK 10.0.114 and TypeScript 6.0.3. Bytes and sha256 in `spikes/lang-explore/inputs/prompts.json`; read back from one cell per stack (`common.measurement` rule 1) |
-| D-X8 | **Scoring** (§4): Python stdlib, visible + held-out, **time limit 2 s**, memory certified by a systemd scope (probed easy, §4; required, spec 01 R11) |
+| D-X8 | **Scoring** (§4): Python stdlib, visible + held-out, a fresh copy of the built workspace per case; **time limit: 2 s is the floor, the effective TL = max(2 s, 3 × the slower reference's slowest case wall)**, measured under the 30 s calibration ceiling and recorded in the run's inputs; memory certified by a systemd scope (probed easy, §4; required, spec 01 R11) |
 | D-X9 | **Time:** every v1 measure (wall, `model_api`, `active − model_api`, every category). v1's classifier does not know `build.sh` / `run.sh`, and is not widened (it would re-class v1's sessions on replay), so **build/test time** is reported beside it, labelled: the summed spans of Bash calls whose command runs `build.sh`, `run.sh` or `tsc`/`dotnet build`, from v1's `callsOf`. v2 E3's widening decides how that lands for v2 |
 | D-X10 | **Records:** v1's session and pair records (D34: every v1 metric), plus an `explore` section: visible and held-out pass rates, verdict counts by class, per-case wall and certified peak, build time, the limits used, trap hits (count only; detail private). **CPC** per stack (D24): Σ cost of the stack's sessions / accepted, `no correct solution` with its spend when 0 |
 
@@ -87,11 +96,16 @@ or series is affected, and a v1 re-run would need `--accept-harness` as for any 
   `52e0a13e…`; `-I` adds no script directory to the import path, so the file is self-contained). In held-out mode it is handed by
   `lib/score.mjs` a pristine copy of
   `box/work` (v1's `excludedDirs`), the cases directory and the scoring-box argv (v1's `scoreBoxArgv` with W3, offline caches,
-  no network): `bash build.sh` once, 600 s (R14); then, per case, `bash run.sh` with the case's stdin. A case passes when stdout
+  no network): `bash build.sh` once, 600 s (R14), in a scoring copy that is then made read-only (the built tree); then, **per case,
+  a fresh copy of the built tree** (copy-on-run, removed after the case) in which `bash run.sh` runs with the case's stdin, so
+  nothing a run writes reaches the next case (R15, R16). The harness scores the visible samples the same way. A case passes when stdout
   equals the expected bytes (R8), the exit is 0 (R10), the wall is within the limit and the memory claim holds; stderr is
   recorded, not judged (R9). Verdicts: `pass`, `wrong answer`, `time limit`, `memory limit`, `runtime error`; a failed build
-  fails every case. Output is read up to a cap; a timeout kills the whole scope (`systemctl --user kill --signal=KILL`) and checks
-  it is gone (`common.security`). The cases are piped from the host; the box never sees them.
+  fails every case. Output is read up to a cap; a timeout kills the whole scope (`systemctl --user kill --signal=KILL <unit>`) and then
+  proves it is gone (`common.security`). **The kill path tolerates a missing unit:** a unit that already ended answers "not loaded"
+  or "not found" (exit 5, or exit 1 with that message), which is not a harness failure; after the kill the judge checks
+  `systemctl --user is-active --quiet <unit>` and asserts no process remains (the scope's `cgroup.procs` empty, or the unit gone).
+  A process that remains is a harness failure that stops the pilot. The cases are piped from the host; the box never sees them.
 - **Memory.** Each run is a `systemd-run --user --scope -p MemoryMax=<ML> -p MemorySwapMax=0` around a `sh` wrapper that starts
   the box and, after the program ends, reads its own scope's `memory.peak` and `memory.events`. Probed 2026-10-31 on this host: a
   50 MiB allocation read `memory.peak` 56,082,432 B and `oom_kill 0` after the program had exited. The peak includes the wrapper
@@ -99,8 +113,11 @@ or series is affected, and a v1 re-run would need `--accept-harness` as for any 
   on a machine that can read this peak, so there is no descriptive fallback: if the build-order probe fails on the real path, the
   pilot halts before pair 1 with `memory-not-certifiable` (v2 D36's halt), and `ru_maxrss` from `wait4` is kept beside the peak as
   description only.
-- **Limits, and how they were chosen.** Time limit **TL = max(2 s, 3 × the slower reference's slowest case wall)**; memory limit
-  **ML = max(512 MB, 2 × the larger reference peak)**, both measured through the same scope and box on this host before pair 1.
+- **Limits, and how they were chosen.** One definition, D-X8's: the time limit's floor is 2 s and the **effective TL = max(2 s,
+  3 × the slower reference's slowest case wall)**; memory limit **ML = max(512 MB, 2 × the larger reference peak)**, both measured
+  through the same scope and box on this host before pair 1 and written into the run's inputs (`<series>/inputs.json`), which
+  every record names. **The calibration runs each reference case under a fixed ceiling of 30 s**; a reference case that exceeds it, or
+  fails, stops the pilot before any paid session.
   2 s and 512 MB are twice spec 01's floors (R11: 1 s, 256 MB) because the pilot has no calibration (v2 E2.S3) and every run pays
   a fixed start-up (scope, `bwrap`, the runtime's host) that only a calibration can measure; doubling the floor keeps a correct
   program in either runtime from failing on start-up noise. Every case's wall and peak are recorded, so the note states how many
@@ -108,7 +125,7 @@ or series is affected, and a v1 re-run would need `--accept-harness` as for any 
 - **Validated before it reports anything** (`common.measurement` rule 2): both references pass 100 %; each mutant fails exactly
   the cases the private notes predict for it; the first paid pair's verdicts are read by hand (all visible cases and at least 20
   held-out verdicts across the pair) before any pass rate appears in the note.
-- **Accepted** (for CPC) = a clean build, every visible and held-out case passed, the memory claim certified (or the flag).
+- **Accepted** (for CPC) = a clean build, every visible and held-out case passed, the memory claim certified.
 
 ## 5. Prediction — recorded before the run
 
@@ -170,25 +187,26 @@ pairs (sessions, a 60 s quiet window per pair, scoring), plus the build steps.
 | Held-out side, records | — | — | outside git under `~/rsd/lang-v2/explore/`, disjoint from v2's `~/rsd/lang-v2/` series dirs |
 | `runner/run_samples.py` | — | E1.S8a builds the series runner (all three kinds, FORMAT v2's grammar) and pins it; it may read the pilot's as a draft, recorded as such | an olympiad-only judge for this pilot |
 
-Order: this pilot first; v2's E1 runs in parallel and is not blocked. The same table is written into the v2 plan (on `main` since #129) as a status
-note, not a change, once this plan is approved, and into v1's module document with the seams.
+Order: this pilot first; v2's E1 runs in parallel and is not blocked. **This table lives only in this plan:** the pilot edits no
+approved plan's text, neither v2's nor v1's. Only v1's module document (`research/module_minigit_bench.md`, a description of
+the code, not a plan) gains the four seams when they land.
 
 ## 10. Build order
 
-0. **Gate and probes (no paid call).** The coai plan round on this file. Pins: `typescript@6.0.3`'s integrity from the registry
+1. **Gate and probes (no paid call).** The coai plan round on this file (passed, `f858222`). Pins: `typescript@6.0.3`'s integrity from the registry
    (network), `python3` sha256, spec 01 at `d622768` (sha256 `d890bb3fab5f9b4e6899a8578e852526cdab25a9316eda0860f21f6c3706742e`),
    FORMAT v2 at `1531de8` (sha256 `5b476946bf9f0a61f87845bead56043953777d038269a117000af149ec8f3d9c`) — a later amendment moves a pin
    in one dated line before pair 1, never between pairs; the scope probe on the real path.
-1. **W1–W4**, RED-GREEN-RED each; v1's suite green under `BENCH_REQUIRE_SANDBOX=1`.
-2. **`prepare`** (the one networked step): the TS toolchain, the Node snapshot, the C# snapshot re-hashed; spin calibration.
-3. **Held-out side** (Sonnet, outside git): `gen.py`, the cases and `cases.txt`, the two references, the mutants.
-4. **`runner/run_samples.py` + `lib/score.mjs`**, RED-GREEN-RED; references 100 %, mutants exact; TL and ML computed and recorded.
-5. **`lib/workspace.mjs`, `lib/plan.mjs`, `lib/records.mjs`, `lib/note.mjs`, `explore.mjs`**, RED-GREEN-RED.
-6. **$0 rehearsal:** a stub CLI in the real box behind the real broker (stub upstream), workspaces pre-filled with the reference
+2. **W1–W4**, RED-GREEN-RED each; v1's suite green under `BENCH_REQUIRE_SANDBOX=1`.
+3. **`prepare`** (the one networked step): the TS toolchain, the Node snapshot, the C# snapshot re-hashed; spin calibration.
+4. **Held-out side** (Sonnet, outside git): `gen.py`, the cases and `cases.txt`, the two references, the mutants.
+5. **`runner/run_samples.py` + `lib/score.mjs`**, RED-GREEN-RED; references 100 %, mutants exact; TL and ML computed and recorded.
+6. **`lib/workspace.mjs`, `lib/plan.mjs`, `lib/records.mjs`, `lib/note.mjs`, `explore.mjs`**, RED-GREEN-RED.
+7. **$0 rehearsal:** a stub CLI in the real box behind the real broker (stub upstream), workspaces pre-filled with the reference
    trees, one pair on the masks: launch, collect, classify, score, record and note run end to end; `leafProblems` is `[]`.
-7. **Pair 1** after the quiet check; the hand check of §4; the prompt and env read back from one cell per stack.
-8. **Pairs 2 and 3**; voids re-run once.
-9. **The note**, the leak check, the commit; `prune`; this plan promoted with its deviations.
+8. **Pair 1** after the quiet check; the hand check of §4; the prompt and env read back from one cell per stack.
+9. **Pairs 2 and 3**; voids re-run once.
+10. **The note**, the leak check, the commit; `prune`; this plan promoted with its deviations.
 
 Code is written by Sonnet coders from Opus briefs and reviewed by Opus (`common.subagent-models`); the coai code round runs
 before the merge.
@@ -207,14 +225,17 @@ before the merge.
 | T-X8 | CPC: Σ cost / accepted; 0 accepted gives `no correct solution` with its spend; a `killed: cap` session counts in the numerator |
 | T-X9 | The note: the banner, every §5 row against its observation, every §8 difference; no case id, R-id breakdown, input or expected value (a fixture's needles are asserted absent); trap hits as counts |
 | T-X10 | The barrier: pair k+1 refused until pair k is recorded; one re-run per void |
-| T-X11 | The $0 rehearsal end to end (step 6) |
+| T-X11 | The $0 rehearsal end to end (step 7) |
+| T-X12 | A fresh workspace per case: a stub submission whose `run.sh` writes a marker into its directory during case 1, and answers differently when the marker exists, gets the same verdict on case 2 as when case 2 runs alone (watched red with one shared copy) |
+| T-X13 | The kill path with a unit that never started: `systemctl --user kill` answering "not loaded" / "not found" is no harness failure, the residual-process check passes; a unit with a process left is a failure |
+| T-X14 | Calibration: a reference case over the 30 s ceiling, or a failing one, stops the pilot before any paid launch; the effective TL is the larger of 2 s and 3 × the slowest reference wall, and the run's inputs record it |
 
 Every test runs through v1's `run-tests.mjs`; Python is driven from `node:test` with a temp directory from v1's helper, so
 the judge creates no temp path of its own.
 
 ## 12. Definition of Done
 
-- [ ] The coai plan round passed; the ledger opened at that approval.
+- [x] The coai plan round passed (PROCEED on `f858222`); the ledger opened at that approval.
 - [ ] W1–W4 merged with their tests; v1's suite green with 0 skipped under `BENCH_REQUIRE_SANDBOX=1`.
 - [ ] Network was used only by `prepare`; every session's egress log shows no allowed host.
 - [ ] The scorer was validated (references, mutants, the hand check) before any rate was reported.
@@ -226,7 +247,7 @@ the judge creates no temp path of its own.
 - [ ] The private detail (trap hits by case, the agents' failing outputs) is in `~/rsd/lang-v2/explore/<series>/private/`.
 - [ ] The leak check is clean over the repository and the branch range.
 - [ ] `prune` ran; the growth table's sizes were checked against the disk.
-- [ ] The boundary table is in the v2 plan (status note) and the seams in `research/module_minigit_bench.md`.
+- [ ] The seams are in `research/module_minigit_bench.md`; no approved plan's text was edited.
 - [ ] This plan is promoted with its deviations; `plan-lifecycle.mjs` is clean.
 
 ## 13. Open questions (the owner's)
@@ -234,3 +255,101 @@ the judge creates no temp path of its own.
 - **Q-1** — does the account's data-use setting exclude the pilot's conversations from training? (Risk 1.) Not blocking: v1's
   paid sessions ran under the same setting.
 - **Q-2** — closed 2026-10-31: TypeScript 6.0.3 (D-X3, D-X4).
+
+## 14. Brief for the Sonnet coder
+
+Self-contained: everything you need is here or at a path named here. Written by the team lead (Opus) from the approved plan;
+where this brief and §1–§13 differ, §1–§13 win and you stop and ask.
+
+**Before any edit.** Worktree `/home/jinx/git/wt/benchmark-explore-t1`, branch `feat/lang-explore-task1`. Read `AGENTS.md`,
+`.agents/conventions/ENTRY.md`, `.agents/PROJECT.md`; run `node .agents/conventions/tools/rules.mjs check --repo .` and
+`… explain --repo . --task implement --task test --file <each file below>`, then read every selected rule. Read
+`research/module_minigit_bench.md` §5–§6 (the box, the broker, the runner). Style: plain ESM `.mjs` on Node 26, no dependency
+and no `package.json`, as v1; every function ≤ 50 lines and complexity ≤ 4; failures as values (`ok` / `fail` of v1's
+`lib/result.mjs`); an unknown is `{ known: false, why }`, never 0; external processes as exe + argv with a timeout that kills
+the whole tree (v1's `runBounded`, `spawnTracked`), never a shell string. Tests: `node:test`, run only through
+`node spikes/minigit-bench/run-tests.mjs ../lang-explore/test/*.test.mjs` (and v1's own suite with
+`BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs`); temp folders only through v1's `test/helpers.mjs` `tmpDir`;
+a test that drives the runner imports v1's `test/fake-home.mjs` first. **RED-GREEN-RED** for every new behaviour: write the
+test, watch it fail for the real reason, make it pass, then break the code once more (revert the line) and watch the same test
+fail, restore; report both observations.
+
+**The ten steps, and your files.** You do steps 1–7 and the code of step 10; the team lead does 8–10's runs.
+
+| Step | You do | Files (all paths from the repository root unless `~`) |
+|---|---|---|
+| 1 | Write the pins file; run the probes and record their output: the scope probe on the real path (`systemd-run --user --scope -p MemoryMax=… -p MemorySwapMax=0` → `sh` wrapper → v1's scoring `bwrap` → `bash run.sh`, then `memory.peak` and `memory.events` read inside the scope after the program ends), the locale probe in both boxes (T-X4), `python3` sha256 | `spikes/lang-explore/inputs/explore.json`: CLI 2.1.310 path and sha256 `b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56`; node 26.12.1 dir; SDK 10.0.114; `typescript` 6.0.3 (integrity filled by step 3); `/usr/bin/python3` sha256 `52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41`; spec 01 `d622768` sha256 `d890bb3f…706742e`, FORMAT v2 `1531de8` sha256 `5b476946…f8c3d9c` (full values in §10 step 1), read from `/home/jinx/git/dew_flow_ai_language_comparison` with `git show <sha>:<path>`; the private notes' sha256 `0eb311642c70460d07fa5d32e57a741decbe61cd8f99ba0e4705831e77d8e89e`; caps $50 / 75 min / 45 min; TL floor 2 s, ML floor 512 MB, calibration ceiling 30 s |
+| 2 | The four v1 seams (below) | `spikes/minigit-bench/lib/{bare-phase,sandbox,bwrap,bare-record}.mjs`; tests `spikes/minigit-bench/test/explore-seams.test.mjs`; extend `spikes/minigit-bench/test/no-shell.test.mjs` to scan `spikes/lang-explore/` too |
+| 3 | `explore.mjs prepare` (below) | `spikes/lang-explore/explore.mjs`, `lib/prepare.mjs`, `inputs/cache-recipe.json`, `inputs/cache-snapshots.json` |
+| 4 | The held-out side (below) | `~/rsd/lang-v2/explore/heldout/` only |
+| 5 | The judge and its Node side; `explore.mjs calibrate` | `spikes/lang-explore/runner/run_samples.py`, `lib/score.mjs`, `lib/calibrate.mjs`; tests `test/judge.test.mjs`, `test/calibrate.test.mjs` |
+| 6 | Workspace, session plan, records, CPC, note, the CLI | `templates/csharp/` (`build.sh`, `run.sh` ending in `exec dotnet out/App.dll`, `global.json`, `nuget.config`, `src/App.csproj`, `PACKAGES.md`), `templates/node/` (`build.sh` = `tsc --noEmit`, `run.sh` = `exec node src/main.ts`, `package.json`, `tsconfig.json`, `.npmrc`, `PACKAGES.md`), `inputs/prompts.json`, `lib/workspace.mjs`, `lib/plan.mjs`, `lib/records.mjs`, `lib/note.mjs`, `explore.mjs` (`run --pair k [--rerun <stack>]`, `status`, `note`, `prune`); tests `test/{workspace,plan,records,note,barrier}.test.mjs` |
+| 7 | `explore.mjs rehearse` (below), and run it | `lib/rehearse.mjs`; test `test/rehearse.test.mjs` |
+| 8–9 | — (the team lead: quiet check, pairs 1–3) | — |
+| 10 | — (the team lead: the note, `leakcheck`, `prune`, the promotion) | — |
+
+**The four v1 seams — each default byte-identical, each RED-GREEN-RED.** Before the change, capture today's outputs as the
+regression fixture (a test that compares JSON, not your memory).
+- **W1** `lib/bare-phase.mjs`: `ctx.fill` and `ctx.planFor`, optional; when absent, `fillFor` (`:32`) and `sessionPlan`
+  (`:75`) run exactly as today. Tests: with neither, a v1 phase fills SPEC-v1.txt and gets the minigit prompt (unchanged); with
+  both, the given functions are called once per item and their results used.
+- **W2** `lib/sandbox.mjs` `agentEnv({ …, locale })`: absent → the object is byte-identical to today's (`LANG: 'C.UTF-8'`, no
+  `LC_ALL`); given → `LANG` and `LC_ALL` are that value; `extra` still may not replace either (the clash rule). `AGENT_ENV_KEYS`
+  gains `LC_ALL` only if its own test demands the list match; say which.
+- **W3** `lib/bwrap.mjs` `scoreEnv` / `scoreBoxArgv({ …, locale })`: the same rule; the default argv is byte-identical.
+- **W4** `lib/bare-record.mjs`: export `sessionMeasure` unchanged; `cellOf`'s results identical on a fixture.
+Then v1's whole suite: 0 failed, 0 skipped, under `BENCH_REQUIRE_SANDBOX=1`.
+
+**What `prepare` downloads — the only networked step.** `typescript@6.0.3` from `registry.npmjs.org`: read `npm view
+typescript@6.0.3 dist.integrity` and record it in `inputs/explore.json`; install it read-only at
+`~/rsd/lang-v2/explore/toolchains/typescript-6.0.3/` through v1's `preflight({ stacks, install: true })` with the pilot's
+`stacks` object, and check the installed tarball's integrity equals the recorded one (do NOT use the copy in `~/.npm`). Then
+the Node cache snapshot with v1's `makeSnapshot` and the pilot's recipe (`node --version` = `v26.12.1`; `npm init -y`;
+`npm install --no-audit --no-fund typescript@6.0.3 @types/node@{TYPES_NODE}`, `TYPES_NODE` = highest `@types/node@26`), in a box
+behind the proxy with the registry list, read-only under `~/rsd/lang-v2/explore/toolchains/`, its tree hash registered in
+`inputs/cache-snapshots.json`. The C# part is v1's registered `cache-csharp-0a5733e2d4f1`, re-hashed. Then the spin calibration.
+Nothing else reaches the network, ever: sessions run with `allow: []`.
+
+**The held-out side — private, never in git.** Read `~/rsd/lang-v2/test-design/01.md` §1–§2. Write under
+`~/rsd/lang-v2/explore/heldout/` (directories mode 0700, files 0600): `gen.py` (Python stdlib) that writes `cases/<id>.in`,
+`cases/<id>.out` and `cases/cases.txt` (`<id> <R-ids> byte-exact`, every case at least one R-id of spec 01) and asserts the
+notes' fact table; `refs/csharp/` and `refs/node/` in workspace shape; `mutants/<id>/` as the notes list them; `manifest.json`
+with the case count, each mutant's expected failing set and every file's sha256. No case value, mutant, trap name or
+reference code goes into git, a test fixture in git, a commit message, a PR body, a prompt or a workspace; tests in git read
+these files at run time and are `hostLacks` when they are absent.
+
+**The judge.** `runner/run_samples.py`, Python stdlib, self-contained (`-I` imports nothing beside it), two modes.
+*Visible* (the copy in every workspace, byte-identical): `python3 -I runner/run_samples.py samples/` builds with
+`bash build.sh`, runs every pair, prints one `PASS`/`FAIL` line per case (FORMAT v2 §3.1, §5.6), time against the 1 s floor,
+no memory. *Held-out* (the harness, on the host, handed by `lib/score.mjs`: the pristine copy, the cases dir, the scoring-box
+argv with W3, the limits): build once (600 s) in a copy, make it read-only; **per case, a fresh copy of that built tree**,
+removed after; the run in its own scope as step 1 probed; stdin piped from the host; stdout read up to 1 MiB; verdict `pass` /
+`wrong answer` / `time limit` / `memory limit` / `runtime error`; per case wall, certified peak, `memory.events`, exit code,
+stderr tail; one JSON result file. **Kill path:** on timeout `systemctl --user kill --signal=KILL <unit>`; "not loaded" / "not
+found" (exit 5, or 1 with that message) is not an error; then `systemctl --user is-active --quiet <unit>` and an empty
+`cgroup.procs` (or the unit gone); a process left stops the pilot. No temp path of its own: it writes only under the
+directories it is given. `lib/score.mjs` maps the result to v1's score shape (`bare-record.mjs:98`) plus the explore fields.
+`explore.mjs calibrate`: both references through the held-out mode with a **30 s ceiling per case**; any case over it, or
+failing, stops with a sentence; then TL = max(2 s, 3 × slower reference's slowest wall), ML = max(512 MB, 2 × larger peak),
+and every mutant must fail exactly its manifest set; the limits go to the run's inputs.
+
+**The $0 rehearsal** (`explore.mjs rehearse`). v1's `stubClaude` as the CLI and `stubUpstream` as the API, in the real box
+behind the real broker and proxy, a fake token (the real token file is never read), one C# ∥ TS pair on the masks, each
+workspace pre-filled with its reference tree; then collect, classify, score, record and render the note exactly as a paid
+pair. Pass: both sessions `completed`, both scored 100 %, `leafProblems` of every record is `[]`, T1–T5 as v1's stub gives
+them, and the note renders with its banner. Its ledger line is a $0 `rehearsal`.
+
+**The machine-quiet check** (before every pair; you build it, the team lead runs it). v1's `inputs/quiet.json` thresholds,
+`quietWindow` and `waitForQuiet` (`lib/quiet.mjs`), a sampler from `createSampler` (`lib/cpu-sampler.mjs:227`) whose
+`liveSessions` lists live sessions under both `~/rsd/minigit` and `~/rsd/lang-v2/explore`, and the spin probe calibrated at
+`prepare`. Not quiet: re-check every 60 s for 30 min, printing each verdict, then exit 3; `--accept-noisy <reason>` starts
+anyway with the flag `started not quiet`. During a pair the phase sampler writes its file and flags, never kills.
+
+**You must NOT:**
+- start any paid session or read the real token file (`~/.config/minigit-bench/claude-oauth-token`) — the team lead starts
+  pair 1 after the coai code gate;
+- use the network outside `prepare`;
+- put any held-out or private material in git (above);
+- edit any plan's text (this one included, beyond ticking boxes the team lead asks for);
+- `git add -A`, `git add .` or `git commit -a` — add files by name; never push;
+- change a v1 default, a v1 registered input under `spikes/minigit-bench/inputs/`, or v1's classifier.
