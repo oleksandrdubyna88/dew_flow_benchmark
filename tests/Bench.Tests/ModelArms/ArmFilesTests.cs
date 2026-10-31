@@ -20,13 +20,13 @@ public sealed class ArmFilesTests
         Assert.SkipWhen(OperatingSystem.IsWindows(), "modes are POSIX");
         using var temp = new TempFolder();
         var path = temp.Combine("keys", "mcp-coai.json");
-        var seen = new List<(UnixFileMode Mode, string Text)>();
+        (UnixFileMode Mode, string Text)? seen = null;
 
-        ArmFiles.ReplacePrivate(path, "{\"key\":\"s3cret\"}\n", staged => seen.Add((File.GetUnixFileMode(staged), File.ReadAllText(staged))));
+        ArmFiles.ReplacePrivate(path, "{\"key\":\"s3cret\"}\n", staged => seen = (File.GetUnixFileMode(staged), File.ReadAllText(staged)));
 
-        seen.Should().ContainSingle("the seam runs once, after the staging file is written and before the rename");
-        seen[0].Text.Should().Contain("s3cret", "the staging file already holds the secret at that moment — so its mode is what matters");
-        seen[0].Mode.Should().Be(Private, "a create-then-chmod would leave the default umask's 0644 here, with the key already written");
+        seen.Should().NotBeNull("the seam runs once, after the staging file is written and before the rename");
+        seen!.Value.Text.Should().Contain("s3cret", "the staging file already holds the secret at that moment — so its mode is what matters");
+        seen.Value.Mode.Should().Be(Private, "a create-then-chmod would leave the default umask's 0644 here, with the key already written");
         File.GetUnixFileMode(path).Should().Be(Private);
         File.ReadAllText(path).Should().Be("{\"key\":\"s3cret\"}\n");
 
