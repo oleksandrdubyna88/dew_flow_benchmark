@@ -106,11 +106,11 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
 
     public RestoreReport Restore(IReadOnlyList<SavedMode> reverse, RestoreBound bound)
     {
-        var tally = new RestoreTally();
+        var tally = RestoreTally.Empty;
         foreach (var saved in reverse)
         {
             var judged = Judged(saved, bound);
-            tally.Add(judged.Verdict, saved.Path, () => Restored(saved, judged.Fd));
+            tally = tally.Add(judged.Verdict, saved.Path, () => Restored(saved, judged.Fd));
             CloseFd(judged.Fd);
         }
 

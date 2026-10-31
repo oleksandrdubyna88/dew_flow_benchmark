@@ -108,7 +108,9 @@ public sealed class InitVerbTests
         var root = Path.Combine(fixture.Temp, "fresh");
         (await InitAsync(root)).Code.Should().Be(0);
         File.Exists(Path.Combine(root, "experiment.json")).Should().BeTrue("init wrote the template this test then fills");
-        File.WriteAllText(Path.Combine(root, "experiment.json"), File.ReadAllText(Path.Combine(fixture.Root, "experiment.json")));
+        File.WriteAllText(
+            Path.Combine(root, "experiment.json"),
+            File.ReadAllText(Path.Combine(fixture.Root, "experiment.json")).Replace($"/{fixture.Root}/arms.map.json", $"/{root}/arms.map.json", StringComparison.Ordinal));
         File.WriteAllText(Path.Combine(root, "scenarios.json"), File.ReadAllText(Path.Combine(fixture.Root, "scenarios.json")));
 
         var (code, output, error) = await RunAsync(["validate", "--experiment", root], fixture.Environment);

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Bench.Domain;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
@@ -79,16 +80,20 @@ public sealed class IsolationPlanTests
         missing.Should().Contain("runs.part7.closedArms[0]").And.Contain("'C1'").And.Contain("never made", "an arm the map lacks is refused, never skipped: a closure the operator wrote and the module ignored would be a silent lie");
     }
 
-    /// <summary>What <c>after7.sh:40-42</c> put in <c>EXTRA_CLOSED</c> besides the nine arm folders, in the shell's order (<c>$E</c> is the experiment root).</summary>
-    private static readonly string[] ShellExtraClosed =
-    [
-        "$E/judge-abs", "$E/judge-coai", "$E/mut6", "$E/coai-findings.json", "$E/metrics6.json", "$E/judge-abs.log", "$E/judge-coai.out", "$E/mut6.log", "$E/chain.log", "$E/chain", "$E/PROTOCOL.md",
-        "/home/jinx/git/dew_flow_benchmark-wt/lmc-part6",
-    ];
+    /// <summary>The shell's source of truth: <c>part6/after7.sh</c> is checked in beside the harness's other scripts (sha256 <c>12199719…</c>, the parent's §2 sum). Its <c>EXTRA_CLOSED</c> is PARSED from there — the words after the nine arm folders (<c>$P6</c>), the line continuation joined — and a file or a variable that cannot be found fails the test.</summary>
+    private static string[] ShellExtraClosed()
+    {
+        var path = Path.Combine(Cli.Repository.Root, "research", "local-model-coding", "harness", "part6", "after7.sh");
+        File.Exists(path).Should().BeTrue($"the shell's after7.sh is checked in at {path}: the example's part-7 set is compared with it");
+        var text = File.ReadAllText(path).Replace("\\\n", " ", StringComparison.Ordinal);
+        var declaration = Regex.Match(text, "export EXTRA_CLOSED=\"(?<words>[^\"]*)\"", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
+        declaration.Success.Should().BeTrue("after7.sh declares EXTRA_CLOSED");
+        return [.. declaration.Groups["words"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(word => word != "$P6")];
+    }
 
     /// <summary>The shell's list mapped onto the example: <c>$E/x</c> is <c>&lt;root&gt;/x</c>; <c>$E/chain</c> is the run's own marker folder <c>&lt;root&gt;/chain/part6</c> (closing <c>chain/</c> itself would close the folder the NEXT run's markers are written in — the shell kept them in <c>chain7/</c>); the part-6 worktree is the example's stand-in beside the target.</summary>
     private static string[] Part7Closed(ExperimentRoot root) =>
-        [.. ShellExtraClosed.Select(path => path switch
+        [.. ShellExtraClosed().Select(path => path switch
         {
             "$E/chain" => Path.Combine(root.Root, "chain", "part6"),
             _ when path.StartsWith("$E/", StringComparison.Ordinal) => Path.Combine(root.Root, path["$E/".Length..]),

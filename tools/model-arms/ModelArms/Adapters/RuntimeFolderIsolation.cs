@@ -88,13 +88,7 @@ internal sealed class RuntimeFolderIsolation(PlatformRoad road, IsolationHands? 
 
     public RestoreReport Restore(IReadOnlyList<SavedMode> reverse, RestoreBound bound)
     {
-        var tally = new RestoreTally();
-        foreach (var saved in reverse)
-        {
-            tally.Add(Judged(saved, bound), saved.Path, () => Restored(saved));
-        }
-
-        return tally.Report();
+        return reverse.Aggregate(RestoreTally.Empty, (tally, saved) => tally.Add(Judged(saved, bound), saved.Path, () => Restored(saved))).Report();
     }
 
     public Outcome<string> ReApply(IReadOnlyList<SavedMode> open, IsolationPlan plan)
