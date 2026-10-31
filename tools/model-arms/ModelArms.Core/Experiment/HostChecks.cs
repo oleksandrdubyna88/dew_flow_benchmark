@@ -164,7 +164,7 @@ public static class HostChecks
     private static IEnumerable<HostProblem> GitFloorProblems(HostFacts facts) =>
         facts.Version switch
         {
-            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem($"git at {RealGit(facts)}: {reason}", Environment: true)]),
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem($"git at {ExecutableRule.Shown(RealGit(facts))}: {reason}", Environment: true)]),
             GitVersionAnswer.Unanswered unanswered => [new(unanswered.Reason, Environment: true)],
             GitVersionAnswer.NotAsked notAsked => [new(notAsked.Reason, Environment: true)],
             _ => [],

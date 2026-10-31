@@ -34,6 +34,6 @@ internal static class LaunchAdmission
         (await new ArmGit(git, cwd, environment).VersionAsync(ct)).Match(
             text => GitFloor.Admit(text).Match(
                 version => new Passage<GitVersion>.Through(version),
-                reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {git}: {reason}")),
-            reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {git}: `git --version` could not be read: {reason}"));
+                reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {ExecutableRule.Shown(git)}: {reason}")),
+            reason => Passage<GitVersion>.Stop(ExitCodes.Environment, $"model-arms {verb}: git at {ExecutableRule.Shown(git)}: `git --version` could not be read: {reason}"));
 }

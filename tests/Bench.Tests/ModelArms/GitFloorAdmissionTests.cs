@@ -86,6 +86,45 @@ public sealed class GitFloorAdmissionTests
         lines[0].Should().Contain("NOT verified", "the road's line comes first: the portable road was taken");
     }
 
+    /// <summary>The refused git's path is printed ESCAPED (<see cref="ExecutableRule.Printable"/>, cut at 200): a PATH entry whose folder name holds an ESC or a newline must not forge a terminal line in a refusal (coai code round). The git shim sits in such a folder, first on PATH, and prints a version below the floor; the refusal names it by its real path — escaped — at <c>validate</c> (the host checks) and at <c>run-arm</c> (the admission).</summary>
+    [Theory]
+    [InlineData("validate", "bin\u001b[31mred", "\\u001B[31mred")]
+    [InlineData("run-arm", "bin\u001b[31mred", "\\u001B[31mred")]
+    [InlineData("validate", "bin\nforged line", "bin\\u000Aforged line")]
+    [InlineData("run-arm", "bin\nforged line", "bin\\u000Aforged line")]
+    public async Task The_refused_gits_path_is_printed_escaped(string road, string folderName, string escaped)
+    {
+        Posix();
+        using var root = road == "validate" ? await new ExperimentRoot().WithTargetAsync() : new ExperimentRoot();
+        using var fake = new FakeCli();
+        if (road == "run-arm")
+        {
+            await root.MakeArmAsync("C1", fake);
+        }
+
+        var folder = Path.Combine(root.Temp, folderName);
+        var git = root.ShimScript(Path.Combine(folder, "git"), Sentinel.LogsAllButVersion(root.MarkerFile("git"), "2.44.0"));
+        root.UsePath(string.Join(Path.PathSeparator, folder, Path.Combine(root.Temp, "bin")));
+
+        var (code, error) = road == "validate" ? await ValidateErrorAsync(root) : await RunArmAsync(root);
+
+        code.Should().Be(3, error);
+        error.Should().Contain(ExecutableRule.Printable(git), "the path is named, escaped").And.Contain(escaped);
+        error.Should().NotContain("\u001b", "no raw ESC reaches the terminal").And.NotContain("\nforged", "a newline in the path cannot start a forged line");
+    }
+
+    private static async Task<(int Code, string Error)> ValidateErrorAsync(ExperimentRoot root)
+    {
+        var run = await ValidateAsync(root, "validate");
+        return (run.Code, run.Error);
+    }
+
+    private static async Task<(int Code, string Error)> RunArmAsync(ExperimentRoot root)
+    {
+        var run = await RunArmKit.RunAsync(root, "C1");
+        return (run.Code, run.Error);
+    }
+
     public static TheoryData<string> Roads() => ["validate", "prep-base", "make", "run-arm", "checks", "checks --parse-only"];
 
     /// <summary>The consultant's check (E4.S0): every admission asks git exactly ONCE for its version, from the experiment root, under the pins — and a refused git runs NOTHING else: exactly one recorded block, not "no other call" (a count of zero and a count of two both fail). The same road with an admitted version: the first block is that call and the second is a repository question — the positive

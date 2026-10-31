@@ -72,7 +72,7 @@ internal static class HostFactsReader
         var real = RealGit(executables);
         return (await new ArmGit(real, input.Root.Root, input.Verb.Environment).VersionAsync(input.Verb.Stopping)).Match<GitVersionAnswer>(
             text => new GitVersionAnswer.Read(text),
-            reason => new GitVersionAnswer.Unanswered($"git --version at {real} could not be read: {reason}"));
+            reason => new GitVersionAnswer.Unanswered($"git --version at {ExecutableRule.Shown(real)} could not be read: {reason}"));
     }
 
     /// <summary>The source is asked only through a git the resolution FOUND, whose version was read and passes <see cref="GitFloor.Admit"/> (a git whose guards are unknown is never run over the operator's checkout), and only while PATH is clean: git looks its own helpers up in PATH, and a refused PATH is exit 4
