@@ -849,7 +849,7 @@ the parent's ledger in the commit that accepts it.
 - [ ] No trap content, held-out case, reference, mutant or riskiest scenario in either repository or in any PR, commit or review
       body (D41; `leakcheck` with the aid's shingles; the hash test).
 - [ ] Every push went through `push-check`, one branch per push; tags alone.
-- [ ] OP-A decided by the team lead and, if a change, recorded in the parent's ledger in the commit that accepts it.
+- [x] OP-A decided by the team lead, 2026-10-31: option (c) — the harness checks the conventions submodule out into the run's clone from a local snapshot of the pinned sha before the session starts; it fits D11 (the clone carries the conventions) and D42 (the bare repository holds only the run base and the run's refs) as written, so it is NOT a change and no ledger entry is written; E1.S7 (run bases) and E3.S7a (the broker) build it.
 - [ ] `research/module_tests.md`, `research/module_lang_bench.md` and `research/architecture.md` describe what E1 built; the task
       repository's README, `todo/README.md` and research stubs match its tree.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs .` clean.
