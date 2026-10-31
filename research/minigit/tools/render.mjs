@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Rewrites the generated blocks of the results record from research/minigit/data/<series>.json.
+// Rewrites the generated blocks of the results record from research/minigit/data/<series>.json and data/replay.json.
 //
 //   node research/minigit/tools/render.mjs [--doc <path>] [--amendments-ref <git ref>]
 //
@@ -17,11 +17,13 @@ import { amendmentLines, amendmentsSource, defects, prediction } from './finding
 import { crossCells, crossMedians, crossPairs, crossPhases, crossQuality } from './cross.mjs';
 import * as S from './tables-sessions.mjs';
 import * as P from './tables-pairs.mjs';
+import * as R from './tables-replay.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..', '..');
 const DATA = resolve(HERE, '..', 'data');
 const DOC = resolve(HERE, '..', 'RESULTS_bare_2026-10-30.md');
+const REPLAY = join(DATA, 'replay.json');
 /** Pairs the operator noted as started on a noisy machine although the records carry no flag for them. */
 const NOTED = ['B3'];
 
@@ -31,6 +33,11 @@ function load() {
     if (!existsSync(file)) throw new Error(`${file} is missing: run extract.mjs first`);
     return JSON.parse(readFileSync(file, 'utf8'));
   });
+}
+
+function loadReplay() {
+  if (!existsSync(REPLAY)) throw new Error(`${REPLAY} is missing: run replay.mjs first`);
+  return JSON.parse(readFileSync(REPLAY, 'utf8'));
 }
 
 const byId = (all, tail) => all.find(x => x.series.seriesId.endsWith(tail));
@@ -72,7 +79,7 @@ const PER_SERIES = {
   handcheck: P.handcheck,
 };
 
-function blocks(ref) {
+function blocks(ref, replay) {
   return {
     headline,
     conditions: S.conditions,
@@ -83,6 +90,8 @@ function blocks(ref) {
     rehearsals: S.rehearsals,
     voids: S.voids,
     cpu: S.cpu,
+    'replay-summary': () => R.replaySummary(replay),
+    'replay-voids': () => R.replayVoids(replay),
     'aa-spread': P.aaSpread,
     ledger: P.ledger,
     'ledger-totals': P.ledgerTotals,
@@ -102,15 +111,15 @@ function resolveBlock(name, fixed) {
   throw new Error(`unknown generated block "${name}"; legal: ${Object.keys(fixed).join(', ')}, or <${Object.keys(PER_SERIES).join('|')}>-<series tail>`);
 }
 
-export function render(text, all, ref) {
-  const fixed = blocks(ref);
+export function render(text, all, ref, replay) {
+  const fixed = blocks(ref, replay);
   return text.replace(/<!-- generated:([a-z0-9-]+) -->[\s\S]*?<!-- \/generated:\1 -->/g, (_, name) => `<!-- generated:${name} -->\n${resolveBlock(name, fixed)(all)}\n<!-- /generated:${name} -->`);
 }
 
 function main() {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const doc = arg('--doc') ? resolve(arg('--doc')) : DOC;
-  writeFileSync(doc, render(readFileSync(doc, 'utf8'), load(), arg('--amendments-ref')));
+  writeFileSync(doc, render(readFileSync(doc, 'utf8'), load(), arg('--amendments-ref'), loadReplay()));
   console.log(`rendered ${doc}`);
 }
 

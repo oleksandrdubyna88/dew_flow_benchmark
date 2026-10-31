@@ -10,7 +10,8 @@
 > [module_minigit_bench.md](../module_minigit_bench.md).
 
 **How the numbers got here.** No number in a generated block was typed. `tools/extract.mjs` reads the series records
-under `~/rsd/minigit/` (read-only) and writes [data/](data/) (one JSON file per series); `tools/render.mjs` rewrites
+under `~/rsd/minigit/` (read-only) and writes [data/](data/) (one JSON file per series); `tools/replay.mjs` replays the
+contamination scan over every recorded stream and writes [data/replay.json](data/replay.json); `tools/render.mjs` rewrites
 every block between `<!-- generated:… -->` marks from those files. The prose outside the blocks names rids, rules and
 commits, and registered constants (the $6 cap, the $40 and $500 limits, n = 3); it holds no measured number. How to
 run it again: [§ 13](#13-how-to-re-run-the-extraction).
@@ -361,9 +362,45 @@ broker). "real token seen" is the number of times a sampler found the real token
   at the work tree, so it put `test-v2.sh` one level above it.
 - `97168d` (b82e): the agent edited its TypeScript source through an inline `python3 - <<'EOF'` script. The scan parsed
   the script body as shell, and a quoted `"/"` string in it as a walk of `/`.
-- The team lead reports a replay of every session with a stream, across the four series, at the fix2 harness: no high hit,
-  and every real model session `completed`. The replay scripts were not at the path given to this record, and this record
-  did not re-run the replay.
+
+**The replay.** `tools/replay.mjs` ([§ 13](#13-how-to-re-run-the-extraction)) runs the CURRENT contamination scan over
+every session of the four series that has a `stream.ndjson`. It rebuilds each session's context as
+`lib/bare-collect.mjs` does: `allow`, `skeleton`, `boxDir` and `maps` from the session's own `argv.json`, the layout's
+paths, the per-agent shell directory from the lib, and the other sessions of the same pair, phase and attempt as
+partners. It reads no token and no secret (no own secret is passed; the token reader is not imported). The result is
+[data/replay.json](data/replay.json); every number below comes from it. A real model session is any session that is not
+a rehearsal (a rehearsal's model is a stub).
+
+<!-- generated:replay-summary -->
+| series | sessions | real model | high hits | sessions with a high hit | low hits | sessions with a low hit | calls |
+|---|---|---|---|---|---|---|---|
+| 0c1a | 5 | 3 | 0 | 0 (0 real model) | 2 | 1 | 10 |
+| 92a9 | 5 | 3 | 0 | 0 (0 real model) | 0 | 0 | 16 |
+| b82e | 18 | 16 | 0 | 0 (0 real model) | 16 | 13 | 76 |
+| bf89 | 18 | 16 | 0 | 0 (0 real model) | 14 | 10 | 97 |
+| all | 46 | 38 | 0 | 0 (0 real model) | 32 | 24 | 199 |
+
+Sessions in a run-map with no `stream.ndjson`: 0. Real model sessions not recorded as `completed` or `void: contaminated`: none. Lib files hashed (sha256, first 12): agent-files.mjs fb99a5af311a, contamination-cwd.mjs c682cab6c87a, contamination-heredoc.mjs 860524046a5f, contamination-links.mjs d5c5c212f8a3, contamination-pipe.mjs ec5bd290f6d9, contamination-reach.mjs e5a7cc95b9b0, contamination-refs.mjs 6058b266f3e9, contamination-session-cwd.mjs 366cae40918c, contamination.mjs a7020f47ee74, egress-hosts.mjs 1d0f9e603626, link-class.mjs 71ad371ce165, sandbox.mjs ce79d835d3b6, stream-calls.mjs f6181aeff4d6, token-scan.mjs 5f03acdfaf39.
+<!-- /generated:replay-summary -->
+
+Each session the run-map recorded as `void: contaminated`, read again by the current scan:
+
+<!-- generated:replay-voids -->
+| series | rid | stack | phase | recorded class | high hits now | low hits now |
+|---|---|---|---|---|---|---|
+| 0c1a | c9b413 | TS | v1 | void: contaminated | 0 | 2 |
+| 92a9 | 9804fc | TS | v1 | void: contaminated | 0 | 0 |
+| b82e | 97168d | TS | v2 | void: contaminated | 0 | 1 |
+| bf89 | 3407d8 | C# | v2 | void: contaminated | 0 | 1 |
+| bf89 | ebd0b0 | C# | v2 | void: contaminated | 0 | 2 |
+<!-- /generated:replay-voids -->
+
+The low hits are reaches the scan records without voiding a session (the `web` rule, and a path under none of the
+protected roots); `replay.json` lists them per session as a count, and every high hit with its rule, the tool and a
+masked excerpt. The tables are the result. A zero in the high column says the current scan finds no reach it calls high
+in that stream; it does not say that no agent reached for something the scan cannot see (§ 12). The replay also reads
+each stream with the host's own links as they are today (a link in a work tree that has since changed is read as it is
+now).
 
 ### 5.6 The v2 rehearsals (G-14)
 
@@ -1074,10 +1111,10 @@ What the list says about the result, in one place:
 
 ### 11.2 Every dated line of `amendments.md`
 
-The record's own branch is behind the branch that holds series B's dated lines, so the lines are read from that branch.
+The dated lines are read from the working tree's `amendments.md` (this branch holds every line).
 
 <!-- generated:amendments -->
-Read from `spikes/minigit-bench/inputs/amendments.md` at `feat/minigit-bench-e3b-fix2` = `a619e91bd7b2`.
+Read from the working tree's `spikes/minigit-bench/inputs/amendments.md`.
 
 | date | kind | subject | reason or evidence |
 |---|---|---|---|
@@ -1140,7 +1177,8 @@ Read from `spikes/minigit-bench/inputs/amendments.md` at `feat/minigit-bench-e3b
   behind the same id. Series B's pair 3 ran on the next day. Server-side latency and time of day are not controlled.
 - **Records missing:** series A's `96fcf4` has no record and no score; series A has no `pairs/p3.json`; series 92a9 has no
   G table; the pilot `9804fc` kept no contamination hits; the V16 mixed-chain count is not in any record; series A has no
-  pair-1 read-back line; the replay behind "every real session completes at the fix2 harness" was not re-run here.
+  pair-1 read-back line; the partner directories of the replay are rebuilt from the run-map, not read from the runner's
+  own list (§ 5.5).
 - **Known residual risks of the box, stated in [module_minigit_bench.md](../module_minigit_bench.md) and not closed:** the
   egress proxy checks only the first TLS ClientHello of a tunnel (a second hello or a TLS 1.2 renegotiation is piped
   unread); the contamination scan reads only the immediate wrapper form of a walker (`sudo xargs find`, or a walker
@@ -1153,8 +1191,11 @@ Read from `spikes/minigit-bench/inputs/amendments.md` at `feat/minigit-bench-e3b
 # from the repository root; reads ~/rsd/minigit/<series>/ (or $MINIGIT_RUNS), writes research/minigit/data/<series>.json
 node research/minigit/tools/extract.mjs                                 # all four series
 node research/minigit/tools/extract.mjs --series s-20261030-b82e        # one series
+# the contamination scan, current lib, over every stream of every series; writes research/minigit/data/replay.json
+node research/minigit/tools/replay.mjs
+node research/minigit/tools/replay.mjs --self-check                     # fixture in a fake home: expects 0 and 1 high hits
 # rewrites every generated block of this file from research/minigit/data/; the dated lines come from the named ref
-node research/minigit/tools/render.mjs --amendments-ref feat/minigit-bench-e3b-fix2
+node research/minigit/tools/render.mjs
 ```
 
 - `tools/extract.mjs` is read-only on the runs root. It reads `run-map.json`, `ledger.ndjson`, `aa-verdicts.json`,
@@ -1165,9 +1206,13 @@ node research/minigit/tools/render.mjs --amendments-ref feat/minigit-bench-e3b-f
   (`pairCrosscheck` in each data file): they agree for series A's pairs 1–2 and series B's pairs 1–3.
 - It charges every paid session from the run-map and checks that figure against the record and the broker (`charges` in
   each data file); it lists the sessions missing from the series' own ledger.
-- `tools/render.mjs` fails on an unknown block, a missing data file, a defect commit that does not exist, or a harness
-  identity with no dated line. When `--amendments-ref` is left out it reads the working tree's `amendments.md`, which on
-  this branch lacks series B's lines and the fix2 identities, so the defect check fails.
+- `tools/render.mjs` fails on an unknown block, a missing data file (the series files and `replay.json`), a defect commit
+  that does not exist, or a harness identity with no dated line. It reads the working tree's `amendments.md`; on a branch
+  whose copy lacks lines another branch holds, `--amendments-ref <git ref>` reads the file as committed on that ref.
+- `tools/replay.mjs` is read-only on the runs root. It opens `run-map.json` (only the ids, stack, phase, attempt, kind and
+  class of each entry; the dummy token and canary values are never copied), and each session's `argv.json` and
+  `stream.ndjson`. It never opens `score/`, `~/.config`, the broker or egress logs, and never reads a token. `replay.json`
+  names the lib files it ran with (`extractedFrom.lib`); run it again after a change of the scan.
 - The data files name the sha256 of each series file they were read from (`extractedFrom.sources`).
 
 Not built: the plan's `bare-report.mjs` (E3b.S4, "Interim record") does not exist; this extractor and renderer stand in
