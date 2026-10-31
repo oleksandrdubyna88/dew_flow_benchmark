@@ -184,7 +184,7 @@ public sealed class StatusVerbTests
             "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs",
             "ModelArms/Verbs/Lock.cs", "ModelArms/Verbs/Unlock.cs", "ModelArms/Verbs/SnapshotAside.cs", "ModelArms/Verbs/RunnerLiveness.cs", "ModelArms/Verbs/IsolationLocking.cs",
             "ModelArms/Adapters/PosixFolderIsolation.cs", "ModelArms/Adapters/NoIsolation.cs", "ModelArms/Adapters/FolderIsolations.cs", "ModelArms/Adapters/RootFolders.cs", "ModelArms/Adapters/LockLog.cs",
-            "ModelArms/Adapters/RootLogFile.cs", "ModelArms/Adapters/WslHostAwake.cs", "ModelArms/Adapters/WindowsAwake.cs", "ModelArms/Adapters/NoAwake.cs", "ModelArms/Adapters/HostAwakes.cs",
+            "ModelArms/Adapters/RootLogFile.cs", "ModelArms/Adapters/WslHostAwake.cs", "ModelArms/Adapters/WindowsAwake.cs", "ModelArms/Adapters/NoAwake.cs", "ModelArms/Adapters/HostAwakes.cs", "ModelArms/Verbs/RunAll.cs",
         })
         {
             Forbidden.Where(word => Source(file).Contains(word, StringComparison.Ordinal)).Should().BeEmpty($"{file}: a verb that lists an unlisted folder fails at mode 300, the one state the isolation exists for");

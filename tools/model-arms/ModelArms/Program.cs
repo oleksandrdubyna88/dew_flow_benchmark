@@ -86,7 +86,7 @@ public static class Program
             "lock" => ExperimentGate.RunAsync(input, LockVerb.RunAsync),
             "unlock" => ExperimentGate.RunAsync(input, UnlockVerb.RunAsync),
             "run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),
-            "run-all" => NotBuilt(input, "E5.S3"),
+            "run-all" => ExperimentGate.RunAsync(input, RunAllVerb.RunAsync),
             "chain" => NotBuilt(input, "E5.S4"),
             "checks" => ExperimentGate.RunAsync(input, ChecksVerb.RunAsync),
             "status" => ExperimentGate.RunAsync(input, StatusVerb.RunAsync),

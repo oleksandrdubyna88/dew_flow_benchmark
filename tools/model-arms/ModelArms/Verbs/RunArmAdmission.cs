@@ -35,6 +35,9 @@ internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme,
 /// executables are looked up in it: git and claude look their own helpers up there for hours, and <c>validate</c>'s judgement is not carried over by magic. <c>HOME</c> and <c>XDG_CONFIG_HOME</c> are judged next, by the same helper <c>validate</c> uses (D26 c: git reads its global config there and a claude its settings and hooks). The one launch admission itself makes is <c>git --version</c> of the resolved git, from the experiment root, under the hardened environment (<see cref="LaunchAdmission.FloorAsync"/>, D23, E4.S0): a git below the floor is exit 3 before <c>scenarios.json</c> is counted. Exit 3 is the host (a CLI that is not there, a file that cannot be read), exit 4 a wrong configuration.</summary>
 internal static class RunArmAdmission
 {
+    /// <summary>Whether a scheme with a <c>tasks</c> block may be walked by a runner. False until E4.S3; <c>run-all</c> asks the same constant, so one flip opens both and a verb cannot start a runner its <c>run-arm</c> would refuse.</summary>
+    internal const bool AllowsTasks = false;
+
     private const string Verb = "run-arm";
     private const string Name = "model-arms " + Verb;
     private static readonly TimeSpan LockPoll = TimeSpan.FromSeconds(2);
@@ -204,7 +207,7 @@ internal static class RunArmAdmission
             ? Outcome<IGateLock>.Success(given)
             : FileGateLock.Create(TimeProvider.System, LockPoll).Match(created => Outcome<IGateLock>.Success(created), Outcome<IGateLock>.Failure);
 
-    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb, allowTasks: false);
+    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb, AllowsTasks);
 
     private static Passage<ArmPlaced> Place(ExperimentInput input, ArmChoice choice)
     {

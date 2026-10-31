@@ -198,10 +198,13 @@ public sealed class ModelArmsArchitectureTests
     /// What this does NOT prove: that no other API starts a process (<c>Process.Start</c> itself is not matched), or that a launch by an absolute path is made
     /// under the right environment — only that the two shared launchers are not given a literal name and the git helper that does so is not used.
     /// </para></summary>
+    /// <summary>The ONE file the scan above does not read: the Windows launcher (E5.S3) holds <c>Process.Start</c> and <c>new ProcessStartInfo</c> by design — it is the only road that road has, because <c>posix_spawn</c> does not exist there. It is excluded by its exact path, not by a pattern, and the companion test below proves it starts by a variable.</summary>
+    private const string WindowsLauncher = "ModelArms/Adapters/WindowsLauncher.cs";
+
     [Fact]
     public void The_module_launches_nothing_by_a_bare_name()
     {
-        var sites = FilesLaunchingByName(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
+        var sites = FilesLaunchingByName(Path.Combine(Cli.Repository.Root, "tools", "model-arms"), WindowsLauncher);
 
         sites.Should().BeEmpty("a launch by a literal name is looked up in the cwd before PATH; name the absolute path Resolve found");
     }
@@ -216,7 +219,7 @@ public sealed class ModelArmsArchitectureTests
     /// <summary>Every shape a process is started by that a literal name can ride on: the module's git helper, the shared launcher given a literal, <c>Process.Start</c> and
     /// a <c>ProcessStartInfo</c> built or initialised in place.</summary>
     private static readonly System.Text.RegularExpressions.Regex LaunchByName = new(
-        "GitCommand\\.|ProcessRunner\\.\\w+\\(\\s*\"[A-Za-z]|Process\\.Start\\(|new\\s+ProcessStartInfo\\b|ProcessStartInfo\\s*\\{",
+        "GitCommand\\.|ProcessRunner\\.\\w+\\(\\s*\"[A-Za-z]|Process\\.Start\\(|new\\s+ProcessStartInfo\\b|ProcessStartInfo\\s*\\{|posix_spawnp\\(",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 
@@ -227,6 +230,7 @@ public sealed class ModelArmsArchitectureTests
     [InlineData("var start = new ProcessStartInfo(\"ln\");")]
     [InlineData("var start = new  ProcessStartInfo { FileName = \"ln\" };")]
     [InlineData("var start = new() { };\nProcessStartInfo{ }")]
+    [InlineData("var error = posix_spawnp(out var pid, \"setsid\", actions, attributes, argv, environment);")]
     public void The_bare_name_pattern_still_matches_each_launch_shape(string fixture)
     {
         LaunchByName.IsMatch(fixture).Should().BeTrue("a pattern that stops matching one of its shapes passes forever for that shape");
@@ -236,6 +240,31 @@ public sealed class ModelArmsArchitectureTests
     public void The_bare_name_pattern_does_not_match_a_launch_by_a_resolved_path()
     {
         LaunchByName.IsMatch("ProcessRunner.RunAsync(git, arguments, source, Budget, string.Empty, environment, ct)").Should().BeFalse();
+    }
+
+    /// <summary>E5.S3: the two detached launchers are inside the scanned tree and start by a path they were handed. <c>SetsidLauncher.cs</c> holds <c>posix_spawn(</c> through <c>PosixSpawn</c> with the program a PARAMETER (the resolved <c>setsid</c> its constructor was given), never <c>posix_spawnp</c>; <c>WindowsLauncher.cs</c> — the scan's one named exception — holds <c>Process.Start(</c> with no string
+    /// literal on the line. A rename out of the tree, or a literal name, is seen. What this does NOT prove: that the path handed in is the resolved one (<c>RunAllVerbTests</c> proves the verb hands exactly what it printed).</summary>
+    [Fact]
+    public void The_detached_launchers_are_in_the_scanned_tree_and_start_by_a_path_they_were_handed()
+    {
+        var module = Path.Combine(Cli.Repository.Root, "tools", "model-arms");
+        var setsid = Directory.EnumerateFiles(module, "SetsidLauncher.cs", SearchOption.AllDirectories).ToList();
+        var spawn = Directory.EnumerateFiles(module, "PosixSpawn.cs", SearchOption.AllDirectories).ToList();
+        var windows = Directory.EnumerateFiles(module, "WindowsLauncher.cs", SearchOption.AllDirectories).ToList();
+
+        setsid.Should().ContainSingle("a scan that cannot see the file passes forever");
+        spawn.Should().ContainSingle();
+        windows.Should().ContainSingle();
+        File.ReadAllText(setsid[0]).Should().Contain("PosixSpawn.Spawn(setsid,", "the program is the resolved path the constructor was handed — a field, not a literal");
+        var native = File.ReadAllText(spawn[0]);
+        native.Should().Contain("SpawnCall(out var pid, program,", "posix_spawn (a path) with the program a parameter of Spawn");
+        native.Should().NotMatchRegex("posix_spawnp\\s*\\(|\"posix_spawnp\"", "posix_spawnp looks the name up along PATH");
+        File.ReadAllText(setsid[0]).Should().NotMatchRegex("PosixSpawn\\.Spawn\\(\\s*\"", "no literal program");
+        var launch = File.ReadAllLines(windows[0]).Where(line => line.Contains("Process.Start(", StringComparison.Ordinal) && !line.TrimStart().StartsWith("///", StringComparison.Ordinal)).ToList();
+        launch.Should().ContainSingle("the Windows launcher starts a process in exactly one place");
+        launch[0].Should().NotContain("\"", "and by a variable, never a literal name");
+        Path.GetRelativePath(module, windows[0]).Replace('\\', '/').Should().Be(WindowsLauncher, "the scan's exception names exactly this file");
+        FilesLaunchingByName(module).Should().Contain("WindowsLauncher.cs", "the exception is needed: without it the scan finds the Windows launcher, so the pattern is alive");
     }
 
     /// <summary>E2.S4: the step's git is the one place the module asks git a question, and it goes by the path it was handed. The scan above matches a literal and the bare-name helper; this one proves the scan's folder holds the
@@ -274,9 +303,10 @@ public sealed class ModelArmsArchitectureTests
         File.ReadAllText(Path.Combine(adapters, "Adapters", "BoundedFile.cs")).Should().Contain("road == BoundedRoad.Kernel ?", "the call sits behind the kernel road");
     }
 
-    private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>
+    private static IReadOnlyList<string> FilesLaunchingByName(string folder, params string[] except) =>
         [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => !except.Contains(Path.GetRelativePath(folder, path).Replace('\\', '/'), StringComparer.Ordinal))
             .Where(path => LaunchByName.IsMatch(File.ReadAllText(path)))
             .Select(Path.GetFileName)
             .Cast<string>()
