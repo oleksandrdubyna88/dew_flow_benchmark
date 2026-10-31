@@ -24,7 +24,7 @@ public sealed class HostAwakesTests
         root.Edit(top => top["awake"] = awake);
         var seen = (await root.PassAsync("validate")).Calls.Single();
         var output = new StringWriter();
-        return (seen with { Verb = seen.Verb with { Environment = environment, Output = output } }, output);
+        return (seen with { Verb = seen.Verb with { Verb = "chain", Environment = environment, Output = output } }, output);
     }
 
     private static string Text(ModelArmsApp.Passage<IHostAwake> passage) => passage.Should().BeOfType<ModelArmsApp.Passage<IHostAwake>.Stopped>().Subject.Lines.Single();
@@ -40,6 +40,9 @@ public sealed class HostAwakesTests
         var stopped = mismatch.Should().BeOfType<ModelArmsApp.Passage<IHostAwake>.Stopped>().Subject;
         stopped.ExitCode.Should().Be(4, "a configuration the host cannot run is exit 4");
         stopped.Lines.Single().Should().Contain("needs a Wsl host").And.Contain("this host is OtherPosix").And.Contain("model-arms chain");
+
+        var named = await HostAwakes.StartAsync(wsl with { Verb = wsl.Verb with { Verb = "run-all" } }, HostKind.OtherPosix, Ct);
+        Text(named).Should().StartWith("model-arms run-all:", "the sentence names the verb that is running, not a fixed one");
 
         var (none, output) = await InputAsync(root, "none", root.Environment);
         var quiet = await HostAwakes.StartAsync(none, HostKind.Wsl, Ct);
@@ -100,6 +103,7 @@ public sealed class HostAwakesTests
         var pid = ((WslHostAwake)awake).ChildProcessId!.Value;
         WorkerLiveness.ProcessIsAlive(pid).Should().BeTrue("the stand-in holds its stdin open until the scope ends");
         output.ToString().Should().Contain("keep-awake: pwsh.exe \\\\wsl.localhost\\Ubuntu").And.Contain("keep-awake.ps1, held, checked every 2 min").And.NotContain("not reported");
+        output.ToString().Split("keep-awake: pwsh.exe").Should().HaveCount(2, "the factory writes the description once");
 
         await awake.DisposeAsync();
 
@@ -107,6 +111,31 @@ public sealed class HostAwakesTests
         var arguments = File.ReadAllLines(argv);
         arguments.Should().Equal("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", arguments[^1]);
         arguments[^1].Should().StartWith(@"\\wsl.localhost\Ubuntu\").And.EndWith(@"\windows\keep-awake.ps1");
+    }
+
+    [Fact]
+    public async Task The_callers_stop_reaches_the_wsl_start_and_leaves_no_child()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the stand-in is a POSIX script");
+        using var root = new ExperimentRoot();
+        await root.WithTargetAsync();
+        var pwsh = Path.Combine(root.Temp, "bin", "pwsh.exe");
+        File.WriteAllText(pwsh, $"#!/bin/sh\nwhile read -r _line; do :; done\n");
+        var (input, output) = await InputAsync(root, "wsl", new Dictionary<string, string>(root.Environment) { ["WSL_DISTRO_NAME"] = "Ubuntu" });
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        var start = HostAwakes.StartAsync(input, HostKind.Wsl, stop.Token);
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!output.ToString().Contains("waiting up to", StringComparison.Ordinal))
+        {
+            waited.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15), "the adapter says it is waiting before it waits");
+            await Task.Delay(25, Ct);
+        }
+
+        await stop.CancelAsync();
+
+        await FluentActions.Awaiting(() => start).Should().ThrowAsync<OperationCanceledException>();
+        output.ToString().Should().NotContain("keep-awake: pwsh.exe", "a cancelled start describes nothing");
     }
 
     [Fact]

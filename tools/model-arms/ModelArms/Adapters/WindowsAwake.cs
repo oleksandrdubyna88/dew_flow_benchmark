@@ -25,12 +25,15 @@ internal sealed class WindowsAwake : IHostAwake
     private readonly TaskCompletionSource<(uint Previous, int Thread)> _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<int> _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private WindowsAwake(TextWriter output)
+    private WindowsAwake()
     {
-        _thread = new Thread(() => Body(output)) { IsBackground = true, Name = "model-arms keep-awake" };
+        _thread = new Thread(Body) { IsBackground = true, Name = "model-arms keep-awake" };
     }
 
-    public string Describe => "SetThreadExecutionState (system and display), held on one thread";
+    private volatile string _failure = string.Empty;
+
+    /// <summary>What it does — or, when the call failed (a previous state of 0, or the thread faulted), that the host may sleep. The factory writes <c>keep-awake: &lt;Describe&gt;</c>; this class writes nothing.</summary>
+    public string Describe => Previous == 0 ? $"SetThreadExecutionState failed — the host may sleep{_failure}" : "SetThreadExecutionState (system and display), held on one thread";
 
     /// <summary>The state the call replaced; 0 when it failed.</summary>
     internal uint Previous { get; private set; }
@@ -40,16 +43,23 @@ internal sealed class WindowsAwake : IHostAwake
 
     internal Task<int> ReleasedOnThread => _released.Task;
 
-    /// <summary>Starts the thread and awaits the previous state it handed back; prints <c>keep-awake: &lt;Describe&gt;</c> (or the failure line).</summary>
-    public static async Task<WindowsAwake> StartAsync(TextWriter output)
+    /// <summary>Starts the thread and awaits, until <paramref name="ct"/>, the previous state it handed back (on cancellation the thread is released first).</summary>
+    public static async Task<WindowsAwake> StartAsync(CancellationToken ct)
     {
-        var awake = new WindowsAwake(output);
+        var awake = new WindowsAwake();
         awake._thread.Start();
-        var (previous, thread) = await awake._held.Task;
-        awake.Previous = previous;
-        awake.HeldOnThread = thread;
-        output.WriteLine(previous == 0 ? "keep-awake: SetThreadExecutionState failed — the host may sleep" : $"keep-awake: {awake.Describe}");
-        return awake;
+        try
+        {
+            var (previous, thread) = await awake._held.Task.WaitAsync(ct);
+            awake.Previous = previous;
+            awake.HeldOnThread = thread;
+            return awake;
+        }
+        catch (OperationCanceledException)
+        {
+            await awake.DisposeAsync();
+            throw;
+        }
     }
 
     public ValueTask DisposeAsync()
@@ -63,7 +73,7 @@ internal sealed class WindowsAwake : IHostAwake
         return ValueTask.CompletedTask;
     }
 
-    private void Body(TextWriter output)
+    private void Body()
     {
         try
         {
@@ -79,9 +89,9 @@ internal sealed class WindowsAwake : IHostAwake
         }
         catch (Exception ex)
         {
+            _failure = $" ({ex.GetType().Name}: {ex.Message})";
             _held.TrySetResult((0, Environment.CurrentManagedThreadId));
             _released.TrySetResult(Environment.CurrentManagedThreadId);
-            output.WriteLine($"keep-awake: the execution-state thread failed — {ex.GetType().Name}: {ex.Message}");
         }
     }
 

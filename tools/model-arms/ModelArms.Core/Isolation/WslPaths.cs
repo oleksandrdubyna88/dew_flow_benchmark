@@ -22,9 +22,12 @@ public static class WslPaths
             _ when linuxPath.Contains('\\') || linuxPath.Contains('\0') => $"'{linuxPath.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a backslash or a NUL — it cannot be written as a Windows path",
             _ when linuxPath.Split('/').Contains("..") => $"'{linuxPath}' holds a '..' segment — it is not a path to hand to Windows",
             _ when distro.Length == 0 => DistroSentence,
-            _ when distro.Contains('\\') || distro.Contains('/') => $"WSL_DISTRO_NAME '{distro}' holds a slash or a backslash",
+            _ when IsNotAName(distro) => $"WSL_DISTRO_NAME '{distro.Replace("\0", "\\0", StringComparison.Ordinal)}' is not a distribution name — it is '.' or '..', or holds a slash, a backslash, a NUL or whitespace",
             _ => string.Empty,
         };
+
+    private static bool IsNotAName(string distro) =>
+        distro is "." or ".." || distro.Any(character => character is '/' or '\\' or '\0' || char.IsWhiteSpace(character));
 
     /// <summary><c>/mnt/c</c> or <c>/mnt/c/rest</c> (one letter) as <c>C:\</c> + rest; else null.</summary>
     private static string? Mounted(string linuxPath)

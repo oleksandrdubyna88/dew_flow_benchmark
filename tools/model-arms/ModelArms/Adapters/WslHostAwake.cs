@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Bench.Domain;
 using Bench.Infrastructure.Process;
 using ModelArms.Core.Experiment;
@@ -46,8 +45,9 @@ internal sealed class WslHostAwake : IHostAwake
     private readonly TextWriter _output;
     private readonly string _stamp;
     private readonly CancellationTokenSource _stop = new();
-    private readonly TaskCompletionSource _reported = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<ScriptReport> _reported = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private volatile ProcessSession? _session;
+    private volatile string _described = string.Empty;
     private int _inARow;
     private int _launches = 1;
     private Task _loop = Task.CompletedTask;
@@ -61,7 +61,10 @@ internal sealed class WslHostAwake : IHostAwake
         _stamp = clock.GetUtcNow().ToString(StampFormat, CultureInfo.InvariantCulture);
     }
 
-    public string Describe => $"pwsh.exe {_script}, held, checked every {(int)CheckEvery.TotalMinutes} min";
+    /// <summary>What the first child came to once <see cref="StartAsync"/> has run — held and checked, exited before the script held the host, failed, or running but not confirmed — and the held phrase before. The one place the chain's line <c>keep-awake: &lt;Describe&gt;</c> is written is the factory.</summary>
+    public string Describe => _described.Length > 0 ? _described : Held;
+
+    private string Held => $"pwsh.exe {_script}, held, checked every {(int)CheckEvery.TotalMinutes} min";
 
     /// <summary>How long <see cref="Start"/> waits for the script's own first line before it stops saying the host is held (a pwsh that exits sooner is said at once). The script prints it within a second of a reachable start; fifteen seconds covers a cold <c>pwsh.exe</c>.</summary>
     internal TimeSpan ScriptLineWithin { get; init; } = TimeSpan.FromSeconds(15);
@@ -81,21 +84,14 @@ internal sealed class WslHostAwake : IHostAwake
             .Where(parent.ContainsKey)
             .ToDictionary(name => name, name => parent[name], StringComparer.Ordinal);
 
-    /// <summary>The first launch; a missing or unstartable <c>pwsh.exe</c> is a failure with its reason (the caller's exit 3). On success the check loop starts. The line <c>keep-awake: &lt;Describe&gt;</c> is printed only once the SCRIPT has reported (<c>keep-awake on pid=</c>), waiting at most <see cref="ScriptLineWithin"/>: a pwsh that exits first — it could not reach the script — is said at once and, like one
-    /// that is silent past the bound, does not fail the chain (the relaunch bound applies from the first check).</summary>
-    public Outcome<int> Start()
+    /// <summary>The first launch; a missing or unstartable <c>pwsh.exe</c> is a failure with its reason (the caller's exit 3). On success the check loop starts, one line says that the script's confirmation is awaited (<c>keep-awake: waiting up to N s …</c>), and the wait ends at the first of: the script's own line (<c>keep-awake on pid=… prev=…</c>), the child's exit,
+    /// <see cref="ScriptLineWithin"/>, or <paramref name="ct"/> (the child is then stopped and the cancellation propagates). What came of it is <see cref="Describe"/>; a pwsh that exits first or a script that reports a previous state of 0 does not fail the chain (the relaunch bound applies from the first check).</summary>
+    public async Task<Outcome<int>> StartAsync(CancellationToken ct)
     {
         try
         {
-            return Launch(1).Match(
-                session =>
-                {
-                    _session = session;
-                    _loop = Task.Run(() => CheckLoopAsync(_stop.Token));
-                    Say(Reported(session));
-                    return Outcome<int>.Success(session.ProcessId);
-                },
-                Outcome<int>.Failure);
+            ct.ThrowIfCancellationRequested();
+            return await Launch(1).Match(session => BeginAsync(session, ct), reason => Task.FromResult(Outcome<int>.Failure(reason)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -103,22 +99,34 @@ internal sealed class WslHostAwake : IHostAwake
         }
     }
 
-    private string Reported(ProcessSession session)
+    private async Task<Outcome<int>> BeginAsync(ProcessSession session, CancellationToken ct)
     {
-        Task.WaitAny([_reported.Task, session.Exited], ScriptLineWithin);
-        return (_reported.Task.IsCompleted, session.HasExited) switch
+        _session = session;
+        _loop = Task.Run(() => CheckLoopAsync(_stop.Token));
+        _output.WriteLine($"keep-awake: waiting up to {ScriptLineWithin.TotalSeconds:0.##} s for the script's confirmation");
+        using var bound = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        await Task.WhenAny(_reported.Task, session.Exited, Task.Delay(ScriptLineWithin, bound.Token));
+        await bound.CancelAsync();
+        if (ct.IsCancellationRequested)
         {
-            (true, _) => $"keep-awake: {Describe}",
-            (_, true) => $"keep-awake: pwsh.exe exited before the script reported — it could not reach {_script}; the host may sleep (stderr: {session.StderrPath})",
-            _ => $"keep-awake: pwsh.exe is running but {_script} has not reported in {ScriptLineWithin.TotalSeconds:0.##} s — held, not confirmed; the host may sleep",
-        };
+            await DisposeAsync();
+            ct.ThrowIfCancellationRequested();
+        }
+
+        _described = StatusOf(_reported.Task.IsCompleted ? _reported.Task.Result : null, session.HasExited, session.StderrPath);
+        Log($"keep-awake: {_described}");
+        return Outcome<int>.Success(session.ProcessId);
     }
 
-    private void Say(string line)
-    {
-        _output.WriteLine(line);
-        Log(line);
-    }
+    /// <summary>What to say about the first child, pure over what was seen: an EXITED child is never held, whatever it printed first; a script that reported a previous state of 0 says <c>SetThreadExecutionState</c> failed (as <c>WindowsAwake</c> does); a confirmed one is described as held; a silent one is held, not confirmed.</summary>
+    internal string StatusOf(ScriptReport? report, bool hasExited, string stderrPath) =>
+        (report, hasExited) switch
+        {
+            (_, true) => $"pwsh.exe exited before the script held the host — it could not reach {_script}; the host may sleep (stderr: {stderrPath})",
+            (ScriptReport.Failed, _) => "SetThreadExecutionState failed — the host may sleep",
+            (ScriptReport.Confirmed, _) => Held,
+            _ => $"pwsh.exe is running but {_script} has not reported in {ScriptLineWithin.TotalSeconds:0.##} s — held, not confirmed; the host may sleep",
+        };
 
     public async ValueTask DisposeAsync()
     {
@@ -172,10 +180,15 @@ internal sealed class WslHostAwake : IHostAwake
 
     private bool LeaveSaid(int inARow)
     {
-        var line = $"keep-awake exited at {inARow} checks in a row — not relaunched again; the host may sleep while the chain runs";
+        Say($"keep-awake exited at {inARow} checks in a row — not relaunched again; the host may sleep while the chain runs");
+        return false;
+    }
+
+    /// <summary>A line for the operator (the output first, so whoever reads the log has already been told) and for the log.</summary>
+    private void Say(string line)
+    {
         _output.WriteLine(line);
         Log(line);
-        return false;
     }
 
     /// <summary>Launches the <paramref name="n"/>th child in place of the exited one; false (and logged) when it could not be started, which ends the loop.</summary>
@@ -192,7 +205,8 @@ internal sealed class WslHostAwake : IHostAwake
             },
             reason =>
             {
-                Log($"keep-awake: the relaunch failed — {reason}");
+                _session = null;
+                Say($"keep-awake: the relaunch failed — {reason}; the host may sleep while the chain runs");
                 return false;
             });
     }
@@ -205,6 +219,15 @@ internal sealed class WslHostAwake : IHostAwake
             _ => throw new InvalidOperationException("unreachable"),
         };
 
+    /// <summary>The script's own line, <c>keep-awake on pid=&lt;pid&gt; prev=&lt;state&gt;</c>: confirmed only when <c>prev=</c> parses as an unsigned integer and is not 0 (a previous state of 0 is the call failing); any other line, or a <c>prev=</c> that is not a number, reports nothing.</summary>
+    internal static ScriptReport? ReportOf(string line)
+    {
+        var at = line.StartsWith(ScriptReported, StringComparison.Ordinal) ? line.IndexOf(" prev=", StringComparison.Ordinal) : -1;
+        return at >= 0 && uint.TryParse(line.AsSpan(at + " prev=".Length), NumberStyles.None, CultureInfo.InvariantCulture, out var previous)
+            ? previous == 0 ? ScriptReport.Failed : ScriptReport.Confirmed
+            : null;
+    }
+
     private void OnLine(string line)
     {
         if (line == ProcessSession.EndOfStream)
@@ -213,32 +236,21 @@ internal sealed class WslHostAwake : IHostAwake
         }
 
         Log(line);
-        if (line.StartsWith(ScriptReported, StringComparison.Ordinal))
+        if (ReportOf(line) is { } report)
         {
-            _reported.TrySetResult();
+            _reported.TrySetResult(report);
         }
     }
 
-    /// <summary>One line, <c>&lt;utc&gt; &lt;text&gt;</c>, appended to <c>keep-awake.log</c> by name and only when the name is not a link; a failed append is one line on the output and never an exception.</summary>
+    /// <summary>One line appended to <c>keep-awake.log</c> by <see cref="RootLogFile"/> (by name, not through a link, never throwing), serialised so the stdout pump and the check loop never interleave a line.</summary>
     private void Log(string text)
     {
         lock (LogGate)
         {
-            try
-            {
-                if (BoundedFile.IsLink(_root.KeepAwakeLog))
-                {
-                    _output.WriteLine($"model-arms: {_root.KeepAwakeLog} is a symbolic link — not appended to (D17)");
-                    return;
-                }
-
-                using var stream = new FileStream(_root.KeepAwakeLog, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                stream.Write(new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes($"{_clock.GetUtcNow().ToString(SnapshotFiles.Utc, CultureInfo.InvariantCulture)} {text}\n"));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _output.WriteLine($"model-arms: {_root.KeepAwakeLog} could not be appended to: {ex.Message}");
-            }
+            RootLogFile.Append(_root.KeepAwakeLog, _clock, text, _output);
         }
     }
 }
+
+/// <summary>What the keep-awake script said about the execution state it took: held (a previous state it replaced) or failed (a previous state of 0).</summary>
+internal enum ScriptReport { Confirmed, Failed }

@@ -86,6 +86,13 @@ public sealed class WslHostAwakeTests
 
         private readonly SemaphoreSlim _ticks = new(0);
 
+        /// <summary>Lets one check happen without waiting for it (for a check that ends the loop).</summary>
+        public void ReleaseTick()
+        {
+            Interlocked.Increment(ref _released);
+            _ticks.Release();
+        }
+
         /// <summary>Lets exactly one check happen and returns once the loop has either come back to its next wait or said it will not relaunch again.</summary>
         public async Task TickAsync()
         {
@@ -139,11 +146,12 @@ public sealed class WslHostAwakeTests
     {
         await using var kit = new PwshKit();
 
-        kit.Awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await kit.Awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
         var pid = kit.Child;
         await Task.Delay(TimeSpan.FromSeconds(2), Ct);
         WorkerLiveness.ProcessIsAlive(pid).Should().BeTrue("the child is held for the whole scope with no tick released");
-        kit.Output.ToString().Should().Contain("held, not confirmed", "the fake never prints the script's own line, so the host is not said to be held");
+        kit.Awake.Describe.Should().Contain("held, not confirmed", "the fake never prints the script's own line, so the host is not said to be held");
+        kit.Output.ToString().Should().Contain("keep-awake: waiting up to 0.25 s for the script's confirmation");
 
         await kit.Awake.DisposeAsync();
 
@@ -157,7 +165,7 @@ public sealed class WslHostAwakeTests
     public async Task A_child_that_exits_is_relaunched_at_the_next_check()
     {
         await using var kit = new PwshKit();
-        kit.Awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await kit.Awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
         var first = kit.Child;
 
         await kit.KillChildAsync();
@@ -178,7 +186,7 @@ public sealed class WslHostAwakeTests
     public async Task A_child_that_keeps_exiting_is_relaunched_three_times_then_said_and_left()
     {
         await using var kit = new PwshKit();
-        kit.Awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await kit.Awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
         var pids = new List<int> { kit.Child };
 
         for (var launch = 1; launch <= WslHostAwake.RelaunchesInARow; launch++)
@@ -204,7 +212,7 @@ public sealed class WslHostAwakeTests
     public async Task A_child_found_alive_at_a_check_resets_the_count_of_exits_in_a_row()
     {
         await using var kit = new PwshKit();
-        kit.Awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await kit.Awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
         var pids = new List<int> { kit.Child };
 
         for (var launch = 1; launch <= WslHostAwake.RelaunchesInARow; launch++)
@@ -238,6 +246,8 @@ public sealed class WslHostAwakeTests
         return (new WslHostAwake(pwsh, "/s/keep-awake.ps1", root.Root, environment, root, TimeProvider.System, (_, ct) => Task.Delay(Timeout.Infinite, ct), output) { ScriptLineWithin = within }, output, temp);
     }
 
+    private static ScriptReport? Report(string name) => name.Length == 0 ? null : Enum.Parse<ScriptReport>(name);
+
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task The_host_is_said_to_be_held_once_the_script_has_reported()
@@ -247,38 +257,125 @@ public sealed class WslHostAwakeTests
         await using var held = awake;
         var started = System.Diagnostics.Stopwatch.StartNew();
 
-        awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
 
         started.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15), "the script's line ends the wait, not the bound");
-        output.ToString().Should().Contain($"keep-awake: {awake.Describe}").And.NotContain("has not reported").And.NotContain("exited before");
+        awake.Describe.Should().Be("pwsh.exe /s/keep-awake.ps1, held, checked every 2 min");
+        output.ToString().Should().Contain("keep-awake: waiting up to 30 s for the script's confirmation").And.NotContain("keep-awake: pwsh.exe", "the factory writes the description, not the adapter");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_script_that_reports_a_previous_state_of_zero_is_said_to_have_failed()
+    {
+        var (awake, _, temp) = await StandInAsync("echo 'keep-awake on pid=7 prev=0'\nwhile read -r _l; do :; done", TimeSpan.FromSeconds(30));
+        using var folder = temp;
+        await using var held = awake;
+
+        (await awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>("the chain is never failed by its keep-awake");
+
+        awake.Describe.Should().Be("SetThreadExecutionState failed — the host may sleep");
+    }
+
+    [Theory]
+    [InlineData("keep-awake on pid=7 prev=1", "Confirmed")]
+    [InlineData("keep-awake on pid=7 prev=2147483649", "Confirmed")]
+    [InlineData("keep-awake on pid=7 prev=0", "Failed")]
+    [InlineData("keep-awake on pid=7 prev=", "")]
+    [InlineData("keep-awake on pid=7 prev=-1", "")]
+    [InlineData("keep-awake on pid=7 prev=abc", "")]
+    [InlineData("keep-awake on pid=7 prev=1x", "")]
+    [InlineData("keep-awake on pid=7", "")]
+    [InlineData("keep-awake off", "")]
+    [InlineData("something else prev=1", "")]
+    public void The_scripts_line_confirms_only_with_a_previous_state_that_is_an_unsigned_number_and_not_zero(string line, string expected)
+    {
+        WslHostAwake.ReportOf(line).Should().Be(Report(expected), line);
+    }
+
+    [Theory]
+    [InlineData("", true, "exited before the script held the host")]
+    [InlineData("Confirmed", true, "exited before the script held the host")]
+    [InlineData("Failed", true, "exited before the script held the host")]
+    [InlineData("Failed", false, "SetThreadExecutionState failed")]
+    [InlineData("Confirmed", false, "held, checked every 2 min")]
+    [InlineData("", false, "held, not confirmed")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task An_exited_child_is_never_said_to_be_held_whatever_it_printed(string reportName, bool exited, string expected)
+    {
+        var (awake, _, temp) = await StandInAsync("exit 0", TimeSpan.FromSeconds(1));
+        using var folder = temp;
+        await using var held = awake;
+
+        var said = awake.StatusOf(Report(reportName), exited, "/x.err");
+
+        said.Should().Contain(expected);
+        if (exited)
+        {
+            said.Should().NotContain(", held");
+        }
     }
 
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task A_pwsh_that_exits_at_once_is_said_at_once_and_does_not_fail_the_chain()
     {
-        var (awake, output, temp) = await StandInAsync("echo 'cannot reach the script' >&2\nexit 1", TimeSpan.FromSeconds(60));
+        var (awake, _, temp) = await StandInAsync("echo 'cannot reach the script' >&2\nexit 1", TimeSpan.FromSeconds(60));
         using var folder = temp;
         await using var held = awake;
         var started = System.Diagnostics.Stopwatch.StartNew();
 
-        awake.Start().Should().BeOfType<Outcome<int>.Ok>("the chain is never failed by its keep-awake");
+        (await awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>("the chain is never failed by its keep-awake");
 
         started.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), "an exited pwsh ends the wait at once, not at the bound");
-        output.ToString().Should().Contain("exited before the script reported").And.Contain("/s/keep-awake.ps1").And.NotContain($"keep-awake: {awake.Describe}");
+        awake.Describe.Should().Contain("exited before the script held the host").And.Contain("/s/keep-awake.ps1").And.NotContain(", held, checked");
     }
 
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task A_pwsh_that_is_silent_is_said_to_be_held_but_not_confirmed_at_the_bound()
     {
-        var (awake, output, temp) = await StandInAsync("while read -r _l; do :; done", TimeSpan.FromMilliseconds(300));
+        var (awake, _, temp) = await StandInAsync("while read -r _l; do :; done", TimeSpan.FromMilliseconds(300));
         using var folder = temp;
         await using var held = awake;
 
-        awake.Start().Should().BeOfType<Outcome<int>.Ok>();
+        (await awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
 
-        output.ToString().Should().Contain("has not reported in 0.3 s").And.Contain("held, not confirmed");
+        awake.Describe.Should().Contain("has not reported in 0.3 s").And.Contain("held, not confirmed");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task The_wait_for_the_script_says_so_first_and_ends_at_the_callers_cancellation_with_the_child_stopped()
+    {
+        var (awake, output, temp) = await StandInAsync("while read -r _l; do :; done", TimeSpan.FromSeconds(120));
+        using var folder = temp;
+        await using var held = awake;
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        var start = awake.StartAsync(cancel.Token);
+        await Eventually(() => output.ToString().Contains("waiting up to 120 s for the script's confirmation", StringComparison.Ordinal), "the waiting line is written BEFORE the wait");
+        start.IsCompleted.Should().BeFalse("the script has not reported and the bound is two minutes");
+        var pid = awake.ChildProcessId!.Value;
+        await cancel.CancelAsync();
+
+        await FluentActions.Awaiting(() => start).Should().ThrowAsync<OperationCanceledException>();
+        WorkerLiveness.ProcessIsAlive(pid).Should().BeFalse("a cancelled start leaves no child behind");
+    }
+
+    [Fact]
+    public async Task A_relaunch_that_fails_leaves_no_child_and_says_so_to_the_operator_too()
+    {
+        await using var kit = new PwshKit();
+        (await kit.Awake.StartAsync(Ct)).Should().BeOfType<Outcome<int>.Ok>();
+        File.Delete(kit.Pwsh);
+        await kit.KillChildAsync();
+
+        kit.ReleaseTick();
+        await Eventually(() => kit.Log.Contains("the relaunch failed", StringComparison.Ordinal), "the failed relaunch is logged");
+
+        kit.Awake.ChildProcessId.Should().BeNull("after a failed relaunch there is no held child");
+        kit.Output.ToString().Should().Contain("the relaunch failed");
     }
 
     public static TheoryData<string, string, string, string> WindowsPaths => new()
@@ -291,8 +388,14 @@ public sealed class WslHostAwakeTests
         { "x/k.ps1", Ubuntu, string.Empty, "is not an absolute Linux path" },
         { "/a/../k.ps1", Ubuntu, string.Empty, "'..' segment" },
         { @"/a\b", Ubuntu, string.Empty, "backslash or a NUL" },
-        { "/a/k.ps1", @"Ub\untu", string.Empty, "slash or a backslash" },
-        { "/a/k.ps1", "Ub/untu", string.Empty, "slash or a backslash" },
+        { "/a/k.ps1", @"Ub\untu", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "Ub/untu", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "..", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", ".", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "Ub untu", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "Ubuntu\t", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "Ubuntu\n", string.Empty, "not a distribution name" },
+        { "/a/k.ps1", "Ubuntu-24.04", @"\\wsl.localhost\Ubuntu-24.04\a\k.ps1", string.Empty },
     };
 
     [Theory]
@@ -309,6 +412,12 @@ public sealed class WslHostAwakeTests
         {
             windows.Should().BeOfType<Outcome<string>.Fail>(windows.ToString()).Which.Reason.Should().Contain(refusal);
         }
+    }
+
+    [Fact]
+    public void A_distribution_name_holding_a_nul_is_refused()
+    {
+        WslPaths.Windows("/a/k.ps1", "Ub\0untu").Should().BeOfType<Outcome<string>.Fail>().Which.Reason.Should().Contain("not a distribution name");
     }
 
     [Fact]
