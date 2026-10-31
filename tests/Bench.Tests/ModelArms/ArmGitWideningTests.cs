@@ -8,10 +8,9 @@ namespace Bench.Tests.ModelArms;
 /// <summary><see cref="ArmGit"/> as E3 widened it (C14): the questions <c>prep-base</c> asks of the base clone and the ones <c>make</c> and <c>checks</c> ask of an arm's, each against a REAL git over real folders, each started by the real path it was handed with <c>-c core.fsmonitor=false</c> —
 /// the class is the one place the module asks git, so one test per answer the later verbs read.
 /// <para>
-/// What this does NOT prove: Windows (the shims are shell scripts); a git other than the host's (every plant is observed on the host's git first, so a git that runs a program these flags do not name turns a test red rather than passing silently); <c>smudge=</c> is neutralised by the same mechanism as <c>clean=</c>
-/// but no question here writes a worktree — E4's does, and its test must observe it.
+/// What this does NOT prove: Windows (the shims are shell scripts); a git other than the host's (every plant is observed on the host's git first, so a git that runs a program these flags do not name turns a test red rather than passing silently); <c>smudge=</c> is neutralised by the same mechanism as <c>clean=</c> and is observed on a <c>worktree add</c> by <c>TaskWorktreesTests</c> (E4.S2).
 /// </para></summary>
-public sealed class ArmGitWideningTests : IDisposable
+public sealed partial class ArmGitWideningTests : IDisposable
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -23,38 +22,19 @@ public sealed class ArmGitWideningTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private int _dirtied;
+    private string SentinelFile => Sentinel.Marker(_temp);
 
-    private string SentinelFile => _temp.Combine("sentinel.log");
+    private bool Ran => Sentinel.Ran(_temp);
 
-    private bool Ran => File.Exists(SentinelFile);
-
-    /// <summary>A program a clone's config or hooks folder can name: it appends a line to the sentinel and, as a filter must, passes its input through.</summary>
+    /// <summary>A program a clone's config or hooks folder can name (see <see cref="Sentinel.PlantProgram"/>).</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    private string PlantProgram(string name, string? body = null)
-    {
-        return ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 ran\" >> '{SentinelFile}'\n{body ?? "cat"}\n");
-    }
+    private string PlantProgram(string name, string? body = null) => Sentinel.PlantProgram(_temp, name, body);
 
-    /// <summary>Makes <paramref name="file"/> stat-dirty without changing a byte: a distinct, older modification time every call — a repeated one would let a later "no program ran" prove nothing, because git would find the index already refreshed.</summary>
-    private void Redirty(string file) => File.SetLastWriteTimeUtc(file, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(++_dirtied));
+    private static void Redirty(string file) => Sentinel.Redirty(file);
 
-    /// <summary>The host's git, EXIT CODE IGNORED, under the scratch environment: for proving a plant live (a plant that makes git fail still ran its program).</summary>
-    private async Task HostGitAsync(string folder, params string[] arguments)
-    {
-        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, arguments, folder, TimeSpan.FromSeconds(60), string.Empty, Environment, Ct);
-        attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe);
-    }
+    private Task HostGitAsync(string folder, params string[] arguments) => Sentinel.HostGitAsync(folder, Environment, Ct, arguments);
 
-    /// <summary>The plant is LIVE: the host's own git, asked the same kind of question over a stat-dirty file, ran the program. Then the sentinel is deleted and the file made dirty again, so the question under test starts from the same state.</summary>
-    private async Task ProveLiveAsync(string folder, string dirtyFile, params string[] hostQuestion)
-    {
-        Redirty(dirtyFile);
-        await HostGitAsync(folder, hostQuestion);
-        Ran.Should().BeTrue("the plant must be proven live with the host's git first, or 'no program ran' proves nothing");
-        File.Delete(SentinelFile);
-        Redirty(dirtyFile);
-    }
+    private Task ProveLiveAsync(string folder, string dirtyFile, params string[] hostQuestion) => Sentinel.ProveLiveAsync(_temp, Environment, Ct, folder, dirtyFile, hostQuestion);
 
     private async Task<string> ClonedAsync()
     {

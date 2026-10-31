@@ -158,11 +158,15 @@ public sealed class ArmFiles(ArmPaths paths)
     public void Delete(string path) => File.Delete(path);
 
     /// <summary>One line and a newline, flushed to disk.</summary>
-    public void AppendTiming(TimingLine line)
+    public void AppendTiming(TimingLine line) => AppendLine(paths.Timing, TimingLines.Write(line));
+
+    /// <summary><paramref name="line"/> and a newline appended to <paramref name="path"/> (created when absent) by a fresh <c>FileMode.Append</c> stream, flushed to disk before it closes: a crash leaves the file whole to its last flushed line. No lock — the timing file's is E4.S3's, wrapped around
+    /// <see cref="AppendTiming"/>; the pick record has ONE writer, the pick in task order.</summary>
+    public void AppendLine(string path, string line)
     {
-        Directory.CreateDirectory(paths.Out);
-        using var stream = new FileStream(paths.Timing, FileMode.Append, FileAccess.Write, FileShare.Read);
-        stream.Write(Utf8.GetBytes(TimingLines.Write(line) + "\n"));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+        stream.Write(Utf8.GetBytes(line + "\n"));
         stream.Flush(flushToDisk: true);
     }
 

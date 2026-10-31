@@ -96,6 +96,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(TasksPlan), typeof(BatchesFile), typeof(TaskStems), typeof(TaskBriefFields),
 
         // E4.S2
+        typeof(PickRecord), typeof(PickBackOrder), typeof(TaskRecovery),
 
         // E4.S3
 
