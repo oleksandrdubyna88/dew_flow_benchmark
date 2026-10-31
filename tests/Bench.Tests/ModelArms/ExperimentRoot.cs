@@ -199,6 +199,14 @@ internal sealed class ExperimentRoot : IDisposable
         return ShimFiles.Write(path, "#!/bin/sh\n" + body);
     }
 
+    /// <summary>Replaces <c>&lt;temp&gt;/bin/git</c> by a shim with the given body: the link to the host's git is deleted FIRST, always — writing through it would overwrite the operator's git itself (<c>ValidateVerbTests</c> has always done these two steps by hand). Returns the shim's path.</summary>
+    public string ReplaceGit(string body)
+    {
+        var git = Path.Combine(Temp, "bin", "git");
+        File.Delete(git);
+        return ShimScript(git, body);
+    }
+
     /// <summary>Where a shim named <paramref name="name"/> writes its marker lines.</summary>
     public string MarkerFile(string name) => Path.Combine(Temp, "markers", name);
 

@@ -253,12 +253,13 @@ public sealed class StepRunnerTests
     {
         using var bench = new StepBench();
         bench.Replays("result-success.jsonl");
+        bench.Parent["PGPASSWORD"] = "hunter2"; // secret-shaped, and the shared rule does not end with it: only the union strips it (E4.S0, D19)
 
         await bench.Runner().RunAsync(bench.Context("C", 0), Ct);
 
         var call = bench.Fake.Calls().Should().ContainSingle().Subject;
         call.EnvironmentNames.Should().Contain(["TMPDIR", "HOME", "PATH", "FAKE_CLI_HOME", "PWD"]);
-        call.EnvironmentNames.Should().NotContain(["BENCH_DB", "SUBAGENT_MODEL_GUARD", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "OLDPWD"]);
+        call.EnvironmentNames.Should().NotContain(["BENCH_DB", "PGPASSWORD", "SUBAGENT_MODEL_GUARD", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "OLDPWD"]);
         call.SubagentModelGuard.Should().BeEmpty();
     }
 

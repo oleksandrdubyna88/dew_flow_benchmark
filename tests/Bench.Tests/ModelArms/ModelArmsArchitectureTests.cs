@@ -88,7 +88,14 @@ public sealed class ModelArmsArchitectureTests
         // E3.S5
         typeof(StageRecord), typeof(DeadlineSteps),
 
-        // E4
+        // E4.S0
+        typeof(SecretShaped), typeof(GitFloor),
+
+        // E4.S1
+
+        // E4.S2
+
+        // E4.S3
 
         // E5
     ];

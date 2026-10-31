@@ -3,6 +3,7 @@ using Bench.Cli;
 using Bench.Tests.Probes.Driver;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
 using Xunit;
 using static Bench.Tests.ModelArms.RunArmKit;
@@ -169,6 +170,36 @@ public sealed class RunArmSchemeTests
         var git = new FileInfo(Path.Combine(root.Temp, "bin", "git")).ResolveLinkTarget(returnFinalTarget: true)!.FullName;
         run.Output.Should().Contain("resolved executables:").And.Contain($"  claude → {claude}").And.Contain($"  git → {git}", "the REAL path of each, the one the harness launches (D17 c)");
         run.Output.IndexOf("claude → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[C1] 1-code", StringComparison.Ordinal), "the executables are said before the first step starts");
+    }
+
+    /// <summary>The floor at the VERB's admission, not only at <c>validate</c> (D23, E4.S0): <c>run-arm</c> without a prior <c>validate</c> (none ever ran on this root — the arm is made by hand) reads the resolved git's version before it counts <c>scenarios.json</c>, takes the gate lock or starts a step. The shim answers <c>--version</c> and logs every other call:
+    /// an absent marker is "no repository operation ran". <c>Run_arm_prints_the_resolved_claude_and_git_before_the_first_launch</c> stays unedited and green for the admitted rows.</summary>
+    [Theory]
+    [InlineData("2.44.0", 3)]
+    [InlineData("2.44.1", 0)]
+    [InlineData("not a version", 3)]
+    public async Task A_git_below_the_floor_is_refused_at_validate_and_at_run_arm_admission(string printed, int exit)
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
+
+        var run = await RunAsync(root, "C1");
+
+        run.Code.Should().Be(exit, run.Error + run.Output);
+        if (exit == 0)
+        {
+            fake.Calls().Select(call => BriefOf(call)).Should().Equal("1-code", "2-review", "3-fix", "gate");
+            return;
+        }
+
+        fake.Calls().Should().BeEmpty("no step started");
+        File.Exists(root.MarkerFile("git")).Should().BeFalse("no repository operation ran: the shim logs every git but --version");
+        File.Exists(root.PathsOf("C1").Timing).Should().BeFalse("nothing was timed: the arm never started");
+        run.Error.Should().Contain(printed == "not a version" ? "not a version this harness can read" : GitFloor.Sentence);
+        run.Error.Should().Contain(printed);
     }
 
     [Fact]
