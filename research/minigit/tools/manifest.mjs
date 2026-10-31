@@ -17,9 +17,11 @@
 //
 // write (the default): writes <data>/raw-manifest.tsv (the public list) and <data>/raw-manifest.json (counts per top-level folder, the sha256 of the
 // public list, the count and sha256 of the private list, and the skipped counts). Both go to *.tmp beside the targets, the pair is re-read, then the tsv is renamed, then
-// the json. --private <file> also writes the private list there; the path may not be inside this repository (exit 2, nothing written).
-// verify: recomputes both lists over --runs and compares them with <manifest>/raw-manifest.tsv (default <data>): `missing`, `changed` and `extra` lines
-// name public paths. The summary must hold the sha256 of that tsv (a mixed generation fails), and a --manifest folder other than <data> must hold
+// the json. --private <file> also writes the private list there; the path may not be inside this repository (exit 2, nothing written). The private list is
+// staged beside its target first and renamed LAST, after the public pair: a failed publish deletes the staged file and keeps the old private list.
+// verify: first reads <manifest>/raw-manifest.tsv and .json (a missing or unreadable one fails before --runs is looked at), then recomputes both lists over
+// --runs and compares them with the tsv (<manifest> defaults to <data>): `missing`, `changed` and `extra` lines name public paths, and a summary difference is
+// named by field (`public.bytes`, `topLevel["<folder>"].sha256`). The summary must hold the sha256 of that tsv (a mixed generation fails), and a --manifest folder other than <data> must hold
 // the same two files as <data>, byte for byte. The `skipped` counts are not compared (a tar copy drops sockets). The held-out list is compared by count and sha256 only; when <manifest>/raw-manifest-heldout.tsv exists
 // its bytes must hash to the summary's value and the entries are compared too, but a difference prints as three counts, never a name.
 // Both modes then check every <data>/s-*.json: each extractedFrom.sources hash must equal the manifest's hash of <seriesId>/<file>.
@@ -34,11 +36,10 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { isUtf8 } from 'node:buffer';
-import { createReadStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, createReadStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tidyPath } from './session.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const HERE = dirname(SELF);
@@ -56,6 +57,8 @@ class Fail extends Error {}
 class Usage extends Fail {}
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
+/** The operator's home prefix written as `~`, so no absolute path of the machine reaches a committed file. */
+const tilde = (text, home) => (home ? text.split(home).join('~') : text);
 
 /** What may be printed about an error: ours as written, a system error as call and code (Node puts the path in its message), anything else by name. */
 export function describe(e) {
@@ -123,7 +126,8 @@ async function record(entry, index) {
   return { path, hash, size: String(bytes), bytes };
 }
 
-const byBytes = (a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path));
+/** The items sorted by the UTF-8 bytes of `keyOf(item)`: each key is turned into bytes once, then compared as bytes (never as text). */
+const sortedByBytes = (items, keyOf) => items.map(item => [Buffer.from(keyOf(item)), item]).sort(([a], [b]) => Buffer.compare(a, b)).map(([, item]) => item);
 const isHeldout = e => e.path.startsWith(HELDOUT_PREFIX);
 
 const countSkipped = entries => Object.fromEntries(SKIPPED.map(k => [k, entries.filter(e => e.kind === k).length]));
@@ -134,7 +138,7 @@ export async function scan(runs) {
   const all = walk(Buffer.from(runs), Buffer.alloc(0)).map(checked);
   const recorded = [];
   for (const [index, entry] of all.entries()) if (['file', 'link'].includes(entry.kind)) recorded.push(await record(entry, index));
-  const sorted = recorded.sort(byBytes);
+  const sorted = sortedByBytes(recorded, e => e.path);
   const skipped = all.filter(e => SKIPPED.includes(e.kind));
   const skippedBy = Object.fromEntries([...new Set(skipped.map(firstOf))].map(top => [top, countSkipped(skipped.filter(e => firstOf(e) === top))]));
   return { pub: sorted.filter(e => !isHeldout(e)), held: sorted.filter(isHeldout), skipped: countSkipped(skipped), skippedBy };
@@ -151,7 +155,7 @@ export function summaryOf(runs, { pub, held, skipped, skippedBy }) {
   const folders = [...new Set(pub.map(topOf))];
   const folder = name => { const own = pub.filter(e => topOf(e) === name); return [name, { entries: own.length, bytes: totalBytes(own), sha256: sha256(textOf(own)), skipped: skippedBy[name] ?? countSkipped([]) }]; };
   return {
-    runsRoot: tidyPath(runs, homedir()),
+    runsRoot: tilde(runs, homedir()),
     public: { entries: pub.length, bytes: totalBytes(pub) },
     topLevel: Object.fromEntries(folders.map(folder)),
     publicSha256: sha256(textOf(pub)),
@@ -178,7 +182,7 @@ function parseList(text, what) {
 /** The paths only in the manifest (missing), in both with another hash or size (changed), and only in the tree (extra). */
 function compare(committed, entries) {
   const now = new Map(entries.map(e => [e.path, `${e.hash}\t${e.size}`]));
-  const paths = ms => [...ms.keys()].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+  const paths = ms => sortedByBytes([...ms.keys()], p => p);
   return {
     missing: paths(committed).filter(p => !now.has(p)),
     changed: paths(committed).filter(p => now.has(p) && now.get(p) !== committed.get(p)),
@@ -205,8 +209,8 @@ export function crossCheck(data, pub) {
   return { files: files.length, problems };
 }
 
-function readJsonFile(file) {
-  try { return JSON.parse(readFileSync(file, 'utf8')); } catch (e) {
+function readJsonFile(file, bytes = null) {
+  try { return JSON.parse((bytes ?? readFileSync(file)).toString('utf8')); } catch (e) {
     if (e instanceof SyntaxError) throw new Fail(`${basename(file)} is not valid JSON`);
     throw e;
   }
@@ -233,21 +237,27 @@ export function publish({ data, tsvText, summary, privatePath, privateText }) {
   mkdirSync(data, { recursive: true });
   if (privatePath) mkdirSync(dirname(privatePath), { recursive: true });
   try {
+    if (privatePath) writeFileSync(tmp(privatePath), privateText, { mode: 0o600 });
     writeFileSync(tmp(targets[0]), tsvText);
     writeFileSync(tmp(targets[1]), jsonText(summary));
-    if (privatePath) writeFileSync(tmp(privatePath), privateText, { mode: 0o600 });
     const back = JSON.parse(readFileSync(tmp(targets[1]), 'utf8'));
     if (back.publicSha256 !== sha256(readFileSync(tmp(targets[0])))) throw new Fail('the summary and the list written aside do not match; nothing was published');
-    if (privatePath) renameSync(tmp(privatePath), privatePath);
     renameSync(tmp(targets[0]), targets[0]);
     renameSync(tmp(targets[1]), targets[1]);
+    if (privatePath) renameSync(tmp(privatePath), privatePath); // only after the public pair: a failed publish keeps the old private list
   } finally {
     targets.forEach(t => rmSync(tmp(t), { force: true }));
   }
 }
 
+/** --runs must be a folder that exists; checked when the run needs it, so a missing manifest is named first. */
+function requireRuns(a) {
+  if (!existsSync(a.runs)) throw new Fail(`--runs ${a.runs} does not exist`);
+}
+
 async function writeMode(a) {
   if (a.private && insideRepo(a.private)) throw new Usage('--private may not be a path inside this repository; nothing was written');
+  requireRuns(a);
   const scanned = await scan(a.runs);
   const { pub, held } = scanned;
   const cross = crossCheck(a.data, pub);
@@ -282,23 +292,42 @@ function heldoutProblems({ dir, summary, held }) {
 const withoutSkipped = topLevel => Object.fromEntries(Object.entries(topLevel ?? {}).map(([name, { skipped, ...rest }]) => [name, rest]));
 const comparable = summary => ({ public: summary.public, topLevel: withoutSkipped(summary.topLevel) });
 
+const differs = (path, mine, theirs) => (JSON.stringify(mine) === JSON.stringify(theirs) ? [] : [`${path} differs`]);
+
+/** Where the committed summary and the recomputed one differ, named by field (`public.bytes`, `topLevel["docs"].sha256`). Only public names can appear. */
 function summaryProblems(summary, current) {
   const [mine, theirs] = [comparable(summary), comparable(current)];
-  return ['public', 'topLevel'].filter(k => JSON.stringify(mine[k]) !== JSON.stringify(theirs[k])).map(k => `the summary's ${k} differs from the recomputed one`);
+  const folders = [...new Set([...Object.keys(mine.topLevel), ...Object.keys(theirs.topLevel)])];
+  const folder = name => {
+    const path = `topLevel[${JSON.stringify(name)}]`;
+    if (!Object.hasOwn(mine.topLevel, name)) return [`${path} is not in the summary`];
+    if (!Object.hasOwn(theirs.topLevel, name)) return [`${path} is in the summary but not in the tree`];
+    return ['entries', 'bytes', 'sha256'].flatMap(f => differs(`${path}.${f}`, mine.topLevel[name][f], theirs.topLevel[name][f]));
+  };
+  return [...['entries', 'bytes'].flatMap(f => differs(`public.${f}`, mine.public?.[f], theirs.public[f])), ...folders.flatMap(folder)];
+}
+
+/** The two manifest files of `dir`, read and parsed, before anything else is done: a missing or unreadable one is a plain answer, not a scan error. */
+function readManifest(dir) {
+  const read = f => {
+    const file = join(dir, f);
+    if (!existsSync(file)) throw new Fail(`${f} is missing in ${dir}`);
+    try { return readFileSync(file); } catch { throw new Fail(`${f} in ${dir} cannot be read`); }
+  };
+  const [tsv, json] = [read(TSV), read(SUMMARY)];
+  return { tsv, summary: readJsonFile(join(dir, SUMMARY), json), committed: parseList(tsv.toString('utf8'), TSV) };
 }
 
 async function verifyMode(a) {
   const dir = a.manifest ?? a.data;
+  const { tsv, summary, committed } = readManifest(dir);
+  requireRuns(a);
   const scanned = await scan(a.runs);
   const { pub, held } = scanned;
   const cross = crossCheck(a.data, pub);
-  const tsv = readOrNull(join(dir, TSV));
-  const json = readOrNull(join(dir, SUMMARY));
-  if (tsv === null || json === null) return { lines: [`${tsv === null ? TSV : SUMMARY} is missing in ${dir}`], code: 1 };
-  const summary = readJsonFile(join(dir, SUMMARY));
   const apart = dir === a.data ? [] : [TSV, SUMMARY].filter(f => !(readOrNull(join(a.data, f))?.equals(readOrNull(join(dir, f))))).map(f => `${f} in ${dir} differs from ${a.data}`);
   const mixed = sha256(tsv) === summary.publicSha256 ? [] : [`mixed generation: ${SUMMARY} holds another publicSha256 than the sha256 of ${TSV}`];
-  const d = compare(parseList(tsv.toString('utf8'), TSV), pub);
+  const d = compare(committed, pub);
   const problems = [
     ...apart, ...mixed, ...named('missing', d.missing), ...named('changed', d.changed), ...named('extra', d.extra),
     ...summaryProblems(summary, summaryOf(a.runs, scanned)), ...heldoutProblems({ dir, summary, held }), ...cross.problems,
@@ -487,12 +516,50 @@ const CASES = [
     const a = w.verify('--manifest', same); const b = w.verify('--manifest', other);
     return [...(a.code === 0 ? [] : [`equal folder: exit ${a.code}: ${a.out}`]), ...(b.code === 1 && b.out.includes('differs from') ? [] : [`other folder: exit ${b.code}: ${b.out}`])];
   }],
-  ['a summary whose counts were edited exits 1', w => {
+  ['a summary whose counts or folder hash were edited exits 1 and the message names the field', w => {
     w.write();
     const summary = JSON.parse(readFileSync(join(w.data, SUMMARY), 'utf8'));
-    writeFileSync(join(w.data, SUMMARY), jsonText({ ...summary, public: { ...summary.public, entries: summary.public.entries + 1 } }));
+    const docs = summary.topLevel.docs;
+    writeFileSync(join(w.data, SUMMARY), jsonText({ ...summary, public: { ...summary.public, entries: summary.public.entries + 1 }, topLevel: { ...summary.topLevel, docs: { ...docs, sha256: '0'.repeat(64) } } }));
     const r = w.verify();
-    return r.code === 1 && r.out.includes("summary's public differs") ? [] : [`exit ${r.code}: ${r.out}`];
+    return [
+      ...(r.code === 1 && r.out.includes('public.entries differs') ? [] : [`exit ${r.code}: ${r.out}`]),
+      ...(r.out.includes('topLevel["docs"].sha256 differs') ? [] : ['the message does not name the folder and the field']),
+      ...(r.out.includes('topLevel["notes.txt"]') || !clean(r.out) ? ['an unrelated folder or a held-out name was named'] : []),
+    ];
+  }],
+  ['verify checks the manifest files before it scans the runs root', w => {
+    const empty = join(w.root, 'empty');
+    mkdirSync(empty);
+    const gone = join(w.root, 'no-such-runs');
+    const a = w.cli('verify', '--runs', gone, '--data', w.data, '--manifest', empty);
+    const unreadable = join(w.root, 'unreadable');
+    mkdirSync(join(unreadable, TSV), { recursive: true });
+    writeFileSync(join(unreadable, SUMMARY), '{}');
+    const b = w.cli('verify', '--runs', gone, '--data', w.data, '--manifest', unreadable);
+    return [
+      ...(a.code === 1 && a.out.includes(`${TSV} is missing in ${empty}`) && !a.out.includes('does not exist') ? [] : [`empty folder: exit ${a.code}: ${a.out}`]),
+      ...(b.code === 1 && b.out.includes(`${TSV} in ${unreadable} cannot be read`) && !b.out.includes('does not exist') ? [] : [`unreadable file: exit ${b.code}: ${b.out}`]),
+    ];
+  }],
+  ['a failed public publish keeps the old private list and leaves no temp file', w => {
+    const priv = join(w.root, 'private', 'heldout.tsv');
+    mkdirSync(dirname(priv));
+    writeFileSync(priv, 'OLD\n');
+    mkdirSync(join(w.data, TSV, 'in-the-way'), { recursive: true });
+    const a = w.write('--private', priv);
+    const leftovers = d => readdirSync(d).filter(f => f.endsWith('.tmp'));
+    const asRoot = process.getuid?.() === 0;
+    rmSync(join(w.data, TSV), { recursive: true });
+    chmodSync(w.data, 0o500);
+    const b = asRoot ? { code: 1 } : w.write('--private', priv);
+    chmodSync(w.data, 0o700);
+    return [
+      ...(a.code !== 0 ? [] : ['the write succeeded although the list could not be replaced']),
+      ...(b.code !== 0 ? [] : ['the write succeeded in a read-only data folder']),
+      ...(readFileSync(priv, 'utf8') === 'OLD\n' ? [] : ['the old private list was replaced']),
+      ...(leftovers(w.data).length + leftovers(dirname(priv)).length === 0 ? [] : ['a temp file was left']),
+    ];
   }],
   ['a publish whose pair does not match changes no file and leaves no temp file', w => {
     w.write();
@@ -536,7 +603,6 @@ async function main() {
   try {
     const a = args(process.argv.slice(2));
     if (a.selfCheck) process.exit(selfCheck());
-    if (!existsSync(a.runs)) throw new Fail(`--runs ${a.runs} does not exist`);
     const { lines, code } = await (a.mode === 'verify' ? verifyMode(a) : writeMode(a));
     lines.forEach(l => console.log(l));
     process.exit(code);
