@@ -1,6 +1,6 @@
 # PLAN — E4 stories: the task pipeline of the model-arms module
 
-> Status: **stories written 2026-10-31, nothing implemented yet.** Epic E4 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D14, D16,
+> Status: **BUILT 2026-11-01 on `feat/model-arms-e4` (E4.S0–E4.S3, each through an Opus review and the coai code gate; ModelArms suite 1661, 0 failed); pull requests not opened (the repository's three-open cap — the owner's) and the real-git pilot on git 2.39.4 / 2.45.0 not run (building them was not authorised this session).** Stories written 2026-10-31. Epic E4 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D14, D16,
 > D17 (d), D19, D21, D22, D23, D25, D26; §4.6, §4.11, §4.12; §6 step 4; §7's E4 tests; §9; §10), written at `ecc890c` on
 > `feat/model-arms-e4` (E1–E3 on `main`) by the judge role (Opus), as the epic starts — `common.plan-change-control` § *What counts as a
 > change*: writing them is not a change. **The parent's epoch 3 has ONE entry since, 3.1** (2026-10-31, `contract`: a task whose session
