@@ -89,7 +89,7 @@ public sealed class RunnerIdentityTests
         await using var first = ModelArmsBinary.Start(root, "run-arm", "C1");
         await AliveAsync(root, fake, first);
         var pid = int.Parse(File.ReadAllText(Layout(root).PidFile("C1")).Trim(), CultureInfo.InvariantCulture);
-        root.ReplaceGit($"echo \"$0 $*\" >> '{root.MarkerFile("git-second")}'\nexit 0\n");
+        root.ReplaceGit(Sentinel.Body(root.MarkerFile("git-second"), "2.45.0"));
 
         var second = await ModelArmsBinary.RunAsync(root, "run-arm", "C1");
 

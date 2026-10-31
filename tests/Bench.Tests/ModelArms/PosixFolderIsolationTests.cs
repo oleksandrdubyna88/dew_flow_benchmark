@@ -668,16 +668,31 @@ public sealed class PosixFolderIsolationTests
         var elsewhere = kit.Root.Scratch("elsewhere");
         File.SetUnixFileMode(elsewhere, IsolationKit.Mode755);
         var moved = Path.Combine(kit.Root.Temp, "pids-moved");
-        var hands = new IsolationHands(null, null, null, () =>
-        {
-            Directory.Move(kit.Pids, moved);
-            Directory.CreateSymbolicLink(kit.Pids, elsewhere);
-        });
+        UnixFileMode? elsewhereWhenPidsWasLocked = null;
+        UnixFileMode? movedWhenPidsWasLocked = null;
+        var hands = new IsolationHands(
+            null,
+            null,
+            (index, _) =>
+            {
+                if (index == 3)
+                {
+                    elsewhereWhenPidsWasLocked = File.GetUnixFileMode(elsewhere);
+                    movedWhenPidsWasLocked = File.GetUnixFileMode(moved);
+                }
+            },
+            () =>
+            {
+                Directory.Move(kit.Pids, moved);
+                Directory.CreateSymbolicLink(kit.Pids, elsewhere);
+            });
 
         var run = await kit.LockAsync(hands: hands);
 
         run.Code.Should().Be(3, Ctx(run));
-        File.GetUnixFileMode(elsewhere).Should().Be(IsolationKit.Mode755, "the modes went through the pinned descriptors: a link planted at the leaf changes nothing it points at");
+        movedWhenPidsWasLocked.Should().Be((UnixFileMode)0xC0, "the pinned folder — now at pids-moved — is the one that was locked");
+        elsewhereWhenPidsWasLocked.Should().Be(IsolationKit.Mode755, "the modes went through the pinned descriptors: a link planted at the leaf changes nothing it points at, not even while the lock stands");
+        File.GetUnixFileMode(elsewhere).Should().Be(IsolationKit.Mode755, "nor does the roll-back");
         File.GetUnixFileMode(moved).Should().Be(IsolationKit.Mode755, "the roll-back restored the pinned folder through its held descriptor");
         run.Error.Should().Contain("could not be verified").And.Contain(kit.Pids);
     }
