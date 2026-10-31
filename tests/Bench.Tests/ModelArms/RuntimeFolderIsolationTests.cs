@@ -16,7 +16,7 @@ public sealed class RuntimeFolderIsolationTests
     private static readonly string[] Original = ["755", "700", "755", "755", "755", "755", "755", "755"];
     private static readonly string[] Locked = ["0", "300", "300", "300", "300", "300", "300", "300"];
 
-    private static string Line => $"isolation on {PlatformKit.MacRoad.Platform}: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart at unlock; a FIFO or a device reads as a file (ledger 2.1)";
+    private static string Line => $"isolation on {PlatformKit.MacRoad.Platform}: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart when restoring or re-applying (unlock, a recovery, a lock over an applied snapshot); a FIFO or a device reads as a file (ledger 2.1)";
 
     [Fact]
     public async Task On_a_road_without_the_kernel_reader_lock_and_unlock_run_by_path_and_say_what_is_not_verified()
@@ -64,6 +64,20 @@ public sealed class RuntimeFolderIsolationTests
         System.Text.RegularExpressions.Regex.Matches(run.Error, "is still listable").Should().ContainSingle();
         kit.Modes().Should().Equal(Original);
         kit.Snapshot().Should().BeOfType<LockState.None>();
+    }
+
+    [Fact]
+    public async Task A_lock_over_an_applied_snapshot_says_what_is_not_verified_before_it_re_applies()
+    {
+        using var kit = new IsolationKit();
+        (await kit.LockAsync(road: PlatformKit.MacRoad)).Code.Should().Be(0);
+        File.SetUnixFileMode(kit.Pids, IsolationKit.Mode755);
+
+        var run = await kit.LockAsync(road: PlatformKit.MacRoad);
+
+        run.Code.Should().Be(0, run.Output + run.Error);
+        run.Output.Split('\n')[0].Should().Contain(Line, "the re-apply sets a mode by path too: the line comes before it");
+        run.Output.Should().Contain("re-applied 1 entries that were open");
     }
 
     [Theory]

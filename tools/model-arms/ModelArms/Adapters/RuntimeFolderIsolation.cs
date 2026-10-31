@@ -8,7 +8,7 @@ namespace ModelArms.Adapters;
 /// <summary>D11's file-system side on every POSIX road that is not <c>Kernel</c>/<c>Kernel</c> (macOS, FreeBSD, Linux arm64, a Linux without <c>statx</c>; ledger 2.1 — no verb of this epic exits 3 on a POSIX host for want of a kernel reader). The same <see cref="IFolderIsolation"/> over the runtime's facts, no P/Invoke: the kind by the file's link attribute (<c>BoundedFile.IsLink</c>) then
 /// <c>Directory.Exists</c> / <c>File.Exists</c> (a link is refused without being followed), the ancestors by <see cref="RealPath"/> as the kernel road, the modes read by <c>File.GetUnixFileMode</c> and set by <c>File.SetUnixFileMode</c> — BY PATH. It refuses only an actual inability to apply, verify or recover, never a platform's name.
 /// <para>
-/// <b>What it does not verify</b> (D26 a, said in the line <see cref="NotVerifiedLine"/> the verbs print before their first mode call, in the same words): the window between the check and the <c>chmod</c> is open, so a link planted there is followed; the snapshot carries no device and no inode, so a replaced entry is not told apart at <c>unlock</c> (kind and the mode rule are still judged); a FIFO or a device reads as a file.
+/// <b>What it does not verify</b> (D26 a, said in the line <see cref="NotVerifiedLine"/> the verbs print before their first mode call, in the same words): the window between the check and the <c>chmod</c> is open, so a link planted there is followed; the snapshot carries no device and no inode, so a replaced entry is not told apart when restoring or re-applying (kind and the mode rule are still judged); a FIFO or a device reads as a file.
 /// <b>D26 f</b> (the identity compared at <c>unlock</c>) is not performed here, and says so. The verification IS performed, for every entry, by the attempt: a folder must refuse to be enumerated (<c>UnauthorizedAccessException</c> from the runtime's <c>opendir</c>, before a name is read), a closed folder must refuse the status of a child, a closed file must refuse to be opened.
 /// The same-user residuals of <see cref="PosixFolderIsolation"/> hold here too. Observed on Linux through the seam (<c>IsolationSeams.Road</c>); a Mac itself is unobserved (parent §9).
 /// </para></summary>
@@ -25,7 +25,7 @@ internal sealed class RuntimeFolderIsolation(PlatformRoad road, IsolationHands? 
     public bool Applies => true;
 
     public string NotVerifiedLine =>
-        $"isolation on {road.Platform}: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart at unlock; a FIFO or a device reads as a file (ledger 2.1)";
+        $"isolation on {road.Platform}: modes are set by path — a link planted between the check and the chmod is followed; a replaced entry is not told apart when restoring or re-applying (unlock, a recovery, a lock over an applied snapshot); a FIFO or a device reads as a file (ledger 2.1)";
 
     public bool IsRoot => hands?.IsRoot is { } hand ? hand() : Environment.IsPrivilegedProcess;
 
@@ -88,64 +88,48 @@ internal sealed class RuntimeFolderIsolation(PlatformRoad road, IsolationHands? 
 
     public RestoreReport Restore(IReadOnlyList<SavedMode> reverse, RestoreBound bound)
     {
-        var restored = new List<string>();
-        var skipped = new List<string>();
-        var unresolved = new List<string>();
-        var failed = new List<string>();
+        var tally = new RestoreTally();
         foreach (var saved in reverse)
         {
-            switch (Judged(saved, bound))
-            {
-                case EntryVerdict.Restore:
-                    events?.Add("restore " + saved.Path);
-                    var refused = SetMode(saved.Path, IsolationSentences.SavedBits(saved));
-                    (refused.Length == 0 ? restored : failed).Add(refused.Length == 0 ? saved.Path : refused);
-                    break;
-                case EntryVerdict.AlreadyRestored:
-                    restored.Add(saved.Path);
-                    break;
-                case EntryVerdict.Unresolved unresolvedEntry:
-                    unresolved.Add(unresolvedEntry.Sentence);
-                    break;
-                case EntryVerdict.Skip skip:
-                    skipped.Add(skip.Sentence);
-                    break;
-                case EntryVerdict.Fail fail:
-                    failed.Add(fail.Sentence);
-                    break;
-            }
+            tally.Add(Judged(saved, bound), saved.Path, () => Restored(saved));
         }
 
-        return new RestoreReport(restored, skipped, unresolved, failed);
+        return tally.Report();
     }
 
     public Outcome<string> ReApply(IReadOnlyList<SavedMode> open, IsolationPlan plan)
     {
         foreach (var saved in open)
         {
-            var refusal = Judged(saved, new RestoreBound(string.Empty, string.Empty, [saved.Path])) switch
+            var again = Judged(saved, new RestoreBound(string.Empty, string.Empty, [saved.Path])) switch
             {
-                EntryVerdict.Skip skip => skip.Sentence,
-                EntryVerdict.Fail fail => fail.Sentence,
+                EntryVerdict.Skip skip => Outcome<string>.Failure(skip.Sentence),
+                EntryVerdict.Fail fail => Outcome<string>.Failure(fail.Sentence),
                 _ => SetLocked(saved),
             };
-            if (refusal.Length > 0)
+            if (again is Outcome<string>.Fail failed)
             {
-                return Outcome<string>.Failure(refusal);
+                return failed;
             }
         }
 
         return Outcome<string>.Success($"{open.Count} entries re-applied");
     }
 
+    private string Restored(SavedMode saved)
+    {
+        events?.Add("restore " + saved.Path);
+        return SetMode(saved.Path, IsolationSentences.SavedBits(saved));
+    }
+
     public void Dispose()
     {
     }
 
-    private string SetLocked(SavedMode saved)
+    private Outcome<string> SetLocked(SavedMode saved)
     {
         events?.Add("reapply " + saved.Path);
-        return SetMode(saved.Path, IsolationPlans.LockedMode(saved.Kind));
+        return SetMode(saved.Path, IsolationPlans.LockedMode(saved.Kind)) is { Length: > 0 } refused ? Outcome<string>.Failure(refused) : Outcome<string>.Success(string.Empty);
     }
 
     private static EntryVerdict Judged(SavedMode saved, RestoreBound bound)
@@ -153,7 +137,7 @@ internal sealed class RuntimeFolderIsolation(PlatformRoad road, IsolationHands? 
         var inBound = bound.Holds(saved.Path);
         return IsLink(saved.Path) ? RestoreJudgement.Of(saved, new PinnedFacts(IsLink: true, IsFolder: false, IsFile: false, 0, null), inBound)
             : !Directory.Exists(saved.Path) && !File.Exists(saved.Path) ? RestoreJudgement.Of(saved, null, inBound)
-            : ThroughALink(saved.Path) ? new EntryVerdict.Skip($"{saved.Path}: reached through a link now — not restored")
+            : ThroughALink(saved.Path) ? (inBound ? new EntryVerdict.Skip($"{saved.Path}: reached through a link now — not restored") : RestoreJudgement.Of(saved, null, inBound: false))
             : RestoreJudgement.Of(saved, Facts(saved.Path), inBound);
     }
 
@@ -182,7 +166,7 @@ internal sealed class RuntimeFolderIsolation(PlatformRoad road, IsolationHands? 
         }
 
         return ModeOf(entry.Path).Match(
-            bits => Outcome<SavedMode>.Success(new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText(bits), null)),
+            bits => Outcome<SavedMode>.Success(new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText(bits), null, entry.Source)),
             reason => Outcome<SavedMode>.Failure($"{entry.Path} cannot be read: {reason}{named}"));
     }
 

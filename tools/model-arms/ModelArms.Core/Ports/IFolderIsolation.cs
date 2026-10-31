@@ -4,7 +4,17 @@ using ModelArms.Core.Isolation;
 namespace ModelArms.Core.Ports;
 
 /// <summary>What a restore (or a roll-back) came to, entry by entry: the paths restored, and the sentences for what was skipped (gone, replaced, a link), left to the operator (a mode changed by hand) or failed (outside the bound, a refused <c>chmod</c>). Only <see cref="Failed"/> keeps the snapshot.</summary>
-public sealed record RestoreReport(IReadOnlyList<string> Restored, IReadOnlyList<string> Skipped, IReadOnlyList<string> Unresolved, IReadOnlyList<string> Failed);
+public sealed record RestoreReport(IReadOnlyList<string> Restored, IReadOnlyList<string> Skipped, IReadOnlyList<string> Unresolved, IReadOnlyList<string> Failed)
+{
+    /// <summary>The entries that needed no call because they already stood at their saved mode (a harmless retry): counted as restored, and SAID.</summary>
+    public IReadOnlyList<string> Harmless { get; init; } = [];
+
+    /// <summary>Restored by a call plus already at the saved mode: the <c>k</c> of <i>restored k of n</i>.</summary>
+    public int Settled => Restored.Count + Harmless.Count;
+
+    /// <summary><c>(m already at their saved mode)</c> when there were any, else nothing.</summary>
+    public string HarmlessWords => Harmless.Count == 0 ? string.Empty : $" ({Harmless.Count} already at their saved mode)";
+}
 
 /// <summary>Every entry of the plan, pinned, with the mode it had: what <see cref="IFolderIsolation.Pin"/> hands back and the snapshot is written from. The adapter keeps the descriptors (kernel road) until it is disposed.</summary>
 public sealed record Pinned(IReadOnlyList<SavedMode> Modes);

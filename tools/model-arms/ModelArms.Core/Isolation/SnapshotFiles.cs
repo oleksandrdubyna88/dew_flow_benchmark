@@ -7,8 +7,9 @@ namespace ModelArms.Core.Isolation;
 /// It is what tells, at <c>unlock</c>, an entry that was replaced since the lock from the one that was locked; the runtime road cannot read it, so there it is <c>null</c> on both sides.</summary>
 public sealed record NodeIdentity(ulong Device, ulong Inode);
 
-/// <summary>One path of the snapshot: what it is, the 12 permission bits it had before the lock as octal text (<c>stat -c %a</c>: <c>755</c>, <c>2755</c>, <c>0</c>) and, on the kernel road, which inode.</summary>
-public sealed record SavedMode(string Path, IsolationKind Kind, string Mode, NodeIdentity? Identity);
+/// <summary>One path of the snapshot: what it is, the 12 permission bits it had before the lock as octal text (<c>stat -c %a</c>: <c>755</c>, <c>2755</c>, <c>0</c>), on the kernel road which inode, and <see cref="Source"/> — the configuration entry that authorised it (<c>isolation.closed[0]</c>), covered by the snapshot's digest, so that
+/// <c>unlock</c> can restore what the lock closed after the block that named it was removed, and a path added to the file by hand (which the digest does not cover) is not restored.</summary>
+public sealed record SavedMode(string Path, IsolationKind Kind, string Mode, NodeIdentity? Identity, string Source = "");
 
 /// <summary>What <c>.locked-modes</c> holds: the run, the digest of the plan, the moment of the snapshot and the saved modes in lock order.</summary>
 public sealed record SavedSnapshot(string Run, string Digest, string Since, IReadOnlyList<SavedMode> Modes);
@@ -52,6 +53,9 @@ public static class SnapshotFiles
                 writer.WriteEndObject();
             }) + "\n";
 
+    /// <summary>The digest the snapshot's own entries spell (kind, path, source), which must equal the digest it records — else the file was edited after the lock wrote it and its sources are not believed.</summary>
+    public static string DigestOf(SavedSnapshot saved) => IsolationPlans.DigestOf([.. saved.Modes.Select(mode => new IsolationEntry(mode.Path, mode.Kind, mode.Source))]);
+
     /// <summary><c>0o755</c> as <c>"755"</c>, <c>0</c> as <c>"0"</c>, <c>0o2755</c> as <c>"2755"</c>.</summary>
     public static string ModeText(int permissionBits) => Convert.ToString(permissionBits, OctalBase);
 
@@ -67,6 +71,11 @@ public static class SnapshotFiles
         writer.WriteString("path", mode.Path);
         writer.WriteString("kind", mode.Kind == IsolationKind.Closed ? "closed" : "unlisted");
         writer.WriteString("mode", mode.Mode);
+        if (mode.Source.Length > 0)
+        {
+            writer.WriteString("source", mode.Source);
+        }
+
         if (mode.Identity is { } identity)
         {
             writer.WriteNumber("dev", identity.Device);

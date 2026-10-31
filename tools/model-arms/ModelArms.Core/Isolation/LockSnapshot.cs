@@ -61,10 +61,10 @@ public static class LockSnapshots
     /// <c>closed</c> nor <c>unlisted</c>, a <c>dev</c> without its <c>ino</c> (or the reverse) is a failure naming the entry. <see cref="State"/> itself reads only the header, so the E3 reader's fixtures — which carry <c>modes</c> without a kind — stay <i>applying</i>; the one header parse is shared.</summary>
     public static Outcome<SavedSnapshot> Saved(string json) =>
         JsonRow.Parse(json, ".locked-modes").Match(
-            row => Checked(row, ".locked-modes", Header(row)).Match(header => ModesOf(row, header), Outcome<SavedSnapshot>.Failure),
+            row => Checked(row, ".locked-modes", Header(row)).Match(header => ModesOf(row, header, requireKind: true), Outcome<SavedSnapshot>.Failure),
             Outcome<SavedSnapshot>.Failure);
 
-    private static Outcome<SavedSnapshot> ModesOf(JsonRow row, Snapshot header)
+    private static Outcome<SavedSnapshot> ModesOf(JsonRow row, Snapshot header, bool requireKind)
     {
         var rows = row.Rows("modes");
         if (row.Problem.Length > 0)
@@ -75,7 +75,7 @@ public static class LockSnapshots
         var modes = new List<SavedMode>();
         foreach (var (each, index) in rows.Select((each, index) => (each, index)))
         {
-            var read = One(each, index);
+            var read = One(each, index, requireKind);
             if (read is Outcome<SavedMode>.Fail failed)
             {
                 return Outcome<SavedSnapshot>.Failure(failed.Reason);
@@ -87,26 +87,29 @@ public static class LockSnapshots
         return Outcome<SavedSnapshot>.Success(new SavedSnapshot(header.Run, header.Digest, header.Since, modes));
     }
 
-    private static Outcome<SavedMode> One(JsonRow each, int index)
+    private static Outcome<SavedMode> One(JsonRow each, int index, bool requireKind)
     {
         var where = $".locked-modes: modes[{index}]";
         var path = each.Text("path", required: true);
-        var kind = each.Text("kind", required: true);
+        var kind = each.Text("kind", required: requireKind);
         var mode = each.Text("mode", required: true);
+        var source = each.Text("source");
         var device = each.ULong("dev");
         var inode = each.ULong("ino");
         return each.Problem.Length > 0 ? Outcome<SavedMode>.Failure($"{where}: {each.Problem}")
-            : kind is not ("closed" or "unlisted") ? Outcome<SavedMode>.Failure($"{where}: 'kind' must be closed or unlisted, got '{kind}'")
+            : path.Contains('\0', StringComparison.Ordinal) || !Path.IsPathFullyQualified(path) ? Outcome<SavedMode>.Failure($"{where}: 'path' must be a fully qualified path with no NUL character")
+            : (requireKind || kind.Length > 0) && kind is not ("closed" or "unlisted") ? Outcome<SavedMode>.Failure($"{where}: 'kind' must be closed or unlisted, got '{kind}'")
             : SnapshotFiles.ModeBits(mode) is Outcome<int>.Fail bad ? Outcome<SavedMode>.Failure($"{where}: {bad.Reason}")
             : device.HasValue != inode.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'dev' and 'ino' come together or not at all")
-            : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value) : null));
+            : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value) : null, source));
     }
 
     private static Snapshot Header(JsonRow row) => new(row.Text("run", required: true), row.Text("digest", required: true), row.Text("since", required: true));
 
+    /// <summary>What <see cref="State"/> reads: the header and the modes, each mode's <c>path</c> (fully qualified, no NUL) and <c>mode</c> (octal) — a good header over corrupt modes is <i>inconsistent</i>, never <i>applied</i>, to <c>status</c> and to the runner's warning. A mode with no <c>kind</c> (the E3 reader's fixtures) is tolerated here and refused by <see cref="Saved"/>, which a writer needs.</summary>
     private static Outcome<Snapshot> Parsed(string json, string file) =>
         JsonRow.Parse(json, file).Match(
-            row => Checked(row, file, Header(row)),
+            row => Checked(row, file, Header(row)).Match(header => ModesOf(row, header, requireKind: false).Match(_ => Outcome<Snapshot>.Success(header), Outcome<Snapshot>.Failure), Outcome<Snapshot>.Failure),
             Outcome<Snapshot>.Failure);
 
     private static Outcome<Verified> Verification(string json) =>

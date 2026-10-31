@@ -8,11 +8,9 @@ using ModelArms.Core.Isolation;
 using ModelArms.Verbs;
 using Xunit;
 using ModelArmsApp = ModelArms;
+using static Bench.Tests.ModelArms.IsolationSupport;
 
 namespace Bench.Tests.ModelArms;
-
-/// <summary>A hook that stands in for a process that dies half-way: it throws, and the test sees where the lock stopped.</summary>
-internal sealed class TestCrash : Exception;
 
 /// <summary><c>lock</c> and <c>unlock</c> on the KERNEL road (Linux x86-64, E5.S1; D11): the modes set through descriptors that pin the entries, the snapshot durable before the first change, the recovery of a lock killed half-way — in this process and by a REAL <c>SIGKILL</c> in another — the observation that the isolation holds
 /// before it is recorded, the roll-back, the restore judged entry by entry, and the writers' lock. Every test runs over <see cref="IsolationKit"/>: its own HOME, its own root, every closed folder opened again by the temp folder's dispose. Linux only; the rows skip on a road that is not Kernel/Kernel, with the road's line.
@@ -22,35 +20,6 @@ internal sealed class TestCrash : Exception;
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class PosixFolderIsolationTests
 {
-    private static readonly string[] Original = ["755", "700", "755", "755", "755", "755", "755", "755"];
-    private static readonly string[] Locked = ["0", "300", "300", "300", "300", "300", "300", "300"];
-
-    private static IsolationKit Kit()
-    {
-        var kit = new IsolationKit();
-        var road = PlatformFactsReader.CurrentRoad;
-        Assert.SkipUnless(road is { Trust: TrustRoad.Kernel, Bounded: BoundedRoad.Kernel }, $"the kernel road is Linux x86-64 with statx; this host's road is: {road.Platform}");
-        return kit;
-    }
-
-    private static IsolationHands Crash(int after) => new(null, null, (index, _) => ThrowAfter(index, after), null);
-
-    private static void ThrowAfter(int index, int after)
-    {
-        if (index == after)
-        {
-            throw new TestCrash();
-        }
-    }
-
-    private static int Chmod(string path, int mode)
-    {
-        File.SetUnixFileMode(path, (UnixFileMode)mode);
-        return 0;
-    }
-
-    private static string Ctx(IsolationRun run) => $"stdout: {run.Output} stderr: {run.Error}";
-
     [Fact]
     public async Task Modes_are_saved_before_the_first_change_and_restored_in_reverse()
     {
@@ -115,7 +84,7 @@ public sealed class PosixFolderIsolationTests
         var again = await kit.LockAsync();
 
         again.Code.Should().Be(0, Ctx(again));
-        again.Output.Should().Contain("a lock was interrupted (snapshot of part6 since").And.Contain("restored 8 of 8, now locking afresh").And.Contain("locked — closed 1, unlisted 7");
+        again.Output.Should().Contain("a lock was interrupted (snapshot of part6 since").And.Contain("restored 8 of 8 (6 already at their saved mode), now locking afresh").And.Contain("locked — closed 1, unlisted 7");
         again.Output.IndexOf("interrupted", StringComparison.Ordinal).Should().BeLessThan(again.Output.IndexOf("locked — closed", StringComparison.Ordinal));
         kit.Modes().Should().Equal(Locked);
         kit.Files().Should().Contain(".locked-modes.restored-" + IsolationKit.Stamp);
@@ -137,13 +106,13 @@ public sealed class PosixFolderIsolationTests
         var retry = await ModelArmsBinary.RunAsync(kit.Root, "lock", "part6");
 
         retry.Code.Should().Be(0, retry.Output + retry.Error);
-        retry.Output.Should().Contain("a lock was interrupted (snapshot of part6 since").And.Contain("restored 8 of 8, now locking afresh").And.Contain("locked — closed 1, unlisted 7");
+        retry.Output.Should().Contain("a lock was interrupted (snapshot of part6 since").And.Contain("restored 8 of 8 (6 already at their saved mode), now locking afresh").And.Contain("locked — closed 1, unlisted 7");
         kit.Snapshot().Should().BeOfType<LockState.Applied>();
         kit.SavedOf().Modes.Select(mode => mode.Mode).Should().Equal(Original, "the modes were original again before the fresh apply");
         var unlocked = await ModelArmsBinary.RunAsync(kit.Root, "unlock");
         unlocked.Code.Should().Be(0, unlocked.Output + unlocked.Error);
         kit.Modes().Should().Equal(Original);
-        Archived(kit).Should().Contain(crashedText, "the interrupted lock's record is kept, byte for byte, in .locked-modes.restored-<utc>");
+        Archived(kit).Should().Contain(crashedText, "the interrupted lock's record is kept, byte for byte, in .locked-modes.restored-<the second of the recovery>");
 
         // (b) the entries are not what they were: a link where a folder was, a folder made again
         await ModelArmsBinary.RunCrasherAsync(kit.Root, "part6");
@@ -290,32 +259,6 @@ public sealed class PosixFolderIsolationTests
     }
 
     [Fact]
-    public async Task Unlock_restores_a_standing_snapshot_after_the_block_was_removed()
-    {
-        using var kit = Kit();
-        (await kit.LockAsync()).Code.Should().Be(0);
-        kit.Root.Edit(top => top.AsObject().Remove("isolation"));
-
-        var first = await kit.UnlockAsync();
-
-        first.Code.Should().Be(3, Ctx(first));
-        first.Error.Should().Contain($"{kit.OldExperiment}: not under any folder this experiment names — not restored (by hand: chmod 755 {kit.OldExperiment})").And.Contain("restored 7 of 8").And.Contain("the applied file was moved aside");
-        first.Error.Should().NotContain("InvalidOperationException");
-        File.Exists(kit.Layout.LockedModes).Should().BeTrue("a failed restore keeps the snapshot");
-        kit.Files().Should().Contain(".locked-modes.applied.restored-" + IsolationKit.Stamp);
-        kit.Snapshot().Should().BeOfType<LockState.Applying>();
-        kit.Modes().Should().Equal(["0", "700", "755", "755", "755", "755", "755", "755"], "the seven root-and-home entries were restored; the configured closure outside both was not");
-
-        File.SetUnixFileMode(kit.OldExperiment, IsolationKit.Mode755);
-        var second = await kit.UnlockAsync();
-
-        second.Code.Should().Be(0, Ctx(second));
-        second.Output.Should().Contain("unlocked — restored 8 of 8");
-        kit.Files().Should().Equal(".locked-modes.restored-" + IsolationKit.Stamp, ".locked-modes.applied.restored-" + IsolationKit.Stamp);
-        kit.Snapshot().Should().BeOfType<LockState.None>();
-    }
-
-    [Fact]
     public async Task A_verification_failure_restores_before_refusing()
     {
         using var kit = Kit();
@@ -330,30 +273,6 @@ public sealed class PosixFolderIsolationTests
             "the restore precedes the refusal, and the snapshot is moved aside only after it");
         kit.Snapshot().Should().BeOfType<LockState.None>();
         kit.Modes().Should().Equal(Original);
-    }
-
-    [Fact]
-    public async Task A_roll_back_that_fails_keeps_the_snapshot_and_the_retry_restores_the_originals()
-    {
-        using var kit = Kit();
-        var r = Path.Combine(kit.Root.Root, "r");
-        var rCalls = 0;
-        var hands = new IsolationHands((_, path, mode) => path == kit.Pids ? 0 : path == r && ++rCalls == 2 ? 1 : Chmod(path, mode), null, null, null);
-
-        var run = await kit.LockAsync(hands: hands);
-
-        run.Code.Should().Be(3, Ctx(run));
-        run.Error.Should().Contain("the lock could not be verified").And.Contain($"{kit.Pids} is still listable").And.Contain("restored 7 of 8").And.Contain($"{r}: Operation not permitted").And.Contain("the snapshot is kept");
-        File.Exists(kit.Layout.LockedModes).Should().BeTrue("a roll-back that failed for an entry keeps the snapshot");
-        kit.Files().Should().Equal(".locked-modes");
-        File.GetUnixFileMode(r).Should().Be((UnixFileMode)0xC0, "the entry that could not be restored is still locked");
-        kit.Snapshot().Should().BeOfType<LockState.Applying>();
-
-        var retry = await kit.UnlockAsync();
-
-        retry.Code.Should().Be(0, Ctx(retry));
-        kit.Modes().Should().Equal(Original);
-        kit.Files().Should().Equal(".locked-modes.restored-" + IsolationKit.Stamp);
     }
 
     [Fact]
@@ -418,23 +337,6 @@ public sealed class PosixFolderIsolationTests
         {
             Directory.Delete(folder, recursive: true);
         }
-    }
-
-    [Fact]
-    public async Task Unlock_is_idempotent_and_says_so_without_a_snapshot()
-    {
-        using var kit = Kit();
-        var fresh = await kit.UnlockAsync();
-        fresh.Code.Should().Be(0, Ctx(fresh));
-        fresh.Output.Should().Contain("nothing locked");
-
-        (await kit.LockAsync()).Code.Should().Be(0);
-        (await kit.UnlockAsync()).Code.Should().Be(0);
-        var third = await kit.UnlockAsync();
-
-        third.Code.Should().Be(0, Ctx(third));
-        third.Output.Should().Contain("nothing locked");
-        kit.Files().Should().Equal(".locked-modes.restored-" + IsolationKit.Stamp, ".locked-modes.applied.restored-" + IsolationKit.Stamp);
     }
 
     [Fact]
@@ -539,7 +441,8 @@ public sealed class PosixFolderIsolationTests
     public async Task An_inconsistent_snapshot_is_never_read_as_none_by_a_writer(string row)
     {
         using var kit = Kit();
-        var modes = $$"""[{"path":{{JsonValue.Create(kit.Pids)!.ToJsonString()}},"kind":"unlisted","mode":"755"}]""";
+        var identity = ((FactsRead.Read)KernelFacts.Read(kit.Pids)).Facts.Identity;
+        var modes = $$"""[{"path":{{JsonValue.Create(kit.Pids)!.ToJsonString()}},"kind":"unlisted","mode":"755","dev":{{identity.Device}},"ino":{{identity.Inode}}}]""";
         string Snapshot(string run, string digest) => $$"""{"run":"{{run}}","digest":"{{digest}}","since":"2026-10-31T10:00:00Z","modes":{{modes}}}""";
         string Applied(string run, string digest) => $$"""{"run":"{{run}}","digest":"{{digest}}","verifiedAt":"2026-10-31T10:00:05Z"}""";
         switch (row)
@@ -698,93 +601,19 @@ public sealed class PosixFolderIsolationTests
     }
 
     [Fact]
-    public async Task Unlock_skips_an_entry_gone_or_replaced_since_the_lock_and_says_so()
+    public async Task A_write_that_fails_for_want_of_room_is_a_host_failure_not_a_file_that_appeared()
     {
         using var kit = Kit();
         (await kit.LockAsync()).Code.Should().Be(0);
-        Directory.Delete(kit.OldExperiment);
-        Directory.Delete(kit.Pids);
-        Directory.CreateDirectory(kit.Pids);
-        File.SetUnixFileMode(kit.Pids, IsolationKit.Mode755);
-
-        var run = await kit.UnlockAsync();
-
-        run.Code.Should().Be(0, Ctx(run));
-        run.Output.Should().Contain("unlocked — restored 6 of 8 (skipped: ")
-            .And.Contain($"{kit.OldExperiment}: not found by this name — if it was renamed, it may still stand at 0 elsewhere; the record is kept in .locked-modes.restored-<utc>")
-            .And.Contain($"{kit.Pids}: replaced since the lock (inode ")
-            .And.Contain(") — its mode is left as it is");
-        File.GetUnixFileMode(kit.Pids).Should().Be(IsolationKit.Mode755);
-        kit.Files().Should().Equal(".locked-modes.restored-" + IsolationKit.Stamp, ".locked-modes.applied.restored-" + IsolationKit.Stamp);
-        File.ReadAllText(kit.Layout.LockedModesRestored(IsolationKit.Stamp)).Should().Contain(kit.OldExperiment);
-    }
-
-    [Fact]
-    public async Task An_operators_own_mode_change_survives_unlock_and_is_reported()
-    {
-        using var kit = Kit();
-        (await kit.LockAsync()).Code.Should().Be(0);
-        var r = Path.Combine(kit.Root.Root, "r");
-        File.SetUnixFileMode(r, (UnixFileMode)0x1C0);
-        File.SetUnixFileMode(kit.Pids, IsolationKit.Mode755);
-        kit.Events.Clear();
-
-        var run = await kit.UnlockAsync();
-
-        run.Code.Should().Be(0, Ctx(run));
-        run.Output.Should().Contain($"unlocked — restored 7 of 8 (unresolved: {r}: mode 700 is neither the saved 755 nor the locked 300 — changed by hand since the lock; left as it is)");
-        File.GetUnixFileMode(r).Should().Be((UnixFileMode)0x1C0, "the operator's own mode is left as it is");
-        kit.Events.Should().NotContain("restore " + kit.Pids, "an entry already at its saved mode is counted without a call");
-        kit.Files().Should().Equal(".locked-modes.restored-" + IsolationKit.Stamp, ".locked-modes.applied.restored-" + IsolationKit.Stamp);
-    }
-
-    [Fact]
-    public async Task A_restore_that_fails_half_way_keeps_the_snapshot_moves_the_applied_file_aside_and_exits_3()
-    {
-        using var kit = Kit();
-        (await kit.LockAsync()).Code.Should().Be(0);
-        var r = Path.Combine(kit.Root.Root, "r");
-
-        var failed = await kit.UnlockAsync(hands: new IsolationHands((_, path, mode) => path == r ? 1 : Chmod(path, mode), null, null, null));
-
-        failed.Code.Should().Be(3, Ctx(failed));
-        failed.Error.Should().Contain($"restored 7 of 8 — {r}: Operation not permitted — the applied file was moved aside; run unlock again, or lock part6");
-        File.Exists(kit.Layout.LockedModes).Should().BeTrue();
-        kit.Files().Should().Equal(".locked-modes", ".locked-modes.applied.restored-" + IsolationKit.Stamp);
-        kit.Snapshot().Should().BeOfType<LockState.Applying>();
         (await kit.UnlockAsync()).Code.Should().Be(0);
-        kit.Modes().Should().Equal(Original);
+        File.SetUnixFileMode(kit.Root.Root, (UnixFileMode)0x140);
 
-        // the same through lock's own recovery of an interrupted lock
-        var interrupted = async () => await kit.LockAsync(hands: Crash(after: 1));
-        await interrupted.Should().ThrowAsync<TestCrash>();
-        var old = File.ReadAllBytes(kit.Layout.LockedModes);
-        var recovery = await kit.LockAsync(hands: new IsolationHands((_, path, mode) => path == kit.OldExperiment ? 1 : Chmod(path, mode), null, null, null));
+        var run = await kit.LockAsync();
 
-        recovery.Code.Should().Be(3, Ctx(recovery));
-        recovery.Error.Should().Contain("restored 7 of 8").And.Contain($"{kit.OldExperiment}: Operation not permitted").And.Contain("the snapshot is kept");
-        File.ReadAllBytes(kit.Layout.LockedModes).Should().Equal(old, "no fresh snapshot is ever written over a failed restore");
-        kit.Snapshot().Should().BeOfType<LockState.Applying>();
-        var retry = await kit.LockAsync();
-        retry.Code.Should().Be(0, Ctx(retry));
-        retry.Output.Should().Contain("restored 8 of 8, now locking afresh");
-    }
-
-    [Fact]
-    public async Task Two_cycles_in_one_second_keep_both_records()
-    {
-        using var kit = Kit();
-        for (var cycle = 0; cycle < 2; cycle++)
-        {
-            (await kit.LockAsync()).Code.Should().Be(0);
-            (await kit.UnlockAsync()).Code.Should().Be(0);
-        }
-
-        kit.Files().Should().Equal(
-            ".locked-modes.restored-" + IsolationKit.Stamp,
-            ".locked-modes.applied.restored-" + IsolationKit.Stamp,
-            ".locked-modes.restored-" + IsolationKit.Stamp + "-2",
-            ".locked-modes.applied.restored-" + IsolationKit.Stamp + "-2");
+        File.SetUnixFileMode(kit.Root.Root, (UnixFileMode)0x1C0);
+        run.Code.Should().Be(3, Ctx(run));
+        run.Error.Should().Contain(".locked-modes could not be written").And.NotContain("appeared");
+        File.Exists(kit.Layout.LockedModes).Should().BeFalse();
     }
 
     [Fact]

@@ -50,4 +50,7 @@ internal abstract record UnlockOutcome
     public sealed record RefusedAlive(string Arm, string Why) : UnlockOutcome;
 
     public sealed record Stopped(int ExitCode, string Why) : UnlockOutcome;
+
+    /// <summary>The liveness probe's all-clear: no arm of the map is alive. Never returned by <c>UnlockAsync</c>.</summary>
+    public sealed record Clear : UnlockOutcome;
 }

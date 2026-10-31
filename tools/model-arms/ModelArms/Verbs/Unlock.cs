@@ -112,9 +112,9 @@ internal static class UnlockVerb
         }
 
         var map = ((Passage<ArmMap>.Through)mapped).Value;
-        if (!force && Alive(input, seams, map) is { } alive)
+        if (!force && Alive(input, seams, map) is var probed and not UnlockOutcome.Clear)
         {
-            return alive;
+            return probed;
         }
 
         if (isolation.NotVerifiedLine.Length > 0)
@@ -122,12 +122,12 @@ internal static class UnlockVerb
             input.Verb.Output.WriteLine($"model-arms unlock: {isolation.NotVerifiedLine}");
         }
 
-        var report = isolation.Restore(IsolationRestoreOrder.Of(restore.Saved.Modes), IsolationLocking.BoundOf(input, map));
+        var report = isolation.Restore(IsolationRestoreOrder.Of(restore.Saved.Modes), IsolationLocking.BoundOf(input, map, restore.Saved));
         return report.Failed.Count == 0 ? Unlocked(input, seams, restore, report) : Failed(input, seams, restore, report);
     }
 
-    /// <summary>The first arm of the map that is alive, in map order, as the refusal — or the refusal of a lock the root will not let be probed; <c>null</c> when none is.</summary>
-    private static UnlockOutcome? Alive(ExperimentInput input, IsolationSeams seams, ArmMap map)
+    /// <summary>The first arm of the map that is alive, in map order, as the refusal — or the refusal of a lock the root will not let be probed; <see cref="UnlockOutcome.Clear"/> when none is.</summary>
+    private static UnlockOutcome Alive(ExperimentInput input, IsolationSeams seams, ArmMap map)
     {
         var portable = RunnerLiveness.PortableLine(seams.Road);
         if (portable.Length > 0 && map.Entries.Count > 0)
@@ -148,48 +148,51 @@ internal static class UnlockVerb
             }
         }
 
-        return null;
+        return new UnlockOutcome.Clear();
     }
 
-    /// <summary>Nothing failed: both files moved aside in D11's order — the snapshot, then the applied file (a crash between the two leaves the applied file alone, which the next <c>unlock</c> moves aside).</summary>
+    /// <summary>Nothing failed: both files moved aside in D11's order — the snapshot, then the applied file (a crash between the two leaves the applied file alone, which the next <c>unlock</c> moves aside). The line says how many entries needed no call, and where the record of what was locked now is.</summary>
     private static UnlockOutcome Unlocked(ExperimentInput input, IsolationSeams seams, UnlockStep.Restore restore, RestoreReport report)
     {
         var snapshot = SnapshotAside.Snapshot(input.Root, seams.Clock);
         if (snapshot is Outcome<string>.Fail failed)
         {
-            return new UnlockOutcome.Stopped(ExitCodes.Environment, failed.Reason);
+            return new UnlockOutcome.Stopped(ExitCodes.Environment, $"everything was restored, but {failed.Reason}");
         }
 
-        seams.Events?.Add("aside " + Path.GetFileName(((Outcome<string>.Ok)snapshot).Value));
-        if (restore.AppliedPresent)
+        var archive = Path.GetFileName(((Outcome<string>.Ok)snapshot).Value);
+        seams.Events?.Add("aside " + archive);
+        if (restore.AppliedPresent && SnapshotAside.Applied(input.Root, seams.Clock) is var applied)
         {
-            var applied = SnapshotAside.Applied(input.Root, seams.Clock);
             if (applied is Outcome<string>.Fail appliedFailed)
             {
-                return new UnlockOutcome.Stopped(ExitCodes.Environment, appliedFailed.Reason);
+                return new UnlockOutcome.Stopped(ExitCodes.Environment, $"everything was restored and the snapshot moved aside, but {appliedFailed.Reason} — the next unlock moves it");
             }
 
             seams.Events?.Add("aside " + Path.GetFileName(((Outcome<string>.Ok)applied).Value));
         }
 
-        var line = $"unlocked — restored {report.Restored.Count} of {restore.Saved.Modes.Count}";
-        line += report.Skipped.Count > 0 ? $" (skipped: {string.Join("; ", report.Skipped)})" : string.Empty;
+        var line = $"unlocked — restored {report.Settled} of {restore.Saved.Modes.Count}{report.HarmlessWords}";
+        line += report.Skipped.Count > 0 ? $" (skipped: {string.Join("; ", report.Skipped)}; the record of what was locked is kept in {archive})" : string.Empty;
         line += report.Unresolved.Count > 0 ? $" (unresolved: {string.Join("; ", report.Unresolved)})" : string.Empty;
-        return new UnlockOutcome.Restored(report.Restored.Count, line);
+        return new UnlockOutcome.Restored(report.Settled, line);
     }
 
-    /// <summary>An entry failed: the applied file is moved aside (when present) and <c>.locked-modes</c> is KEPT — the one authority for the modes, retried by the next <c>unlock</c> and recovered by <c>lock</c>; the state reads <i>applying</i>.</summary>
+    /// <summary>An entry failed: the applied file is moved aside (when present) and <c>.locked-modes</c> is KEPT — the one authority for the modes, retried by the next <c>unlock</c> and recovered by <c>lock</c>; the state reads <i>applying</i>. The line says whether the applied file really moved.</summary>
     private static UnlockOutcome Failed(ExperimentInput input, IsolationSeams seams, UnlockStep.Restore restore, RestoreReport report)
     {
-        if (restore.AppliedPresent)
+        var aside = restore.AppliedPresent ? SnapshotAside.Applied(input.Root, seams.Clock) : Outcome<string>.Success(string.Empty);
+        if (aside is Outcome<string>.Ok { Value.Length: > 0 } moved)
         {
-            var applied = SnapshotAside.Applied(input.Root, seams.Clock);
-            if (applied is Outcome<string>.Ok moved)
-            {
-                seams.Events?.Add("aside " + Path.GetFileName(moved.Value));
-            }
+            seams.Events?.Add("aside " + Path.GetFileName(moved.Value));
         }
 
-        return new UnlockOutcome.Stopped(ExitCodes.Environment, $"restored {report.Restored.Count} of {restore.Saved.Modes.Count} — {string.Join("; ", report.Failed)} — the applied file was moved aside; run unlock again, or lock {ExecutableRule.Printable(restore.Saved.Run)}");
+        var applied = aside switch
+        {
+            Outcome<string>.Fail failed => $"the applied file could not be moved aside ({failed.Reason})",
+            _ when restore.AppliedPresent => "the applied file was moved aside",
+            _ => "there was no applied file",
+        };
+        return new UnlockOutcome.Stopped(ExitCodes.Environment, $"restored {report.Settled} of {restore.Saved.Modes.Count}{report.HarmlessWords} — {string.Join("; ", report.Failed)} — {applied}; run unlock again, or lock {ExecutableRule.Printable(restore.Saved.Run)}");
     }
 }

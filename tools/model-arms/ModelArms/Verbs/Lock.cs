@@ -134,6 +134,11 @@ internal static class LockVerb
         }
 
         IReadOnlyList<SavedMode> entries = [.. ((Outcome<SavedSnapshot>.Ok)saved).Value.Modes.Where(mode => open.Any(sentence => sentence.StartsWith(mode.Path + " ", StringComparison.Ordinal)))];
+        if (isolation.NotVerifiedLine.Length > 0)
+        {
+            input.Verb.Output.WriteLine($"model-arms lock {plan.Run}: {isolation.NotVerifiedLine}");
+        }
+
         var again = isolation.ReApply(entries, plan);
         if (again is Outcome<string>.Fail replaced)
         {
@@ -157,41 +162,42 @@ internal static class LockVerb
 
         var mapped = IsolationLocking.MapOf(input, seams.Road);
         var map = mapped is Passage<ArmMap>.Through through ? through.Value : ArmMap.Empty;
-        var report = isolation.Restore(IsolationRestoreOrder.Of(old.Modes), IsolationLocking.BoundOf(input, map));
+        var report = isolation.Restore(IsolationRestoreOrder.Of(old.Modes), IsolationLocking.BoundOf(input, map, old));
         var interrupted = $"a lock was interrupted (snapshot of {ExecutableRule.Printable(old.Run)} since {ExecutableRule.Printable(old.Since)})";
         var trouble = report.Failed.Concat(report.Unresolved).ToList();
         if (trouble.Count > 0)
         {
-            return new LockOutcome.Stopped(ExitCodes.Environment, $"{interrupted} — restored {report.Restored.Count} of {old.Modes.Count} — {string.Join("; ", trouble)} — the snapshot is kept; restore by hand, or run lock {ExecutableRule.Printable(plan.Run)} again");
+            return new LockOutcome.Stopped(ExitCodes.Environment, $"{interrupted} — restored {report.Settled} of {old.Modes.Count}{report.HarmlessWords} — {string.Join("; ", trouble)} — the snapshot is kept; restore by hand, or run lock {ExecutableRule.Printable(plan.Run)} again");
         }
 
-        var skipped = report.Skipped.Count > 0 ? $" (skipped: {string.Join("; ", report.Skipped)})" : string.Empty;
-        input.Verb.Output.WriteLine($"model-arms lock {plan.Run}: {interrupted} — restored {report.Restored.Count} of {old.Modes.Count}{skipped}, now locking afresh");
-        return Aside(input, seams, appliedToo: read.Applied is not Read<string>.Absent) is { } stopped ? stopped : Fresh(input, plan, isolation, seams, said: line.Length > 0);
+        var archived = Aside(input, seams, appliedToo: read.Applied is not Read<string>.Absent);
+        if (archived is Outcome<string>.Fail failed)
+        {
+            return new LockOutcome.Stopped(ExitCodes.Environment, $"{interrupted} was restored, but its snapshot could not be moved aside: {failed.Reason}");
+        }
+
+        var skipped = report.Skipped.Count > 0 ? $" (skipped: {string.Join("; ", report.Skipped)}; the record of what was locked is kept in {((Outcome<string>.Ok)archived).Value})" : string.Empty;
+        input.Verb.Output.WriteLine($"model-arms lock {plan.Run}: {interrupted} — restored {report.Settled} of {old.Modes.Count}{report.HarmlessWords}{skipped}, now locking afresh");
+        return Fresh(input, plan, isolation, seams, said: line.Length > 0);
     }
 
-    private static LockOutcome? Aside(ExperimentInput input, IsolationSeams seams, bool appliedToo)
+    /// <summary>The snapshot moved aside (and the applied file with it when asked): the snapshot's new file name, or why a move failed.</summary>
+    private static Outcome<string> Aside(ExperimentInput input, IsolationSeams seams, bool appliedToo)
     {
         var moved = SnapshotAside.Snapshot(input.Root, seams.Clock);
-        if (moved is Outcome<string>.Fail failed)
+        if (moved is not Outcome<string>.Ok snapshot)
         {
-            return new LockOutcome.Stopped(ExitCodes.Environment, failed.Reason);
+            return moved;
         }
 
-        seams.Events?.Add("aside " + Path.GetFileName(((Outcome<string>.Ok)moved).Value));
-        if (!appliedToo)
+        seams.Events?.Add("aside " + Path.GetFileName(snapshot.Value));
+        var applied = appliedToo ? SnapshotAside.Applied(input.Root, seams.Clock) : Outcome<string>.Success(string.Empty);
+        if (applied is Outcome<string>.Ok { Value.Length: > 0 } appliedMoved)
         {
-            return null;
+            seams.Events?.Add("aside " + Path.GetFileName(appliedMoved.Value));
         }
 
-        var applied = SnapshotAside.Applied(input.Root, seams.Clock);
-        if (applied is Outcome<string>.Fail appliedFailed)
-        {
-            return new LockOutcome.Stopped(ExitCodes.Environment, appliedFailed.Reason);
-        }
-
-        seams.Events?.Add("aside " + Path.GetFileName(((Outcome<string>.Ok)applied).Value));
-        return null;
+        return applied is Outcome<string>.Fail ? applied : Outcome<string>.Success(Path.GetFileName(snapshot.Value));
     }
 
     /// <summary>Nothing stands: pin every entry, write the snapshot, apply, verify, write the applied file.</summary>
@@ -210,10 +216,9 @@ internal static class LockVerb
 
         var held = ((Outcome<Pinned>.Ok)pinned).Value;
         var since = seams.Clock.GetUtcNow().ToString(SnapshotFiles.Utc, System.Globalization.CultureInfo.InvariantCulture);
-        var written = Written(input.Root.LockedModes, SnapshotFiles.Snapshot(new SavedSnapshot(plan.Run, plan.Digest, since, held.Modes)));
-        if (written.Length > 0)
+        if (Written(input.Root.LockedModes, SnapshotFiles.Snapshot(new SavedSnapshot(plan.Run, plan.Digest, since, held.Modes))) is Passage<bool>.Stopped written)
         {
-            return new LockOutcome.Stopped(ExitCodes.Configuration, $".locked-modes appeared while the lock was being made — nothing was overwritten: {written}");
+            return new LockOutcome.Stopped(written.ExitCode, string.Join(' ', written.Lines));
         }
 
         seams.Events?.Add("snapshot");
@@ -235,9 +240,8 @@ internal static class LockVerb
         }
 
         var at = seams.Clock.GetUtcNow().ToString(SnapshotFiles.Utc, System.Globalization.CultureInfo.InvariantCulture);
-        var recorded = Written(input.Root.LockedModesApplied, SnapshotFiles.Applied(plan.Run, plan.Digest, at));
-        return recorded.Length > 0
-            ? new LockOutcome.Stopped(ExitCodes.Environment, $"the modes are applied but .locked-modes.applied could not be written: {recorded} — run lock {ExecutableRule.Printable(plan.Run)} again")
+        return Written(input.Root.LockedModesApplied, SnapshotFiles.Applied(plan.Run, plan.Digest, at)) is Passage<bool>.Stopped recorded
+            ? new LockOutcome.Stopped(recorded.ExitCode, $"the modes are applied but {string.Join(' ', recorded.Lines)} — run lock {ExecutableRule.Printable(plan.Run)} again")
             : new LockOutcome.Applied($"locked — closed {plan.Entries.Count(entry => entry.Kind == IsolationKind.Closed)}, unlisted {plan.Entries.Count(entry => entry.Kind == IsolationKind.Unlisted)}, verified at {at}");
     }
 
@@ -247,23 +251,30 @@ internal static class LockVerb
         var report = isolation.RollBack(held);
         if (report.Failed.Count > 0)
         {
-            return new LockOutcome.Stopped(ExitCodes.Environment, $"{what} — restored {report.Restored.Count} of {held.Modes.Count} — {string.Join("; ", report.Failed)} — the snapshot is kept; restore by hand, or run lock {ExecutableRule.Printable(plan.Run)} again");
+            return new LockOutcome.Stopped(ExitCodes.Environment, $"{what} — restored {report.Settled} of {held.Modes.Count}{report.HarmlessWords} — {string.Join("; ", report.Failed)} — the snapshot is kept; restore by hand, or run lock {ExecutableRule.Printable(plan.Run)} again");
         }
 
-        return Aside(input, seams, appliedToo: false) is { } stopped ? stopped : new LockOutcome.Stopped(ExitCodes.Environment, $"{what} — {restored}");
+        return Aside(input, seams, appliedToo: false) is Outcome<string>.Fail failed
+            ? new LockOutcome.Stopped(ExitCodes.Environment, $"{what} — the modes were restored, but the snapshot could not be moved aside: {failed.Reason}")
+            : new LockOutcome.Stopped(ExitCodes.Environment, $"{what} — {restored}");
     }
 
-    /// <summary>The bytes staged, flushed and renamed in (create-new): the empty string, or why a file that appeared first was not overwritten.</summary>
-    private static string Written(string path, string text)
+    /// <summary>The bytes staged, flushed and renamed in (create-new). A file that appeared first and was not overwritten is 4 — the operator's to look at; a write the host could not make (no room, no right to create) is 3 and says so: the two are different facts.</summary>
+    private static Passage<bool> Written(string path, string text)
     {
+        var name = Path.GetFileName(path);
         try
         {
             ArtifactCommit.Stage(path, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text));
-            return string.Empty;
+            return new Passage<bool>.Through(true);
+        }
+        catch (IOException ex) when (Path.Exists(path))
+        {
+            return Passage<bool>.Stop(ExitCodes.Configuration, $"{name} appeared while the lock was being made — nothing was overwritten: {ex.Message}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return ex.Message;
+            return Passage<bool>.Stop(ExitCodes.Environment, $"{name} could not be written: {ex.Message}");
         }
     }
 }

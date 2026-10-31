@@ -106,52 +106,35 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
 
     public RestoreReport Restore(IReadOnlyList<SavedMode> reverse, RestoreBound bound)
     {
-        var restored = new List<string>();
-        var skipped = new List<string>();
-        var unresolved = new List<string>();
-        var failed = new List<string>();
+        var tally = new RestoreTally();
         foreach (var saved in reverse)
         {
             var judged = Judged(saved, bound);
-            switch (judged.Verdict)
-            {
-                case EntryVerdict.Restore:
-                    events?.Add("restore " + saved.Path);
-                    var errno = SetMode(judged.Fd, saved.Path, IsolationSentences.SavedBits(saved));
-                    (errno == 0 ? restored : failed).Add(errno == 0 ? saved.Path : Refused(saved.Path, errno));
-                    break;
-                case EntryVerdict.AlreadyRestored:
-                    restored.Add(saved.Path);
-                    break;
-                case EntryVerdict.Unresolved unresolvedEntry:
-                    unresolved.Add(unresolvedEntry.Sentence);
-                    break;
-                case EntryVerdict.Skip skip:
-                    skipped.Add(skip.Sentence);
-                    break;
-                case EntryVerdict.Fail fail:
-                    failed.Add(fail.Sentence);
-                    break;
-            }
-
+            tally.Add(judged.Verdict, saved.Path, () => Restored(saved, judged.Fd));
             CloseFd(judged.Fd);
         }
 
-        return new RestoreReport(restored, skipped, unresolved, failed);
+        return tally.Report();
     }
 
     public Outcome<string> ReApply(IReadOnlyList<SavedMode> open, IsolationPlan plan)
     {
         foreach (var saved in open)
         {
-            var again = ReApplyOne(saved);
-            if (again.Length > 0)
+            if (ReApplyOne(saved) is Outcome<string>.Fail failed)
             {
-                return Outcome<string>.Failure(again);
+                return failed;
             }
         }
 
         return Outcome<string>.Success($"{open.Count} entries re-applied");
+    }
+
+    private string Restored(SavedMode saved, int fd)
+    {
+        events?.Add("restore " + saved.Path);
+        var errno = SetMode(fd, saved.Path, IsolationSentences.SavedBits(saved));
+        return errno == 0 ? string.Empty : Refused(saved.Path, errno);
     }
 
     public void Dispose() => Release();
@@ -176,12 +159,23 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
     private static EntryVerdict Described(int fd, SavedMode saved, bool inBound) =>
         KernelFacts.ReadOpen(fd, saved.Path) switch
         {
-            FactsRead.Read read when read.Facts.Identity.Kind != FileKind.Link && ThroughALink(saved.Path) => new EntryVerdict.Skip($"{saved.Path}: reached through a link now — not restored"),
-            FactsRead.Read read => RestoreJudgement.Of(saved, FactsOf(read.Facts), inBound),
+            FactsRead.Read read => Judged(read.Facts, saved, inBound),
             FactsRead.Unread unread => new EntryVerdict.Fail(unread.Reason),
             FactsRead.Refused refused => new EntryVerdict.Fail(refused.Reason),
             _ => new EntryVerdict.Fail($"{saved.Path}: unreadable"),
         };
+
+    /// <summary>The bound is judged FIRST, whatever the entry is: a path outside it that is reached through a link is refused like any other, never skipped. Inside it, a path reached through a link is skipped; and an entry that would be restored but whose snapshot recorded no device and inode (it was made on the runtime road) is refused —
+    /// without them a replaced entry could not be told apart here.</summary>
+    private static EntryVerdict Judged(FileFacts facts, SavedMode saved, bool inBound)
+    {
+        var viaLink = facts.Identity.Kind != FileKind.Link && ThroughALink(saved.Path);
+        var verdict = viaLink ? RestoreJudgement.Of(saved, null, inBound) is EntryVerdict.Fail outside ? outside : new EntryVerdict.Skip($"{saved.Path}: reached through a link now — not restored")
+            : RestoreJudgement.Of(saved, FactsOf(facts), inBound);
+        return verdict is EntryVerdict.Restore && saved.Identity is null
+            ? new EntryVerdict.Fail($"{saved.Path}: the snapshot records no device and inode (it was made on a road without them), so a replaced entry cannot be told apart here — not restored (by hand: chmod {saved.Mode} {saved.Path})")
+            : verdict;
+    }
 
     private static bool ThroughALink(string path) => RealPath.Of(path) is not Outcome<string>.Ok ok || !string.Equals(ok.Value, path, StringComparison.Ordinal);
 
@@ -228,26 +222,21 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
         };
         return wrong.Length > 0
             ? Outcome<Held>.Failure($"{entry.Path} {wrong}{named}")
-            : Outcome<Held>.Success(new Held(fd, new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText((int)facts.Mode & PermissionBits), new NodeIdentity(facts.Identity.Device, facts.Identity.Inode))));
+            : Outcome<Held>.Success(new Held(fd, new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText((int)facts.Mode & PermissionBits), new NodeIdentity(facts.Identity.Device, facts.Identity.Inode), entry.Source)));
     }
 
-    private string ReApplyOne(SavedMode saved)
+    private Outcome<string> ReApplyOne(SavedMode saved)
     {
         var judged = Judged(saved, new RestoreBound(string.Empty, string.Empty, [saved.Path]));
         try
         {
-            var refusal = judged.Verdict switch
+            return judged.Verdict switch
             {
-                EntryVerdict.Skip skip => skip.Sentence,
-                EntryVerdict.Fail fail => fail.Sentence,
-                _ => string.Empty,
+                EntryVerdict.Skip skip => Outcome<string>.Failure(skip.Sentence),
+                EntryVerdict.Fail fail => Outcome<string>.Failure(fail.Sentence),
+                _ when judged.Fd < 0 => Outcome<string>.Failure($"{saved.Path} could not be pinned again"),
+                _ => Locked(saved, judged.Fd),
             };
-            if (refusal.Length > 0 || judged.Fd < 0)
-            {
-                return refusal.Length > 0 ? refusal : $"{saved.Path} could not be pinned again";
-            }
-
-            return Locked(saved, judged.Fd);
         }
         finally
         {
@@ -255,11 +244,11 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
         }
     }
 
-    private string Locked(SavedMode saved, int fd)
+    private Outcome<string> Locked(SavedMode saved, int fd)
     {
         events?.Add("reapply " + saved.Path);
         var errno = SetMode(fd, saved.Path, IsolationPlans.LockedMode(saved.Kind));
-        return errno == 0 ? string.Empty : Refused(saved.Path, errno);
+        return errno == 0 ? Outcome<string>.Success(string.Empty) : Outcome<string>.Failure(Refused(saved.Path, errno));
     }
 
     /// <summary>One entry tried the way an arm would; the empty string when it holds.</summary>

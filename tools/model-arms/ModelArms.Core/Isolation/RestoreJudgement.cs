@@ -32,7 +32,7 @@ public static class RestoreJudgement
 {
     public static EntryVerdict Of(SavedMode saved, PinnedFacts? now, bool inBound) =>
         !inBound ? Outside(saved, now)
-        : now is null ? new EntryVerdict.Skip($"{saved.Path}: not found by this name — if it was renamed, it may still stand at {Locked(saved)} elsewhere; the record is kept in .locked-modes.restored-<utc>")
+        : now is null ? new EntryVerdict.Skip($"{saved.Path}: not found by this name — if it was renamed, it may still stand at {Locked(saved)} elsewhere")
         : Inside(saved, now);
 
     /// <summary>An entry outside the bound is never given a mode: <see cref="EntryVerdict.Fail"/>. Except that one already standing at its saved mode (the operator restored it by hand, as the failure told them to) needs no call and is counted — a harmless retry.</summary>

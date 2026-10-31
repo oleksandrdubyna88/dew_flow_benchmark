@@ -121,8 +121,8 @@ internal static class RunArmAdmission
         }
 
         var holds = new Holds(shared, ((Passage<IDisposable>.Through)runner).Value);
-        return PidWritten(input, arm) is { Length: > 0 } failed
-            ? Disposed(holds, Passage<Holds>.Stop(ExitCodes.Environment, $"{Name} {arm}: the pid file could not be written: {failed}"))
+        return PidWritten(input, arm) is Outcome<string>.Fail failed
+            ? Disposed(holds, Passage<Holds>.Stop(ExitCodes.Environment, $"{Name} {arm}: the pid file could not be written: {failed.Reason}"))
             : new Passage<Holds>.Through(holds);
     }
 
@@ -158,16 +158,16 @@ internal static class RunArmAdmission
     }
 
     /// <summary>The runner names itself (D13): <c>pids/&lt;arm&gt;.pid</c> holds this process's id as decimal digits and one newline, staged beside and renamed over — by name, never through a write that lists the folder.</summary>
-    private static string PidWritten(ExperimentInput input, string arm)
+    private static Outcome<string> PidWritten(ExperimentInput input, string arm)
     {
         try
         {
             ArmFiles.ReplaceFile(input.Root.PidFile(arm), Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n");
-            return string.Empty;
+            return Outcome<string>.Success(input.Root.PidFile(arm));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return ex.Message;
+            return Outcome<string>.Failure(ex.Message);
         }
     }
 

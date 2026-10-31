@@ -38,13 +38,13 @@ public static class IsolationPlans
             Outcome<IsolationPlan>.Failure);
     }
 
-    /// <summary>SHA-256 over the UTF-8 bytes of one line per entry in plan order, <c>&lt;kind&gt;\t&lt;path&gt;\n</c>, kind <c>closed</c> or <c>unlisted</c>; 64 lower-case hex characters. The snapshot and the applied file carry it, and the runner and the chain compare it ordinally.</summary>
+    /// <summary>SHA-256 over the UTF-8 bytes of one line per entry in plan order, <c>&lt;kind&gt;\t&lt;path&gt;\t&lt;source&gt;\n</c>, kind <c>closed</c> or <c>unlisted</c>, source the configuration entry that named it; 64 lower-case hex characters. The snapshot and the applied file carry it, and the runner and the chain compare it ordinally.</summary>
     public static string DigestOf(IReadOnlyList<IsolationEntry> entries)
     {
         var text = new StringBuilder();
         foreach (var entry in entries)
         {
-            text.Append(entry.Kind == IsolationKind.Closed ? "closed" : "unlisted").Append('\t').Append(entry.Path).Append('\n');
+            text.Append(entry.Kind == IsolationKind.Closed ? "closed" : "unlisted").Append('\t').Append(entry.Path).Append('\t').Append(entry.Source).Append('\n');
         }
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));

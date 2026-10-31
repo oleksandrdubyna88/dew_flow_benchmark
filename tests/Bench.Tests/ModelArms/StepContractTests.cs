@@ -224,7 +224,7 @@ public sealed class StepContractTests
         runs[0].ClosedArms.Should().BeEmpty();
         runs[1].Rounds.Should().ContainSingle().Which.Should().Equal("CHH1", "CHH2", "CHH3");
         runs[1].ClosedArms.Should().HaveCount(9);
-        runs[1].Closed.Should().Equal("/x/root/judge-abs", "/x/root/judge-coai", "/x/root/chain/part6");
+        runs[1].Closed.Should().Equal(["/x/root/judge-abs", "/x/root/judge-coai", "/x/root/mut6", "/x/root/coai-findings.json", "/x/root/metrics6.json", "/x/root/judge-abs.log", "/x/root/judge-coai.out", "/x/root/mut6.log", "/x/root/chain.log", "/x/root/chain/part6", "/x/root/PROTOCOL.md", "/example/lmc-part6"]);
 
         HasLine(Refused(root => root["runs"]!["part 8"] = root["runs"]!["part7"]!.DeepClone()), "runs.part 8", "a run name is letters, digits and dashes: it names the folder chain/part 8/");
         HasLine(Refused(root => root["runs"]!["part7"]!["rounds"]![0]!.AsArray().Add("C1")), "runs.part7", "arm C1 is already in run part6");
@@ -245,7 +245,7 @@ public sealed class StepContractTests
         HasLine(Refused(root => root["runs"]!["part7"]!["closedArms"]!.AsArray().Add("C9")), "runs.part7.closedArms[9]", "names 'C9', which no run names");
         HasLine(
             Refused(root => root["runs"]!["part7"]!["closed"]!.AsArray().Add("relative/x")),
-            "runs.part7.closed[3]",
+            "runs.part7.closed[12]",
             "is 'relative/x' — it must be <root>, start with <root>/ or ~/, or be an absolute path");
         Accepted(root => root["runs"]!["part7"]!["closed"]!.AsArray().Add("~/judges")).Runs[1].Closed.Last().Should().Be(Path.Combine("/x/home", "judges"));
     }

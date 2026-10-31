@@ -69,14 +69,42 @@ public sealed class IsolationPlanTests
         var plan = Ok(IsolationPlans.From(experiment.Isolation, part7, map, experiment.Root, [experiment.Root]));
 
         var armFolders = arms.Select(arm => new RootPaths(experiment.Root).Arm(map.TokenOf(arm).Ok()).Folder).ToList();
-        plan.Entries.Take(1 + 9 + 3).Select(entry => entry.Path).Should().Equal(
-            [Path.Combine(root.Temp, "example", "old-experiment"), .. armFolders, Path.Combine(root.Root, "judge-abs"), Path.Combine(root.Root, "judge-coai"), Path.Combine(root.Root, "chain", "part6")],
+        plan.Entries.Take(1 + 9 + 12).Select(entry => entry.Path).Should().Equal(
+            [Path.Combine(root.Temp, "example", "old-experiment"), .. armFolders, .. Part7Closed(root)],
             "the configured closed path, then the run's closedArms through the map in the run's order, then the run's own closed paths");
-        plan.Entries.Take(13).Should().OnlyContain(entry => entry.Kind == IsolationKind.Closed);
-        plan.Entries.Skip(13).Should().OnlyContain(entry => entry.Kind == IsolationKind.Unlisted).And.HaveCount(7);
+        plan.Entries.Take(22).Should().OnlyContain(entry => entry.Kind == IsolationKind.Closed);
+        plan.Entries.Skip(22).Should().OnlyContain(entry => entry.Kind == IsolationKind.Unlisted).And.HaveCount(7);
 
         var missing = Failure(IsolationPlans.From(experiment.Isolation, part7, MapOf(arms.Skip(1).ToArray()), experiment.Root, [experiment.Root]));
         missing.Should().Contain("runs.part7.closedArms[0]").And.Contain("'C1'").And.Contain("never made", "an arm the map lacks is refused, never skipped: a closure the operator wrote and the module ignored would be a silent lie");
+    }
+
+    /// <summary>What <c>after7.sh:40-42</c> put in <c>EXTRA_CLOSED</c> besides the nine arm folders, in the shell's order (<c>$E</c> is the experiment root).</summary>
+    private static readonly string[] ShellExtraClosed =
+    [
+        "$E/judge-abs", "$E/judge-coai", "$E/mut6", "$E/coai-findings.json", "$E/metrics6.json", "$E/judge-abs.log", "$E/judge-coai.out", "$E/mut6.log", "$E/chain.log", "$E/chain", "$E/PROTOCOL.md",
+        "/home/jinx/git/dew_flow_benchmark-wt/lmc-part6",
+    ];
+
+    /// <summary>The shell's list mapped onto the example: <c>$E/x</c> is <c>&lt;root&gt;/x</c>; <c>$E/chain</c> is the run's own marker folder <c>&lt;root&gt;/chain/part6</c> (closing <c>chain/</c> itself would close the folder the NEXT run's markers are written in — the shell kept them in <c>chain7/</c>); the part-6 worktree is the example's stand-in beside the target.</summary>
+    private static string[] Part7Closed(ExperimentRoot root) =>
+        [.. ShellExtraClosed.Select(path => path switch
+        {
+            "$E/chain" => Path.Combine(root.Root, "chain", "part6"),
+            _ when path.StartsWith("$E/", StringComparison.Ordinal) => Path.Combine(root.Root, path["$E/".Length..]),
+            _ => Path.Combine(root.Temp, "example", "lmc-part6"),
+        })];
+
+    [Fact]
+    public void Part_7_of_the_example_closes_everything_the_shell_closed_and_the_map_cannot_be_denied_by_a_root_relative_entry()
+    {
+        using var root = new ExperimentRoot();
+        var experiment = root.ExperimentOf();
+        var part7 = experiment.Runs.Single(run => run.Name == "part7");
+
+        part7.Closed.Should().Equal(Part7Closed(root), "the shell's EXTRA_CLOSED (after7.sh:40-42) maps one to one onto runs.part7.closed — a path dropped from either side is a part-7 arm that can read a part-6 result");
+        part7.ClosedArms.Should().Equal("C1", "CR1", "SRS1", "C2", "CR2", "SRS2", "C3", "CR3", "SRS3");
+        experiment.Tools.Deny.Should().Contain("Read(/" + Path.Combine(root.Root, "arms.map.json") + ")", "the read that the 300 root still allows by its fixed name is denied in the example — as an absolute entry the operator fills in: tools.deny is passed to the CLI as written, so no <root> placeholder can stand in it");
     }
 
     [Fact]
@@ -89,18 +117,23 @@ public sealed class IsolationPlanTests
     }
 
     [Fact]
-    public void The_digest_is_the_sha256_of_the_kind_and_path_lines_in_plan_order()
+    public void The_digest_is_the_sha256_of_the_kind_path_and_source_lines_in_plan_order()
     {
-        IReadOnlyList<IsolationEntry> entries = [new("/a", IsolationKind.Closed), new("/b", IsolationKind.Unlisted)];
-        var expected = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("closed\t/a\nunlisted\t/b\n")));
+        IReadOnlyList<IsolationEntry> entries = [new("/a", IsolationKind.Closed, "isolation.closed[0]"), new("/b", IsolationKind.Unlisted, "isolation.unlisted[0]")];
+        var expected = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("closed\t/a\tisolation.closed[0]\nunlisted\t/b\tisolation.unlisted[0]\n")));
 
         IsolationPlans.DigestOf(entries).Should().Be(expected);
         IsolationPlans.DigestOf([entries[1], entries[0]]).Should().NotBe(expected, "the order is part of what was locked");
-        IsolationPlans.DigestOf([new("/a", IsolationKind.Unlisted), entries[1]]).Should().NotBe(expected, "the kind is part of it");
+        IsolationPlans.DigestOf([new("/a", IsolationKind.Unlisted, "isolation.closed[0]"), entries[1]]).Should().NotBe(expected, "the kind is part of it");
+        IsolationPlans.DigestOf([new("/a", IsolationKind.Closed, "isolation.closed[1]"), entries[1]]).Should().NotBe(expected, "so is the source that authorised the path: a path whose source was edited is a different snapshot");
         expected.Should().MatchRegex("^[0-9a-f]{64}$");
 
         var facts = Facts(["/a"], ["/b"]);
-        Ok(Plan(facts, Run(), ArmMap.Empty)).Digest.Should().Be(expected).And.Be(Ok(Plan(facts, Run(), ArmMap.Empty)).Digest);
+        var plan = Ok(Plan(facts, Run(), ArmMap.Empty));
+        plan.Digest.Should().Be(expected).And.Be(Ok(Plan(facts, Run(), ArmMap.Empty)).Digest);
+        var saved = new SavedSnapshot("part6", plan.Digest, "2026-10-31T10:00:00Z", [.. plan.Entries.Select(entry => new SavedMode(entry.Path, entry.Kind, "755", null, entry.Source))]);
+        SnapshotFiles.DigestOf(saved).Should().Be(plan.Digest, "the snapshot's own entries spell the digest it records");
+        SnapshotFiles.DigestOf(saved with { Modes = [.. saved.Modes, new SavedMode("/c", IsolationKind.Closed, "755", null, "isolation.closed[9]")] }).Should().NotBe(plan.Digest, "an entry added by hand is not covered");
     }
 
     [Theory]
@@ -220,6 +253,8 @@ public sealed class IsolationPlanTests
         back.Modes.Should().Equal(saved.Modes);
 
         LockSnapshots.Saved(text.Replace(",\"ino\":1234567", string.Empty, StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>("a device without its inode is refused");
+        LockSnapshots.Saved(text.Replace("\"path\":\"/a\"", "\"path\":\"a\"", StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>("a path that is not fully qualified is refused at parse");
+        LockSnapshots.Saved(text.Replace("\"path\":\"/a\"", "\"path\":\"/a\\u0000b\"", StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>("a NUL in a path is refused at parse, not found by GetFullPath half-way through a restore");
 
         var applied = SnapshotFiles.Applied("part6", saved.Digest, "2026-10-31T10:00:05Z");
         applied.Should().EndWith("}\n");
