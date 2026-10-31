@@ -160,15 +160,18 @@ public static class HostChecks
             _ => [],
         };
 
-    /// <summary>D23: the git's version against the floor. Every finding is the environment (exit 3): the host's git is too old, unreadable or unasked.</summary>
+    /// <summary>D23: the git's version against the floor. Every finding is the environment (exit 3): the host's git is too old, unreadable or unasked. A refusal of a version names the git it is about, by the real path the resolution found.</summary>
     private static IEnumerable<HostProblem> GitFloorProblems(HostFacts facts) =>
         facts.Version switch
         {
-            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem(reason, Environment: true)]),
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem($"git at {ExecutableRule.Shown(RealGit(facts))}: {reason}", Environment: true)]),
             GitVersionAnswer.Unanswered unanswered => [new(unanswered.Reason, Environment: true)],
             GitVersionAnswer.NotAsked notAsked => [new(notAsked.Reason, Environment: true)],
             _ => [],
         };
+
+    private static string RealGit(HostFacts facts) =>
+        facts.Executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer is ExecutableAnswer.Found found ? found.Real : "(not resolved)";
 
     private static IEnumerable<HostProblem> SourceProblems(TargetFacts target, HostFacts facts) =>
         facts.Source switch

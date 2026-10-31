@@ -69,10 +69,10 @@ internal static class HostFactsReader
             return new GitVersionAnswer.NotAsked($"git's version was not checked: {cause}");
         }
 
-        var real = ((ExecutableAnswer.Found)executables.First(executable => executable.Needed.Name == "git").Answer).Real;
+        var real = RealGit(executables);
         return (await new ArmGit(real, input.Root.Root, input.Verb.Environment).VersionAsync(input.Verb.Stopping)).Match<GitVersionAnswer>(
             text => new GitVersionAnswer.Read(text),
-            reason => new GitVersionAnswer.Unanswered($"git --version at {real} could not be read: {reason}"));
+            reason => new GitVersionAnswer.Unanswered($"git --version at {ExecutableRule.Shown(real)} could not be read: {reason}"));
     }
 
     /// <summary>The source is asked only through a git the resolution FOUND, whose version was read and passes <see cref="GitFloor.Admit"/> (a git whose guards are unknown is never run over the operator's checkout), and only while PATH is clean: git looks its own helpers up in PATH, and a refused PATH is exit 4
@@ -91,16 +91,20 @@ internal static class HostFactsReader
             return new SourceAnswer.NotAsked($"the source was not checked: {cause}");
         }
 
-        return Admitted(version) is { } why
+        return ReasonSourceIsNotAsked(version) is { } why
             ? new SourceAnswer.NotAsked($"the source was not checked: {why}")
-            : await SourceFacts.ReadAsync(target, ((ExecutableAnswer.Found)executables.First(executable => executable.Needed.Name == "git").Answer).Real, GitEnvironment.Of(input.Verb.Environment), RootFacts.RealPathOf, input.Verb.Stopping);
+            : await SourceFacts.ReadAsync(target, RealGit(executables), GitEnvironment.Of(input.Verb.Environment), RootFacts.RealPathOf, input.Verb.Stopping);
     }
 
-    /// <summary>Why the source must not be asked of this git, or nothing when its version was read and passes the floor.</summary>
-    private static string? Admitted(GitVersionAnswer version) =>
+    /// <summary>The real path of the git the resolution found; the empty text for any other answer (callers ask only after <see cref="Unasked"/> found nothing to object to).</summary>
+    private static string RealGit(IReadOnlyList<ResolvedExecutable> executables) =>
+        executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer is ExecutableAnswer.Found found ? found.Real : string.Empty;
+
+    /// <summary>Why the source must not be asked of this git — its version was refused by the floor (below it, a release candidate, or not git's text: the finding says which) or could not be read — or nothing when the version was read and admitted. Parsed once, by <see cref="GitFloor.Admit"/>.</summary>
+    private static string? ReasonSourceIsNotAsked(GitVersionAnswer version) =>
         version switch
         {
-            GitVersionAnswer.Read read when GitVersion.Parse(read.Text) is Outcome<GitVersion>.Ok => GitFloor.Admit(read.Text) is Outcome<GitVersion>.Ok ? null : "git's version is below the floor",
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text) is Outcome<GitVersion>.Ok ? null : "git's version is refused",
             _ => "git's version could not be read",
         };
 

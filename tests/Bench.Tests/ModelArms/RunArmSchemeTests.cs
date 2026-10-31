@@ -184,7 +184,7 @@ public sealed class RunArmSchemeTests
         using var fake = new FakeCli();
         await root.MakeArmAsync("C1", fake);
         Replay(fake, "result-success.jsonl");
-        root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
+        var git = root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
 
         var run = await RunAsync(root, "C1");
 
@@ -199,7 +199,7 @@ public sealed class RunArmSchemeTests
         File.Exists(root.MarkerFile("git")).Should().BeFalse("no repository operation ran: the shim logs every git but --version");
         File.Exists(root.PathsOf("C1").Timing).Should().BeFalse("nothing was timed: the arm never started");
         run.Error.Should().Contain(printed == "not a version" ? "not a version this harness can read" : GitFloor.Sentence);
-        run.Error.Should().Contain(printed);
+        run.Error.Should().Contain(printed).And.Contain($"git at {git}: ", "the refusal names the git it is about, by its real path");
     }
 
     [Fact]

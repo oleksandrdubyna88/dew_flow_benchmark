@@ -461,7 +461,7 @@ public sealed class ChecksVerbTests
         calls.Should().NotContain(call => call.Tool == "dotnet", "no target tool was launched");
         Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
         (full.Output + parseOnly.Output).Should().NotContain("resolved executables:");
-        full.Error.Should().Contain("2.43.3").And.Contain(GitFloor.Sentence);
+        full.Error.Should().Contain("2.43.3").And.Contain(GitFloor.Sentence).And.Contain($"git at {Path.Combine(kit.Root.Temp, "bin", "git")}: ", "the refusal names the git it is about, by its real path");
     }
 
     [Fact]
