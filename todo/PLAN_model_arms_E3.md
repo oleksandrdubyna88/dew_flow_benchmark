@@ -1,6 +1,6 @@
 # PLAN — E3 stories: preparation and the objective checks of the model-arms module
 
-> Status: **plan only, nothing implemented yet, 2026-10-30.** Epic E3 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D4, D8, D11 (the
+> Status: **in progress — E3.S0–E3.S5 are built on `feat/model-arms-e3` (each to an Opus 'ready', 2026-10-30/31); the coai code gate passed (4 findings accepted and fixed, 5 rejected with reasons — §8 items 49–51); delivered to `main` by its PR; open: M2 and M2's key check (the owner's, by hand), then the promotion with its parent.** Written 2026-10-30 as: Epic E3 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D4, D8, D11 (the
 > reading half), D16–D18, D23, D24, D26, D27; §4.1's `prep-base`, `make`, `status` and `checks` rows; §4.9; §4.12; §6 step 3 — M2 and M2's
 > key check; §7's E3 tests). Written at `5a8b4ce` on `feat/model-arms-e3` (E1 and E2 merged to `main`), by the judge role (Opus), as the epic
 > starts — `common.plan-change-control` § *What counts as a change*: not a change. **No cornerstone** (the ledger stays `3 of 3`, §8 item 1).
@@ -1158,26 +1158,31 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
 
 ## 11. Definition of Done — epic E3
 
-- [ ] E3.S0 landed first, then E3.S1–E3.S5, on `feat/model-arms-e3`, each with its tests watched red on an assertion first (the messages
+- [x] E3.S0 landed first, then E3.S1–E3.S5, on `feat/model-arms-e3`, each with its tests watched red on an assertion first (the messages
       in its summary) and its break-its observed.
-- [ ] **The platform roads (ledger 2.1):** `PlatformRoadsTests` green; the Mac's road through the gate and `init` prints ONE line naming the
+- [x] **The platform roads (ledger 2.1):** `PlatformRoadsTests` green; the Mac's road through the gate and `init` prints ONE line naming the
       owner as not verified and judges the mode; `LockProbeTests` measure 11 on Linux; the FIFO ceiling observed; no verb exits 3 on a POSIX
       host for want of a kernel reader (`RootFactsTests.On_a_platform_without_a_probed_reader_…` deleted); the module doc's *The platform
       roads* says what is unobserved (§8 item 25); the review names D26 (a)–(f) for `PortableFacts`, `BoundedFile`, `LockProbe` and
       `FileGateLock`.
-- [ ] The parent's E3 tests of §7 exist under their exact names and are green; the added ones of §7 here too.
-- [ ] `ObjectiveReportTests.The_report_of_a_real_arm_round_trips_the_shells_shape` green against the shell's own reader, byte for byte.
-- [ ] `PrepBaseTests.Every_target_tool_is_launched_by_its_resolved_path_under_a_built_environment`, the same scenario of `MakeVerbTests`,
+- [x] The parent's E3 tests of §7 exist under their exact names and are green; the added ones of §7 here too.
+- [x] `ObjectiveReportTests.The_report_of_a_real_arm_round_trips_the_shells_shape` green against the shell's own reader, byte for byte.
+- [x] `PrepBaseTests.Every_target_tool_is_launched_by_its_resolved_path_under_a_built_environment`, the same scenario of `MakeVerbTests`,
       and `ChecksVerbTests.Every_git_of_checks_…` green; `The_module_launches_nothing_by_a_bare_name` green with `TargetTools.cs`, `ArmMaker.cs`
       and `ObjectiveRun.cs` present; every review names D26 (a)–(f) per adapter.
-- [ ] `StatusVerbTests.Status_opens_every_file_by_name_and_enumerates_no_folder` green live on Linux at mode 300; `ChecksVerbTests.A_link_planted_…`
+- [x] `StatusVerbTests.Status_opens_every_file_by_name_and_enumerates_no_folder` green live on Linux at mode 300; `ChecksVerbTests.A_link_planted_…`
       and `…a_fifo…` green; no verb of E3 prints a token.
 - [ ] `RunArmSchemeTests`, `GateStatusFileTests` (and E2's suites) unedited and green after the two extractions.
+      *(2026-10-31: green, but NOT unedited — the S2 review and the code gate pinned the new git environment (`GIT_ALLOW_PROTOCOL`, the
+      `GIT_CONFIG_*` allowance) in `RunArmSchemeTests` and `StepGitTests`, and `ValidateVerbTests`/`ModelArmsScenarioTests` follow the guard
+      `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)*
 - [ ] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
       logged) or its fallback recorded here and in the parent's §11.
 - [x] §8 item 2 answered by the owner (2026-10-30: a fix, not a change), and the stories followed the answer (the proposal).
-- [ ] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
+- [x] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
       residuals); `research/module_tests.md`'s `prep-base`, `make`, `status`, `checks` rows `covered`, and the E5 rows' ids corrected.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
-- [ ] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+      *(2026-10-31: `dotnet format --verify-no-changes` clean; the build's one warning is AppHost's ASPIRE010, on `main` before E3; the
+      whole suite on this host fails only the 572 database/service tests `main` fails here (no store reachable) — the PR's CI is the verdict.)*
+- [x] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green.

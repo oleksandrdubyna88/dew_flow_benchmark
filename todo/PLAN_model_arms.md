@@ -4,7 +4,7 @@
 > document gate, the interim path of `common.plan-change-control`; verdict proceed, its six findings taken into the baseline; Narrowed:
 > no) after the stop of 2026-10-29 (`## Plan changes`, epoch 1: entries 1.1–1.3, closed) and the WHOLE plan's revision by the re-review
 > (its record is under `## Plan changes`; §11's last row says what changed) — E2 may start; PR #116 (E1) merged to `main` at `431e759`
-> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2); E2's stories are built — E2.S0–E2.S8 landed (E2.S8, `run-arm`, last, 2026-10-30; M1 observed) and E2 merged to `main` at `5a8b4ce` (#119); E3 started on `feat/model-arms-e3` (its stories document, 2026-10-30); **epoch 2 entry 2.1** (the owner, 2026-10-30: macOS and FreeBSD run, not refused — E3.S0) — one change, no stop.** Scope: a new self-contained module
+> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2); E2's stories are built — E2.S0–E2.S8 landed (E2.S8, `run-arm`, last, 2026-10-30; M1 observed) and E2 merged to `main` at `5a8b4ce` (#119); E3 built on `feat/model-arms-e3` (E3.S0–E3.S5, 2026-10-30/31; the coai code gate passed, its accepted findings fixed — E3 §8 items 49–51) and delivered to `main` by its PR; **M2 and its key check are the owner's and still open**; **epoch 2 entry 2.1** (the owner, 2026-10-30: macOS and FreeBSD run, not refused — E3.S0) — one change, no stop; E4–E6 not started — see *State after E3* below.** Scope: a new self-contained module
 > `tools/model-arms/` (two projects, a console `model-arms`), tests in `tests/Bench.Tests/ModelArms/`, three files moved out of `hosts/Cli`
 > into a shared host-support project, two widenings of the shared CLI launcher, one widening of `tests/FakeCli`, a `research/module_model_arms.md`
 > and the `research/module_tests.md` rows. It ports the RUN half of the owner's part-6 AND part-7 harness (four schemes: C, CR, SRS, CHH — the
@@ -17,6 +17,40 @@
 > [PLAN_subagent_policy_ab.md](PLAN_subagent_policy_ab.md) (its own instrument, §5), [research/module_scouts.md](../research/module_scouts.md)
 > and [research/module_probes.md](../research/module_probes.md) (the pieces this composes), [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) §3
 > (the ways a run lies about itself — the reason an error result is never "done").
+
+## State after E3 (2026-10-31) — where E4, E5 and E6 start
+
+Written for the session that builds E4–E6. Progress, not a plan change (`common.plan-change-control` § *What counts as a change*).
+
+- **Built and on `main`:** E1 (`431e759`, #116), E2 (`5a8b4ce`, #119), E3 (its PR; branch `feat/model-arms-e3`). The verbs `init`,
+  `validate`, `prep-base`, `make`, `status`, `run-arm` (sequential schemes C, CR, CHH), `checks` and `gate-lock` work; `lock`, `unlock`,
+  `run-all` and `chain` print *not built yet* with their story ids (E5.S1, E5.S1, E5.S3, E5.S4). The module doc
+  (`research/module_model_arms.md`) describes what is built and what is unobserved; E3's deviations are its §8 items 26–51.
+- **The ledger:** epoch 2 has ONE entry (2.1). A second accepted change to this plan stops it for a whole re-review
+  (`common.plan-change-control`). Two proposals wait for the owner and would each be that second entry: **E3 §8 item 50** — the arm's own
+  claude session still receives secret-shaped variables that `IsSecretName` misses (`PGPASSWORD`, `DATABASE_URL`, `*_PAT`, `*_APIKEY`,
+  `*_CREDENTIALS`, npm auth tokens), because D19 defines that environment by `IsSecretName`; the proposed fix is one ModelArms.Core
+  `IsSecretShaped` helper for both `TargetEnvironment` and `ArmChildEnvironment` (the operator's workaround meanwhile: start `run-arm` from a
+  shell without such variables); **E3 §8 item 51** — no git minimum is enforced (`GIT_ALLOW_PROTOCOL` needs git 2.6.1, the filter
+  neutralisation 2.31, `GIT_NO_LAZY_FETCH` 2.44, each ignored silently by an older git); a floor at `validate` is a new D23 host check.
+- **Open for the owner, by hand:** **M2** (the attended pilot with `tests/FakeCli` as `claude`) and **M2's key check** (the real `claude`
+  and `coai-mcp`, the owner's key, a FRESH root) — the exact steps are in `research/module_model_arms.md` under *M2* and E3 §8 item 47; the
+  scaffold is `M2PilotScaffold.Writes_the_scratch_target_and_root_for_the_pilot` (run with `--explicit only`). E3's Definition of Done
+  keeps the M2 line open until then.
+- **E4 — the task pipeline** (`## Epics`): its stories document is not written. Carried to E4 from E3: §8 item 40 (every checkout,
+  `worktree add` and `cherry-pick` of the ARM's clone goes through `ArmGit`'s road — smudge filters, merge drivers, `core.editor` /
+  `sequence.editor`, `commit.gpgsign` → `gpg.program`, `submodule.<n>.update=!cmd`; pin `-c commit.gpgsign=false` and `--no-edit`; prove
+  `smudge=` with a planted sentinel; give `DetachAsync`/`SubmoduleUpdateAsync` a neutralised form for the arm's clone, since their opt-outs
+  are per question, not per folder); §8 item 20 (the task coders' stems in `stepsOnDeadline`).
+- **E5 — isolation, keep-awake, the detached arms and the chain** (security judgement: specs by Fable): its stories document is not
+  written. The read side of the isolation snapshot is built (E3.S4: `RootPaths.LockedModesApplied`, `RootPaths.RunMarker`,
+  `LockSnapshots.State`; E3 §8 item 2 — the owner classed it a fix); E5.S1 and E5.S4 keep every WRITER. `status` and `checks` already read
+  `pids/<arm>.pid` as a decimal pid (E3 §8 item 32: the format is not settled until E5.S3 writes it). Items 59 and 61 of E2 §8 (the gate
+  lock's ceiling under `run-all`) are E5's.
+- **E6 — the compatibility contract and the record:** unchanged; it depends on E2–E5.
+- **Known residuals a later epic may meet:** the shared launcher keeps every output line in memory (E3 §8 item 18); a target tool inherits
+  the harness's stdin (E3 §8 item 39); the FakeCli call number can race for two calls of one model at the same instant (the commit that
+  staged its call record says so).
 
 ## Plan changes
 
