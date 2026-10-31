@@ -23,7 +23,8 @@ internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme,
 /// executables are looked up in it: git and claude look their own helpers up there for hours, and <c>validate</c>'s judgement is not carried over by magic. <c>HOME</c> and <c>XDG_CONFIG_HOME</c> are judged next, by the same helper <c>validate</c> uses (D26 c: git reads its global config there and a claude its settings and hooks). Exit 3 is the host (a CLI that is not there, a file that cannot be read), exit 4 a wrong configuration.</summary>
 internal static class RunArmAdmission
 {
-    private const string Name = "model-arms run-arm";
+    private const string Verb = "run-arm";
+    private const string Name = "model-arms " + Verb;
     private static readonly TimeSpan LockPoll = TimeSpan.FromSeconds(2);
 
     public static Task<Passage<ArmPlan>> AdmitAsync(ExperimentInput input) =>
@@ -38,24 +39,7 @@ internal static class RunArmAdmission
             ? Outcome<IGateLock>.Success(given)
             : FileGateLock.Create(TimeProvider.System, LockPoll).Match(created => Outcome<IGateLock>.Success(created), Outcome<IGateLock>.Failure);
 
-    private static Passage<ArmChoice> Choose(ExperimentInput input)
-    {
-        var arm = input.Verb.Positionals[0];
-        return ArmNames.SchemeOf(arm).Match(name => Known(input, arm, name), reason => Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {reason}"));
-    }
-
-    private static Passage<ArmChoice> Known(ExperimentInput input, string arm, string name)
-    {
-        var schemes = input.Experiment.Schemes;
-        if (schemes.FirstOrDefault(scheme => scheme.Name == name) is not { } scheme)
-        {
-            return Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {arm} belongs to scheme {name}, which is not among the schemes ({string.Join(", ", schemes.Select(each => each.Name))})");
-        }
-
-        return scheme.Entries.Any(entry => entry is SchemeEntry.Tasks)
-            ? Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s scheme runs the task pipeline — not built yet, story E4.S3 of todo/PLAN_model_arms.md")
-            : new Passage<ArmChoice>.Through(new ArmChoice(arm, scheme));
-    }
+    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb, allowTasks: false);
 
     private static Passage<ArmPlaced> Place(ExperimentInput input, ArmChoice choice)
     {
@@ -78,31 +62,16 @@ internal static class RunArmAdmission
 
     private static Passage<ArmPlan> Equip(ExperimentInput input, ArmPlaced placed)
     {
-        var entries = input.Verb.Environment.TryGetValue("PATH", out var path) ? path.Split(Path.PathSeparator) : [];
+        var environment = input.Verb.Environment;
         var roots = ExecutableRule.ForbiddenRoots(input.Experiment.Target.Source, input.Experiment.Root);
-        var refusal = FirstRefusal(input, entries, roots);
+        var refusal = LaunchAdmission.FirstRefusal(environment, roots);
         return refusal.Length > 0
             ? Passage<ArmPlan>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
-            : Resolve("claude", entries, roots).Bind(claude => Resolve("git", entries, roots).Map(git => Planned(input, placed, new ArmTools(claude, git))));
+            : LaunchAdmission.Resolve(Verb, "claude", environment, roots).Bind(claude => LaunchAdmission.Resolve(Verb, "git", environment, roots).Map(git => Planned(input, placed, new ArmTools(claude, git))));
     }
-
-    /// <summary>The first refusal of what the children inherit: a PATH entry, then <c>HOME</c> or <c>XDG_CONFIG_HOME</c> (D26 c — <see cref="ConfigFolders"/>, the one helper <c>validate</c> shares), else the empty string.</summary>
-    private static string FirstRefusal(ExperimentInput input, IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
-        entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).FirstOrDefault(sentence => sentence.Length > 0)
-        ?? ConfigFolders.Refusals(input.Verb.Environment, roots).Select(home => home.Refusal).FirstOrDefault()
-        ?? string.Empty;
 
     private static ArmPlan Planned(ExperimentInput input, ArmPlaced placed, ArmTools tools) =>
         new(input, placed.Choice.Arm, placed.Choice.Scheme, placed.Map, placed.Paths, tools, ScenarioCount: 0);
-
-    private static Passage<string> Resolve(string name, IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
-        ExecutableResolution.Resolve(name, entries, roots, RootFacts.Host, OperatingSystem.IsWindows()) switch
-        {
-            ExecutableAnswer.Found found => new Passage<string>.Through(found.Real),
-            ExecutableAnswer.Absent absent => Passage<string>.Stop(ExitCodes.Environment, $"{Name}: {absent.Reason}"),
-            ExecutableAnswer.Refused refused => Passage<string>.Stop(ExitCodes.Configuration, $"{Name}: {refused.Reason}"),
-            _ => throw new InvalidOperationException("unreachable"),
-        };
 
     /// <summary><c>scenarios.json</c> as the gate judged it (the same road <c>validate</c> reads it by): its count is what the briefs say. A file that does not read is exit 4 naming why.</summary>
     private static async Task<Passage<ArmPlan>> CountedAsync(ArmPlan plan)

@@ -324,6 +324,29 @@ public sealed class InitVerbTests
         Directory.EnumerateFileSystemEntries(root).Should().BeEmpty();
     }
 
+    /// <summary>The Mac's road is handed to <c>init</c> on this Linux host (E3 §8 item 25): the units run here, the composition on a real Mac is unobserved.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Init_on_the_portable_road_prints_its_line_first_and_makes_the_root_owner_only()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        var root = temp.Combine("mac");
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var input = new ModelArmsApp.VerbInput(
+            "init", [root], Bench.Cli.CommandLine.Parse(["init"]), output, error, NoEnvironment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
+
+        var code = await ModelArmsApp.Verbs.InitVerb.RunAsync(input, KernelFacts.MakeFolder, PlatformKit.MacRoad);
+
+        code.Should().Be(0, error.ToString());
+        File.GetUnixFileMode(root).Should().Be(OwnerOnlyFolder);
+        File.GetUnixFileMode(Path.Combine(root, "experiment.json")).Should().Be(OwnerOnlyFile);
+        var lines = error.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        lines.FirstOrDefault().Should().Be(PlatformKit.MacRoad.Line, "the road's line is the FIRST thing init says, before anything is made");
+        lines.Should().HaveCount(1, "no Windows line, and the road's line once");
+    }
+
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public void The_kernels_mkdir_makes_a_new_folder_and_says_so_for_an_existing_one_without_touching_it()

@@ -294,15 +294,13 @@ internal sealed class GateRun
         $"{_step}: the gate's status cannot be judged — {Shown(reason)}; {(begins is null ? string.Empty : $"it begins: {begins}; ")}fix it and run me again (removing it finishes the gate as missing)";
 
     private static string Begins(GateStatusFile.Answer status) =>
-        status is GateStatusFile.Answer.Text { Value.Length: > 0 } text ? ExecutableRule.Printable(text.Value.Length <= BeginsCharacters ? text.Value : Cut(text.Value, BeginsCharacters) + "…") : "(nothing)";
+        status is GateStatusFile.Answer.Text { Value.Length: > 0 } text ? ExecutableRule.Printable(text.Value.Length <= BeginsCharacters ? text.Value : ExecutableRule.Cut(text.Value, BeginsCharacters) + "…") : "(nothing)";
 
     /// <summary>At most <see cref="KeptCharacters"/> characters, never cut inside a surrogate pair.</summary>
-    private static string Clamped(string text) => Cut(text, KeptCharacters);
+    private static string Clamped(string text) => ExecutableRule.Cut(text, KeptCharacters);
 
     /// <summary>A model's text as one short line of the log.</summary>
-    private static string Shown(string text) => ExecutableRule.Printable(text.Length <= ShownCharacters ? text : Cut(text, ShownCharacters) + "…");
-
-    private static string Cut(string text, int limit) => text.Length <= limit ? text : text[..(char.IsHighSurrogate(text[limit - 1]) ? limit - 1 : limit)];
+    private static string Shown(string text) => ExecutableRule.Printable(text.Length <= ShownCharacters ? text : ExecutableRule.Cut(text, ShownCharacters) + "…");
 
     private static string Said(TimeSpan span) =>
         span >= TimeSpan.FromMinutes(1) ? $"{span.TotalMinutes.ToString("0.##", CultureInfo.InvariantCulture)} min"

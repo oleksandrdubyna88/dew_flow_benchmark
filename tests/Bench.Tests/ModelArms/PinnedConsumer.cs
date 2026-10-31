@@ -27,6 +27,9 @@ internal static class PinnedConsumer
         .Resolve("node", (System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator), [], RootFacts.Host, OperatingSystem.IsWindows())
         is ExecutableAnswer.Found found ? found.Real : string.Empty);
 
+    /// <summary>The <c>node</c> the test process's PATH resolves to, as its real path (empty when none does): what a test that runs a pinned script launches (D17 d).</summary>
+    public static string NodePath => Node.Value;
+
     private static string Pinned => Path.Combine(Cli.Repository.Root, "research", "local-model-coding", "harness", "metrics.mjs");
 
     /// <summary>The script over a made arm of <paramref name="root"/> (E2.S8; E6 reuses it for every scheme): the arm's <c>out/timing.jsonl</c>, under the name the script lists the scheme by, in a scratch folder of the root's own.</summary>

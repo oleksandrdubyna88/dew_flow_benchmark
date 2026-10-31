@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -321,5 +322,68 @@ public sealed class GateLockHolderTests
         {
             // already gone: the test's own cleanup has nothing to do
         }
+    }
+
+    /// <summary>Which road believes a note (E3.S0): the kernel's tick where <c>/proc</c> has one, the start second within two seconds where only <c>Process.StartTime</c> does, never on Windows. Pure over what was read.</summary>
+    [Theory]
+    [InlineData(HolderRoad.ProcTicks, 500L, 500L, null, null, true)]
+    [InlineData(HolderRoad.ProcTicks, 500L, 501L, null, null, false)]
+    [InlineData(HolderRoad.ProcTicks, null, 500L, null, null, false)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, 1_000L, 1_000L, true)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, 1_000L, 1_002L, true)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, 1_000L, 998L, true)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, 1_000L, 1_003L, false)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, null, 1_000L, false)]
+    [InlineData(HolderRoad.ProcessStartTime, null, null, 1_000L, null, false)]
+    [InlineData(HolderRoad.None, 500L, 500L, 1_000L, 1_000L, false)]
+    public void A_note_is_believed_by_the_kernels_ticks_on_linux_and_by_its_start_second_within_two_seconds_elsewhere(
+        HolderRoad road, long? recordedTicks, long? liveTicks, long? recordedStart, long? liveStart, bool believed)
+    {
+        var raw = new GateHolderNote.Raw(4242, recordedTicks, recordedStart, "2026-10-30T08:00:00Z");
+
+        GateHolderNote.Believe(raw, alive: true, liveTicks, liveStart, road).Should().Be(believed);
+        GateHolderNote.Believe(raw, alive: false, liveTicks, liveStart, road).Should().BeFalse("a pid that is not alive is never the holder");
+    }
+
+    [Fact]
+    public void The_note_carries_both_the_ticks_and_the_start_second()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        held.Should().NotBeNull();
+
+        var note = Sidecar(root);
+
+        note.ContainsKey("start_unix").Should().BeTrue("the note carries the start second on every platform");
+        note["start_ticks"]!.GetValue<long>().Should().Be(RealTicks());
+        var started = new DateTimeOffset(Process.GetCurrentProcess().StartTime.ToUniversalTime(), TimeSpan.Zero).ToUnixTimeSeconds();
+        Math.Abs(note["start_unix"]!.GetValue<long>() - started).Should().BeLessThanOrEqualTo(2, "two readings of one process differ by milliseconds");
+    }
+
+    /// <summary>A lock built with a road reads its holder's note on THAT road, not on the host's: the observable difference is a FIFO at the note's path, which the kernel road refuses at once (non-blocking open, the descriptor judged) and the portable road
+    /// answers only when its 5 s ceiling ends the wait. The Mac's road is handed in on this Linux host (E3 §8 item 25).</summary>
+    [Fact]
+    public async Task A_lock_built_with_a_road_reads_its_note_on_that_road_not_on_the_hosts()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64, "the kernel road is Linux x86-64's");
+        using var temp = new TempFolder();
+        var lockPath = temp.Combine(".gate.lock");
+        var note = GateHolderNote.PathFor(lockPath);
+        mkfifo(note, Convert.ToUInt32("600", 8)).Should().Be(0);
+        var kernel = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50), PlatformKit.LinuxRoad);
+        var portable = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50), PlatformKit.MacRoad);
+
+        var watch = Stopwatch.StartNew();
+        kernel.Describe(lockPath).Should().Be("(holder unknown)");
+        var kernelTook = watch.Elapsed;
+        watch.Restart();
+        var portableAnswer = await Task.Run(() => portable.Describe(lockPath), TestContext.Current.CancellationToken);
+        var portableTook = watch.Elapsed;
+        PlatformKit.ReleaseFifo(note);
+
+        portableAnswer.Should().Be("(holder unknown)");
+        kernelTook.Should().BeLessThan(TimeSpan.FromSeconds(2), "the kernel road refuses a FIFO at once");
+        portableTook.Should().BeGreaterThan(TimeSpan.FromSeconds(4), "the portable road waited out its ceiling: the lock's own road reached the read, not the host's");
     }
 }

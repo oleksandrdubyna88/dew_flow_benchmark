@@ -47,12 +47,37 @@ public sealed record RootPaths(string Root)
 
     public string LockedModes => Path.Combine(Root, ".locked-modes");
 
+    /// <summary>The second immutable file of D11's two-file state (<c>{"run","digest","verifiedAt"}</c>): present beside <see cref="LockedModes"/> with the same run and digest, the snapshot is <i>applied</i>. Spelled here for the readers (E3.S4, §8 item 2); E5.S1 writes it.</summary>
+    public string LockedModesApplied => Path.Combine(Root, ".locked-modes.applied");
+
+    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The root-level <see cref="Locked"/>, <see cref="Unlocked"/> and <see cref="ArmsDone"/> are E5.S4's to remove.</summary>
+    public string RunMarker(string run, RunStage stage) =>
+        Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), stage switch { RunStage.Locked => "locked", RunStage.Unlocked => "unlocked", _ => "arms-done" });
+
     public string LockLog => Path.Combine(Root, "lock.log");
 
     /// <summary>Where <c>unlock</c> moves <see cref="LockedModes"/> to once it has restored the modes; the stamp is UTC, like <c>20261029T101500Z</c>.</summary>
     public string LockedModesRestored(string stamp) => Path.Combine(Root, ".locked-modes.restored-" + ArmPaths.Segment(stamp, "stamp"));
 
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
+
+    /// <summary>What <c>prep-base</c> writes at the root (<c>prep-base.sh:5</c>, <c>:14-17</c>): a line per stage, and each tool's log. An earlier attempt's copies are moved aside into <see cref="PrepBasePrevious"/> before the next attempt creates its own.</summary>
+    public string PrepBaseLog => Path.Combine(Root, "prep-base.log");
+
+    public string BaseBuildLog => Path.Combine(Root, "base-build.log");
+
+    /// <summary>The log of the <paramref name="n"/>th <c>npm ci</c> of the attempt (1-based, the rules submodule's first).</summary>
+    public string BaseNpmLog(int n) => Path.Combine(Root, "base-npm-" + n.ToString(CultureInfo.InvariantCulture) + ".log");
+
+    public string BaseSuiteLog => Path.Combine(Root, "base-test.log");
+
+    public string BaseExtensionLog => Path.Combine(Root, "base-ts-test.log");
+
+    /// <summary>The folder the main suite writes its results into (<c>--results-directory</c>).</summary>
+    public string BaseResults => Path.Combine(Root, "base-results");
+
+    /// <summary>Where an earlier attempt's <c>prep-base.log</c>, <c>base-*.log</c> and <c>base-results</c> are moved to (kept, never followed); the stamp is UTC, like <c>20261030T101500Z</c>.</summary>
+    public string PrepBasePrevious(string stamp) => Path.Combine(Root, "prep-base.prev-" + ArmPaths.Segment(stamp, "stamp"));
 
     /// <summary>A file the operator named in the experiment file, resolved inside the root; a rooted name or any
     /// <c>..</c> segment would leave it and is refused.</summary>
@@ -75,6 +100,9 @@ public sealed record RootPaths(string Root)
         return true;
     }
 }
+
+/// <summary>The three stages of a run the chain marks (D27).</summary>
+public enum RunStage { Locked, Unlocked, ArmsDone }
 
 /// <summary>Every path under one arm's folder, <c>r/&lt;token&gt;</c>, spelled once — the shell harness's
 /// spelling, plus the files its helper scripts wrote that the first sketch of the layout missed.</summary>
@@ -129,6 +157,21 @@ public sealed record ArmPaths(string Root, string Token)
     public string ObjectiveFolder => Under("out", "objective");
 
     public string Objective => Under("out", "objective.json");
+
+    /// <summary>The four logs <c>checks</c> keeps in <see cref="ObjectiveFolder"/> (the shell's <c>build.log</c>, <c>mcp-tests.log</c>, <c>format.log</c>, <c>ts-tests.log</c>): each is created exclusively before the first child starts (E3.S5).</summary>
+    public string ObjectiveBuildLog => Under("out", "objective", "build.log");
+
+    public string ObjectiveSuiteLog => Under("out", "objective", "mcp-tests.log");
+
+    public string ObjectiveFormatLog => Under("out", "objective", "format.log");
+
+    public string ObjectiveExtensionLog => Under("out", "objective", "ts-tests.log");
+
+    /// <summary>How each stage ended (<c>{"build":{"exit":0,"seconds":65,"killed":false},…}</c>): what <c>checks --parse-only</c> reads the exits from.</summary>
+    public string ObjectiveStages => Under("out", "objective", "stages.json");
+
+    /// <summary>Where an earlier <see cref="ObjectiveFolder"/> is renamed to before a new run makes its own (kept, never followed); the stamp is UTC, like <c>20261030T101500Z</c>.</summary>
+    public string ObjectivePrevious(string stamp) => Under("out", "objective.prev-" + Segment(stamp, "stamp"));
 
     public string TasksPlanLog => Under("out", "tasks-plan.log");
 

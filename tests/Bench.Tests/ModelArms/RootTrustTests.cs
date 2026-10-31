@@ -34,7 +34,7 @@ public sealed class RootTrustTests
 
         var uid = RootFacts.CurrentUid();
         var facts = new[] { RootFacts.FileFacts(root).Ok(), RootFacts.FileFacts(experiment).Ok() };
-        var problems = ProblemsOf(RootTrust.Decide(true, uid, facts, root));
+        var problems = ProblemsOf(RootTrust.Decide(TrustRoad.Kernel, uid, facts, root));
 
         problems.Should().HaveCount(2);
         problems.Should().ContainSingle(p => p.Contains(root, StringComparison.Ordinal) && p.Contains("775", StringComparison.Ordinal) && p.Contains("writable by group or others", StringComparison.Ordinal));
@@ -57,13 +57,13 @@ public sealed class RootTrustTests
         var uid = RootFacts.CurrentUid();
         var facts = new[] { RootFacts.FileFacts(temp.Path).Ok(), RootFacts.FileFacts(experiment).Ok() };
 
-        RootTrust.Decide(true, uid, facts, temp.Path).Should().BeOfType<TrustAnswer.Trusted>("readable by others is fine; writable is not");
+        RootTrust.Decide(TrustRoad.Kernel, uid, facts, temp.Path).Should().BeOfType<TrustAnswer.Trusted>("readable by others is fine; writable is not");
     }
 
     [Fact]
     public void A_file_not_owned_by_the_current_user_is_refused()
     {
-        var answer = RootTrust.Decide(true, 1000, [new FileFacts("/r/experiment.json", 0, Own)], "/r");
+        var answer = RootTrust.Decide(TrustRoad.Kernel, 1000, [new FileFacts("/r/experiment.json", 0, Own)], "/r");
 
         var problems = ProblemsOf(answer);
         problems.Should().ContainSingle().Which.Should().Contain("/r/experiment.json").And.Contain("uid 0").And.Contain("uid 1000").And.Contain("D17");
@@ -72,7 +72,7 @@ public sealed class RootTrustTests
     [Fact]
     public void A_file_both_foreign_and_writable_is_refused_for_both_reasons_on_separate_lines()
     {
-        var answer = RootTrust.Decide(true, 1000, [new FileFacts("/r/scenarios.json", 0, Own | UnixFileMode.OtherWrite)], "/r");
+        var answer = RootTrust.Decide(TrustRoad.Kernel, 1000, [new FileFacts("/r/scenarios.json", 0, Own | UnixFileMode.OtherWrite)], "/r");
 
         var problems = ProblemsOf(answer);
         problems.Should().HaveCount(2);
@@ -83,7 +83,7 @@ public sealed class RootTrustTests
     public void Every_file_is_judged_not_only_the_first_that_fails()
     {
         var answer = RootTrust.Decide(
-            true, 1000, [new FileFacts("/r", 0, Own), new FileFacts("/r/experiment.json", 1000, Own), new FileFacts("/r/scenarios.json", 7, Own)], "/r");
+            TrustRoad.Kernel, 1000, [new FileFacts("/r", 0, Own), new FileFacts("/r/experiment.json", 1000, Own), new FileFacts("/r/scenarios.json", 7, Own)], "/r");
 
         ProblemsOf(answer).Should().HaveCount(2).And.Contain(p => p.Contains("/r ", StringComparison.Ordinal)).And.Contain(p => p.Contains("scenarios.json", StringComparison.Ordinal));
     }
@@ -91,7 +91,7 @@ public sealed class RootTrustTests
     [Fact]
     public void A_group_writable_mode_alone_is_refused_with_its_three_digit_octal_form()
     {
-        var answer = RootTrust.Decide(true, 1000, [new FileFacts("/r/experiment.json", 1000, Own | UnixFileMode.GroupWrite)], "/r");
+        var answer = RootTrust.Decide(TrustRoad.Kernel, 1000, [new FileFacts("/r/experiment.json", 1000, Own | UnixFileMode.GroupWrite)], "/r");
 
         ProblemsOf(answer).Should().ContainSingle().Which.Should().Contain("is mode 620");
     }
@@ -99,7 +99,7 @@ public sealed class RootTrustTests
     [Fact]
     public void A_low_mode_is_padded_to_three_digits()
     {
-        var answer = RootTrust.Decide(true, 1000, [new FileFacts("/r/x", 1000, UnixFileMode.OtherWrite)], "/r");
+        var answer = RootTrust.Decide(TrustRoad.Kernel, 1000, [new FileFacts("/r/x", 1000, UnixFileMode.OtherWrite)], "/r");
 
         ProblemsOf(answer).Should().ContainSingle().Which.Should().Contain("is mode 002");
     }
@@ -107,11 +107,41 @@ public sealed class RootTrustTests
     [Fact]
     public void On_windows_the_check_is_declared_not_performed_never_passed_silently()
     {
-        var answer = RootTrust.Decide(false, 0, [new FileFacts("/r/experiment.json", 0, UnixFileMode.OtherWrite)], "/r");
+        var answer = RootTrust.Decide(TrustRoad.NotPerformed, 0, [new FileFacts("/r/experiment.json", 0, UnixFileMode.OtherWrite)], "/r");
 
         var line = answer.Should().BeOfType<TrustAnswer.NotPerformed>("a check that was not performed is not a check that passed").Subject.Line;
         line.Should().Contain("not performed").And.Contain("/r").And.Contain("POSIX only");
         answer.Should().NotBeOfType<TrustAnswer.Trusted>();
+    }
+
+    [Fact]
+    public void On_the_portable_road_the_mode_is_judged_and_the_owner_is_not()
+    {
+        var group = RootTrust.Decide(TrustRoad.Portable, 1000, [Portable("/r/experiment.json", UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead)], "/r");
+        var closed = RootTrust.Decide(TrustRoad.Portable, 1000, [Portable("/r/experiment.json", Own)], "/r");
+        var foreign = RootTrust.Decide(TrustRoad.Kernel, 1000, [new FileFacts("/r/experiment.json", 1001, Own)], "/r");
+        var windows = RootTrust.Decide(TrustRoad.NotPerformed, 1000, [Portable("/r/experiment.json", UnixFileMode.OtherWrite)], "/r");
+
+        ProblemsOf(group).Should().ContainSingle().Which.Should().Contain("664").And.Contain("chmod go-w").And.Contain("experiment.json");
+        closed.Should().BeOfType<TrustAnswer.Trusted>("a portable fact has no owner: the mode alone is judged, and the road's line says the owner was not");
+        ProblemsOf(foreign).Should().ContainSingle().Which.Should().Contain("uid 1001", "the kernel road still judges the owner");
+        windows.Should().BeOfType<TrustAnswer.NotPerformed>("Windows is unchanged");
+    }
+
+    private static FileFacts Portable(string path, UnixFileMode mode, long length = 10, long ticks = 100, FileKind kind = FileKind.Unknown) =>
+        new(path, null, mode) { Source = FactsSource.Portable, Witness = new FileWitness(length, ticks), Identity = new FileIdentity(0, 0, kind, 0m) };
+
+    [Fact]
+    public void Portable_changes_compare_kind_mode_length_and_write_time_and_a_change_of_source_is_a_change()
+    {
+        var before = Portable("/r/experiment.json", Own);
+
+        RootTrust.Changes(before, before with { Witness = new FileWitness(11, 100) }).Should().Equal("length");
+        RootTrust.Changes(before, before with { Witness = new FileWitness(10, 101) }).Should().Equal("mtime");
+        RootTrust.Changes(before, before with { Identity = new FileIdentity(0, 0, FileKind.Directory, 0m) }).Should().Equal("kind");
+        RootTrust.Changes(before, before with { Mode = Own | UnixFileMode.UserExecute }).Should().Equal("mode");
+        RootTrust.Changes(before, before with { }).Should().BeEmpty();
+        RootTrust.Changes(Facts(), Portable("/r/experiment.json", Own)).Should().Equal("source");
     }
 
     private static FileFacts Facts(ulong device = 1, ulong inode = 2, FileKind kind = FileKind.Regular, int owner = 1000, UnixFileMode mode = Own, decimal ctime = 5m) =>

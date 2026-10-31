@@ -43,6 +43,10 @@ public static class ExecutableResolution
             reason => new ExecutableAnswer.Refused(reason));
     }
 
+    /// <summary>The PATH of an environment map split into its entries, an empty one included (the current directory, which <see cref="PathEntryRefusal"/> refuses); none when the map has no PATH at all. The ONE place a verb's PATH is read.</summary>
+    public static IReadOnlyList<string> PathEntries(IReadOnlyDictionary<string, string> environment) =>
+        environment.TryGetValue("PATH", out var path) ? [.. path.Split(Path.PathSeparator)] : [];
+
     /// <summary>Why this entry of a PATH list is refused, or the empty string. The programs the harness starts look their own tools up in the PATH they
     /// inherit — a shebang interpreter (<c>#!/usr/bin/env node</c>), <c>dotnet</c> starting <c>git</c>, <c>git</c> starting its helpers — so an entry an arm could
     /// write to is as dangerous as a configured executable there (observed: an outside tool's <c>#!/usr/bin/env mynode</c> ran the target's <c>mynode</c>).

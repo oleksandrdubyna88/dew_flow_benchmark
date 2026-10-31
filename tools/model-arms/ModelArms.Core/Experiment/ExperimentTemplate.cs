@@ -45,19 +45,16 @@ public static class ExperimentTemplate
     private sealed record Token(JsonTokenType Type, string Text, bool IsKept);
 
     /// <summary>The template for <paramref name="exampleText"/>. The text must be valid JSON with comments; a reader error is the caller's, the example being a file that ships.</summary>
-    public static string From(string exampleText)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, WriteIndented))
-        {
-            foreach (var token in CommentsBehindTheirName(Tokens(Encoding.UTF8.GetBytes(exampleText))))
+    public static string From(string exampleText) =>
+        JsonText.Write(
+            WriteIndented,
+            writer =>
             {
-                Write(writer, token);
-            }
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray()) + "\n";
-    }
+                foreach (var token in CommentsBehindTheirName(Tokens(Encoding.UTF8.GetBytes(exampleText))))
+                {
+                    Write(writer, token);
+                }
+            }) + "\n";
 
     private static List<Token> Tokens(byte[] example)
     {
