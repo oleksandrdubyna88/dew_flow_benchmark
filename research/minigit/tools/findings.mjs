@@ -32,7 +32,7 @@ export function prediction(d) {
   const allBelow = ts.every(x => x < 0.8) && cs.every(x => x < 1.0);
   const unscored = Object.values(q).flatMap(v => v.unscored);
   const rows = [
-    ['1', 'C# > TS in ≥ 2 of 3 pairs (cost)', `${a.costUsd.csharpHigher} of ${n}`, verdict(k1, k1 === false ? `${missing} pair(s) missing; with them k could still not reach 2` : `${missing} pair(s) missing`)],
+    ['1', 'C# > TS in ≥ 2 of 3 pairs (cost)', `${a.costUsd.csharpHigher} of ${n}`, verdict(k1, missing === 0 ? `all ${n} pairs present` : k1 === false ? `${missing} pair(s) missing; with them k could still not reach 2` : `${missing} pair(s) missing`)],
     ['1', 'median C#/TS cost 1.15–1.5×', ratio(a.costUsd.median), verdict(inRange(a.costUsd.median, 1.15, 1.5), range(a.costUsd))],
     ['1', 'per cell: TS $0.8–2.5, C# $1.0–3.5', `TS ${ts.map(x => usd(x, 2)).join(', ')}; C# ${cs.map(x => usd(x, 2)).join(', ')}`, verdict(cellsOk, allBelow ? 'every complete cell is below its predicted range' : 'see the cells')],
     ['2', 'wall C#/TS 1.3–1.8×', ratio(a.wallMs.median), verdict(inRange(a.wallMs.median, 1.3, 1.8), range(a.wallMs))],
@@ -78,14 +78,34 @@ export const DEFECTS = [
     effect: 'the scan started every Bash call at the work tree. Both C# v2 sessions ran `cd src` in one call and `cd .. && bash test-v2.sh` in the next, so the scan put `test-v2.sh` one level above the work tree: a high hit and a void. Two false voids, one C# re-run `ran unpaired`, and series bf89 stopped at the second. Against C# in this series.' },
   { what: 'the printed "Shell cwd was reset to" line chose the start', found: 'coai code round on the `cwd` fix', commits: ['52bdec2'], harness: '814d82e66e53',
     effect: 'a command can print that line and choose where the scan thinks it is: false negative. Fixed before series b82e.' },
+  { what: 'a heredoc run by an interpreter (`python3 - <<\'EOF\'`) parsed as shell', found: 'data session 97168d (pair 2 TS v2), series b82e', commits: ['9dac39e'], harness: '198106f80a8b',
+    effect: 'the agent edited its TypeScript through an inline Python script; the scan read the script body as shell, and a quoted `"/"` string as a walk of `/`: a high hit and a false void. Its re-run `6848b0` ran unpaired, under `foreign load`. Against TS in this series. Fixed after series B, on `feat/minigit-bench-e3b-fix2`.' },
+  { what: 'the ledger charged a session once per rid, not once per series and rid', found: 'the pair-1 read-back of series b82e (G-1, Opus judge)', commits: ['1bdbe75'], harness: '198106f80a8b',
+    effect: 'series b82e reused the registered seed, so its rids repeat those of bf89, whose lines `init` had copied in; every b82e session with a repeated rid was not appended to its own ledger, and the money gates read too little (§ 8). No gate was near its limit. The same commit makes a by-hand verdict apply only to the series its evidence names.' },
+  { what: 'an interpreter or shell launched through a wrapper or by its path did not get the heredoc rule', found: 'coai code round on the fix above', commits: ['1769c95'], harness: 'db8d360cf9a8',
+    effect: '`env python3 - <<EOF` or `/usr/bin/python3 - <<EOF` would still be parsed as shell: the same false void as above.' },
 ];
 
 function commitExists(repo, sha) {
   try { execFileSync('git', ['-C', repo, 'cat-file', '-e', `${sha}^{commit}`], { stdio: 'ignore' }); return true; } catch { return false; }
 }
 
-export function defects(repo) {
-  const amendments = readFileSync(join(repo, 'spikes/minigit-bench/inputs/amendments.md'), 'utf8');
+const AMENDMENTS = 'spikes/minigit-bench/inputs/amendments.md';
+
+/** amendments.md as committed at `ref` (the branch that holds every dated line), or the working file when ref is empty. */
+export function amendmentsText(repo, ref) {
+  if (!ref) return readFileSync(join(repo, AMENDMENTS), 'utf8');
+  return execFileSync('git', ['-C', repo, 'show', `${ref}:${AMENDMENTS}`], { encoding: 'utf8' });
+}
+
+export function amendmentsSource(repo, ref) {
+  if (!ref) return `the working tree's \`${AMENDMENTS}\``;
+  const sha = execFileSync('git', ['-C', repo, 'rev-parse', '--short=12', ref], { encoding: 'utf8' }).trim();
+  return `\`${AMENDMENTS}\` at \`${ref}\` = \`${sha}\``;
+}
+
+export function defects(repo, ref) {
+  const amendments = amendmentsText(repo, ref);
   const problems = [];
   const rows = DEFECTS.map((x, i) => {
     for (const c of x.commits) if (!commitExists(repo, c)) problems.push(`commit ${c} not found`);
@@ -97,7 +117,7 @@ export function defects(repo) {
 }
 
 /** Every dated instrument line of amendments.md, as registered. */
-export function amendmentLines(repo) {
-  const lines = readFileSync(join(repo, 'spikes/minigit-bench/inputs/amendments.md'), 'utf8').split('\n').filter(l => /^\d{4}-\d{2}-\d{2} \| /.test(l));
+export function amendmentLines(repo, ref) {
+  const lines = amendmentsText(repo, ref).split('\n').filter(l => /^\d{4}-\d{2}-\d{2} \| /.test(l));
   return table(['date', 'kind', 'subject', 'reason or evidence'], lines.map(l => { const [date, kind, subj, ...rest] = l.split(' | '); return [date, kind, subj, rest.join(' | ').replace(/\/home\/[^/]+\//g, '~/')]; }));
 }

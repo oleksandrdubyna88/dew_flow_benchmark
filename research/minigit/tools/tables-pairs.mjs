@@ -89,34 +89,42 @@ export function handcheck(d) {
   return d.handcheck.map(h => `\`${h.file}\` (sha256 \`${h.sha256.slice(0, 12)}\`):\n\n\`\`\`text\n${h.text.trim()}\n\`\`\``).join('\n\n');
 }
 
-/** Every paid line once: the registered prior spend once, then each series' own lines. */
+/**
+ * Every paid session once, charged from the records (the run-map's stop-rule figure, equal to the record's and the
+ * broker's — `charges.disagree` lists any that is not), with whether the series' own ledger holds its line. The
+ * registered prior spend comes once, from the ledger.
+ */
 export function ledger(all) {
   const prior = all[0].ledger.lines.filter(l => l.kind === 'prior');
-  const own = all.flatMap(d => d.ledger.lines.filter(l => l.kind !== 'prior' && !l.fromSeries).map(l => ({ ...l, series: d.series.seriesId })));
-  const rows = [...prior.map(l => [l.date, 'before E3b', 'prior', DASH, `${l.what}${l.approx && !l.what.includes('approximate') ? ' (approximate)' : ''}`, usd(l.usd)]),
-    ...own.map(l => [l.date, l.series, l.kind, l.rid, l.what, usd(l.usd)])];
-  return table(['when (UTC for series lines)', 'series', 'kind', 'rid', 'what', 'charged'], rows);
+  const rows = [...prior.map(l => [l.date, 'before E3b', 'prior', DASH, `${l.what}${l.approx && !l.what.includes('approximate') ? ' (approximate)' : ''}`, usd(l.usd), 'yes']),
+    ...all.flatMap(d => d.charges.rows.map(r => {
+      const s = d.sessions.find(x => x.rid === r.rid);
+      return [s.startedAt, d.series.seriesId, r.kind, r.rid, r.class, usd(r.runMapUsd), r.inOwnLedger ? 'yes' : '**no**'];
+    }))];
+  return table(['when (UTC start for sessions)', 'series', 'kind', 'rid', 'class', 'charged (records)', "line in the series' own ledger"], rows);
 }
 
 export function ledgerTotals(all) {
-  const sum = xs => xs.reduce((a, l) => a + l.usd, 0);
-  const prior = all[0].ledger.lines.filter(l => l.kind === 'prior');
-  const per = all.map(d => { const own = d.ledger.lines.filter(l => l.kind !== 'prior' && !l.fromSeries); return [d.series.seriesId, own.filter(l => l.usd > 0).length, usd(sum(own))]; });
-  const bare = sum(all.flatMap(d => d.ledger.lines.filter(l => l.kind !== 'prior' && !l.fromSeries)));
+  const sum = xs => xs.reduce((a, x) => a + x, 0);
+  const prior = sum(all[0].ledger.lines.filter(l => l.kind === 'prior').map(l => l.usd));
+  const per = all.map(d => [d.series.seriesId, d.charges.rows.length, usd(d.charges.fromRecordsUsd), usd(d.ledger.ownBareUsd),
+    d.charges.missingFromLedger.length ? `${d.charges.missingFromLedger.length} sessions, ${usd(d.charges.missingUsd)}` : DASH, d.charges.disagree.length ? d.charges.disagree.join(', ') : 'none']);
+  const trueBare = sum(all.map(d => d.charges.fromRecordsUsd));
+  const ledgerBare = sum(all.map(d => d.ledger.ownBareUsd));
   const last = all[all.length - 1];
   const budget = last.series.bareBudgetUsd;
   const ceiling = last.series.ceilingUsd;
-  const agree = Math.abs(bare - last.ledger.bareUsdIncludingCarried) < 1e-6 ? 'equal' : 'DIFFERENT';
+  const share = (x, lim) => `${((100 * x) / lim).toFixed(2)} %`;
   return [
-    table(['series', 'paid sessions', 'bare spend (own lines)'], per),
+    table(['series', 'paid sessions', 'bare spend from the records', "bare spend in the series' own ledger lines", 'charged but missing from its own ledger', 'records, run-map and broker disagree'], per),
     '',
-    table(['total', 'value', 'limit', 'share of limit'], [
-      ['prior instrument spend (registered, before E3b)', `${usd(sum(prior))} over ${prior.length} sessions`, DASH, DASH],
-      ['bare spend, every series', usd(bare), usd(budget, 0), `${((100 * bare) / budget).toFixed(1)} %`],
-      ['all spend (prior + bare)', usd(bare + sum(prior)), usd(ceiling, 0), `${((100 * (bare + sum(prior))) / ceiling).toFixed(2)} %`],
+    table(['total', 'from the records', 'as the ledgers summed it', 'limit', 'share of limit (records)'], [
+      ['prior instrument spend (registered, before E3b)', usd(prior), usd(prior), DASH, DASH],
+      ['bare spend, every series', usd(trueBare), usd(ledgerBare), usd(budget, 0), share(trueBare, budget)],
+      ['all spend (prior + bare)', usd(trueBare + prior), usd(ledgerBare + prior), usd(ceiling, 0), share(trueBare + prior, ceiling)],
     ]),
     '',
-    `Check: the sum of the series' own lines is ${agree} to the carried total in the last series' ledger (${usd(last.ledger.bareUsdIncludingCarried)}).`,
+    `Check: the last series' ledger, carried lines included, sums its bare lines to ${usd(last.ledger.bareUsdIncludingCarried)}; the money gates of that series read this figure.`,
   ].join('\n');
 }
 

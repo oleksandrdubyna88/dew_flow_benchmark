@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { readSession, tidyPath } from './session.mjs';
 import { buildPairs, perStack, qualityByStack, summarise } from './pairs.mjs';
 
-export const SERIES = ['s-20261030-92a9', 's-20261030-0c1a', 's-20261030-bf89'];
+export const SERIES = ['s-20261030-92a9', 's-20261030-0c1a', 's-20261030-bf89', 's-20261030-b82e'];
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', 'data');
 
@@ -119,6 +119,22 @@ function crosscheck(pairs, recorded) {
   return out;
 }
 
+/**
+ * What each paid session was charged, from the run-map (the stop-rule figure), beside the record's stop-rule figure and
+ * the broker's settled spend, and whether this series' own ledger holds a line for it. Series b82e reused the seed, so
+ * its rids repeat bf89's; its ledger skipped its own charges for every rid it had copied from bf89 (fixed in 1bdbe75).
+ */
+function chargesOf(sessions, ledger) {
+  const ownRids = new Set(ledger.lines.filter(l => !l.fromSeries && l.rid).map(l => l.rid));
+  const rows = sessions.filter(s => s.kind !== 'rehearsal').map(s => ({
+    rid: s.rid, kind: s.kind, class: s.class, runMapUsd: s.runMapUsd, recordStopRuleUsd: s.cost?.stopRuleUsd ?? null,
+    brokerUsd: s.broker?.spentUsd ?? null, inOwnLedger: ownRids.has(s.rid),
+  }));
+  const total = xs => round6(xs.reduce((a, r) => a + (r.runMapUsd ?? 0), 0));
+  const disagree = rows.filter(r => [r.recordStopRuleUsd, r.brokerUsd].some(v => v !== null && Math.abs(v - r.runMapUsd) > 1e-6)).map(r => r.rid);
+  return { rows, fromRecordsUsd: total(rows), missingFromLedger: rows.filter(r => !r.inOwnLedger).map(r => r.rid), missingUsd: total(rows.filter(r => !r.inOwnLedger)), disagree };
+}
+
 function sources(seriesDir) {
   const files = ['run-map.json', 'ledger.ndjson', 'aa-verdicts.json', 'rehearsal-v2.json'].filter(f => existsSync(join(seriesDir, f)));
   return Object.fromEntries(files.map(f => [f, sha256(join(seriesDir, f))]));
@@ -131,6 +147,7 @@ export function extractSeries(runs, id, home) {
   const sessions = Object.entries(map.sessions).map(([rid, e]) => readSession(seriesDir, rid, e, home))
     .sort((a, b) => (a.startedAt ?? '').localeCompare(b.startedAt ?? ''));
   const pairs = buildPairs(sessions);
+  const ledger = ledgerOf(seriesDir);
   return {
     extractedFrom: { runsRoot: tidyPath(runs, home), sources: sources(seriesDir), tool: 'research/minigit/tools/extract.mjs' },
     series: header(map),
@@ -144,7 +161,8 @@ export function extractSeries(runs, id, home) {
     rehearsalV2: readJson(join(seriesDir, 'rehearsal-v2.json')),
     cpu: cpuOf(seriesDir),
     handcheck: handcheckOf(seriesDir, home),
-    ledger: ledgerOf(seriesDir),
+    ledger,
+    charges: chargesOf(sessions, ledger),
   };
 }
 

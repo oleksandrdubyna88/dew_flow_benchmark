@@ -4700,5 +4700,157 @@
    "void": 0.558512
   },
   "ceilingUsdSpent": 5.973767
+ },
+ "charges": {
+  "rows": [
+   {
+    "rid": "5f55d0",
+    "kind": "aa",
+    "class": "completed",
+    "runMapUsd": 0.21410220000000002,
+    "recordStopRuleUsd": 0.21410220000000002,
+    "brokerUsd": 0.2141022,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "586c41",
+    "kind": "aa",
+    "class": "completed",
+    "runMapUsd": 0.21936160000000002,
+    "recordStopRuleUsd": 0.21936160000000002,
+    "brokerUsd": 0.2193616,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "98ee3c",
+    "kind": "pilot",
+    "class": "completed",
+    "runMapUsd": 0.23192060000000003,
+    "recordStopRuleUsd": 0.23192060000000003,
+    "brokerUsd": 0.2319206,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "14d81c",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.2101104,
+    "recordStopRuleUsd": 0.2101104,
+    "brokerUsd": 0.2101104,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "078dcd",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.18467280000000003,
+    "recordStopRuleUsd": 0.18467280000000003,
+    "brokerUsd": 0.1846728,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "1d2624",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.2678968,
+    "recordStopRuleUsd": 0.2678968,
+    "brokerUsd": 0.2678968,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "ede2a0",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.2574498,
+    "recordStopRuleUsd": 0.2574498,
+    "brokerUsd": 0.2574498,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "f57599",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.1909152,
+    "recordStopRuleUsd": 0.1909152,
+    "brokerUsd": 0.1909152,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "d79dc1",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.2118062,
+    "recordStopRuleUsd": 0.2118062,
+    "brokerUsd": 0.2118062,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "ebd0b0",
+    "kind": "data",
+    "class": "void: contaminated",
+    "runMapUsd": 0.27896800000000005,
+    "recordStopRuleUsd": 0.27896800000000005,
+    "brokerUsd": 0.278968,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "97168d",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.30115840000000005,
+    "recordStopRuleUsd": 0.30115840000000005,
+    "brokerUsd": 0.3011584,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "d9638c",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.27200420000000003,
+    "recordStopRuleUsd": 0.27200420000000003,
+    "brokerUsd": 0.2720042,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "f9cc17",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.1941386,
+    "recordStopRuleUsd": 0.1941386,
+    "brokerUsd": 0.1941386,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "922a82",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.2154702,
+    "recordStopRuleUsd": 0.2154702,
+    "brokerUsd": 0.2154702,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "96fcf4",
+    "kind": "data",
+    "class": "completed",
+    "runMapUsd": 0.26068600000000003,
+    "recordStopRuleUsd": null,
+    "brokerUsd": 0.260686,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "3407d8",
+    "kind": "data",
+    "class": "void: contaminated",
+    "runMapUsd": 0.2795444,
+    "recordStopRuleUsd": 0.2795444,
+    "brokerUsd": 0.2795444,
+    "inOwnLedger": true
+   }
+  ],
+  "fromRecordsUsd": 3.790205,
+  "missingFromLedger": [],
+  "missingUsd": 0,
+  "disagree": []
  }
 }

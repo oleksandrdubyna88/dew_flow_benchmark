@@ -1,10 +1,10 @@
-# minigit bare arm — C# / .NET 10 against TypeScript / Node 26, the first record (2026-10-30)
+# minigit bare arm — C# / .NET 10 against TypeScript / Node 26 (2026-10-30/31)
 
-> Status: **interim record, written 2026-10-30 while series B (`s-20261030-b82e`) runs.** It covers the three
-> series that ended before it: `s-20261030-92a9` and `s-20261030-0c1a` (instrument checks, abandoned) and
-> `s-20261030-bf89` (series A: A/A GO, pairs 1–3, stopped by its registered rule). Series B is a placeholder
-> ([§ 11](#11-series-b-s-20261030-b82e--running)). Pre-registration: tag `prereg/minigit-bare-20261030` =
-> `41395f7`; registered texts in [spikes/minigit-bench/inputs/](../../spikes/minigit-bench/inputs/). Plans:
+> Status: **record of the bare arm's runs, 2026-10-31.** Four series: `s-20261030-92a9` and `s-20261030-0c1a`
+> (instrument checks, abandoned), `s-20261030-bf89` (**series A**: A/A GO, stopped at pair 3 by its registered rule) and
+> `s-20261030-b82e` (**series B**: A/A GO, pairs 1–3 complete, on the fixed instrument). Pre-registration: tag
+> `prereg/minigit-bare-20261030` = `41395f7`; registered texts in
+> [spikes/minigit-bench/inputs/](../../spikes/minigit-bench/inputs/). Plans:
 > [PLAN_minigit_stack_bench.md](../../todo/PLAN_minigit_stack_bench.md) (parent) and
 > [PLAN_minigit_stack_bench_E3_bare.md](../../todo/PLAN_minigit_stack_bench_E3_bare.md) (the bare arm). Instruments:
 > [module_minigit_bench.md](../module_minigit_bench.md).
@@ -13,33 +13,36 @@
 under `~/rsd/minigit/` (read-only) and writes [data/](data/) (one JSON file per series); `tools/render.mjs` rewrites
 every block between `<!-- generated:… -->` marks from those files. The prose outside the blocks names rids, rules and
 commits, and registered constants (the $6 cap, the $40 and $500 limits, n = 3); it holds no measured number. How to
-run it again: [§ 12](#12-how-to-re-run-the-extraction).
+run it again: [§ 13](#13-how-to-re-run-the-extraction).
 
 **Held-out results** appear as counts, `percent` and `defects` only. No held-out case is named here.
 
 ## 1. Summary
 
 <!-- generated:headline -->
-- Every paid data session of the series (voids included) ran 40.2–76.6 s wall, spawn to exit; recorded sessions that launched a subagent: 0.
-- Series s-20261030-bf89: 2 complete pair(s) of 3 (pair(s) 1, 2); missing: pair 3. Stopped by `second void: contaminated`.
-- Cost C#/TS (headline recompute, cell = v1 + v2): pair 1 0.92, pair 2 0.90; C# > TS in 0 of 2.
-- Wall C#/TS: pair 1 1.11, pair 2 1.02; model_api: pair 1 1.11, pair 2 0.89; active − model_api: pair 1 1.12, pair 2 1.99.
-- The only pair that is neither flagged nor holds a `ran unpaired` cell is pair 1: cost 0.92, wall 1.11, model_api 1.11, active − model_api 1.12.
-- A cell (v1 + v2) cost $0.44–$0.46 in C# and $0.48–$0.51 in TS; a C# cell's wall was 102.8–106.2 s.
-- Quality: every scored data session was accepted (built, passed the visible tests, held-out primary 100 %); the lowest held-out percent was 100 % (accepted: 10 of 10 scored).
-- Spend: $5.1475 bare over all three series (of $40), $5.9738 with the prior instrument spend (of $500).
+- Series B (s-20261030-b82e) ran its three pairs (complete: 1, 2, 3; stop: none). Series A (s-20261030-bf89) reached pairs 1, 2 and stopped by `second void: contaminated`.
+- Cost C#/TS per complete pair (cell = v1 + v2, headline recompute): A1 0.92, A2 0.90, B1 0.92, B2 0.89, B3 1.06. In series B, C# > TS in 1 of 3; median 0.92.
+- Wall C#/TS: A1 1.11, A2 1.02, B1 0.93, B2 0.91, B3 0.99. Series B: C# > TS in 0 of 3; median 0.93.
+- model_api C#/TS: A1 1.11, A2 0.89, B1 0.83, B2 0.86, B3 0.92. Series B: C# > TS in 0 of 3; median 0.86.
+- active − model_api C#/TS: A1 1.12, A2 1.99, B1 1.70, B2 1.29, B3 1.72. Series B: C# > TS in 3 of 3; median 1.70.
+- Pairs that are neither flagged nor hold a `ran unpaired` cell: A1, B3.
+- Every paid data session of A and B (voids included) ran 37.8–76.6 s wall, spawn to exit; recorded sessions that launched a subagent: 0.
+- Quality: every scored data session of A and B was accepted (22 of 22); the lowest held-out percent was 100 %.
+- Spend from the records: $8.8533 bare over the four series (of $40), $9.6795 with the prior instrument spend (of $500). Series B's own ledger missed 12 of its charges ($2.8962; § 10).
 <!-- /generated:headline -->
 
-**What this licenses.** Series A reached two complete pairs of the three it registered; only pair 1 is neither flagged
-nor holds a `ran unpaired` cell. The pre-registration allows "in k of n pairs" and whether ranges overlap, nothing more
-([§ 6.6](#66-the-pre-registered-reading)). In series A, on this tiny task, the C# cells did **not** cost more than the
-TypeScript cells, and every scored session of both stacks was accepted. The prediction's cost and wall items are **not
-held** in the pairs reached ([§ 6.7](#67-the-prediction-beside-the-observation)). This is not yet the bare arm's result:
-series A stopped early, and series B repeats the three pairs on the fixed instrument.
+**What this licenses.** Series B is the one series that ran the registered three pairs; its reading is in
+[§ 7](#7-pairs-series-b-s-20261030-b82e), its prediction check in [§ 7.7](#77-the-prediction-beside-the-observation-series-b).
+The registration allows "in k of 3 pairs" and whether ranges overlap, nothing more. Two of series B's three pairs are
+flagged (`foreign load`) and one also holds a `ran unpaired` cell, so the registered "without flagged pairs" line rests on
+one pair. Series A adds two complete pairs from an earlier window on an instrument that differs only in how a session is
+classed ([§ 8](#8-the-cross-series-picture-descriptive)). On this tiny task the cost and wall items of the prediction are
+**not held**, and every scored session of both stacks was accepted.
 
-**What stopped series A.** Two C# v2 sessions (`ebd0b0`, pair 2; `3407d8`, pair 3) were voided `contaminated` by a false
-positive of the contamination scan, which modelled the Bash tool's working directory per call. The second void is a
-registered series stop. Both voids are instrument errors, not agent behaviour ([§ 9](#9-instrument-defects-in-the-order-they-were-found)).
+**What stopped or disturbed the runs.** Every void in the data pairs was a false positive of the contamination scan,
+not agent behaviour: two C# v2 sessions in series A (the Bash tool's working directory, defect 14) and one TypeScript v2
+session in series B (an inline Python script read as shell, defect 16). Series B's own spend ledger missed most of its
+charges (defect 17); § 10 computes the spend from the records.
 
 ## 2. What is measured, and why
 
@@ -88,6 +91,7 @@ Registered in [statement.md](../../spikes/minigit-bench/inputs/statement.md) § 
 | s-20261030-92a9 | e63941bdbdf9 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.56 | no (abandoned or open) |
 | s-20261030-0c1a | de9091b54e2b | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 21.84 | no (abandoned or open) |
 | s-20261030-bf89 | 3129eeadfa8d | faaf55b4ecf7 | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 21.69 | second void: contaminated (2026-10-30T20:43:29.386Z) |
+| s-20261030-b82e | 814d82e66e53 | — | 41395f72984e | 2.1.310 | 26.12.1 | 10.0.114 | 7.0.2 | $6 / 60 min / 45 min | $40 / $500 | 22.18 | no (abandoned or open) |
 <!-- /generated:conditions -->
 
 - **Agent and model:** Claude Code CLI 2.1.310, run from a read-only copy whose sha256 is in the run-map; `--model opus`
@@ -109,7 +113,8 @@ Registered in [statement.md](../../spikes/minigit-bench/inputs/statement.md) § 
   phase is a flag.
 - **Seed:** commit-reveal. `seed.sha256` was committed in the tagged commit; `seed.txt` was revealed after the A/A of
   series A was GO (`47b2bc0`) and hashes to the committed value. It fixes the data rids, pair 1's masks and the launch
-  order.
+  order. Series B used the same registered seed, so its data rids, masks and order repeat series A's: in this record a rid
+  names a session only together with its series.
 
 ## 4. The series, in order
 
@@ -117,24 +122,32 @@ Registered in [statement.md](../../spikes/minigit-bench/inputs/statement.md) § 
 |---|---|---|---|
 | `s-20261030-92a9` | `e63941bdbdf9` (the tagged one) | A/A `d3f571` ∥ `433bf6`, v2 rehearsal, Node pilot `9804fc` | pilot **voided falsely** (the TypeScript toolchain read as an outside path, defect 1). G-8 refuted is a stop; the runner cannot re-run a pilot, so a new series was started. Abandoned. |
 | `s-20261030-0c1a` | `de9091b54e2b` | A/A `58d1fa` ∥ `a4fddc`, v2 rehearsal, Node pilot `c9b413` | pilot **voided falsely** (`cd / && rm -rf /tmp/…` read as a walk of `/`, defect 6). `aa-verdicts`: STOP on G-8. Abandoned. |
-| `s-20261030-bf89` (series A) | `3129eeadfa8d` for the A/A; `faaf55b4ecf7` accepted before pair 1 | A/A `5f55d0` ∥ `586c41`, rehearsal, Node pilot `98ee3c` (completed); by-hand lines; `aa-verdicts` **GO**; T3 commit; seed reveal; pairs 1–3 | **stopped by `second void: contaminated`**: `ebd0b0` (pair 2 C# v2) and `3407d8` (pair 3 C# v2), both false positives (defect 14). After pair 1 started, no harness change could be accepted in this series, so it ran on to its registered stop. |
-| `s-20261030-b82e` (series B) | `814d82e66e53` | running | — |
+| `s-20261030-bf89` (series A) | `3129eeadfa8d` for the A/A; `faaf55b4ecf7` accepted before pair 1 | A/A `5f55d0` ∥ `586c41`, rehearsal, Node pilot `98ee3c`; by-hand lines; `aa-verdicts` **GO**; T3 commit; seed reveal; pairs 1–3 | **stopped by `second void: contaminated`**: `ebd0b0` (pair 2 C# v2) and `3407d8` (pair 3 C# v2), both false positives (defect 14). After pair 1 started, no harness change could be accepted in this series, so it ran on to its registered stop. |
+| `s-20261030-b82e` (series B) | `814d82e66e53` | A/A `c06594` ∥ `69fc02`, rehearsal, Node pilot `d9de4b`; by-hand lines and the pair-1 read-back; `aa-verdicts` **GO**; pairs 1–3 | **complete, no stop.** One void: `97168d` (pair 2 TS v2), a false positive (defect 16), re-run as `6848b0` (`ran unpaired`). |
 
-Pair 2's C# v2 was re-run once as `d9638c` (attempt 2, `ran unpaired`, as the contract's re-run schedule requires) and
-carries the flag `foreign load`. The work on the fix for defect 14 ran on the same machine at that time (team-lead log);
-the CPU samples (§ 5.7) show the load, not its source. Pair 3's first start halted on the quiet check (a resumable halt, nothing paid) for the same reason
-and ran on the second start. Pair 3's TypeScript v2 `96fcf4` completed and was charged, but the series stopped before it was
-recorded and scored: it has no `record.json` and no held-out score.
+Series A, pair 2: the C# v2 re-run `d9638c` (attempt 2, `ran unpaired`) carries `foreign load`. The work on the fix for
+defect 14 ran on the same machine at that time (team-lead log); the CPU samples (§ 5.7) show the load, not its source.
+Pair 3's first start halted on the quiet check (a resumable halt, nothing paid). Pair 3's TypeScript v2 `96fcf4` completed
+and was charged, but the series stopped before it was recorded and scored: it has no `record.json` and no held-out score.
+
+Series B: pairs 1 and 2 ran on 2026-10-30; pair 3 ran on 2026-10-31 (start times in § 10). Pair 1's v2 sessions and the
+re-run `6848b0` carry `foreign load`. **Pair 3 and the noisy start.** The team lead reports that pair 3 was started with
+`--accept-noisy` by the operator's decision, because another session's `dotnet test` run loaded the host. The records do
+not show that: the run-map entries of all four pair-3 sessions hold a quiet check with `quiet: true` and no flag, after a
+wait at each phase; the pair record `pairs/p3.json` has no flag; neither the run-map nor the ledger holds a noisy-start
+reason. Pair 3's v1 sessions carry only `scored under load`, a flag that does not remove a pair. This record follows the
+records (pair 3 is not flagged) and also shows every series-B median without pair 3 (§ 7.3, § 8.2), so both readings are
+on the page.
 
 ## 5. Per session
 
-Every paid session of the three series. Rehearsal sessions (a stub CLI, $0) are in § 5.6. "kind" is `aa` (A/A twin),
+Every paid session of the four series. Rehearsal sessions (a stub CLI, $0) are in § 5.6. "kind" is `aa` (A/A twin),
 `pilot` (the Node pilot) or `data p<k>` (pair k). A void is not a data point and is never scored.
 
 ### 5.1 Class, flags and cost
 
-Cost columns: the headline recompute (primary), E, B and O, all in USD; "charged" is the stop-rule figure the ledger
-holds. T1–T5: `p` pass, `B` breach, `u` unchecked.
+Cost columns: the headline recompute (primary), E, B and O, all in USD; "charged" is the stop-rule figure in the
+run-map. T1–T5: `p` pass, `B` breach, `u` unchecked.
 
 <!-- generated:sessions-cost -->
 | series | rid | kind | stack | phase | att. | label | class | flags | headline (primary) | E | B | O | T1–T5 | charged |
@@ -161,12 +174,29 @@ holds. T1–T5: `p` pass, `B` breach, `u` unchecked.
 | bf89 | 922a82 | data p3 | TS | v1 | a1 | paired | completed | — | $0.2155 | $0.2155 | $0.2155 | $0.2155 | p p p p p | $0.2155 |
 | bf89 | 96fcf4 | data p3 | TS | v2 | a1 | paired | completed | — | — | $0.2607 | $0.2607 | $0.2607 | no record | $0.2607 |
 | bf89 | 3407d8 | data p3 | C# | v2 | a1 | paired | void: contaminated | — | $0.2795 | $0.2795 | $0.2795 | $0.2795 | p p p p p | $0.2795 |
+| b82e | c06594 | aa | C# | v1 | a1 | paired | completed | — | $0.1735 | $0.1735 | $0.1735 | $0.1735 | p p p p p | $0.1735 |
+| b82e | 69fc02 | aa | C# | v1 | a1 | paired | completed | — | $0.1778 | $0.1778 | $0.1778 | $0.1778 | p p p p p | $0.1778 |
+| b82e | d9de4b | pilot | TS | v1 | a1 | paired | completed | — | $0.2005 | $0.2005 | $0.2005 | $0.2005 | p p p p p | $0.2005 |
+| b82e | 14d81c | data p1 | TS | v1 | a1 | paired | completed | — | $0.2331 | $0.2331 | $0.2331 | $0.2331 | p p p p p | $0.2331 |
+| b82e | 078dcd | data p1 | C# | v1 | a1 | paired | completed | — | $0.1960 | $0.1960 | $0.1960 | $0.1960 | p p p p p | $0.1960 |
+| b82e | 1d2624 | data p1 | TS | v2 | a1 | paired | completed | foreign load, scored under load | $0.2645 | $0.2645 | $0.2645 | $0.2645 | p p p p p | $0.2645 |
+| b82e | ede2a0 | data p1 | C# | v2 | a1 | paired | completed | foreign load, scored under load | $0.2634 | $0.2634 | $0.2634 | $0.2634 | p p p p p | $0.2634 |
+| b82e | f57599 | data p2 | C# | v1 | a1 | paired | completed | — | $0.1699 | $0.1699 | $0.1699 | $0.1699 | p p p p p | $0.1699 |
+| b82e | d79dc1 | data p2 | TS | v1 | a1 | paired | completed | — | $0.1977 | $0.1977 | $0.1977 | $0.1977 | p p p p p | $0.1977 |
+| b82e | ebd0b0 | data p2 | C# | v2 | a1 | paired | completed | — | $0.2362 | $0.2362 | $0.2362 | $0.2362 | p p p p p | $0.2362 |
+| b82e | 97168d | data p2 | TS | v2 | a1 | paired | void: contaminated | — | $0.2680 | $0.2680 | $0.2680 | $0.2680 | p p p p p | $0.2680 |
+| b82e | 6848b0 | data p2 | TS | v2 | a2 | ran unpaired | completed | foreign load, scored under load | $0.2578 | $0.2578 | $0.2578 | $0.2578 | p p p p p | $0.2578 |
+| b82e | f9cc17 | data p3 | C# | v1 | a1 | paired | completed | scored under load | $0.2525 | $0.2525 | $0.2525 | $0.2525 | p p p p p | $0.2525 |
+| b82e | 922a82 | data p3 | TS | v1 | a1 | paired | completed | scored under load | $0.2417 | $0.2417 | $0.2417 | $0.2417 | p p p p p | $0.2417 |
+| b82e | 96fcf4 | data p3 | TS | v2 | a1 | paired | completed | — | $0.2762 | $0.2762 | $0.2762 | $0.2762 | p p p p p | $0.2762 |
+| b82e | 3407d8 | data p3 | C# | v2 | a1 | paired | completed | — | $0.2971 | $0.2971 | $0.2971 | $0.2971 | p p p p p | $0.2971 |
 <!-- /generated:sessions-cost -->
 
 ### 5.2 Tokens per model
 
 From the record (E's `modelUsage` with the transcript split). "B tokens equal" compares them with the sum of the broker's
-settled requests, field by field, including the 1h cache-write split. `96fcf4` has no record, so its row is the envelope's.
+settled requests, field by field, including the 1h cache-write split. Series A's `96fcf4` has no record, so its row is the
+envelope's.
 
 <!-- generated:sessions-tokens -->
 | series | rid | kind | stack | phase | att. | model | input | output | cache read | cache write 5m | cache write 1h | first-turn cache read | B tokens equal |
@@ -193,13 +223,30 @@ settled requests, field by field, including the 1h cache-write split. `96fcf4` h
 | bf89 | 922a82 | data p3 | TS | v1 | a1 | claude-opus-5-5 | 12 | 4775 | 77931 | 0 | 13042 | 5790 | yes |
 | bf89 | 96fcf4 | data p3 | TS | v2 | a1 | claude-opus-5-5 (envelope) | 14 | 4145 | 117170 | 0 | 19287 | — | — |
 | bf89 | 3407d8 | data p3 | C# | v2 | a1 | claude-opus-5-5 | 14 | 4593 | 118302 | 0 | 20496 | 5790 | yes |
+| b82e | c06594 | aa | C# | v1 | a1 | claude-opus-5-5 | 8 | 3768 | 44536 | 0 | 11148 | 5790 | yes |
+| b82e | 69fc02 | aa | C# | v1 | a1 | claude-opus-5-5 | 8 | 3888 | 44743 | 0 | 11379 | 5790 | yes |
+| b82e | d9de4b | pilot | TS | v1 | a1 | claude-opus-5-5 | 12 | 4416 | 74343 | 0 | 12158 | 5790 | yes |
+| b82e | 14d81c | data p1 | TS | v1 | a1 | claude-opus-5-5 | 14 | 5351 | 93670 | 0 | 13406 | 5790 | yes |
+| b82e | 078dcd | data p1 | C# | v1 | a1 | claude-opus-5-5 | 8 | 4472 | 44999 | 0 | 12196 | 5790 | yes |
+| b82e | 1d2624 | data p1 | TS | v2 | a1 | claude-opus-5-5 | 12 | 4462 | 92939 | 0 | 19576 | 5790 | yes |
+| b82e | ede2a0 | data p1 | C# | v2 | a1 | claude-opus-5-5 | 12 | 4139 | 97481 | 0 | 20131 | 5790 | yes |
+| b82e | f57599 | data p2 | C# | v1 | a1 | claude-opus-5-5 | 8 | 3617 | 44448 | 0 | 11076 | 5790 | yes |
+| b82e | d79dc1 | data p2 | TS | v1 | a1 | claude-opus-5-5 | 10 | 4448 | 59860 | 0 | 12095 | 5790 | yes |
+| b82e | ebd0b0 | data p2 | C# | v2 | a1 | claude-opus-5-5 | 8 | 3944 | 47271 | 0 | 18475 | 5790 | yes |
+| b82e | 97168d | data p2 | TS | v2 | a1 | claude-opus-5-5 | 14 | 4503 | 111822 | 0 | 19435 | 5790 | yes |
+| b82e | 6848b0 | data p2 | TS | v2 | a2 | claude-opus-5-5 | 12 | 4271 | 93511 | 0 | 19201 | 5790 | yes |
+| b82e | f9cc17 | data p3 | C# | v1 | a1 | claude-opus-5-5 | 12 | 4615 | 71417 | 0 | 18238 | 0 | yes |
+| b82e | 922a82 | data p3 | TS | v1 | a1 | claude-opus-5-5 | 10 | 4396 | 53828 | 0 | 17874 | 0 | yes |
+| b82e | 96fcf4 | data p3 | TS | v2 | a1 | claude-opus-5-5 | 12 | 4869 | 95252 | 0 | 19970 | 5790 | yes |
+| b82e | 3407d8 | data p3 | C# | v2 | a1 | claude-opus-5-5 | 12 | 5412 | 96955 | 0 | 21173 | 5790 | yes |
 <!-- /generated:sessions-tokens -->
 
 ### 5.3 Time
 
 Seconds. Wall, `model_api` and `active − model_api` are primary; the rest are descriptive. "wall − Σ partition" is the
 part of the wall the partition does not cover. In every session run before harness `179624f5fec2` it is the harness's
-3 s settle plus the CLI's own start before its first event (G-6 evidence, § 7.5; defect 11). The series A data sessions ran at `faaf55b4ecf7`, after the fix.
+3 s settle plus the CLI's own start before its first event (G-6 evidence, § 9.5; defect 11). The data sessions of both
+series ran after that fix.
 
 <!-- generated:sessions-time -->
 | series | rid | kind | stack | phase | att. | harness | wall s | model_api s | active − model_api s | build_test s | other_tool s | hooks s | unattributed s | unattributed / wall | wall − Σ partition s | turns | subagents |
@@ -226,14 +273,30 @@ part of the wall the partition does not cover. In every session run before harne
 | bf89 | 922a82 | data p3 | TS | v1 | a1 | faaf55b4ecf7 | 42.2 | 38.9 | 2.6 | 1.7 | 0.7 | 0.2 | 0.7 | 1.6 % | 0.0 | 10 | 0 |
 | bf89 | 96fcf4 | data p3 | TS | v2 | a1 | — | 49.8 | — | — | — | — | — | — | — | — | 7 | — |
 | bf89 | 3407d8 | data p3 | C# | v2 | a1 | faaf55b4ecf7 | 70.6 | 57.9 | 12.0 | 11.0 | 0.8 | 0.2 | 0.7 | 1.0 % | 0.0 | 7 | 0 |
+| b82e | c06594 | aa | C# | v1 | a1 | 814d82e66e53 | 45.1 | 35.7 | 8.7 | 2.6 | 5.9 | 0.1 | 0.7 | 1.4 % | 0.0 | 4 | 0 |
+| b82e | 69fc02 | aa | C# | v1 | a1 | 814d82e66e53 | 39.7 | 32.5 | 6.5 | 5.8 | 0.6 | 0.1 | 0.7 | 1.7 % | 0.0 | 4 | 0 |
+| b82e | d9de4b | pilot | TS | v1 | a1 | 814d82e66e53 | 41.2 | 38.0 | 2.6 | 2.1 | 0.3 | 0.2 | 0.6 | 1.5 % | 0.0 | 6 | 0 |
+| b82e | 14d81c | data p1 | TS | v1 | a1 | 814d82e66e53 | 48.5 | 45.0 | 2.8 | 1.7 | 0.8 | 0.2 | 0.7 | 1.5 % | 0.0 | 9 | 0 |
+| b82e | 078dcd | data p1 | C# | v1 | a1 | 814d82e66e53 | 45.7 | 37.2 | 7.8 | 7.6 | 0.1 | 0.1 | 0.7 | 1.5 % | 0.0 | 5 | 0 |
+| b82e | 1d2624 | data p1 | TS | v2 | a1 | 814d82e66e53 | 61.3 | 51.3 | 9.1 | 7.8 | 1.1 | 0.2 | 0.9 | 1.5 % | 0.0 | 6 | 0 |
+| b82e | ede2a0 | data p1 | C# | v2 | a1 | 814d82e66e53 | 55.9 | 42.8 | 12.4 | 11.3 | 0.9 | 0.2 | 0.7 | 1.2 % | 0.0 | 6 | 0 |
+| b82e | f57599 | data p2 | C# | v1 | a1 | 814d82e66e53 | 37.8 | 31.3 | 5.8 | 5.2 | 0.5 | 0.1 | 0.6 | 1.7 % | 0.0 | 4 | 0 |
+| b82e | d79dc1 | data p2 | TS | v1 | a1 | 814d82e66e53 | 42.3 | 38.9 | 2.8 | 0.0 | 2.6 | 0.2 | 0.7 | 1.6 % | 0.0 | 5 | 0 |
+| b82e | ebd0b0 | data p2 | C# | v2 | a1 | 814d82e66e53 | 42.4 | 33.2 | 8.5 | 8.2 | 0.2 | 0.1 | 0.7 | 1.6 % | 0.0 | 4 | 0 |
+| b82e | 97168d | data p2 | TS | v2 | a1 | 814d82e66e53 | 46.7 | 38.4 | 7.5 | 7.0 | 0.3 | 0.2 | 0.7 | 1.6 % | 0.0 | 7 | 0 |
+| b82e | 6848b0 | data p2 | TS | v2 | a2 | 814d82e66e53 | 45.6 | 36.7 | 8.3 | 6.5 | 1.6 | 0.2 | 0.6 | 1.4 % | 0.0 | 6 | 0 |
+| b82e | f9cc17 | data p3 | C# | v1 | a1 | 814d82e66e53 | 49.0 | 40.4 | 8.0 | 7.1 | 0.7 | 0.2 | 0.7 | 1.4 % | 0.0 | 8 | 0 |
+| b82e | 922a82 | data p3 | TS | v1 | a1 | 814d82e66e53 | 58.6 | 55.1 | 2.9 | 1.9 | 0.8 | 0.2 | 0.7 | 1.1 % | 0.0 | 5 | 0 |
+| b82e | 96fcf4 | data p3 | TS | v2 | a1 | 814d82e66e53 | 63.0 | 54.9 | 7.4 | 5.9 | 1.3 | 0.2 | 0.7 | 1.1 % | 0.0 | 6 | 0 |
+| b82e | 3407d8 | data p3 | C# | v2 | a1 | 814d82e66e53 | 71.6 | 61.2 | 9.7 | 8.8 | 0.7 | 0.2 | 0.7 | 0.9 % | 0.0 | 7 | 0 |
 <!-- /generated:sessions-time -->
 
 ### 5.4 Quality, size, egress and packages
 
 LOC is the scorer's count (product / test / files). Latency is the scorer's per-invocation median of one registered
-command in the scoring box, beside the box's own baseline (a reference measure, load-sensitive). Egress counts CONNECTs; refused ones are the
-box's own attempts to reach a host outside the bare list (the API host is reached only through the broker). "real token
-seen" is the number of times a sampler found the real token in a process of the box.
+command in the scoring box, beside the box's own baseline (a reference measure, load-sensitive). Egress counts CONNECTs;
+refused ones are the box's own attempts to reach a host outside the bare list (the API host is reached only through the
+broker). "real token seen" is the number of times a sampler found the real token in a process of the box.
 
 <!-- generated:sessions-quality -->
 | series | rid | kind | stack | phase | att. | LOC product / test / files | build | visible | held-out percent | defects | blocked | latency median / box baseline ms | egress | packages | real token seen |
@@ -260,6 +323,22 @@ seen" is the number of times a sampler found the real token in a process of the 
 | bf89 | 922a82 | data p3 | TS | v1 | a1 | 154 / 0 / 2 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 101.35 / 10.31 | allowed: none; refused: 13; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
 | bf89 | 96fcf4 | data p3 | TS | v2 | a1 | — | not scored | — | — | — | — | — | — | — | 0 |
 | bf89 | 3407d8 | data p3 | C# | v2 | a1 | 299 / 0 / 1 | not scored | — | — | — | — | — | allowed: api.nuget.org 3; refused: 28; 58.8 MB down | 8 seen, 4 added (microsoft.aspnetcore.app.runtime.linux-x64 10.0.14, microsoft.net.illink.tasks 10.0.14, microsoft.netcore.app.host.linux-x64 10.0.14, microsoft.netcore.app.runtime.linux-x64 10.0.14), 0 flagged | 0 |
+| b82e | c06594 | aa | C# | v1 | a1 | 138 / 0 / 1 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 53.83 / 10.27 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 69fc02 | aa | C# | v1 | a1 | 164 / 0 / 1 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 54.7 / 10.14 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | d9de4b | pilot | TS | v1 | a1 | 148 / 0 / 2 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 77.56 / 9.56 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 14d81c | data p1 | TS | v1 | a1 | 173 / 0 / 2 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 76.98 / 9.53 | allowed: none; refused: 13; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 078dcd | data p1 | C# | v1 | a1 | 176 / 0 / 1 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 45.66 / 9.65 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 1d2624 | data p1 | TS | v2 | a1 | 291 / 0 / 2 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 86.56 / 10.35 | allowed: none; refused: 24; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | ede2a0 | data p1 | C# | v2 | a1 | 302 / 0 / 1 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 48.78 / 12.09 | allowed: none; refused: 29; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | f57599 | data p2 | C# | v1 | a1 | 149 / 0 / 1 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 49.5 / 10.03 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | d79dc1 | data p2 | TS | v1 | a1 | 157 / 0 / 2 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 84.71 / 9.58 | allowed: none; refused: 13; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | ebd0b0 | data p2 | C# | v2 | a1 | 291 / 0 / 1 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 50.56 / 9.69 | allowed: none; refused: 12; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 97168d | data p2 | TS | v2 | a1 | 262 / 0 / 2 | not scored | — | — | — | — | — | allowed: registry.npmjs.org 1; refused: 17; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 6848b0 | data p2 | TS | v2 | a2 | 262 / 0 / 2 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 95.07 / 10.96 | allowed: none; refused: 20; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | f9cc17 | data p3 | C# | v1 | a1 | 182 / 0 / 1 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 45.17 / 10.45 | allowed: api.nuget.org 2; refused: 27; 5.6 MB down | 6 seen, 2 added (microsoft.net.illink.tasks 10.0.14, microsoft.netcore.app.host.linux-x64 10.0.14), 0 flagged | 0 |
+| b82e | 922a82 | data p3 | TS | v1 | a1 | 175 / 0 / 2 | ok | test-v1 11/11 | 100.0 % of 29 | 0 | 0 | 85.9 / 10.15 | allowed: none; refused: 19; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 96fcf4 | data p3 | TS | v2 | a1 | 294 / 0 / 2 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 84.59 / 9.9 | allowed: none; refused: 20; 0.0 MB down | 4 seen, 0 added, 0 flagged | 0 |
+| b82e | 3407d8 | data p3 | C# | v2 | a1 | 322 / 0 / 1 | ok | test-v2 30/30, test-v1 11/11 | 100.0 % of 58 | 0 | 0 | 65 / 14.76 | allowed: api.nuget.org 2; refused: 28; 5.6 MB down | 6 seen, 2 added (microsoft.net.illink.tasks 10.0.14, microsoft.netcore.app.host.linux-x64 10.0.14), 0 flagged | 0 |
 <!-- /generated:sessions-quality -->
 
 ### 5.5 The voids and what the scan saw
@@ -271,16 +350,20 @@ seen" is the number of times a sampler found the real token in a process of the 
 | 0c1a | c9b413 | pilot | TS | v1 | de9091b54e2b | 1 | outside-path | main:Bash | `/` | $0.2284 |
 | bf89 | ebd0b0 | data p2 | C# | v2 | faaf55b4ecf7 | 1 | outside-path | main:Bash | `~/rsd/minigit/s-20261030-bf89/s/ebd0b0/box/test-v2.sh` | $0.2790 |
 | bf89 | 3407d8 | data p3 | C# | v2 | faaf55b4ecf7 | 1 | outside-path | main:Bash | `~/rsd/minigit/s-20261030-bf89/s/3407d8/box/test-v2.sh` | $0.2795 |
+| b82e | 97168d | data p2 | TS | v2 | 814d82e66e53 | 1 | outside-path | main:Bash | `/` | $0.2680 |
 <!-- /generated:voids -->
 
-- `9804fc`: the scan of that harness did not keep its hits (fixed in `5249048`); the cause was found by reading the session:
-  the pinned TypeScript toolchain and the box's own config directory were outside its allow-list.
-- `c9b413`: the agent cleaned up with `cd / && rm -rf /tmp/…`; the scan read the `cd /` as a walk of `/`.
-- `ebd0b0` and `3407d8`: each agent ran `cd src` in one Bash call and `cd .. && bash test-v2.sh` in the next. The Bash
-  tool keeps its working directory across calls, so the agent was back in its work tree; the scan started every call at
-  the work tree, so it put `test-v2.sh` one level above it. The team-lead log records that a replay of every real session
-  at `9475b1fed23f` and then at `814d82e66e53` gave no high hit, with these voids and the two pilot voids reading
-  `completed`; this record did not re-run that replay.
+- `9804fc` (92a9): the scan of that harness did not keep its hits (fixed in `5249048`); the cause was found by reading the
+  session: the pinned TypeScript toolchain and the box's own config directory were outside its allow-list.
+- `c9b413` (0c1a): the agent cleaned up with `cd / && rm -rf /tmp/…`; the scan read the `cd /` as a walk of `/`.
+- `ebd0b0` and `3407d8` (bf89): each agent ran `cd src` in one Bash call and `cd .. && bash test-v2.sh` in the next. The
+  Bash tool keeps its working directory across calls, so the agent was back in its work tree; the scan started every call
+  at the work tree, so it put `test-v2.sh` one level above it.
+- `97168d` (b82e): the agent edited its TypeScript source through an inline `python3 - <<'EOF'` script. The scan parsed
+  the script body as shell, and a quoted `"/"` string in it as a walk of `/`.
+- The team lead reports a replay of every session with a stream, across the four series, at the fix2 harness: no high hit,
+  and every real model session `completed`. The replay scripts were not at the path given to this record, and this record
+  did not re-run the replay.
 
 ### 5.6 The v2 rehearsals (G-14)
 
@@ -295,6 +378,8 @@ A stub CLI on an A/A twin's tree, the real scorer, for both stacks; no paid requ
 | 0c1a | ebe7f5 | TS | completed | claude-sonnet-5-5 | $0.0000 | workspace ok, record ok, score ok |
 | bf89 | 4c53a2 | C# | completed | claude-sonnet-5-5 | $0.0000 | workspace ok, record ok, score ok |
 | bf89 | d7a0b7 | TS | completed | claude-sonnet-5-5 | $0.0000 | workspace ok, record ok, score ok |
+| b82e | 25275e | C# | completed | claude-sonnet-5-5 | $0.0000 | workspace ok, record ok, score ok |
+| b82e | 89f619 | TS | completed | claude-sonnet-5-5 | $0.0000 | workspace ok, record ok, score ok |
 <!-- /generated:rehearsals -->
 
 ### 5.7 Load during each session
@@ -327,18 +412,34 @@ CPU-equivalents, and is a lower bound (a process born and gone between two sampl
 | bf89 | p3-v1-cpu.ndjson | f9cc17 | 11 | 0.11 | 0.15 | 0 | — |
 | bf89 | p3-v2-cpu.ndjson | 3407d8 | 14 | 0.12 | 0.20 | 0 | — |
 | bf89 | p3-v2-cpu.ndjson | 96fcf4 | 10 | 0.12 | 0.20 | 0 | — |
+| b82e | p0-v1-cpu.ndjson | 69fc02 | 8 | 0.19 | 0.28 | 0 | — |
+| b82e | p0-v1-cpu.ndjson | c06594 | 9 | 0.18 | 0.28 | 0 | — |
+| b82e | p0-v1-cpu.ndjson | d9de4b | 8 | 0.11 | 0.16 | 0 | — |
+| b82e | p1-v1-cpu.ndjson | 078dcd | 9 | 0.14 | 0.25 | 0 | — |
+| b82e | p1-v1-cpu.ndjson | 14d81c | 10 | 0.15 | 0.25 | 0 | — |
+| b82e | p1-v2-cpu.ndjson | 1d2624 | 12 | 3.41 | 9.64 | 0 | foreign load, scored under load |
+| b82e | p1-v2-cpu.ndjson | ede2a0 | 11 | 2.84 | 9.42 | 0 | foreign load, scored under load |
+| b82e | p2-v1-cpu.ndjson | d79dc1 | 9 | 0.13 | 0.19 | 0 | — |
+| b82e | p2-v1-cpu.ndjson | f57599 | 8 | 0.13 | 0.19 | 0 | — |
+| b82e | p2-v2-cpu.ndjson | 97168d | 9 | 0.58 | 1.47 | 0 | — |
+| b82e | p2-v2-cpu.ndjson | ebd0b0 | 9 | 0.58 | 1.47 | 0 | — |
+| b82e | p2-v2-cpu.ndjson | 6848b0 | 9 | 1.24 | 1.38 | 0 | foreign load, scored under load |
+| b82e | p3-v1-cpu.ndjson | 922a82 | 12 | 0.13 | 0.24 | 0 | scored under load |
+| b82e | p3-v1-cpu.ndjson | f9cc17 | 10 | 0.14 | 0.24 | 0 | scored under load |
+| b82e | p3-v2-cpu.ndjson | 3407d8 | 14 | 0.13 | 0.24 | 0 | — |
+| b82e | p3-v2-cpu.ndjson | 96fcf4 | 13 | 0.12 | 0.24 | 0 | — |
 <!-- /generated:cpu -->
 
-## 6. Pairs (series A)
+## 6. Pairs, series A (`s-20261030-bf89`)
 
-Only data pairs enter this section; the A/A and the pilots never do. The A/A twin spread (G-9) is shown in § 7.4 as a
-reference at n = 1.
+Only data pairs enter §§ 6–8; the A/A and the pilots never do. The A/A twin spread (G-9) is in § 9.6 as a reference at
+n = 1.
 
 ### 6.1 Per phase
 
 Descriptive: the registered unit is the cell (v1 + v2), not the phase. Pair 3 has a v1 comparison and no C# v2.
 
-<!-- generated:pairs-phase -->
+<!-- generated:pairs-phase-bf89 -->
 | pair | phase | C# rid | TS rid | C# cost (headline) | TS cost (headline) | C#/TS | C# wall s | TS wall s | C#/TS | C# model_api s | TS model_api s | C#/TS | C# active − model_api s | TS active − model_api s | C#/TS |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | v1 | 078dcd | 14d81c | $0.1847 | $0.2101 | 0.88 | 49.3 | 46.7 | 1.06 | 39.6 | 42.0 | 0.94 | 9.1 | 4.0 | 2.26 |
@@ -347,74 +448,182 @@ Descriptive: the registered unit is the cell (v1 + v2), not the phase. Pair 3 ha
 | 2 | v2 | d9638c | 97168d | $0.2720 | $0.3012 | 0.90 | 62.6 | 56.3 | 1.11 | 43.7 | 46.4 | 0.94 | 18.2 | 9.3 | 1.96 |
 | 3 | v1 | f9cc17 | 922a82 | $0.1941 | $0.2155 | 0.90 | 55.7 | 42.2 | 1.32 | 42.9 | 38.9 | 1.10 | 12.1 | 2.6 | 4.58 |
 | 3 | v2 | missing | 96fcf4 | — | — | — | — | 49.8 | — | — | — | — | — | — | — |
-<!-- /generated:pairs-phase -->
+<!-- /generated:pairs-phase-bf89 -->
 
 ### 6.2 Per cell (v1 + v2) and the C#/TS ratio
 
-<!-- generated:pairs-cell -->
+<!-- generated:pairs-cell-bf89 -->
 | pair | C# cell (v1 + v2) | TS cell (v1 + v2) | C# cost (headline) | TS cost (headline) | C#/TS cost | C# wall s | TS wall s | C#/TS wall | C# model_api s | TS model_api s | C#/TS model_api | C# active − model_api s | TS active − model_api s | C#/TS active | labels |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 078dcd + ede2a0 | 14d81c + 1d2624 | $0.4421 | $0.4780 | 0.92 | 106.2 | 95.8 | 1.11 | 86.6 | 78.1 | 1.11 | 18.2 | 16.3 | 1.12 | — |
 | 2 | f57599 + d9638c | d79dc1 + 97168d | $0.4629 | $0.5130 | 0.90 | 102.8 | 100.6 | 1.02 | 77.1 | 87.0 | 0.89 | 24.2 | 12.2 | 1.99 | `ran unpaired` cell; flagged: foreign load (d9638c) |
 | 3 | f9cc17 + — | 922a82 + 96fcf4 | missing | — | — (a cell is missing) | missing | 92.1 | — (a cell is missing) | missing | — | — (a cell is missing) | missing | — | — (a cell is missing) | C# missing: no v2 data session (3407d8 void: contaminated; the series stopped before its re-run); TS incomplete: costUsd, modelApiMs, activeMinusModelApiMs not captured |
-<!-- /generated:pairs-cell -->
+<!-- /generated:pairs-cell-bf89 -->
 
 ### 6.3 Ratios over the pairs, three ways
 
 (a) every data cell; (b) without cells that hold a `ran unpaired` session; (c) without flagged pairs (a pair is flagged
 when any of its sessions carries `foreign load`, `harness core contended`, `started not quiet`, `start skew`, `broker
 refused k`, `upstream 429 k` or `model_refusal_fallback`). No session was censored (no cap, wall or stall kill), so every
-ratio below is a value, not a bound.
+ratio is a value, not a bound.
 
-<!-- generated:medians -->
+<!-- generated:medians-bf89 -->
 | way | pairs used | excluded | missing | cost: median C#/TS (range); C# > TS in k of n | wall: median C#/TS (range); C# > TS in k of n | model_api: median C#/TS (range); C# > TS in k of n | active: median C#/TS (range); C# > TS in k of n |
 |---|---|---|---|---|---|---|---|
 | (a) every data cell | 1, 2 | — | 3 | 0.91 (0.90–0.92); 0 of 2 | 1.07 (1.02–1.11); 2 of 2 | 1.00 (0.89–1.11); 1 of 2 | 1.55 (1.12–1.99); 2 of 2 |
 | (b) without cells holding a `ran unpaired` session | 1 | 2 | 3 | 0.92 (0.92–0.92); 0 of 1 | 1.11 (1.11–1.11); 1 of 1 | 1.11 (1.11–1.11); 1 of 1 | 1.12 (1.12–1.12); 1 of 1 |
 | (c) without flagged pairs | 1 | 2 | 3 | 0.92 (0.92–0.92); 0 of 1 | 1.11 (1.11–1.11); 1 of 1 | 1.11 (1.11–1.11); 1 of 1 | 1.12 (1.12–1.12); 1 of 1 |
-<!-- /generated:medians -->
+<!-- /generated:medians-bf89 -->
 
-**With the voided attempts counted.** Not a registered measure: the money each stack's cell cost, every attempt
-included. A void is an instrument error, so this view charges the C# side for the scan's defect.
+**With the voided attempts counted** (not a registered measure: the money each stack's cell cost, every attempt
+included; a void is an instrument error, so this view charges a stack for the scan's defect):
 
-<!-- generated:pairs-spend-voids -->
+<!-- generated:pairs-spend-voids-bf89 -->
 | pair | C# charged, voids included | C# voids | TS charged, voids included | TS voids | C#/TS |
 |---|---|---|---|---|---|
 | 1 | $0.4421 | — | $0.4780 | — | 0.92 |
 | 2 | $0.7419 | ebd0b0 | $0.5130 | — | 1.45 |
 | 3 | $0.4737 | 3407d8 | $0.4762 | — | 0.99 |
-<!-- /generated:pairs-spend-voids -->
+<!-- /generated:pairs-spend-voids-bf89 -->
 
-### 6.4 Per stack
+### 6.4 Per stack, ranges and quality
 
-Median and range over the cells that are complete, with every primary measure known. The TypeScript wall includes the
-pair-3 cell, whose other measures are not captured.
+Median and range over the cells that are complete. The TypeScript wall includes the pair-3 cell, whose other measures are
+not captured.
 
-<!-- generated:per-stack -->
+<!-- generated:per-stack-bf89 -->
 | stack | cost (headline): median (range), n | wall s: median (range), n | model_api s: median (range), n | active − model_api s: median (range), n |
 |---|---|---|---|---|
 | C# | $0.4525 ($0.4421–$0.4629), 2 | 104.5 (102.8–106.2), 2 | 81.9 (77.1–86.6), 2 | 21.2 (18.2–24.2), 2 |
 | TS | $0.4955 ($0.4780–$0.5130), 2 | 98.2 (95.8–100.6), 2 | 82.6 (78.1–87.0), 2 | 14.3 (12.2–16.3), 2 |
-<!-- /generated:per-stack -->
+<!-- /generated:per-stack-bf89 -->
 
-### 6.5 Quality per stack and phase
+<!-- generated:overlap-bf89 -->
+| measure | C# range (n) | TS range (n) | ranges overlap | reading |
+|---|---|---|---|---|
+| cost (headline) | $0.4421–$0.4629 (2) | $0.4780–$0.5130 (2) | no | C# below TS in every cell reached (n = 2 per stack: not a finding) |
+| wall s | 102.8–106.2 (2) | 95.8–100.6 (2) | no | C# above TS in every cell reached (n = 2 per stack: not a finding) |
+| model_api s | 77.1–86.6 (2) | 78.1–87.0 (2) | yes | not distinguished |
+| active − model_api s | 18.2–24.2 (2) | 12.2–16.3 (2) | no | C# above TS in every cell reached (n = 2 per stack: not a finding) |
+<!-- /generated:overlap-bf89 -->
 
-"accepted" = build clean, every visible script 100 %, held-out primary 100 % with blocked cases counted against it
-([checklist.json](../../spikes/minigit-bench/inputs/checklist.json)). Acceptance is a label, not a filter.
-
-<!-- generated:quality-summary -->
+<!-- generated:quality-summary-bf89 -->
 | stack | phase | data sessions | scored | not scored | held-out percent: median (min) | defects: median (max) | accepted |
 |---|---|---|---|---|---|---|---|
 | C# | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
 | C# | v2 | 2 | 2 | — | 100 (100) | 0 (0) | 2 of 2 |
 | TS | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
 | TS | v2 | 3 | 2 | 96fcf4 | 100 (100) | 0 (0) | 2 of 2 |
-<!-- /generated:quality-summary -->
+<!-- /generated:quality-summary-bf89 -->
 
-Every scored session is at the top of the held-out scale, so the held-out suite does not separate the stacks on this
-task: a ceiling, not evidence of equal quality on harder work.
+### 6.5 What series A misses
 
-### 6.6 The pre-registered reading
+Pair 3 is **missing**: its C# cell has no v2 data session (`3407d8` voided, and the series stopped before the re-run), and
+its TypeScript v2 `96fcf4` was never scored. Pair 2's C# v2 is the re-run `d9638c`, `ran unpaired` and flagged, so lines
+(b) and (c) hold pair 1 only. The prediction table for series A, read on the pairs it reached:
+
+<!-- generated:prediction-bf89 -->
+| item | registered expectation | observed (series pairs reached) | reading |
+|---|---|---|---|
+| 1 | C# > TS in ≥ 2 of 3 pairs (cost) | 0 of 2 | **not held** — 1 pair(s) missing; with them k could still not reach 2 |
+| 1 | median C#/TS cost 1.15–1.5× | 0.91 | **not held** — n = 2, range 0.90–0.92 |
+| 1 | per cell: TS $0.8–2.5, C# $1.0–3.5 | TS $0.48, $0.51; C# $0.44, $0.46 | **not held** — every complete cell is below its predicted range |
+| 2 | wall C#/TS 1.3–1.8× | 1.07 | **not held** — n = 2, range 1.02–1.11 |
+| 2 | API-time ratio 1.1–1.4× | 1.00 | **not held** — n = 2, range 0.89–1.11 |
+| 5 | every bare session passes the visible tests | 10 scored data sessions | **held** — every scored session passes; not scored: 96fcf4 |
+| 5 | held-out median percent ≥ 90 % in both stacks | lowest per-phase median 100 % | **held** — lowest scored session 100 % |
+| 5 | … with at least one bare failure | no failure | **not held** — no scored data session failed a held-out case |
+| 5 | no stack difference > 1 defect | largest per-phase median difference 0 | **held** — per-phase medians of `defects` |
+| 7 | surprise: TS costing ≥ C# in ≥ 2 bare pairs | 2 of 2 | **the named surprise occurred** |
+<!-- /generated:prediction-bf89 -->
+
+## 7. Pairs, series B (`s-20261030-b82e`)
+
+### 7.1 Per phase
+
+<!-- generated:pairs-phase-b82e -->
+| pair | phase | C# rid | TS rid | C# cost (headline) | TS cost (headline) | C#/TS | C# wall s | TS wall s | C#/TS | C# model_api s | TS model_api s | C#/TS | C# active − model_api s | TS active − model_api s | C#/TS |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | v1 | 078dcd | 14d81c | $0.1960 | $0.2331 | 0.84 | 45.7 | 48.5 | 0.94 | 37.2 | 45.0 | 0.83 | 7.8 | 2.8 | 2.82 |
+| 1 | v2 | ede2a0 | 1d2624 | $0.2634 | $0.2645 | 1.00 | 55.9 | 61.3 | 0.91 | 42.8 | 51.3 | 0.83 | 12.4 | 9.1 | 1.36 |
+| 2 | v1 | f57599 | d79dc1 | $0.1699 | $0.1977 | 0.86 | 37.8 | 42.3 | 0.89 | 31.3 | 38.9 | 0.81 | 5.8 | 2.8 | 2.09 |
+| 2 | v2 | ebd0b0 | 6848b0 | $0.2362 | $0.2578 | 0.92 | 42.4 | 45.6 | 0.93 | 33.2 | 36.7 | 0.91 | 8.5 | 8.3 | 1.03 |
+| 3 | v1 | f9cc17 | 922a82 | $0.2525 | $0.2417 | 1.04 | 49.0 | 58.6 | 0.84 | 40.4 | 55.1 | 0.73 | 8.0 | 2.9 | 2.77 |
+| 3 | v2 | 3407d8 | 96fcf4 | $0.2971 | $0.2762 | 1.08 | 71.6 | 63.0 | 1.14 | 61.2 | 54.9 | 1.11 | 9.7 | 7.4 | 1.31 |
+<!-- /generated:pairs-phase-b82e -->
+
+### 7.2 Per cell (v1 + v2) and the C#/TS ratio
+
+<!-- generated:pairs-cell-b82e -->
+| pair | C# cell (v1 + v2) | TS cell (v1 + v2) | C# cost (headline) | TS cost (headline) | C#/TS cost | C# wall s | TS wall s | C#/TS wall | C# model_api s | TS model_api s | C#/TS model_api | C# active − model_api s | TS active − model_api s | C#/TS active | labels |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 078dcd + ede2a0 | 14d81c + 1d2624 | $0.4594 | $0.4975 | 0.92 | 101.6 | 109.8 | 0.93 | 80.0 | 96.3 | 0.83 | 20.2 | 11.9 | 1.70 | flagged: foreign load (1d2624, ede2a0) |
+| 2 | f57599 + ebd0b0 | d79dc1 + 6848b0 | $0.4060 | $0.4555 | 0.89 | 80.2 | 87.9 | 0.91 | 64.6 | 75.5 | 0.86 | 14.3 | 11.1 | 1.29 | `ran unpaired` cell; flagged: foreign load (6848b0) |
+| 3 | f9cc17 + 3407d8 | 922a82 + 96fcf4 | $0.5496 | $0.5180 | 1.06 | 120.7 | 121.6 | 0.99 | 101.6 | 110.0 | 0.92 | 17.7 | 10.3 | 1.72 | — |
+<!-- /generated:pairs-cell-b82e -->
+
+### 7.3 Ratios over the pairs, three ways
+
+The same three registered lines as § 6.3. Line (c) keeps pair 3 only, because pairs 1 and 2 carry `foreign load`. The
+line "without pair B3", for the operator's noisy start that the records do not show (§ 4), is in § 8.2.
+
+<!-- generated:medians-b82e -->
+| way | pairs used | excluded | missing | cost: median C#/TS (range); C# > TS in k of n | wall: median C#/TS (range); C# > TS in k of n | model_api: median C#/TS (range); C# > TS in k of n | active: median C#/TS (range); C# > TS in k of n |
+|---|---|---|---|---|---|---|---|
+| (a) every data cell | 1, 2, 3 | — | — | 0.92 (0.89–1.06); 1 of 3 | 0.93 (0.91–0.99); 0 of 3 | 0.86 (0.83–0.92); 0 of 3 | 1.70 (1.29–1.72); 3 of 3 |
+| (b) without cells holding a `ran unpaired` session | 1, 3 | 2 | — | 0.99 (0.92–1.06); 1 of 2 | 0.96 (0.93–0.99); 0 of 2 | 0.88 (0.83–0.92); 0 of 2 | 1.71 (1.70–1.72); 2 of 2 |
+| (c) without flagged pairs | 3 | 1, 2 | — | 1.06 (1.06–1.06); 1 of 1 | 0.99 (0.99–0.99); 0 of 1 | 0.92 (0.92–0.92); 0 of 1 | 1.72 (1.72–1.72); 1 of 1 |
+<!-- /generated:medians-b82e -->
+
+**With the voided attempt counted** (not registered; see § 6.3):
+
+<!-- generated:pairs-spend-voids-b82e -->
+| pair | C# charged, voids included | C# voids | TS charged, voids included | TS voids | C#/TS |
+|---|---|---|---|---|---|
+| 1 | $0.4594 | — | $0.4975 | — | 0.92 |
+| 2 | $0.4060 | — | $0.7235 | 97168d | 0.56 |
+| 3 | $0.5496 | — | $0.5180 | — | 1.06 |
+<!-- /generated:pairs-spend-voids-b82e -->
+
+### 7.4 Per stack and range overlap
+
+Overlap of ranges means "not distinguished". Ranges that do not overlap at n = 3 per stack are reported, not read: the
+registration names no finding for them.
+
+<!-- generated:per-stack-b82e -->
+| stack | cost (headline): median (range), n | wall s: median (range), n | model_api s: median (range), n | active − model_api s: median (range), n |
+|---|---|---|---|---|
+| C# | $0.4594 ($0.4060–$0.5496), 3 | 101.6 (80.2–120.7), 3 | 80.0 (64.6–101.6), 3 | 17.7 (14.3–20.2), 3 |
+| TS | $0.4975 ($0.4555–$0.5180), 3 | 109.8 (87.9–121.6), 3 | 96.3 (75.5–110.0), 3 | 11.1 (10.3–11.9), 3 |
+<!-- /generated:per-stack-b82e -->
+
+<!-- generated:overlap-b82e -->
+| measure | C# range (n) | TS range (n) | ranges overlap | reading |
+|---|---|---|---|---|
+| cost (headline) | $0.4060–$0.5496 (3) | $0.4555–$0.5180 (3) | yes | not distinguished |
+| wall s | 80.2–120.7 (3) | 87.9–121.6 (3) | yes | not distinguished |
+| model_api s | 64.6–101.6 (3) | 75.5–110.0 (3) | yes | not distinguished |
+| active − model_api s | 14.3–20.2 (3) | 10.3–11.9 (3) | no | C# above TS in every cell reached (n = 3 per stack: not a finding) |
+<!-- /generated:overlap-b82e -->
+
+### 7.5 Quality per stack and phase
+
+"accepted" = build clean, every visible script 100 %, held-out primary 100 % with blocked cases counted against it
+([checklist.json](../../spikes/minigit-bench/inputs/checklist.json)). Acceptance is a label, not a filter.
+
+<!-- generated:quality-summary-b82e -->
+| stack | phase | data sessions | scored | not scored | held-out percent: median (min) | defects: median (max) | accepted |
+|---|---|---|---|---|---|---|---|
+| C# | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| C# | v2 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| TS | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| TS | v2 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+<!-- /generated:quality-summary-b82e -->
+
+When every scored session sits at the top of the held-out scale, the suite does not separate the stacks on this task: a
+ceiling, not evidence of equal quality on harder work.
+
+### 7.6 The pre-registered reading
 
 The registered paragraph ([statement.md](../../spikes/minigit-bench/inputs/statement.md) § 7, parent § 11, verbatim):
 
@@ -423,26 +632,14 @@ The registered paragraph ([statement.md](../../spikes/minigit-bench/inputs/state
 > confidence intervals, no effect sizes as findings. It does not license other tasks, languages, models or CLI versions, the
 > value of the process on real work, or any mechanism.
 
-Applied to series A:
+Applied to series B:
 
-- **n reached:** two complete pairs (1 and 2). Pair 3 is **missing**: its C# cell has no v2 data session (`3407d8` voided,
-  and the series stopped before the re-run), and its TypeScript v2 `96fcf4` was never scored.
-- **Unpaired and flagged:** pair 2's C# v2 is the re-run `d9638c`, `ran unpaired` and flagged `foreign load`. Lines (b) and
-  (c) of § 6.3 therefore hold pair 1 only.
-- **Voids and their cause:** `ebd0b0` and `3407d8`, both `void: contaminated`, both false positives of the per-call
-  working-directory model (defect 14). They are not data and enter no ratio; § 6.3's last table shows the spend view
-  with them.
-- **Ranges:** the per-stack ranges of § 6.4, side by side. Overlap means "not distinguished". Ranges that do not overlap
-  at n = 2 per stack are two points each: the registration names no finding for them, and they are reported, not read.
-
-<!-- generated:overlap -->
-| measure | C# range (n) | TS range (n) | ranges overlap | reading |
-|---|---|---|---|---|
-| cost (headline) | $0.4421–$0.4629 (2) | $0.4780–$0.5130 (2) | no | C# below TS in every cell reached (n = 2 per stack: not a finding) |
-| wall s | 102.8–106.2 (2) | 95.8–100.6 (2) | no | C# above TS in every cell reached (n = 2 per stack: not a finding) |
-| model_api s | 77.1–86.6 (2) | 78.1–87.0 (2) | yes | not distinguished |
-| active − model_api s | 18.2–24.2 (2) | 12.2–16.3 (2) | no | C# above TS in every cell reached (n = 2 per stack: not a finding) |
-<!-- /generated:overlap -->
+- **n:** three complete pairs; no session censored; no cell missing.
+- **Unpaired and flagged:** pair 2's TypeScript v2 is the re-run `6848b0` (`ran unpaired`, `foreign load`); pair 1's v2
+  sessions carry `foreign load`. Line (b) keeps pairs 1 and 3; line (c) keeps pair 3.
+- **Void and its cause:** `97168d`, `void: contaminated`, a false positive of the scan (defect 16). It is not data and
+  enters no ratio; the spend view above shows it.
+- **"In k of 3" and overlap:** the "C# > TS in k of n" column of § 7.3 and the overlap table of § 7.4.
 
 The bare-first deviation, verbatim from the statement (§ 8), still applies:
 
@@ -458,35 +655,95 @@ The bare-first deviation, verbatim from the statement (§ 8), still applies:
 > The C#/TS comparison **inside** the bare arm keeps its concurrent pairs and loses nothing.
 
 **banteg, as a ratio only, and with the caveat in the same sentence:** banteg's re-priced cost ratio is C#/TS 1.32× (other
-agent, other model, other date, so the two numbers are not the same measurement); series A's cost ratios are in § 6.3.
+agent, other model, other date, so the two numbers are not the same measurement); series B's cost ratios are in § 7.3.
 
-### 6.7 The prediction beside the observation
+### 7.7 The prediction beside the observation (series B)
 
-Items 1, 2, 5 and 7 of [prediction.md](../../spikes/minigit-bench/inputs/prediction.md), read on the pairs series A
-reached. The final reading belongs to the bare arm's full n.
+Items 1, 2, 5 and 7 of [prediction.md](../../spikes/minigit-bench/inputs/prediction.md), on series B's three pairs.
 
-<!-- generated:prediction -->
+<!-- generated:prediction-b82e -->
 | item | registered expectation | observed (series pairs reached) | reading |
 |---|---|---|---|
-| 1 | C# > TS in ≥ 2 of 3 pairs (cost) | 0 of 2 | **not held** — 1 pair(s) missing; with them k could still not reach 2 |
-| 1 | median C#/TS cost 1.15–1.5× | 0.91 | **not held** — n = 2, range 0.90–0.92 |
-| 1 | per cell: TS $0.8–2.5, C# $1.0–3.5 | TS $0.48, $0.51; C# $0.44, $0.46 | **not held** — every complete cell is below its predicted range |
-| 2 | wall C#/TS 1.3–1.8× | 1.07 | **not held** — n = 2, range 1.02–1.11 |
-| 2 | API-time ratio 1.1–1.4× | 1.00 | **not held** — n = 2, range 0.89–1.11 |
-| 5 | every bare session passes the visible tests | 10 scored data sessions | **held** — every scored session passes; not scored: 96fcf4 |
+| 1 | C# > TS in ≥ 2 of 3 pairs (cost) | 1 of 3 | **not held** — all 3 pairs present |
+| 1 | median C#/TS cost 1.15–1.5× | 0.92 | **not held** — n = 3, range 0.89–1.06 |
+| 1 | per cell: TS $0.8–2.5, C# $1.0–3.5 | TS $0.50, $0.46, $0.52; C# $0.46, $0.41, $0.55 | **not held** — every complete cell is below its predicted range |
+| 2 | wall C#/TS 1.3–1.8× | 0.93 | **not held** — n = 3, range 0.91–0.99 |
+| 2 | API-time ratio 1.1–1.4× | 0.86 | **not held** — n = 3, range 0.83–0.92 |
+| 5 | every bare session passes the visible tests | 12 scored data sessions | **held** — every scored session passes; not scored: none |
 | 5 | held-out median percent ≥ 90 % in both stacks | lowest per-phase median 100 % | **held** — lowest scored session 100 % |
 | 5 | … with at least one bare failure | no failure | **not held** — no scored data session failed a held-out case |
 | 5 | no stack difference > 1 defect | largest per-phase median difference 0 | **held** — per-phase medians of `defects` |
-| 7 | surprise: TS costing ≥ C# in ≥ 2 bare pairs | 2 of 2 | **the named surprise occurred** |
-<!-- /generated:prediction -->
+| 7 | surprise: TS costing ≥ C# in ≥ 2 bare pairs | 2 of 3 | **the named surprise occurred** |
+<!-- /generated:prediction-b82e -->
 
-## 7. The A/A checks (G-1 … G-14)
+## 8. The cross-series picture (descriptive)
+
+Not a registered analysis. Series A and series B ran the same registration, prompts, pins, seed and schedule, in two
+windows (A on 2026-10-30; B on 2026-10-30 and 2026-10-31). Their harnesses differ in how a session is classed (the
+contamination scan) and in nothing that a data session's numbers are computed from: both record the wall to process exit.
+A pair is named by its series and number (A1 … B3).
+
+### 8.1 Every pair
+
+<!-- generated:cross-cells -->
+| pair | C# cell | TS cell | C# cost | TS cost | C#/TS cost | C#/TS wall | C#/TS model_api | C#/TS active − model_api | flagged by | unpaired | note |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | 078dcd + ede2a0 | 14d81c + 1d2624 | $0.4421 | $0.4780 | 0.92 | 1.11 | 1.11 | 1.12 | — | no | — |
+| A2 | f57599 + d9638c | d79dc1 + 97168d | $0.4629 | $0.5130 | 0.90 | 1.02 | 0.89 | 1.99 | foreign load (d9638c) | yes | — |
+| A3 | f9cc17 + — | 922a82 + 96fcf4 | missing | — | — | — | — | — | — | no | C# missing: no v2 data session (3407d8 void: contaminated; the series stopped before its re-run) |
+| B1 | 078dcd + ede2a0 | 14d81c + 1d2624 | $0.4594 | $0.4975 | 0.92 | 0.93 | 0.83 | 1.70 | foreign load (1d2624, ede2a0) | no | — |
+| B2 | f57599 + ebd0b0 | d79dc1 + 6848b0 | $0.4060 | $0.4555 | 0.89 | 0.91 | 0.86 | 1.29 | foreign load (6848b0) | yes | — |
+| B3 | f9cc17 + 3407d8 | 922a82 + 96fcf4 | $0.5496 | $0.5180 | 1.06 | 0.99 | 0.92 | 1.72 | — | no | operator-noted noisy start, not in the records |
+<!-- /generated:cross-cells -->
+
+### 8.2 Cell ratios over the pairs
+
+<!-- generated:cross-medians -->
+| pairs | used | cost: median (range); C# > TS in k of n | wall: median (range); C# > TS in k of n | model_api: median (range); C# > TS in k of n | active − model_api: median (range); C# > TS in k of n |
+|---|---|---|---|---|---|
+| every complete pair | A1, A2, B1, B2, B3 | 0.92 (0.89–1.06); 1 of 5 | 0.99 (0.91–1.11); 2 of 5 | 0.89 (0.83–1.11); 1 of 5 | 1.70 (1.12–1.99); 5 of 5 |
+| without pairs holding a `ran unpaired` cell | A1, B1, B3 | 0.92 (0.92–1.06); 1 of 3 | 0.99 (0.93–1.11); 1 of 3 | 0.92 (0.83–1.11); 1 of 3 | 1.70 (1.12–1.72); 3 of 3 |
+| without flagged pairs | A1, B3 | 0.99 (0.92–1.06); 1 of 2 | 1.05 (0.99–1.11); 1 of 2 | 1.02 (0.92–1.11); 1 of 2 | 1.42 (1.12–1.72); 2 of 2 |
+| neither flagged nor unpaired | A1, B3 | 0.99 (0.92–1.06); 1 of 2 | 1.05 (0.99–1.11); 1 of 2 | 1.02 (0.92–1.11); 1 of 2 | 1.42 (1.12–1.72); 2 of 2 |
+| series B only (the registered complete series) | B1, B2, B3 | 0.92 (0.89–1.06); 1 of 3 | 0.93 (0.91–0.99); 0 of 3 | 0.86 (0.83–0.92); 0 of 3 | 1.70 (1.29–1.72); 3 of 3 |
+| series B without pair B3 (the operator-noted noisy start; no flag in the records) | B1, B2 | 0.91 (0.89–0.92); 0 of 2 | 0.92 (0.91–0.93); 0 of 2 | 0.84 (0.83–0.86); 0 of 2 | 1.50 (1.29–1.70); 2 of 2 |
+<!-- /generated:cross-medians -->
+
+### 8.3 v1 and v2 separately
+
+The phase ratio of every pair whose two sessions of that phase are recorded data sessions (A3's v1 included).
+
+<!-- generated:cross-phases -->
+| phase | pairs | used | cost: median (range); C# > TS in k of n | wall: median (range); C# > TS in k of n | model_api: median (range); C# > TS in k of n | active − model_api: median (range); C# > TS in k of n |
+|---|---|---|---|---|---|---|
+| v1 | every complete pair | A1, A2, A3, B1, B2, B3 | 0.89 (0.84–1.04); 1 of 6 | 0.93 (0.84–1.32); 2 of 6 | 0.82 (0.73–1.10); 1 of 6 | 2.51 (2.09–4.58); 6 of 6 |
+| v1 | neither flagged nor unpaired | A1, A3, B3 | 0.90 (0.88–1.04); 1 of 3 | 1.06 (0.84–1.32); 2 of 3 | 0.94 (0.73–1.10); 1 of 3 | 2.77 (2.26–4.58); 3 of 3 |
+| v2 | every complete pair | A1, A2, B1, B2, B3 | 0.96 (0.90–1.08); 1 of 5 | 1.11 (0.91–1.16); 3 of 5 | 0.94 (0.83–1.30); 2 of 5 | 1.31 (0.74–1.96); 4 of 5 |
+| v2 | neither flagged nor unpaired | A1, B3 | 1.02 (0.96–1.08); 1 of 2 | 1.15 (1.14–1.16); 2 of 2 | 1.21 (1.11–1.30); 2 of 2 | 1.03 (0.74–1.31); 1 of 2 |
+<!-- /generated:cross-phases -->
+
+### 8.4 Quality, both series
+
+<!-- generated:cross-quality -->
+| series | stack | phase | data sessions | scored | not scored | held-out percent: median (min) | defects: median (max) | accepted |
+|---|---|---|---|---|---|---|---|---|
+| A | C# | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| A | C# | v2 | 2 | 2 | — | 100 (100) | 0 (0) | 2 of 2 |
+| A | TS | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| A | TS | v2 | 3 | 2 | 96fcf4 | 100 (100) | 0 (0) | 2 of 2 |
+| B | C# | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| B | C# | v2 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| B | TS | v1 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+| B | TS | v2 | 3 | 3 | — | 100 (100) | 0 (0) | 3 of 3 |
+<!-- /generated:cross-quality -->
+
+## 9. The A/A checks (G-1 … G-14)
 
 The GO definition is [analysis-contract.md](../../spikes/minigit-bench/inputs/analysis-contract.md) § 10: every G holds
 (G-6 `explained` counts as holds; G-9 never gates), except G-4's subagent half and G-12, which may be `not exercised`
 with replacing evidence. A by-hand G without a dated line is NO GO.
 
-### 7.1 `s-20261030-92a9`
+### 9.1 `s-20261030-92a9`
 
 <!-- generated:aa-92a9 -->
 No G table: no aa-verdicts.json in this series: the tool (commit 2c2555a) was written after the series ran.
@@ -496,7 +753,7 @@ What the records of that series show (§ 5): both twins completed with T1–T5 p
 the rehearsal held for both stacks; the Node pilot was voided (G-8 refuted). The by-hand G-10 and G-13 lines were never
 written for it.
 
-### 7.2 `s-20261030-0c1a`
+### 9.2 `s-20261030-0c1a`
 
 <!-- generated:aa-0c1a -->
 Verdict **STOP**, stops: G-8; computed 2026-10-30T17:10:47.988Z at harness `de9091b54e2b`; T3 rule: `stop`.
@@ -519,7 +776,7 @@ Verdict **STOP**, stops: G-8; computed 2026-10-30T17:10:47.988Z at harness `de90
 | G-14 | the v2 rehearsal for both stacks | holds | csharp holds; node holds | — |
 <!-- /generated:aa-0c1a -->
 
-### 7.3 `s-20261030-bf89` (series A)
+### 9.3 `s-20261030-bf89` (series A)
 
 <!-- generated:aa-bf89 -->
 Verdict **GO**; computed 2026-10-30T18:35:32.914Z at harness `3129eeadfa8d`; T3 rule: `stop`.
@@ -542,23 +799,39 @@ Verdict **GO**; computed 2026-10-30T18:35:32.914Z at harness `3129eeadfa8d`; T3 
 | G-14 | the v2 rehearsal for both stacks | holds | csharp holds; node holds | — |
 <!-- /generated:aa-bf89 -->
 
-### 7.4 The twin spread (G-9)
+### 9.4 `s-20261030-b82e` (series B)
 
-Recorded, never gating; the twins of `92a9` have no G table. The walls of every twin here include the 3 s settle.
+G-6 holds here without an `explained` line: the wall ends at the process exit, so the partition sums to the wall.
 
-<!-- generated:aa-spread -->
-| series | cost twin ratio | wall | model_api | active − model_api | held-out percent diff | defects diff | CPU per mask |
-|---|---|---|---|---|---|---|---|
-| s-20261030-0c1a | 1.07 | 1.05 | 1.14 | 1.36 | 0 | 0 | 0-5: 0.053, 8-13: 0.052 |
-| s-20261030-bf89 | 1.02 | 1.19 | 1.18 | 1.41 | 0 | 0 | 0-5: 0.062, 8-13: 0.050 |
-<!-- /generated:aa-spread -->
+<!-- generated:aa-b82e -->
+Verdict **GO**; computed 2026-10-30T20:53:26.392Z at harness `814d82e66e53`; T3 rule: `stop`.
 
-### 7.5 The by-hand evidence (series A)
+| G | must show | verdict | observed | replacing evidence |
+|---|---|---|---|---|
+| G-1 | the read-back is ok on every init field | holds | c06594: the read-back is ok on every init field; 69fc02: the read-back is ok on every init field; d9de4b: the read-back is ok on every init field | — |
+| G-2 | T1 | holds | c06594: T1 pass; 69fc02: T1 pass; d9de4b: T1 pass | — |
+| G-3 | T2 per model and kind | holds | c06594: T2 pass; 69fc02: T2 pass; d9de4b: T2 pass | — |
+| G-4 | T3 and T4 over matched sources: main and subagent | not exercised | c06594: T3 and T4 pass; 69fc02: T3 and T4 pass; no twin launched a subagent | the subagent half: the E2.S2 smoke fixture's B-T1 on CLI 2.1.310 (test/fixtures/real/claude-2.1.310-bare-smoke): 1 main and 1 subagent transcript file(s); T3 pass, T4 pass |
+| G-5 | T5: B = E within $0.000001 | holds | c06594: T5 pass; 69fc02: T5 pass; d9de4b: T5 pass | — |
+| G-6 | partition sum = wall and unattributed < 5 % (or explained) | holds | c06594: sum 45059 ms = registered wall 45059 ms; unattributed 1.4 %; 69fc02: sum 39657 ms = registered wall 39657 ms; unattributed 1.7 %; d9de4b: sum 41184 ms = registered wall 41184 ms; unattributed 1.5 % | — |
+| G-7 | the same record kinds for each twin; aliases per D12 | holds | both twins carry stream, envelope, O, T, audit, broker, egress with bytes, CPU and spin samples, packages, a score with every step known and a ledger line; every alias resolves to the baseline | — |
+| G-8 | isolation: hosts, the real token 0, no contamination | holds | c06594: allowed CONNECTs within the bare list, refused within the known list, the real token 0, no contamination, canary or token hit; 69fc02: allowed CONNECTs within the bare list, refused within the known list, the real token 0, no contamination, canary or token hit; d9de4b: allowed CONNECTs within the bare list, refused within the known list, the real token 0, no contamination, canary or token hit | — |
+| G-9 | the twin spread, recorded, never gating | recorded | c06594 against 69fc02: {"costRatio":1.0247251607072039,"wallRatio":1.1362180699498197,"modelApiRatio":1.0995447274517043,"activeMinusModelApiRatio":1.3347196549599507,"heldoutPercentDiff":0,"heldoutDefectsDiff":0,"cpuPerMask":{"0-5":0.08313962075126179,"8-13":0.0591400939683845}} | — |
+| G-10 | the scorer by hand on a twin tree and the Node tree | holds | c06594: holds by hand: ~/rsd/minigit/s-20261030-b82e/handcheck/G-10.txt; d9de4b: holds by hand: ~/rsd/minigit/s-20261030-b82e/handcheck/G-10.txt | — |
+| G-11 | quiet check, sampler, spin probe, mask observed | holds | c06594: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed; 69fc02: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed; d9de4b: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed | — |
+| G-12 | the cap stops a session that reaches it at settled spend >= the cap | not exercised | no session reached the cap | dated G-12 line for c06594: ~/rsd/minigit/s-20261030-b82e/handcheck/G-12-P-6-814d82e66e53.txt (P-6, harness 814d82e66e53) |
+| G-13 | each session's class read by hand | holds | c06594: holds by hand: ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt; 69fc02: holds by hand: ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt; d9de4b: holds by hand: ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt | — |
+| G-14 | the v2 rehearsal for both stacks | holds | csharp holds; node holds | — |
+<!-- /generated:aa-b82e -->
 
-Copied whole from `~/rsd/minigit/s-20261030-bf89/handcheck/`, with each file's sha256. The dated lines that cite them are
-in [amendments.md](../../spikes/minigit-bench/inputs/amendments.md) (§ 9.2).
+### 9.5 The by-hand evidence
 
-<!-- generated:handcheck -->
+Copied whole from `~/rsd/minigit/<series>/handcheck/`, with each file's sha256. The dated lines that cite them are in
+`amendments.md` (§ 11.2).
+
+**Series A:**
+
+<!-- generated:handcheck-bf89 -->
 `G-10.txt` (sha256 `cbd56f90090d`):
 
 ```text
@@ -604,83 +877,161 @@ The gap between the partition sum and the recorded wall is the harness's own set
 - Every category the partition knows (build_test, model_api, other_tool, hooks) is present in each record; no span source is missing.
 - Fix: record the CLI process exit as the wall's end (instrument amendment after this A/A, before pair 1).
 ```
-<!-- /generated:handcheck -->
+<!-- /generated:handcheck-bf89 -->
 
-**Not done:** the pair-1 by-hand read-back that the E3b plan registers (argv, read-back, binds, snapshot hashes, first
-stream lines and the package list of both v1 sessions, as a dated `amendments.md` line) has no line for series A. Series
-B should carry it.
+**Series B** (the pair-1 read-back, G-1, is the one the E3b plan registers; series A has none):
 
-## 8. Spend
+<!-- generated:handcheck-b82e -->
+`G-10.txt` (sha256 `a7b04ec0aeaa`):
 
-Every paid line once: the registered prior spend once, then each series' own lines. A ledger of a later series also
-carries the earlier series' lines (`fromSeries`); they are not counted twice here. The rehearsals are $0.
+```text
+G-10 holds (2026-10-30, team lead, by hand). Series s-20261030-b82e.
+Fixed visible test: ~/git/wt/minigit-bench-inputs/test-v1.sh, sha256 3dfcf64304f4aae6c3eb13cb915ebec81cfc3000a690d29a5c3411a4141ac27c (= inputs/hashes.txt).
+Each tree copied to a scratch dir and run in bwrap (--unshare-net; home, mnt, run, tmp hidden), make then bash test-v1.sh:
+- c06594 (C# A/A twin), as the scorer copies it (minus bin/ obj/ node_modules/): make rc 0, PASSED 11 FAILED 0 TOTAL 11.
+- c06594 clean rebuild (build output bin/ obj/ build/ removed, sources incl. the agent's minigit script kept): make rc 0, PASSED 11 FAILED 0 TOTAL 11.
+- d9de4b (Node pilot, no build step): PASSED 11 FAILED 0 TOTAL 11.
+Scorer's records: both test-v1.sh 11/11, buildOk true. The by-hand counts equal the scorer's.
+```
+
+`G-12-P-6-814d82e66e53.txt` (sha256 `5ce0d7a08f13`):
+
+```text
+G-12 replacing evidence (2026-10-30, team lead). No session of s-20261030-b82e reached the $6 cap.
+- E2.S2 broker proof P-6 (todo/PLAN_minigit_stack_bench_E2.md, "The credential broker, and what was run to prove it", P-6).
+- Budget tests green at the run's harness identity 814d82e66e53: clean worktree at d428188 (harnessIdentity = 814d82e66e5355a4093c3a12ec391d6becc4f27c69053f634cde49b18b7e763b),
+  BENCH_REQUIRE_SANDBOX=1 node --test test/budget.test.mjs test/broker.test.mjs test/watchdogs.test.mjs: 43 tests, 43 pass, 0 fail, 0 skipped.
+```
+
+`G-13.txt` (sha256 `367d7b7c1091`):
+
+```text
+G-13 holds (2026-10-30, team lead, read by hand against stream.ndjson and broker.ndjson). Series s-20261030-b82e.
+- c06594: result envelope success, is_error false, 4 turns; exit code 0, no stop; broker 4 forwarding, 4 settled, all status 200, 0 refused -> completed (= recorded).
+- 69fc02: result envelope success, is_error false, 4 turns; exit code 0, no stop; broker 4 forwarding, 4 settled, all status 200, 0 refused -> completed (= recorded).
+- d9de4b: result envelope success, is_error false, 6 turns; exit code 0, no stop; broker 6 forwarding, 6 settled, all status 200, 0 refused -> completed (= recorded).
+```
+
+`readback-pair1.txt` (sha256 `28804e18aa97`):
+
+```text
+G-1 read-back, pair 1 (E3b.S5 step 2; parent §8). Series s-20261030-b82e, harness 814d82e66e53, prereg tag prereg/minigit-bare-20261030.
+Read by hand 2026-10-30 by an Opus judge (Opus 5.5), read-only. Sessions: 078dcd (csharp v1), 14d81c (node v1).
+Verdict: 078dcd holds; 14d81c holds. The launch matches the pins; no record field of the two sessions is wrong.
+- CLI: the pinned read-only copy toolchains/claude-2.1.310, sha256 b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56 = run-map; init claude_code_version 2.1.310.
+- Flags (both): -p --model opus --output-format stream-json --verbose --forward-subagent-text --include-hook-events --setting-sources project --settings harness/settings.json --strict-mcp-config --mcp-config harness/mcp.json --max-budget-usd 6 --tools Agent,Bash,Read,Edit,Write,Glob,Grep,TodoWrite. settings equal byte for byte after the rid; effortLevel high; permissions.allow = BARE_ALLOW; hooks = audit only; mcpServers {}.
+- Env: the same 34 keys; no WSL interop; no build-server variables (defaults).
+- Init: model claude-opus-5-5 (alias opus); permissionMode default; apiKeySource none; cwd box/work; tools Task, Bash, Edit, Glob, Grep, Read, Write (+ TodoWrite unreported by design).
+- bwrap: ro /; tmpfs ~, /mnt, /run, /tmp, /var/tmp; box/tmp -> /tmp; ro node 26.12.1, typescript-7.0.2, harness, net, claude copy; /dev/null over gh; rw box/{work,home,config,nuget,npm,out}; unshare net/pid/ipc; die-with-parent. Nothing else bound. Egress allowed {}; refused api.anthropic.com only.
+- Snapshots: re-hashed; nuget, npm and the TS dotnet part equal the registered parts; the C# .dotnet tree = registered + 7 entries the agent's own dotnet run made 27 s after spawn (cert sentinel, a dev cert, a shm server file; 6819 B = record cacheGrowthBytes). seedCaches refuses a non-matching seed.
+- Prompt bytes: C# v1 402 B sha256 0ed6f096... = prompts-bare.json csharp.v1; TS v1 478 B sha256 2e354d8e... = node.v1.
+- Masks: C# 8-13, TS 0-5, observed; same phase start; spawn skew 4 ms; quiet true. Caps $6 / 60 min / 45 min.
+- Packages: the 4 seeded npm packages only (typescript 7.0.2 pinned); none added, none flagged; NuGet empty.
+Record defect found outside the read-back fields (launch not affected; sessions stand): the series reuses the registered seed, so rids repeat those of s-20261030-bf89; init copied bf89's spend lines (fromSeries) and lib/ledger.mjs appendChargeOnce matches on rid only, so this series' own charges for its data sessions were skipped (pair 1: USD 0.9569538). record.json, run-map usd and the broker logs are correct. Fix after the series as an instrument amendment (charge once per series and rid; rebuild the ledger). handVerdictsFor also matches by rid only.
+```
+<!-- /generated:handcheck-b82e -->
+
+### 9.6 The twin spread (G-9)
+
+Recorded, never gating; the twins of `92a9` have no G table. The twins of 0c1a and bf89 include the 3 s settle in their
+walls; the twins of b82e do not.
+
+<!-- generated:aa-spread -->
+| series | cost twin ratio | wall | model_api | active − model_api | held-out percent diff | defects diff | CPU per mask |
+|---|---|---|---|---|---|---|---|
+| s-20261030-0c1a | 1.07 | 1.05 | 1.14 | 1.36 | 0 | 0 | 0-5: 0.053, 8-13: 0.052 |
+| s-20261030-bf89 | 1.02 | 1.19 | 1.18 | 1.41 | 0 | 0 | 0-5: 0.062, 8-13: 0.050 |
+| s-20261030-b82e | 1.02 | 1.14 | 1.10 | 1.33 | 0 | 0 | 0-5: 0.083, 8-13: 0.059 |
+<!-- /generated:aa-spread -->
+
+## 10. Spend
+
+**The ledger defect.** Series B reused the registered seed, so its rids repeat series A's. `init` copied every earlier
+series' spend lines into series B's ledger (tagged `fromSeries`), and the ledger appended a charge only when no line held
+its rid, whatever the series (`appendChargeOnce`). So series B's own charges were not appended for every rid series A had
+used: the table below marks them. The money gates of series B read the ledger, so they undercounted; no gate was near a
+limit. The run-map's charge, the record's stop-rule figure and the broker's settled spend agree for every session (the
+table's last column checks it), so this record computes the spend from the records, and gives the ledger's figure beside
+it. Fixed in `1bdbe75` (defect 17): one charge per series and rid.
+
+Every paid session once, and the registered prior spend once. The rehearsals are $0 and not listed.
 
 <!-- generated:ledger -->
-| when (UTC for series lines) | series | kind | rid | what | charged |
-|---|---|---|---|---|---|
-| 2026-10-29 | before E3b | prior | — | E1.S3 capture session (one tiny session on an unrelated task) | $0.1810 |
-| 2026-10-29 | before E3b | prior | — | token check (one small claude -p call to check the subscription token; approximate) | $0.0100 |
-| 2026-10-29 | before E3b | prior | — | E2.S2 design run (one bare session, real token in the box) | $0.1119 |
-| 2026-10-29 | before E3b | prior | — | E2.S2 credential-broker proof sessions | $0.0185 |
-| 2026-10-30 | before E3b | prior | — | E2.S2 bare-session smoke through the broker (the first one) | $0.1148 |
-| 2026-10-30 | before E3b | prior | — | E2.S2 first re-smoke after the review fixes | $0.1718 |
-| 2026-10-30 | before E3b | prior | — | E2.S2 second re-smoke | $0.1093 |
-| 2026-10-30 | before E3b | prior | — | E2.S2 third re-smoke, the committed fixture | $0.1089 |
-| 2026-10-30T14:27:53.911Z | s-20261030-92a9 | aa | d3f571 | completed | $0.2228 |
-| 2026-10-30T14:28:00.970Z | s-20261030-92a9 | aa | 433bf6 | completed | $0.2637 |
-| 2026-10-30T14:30:16.630Z | s-20261030-92a9 | rehearsal | 555233 | completed | $0.0000 |
-| 2026-10-30T14:30:25.776Z | s-20261030-92a9 | rehearsal | bd4a53 | completed | $0.0000 |
-| 2026-10-30T14:33:59.382Z | s-20261030-92a9 | pilot | 9804fc | void: contaminated | $0.2121 |
-| 2026-10-30T17:06:16.602Z | s-20261030-0c1a | aa | 58d1fa | completed | $0.2077 |
-| 2026-10-30T17:06:22.882Z | s-20261030-0c1a | aa | a4fddc | completed | $0.2226 |
-| 2026-10-30T17:07:22.616Z | s-20261030-0c1a | rehearsal | a164d6 | completed | $0.0000 |
-| 2026-10-30T17:07:28.710Z | s-20261030-0c1a | rehearsal | ebe7f5 | completed | $0.0000 |
-| 2026-10-30T17:10:41.188Z | s-20261030-0c1a | pilot | c9b413 | void: contaminated | $0.2284 |
-| 2026-10-30T18:26:26.603Z | s-20261030-bf89 | aa | 5f55d0 | completed | $0.2141 |
-| 2026-10-30T18:26:32.954Z | s-20261030-bf89 | aa | 586c41 | completed | $0.2194 |
-| 2026-10-30T18:27:36.111Z | s-20261030-bf89 | rehearsal | 4c53a2 | completed | $0.0000 |
-| 2026-10-30T18:27:42.377Z | s-20261030-bf89 | rehearsal | d7a0b7 | completed | $0.0000 |
-| 2026-10-30T18:30:43.863Z | s-20261030-bf89 | pilot | 98ee3c | completed | $0.2319 |
-| 2026-10-30T19:13:04.161Z | s-20261030-bf89 | data | 14d81c | completed | $0.2101 |
-| 2026-10-30T19:13:15.302Z | s-20261030-bf89 | data | 078dcd | completed | $0.1847 |
-| 2026-10-30T19:16:20.712Z | s-20261030-bf89 | data | 1d2624 | completed | $0.2679 |
-| 2026-10-30T19:16:33.933Z | s-20261030-bf89 | data | ede2a0 | completed | $0.2574 |
-| 2026-10-30T19:20:05.600Z | s-20261030-bf89 | data | f57599 | completed | $0.1909 |
-| 2026-10-30T19:20:11.944Z | s-20261030-bf89 | data | d79dc1 | completed | $0.2118 |
-| 2026-10-30T19:23:33.742Z | s-20261030-bf89 | void | ebd0b0 | void: contaminated | $0.2790 |
-| 2026-10-30T19:23:48.515Z | s-20261030-bf89 | data | 97168d | completed | $0.3012 |
-| 2026-10-30T19:44:44.338Z | s-20261030-bf89 | data | d9638c | completed | $0.2720 |
-| 2026-10-30T20:30:43.630Z | s-20261030-bf89 | data | f9cc17 | completed | $0.1941 |
-| 2026-10-30T20:30:51.346Z | s-20261030-bf89 | data | 922a82 | completed | $0.2155 |
-| 2026-10-30T20:38:32.139Z | s-20261030-bf89 | data | 96fcf4 | completed | $0.2607 |
-| 2026-10-30T20:41:05.672Z | s-20261030-bf89 | void | 3407d8 | void: contaminated | $0.2795 |
+| when (UTC start for sessions) | series | kind | rid | class | charged (records) | line in the series' own ledger |
+|---|---|---|---|---|---|---|
+| 2026-10-29 | before E3b | prior | — | E1.S3 capture session (one tiny session on an unrelated task) | $0.1810 | yes |
+| 2026-10-29 | before E3b | prior | — | token check (one small claude -p call to check the subscription token; approximate) | $0.0100 | yes |
+| 2026-10-29 | before E3b | prior | — | E2.S2 design run (one bare session, real token in the box) | $0.1119 | yes |
+| 2026-10-29 | before E3b | prior | — | E2.S2 credential-broker proof sessions | $0.0185 | yes |
+| 2026-10-30 | before E3b | prior | — | E2.S2 bare-session smoke through the broker (the first one) | $0.1148 | yes |
+| 2026-10-30 | before E3b | prior | — | E2.S2 first re-smoke after the review fixes | $0.1718 | yes |
+| 2026-10-30 | before E3b | prior | — | E2.S2 second re-smoke | $0.1093 | yes |
+| 2026-10-30 | before E3b | prior | — | E2.S2 third re-smoke, the committed fixture | $0.1089 | yes |
+| 2026-10-30T14:26:51.281Z | s-20261030-92a9 | aa | d3f571 | completed | $0.2228 | yes |
+| 2026-10-30T14:26:51.281Z | s-20261030-92a9 | aa | 433bf6 | completed | $0.2637 | yes |
+| 2026-10-30T14:32:56.102Z | s-20261030-92a9 | pilot | 9804fc | void: contaminated | $0.2121 | yes |
+| 2026-10-30T17:05:18.928Z | s-20261030-0c1a | aa | 58d1fa | completed | $0.2077 | yes |
+| 2026-10-30T17:05:18.929Z | s-20261030-0c1a | aa | a4fddc | completed | $0.2226 | yes |
+| 2026-10-30T17:09:28.126Z | s-20261030-0c1a | pilot | c9b413 | void: contaminated | $0.2284 | yes |
+| 2026-10-30T18:25:29.329Z | s-20261030-bf89 | aa | 5f55d0 | completed | $0.2141 | yes |
+| 2026-10-30T18:25:29.332Z | s-20261030-bf89 | aa | 586c41 | completed | $0.2194 | yes |
+| 2026-10-30T18:29:46.684Z | s-20261030-bf89 | pilot | 98ee3c | completed | $0.2319 | yes |
+| 2026-10-30T19:12:01.414Z | s-20261030-bf89 | data | 14d81c | completed | $0.2101 | yes |
+| 2026-10-30T19:12:01.414Z | s-20261030-bf89 | data | 078dcd | completed | $0.1847 | yes |
+| 2026-10-30T19:15:11.577Z | s-20261030-bf89 | data | 1d2624 | completed | $0.2679 | yes |
+| 2026-10-30T19:15:11.578Z | s-20261030-bf89 | data | ede2a0 | completed | $0.2574 | yes |
+| 2026-10-30T19:19:08.256Z | s-20261030-bf89 | data | f57599 | completed | $0.1909 | yes |
+| 2026-10-30T19:19:08.257Z | s-20261030-bf89 | data | d79dc1 | completed | $0.2118 | yes |
+| 2026-10-30T19:22:05.058Z | s-20261030-bf89 | data | ebd0b0 | void: contaminated | $0.2790 | yes |
+| 2026-10-30T19:22:05.059Z | s-20261030-bf89 | data | 97168d | completed | $0.3012 | yes |
+| 2026-10-30T19:43:29.801Z | s-20261030-bf89 | data | d9638c | completed | $0.2720 | yes |
+| 2026-10-30T20:27:36.565Z | s-20261030-bf89 | data | f9cc17 | completed | $0.1941 | yes |
+| 2026-10-30T20:27:36.567Z | s-20261030-bf89 | data | 922a82 | completed | $0.2155 | yes |
+| 2026-10-30T20:37:07.587Z | s-20261030-bf89 | data | 96fcf4 | completed | $0.2607 | yes |
+| 2026-10-30T20:37:07.589Z | s-20261030-bf89 | data | 3407d8 | void: contaminated | $0.2795 | yes |
+| 2026-10-30T20:46:05.095Z | s-20261030-b82e | aa | c06594 | completed | $0.1735 | yes |
+| 2026-10-30T20:46:05.095Z | s-20261030-b82e | aa | 69fc02 | completed | $0.1778 | yes |
+| 2026-10-30T20:50:33.150Z | s-20261030-b82e | pilot | d9de4b | completed | $0.2005 | yes |
+| 2026-10-30T20:54:45.598Z | s-20261030-b82e | data | 14d81c | completed | $0.2331 | **no** |
+| 2026-10-30T20:54:45.598Z | s-20261030-b82e | data | 078dcd | completed | $0.1960 | **no** |
+| 2026-10-30T20:57:46.405Z | s-20261030-b82e | data | 1d2624 | completed | $0.2645 | **no** |
+| 2026-10-30T20:57:46.405Z | s-20261030-b82e | data | ede2a0 | completed | $0.2634 | **no** |
+| 2026-10-30T21:09:33.854Z | s-20261030-b82e | data | f57599 | completed | $0.1699 | **no** |
+| 2026-10-30T21:09:33.854Z | s-20261030-b82e | data | d79dc1 | completed | $0.1977 | **no** |
+| 2026-10-30T21:12:33.469Z | s-20261030-b82e | data | ebd0b0 | completed | $0.2362 | **no** |
+| 2026-10-30T21:12:33.470Z | s-20261030-b82e | data | 97168d | void: contaminated | $0.2680 | **no** |
+| 2026-10-30T21:19:20.466Z | s-20261030-b82e | data | 6848b0 | completed | $0.2578 | yes |
+| 2026-10-31T11:27:27.372Z | s-20261030-b82e | data | f9cc17 | completed | $0.2525 | **no** |
+| 2026-10-31T11:27:27.373Z | s-20261030-b82e | data | 922a82 | completed | $0.2417 | **no** |
+| 2026-10-31T11:32:45.289Z | s-20261030-b82e | data | 96fcf4 | completed | $0.2762 | **no** |
+| 2026-10-31T11:32:45.290Z | s-20261030-b82e | data | 3407d8 | completed | $0.2971 | **no** |
 <!-- /generated:ledger -->
 
 <!-- generated:ledger-totals -->
-| series | paid sessions | bare spend (own lines) |
-|---|---|---|
-| s-20261030-92a9 | 3 | $0.6986 |
-| s-20261030-0c1a | 3 | $0.6587 |
-| s-20261030-bf89 | 16 | $3.7902 |
+| series | paid sessions | bare spend from the records | bare spend in the series' own ledger lines | charged but missing from its own ledger | records, run-map and broker disagree |
+|---|---|---|---|---|---|
+| s-20261030-92a9 | 3 | $0.6986 | $0.6986 | — | none |
+| s-20261030-0c1a | 3 | $0.6587 | $0.6587 | — | none |
+| s-20261030-bf89 | 16 | $3.7902 | $3.7902 | — | none |
+| s-20261030-b82e | 16 | $3.7058 | $0.8095 | 12 sessions, $2.8962 | none |
 
-| total | value | limit | share of limit |
-|---|---|---|---|
-| prior instrument spend (registered, before E3b) | $0.8263 over 8 sessions | — | — |
-| bare spend, every series | $5.1475 | $40 | 12.9 % |
-| all spend (prior + bare) | $5.9738 | $500 | 1.19 % |
+| total | from the records | as the ledgers summed it | limit | share of limit (records) |
+|---|---|---|---|---|
+| prior instrument spend (registered, before E3b) | $0.8263 | $0.8263 | — | — |
+| bare spend, every series | $8.8533 | $5.9570 | $40 | 22.13 % |
+| all spend (prior + bare) | $9.6795 | $6.7833 | $500 | 1.94 % |
 
-Check: the sum of the series' own lines is equal to the carried total in the last series' ledger ($5.1475).
+Check: the last series' ledger, carried lines included, sums its bare lines to $5.9570; the money gates of that series read this figure.
 <!-- /generated:ledger-totals -->
 
-Series B's own spend is not in these totals; it is added when its record is.
+## 11. Instrument defects, in the order they were found
 
-## 9. Instrument defects, in the order they were found
+### 11.1 The defects
 
-### 9.1 The defects
-
-All of them were found between the tag (`41395f7`) and series B's harness (`814d82e66e53`). Each fix was an instrument
-amendment: a dated line naming the accepted harness identity, committed before the series that used it. The script checks
-that every commit below exists and that every harness identity has a dated line.
+Each fix was an instrument amendment: a dated line naming the accepted harness identity. Defects 1–15 were fixed before
+the series that used them; defects 16–18 were found in or after series B and are fixed on `feat/minigit-bench-e3b-fix2`,
+which no series has run yet. The script checks that every commit below exists and that every harness identity has a dated
+line in the `amendments.md` it reads (§ 11.2).
 
 <!-- generated:defects -->
 | # | defect | found by | fix commit | harness identity line | what it would have done to the result |
@@ -700,25 +1051,34 @@ that every commit below exists and that every harness identity has a dated line.
 | 13 | box supervision timers left running | coai code round | `97c9a78` | `faaf55b4ecf7` | a box that failed to start left its timers running. No session hit it. |
 | 14 | per-call `cwd` in the contamination scan | data sessions ebd0b0 (pair 2) and 3407d8 (pair 3), series bf89 | `6b09da2` | `9475b1fed23f` | the scan started every Bash call at the work tree. Both C# v2 sessions ran `cd src` in one call and `cd .. && bash test-v2.sh` in the next, so the scan put `test-v2.sh` one level above the work tree: a high hit and a void. Two false voids, one C# re-run `ran unpaired`, and series bf89 stopped at the second. Against C# in this series. |
 | 15 | the printed "Shell cwd was reset to" line chose the start | coai code round on the `cwd` fix | `52bdec2` | `814d82e66e53` | a command can print that line and choose where the scan thinks it is: false negative. Fixed before series b82e. |
+| 16 | a heredoc run by an interpreter (`python3 - <<'EOF'`) parsed as shell | data session 97168d (pair 2 TS v2), series b82e | `9dac39e` | `198106f80a8b` | the agent edited its TypeScript through an inline Python script; the scan read the script body as shell, and a quoted `"/"` string as a walk of `/`: a high hit and a false void. Its re-run `6848b0` ran unpaired, under `foreign load`. Against TS in this series. Fixed after series B, on `feat/minigit-bench-e3b-fix2`. |
+| 17 | the ledger charged a session once per rid, not once per series and rid | the pair-1 read-back of series b82e (G-1, Opus judge) | `1bdbe75` | `198106f80a8b` | series b82e reused the registered seed, so its rids repeat those of bf89, whose lines `init` had copied in; every b82e session with a repeated rid was not appended to its own ledger, and the money gates read too little (§ 8). No gate was near its limit. The same commit makes a by-hand verdict apply only to the series its evidence names. |
+| 18 | an interpreter or shell launched through a wrapper or by its path did not get the heredoc rule | coai code round on the fix above | `1769c95` | `db8d360cf9a8` | `env python3 - <<EOF` or `/usr/bin/python3 - <<EOF` would still be parsed as shell: the same false void as above. |
 <!-- /generated:defects -->
 
 What the list says about the result, in one place:
 
-- **Two defects voided sessions of one stack only.** Defect 1 voided every TypeScript session it met (found on the first
-  pilot, before any data). Defect 14 voided C# v2 sessions in series A, because the C# agents in those two sessions moved
-  into `src` and back. Neither was a property of the stack; both were properties of the scan meeting one agent habit.
+- **Three defects voided sessions of one stack.** Defect 1 voided every TypeScript session it met (found on the first
+  pilot, before any data). Defect 14 voided C# v2 sessions in series A, because those C# agents moved into `src` and back.
+  Defect 16 voided a TypeScript v2 session in series B, because that agent edited its code through inline Python. None of
+  these is a property of the stack; each is the scan meeting one agent habit. Every data void in this record is one of
+  them.
 - **Most of the others were false negatives** (2, 4, 5, 8, 9, 15): a contaminated session would have counted as data.
-  They were found in code, by the reviews (Opus, coai) and the team lead, not in a paid session. The replay recorded in
-  the team-lead log found no high hit in any real session at the final harness; this record did not re-run it.
-- **Defect 11 biased the time of the instrument checks only**: the A/A and pilot walls of all three series include the
-  3 s settle. The data sessions of series A do not.
+  They were found in code, by the reviews (Opus, coai) and the team lead, not in a paid session.
+- **Defect 11 biased the time of the instrument checks only**: the A/A and pilot walls of 92a9, 0c1a and bf89 include the
+  3 s settle. No data session does.
+- **Defect 17 touched the money gates, not a measure**: the cost of every session is in its record.
 - The `aa-verdicts` tool itself was corrected by the Opus review before it was used for a GO (G-6 compared with the
   registered wall, G-12's replacing line, G-9's defect count, G-10/G-13 not accepting `explained`, G-11's sampler gap,
   G-7's stop only on alias drift; commits `6503006` … `455baf7`).
 
-### 9.2 Every dated line of `amendments.md`
+### 11.2 Every dated line of `amendments.md`
+
+The record's own branch is behind the branch that holds series B's dated lines, so the lines are read from that branch.
 
 <!-- generated:amendments -->
+Read from `spikes/minigit-bench/inputs/amendments.md` at `feat/minigit-bench-e3b-fix2` = `a619e91bd7b2`.
+
 | date | kind | subject | reason or evidence |
 |---|---|---|---|
 | 2026-10-30 | instrument | harness:c825944d587d | instrument: TS toolchain and own box paths were flagged as outside-path (pilot 9804fc); hits persisted; aa-verdicts added (E3b.S4) |
@@ -744,59 +1104,70 @@ What the list says about the result, in one place:
 | 2026-10-30 | instrument | harness:faaf55b4ecf7 | instrument: one finalizer settles the box supervision, so a box that fails to start leaves no timer running (coai; on top of the line before, E3b.S4) |
 | 2026-10-30 | instrument | harness:9475b1fed23f | instrument: G-8 the Bash tool's cwd persists across calls and resets to the work tree when it leaves it (data session ebd0b0, series bf89); on top of the line before (E3b.S4) |
 | 2026-10-30 | instrument | harness:814d82e66e53 | instrument: G-8 the printed "Shell cwd was reset to" line never chooses a start (coai: spoofable); the next start is the work tree after an outside end, unknown after an unknown end; on top of the line before (E3b.S4) |
+| 2026-10-30 | G-10 | holds | c06594 \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-10.txt \| team lead (Opus 5.5) |
+| 2026-10-30 | G-10 | holds | d9de4b \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-10.txt \| team lead (Opus 5.5) |
+| 2026-10-30 | G-12 | holds | c06594 \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-12-P-6-814d82e66e53.txt (P-6, harness 814d82e66e53) \| team lead (Opus 5.5) |
+| 2026-10-30 | G-13 | holds | c06594 \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt \| team lead (Opus 5.5) |
+| 2026-10-30 | G-13 | holds | 69fc02 \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt \| team lead (Opus 5.5) |
+| 2026-10-30 | G-13 | holds | d9de4b \| ~/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt \| team lead (Opus 5.5) |
+| 2026-10-30 | G-1 | holds | 078dcd \| ~/rsd/minigit/s-20261030-b82e/handcheck/readback-pair1.txt \| Opus judge (Opus 5.5) |
+| 2026-10-30 | G-1 | holds | 14d81c \| ~/rsd/minigit/s-20261030-b82e/handcheck/readback-pair1.txt \| Opus judge (Opus 5.5) |
+| 2026-10-30 | instrument | harness:198106f80a8b | instrument: G-8 an interpreter heredoc is code in its own language, not shell (TS v2 97168d, series b82e); the ledger charges once per series and rid; on top of the line before (E3b.S4) |
+| 2026-10-30 | instrument | harness:db8d360cf9a8 | instrument: G-8 an interpreter or shell launched through a wrapper (env, timeout, nice, sudo) or by its path reads its heredoc body like the bare word (coai); on top of the line before (E3b.S4) |
 <!-- /generated:amendments -->
 
-## 10. Threats and limits
+## 12. Threats and limits
 
-- **n is tiny.** Series A reached two complete pairs; one is flagged and holds an unpaired re-run. The registration's own
-  ceiling is n = 3 and descriptive. Nothing here is a finding about C# or TypeScript in general.
-- **Series A stopped early, on instrument errors that hit one stack.** The two false voids removed C# v2 sessions only. The
-  re-run of one of them ran alone and under foreign load. The missing pair 3 cannot be filled inside series A.
+- **n is tiny.** Series B has three pairs; two are flagged and one holds an unpaired re-run, so its "without flagged
+  pairs" line is one pair. Series A adds two. The registration's ceiling is n = 3 and descriptive. Nothing here is a
+  finding about C# or TypeScript in general.
+- **The voids hit one stack at a time.** Series A lost C# v2 sessions, series B one TypeScript v2 session, each to a scan
+  defect; each re-run ran alone, and two of them under foreign load.
 - **The task is tiny.** Every session finished in about a minute with a handful of turns and no subagent (§ 5.3), and the
   C# build-and-test time is a small slice of the wall. On this task the comparison mostly measures how many model tokens
-  each stack's agent used, not how the toolchains behave under load or at scale.
-- **Quality is at the ceiling** (§ 6.5): every scored session passed everything, so quality does not separate the stacks.
-- **Walls of the instrument checks include the 3 s settle** (series 92a9, 0c1a, and the A/A and pilot of bf89). The G-9
-  wall spread is therefore slightly compressed.
-- **Prompt-cache warmth.** The A/A twins in each series started cold (first-turn cache read in § 5.2); later sessions
-  started warm. The two cells of a pair start in the same tick, so warmth meets both stacks alike within a pair.
+  each stack's agent used, not how the toolchains behave at scale.
+- **Quality is at the ceiling** (§ 7.5, § 8.4): it does not separate the stacks here.
+- **Each series' harness.** 92a9 `e63941bdbdf9`; 0c1a `de9091b54e2b`; bf89 `3129eeadfa8d` (A/A, pilot) and `faaf55b4ecf7`
+  (data); b82e `814d82e66e53`. The data numbers of A and B are computed the same way; only the classing differs. Defects
+  16–18 are fixed on a harness no series has run.
+- **Flagged pairs and load.** `foreign load` sits on A2, B1 and B2. The operator's noisy start of B3 is not in the records
+  (§ 4); the medians are shown with and without B3 (§ 8.2).
+- **Prompt-cache warmth.** The A/A twins started cold (first-turn cache read, § 5.2); later sessions started warm. The two
+  cells of a pair start in the same tick, so warmth meets both stacks alike within a pair.
 - **All cache writes were 1h writes** (§ 5.2), priced at the 1h rate. A tool that prices them at the 5m rate gets a lower
   figure for both stacks.
-- **One model id, one CLI version, one machine.** D12 catches a new id behind the `opus` alias, not a change behind the
-  same id. Server-side latency and time of day are not controlled.
-- **Records missing:** `96fcf4` has no record and no score; there is no `pairs/p3.json`; series 92a9 has no G table; the
-  pilot `9804fc` kept no contamination hits; the V16 mixed-chain count is not in any record; the pair-1 read-back line was
-  not written.
+- **Two windows, one model id, one CLI version, one machine.** D12 catches a new id behind the `opus` alias, not a change
+  behind the same id. Series B's pair 3 ran on the next day. Server-side latency and time of day are not controlled.
+- **Records missing:** series A's `96fcf4` has no record and no score; series A has no `pairs/p3.json`; series 92a9 has no
+  G table; the pilot `9804fc` kept no contamination hits; the V16 mixed-chain count is not in any record; series A has no
+  pair-1 read-back line; the replay behind "every real session completes at the fix2 harness" was not re-run here.
 - **Known residual risks of the box, stated in [module_minigit_bench.md](../module_minigit_bench.md) and not closed:** the
   egress proxy checks only the first TLS ClientHello of a tunnel (a second hello or a TLS 1.2 renegotiation is piped
   unread); the contamination scan reads only the immediate wrapper form of a walker (`sudo xargs find`, or a walker
   started by a script or a shell function, is not seen); the session scan cannot see a token broken by more whitespace
   than its window overlap.
 
-## 11. Series B (`s-20261030-b82e`) — running
-
-> **Placeholder.** Series B runs the same registration on the fixed instrument (harness `814d82e66e53`, which includes
-> defects 14 and 15). Its A/A, rehearsal, pilot, G table, pairs, spend and the bare arm's reading will be added here, from
-> `data/s-20261030-b82e.json`, when it ends. Nothing in this record is a result of series B.
-
-## 12. How to re-run the extraction
+## 13. How to re-run the extraction
 
 ```bash
 # from the repository root; reads ~/rsd/minigit/<series>/ (or $MINIGIT_RUNS), writes research/minigit/data/<series>.json
-node research/minigit/tools/extract.mjs
-node research/minigit/tools/extract.mjs --series s-20261030-b82e     # one series, e.g. series B when it ends
-# rewrites every generated block of this file from research/minigit/data/
-node research/minigit/tools/render.mjs
+node research/minigit/tools/extract.mjs                                 # all four series
+node research/minigit/tools/extract.mjs --series s-20261030-b82e        # one series
+# rewrites every generated block of this file from research/minigit/data/; the dated lines come from the named ref
+node research/minigit/tools/render.mjs --amendments-ref feat/minigit-bench-e3b-fix2
 ```
 
 - `tools/extract.mjs` is read-only on the runs root. It reads `run-map.json`, `ledger.ndjson`, `aa-verdicts.json`,
   `rehearsal-v2.json`, `pairs/p<k>.json`, `pairs/*-cpu.ndjson`, `handcheck/*.txt` and each session's `record.json`,
   `meta.json` and `broker.json` (and, for a session without a record, the envelope line of `stream.ndjson`). It never
   opens `score/` (the held-out cases), never copies a canary or a dummy token, and writes `~` for the operator's home.
-- It recomputes every cell and ratio from the session records and compares them with the harness's own `pairs/p<k>.json`;
-  for pairs 1 and 2 of series A they agree (`pairCrosscheck` in the data file).
+- It recomputes every cell and ratio from the session records and compares them with the harness's own `pairs/p<k>.json`
+  (`pairCrosscheck` in each data file): they agree for series A's pairs 1–2 and series B's pairs 1–3.
+- It charges every paid session from the run-map and checks that figure against the record and the broker (`charges` in
+  each data file); it lists the sessions missing from the series' own ledger.
 - `tools/render.mjs` fails on an unknown block, a missing data file, a defect commit that does not exist, or a harness
-  identity with no dated line.
+  identity with no dated line. When `--amendments-ref` is left out it reads the working tree's `amendments.md`, which on
+  this branch lacks series B's lines and the fix2 identities, so the defect check fails.
 - The data files name the sha256 of each series file they were read from (`extractedFrom.sources`).
 
 Not built: the plan's `bare-report.mjs` (E3b.S4, "Interim record") does not exist; this extractor and renderer stand in

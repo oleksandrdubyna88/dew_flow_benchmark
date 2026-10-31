@@ -1262,5 +1262,40 @@
    "pilot": 0.212126
   },
   "ceilingUsdSpent": 1.524882
+ },
+ "charges": {
+  "rows": [
+   {
+    "rid": "d3f571",
+    "kind": "aa",
+    "class": "completed",
+    "runMapUsd": 0.2228268,
+    "recordStopRuleUsd": 0.2228268,
+    "brokerUsd": 0.2228268,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "433bf6",
+    "kind": "aa",
+    "class": "completed",
+    "runMapUsd": 0.2636632,
+    "recordStopRuleUsd": 0.2636632,
+    "brokerUsd": 0.2636632,
+    "inOwnLedger": true
+   },
+   {
+    "rid": "9804fc",
+    "kind": "pilot",
+    "class": "void: contaminated",
+    "runMapUsd": 0.2121264,
+    "recordStopRuleUsd": 0.2121264,
+    "brokerUsd": 0.2121264,
+    "inOwnLedger": true
+   }
+  ],
+  "fromRecordsUsd": 0.698616,
+  "missingFromLedger": [],
+  "missingUsd": 0,
+  "disagree": []
  }
 }
