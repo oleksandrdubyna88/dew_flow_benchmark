@@ -1,7 +1,14 @@
 # PLAN — exploratory pilot: language-comparison task 1 on the v1 bare harness, 3 C# ∥ TypeScript pairs, to see v2's cost and time scale early
 
-> Status: **plan only, nothing implemented yet; epoch 1 open since 2026-10-31 with 0 changes, approved by the coai plan round
-> (PROCEED from both reviewers on `f858222`, its five findings applied as the baseline).** One unit, no epics. Owner-authorised (2026-10-31), **exploratory, not
+> Status: **IMPLEMENTED and RUN, 2026-11-01.** Built on `feat/lang-explore-task1` (coai code gate PROCEED, re-review PROCEED;
+> pilot suite 150/150, v1 1232/1232 with 0 skipped under `BENCH_REQUIRE_SANDBOX=1` at `6191377`), run as series `x-20261101-13cc`:
+> 3 pairs, 6 of 6 sessions completed and accepted, 0 voids, $1.04 in all. Results: `research/lang-v2/EXPLORE_task1_2026-11-01.md`
+> (generated) and `research/lang-v2/EXPLORE_task1_2026-11-01_analysis.md` (the reading, with seven findings for v2 E1). Promoted
+> from `todo/` on 2026-11-01; the code comments and the pinned `spikes/lang-explore/inputs/explore.json` still name the plan at its
+> `todo/` path, as they were when the series ran, and are not edited after it. The approved body below is unchanged.
+>
+> Status when approved: plan only, epoch 1 open since 2026-10-31 with 0 changes, approved by the coai plan round
+> (PROCEED from both reviewers on `f858222`, its five findings applied as the baseline). One unit, no epics. Owner-authorised (2026-10-31), **exploratory, not
 > evidence**: it is NOT part of `todo/PLAN_lang_comparison_v2.md`'s pre-registered series and replaces none of its steps (its D16
 > pilot still runs task 1 on v2's harness). Scope: a new spike `spikes/lang-explore/` that imports `spikes/minigit-bench/`; four
 > named widenings of v1 files (§2.2); held-out cases, references and raw records outside git under `~/rsd/lang-v2/explore/`; one
