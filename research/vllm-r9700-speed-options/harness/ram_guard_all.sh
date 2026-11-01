@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ram_guard_all.sh <pid> [min_mb]: while process <pid> lives, read Windows "Available MBytes" every 15 s. Below the
 # limit: stop every vllmprtest-* container and send TERM to <pid> (its EXIT trap restores the operator's server).
+# When <pid> leads its own process group (started with setsid), the whole group gets TERM, so no child runs on.
 set -u
 pid="$1"; min="${2:-4096}"; W="/mnt/c/Program Files/WSL/wslc.exe"; i=0
 while kill -0 "$pid" 2>/dev/null; do
@@ -8,7 +9,7 @@ while kill -0 "$pid" 2>/dev/null; do
   if [[ "$mb" =~ ^[0-9]+$ ]] && (( mb < min )); then
     echo "$(date '+%T') RAM GUARD: available $mb MB < $min MB, stopping tests"
     for c in $("$W" list --no-trunc 2>/dev/null | tr -d '\r' | awk 'NR>1{print $NF}' | grep -E '^vllmprtest-' || true); do "$W" stop "$c" >/dev/null 2>&1; done
-    kill -TERM "$pid"; exit 1
+    kill -TERM -- -"$pid" 2>/dev/null || kill -TERM "$pid"; exit 1
   fi
   (( i % 20 == 0 )) && echo "$(date '+%T') available RAM ${mb} MB"
   i=$((i+1)); sleep 15

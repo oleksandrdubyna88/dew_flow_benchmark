@@ -1,0 +1,20 @@
+2026-10-28 21:03:11 NIGHT START, deadline 2026-10-29 07:15:00
+2026-10-28 21:19:33 prodcheck.log rc=0
+2026-10-28 22:19:33 quiet wait rc=0 (124: not quiet after 60 min, the A/B runs anyway; load is in each arm line)
+2026-10-28 22:27:17 speed_F.log rc=143
+STOP after the final A/B
+restore: stopping test container vllmprtest-sp-fbase-1
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+a3669f56f9f98fcc76cc9d74dd9789e8e4decee431724fdd541ea773ad2c8764
+restore: started at 2026-10-28T22:27:50+01:00
+2026-10-28 22:31:44 NIGHT2 START, deadline 2026-10-29 07:15:00
+2026-10-28 22:42:50 speed_CB_night.log env ONLY=none /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-28 22:49:17 speed_CB_night.log env ONLY=draft-coarse-largeM /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-28 22:54:29 speed_CB_night.log env ONLY=draft-bs-1 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-28 22:59:50 speed_CB_night.log env ONLY=draft-bs-2 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-28 23:09:50 quiet check rc=0
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+f25d9aad11440e624e6c898448e5ee807340a86ef54efda678a89cc7363ab2ef
+restore: started at 2026-10-28T23:35:17+01:00

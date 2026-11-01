@@ -1,0 +1,9 @@
+2026-10-30 00:12:44 NIGHT3 START, deadline 2026-10-30 07:15:00, coai-exp processes 22
+2026-10-30 00:18:49 phaseC2.log phase_c2 rc=0
+2026-10-30 00:44:58 speed_CB_night3.log env ONLY=draft-bs-4 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-30 01:27:04 speed_CB_night3.log env ONLY=draft-bs-12 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_CB.sh rc=0
+2026-10-30 05:02:07 NIGHT3 DONE (A/B done: no, tries 0)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+8bbe8469fd0d2f79d183e7e7f20805d7d4645b69d23a8ee23edad969b46eea4b
+restore: started at 2026-10-30T05:02:12+01:00

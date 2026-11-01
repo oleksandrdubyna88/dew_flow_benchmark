@@ -1,0 +1,32 @@
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:55:16 default rep 1
+rc=0 8 kernel times
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:56:07 tuned rep 1
+rc=0 8 kernel times
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:56:46 default rep 2
+rc=0 8 kernel times
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:57:24 tuned rep 2
+rc=0 8 kernel times
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:58:02 default rep 3
+rc=0 8 kernel times
+OK: no new disk event (newest 4566)
+=== 2026-10-31 17:58:40 tuned rep 3
+rc=0 8 kernel times
+bs  default_us  tuned_us  change   (median of reps)
+ 1       77.97     70.67    -9.4 %   n=3/3
+ 2      230.20    195.61   -15.0 %   n=3/3
+ 3      318.32    274.61   -13.7 %   n=3/3
+ 4      392.72    352.51   -10.2 %   n=3/3
+ 6      545.59    505.72    -7.3 %   n=3/3
+ 8      692.88    656.17    -5.3 %   n=3/3
+12      900.45    868.86    -3.5 %   n=3/3
+16     1110.13   1081.88    -2.5 %   n=3/3
+default bs 1 config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+default bs 4 config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+tuned bs 1 config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4}
+tuned bs 4 config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+B1 KERNEL: faster

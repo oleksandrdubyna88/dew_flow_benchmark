@@ -31,6 +31,8 @@ Speed of the operator's server (`vllm bench serve`, random 1,024 tokens in / 512
 The rows are on different settings or days. Compare neighbouring rows only. The clean A/B proofs are
 in section 5.
 
+**Update 2026-11-01:** the follow-up series ([RESULTS_vllm_029_r9700_speed_options.md](RESULTS_vllm_029_r9700_speed_options.md) § 13) found one more kept setting: MTP with 3 draft tokens plus `--attention-backend TRITON_ATTN`, +11–12 % tok/s at 1 request and +13.5–14 % at 4 against MTP 2 with the ROCm default backend, GSM8K equal. That series uses the operator's sampling defaults, so its absolute numbers (76 → 85 tok/s at 1 request) are not comparable with the table above. The operator's `start-vllm.ps1` starts with these two settings by default since 2026-11-01.
+
 Quality for fixes 1 and 3 did not change in a way we could measure: GSM8K (200 samples, greedy) is
 87.0% with the Triton kernel, 86.5% with the hybrid kernel (same day), and 88.5% before and after the MoE
 file (same day). **Fix 2 (MTP) was not measured on GSM8K.** With MTP, 15 of 20 greedy outputs are
@@ -405,4 +407,5 @@ PR <https://github.com/vllm-project/vllm/pull/49539>, PR <https://github.com/vll
 | An upstream PR with the tuned MoE file (needs the operator's approval of the text) | operator decides |
 | An upstream report of the Ray 2.59 / `ROCR_VISIBLE_DEVICES` problem in `benchmark_moe.py` | operator decides |
 | Remove the backports when a new image contains #52637 and #49539 | operator, at the next image upgrade |
-| Seven more speed options (MTP 1/3 drafts, batched tokens, FP8 KV, `TRITON_ATTN`, linear kernel at M 6–16, BF16 draft MoE file, int4 keys 24–128): partly measured 2026-10-27/28 — `mtp3` and `TRITON_ATTN` pass, the combination is not tested. See [RESULTS_vllm_029_r9700_speed_options.md](RESULTS_vllm_029_r9700_speed_options.md) | operator decides on the final A/B |
+| Seven more speed options (MTP 1/3 drafts, batched tokens, FP8 KV, `TRITON_ATTN`, linear kernel at M 6–16, BF16 draft MoE file, int4 keys 24–128): partly measured 2026-10-27/28 — `mtp3` and `TRITON_ATTN` pass; the combined A/B started 2026-10-28 and was paused after its first `base` round. See [RESULTS_vllm_029_r9700_speed_options.md](RESULTS_vllm_029_r9700_speed_options.md) § 11 | resume the final A/B on a quiet PC |
+| Update 2026-11-01 for the row above: the final A/B is done — MTP 3 + `TRITON_ATTN` passes and is the production default; the BF16 draft file, the option 7 tile patch, MTP 1, FP8 KV and `--max-num-batched-tokens 8192` are not kept. Phase B2 (int4 keys 24–128) runs since 2026-11-01; `mtp3 + tattn + mnbt8k` and the cause of the one-request stall stay open. See [RESULTS_vllm_029_r9700_speed_options.md](RESULTS_vllm_029_r9700_speed_options.md) § 13 | agent (B2); operator decides the rest |

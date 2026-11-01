@@ -1,0 +1,22 @@
+2026-10-31 16:58:54,801	WARNING authentication_token_setup.py:85 -- Token authentication is enabled for this Ray cluster. Set RAY_AUTH_MODE=disabled to opt out. For more information, see https://docs.ray.io/en/latest/ray-security/token-auth.html
+2026-10-31 16:58:54,802	INFO authentication_token_setup.py:50 -- Generated new authentication token and saved to /root/.ray/auth_token
+2026-10-31 16:58:57,337	INFO worker.py:2033 -- Started a local Ray instance.
+Namespace(model='/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ', tp_size=1, enable_expert_parallel=False, dtype='auto', use_deep_gemm=False, save_dir='./', seed=0, batch_size=[1, 2, 3, 4, 6, 8, 12, 16], tune=False, trust_remote_code=True, model_prefix=None)
+[36m(pid=392)[0m WARNING 10-31 16:59:00 [rocm.py:134] Using CUDA_VISIBLE_DEVICES on ROCm is deprecated and support will be removed in vLLM v0.26.0. Please use HIP_VISIBLE_DEVICES instead.
+[36m(BenchmarkWorker pid=392)[0m INFO 10-31 16:59:06 [fused_moe.py:1154] Using configuration from /moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json for MoE layer.
+Batch size: 1, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4}
+Kernel time: 70.81 us
+Batch size: 2, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+Kernel time: 195.41 us
+Batch size: 3, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+Kernel time: 274.54 us
+Batch size: 4, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+Kernel time: 352.62 us
+Batch size: 6, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+Kernel time: 505.60 us
+Batch size: 8, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1}
+Kernel time: 655.96 us
+Batch size: 12, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 2, 'num_stages': 2, 'waves_per_eu': 2}
+Kernel time: 867.81 us
+Batch size: 16, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 1, 'num_warps': 2, 'num_stages': 2, 'waves_per_eu': 2}
+Kernel time: 1081.69 us
