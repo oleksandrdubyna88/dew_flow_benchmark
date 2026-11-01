@@ -6,7 +6,7 @@
 //    characters, plus exact substrings for names that are not words. These are public (they are in the plan), so a finding names the needle.
 import { parseTokens, SHINGLE_WORDS } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { wordsWithLines } from './push-text.mjs';
+import { lineIndex, wordsWithLines } from './push-text.mjs';
 
 const shinglesOf = text => {
   const words = wordsWithLines(text).map(w => w.word);
@@ -55,6 +55,8 @@ export function findAidHits(path, text, { shingles, literals }) {
 }
 
 const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// the words of a multi-word needle are joined by any run of whitespace, so a needle wrapped over lines is still the needle
+const wordPattern = needle => needle.split(/\s+/).map(escapeRegExp).join('\\s+');
 const WORD_EDGE = ['(?<![A-Za-z0-9])', '(?![A-Za-z0-9])'];
 
 /** ok({ words, substrings, matchers }) from the parsed needle file, or a fail naming what is wrong with it. */
@@ -65,15 +67,18 @@ export function parseKnownNeedles(file) {
     if (!Array.isArray(file[key]) || file[key].some(n => typeof n !== 'string' || n.trim() === '')) return fail(`the needle file's ${key} must be a list of non-empty strings`);
   }
   const matchers = [
-    ...file.words.map(n => ({ name: n, re: new RegExp(`${WORD_EDGE[0]}${escapeRegExp(n)}${WORD_EDGE[1]}`) })),
-    ...file.substrings.map(n => ({ name: n, re: new RegExp(escapeRegExp(n)) })),
+    ...file.words.map(n => ({ name: n, re: new RegExp(`${WORD_EDGE[0]}${wordPattern(n)}${WORD_EDGE[1]}`, 'g') })),
+    ...file.substrings.map(n => ({ name: n, re: new RegExp(escapeRegExp(n), 'g') })),
   ];
   return ok({ words: file.words, substrings: file.substrings, runBaseOnly: file.runBaseOnly ?? [], matchers });
 }
 
-/** Every known-task needle found in `text`: one finding per needle per line. */
+/** Every known-task needle found in `text` (over the whole text, so a wrapped needle counts): one finding per needle per starting line. */
 export function findKnownNeedles(path, text, { matchers }) {
-  const lines = text.split('\n');
-  return lines.flatMap((line, i) => matchers.filter(m => m.re.test(line)).map(m => ({ path, line: i + 1, what: `needle ${m.name}` })));
+  const lineOf = lineIndex(text);
+  const seen = new Set();
+  return matchers
+    .flatMap(m => [...text.matchAll(m.re)].map(hit => ({ path, line: lineOf(hit.index), what: `needle ${m.name}` })))
+    .filter(f => { const key = `${f.line}\0${f.what}`; return !seen.has(key) && seen.add(key); })
+    .sort((a, b) => a.line - b.line);
 }
-

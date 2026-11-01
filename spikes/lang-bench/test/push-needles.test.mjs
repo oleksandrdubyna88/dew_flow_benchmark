@@ -91,3 +91,13 @@ test('A_leaked_passage_with_markup_or_a_slash_every_five_words_is_still_caught_b
   const droppedTokens = wrapped(w => `${w}/`).split(/\s+/).filter(t => !/[/\\_]/.test(t)).join(' ');
   assert.equal(findAidHits('p', droppedTokens, needles).length, 0, 'the refuted reading sees nothing');
 });
+
+test('A_multi_word_needle_wrapped_over_lines_is_found_and_reported_where_it_starts', () => {
+  const text = 'intro\nThis is the Counting\nRooms problem, and Weird\n  Algorithm too, and Counting   Rooms again.\n';
+  const hits = findKnownNeedles('todo/tasks/03-x.md', text, known).map(h => [h.line, h.what]);
+  assert.deepEqual(hits, [[2, 'needle Counting Rooms'], [3, 'needle Weird Algorithm'], [4, 'needle Counting Rooms']]);
+  // the refuted approach: one line at a time sees neither wrapped needle
+  const lineByLine = text.split('\n').flatMap(l => findKnownNeedles('p', l, known));
+  assert.equal(lineByLine.filter(h => h.what === 'needle Weird Algorithm').length, 0);
+  assert.equal(findKnownNeedles('p', 'Counting-Rooms and CountingRooms and counting rooms\n', known).length, 0, 'only whitespace joins the words, and case still counts');
+});
