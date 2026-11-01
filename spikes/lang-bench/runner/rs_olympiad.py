@@ -6,11 +6,13 @@ byte and nothing more. A wall time over the limit is a time limit even when the 
 import os
 import selectors
 import signal
-import subprocess
 from typing import NamedTuple
 
 import rs_exec as ex
+import rs_launch as rl
 import rs_report as rp
+import rs_scope
+import rs_view
 from rs_report import CaseResult
 
 
@@ -20,6 +22,7 @@ class Case(NamedTuple):
     expected: bytes
     r_ids: tuple = ()
     comparison: object = None
+    fixtures: object = None
 
 
 def _common_prefix(a, b):
@@ -78,6 +81,9 @@ class Outcome(NamedTuple):
     wall_ms: int
     returncode: int
     leftover: object
+    memory: dict
+    launched: object
+    road: dict
 
 
 class _Pump:
@@ -175,34 +181,30 @@ class _Pump:
                 stream.close()
 
 
+def _launch(case, config, lifecycle, stderr_path):
+    """Start the case in its own view when `--case-view` is given (fixtures written into it first), else in the workspace."""
+    cwd = config.workspace
+    if config.case_view:
+        cwd = rs_view.require(rs_view.view_of(config.case_view, case.id))
+        rs_view.write_fixtures(cwd, case.fixtures)
+    return rl.start(config, case.id, lifecycle, stderr_path, cwd)
+
+
 def _execute(case, config, comparer, stderr_path):
-    argv = ex.launch_argv(config.prefix, case.id)
-    started = ex.now_ms()
-    with open(stderr_path, "wb") as err:
-        proc = subprocess.Popen(argv, cwd=config.workspace, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, start_new_session=True)
-    pidfd = ex.pidfd_of(proc)
-    pump = _Pump(proc, pidfd, case.stdin, comparer, stderr_path)
+    lifecycle = rs_scope.lifecycle_for(config, case.id)
+    launched = _launch(case, config, lifecycle, stderr_path)
+    pump = _Pump(launched.proc, launched.pidfd, case.stdin, comparer, stderr_path)
     try:
-        end = pump.run(started, config.limit_ms)
-        wall = (pump.exit_ms or ex.now_ms()) - started
-        return _reap(proc, end, wall, config)
+        end = pump.run(launched.clock_ms, config.limit_ms)
+        wall = (pump.exit_ms or ex.now_ms()) - launched.clock_ms
+        settled = lifecycle.settle(launched, end)
+        return Outcome(end, wall, settled.code, settled.leftover, settled.memory, launched, lifecycle.road)
     except BaseException:  # the runner itself is being stopped (a signal): never leave the program under test running
-        config.lifecycle.kill(proc)
+        lifecycle.kill(launched.proc)
         raise
     finally:
         pump.close()
-        if pidfd is not None:
-            os.close(pidfd)
-
-
-def _reap(proc, end, wall_ms, config):
-    if end != "exited":
-        config.lifecycle.kill(proc)
-    code = proc.wait()
-    leftover = config.lifecycle.leftover(proc) if end == "exited" else None
-    if leftover:
-        config.lifecycle.kill(proc)
-    return Outcome(end, wall_ms, code, leftover)
+        launched.close()
 
 
 # ---- judging --------------------------------------------------------------------------------------------------------------------
@@ -214,6 +216,12 @@ def _exit_reason(code):
 def _over_time(case, config, out, comparer):
     over = out.end == "timeout" or out.wall_ms > config.limit_ms
     return (rp.time_text(out.wall_ms, config.limit_ms, config.basis), None, []) if over else None
+
+
+def _out_of_memory(case, config, out, comparer):
+    """The kernel killed a process of the program's cgroup for memory: a failure whatever the exit status (a parent that exits 0 over an
+    OOM-killed child is never a pass)."""
+    return ("memory limit", None, [f"  memory.events: oom_kill {out.memory['oomKill']}"]) if out.memory.get("oomKill") else None
 
 
 def _mismatched(case, config, out, comparer):
@@ -233,8 +241,8 @@ def _short(case, config, out, comparer):
 
 
 def _judge(case, config, out, comparer):
-    """(reason, first mismatch dict or None, detail lines) of a failed case, or None for a pass: time, then output, then status."""
-    for check in (_over_time, _mismatched, _flooded, _bad_exit, _short):
+    """(reason, first mismatch dict or None, detail lines) of a failed case, or None for a pass: time, memory, then output, then status."""
+    for check in (_over_time, _out_of_memory, _mismatched, _flooded, _bad_exit, _short):
         failed = check(case, config, out, comparer)
         if failed is not None:
             return failed
@@ -248,20 +256,21 @@ def _difference(case, comparer, byte):
 
 def _stderr_record(path):
     size = os.path.getsize(path) if os.path.exists(path) else 0
-    return {"known": True, "bytes": size, "tail": ex.read_tail(path)}
+    return {"known": True, "bytes": size, "truncated": size > ex.CAPTURE_CAP, "tail": ex.read_tail(path)}
 
 
 def run_case(case, config):
-    """Run `bash run.sh` for one olympiad case and judge it -> CaseResult."""
+    """Run `bash run.sh` for one olympiad case and judge it -> CaseResult. Raises LaunchFailed (no verdict) when no sandbox was reported."""
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
-    memory = config.lifecycle.memory(case.id)
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
-    lifecycle = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), memory, capture)
+    program = out.launched.program
+    record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, program)
     failed = _judge(case, config, out, comparer)
-    tail = rp.capture_lines(capture) + (rp.memory_line(memory),) + rp.leftover_lines(out.leftover)
+    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(program)
+    launch_ms = out.launched.launch_ms
     if failed is None:
-        return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, lifecycle, out.wall_ms, case.comparison)
+        return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, record, out.wall_ms, case.comparison, launch_ms)
     reason, mismatch, lines = failed
-    return CaseResult(case.id, "FAIL", reason, 0, case.r_ids, tuple(lines) + tail, mismatch, lifecycle, out.wall_ms, case.comparison)
+    return CaseResult(case.id, "FAIL", reason, 0, case.r_ids, tuple(lines) + tail, mismatch, record, out.wall_ms, case.comparison, launch_ms)

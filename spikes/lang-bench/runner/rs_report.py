@@ -1,8 +1,11 @@
 """rs_report: the lines the runner prints (FORMAT v2 5.5) and the JSON result it writes.
 
 Everything here returns text or plain dicts; nothing prints. The JSON result is
-`{ format: 1, runner, grammar: 2, kind, build, cases: [{ id, status, reason, rIds, entries, firstMismatch, lifecycle, wallMs }], python }`;
-what was not measured is `{ known: false, why }`, never zero.
+`{ format: 1, runner, grammar: 2, kind, build, launch, emptyProgramMs, cases: [{ id, status, reason, rIds, entries, firstMismatch,
+lifecycle, wallMs, launchMs }], python }`; what was not measured is `{ known: false, why }`, never zero. `wallMs` is the program's wall from
+the case clock (the launcher's `child-pid` with `--launch-status`, else the spawn), `launchMs` the time from the spawn to that line,
+`emptyProgramMs` an empty program timed through the same prefix once per run, `launch` is `{ failed, stderr }` (a launch that failed
+is exit 3 and no case verdict). `lifecycle.signalled` says which pid the runner knows as the program's and how it was found.
 """
 import sys
 from dataclasses import dataclass
@@ -12,7 +15,7 @@ import rs_fields
 import rs_lex as lex
 from rs_transcript import abbreviate, canonical, render_actual
 
-RUNNER_VERSION = "0.1.0"
+RUNNER_VERSION = "0.2.0"
 GRAMMAR = 2
 RESULT_FORMAT = 1
 DASH = "—"
@@ -32,6 +35,7 @@ class CaseResult:
     lifecycle: Optional[dict] = None
     wall_ms: int = 0
     comparison: Optional[str] = None
+    launch_ms: Optional[int] = None
 
 
 def render_case(result):
@@ -182,24 +186,65 @@ def _unknown(value, why):
     return value or {"known": False, "why": why}
 
 
-def plain_lifecycle(leftover, stderr=None, memory=None, capture=None):
-    """The lifecycle record of a case run on the plain path (no cgroup): what was not observed is unknown, not zero."""
+PLAIN_ROAD = {"kill": "killpg", "leftoverEvidence": "process group (killpg 0)"}
+
+
+def signalled_record(program):
+    """Which pid the runner knows as the program's and how it found it. An olympiad program is never signalled (`signal` is null): the
+    pid is what the exit was awaited on."""
+    if program is None:
+        return {"signal": None, "pid": None, "found": "not looked for"}
+    return {"signal": None, "pid": program.pid, "found": program.found}
+
+
+def fork_record(program):
+    """The finding `fork`: more than one candidate in the program's cgroup where D38 promises exactly one. Unknown when it was not counted."""
+    if program is None or program.count is None:
+        return {"known": False, "why": "the processes of the program's cgroup were not counted"}
+    return {"known": True, "found": program.count > 1, "count": program.count}
+
+
+def fork_lines(program):
+    return (f"  fork: {program.count} processes in the program's cgroup where one was expected",) if program is not None and (program.count or 0) > 1 else ()
+
+
+def plain_lifecycle(leftover, stderr=None, memory=None, capture=None, road=None, program=None):
+    """The lifecycle record of a case: what was not observed is unknown, not zero. `road` names the way the leftovers were found and the
+    kill was done (the plain path: the process group; the scope path: `cgroup.procs` and `cgroup.kill`), so a reader knows which road ran."""
+    road = road or PLAIN_ROAD
     return {
         "stop": {"known": False, "why": "this program is not signalled"},
+        "signalled": signalled_record(program),
+        "fork": fork_record(program),
         "leftover": {"known": True, "found": bool(leftover)} if leftover is not None else _unknown(None, "not checked"),
-        "leftoverEvidence": "process group (killpg 0)",
+        "leftoverEvidence": road["leftoverEvidence"],
+        "kill": road["kill"],
         "memory": memory or NOT_CERTIFIED,
         "stderr": _unknown(stderr, "not captured"),
         "capture": _unknown(capture, "not captured"),
     }
 
 
+def _launch_ms(value):
+    return value if value is not None else {"known": False, "why": "no launch status: the case clock starts at the spawn"}
+
+
 def case_record(result):
     return {
         "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "comparison": result.comparison, "entries": result.entries,
         "firstMismatch": result.first_mismatch, "lifecycle": result.lifecycle, "wallMs": result.wall_ms,
+        "launchMs": _launch_ms(result.launch_ms),
     }
 
 
-def run_record(kind, build, cases):
-    return {"format": RESULT_FORMAT, "runner": RUNNER_VERSION, "grammar": GRAMMAR, "kind": kind, "build": build, "cases": cases, "python": sys.version}
+NO_LAUNCH = {"failed": False, "stderr": ""}
+NO_EMPTY = {"known": False, "why": "no empty program was timed"}
+
+
+def run_record(kind, build, cases, launch=None, empty_program_ms=None):
+    """The JSON result. `launch` is `{failed, stderr}`; `empty_program_ms` is milliseconds or None (then `{known: false, why}`)."""
+    return {
+        "format": RESULT_FORMAT, "runner": RUNNER_VERSION, "grammar": GRAMMAR, "kind": kind, "build": build,
+        "launch": launch or NO_LAUNCH, "emptyProgramMs": NO_EMPTY if empty_program_ms is None else empty_program_ms,
+        "cases": cases, "python": sys.version,
+    }

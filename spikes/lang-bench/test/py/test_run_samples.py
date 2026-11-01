@@ -710,12 +710,6 @@ class ConfigurationTests(unittest.TestCase):
         for text in ("not json", '{"a":1}', "[1, 2]", '"x"'):
             self.assertEqual(Box(self).cli("--launch-prefix", text)[0], 4, text)
 
-    def test_The_options_that_belong_to_part_two_are_refused_instead_of_silently_ignored(self):
-        for flag, value in (("--cgroup-of", "/x/{case}"), ("--launch-status", "3"), ("--case-view", "/v/{case}")):
-            code, _, err = Box(self).cli(flag, value)
-            self.assertEqual(code, 4, flag)
-            self.assertIn("not supported", err)
-
     def test_A_cases_file_attaches_its_comparison_and_requirement_ids_to_each_case_in_the_JSON_result(self):
         box = Box(self)
         box.write(box.samples, "cases.txt", "# manifest\ns03 bytes R1 R4\n")
@@ -800,7 +794,7 @@ class ResultTests(unittest.TestCase):
         box.cli("--json", out_json)
         record = read_json(out_json)
         self.assertEqual((record["format"], record["grammar"], record["kind"]), (1, 2, "olympiad"))
-        self.assertEqual(sorted(record), ["build", "cases", "format", "grammar", "kind", "python", "runner"])
+        self.assertEqual(sorted(record), ["build", "cases", "emptyProgramMs", "format", "grammar", "kind", "launch", "python", "runner"])
         case = record["cases"][0]
         self.assertEqual((case["id"], case["status"], case["entries"]), ("s03", "PASS", 1))
         self.assertEqual(case["lifecycle"]["memory"], {"known": False, "why": "not certified"})

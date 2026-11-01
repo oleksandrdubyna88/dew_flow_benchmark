@@ -1,8 +1,9 @@
-"""rs_exec: running a program for one case on the plain path (no box, no cgroup): the build, the launch argv, the process group, the wait.
+"""rs_exec: what every program run shares: the build, the launch argv, the program's environment (V11), the process group of the plain
+path, and the wait.
 
-The execution layer (E1.S8b) hands the runner a launch prefix and a cgroup; part ii of this story replaces `PlainLifecycle` with one
-that signals the program's host pid and kills through the scope. Everything the olympiad and the daemon paths share about a process
-is here. Wall time is `time.monotonic_ns()` and the exit is awaited on a pidfd, never on `Popen.wait(timeout=...)`'s polling.
+The execution layer (E1.S8b) hands the runner a launch prefix, a launch status descriptor, a cgroup and a case view; `rs_scope.py` is the
+lifecycle that reads and kills through that cgroup, `PlainLifecycle` here is the one with no box. Wall time is `time.monotonic_ns()` and
+every wait for an exit is `os.pidfd_open` + `select` with the exact remaining time, never `Popen.wait(timeout=...)`'s polling.
 """
 import os
 import re
@@ -23,22 +24,57 @@ CHUNK = 65536
 TICK_S = 0.05
 TAIL_BYTES = 2048
 GONE_CEILING_MS = 2000
+TEST_CEILING_MS = 600_000
+LAUNCH_CEILING_MS = 60_000
+SEEK_MS = 1000
+EMPTY_CASE = "empty-program"
+RUN_PROGRAM = ("bash", "run.sh")
 POLL_FIRST_S = 0.001
 POLL_LAST_S = 0.05
 
 
-class PlainLifecycle:
-    """How the plain path finds leftovers, kills and reads memory. Part ii supplies the scope-based one with the same three methods."""
+class Program(NamedTuple):
+    """The program's host pid (None when it could not be told), how it was found, and how many candidates there were."""
+    pid: Optional[int]
+    found: str
+    count: Optional[int]
 
-    def memory(self, case_id):
+
+class Settled(NamedTuple):
+    """What a case's end leaves: the program's status, the leftover finding (None: not checked) and its memory record."""
+    code: int
+    leftover: object
+    memory: dict
+
+
+class PlainLifecycle:
+    """How the plain path (no `--cgroup-of`) finds leftovers, kills and reads memory: through the process group of the launcher."""
+    road = {"kill": "killpg", "leftoverEvidence": "process group (killpg 0)"}
+
+    def memory(self, case_id=None):
         return rs_report.NOT_CERTIFIED
 
     def kill(self, proc):
         kill_group(proc)
 
-    def leftover(self, proc):
+    def leftover(self, proc, program=None):
         """True when something of the program's process group is still alive after the program was reaped."""
         return group_present(proc)
+
+    def program_of(self, proc):
+        """No box, no cgroup: the launcher execs the program (D38), so the launcher's pid is the program's."""
+        return Program(proc.pid, "launcher pid (no --cgroup-of)", 1)
+
+    def settle(self, launched, end):
+        """The case's end: kill what is still running, reap the launcher, then look for what the program left behind."""
+        proc = launched.proc
+        if end != "exited":
+            self.kill(proc)
+        code = launched.status_code(proc.wait())
+        leftover = self.leftover(proc) if end == "exited" else None
+        if leftover:
+            self.kill(proc)
+        return Settled(code, leftover, self.memory())
 
 
 @dataclass
@@ -50,6 +86,10 @@ class Config:
     basis: str = "floor"
     capture_cap: int = CAPTURE_CAP
     lifecycle: object = field(default_factory=PlainLifecycle)
+    status_fd: Optional[int] = None
+    cgroup: Optional[str] = None
+    case_view: Optional[str] = None
+    out_dir: Optional[str] = None
 
 
 class BuildResult(NamedTuple):
@@ -67,12 +107,25 @@ def now_ms():
 CASE_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 
-def launch_argv(prefix, case_id):
-    """The prefix with `{case}` filled in, then `bash run.sh` (the layer's box and scope come before it). A case id is letters, digits,
-    underscore and hyphen only: anything else raises ValueError before it can reach an argv (the plan refuses such samples with exit 4)."""
+def checked_case_id(case_id):
+    """The case id, which is letters, digits, underscore and hyphen only: anything else raises ValueError before it can reach an argv, a
+    path or a cgroup name (the plan refuses such samples with exit 4)."""
     if not CASE_ID.match(case_id):
         raise ValueError(f"case id {case_id!r} is not letters, digits, underscore and hyphen")
-    return [part.replace("{case}", case_id) for part in prefix or []] + ["bash", "run.sh"]
+    return case_id
+
+
+def launch_argv(prefix, case_id, program=RUN_PROGRAM):
+    """The prefix with `{case}` filled in, then `bash run.sh` (the layer's box and scope come before it)."""
+    checked_case_id(case_id)
+    return [part.replace("{case}", case_id) for part in prefix or []] + list(program)
+
+
+def program_env(extra=None):
+    """V11: the program's environment is the runner's own (which the layer sets: D15's base plus the documented per-stack variables), plus
+    `extra` (`PORT` and the scenario's `env` lines for the daemon and web kinds; nothing for an olympiad case). Nothing else is added or
+    removed here: a copy taken at the launch, so a later change of the runner's own is not seen by a program already started."""
+    return {**os.environ, **(extra or {})}
 
 
 def _signal_group(pid, sig):
@@ -108,12 +161,17 @@ def kill_group(proc):
         raise CleanupFailed(f"a process of the case could not be killed: its group {proc.pid} is still there after {GONE_CEILING_MS} ms")
 
 
-def pidfd_of(proc):
-    """A pollable descriptor that turns readable when the process exits, or None where the kernel has none."""
+def pidfd_open(pid):
+    """A pollable descriptor that turns readable when the process `pid` exits, or None where the kernel has none or the process is gone."""
     try:
-        return os.pidfd_open(proc.pid)
+        return os.pidfd_open(pid)
     except (AttributeError, OSError):
         return None
+
+
+def pidfd_of(proc):
+    """The pidfd of a launcher not yet reaped (a reaped one's pid may belong to someone else by now), else None."""
+    return pidfd_open(proc.pid) if proc.returncode is None else None
 
 
 def wait_exit(proc, pidfd, deadline_ms):
@@ -160,7 +218,7 @@ def build(workspace, scratch, ceiling_ms=None):
         kill_group(proc)
         raise
     finally:
-        _close(pidfd)
+        close_fd(pidfd)
     if not done:
         kill_group(proc)
     status = proc.wait()
@@ -168,6 +226,6 @@ def build(workspace, scratch, ceiling_ms=None):
     return BuildResult(True, status, now_ms() - started, not done, read_tail(log))
 
 
-def _close(fd):
+def close_fd(fd):
     if fd is not None:
         os.close(fd)

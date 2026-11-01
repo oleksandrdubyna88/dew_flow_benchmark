@@ -1,12 +1,24 @@
 """run_samples: the baseline visible-sample runner (E1.S8a; FORMAT v2 grammar 2).
 
     python3 -I run_samples.py [--workspace DIR] [--kind olympiad|daemon|web] [--no-build] [--limits FILE] [--launch-prefix JSON]
+                              [--launch-status FD] [--cgroup-of TEMPLATE] [--case-view TEMPLATE]
                               [--json OUT] [--only ID] [--parse-only] SAMPLES_DIR
 
-Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash),
-4 configuration (usage, a malformed sample with its file and line, a version or limits problem), 5 the runner itself failed.
-Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every case says
-its memory is not certified. The daemon and web kinds run in part ii of the story; here they parse (--parse-only).
+Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash, a case view that
+is missing, a LAUNCH FAILED), 4 configuration (usage, a malformed sample with its file and line, a version or limits problem), 5 the
+runner itself failed. Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every
+case says its memory is not certified. The daemon and web kinds run in part ii-b of the story; here they parse (--parse-only).
+
+The execution layer's options (E1.S8b builds the layer; this runner only reads what it hands over):
+  --launch-prefix JSON   a JSON array of strings put before `bash run.sh`; `{case}` in any element is replaced by the case id.
+  --launch-status FD     the descriptor number the prefix gives bwrap as `--json-status-fd FD`. The runner makes a pipe per case and puts
+                         its write end at FD in the launcher. `{"child-pid": P}` is the sandbox ready and the start of the case clock;
+                         no `child-pid` before the launcher exits is exit 3 `launch failed` with the prefix's stderr, never a case verdict.
+  --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
+                         after the program's exit and before any kill; the kill is `cgroup.kill`. `wrapper.pid` is looked for beside
+                         the `--json` file. Host pids only.
+  --case-view TEMPLATE   the fresh writable view of the built tree the layer made for the case (`{case}` filled in): the program starts in
+                         it and a scenario's `.scenario/` fixtures are written into it first. The samples directory may not lie in it.
 """
 import atexit
 import os
@@ -27,21 +39,24 @@ import json
 import signal
 import traceback
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import rs_exec as ex
 import rs_json
+import rs_launch as rl
 import rs_olympiad as ro
 import rs_pair
 import rs_report as rp
 import rs_samples as sm
+import rs_scope
 import rs_script
+import rs_status
 import rs_transcript
+import rs_view
 from rs_lex import Problem
 
 EXIT_OK, EXIT_FAILED, EXIT_ENVIRONMENT, EXIT_CONFIG, EXIT_RUNNER = 0, 1, 3, 4, 5
 KINDS = ("olympiad", "daemon", "web")
-PART_TWO_OPTIONS = ("cgroup_of", "launch_status", "case_view")
 
 
 class Failure:
@@ -82,6 +97,13 @@ def build_parser():
     return p
 
 
+class RunInfo(NamedTuple):
+    """What the run observed besides the cases: the empty program's time, and whether a launch failed (with its reason and stderr)."""
+    empty_ms: Optional[int] = None
+    launch: dict = rp.NO_LAUNCH
+    reason: str = ""
+
+
 @dataclass
 class Plan:
     kind: str
@@ -103,13 +125,27 @@ def _prefix_of(text):
     return parsed.value if parsed.ok and _is_string_list(parsed.value) else None
 
 
-def _refused_options(args):
-    return [f"--{name.replace('_', '-')} is not supported by this build (the execution layer's options come with part ii)"
-            for name in PART_TWO_OPTIONS if getattr(args, name) is not None]
+def _fd_number(text):
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
+def _status_problem(args):
+    """What is wrong with `--launch-status`: it needs the prefix that writes it, and a free descriptor number of 3 or more."""
+    if args.launch_prefix is None:
+        return "--launch-status needs --launch-prefix: the prefix's launcher is what writes the status"
+    number = _fd_number(args.launch_status)
+    return "--launch-status must be a descriptor number" if number is None else rs_status.check_number(number)
+
+
+def _status_problems(args):
+    if args.launch_status is None:
+        return []
+    problem = _status_problem(args)
+    return [problem] if problem else []
 
 
 def _argument_problems(args):
-    problems = _refused_options(args)
+    problems = _status_problems(args)
     problems += [] if os.path.isdir(args.samples_dir) else [f"{sm.shown(args.samples_dir)} is not a directory"]
     problems += [] if args.launch_prefix is None or _prefix_of(args.launch_prefix) is not None else ["--launch-prefix must be a JSON array of strings"]
     return problems
@@ -159,6 +195,13 @@ def _pairs_of(args):
     return loaded, problems + more + _empty_selection(args, chosen) + unreadable
 
 
+def _view_problems(args, pairs):
+    """The samples directory and a case view must not contain one another (a held-out run never puts the samples in the box's binds)."""
+    if args.case_view is None:
+        return []
+    return [Problem(sm.shown(args.samples_dir), 0, text) for text in rs_view.overlaps_samples(args.case_view, [p.id for p in pairs], args.samples_dir)]
+
+
 def _limits_of(args):
     return sm.load_limits(args.limits) if args.limits else (sm.Limits(), [])
 
@@ -188,7 +231,7 @@ def make_plan(args):
     kind, failure = _kind_of(args)
     pairs, pair_problems = _pairs_of(args)
     limits, limit_problems = _limits_of(args)
-    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs))
+    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + _view_problems(args, pairs))
     if failure:
         return failure
     return Failure(EXIT_CONFIG, found) if found else Plan(kind, args, pairs, limits, _launch_prefix(args))
@@ -234,10 +277,31 @@ def _run_one(pair, config):
     return result
 
 
-def _run_cases(plan, scratch):
+def _config_of(plan, scratch):
     limit, basis = _limit_and_basis(plan)
-    config = ex.Config(os.path.abspath(plan.args.workspace), scratch, plan.prefix, limit, basis)
-    return [_run_one(p, config) for p in plan.pairs]
+    args = plan.args
+    return ex.Config(os.path.abspath(args.workspace), scratch, plan.prefix, limit, basis, status_fd=_status_fd(args), cgroup=args.cgroup_of,
+                     case_view=args.case_view, out_dir=os.path.dirname(os.path.abspath(args.json_out)) if args.json_out else None)
+
+
+def _status_fd(args):
+    return None if args.launch_status is None else _fd_number(args.launch_status)
+
+
+def _launch_failure(failed):
+    return RunInfo(None, {"failed": True, "stderr": failed.stderr}, failed.reason)
+
+
+def _run_cases(plan, scratch):
+    """(results, RunInfo): the empty program is timed first; a launch that fails stops the run (the cases done so far are kept)."""
+    config, results, empty = _config_of(plan, scratch), [], None
+    try:
+        empty = rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr"))
+        for pair in plan.pairs:
+            results.append(_run_one(pair, config))
+    except rl.LaunchFailed as failed:
+        return results, _launch_failure(failed)
+    return results, RunInfo(empty)
 
 
 def _build_outcome(done):
@@ -245,23 +309,29 @@ def _build_outcome(done):
 
 
 def _execute(plan, scratch):
-    """(build record, results): the build first unless --no-build; a build that fails fails every case."""
+    """(build record, results, RunInfo): the build first unless --no-build; a build that fails fails every case."""
     if plan.args.no_build:
-        return {"ran": False}, _run_cases(plan, scratch)
+        return ({"ran": False}, *_run_cases(plan, scratch))
     progress("build started")
     done = ex.build(os.path.abspath(plan.args.workspace), scratch)
     progress(f"build finished ({_build_outcome(done)}, {done.wall_ms} ms)")
     record = {"ran": True, "status": done.status, "wallMs": done.wall_ms, "timedOut": done.timed_out}
-    return record, (_run_cases(plan, scratch) if done.status == 0 and not done.timed_out else _build_failed(plan, done))
+    if done.status == 0 and not done.timed_out:
+        return (record, *_run_cases(plan, scratch))
+    return record, _build_failed(plan, done), RunInfo()
 
 
-def _report(plan, build, results):
+def _write_json(plan, build, results, info):
+    if plan.args.json_out:
+        with open(plan.args.json_out, "w", encoding="utf-8") as f:
+            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results], info.launch, info.empty_ms), f, indent=2, ensure_ascii=False)
+
+
+def _report(plan, build, results, info):
     for result in results:
         print("\n".join(rp.render_case(result)))
     print(rp.summary_line(results))
-    if plan.args.json_out:
-        with open(plan.args.json_out, "w", encoding="utf-8") as f:
-            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results]), f, indent=2, ensure_ascii=False)
+    _write_json(plan, build, results, info)
 
 
 def _scratch_run(plan):
@@ -276,14 +346,22 @@ def _exit_code(results):
     return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
 
 
+def _launch_lines(info):
+    """The exit 3 text of a failed launch: the reason, then the bounded tail of the prefix's standard error."""
+    return [f"launch failed: {info.reason}"] + ["  " + line for line in info.launch["stderr"].splitlines()]
+
+
 def _run_olympiad(plan):
     if not os.path.isdir(plan.args.workspace):
         return Failure(EXIT_ENVIRONMENT, [f"workspace {sm.shown(plan.args.workspace)} is not a directory"])
     try:
-        build, results = _scratch_run(plan)
-    except OSError as e:
+        build, results, info = _scratch_run(plan)
+    except (OSError, rs_view.ViewError) as e:
         return Failure(EXIT_ENVIRONMENT, [f"cannot start a program: {type(e).__name__}: {e}"])
-    _report(plan, build, results)
+    if info.launch["failed"]:
+        _write_json(plan, build, results, info)
+        return Failure(EXIT_ENVIRONMENT, _launch_lines(info))
+    _report(plan, build, results, info)
     return _exit_code(results)
 
 
