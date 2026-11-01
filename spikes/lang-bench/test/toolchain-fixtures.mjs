@@ -10,6 +10,9 @@ import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
 const ownedUrl = new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url);
 const helper = existsSync(fileURLToPath(ownedUrl)) ? (await import(ownedUrl.href)).ownedFor({ token: 'bench' }) : null;
 
+/** The owned-name helper bound to token `bench`, or `null` when the conventions mount is absent (CI). */
+export const ownedApi = helper;
+
 /** A fresh folder named `testsToDelete-u<uid>-bench-<what>-<id>` in `parent` (the temp root by default); `t.after` removes it. `t` is a node:test context. */
 export function ownedFolder(t, what, parent = os.tmpdir()) {
   // A sealed (read-only) tree inside cannot be removed, so a test that failed before it unsealed would leave the folder behind. This hook is registered

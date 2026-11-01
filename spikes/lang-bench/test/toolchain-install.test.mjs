@@ -3,15 +3,16 @@
 // only when it is the recorded one, and a half-written directory is never registered in the store.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { installToolchain } from '../lib/toolchain-install.mjs';
 import { curlArgv, dotnetInstallArgv, npmInstallArgv } from '../lib/toolchain-io.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
-import { unsealTree, writablePaths } from '../lib/toolchain-store.mjs';
-import { makeTarXz, ownedFolder, writeTree } from './toolchain-fixtures.mjs';
+import { sealTree, unsealTree, writablePaths } from '../lib/toolchain-store.mjs';
+import { spawnSync } from 'node:child_process';
+import { makeTarXz, ownedApi, ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
 const real = JSON.parse(readFileSync(fileURLToPath(new URL('../inputs/stacks-lang.json', import.meta.url)), 'utf8'));
 const hash = (algorithm, text, encoding = 'hex') => createHash(algorithm).update(text).digest(encoding);
@@ -247,4 +248,53 @@ test('A_tree_that_differs_from_the_recorded_hash_is_discarded_and_never_register
   try {
     assert.equal(accepted.ok, true, JSON.stringify(accepted));
   } finally { unsealStore(right.storeRoot); }
+});
+
+/** A staging folder in `storeRoot` named as the installer names them, sealed, with a claim beside it written for `pid`. */
+function staleStaging(storeRoot, id, { pid, claim = true } = {}) {
+  const dir = path.join(storeRoot, `${ownedApi.ownedPrefix('stage')}node-${id}`);
+  writeTree(dir, { 'bin/node': 'half written\n' });
+  if (claim) writeFileSync(`${dir}.owner`, `${ownedApi.formatOwner({ ...ownedApi.thisOwner(), pid, start: 1 })}\n`);
+  sealTree(dir);
+  return dir;
+}
+
+const deadPid = () => spawnSync('true').pid;
+
+test('A_staging_folder_left_by_an_interrupted_install_is_unsealed_removed_and_named_when_its_owner_is_gone', async t => {
+  if (!ownedApi) return t.skip('the conventions mount is absent: no owner records to read');
+  const r = rig(t);
+  mkdirSync(r.storeRoot, { recursive: true });
+  const stale = staleStaging(r.storeRoot, 'dead01', { pid: deadPid() });
+  const live = staleStaging(r.storeRoot, 'live01', { pid: process.pid });
+  const unmarked = staleStaging(r.storeRoot, 'none01', { claim: false });
+  const foreign = path.join(r.storeRoot, 'testsToDelete-u99999-bench-stage-node-other1');
+  writeTree(foreign, { a: 'b' });
+  const notStaging = path.join(r.storeRoot, `${ownedApi.ownedPrefix('something-else')}x1`); // an owned folder of ours with a dead owner, but not an installer's staging folder
+  writeTree(notStaging, { a: 'b' });
+  writeFileSync(`${notStaging}.owner`, `${ownedApi.formatOwner({ ...ownedApi.thisOwner(), pid: deadPid(), start: 1 })}\n`);
+  const notes = [];
+  const done = await installToolchain({ name: 'node', stacks: r.stacks, storeRoot: r.storeRoot, io: r.io, newFolder: r.newFolder, owned: ownedApi, log: line => notes.push(line) });
+  try {
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.deepEqual(done.value.swept, [stale]);
+    assert.equal(existsSync(stale), false, 'the dead owner\'s sealed folder is gone');
+    assert.equal(existsSync(`${stale}.owner`), false, 'and its claim');
+    assert.ok(notes.some(line => line.includes(stale)), `each removal is named: ${notes.join(' | ')}`);
+    assert.ok(existsSync(live) && existsSync(unmarked) && existsSync(foreign) && existsSync(notStaging), 'a live owner\'s, an unmarked, another user\'s and a not-staging folder are left alone');
+  } finally {
+    for (const dir of [live, unmarked]) unsealTree(dir);
+    unsealStore(r.storeRoot);
+  }
+});
+
+test('The_first_install_into_a_store_root_that_does_not_exist_yet_has_nothing_to_collect', async t => {
+  if (!ownedApi) return t.skip('the conventions mount is absent: no owner records to read');
+  const r = rig(t);
+  const root = path.join(r.storeRoot, 'not-yet');
+  const done = await installToolchain({ name: 'node', stacks: r.stacks, storeRoot: root, io: r.io, newFolder: r.newFolder, owned: ownedApi });
+  try {
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.deepEqual(done.value.swept, []);
+  } finally { unsealStore(root); }
 });

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { sweepStaleStaging } from './toolchain-stale.mjs';
 import { dotnetOfficial, nodeOfficial, typescriptOfficial } from './toolchain-pins.mjs';
 import { checkDigest, sdkVersionsIn, sealTree, treeRecord, unsealTree } from './toolchain-store.mjs';
 
@@ -143,8 +144,16 @@ function discard(dir) {
  * `newFolder(what, parent)` makes an owned folder (removed by its owner); `io` is lib/toolchain-io.mjs's `realIo` or a test's fixture.
  * A directory already in the store is left exactly as it is: `present`, `treeSha256: null` (not examined — `verifyRecordedTrees` examines).
  */
+/**
+ * With `owned` (the owned-name helper bound to `bench`), the stale staging folders of interrupted installs are collected first and named through `log`;
+ * the folders removed are `value.swept`.
+ */
 export function installToolchain(options) {
-  return withInstallUmask(() => installOne(options));
+  return withInstallUmask(async () => {
+    const swept = options.owned ? sweepStaleStaging({ storeRoot: options.storeRoot, owned: options.owned, log: options.log }) : [];
+    const done = await installOne(options);
+    return done.ok ? ok({ ...done.value, swept }) : done;
+  });
 }
 
 async function installOne({ name, stacks, storeRoot, io, newFolder }) {
