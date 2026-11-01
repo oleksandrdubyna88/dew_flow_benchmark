@@ -14,6 +14,8 @@
 //     A second install changes nothing; a foreign hook is refused (exit 4) unless --force-hook (it is kept as pre-push.foreign).
 //     NEVER installed into the bench repository (it is shared by other sessions; its rule is the manual --self run before a push): a
 //     repository holding spikes/lang-bench/push-check.mjs, or whose origin is not the task repository, is refused.
+//   node spikes/lang-bench/push-check.mjs --tag <name> --repo <task repo>        a tag, BEFORE it is pushed (the freeze procedure runs this): an annotated tag's message gets the task
+//     repository body rules (leak, secrets, needles, family names) and the commit it points at must already be on a remote ref, else `tag-target` refuses it
 //   --tip <sha> (with --repo --branch): check exactly that commit, as git is about to publish it; the branch moving off it is exit 4.
 //
 //   a branch check refuses (exit 4) when a refs/remotes/origin/* ref is not what the remote has now (ls-remote): run --setup-remote first.
@@ -36,12 +38,13 @@ import { parseArgs } from 'node:util';
 import { checkBranch, checkSelf, checkText, EXIT, formatReport } from './lib/push-check.mjs';
 import { runGit } from './lib/push-git.mjs';
 import { installHook, uninstallHook } from './lib/push-hook.mjs';
+import { checkTag } from './lib/push-tag.mjs';
 import { loadInputs } from './lib/push-inputs.mjs';
 import { setupRemote } from './lib/push-remote.mjs';
 
 const OPTIONS = {
   repo: { type: 'string' }, branch: { type: 'string' }, text: { type: 'string' }, url: { type: 'string' },
-  self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' }, tip: { type: 'string' },
+  self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' }, tip: { type: 'string' }, tag: { type: 'string' },
   'install-hook': { type: 'boolean' }, 'uninstall-hook': { type: 'boolean' }, 'force-hook': { type: 'boolean' },
   aid: { type: 'string', multiple: true }, 'aids-dir': { type: 'string' }, tokens: { type: 'string' },
   public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, 'origin-url': { type: 'string' }, dest: { type: 'string' }, 'secret-file': { type: 'string', multiple: true }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
@@ -58,7 +61,7 @@ function parse(argv) {
 }
 
 // --self alone is the bench's branch check; with --text it only narrows the body check to the bench's rules
-const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v['install-hook'] ? 'install-hook' : null, v['uninstall-hook'] ? 'uninstall-hook' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
+const modeOf = v => [v.tag === undefined ? null : 'tag', v['setup-remote'] ? 'setup-remote' : null, v['install-hook'] ? 'install-hook' : null, v['uninstall-hook'] ? 'uninstall-hook' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
 
 const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };
 /** Progress goes to stderr, one line per phase, so a long check is not silent and stdout stays exactly the report. */
@@ -119,7 +122,9 @@ async function runUninstallHook(v) {
   return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
 }
 
-const MODES = { 'install-hook': runInstallHook, 'uninstall-hook': runUninstallHook, 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
+const runTag = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--tag needs --repo') : report(await checkTag({ repo: v.repo, tag: v.tag, inputs }))));
+
+const MODES = { tag: runTag, 'install-hook': runInstallHook, 'uninstall-hook': runUninstallHook, 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
 
 async function run(v) {
   const modes = modeOf(v);

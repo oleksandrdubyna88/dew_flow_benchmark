@@ -155,6 +155,11 @@ scans and counts are exactly `git rev-list --objects <tip> --not <base>`: every 
 of `origin/main` into an older branch is not charged for main's content; a blob that only another branch holds is scanned when a new branch adds it). The batch readers work in chunks
 of at most 500 objects with the 16 MiB and 256 MiB ceilings kept across the chunks. `workspace-diff` treats only `ENOENT` as an empty folder: any other read error is a finding.
 
+**Tags.** `push-check.mjs --tag <name> --repo <task repo>` is what the freeze procedure runs BEFORE it pushes a tag (a tag is pushed alone, the hook refuses a ref outside `refs/heads`,
+and no branch check reads a tag): an annotated tag's message gets the task-repository body rules (leak, secrets, needles, family names; never printed), and the commit the tag points at
+(annotated or lightweight) must already be on a remote ref, so it was checked when its branch was pushed - otherwise `tag-target` refuses it, naming the commit. Then the tag is pushed with
+`git push --no-verify` on the team lead's word.
+
 **What reads what.** History is published, so the leak and secret scans read every commit and every message. A run base carries the tip tree and
 never the history, so every other rule reads the files as they stand at the tip (credited to the commit that brought the blob). Needles match by
 D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
