@@ -199,7 +199,7 @@ class JsonBodyTests(unittest.TestCase):
 class CorrespondenceTests(unittest.TestCase):
     def pair(self, script_body, transcript_body):
         head = "scenario 2\ndefault within 2s\nstart ready port within 1s\nconnect c1 tcp\n"
-        scenario, problems = rs.parse_script((head + script_body + "wait-exit\n").encode(), "t.in")
+        scenario, problems = rs.parse_script((head + script_body + "signal TERM\nwait-exit within 5s\n").encode(), "t.in")
         assert not problems, problems
         transcript, problems = parse("transcript 2\nready\n" + transcript_body + "exit 0\n")
         assert not problems, problems

@@ -16,7 +16,7 @@ def parse(text, file="t.in"):
 
 
 def body(*lines):
-    return parse(HEAD + "\n".join(lines) + "\nwait-exit\n")
+    return parse(HEAD + "\n".join(lines) + "\n" + "signal TERM\nwait-exit within 5s\n")
 
 
 def messages(problems):
@@ -67,21 +67,21 @@ class HeadTests(unittest.TestCase):
     def test_Exactly_one_start_comes_after_the_env_and_file_lines_and_before_any_step(self):
         head = "scenario 2\ndefault within 2s\n"
         self.assertTrue(parse(head + "connect c1 tcp\n")[1])
-        self.assertTrue(parse(head + "start ready port within 1s\nstart ready port within 1s\nwait-exit\n")[1])
+        self.assertTrue(parse(head + "start ready port within 1s\nstart ready port within 1s\nsignal TERM\nwait-exit within 5s\n")[1])
         self.assertTrue(parse(head + "start ready port within 1s\nenv A \"x\"\nwait-exit\n")[1])
 
     def test_Env_and_file_lines_may_come_in_any_order_and_a_file_variable_is_usable_after_its_line(self):
         scenario, problems = parse(
-            'scenario 2\ndefault within 2s\nenv A "1"\nfile f "data"\nenv B "${f}"\nfile g "x"\nstart ready port within 1s\nwait-exit\n')
+            'scenario 2\ndefault within 2s\nenv A "1"\nfile f "data"\nenv B "${f}"\nfile g "x"\nstart ready port within 1s\nsignal TERM\nwait-exit within 5s\n')
         self.assertEqual(problems, [])
         self.assertEqual([(s.kind, s.name) for s in scenario.setup], [("env", "A"), ("file", "f"), ("env", "B"), ("file", "g")])
 
     def test_An_env_line_for_PORT_is_refused_because_the_runner_chooses_the_port(self):
-        _, problems = parse('scenario 2\ndefault within 2s\nenv PORT "1"\nstart ready port within 1s\nwait-exit\n')
+        _, problems = parse('scenario 2\ndefault within 2s\nenv PORT "1"\nstart ready port within 1s\nsignal TERM\nwait-exit within 5s\n')
         self.assertEqual(len(problems), 1)
 
     def test_Readiness_on_stdout_takes_a_line_and_a_deadline(self):
-        scenario, problems = parse('scenario 2\ndefault within 2s\nstart ready stdout "listening" within 3s\nwait-exit\n')
+        scenario, problems = parse('scenario 2\ndefault within 2s\nstart ready stdout "listening" within 3s\nsignal TERM\nwait-exit within 5s\n')
         self.assertEqual(problems, [])
         self.assertEqual((scenario.start.ready, scenario.start.within_ms), ("stdout", 3000))
 
@@ -124,7 +124,7 @@ class SplitTests(unittest.TestCase):
 
     def test_A_split_with_a_variable_is_checked_when_its_length_is_known_and_not_before(self):
         scenario, problems = parse('scenario 2\ndefault within 2s\nfile f "x"\nstart ready port within 1s\nconnect c1 tcp\n'
-                                   'send c1 "${f}" split 9 pause 1ms\nwait-exit\n')
+                                   'send c1 "${f}" split 9 pause 1ms\nsignal TERM\nwait-exit within 5s\n')
         self.assertEqual(problems, [], "the length of a file path is only known when the file is written")
 
     def test_A_split_needs_its_pause_and_a_pause_needs_its_split(self):
@@ -140,7 +140,7 @@ class SplitTests(unittest.TestCase):
 
 class NameTests(unittest.TestCase):
     def test_A_name_bound_twice_is_an_error_naming_the_second_line(self):
-        _, problems = parse("scenario 2\ndefault within 2s\nfile f \"x\"\nfile f \"y\"\nstart ready port within 1s\nwait-exit\n")
+        _, problems = parse("scenario 2\ndefault within 2s\nfile f \"x\"\nfile f \"y\"\nstart ready port within 1s\nsignal TERM\nwait-exit within 5s\n")
         self.assertEqual([p.line for p in problems], [4])
 
     def test_A_capture_name_bound_twice_or_a_capture_inside_a_repeat_is_an_error(self):
@@ -163,7 +163,7 @@ class NameTests(unittest.TestCase):
         self.assertEqual(len(body("repeat 2 i", "repeat 2 i", "sleep 1ms", "end", "end")[1]), 1)
 
     def test_A_name_that_is_a_keyword_is_refused(self):
-        self.assertTrue(parse(HEAD + "connect end tcp\nwait-exit\n")[1])
+        self.assertTrue(parse(HEAD + "connect end tcp\nsignal TERM\nwait-exit within 5s\n")[1])
         self.assertTrue(body("repeat 2 split", "sleep 1ms", "end")[1])
 
     def test_A_connection_name_must_be_declared_once_and_before_its_use(self):
@@ -194,9 +194,9 @@ class StepTests(unittest.TestCase):
         self.assertEqual(len(body("recv c1 bytes 1 capture a regex \"x\" as float")[1]), 1)
 
     def test_Expect_quiet_and_closed_close_shutdown_signal_and_wait_exit_have_their_arguments(self):
-        scenario, problems = body("expect c1 quiet for 200ms", "expect c1 closed within 1s", "shutdown c1", "close c1", "close stdin", "signal TERM")
+        scenario, problems = body("expect c1 quiet for 200ms", "expect c1 closed within 1s", "shutdown c1", "close c1")
         self.assertEqual(problems, [])
-        self.assertEqual([n.op for n in scenario.body[2:]], ["quiet", "closed", "shutdown", "close", "close", "signal", "wait_exit"])
+        self.assertEqual([n.op for n in scenario.body[2:]], ["quiet", "closed", "shutdown", "close", "signal", "wait_exit"])
 
     def test_A_signal_other_than_TERM_is_a_problem(self):
         self.assertEqual(len(body("signal KILL")[1]), 1)
@@ -318,6 +318,67 @@ class FormatV21Tests(unittest.TestCase):
     def test_A_send_to_standard_output_and_a_request_on_a_tcp_connection_are_still_refused(self):
         self.assertEqual(len(body('send stdout "x"')[1]), 1)
         self.assertEqual(len(body('request c1 GET "/"')[1]), 1)
+
+
+class EndTests(unittest.TestCase):
+    """4.4: exactly one wait-exit with its within, preceded by the end trigger; between them and after, only reads and waits."""
+
+    def script(self, tail, head=HEAD):
+        return parse(head + tail)
+
+    def test_A_send_after_the_end_trigger_is_refused_at_its_line(self):
+        _, problems = self.script('signal TERM\nsend c1 "x"\nwait-exit within 5s\n')
+        self.assertEqual([p.line for p in problems], [7])
+        self.assertIn("between the end trigger and wait-exit", problems[0].message)
+
+    def test_Anything_but_a_read_or_a_wait_between_the_trigger_and_the_wait_exit_is_refused(self):
+        for line in ('send c1 "x"', 'request h GET "/"', "connect d tcp", "shutdown c1", "signal TERM", "together"):
+            tail = f"signal TERM\n{line}\n" + ("send c1 \"y\"\nrequest h GET \"/\"\nend\n" if line == "together" else "") + "wait-exit within 5s\n"
+            self.assertTrue(self.script(tail)[1], line)
+
+    def test_Reads_and_waits_between_the_trigger_and_the_wait_exit_are_allowed(self):
+        tail = "signal TERM\nrecv c1 lines 1\nexpect c1 quiet for 5ms\nexpect c1 closed within 1s\nsleep 5ms\nclose c1\nwait-exit within 5s\n"
+        self.assertEqual(self.script(tail)[1], [])
+
+    def test_Two_wait_exits_are_refused_at_the_second(self):
+        _, problems = self.script("signal TERM\nwait-exit within 5s\nwait-exit within 5s\n")
+        self.assertEqual([p.line for p in problems], [8])
+        self.assertIn("exactly one wait-exit", problems[0].message)
+
+    def test_A_wait_exit_without_its_within_is_refused_because_the_within_is_the_grace_period(self):
+        _, problems = self.script("signal TERM\nwait-exit\n")
+        self.assertEqual([p.line for p in problems], [7])
+        self.assertIn("within", problems[0].message)
+
+    def test_A_wait_exit_with_no_end_trigger_before_it_is_refused(self):
+        _, problems = self.script("wait-exit within 5s\n")
+        self.assertEqual([p.line for p in problems], [6])
+        self.assertIn("end trigger", problems[0].message)
+
+    def test_A_trigger_that_comes_after_the_wait_exit_is_no_trigger_before_it(self):
+        self.assertTrue(self.script("wait-exit within 5s\nsignal TERM\n")[1])
+
+    def test_A_script_without_any_wait_exit_is_refused(self):
+        self.assertTrue(self.script("signal TERM\n")[1])
+        self.assertTrue(self.script("sleep 1ms\n")[1])
+
+    def test_Close_stdin_is_an_end_trigger_and_so_is_whichever_of_the_two_comes_first(self):
+        stdout = STDOUT_HEAD
+        self.assertEqual(parse(stdout + "close stdin\nrecv stdout lines 1\nwait-exit within 5s\n")[1], [])
+        problems = parse(stdout + "close stdin\nsignal TERM\nwait-exit within 5s\n")[1]
+        self.assertEqual(len(problems), 1, "a second trigger after the first is not a read or a wait")
+        self.assertEqual(parse(stdout + 'send stdin "x"\nclose stdin\nwait-exit within 5s\n')[1], [], "sends before the trigger are the scenario")
+
+    def test_A_close_of_another_connection_is_no_trigger(self):
+        self.assertTrue(self.script("close c1\nwait-exit within 5s\n")[1])
+
+    def test_The_trigger_and_the_wait_exit_stand_at_the_top_level_not_inside_a_repeat(self):
+        self.assertTrue(self.script("repeat 2 i\nsignal TERM\nend\nwait-exit within 5s\n")[1])
+        self.assertTrue(self.script("signal TERM\nrepeat 2 i\nwait-exit within 5s\nend\n")[1])
+
+    def test_Reads_in_a_repeat_after_the_end_are_allowed_and_a_send_in_one_is_not(self):
+        self.assertEqual(self.script("signal TERM\nwait-exit within 5s\nrepeat 2 i\nrecv c1 lines 1\nend\n")[1], [])
+        self.assertTrue(self.script('signal TERM\nwait-exit within 5s\nrepeat 2 i\nsend c1 "x"\nend\n')[1])
 
 
 class ProducedEntryTests(unittest.TestCase):
