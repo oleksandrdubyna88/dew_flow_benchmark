@@ -293,3 +293,29 @@ runner has only run FORMAT's own examples and toys; a behaviour beyond the scena
 
 A new CLI verb or route ships with its row here in the same task — `covered` naming its scenario test, or `not covered` with a reason.
 `ModuleTestsCatalogTests` turns a forgotten row red.
+
+## The language comparison v2 bench (E1.S1, `spikes/lang-bench/`)
+
+A third Node harness: the push check, the run base's tree and `workspace-diff` of the language comparison v2, in `spikes/lang-bench/test/`. Every test
+builds throw-away git repositories (a bare `origin` and a task repository with an unrelated history) in owned folders and a synthetic aid; none reads
+the private aids, the real secret files or the network. The design is [module_lang_bench.md](module_lang_bench.md), section *Skeleton and the push path*.
+
+```bash
+node spikes/lang-bench/run-tests.mjs                                       # everything in spikes/lang-bench/test (lowered, min(8, CPUs - 1) workers)
+node spikes/lang-bench/run-tests.mjs 'test/push-*.test.mjs' test/run-base-tree.test.mjs test/workspace-diff.test.mjs   # this story's files
+```
+
+| Flow | Status | Test files |
+|---|---|---|
+| E1.S1: the push check's named checks over a branch, a body text and the bench's own branch (leak, secrets, attribution, run-base text, family names, credits, stack folders, tree shape), exit codes, the report | covered | `test/push-check.test.mjs`, `test/push-cli.test.mjs` |
+| E1.S1: the secret shapes, own-value scan, aid shingles, known-task needles, placement rules, credit terms, tree shape, decoding, public texts | covered | `test/push-secrets.test.mjs`, `test/push-needles.test.mjs`, `test/push-visible.test.mjs`, `test/push-credits.test.mjs`, `test/push-shape.test.mjs`, `test/push-decode.test.mjs`, `test/push-public.test.mjs` |
+| E1.S1: the range a push adds, `--setup-remote` (idempotent, prune, no tags, LICENSE) | covered | `test/push-range.test.mjs`, `test/push-remote.test.mjs` |
+| E1.S1: the run base's tree (cut, credit files, needle scan) and `workspace-diff` | covered | `test/run-base-tree.test.mjs`, `test/workspace-diff.test.mjs` |
+| E1.S1: `--tag <name>` (the tag message's body rules; `tag-target` against the remote's CURRENT refs by `ls-remote`, "fetch first" when undecidable) | covered | `test/push-tag.test.mjs` |
+| E1.S1: the pre-push hook (`--install-hook`, `--uninstall-hook`, `--force-hook`, the baked literal arguments) | covered | `test/push-hook.test.mjs` |
+| E1.S1: the shared bounded process launcher, the chunked batch readers, placement over new (path, blob) pairs | covered | `test/push-launch.test.mjs`, `test/push-scan.test.mjs` |
+| E1.S1: credits after an unclosed HTML comment do not count (CodeQL alert 18) | covered | `test/push-credits.test.mjs` |
+
+**Last full run (2026-11-01, `main` at `6321cd24`, E1.S1 and E1.S8a part i merged):** `node spikes/lang-bench/run-tests.mjs` — 821 tests,
+821 pass, 0 fail, 0 skipped, 49 s. A fresh worktree needs `git submodule update --init .agents/conventions` first: without it every
+`runner-*` file fails at import (`.agents/conventions/tools/lib/owned.mjs` not found), and the preflight tests fail.

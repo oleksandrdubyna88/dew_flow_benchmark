@@ -8,11 +8,15 @@ import { test } from 'node:test';
 import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { runCalibration } from '../lib/calibrate.mjs';
 import { loadHeldout, manifestProblems, permissionProblems } from '../lib/heldout.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
+import { resolveTask } from '../lib/tasks.mjs';
 import { loadWorld } from '../lib/world.mjs';
+
+const TASK = resolveTask(loadExplore().value, '01').value;
 
 /** The held-out side, or null when this host lacks it. */
 function heldoutOrNull(t) {
-  const h = loadHeldout(realHome);
+  const h = loadHeldout(realHome, TASK);
   return h.ok ? h.value : (h.absent ? hostLacks(t, h.reason) && null : assert.fail(h.reason));
 }
 
@@ -33,9 +37,9 @@ test('Both_references_pass_every_case_and_each_mutant_fails_exactly_the_cases_it
   const h = heldoutOrNull(t);
   if (!h) return;
   const work = tmpDir('real-cal');
-  const world = await loadWorld({ home: realHome, work });
+  const world = await loadWorld({ home: realHome, work, task: TASK });
   if (!world.ok) { hostLacks(t, world.reason); return; }
-  const r = await runCalibration({ explore: world.value.explore, heldout: h, files: world.value.filesFor, scoreFn: world.value.scoreFn, work, say: () => {} });
+  const r = await runCalibration({ explore: world.value.explore, task: TASK, heldout: h, oracleFn: () => { throw new Error('task 1 has no oracle step'); }, now: () => new Date(0), files: world.value.filesFor, scoreFn: world.value.scoreFn, work, say: () => {} });
   assert.equal(r.ok, true, r.reason);
   assert.deepEqual(r.value.mutants.filter(m => !m.ok), []);
   assert.equal(r.value.mutants.length, Object.keys(h.manifest.mutants).length);

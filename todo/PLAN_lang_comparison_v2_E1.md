@@ -340,9 +340,9 @@ staged series and kept for their history.
 
 | Story | Group A (01, 02, 03, 09; bare) | Group B (the six others; bare) | Group C (process) |
 |---|---|---|---|
-| E1.S1 | built, in review; fix forward: exact exemptions (D52, T-L47) | `workspace-diff` and the push check over B's pairs | — |
+| E1.S1 | merged (#142, `6321cd24`, 2026-11-01), the fix forward of D52 included (exact exemptions, T-L47): 821 of 821 `spikes/lang-bench` tests pass on `main`; the pre-push hook installed in the task repository from the main bench checkout, and its branch check of the task repository's `main` passes | `workspace-diff` and the push check over B's pairs | — |
 | E1.S5 | merged (#135) | — | — |
-| E1.S8a | part i (built, in review; the V2 test of D52 added); **part ii-a** | **part ii-b** — the second runner manifest (D50, T-L38) | — |
+| E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a** built on `feat/lang-v2-e1-s8a-iia`, in review (coai plan round passed; the code gate's second round of fixes in progress) | **part ii-b** — the second runner manifest (D50, T-L38) | — |
 | E1.S8b | **whole**, the netns holder included; CP2; the memory view asserted (T-L43) | — (the same identity) | — |
 | E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) | — |
 | E1.S4 | the full sets of both stacks, web packages included | — | — |

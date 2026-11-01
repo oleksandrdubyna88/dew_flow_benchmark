@@ -7,12 +7,12 @@ import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { SPIKE } from './paths.mjs';
+import { parseSamples } from './samples.mjs';
 
 export const STACKS = Object.freeze(['csharp', 'node']);
 const TEMPLATES = path.join(SPIKE, 'templates');
 export const JUDGE_SOURCE = path.join(SPIKE, 'runner', 'run_samples.py');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-const LF_MARK = '⏎'; // the symbol the spec uses for a line feed
 
 /** The sentence that varies by stack (plan section 4.5 of v2, with the SDK and TypeScript patch this pilot runs). */
 export function stackSentence(explore, stack) {
@@ -38,23 +38,24 @@ async function pinnedText(repo, pin, what) {
   return hash === pin.sha256 ? ok(got.value.toString('utf8')) : fail(`${what} at ${pin.sha} hashes to ${hash.slice(0, 12)}, the pins say ${pin.sha256.slice(0, 12)}`);
 }
 
-/** The spec and the FORMAT text from the first candidate repository that has both at their pins. -> `ok({ spec, format, repo })` | `fail`. */
-export async function loadSources({ explore, candidates }) {
+/** The spec and the FORMAT text of `task` from the first candidate repository that has both at their pins. -> `ok({ spec, format, repo })` | `fail`. A spec whose samples table cannot be read is refused here. */
+export async function loadSources({ task, candidates }) {
   const problems = [];
   for (const repo of candidates) {
-    const both = await sourcesIn(repo, explore);
+    const both = await sourcesIn(repo, task);
     if (both.ok) return both;
     problems.push(both.reason);
   }
   return fail(`the task repository was not found at its pins: ${problems.join(' | ') || 'no candidate directory'}`);
 }
 
-/** The spec and FORMAT text of one repository at their pins. */
-async function sourcesIn(repo, explore) {
-  const spec = await pinnedText(repo, explore.specs.spec01, 'the spec');
+/** The spec and FORMAT text of one repository at the task's pins; the spec's samples table must be readable. */
+async function sourcesIn(repo, task) {
+  const spec = await pinnedText(repo, task.spec, `the spec of task ${task.id}`);
   if (!spec.ok) return spec;
-  const format = await pinnedText(repo, explore.specs.format, 'FORMAT.md');
-  return format.ok ? ok({ spec: spec.value, format: format.value, repo }) : format;
+  const format = await pinnedText(repo, task.format, 'FORMAT.md');
+  const samples = format.ok ? parseSamples(spec.value) : format;
+  return samples.ok ? ok({ spec: spec.value, format: format.value, repo }) : samples;
 }
 
 /** `runner/GRAMMAR.md`: FORMAT.md's sections 3 to 5, verbatim (FORMAT.md's own rule). */
@@ -65,10 +66,11 @@ export function grammarOf(format) {
   return `${format.slice(from + 1, to).replace(/\n+$/, '')}\n`;
 }
 
-/** The visible samples as the spec's section 6 table shows them: `[{ id, input, output }]` with every `⏎` a line feed. */
+/** The visible samples as the spec's section 6 table shows them: `[{ id, input, output }]` with every `⏎` a line feed. A table that cannot be read throws: `loadSources` refuses such a spec before a workspace is made. */
 export function samplesOf(spec) {
-  const rows = [...spec.matchAll(/^\| `(s\d\d)` \| `([^`]*)` \| `([^`]*)` \|$/gm)];
-  return rows.map(m => ({ id: m[1], input: m[2].replaceAll(LF_MARK, '\n'), output: m[3].replaceAll(LF_MARK, '\n') }));
+  const r = parseSamples(spec);
+  if (!r.ok) throw new Error(r.reason);
+  return r.value;
 }
 
 /** `STATEMENT.md`: the spec's bytes, a blank line, then the stack sentence. */

@@ -17,7 +17,10 @@ import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from '.
 import { allOk } from './chain.mjs';
 import { calibrationFor, loadCalibration } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
-import { isRehearsal, loadSeries, planPair, runMapFileOf, seriesPrompts } from './series.mjs';
+import { canonicalNameProblem, isRehearsal, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
+import { pauseVerdict } from './pause.mjs';
+import { acquirePlanLock } from './plan-lock.mjs';
+import { frozenPinsProblem, seriesTaskProblem } from './tasks.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
@@ -37,51 +40,78 @@ function finalizeOne(seriesDir, e) {
   return missingPaths(record, e.status === 'scored').map(p => `${e.rid}: the record lacks ${p}`);
 }
 
+/** What the pair's record already holds of the owner's `--allow-over` texts (a resume rewrites the record and must not erase them). */
+const earlierOverrides = file => { try { return readJson(file).pauseOverrides ?? []; } catch { return []; } };
+
 /**
- * After the loop: each session of `pair` that has a record gains its `explore` section; the records are checked for completeness; the pair record is written. -> `{ problems, pairFile }`.
+ * After the loop: each session of `pair` that has a record gains its `explore` section; the records are checked for completeness; the pair record is written, with the owner's `--allow-over` text when the pause
+ * point was passed by it (`pause`, see lib/pause.mjs; earlier ones are kept). -> `{ problems, pairFile }`.
  */
-export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'] }) {
+export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'], pause = null }) {
   const entries = Object.values(map.sessions).filter(s => s.pair === pair && kinds.includes(s.kind));
   const problems = entries.flatMap(e => finalizeOne(seriesDir, e));
   const recordOf = rid => (existsSync(recordFile(seriesDir, rid)) ? readJson(recordFile(seriesDir, rid)) : null);
   const pairFile = path.join(seriesDir, 'pairs', `p${pair}.json`);
-  writeFileSync(pairFile, `${JSON.stringify(pairRecordOf({ pair, entries, recordOf }), null, 2)}\n`);
+  writeFileSync(pairFile, `${JSON.stringify(withOverrides(pairRecordOf({ pair, entries, recordOf }), [...earlierOverrides(pairFile), ...(pause ? [pause] : [])]), null, 2)}\n`);
   return { problems, pairFile };
 }
+
+/** The pair record with the owner's `--allow-over` texts, when there are any. */
+const withOverrides = (record, overrides) => (overrides.length > 0 ? { ...record, pauseOverrides: overrides } : record);
 
 /** The real token, read ONCE from its mode-600 file; only a paid run calls this. */
 export const readToken = home => readSecretFile({ home, parts: TOKEN_FILE_PARTS, label: 'token' });
 
 /**
- * Run pair `pair` (or re-run a void's stack) of the series in `seriesDir`. `io` = `{ home, say, signal, abort, acceptNoisy, worldFn, tokenFn }`; the last two are for tests. -> `{ exit, message, pairFile, problems }`.
- * Exit: 0 done | 2 a stop | 3 a resumable halt | 4 configuration or a refusal | 5 failed.
+ * Run pair `pair` (or re-run a void's stack) of the series in `seriesDir`, which must be a series of `task` (its pins entry; `explore` the pins). `io` = `{ home, say, signal, abort, acceptNoisy, allowOver, worldFn, tokenFn, seriesNameOk }`;
+ * the last two are for tests. -> `{ exit, message, pairFile, problems }`. Exit: 0 done | 2 a stop (the series is stopped, or the plan's $60 pause point) | 3 a resumable halt | 4 configuration or a refusal | 5 failed.
  */
-export async function runPair({ seriesDir, pair, rerun = null, io }) {
+export async function runPair({ seriesDir, pair, rerun = null, io, explore, task }) {
+  const outside = seriesRootProblem(io.home, seriesDir);
+  if (outside) return { exit: 4, message: outside };
   const series = loadSeries(seriesDir);
-  const refusal = seriesRefusal(seriesDir, series);
+  const refusal = seriesRefusal(seriesDir, series, task, io.seriesNameOk);
   if (refusal) return refusal;
   const lock = acquireSeriesLock({ seriesDir });
   if (!lock.ok) return { exit: 4, message: lock.reason };
   try {
-    return await runLocked({ series: series.value, pair, rerun, io });
+    return await underPlanLock({ series: series.value, pair, rerun, io, explore, task });
   } finally {
     lock.value.release();
   }
 }
 
-/** Why a series cannot run a paid pair, as a result, or null: it is not a series, it is a rehearsal's, or it is stopped. */
-function seriesRefusal(seriesDir, series) {
-  if (!series.ok) return { exit: 4, message: series.reason };
-  if (isRehearsal(seriesDir)) return { exit: 4, message: `${seriesDir} is a rehearsal series (stub CLI): a paid pair runs on a series made by \`explore.mjs init\`` };
-  return series.value.map.stopped ? { exit: 2, message: `the series is stopped (${series.value.map.stopped.rule}): a stop is final for its series` } : null;
+/** The plan's tasks run under ONE lock (lib/plan-lock.mjs) held from the pause check to the end of the pair; task 1's own series does not. */
+async function underPlanLock(a) {
+  if (!a.explore.olympiad.planTasks.includes(a.task.id)) return runLocked(a);
+  const lock = acquirePlanLock({ home: a.io.home });
+  if (!lock.ok) return { exit: 4, message: lock.reason };
+  try {
+    return await runLocked(a);
+  } finally {
+    lock.value.release();
+  }
 }
 
-/** What a pair needs besides its plan: the calibration, the held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
-async function prerequisites({ home, series, worldFn, tokenFn }) {
-  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir }), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
+/** Why a series cannot run a paid pair, as a result, or null: it is not a series, it is of another task, it is a rehearsal's, or it is stopped. */
+function seriesRefusal(seriesDir, series, task, nameOk) {
+  if (!series.ok) return { exit: 4, message: series.reason };
+  const refused = [
+    () => seriesTaskProblem({ state: series.value.state, task }),
+    () => (isRehearsal(seriesDir) ? `${seriesDir} is a rehearsal series (stub CLI): a paid pair runs on a series made by \`explore.mjs init\`` : null),
+    () => canonicalNameProblem(seriesDir, nameOk),
+  ].map(check => check()).find(Boolean);
+  return refused ? { exit: 4, message: refused } : stoppedRefusal(series.value.map);
+}
+
+const stoppedRefusal = map => (map.stopped ? { exit: 2, message: `the series is stopped (${map.stopped.rule}): a stop is final for its series` } : null);
+
+/** What a pair needs besides its plan: the task's calibration, its held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
+async function prerequisites({ home, series, task, worldFn, tokenFn }) {
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => loadHeldout(home, task), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
-  const pins = pinsOk({ explore: world.explore, home, snapshots: world.snapshots });
+  const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
   return pins.ok ? ok({ calibration, heldout, world, token, prompts }) : pins;
 }
 
@@ -92,12 +122,30 @@ function commitPlan({ series, pair, planned, say }) {
   else say(`pair ${pair}: planned ${planned.planned.map(p => `${p.rid} (${p.stack}, mask ${p.mask}, ${p.label})`).join(' and ')}`);
 }
 
-async function runLocked({ series, pair, rerun, io }) {
-  const planned = planPair({ map: series.map, pair, pairs: series.state.pairs, draw: series.state.draw, rerun });
+/** The pair's plan (the barrier), refused first when the series' frozen pins are not the task's pins now. -> `ok(plan)` | `fail`. */
+function planOnPins({ series, pair, rerun, task }) {
+  const moved = pinsMoved({ series, task });
+  return moved ? fail(moved) : planPair({ map: series.map, pair, pairs: series.state.pairs, draw: series.state.draw, rerun });
+}
+
+/** Why the series cannot start a pair on today's pins of the task (an amendment since `init`), or null. */
+function pinsMoved({ series, task }) {
+  const inputs = seriesInputs(series.dir);
+  return inputs.ok ? frozenPinsProblem({ inputs: inputs.value, task, seriesId: series.state.seriesId }) : inputs.reason;
+}
+
+/** The pause point (lib/pause.mjs) applies to the plan's tasks only; task 1's own series, made before it existed, is not under it. */
+const pauseOf = ({ io, explore, task }) => (explore.olympiad.planTasks.includes(task.id) ? pauseVerdict({ home: io.home, explore, allowOver: io.allowOver ?? null, ...(io.now ? { now: io.now } : {}) }) : { stop: false, record: null });
+
+async function runLocked({ series, pair, rerun, io, explore, task }) {
+  const planned = planOnPins({ series, pair, rerun, task });
   if (!planned.ok) return { exit: 4, message: planned.reason };
-  const need = await prerequisites({ home: io.home, series, worldFn: io.worldFn, tokenFn: io.tokenFn });
+  const pause = pauseOf({ io, explore, task });
+  if (pause.stop) return { exit: 2, message: pause.message };
+  await io.afterPauseCheck?.(); // a seam for tests: a run that has passed the check and holds the plan lock
+  const need = await prerequisites({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn });
   if (!need.ok) return { exit: 4, message: need.reason };
-  return loopAndFinalize({ series, pair, planned: planned.value, ...need.value, io, abort: io.abort });
+  return loopAndFinalize({ series, pair, planned: planned.value, ...need.value, io, abort: io.abort, pause: pause.record });
 }
 
 /** A resume first lets v1 settle what a crash left `launching` (charge from the broker ledger, class `void: harness`, or plan again a session that never paid); a fresh pair has nothing to settle. */
@@ -109,7 +157,7 @@ async function settleOpen({ ctx, deps, map, resumed, say }) {
  * The loop over the planned pair, then the records. `io.seams` (`{ claudeBinary, planOver, machine, preflightHome, stub }`) is for tests only: a stub CLI behind a loopback stub upstream, a scripted machine. A real run
  * passes none, so it launches the pinned CLI copy against the real API behind the real machine.
  */
-async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, prompts, io, abort }) {
+async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, prompts, io, abort, pause }) {
   const seams = io.seams ?? {};
   const ctx = await runContext({
     world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts,
@@ -121,6 +169,6 @@ async function loopAndFinalize({ series, pair, planned, calibration, heldout, wo
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
   const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });
-  const fin = finalizePair({ seriesDir: series.dir, map: result.map, pair });
+  const fin = finalizePair({ seriesDir: series.dir, map: result.map, pair, pause });
   return { exit: result.exit, message: result.message, pairFile: fin.pairFile, problems: fin.problems };
 }

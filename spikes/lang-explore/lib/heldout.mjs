@@ -2,10 +2,9 @@
 // the two reference sources, the mutants and the manifest, each file checked against the manifest's sha256 before anything uses it. Nothing it returns is ever written to a public file.
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import os from 'node:os';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { heldoutDir } from './paths.mjs';
+import { taskPaths } from './tasks.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const filesUnder = (root, rel = '') => readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap(e => (e.isDirectory() ? filesUnder(root, path.join(rel, e.name)) : [path.join(rel, e.name)]));
@@ -37,15 +36,15 @@ export function permissionProblems(dir) {
   return [...dirs, ...files].map(p => modeProblem(dir, p)).filter(Boolean);
 }
 
-/** `ok(heldout)` with `{ dir, manifest, casesDir, refDir(stack), mutantDir(id), traps, caseIds }`, or a `fail` naming what is absent or changed. */
-export function loadHeldout(home = os.homedir()) {
-  const dir = heldoutDir(home);
+/** `ok(heldout)` with `{ task, dir, manifest, casesDir, bruteFile, handcheckFile, refDir(stack), mutantDir(id), traps, caseIds }` for one task's folder, or a `fail` naming what is absent or changed. */
+export function loadHeldout(home, task) {
+  const dir = taskPaths(task, home).heldoutDir;
   if (!existsSync(path.join(dir, 'manifest.json'))) return fail(`the held-out side is not there (${dir}/manifest.json): run gen.py there`, { absent: true });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
   const problems = [...manifestProblems(dir, manifest), ...permissionProblems(dir)];
   if (problems.length > 0) return fail(`the held-out side does not match its manifest: ${problems.join('; ')}`);
   return ok(Object.freeze({
-    dir, manifest, casesDir: path.join(dir, 'cases'), traps: manifest.traps, caseIds: Object.keys(manifest.cases).sort(),
+    task: task.id, dir, manifest, casesDir: path.join(dir, 'cases'), bruteFile: path.join(dir, 'brute.py'), handcheckFile: path.join(dir, 'handcheck.md'), traps: manifest.traps, caseIds: Object.keys(manifest.cases).sort(),
     refDir: stack => path.join(dir, 'refs', stack), mutantDir: id => path.join(dir, 'mutants', id),
   }));
 }
