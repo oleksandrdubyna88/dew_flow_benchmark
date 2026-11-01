@@ -15,7 +15,7 @@ public static class ModelArmsCommandLine
     private sealed record Shape(string Verb, int Min, int Max, string Usage, string Takes, IReadOnlyList<string> Legal, IReadOnlyList<string> Flags);
 
     /// <summary>Each verb names the flags it takes (the parent plan's §4.1 table and the E2 spec): <c>--experiment</c> for every verb that reads an
-    /// experiment, <c>--seconds</c> for <c>gate-lock hold</c>, <c>--parse-only</c> for <c>checks</c>. Any other flag is refused, so a misspelt
+    /// experiment, <c>--seconds</c> for <c>gate-lock hold</c> only, <c>--parse-only</c> for <c>checks</c>. Any other flag is refused, so a misspelt
     /// <c>--experimnt</c> is not silently dropped while the root falls back to the environment.</summary>
     private static readonly Shape[] Table =
     [
@@ -23,13 +23,13 @@ public static class ModelArmsCommandLine
         Fixed("validate", 0, "validate", "no positional argument", ExperimentFlag),
         Fixed("prep-base", 0, "prep-base", "no positional argument", ExperimentFlag),
         Fixed("make", 0, "make", "no positional argument", ExperimentFlag),
-        Fixed("lock", 0, "lock", "no positional argument", ExperimentFlag),
-        Fixed("unlock", 0, "unlock", "no positional argument", ExperimentFlag),
+        Fixed("lock", 1, "lock <run>", "exactly one argument, the run", ExperimentFlag),
+        Fixed("unlock", 0, "unlock [--force]", "no positional argument", ExperimentFlag, "--force"),
         Fixed("run-arm", 1, "run-arm <arm>", "exactly one argument, the arm", ExperimentFlag),
 
-        // --seconds: not named for run-all by any spec yet (E4.S3 specifies the verb); allowed because the command line's own first scenario passes it.
-        new("run-all", 1, int.MaxValue, "run-all <arm>...", "one or more arms", [], [ExperimentFlag, "--seconds"]),
-        Fixed("chain", 0, "chain", "no positional argument", ExperimentFlag),
+        // run-all takes --experiment only (E5 §8 item 21): --seconds was accepted by no spec, and a flag accepted and ignored is a silent lie.
+        new("run-all", 1, int.MaxValue, "run-all <arm>...", "one or more arms", [], [ExperimentFlag]),
+        Fixed("chain", 1, "chain <run>", "exactly one argument, the run", ExperimentFlag),
         Fixed("checks", 1, "checks <arm>", "exactly one argument, the arm", ExperimentFlag, "--parse-only"),
         Fixed("status", 0, "status", "no positional argument", ExperimentFlag),
         new("gate-lock", 1, 1, "gate-lock status|hold", "exactly one argument, status or hold", ["status", "hold"], [ExperimentFlag, "--seconds"]),

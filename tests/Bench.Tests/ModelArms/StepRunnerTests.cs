@@ -253,12 +253,17 @@ public sealed class StepRunnerTests
     {
         using var bench = new StepBench();
         bench.Replays("result-success.jsonl");
+        bench.Parent["PGPASSWORD"] = "hunter2"; // secret-shaped, and the shared rule does not end with it: only the union strips it (E4.S0, D19)
+        bench.Parent["SSH_AUTH_SOCK"] = "/run/user/1000/keyring/ssh"; // the agent's socket and the GIT_* names are stripped from the arm's own session (E6.S4 a, ledger 3.2); StepGitTests plants GIT_DIR the same
+        bench.Parent["GIT_DIR"] = "/nowhere";
+        bench.Parent["GIT_CONFIG_COUNT"] = "1";
+        bench.Parent["GIT_SSH_COMMAND"] = "ssh -i /home/op/.ssh/id_ed25519";
 
         await bench.Runner().RunAsync(bench.Context("C", 0), Ct);
 
         var call = bench.Fake.Calls().Should().ContainSingle().Subject;
         call.EnvironmentNames.Should().Contain(["TMPDIR", "HOME", "PATH", "FAKE_CLI_HOME", "PWD"]);
-        call.EnvironmentNames.Should().NotContain(["BENCH_DB", "SUBAGENT_MODEL_GUARD", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "OLDPWD"]);
+        call.EnvironmentNames.Should().NotContain(["BENCH_DB", "PGPASSWORD", "SUBAGENT_MODEL_GUARD", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "OLDPWD", "SSH_AUTH_SOCK", "GIT_DIR", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND"]);
         call.SubagentModelGuard.Should().BeEmpty();
     }
 

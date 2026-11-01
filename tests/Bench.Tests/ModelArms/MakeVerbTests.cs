@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Launch;
 using Xunit;
 
@@ -431,6 +432,39 @@ public sealed class MakeVerbTests
         run.Error.Should().Contain("warm build of C1 failed").And.Contain("out/prep-build.log");
         kit.Tokens.Should().OnlyContain(token => !run.Everything.Contains(token, StringComparison.Ordinal));
         File.ReadAllText(kit.Paths("C1").PrepBuildLog).Should().Contain("Build succeeded.", "the failed build's log is what the operator reads");
+    }
+
+    /// <summary>The floor at <c>make</c>'s admission (D23, E4.S0): the git shim answers <c>--version</c> with the canned text. A refused git is exit 3 with exactly ONE recorded call — the version, from the experiment root, by the shim's own path — and nothing made, nothing printed (the verb's contract: no line before a refusal). An admitted one makes the arms
+    /// (<c>Every_tool_of_make_is_launched_by_its_resolved_path_under_a_built_environment</c> stays unedited and green, its <c>HarnessGit()</c> now also sees the pinned version call).</summary>
+    [Fact]
+    public async Task Make_and_checks_refuse_a_git_below_the_floor_before_any_repository_operation()
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        kit.Bench.Say("git.version", "git version 2.44.0\n");
+
+        var run = await kit.MakeAsync();
+
+        run.Code.Should().Be(3, run.Everything);
+        var calls = kit.Bench.Recorded();
+        var only = calls.Should().ContainSingle("a refused git is asked its version and nothing else").Subject;
+        only.Tool.Should().Be("git");
+        only.Arguments.Last().Should().Be("--version");
+        only.Executable.Should().Be(Path.Combine(kit.Root.Temp, "bin", "git"), "the resolved shim's own path");
+        only.Cwd.Should().Be(kit.Root.Root, "from the experiment root");
+        File.Exists(kit.Layout.ArmMapFile).Should().BeFalse("no arm map was written");
+        Directory.Exists(kit.Layout.Arms).Should().BeFalse("no arm folder was made");
+        run.Output.Should().NotContain("resolved executables:", "refused before printing");
+        run.Error.Should().Contain("2.44.0").And.Contain(GitFloor.Sentence).And.Contain($"git at {only.Executable}: ", "the refusal names the git it is about, by its real path");
+
+        kit.Bench.Say("git.version", "git version 2.44.1\n");
+        File.Delete(kit.Bench.Calls);
+
+        var admitted = await kit.MakeAsync();
+
+        admitted.Code.Should().Be(0, admitted.Everything);
+        admitted.Output.Should().Contain("resolved executables:");
+        kit.Bench.HarnessGit().Where(call => call.Arguments.Last() == "--version").Should().ContainSingle().Which.Executable.Should().Be(TargetBench.Printed(admitted.Output)["git"]);
     }
 
     [Fact]

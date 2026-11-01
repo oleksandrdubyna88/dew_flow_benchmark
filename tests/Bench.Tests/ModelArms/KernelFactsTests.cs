@@ -119,6 +119,44 @@ public sealed class KernelFactsTests
     }
 
     [Fact]
+    public void The_birth_time_is_read_when_the_file_system_reports_it_and_is_none_when_it_does_not()
+    {
+        var reported = KernelFacts.Decode("/r/f", File644 with { Mask = Basic | KernelFacts.BirthBit, BtimeSec = 1761700000, BtimeNsec = 5 }).Should().BeOfType<FactsRead.Read>().Subject.Facts;
+        var silent = KernelFacts.Decode("/r/f", File644 with { BtimeSec = 1761700000, BtimeNsec = 5 }).Should().BeOfType<FactsRead.Read>().Subject.Facts;
+
+        reported.Identity.Birth.Should().Be(1761700000.000000005m);
+        silent.Identity.Birth.Should().BeNull("a bit the kernel did not set is not captured, which is not zero");
+    }
+
+    [Fact]
+    public void A_folder_made_again_under_a_name_has_the_birth_time_of_the_new_one_whatever_inode_number_it_got()
+    {
+        Linux();
+        var parent = Directory.CreateTempSubdirectory("birth-").FullName;
+        try
+        {
+            var folder = Path.Combine(parent, "f");
+            Directory.CreateDirectory(folder);
+            var first = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
+            if (first.Birth is null)
+            {
+                return; // this file system reports no birth time: nothing to compare
+            }
+
+            Thread.Sleep(50);
+            Directory.Delete(folder);
+            Directory.CreateDirectory(folder);
+            var second = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
+
+            second.Birth.Should().BeGreaterThan(first.Birth.Value, "the inode number may come back (ext4 reuses it), the birth time cannot");
+        }
+        finally
+        {
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Two_reads_that_name_two_inodes_or_two_change_times_are_changes_a_nanosecond_apart()
     {
         var judged = KernelFacts.Decode("/r/f", File644).Should().BeOfType<FactsRead.Read>().Subject.Facts;

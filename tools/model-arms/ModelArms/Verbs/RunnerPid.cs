@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace ModelArms.Verbs;
 
-/// <summary>The one reading of <c>pids/&lt;arm&gt;.pid</c>: the decimal text of a process id and nothing else — digits only, more than zero, a whole <see cref="int"/>. <c>status</c> and <c>checks</c> both ask it (<c>common.reuse-first</c>); nothing writes a pid file until E5.S3's <c>run-all</c>, so this is the format the story fixes, not one E4 has settled.</summary>
+/// <summary>The one reading of <c>pids/&lt;arm&gt;.pid</c>: the decimal text of a process id and nothing else — digits only, more than zero, a whole <see cref="int"/>. <c>status</c> and <c>checks</c> both ask it (<c>common.reuse-first</c>); the runner writes it itself (E5.S1, D13: <c>RunArmAdmission</c> after its two locks), as this format, and liveness is asked of the runner's lock (<c>RunnerLiveness</c>), never of the pid — which <c>status</c> and <c>checks</c> keep printing and testing as E3 built them (a reused pid reads alive there: the safe direction).</summary>
 internal static class RunnerPid
 {
     /// <summary>The pid <paramref name="text"/> (already trimmed) names, or <c>null</c> when it is no pid.</summary>
