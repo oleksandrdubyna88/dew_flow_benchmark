@@ -142,13 +142,17 @@ def time_text(wall_ms, limit_ms, basis):
 NOT_CERTIFIED = {"known": False, "why": "not certified"}
 
 
-def plain_lifecycle(leftover, stderr=None):
+def memory_line(memory):
+    return f"  memory: peak {memory['peakBytes']} bytes" if memory.get("known") and "peakBytes" in memory else "  memory: not certified"
+
+
+def plain_lifecycle(leftover, stderr=None, memory=None):
     """The lifecycle record of a case run on the plain path (no cgroup): what was not observed is unknown, not zero."""
     return {
         "stop": {"known": False, "why": "this program is not signalled"},
         "leftover": {"known": True, "found": bool(leftover)} if leftover is not None else {"known": False, "why": "not checked"},
         "leftoverEvidence": "process group (killpg 0)",
-        "memory": NOT_CERTIFIED,
+        "memory": memory or NOT_CERTIFIED,
         "stderr": stderr or {"known": False, "why": "not captured"},
     }
 
