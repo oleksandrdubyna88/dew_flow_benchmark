@@ -53,12 +53,13 @@ export function scanEntries(files, tip) {
 export function entryFindings(entry, bytes, inputs, { refuseNul }) {
   const { commit, path } = entry;
   const { text, nul } = bytes === undefined ? { text: null, nul: false } : decodeBlob(bytes);
-  const refusal = nul && refuseNul ? [{ check: 'tree-shape', commit, path, line: null, what: NUL_REASON }] : [];
+  // `always`: a binary blob anywhere in the range is refused, not only the one at the tip (a gzipped secret added and removed was published all the same)
+  const refusal = nul && refuseNul ? [{ check: 'tree-shape', commit, path, line: null, what: NUL_REASON, always: true }] : [];
   return [
     ...(text === null ? [] : flatten(scanText(path, text, inputs), commit)),
     ...(entry.firstOfPath ? flatten(scanPath(path, inputs), commit) : []),
     ...refusal,
-  ].map(f => ({ ...f, atTip: entry.atTip }));
+  ].map(f => ({ atTip: entry.atTip, ...f }));
 }
 
 /** Tagged findings of the commit messages (never at the tip: only the history checks keep them). */
@@ -67,7 +68,7 @@ export const messageFindings = (messages, inputs) => messages.flatMap(({ commit,
 const isMessageFamily = f => f.check === 'family-names' && f.path === COMMIT_MESSAGE;
 
 /** Only what the check reads: a history check keeps everything, a family name in a commit message too (public history), any other keeps what is at the tip. */
-export const keptFindings = findings => findings.filter(f => f.atTip !== false || HISTORY_CHECKS.has(f.check) || isMessageFamily(f));
+export const keptFindings = findings => findings.filter(f => f.atTip !== false || HISTORY_CHECKS.has(f.check) || isMessageFamily(f) || f.always === true);
 
 /** Is there a README structure to check? It is when a known-task text is in play or the README already has the heading. */
 const attributionNeeded = (text, addedPaths, carriesKnownText) => text !== null && (carriesKnownText(addedPaths) || /^## Attribution\s*$/m.test(text));

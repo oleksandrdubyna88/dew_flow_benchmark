@@ -463,3 +463,14 @@ test('The_task_repository_and_a_task_PR_body_do_not_exempt_a_plan_sentence_and_t
   assert.equal(checkText({ text: body, label: 'b.md', inputs: withPublic }).exit, EXIT.REFUSED, 'a task PR body is checked like the task repository');
   assert.equal(checkText({ text: body, label: 'b.md', inputs: withPublic, self: true }).exit, EXIT.PASS, 'a bench PR body is not');
 });
+
+test('A_gzipped_secret_added_and_then_removed_in_the_range_is_refused_because_every_blob_of_the_history_counts', async t => {
+  const { gzipSync } = await import('node:zlib');
+  const { repo, sha } = branchWith(t, { 'tasks/data.gz': gzipSync(Buffer.from(`token ${SECRET}\n`)) });
+  commit(repo, 'refactor: remove it again', { 'tasks/data.gz': null, 'a.txt': 'x\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => [f.commit, f.path, f.what]), [[sha, 'tasks/data.gz', 'file holds a NUL byte (binary or UTF-16): the text scans cannot be trusted on it']]);
+  const self = await checkSelf({ repo, branch: 'topic', inputs });
+  assert.equal(self.checks.some(c => c.name === 'tree-shape'), false, 'the bench branch does not refuse binaries');
+});

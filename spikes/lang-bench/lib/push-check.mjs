@@ -86,7 +86,7 @@ async function tipFindings({ repo, branch, inputs, scan }) {
 }
 
 /** The tagged findings grouped under the named checks, in the named order. */
-const groupChecks = (names, findings) => names.map(name => ({ name, findings: findings.filter(f => f.check === name).map(({ check, atTip, ...f }) => f) }));
+const groupChecks = (names, findings) => names.map(name => ({ name, findings: findings.filter(f => f.check === name).map(({ check, atTip, always, ...f }) => f) }));
 
 /** ok(null) when origin is the task repository, the tracking refs are what it has now and the branch has not moved off `tip` (when given). */
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
