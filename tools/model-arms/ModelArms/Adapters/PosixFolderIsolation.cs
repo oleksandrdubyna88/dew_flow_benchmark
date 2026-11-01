@@ -180,7 +180,7 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
     private static bool ThroughALink(string path) => RealPath.Of(path) is not Outcome<string>.Ok ok || !string.Equals(ok.Value, path, StringComparison.Ordinal);
 
     private static PinnedFacts FactsOf(FileFacts facts) =>
-        new(facts.Identity.Kind == FileKind.Link, facts.Identity.Kind == FileKind.Directory, facts.Identity.Kind == FileKind.Regular, (int)facts.Mode & PermissionBits, new NodeIdentity(facts.Identity.Device, facts.Identity.Inode));
+        new(facts.Identity.Kind == FileKind.Link, facts.Identity.Kind == FileKind.Directory, facts.Identity.Kind == FileKind.Regular, (int)facts.Mode & PermissionBits, new NodeIdentity(facts.Identity.Device, facts.Identity.Inode, facts.Identity.Birth));
 
     private Outcome<Held> PinOne(IsolationEntry entry)
     {
@@ -222,7 +222,7 @@ internal sealed class PosixFolderIsolation(IsolationHands? hands, List<string>? 
         };
         return wrong.Length > 0
             ? Outcome<Held>.Failure($"{entry.Path} {wrong}{named}")
-            : Outcome<Held>.Success(new Held(fd, new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText((int)facts.Mode & PermissionBits), new NodeIdentity(facts.Identity.Device, facts.Identity.Inode), entry.Source)));
+            : Outcome<Held>.Success(new Held(fd, new SavedMode(entry.Path, entry.Kind, SnapshotFiles.ModeText((int)facts.Mode & PermissionBits), new NodeIdentity(facts.Identity.Device, facts.Identity.Inode, facts.Identity.Birth), entry.Source)));
     }
 
     private Outcome<string> ReApplyOne(SavedMode saved)

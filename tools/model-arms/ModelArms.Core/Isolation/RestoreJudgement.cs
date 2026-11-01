@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ModelArms.Core.Isolation;
 
 /// <summary>What a re-pinned entry is NOW, as the adapter read it from the descriptor: a link, a folder or a regular file, the 12 permission bits and, on the kernel road, the inode. <c>null</c> for the whole value means the name is gone.</summary>
@@ -44,15 +46,23 @@ public static class RestoreJudgement
     private static EntryVerdict Inside(SavedMode saved, PinnedFacts now) =>
         now.IsLink ? new EntryVerdict.Skip($"{saved.Path}: a link now — not restored")
         : WrongKind(saved, now) ? new EntryVerdict.Skip($"{saved.Path}: not the {(saved.Kind == IsolationKind.Unlisted ? "folder" : "kind of file")} it was when locked — not restored")
-        : Replaced(saved, now) ? new EntryVerdict.Skip($"{saved.Path}: replaced since the lock (inode {saved.Identity!.Inode} → {now.Identity!.Inode}) — its mode is left as it is")
+        : Replaced(saved, now) ? new EntryVerdict.Skip($"{saved.Path}: replaced since the lock ({Difference(saved.Identity!, now.Identity!)}) — its mode is left as it is")
         : ByMode(saved, now);
 
     private static string Locked(SavedMode saved) => SnapshotFiles.ModeText(IsolationPlans.LockedMode(saved.Kind));
 
     private static bool WrongKind(SavedMode saved, PinnedFacts now) => !now.IsFolder && (saved.Kind == IsolationKind.Unlisted || !now.IsFile);
 
+    /// <summary>Another device or inode number, or — the same number, which a file system reuses at once — another birth time. Compared only when BOTH sides carry one: a snapshot from a file system that reports none still holds the rest.</summary>
     private static bool Replaced(SavedMode saved, PinnedFacts now) =>
-        saved.Identity is { } was && now.Identity is { } current && was != current;
+        saved.Identity is { } was && now.Identity is { } current && (was.Device != current.Device || was.Inode != current.Inode || (was.Birth is { } born && current.Birth is { } bornNow && born != bornNow));
+
+    private static string Difference(NodeIdentity was, NodeIdentity current) =>
+        was.Inode != current.Inode || was.Device != current.Device
+            ? $"inode {was.Inode} → {current.Inode}"
+            : $"inode {was.Inode} made again: created {Born(was)} → {Born(current)}";
+
+    private static string Born(NodeIdentity node) => node.Birth?.ToString("0.#########", CultureInfo.InvariantCulture) ?? "unknown";
 
     private static EntryVerdict ByMode(SavedMode saved, PinnedFacts now)
     {

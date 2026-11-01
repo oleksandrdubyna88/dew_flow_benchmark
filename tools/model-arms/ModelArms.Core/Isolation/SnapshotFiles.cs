@@ -1,11 +1,12 @@
+using System.Globalization;
 using System.Text.Json;
 using Bench.Domain;
 
 namespace ModelArms.Core.Isolation;
 
-/// <summary>Which inode an entry was when it was locked: the device (<c>major &lt;&lt; 32 | minor</c>) and the inode number. Named <c>NodeIdentity</c>, not <c>FileIdentity</c>, because <c>ModelArms.Core.Experiment.FileIdentity</c> is the trust check's (kind and change time too — and a <c>chmod</c> changes the change time).
+/// <summary>Which inode an entry was when it was locked: the device (<c>major &lt;&lt; 32 | minor</c>), the inode number and, where the file system reports it, when the inode was created (<paramref name="Birth"/>: seconds since the epoch, nine decimals; <c>null</c> otherwise). The inode number alone does not tell a folder from the one made again at its name — ext4 reuses a freed number at once. Named <c>NodeIdentity</c>, not <c>FileIdentity</c>, because <c>ModelArms.Core.Experiment.FileIdentity</c> is the trust check's (kind and change time too — and a <c>chmod</c> changes the change time).
 /// It is what tells, at <c>unlock</c>, an entry that was replaced since the lock from the one that was locked; the runtime road cannot read it, so there it is <c>null</c> on both sides.</summary>
-public sealed record NodeIdentity(ulong Device, ulong Inode);
+public sealed record NodeIdentity(ulong Device, ulong Inode, decimal? Birth = null);
 
 /// <summary>One path of the snapshot: what it is, the 12 permission bits it had before the lock as octal text (<c>stat -c %a</c>: <c>755</c>, <c>2755</c>, <c>0</c>), on the kernel road which inode, and <see cref="Source"/> — the configuration entry that authorised it (<c>isolation.closed[0]</c>), covered by the snapshot's digest, so that
 /// <c>unlock</c> can restore what the lock closed after the block that named it was removed, and a path added to the file by hand (which the digest does not cover) is not restored.</summary>
@@ -14,7 +15,7 @@ public sealed record SavedMode(string Path, IsolationKind Kind, string Mode, Nod
 /// <summary>What <c>.locked-modes</c> holds: the run, the digest of the plan, the moment of the snapshot and the saved modes in lock order.</summary>
 public sealed record SavedSnapshot(string Run, string Digest, string Since, IReadOnlyList<SavedMode> Modes);
 
-/// <summary>The bytes of D11's two files, as values: <c>.locked-modes</c> is <c>{"run","digest","since","modes":[{"path","kind","mode"[,"dev","ino"]}]}</c> and <c>.locked-modes.applied</c> is <c>{"run","digest","verifiedAt"}</c>, each followed by <c>\n</c>. The reader of both is <see cref="LockSnapshots"/> — one reader, two writers.</summary>
+/// <summary>The bytes of D11's two files, as values: <c>.locked-modes</c> is <c>{"run","digest","since","modes":[{"path","kind","mode"[,"dev","ino"[,"btime"]]}]}</c> and <c>.locked-modes.applied</c> is <c>{"run","digest","verifiedAt"}</c>, each followed by <c>\n</c>. The reader of both is <see cref="LockSnapshots"/> — one reader, two writers.</summary>
 public static class SnapshotFiles
 {
     public const string Utc = "yyyy-MM-dd'T'HH:mm:ss'Z'";
@@ -80,6 +81,10 @@ public static class SnapshotFiles
         {
             writer.WriteNumber("dev", identity.Device);
             writer.WriteNumber("ino", identity.Inode);
+            if (identity.Birth is { } birth)
+            {
+                writer.WriteString("btime", birth.ToString("0.#########", CultureInfo.InvariantCulture));
+            }
         }
 
         writer.WriteEndObject();

@@ -243,6 +243,19 @@ public sealed class IsolationPlanTests
     }
 
     [Fact]
+    public void A_birth_time_travels_in_the_snapshot_beside_the_inode_and_a_malformed_one_is_refused()
+    {
+        var saved = new SavedSnapshot("part6", new string('a', 64), "2026-10-31T10:00:00Z", [new("/a", IsolationKind.Closed, "755", new NodeIdentity(64769, 1234567, 1761768000.123456789m)), new("/b", IsolationKind.Closed, "755", new NodeIdentity(64769, 7))]);
+
+        var text = SnapshotFiles.Snapshot(saved);
+
+        text.Should().Contain("\"ino\":1234567,\"btime\":\"1761768000.123456789\"");
+        text.Split("\"path\":\"/b\"")[1].Should().NotContain("btime", "a file system that reports no birth time records none");
+        LockSnapshots.Saved(text).Ok().Modes.Should().Equal(saved.Modes);
+        LockSnapshots.Saved(text.Replace("1761768000.123456789", "soon", StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>();
+    }
+
+    [Fact]
     public void The_snapshot_and_applied_texts_round_trip_through_the_one_reader()
     {
         var saved = new SavedSnapshot("part6", new string('a', 64), "2026-10-31T10:00:00Z", [new("/a", IsolationKind.Closed, "755", new NodeIdentity(64769, 1234567)), new("/b c", IsolationKind.Unlisted, "2755", null)]);
@@ -298,6 +311,9 @@ public sealed class IsolationPlanTests
         { "an unlisted folder the operator opened to 500", Saved(IsolationKind.Unlisted, "755"), Now(Mode500), true, typeof(EntryVerdict.Unresolved), "neither the saved 755 nor the locked 300" },
         { "a link now", Saved(IsolationKind.Closed, "755"), Now(Mode755, link: true, folder: false), true, typeof(EntryVerdict.Skip), "a link now" },
         { "another inode", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2)), Now(Mode000, new NodeIdentity(1, 3)), true, typeof(EntryVerdict.Skip), "replaced since the lock (inode 2 → 3)" },
+        { "the same inode number made again (ext4 reuses a freed one)", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2, 200.25m)), true, typeof(EntryVerdict.Skip), "replaced since the lock (inode 2 made again: created 100.5 → 200.25)" },
+        { "the same inode and the same birth", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2, 100.5m)), true, typeof(EntryVerdict.Restore), string.Empty },
+        { "the same inode, a birth on one side only (a file system that reports none)", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2)), true, typeof(EntryVerdict.Restore), string.Empty },
         { "gone", Saved(IsolationKind.Closed, "755"), null, true, typeof(EntryVerdict.Skip), "may still stand at 0 elsewhere" },
         { "gone, unlisted", Saved(IsolationKind.Unlisted, "755"), null, true, typeof(EntryVerdict.Skip), "may still stand at 300 elsewhere" },
         { "outside the bound before every other verdict", Saved(IsolationKind.Closed, "755"), null, false, typeof(EntryVerdict.Fail), "not under any folder this experiment names — not restored (by hand: chmod 755 /x/y)" },

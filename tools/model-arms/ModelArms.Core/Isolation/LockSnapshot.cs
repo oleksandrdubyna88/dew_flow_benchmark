@@ -1,3 +1,4 @@
+using System.Globalization;
 using Bench.Domain;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
@@ -96,12 +97,15 @@ public static class LockSnapshots
         var source = each.Text("source");
         var device = each.ULong("dev");
         var inode = each.ULong("ino");
+        var birthText = each.Text("btime");
+        var birth = decimal.TryParse(birthText, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed) ? parsed : (decimal?)null;
         return each.Problem.Length > 0 ? Outcome<SavedMode>.Failure($"{where}: {each.Problem}")
             : path.Contains('\0', StringComparison.Ordinal) || !Path.IsPathFullyQualified(path) ? Outcome<SavedMode>.Failure($"{where}: 'path' must be a fully qualified path with no NUL character")
             : (requireKind || kind.Length > 0) && kind is not ("closed" or "unlisted") ? Outcome<SavedMode>.Failure($"{where}: 'kind' must be closed or unlisted, got '{kind}'")
             : SnapshotFiles.ModeBits(mode) is Outcome<int>.Fail bad ? Outcome<SavedMode>.Failure($"{where}: {bad.Reason}")
             : device.HasValue != inode.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'dev' and 'ino' come together or not at all")
-            : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value) : null, source));
+            : birthText.Length > 0 && (!birth.HasValue || !device.HasValue) ? Outcome<SavedMode>.Failure($"{where}: 'btime' must be seconds since the epoch and come with 'dev' and 'ino', got '{birthText}'")
+            : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value, birth) : null, source));
     }
 
     private static Snapshot Header(JsonRow row) => new(row.Text("run", required: true), row.Text("digest", required: true), row.Text("since", required: true));
