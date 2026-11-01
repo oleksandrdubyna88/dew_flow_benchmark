@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Bench.Tests.Probes.Driver;
 using FluentAssertions;
 using ModelArms.Core.Checks;
 using ModelArms.Core.Experiment;
@@ -373,7 +374,23 @@ public sealed class ChecksVerbTests
     }
 
     [Fact]
-    public async Task Checks_refuses_an_arm_whose_runner_is_alive()
+    public async Task Checks_refuses_an_arm_whose_runner_lock_is_held()
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        Directory.CreateDirectory(kit.Layout.Pids);
+        await using var holder = ModelArmsBinary.StartHolder(kit.Root, kit.Layout.RunnerLock(kit.Name), FakeCli.Executable);
+        await holder.LineAsync("child ", TimeSpan.FromSeconds(30));
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(4);
+        run.Error.Should().Contain($"{kit.Name}'s runner is alive").And.Contain("the lock is held").And.Contain("finished or stopped arm");
+        kit.Bench.Recorded().Should().OnlyContain(call => call.Tool == "git" && call.Arguments.Last() == "--version", "nothing is launched but the floor's question — not a stage, not even a repository question to git (E4.S0: the version is asked at admission, before the runner is looked for)");
+        Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_stale_pid_of_an_unrelated_live_process_is_not_a_runner_when_its_lock_is_free()
     {
         using var kit = await ChecksKit.CreateAsync();
         using var live = await StatusKit.HeldProcess.StartAsync();
@@ -381,26 +398,22 @@ public sealed class ChecksVerbTests
 
         var run = await kit.RunAsync();
 
-        run.Code.Should().Be(4);
-        run.Error.Should().Contain($"runner (pid {live.Pid}) is alive").And.Contain("finished or stopped arm");
-        kit.Bench.Recorded().Should().OnlyContain(call => call.Tool == "git" && call.Arguments.Last() == "--version", "nothing is launched but the floor's question — not a stage, not even a repository question to git (E4.S0: the version is asked at admission, before the runner is looked for)");
-        Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
+        run.Code.Should().Be(0, run.Error, "the runner's lock decides (D13), not a pid that a reused number can hold: the pid is alive and is not this arm's runner");
+        Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeTrue();
     }
 
     [Theory]
     [InlineData("abc")]
     [InlineData("0")]
     [InlineData("12 34")]
-    public async Task A_pid_file_that_holds_no_pid_is_refused_because_liveness_cannot_be_told(string text)
+    public async Task A_pid_file_that_holds_no_pid_is_no_runner_when_the_lock_is_free(string text)
     {
         using var kit = await ChecksKit.CreateAsync();
         kit.Root.Write($"pids/{kit.Name}.pid", text);
 
         var run = await kit.RunAsync();
 
-        run.Code.Should().Be(4, text);
-        run.Error.Should().Contain("holds no pid");
-        kit.Bench.Recorded().Should().OnlyContain(call => call.Tool == "git" && call.Arguments.Last() == "--version", "the arm's code is not run under a runner that may still be writing the clone: only the floor's question (E4.S0) was asked");
+        run.Code.Should().Be(0, text + run.Error);
     }
 
     [Fact]

@@ -18,7 +18,7 @@ namespace Bench.Tests.ModelArms;
 /// <summary><c>chain &lt;run&gt;</c> (E5.S4, parent §4.7, D11, D27) in process over <see cref="ChainKit"/>: the stages in their order with the markers written after each verb returns, the run's own lock, the startup poll, the waits that sleep what remains, the bounded exit wait before every start, and — the point of the story — the failure path, which leaves the isolation applied, stops no runner and prints the recovery. The files are real and the verbs
 /// the chain calls are recorded (except where a row says the real <c>lock</c>, <c>unlock</c>, <c>make</c> or <c>run-all</c> is called).
 /// <para>
-/// What this does NOT prove: that a started runner is detached and frees the run's lock when the chain dies (<c>ChainProcessTests</c>); the facts' reading against a REAL runner past the one non-runner holder; a Windows host (the host seam says Windows, the process is Linux); the SRS arms (E4.S3 — <c>run-all</c> refuses their scheme).
+/// What this does NOT prove: that a started runner is detached and frees the run's lock when the chain dies (<c>ChainProcessTests</c>); the facts' reading against a REAL runner past the one non-runner holder; a Windows host (the host seam says Windows, the process is Linux); an SRS arm walked for real under a chain (E4.S3: <c>run-all</c> starts it like any other, but the facts here are recorded, never a task pipeline).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class ChainVerbTests

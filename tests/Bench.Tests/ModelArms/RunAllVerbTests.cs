@@ -330,6 +330,18 @@ public sealed class RunAllVerbTests
     }
 
     [Fact]
+    public async Task An_srs_arm_is_started_like_any_other_since_run_arm_walks_the_task_pipeline()
+    {
+        await using var kit = await RunAllKit.MakeAsync("SRS1");
+        var launcher = new RecordingLauncher();
+
+        var run = await kit.InProcessAsync(RunAllKit.Seams(launcher, new Dictionary<string, string>()), "SRS1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        launcher.Starts.Single().Arguments.Should().Equal("run-arm", "SRS1", "--experiment", kit.Root.Root);
+    }
+
+    [Fact]
     public async Task A_pids_folder_that_is_a_link_is_refused_naming_it_before_anything_starts()
     {
         await using var kit = await RunAllKit.MakeAsync("C1");

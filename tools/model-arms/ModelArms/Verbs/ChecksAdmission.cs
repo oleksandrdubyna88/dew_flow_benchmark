@@ -29,7 +29,6 @@ internal static class ChecksAdmission
 {
     private const string Verb = "checks";
     private const string Name = "model-arms " + Verb;
-    private const int PidLimit = 64;
     private const int TimingLimit = 16 * 1024 * 1024;
 
     public static Task<Passage<ChecksPlan>> AdmitAsync(ExperimentInput input) =>
@@ -111,21 +110,18 @@ internal static class ChecksAdmission
 
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;
 
-    /// <summary>Step 3: a live runner is a refusal — <c>checks</c> measures a finished or stopped arm and would run the build and the tests under a runner that is still writing the clone. A pid file that cannot be read, or holds no pid, is a refusal too: whether the runner is alive cannot be told.</summary>
+    /// <summary>Step 3: a live runner is a refusal — <c>checks</c> measures a finished or stopped arm and would run the build and the tests under a runner that is still writing the clone. Whether the runner is alive is asked of <see cref="RunnerLiveness"/> (D13): its lock decides, and a pid file alone counts only when the pid's command line is this arm's runner — a pid number a dead runner left to an unrelated process is no runner. A lock that cannot be judged is exit 4 (a path that is not the root's file), a host that cannot say exit 3.</summary>
     private static Passage<Resolved> Idle(Resolved equipped)
     {
         var (input, placed) = (equipped.Input, equipped.Placed);
-        var pidFile = input.Root.PidFile(placed.Choice.Arm);
-        var refusal = BoundedFile.Read(pidFile, PidLimit, PlatformFactsReader.CurrentRoad) switch
+        var arm = placed.Choice.Arm;
+        return RunnerLiveness.Of(input.Root, arm) switch
         {
-            BoundedRead.Absent => string.Empty,
-            BoundedRead.Refused refused => $"{Name}: {pidFile} cannot be read — whether {placed.Choice.Arm}'s runner is alive cannot be told: {ExecutableRule.Printable(refused.Reason)}",
-            BoundedRead.Bytes bytes => RunnerPid.Parse(Encoding.UTF8.GetString(bytes.Value).Trim()) is { } pid
-                ? WorkerLiveness.ProcessIsAlive(pid) ? $"{Name}: {placed.Choice.Arm}'s runner (pid {pid}) is alive — checks measures a finished or stopped arm" : string.Empty
-                : $"{Name}: {pidFile} holds no pid — whether {placed.Choice.Arm}'s runner is alive cannot be told",
-            _ => string.Empty,
+            RunnerState.Alive alive => Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s runner is alive ({ExecutableRule.Printable(alive.Holder)}) — checks measures a finished or stopped arm"),
+            RunnerState.Refused refused => Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s runner lock cannot be read — whether the runner is alive cannot be told: {ExecutableRule.Printable(refused.Reason)}"),
+            RunnerState.Unread unread => Passage<Resolved>.Stop(ExitCodes.Environment, $"{Name}: {arm}'s runner lock cannot be read — whether the runner is alive cannot be told: {ExecutableRule.Printable(unread.Reason)}"),
+            _ => new Passage<Resolved>.Through(equipped),
         };
-        return refusal.Length > 0 ? Passage<Resolved>.Stop(ExitCodes.Configuration, refusal) : new Passage<Resolved>.Through(equipped);
     }
 
     /// <summary>Step 4: <c>baseline.json</c> through the bounded road and <c>BaselineFile.Read</c>, and <c>scenarios.json</c> as the gate judged it; the arm's timing is looked at last — an arm with no <c>arm-done</c> line is one warning, never a refusal.</summary>
