@@ -383,6 +383,28 @@ class CleanupFailureTests(unittest.TestCase):
         self.assertEqual((code, out), (5, ""))
         self.assertIn("could not be killed", err)
 
+    def test_The_wait_for_the_group_backs_off_from_1_ms_to_50_ms_and_does_not_spin(self):
+        clock, slept = [0], []
+        saved = (ex.group_present, ex.now_ms, ex.time.sleep)
+        proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
+        self.addCleanup(lambda: (os.killpg(proc.pid, 9), proc.wait()) if proc.poll() is None else None)
+
+        def sleep(seconds):
+            slept.append(seconds)
+            clock[0] += seconds * 1000
+
+        ex.group_present, ex.now_ms, ex.time.sleep = (lambda p: True), (lambda: clock[0]), sleep
+        try:
+            with self.assertRaises(ex.CleanupFailed):
+                ex.kill_group(proc)
+        finally:
+            ex.group_present, ex.now_ms, ex.time.sleep = saved
+        self.assertEqual(slept[0], 0.001)
+        self.assertEqual(max(slept), 0.05)
+        self.assertEqual(slept, sorted(slept), "the delay only grows")
+        self.assertEqual(slept[:6], [0.001, 0.002, 0.004, 0.008, 0.016, 0.032])
+        self.assertLess(len(slept), 60, f"{len(slept)} polls in the 2 s ceiling: a 1 ms spin would make 2000")
+
     def test_A_group_that_goes_in_time_is_no_failure(self):
         proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
         ex.kill_group(proc)

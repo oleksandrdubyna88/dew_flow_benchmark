@@ -23,6 +23,8 @@ CHUNK = 65536
 TICK_S = 0.05
 TAIL_BYTES = 2048
 GONE_CEILING_MS = 2000
+POLL_FIRST_S = 0.001
+POLL_LAST_S = 0.05
 
 
 class PlainLifecycle:
@@ -98,9 +100,10 @@ def kill_group(proc):
     children go a moment later. If the group is still there at the ceiling (2 s) the cleanup has failed: CleanupFailed."""
     _signal_group(proc.pid, signal.SIGKILL)
     proc.wait()
-    deadline = now_ms() + GONE_CEILING_MS
+    deadline, delay = now_ms() + GONE_CEILING_MS, POLL_FIRST_S
     while group_present(proc) and now_ms() < deadline:
-        time.sleep(0.001)
+        time.sleep(delay)
+        delay = min(delay * 2, POLL_LAST_S)
     if group_present(proc):
         raise CleanupFailed(f"a process of the case could not be killed: its group {proc.pid} is still there after {GONE_CEILING_MS} ms")
 
