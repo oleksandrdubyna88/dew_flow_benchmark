@@ -77,6 +77,35 @@ class ReaderTests(unittest.TestCase):
         reader.feed(b'\n{"exit-code": 2}\n')
         self.assertEqual(reader.exit_code, 2)
 
+    def test_D3_a_line_of_exactly_the_bound_that_ends_with_the_first_byte_of_the_next_read_is_not_an_overflow_and_the_record_after_it_counts(self):
+        reader = st.StatusReader()
+        reader.feed(b'{"child-pid": 8}\n' + b"x" * st.MAX_LINE)
+        self.assertEqual(len(reader.partial), st.MAX_LINE)
+        self.assertFalse(reader.skipping, "exactly the bound is not over it")
+        reader.feed(b'\n{"exit-code": 2}\n')
+        self.assertEqual((reader.exit_code, reader.problem), (2, None))
+
+    def test_D3_an_over_long_line_whose_line_feed_and_the_next_record_arrive_in_one_read_does_not_hide_the_record(self):
+        reader = st.StatusReader()
+        reader.feed(b'{"child-pid": 8}\n' + b"x" * (st.MAX_LINE + 5))
+        self.assertTrue(reader.skipping)
+        reader.feed(b'yyy\n{"exit-code": 2}\n')
+        self.assertEqual((reader.exit_code, reader.problem), (2, None))
+        self.assertFalse(reader.skipping)
+
+    def test_D3_the_tail_of_an_over_long_line_that_looks_like_a_record_is_not_one(self):
+        reader = st.StatusReader()
+        reader.feed(b'{"child-pid": 8}\n' + b"x" * (st.MAX_LINE + 5))
+        reader.feed(b"zzz")  # no line feed yet: still the same over-long line
+        reader.feed(b'{"exit-code": 9}\n{"exit-code": 2}\n')  # the first of these is the end of that line
+        self.assertEqual(reader.exit_code, 2, "what follows the bound on the same line is junk, whatever it looks like")
+
+    def test_D3_the_bound_is_one_byte_wide_before_child_pid(self):
+        at, over = st.StatusReader(), st.StatusReader()
+        at.feed(b"x" * st.MAX_LINE)
+        over.feed(b"x" * (st.MAX_LINE + 1))
+        self.assertEqual((at.problem, over.problem is not None), (None, True))
+
     def test_The_work_per_read_does_not_grow_with_what_was_read_before(self):
         reader = st.StatusReader()
         reader.feed(b'{"child-pid": 8}\n')

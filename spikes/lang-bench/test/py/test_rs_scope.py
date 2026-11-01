@@ -12,6 +12,7 @@ import runner_path  # noqa: F401
 import rs_cgroup as cg
 import rs_exec as ex
 import rs_launch as rl
+import rs_olympiad as ro
 import rs_scope
 from box_support import ANSWER, STATUS_FD, Scope, Workspace, box_prefix, case, fake_box, fake_cgroup, reporting_prefix, wait_until
 
@@ -130,19 +131,28 @@ class ForkTests(unittest.TestCase):
         self.assertEqual(result.lifecycle["signalled"]["comm"], "bash", "the pid is still bash's: fork never blocks the pid choice")
         self.assertIn("  fork: 2 processes in the program's cgroup where one was expected", result.lines)
 
-    def test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork(self):
-        result, _, _ = run_in_scope(self, "true\n( true )\nexec cat answer.bin\n", expected=ANSWER, limit_ms=5000)
-        self.assertEqual(result.status, "PASS")
-        fork = result.lifecycle["fork"]
-        self.assertIn(fork.get("found"), (False, None), "a short tool is never fork; on a machine too loaded to look in time it is unknown")
-        self.assertEqual(fork.get("count", 1), 1)
-        self.assertIn(result.lifecycle["signalled"]["comm"], ("bash", "cat", None), "bash before the exec, cat after, unknown if never seen")
+    def test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs(self):
+        # the program lives long enough to be found for sure; the short tools are gone in a millisecond. Twenty times: it must never flake.
+        for round_ in range(20):
+            result, _, _ = run_in_scope(self, "true\n( true )\ntrue | true\nexec sleep 0.4\n", expected=b"", limit_ms=5000)
+            self.assertEqual(result.status, "PASS", round_)
+            signalled = result.lifecycle["signalled"]
+            self.assertIsNotNone(signalled["pid"], f"round {round_}: the pid IS the program's, found whatever the short tools did")
+            self.assertNotEqual(signalled["pid"], signalled["launcher"])
+            self.assertIn(signalled["comm"], ("bash", "sleep"), "bash before the exec, the program after")
+            self.assertEqual(result.lifecycle["fork"], {"known": True, "found": False, "count": 1}, f"round {round_}")
 
-    def test_A_program_that_exits_at_once_is_judged_by_its_output_and_is_not_fork_and_its_wall_is_not_stretched(self):
-        result, _, _ = run_in_scope(self, "exec cat answer.bin\n", expected=ANSWER, limit_ms=5000)
+    def test_A_program_that_exits_at_once_is_judged_by_its_output_and_is_not_fork_and_its_wall_is_close_to_the_empty_programs(self):
+        scope, ws = Scope(self), Workspace(self, "exec cat answer.bin\n", FILES)
+        holder = os.path.join(ws.root, "holder-{case}.pid")
+        config = ws.config(prefix=scope.prefix(ws.dir, per_case=True, status_fd=STATUS_FD, holder=holder), status_fd=STATUS_FD, cgroup=scope.cgroup_template,
+                           wrapper_file=holder, limit_ms=5000)
+        empty = rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(ws.scratch, "empty.err"))
+        result = ro.run_case(case(ident="s03"), config)
         self.assertEqual((result.status, result.reason), ("PASS", ""))
         self.assertIn(result.lifecycle["fork"].get("found"), (False, None), "a program too quick to look at is unknown or clean, never fork")
-        self.assertLess(result.wall_ms, 4000)
+        self.assertIsNotNone(empty.wall_ms)
+        self.assertLessEqual(result.wall_ms, empty.wall_ms + 300, f"a `cat` takes {result.wall_ms} ms against {empty.wall_ms} ms for nothing: the look did not stretch it")
 
 
 class FakeCgroupTests(unittest.TestCase):
