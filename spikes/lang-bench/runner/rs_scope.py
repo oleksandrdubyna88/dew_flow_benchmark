@@ -5,6 +5,7 @@ The order at the end of a case is fixed: the program's exit is seen, `cgroup.pro
 bwrap process, nor the wrapper, nor the program itself), `memory.peak` and `memory.events` are read, and only THEN anything is killed
 (`cgroup.kill`); a kill first would hide a lingering child and zero the peak. The launcher is reaped last, by a bounded wait.
 """
+import os
 import time
 
 import rs_cgroup as cg
@@ -41,6 +42,10 @@ class ScopeLifecycle:
 
     def memory(self, case_id=None):
         return cg.memory(self.directory)
+
+    def present(self):
+        """Whether the cgroup directory exists yet (without a launch status the layer makes it a moment after the spawn)."""
+        return os.path.isdir(self.directory)
 
     def kill(self, proc):
         """`1` into `cgroup.kill`, the launcher reaped, and then no pid left in the cgroup or CleanupFailed."""

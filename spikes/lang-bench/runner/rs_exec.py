@@ -54,6 +54,10 @@ class PlainLifecycle:
     def memory(self, case_id=None):
         return rs_report.NOT_CERTIFIED
 
+    def present(self):
+        """Whether what this lifecycle kills through exists (a process group always does)."""
+        return True
+
     def kill(self, proc):
         kill_group(proc)
 
@@ -128,7 +132,7 @@ def program_env(extra=None):
     return {**os.environ, **(extra or {})}
 
 
-def _signal_group(pid, sig):
+def signal_group(pid, sig):
     try:
         os.killpg(pid, sig)
     except ProcessLookupError:
@@ -151,7 +155,7 @@ class CleanupFailed(RuntimeError):
 def kill_group(proc):
     """SIGKILL to the whole group, reap the leader, then wait until nothing of the group is left: the signal is delivered at once but the
     children go a moment later. If the group is still there at the ceiling (2 s) the cleanup has failed: CleanupFailed."""
-    _signal_group(proc.pid, signal.SIGKILL)
+    signal_group(proc.pid, signal.SIGKILL)
     proc.wait()
     deadline, delay = now_ms() + GONE_CEILING_MS, POLL_FIRST_S
     while group_present(proc) and now_ms() < deadline:
@@ -222,7 +226,7 @@ def build(workspace, scratch, ceiling_ms=None):
     if not done:
         kill_group(proc)
     status = proc.wait()
-    _signal_group(proc.pid, signal.SIGKILL)
+    signal_group(proc.pid, signal.SIGKILL)
     return BuildResult(True, status, now_ms() - started, not done, read_tail(log))
 
 

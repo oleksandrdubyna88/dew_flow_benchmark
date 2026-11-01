@@ -8,6 +8,7 @@ bwrap or the wrapper; the exit is then awaited on a pidfd of THAT pid (a grandch
 `launchMs` is the time from the spawn to `child-pid`; `emptyProgramMs` is an empty program timed through the same prefix and clock.
 """
 import selectors
+import signal
 import subprocess
 import rs_exec as ex
 import rs_status
@@ -140,23 +141,45 @@ def _release(proc, launcher_fd, pipe_fd):
             stream.close()
 
 
+def _abandon(proc, lifecycle):
+    """Stop a launcher whose case will not start because the runner is being stopped: its group first (before the sandbox exists nothing is
+    elsewhere), then, once the cgroup exists, the cgroup (a program behind `--new-session` is not in that group)."""
+    ex.signal_group(proc.pid, signal.SIGKILL)
+    if lifecycle.present():
+        lifecycle.kill(proc)
+    else:
+        proc.wait()
+
+
+def _spawn_with_status(config, argv, cwd, stderr_path, streams):
+    """(Popen, read end of the status pipe or None): the pipe is closed again when the launcher cannot be started."""
+    pipe_fd = None if config.status_fd is None else rs_status.open_pipe(config.status_fd)
+    try:
+        return _spawn(argv, cwd, stderr_path, config.status_fd, streams), pipe_fd
+    except BaseException:
+        ex.close_fd(pipe_fd)
+        raise
+
+
+def _begin_or_abandon(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path):
+    try:
+        return _begun(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path)
+    except LaunchFailed:  # stopped and reaped already
+        _release(proc, launcher_fd, pipe_fd)
+        raise
+    except BaseException:  # the runner itself is being stopped: never leave a launcher running
+        _abandon(proc, lifecycle)
+        _release(proc, launcher_fd, pipe_fd)
+        raise
+
+
 def start(config, case_id, lifecycle, stderr_path, cwd, streams=(subprocess.PIPE, subprocess.PIPE), program=ex.RUN_PROGRAM):
     """Spawn the launcher for one case and wait for its `child-pid` when `--launch-status` is given -> Launched.
     Raises LaunchFailed (nothing of it is left running) or OSError when the launcher cannot be started at all."""
     argv = ex.launch_argv(config.prefix, case_id, program)
     spawned = ex.now_ms()
-    pipe_fd = None if config.status_fd is None else rs_status.open_pipe(config.status_fd)
-    try:
-        proc = _spawn(argv, cwd, stderr_path, config.status_fd, streams)
-    except BaseException:
-        ex.close_fd(pipe_fd)
-        raise
-    launcher_fd = ex.pidfd_of(proc)
-    try:
-        return _begun(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path)
-    except BaseException:
-        _release(proc, launcher_fd, pipe_fd)
-        raise
+    proc, pipe_fd = _spawn_with_status(config, argv, cwd, stderr_path, streams)
+    return _begin_or_abandon(proc, ex.pidfd_of(proc), pipe_fd, spawned, case_id, lifecycle, stderr_path)
 
 
 def time_empty(config, lifecycle_for, stderr_path):

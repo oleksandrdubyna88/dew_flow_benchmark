@@ -1,5 +1,6 @@
 """Shared fixtures of the part ii-a unit tests: a temporary workspace whose run.sh is the stub under test, fake launchers (shell
 one-liners that write bwrap's status lines), and the real transient user scope the kill tests need. Stubs are toys, never a task."""
+import glob
 import json
 import os
 import subprocess
@@ -114,12 +115,19 @@ class Scope:
         self.cgroup = f"{base}/{self.unit}.scope"
         test.addCleanup(self.stop)
 
-    def prefix(self, workspace_dir, new_session=True):
-        """`systemd-run --user --scope … bwrap --unshare-pid --new-session … --`: the program behind bwrap, in a session of its own."""
-        box = ["bwrap", "--unshare-pid", *(["--new-session"] if new_session else []), "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin",
+    def prefix(self, workspace_dir, new_session=True, per_case=False, status_fd=None):
+        """`systemd-run --user --scope … bwrap --unshare-pid --new-session … --`: the program behind bwrap, in a session of its own.
+        `per_case` gives each case its own scope (`<unit>-{case}`, whose cgroup is `cgroup_template`), `status_fd` the bwrap status descriptor."""
+        status = [] if status_fd is None else ["--json-status-fd", str(status_fd)]
+        box = ["bwrap", *status, "--unshare-pid", *(["--new-session"] if new_session else []), "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin",
                "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                "--bind", workspace_dir, "/ws", "--chdir", "/ws", "--"]
-        return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={self.unit}", "-p", "Delegate=yes", "--", *box]
+        unit = f"{self.unit}-{{case}}" if per_case else self.unit
+        return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "-p", "Delegate=yes", "--", *box]
+
+    @property
+    def cgroup_template(self):
+        return f"{self.cgroup[:-len('.scope')]}-{{case}}.scope"
 
     def pids(self):
         try:
@@ -129,12 +137,13 @@ class Scope:
             return []
 
     def stop(self):
-        try:
-            with open(os.path.join(self.cgroup, "cgroup.kill"), "w") as f:
-                f.write("1")
-        except OSError:
-            pass
-        subprocess.run(["systemctl", "--user", "stop", f"{self.unit}.scope"], capture_output=True, timeout=30)
+        for directory in glob.glob(f"{self.cgroup[:-len('.scope')]}*.scope"):
+            try:
+                with open(os.path.join(directory, "cgroup.kill"), "w") as f:
+                    f.write("1")
+            except OSError:
+                pass
+        subprocess.run(["systemctl", "--user", "stop", f"{self.unit}*.scope"], capture_output=True, timeout=30)
 
 
 def wait_until(predicate, seconds=5):
