@@ -80,6 +80,18 @@ not reported as the program's. The look into the cgroup is paced by TIME (1 ms b
 200 µs and a program printing 64 MiB used to pay it on every read (79 ms became 190 ms). `wallMs`, `launchMs` and `emptyProgramMs` are rounded UP, all three, so the F1 subtraction
 mixes no two roundings. An `exit-code` record that arrives in the same read as `child-pid` is the end of the case at the instant it was read, never the launcher's teardown.
 
+*Round 5.* The directory named by `--cgroup-of` must lie under a cgroup2 MOUNT (found in `/proc/self/mountinfo`, the nearest mount above the resolved path must be cgroup2) as well
+as hold `cgroup.controllers`; a controllers file in a plain folder is refused (exit 3) and nothing is written to it. The box must be IN the named cgroup, not in a descendant of it
+(`/proc/<child-pid>/cgroup` equals the directory's path from the mount root, both resolved), and a launch failure for a box in the wrong cgroup names the expected cgroup and the one the
+box was seen in. The pidfd of `child-pid` is opened FIRST and the box is judged and, if need be, stopped through it; the fallback kill signals each listed pid through a pidfd opened for it
+after re-checking that the pid is still listed. An existing cgroup is free only when `populated` of `cgroup.events` says 0 (else its listing is read). On the plain path (no box, no
+`child-pid`) the LAUNCHER must have been seen in the cgroup (listed, or `/proc/<pid>/cgroup` names it) or memory is unknown: a cgroup the program does not run in has counters of 0 that mean
+nothing. A `--cgroup-of` that never existed on the plain path is exit 3 (after the launcher's group was killed); one that was there and went is still a cleanup failure (exit 5). An extra
+process counts for `fork` only when it has been in the cgroup for 100 ms (looks at least 100 ms apart), or is still alive at the program's end (the leftover read). The end of the
+program (for the orphan rule) is judged by its pidfd, not by `/proc`. Waiting for a group to go is a scan of `/proc` paced from 1 ms to 20 ms. The stop handler blocks every stopping
+signal at once before it sets them to ignore. Limit (F8, very low probability, not fixed): the box is judged by `/proc/<child-pid>/cgroup` at one instant; a box that moves itself into
+another cgroup later is not followed.
+
 *Host prerequisites (P1).* At the start of a run the host must be Linux 5.14 or newer and have a working `os.pidfd_open`, and cgroup v2 at `/sys/fs/cgroup` when `--cgroup-of`
 is given; each missing one is named in an exit 3, never a crash.
 
