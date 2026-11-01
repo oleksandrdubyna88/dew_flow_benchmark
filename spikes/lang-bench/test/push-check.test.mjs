@@ -314,3 +314,17 @@ test('The_report_prints_the_token_span_of_a_shingle_finding_and_not_its_words', 
   const report = formatReport(await run(repo));
   assert.match(report, /notes\/x\.md:2 shingle of synthetic-aid\.md \[window spans \d+ tokens\]/);
 });
+
+test('A_remote_branch_that_was_never_fetched_is_refused_too_because_the_freshness_check_runs_both_ways', async t => {
+  const { repo } = branchWith(t, { 'research/a.md': 'x\n' });
+  const bare = originOf(repo);
+  const other = path.join(path.dirname(repo), 'other2');
+  git(path.dirname(repo), 'clone', '-q', bare, other);
+  git(other, 'push', '-q', 'origin', 'HEAD:refs/heads/extra-branch');
+  const stale = await run(repo);
+  assert.equal(stale.exit, EXIT.CONFIG, 'the remote has a branch this repository has no tracking ref for');
+  assert.match(stale.error, /refs\/remotes\/origin\/extra-branch/);
+  assert.match(stale.error, /--setup-remote/);
+  git(repo, 'fetch', '-q', 'origin');
+  assert.equal((await run(repo)).exit, EXIT.PASS, 'after the fetch the two sides agree');
+});
