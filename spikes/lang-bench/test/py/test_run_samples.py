@@ -449,6 +449,13 @@ class ConfigurationTests(unittest.TestCase):
         for text in ("s03\n", "s03 bytes\n", "s03 R1\n", "s03 bytes X1\n", "s03 bytes R1 R1x\n"):
             self.assertTrue(self.manifest(text)[1], text)
 
+    def test_A_sample_whose_id_could_not_be_a_case_id_is_exit_4_and_nothing_is_run_even_with_a_launch_prefix(self):
+        for name in ("a b", "x;y", "$(id)", "-rf", "caf\u00e9"):
+            box = Box(self, pairs={f"{name}.in": b"", f"{name}.out": b""})
+            code, out, err = box.cli("--launch-prefix", json.dumps(["env", "X={case}"]))
+            self.assertEqual((code, out), (4, ""), name)
+            self.assertIn("not a sample id", err)
+
     def test_A_normalised_olympiad_case_is_exit_4_never_a_silent_byte_comparison(self):
         forms = ("normalised", "normalised+json", "json+normalised", "normalised+relational", "json", "relational", "json+relational", "relational+json")
         for comparison in forms:

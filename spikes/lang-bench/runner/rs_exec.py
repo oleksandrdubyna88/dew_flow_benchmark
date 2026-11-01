@@ -5,6 +5,7 @@ that signals the program's host pid and kills through the scope. Everything the 
 is here. Wall time is `time.monotonic_ns()` and the exit is awaited on a pidfd, never on `Popen.wait(timeout=...)`'s polling.
 """
 import os
+import re
 import selectors
 import signal
 import subprocess
@@ -61,8 +62,14 @@ def now_ms():
     return time.monotonic_ns() // 1_000_000
 
 
+CASE_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
+
+
 def launch_argv(prefix, case_id):
-    """The prefix with `{case}` filled in, then `bash run.sh` (the layer's box and scope come before it)."""
+    """The prefix with `{case}` filled in, then `bash run.sh` (the layer's box and scope come before it). A case id is letters, digits,
+    underscore and hyphen only: anything else raises ValueError before it can reach an argv (the plan refuses such samples with exit 4)."""
+    if not CASE_ID.match(case_id):
+        raise ValueError(f"case id {case_id!r} is not letters, digits, underscore and hyphen")
     return [part.replace("{case}", case_id) for part in prefix or []] + ["bash", "run.sh"]
 
 

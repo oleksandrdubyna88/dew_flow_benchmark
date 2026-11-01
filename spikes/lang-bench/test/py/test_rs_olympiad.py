@@ -361,6 +361,17 @@ class ProcessTests(unittest.TestCase):
             return False
         return True
 
+    def test_A_case_id_with_anything_but_letters_digits_underscore_and_hyphen_is_refused_before_it_reaches_an_argv(self):
+        for bad in ("", "a b", "a;b", "$(touch x)", "a/b", "..", "a\nb", "s01\u00e9", "a\x00b", "x'y", '"q"'):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                ex.launch_argv(["env", "X={case}"], bad)
+        for good in ("s01", "h001", "a_b-c", "S1"):
+            self.assertEqual(ex.launch_argv(["env", "X={case}"], good), ["env", f"X={good}", "bash", "run.sh"])
+
+    def test_A_case_id_is_checked_even_when_no_prefix_uses_it(self):
+        with self.assertRaises(ValueError):
+            ex.launch_argv(None, "a;b")
+
     def test_The_launch_argv_fills_the_case_into_every_prefix_element(self):
         self.assertEqual(ex.launch_argv(["a", "{case}-x", "{case}"], "s1"), ["a", "s1-x", "s1", "bash", "run.sh"])
         self.assertEqual(ex.launch_argv(None, "s1"), ["bash", "run.sh"])
