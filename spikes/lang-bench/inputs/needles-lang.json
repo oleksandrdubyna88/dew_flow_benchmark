@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "rule": "case-sensitive on word boundaries, ASCII letters and digits as word characters; substrings are exact (parent D18, change 4.1)",
+  "words": [
+    "CSES", "IOI", "Werewolf", "RealWorld", "Conduit",
+    "Weird Algorithm", "Counting Rooms",
+    "Redis", "RESP", "RESP2", "RESP3", "ioredis", "redis"
+  ],
+  "substrings": ["redis.io", "redis-cli", "StackExchange.Redis", "node-redis", "cses.fi"],
+  "runBaseOnly": ["dew_flow_ai_language_comparison", "oleksandrdubyna88"]
+}
