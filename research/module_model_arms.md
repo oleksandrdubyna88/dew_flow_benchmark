@@ -1945,6 +1945,167 @@ flowchart TD
 3. `ArmChoices.Of(input, verb, allowTasks)` is `run-arm`'s `Choose` extracted (it calls it; its tests ran unedited); `RunnerPid.Parse` is `status`'s pid reading extracted; `BaseLeftovers.Rename` is internal now (the one rename of a file, a link or a folder); `OutcomeChain` chains an `Outcome<T>`'s steps as `PassageSteps` does a `Passage`'s. A `pids/<arm>.pid` that is a link, a FIFO, past 64 bytes or holds no pid is exit 4 (whether the runner is alive cannot be told) — the story names only a live process.
 4. `TargetBench` gains `build.hook`, `suite.hook` and `ext.hook` (shell text a shim runs after it printed); `ExperimentRoot` is unchanged. `Program.cs` also corrects the four E5 verbs' story ids (`lock`/`unlock` E5.S1, `run-all` E5.S3, `chain` E5.S4), which the story owns.
 
+## The consumer check (E6.S1)
+
+Status: **built 2026-11-01** on `feat/model-arms-e6s1`. Every checked-in reader of the harness is run over a fake arm of each scheme that the module itself wrote, and the layout of the shell is compared with the module's in both directions. `Bench.Tests.ModelArms`: 2016 → 2037 cases (`ConsumerCompatibilityTests`: nine tests, 21 cases — two theories of seven readers and seven facts), 5 skipped on this host, 0 failed.
+
+**What is built.** `ConsumerArms` (an xUnit class fixture, built once per class, ~17 s): ONE experiment root over `TargetBench`'s scratch target holding C1, CR1, CHH1 and SRS1, MADE by `make` (the run is named `consumers`), RUN one at a time by `run-arm` against the fake CLI (`SrsKit`'s wrapper as `claude`, one fake behind it) and CHECKED by `checks` through the gate with the bench's recording shims (`ChecksKit.RunAsync(root, arm)`, now also static). The limits are the smallest the experiment file admits — a wait of 0 is refused naming the member, 1 is accepted, and `validate` accepts the root so limited. An arm that does not end in `arm-done` fails the construction naming it. What each arm was made to leave:
+
+| arm | what is scripted | what it leaves |
+|---|---|---|
+| C1 | `notes/gate.json` pre-written `blocked`; a commit of `src_mcp/tests/ATests.cs` in the clone; `2-review` replays the recorded success with the one verdict that is not `ready` (`changes-requested`, one major finding); `4-gate`'s first call replays `stream-gate-coai-round.jsonl` (its result costs 1.25), its resume `result-success-cost-2.jsonl` (2.00) | `notes/review.json` `changes-requested`; `4-gate.a1` and `.a2` in ONE session; one coai code round, one finding, accepted |
+| CR1 | `2-hreview`'s first call replays the 2026-10-28 `usage_limit_reached` line | `2-hreview.a1` limited (terminal `api_error`), `.a2` resumed |
+| CHH1 | `2-hA`'s first call replays `stream-no-result.jsonl` → exit 5; `run-arm CHH1` again → 0 | `2-hA.a1` interrupted (`complete: false`), `.a2` resumed |
+| SRS1 | `SrsKit.Plan(Five())` — five tasks, two batches; each task's file holds the one line `the coder of <id> wrote this line` (`SrsKit.CreateAsync` gained the line as a parameter; its default is the id, unchanged for every caller) | `work/batches.json`, `out/task-<id>-coder.diff` ×5, four pick records, a final diff of five files |
+
+**One slow call per arm.** `wall_s` is whole seconds and the fake answers in milliseconds, so every wall would be 0 and a wall assertion would pass on zeros. Each arm's FIRST step (`1-code`; SRS1's `1-split`) runs on a second model id whose script entry pauses the fake 1500 ms (`subjects.<id>.delayMs`); that entry also carries an EMPTY `stdoutByCall`, because the call numbering of a second model starts at 1 too and would otherwise replay the main model's numbered stream. **The second id is `slow-<main id>`, not `<main id>-slow`** (the story's spelling): the fake numbers a model's calls by the files named `call-<model>-*`, so an id that begins with the main id is counted in the main model's numbering. The builder reads the count of the main model's calls before each arm and scripts that arm's numbered calls from it (C1: the review, the gate's first call and its resume; CR1: the haiku review; CHH1: `2-hA`).
+
+**The readers, and what each reports** (every expected value read back from the module's own files — `TimingOf`, the arm's streams, `notes/review.json`, `objective.json`, `work/batches.json` — never typed). Wall: the longest of 3 runs of the reader process alone on this host (`nice 10`); timeout: ten times that wall, never under 30 s — **all seven are at the 30 s floor**.
+
+| reader | given | reports (asserted) | wall | timeout |
+|---|---|---|---|---|
+| `metrics.mjs` | `results/<listed>/timing.jsonl` of the four arms linked; `HOME` = its scratch, holding the one transcript fixture at CHH1's `2-hA` a1 session | per arm: the distinct start steps in order, one attempt per start line, each attempt's `wallSeconds` = its end line's, the slow step's > 0, the arm's wall = their sum, `vllm` null; CR1's first `2-hreview` attempt `terminal` = the 429 stream's; CHH1's `2-hA` a1 `complete: false`, `cost` null, `byModel` = the TRANSCRIPT's four counts; C's `4-gate` attempt costs = the two streams' | 54 ms | 30 s |
+| `metrics6.mjs` | `r` → `<root>/r`, the map as argv | the four arms; `attempts` = the arm's `.a<N>.jsonl` count; `wall_s` = Σ end lines, the slow step's > 0; `model` = the start line's; `span_min` present; SRS1's five coders of kind `t-code`; C1 `4-gate` cost = the LAST result of its session | 48 ms | 30 s |
+| `t-survival.mjs SR1` | `COAI_EXP_ROOT`, `arm-SR1` → the clone, `task-<id>-haiku.diff` → `out/task-<id>-coder.diff` (THE map), `batches.json`; the base literal rewritten to `target.base`; a HOME with a minimal `.gitconfig` and the `GIT_*` identity — the only reader that runs git | task ids = `batches.json`'s (five); `haikuLines` = 5 = the task count; `keptFinal` 1; `reviewChangedLines` null and *no task review ran* | 77 ms | 30 s |
+| `compare.mjs --json` | its root line → scratch; `metrics.json` = `metrics.mjs --json` over the four arms; `objective.json` linked | ONE row, `C`: `steps["4-gate"].cost` = Σ both attempts (3.25), `cost` null, `objective` not `n/a`, `scenarios` = `scenariosPresentCount`, `judge` and `survival` null; NO row `CR1`, `CH1`, `SR1` although `metrics.json` holds them | 35 ms | 30 s |
+| `make-tables.mjs` | copied unmodified to `<s>/harness/`; `data/metrics.json`, `data/arms/<listed>/{objective.json, <listed>-review.json, timing.jsonl}`, SR1's `tasks/batches.json` and `t-survival.json` | `tables.md written: 4 arms`; §3's last cell = `diff.shortstat` (SR1's non-empty); §3b = `notes/review.json` (C `1 | 0 / 1 / 0 | changes-requested`, the others `ready`); §4b's SR1 `5 / 2 (4)`, `5 → 100 %`, elapsed not `n/a`; C's mutation and judge rows *not run* / *not judged yet* | 50 ms | 30 s |
+| `coai-findings.mjs` | `exp.env` = `MAP=<root>/arms.map.json`, `r` linked | C1: one `code` round, the fixture's verdict, one finding whose `decision` is the resolve's (`decisions` a JSON string) `accept`; the others `[]` | 44 ms | 30 s |
+| `coai-cost.mjs` | the same, the output path as argv | C1: one round with the fixture's `tokensIn` / `tokensOut`; the others `[]` | 39 ms | 30 s |
+
+Verdict by scheme (all seven run, none edited, each from a scratch copy of the file whose sha256 is pinned in `PinnedReaders`; the parent's §2 pins only the seven shell scripts, `ShellLayout.Scripts`): **C** — read by `metrics`, `metrics6`, `compare` (its only row), `make-tables`, `coai-findings`, `coai-cost`; **CR** — `metrics`, `metrics6`, `make-tables`; `compare` drops it (`:12`); **CHH** — `metrics` (as `CH1`), `metrics6`, `make-tables`; `compare` drops it; **SRS** — `metrics` (as `SR1`), `metrics6`, `t-survival`, `make-tables`; `compare` drops it. A timeout fails the test naming the reader, its timeout and the scratch, which is moved out of the fixture's folder to `testsToDelete-modelarms-reader-<name>-<id>` (a legacy name, removed by hand): observed once with a timeout of 1 ms.
+
+**Every input of every reader is given and asserted, or named and the guarantee narrowed:**
+
+| reader | inputs given → the assertion that proves it was read | inputs NOT given — why, and what is therefore not proven |
+|---|---|---|
+| `metrics.mjs` | `timing.jsonl` → steps, attempts, walls; each `.a<N>.jsonl` → `terminal`, `cost`, `complete`; a transcript → `byModel` of the interrupted attempt | `vllm/requests-<arm>.jsonl` — parts 6–7 run no local model and the module writes none: `vllm` null asserted; the fitted prices (`:112-127`, three priced attempts per model needed) — not proven |
+| `metrics6.mjs` | the map → its four arm keys; `timing.jsonl` → `wall_s`, `model`; the streams → `attempts`, `cost`; `arm-done` → `span_min` | — |
+| `t-survival.mjs` | the clone (git) → `keptFinal`; the coder diffs → `haikuLines`; `batches.json` → `tasks` | `task-<id>-review.diff` — no scheme reviews per task: `reviewChangedLines` null asserted |
+| `compare.mjs` | `metrics.json` → the step cost, the rows; `objective.json` → `objective`, `scenarios` | `judge-abs/scores.json` (the judges) and `survival.json` (Q arms only): `judge` and `survival` null asserted; the classic band over more than one C arm — not proven |
+| `make-tables.mjs` | `metrics.json` → the arm count; `objective.json` → §3; the review → §3b; `timing.jsonl`, `batches.json`, `t-survival.json` → §4b | `survival.json`, `fill-*.json`, `filler-requests.jsonl` (Q/H arms), `judges/`, `mutation.json`, `fix-outcomes.json` — no module output: their sections print the *not run* / *not judged* rows, asserted for C; **`data/part6` and `data/part7` are not created, so `make-tables6.mjs` and `make-tables7.mjs` are never imported — they are `Excluded` and make-tables' part-6 and part-7 sections are NOT proven** |
+| `coai-findings.mjs`, `coai-cost.mjs` | `exp.env` → `MAP`; the map → the four arms; the gate streams → rounds, findings, decisions, tokens | — |
+
+**The one rename is the whole difference.** `task-<id>-haiku.diff` → `task-<id>-coder.diff` (D5): `t-survival.mjs` given the diffs under the shell's name reports 5 lines kept 100 %; given them under the module's own name it exits 0, reads nothing and reports `haikuLines` 0 and `keptFinal` null — over the same non-empty files. `PinnedConsumer.Listed` is the ONE name map and gained `SRS1 → SR1`; it refuses an arm NAME parts 1–5 have no spelling for and never answers whether a reader keeps the row (`compare.mjs:12` lists no `CR*`, `CH*` or `SR*` arm; asserted over `Listed("CR1")`, `Listed("CHH1")`, `Listed("SRS1")`, and no arm is ever relabelled to fit — `CR1` as `C2` would enter the classic band and move every arm's marks, the break-it below).
+
+**E2 §8 item 62, measured in the readers, not fixed.** One resumed gate step (C1's `4-gate`: both attempts in one session, the resume's result reporting the session's cumulative cost):
+
+| reader | field | value |
+|---|---|---|
+| `metrics6.mjs` | `C1.steps["4-gate"].cost` | **2.00** — the last result per session (`:20-34`) |
+| `metrics.mjs` | `report.C.steps["4-gate"][0].cost`, `[1].cost` | 1.25, 2.00 |
+| `metrics.mjs` | `report.C.models["claude-sonnet-5-5"].cost` | **3.25** — `:140` sums every attempt: the readers' defect, asserted as it is |
+| `compare.mjs` | `rows[C].steps["4-gate"].cost` | **3.25** — `:34-35` sums the attempts too |
+| `metrics.mjs` | `report.C.cost` | null — the other attempts carry no cost, `:144` sums NaN, JSON writes null |
+
+The analysis plan's port takes the last result per session (E6.S3 writes it there). Also seen while building it, for that plan: `compare.mjs`'s `objective` column and `make-tables.mjs` §3's *Generator check* read `generatorCheck`, a key parts 1–5's `objective.json` carried and the part-6 shell's own (`Fixtures/model-arms/objective/objective-part6-C1.json`) does not, so every part-6 arm reads `FAIL` there — by the reader's shape, not by an arm's failure; and `metrics6.mjs` counts a stream with no start line as an attempt (`s.attempts++` before `if (!last) continue`).
+
+**The layout, compared in both directions** (`ShellLayout` scans the seven pinned scripts — `run-arm.sh`, `t-lib.sh`, `objective-checks.sh`, `after6.sh`, `after7.sh`, `lock.sh`, `run-all.sh`, each pinned by the parent's §2 sum — for every path built from `$E`, `$R`, `$OUT`, `$NOTES`, `$WORK`, `$O`, `$M`, `$S` and `${O}/../`, 103 paths; `ModuleSpellings` renders the public members of `RootPaths` and `ArmPaths` by reflection, the gate holder's note and the example's bindings, 103 spellings). `$1` is `<step>` in `run-arm.sh`, `<id>` in `t-lib.sh` and `<arm>` in `after6.sh` / `after7.sh` (the story said `<step>` for all: `$R/wt/$1` is a task's worktree). A placeholder matches the shape of its own name (a step starts with a digit, a task is `t<n>`), so `<step>.diff` does not read `task-<id>-haiku.diff` as a step's. The tables as they landed:
+
+| shell | module | decision |
+|---|---|---|
+| `r/<token>/out/task-<id>-haiku.diff` | `r/<token>/out/task-<id>-coder.diff` | D5: the coder model is configuration, so no path names a model - THE one rename; the analysis plan carries it |
+| `r/<token>/out/task-<id>-haiku.head` | `r/<token>/out/task-<id>-coder.head` | D5: the same rename, for the snapshot t-survival.mjs does not read |
+| `chain/locked` | `chain/<run>/locked` | D27: the stage markers are per run (part 6's chain/) |
+| `chain/unlocked` | `chain/<run>/unlocked` | D27: the stage markers are per run (part 6's chain/) |
+| `chain/arms-done` | `chain/<run>/arms-done` | D27: the stage markers are per run (part 6's chain/) |
+| `chain7` | `chain` | D27: part 7's chain7/ and part 6's chain/ are one folder, the run a level below it for the three stage markers |
+| `chain7/locked` | `chain/<run>/locked` | D27: the stage markers are per run (part 7's chain7/) |
+| `chain7/unlocked` | `chain/<run>/unlocked` | D27: the stage markers are per run (part 7's chain7/) |
+| `chain7/arms-done` | `chain/<run>/arms-done` | D27: the stage markers are per run (part 7's chain7/) |
+| `chain7/made-<arm>` | `chain/made-<arm>` | D27: the made and objective markers are per arm, in the one chain folder |
+| `chain7/objective-<arm>` | `chain/objective-<arm>` | D27: the made and objective markers are per arm, in the one chain folder |
+| `exp.env` | `experiment.json` | D4: the shell's sourced constants are one JSON file at the root |
+
+| shell | why |
+|---|---|
+| `run-arm.sh` | replaced by the run-arm verb (E2.S8) |
+| `run-all.sh` | replaced by the run-all verb (E5.S3) |
+| `lock.sh` | replaced by the lock and unlock verbs (D11, E5.S1) |
+| `objective-checks.sh` | replaced by the checks verb (E3.S5) |
+| `t-lib.sh` | replaced by the task pipeline of run-arm (D14, E4.S3) |
+| `tasks-plan.mjs` | replaced by TasksPlan (E4.S1); a checker, not a file of the record |
+| `judge-abs` | the analysis half's absolute judge folder (D28, section 5); closed by name in part 7's isolation, never written by this module |
+| `judge-abs.log` | the analysis half's judge log; closed by name, never written by this module |
+| `judge-coai` | the analysis half's coai judge folder; closed by name, never written by this module |
+| `judge-coai.out` | the analysis half's coai judge log; closed by name, never written by this module |
+| `mut6` | the analysis half's mutation folder; closed by name, never written by this module |
+| `mut6.log` | the analysis half's mutation log; closed by name, never written by this module |
+| `coai-findings.json` | written by coai-findings.mjs (a reader this test runs), at the root of the experiment's own folder; closed by name in part 7 |
+| `metrics6.json` | written by metrics6.mjs (a reader this test runs); closed by name in part 7 |
+| `chain.log` | the owner's own log of the chain; closed by name in part 7, never written by this module |
+| `PROTOCOL.md` | the owner's protocol document (read once, E6 section 8 item 4); closed by name in part 7 |
+
+| module | decision |
+|---|---|
+| `r/<token>/out/<step>.continue` | D7, D10 (ledger 1.1): the gate's marker 'attempt N finished, continue its session' |
+| `chain/<run>/.chain.lock` | E5.S4 (item 45): the run's own lock, held by the one chain process |
+| `.isolation.lock` | D11: the lock over every change of a mode |
+| `.locked-modes.applied` | D11: the second immutable file of the two-file isolation state |
+| `.locked-modes.applied.restored-<stamp>` | D11: where unlock moves the applied file |
+| `pids/<arm>.lock` | D13: the runner's own lock, the one answer to whether an arm runs |
+| `pids/.run-all.lock` | E5.S3: run-all's own lock |
+| `r/<token>/out/pick-<id>.json` | D22: the pick record of a task carried back |
+| `chain/executables.txt` | D17: the executables the chain resolved |
+| `r/<token>/out/objective.prev-<stamp>` | E3.S5: an earlier objective folder, renamed aside |
+| `r/<token>/out/objective/stages.json` | E3.S5: how each stage ended, what checks --parse-only reads |
+| `.gate.lock.holder` | E2.S6: who holds the gate lock, a hint beside the kernel's lock |
+| `keep-awake.<stamp>.<n>.err` | E5.S2: the stderr of each launch of the keep-awake child |
+| `arms.map.json` | D4: the arm map (the shell's was $MAP of exp.env, a hidden file named by hash) |
+| `prep-base.log` | E3.S1: prep-base.sh's log (a script that is not one of the seven scanned) |
+| `prep-base.prev-<stamp>` | E3.S1: an earlier attempt's prep-base logs, moved aside |
+| `base-build.log` | E3.S1: prep-base's build log |
+| `base-npm-<n>.log` | E3.S1: prep-base's npm ci logs |
+| `base-test.log` | E3.S1: prep-base's main suite log |
+| `base-ts-test.log` | E3.S1: prep-base's extension suite log |
+| `base-results` | E3.S1: the folder prep-base's main suite writes its results into |
+| `r/<token>/work/tasks.json` | D14: the task list the SPLIT model writes by brief (the shell's model wrote it too; the module spells it to read it) |
+| `r/<token>/work/<id>.md` | D14: a task's brief, written by the split model by brief (the shell's t-lib.sh read it through batches.json) |
+
+It cannot see: files the MODEL writes by brief (`work/tasks.json`, `work/t<n>.md` are spelled by the module and listed as additions), paths built inside inline node other than `${O}/../objective.json` and the literal ones of the heredoc, a glob (`$OUT/$name.a*.jsonl` lists, it names no file), the target clone's own paths, and the staging names a death leaves (E5 §8 item 54).
+
+**D5's "two additions" was incomplete** (parent defect, E6 §8 item 11): the *Additions* table above lists twenty-three paths, each with its decision, of which D5 named one (`.continue`; its `chain/<run>/` is the *Renamed* stage markers plus `.chain.lock`).
+
+### Tests (E6.S1: 2016 → 2037 cases in `Bench.Tests.ModelArms`)
+
+`ConsumerCompatibilityTests` — `Every_checked_in_reader_reads_a_fake_arm_of_each_scheme_without_an_error` and `The_readers_report_what_the_fake_arm_did` (theories over the seven readers), `The_renamed_coder_files_reach_t_survival_through_the_named_map`, `A_file_the_shell_wrote_that_the_module_does_not_is_listed_by_name_or_the_test_fails`, `A_file_the_module_writes_that_the_shell_did_not_is_listed_by_name_with_its_decision`, `The_shell_scan_still_finds_known_paths_in_each_pinned_script`, `Every_file_a_fake_arm_holds_is_one_the_module_spells`, `A_resumed_steps_cost_is_its_sessions_last_result_in_metrics6_and_every_attempt_in_metrics_mjs`, `Every_checked_in_script_of_the_harness_is_run_or_excluded_by_name_with_its_reason`. `RunArmSchemeTests`, `StepRestartTests`, `MakeVerbTests`, `ArmPathsTests` unedited and green; `TimingLineTests` edited in one doc comment.
+
+### Red first (observed 2026-11-01, each stub removed after)
+
+- Every reader reads: `PinnedConsumer.RunAsync` returning `ReaderRun(-1, "", "not run", …)` → *Expected staged.Run.ExitCode to be 0 because metrics.mjs must read the four fake arms: not run, but found -1* (seven rows; make-tables' row fails earlier on its link: *the link …/data/arms/SR1/t-survival.json must have a target … is not there*).
+- Readers report: a builder that runs no arm (empty `timing.jsonl`) → *Expected steps to be equal to {"1-code", "2-review", "3-fix", "4-gate"} because C1 ran every step of the C scheme, but found empty collection.* (`metrics.mjs`); *Expected object not to be <null> because compare lists C's 4-gate.*; the others on *SRS1 left its work/batches.json* / *C1's gate left its first attempt's stream* / *metrics6.mjs must read the arms before it can report on them*.
+- Renamed files: the map left out of the helper → *Expected mapped.Json["haikuLines"] to be 5 because … but found 0 (difference of -5).*
+- Shell → module: `Renamed` emptied → *add a row to ShellLayout.Renamed or ShellLayout.ShellOnly for: chain/arms-done, chain/locked, chain/unlocked, chain7, chain7/arms-done, chain7/locked, chain7/made-<arm>, chain7/objective-<arm>, chain7/unlocked, exp.env, r/<token>/out/task-<id>-haiku…*
+- Module → shell: `Additions` emptied → *add a row to ShellLayout.Additions for: .gate.lock.holder, .isolation.lock, .locked-modes.applied, … arms.map.json, base-build.log, …* (`chain/<run>/locked` is accounted by `Renamed`, so it is not listed).
+- Known paths: the scan's variable pattern matching nothing → *Expected ShellLayout.Scan(script) {empty} to contain {"r/<token>/out/timing.jsonl", "r/<token>/notes/hA.json", ".gate.lock", …}*.
+- A fake arm's files: `PickRecord` dropped from the spellings → *these files … r/<token>/out/pick-t1.json, … pick-t4.json*.
+- Resumed cost: the builder without the cost fixtures → *Expected first to be greater than 0.0 because the gate's first attempt ended in a result with a cost, but found 0.0.*
+- Every script run or excluded: `Excluded` emptied → *add it to PinnedReaders.Run or PinnedReaders.Excluded: …/ask-haiku.mjs, …/ask.mjs, …/fill.mjs, …/gen-q-briefs.js, …/mutate.mjs, …*
+
+### Break-its (each planted, the named tests watched red, restored)
+
+- **The base literal not rewritten** → `t-survival.mjs` writes git's *fatal: ambiguous argument 'b4e2ea96'* to stderr (the *without an error* row goes red too), `keptFinal` 0 (*report*), make-tables' *5 → 0 %*.
+- **A link to a missing target with the existence check removed** → the *without an error* theory stays GREEN (seven exits 0, empty stderr) and *report* goes red on four readers (*Expected rows to contain a single item … the collection is empty*, *tables.md written: 3 arms*, *the reader lists exactly the arms it was given a timing for*): the reason for the check.
+- **The map removed** → the *renamed coder files* test (above). **`PickRecord` dropped from the spelling** → the *fake arm's files* test (above).
+- **`CR1` relabelled `C2` for `compare.mjs`** → *report* (compare): *Expected rows to contain a single item … but found {…C…, C2…}* — a row it must not have.
+- **The cost fixtures swapped** → *Expected second to be greater than 2.0 because a resume's result carries the session's cumulative cost, but found 1.25*.
+- **The module renames `task-<id>-coder.diff`** (`ArmPaths.CoderDiff`) → both layout tests red: *add a row to ShellLayout.Additions for: r/<token>/out/task-<id>-coders.diff* and *a rename names a path the module really spells*.
+- **A timing line without `wall_s`** (`TimingLines.WriteEnd`) → *metrics6.mjs*: *Expected steps[…]["wall_s"] to be greater than 0L, but found 0L*; `metrics.mjs` loses the wall.
+- **Two arms' links swapped** (C1's timing link to CR1's) → *Expected steps … to be equal to {"1-code", "2-review", "3-fix", "4-gate"} … contains 1 item(s) too many*, *compare lists C's 4-gate*, and the resumed-cost test.
+
+### Not proven (said, not hidden)
+
+A real claude's streams (the fake replays recorded shapes); a real multi-hour task's diff; the judges (`ObjectiveReportTests`' round trip of the shell's shape stands for them, D28); the parts 1–5 Q/H readers' inputs; `make-tables.mjs`'s part-6 and part-7 sections; the fitted unit prices of `metrics.mjs`; `compare.mjs` over a CR, CHH or SRS arm (its list holds none); `survival.mjs`, `mutate.mjs`, `mutate6.mjs`, `make-tables6.mjs` and `make-tables7.mjs`, `tasks-plan.mjs`, `ask.mjs`, `ask-haiku.mjs`, `fill.mjs`, `gen-q-briefs.js` (`PinnedReaders.Excluded`, each with its reason); anything off Linux.
+
+### Deviations from the story
+
+1. The slow model id is `slow-<main id>`, not `<main id>-slow` (the call log's prefix match, above).
+2. `PinnedConsumer.RunAsync` takes the copy's path beside the scratch (`make-tables.mjs`'s copy lives in `<s>/harness/`, its scratch is `<s>`); `CopyAsync` returns a finished task.
+3. `ConsumerArms` is `public` with internal members (a public test class takes a fixture of a public type); `Arms`, `Root`, `PathsOf`, `Base` and `Calls` are as C27 spells them.
+4. Four files beside the story's: `PinnedReaders.cs` (C26's static class), `ConsumerReaders.cs` (how each reader is given the arms), `ConsumerFacts.cs` (what the arms hold, read back) and `ModuleSpellings.cs` (the reflection half of the scan).
+5. `SrsKit` gained `CreateAsync(taskLine)` and `Over(MakeKit, taskLine)` (a kit over a root that already made its arms); `ChecksKit.RunAsync` the static overload the story names.
+6. The six readers beyond `metrics.mjs` are pinned by their sha256 at this commit; the parent's §2 pins only the seven shell scripts.
+7. Every timeout is the 30 s floor: the slowest reader took 77 ms.
+
 ## M2 — the attended pilot (by hand; the main session)
 
 The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_the_pilot` (`Explicit = true`; `--explicit only` runs it). From the worktree, the Release build in place, Docker not needed; `PATH` holds a `bin` folder whose `claude` links to `tests/FakeCli`'s apphost, plus the host's `git`, `node`, `npm`, `dotnet`; `FAKE_CLI_HOME` set; nothing under the root or the target on PATH.
