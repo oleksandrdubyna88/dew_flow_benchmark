@@ -1,0 +1,40 @@
+{
+  "decidedOn": "2026-10-31",
+  "readOn": "2026-11-01",
+  "reason": "The toolchains every gate, reference and session of the language comparison v2 runs on, pinned (parent D6, D22). Each lives read-only under ~/rsd/lang-v2/toolchains/ (storeRoot, parts under the home), installed from the official artefact and checked against the checksum its publisher lists; the preflight reads every pin back from inside a box with the probe argv below. TypeScript is the newest 6.0 patch npm listed on readOn (6.0.3; 7.0.2 is superseded, D6).",
+  "pins": { "dotnetSdk": "10.0.403", "dotnetRuntime": "10.0.14", "node": "26.13.0", "typescript": "6.0.3" },
+  "typescriptLine": "6.0",
+  "python": { "path": "/usr/bin/python3", "version": "3.14.4", "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41" },
+  "locale": "de_DE.utf8",
+  "storeRoot": ["rsd", "lang-v2", "toolchains"],
+  "directories": { "dotnetSdk": "dotnet-sdk-10.0.403", "node": "node-v26.13.0-linux-x64", "typescript": "typescript-6.0.3" },
+  "artifacts": {
+    "dotnetInstallScript": { "url": "https://dot.net/v1/dotnet-install.sh", "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e" },
+    "dotnetSdk": {
+      "metadataUrl": "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/10.0/releases.json",
+      "rid": "linux-x64",
+      "name": "dotnet-sdk-linux-x64.tar.gz",
+      "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-linux-x64.tar.gz",
+      "sha512": "b7b3d8461cf98b07d2552ce9199702fa3ad010ac2671a5f8cd5136f7534e50f6855ba7bbb02b11494563f1d04156276a31cda1103b900e5eecd0d9473dc7b9c5"
+    },
+    "node": {
+      "shasumsUrl": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt",
+      "file": "node-v26.13.0-linux-x64.tar.xz",
+      "url": "https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-x64.tar.xz",
+      "sha256": "d28a96af6c38596f6d9d97c0ee531c13d238d757742387d1928de822d959e997"
+    },
+    "typescript": {
+      "packumentUrl": "https://registry.npmjs.org/typescript",
+      "tarball": "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz",
+      "integrity": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="
+    }
+  },
+  "probes": {
+    "node": ["node", "--version"],
+    "dotnetSdks": ["dotnet", "--list-sdks"],
+    "dotnetRuntimes": ["dotnet", "--list-runtimes"],
+    "tsc": ["tsc", "--version"],
+    "pythonSha256": ["/usr/bin/sha256sum", "/usr/bin/python3"],
+    "locales": ["/usr/bin/locale", "-a"]
+  }
+}
