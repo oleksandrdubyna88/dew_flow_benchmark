@@ -2238,7 +2238,14 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 6. **If the key does not arrive:** the copied settings file is the delivery (the shell's road, `after6.sh:32`; the panel writes the key into it, `make` copies it at `0600`); `McpConfig`'s `env` member stays and is marked *a request, unverified* in this document and in its doc comment; D19 is never widened; the deviation is recorded in E3 §8 and in the parent's §11.
 7. Remove the fresh root (it holds the key) and the settings copy at once; the log says so.
 
-*Not yet run.* The key check needs `make` (E3.S3) and the owner's key: neither is available to this story.
+**Ran 2026-11-01 at `95be3c42`** (the owner's go-ahead; claude 2.1.310 (Claude Code); the real `coai-mcp` of the connect-other-ais extension). The value given as `COAI_CREDS_KEY` was a PLACEHOLDER, `m2-placeholder-not-a-real-key` — no vault key exists on this machine (the panel's settings file holds no `COAI_CREDS_KEY` line, the server reports none). That is enough for what this check observes, step 4's criterion: whether a key the harness writes into `mcp-coai.json` ARRIVES at the server — "the vault's own refusal of a key it received" counts. Steps: a fresh root from the scaffold with `M2_COAI_BINARY` the real coai-mcp and `M2_COAI_SETTINGS` a copy of the panel's settings (`grep -c COAI_CREDS_KEY` → 0); `init` 0, `validate` 0, `prep-base` 0, `make` 0 with the key in the calling shell; `stat -c %a mcp-coai.json` → `600`; the arm's `coai-data/*/settings.json` holds `COAI_CREDS_KEY` → 0; the real `claude -p` asked for `mcp__coai__providers` twice under `env -u COAI_CREDS_KEY`. The two vault fields:
+
+| through | `vaultNote` |
+|---|---|
+| `mcp-coai.json` (the key in its `env`) | `the \`creds\` CLI is not installed on this machine — looked on PATH and in the CredsForDevs extension's folder (not present)` |
+| the key-less copy | `no COAI_CREDS_KEY configured — keyless vendors still work on their own auth` |
+
+**Observed: the key arrived** — with it the server went on to read the vault (and stopped at the missing `creds` CLI, which it only reaches holding a key); without it, the no-key sentence. `McpConfig`'s `env` member is a delivery, not a request; D19 is not widened. Not observed: `N vendor key(s) loaded` with a REAL key — that needs the owner's key and the `creds` CLI, neither on this machine. The log never held the key (`grep -cF` → 0). **Then** the fresh root, its target and the settings copy were removed (`/tmp/testsToDelete-m2key-*`, none left).
 
 ## M3 — the attended pilot of the whole module (by hand; the main session's brief, run 2026-11-01)
 

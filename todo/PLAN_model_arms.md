@@ -24,7 +24,7 @@ Progress, not a plan change. E4, E5 and E6 are built, each story through an Opus
 3.1). The branches, none merged: `feat/model-arms-e4s0` (E4.S0 alone, the first pull request), `feat/model-arms-e4` (E4.S1–S3 on top),
 `feat/model-arms-e5` (E5.S1–S4), `feat/model-arms-e6` (E4 and E5 integrated, E6 on top; ModelArms suite 2041, 0 failed); the epoch-3
 re-review is PR #126 (green, not merged). What is open:
-- **M2's key check** (the real `claude`, `coai-mcp`, the vault key) — it holds the promotion; and **M3 step 14** (the real-claude delegation re-run).
+- **M2's key check RAN** (2026-11-01, a placeholder key: the key arrived through `mcp-coai.json` — the module doc's M2 section); still open: **M3 step 14** (the real-claude delegation re-run), and a REAL key's `N vendor key(s) loaded` needs the owner's key and the `creds` CLI, not on this machine.
 - **The real-git pilot ran** (2026-11-01, the owner's go-ahead): every E4.S0 and E4.S2 git class green on git 2.39.4 and 2.45.0 built from source (the module doc's E4.S0 section).
 - **Owner decisions recorded, not taken:** `SSH_AUTH_SOCK` and inherited `GIT_*` reaching the arm's own session (§9); removing the
   patch-id skip of the pick-back (D22); `make`'s own clone/checkout/submodule update still run a GLOBAL git filter (LFS by design —
