@@ -89,14 +89,20 @@ def group_present(proc):
     return True
 
 
+class CleanupFailed(RuntimeError):
+    """The runner could not stop a process of the case: a failure of the runner's own cleanup, never a verdict about the program."""
+
+
 def kill_group(proc):
     """SIGKILL to the whole group, reap the leader, then wait until nothing of the group is left: the signal is delivered at once but the
-    children go a moment later (2 s ceiling)."""
+    children go a moment later. If the group is still there at the ceiling (2 s) the cleanup has failed: CleanupFailed."""
     _signal_group(proc.pid, signal.SIGKILL)
     proc.wait()
     deadline = now_ms() + GONE_CEILING_MS
     while group_present(proc) and now_ms() < deadline:
         time.sleep(0.001)
+    if group_present(proc):
+        raise CleanupFailed(f"a process of the case could not be killed: its group {proc.pid} is still there after {GONE_CEILING_MS} ms")
 
 
 def pidfd_of(proc):
@@ -137,8 +143,9 @@ def read_tail(path, limit=TAIL_BYTES):
         return ""
 
 
-def build(workspace, scratch, ceiling_ms=BUILD_CEILING_MS):
-    """Run `bash build.sh` in the workspace: output to a file in `scratch`, the whole group killed at the ceiling."""
+def build(workspace, scratch, ceiling_ms=None):
+    """Run `bash build.sh` in the workspace: output to a file in `scratch`, the whole group killed at the ceiling (BUILD_CEILING_MS)."""
+    ceiling_ms = BUILD_CEILING_MS if ceiling_ms is None else ceiling_ms
     log = os.path.join(scratch, "build.log")
     started = now_ms()
     with open(log, "wb") as out:

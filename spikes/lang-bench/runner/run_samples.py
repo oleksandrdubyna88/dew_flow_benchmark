@@ -307,7 +307,15 @@ def run(argv):
     if isinstance(plan, Failure):
         return _finish(plan)
     problems = parse_problems(plan)
-    return _finish(Failure(EXIT_CONFIG, _texts(problems)) if problems else _after_parsing(plan))
+    return _finish(Failure(EXIT_CONFIG, _texts(problems)) if problems else _guarded(plan))
+
+
+def _guarded(plan):
+    """The run, with a failure of the runner's own cleanup (a process that could not be killed) as exit 5 and no verdict."""
+    try:
+        return _after_parsing(plan)
+    except ex.CleanupFailed as failed:
+        return Failure(EXIT_RUNNER, [str(failed)])
 
 
 def _after_parsing(plan):

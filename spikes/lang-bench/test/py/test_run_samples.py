@@ -14,6 +14,7 @@ import time
 import unittest
 
 import runner_path  # noqa: F401
+import rs_exec as ex
 import rs_samples as sm
 import run_samples as rs
 
@@ -336,6 +337,56 @@ class NotRegularTests(unittest.TestCase):
         self.assertEqual(code, 4)
         self.assertIn("has no matching .out", err)
         self.assertEqual(Box(self).cli("--parse-only")[0], 0)
+
+
+class CleanupFailureTests(unittest.TestCase):
+    """A process of the case that could not be killed is a failure of the runner's own cleanup: exit 5, no verdict of any case."""
+
+    def run_with_group_that_never_goes(self, box, *args):
+        saved = (ex.group_present, ex.GONE_CEILING_MS)
+        ex.group_present, ex.GONE_CEILING_MS = (lambda proc: True), 30
+        out, err, real = io.StringIO(), io.StringIO(), (sys.stdout, sys.stderr)
+        sys.stdout, sys.stderr = out, err
+        try:
+            code = rs.run([box.samples, "--workspace", box.ws, *args])
+        finally:
+            (sys.stdout, sys.stderr), (ex.group_present, ex.GONE_CEILING_MS) = real, saved
+        return code, out.getvalue(), err.getvalue()
+
+    def test_A_group_that_is_still_there_after_the_kill_ceiling_is_exit_5_and_no_verdict_is_printed(self):
+        code, out, err = self.run_with_group_that_never_goes(Box(self, run_sh="sleep 61 &\ncat answer.bin\n"))
+        self.assertEqual(code, 5, err)
+        self.assertEqual(out, "", "no PASS, no FAIL, no summary: the case's processes could not be stopped")
+        self.assertIn("a process of the case could not be killed", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_The_kill_function_itself_raises_when_the_ceiling_passes_with_the_group_still_there(self):
+        proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
+        self.addCleanup(lambda: (os.killpg(proc.pid, 9), proc.wait()) if proc.poll() is None else None)
+        saved = (ex.group_present, ex.GONE_CEILING_MS)
+        ex.group_present, ex.GONE_CEILING_MS = (lambda p: True), 20
+        try:
+            with self.assertRaises(ex.CleanupFailed) as raised:
+                ex.kill_group(proc)
+        finally:
+            ex.group_present, ex.GONE_CEILING_MS = saved
+        self.assertIn("a process of the case could not be killed", str(raised.exception))
+
+    def test_A_build_whose_group_will_not_go_is_exit_5_too(self):
+        box = Box(self, build_sh="sleep 61 &\nwait\n")
+        saved_ceiling = ex.BUILD_CEILING_MS
+        ex.BUILD_CEILING_MS = 100
+        try:
+            code, out, err = self.run_with_group_that_never_goes(box)
+        finally:
+            ex.BUILD_CEILING_MS = saved_ceiling
+        self.assertEqual((code, out), (5, ""))
+        self.assertIn("could not be killed", err)
+
+    def test_A_group_that_goes_in_time_is_no_failure(self):
+        proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
+        ex.kill_group(proc)
+        self.assertFalse(ex.group_present(proc))
 
 
 class SampleSizeTests(unittest.TestCase):
