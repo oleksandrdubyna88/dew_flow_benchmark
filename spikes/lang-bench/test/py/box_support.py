@@ -100,14 +100,19 @@ def fake_box(test):
     return path
 
 
+def _cgroup_fragments(cgroup):
+    """(listing, boxed, gone): the shell fragments that keep a fake cgroup.procs as a real one would be (nothing without a cgroup)."""
+    if not cgroup:
+        return ":", ":", ":"
+    file = f"{cgroup}/cgroup.procs"
+    return f'printf "%s\\n%s\\n" $$ $pid > "{file}"', f'printf "%s\\n" $$ > "{file}"', f': > "{file}"'
+
+
 def box_prefix(box, cgroup=None, linger=None, setup="", after_report=""):
     """The fake box as a launch prefix: the program runs as ITS child (so its parent is a bwrap process), `child-pid` and `exit-code` go to
     descriptor 7, and with `cgroup` the pids of the box and of the program are written to that folder's fake `cgroup.procs`, the program's
     leaving it when the program ends and the box's when the box does (a real cgroup does the same, a fake file must be told to)."""
-    file = f"{cgroup}/cgroup.procs" if cgroup else None
-    listing = f'printf "%s\\n%s\\n" $$ $pid > "{file}"' if file else ":"
-    boxed = f'printf "%s\\n" $$ > "{file}"' if file else ":"
-    gone = f': > "{file}"' if file else ":"
+    listing, boxed, gone = _cgroup_fragments(cgroup)
     tail = f"\nsleep {linger}" if linger else ""
     script = (f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n{after_report}\n"$@" <&0 &\npid=$!\n{listing}\nwait $pid\nc=$?\n{boxed}\n'
               f'printf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}{tail}\n{gone}\nexit $c')
@@ -162,6 +167,13 @@ def require_bwrap(test):
         _unavailable(test, "bwrap is not installed")
 
 
+def _bwrap_argv(workspace_dir, new_session, status_fd):
+    status = [] if status_fd is None else ["--json-status-fd", str(status_fd)]
+    sessions = ["--new-session"] if new_session else []
+    return ["bwrap", *status, "--unshare-pid", *sessions, "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib",
+            "--symlink", "usr/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev", "--bind", workspace_dir, "/ws", "--chdir", "/ws", "--"]
+
+
 class Scope:
     """One transient user scope named in the owner form (`testsToDelete-u<uid>-bench-scope-<id>`); the test stops it when it ends."""
 
@@ -177,12 +189,9 @@ class Scope:
         `per_case` gives each case its own scope (`<unit>-{case}`, whose cgroup is `cgroup_template`), `status_fd` the bwrap status descriptor.
         `holder` (a file name, `{case}` allowed) keeps the scope alive after the program: the system removes a scope when its last process exits,
         so a `sleep` is started in it and its pid written to that file, which the runner is told as the wrapper (E1.S8b's scope holder)."""
-        status = [] if status_fd is None else ["--json-status-fd", str(status_fd)]
-        box = ["bwrap", *status, "--unshare-pid", *(["--new-session"] if new_session else []), "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin",
-               "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
-               "--bind", workspace_dir, "/ws", "--chdir", "/ws", "--"]
         unit = f"{self.unit}-{{case}}" if per_case else self.unit
         held = [] if holder is None else ["sh", "-c", 'sleep 40 >/dev/null 2>&1 <&- 7>&- &\necho $! > "$0"\nexec "$@"', holder]
+        box = _bwrap_argv(workspace_dir, new_session, status_fd)
         return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "-p", "Delegate=yes", "--", *held, *box]
 
     @property

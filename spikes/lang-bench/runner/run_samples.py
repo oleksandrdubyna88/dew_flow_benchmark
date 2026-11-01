@@ -13,7 +13,7 @@ case says its memory is not certified. The daemon and web kinds run in part ii-b
 The execution layer's options (E1.S8b builds the layer; this runner only reads what it hands over):
   --launch-prefix JSON   a JSON array of strings put before `bash run.sh`; `{case}` in any element is replaced by the case id.
   --launch-status FD     the descriptor number the prefix gives bwrap as `--json-status-fd FD`. The runner makes a pipe per case and puts
-                         its write end at FD in the launcher. `{"child-pid": P}` is the sandbox ready and the start of the case clock;
+                         its write end at FD in the launcher. `{"child-pid": P}` is the start of the case clock (bwrap writes it right after it clones the sandbox, before its mounts);
                          no `child-pid` before the launcher exits is exit 3 `launch failed` with the prefix's stderr, never a case verdict.
   --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
                          after the program's exit and before any kill; the kill is `cgroup.kill`. Host pids only.
@@ -38,7 +38,6 @@ if __name__ == "__main__":  # under -I the script's own directory is not on sys.
 
 import argparse
 import json
-import signal
 import traceback
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -53,6 +52,7 @@ import rs_report as rp
 import rs_samples as sm
 import rs_scope
 import rs_script
+import rs_stop
 import rs_transcript
 import rs_view
 from rs_lex import Problem
@@ -375,42 +375,14 @@ def _after_parsing(plan):
     return _run_olympiad(plan)
 
 
-class _Interrupted(BaseException):
-    """The runner itself was stopped by a signal. A BaseException, so no handler of a case swallows it."""
-
-    def __init__(self, signum):
-        super().__init__(signum)
-        self.signum = signum
-
-
-def _on_signal(signum, frame):
-    for other in rl.STOPPING_SIGNALS:  # the cleanup that follows must not be interrupted again
-        signal.signal(other, signal.SIG_IGN)
-    raise _Interrupted(signum)
-
-
-def _install_handlers():
-    for sig in rl.STOPPING_SIGNALS:
-        signal.signal(sig, _on_signal)
-
-
-def _stopped(stopped):
-    """The runner was stopped by a signal: every launcher still registered is stopped first (cgroup.kill, or the group on the plain path)."""
-    try:
-        rl.abandon_active()
-    except ex.CleanupFailed as failed:
-        print(f"run_samples: {failed}", file=sys.stderr)
-    print(f"run_samples: interrupted by {signal.Signals(stopped.signum).name}: no verdict was reached", file=sys.stderr)
-    return EXIT_RUNNER
-
-
 def main(argv=None):
     configure_streams(sys.stdout, sys.stderr)
-    _install_handlers()
+    rs_stop.install_handlers()
     try:
         return run(sys.argv[1:] if argv is None else argv)
-    except _Interrupted as stopped:
-        return _stopped(stopped)
+    except rs_stop.Interrupted as interrupted:
+        rs_stop.stopped(interrupted)
+        return EXIT_RUNNER
     except Exception:
         traceback.print_exc()
         return EXIT_RUNNER

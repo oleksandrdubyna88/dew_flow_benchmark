@@ -73,11 +73,11 @@ def _launch_status_needed(args):
 
 
 def cgroup_problems(args):
-    """`--cgroup-of` with a prefix needs the launch status (only `child-pid` says the box is up and starts the clock); a wrapper file
+    """`--cgroup-of` with a prefix needs the launch status (only `child-pid` starts the clock and is the proof that the launcher started); a wrapper file
     needs the cgroup it is a process of."""
     problems = []
     if _launch_status_needed(args):
-        problems.append("--cgroup-of with --launch-prefix needs --launch-status: only child-pid says the box is up and starts the clock")
+        problems.append("--cgroup-of with --launch-prefix needs --launch-status: only child-pid starts the clock and proves the launcher started")
     if args.wrapper_pid_file is not None and args.cgroup_of is None:
         problems.append("--wrapper-pid-file needs --cgroup-of")
     return problems

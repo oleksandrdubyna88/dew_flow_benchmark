@@ -41,7 +41,7 @@ class LaunchFailedTests(unittest.TestCase):
             ws.run(case(), prefix=failing_prefix(), status_fd=STATUS_FD)
         failed = raised.exception
         self.assertEqual(failed.case_id, "s03")
-        self.assertIn("exited before the sandbox reported child-pid", failed.reason)
+        self.assertIn("exited before it reported child-pid", failed.reason)
         self.assertIn("boom: the box could not be made", failed.stderr, "the prefix's own standard error travels with the failure")
         self.assertTrue(os.path.exists(os.path.join(ws.dir, "answer.bin")))
 

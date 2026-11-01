@@ -1,7 +1,7 @@
 """rs_launch: starting a case's program through the launch prefix and finding out whether it really started (B5, B6, B1).
 
 With `--launch-status N` the launcher (the layer's `systemd-run … bwrap --json-status-fd N … bash run.sh`) must report `child-pid` before
-it exits: the line marks the sandbox ready and is the START OF THE CASE CLOCK. bwrap writes it right after it clones the sandbox, BEFORE the
+it exits: the line is the START OF THE CASE CLOCK and the proof that the launcher started; it does not say the box is complete. bwrap writes it right after it clones the sandbox, BEFORE the
 box's mounts are made, so a few milliseconds of box set-up are inside the case clock; the plan fixes the start at `child-pid` and it is not
 moved. No `child-pid` before the launcher exits (or within LAUNCH_CEILING_MS), a malformed or doubled status line before it, an unknown
 record before it, or a cgroup that does not exist after it, is `LaunchFailed` with the tail of the prefix's standard error: exit 3, never a
@@ -29,7 +29,7 @@ ACTIVE = []
 
 
 class LaunchFailed(Exception):
-    """The launcher did not report a running sandbox. `stderr` is the bounded tail of what the prefix wrote."""
+    """The launcher did not report `child-pid` as it must. `stderr` is the bounded tail of what the prefix wrote."""
 
     def __init__(self, case_id, reason, stderr):
         super().__init__(f"launch failed for case {case_id}: {reason}")
@@ -179,7 +179,7 @@ def _status_problem(how, reader):
     if how == "late":
         return f"no child-pid within {ex.LAUNCH_CEILING_MS} ms (the launcher was killed)"
     if how == "exited":
-        return "the launcher exited before the sandbox reported child-pid"
+        return "the launcher exited before it reported child-pid"
     return None if reader.problem is None else f"the launch status is malformed: {reader.problem}"
 
 
@@ -217,7 +217,7 @@ def _confirm_box(proc, reader, lifecycle, case_id, stderr_path):
 
 
 def _clock(proc, lifecycle, launcher_fd, pipe_fd, case_id, stderr_path):
-    """(StatusReader, instant of `child-pid` in ns), or (None, None) without `--launch-status`; LaunchFailed when no sandbox was reported."""
+    """(StatusReader, instant of `child-pid` in ns), or (None, None) without `--launch-status`; LaunchFailed when no child-pid was reported."""
     if pipe_fd is None:
         return None, None
     if launcher_fd is None:

@@ -5,7 +5,7 @@ The runner never measures or kills a cgroup this case does not own: the director
 (else `CgroupBusy`, exit 3). The order at the end of a case is fixed: the program's end is seen, `cgroup.procs` is read (the leftover
 evidence), `memory.peak` and `memory.events` are read, the launcher gets a bounded moment to write its `exit-code` and go, and then
 `cgroup.kill` is ALWAYS written, a leftover found or not, and `cgroup.procs` must read empty or the cleanup has failed. A kill first would
-hide a lingering child and zero the peak. Where the cgroup is missing or the kill cannot be written, the launcher's process group is killed
+hide a lingering child (`cgroup.kill` does not reset `memory.peak`: the peak is read first so that it is read while the cgroup is still there). Where the cgroup is missing or the kill cannot be written, the launcher's process group is killed
 as well.
 """
 import os
@@ -23,7 +23,7 @@ class CgroupInvalid(ex.EnvironmentProblem):
 
 
 class CgroupLost(ex.EnvironmentProblem):
-    """The cgroup directory vanished after the launcher reported its sandbox: the layer's scope is gone, so nothing can be measured or killed
+    """The cgroup directory vanished after the launcher reported `child-pid`: the layer's scope is gone, so nothing can be measured or killed
     through it. Exit 3, never a case status."""
 
 

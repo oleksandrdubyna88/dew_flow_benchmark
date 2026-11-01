@@ -140,6 +140,34 @@ class ChoiceTests(unittest.TestCase):
         self.assertEqual(sorted(os.listdir("/proc/self/fd")), before, "the pidfd taken for the check is closed again")
 
 
+class OrphanTests(unittest.TestCase):
+    """A real-scope flake: the program (bash) was gone before the first look and its orphan `sleep`, now a child of bwrap's init, was adopted as
+    the program, so the leftover read excluded the very leftover it was there to find."""
+
+    def test_A_process_taken_for_the_program_that_is_still_alive_when_the_program_has_ended_is_a_leftover_and_not_the_pid(self):
+        family, launcher = Family(self, 1), launcher_of(self)
+        child = family.children()[0]
+        family.list(child)
+        tracker = family.tracker(launcher)
+        tracker.look()
+        self.assertEqual(tracker.pid, child)
+        self.assertEqual(tracker.leftover(), [child], "alive after the program ended: it was an orphan, not the program")
+        self.assertIsNone(tracker.signalled()["pid"])
+        self.assertIn("orphan", tracker.signalled()["found"])
+        self.assertEqual(tracker.fork(tracker.leftover()), {"known": True, "found": True, "count": 2})
+
+    def test_The_program_that_really_ended_is_not_its_own_leftover(self):
+        family, launcher = Family(self, 1), launcher_of(self)
+        child = family.children()[0]
+        family.list(child)
+        tracker = family.tracker(launcher)
+        tracker.look()
+        os.kill(child, 9)
+        self.assertTrue(wait_until(lambda: not os.path.exists(f"/proc/{child}") or cg.is_zombie(child)))
+        self.assertEqual(tracker.leftover(), [])
+        self.assertEqual(tracker.signalled()["pid"], child)
+
+
 class ForkTests(unittest.TestCase):
     def test_Extras_count_only_when_they_persist_across_two_looks_and_never_before_the_program_is_known(self):
         family, launcher = Family(self, 1), launcher_of(self)
