@@ -32,6 +32,12 @@ internal abstract record ReapState
     public sealed record Failed(int Error) : ReapState;
 }
 
+/// <summary>What a test hands <see cref="PosixSpawn.Spawn(string, IReadOnlyList{string}, IReadOnlyList{string}, string, string, SpawnHooks)"/>: the two <c>init</c> calls (so one can fail) and <see cref="Event"/>, told <c>alloc</c> for each allocation, <c>destroy actions</c> / <c>destroy attributes</c> for each structure destroyed and <c>free N</c> at the end. <see cref="Real"/> calls libc and tells nobody.</summary>
+internal sealed record SpawnHooks(Func<IntPtr, int> ActionsInit, Func<IntPtr, int> AttributesInit, Action<string>? Event)
+{
+    public static SpawnHooks Real { get; } = new(PosixSpawn.InitActionsCall, PosixSpawn.InitAttributesCall, null);
+}
+
 /// <summary>The libc calls <see cref="SetsidLauncher"/> starts a detached program with, and the constants and sizes they are called with — the ONE place the module names them (D26 a: the kernel's numbers, not the runtime's). <b>Measured on Linux x86-64</b> (glibc 2.43, 2026-10-31; E5 plan M-5, re-measured with a C probe for this story): <c>sizeof(posix_spawn_file_actions_t)</c>
 /// 80, <c>posix_spawnattr_t</c> 336, <c>sigset_t</c> 128; <c>O_WRONLY 0x1</c>, <c>O_CREAT 0x40</c>, <c>O_APPEND 0x400</c>, <c>O_NOFOLLOW 0x20000</c> (on Linux arm64 <c>0x20000</c> is <c>O_LARGEFILE</c> and the link would be FOLLOWED — <see cref="DetachedRoads"/> grants this class to Linux x86-64 alone); <c>POSIX_SPAWN_SETPGROUP 0x02</c>, <c>SETSIGDEF 0x04</c>,
 /// <c>SETSIGMASK 0x08</c>; <c>WNOHANG 1</c>; <c>ELOOP 40</c>, <c>ECHILD 10</c>; <c>SIGKILL 9</c>, <c>SIGSTOP 19</c>. Every structure lives in a zeroed buffer of <see cref="Capacity"/> bytes — more than the largest measured size — initialised by libc and destroyed in <c>finally</c>.</summary>
@@ -69,6 +75,10 @@ internal static class PosixSpawn
     private const string NullDevice = "/dev/null";
 
     /// <summary>Whether this libc has <c>posix_spawn_file_actions_addclosefrom_np</c> (glibc 2.34 and later; 2.43 here). Without it the runner would inherit every descriptor of this process that is not close-on-exec, so the road is refused (<see cref="DetachedRoads.Current"/>).</summary>
+    internal static int InitActionsCall(IntPtr actions) => ActionsInit(actions);
+
+    internal static int InitAttributesCall(IntPtr attributes) => AttributesInit(attributes);
+
     public static bool CloseFromAvailable { get; } = NativeLibrary.TryLoad("libc", typeof(PosixSpawn).Assembly, null, out var libc) && NativeLibrary.TryGetExport(libc, CloseFromEntry, out _);
 
     /// <summary>glibc's version text (<c>2.43</c>) from <c>gnu_get_libc_version</c>, which only glibc exports; empty on any other C library (musl) or when it cannot be asked.</summary>
@@ -88,41 +98,35 @@ internal static class PosixSpawn
 
     /// <summary>Starts <paramref name="program"/> (a path: <c>posix_spawn</c>, never <c>posix_spawnp</c>) with <paramref name="argv"/> and <paramref name="environment"/> (<c>NAME=value</c>) as the leader of a new process group, stdin <c>/dev/null</c>, stdout and stderr the <paramref name="log"/> opened for append, created at 0600 and
     /// <b>refusing a link</b> (<c>O_NOFOLLOW</c> — D26 a: a log that is a link fails the start with <c>ELOOP</c>) and <b>not waiting on a FIFO</b> (<c>O_NONBLOCK</c>: a FIFO with no reader fails with <c>ENXIO</c> instead of blocking this process inside <c>posix_spawn</c>; on a regular file the flag changes nothing), every descriptor from 3 up closed in the child (no lock or handle of this process crosses into the runner), every signal 1–31 but 9 and 19 at its default and the mask empty (without it SIGPIPE, ignored by this runtime, stays ignored across <c>exec</c> — M-3), the working directory <paramref name="workingDirectory"/>.</summary>
-    public static SpawnResult Spawn(string program, IReadOnlyList<string> argv, IReadOnlyList<string> environment, string log, string workingDirectory)
-    {
-        var buffers = new List<IntPtr>();
-        var strings = new List<IntPtr>();
-        IntPtr actions = Zeroed(buffers), attributes = Zeroed(buffers), defaults = Zeroed(buffers), mask = Zeroed(buffers);
-        try
-        {
-            var prepared = FirstError(
-                () => ActionsInit(actions),
-                () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
-                () => ActionsAddOpen(actions, 1, log, WriteOnly | Append | Create | NoFollow | NonBlock, PrivateFile),
-                () => ActionsAddDup2(actions, 1, 2),
-                () => ActionsAddCloseFrom(actions, FirstClosed),
-                () => ActionsAddChdir(actions, workingDirectory),
-                () => AttributesInit(attributes),
-                () => AttributesSetFlags(attributes, (short)(SetProcessGroup | SetSignalsDefault | SetSignalMask)),
-                () => AttributesSetGroup(attributes, 0),
-                () => DefaultSignals(defaults),
-                () => AttributesSetDefaults(attributes, defaults),
-                () => SigEmptySet(mask),
-                () => AttributesSetMask(attributes, mask));
-            if (prepared != 0)
-            {
-                return new SpawnResult(0, prepared);
-            }
+    public static SpawnResult Spawn(string program, IReadOnlyList<string> argv, IReadOnlyList<string> environment, string log, string workingDirectory) =>
+        Spawn(program, argv, environment, log, workingDirectory, SpawnHooks.Real);
 
-            var error = SpawnCall(out var pid, program, actions, attributes, Terminated(argv, strings), Terminated(environment, strings));
-            return new SpawnResult(error == 0 ? pid : 0, error);
-        }
-        finally
+    /// <summary>The same with the two <c>init</c> calls and the record of what was allocated, initialised and destroyed handed in — the only way a test makes an <c>init</c> fail (<see cref="SpawnHooks"/>). Cleanup is entered with the first allocation: every buffer is freed, and a structure is destroyed only when its own <c>init</c> succeeded.</summary>
+    internal static SpawnResult Spawn(string program, IReadOnlyList<string> argv, IReadOnlyList<string> environment, string log, string workingDirectory, SpawnHooks hooks)
+    {
+        using var native = new Native(hooks);
+        var (actions, attributes, defaults, mask) = (native.Buffer(), native.Buffer(), native.Buffer(), native.Buffer());
+        var prepared = FirstError(
+            () => native.InitActions(actions),
+            () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
+            () => ActionsAddOpen(actions, 1, log, WriteOnly | Append | Create | NoFollow | NonBlock, PrivateFile),
+            () => ActionsAddDup2(actions, 1, 2),
+            () => ActionsAddCloseFrom(actions, FirstClosed),
+            () => ActionsAddChdir(actions, workingDirectory),
+            () => native.InitAttributes(attributes),
+            () => AttributesSetFlags(attributes, (short)(SetProcessGroup | SetSignalsDefault | SetSignalMask)),
+            () => AttributesSetGroup(attributes, 0),
+            () => DefaultSignals(defaults),
+            () => AttributesSetDefaults(attributes, defaults),
+            () => SigEmptySet(mask),
+            () => AttributesSetMask(attributes, mask));
+        if (prepared != 0)
         {
-            ActionsDestroy(actions);
-            AttributesDestroy(attributes);
-            Free(buffers, strings);
+            return new SpawnResult(0, prepared);
         }
+
+        var error = SpawnCall(out var pid, program, actions, attributes, native.Terminated(argv), native.Terminated(environment));
+        return new SpawnResult(error == 0 ? pid : 0, error);
     }
 
     /// <summary>What a test needs to know about the buffers: how many bytes of a buffer pre-filled with a sentinel each structure's calls changed — the structure's real extent, observed, not a constant compared with a constant. <c>posix_spawnattr_init</c> and <c>sigemptyset</c> clear their whole structure and
@@ -130,39 +134,21 @@ internal static class PosixSpawn
     internal static (int Actions, int Attributes, int Sigset) BytesTouched()
     {
         const byte sentinel = 0xA5;
-        var buffers = new List<IntPtr>();
-        var strings = new List<IntPtr>();
-        IntPtr actions = Filled(buffers, sentinel), attributes = Filled(buffers, sentinel), signals = Filled(buffers, sentinel);
-        try
-        {
-            FirstError(
-                () => ActionsInit(actions),
-                () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
-                () => ActionsAddDup2(actions, 1, 2),
-                () => ActionsAddCloseFrom(actions, FirstClosed),
-                () => ActionsAddChdir(actions, "/"),
-                () => AttributesInit(attributes),
-                () => AttributesSetFlags(attributes, SetProcessGroup),
-                () => AttributesSetGroup(attributes, 0),
-                () => DefaultSignals(signals),
-                () => AttributesSetDefaults(attributes, signals),
-                () => AttributesSetMask(attributes, signals));
-            return (Touched(actions, sentinel), Touched(attributes, sentinel), Touched(signals, sentinel));
-        }
-        finally
-        {
-            ActionsDestroy(actions);
-            AttributesDestroy(attributes);
-            Free(buffers, strings);
-        }
-    }
-
-    private static IntPtr Filled(List<IntPtr> buffers, byte value)
-    {
-        var buffer = Marshal.AllocHGlobal(Capacity);
-        Marshal.Copy(Enumerable.Repeat(value, Capacity).ToArray(), 0, buffer, Capacity);
-        buffers.Add(buffer);
-        return buffer;
+        using var native = new Native(SpawnHooks.Real);
+        var (actions, attributes, signals) = (native.Buffer(sentinel), native.Buffer(sentinel), native.Buffer(sentinel));
+        FirstError(
+            () => native.InitActions(actions),
+            () => ActionsAddOpen(actions, 0, NullDevice, ReadOnly, 0),
+            () => ActionsAddDup2(actions, 1, 2),
+            () => ActionsAddCloseFrom(actions, FirstClosed),
+            () => ActionsAddChdir(actions, "/"),
+            () => native.InitAttributes(attributes),
+            () => AttributesSetFlags(attributes, SetProcessGroup),
+            () => AttributesSetGroup(attributes, 0),
+            () => DefaultSignals(signals),
+            () => AttributesSetDefaults(attributes, signals),
+            () => AttributesSetMask(attributes, signals));
+        return (Touched(actions, sentinel), Touched(attributes, sentinel), Touched(signals, sentinel));
     }
 
     /// <summary>One past the last byte that is no longer the sentinel.</summary>
@@ -209,31 +195,69 @@ internal static class PosixSpawn
         return error;
     }
 
-    private static IntPtr Zeroed(List<IntPtr> buffers)
+    /// <summary>What is allocated and initialised for one start, tracked from the moment it exists: <see cref="Buffer"/> and <see cref="Terminated"/> record each allocation as they make it, <see cref="InitActions"/> and <see cref="InitAttributes"/> record an <c>init</c> only when it succeeded, and <see cref="Dispose"/> destroys exactly those structures and frees exactly those allocations.</summary>
+    private sealed class Native(SpawnHooks hooks) : IDisposable
     {
-        var buffer = Marshal.AllocHGlobal(Capacity);
-        Marshal.Copy(new byte[Capacity], 0, buffer, Capacity);
-        buffers.Add(buffer);
-        return buffer;
-    }
+        private readonly List<IntPtr> _memory = [];
+        private readonly List<IntPtr> _strings = [];
+        private IntPtr _actions;
+        private IntPtr _attributes;
 
-    /// <summary>The words as a NULL-terminated array of UTF-8 C strings; each string is kept in <paramref name="strings"/> to be freed.</summary>
-    private static IntPtr[] Terminated(IReadOnlyList<string> words, List<IntPtr> strings)
-    {
-        var array = new IntPtr[words.Count + 1];
-        for (var at = 0; at < words.Count; at++)
+        public IntPtr Buffer(byte fill = 0)
         {
-            array[at] = Marshal.StringToCoTaskMemUTF8(words[at]);
-            strings.Add(array[at]);
+            var buffer = Marshal.AllocHGlobal(Capacity);
+            _memory.Add(buffer);
+            hooks.Event?.Invoke("alloc");
+            Marshal.Copy(Enumerable.Repeat(fill, Capacity).ToArray(), 0, buffer, Capacity);
+            return buffer;
         }
 
-        return array;
-    }
+        public int InitActions(IntPtr actions)
+        {
+            var error = hooks.ActionsInit(actions);
+            _actions = error == 0 ? actions : IntPtr.Zero;
+            return error;
+        }
 
-    private static void Free(List<IntPtr> buffers, List<IntPtr> strings)
-    {
-        buffers.ForEach(Marshal.FreeHGlobal);
-        strings.ForEach(Marshal.FreeCoTaskMem);
+        public int InitAttributes(IntPtr attributes)
+        {
+            var error = hooks.AttributesInit(attributes);
+            _attributes = error == 0 ? attributes : IntPtr.Zero;
+            return error;
+        }
+
+        /// <summary>The words as a NULL-terminated array of UTF-8 C strings, each recorded as it is allocated.</summary>
+        public IntPtr[] Terminated(IReadOnlyList<string> words)
+        {
+            var array = new IntPtr[words.Count + 1];
+            for (var at = 0; at < words.Count; at++)
+            {
+                array[at] = Marshal.StringToCoTaskMemUTF8(words[at]);
+                _strings.Add(array[at]);
+                hooks.Event?.Invoke("alloc");
+            }
+
+            return array;
+        }
+
+        public void Dispose()
+        {
+            if (_actions != IntPtr.Zero)
+            {
+                ActionsDestroy(_actions);
+                hooks.Event?.Invoke("destroy actions");
+            }
+
+            if (_attributes != IntPtr.Zero)
+            {
+                AttributesDestroy(_attributes);
+                hooks.Event?.Invoke("destroy attributes");
+            }
+
+            _memory.ForEach(Marshal.FreeHGlobal);
+            _strings.ForEach(Marshal.FreeCoTaskMem);
+            hooks.Event?.Invoke($"free {_memory.Count + _strings.Count}");
+        }
     }
 
     [DllImport("libc", EntryPoint = "gnu_get_libc_version")]

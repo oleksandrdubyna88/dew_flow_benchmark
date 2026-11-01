@@ -112,6 +112,65 @@ public sealed class RunAllVerbTests
     }
 
     [Fact]
+    public async Task A_launcher_that_cannot_keep_the_log_makes_run_all_say_so_and_one_that_can_does_not()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+
+        var silent = await kit.InProcessAsync(RunAllKit.Seams(new RecordingLauncher { WritesLog = false }, new Dictionary<string, string>()), "C1");
+        var logged = await kit.InProcessAsync(RunAllKit.Seams(new RecordingLauncher(), new Dictionary<string, string>()), "C1");
+
+        silent.Code.Should().Be(0, silent.Error);
+        silent.Output.Should().Contain("the runners' output is not kept in pids/<arm>.log").And.Contain("not observed");
+        logged.Output.Should().NotContain("not kept in pids");
+    }
+
+    [Fact]
+    public async Task Run_all_says_it_is_waiting_stops_waiting_for_a_runner_that_has_already_ended_and_points_at_its_log()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var launcher = new RecordingLauncher(_ => File.WriteAllText(kit.Layout.PidFile("C1"), "4242\n"));
+        var seams = new RunAllSeams(_ => launcher, (_, _) => new RunnerState.Gone(), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Output.Should().Contain("waiting up to 15 s for the runners to take their locks (C1)");
+        run.Error.Should().Contain("C1: its runner started and has already ended — see pids/C1.log");
+        run.Error.Should().NotContain("did not take its lock");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "an arm whose runner ended is not waited for until the bound");
+    }
+
+    [Fact]
+    public async Task The_wait_polls_with_a_backoff_from_50_ms_to_500_ms_and_a_runner_that_never_shows_is_pointed_at_its_log()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        var launcher = new RecordingLauncher();
+        var polls = new List<long>();
+        var seams = new RunAllSeams(_ => launcher, (_, _) =>
+        {
+            if (launcher.Starts.Count > 0)
+            {
+                polls.Add(TimeProvider.System.GetTimestamp());
+            }
+
+            return new RunnerState.Gone();
+        }, DetachedRoad.Setsid, TimeSpan.FromSeconds(3));
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Error.Should().Contain("C1: its runner did not take its lock within 15 s — see pids/C1.log");
+        var gaps = polls.Zip(polls.Skip(1), (a, b) => TimeProvider.System.GetElapsedTime(a, b).TotalMilliseconds).ToList();
+        gaps.Count.Should().BeGreaterThan(5);
+        gaps[0].Should().BeInRange(30, 200, "the first pause is about 50 ms");
+        gaps.Should().OnlyContain(gap => gap < 900, "no pause is longer than the 500 ms cap");
+        gaps.Skip(3).Max().Should().BeGreaterThan(400, "the pause doubled up to the cap");
+        polls.Count.Should().BeLessThan(20, "3 s at a fixed 50 ms would be 60 polls");
+    }
+
+    [Fact]
     public async Task Two_run_all_calls_at_the_same_moment_over_a_queue_of_three_never_start_four_arms()
     {
         await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");

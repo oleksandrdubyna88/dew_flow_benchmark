@@ -235,6 +235,50 @@ public sealed class DetachedLauncherTests
         kit.PidOf("C1").Should().BeNull("no runner started");
     }
 
+    [Theory]
+    [InlineData("actions", 12)]
+    [InlineData("attributes", 22)]
+    [InlineData("none", 0)]
+    public void A_structure_is_destroyed_only_when_its_own_init_succeeded_and_every_allocation_is_freed(string failing, int error)
+    {
+        RunAllKit.Require();
+        using var temp = new TempFolder();
+        var events = new List<string>();
+        var hooks = new SpawnHooks(
+            actions => failing == "actions" ? error : PosixSpawn.InitActionsCall(actions),
+            attributes => failing == "attributes" ? error : PosixSpawn.InitAttributesCall(attributes),
+            events.Add);
+
+        var result = PosixSpawn.Spawn(temp.Combine("no-such-program"), [temp.Combine("no-such-program")], ["A=b"], temp.Combine("child.log"), temp.Path, hooks);
+
+        result.Pid.Should().Be(0);
+        (failing == "none" ? result.Error != 0 : result.Error == error).Should().BeTrue($"the failing init's number is the result ({failing}); with none failing the start itself fails on the missing program: {result.Error}");
+        events.Count(each => each == "alloc").Should().BeGreaterThanOrEqualTo(4);
+        events.Last().Should().Be($"free {events.Count(each => each == "alloc")}", "every allocation, however far the start got, is freed — once");
+        events.Contains("destroy actions").Should().Be(failing != "actions", "file actions are destroyed only if their init succeeded");
+        events.Contains("destroy attributes").Should().Be(failing == "none", "attributes are destroyed only if their init succeeded — and not at all when the file actions failed first, which never reached them");
+    }
+
+    [Fact]
+    public async Task A_log_keeps_one_earlier_run_not_every_one()
+    {
+        RunAllKit.Require();
+        using var temp = new TempFolder();
+        var log = temp.Combine("child.log");
+        File.WriteAllText(log, "first run\n");
+        var launcher = new SetsidLauncher(RunAllKit.HostSetsid);
+
+        launcher.Start("/bin/sh", ["-c", "echo second run"], log, ChildEnvironment(), temp.Path).Should().BeOfType<DetachedStart.Started>();
+        var second = await LogAsync(log, "second run");
+        launcher.Start("/bin/sh", ["-c", "echo third run"], log, ChildEnvironment(), temp.Path).Should().BeOfType<DetachedStart.Started>();
+        var third = await LogAsync(log, "third run");
+
+        second.Should().NotContain("first run", "the earlier run moved aside before the new one opened the log");
+        third.Should().NotContain("second run").And.NotContain("first run");
+        File.ReadAllText(log + ".prev").Should().Be("second run\n", "the .prev is the run before, an older .prev replaced");
+        Directory.GetFiles(temp.Path).Select(Path.GetFileName).Order().Should().Equal("child.log", "child.log.prev");
+    }
+
     private static Dictionary<string, string> ChildEnvironment() => new() { ["PATH"] = "/usr/bin:/bin" };
 
     private static string RealPathOf(string path) => (File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName) ?? Path.GetFullPath(path);

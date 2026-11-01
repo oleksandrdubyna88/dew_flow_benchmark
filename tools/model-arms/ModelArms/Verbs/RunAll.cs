@@ -53,6 +53,7 @@ internal static class RunAllVerb
     internal const int SettleSeconds = 15;
 
     private static readonly TimeSpan SettlePoll = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan SettleLast = TimeSpan.FromMilliseconds(500);
 
     /// <summary>The arms of the map that run now, each with the holder words its lock gave.</summary>
     private sealed record Probed(Equipped Equipped, IReadOnlyDictionary<string, string> Alive);
@@ -256,38 +257,69 @@ internal static class RunAllVerb
     {
         var placed = probed.Equipped.Placed;
         var input = placed.Input;
-        if (seams.Road == DetachedRoad.Windows)
+        var launcher = seams.Launcher(probed.Equipped.Setsid);
+        if (!launcher.WritesLog)
         {
-            input.Verb.Output.WriteLine($"{Name}: on Windows the runner's output is not kept in pids/<arm>.log (not observed — no Windows host here)");
+            input.Verb.Output.WriteLine($"{Name}: the runners' output is not kept in pids/<arm>.log on this road (Windows: not observed — no Windows host here)");
         }
 
-        var launcher = seams.Launcher(probed.Equipped.Setsid);
-        var started = new List<string>();
+        var started = new Dictionary<string, long>(StringComparer.Ordinal);
         var codes = placed.Arms.Select(arm => probed.Alive.TryGetValue(arm, out var holder) ? Left(input, arm, holder) : Started(probed, launcher, arm, started)).ToList();
         Settle(input, seams, started);
         input.Verb.Output.Flush();
         return codes.Contains(ExitCodes.Configuration) ? ExitCodes.Configuration : codes.Contains(ExitCodes.Environment) ? ExitCodes.Environment : ExitCodes.Pass;
     }
 
-    /// <summary>Holds the call's lock until each runner it started has taken its own (alive, or its lock refused or unread — either way a later call can see it), polled every 50 ms for at most <see cref="SettleSeconds"/> seconds; a runner that has not shown by then is a stderr note, never a failure: the start was accepted, and a slow host is not a dead runner.</summary>
-    private static void Settle(ExperimentInput input, RunAllSeams seams, List<string> started)
+    /// <summary>Holds the call's lock until each runner it started has taken its own (alive, or its lock refused or unread — either way a later call can see it), polled with a backoff from 50 ms doubling to 500 ms for at most <see cref="SettleSeconds"/> seconds; one line says so first. A runner that has started and ALREADY ENDED (its pid file is newer than before the start, its lock free) is not waited for: a line points at its log.
+    /// A runner that has not shown by the bound is a stderr note naming its log, never a failure: the start was accepted, and a slow host is not a dead runner.</summary>
+    private static void Settle(ExperimentInput input, RunAllSeams seams, Dictionary<string, long> started)
     {
+        if (started.Count == 0 || seams.Settle <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        input.Verb.Output.WriteLine($"{Name}: waiting up to {SettleSeconds} s for the runners to take their locks ({string.Join(", ", started.Keys)})");
+        input.Verb.Output.Flush();
         var begun = TimeProvider.System.GetTimestamp();
-        var pending = started.ToList();
+        var pending = started.Keys.ToList();
+        var pause = SettlePoll;
         while (pending.Count > 0 && TimeProvider.System.GetElapsedTime(begun) < seams.Settle)
         {
-            pending.RemoveAll(arm => seams.Liveness(input.Root, arm) is not RunnerState.Gone);
+            pending.RemoveAll(arm => Shown(input, seams, arm, started[arm]));
             if (pending.Count > 0)
             {
-                Thread.Sleep(SettlePoll);
+                Thread.Sleep(pause);
+                pause = TimeSpan.FromTicks(Math.Min(pause.Ticks * 2, SettleLast.Ticks));
             }
         }
 
-        foreach (var arm in pending.Where(_ => seams.Settle > TimeSpan.Zero))
+        foreach (var arm in pending)
         {
-            input.Verb.Error.WriteLine($"{Name} {arm}: its runner did not take its lock within {SettleSeconds} s — a run-all run now may not count it");
+            input.Verb.Error.WriteLine($"{Name} {arm}: its runner did not take its lock within {SettleSeconds} s — see pids/{arm}.log; a run-all run now may not count it");
         }
     }
+
+    /// <summary>True when nothing more is to be waited for on <paramref name="arm"/>: its lock is held (or refused, or unread) or its runner has already ended — said, with its log.</summary>
+    private static bool Shown(ExperimentInput input, RunAllSeams seams, string arm, long stampBefore)
+    {
+        if (seams.Liveness(input.Root, arm) is not RunnerState.Gone)
+        {
+            return true;
+        }
+
+        if (PidStamp(input, arm) == stampBefore)
+        {
+            return false;
+        }
+
+        input.Verb.Error.WriteLine($"{Name} {arm}: its runner started and has already ended — see pids/{arm}.log");
+        return true;
+    }
+
+    /// <summary>When the arm's pid file was last written (the runner writes it, by rename, after taking its lock); a file that is absent has the epoch's stamp. A newer stamp with the lock free means a runner of THIS start lived and ended.</summary>
+    private static long PidStamp(ExperimentInput input, string arm) => File.GetLastWriteTimeUtc(input.Root.PidFile(arm)).Ticks;
+
     private static int Left(ExperimentInput input, string arm, string holder)
     {
         input.Verb.Output.WriteLine($"{arm}: already running ({holder})");
@@ -295,16 +327,17 @@ internal static class RunAllVerb
     }
 
     /// <summary>One arm started; whatever it comes to is that arm's line and code, and the next arm is still tried.</summary>
-    private static int Started(Probed probed, IDetachedLauncher launcher, string arm, List<string> started)
+    private static int Started(Probed probed, IDetachedLauncher launcher, string arm, Dictionary<string, long> started)
     {
         var input = probed.Equipped.Placed.Input;
         try
         {
             var arguments = new[] { "run-arm", arm, "--experiment", input.Root.Root };
             var resume = Resumed(probed.Equipped.Placed, arm);
+            var stamp = PidStamp(input, arm);
             return launcher.Start(probed.Equipped.Module, arguments, input.Root.PidLog(arm), input.Verb.Environment, input.Root.Root) switch
             {
-                DetachedStart.Started accepted => Said(input, arm, accepted, resume, started),
+                DetachedStart.Started accepted => Said(input, arm, accepted, resume, started, stamp),
                 DetachedStart.Failed failed => Refused(input, arm, failed.ExitCode, failed.Why),
                 _ => throw new InvalidOperationException("unreachable"),
             };
@@ -315,9 +348,9 @@ internal static class RunAllVerb
         }
     }
 
-    private static int Said(ExperimentInput input, string arm, DetachedStart.Started accepted, bool resume, List<string> started)
+    private static int Said(ExperimentInput input, string arm, DetachedStart.Started accepted, bool resume, Dictionary<string, long> started, long stamp)
     {
-        started.Add(arm);
+        started[arm] = stamp;
         input.Verb.Output.WriteLine($"{arm}: started — its runner writes pids/{arm}.pid{(resume ? ResumeWords : string.Empty)}");
         if (accepted.Note.Length > 0)
         {

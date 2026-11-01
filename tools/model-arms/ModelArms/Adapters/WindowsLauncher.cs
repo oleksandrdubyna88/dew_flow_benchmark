@@ -10,6 +10,9 @@ namespace ModelArms.Adapters;
 /// </para></summary>
 internal sealed class WindowsLauncher : IDetachedLauncher
 {
+    /// <summary>The log is NOT written: <c>Process.Start</c> can give a child a file as stdout only by redirecting through a pipe the starter must read, which would tie the runner to <c>run-all</c> (the failure the POSIX road's planted run showed), and a shell string (<c>&gt;&gt; log</c>) is forbidden. Not observed — no Windows host here.</summary>
+    public bool WritesLog => false;
+
     public DetachedStart Start(string executable, IReadOnlyList<string> arguments, string log, IReadOnlyDictionary<string, string> environment, string workingDirectory)
     {
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = workingDirectory };

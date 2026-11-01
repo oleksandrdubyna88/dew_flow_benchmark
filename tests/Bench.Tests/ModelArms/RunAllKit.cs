@@ -19,6 +19,9 @@ internal sealed record RunAllRun(int Code, string Output, string Error);
 /// <summary>A launcher that records every start it is asked for and starts nothing: the in-process rows' stand-in for <c>SetsidLauncher</c>. <see cref="Seen"/> is called with each start, so a test can look at what the verb had PRINTED when it was asked.</summary>
 internal sealed class RecordingLauncher(Action<string>? seen = null) : IDetachedLauncher
 {
+    /// <summary>What the launcher says about keeping the log (the port's default is true).</summary>
+    public bool WritesLog { get; init; } = true;
+
     public List<(string Executable, IReadOnlyList<string> Arguments, string Log, IReadOnlyDictionary<string, string> Environment, string WorkingDirectory)> Starts { get; } = [];
 
     public DetachedStart Start(string executable, IReadOnlyList<string> arguments, string log, IReadOnlyDictionary<string, string> environment, string workingDirectory)
@@ -92,8 +95,9 @@ internal sealed class RunAllKit : IAsyncDisposable
     /// <summary>The fake's script with <paramref name="more"/> added (<c>transcripts: true</c> and the success replay stay).</summary>
     public void Script(JsonObject more)
     {
-        more["stdoutFile"] ??= ModelArmsFixtures.Path("result-success.jsonl");
-        Fake.Rewrite(ExperimentRoot.Script(more));
+        var script = new JsonObject(more.Select(property => KeyValuePair.Create(property.Key, property.Value?.DeepClone())));
+        script["stdoutFile"] ??= ModelArmsFixtures.Path("result-success.jsonl");
+        Fake.Rewrite(ExperimentRoot.Script(script));
     }
 
     /// <summary><c>run-all &lt;arms&gt; --experiment &lt;root&gt;</c> as the console's own binary, a separate process run to its end.</summary>
