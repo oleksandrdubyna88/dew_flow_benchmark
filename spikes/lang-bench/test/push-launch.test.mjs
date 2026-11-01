@@ -70,3 +70,32 @@ test('The_batch_read_refuses_an_object_beyond_the_per_object_ceiling_and_an_aggr
   assert.equal(total.ok, false);
   assert.match(total.reason, /more than 1000 bytes/);
 });
+
+test('Bytes_mode_neither_decodes_stdout_to_text_nor_joins_the_buffer_twice', async () => {
+  const BIG = 2_000_000;
+  const realConcat = Buffer.concat;
+  const realToString = Buffer.prototype.toString;
+  const bigConcats = [];
+  const bigDecodes = [];
+  Buffer.concat = (list, total) => { const out = realConcat.call(Buffer, list, total); if (out.length >= BIG) bigConcats.push(out.length); return out; };
+  Buffer.prototype.toString = function toString(encoding, ...rest) { if (this.length >= BIG && (encoding === undefined || encoding === 'utf8')) bigDecodes.push(this.length); return realToString.call(this, encoding, ...rest); };
+  let bytes;
+  let text;
+  const counts = {};
+  try {
+    bytes = await runBounded('sh', ['-c', `head -c ${BIG} /dev/zero`], { bytes: true, maxBytes: BIG + 10, timeoutMs: 20_000 });
+    counts.bytes = { concats: bigConcats.length, decodes: bigDecodes.length };
+    bigConcats.length = 0; bigDecodes.length = 0;
+    text = await runBounded('sh', ['-c', `head -c ${BIG} /dev/zero`], { maxBytes: BIG + 10, timeoutMs: 20_000 });
+    counts.text = { concats: bigConcats.length, decodes: bigDecodes.length };
+  } finally {
+    Buffer.concat = realConcat;
+    Buffer.prototype.toString = realToString;
+  }
+  assert.equal(bytes.value.stdoutBytes.length, BIG);
+  assert.deepEqual(counts.bytes, { concats: 1, decodes: 0 }, 'one join of the chunks, no text decode');
+  assert.equal(bytes.value.stdout, '', 'the text field is empty in bytes mode: nobody reads both');
+  assert.equal(text.value.stdout.length, BIG);
+  assert.deepEqual(counts.text, { concats: 1, decodes: 1 }, 'text mode is unchanged: one join, one decode');
+  assert.equal('stdoutBytes' in text.value, false);
+});

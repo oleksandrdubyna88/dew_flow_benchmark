@@ -32,8 +32,8 @@ const killGroup = child => killTree(child.pid, { log: line => process.stderr.wri
 /**
  * Run `exe args` and resolve with { code, signal, stdout, stderr, timedOut, truncated, ms }. A launch failure is
  * { ok: false, reason }. `timeoutMs` is required: nothing here runs unbounded.
- * `input` (a string or Buffer) is written to the child's stdin, which is then closed. `bytes: true` adds `stdoutBytes`, the child's stdout
- * untouched (`stdout` is the same bytes decoded as UTF-8): a blob or an archive is not always text.
+ * `input` (a string or Buffer) is written to the child's stdin, which is then closed. `bytes: true` returns `stdoutBytes`, the child's stdout
+ * untouched, joined once and never decoded (`stdout` is then ''): a blob or an archive is not always text, and a large one must not be held twice.
  */
 export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES, input, bytes = false } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(fail('runBounded needs a positive timeoutMs'));
@@ -54,7 +54,7 @@ export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTE
       clearTimeout(timer);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve(ok({ code, signal, stdout: out.text(), ...(bytes ? { stdoutBytes: out.bytes() } : {}), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started }));
+      resolve(ok({ code, signal, ...(bytes ? { stdout: '', stdoutBytes: out.bytes() } : { stdout: out.text() }), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started }));
     };
     const timer = setTimeout(() => {
       timedOut = true;
