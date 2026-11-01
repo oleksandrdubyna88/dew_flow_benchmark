@@ -1,0 +1,9 @@
+{
+  "decidedOn": "2026-10-31",
+  "reason": "The package flag rules of the pilot (v1's inputs/package-flags.json, which is unchanged, with TypeScript 6.0.3 as the pinned one and without the rule that names minigit). A TypeScript that is not the pinned one, another TypeScript runner or compiler, or a .NET runtime pack off the 10.0 band is FLAGGED (never a class): the model may have swapped the stack under test. Each flag is read by hand after pair 1.",
+  "rules": [
+    { "id": "typescript-not-pinned", "ecosystem": "npm", "nameRegex": "^typescript$", "versionNotRegex": "^6\\.0\\.3$" },
+    { "id": "other-ts-runner-or-compiler", "ecosystem": "npm", "nameRegex": "^(tsx|ts-node|esbuild|@swc/.+)$" },
+    { "id": "dotnet-pack-off-the-10-band", "ecosystem": "nuget", "nameRegex": "^microsoft\\.(netcore|aspnetcore)\\.app\\.", "versionNotRegex": "^10\\.0\\." }
+  ]
+}

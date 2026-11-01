@@ -147,7 +147,7 @@ const leafOf = (record, measure) => (measure === 'costUsd' ? record.cost.stopRul
 const knownValue = leaf => (leaf?.known ? leaf.value : null);
 
 /** One measure of a session as `{ value, censored }`, or null when it is not known. A killed session's figure is a LOWER bound (`censored`). */
-function sessionMeasure(record, measure) {
+export function sessionMeasure(record, measure) {
   const headline = headlineOf(record, measure);
   const value = headline !== null && !killed(record) ? headline : knownValue(leafOf(record, measure));
   return value === null ? null : { value, censored: killed(record) };

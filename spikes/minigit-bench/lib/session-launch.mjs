@@ -140,7 +140,7 @@ function supervise({ plan, d, stack, rec, signal }) {
   if (!existsSync(plan.claudeBinary)) throw new Error(`the claude binary ${plan.claudeBinary} does not exist`);
   const claude = [plan.claudeBinary, ...claudeArgv({ layout, cap: plan.capUsd, tools: plan.tools })];
   const argv = agentBoxArgv({ layout, arm: plan.arm, toolchains: plan.toolchains, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, operatorHome: plan.operatorHome, command: claude });
-  const env = agentEnv({ layout, dummyToken: plan.dummy, cellId: plan.cellId, nodeDir: plan.nodeDir, tsDir: plan.tsDir, extra: plan.envExtra });
+  const env = agentEnv({ layout, dummyToken: plan.dummy, cellId: plan.cellId, nodeDir: plan.nodeDir, tsDir: plan.tsDir, extra: plan.envExtra, locale: plan.locale });
   writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: argv, claude, envKeys: Object.keys(env).sort(), settingsSha256: rec.settingsSha256, mcpSha256: rec.mcpSha256 }, null, 2)}\n`);
   const spawnedAtMs = d.now();
   const clock = mapClock({ hrAtSpawn: performance.now(), epochAtSpawn: spawnedAtMs });
