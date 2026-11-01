@@ -1,0 +1,3 @@
+# Compiled Python is never committed here: a cache in runner/ could run in place of the pinned source (the pin refuses it too).
+__pycache__/
+*.pyc

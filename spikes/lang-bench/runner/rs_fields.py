@@ -1,0 +1,370 @@
+"""rs_fields: the normalised fields of FORMAT v2 5.3 and the matcher of one expected byte string against an actual one.
+
+A string is a list of parts (Lit, Var, Field). Variables are substituted first; a field then matches the SHORTEST run of bytes that lets
+the rest of the string match (backtracking, with a memo of failed (part, position) pairs so it cannot go exponential), and a field
+may bind what it matched (V6). Numbers inside a `num` field are compared as exact fractions, never as floats.
+"""
+import re
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from fractions import Fraction
+from typing import Any, NamedTuple
+
+import rs_lex as lex
+from rs_lex import Field, Lit, Var
+
+MISSING = object()
+MAX_PARTS = 200
+MAX_STEPS = 500_000
+MAX_MAGNITUDE = 100_000
+MAX_CHARACTERS = 200_000
+TOO_LARGE_NOTE = "a number too large to compare exactly"
+UTC = timezone.utc
+
+FIELD_PATTERNS = {
+    "int": rb"-?(0|[1-9][0-9]*)",
+    "uint": rb"0|[1-9][0-9]*",
+    "hex": rb"[0-9a-f]+",
+    "uuid": rb"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
+    "token": rb"[A-Za-z0-9._~-]+",
+    "ts": rb"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z",
+    "num": rb"-?[0-9]+(\.[0-9]+)?",
+}
+FIELD_RX = {kind: re.compile(pattern) for kind, pattern in FIELD_PATTERNS.items()}
+BASE_KIND = {"ts~": "ts", "ts.": "ts", "ts.~": "ts"}
+TS_LENGTH = (20, 30)
+PURE_CLASS = frozenset({"hex", "token"})
+TS_PARTS = re.compile(rb"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?Z\Z")
+
+
+class Bound(NamedTuple):
+    """What a variable holds: its bytes, and for a value that came from JSON also the typed JSON value."""
+    raw: bytes
+    json: Any = MISSING
+
+
+class TemplateMatch(NamedTuple):
+    ok: bool
+    binds: tuple = ()
+    furthest: int = 0
+    note: str = ""
+
+
+def parse_ts(run):
+    """A UTC datetime from `YYYY-MM-DDThh:mm:ss[.fraction]Z`, or None when the text is not a real time."""
+    m = TS_PARTS.match(run)
+    if m is None:
+        return None
+    try:
+        return datetime(*_ts_numbers(m), tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _ts_numbers(m):
+    numbers = [int(g) for g in m.groups()[:6]]
+    micro = int((m.group(7) or b"0").ljust(6, b"0")[:6])
+    return (*numbers, micro)
+
+
+def fraction_of(value):
+    """The exact Fraction of a Decimal (built from the Decimal itself, never through a string, so no digit limit applies), or None when the
+    number is too large to compare exactly: a magnitude beyond 10^100000 or below 10^-100000, or more than 200,000 characters. A number
+    with trailing zeros after the point (`1.` and a thousand zeros) is the number without them: only the magnitude counts, not the exponent."""
+    if not value.is_finite() or abs(value.adjusted()) > MAX_MAGNITUDE or len(str(value)) > MAX_CHARACTERS:
+        return None
+    return Fraction(value)
+
+
+def comparable(*values):
+    """True when every Decimal can be compared exactly."""
+    return all(fraction_of(v) is not None for v in values)
+
+
+def within_tolerance(value, centre, tolerance):
+    """True when |value - centre| <= tolerance, all three exact Decimals; False when one is too large to compare exactly."""
+    parts = [fraction_of(x) for x in (value, centre, tolerance)]
+    return None not in parts and abs(parts[0] - parts[1]) <= parts[2]
+
+
+def _numeric_ok(field, run, clock):
+    return within_tolerance(Decimal(run.decode("ascii")), field.args[0], field.args[1])
+
+
+def base_kind(field):
+    """The kind whose pattern a field uses: `ts.<d>` and the windowed times are times."""
+    return BASE_KIND.get(field.kind, field.kind)
+
+
+def ts_digits(field):
+    """The exact fraction digit count of a `ts.<d>` field (0 to 9), or None for a time of any count."""
+    return field.args[0] if field.kind in ("ts.", "ts.~") else None
+
+
+def ts_window(field):
+    """The window in ms of a windowed time field, or None."""
+    index = {"ts~": 0, "ts.~": 1}.get(field.kind)
+    return None if index is None else field.args[index]
+
+
+def _digits_ok(field, run):
+    digits = ts_digits(field)
+    return digits is None or len(run) == 20 + (digits + 1 if digits else 0)
+
+
+def _ts_ok(field, run, clock):
+    window = ts_window(field)
+    ts = parse_ts(run)
+    return ts is not None and _digits_ok(field, run) and (window is None or abs(ts - clock) <= timedelta(milliseconds=window))
+
+
+_EXTRA_CHECKS = {"ts": _ts_ok, "num": _numeric_ok}
+
+
+def field_accepts(field, run, clock):
+    """Does `run` (bytes) match the field: its pattern in full, and for a time a real one with its digit count and window, for `num` the tolerance."""
+    return field_accepts_at(field, run, 0, len(run), clock)
+
+
+def field_accepts_at(field, data, pos, end, clock):
+    """The same for `data[pos:end]`, matched in place: no slice of the data is made unless the field has more to check than its pattern."""
+    kind = base_kind(field)
+    if FIELD_RX[kind].fullmatch(data, pos, end) is None:
+        return False
+    extra = _EXTRA_CHECKS.get(kind)
+    return True if extra is None else extra(field, data[pos:end], clock)
+
+
+def length_bounds(field, room):
+    """The fewest and most bytes a field can match: fixed for a uuid and for a time with a digit count, `room` at most otherwise."""
+    if field.kind == "uuid":
+        return 36, 36
+    return _time_bounds(field) if base_kind(field) == "ts" else (1, room)
+
+
+def _time_bounds(field):
+    digits = ts_digits(field)
+    exact = 20 + (digits + 1 if digits else 0)
+    return TS_LENGTH if digits is None else (exact, exact)
+
+
+def _field_args(field):
+    digit = "" if ts_digits(field) is None else f".{ts_digits(field)}"
+    window = "" if ts_window(field) is None else f"~{ts_window(field)}ms"
+    return {"ts": lambda: digit + window, "num": lambda: f" {field.args[0]} {field.args[1]}"}.get(base_kind(field), lambda: "")()
+
+
+def field_text(field):
+    """A field as it is written in a transcript: `${:uint}`, `${:ts.3~10000ms}`, `${:num 1.5 0.25=x}`."""
+    bind = "=" + "".join(p.data.decode("ascii") if isinstance(p, Lit) else "${" + p.name + "}" for p in field.bind) if field.bind else ""
+    return "${:" + base_kind(field) + _field_args(field) + bind + "}"
+
+
+# ---- variables ------------------------------------------------------------------------------------------------------------------
+
+def _item_parts(item, variables):
+    out = []
+    for part in item.parts:
+        out.append(Lit(variables[part.name].raw) if isinstance(part, Var) else part)
+    return out
+
+
+def _joinable(merged, part):
+    return bool(merged) and isinstance(part, Lit) and isinstance(merged[-1], Lit)
+
+
+def _merge(parts):
+    merged = []
+    for part in parts:
+        if _joinable(merged, part):
+            merged[-1] = Lit(merged[-1].data + part.data)
+        else:
+            merged.append(part)
+    return merged
+
+
+def _repeated(parts, count):
+    single = _merge(parts)
+    if len(single) == 1 and isinstance(single[0], Lit):
+        return [Lit(single[0].data * count)]
+    return single * count
+
+
+def _first_missing(names, variables):
+    return next((n for n in names if n not in variables), None)
+
+
+def _size_estimate(expr):
+    return sum(1 if all(isinstance(p, Lit) for p in i.parts) else len(i.parts) * i.count for i in expr.items)
+
+
+def _problem(expr, variables):
+    absent = _first_missing(lex.vars_of(expr), variables)
+    if absent is not None:
+        return f"variable '{absent}' is not bound"
+    return "the string expands to too many parts" if _size_estimate(expr) > MAX_PARTS else None
+
+
+def _expanded(expr, variables):
+    return [p for item in expr.items for p in _repeated(_item_parts(item, variables), item.count)]
+
+
+def resolve(expr, variables):
+    """`(parts, None)` with every variable replaced by its bytes and every repeat written out, or `(None, message)`."""
+    problem = _problem(expr, variables)
+    return (None, problem) if problem else (_merge(_expanded(expr, variables)), None)
+
+
+def _var_names(parts):
+    return [p.name for p in parts if isinstance(p, Var)]
+
+
+def _substituted(part, variables):
+    return Lit(variables[part.name].raw) if isinstance(part, Var) else part
+
+
+def resolve_template(parts, variables):
+    """The same for a list of parts that is already flat (a JSON string's template)."""
+    absent = _first_missing(_var_names(parts), variables)
+    if absent is not None:
+        return None, f"variable '{absent}' is not bound"
+    return _merge([_substituted(p, variables) for p in parts]), None
+
+
+def bind_name(template, variables):
+    """The name a field binds, with a repeat variable filled in: `r${i}` -> `r2`."""
+    return "".join(p.data.decode("ascii") if isinstance(p, Lit) else variables[p.name].raw.decode("ascii") for p in template)
+
+
+# ---- the matcher ------------------------------------------------------------------------------------------------------------------
+
+def _common_prefix(a, b):
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n
+
+
+class _Search:
+    def __init__(self, parts, data, variables, clock):
+        self.parts, self.data, self.variables, self.clock = parts, data, variables, clock
+        self.failed, self.furthest, self.steps, self.note = set(), 0, 0, ""
+        self.spans, self.missing = {}, {}
+
+    def run(self, i, pos):
+        """The binds of a match of parts[i:] against data[pos:] to its end, or None."""
+        self.steps += 1
+        if self._exhausted(i, pos):
+            return None
+        found = self._step(i, pos)
+        return found if found is not None else self._fail(i, pos)
+
+    def _exhausted(self, i, pos):
+        return (i, pos) in self.failed or self.steps > MAX_STEPS
+
+    def _step(self, i, pos):
+        if i == len(self.parts):
+            return [] if pos == len(self.data) else None
+        part = self.parts[i]
+        return self._literal(i, pos, part) if isinstance(part, Lit) else self._field(i, pos, part)
+
+    def _fail(self, i, pos):
+        self.failed.add((i, pos))
+        self.furthest = max(self.furthest, pos)
+        return None
+
+    def _literal(self, i, pos, lit):
+        if self.data.startswith(lit.data, pos):
+            return self.run(i + 1, pos + len(lit.data))
+        self.furthest = max(self.furthest, pos + _common_prefix(lit.data, self.data[pos:pos + len(lit.data)]))
+        return None
+
+    def _field(self, i, pos, field):
+        for end in self._ends(i, pos, field):
+            self.steps += 1
+            if not self._accepts(field, pos, end):
+                continue
+            rest = self.run(i + 1, end)
+            if rest is not None:
+                return self._bind(field, self.data[pos:end]) + rest
+        self.furthest = max(self.furthest, pos + self._reach(field, pos))
+        self._note_size(field, pos)
+        return None
+
+    def _note_size(self, field, pos):
+        """A number field that failed on a number too large to compare exactly says so, instead of looking like a plain mismatch."""
+        if field.kind == "num" and self._number_too_large(pos):
+            self.note = TOO_LARGE_NOTE
+
+    def _number_too_large(self, pos):
+        m = FIELD_RX["num"].match(self.data, pos)
+        return m is not None and fraction_of(Decimal(m.group().decode("ascii"))) is None
+
+    def _bind(self, field, run):
+        return [(bind_name(field.bind, self.variables), Bound(run))] if field.bind else []
+
+    def _accepts(self, field, pos, end):
+        """A class field (hex, token) takes every non-empty prefix of its run; any other field is matched in place."""
+        if base_kind(field) in PURE_CLASS:
+            return 0 < end - pos <= self._reach(field, pos)
+        return field_accepts_at(field, self.data, pos, end, self.clock)
+
+    def _known_stop(self, kind, pos):
+        start, stop = self.spans.get(kind, (0, 0))
+        return stop if kind in PURE_CLASS and start <= pos < stop else None
+
+    def _reach(self, field, pos):
+        """How far the pattern of `field` runs from `pos`; for a class field the run found once serves every start inside it."""
+        kind = base_kind(field)
+        known = self._known_stop(kind, pos)
+        if known is not None:
+            return known - pos
+        m = FIELD_RX[kind].match(self.data, pos)
+        end = pos if m is None else m.end()
+        if kind in PURE_CLASS:
+            self.spans[kind] = (pos, end)
+        return end - pos
+
+    def _find(self, literal, start):
+        """`data.find(literal, start)`, remembering that a literal missing from one start is missing from every later one."""
+        if start >= self.missing.get(literal, len(self.data) + 1):
+            return -1
+        at = self.data.find(literal, start)
+        if at == -1:
+            self.missing[literal] = start
+        return at
+
+    def _literal_missing_after(self, i, pos):
+        """Is the first literal after part `i` absent from the data at or after `pos`? Then nothing can match from here."""
+        later = next((p for p in self.parts[i + 1:] if isinstance(p, Lit)), None)
+        return later is not None and self._find(later.data, pos) == -1
+
+    def _ends(self, i, pos, field):
+        """The candidate end positions of a field starting at `pos`, shortest first."""
+        low, high = length_bounds(field, len(self.data) - pos)
+        if self._literal_missing_after(i, pos + low):
+            return []
+        return self._ends_before(self.parts[i + 1] if i + 1 < len(self.parts) else None, pos, low, min(high, self._reach(field, pos)))
+
+    def _ends_before(self, nxt, pos, low, high):
+        if nxt is None:
+            return [len(self.data)] if low <= len(self.data) - pos <= high else []
+        if isinstance(nxt, Lit):
+            return self._literal_ends(pos, nxt.data, low, high)
+        return range(pos + low, min(len(self.data), pos + high) + 1)
+
+    def _literal_ends(self, pos, literal, low, high):
+        ends, at = [], self._find(literal, pos + low)
+        while at != -1 and at - pos <= high:
+            ends.append(at)
+            at = self._find(literal, at + 1)
+        return ends
+
+
+def match_template(parts, data, variables, clock):
+    """Does the byte string `data` match `parts` (Lit and Field, variables already substituted)? -> TemplateMatch."""
+    search = _Search(parts, data, variables, clock)
+    binds = search.run(0, 0)
+    if search.steps > MAX_STEPS:
+        return TemplateMatch(False, (), search.furthest, "the match was abandoned as too complex")
+    return TemplateMatch(True, tuple(binds)) if binds is not None else TemplateMatch(False, (), search.furthest, search.note)

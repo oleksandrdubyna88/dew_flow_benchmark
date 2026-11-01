@@ -1,0 +1,38 @@
+scenario 2
+# Illustrative only: a toy order endpoint with idempotency keys. No task of
+# this repository.
+default within 2s
+start ready port within 10s
+connect a http
+connect b http
+
+# 1. Two clients race on one key: both requests are released at one instant.
+together
+  request a POST "/orders"
+    header "content-type" "application/json"
+    header "idempotency-key" "toy-key-1"
+    body json {"item":"tea","qty":2}
+  request b POST "/orders"
+    header "content-type" "application/json"
+    header "idempotency-key" "toy-key-1"
+    body json {"item":"tea","qty":2}
+end
+recv a capture order json $.id as uuid capture at json $.at as ts
+recv b
+
+# 2. The captured id is reused in a later request.
+request a GET "/orders/${order}"
+recv a
+
+# 3. A second key makes a second order; the listing holds exactly two.
+request b POST "/orders"
+  header "content-type" "application/json"
+  header "idempotency-key" "toy-key-2"
+  body json {"item":"cake","qty":1}
+recv b capture other json $.id as uuid
+request a GET "/orders"
+recv a
+
+# 4. The stop.
+signal TERM
+wait-exit within 5s
