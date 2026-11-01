@@ -33,7 +33,9 @@ plan rather than holding the whole document hostage.
 ## Related documents
 
 - [../research/README.md](../research/README.md) — what belongs in `research/`, and what is there now.
-  Most recently promoted: [PLAN_hardware_sampler.md](../research/PLAN_hardware_sampler.md) and
+  Most recently promoted: [PLAN_lang_explore_task1.md](../research/PLAN_lang_explore_task1.md), the exploratory
+  pilot of language-comparison task 1, built and run on 2026-11-01 (results in `research/lang-v2/`). Before it:
+  [PLAN_hardware_sampler.md](../research/PLAN_hardware_sampler.md) and
   [PLAN_bench_console.md](../research/PLAN_bench_console.md), together, because the second closed the
   first's last item without either plan noticing (2026-08-23). The console shipped whole — its DoD was met
   on 2026-08-20 and its one deviation, §5's submodule, is extracted as

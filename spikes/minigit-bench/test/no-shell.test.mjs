@@ -1,12 +1,12 @@
 // No spike launcher can reach a shell interpreter (code-scanning alert #8). A scan over every non-test module of both spikes.
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { spikeDir, tmpDir } from './helpers.mjs';
 import { ALLOWED_CHILD_PROCESS, shellRoutes } from './shell-routes.mjs';
 
-const SPIKES = [spikeDir, path.resolve(spikeDir, '..', 'policy-ab-quick')];
+const SPIKES = [spikeDir, path.resolve(spikeDir, '..', 'policy-ab-quick'), path.resolve(spikeDir, '..', 'lang-explore')];
 const SKIPPED_DIRS = new Set(['test', 'node_modules', '.git']);
 /** Every non-test `.mjs` under `root`, as absolute paths. */
 const modulesUnder = root => readdirSync(root, { withFileTypes: true }).flatMap(e => {
@@ -19,6 +19,12 @@ test('No_spike_launcher_can_reach_a_shell_interpreter', () => {
   assert.ok(files.length >= 50, `the scan covers both spikes' modules (${files.length})`);
   const hits = files.flatMap(f => shellRoutes(readFileSync(f, 'utf8')).map(h => `${path.relative(path.resolve(spikeDir, '..', '..'), f)}:${h.line} ${h.rule}`));
   assert.deepEqual(hits, []);
+});
+
+test('The_scan_covers_the_exploratory_pilots_spike_as_well', () => {
+  const pilotModule = path.resolve(spikeDir, '..', 'lang-explore', 'lib', 'paths.mjs');
+  assert.ok(existsSync(pilotModule), 'the pilot module the scan must find exists');
+  assert.ok(SPIKES.flatMap(modulesUnder).includes(pilotModule), 'a module of spikes/lang-explore is among the scanned files, so a shell route written there fails the scan above');
 });
 
 test('The_shell_scan_still_finds_a_planted_route', () => {

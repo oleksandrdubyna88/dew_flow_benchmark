@@ -1,0 +1,101 @@
+{
+  "node": {
+    "treeSha256": "89703850a4b8797232c804ea224df75f728d569d4cd566b3b3e074ea14c38c4b",
+    "parts": {
+      "npm": "8102ac90d596bc0e9cac1f3e4f8beb0dab65947f2d0fee271f9f69578ea6c6d5"
+    },
+    "sizeBytes": 32378210,
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "@types/node",
+        "version": "26.6.6"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "typescript",
+        "version": "6.0.3"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "undici-types",
+        "version": "8.9.0"
+      }
+    ],
+    "resolved": {
+      "TYPES_NODE": "26.6.6"
+    },
+    "steps": [
+      {
+        "argv": [
+          "node",
+          "--version"
+        ],
+        "stdout": "v26.12.1"
+      },
+      {
+        "argv": [
+          "npm",
+          "init",
+          "-y"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "npm",
+          "install",
+          "--no-audit",
+          "--no-fund",
+          "typescript@6.0.3",
+          "@types/node@26.6.6"
+        ],
+        "stdout": null
+      }
+    ],
+    "madeOn": "2026-10-31"
+  },
+  "csharp": {
+    "treeSha256": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8",
+    "parts": {
+      "nuget": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dotnet": "b07e994ceef8c2f36ff224f4b782c189bb043bcfbd55cf4fc0829062839b4e47"
+    },
+    "sizeBytes": 1025,
+    "packages": [],
+    "resolved": {},
+    "steps": [
+      {
+        "argv": [
+          "dotnet",
+          "--version"
+        ],
+        "stdout": "10.0.114"
+      },
+      {
+        "argv": [
+          "dotnet",
+          "new",
+          "console",
+          "--force",
+          "--output",
+          ".",
+          "--name",
+          "snapshotapp"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "dotnet",
+          "build",
+          "--nologo"
+        ],
+        "stdout": null
+      }
+    ],
+    "rehashedOn": "2026-10-31",
+    "rehashedTreeSha256": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8",
+    "madeOn": "2026-10-30"
+  }
+}
