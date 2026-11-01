@@ -22,11 +22,17 @@ def _augment(r, cols, fits, owner, seen):
     return False
 
 
+def fit_matrix(rows, cols, fits):
+    """`fits(r, c)` for every pair, evaluated once each: the augmenting search revisits pairs, and `fits` may be a whole entry comparison."""
+    return [[bool(fits(r, c)) for c in range(cols)] for r in range(rows)]
+
+
 def assign(rows, cols, fits):
     """A largest set of (row, col) pairs with `fits(row, col)` true, no row or column twice: `owner[col]` is the row or None."""
+    matrix = fit_matrix(rows, cols, fits)
     owner = [None] * cols
     for r in range(rows):
-        _augment(r, cols, fits, owner, set())
+        _augment(r, cols, lambda row, col: matrix[row][col], owner, set())
     return owner
 
 
