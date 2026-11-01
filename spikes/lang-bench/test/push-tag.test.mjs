@@ -76,3 +76,61 @@ test('The_command_checks_a_tag_with_the_same_aids_and_exits_with_the_same_codes'
   assert.match(r.stdout, /^secrets +FAIL/m);
   assert.equal(spawnSync(process.execPath, [CLI, '--tag', 'v-secret', '--branch', 'x', '--repo', repo, '--aid', aid], { encoding: 'utf8' }).status, 4, 'two modes at once');
 });
+
+/** The bare repository behind `repo`'s origin. */
+const bareOf = repo => git(repo, 'remote', 'get-url', 'origin');
+
+test('A_tag_on_a_commit_whose_remote_branch_was_deleted_is_refused_although_the_local_tracking_ref_still_holds_it', async t => {
+  const { repo } = world(t);
+  const bare = bareOf(repo);
+  git(repo, 'push', '-q', 'origin', 'topic');
+  const pushed = git(repo, 'rev-parse', 'topic');
+  git(repo, 'tag', 'v-pushed', pushed);
+  assert.ok(git(repo, 'rev-parse', 'refs/remotes/origin/topic'), 'the push left a local tracking ref');
+  assert.equal((await checkTag({ repo, tag: 'v-pushed', inputs })).exit, EXIT.PASS, 'on a live remote branch: fine');
+  git(bare, 'branch', '-q', '-D', 'topic'); // the remote branch is deleted; the local origin/topic stays
+  assert.equal(git(repo, 'rev-parse', 'refs/remotes/origin/topic'), pushed, 'the stale tracking ref still says the commit is published');
+  const result = await checkTag({ repo, tag: 'v-pushed', inputs });
+  assert.equal(result.exit, EXIT.REFUSED, formatReport(result));
+  assert.deepEqual(checkOf(result, 'tag-target').findings.map(f => f.commit), [pushed]);
+});
+
+test('When_the_remote_head_moved_on_to_commits_not_fetched_even_a_tag_at_the_old_head_cannot_be_decided_and_says_fetch_first', async t => {
+  const { repo, published } = world(t);
+  const bare = bareOf(repo);
+  const other = path.join(path.dirname(repo), 'other-clone');
+  git(path.dirname(repo), 'clone', '-q', bare, other);
+  commit(other, 'feat: the remote moved on', { 'z.txt': 'z\n' });
+  git(other, 'push', '-q', 'origin', 'HEAD:main');
+  git(repo, 'tag', 'v-old-head', published);
+  const stale = await checkTag({ repo, tag: 'v-old-head', inputs });
+  assert.equal(stale.exit, EXIT.REFUSED, 'the local origin/main still says published, but the remote head is a commit this clone does not have');
+  assert.match(checkOf(stale, 'tag-target').findings[0].what, /fetch first/);
+  git(repo, 'fetch', '-q', 'origin');
+  assert.equal((await checkTag({ repo, tag: 'v-old-head', inputs })).exit, EXIT.PASS, 'after the user fetches, the old head is an ancestor of the live one');
+});
+
+test('When_a_remote_commit_is_not_present_locally_and_nothing_present_holds_the_tag_the_check_says_fetch_first', async t => {
+  const { repo, unpublished } = world(t);
+  const bare = bareOf(repo);
+  const other = path.join(path.dirname(repo), 'other-clone2');
+  git(path.dirname(repo), 'clone', '-q', bare, other);
+  commit(other, 'feat: a remote branch this clone has never fetched', { 'y.txt': 'y\n' });
+  git(other, 'push', '-q', 'origin', 'HEAD:refs/heads/unfetched');
+  git(repo, 'tag', 'v-unpublished', unpublished);
+  const result = await checkTag({ repo, tag: 'v-unpublished', inputs });
+  assert.equal(result.exit, EXIT.REFUSED);
+  const [finding] = checkOf(result, 'tag-target').findings;
+  assert.match(finding.what, /fetch first/);
+  assert.match(finding.what, /not present locally/);
+  assert.equal(git(repo, 'for-each-ref', 'refs/remotes/origin/unfetched'), '', 'the check never fetched on the user\'s behalf');
+});
+
+test('A_remote_that_cannot_be_asked_is_exit_3_never_a_pass', async t => {
+  const { repo, published } = world(t);
+  git(repo, 'tag', 'v-p', published);
+  git(repo, 'remote', 'set-url', 'origin', path.join(path.dirname(repo), 'no-such-remote.git'));
+  const result = await checkTag({ repo, tag: 'v-p', inputs });
+  assert.equal(result.exit, EXIT.ENVIRONMENT);
+  assert.match(result.error, /ls-remote/);
+});

@@ -157,7 +157,9 @@ of at most 500 objects with the 16 MiB and 256 MiB ceilings kept across the chun
 
 **Tags.** `push-check.mjs --tag <name> --repo <task repo>` is what the freeze procedure runs BEFORE it pushes a tag (a tag is pushed alone, the hook refuses a ref outside `refs/heads`,
 and no branch check reads a tag): an annotated tag's message gets the task-repository body rules (leak, secrets, needles, family names; never printed), and the commit the tag points at
-(annotated or lightweight) must already be on a remote ref, so it was checked when its branch was pushed - otherwise `tag-target` refuses it, naming the commit. Then the tag is pushed with
+(annotated or lightweight) must be an ancestor of, or equal to, a commit the remote has NOW - `git ls-remote --heads --tags origin`, never the local tracking refs, which go stale when the remote
+moves or deletes a branch - so it was checked when its branch was pushed; otherwise `tag-target` refuses it, naming the commit. A current remote commit this clone lacks cannot be tested: when nothing
+present holds the tag's commit and some are absent, the finding says "fetch first" (the check never fetches for you); a failing `ls-remote` is exit 3. Then the tag is pushed with
 `git push --no-verify` on the team lead's word.
 
 **Residuals the reviewers accepted (named so nobody mistakes them for coverage).**
