@@ -15,6 +15,7 @@ class Interrupted(BaseException):
 
 
 def _on_signal(signum, frame):
+    signal.pthread_sigmask(signal.SIG_BLOCK, rl.STOPPING_SIGNALS)  # first, all at once: no second stopping signal gets in while the rest is set
     for other in rl.STOPPING_SIGNALS:  # the cleanup that follows must not be interrupted again
         signal.signal(other, signal.SIG_IGN)
     raise Interrupted(signum)

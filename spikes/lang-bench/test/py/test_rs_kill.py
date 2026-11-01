@@ -1,13 +1,19 @@
 """No group signal ever goes to a reaped leader (N8), an interrupt keeps its own exit (N9), and the group scan is cheap and cannot raise (D4, D6)."""
 import os
 import shutil
+import signal
 import subprocess
+import sys
+import tempfile
+import time
 import unittest
 from unittest import mock
 
 import runner_path  # noqa: F401
 import rs_exec as ex
+import rs_launch as rl
 import rs_olympiad as ro
+import rs_stop
 import rs_scope
 from box_support import ANSWER, STATUS_FD, Workspace, box_prefix, case, fake_box, fake_cgroup, sleepers, wait_until
 
@@ -90,6 +96,50 @@ class InterruptKeepsItsExitTests(unittest.TestCase):
                 ws.run(case(), prefix=box_prefix(fake_box(self), cgroup), status_fd=STATUS_FD, cgroup=cgroup)
 
 
+class StopSignalTests(unittest.TestCase):
+    """E4: the first thing the handler does is shut the door on every other stopping signal, all at once."""
+
+    def test_Inside_the_handler_every_stopping_signal_is_already_blocked_when_the_first_one_is_set_to_ignore(self):
+        masks = []
+        real = signal.signal
+
+        def recording(sig, handler):
+            masks.append(set(signal.pthread_sigmask(signal.SIG_BLOCK, [])))
+            return real(sig, handler)
+
+        before = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+        self.addCleanup(signal.pthread_sigmask, signal.SIG_SETMASK, before)
+        saved = {sig: signal.getsignal(sig) for sig in rl.STOPPING_SIGNALS}
+        self.addCleanup(lambda: [real(sig, handler) for sig, handler in saved.items()])
+        with mock.patch.object(signal, "signal", recording):
+            with self.assertRaises(rs_stop.Interrupted):
+                rs_stop._on_signal(signal.SIGTERM, None)
+        self.assertTrue(masks and set(rl.STOPPING_SIGNALS) <= masks[0], f"the first signal.signal call saw the mask {masks[:1]}")
+        self.assertEqual(len(masks), len(rl.STOPPING_SIGNALS))
+
+    def test_Two_stopping_signals_sent_back_to_back_run_the_teardown_once(self):
+        note = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "teardowns")
+        script = (
+            "import os, sys, time\n"
+            f"sys.path.insert(0, {os.path.dirname(os.path.abspath(rs_stop.__file__))!r})\n"
+            "import rs_launch as rl, rs_stop\n"
+            f"def teardown():\n    open({note!r}, 'a').write('x'); time.sleep(0.3)\n"
+            "rl.abandon_active = teardown\n"
+            "rs_stop.install_handlers()\n"
+            "print('ready', flush=True)\n"
+            "try:\n    time.sleep(30)\nexcept rs_stop.Interrupted as i:\n    rs_stop.stopped(i)\n"
+        )
+        proc = subprocess.Popen([sys.executable, "-I", "-B", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        self.assertEqual(proc.stdout.readline(), b"ready\n")
+        proc.send_signal(signal.SIGTERM)
+        proc.send_signal(signal.SIGINT)
+        proc.send_signal(signal.SIGHUP)
+        proc.communicate(timeout=30)
+        with open(note) as f:
+            self.assertEqual(f.read(), "x", "one teardown, whatever came after the first signal")
+
+
 class GroupScanTests(unittest.TestCase):
     def test_A_stat_whose_group_field_is_not_a_number_is_unknown_and_never_an_error(self):
         self.assertEqual(ex._stat_fields("123 (a b) S 1 77 3"), ("S", 77))
@@ -109,6 +159,30 @@ class GroupScanTests(unittest.TestCase):
         live = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(lambda: (live.kill(), live.wait()))
         self.assertTrue(ex.group_alive(live.pid))
+
+
+class PacedScanTests(unittest.TestCase):
+    """E6: waiting for a group to go scans /proc at a backed-off pace (1 ms up to 20 ms), never on every poll."""
+
+    def test_The_wait_for_a_live_group_scans_proc_a_few_times_and_not_every_millisecond(self):
+        proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: (proc.kill(), proc.wait()))
+        scans = []
+        real = os.listdir
+        with mock.patch.object(ex, "GONE_CEILING_MS", 300), mock.patch.object(ex.os, "listdir", lambda path="." : (scans.append(path), real(path))[1]):
+            ex._wait_group_gone(proc)
+        proc_scans = [p for p in scans if p == "/proc"]
+        self.assertGreaterEqual(len(proc_scans), 5, "the group is alive: every poll looks at /proc")
+        self.assertLessEqual(len(proc_scans), 25, f"{len(proc_scans)} scans in 300 ms: a poll every millisecond would make 300")
+
+    def test_A_group_whose_only_member_is_a_zombie_is_gone_for_the_wait(self):
+        proc = subprocess.Popen(["true"], start_new_session=True)
+        self.addCleanup(proc.wait)
+        self.assertTrue(wait_until(lambda: ex._group_of(proc.pid) == ("Z", proc.pid)))
+        started = time.monotonic()
+        ex._wait_group_gone(proc)
+        self.assertLess(time.monotonic() - started, 0.5)
+        self.assertFalse(ex.group_present(proc))
 
 
 class ScopeFallbackTests(unittest.TestCase):

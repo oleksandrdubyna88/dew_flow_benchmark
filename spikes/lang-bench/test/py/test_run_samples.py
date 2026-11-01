@@ -392,7 +392,7 @@ class CleanupFailureTests(unittest.TestCase):
         self.assertEqual((code, out), (5, ""))
         self.assertIn("could not be killed", err)
 
-    def test_The_wait_for_the_group_backs_off_from_1_ms_to_50_ms_and_does_not_spin(self):
+    def test_The_wait_for_the_group_backs_off_from_1_ms_to_20_ms_and_does_not_spin(self):
         clock, slept = [0], []
         saved = (ex.group_present, ex.now_ms, ex.time.sleep)
         proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
@@ -409,10 +409,10 @@ class CleanupFailureTests(unittest.TestCase):
         finally:
             ex.group_present, ex.now_ms, ex.time.sleep = saved
         self.assertEqual(slept[0], 0.001)
-        self.assertEqual(max(slept), 0.05)
+        self.assertEqual(max(slept), 0.02, "E6: each poll is a scan of /proc, so the pace tops out at 20 ms")
         self.assertEqual(slept, sorted(slept), "the delay only grows")
-        self.assertEqual(slept[:6], [0.001, 0.002, 0.004, 0.008, 0.016, 0.032])
-        self.assertLess(len(slept), 60, f"{len(slept)} polls in the 2 s ceiling: a 1 ms spin would make 2000")
+        self.assertEqual(slept[:6], [0.001, 0.002, 0.004, 0.008, 0.016, 0.02])
+        self.assertLess(len(slept), 110, f"{len(slept)} polls in the 2 s ceiling: a 1 ms spin would make 2000")
 
     def test_A_group_that_goes_in_time_is_no_failure(self):
         proc = subprocess.Popen(["sleep", "61"], start_new_session=True)

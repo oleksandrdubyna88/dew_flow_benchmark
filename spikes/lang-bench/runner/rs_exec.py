@@ -35,6 +35,7 @@ EMPTY_CASE = "empty-program"
 RUN_PROGRAM = ("bash", "run.sh")
 POLL_FIRST_S = 0.001
 POLL_LAST_S = 0.05
+SCAN_LAST_S = 0.02
 
 
 class EnvironmentProblem(Exception):
@@ -221,12 +222,9 @@ def wait_gone(proc, timeout_ms):
 
 
 def group_present(proc):
-    """True while anything of the process group `proc` leads is alive (a reaped leader's group still counts)."""
-    try:
-        os.killpg(proc.pid, 0)
-    except ProcessLookupError:
-        return False
-    return True
+    """True while a process of the group `proc` leads is alive: not a zombie, and the group of a leader that is already reaped counts as long
+    as it has members. A signal 0 first (a group that is gone costs nothing), then a scan of /proc."""
+    return group_alive(proc.pid)
 
 
 class CleanupFailed(RuntimeError):
@@ -247,9 +245,9 @@ def kill_group(proc):
 
 def _wait_group_gone(proc):
     deadline, delay = now_ms() + GONE_CEILING_MS, POLL_FIRST_S
-    while group_present(proc) and now_ms() < deadline:
+    while group_present(proc) and now_ms() < deadline:  # a poll that finds the group is a scan of /proc: the pace tops out at 20 ms
         time.sleep(delay)
-        delay = min(delay * 2, POLL_LAST_S)
+        delay = min(delay * 2, SCAN_LAST_S)
 
 
 def pidfd_open(pid):
