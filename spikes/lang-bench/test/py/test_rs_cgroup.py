@@ -2,7 +2,9 @@
 and the kill by `cgroup.kill`. Fake files stand in for the cgroup here; the real scope is in test_rs_scope.py."""
 import os
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 import runner_path  # noqa: F401
@@ -21,13 +23,18 @@ class Folder:
 
 
 def sleeper(test, name="sleep"):
-    """A real process whose /proc comm is `name` (a link to sleep under that name), stopped when the test ends."""
+    """A real process whose /proc comm is `name` (a link to the Python interpreter under that name: the distribution's `sleep` may be a
+    multi-call binary that refuses a name it does not know), stopped when the test ends. It is running, under that comm, when this returns."""
     holder = tempfile.TemporaryDirectory()
     test.addCleanup(holder.cleanup)
     link = os.path.join(holder.name, name)
-    os.symlink("/usr/bin/sleep", link)
-    proc = subprocess.Popen([link, "30"])
+    os.symlink(sys.executable, link)
+    proc = subprocess.Popen([link, "-I", "-c", "import time; time.sleep(30)"])
     test.addCleanup(lambda: (proc.kill(), proc.wait()))
+    deadline = time.monotonic() + 10
+    while cg.comm_of(proc.pid) != name[:15] and time.monotonic() < deadline:
+        time.sleep(0.005)
+    test.assertEqual(cg.comm_of(proc.pid), name[:15], "the helper process must be running under the comm the test relies on")
     return proc.pid
 
 
