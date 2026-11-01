@@ -299,3 +299,12 @@ test('A_remote_tracking_ref_that_the_remote_no_longer_has_or_has_moved_is_refuse
   assert.equal(moved.exit, EXIT.CONFIG, 'a tracking ref behind the remote is stale too');
   assert.match(moved.error, /refs\/remotes\/origin\/main/);
 });
+
+test('A_family_name_in_a_commit_message_is_refused_because_the_task_repository_is_public_history', async t => {
+  const { repo, sha } = branchWith(t, { 'a.txt': 'x\n' }, { message: 'feat: add a, as the plan in dew_flow_benchmark says' });
+  commit(repo, 'docs: a clean message', { 'b.txt': 'y\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'family-names').findings.map(f => [f.commit, f.path, f.line, f.what]), [[sha, '(commit message)', 1, 'needle dew_flow_benchmark']]);
+  assert.equal((await checkSelf({ repo, branch: 'topic', inputs })).exit, EXIT.PASS, 'the bench branch may name its own family');
+});

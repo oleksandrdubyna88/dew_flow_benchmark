@@ -64,8 +64,10 @@ export function entryFindings(entry, bytes, inputs, { refuseNul }) {
 /** Tagged findings of the commit messages (never at the tip: only the history checks keep them). */
 export const messageFindings = (messages, inputs) => messages.flatMap(({ commit, text }) => flatten(scanText(COMMIT_MESSAGE, text, inputs), commit).map(f => ({ ...f, atTip: false })));
 
-/** Only what the check reads: a history check keeps everything, any other keeps what is at the tip. */
-export const keptFindings = findings => findings.filter(f => f.atTip !== false || HISTORY_CHECKS.has(f.check));
+const isMessageFamily = f => f.check === 'family-names' && f.path === COMMIT_MESSAGE;
+
+/** Only what the check reads: a history check keeps everything, a family name in a commit message too (public history), any other keeps what is at the tip. */
+export const keptFindings = findings => findings.filter(f => f.atTip !== false || HISTORY_CHECKS.has(f.check) || isMessageFamily(f));
 
 /** Is there a README structure to check? It is when a known-task text is in play or the README already has the heading. */
 const attributionNeeded = (text, addedPaths, carriesKnownText) => text !== null && (carriesKnownText(addedPaths) || /^## Attribution\s*$/m.test(text));
