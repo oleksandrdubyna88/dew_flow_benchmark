@@ -354,17 +354,17 @@ class ProcessTests(unittest.TestCase):
             self.build_pgid = proc.pid
             return fd
 
-        saved = (ex.pidfd_of, ex.wait_exit)
+        saved = (ex.pidfd_of, ex._exited)
         ex.pidfd_of = recording
         if wait is not None:
-            ex.wait_exit = wait
+            ex._exited = wait
         try:
             ex.build(ws.dir, ws.scratch, ceiling_ms=ceiling_ms)
             return opened, None
         except BaseException as e:  # noqa: B902  (the point: even a BaseException)
             return opened, e
         finally:
-            ex.pidfd_of, ex.wait_exit = saved
+            ex.pidfd_of, ex._exited = saved
 
     def is_closed(self, fd):
         try:

@@ -181,13 +181,6 @@ class FakeCgroupTests(unittest.TestCase):
             peaks.append(ws.run(case(ident=ident), cgroup=os.path.join(ws.root, "cg-{case}")).lifecycle["memory"]["peakBytes"])
         self.assertEqual(peaks, [1, 2])
 
-    def test_A_cgroup_that_does_not_exist_says_unknown_and_never_zero_on_the_plain_path(self):
-        result = Workspace(self, REPLAY, FILES).run(case(), cgroup="/no/such/cgroup")
-        self.assertEqual(result.status, "PASS")
-        self.assertEqual(result.lifecycle["memory"]["known"], False)
-        self.assertEqual(result.lifecycle["leftover"]["known"], False)
-        self.assertIn("  memory: not certified", result.lines)
-
     def test_The_kill_is_written_after_every_case_whether_or_not_a_leftover_was_found(self):
         ws = Workspace(self, REPLAY, FILES)
         cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
@@ -195,12 +188,6 @@ class FakeCgroupTests(unittest.TestCase):
         self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": False})
         with open(os.path.join(cgroup, "cgroup.kill"), "rb") as f:
             self.assertEqual(f.read(), b"1", "cgroup.kill is written even for a clean case: a child no read could see goes with it")
-
-    def test_A_cgroup_that_does_not_exist_gets_the_launchers_group_killed_at_the_time_limit(self):
-        seconds = "47.%d" % (os.getpid() % 1000 + 1000)
-        result = Workspace(self, f"sleep {seconds} & sleep {seconds}\n").run(case(expected=b""), cgroup="/no/such/cgroup", limit_ms=300)
-        self.assertTrue(result.reason.startswith("time limit"), result.reason)
-        self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
 
     def test_A_cgroup_kill_that_cannot_be_written_kills_the_launchers_group_too_and_the_empty_check_decides(self):
         seconds = "48.%d" % (os.getpid() % 1000 + 1000)

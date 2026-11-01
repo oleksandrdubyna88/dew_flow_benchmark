@@ -469,12 +469,14 @@ class CommandLineTests(unittest.TestCase):
         import test_run_samples as cli
         cg = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "cg")
         os.makedirs(os.path.join(cg, "s03"))
+        os.makedirs(os.path.join(cg, "empty-program"))  # the control's {case}: the layer provides one by that name
         box = cli.Box(self, run_sh=f"printf 'oom_kill 1\\n' > {cg}/s03/memory.events\nprintf 9 > {cg}/s03/memory.peak\ncat answer.bin\n")
-        for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
-            with open(os.path.join(cg, "s03", name), "w") as f:
-                f.write(text)
-        code, out, _ = box.cli("--cgroup-of", os.path.join(cg, "{case}"))
-        self.assertEqual(code, 1)
+        for case_name in ("s03", "empty-program"):
+            for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
+                with open(os.path.join(cg, case_name, name), "w") as f:
+                    f.write(text)
+        code, out, err = box.cli("--cgroup-of", os.path.join(cg, "{case}"))
+        self.assertEqual(code, 1, err)
         self.assertIn("FAIL s03 — memory limit", out)
 
     def test_A_case_view_that_is_missing_is_exit_3_the_environment(self):

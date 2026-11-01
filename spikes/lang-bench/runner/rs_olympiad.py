@@ -102,6 +102,15 @@ def _wall_ns(pump, launched, ended):
     return None if pump.exit_ns is None else pump.exit_ns - launched.clock_ns
 
 
+def _stop_quietly(lifecycle, proc):
+    """Stop the program while another exception is on its way (an interrupt): a scope that is already gone must not turn that exception into
+    CgroupLost, so the interrupt keeps its exit. A cleanup that fails otherwise (CleanupFailed) still speaks."""
+    try:
+        lifecycle.kill(proc)
+    except ex.EnvironmentProblem:
+        pass
+
+
 def _execute(case, config, comparer, stderr_path):
     lifecycle = rs_scope.lifecycle_for(config, case.id)
     launched, pump = _launch(case, config, lifecycle, stderr_path), None
@@ -112,7 +121,7 @@ def _execute(case, config, comparer, stderr_path):
         settled = lifecycle.settle(launched, end)
         return Outcome(end, wall, settled.code, settled.leftover, settled.memory, launched, lifecycle.road)
     except BaseException:  # the runner itself is being stopped (a signal): never leave the program under test running
-        lifecycle.kill(launched.proc)
+        _stop_quietly(lifecycle, launched.proc)
         raise
     finally:
         if pump is not None:

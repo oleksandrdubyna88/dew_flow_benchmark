@@ -159,20 +159,44 @@ def signal_group(pid, sig):
         pass
 
 
+def _stat_fields(text):
+    """(state, process group id) from the text of /proc/<pid>/stat, or None when it cannot be understood (never an error)."""
+    fields = text.rsplit(")", 1)[-1].split()
+    if len(fields) < 3 or not fields[2].lstrip("-").isdigit():
+        return None
+    return fields[0], int(fields[2])
+
+
 def _group_of(pid):
-    """The process group id and state of `pid` from /proc, or None when it is gone."""
+    """The state and process group id of `pid` from /proc, or None when it is gone or unreadable."""
     try:
         with open(f"/proc/{pid}/stat", "rb") as f:
-            fields = f.read().decode("ascii", "replace").rsplit(")", 1)[-1].split()
+            return _stat_fields(f.read().decode("ascii", "replace"))
     except OSError:
         return None
-    return (fields[0], int(fields[2])) if len(fields) > 2 else None
+
+
+def _group_exists(pgid):
+    """A signal 0 to the group: False when no process of it exists at all."""
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def _scan_alive(pgid):
+    found = (_group_of(name) for name in os.listdir("/proc") if name.isdigit())
+    return any(_alive_in(entry, pgid) for entry in found)
 
 
 def group_alive(pgid):
-    """True when a process of the group `pgid` is alive and not a zombie (the unreaped leader, once exited, is a zombie and does not count)."""
-    found = (_group_of(name) for name in os.listdir("/proc") if name.isdigit())
-    return any(_alive_in(entry, pgid) for entry in found)
+    """True when a process of the group `pgid` is alive and not a zombie (the unreaped leader, once exited, is a zombie and does not count).
+    A group that no longer exists is found gone by a signal 0, without scanning /proc; /proc is scanned only when the group exists, because
+    a zombie leader may be its only member."""
+    return _group_exists(pgid) and _scan_alive(pgid)
 
 
 def _alive_in(entry, pgid):
@@ -205,15 +229,21 @@ class CleanupFailed(RuntimeError):
 
 def kill_group(proc):
     """SIGKILL to the whole group, reap the leader, then wait until nothing of the group is left: the signal is delivered at once but the
-    children go a moment later. If the group is still there at the ceiling (2 s) the cleanup has failed: CleanupFailed."""
-    signal_group(proc.pid, signal.SIGKILL)
+    children go a moment later. If the group is still there at the ceiling (2 s) the cleanup has failed: CleanupFailed. A leader that is
+    already reaped is not signalled (its pid may be someone else's by now)."""
+    if proc.returncode is None:
+        signal_group(proc.pid, signal.SIGKILL)
     proc.wait()
+    _wait_group_gone(proc)
+    if group_present(proc):
+        raise CleanupFailed(f"a process of the case could not be killed: its group {proc.pid} is still there after {GONE_CEILING_MS} ms")
+
+
+def _wait_group_gone(proc):
     deadline, delay = now_ms() + GONE_CEILING_MS, POLL_FIRST_S
     while group_present(proc) and now_ms() < deadline:
         time.sleep(delay)
         delay = min(delay * 2, POLL_LAST_S)
-    if group_present(proc):
-        raise CleanupFailed(f"a process of the case could not be killed: its group {proc.pid} is still there after {GONE_CEILING_MS} ms")
 
 
 def pidfd_open(pid):
@@ -266,19 +296,20 @@ def build(workspace, scratch, ceiling_ms=None):
     started = now_ms()
     with open(log, "wb") as out:
         proc = subprocess.Popen(["bash", "build.sh"], cwd=workspace, stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
-    pidfd = pidfd_of(proc)
     try:
-        done = wait_exit(proc, pidfd, started + ceiling_ms)
+        done = wait_gone(proc, ceiling_ms)  # awaited on a pidfd, and not reaped: the group signal below needs the leader's pid reserved
     except BaseException:  # the runner itself is being stopped (a signal): never leave the build running
         kill_group(proc)
         raise
-    finally:
-        close_fd(pidfd)
-    if not done:
-        kill_group(proc)
-    status = proc.wait()
-    signal_group(proc.pid, signal.SIGKILL)
+    status = _end_build(proc, done)
     return BuildResult(True, status, now_ms() - started, not done, read_tail(log))
+
+
+def _end_build(proc, done):
+    """The build's status. Stragglers are signalled before the leader is reaped, never after."""
+    if not done or group_alive(proc.pid):
+        kill_group(proc)
+    return proc.wait()
 
 
 def close_fd(fd):

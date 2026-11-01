@@ -105,6 +105,7 @@ class ScopeLifecycle:
             return cg.wait_empty(self.directory, was_readable=was_readable)
         if self.box:
             raise CgroupLost(f"the cgroup {self.directory} is gone after child-pid ({failure}): its processes were stopped through the launcher's group")
+        raise failure
 
     def _seen(self, launched):
         """A counter counts only for a cgroup the box was seen in; without a box (the plain path) the directory is taken as it is."""
