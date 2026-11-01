@@ -71,3 +71,16 @@ export async function readFileAt(repo, branch, path) {
   const blob = await runGit(repo, ['cat-file', 'blob', `refs/heads/${branch}:${path}`], { maxBytes: BLOB_MAX_BYTES });
   return blob.ok ? ok(blob.value.stdout) : blob;
 }
+
+/** ok(Map(path -> blob id)) of the files in the tree at the tip of `branch` (no gitlinks): what a run base would carry. */
+export async function tipTree(repo, branch) {
+  const listing = await runGit(repo, ['ls-tree', '-r', '-z', `refs/heads/${branch}`], { maxBytes: 64 * 1024 * 1024 });
+  if (!listing.ok) return listing;
+  const tree = new Map();
+  for (const record of listing.value.stdout.split('\0').filter(Boolean)) {
+    const [meta, file] = [record.slice(0, record.indexOf('\t')), record.slice(record.indexOf('\t') + 1)];
+    const [mode, , oid] = meta.split(' ');
+    if (mode !== SUBMODULE_MODE) tree.set(file, oid);
+  }
+  return ok(tree);
+}

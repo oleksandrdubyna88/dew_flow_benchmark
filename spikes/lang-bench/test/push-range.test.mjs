@@ -1,7 +1,7 @@
 // The commits a push would add, and what each of them adds: the unit every scan of the push check runs over.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { changesOf, newCommits, readBlobs, readFileAt } from '../lib/push-range.mjs';
+import { changesOf, newCommits, readBlobs, readFileAt, tipTree } from '../lib/push-range.mjs';
 import { commit, git, makeOrigin, makeTaskRepo } from './support/push-fixtures.mjs';
 
 test('The_range_is_exactly_the_commits_the_push_would_add_and_not_the_remotes_own', async t => {
@@ -69,4 +69,14 @@ test('Blobs_are_read_once_by_id_and_a_file_at_a_branch_tip_is_read_by_path', asy
   assert.equal(blobs.get(files.find(f => f.path === 'a.txt').oid), 'same\n');
   assert.equal((await readFileAt(repo, 'main', 'README.md')).value, 'tip readme\n');
   assert.equal((await readFileAt(repo, 'main', 'NOPE.md')).value, null, 'absent is null, not an empty text');
+});
+
+test('The_tip_tree_lists_the_files_at_the_branch_tip_without_gitlinks', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'a\n', 'dir/b.txt': 'b\n' } });
+  commit(repo, 'chore: drop a file', { 'a.txt': null });
+  git(repo, 'update-index', '--add', '--cacheinfo', '160000,1111111111111111111111111111111111111111,sub');
+  git(repo, 'commit', '-q', '-m', 'chore: pin a submodule');
+  const tree = (await tipTree(repo, 'main')).value;
+  assert.deepEqual([...tree.keys()], ['dir/b.txt']);
+  assert.equal(tree.get('dir/b.txt'), git(repo, 'rev-parse', 'main:dir/b.txt'));
 });

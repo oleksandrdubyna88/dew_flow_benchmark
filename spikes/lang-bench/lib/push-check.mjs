@@ -5,7 +5,7 @@ import { ok } from '../../minigit-bench/lib/result.mjs';
 import { attributionSection, outsideAttribution } from './attribution.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { findAidHits } from './push-needles.mjs';
-import { changesOf, newCommits, readBlobs, readFileAt } from './push-range.mjs';
+import { changesOf, newCommits, readBlobs, readFileAt, tipTree } from './push-range.mjs';
 import { findSecrets } from './push-secrets.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
@@ -13,6 +13,8 @@ export const EXIT = Object.freeze({ PASS: 0, REFUSED: 1, ENVIRONMENT: 3, CONFIG:
 export const COMMIT_MESSAGE = '(commit message)';
 const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
+// History is published, so these read every commit; the others read the tip tree, which is what a run base carries.
+const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
 const MAX_PRINTED = 100;
 
 /** The findings of one text, by named check. `file` decides which placement rules apply. */
@@ -30,8 +32,10 @@ function scanText(file, text, inputs, { body = false } = {}) {
 
 const emptyChecks = names => Object.fromEntries(names.map(name => [name, []]));
 
-function merge(into, found, commit) {
-  for (const [name, findings] of Object.entries(found)) if (name in into) into[name].push(...findings.map(f => ({ commit, ...f })));
+function merge(into, found, commit, { atTip = true } = {}) {
+  for (const [name, findings] of Object.entries(found)) {
+    if (name in into && (atTip || HISTORY_CHECKS.has(name))) into[name].push(...findings.map(f => ({ commit, ...f })));
+  }
 }
 
 const verdict = (checks, label, extra = {}) => ({
@@ -44,23 +48,28 @@ const verdict = (checks, label, extra = {}) => ({
 const errorResult = (label, failure) => ({ exit: failure.kind === 'config' ? EXIT.CONFIG : EXIT.ENVIRONMENT, label, checks: [], error: failure.reason });
 const toChecks = (names, byName) => names.map(name => ({ name, findings: byName[name] }));
 
-/** Scan every message and every distinct (path, blob) of the range; the first commit that brings a path owns its findings. */
-async function scanRange(repo, commits, inputs, names) {
+/**
+ * Scan every message and every distinct (path, blob) of the range. The leak and secret scans read all of them; the placement rules
+ * read only the blob that is at the tip, credited to the first commit that brought it. `paths` are the range's files still at the tip.
+ */
+async function scanRange(repo, branch, commits, inputs, names) {
   const changes = await changesOf(repo, commits);
   if (!changes.ok) return changes;
   const blobs = await readBlobs(repo, changes.value.files.map(f => f.oid));
-  if (!blobs.ok) return blobs;
+  const tip = await tipTree(repo, branch);
+  if (!blobs.ok || !tip.ok) return blobs.ok ? tip : blobs;
   const byName = emptyChecks(names);
-  for (const { commit, text } of changes.value.messages) merge(byName, scanText(COMMIT_MESSAGE, text, inputs), commit);
+  for (const { commit, text } of changes.value.messages) merge(byName, scanText(COMMIT_MESSAGE, text, inputs), commit, { atTip: false });
   const seen = new Set();
-  const firstCommit = new Map();
+  const tipCommit = new Map();
   for (const { commit, path, oid } of changes.value.files) {
-    if (!firstCommit.has(path)) firstCommit.set(path, commit);
+    const atTip = tip.value.get(path) === oid;
+    if (atTip && !tipCommit.has(path)) tipCommit.set(path, commit);
     if (seen.has(`${path}\0${oid}`)) continue;
     seen.add(`${path}\0${oid}`);
-    merge(byName, scanText(path, blobs.value.get(oid), inputs), commit);
+    merge(byName, scanText(path, blobs.value.get(oid), inputs), commit, { atTip });
   }
-  return ok({ byName, firstCommit, paths: [...firstCommit.keys()] });
+  return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()] });
 }
 
 /** Branch-level findings: the README's structure, the credit terms and the stack folders, with the commit that brought the path. */
@@ -82,7 +91,7 @@ export async function checkBranch({ repo, branch, inputs }) {
   const label = `${repo} ${branch}`;
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
-  const scanned = await scanRange(repo, range.value, inputs, NAMES);
+  const scanned = await scanRange(repo, branch, range.value, inputs, NAMES);
   if (!scanned.ok) return errorResult(label, scanned);
   const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit });
   if (!tip.ok) return errorResult(label, tip);
@@ -98,7 +107,7 @@ export async function checkSelf({ repo, branch, inputs }) {
   const label = `${repo} ${branch} (bench branch)`;
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
-  const scanned = await scanRange(repo, range.value, inputs, SELF_NAMES);
+  const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES);
   if (!scanned.ok) return errorResult(label, scanned);
   return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length });
 }

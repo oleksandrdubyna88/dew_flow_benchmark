@@ -144,3 +144,22 @@ test('A_report_line_never_carries_matched_text_even_for_a_path_with_odd_characte
   assert.match(report, /notes\/odd name\.md:1 github-fine-grained-pat/);
   assert.equal(report.includes('aB3dE5gH'), false);
 });
+
+test('A_placement_rule_reads_the_tip_tree_because_a_run_base_carries_the_tip_and_never_the_history', async t => {
+  const { repo } = branchWith(t, { 'todo/tasks/FORMAT.md': 'Story E1.S8a and https://example.org and Redis\n', 'csharp/01/Program.cs': 'class P {}\n', 'runner/n.py': '# dew_flow_benchmark\n' });
+  commit(repo, 'docs: clean it up again', { 'todo/tasks/FORMAT.md': 'Clean.\n', 'csharp/01/Program.cs': null, 'runner/n.py': 'pass\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.PASS, formatReport(result));
+  // the same rule still reads the TIP: a file that is wrong at the tip is a finding
+  commit(repo, 'docs: bring it back', { 'todo/tasks/FORMAT.md': 'Story E1.S8a again\n' });
+  const again = await run(repo);
+  assert.deepEqual(checkOf(again, 'agent-visible-paths').findings.map(f => [f.path, f.line, f.what]), [['todo/tasks/FORMAT.md', 1, 'plan story id']]);
+});
+
+test('The_leak_and_secret_scans_read_every_commit_even_where_a_later_commit_removed_the_text', async t => {
+  const { repo, sha } = branchWith(t, { 'old.txt': `key ${SECRET}\nthe widget that frobnicates every sprocket twice before dinner\n` });
+  commit(repo, 'refactor: remove', { 'old.txt': null });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual([checkOf(result, 'secrets').findings[0].commit, checkOf(result, 'leakcheck').findings[0].commit], [sha, sha]);
+});
