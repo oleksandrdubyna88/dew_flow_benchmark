@@ -249,6 +249,33 @@ The verdict ids of the smoke (derived from `SMOKE_ASSUMPTIONS`; each is computed
 - **One real session.** The committed fixture is one paid run on one day; it proves the verdict rules read a real stream, not that every session behaves so.
 - **Concurrency beyond a few requests**, and a run of days: the broker's budget and the janitor are exercised at the scale of seconds.
 
+## The language-comparison runner scenarios (E1.S8a part i, `spikes/lang-bench/`)
+
+The third harness here is the Node suite of the language-comparison bench (`node spikes/lang-bench/run-tests.mjs`, lowered priority, at most
+`min(8, CPUs - 1)` workers). Node test files start the Python units of `test/py/` under `python3 -I -B` in an owned `TMPDIR`
+(`test/support/py-units.mjs`) and register one Node test per Python test, so every guarantee appears under its own name. The design is
+[module_lang_bench.md](module_lang_bench.md). This is **part i**: the lexer, both parsers, the matcher, the olympiad path, the report, the
+command line, the pin. Part ii (processes, networking, the daemon and web runs, signals) adds its own rows.
+
+| Flow | Status | Test files |
+|---|---|---|
+| The lexical rules (lines, strings, escapes, variables, fields) | covered | `test/runner-lex.test.mjs` (`test/py/test_rs_lex.py`) |
+| Exact-decimal JSON: `2` equals `2.0`, `-0` equals `0`, large integers stay distinct, a repeated name, `NaN`, `Infinity` and invalid UTF-8 refused | covered | `test/runner-json.test.mjs`, `test/runner-jmatch.test.mjs` (the float, `str()` and `as_tuple()` compares reproduced as the refuted approaches) |
+| The scenario parser and its validation (V1, V8, V9) | covered | `test/runner-script.test.mjs` |
+| The transcript parser, its pairing with the script, one-to-one assignment | covered | `test/runner-transcript.test.mjs` |
+| Fields, the backtracking string matcher, the JSON body matcher with `$unordered` | covered | `test/runner-fields.test.mjs`, `test/runner-jmatch.test.mjs` |
+| Entry and whole-transcript comparison, V6 checks, FORMAT section 6's verdicts for the daemon and web examples (pass and the failing twin) | covered | `test/runner-match.test.mjs` |
+| The report (FORMAT 5.5 reproduced line for line) and the JSON result | covered | `test/runner-report.test.mjs` |
+| An olympiad case: replay, a dropped line feed, streaming comparison, a capped capture never a PASS, stderr to a file, the wall-time rule, the group kill, the build | covered | `test/runner-olympiad.test.mjs` |
+| The command line: kind, `--parse-only`, limits, exit codes 0/1/3/4/5, B10 encodings in five locales | covered | `test/runner-cli.test.mjs` |
+| The pin and `specs-record.mjs` | covered | `test/runner-pin.test.mjs`, `test/specs-record.test.mjs` |
+| Module and function shape, standard-library imports, no float in a comparison | covered | `test/runner-shape.test.mjs` |
+| Running a daemon or web scenario (processes, sockets, signals, the cgroup) | not covered | part ii |
+
+**What this part does not prove.** Memory is never judged without a cgroup (every case says `not certified`); the plain path's group kill is
+tested, the scope path's `cgroup.kill` is part ii and the execution layer's; the three pilot specs' samples do not exist yet (E1.S6), so the
+runner has only run FORMAT's own examples and toys; a behaviour beyond the scenarios written here is not proven.
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under
