@@ -2,9 +2,10 @@
 // then the machine's install_location file, then the default locations. A box whose PATH is clean can still run such a program on the distribution's runtime.
 // The probe builds a tiny console app with the PINNED SDK inside the box (offline: the SDK bundles the targeting and apphost packs), runs its apphost with
 // COREHOST_TRACE=1 and reads which dotnet root it used. Any root other than the pinned directory is a problem.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { boxArgv, runInBox } from './preflight-box.mjs';
 
@@ -38,18 +39,34 @@ const tail = text => (text ?? '').trim().slice(-300);
  * `runApphostProbe({ stacks, dirs, boxPath, operatorHome, protect })` -> `{ problems, root }`. `root` is the dotnet root the apphost used (`null` when unread).
  * `protect: false` runs the same probe in a box WITHOUT the hiding and DOTNET_ROOT (a test's way to show the open road).
  */
-export async function runApphostProbe({ stacks, dirs, boxPath, operatorHome = os.homedir(), protect = true, hostPath = process.env.PATH ?? '' }) {
+export async function runApphostProbe({ stacks, dirs, boxPath, operatorHome = os.homedir(), protect = true, hostPath = process.env.PATH ?? '', onWorkFolder = () => {} }) {
   void stacks;
   const bwrap = findOnPath('bwrap', hostPath);
   if (bwrap === null) return { problems: ['bwrap is not installed: the apphost probe cannot run'], root: null };
-  const work = mkdtempSync(path.join(os.tmpdir(), `testsToDelete-u${process.getuid?.() ?? 0}-bench-apphost-`));
+  const owned = await ownedHelper();
+  if (!owned.ok) return { problems: [owned.reason], root: null };
+  const scope = owned.scope;
   try {
+    // From the owned-name helper (`common.test-leftovers`): the claim beside the folder lets the next start-of-run sweep collect it if this run is killed during the build.
+    const work = owned.helper.ownedDir(scope, 'apphost');
+    onWorkFolder(work);
     mkdirSync(path.join(work, 'out'));
     writeFileSync(path.join(work, 'probe.csproj'), CSPROJ);
     writeFileSync(path.join(work, 'Program.cs'), PROGRAM);
     return await buildAndRun({ work, dirs, boxPath, operatorHome, protect, bwrap });
   } finally {
-    rmSync(work, { recursive: true, force: true });
+    await scope.close();
+  }
+}
+
+const OWNED_URL = new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url);
+
+async function ownedHelper() {
+  try {
+    const owned = await import(OWNED_URL.href);
+    return { ok: true, helper: owned.ownedFor({ token: 'bench' }), scope: owned.cleanupScope() };
+  } catch (e) {
+    return { ok: false, reason: `the conventions mount's owned-name helper is needed for the probe's scratch folder and cannot be loaded (${e.code ?? e.message}): ${fileURLToPath(OWNED_URL)}` };
   }
 }
 

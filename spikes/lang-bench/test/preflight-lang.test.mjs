@@ -11,7 +11,7 @@ import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
 import { boxArgv, judgeDotnetHits, judgeProbeExecutable, judgeProbes, preflightLang, probeArgvFor, resolveProbeExecutables, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { sealTree, treeRecord, unsealTree } from '../lib/toolchain-store.mjs';
-import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
+import { ownedApi, ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
 const stacks = loadStacksLang(JSON.parse(readFileSync(fileURLToPath(new URL('../inputs/stacks-lang.json', import.meta.url)), 'utf8'))).value;
 const good = () => ({
@@ -314,6 +314,21 @@ test('A_host_without_bwrap_is_refused_naming_it_and_no_probe_is_attempted', asyn
   assert.equal(result.ok, false);
   assert.match(result.problems.join('\n'), /bwrap is not installed/);
   assert.doesNotMatch(result.problems.join('\n'), /did not run/, 'there was no box to probe in');
+});
+
+test('The_apphost_probes_scratch_folder_carries_an_owner_claim_while_it_exists_and_is_gone_after', async t => {
+  if (!gate(t)) return;
+  if (!ownedApi) return lacks(t, 'the conventions mount is absent: no owned-name helper');
+  const dirs = Object.fromEntries(Object.entries(stacks.directories).map(([name, dirName]) => [name, path.join(storeRoot, dirName)]));
+  const seen = [];
+  const result = await runApphostProbe({ stacks, dirs, boxPath: [dirs.dotnetSdk], onWorkFolder: dir => seen.push({ dir, name: path.basename(dir), claim: existsSync(`${dir}.owner`), claimText: existsSync(`${dir}.owner`) ? readFileSync(`${dir}.owner`, 'utf8') : '' }) });
+  assert.deepEqual(result.problems, []);
+  assert.equal(seen.length, 1);
+  assert.match(seen[0].name, /^testsToDelete-u\d+-bench-apphost-/i, 'named as the owned-name helper names it');
+  assert.equal(seen[0].claim, true, 'a claim sits beside the folder, so a killed run leaves something the next start-of-run sweep may collect');
+  assert.match(seen[0].claimText, new RegExp(`^u${process.getuid()}:`));
+  assert.equal(existsSync(seen[0].dir), false, 'the folder is gone after the probe');
+  assert.equal(existsSync(`${seen[0].dir}.owner`), false, 'and so is its claim');
 });
 
 test('An_apphost_in_a_box_without_the_hiding_resolves_the_distributions_dotnet_root_and_that_is_the_point', async t => {
