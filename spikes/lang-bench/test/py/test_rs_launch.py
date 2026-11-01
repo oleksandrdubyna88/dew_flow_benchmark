@@ -2,6 +2,7 @@
 the empty program, and the program's environment."""
 import fcntl
 import os
+import tempfile
 import signal
 import subprocess
 import unittest
@@ -445,38 +446,31 @@ class CommandLineTests(unittest.TestCase):
         import json
         import test_run_samples as cli
         box = cli.Box(self)
-        views, cgroups = os.path.join(box.root, "views"), os.path.join(box.root, "cg")
+        views = os.path.join(box.root, "views")
         os.mkdir(views)
-        os.mkdir(cgroups)
-        for sub in (views, cgroups):
-            os.mkdir(os.path.join(sub, "s03"))
-            os.mkdir(os.path.join(sub, "empty-program"))  # the control's {case}: the layer provides one by that name
+        for case_name in ("s03", "empty-program"):  # the control's {case}: the layer provides one by that name
+            os.mkdir(os.path.join(views, case_name))
         for name in ("run.sh", "build.sh", "answer.bin"):
             with open(os.path.join(box.ws, name), "rb") as src, open(os.path.join(views, "s03", name), "wb") as dst:
                 dst.write(src.read())
-        for case_name in ("s03", "empty-program"):
-            for name, text in (("memory.peak", "5000"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", "")):
-                with open(os.path.join(cgroups, case_name, name), "w") as f:
-                    f.write(text)
         out_json = os.path.join(box.out, "r.json")
-        code, out, err = box.cli("--launch-prefix", json.dumps(reporting_prefix()), "--launch-status", str(STATUS_FD), "--cgroup-of", os.path.join(cgroups, "{case}"),
+        code, out, err = box.cli("--launch-prefix", json.dumps(reporting_prefix()), "--launch-status", str(STATUS_FD),
                                  "--case-view", os.path.join(views, "{case}"), "--json", out_json)
         self.assertEqual(code, 0, err)
-        self.assertIn("  memory: peak 5000 bytes", out)
         record = cli.read_json(out_json)
         case_record = record["cases"][0]
         self.assertIsInstance(case_record["launchMs"], int)
-        self.assertEqual(case_record["lifecycle"]["memory"]["peakBytes"], 5000)
+        self.assertEqual(case_record["lifecycle"]["memory"]["known"], False, "no cgroup was named: memory is not certified")
         self.assertEqual(sorted(case_record["lifecycle"]), ["capture", "fork", "kill", "leftover", "leftoverEvidence", "memory", "signalled", "stderr", "stop"])
         self.assertEqual(set(case_record["lifecycle"]["signalled"]), {"signal", "pid", "found", "comm", "launcher"})
         self.assertEqual((record["launch"], isinstance(record["emptyProgramMs"], int)), ({"failed": False, "stderr": ""}, True))
 
     def test_An_oom_kill_in_the_cgroup_is_memory_limit_and_exit_1_on_the_command_line(self):
         import test_run_samples as cli
-        box = cli.Box(self)
-        cg = os.path.join(box.root, "cg")
+        cg = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "cg")
         os.makedirs(os.path.join(cg, "s03"))
-        for name, text in (("memory.peak", "9"), ("memory.events", "oom_kill 1\n"), ("cgroup.procs", "")):
+        box = cli.Box(self, run_sh=f"printf 'oom_kill 1\\n' > {cg}/s03/memory.events\nprintf 9 > {cg}/s03/memory.peak\ncat answer.bin\n")
+        for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
             with open(os.path.join(cg, "s03", name), "w") as f:
                 f.write(text)
         code, out, _ = box.cli("--cgroup-of", os.path.join(cg, "{case}"))

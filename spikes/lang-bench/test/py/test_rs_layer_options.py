@@ -42,7 +42,7 @@ class RefusedTests(unittest.TestCase):
         box = Box(self)
         cg = os.path.join(box.root, "cg")
         os.mkdir(cg)
-        for name, text in (("memory.peak", "1"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", "")):
+        for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
             with open(os.path.join(cg, name), "w") as f:
                 f.write(text)
         self.assertEqual(box.cli("--cgroup-of", cg)[0], 0)
@@ -113,7 +113,7 @@ class OwnershipTests(unittest.TestCase):
         box = Box(self, run_sh="touch started.marker\n")
         cg = os.path.join(box.root, "cg")
         os.mkdir(cg)
-        for name, text in (("memory.peak", "1"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", f"{foreign.pid}\n")):
+        for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", f"{foreign.pid}\n"), ("cgroup.controllers", "")):
             with open(os.path.join(cg, name), "w") as f:
                 f.write(text)
         code, out, err = box.cli("--cgroup-of", cg)

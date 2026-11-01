@@ -148,7 +148,7 @@ class ForkTests(unittest.TestCase):
 class FakeCgroupTests(unittest.TestCase):
     def test_An_oom_kill_in_memory_events_is_memory_limit_whatever_the_exit_status(self):
         ws = Workspace(self, REPLAY, FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "7340032", "memory.events": OOM_EVENTS})
+        cgroup = fake_cgroup(ws, final={"memory.peak": "7340032", "memory.events": OOM_EVENTS})
         result = ws.run(case(), cgroup=cgroup)
         self.assertEqual((result.status, result.reason), ("FAIL", "memory limit"), "the program exited 0 with the exact output: still not a pass")
         self.assertIn("  memory.events: oom_kill 1", result.lines)
@@ -156,27 +156,29 @@ class FakeCgroupTests(unittest.TestCase):
 
     def test_An_oom_kill_is_judged_even_when_memory_peak_cannot_be_read(self):
         ws = Workspace(self, REPLAY, FILES)
-        result = ws.run(case(), cgroup=fake_cgroup(ws, files={"memory.events": OOM_EVENTS}))
+        result = ws.run(case(), cgroup=fake_cgroup(ws, final={"memory.events": OOM_EVENTS}))
         self.assertEqual((result.status, result.reason), ("FAIL", "memory limit"))
         self.assertEqual(result.lifecycle["memory"]["known"], False)
 
     def test_memory_limit_comes_before_time_limit_when_both_are_true(self):
         ws = Workspace(self, "sleep 5\n")
-        result = ws.run(case(expected=b""), cgroup=fake_cgroup(ws, files={"memory.peak": "9", "memory.events": OOM_EVENTS}), limit_ms=300)
+        result = ws.run(case(expected=b""), cgroup=fake_cgroup(ws, final={"memory.peak": "9", "memory.events": OOM_EVENTS}), limit_ms=300)
         self.assertEqual(result.reason, "memory limit", "the kernel killed it for memory: that is what the case failed on")
 
     def test_A_cgroup_without_an_oom_kill_does_not_change_a_pass_and_its_peak_is_kept(self):
         ws = Workspace(self, REPLAY, FILES)
-        result = ws.run(case(), cgroup=fake_cgroup(ws, files={"memory.peak": "1048576", "memory.events": CLEAN_EVENTS}))
+        result = ws.run(case(), cgroup=fake_cgroup(ws, final={"memory.peak": "1048576", "memory.events": CLEAN_EVENTS}))
         self.assertEqual(result.status, "PASS")
         self.assertEqual(result.lifecycle["memory"], {"known": True, "peakBytes": 1048576, "events": {"oom": 0, "oom_kill": 0}, "oomKill": 0})
         self.assertIn("  memory: peak 1048576 bytes", result.lines)
 
     def test_The_cgroup_template_is_filled_with_the_case_id(self):
         ws = Workspace(self, REPLAY, FILES)
+        peaks = []
         for ident in ("s01", "s02"):
-            fake_cgroup(ws, f"cg-{ident}", {"memory.peak": ident[1:], "memory.events": CLEAN_EVENTS})
-        peaks = [ws.run(case(ident=ident), cgroup=os.path.join(ws.root, "cg-{case}")).lifecycle["memory"]["peakBytes"] for ident in ("s01", "s02")]
+            directory = fake_cgroup(ws, f"cg-{ident}", files={"memory.events": CLEAN_EVENTS})
+            ws.write(ws.dir, "run.sh", f"printf '%s' '{ident[1:]}' > \"{directory}/memory.peak\"\ncat answer.bin\n")
+            peaks.append(ws.run(case(ident=ident), cgroup=os.path.join(ws.root, "cg-{case}")).lifecycle["memory"]["peakBytes"])
         self.assertEqual(peaks, [1, 2])
 
     def test_A_cgroup_that_does_not_exist_says_unknown_and_never_zero_on_the_plain_path(self):
@@ -188,7 +190,7 @@ class FakeCgroupTests(unittest.TestCase):
 
     def test_The_kill_is_written_after_every_case_whether_or_not_a_leftover_was_found(self):
         ws = Workspace(self, REPLAY, FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
         result = ws.run(case(), cgroup=cgroup)
         self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": False})
         with open(os.path.join(cgroup, "cgroup.kill"), "rb") as f:
@@ -203,8 +205,8 @@ class FakeCgroupTests(unittest.TestCase):
     def test_A_cgroup_kill_that_cannot_be_written_kills_the_launchers_group_too_and_the_empty_check_decides(self):
         seconds = "48.%d" % (os.getpid() % 1000 + 1000)
         ws = Workspace(self, f"sleep {seconds}\n")
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
-        os.mkdir(os.path.join(cgroup, "cgroup.kill"))  # a directory: the write fails
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
+        plant_unwritable_kill(cgroup)  # a directory: the write fails
         result = ws.run(case(expected=b""), cgroup=cgroup, limit_ms=300)
         self.assertTrue(result.reason.startswith("time limit"), "the cgroup lists nothing: the fallback found it empty, so the case stands")
         self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
@@ -237,7 +239,7 @@ class FakeCgroupTests(unittest.TestCase):
 
     def test_The_program_is_found_through_a_fake_box_and_the_exit_comes_from_its_pidfd(self):
         ws = Workspace(self, REPLAY, FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
         result = ws.run(case(), prefix=box_prefix(fake_box(self), cgroup), status_fd=STATUS_FD, cgroup=cgroup)
         self.assertEqual((result.status, result.lifecycle["signalled"]["comm"]), ("PASS", "bash"))
         self.assertNotEqual(result.lifecycle["signalled"]["pid"], result.lifecycle["signalled"]["launcher"])
@@ -270,8 +272,8 @@ class SettleOrderTests(unittest.TestCase):
     def test_A_straggler_of_a_launcher_that_exited_is_group_killed_while_the_leader_is_not_yet_reaped(self):
         seconds = "50.%d" % (os.getpid() % 1000 + 1000)
         ws = Workspace(self, f"sleep {seconds} &\ncat answer.bin\n", FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
-        os.mkdir(os.path.join(cgroup, "cgroup.kill"))  # the write fails: the fallback is what runs
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
+        plant_unwritable_kill(cgroup)  # the write fails: the fallback is what runs
         seen = []
         real = ex.signal_group
         launcher = {}
@@ -296,7 +298,7 @@ class SettleOrderTests(unittest.TestCase):
     def test_A_cgroup_that_vanishes_after_child_pid_is_an_environment_failure_and_nothing_is_left(self):
         seconds = "51.%d" % (os.getpid() % 1000 + 1000)
         ws = Workspace(self, f"exec sleep {seconds}\n")
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
         prefix = box_prefix(fake_box(self), cgroup, after_report=f'rm -r "{cgroup}"')
         with self.assertRaises(rs_scope.CgroupLost) as raised:
             ws.run(case(expected=b""), prefix=prefix, status_fd=STATUS_FD, cgroup=cgroup, limit_ms=400)
@@ -320,8 +322,8 @@ class SettleOrderTests(unittest.TestCase):
     def test_A_kill_that_cannot_be_written_falls_back_to_the_pids_the_cgroup_lists_and_checks_it_is_empty(self):
         seconds = "53.%d" % (os.getpid() % 1000 + 1000)
         ws = Workspace(self, "", FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
-        os.mkdir(os.path.join(cgroup, "cgroup.kill"))
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS, "cgroup.events": "populated 0\n"})  # what the kernel says once the pid is dead (a file cannot)
+        plant_unwritable_kill(cgroup)
         # a straggler in a session of its own (the launcher's group does not reach it) that lists itself in the fake cgroup
         ws.write(ws.dir, "run.sh", f'setsid sleep {seconds} &\necho $! > "{cgroup}/cgroup.procs"\ncat answer.bin\n')
         result = ws.run(case(), cgroup=cgroup)
@@ -330,8 +332,8 @@ class SettleOrderTests(unittest.TestCase):
 
     def test_A_pid_the_fallback_cannot_kill_is_a_cleanup_failure_after_the_check(self):
         ws = Workspace(self, "", FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
-        os.mkdir(os.path.join(cgroup, "cgroup.kill"))
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS, "cgroup.events": "populated 1\n"})
+        plant_unwritable_kill(cgroup)
         stubborn = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(lambda: (stubborn.kill(), stubborn.wait()))
         ws.write(ws.dir, "run.sh", f'echo {stubborn.pid} > "{cgroup}/cgroup.procs"\ncat answer.bin\n')
@@ -339,6 +341,12 @@ class SettleOrderTests(unittest.TestCase):
             with self.assertRaises(ex.CleanupFailed) as raised:
                 ws.run(case(), cgroup=cgroup)
         self.assertIn("still in", str(raised.exception), "named by the check that found the cgroup not empty")
+
+
+def plant_unwritable_kill(cgroup):
+    """A folder where `cgroup.kill` should be: opening it for writing fails."""
+    os.remove(os.path.join(cgroup, "cgroup.kill"))
+    os.mkdir(os.path.join(cgroup, "cgroup.kill"))
 
 
 def select_until_readable(fd):

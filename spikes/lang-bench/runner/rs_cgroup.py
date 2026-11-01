@@ -81,10 +81,11 @@ def is_bwrap(pid, identity):
 
 
 def is_zombie(pid):
-    """True for a process that has exited and waits to be reaped (or is gone): it is no program and no leftover, and it has no exe to read."""
+    """True only for a process whose stat SAYS it has exited and waits to be reaped. A stat that cannot be read (pid 0, a pid that is not
+    there, a refused read) is not proof of death: what cannot be read is alive."""
     text = _text(f"/proc/{pid}/stat")
     fields = text.rsplit(")", 1)[-1].split() if text else []
-    return not fields or fields[0] in ("Z", "X")
+    return bool(fields) and fields[0] in ("Z", "X")
 
 
 def ppid_of(pid):
@@ -127,9 +128,11 @@ def memory(directory):
 
 
 def kill(directory):
-    """Write `1` to `cgroup.kill`: every process of the cgroup gets SIGKILL, whatever its group or session."""
+    """Write `1` to `cgroup.kill`: every process of the cgroup gets SIGKILL, whatever its group or session. The file is opened and never
+    created: a file made by the runner would be no kill switch and would only look like one."""
     try:
-        with open(os.path.join(directory, "cgroup.kill"), "wb") as f:
+        fd = os.open(os.path.join(directory, "cgroup.kill"), os.O_WRONLY)
+        with os.fdopen(fd, "wb") as f:
             f.write(b"1")
     except OSError as e:
         raise ex.CleanupFailed(f"cgroup.kill of {directory} could not be written: {type(e).__name__}: {e}") from e
@@ -143,6 +146,47 @@ def kill_pids(directory):
             os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
+
+
+CGROUP_ROOT = "/sys/fs/cgroup"
+
+
+def is_cgroup2(directory):
+    """True when the directory is a cgroup2 node: it holds `cgroup.controllers` (a plain folder, or a cgroup v1 one, does not)."""
+    return os.path.exists(os.path.join(directory, "cgroup.controllers"))
+
+
+def _proc_cgroup(pid):
+    return _text(f"/proc/{pid}/cgroup")
+
+
+def _v2_lines(text):
+    return [line[3:].strip() for line in text.splitlines() if line.startswith("0::")]
+
+
+def pid_cgroup_path(pid):
+    """The cgroup2 path (from the mount root) `/proc/<pid>/cgroup` gives, or None when the process is gone or has no v2 line."""
+    lines = _v2_lines(_proc_cgroup(pid) or "")
+    return lines[0] if lines else None
+
+
+def member_of(pid, directory):
+    """True when `pid` is in the cgroup `directory` or a descendant of it, False when it is somewhere else, None when it cannot be told (the
+    process is gone: a program that ended before it was looked at)."""
+    path = pid_cgroup_path(pid)
+    if path is None:
+        return None
+    here = os.path.relpath(os.path.realpath(directory), CGROUP_ROOT)
+    prefix = "" if here == "." else "/" + here
+    return path == prefix or path.startswith(prefix + "/")
+
+
+def stale_counters(directory):
+    """What an earlier case left in the counters of an existing cgroup (they are not reset): `memory.peak` and `oom_kill` above zero."""
+    peak = _whole_number(_text(os.path.join(directory, "memory.peak")))
+    events = _events_of(directory) or {}
+    found = [f"memory.peak is {peak}"] if peak else []
+    return found + ([f"oom_kill is {events['oom_kill']}"] if events.get("oom_kill") else [])
 
 
 def _read_errno(directory):
@@ -164,13 +208,23 @@ def _gone(directory, was_readable):
     return failed == errno.ENODEV or (was_readable and failed == errno.ENOENT)
 
 
+def _populated(directory):
+    """`populated` of `cgroup.events` (1 while the cgroup or a descendant holds a live process), or None when the file does not say."""
+    value = dict(_pairs(_text(os.path.join(directory, "cgroup.events")) or "")).get("populated")
+    return _whole_number(value)
+
+
+def _all_dead(listed):
+    return listed is not None and all(is_zombie(pid) for pid in listed)
+
+
 def empty(directory, was_readable=False):
-    """True when nothing is alive in the cgroup: it is gone (above) or every listed pid is a zombie. A file that cannot be read or
-    understood, in a cgroup that never was readable, is not empty."""
+    """True when nothing is alive in the cgroup: it is gone (above), or `cgroup.events` says `populated 0`, or (when it says nothing) every
+    listed pid is a zombie. A file that cannot be read or understood, in a cgroup that never was readable, is not empty."""
     if _gone(directory, was_readable):
         return True
-    listed = procs(directory)
-    return listed is not None and all(is_zombie(pid) for pid in listed)
+    populated = _populated(directory)
+    return _all_dead(procs(directory)) if populated is None else populated == 0
 
 
 def _why_unreadable(directory):

@@ -34,6 +34,7 @@ class Tracker:
         self.found = NOT_YET if box else LAUNCHER
         self.pidfd, self.comm, self.many = None, None, 0
         self.reads, self.extra_max, self.previous, self.reader = 0, 0, frozenset(), None
+        self.seen = False
 
     def _listed(self):
         return cg.procs(self.directory) if self.directory else None
@@ -95,6 +96,7 @@ class Tracker:
         if pids is None:
             return
         self.reads += 1
+        self.seen = self.seen or bool(pids)
         others = self._others(pids)
         if self.seeking():
             self._choose(others)

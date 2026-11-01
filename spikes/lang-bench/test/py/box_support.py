@@ -8,8 +8,10 @@ import subprocess
 import tempfile
 import time
 import uuid
+from unittest import mock
 
 import runner_path  # noqa: F401
+import rs_cgroup as cg
 import rs_exec as ex
 import rs_olympiad as ro
 
@@ -26,6 +28,7 @@ class Workspace:
         test.addCleanup(holder.cleanup)
         self.root = holder.name
         self.dir, self.scratch = os.path.join(self.root, "ws"), os.path.join(self.root, "scratch")
+        self.finals = {}
         os.mkdir(self.dir)
         os.mkdir(self.scratch)
         for name, data in {"run.sh": run_sh, **(files or {})}.items():
@@ -43,8 +46,24 @@ class Workspace:
     def config(self, **overrides):
         return ex.Config(workspace=self.dir, scratch=self.scratch, **{"limit_ms": 20_000, **overrides})
 
-    def run(self, case, **overrides):
-        return ro.run_case(case, self.config(**overrides))
+    def run(self, case, real=False, **overrides):
+        """Run one case. A fake cgroup folder is no cgroup2 node and no box is in it, so unless the test says `real=True` (a real scope, or
+        a test of those very checks) the two checks that would refuse it are let through."""
+        self._write_finals(overrides.get("cgroup"))
+        if real:
+            return ro.run_case(case, self.config(**overrides))
+        with mock.patch.object(cg, "is_cgroup2", lambda directory: True), mock.patch.object(cg, "member_of", lambda pid, directory: True):
+            return ro.run_case(case, self.config(**overrides))
+
+    def _write_finals(self, cgroup):
+        """What the kernel would have in a fake cgroup's counters after the case: the program writes it (the counters are zero before the
+        spawn, which the runner insists on)."""
+        final = self.finals.pop(cgroup, None) if cgroup else None
+        if final:
+            lines = "".join(f"printf '%s' '{text}' > \"{cgroup}/{name}\"\n" for name, text in final.items())
+            with open(os.path.join(self.dir, "run.sh"), "rb") as f:
+                body = f.read()
+            self.write(self.dir, "run.sh", lines.encode() + body)
 
 
 def case(expected=ANSWER, stdin=b"7\n", ident="s03", fixtures=None):
@@ -60,11 +79,14 @@ def reporting_prefix(setup="", linger=None):
     return ["sh", "-c", script, "sh"]
 
 
-def fake_cgroup(ws, name="cg", files=None):
-    """A folder that stands in for a cgroup: an empty `cgroup.procs` (nothing in it yet, as the runner requires) and the given files."""
+def fake_cgroup(ws, name="cg", files=None, final=None):
+    """A folder that stands in for a cgroup2 node: an empty `cgroup.procs`, a `cgroup.controllers` and a `cgroup.kill` (the runner opens
+    it, never creates it) and zero counters (it insists on that before the spawn). `final` names the counters the case leaves."""
     path = ws.make_dir(name)
-    for file_name, text in {"cgroup.procs": "", **(files or {})}.items():
+    for file_name, text in {"cgroup.procs": "", "cgroup.controllers": "", "cgroup.kill": "", **(files or {})}.items():
         ws.write(path, file_name, text)
+    if final:
+        ws.finals[path] = final
     return path
 
 

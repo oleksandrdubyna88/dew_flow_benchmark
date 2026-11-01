@@ -62,6 +62,10 @@ class PlainLifecycle:
     def check_free(self):
         """A process group is the launcher's own: there is nothing a foreign process could be holding."""
 
+    def mismatch(self, child_pid):
+        """No cgroup, nothing to confirm."""
+        return None
+
     def kill(self, proc):
         kill_group(proc)
 
