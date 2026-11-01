@@ -1,0 +1,489 @@
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-10-31 22:16:50 fcombo round 2 (WSL load 1.75 1.36 2.89): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+speed_night5.log:5473d64fadabbf66ec201bc9ac26fe6d4e2888237f1af83e313485af104afbfd
+speed_night5.log:READY (waited 280 s here)
+speed_night5.log:(APIServer pid=1) WARNING 10-31 21:17:51 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=183) INFO 10-31 21:18:18 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=183) INFO 10-31 21:21:10 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=183) INFO 10-31 21:21:20 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+speed_night5.log:(EngineCore pid=183) WARNING 10-31 21:21:11 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_night5.log:(EngineCore pid=183) WARNING 10-31 21:21:27 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fcombo-2 c=1 r=1 Output token throughput (tok/s):         71.77     
+speed_night5.log:fcombo-2 c=1 r=1 Mean TTFT (ms):                          3185.96   
+speed_night5.log:fcombo-2 c=1 r=1 Mean TPOT (ms):                          7.73      
+speed_night5.log:fcombo-2 c=1 r=2 Output token throughput (tok/s):         81.84     
+speed_night5.log:fcombo-2 c=1 r=2 Mean TTFT (ms):                          2157.26   
+speed_night5.log:fcombo-2 c=1 r=2 Mean TPOT (ms):                          8.02      
+speed_night5.log:fcombo-2 c=1 r=3 Output token throughput (tok/s):         84.47     
+speed_night5.log:fcombo-2 c=1 r=3 Mean TTFT (ms):                          2158.28   
+speed_night5.log:fcombo-2 c=1 r=3 Mean TPOT (ms):                          7.64      
+speed_night5.log:fcombo-2 c=4 r=1 Output token throughput (tok/s):         192.31    
+speed_night5.log:fcombo-2 c=4 r=1 Mean TTFT (ms):                          4323.25   
+speed_night5.log:fcombo-2 c=4 r=1 Mean TPOT (ms):                          12.15     
+speed_night5.log:fcombo-2 c=4 r=2 Output token throughput (tok/s):         203.61    
+speed_night5.log:fcombo-2 c=4 r=2 Mean TTFT (ms):                          4198.19   
+speed_night5.log:fcombo-2 c=4 r=2 Mean TPOT (ms):                          11.25     
+speed_night5.log:fcombo-2 c=4 r=3 Output token throughput (tok/s):         316.08    
+speed_night5.log:fcombo-2 c=4 r=3 Mean TTFT (ms):                          362.10    
+speed_night5.log:fcombo-2 c=4 r=3 Mean TPOT (ms):                          11.53     
+speed_night5.log:fcombo-2 prefill8192 r=1 Output token throughput (tok/s):         36.90     
+speed_night5.log:fcombo-2 prefill8192 r=1 Mean TTFT (ms):                          1983.70   
+speed_night5.log:fcombo-2 prefill8192 r=1 Median TTFT (ms):                        1987.10   
+speed_night5.log:fcombo-2 prefill8192 r=2 Output token throughput (tok/s):         33.05     
+speed_night5.log:fcombo-2 prefill8192 r=2 Mean TTFT (ms):                          1985.15   
+speed_night5.log:fcombo-2 prefill8192 r=2 Median TTFT (ms):                        2000.48   
+speed_night5.log:fcombo-2 prefill8192 r=3 Output token throughput (tok/s):         15.92     
+speed_night5.log:fcombo-2 prefill8192 r=3 Mean TTFT (ms):                          6199.62   
+speed_night5.log:fcombo-2 prefill8192 r=3 Median TTFT (ms):                        2009.62   
+speed_night5.log:fcombo-2 prefill32768 r=1 Output token throughput (tok/s):         5.47      
+speed_night5.log:fcombo-2 prefill32768 r=1 Mean TTFT (ms):                          19115.45  
+speed_night5.log:fcombo-2 prefill32768 r=1 Median TTFT (ms):                        15440.37  
+speed_night5.log:fcombo-2 prefill32768 r=2 Output token throughput (tok/s):         5.52      
+speed_night5.log:fcombo-2 prefill32768 r=2 Mean TTFT (ms):                          19922.89  
+speed_night5.log:fcombo-2 prefill32768 r=2 Median TTFT (ms):                        16118.83  
+speed_night5.log:fcombo-2 prefill32768 r=3 Output token throughput (tok/s):         5.40      
+speed_night5.log:fcombo-2 prefill32768 r=3 Mean TTFT (ms):                          19980.70  
+speed_night5.log:fcombo-2 prefill32768 r=3 Median TTFT (ms):                        15743.08  
+speed_night5.log:fcombo-2 prefixtest len=8192 A cold=2.08s A hit=0.49s A hit=0.5s B cold=2.1s B hit=0.49s A partial=0.5s
+speed_night5.log:fcombo-2 prefixtest len=1024 A cold=0.33s A hit=0.23s A hit=0.21s B cold=0.22s B hit=0.2s A partial=0.2s
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:NOT QUIET: fb1 round 2 (load 5.96, coai-exp 0)
+speed_night5.log:restore: skipped once (planned restart)
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 01:46:02 fb1 round 2 (WSL load 2.43 4.95 5.92): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_night5.log:b7b8cd1536987dfd9355f5e474346d464d5ecaae7688bae14421881ba809ee29
+speed_night5.log:READY (waited 290 s here)
+speed_night5.log:(APIServer pid=1) WARNING 11-01 00:47:04 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=189) INFO 11-01 00:47:33 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=189) INFO 11-01 00:50:44 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=189) INFO 11-01 00:50:45 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json for MoE layer.
+speed_night5.log:(EngineCore pid=189) INFO 11-01 00:50:46 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_night5.log:(EngineCore pid=189) INFO 11-01 00:50:51 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_night5.log:(EngineCore pid=189) WARNING 11-01 00:50:47 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_night5.log:(EngineCore pid=189) WARNING 11-01 00:50:58 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fb1-2 c=1 r=1 Output token throughput (tok/s):         106.13    
+speed_night5.log:fb1-2 c=1 r=1 Mean TTFT (ms):                          223.00    
+speed_night5.log:fb1-2 c=1 r=1 Mean TPOT (ms):                          9.00      
+speed_night5.log:restore: skipped once (planned restart)
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 03:43:24 fb1 round 2 (WSL load 0.56 1.50 2.41): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_night5.log:96c1a8bea0f165d31939ab9e595088defaae0b6334cd9195399525604f772ab2
+speed_night5.log:READY (waited 240 s here)
+speed_night5.log:(APIServer pid=1) WARNING 11-01 02:44:17 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=183) INFO 11-01 02:44:44 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=183) INFO 11-01 02:47:04 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=183) INFO 11-01 02:47:05 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json for MoE layer.
+speed_night5.log:(EngineCore pid=183) INFO 11-01 02:47:07 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_night5.log:(EngineCore pid=183) INFO 11-01 02:47:12 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_night5.log:(EngineCore pid=183) WARNING 11-01 02:47:08 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_night5.log:(EngineCore pid=183) WARNING 11-01 02:47:18 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fb1-2 c=1 r=1 Output token throughput (tok/s):         77.33     
+speed_night5.log:fb1-2 c=1 r=1 Mean TTFT (ms):                          2083.32   
+speed_night5.log:fb1-2 c=1 r=1 Mean TPOT (ms):                          8.88      
+speed_night5.log:fb1-2 c=1 r=2 Output token throughput (tok/s):         77.69     
+speed_night5.log:fb1-2 c=1 r=2 Mean TTFT (ms):                          2249.67   
+speed_night5.log:fb1-2 c=1 r=2 Mean TPOT (ms):                          8.49      
+speed_night5.log:fb1-2 c=1 r=3 Output token throughput (tok/s):         77.12     
+speed_night5.log:fb1-2 c=1 r=3 Mean TTFT (ms):                          2082.73   
+speed_night5.log:fb1-2 c=1 r=3 Mean TPOT (ms):                          8.92      
+speed_night5.log:fb1-2 c=4 r=1 Output token throughput (tok/s):         181.00    
+speed_night5.log:fb1-2 c=4 r=1 Mean TTFT (ms):                          4130.27   
+speed_night5.log:fb1-2 c=4 r=1 Mean TPOT (ms):                          13.73     
+speed_night5.log:fb1-2 c=4 r=2 Output token throughput (tok/s):         181.27    
+speed_night5.log:fb1-2 c=4 r=2 Mean TTFT (ms):                          4098.96   
+speed_night5.log:fb1-2 c=4 r=2 Mean TPOT (ms):                          13.67     
+speed_night5.log:fb1-2 c=4 r=3 Output token throughput (tok/s):         181.16    
+speed_night5.log:fb1-2 c=4 r=3 Mean TTFT (ms):                          4239.82   
+speed_night5.log:fb1-2 c=4 r=3 Mean TPOT (ms):                          13.63     
+speed_night5.log:fb1-2 prefill8192 r=1 Output token throughput (tok/s):         16.65     
+speed_night5.log:fb1-2 prefill8192 r=1 Mean TTFT (ms):                          5561.85   
+speed_night5.log:fb1-2 prefill8192 r=1 Median TTFT (ms):                        1907.76   
+speed_night5.log:fb1-2 prefill8192 r=2 Output token throughput (tok/s):         15.27     
+speed_night5.log:fb1-2 prefill8192 r=2 Mean TTFT (ms):                          6076.22   
+speed_night5.log:fb1-2 prefill8192 r=2 Median TTFT (ms):                        1960.09   
+speed_night5.log:fb1-2 prefill8192 r=3 Output token throughput (tok/s):         15.06     
+speed_night5.log:fb1-2 prefill8192 r=3 Mean TTFT (ms):                          6081.71   
+speed_night5.log:fb1-2 prefill8192 r=3 Median TTFT (ms):                        1928.01   
+speed_night5.log:fb1-2 prefill32768 r=1 Output token throughput (tok/s):         5.04      
+speed_night5.log:fb1-2 prefill32768 r=1 Mean TTFT (ms):                          19242.91  
+speed_night5.log:fb1-2 prefill32768 r=1 Median TTFT (ms):                        15737.83  
+speed_night5.log:fb1-2 prefill32768 r=2 Output token throughput (tok/s):         5.01      
+speed_night5.log:fb1-2 prefill32768 r=2 Mean TTFT (ms):                          20118.92  
+speed_night5.log:fb1-2 prefill32768 r=2 Median TTFT (ms):                        15932.29  
+speed_night5.log:fb1-2 prefill32768 r=3 Output token throughput (tok/s):         4.82      
+speed_night5.log:fb1-2 prefill32768 r=3 Mean TTFT (ms):                          20181.36  
+speed_night5.log:fb1-2 prefill32768 r=3 Median TTFT (ms):                        15955.06  
+speed_night5.log:fb1-2 prefixtest len=8192 A cold=1.97s A hit=0.46s A hit=0.46s B cold=1.96s B hit=0.46s A partial=0.47s
+speed_night5.log:fb1-2 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.19s B cold=0.18s B hit=0.18s A partial=0.19s
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 04:02:59 fbase round 3 (WSL load 0.36 0.39 0.96): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_night5.log:1d8226d29c41acb977698100cc946a041fe2199f64550e61bec1b6e7553a58a8
+speed_night5.log:READY (waited 210 s here)
+speed_night5.log:(APIServer pid=1) WARNING 11-01 03:03:42 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:04:07 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:06:12 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:06:14 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:06:19 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:06:12 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:06:15 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:06:25 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fbase-3 c=1 r=1 Output token throughput (tok/s):         77.45     
+speed_night5.log:fbase-3 c=1 r=1 Mean TTFT (ms):                          2070.47   
+speed_night5.log:fbase-3 c=1 r=1 Mean TPOT (ms):                          8.88      
+speed_night5.log:fbase-3 c=1 r=2 Output token throughput (tok/s):         68.88     
+speed_night5.log:fbase-3 c=1 r=2 Mean TTFT (ms):                          3090.93   
+speed_night5.log:fbase-3 c=1 r=2 Mean TPOT (ms):                          8.50      
+speed_night5.log:fbase-3 c=1 r=3 Output token throughput (tok/s):         76.62     
+speed_night5.log:fbase-3 c=1 r=3 Mean TTFT (ms):                          2124.74   
+speed_night5.log:fbase-3 c=1 r=3 Mean TPOT (ms):                          8.92      
+speed_night5.log:fbase-3 c=4 r=1 Output token throughput (tok/s):         179.54    
+speed_night5.log:fbase-3 c=4 r=1 Mean TTFT (ms):                          4169.27   
+speed_night5.log:fbase-3 c=4 r=1 Mean TPOT (ms):                          13.84     
+speed_night5.log:fbase-3 c=4 r=2 Output token throughput (tok/s):         183.14    
+speed_night5.log:fbase-3 c=4 r=2 Mean TTFT (ms):                          4317.95   
+speed_night5.log:fbase-3 c=4 r=2 Mean TPOT (ms):                          13.20     
+speed_night5.log:fbase-3 c=4 r=3 Output token throughput (tok/s):         179.01    
+speed_night5.log:fbase-3 c=4 r=3 Mean TTFT (ms):                          4282.27   
+speed_night5.log:fbase-3 c=4 r=3 Mean TPOT (ms):                          13.78     
+speed_night5.log:fbase-3 prefill8192 r=1 Output token throughput (tok/s):         16.54     
+speed_night5.log:fbase-3 prefill8192 r=1 Mean TTFT (ms):                          5607.88   
+speed_night5.log:fbase-3 prefill8192 r=1 Median TTFT (ms):                        1930.87   
+speed_night5.log:fbase-3 prefill8192 r=2 Output token throughput (tok/s):         15.22     
+speed_night5.log:fbase-3 prefill8192 r=2 Mean TTFT (ms):                          6107.75   
+speed_night5.log:fbase-3 prefill8192 r=2 Median TTFT (ms):                        1946.60   
+speed_night5.log:fbase-3 prefill8192 r=3 Output token throughput (tok/s):         15.03     
+speed_night5.log:fbase-3 prefill8192 r=3 Mean TTFT (ms):                          6100.24   
+speed_night5.log:fbase-3 prefill8192 r=3 Median TTFT (ms):                        1944.69   
+speed_night5.log:fbase-3 prefill32768 r=1 Output token throughput (tok/s):         5.02      
+speed_night5.log:fbase-3 prefill32768 r=1 Mean TTFT (ms):                          19325.48  
+speed_night5.log:fbase-3 prefill32768 r=1 Median TTFT (ms):                        15829.24  
+speed_night5.log:fbase-3 prefill32768 r=2 Output token throughput (tok/s):         5.01      
+speed_night5.log:fbase-3 prefill32768 r=2 Mean TTFT (ms):                          20106.54  
+speed_night5.log:fbase-3 prefill32768 r=2 Median TTFT (ms):                        15924.89  
+speed_night5.log:fbase-3 prefill32768 r=3 Output token throughput (tok/s):         4.82      
+speed_night5.log:fbase-3 prefill32768 r=3 Mean TTFT (ms):                          20196.74  
+speed_night5.log:fbase-3 prefill32768 r=3 Median TTFT (ms):                        16001.30  
+speed_night5.log:fbase-3 prefixtest len=8192 A cold=2.0s A hit=0.47s A hit=0.47s B cold=1.96s B hit=0.46s A partial=0.46s
+speed_night5.log:fbase-3 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 04:21:48 fcombo round 3 (WSL load 0.53 0.43 0.56): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+speed_night5.log:c38e1efd2d7f13b432048bd964415acecaf72810c71007be659a0debb927c25d
+speed_night5.log:READY (waited 210 s here)
+speed_night5.log:(APIServer pid=1) WARNING 11-01 03:22:31 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:22:56 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:25:01 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:25:07 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:25:01 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:25:13 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fcombo-3 c=1 r=1 Output token throughput (tok/s):         85.39     
+speed_night5.log:fcombo-3 c=1 r=1 Mean TTFT (ms):                          2089.55   
+speed_night5.log:fcombo-3 c=1 r=1 Mean TPOT (ms):                          7.64      
+speed_night5.log:fcombo-3 c=1 r=2 Output token throughput (tok/s):         82.66     
+speed_night5.log:fcombo-3 c=1 r=2 Mean TTFT (ms):                          2120.56   
+speed_night5.log:fcombo-3 c=1 r=2 Mean TPOT (ms):                          7.97      
+speed_night5.log:fcombo-3 c=1 r=3 Output token throughput (tok/s):         85.63     
+speed_night5.log:fcombo-3 c=1 r=3 Mean TTFT (ms):                          2097.66   
+speed_night5.log:fcombo-3 c=1 r=3 Mean TPOT (ms):                          7.60      
+speed_night5.log:fcombo-3 c=4 r=1 Output token throughput (tok/s):         205.91    
+speed_night5.log:fcombo-3 c=4 r=1 Mean TTFT (ms):                          4118.96   
+speed_night5.log:fcombo-3 c=4 r=1 Mean TPOT (ms):                          11.04     
+speed_night5.log:fcombo-3 c=4 r=2 Output token throughput (tok/s):         202.44    
+speed_night5.log:fcombo-3 c=4 r=2 Mean TTFT (ms):                          4167.04   
+speed_night5.log:fcombo-3 c=4 r=2 Mean TPOT (ms):                          11.31     
+speed_night5.log:fcombo-3 c=4 r=3 Output token throughput (tok/s):         204.47    
+speed_night5.log:fcombo-3 c=4 r=3 Mean TTFT (ms):                          4230.17   
+speed_night5.log:fcombo-3 c=4 r=3 Mean TPOT (ms):                          11.10     
+speed_night5.log:fcombo-3 prefill8192 r=1 Output token throughput (tok/s):         17.95     
+speed_night5.log:fcombo-3 prefill8192 r=1 Mean TTFT (ms):                          5650.53   
+speed_night5.log:fcombo-3 prefill8192 r=1 Median TTFT (ms):                        1949.02   
+speed_night5.log:fcombo-3 prefill8192 r=2 Output token throughput (tok/s):         15.90     
+speed_night5.log:fcombo-3 prefill8192 r=2 Mean TTFT (ms):                          6166.74   
+speed_night5.log:fcombo-3 prefill8192 r=2 Median TTFT (ms):                        2012.10   
+speed_night5.log:fcombo-3 prefill8192 r=3 Output token throughput (tok/s):         16.10     
+speed_night5.log:fcombo-3 prefill8192 r=3 Mean TTFT (ms):                          6109.98   
+speed_night5.log:fcombo-3 prefill8192 r=3 Median TTFT (ms):                        1996.84   
+speed_night5.log:fcombo-3 prefill32768 r=1 Output token throughput (tok/s):         5.54      
+speed_night5.log:fcombo-3 prefill32768 r=1 Mean TTFT (ms):                          18810.18  
+speed_night5.log:fcombo-3 prefill32768 r=1 Median TTFT (ms):                        15349.98  
+speed_night5.log:fcombo-3 prefill32768 r=2 Output token throughput (tok/s):         5.57      
+speed_night5.log:fcombo-3 prefill32768 r=2 Mean TTFT (ms):                          19723.87  
+speed_night5.log:fcombo-3 prefill32768 r=2 Median TTFT (ms):                        15457.47  
+speed_night5.log:fcombo-3 prefill32768 r=3 Output token throughput (tok/s):         5.45      
+speed_night5.log:fcombo-3 prefill32768 r=3 Mean TTFT (ms):                          19747.20  
+speed_night5.log:fcombo-3 prefill32768 r=3 Median TTFT (ms):                        15543.99  
+speed_night5.log:fcombo-3 prefixtest len=8192 A cold=2.03s A hit=0.48s A hit=0.48s B cold=2.01s B hit=0.48s A partial=0.48s
+speed_night5.log:fcombo-3 prefixtest len=1024 A cold=0.21s A hit=0.2s A hit=0.2s B cold=0.19s B hit=0.19s A partial=0.19s
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 04:39:59 fb1 round 3 (WSL load 0.45 0.52 0.54): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_night5.log:9e8db505bb190bf54b7a801b30e81fa2def42db353e653b08b204bd12a2de552
+speed_night5.log:READY (waited 210 s here)
+speed_night5.log:(APIServer pid=1) WARNING 11-01 03:40:42 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:41:07 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:43:12 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:43:12 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json for MoE layer.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:43:14 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_night5.log:(EngineCore pid=177) INFO 11-01 03:43:19 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:43:15 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_night5.log:(EngineCore pid=177) WARNING 11-01 03:43:25 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_night5.log:fb1-3 c=1 r=1 Output token throughput (tok/s):         77.67     
+speed_night5.log:fb1-3 c=1 r=1 Mean TTFT (ms):                          2069.43   
+speed_night5.log:fb1-3 c=1 r=1 Mean TPOT (ms):                          8.85      
+speed_night5.log:fb1-3 c=1 r=2 Output token throughput (tok/s):         79.94     
+speed_night5.log:fb1-3 c=1 r=2 Mean TTFT (ms):                          2087.45   
+speed_night5.log:fb1-3 c=1 r=2 Mean TPOT (ms):                          8.45      
+speed_night5.log:fb1-3 c=1 r=3 Output token throughput (tok/s):         77.07     
+speed_night5.log:fb1-3 c=1 r=3 Mean TTFT (ms):                          2099.65   
+speed_night5.log:fb1-3 c=1 r=3 Mean TPOT (ms):                          8.89      
+speed_night5.log:fb1-3 c=4 r=1 Output token throughput (tok/s):         179.17    
+speed_night5.log:fb1-3 c=4 r=1 Mean TTFT (ms):                          4145.35   
+speed_night5.log:fb1-3 c=4 r=1 Mean TPOT (ms):                          13.89     
+speed_night5.log:fb1-3 c=4 r=2 Output token throughput (tok/s):         181.44    
+speed_night5.log:fb1-3 c=4 r=2 Mean TTFT (ms):                          4116.66   
+speed_night5.log:fb1-3 c=4 r=2 Mean TPOT (ms):                          13.61     
+speed_night5.log:fb1-3 c=4 r=3 Output token throughput (tok/s):         181.14    
+speed_night5.log:fb1-3 c=4 r=3 Mean TTFT (ms):                          4243.13   
+speed_night5.log:fb1-3 c=4 r=3 Mean TPOT (ms):                          13.63     
+speed_night5.log:fb1-3 prefill8192 r=1 Output token throughput (tok/s):         16.58     
+speed_night5.log:fb1-3 prefill8192 r=1 Mean TTFT (ms):                          5594.21   
+speed_night5.log:fb1-3 prefill8192 r=1 Median TTFT (ms):                        1912.79   
+speed_night5.log:fb1-3 prefill8192 r=2 Output token throughput (tok/s):         15.26     
+speed_night5.log:fb1-3 prefill8192 r=2 Mean TTFT (ms):                          6089.70   
+speed_night5.log:fb1-3 prefill8192 r=2 Median TTFT (ms):                        1943.23   
+speed_night5.log:fb1-3 prefill8192 r=3 Output token throughput (tok/s):         15.12     
+speed_night5.log:fb1-3 prefill8192 r=3 Mean TTFT (ms):                          6045.26   
+speed_night5.log:fb1-3 prefill8192 r=3 Median TTFT (ms):                        1920.37   
+speed_night5.log:fb1-3 prefill32768 r=1 Output token throughput (tok/s):         5.04      
+speed_night5.log:fb1-3 prefill32768 r=1 Mean TTFT (ms):                          19257.45  
+speed_night5.log:fb1-3 prefill32768 r=1 Median TTFT (ms):                        15726.60  
+speed_night5.log:fb1-3 prefill32768 r=2 Output token throughput (tok/s):         4.99      
+speed_night5.log:fb1-3 prefill32768 r=2 Mean TTFT (ms):                          20205.09  
+speed_night5.log:fb1-3 prefill32768 r=2 Median TTFT (ms):                        15957.13  
+speed_night5.log:fb1-3 prefill32768 r=3 Output token throughput (tok/s):         4.82      
+speed_night5.log:fb1-3 prefill32768 r=3 Mean TTFT (ms):                          20200.13  
+speed_night5.log:fb1-3 prefill32768 r=3 Median TTFT (ms):                        15926.43  
+speed_night5.log:fb1-3 prefixtest len=8192 A cold=2.0s A hit=0.47s A hit=0.46s B cold=1.94s B hit=0.46s A partial=0.46s
+speed_night5.log:fb1-3 prefixtest len=1024 A cold=0.2s A hit=0.18s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
+speed_night5.log:OK: no new disk event (newest 4566)
+speed_night5.log:=== 2026-11-01 04:58:51 PHASE A DONE
+speed_night5.log:restore: skipped once (planned restart)
+night4_extra.log:OK: no new disk event (newest 4566)
+night4_extra.log:=== 2026-10-31 21:37:46 o7ref round 1 (WSL load 2.58 3.42 4.52): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+night4_extra.log:e645bb1a2d63a4869f9366cf63048de1c909208d6ccca358f2ab30a81d34218a
+night4_extra.log:READY (waited 310 s here)
+night4_extra.log:(APIServer pid=1) WARNING 10-31 20:38:42 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+night4_extra.log:(EngineCore pid=183) INFO 10-31 20:39:09 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+night4_extra.log:(EngineCore pid=183) INFO 10-31 20:42:37 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+night4_extra.log:(EngineCore pid=183) INFO 10-31 20:42:49 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+night4_extra.log:(EngineCore pid=183) WARNING 10-31 20:42:38 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+night4_extra.log:(EngineCore pid=183) WARNING 10-31 20:42:58 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+night4_extra.log:If this error was unexpected, please consider searching for existing issues or filing a new issue at https://github.com/microsoft/WSL/issues.
+night4_extra.log:If this error was unexpected, please consider searching for existing issues or filing a new issue at https://github.com/microsoft/WSL/issues.
+night4_extra.log:OK: no new disk event (newest 4566)
+night4_extra.log:=== 2026-10-31 21:43:55 o7 round 1 (WSL load 9.83 7.44 5.80): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+night4_extra.log:0706c82fb1e15716b3a85f1a193f9d05f11753842458cc5a0896926ca249757a
+night4_extra.log:restore: stopping test container vllmprtest-sp-o7-1
+night4_extra.log:restore: vllm already running
+speed_F.log:OK: no new disk event (newest 4566)
+speed_F.log:=== 2026-10-31 18:49:31 fcombo round 1 (WSL load 1.25 1.81 2.50): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+speed_F.log:e9a0a25791deb35a632f7d04af05f8d490f15e83a95fccdfb39626735753881e
+speed_F.log:READY (waited 300 s here)
+speed_F.log:(APIServer pid=1) WARNING 10-31 17:50:25 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_F.log:(EngineCore pid=183) INFO 10-31 17:50:51 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_F.log:(EngineCore pid=183) INFO 10-31 17:54:08 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_F.log:(EngineCore pid=183) INFO 10-31 17:54:22 [kv_cache_utils.py:2032] GPU KV cache size: 197,557 tokens, Maximum concurrency for 131,072 tokens per request: 1.51x
+speed_F.log:(EngineCore pid=183) WARNING 10-31 17:54:14 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_F.log:(EngineCore pid=183) WARNING 10-31 17:54:28 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_F.log:restore: skipped once (planned restart)
+speed_F.log:OK: no new disk event (newest 4566)
+speed_F.log:=== 2026-10-31 19:25:22 fcombo round 1 (WSL load 2.62 2.51 2.48): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+speed_F.log:48bb7e351a059010f947ff4fe87d9e339a1f685511998f13ce97e4742b56a75a
+speed_F.log:READY (waited 260 s here)
+speed_F.log:(APIServer pid=1) WARNING 10-31 18:26:18 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_F.log:(EngineCore pid=184) INFO 10-31 18:26:45 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_F.log:(EngineCore pid=184) INFO 10-31 18:29:23 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_F.log:(EngineCore pid=184) INFO 10-31 18:29:32 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+speed_F.log:(EngineCore pid=184) WARNING 10-31 18:29:23 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_F.log:(EngineCore pid=184) WARNING 10-31 18:29:38 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_F.log:fcombo-1 c=1 r=1 Output token throughput (tok/s):         120.64    
+speed_F.log:fcombo-1 c=1 r=1 Mean TTFT (ms):                          296.52    
+speed_F.log:fcombo-1 c=1 r=1 Mean TPOT (ms):                          7.72      
+speed_F.log:fcombo-1 c=1 r=2 Output token throughput (tok/s):         81.00     
+speed_F.log:fcombo-1 c=1 r=2 Mean TTFT (ms):                          2228.92   
+speed_F.log:fcombo-1 c=1 r=2 Mean TPOT (ms):                          8.01      
+speed_F.log:fcombo-1 c=1 r=3 Output token throughput (tok/s):         124.76    
+speed_F.log:fcombo-1 c=1 r=3 Mean TTFT (ms):                          219.25    
+speed_F.log:fcombo-1 c=1 r=3 Mean TPOT (ms):                          7.60      
+speed_F.log:fcombo-1 c=4 r=1 Output token throughput (tok/s):         195.80    
+speed_F.log:fcombo-1 c=4 r=1 Mean TTFT (ms):                          4680.82   
+speed_F.log:fcombo-1 c=4 r=1 Mean TPOT (ms):                          11.09     
+speed_F.log:fcombo-1 c=4 r=2 Output token throughput (tok/s):         201.94    
+speed_F.log:fcombo-1 c=4 r=2 Mean TTFT (ms):                          4079.57   
+speed_F.log:fcombo-1 c=4 r=2 Mean TPOT (ms):                          11.51     
+speed_F.log:fcombo-1 c=4 r=3 Output token throughput (tok/s):         199.96    
+speed_F.log:fcombo-1 c=4 r=3 Mean TTFT (ms):                          4255.65   
+speed_F.log:fcombo-1 c=4 r=3 Mean TPOT (ms):                          11.48     
+speed_F.log:fcombo-1 prefill8192 r=1 Output token throughput (tok/s):         17.88     
+speed_F.log:fcombo-1 prefill8192 r=1 Mean TTFT (ms):                          5675.18   
+speed_F.log:fcombo-1 prefill8192 r=1 Median TTFT (ms):                        1999.49   
+speed_F.log:fcombo-1 prefill8192 r=2 Output token throughput (tok/s):         11.59     
+speed_F.log:fcombo-1 prefill8192 r=2 Mean TTFT (ms):                          9159.26   
+speed_F.log:fcombo-1 prefill8192 r=2 Median TTFT (ms):                        2012.16   
+speed_F.log:fcombo-1 prefill8192 r=3 Output token throughput (tok/s):         15.95     
+speed_F.log:fcombo-1 prefill8192 r=3 Mean TTFT (ms):                          6182.32   
+speed_F.log:fcombo-1 prefill8192 r=3 Median TTFT (ms):                        2006.54   
+speed_F.log:fcombo-1 prefill32768 r=1 Output token throughput (tok/s):         5.46      
+speed_F.log:fcombo-1 prefill32768 r=1 Mean TTFT (ms):                          19134.95  
+speed_F.log:fcombo-1 prefill32768 r=1 Median TTFT (ms):                        15587.22  
+speed_F.log:fcombo-1 prefill32768 r=2 Output token throughput (tok/s):         5.01      
+speed_F.log:fcombo-1 prefill32768 r=2 Mean TTFT (ms):                          22290.18  
+speed_F.log:fcombo-1 prefill32768 r=2 Median TTFT (ms):                        15586.41  
+speed_F.log:fcombo-1 prefill32768 r=3 Output token throughput (tok/s):         5.48      
+speed_F.log:fcombo-1 prefill32768 r=3 Mean TTFT (ms):                          19611.56  
+speed_F.log:fcombo-1 prefill32768 r=3 Median TTFT (ms):                        15612.38  
+speed_F.log:fcombo-1 prefixtest len=8192 A cold=2.1s A hit=0.5s A hit=0.51s B cold=2.15s B hit=0.48s A partial=0.49s
+speed_F.log:fcombo-1 prefixtest len=1024 A cold=0.22s A hit=0.22s A hit=0.2s B cold=0.19s B hit=0.2s A partial=0.19s
+speed_F.log:wrote /work/speed/prompts_fcombo.json
+speed_F.log:gsm8k n=200 correct=169 accuracy=0.8450 stderr=0.0256
+speed_F.log:OK: no new disk event (newest 4566)
+speed_F.log:=== 2026-10-31 19:47:57 fb1 round 1 (WSL load 0.90 1.99 2.29): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_F.log:cd18669e1001abec3822921c39d7bd1ac3dc049da37ec4fedfaf9ae01bad83d2
+speed_F.log:READY (waited 230 s here)
+speed_F.log:(APIServer pid=1) WARNING 10-31 18:48:42 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_F.log:(EngineCore pid=177) INFO 10-31 18:49:08 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_F.log:(EngineCore pid=177) INFO 10-31 18:51:21 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_F.log:(EngineCore pid=177) INFO 10-31 18:51:22 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json for MoE layer.
+speed_F.log:(EngineCore pid=177) INFO 10-31 18:51:24 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_F.log:(EngineCore pid=177) INFO 10-31 18:51:32 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_F.log:(EngineCore pid=177) WARNING 10-31 18:51:25 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_F.log:(EngineCore pid=177) WARNING 10-31 18:51:38 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_F.log:fb1-1 c=1 r=1 Output token throughput (tok/s):         75.61     
+speed_F.log:fb1-1 c=1 r=1 Mean TTFT (ms):                          2202.89   
+speed_F.log:fb1-1 c=1 r=1 Mean TPOT (ms):                          8.94      
+speed_F.log:fb1-1 c=1 r=2 Output token throughput (tok/s):         79.15     
+speed_F.log:fb1-1 c=1 r=2 Mean TTFT (ms):                          2096.67   
+speed_F.log:fb1-1 c=1 r=2 Mean TPOT (ms):                          8.56      
+speed_F.log:fb1-1 c=1 r=3 Output token throughput (tok/s):         76.12     
+speed_F.log:fb1-1 c=1 r=3 Mean TTFT (ms):                          2134.23   
+speed_F.log:fb1-1 c=1 r=3 Mean TPOT (ms):                          8.99      
+speed_F.log:fb1-1 c=4 r=1 Output token throughput (tok/s):         140.75    
+speed_F.log:fb1-1 c=4 r=1 Mean TTFT (ms):                          7328.60   
+speed_F.log:fb1-1 c=4 r=1 Mean TPOT (ms):                          13.76     
+speed_F.log:fb1-1 c=4 r=2 Output token throughput (tok/s):         142.00    
+speed_F.log:fb1-1 c=4 r=2 Mean TTFT (ms):                          7329.92   
+speed_F.log:fb1-1 c=4 r=2 Mean TPOT (ms):                          13.46     
+speed_F.log:fb1-1 c=4 r=3 Output token throughput (tok/s):         178.99    
+speed_F.log:fb1-1 c=4 r=3 Mean TTFT (ms):                          4304.23   
+speed_F.log:fb1-1 c=4 r=3 Mean TPOT (ms):                          13.87     
+speed_F.log:fb1-1 prefill8192 r=1 Output token throughput (tok/s):         16.25     
+speed_F.log:fb1-1 prefill8192 r=1 Mean TTFT (ms):                          5742.38   
+speed_F.log:fb1-1 prefill8192 r=1 Median TTFT (ms):                        1969.63   
+speed_F.log:fb1-1 prefill8192 r=2 Output token throughput (tok/s):         14.96     
+speed_F.log:fb1-1 prefill8192 r=2 Mean TTFT (ms):                          6236.07   
+speed_F.log:fb1-1 prefill8192 r=2 Median TTFT (ms):                        1983.81   
+speed_F.log:fb1-1 prefill8192 r=3 Output token throughput (tok/s):         14.86     
+speed_F.log:fb1-1 prefill8192 r=3 Mean TTFT (ms):                          6185.19   
+speed_F.log:fb1-1 prefill8192 r=3 Median TTFT (ms):                        1989.44   
+speed_F.log:fb1-1 prefill32768 r=1 Output token throughput (tok/s):         5.88      
+speed_F.log:fb1-1 prefill32768 r=1 Mean TTFT (ms):                          15625.50  
+speed_F.log:fb1-1 prefill32768 r=1 Median TTFT (ms):                        16126.03  
+speed_F.log:fb1-1 prefill32768 r=2 Output token throughput (tok/s):         4.96      
+speed_F.log:fb1-1 prefill32768 r=2 Mean TTFT (ms):                          20351.15  
+speed_F.log:fb1-1 prefill32768 r=2 Median TTFT (ms):                        16242.39  
+speed_F.log:fb1-1 prefill32768 r=3 Output token throughput (tok/s):         5.67      
+speed_F.log:fb1-1 prefill32768 r=3 Mean TTFT (ms):                          16181.72  
+speed_F.log:fb1-1 prefill32768 r=3 Median TTFT (ms):                        16234.28  
+speed_F.log:fb1-1 prefixtest len=8192 A cold=2.01s A hit=0.47s A hit=0.47s B cold=2.02s B hit=0.48s A partial=0.47s
+speed_F.log:fb1-1 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
+speed_F.log:wrote /work/speed/prompts_fb1.json
+speed_F.log:gsm8k n=200 correct=171 accuracy=0.8550 stderr=0.0249
+speed_F.log:OK: no new disk event (newest 4566)
+speed_F.log:=== 2026-10-31 20:11:00 fbase round 2 (WSL load 1.71 1.47 1.34): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+speed_F.log:c986db50e988fc9633aa5071078dd4079ba8024d347cdf2c65cc352ae2dacd5b
+speed_F.log:READY (waited 240 s here)
+speed_F.log:(APIServer pid=1) WARNING 10-31 19:11:47 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:12:12 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:14:46 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:14:49 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:14:54 [kv_cache_utils.py:2032] GPU KV cache size: 234,958 tokens, Maximum concurrency for 131,072 tokens per request: 1.79x
+speed_F.log:(EngineCore pid=177) WARNING 10-31 19:14:47 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_F.log:(EngineCore pid=177) WARNING 10-31 19:14:50 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+speed_F.log:(EngineCore pid=177) WARNING 10-31 19:15:01 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_F.log:fbase-2 c=1 r=1 Output token throughput (tok/s):         72.80     
+speed_F.log:fbase-2 c=1 r=1 Mean TTFT (ms):                          2475.63   
+speed_F.log:fbase-2 c=1 r=1 Mean TPOT (ms):                          8.92      
+speed_F.log:fbase-2 c=1 r=2 Output token throughput (tok/s):         78.19     
+speed_F.log:fbase-2 c=1 r=2 Mean TTFT (ms):                          2179.09   
+speed_F.log:fbase-2 c=1 r=2 Mean TPOT (ms):                          8.55      
+speed_F.log:fbase-2 c=1 r=3 Output token throughput (tok/s):         75.26     
+speed_F.log:fbase-2 c=1 r=3 Mean TTFT (ms):                          2229.57   
+speed_F.log:fbase-2 c=1 r=3 Mean TPOT (ms):                          8.95      
+speed_F.log:fbase-2 c=4 r=1 Output token throughput (tok/s):         173.02    
+speed_F.log:fbase-2 c=4 r=1 Mean TTFT (ms):                          4488.19   
+speed_F.log:fbase-2 c=4 r=1 Mean TPOT (ms):                          14.06     
+speed_F.log:fbase-2 c=4 r=2 Output token throughput (tok/s):         177.17    
+speed_F.log:fbase-2 c=4 r=2 Mean TTFT (ms):                          4604.51   
+speed_F.log:fbase-2 c=4 r=2 Mean TPOT (ms):                          13.44     
+speed_F.log:fbase-2 c=4 r=3 Output token throughput (tok/s):         172.24    
+speed_F.log:fbase-2 c=4 r=3 Mean TTFT (ms):                          4588.54   
+speed_F.log:fbase-2 c=4 r=3 Mean TPOT (ms):                          14.06     
+speed_F.log:fbase-2 prefill8192 r=1 Output token throughput (tok/s):         15.01     
+speed_F.log:fbase-2 prefill8192 r=1 Mean TTFT (ms):                          6387.96   
+speed_F.log:fbase-2 prefill8192 r=1 Median TTFT (ms):                        2049.06   
+speed_F.log:fbase-2 prefill8192 r=2 Output token throughput (tok/s):         14.35     
+speed_F.log:fbase-2 prefill8192 r=2 Mean TTFT (ms):                          6609.77   
+speed_F.log:fbase-2 prefill8192 r=2 Median TTFT (ms):                        2042.16   
+speed_F.log:fbase-2 prefill8192 r=3 Output token throughput (tok/s):         14.76     
+speed_F.log:fbase-2 prefill8192 r=3 Mean TTFT (ms):                          6245.02   
+speed_F.log:fbase-2 prefill8192 r=3 Median TTFT (ms):                        2045.13   
+speed_F.log:fbase-2 prefill32768 r=1 Output token throughput (tok/s):         4.83      
+speed_F.log:fbase-2 prefill32768 r=1 Mean TTFT (ms):                          20374.89  
+speed_F.log:fbase-2 prefill32768 r=1 Median TTFT (ms):                        16667.86  
+speed_F.log:fbase-2 prefill32768 r=2 Output token throughput (tok/s):         4.72      
+speed_F.log:fbase-2 prefill32768 r=2 Mean TTFT (ms):                          21654.70  
+speed_F.log:fbase-2 prefill32768 r=2 Median TTFT (ms):                        16738.84  
+speed_F.log:fbase-2 prefill32768 r=3 Output token throughput (tok/s):         4.63      
+speed_F.log:fbase-2 prefill32768 r=3 Mean TTFT (ms):                          21291.57  
+speed_F.log:fbase-2 prefill32768 r=3 Median TTFT (ms):                        16604.86  
+speed_F.log:fbase-2 prefixtest len=8192 A cold=2.14s A hit=0.5s A hit=0.51s B cold=2.3s B hit=0.51s A partial=0.5s
+speed_F.log:fbase-2 prefixtest len=1024 A cold=0.33s A hit=0.28s A hit=0.28s B cold=0.19s B hit=0.43s A partial=0.35s
+speed_F.log:OK: no new disk event (newest 4566)
+speed_F.log:=== 2026-10-31 20:32:02 fcombo round 2 (WSL load 10.79 10.40 6.98): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+speed_F.log:22e41466ae0a618240f9312e0875e624ac32fbeda4719a2d14c91cd624f824b8
+speed_F.log:READY (waited 270 s here)
+speed_F.log:(APIServer pid=1) WARNING 10-31 19:32:50 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:33:21 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:36:14 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+speed_F.log:(EngineCore pid=177) INFO 10-31 19:36:22 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+speed_F.log:(EngineCore pid=177) WARNING 10-31 19:36:15 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+speed_F.log:(EngineCore pid=177) WARNING 10-31 19:36:31 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed_F.log:fcombo-2 c=1 r=1 Output token throughput (tok/s):         80.63     
+speed_F.log:fcombo-2 c=1 r=1 Mean TTFT (ms):                          2413.39   
+speed_F.log:fcombo-2 c=1 r=1 Mean TPOT (ms):                          7.70      
+speed_F.log:fcombo-2 c=1 r=2 Output token throughput (tok/s):         78.62     
+speed_F.log:fcombo-2 c=1 r=2 Mean TTFT (ms):                          2414.75   
+speed_F.log:fcombo-2 c=1 r=2 Mean TPOT (ms):                          8.02      
+speed_F.log:fcombo-2 c=1 r=3 Output token throughput (tok/s):         123.36    
+speed_F.log:fcombo-2 c=1 r=3 Mean TTFT (ms):                          265.67    
+speed_F.log:fcombo-2 c=1 r=3 Mean TPOT (ms):                          7.60      
+speed_F.log:fcombo-2 c=4 r=1 Output token throughput (tok/s):         198.52    
+speed_F.log:fcombo-2 c=4 r=1 Mean TTFT (ms):                          4298.85   
+speed_F.log:fcombo-2 c=4 r=1 Mean TPOT (ms):                          11.26     
+speed_F.log:fcombo-2 c=4 r=2 Output token throughput (tok/s):         306.57    
+speed_F.log:fcombo-2 c=4 r=2 Mean TTFT (ms):                          429.52    
+speed_F.log:fcombo-2 c=4 r=2 Mean TPOT (ms):                          11.89     
+speed_F.log:fcombo-2 c=4 r=3 Output token throughput (tok/s):         187.17    
+speed_F.log:fcombo-2 c=4 r=3 Mean TTFT (ms):                          4975.01   
+speed_F.log:fcombo-2 c=4 r=3 Mean TPOT (ms):                          11.44     
+speed_F.log:fcombo-2 prefill8192 r=1 Output token throughput (tok/s):         36.88     
+speed_F.log:fcombo-2 prefill8192 r=1 Mean TTFT (ms):                          1987.41   
+speed_F.log:fcombo-2 prefill8192 r=1 Median TTFT (ms):                        1979.37   
+speed_F.log:fcombo-2 prefill8192 r=2 Output token throughput (tok/s):         10.52     
+speed_F.log:fcombo-2 prefill8192 r=2 Mean TTFT (ms):                          10284.68  
+speed_F.log:fcombo-2 prefill8192 r=2 Median TTFT (ms):                        2011.47   
+speed_F.log:fcombo-2 prefill8192 r=3 Output token throughput (tok/s):         14.75     
+speed_F.log:fcombo-2 prefill8192 r=3 Mean TTFT (ms):                          6835.78   
+speed_F.log:fcombo-2 prefill8192 r=3 Median TTFT (ms):                        2595.19   
+speed_F.log:fcombo-2 prefill32768 r=1 Output token throughput (tok/s):         4.28      
+speed_F.log:fcombo-2 prefill32768 r=1 Mean TTFT (ms):                          22468.71  
+speed_F.log:fcombo-2 prefill32768 r=1 Median TTFT (ms):                        22468.71  
+speed_F.log:restore: skipped once (planned restart)

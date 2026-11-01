@@ -6,6 +6,10 @@
 > (not yet tested) and round 1 of the final A/B for `base` only. A second night run on 2026-10-30 (§ 12) gave
 > phase C a valid timer (option 7: tuned Triton tiles −13–14 % at 6, 8 and 16 rows) and finished the BF16 tuning
 > chunks; the final A/B did not resume (another job ran all night). Phase B2 (int4 keys 24–128) did not run.
+> **Update 2026-11-01 (§ 13):** the final A/B ran all 3 rounds: **`fcombo` (`mtp3 + tattn`) passes** (+12.2 % at
+> c=1, +14.1 % at c=4, GSM8K equal), and the production server now starts with it. The tuned BF16 draft MoE file
+> (option 3) is 3–15 % faster as a kernel but gives no end-to-end gain. The prefix-cache hypothesis of § 6.1 is
+> rejected. Option 7 end-to-end: see § 13.5.
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -29,6 +33,14 @@ server flags.
 | 7 | Hybrid linear kernel at 6–16 rows | **kernel gain, no end-to-end test** (§ 12.1, CUDA-graph timer) | tuned Triton tiles −13 % / −14 % / −14 % of linear time at M 6 / 8 / 16, −1 % at M 12; the split HIP op is slower at every M ≥ 6 |
 | 3 | Tuned BF16 MoE file for the MTP draft layer | **not measured** (all 5 tuning chunks done, § 11.4 and § 12.2; no merge, no A/B) | the draft layer still uses the default MoE config |
 | 4 | int4 MoE keys 24, 32, 64, 128 | **not measured** (phase B2 did not run) | — |
+
+**Update 2026-11-01 (§ 13; the rows above keep their earlier state):**
+
+| # | Option | Verdict | Main number (median of 3 rounds vs `fbase`, same series) |
+|---|---|---|---|
+| 1a + 6 | The combination `mtp3 + tattn` (`fcombo`) | **passes** the ship test; **in production since 2026-11-01** | +12.2 % at c=1, +14.1 % at c=4; TPOT −13 % / −17 %; prefill within spread; GSM8K 169 vs 171 of 200 |
+| 3 | Tuned BF16 MoE file for the MTP draft layer (`fb1`) | **fails** (no end-to-end gain) | kernel −9.4 % (bs 1) to −2.5 % (bs 16); end-to-end +1.6 % / +1.5 %, inside the spread; TPOT equal |
+| 7 | Hybrid linear kernel, tile patch | see § 13.5 | — |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -353,6 +365,15 @@ cross the guard.
 6. Upstream (only with the operator's approval of the exact text): a vLLM issue that `TRITON_ATTN` beats the
    ROCm default with MTP on gfx1201 for this model family; possibly the prefix-cache stall, if confirmed.
 
+**Update 2026-11-01 (§ 13):** items 2, 3 and 5 are done (the final A/B passed and production starts with
+`fcombo`; phase B1 failed end to end). Item 1: the prefix-cache hypothesis is rejected (§ 13.3); the
+`--no-enable-prefix-caching` A/B is not needed for it. Open:
+
+7. The stall of § 6.1 (one request per run, ~12 s, never on a prefix-cache hit): find its cause, for example with
+   a request trace of the bench's first measured request; `fcombo-1` ran 2 of 3 c=1 runs without it.
+8. Option 7: see § 13.5.
+9. Phase B2 and `mtp3 + tattn + mnbt8k` stay open.
+
 ## 10. Files
 
 | Path in [vllm-r9700-speed-options/](vllm-r9700-speed-options/) | What |
@@ -373,6 +394,12 @@ cross the guard.
 | `night-2026-10-30/phaseB1/` | `draft-bs-4.json`, `draft-bs-12.json` and their tuning logs without progress bars |
 | `night-2026-10-30/raw/` | `driver_log.txt` (`night3.sh`), `ram_guard.txt` |
 | `harness/` (night 2026-10-30) | `night3.sh` (driver), `linear_bench_graph.py` (phase C2 timer over `linear_bench.py`), `prefixtest.py` (§ 6.1 check), `speed_A.sh` with the `PREFIXTEST` hook |
+| `night-2026-10-31/raw/` | `bench_final_ab.txt`, `spec_metrics_final_ab.txt`, `prefixtest.txt` (§ 13.2–13.3), `driver_log.txt` (`night4.sh`, `night5.sh`), `series_log.txt`, `wait_quiet.txt`, `ram_guard.txt` |
+| `night-2026-10-31/server_logs/` | Server log per arm-round of the final A/B; `*_STOPPED_*` for the two runs stopped by the RAM guard |
+| `night-2026-10-31/quality/` | `gsm8k_fcombo.json`, `prompts_fcombo.json`, `gsm8k_fb1.json`, `prompts_fb1.json` (`fbase`: `night-2026-10-28/quality/`) |
+| `night-2026-10-31/phaseB1_kernel_ab/` | `default-<n>.log`, `tuned-<n>.log`, `summary.log`, `decision.txt`, and the merged BF16 file |
+| `night-2026-10-31/option7/` | `rdna_hybrid_w4a16.patched.py` (mounted over the image file for arm `o7`) and `tile_patch.diff` |
+| `harness/` (2026-10-31) | `night4.sh`, `night5.sh`, `night6.sh`, `night4_extra.sh` (drivers), `merge_b1.py`, `moe_kernel_ab.sh` + `.py`, `speed_A.sh` (arms `fb1`, `o7ref`, `o7`; `QUIETCHECK`; complete-round check), `ram_guard_all.sh` (process-group stop) |
 
 Reproduce a comparison: `python3 -I harness/harness.py compare quality/prompts_base.json quality/prompts_mtp3.json`
 and `python3 -I harness/harness.py gsm8k-compare quality/gsm8k_base.json quality/gsm8k_mtp3.json`.
@@ -517,3 +544,97 @@ before the deadline, and the driver ended. No prefix-cache check ran (it is part
 
 The production server was restored at 05:02 with no extra arguments (MTP 2, `ROCM_ATTN`). Nothing was changed
 in `start-vllm.ps1`.
+
+## 13. Runs of 2026-10-31/11-01 (operator: "запускай тесты свои", "буду утром")
+
+Drivers: `harness/night4.sh` (17:55–21:43), `harness/night5.sh` (21:46–04:58), `harness/night6.sh` (from 05:00,
+option 7). Guards as in § 11: RAM 2 GB, deadline 07:15, model loads only on a quiet PC. Data:
+`night-2026-10-31/`.
+
+### 13.1 Phase B1 kernel A/B (option 3)
+
+`harness/merge_b1.py` merged the five BF16 chunks (keys 1, 2, 4, 12, 256, 1024, 2048) into
+`moe/tune/merged_b1/` next to a copy of the production int4 file. `harness/moe_kernel_ab.sh`: `benchmark_moe.py`
+without `--tune` (100 iterations of one draft MoE layer), default config against the merged file, A B A B A B
+containers, 17:55–17:59. Decision rule written before the run: `fb1` joins the final A/B only when the tuned file is
+faster by more than 3 % at bs 1 and bs 4.
+
+| bs | 1 | 2 | 3 | 4 | 6 | 8 | 12 | 16 |
+|---|---|---|---|---|---|---|---|---|
+| default (µs, median of 3) | 77.97 | 230.20 | 318.32 | 392.72 | 545.59 | 692.88 | 900.45 | 1110.13 |
+| tuned (µs) | 70.67 | 195.61 | 274.61 | 352.51 | 505.72 | 656.17 | 868.86 | 1081.88 |
+| change | −9.4 % | −15.0 % | −13.7 % | −10.2 % | −7.3 % | −5.3 % | −3.5 % | −2.5 % |
+
+It passed the rule, so `fb1` ran. Expected end-to-end effect before the run: ~0.2 % (one draft MoE layer per draft
+step saves ~7–40 µs of a ~9 ms step), below the spread.
+
+### 13.2 Final A/B — `fbase` vs `fcombo` vs `fb1`, 3 rounds
+
+`fbase` = production shape (MTP 2, `ROCM_ATTN`); `fcombo` = MTP 3 + `--attention-backend TRITON_ATTN`; `fb1` =
+`fbase` with the merged BF16 draft file (the server log shows `Using configuration from
+/work/moe/tune/merged_b1/E=256,N=512,device_name=AMD_Radeon_R9700.json`). Rounds: `fbase-1` on 2026-10-28
+(§ 11.2); `fcombo-1`, `fb1-1`, `fbase-2` on 2026-10-31 19:25–20:30; `fcombo-2` 22:16–22:35; `fb1-2` and round 3
+on 2026-11-01 03:43–04:58. Each value is the median of 3 bench runs; the table gives per round and the median of
+the rounds.
+
+| | `fbase` rounds → median | `fcombo` rounds → median | `fb1` rounds → median |
+|---|---|---|---|
+| c=1 tok/s | 76.08 / 75.26 / 76.62 → **76.08** | 120.64 / 81.84 / 85.39 → **85.39** (+12.2 %) | 76.12 / 77.33 / 77.67 → **77.33** (+1.6 %) |
+| c=4 tok/s | 178.39 / 173.02 / 179.54 → **178.39** | 199.96 / 203.61 / 204.47 → **203.61** (+14.1 %) | 142.00 / 181.16 / 181.14 → **181.14** (+1.5 %) |
+| c=1 mean TPOT | 8.85 / 8.92 / 8.88 ms | 7.72 / 7.73 / 7.64 ms (−13 %) | 8.94 / 8.88 / 8.85 ms |
+| c=4 mean TPOT | 13.88 / 14.06 / 13.78 ms | 11.48 / 11.53 / 11.10 ms (−17 %) | 13.76 / 13.67 / 13.63 ms |
+| c=1 mean TTFT | 2.18 / 2.23 / 2.12 s | 0.30 / 2.16 / 2.10 s | 2.13 / 2.08 / 2.09 s |
+| prefill 8k median TTFT | 1.93 / 2.05 / 1.94 s | 2.01 / 2.00 / 2.00 s | 1.98 / 1.93 / 1.92 s |
+| prefill 32k median TTFT | 16.16 / 16.67 / 15.92 s | 15.59 / 15.74 / 15.46 s | 16.23 / 15.93 / 15.93 s |
+| MTP acceptance per position | 0.92 / 0.86 | 0.91 / 0.82 / 0.74 | 0.92 / 0.85 |
+| mean accepted length | 2.78 | 3.46 | 2.77 |
+| GPU KV cache | 234,958 tokens | 232,700 tokens | 234,958 tokens |
+| GSM8K-200 (round 1) | 171 (85.5 %) | 169 (84.5 %), delta −1.0 %, limit 5.1 %: pass | 171 (85.5 %): pass |
+| 20 greedy prompts vs `fbase` | — | 12 identical; 4 of 8 divergences not near-tie | 20 identical |
+
+Base spread in this series: 1.36 tok/s at c=1, 6.52 at c=4 (phase A: 3.35 / 5.41).
+
+- **`fcombo` passes the ship test:** both decode medians are higher by more than the spread, prefill is within the
+  spread, GSM8K is within 2 × stderr. The prompt divergences are like `tattn` in phase A (12 of 20 identical, § 3.4):
+  a different attention kernel changes the arithmetic, so greedy text can split; GSM8K is the quality gate.
+- **`fb1` fails:** +1.6 % / +1.5 % is inside the spread, and TPOT is equal; the c=4 value of round 1 (142.00) is low
+  because two of its runs had a 7.3 s mean TTFT, not because of the file. As predicted, the kernel gain is too
+  small to show end to end. The 20 prompts are identical, so the file is safe but not worth shipping.
+- `fcombo-1` ran 2 of its 3 c=1 runs without the stall of § 6.1 (TTFT 0.2–0.3 s; hence 120.64 tok/s); rounds 2
+  and 3 had it again. The c=1 median of 85.39 includes the stall like the `fbase` values; TPOT is the cleaner
+  measure (−13 %).
+- `bench_final_ab.txt` keeps every line as written. It holds one stopped block, `fcombo-2` of 20:32 (the RAM guard
+  stopped it during the 32k prefill at 20:47, WSL load 10.8 at its start); the table uses the complete `fcombo-2`
+  block of 22:16.
+
+### 13.3 Prefix-cache check (§ 6.1) — hypothesis rejected
+
+`harness/prefixtest.py` in every A/B arm-round (random token-id prompts, `max_tokens` 1, one at a time):
+
+| arm-round | 8k: A cold / A hit / A hit / B cold / B hit / A partial (s) | 1k: same (s) |
+|---|---|---|
+| `fcombo-1` | 2.10 / 0.50 / 0.51 / 2.15 / 0.48 / 0.49 | 0.22 / 0.22 / 0.20 / 0.19 / 0.20 / 0.19 |
+| `fbase-3` | 2.00 / 0.47 / 0.47 / 1.96 / 0.46 / 0.46 | 0.20 / 0.19 / 0.18 / 0.18 / 0.18 / 0.18 |
+| `fcombo-3` | 2.03 / 0.48 / 0.48 / 2.01 / 0.48 / 0.48 | 0.21 / 0.20 / 0.20 / 0.19 / 0.19 / 0.19 |
+
+(all seven arm-rounds in `raw/prefixtest.txt`, same picture). A full prefix-cache hit is ~4× faster than a cold
+8k prefill, in every arm. So the ~12 s stall is **not** a slow prefix-cache hit; its cause is still unknown.
+
+### 13.4 Incidents and harness fixes
+
+- The RAM guard (2 GB) stopped four runs: 18:54 (`fcombo-1` start), 20:47 (`fcombo-2`, another job at load
+  10.8), 21:43 (`o7ref-1`), 01:52 (`fb1-2` start, 83 MB available). Each stop was during or right after a model load
+  (§ 6.5).
+- **Orphan series (fixed):** on 21:43 the guard sent TERM to `night4_extra.sh` only; its child `speed_A.sh` went
+  on, wrote a false `done_o7ref-1` (its server had been stopped) and started `o7-1` while the production server
+  was loading. It was stopped by hand at ~21:47; the false marker is kept as `FALSE_done_o7ref-1_2026-10-31_2143`.
+  Fixes: drivers start each step with `setsid`, and `ram_guard_all.sh` and the deadline stop the whole process
+  group; `speed_A.sh` writes a done marker only when its server still runs and the arm-round added all six decode
+  bench lines.
+- **Per-round quiet check:** `speed_A.sh` with `QUIETCHECK=1` starts an arm-round only at WSL load < 4 and no
+  coai-exp process, else exits 3 and the driver waits (not a failed try). It held the series from 22:35 to 01:45.
+
+### 13.6 Production
+
+`fcombo` passed, so the production server starts with `-MtpTokens 3 -ExtraArgs --attention-backend=TRITON_ATTN`
+(`restore_args`, read by `restore_server.sh`). `start-vllm.ps1` itself is unchanged.
