@@ -13,12 +13,17 @@ const shinglesOf = text => {
   return new Set(Array.from({ length: Math.max(0, words.length - SHINGLE_WORDS + 1) }, (_, i) => words.slice(i, i + SHINGLE_WORDS).join(' ')));
 };
 
-/** ok({ shingles: Map(shingle -> aid name), literals: [lower-case token] }) or a fail naming the aid that holds no six words. */
-export function aidNeedles({ aids, tokensText = '' }) {
+/**
+ * ok({ shingles: Map(shingle -> aid name), literals: [lower-case token] }) or a fail naming the aid that holds no six words - or none
+ * that is not already public. `publicTexts` (the parent plan and the stories document) are public by definition, so a shingle they hold
+ * (a path, a title the aid quotes) can leak nothing and is dropped; an aid reduced to nothing would check nothing and is refused.
+ */
+export function aidNeedles({ aids, tokensText = '', publicTexts = [] }) {
+  const publicShingles = new Set(publicTexts.flatMap(text => [...shinglesOf(text)]));
   const shingles = new Map();
   for (const aid of aids) {
-    const own = shinglesOf(aid.text);
-    if (own.size === 0) return fail(`aid ${aid.name} holds fewer than ${SHINGLE_WORDS} words: it would check nothing`);
+    const own = [...shinglesOf(aid.text)].filter(s => !publicShingles.has(s));
+    if (own.length === 0) return fail(`aid ${aid.name} holds no ${SHINGLE_WORDS}-word run that is not already public: it would check nothing`);
     for (const s of own) if (!shingles.has(s)) shingles.set(s, aid.name);
   }
   const tokens = tokensText.trim() === '' ? ok([]) : parseTokens(tokensText);

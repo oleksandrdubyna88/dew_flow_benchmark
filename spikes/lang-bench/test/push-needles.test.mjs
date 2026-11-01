@@ -38,6 +38,18 @@ test('A_literal_token_is_found_case_insensitively_and_reported_by_its_number', (
   assert.deepEqual(found.map(f => [f.line, f.what]), [[2, 'leak token 2']]);
 });
 
+test('A_shingle_that_a_public_text_already_holds_is_not_an_aid_hit', () => {
+  const publicText = 'Everything about the plan: a widget that frobnicates every sprocket twice before lunch is public here.\n';
+  const needles = aidNeedles({ aids: [AID], publicTexts: [publicText] }).value;
+  assert.deepEqual(findAidHits('README.md', 'a widget that frobnicates every sprocket twice before lunch\n', needles), [], 'public text cannot leak');
+  const other = { name: 'other-aid.md', text: 'Quite another private sentence about gadgets and their wobbling springs today.\n' };
+  const both = aidNeedles({ aids: [AID, other], publicTexts: [publicText] }).value;
+  assert.equal(findAidHits('p', 'gadgets and their wobbling springs today\n', both).length, 1, 'only the shingles of the public text are dropped');
+  const allPublic = aidNeedles({ aids: [AID], publicTexts: [AID.text] });
+  assert.equal(allPublic.ok, false, 'an aid wholly covered by public text would check nothing');
+  assert.match(allPublic.reason, /synthetic-aid\.md/);
+});
+
 test('An_aid_with_no_six_words_is_refused_instead_of_checking_nothing', () => {
   const r = aidNeedles({ aids: [{ name: 'empty.md', text: 'too short\n' }] });
   assert.equal(r.ok, false);

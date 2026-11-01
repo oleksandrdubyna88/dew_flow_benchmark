@@ -15,6 +15,8 @@ export const DEFAULT_AIDS_DIR = () => path.join(os.homedir(), 'rsd', 'lang-v2', 
 const DEFAULT_CREDITS = spikePath('inputs/credits-lang.json');
 const DEFAULT_NEEDLES = spikePath('inputs/needles-lang.json');
 const DEFAULT_TEMPLATE_FILES = spikePath('templates/stack-files.json');
+// Public by definition: the plans that name the aids' paths and titles. A shingle they hold leaks nothing (see aidNeedles).
+const DEFAULT_PUBLIC_TEXTS = Object.freeze([spikePath('../../todo/PLAN_lang_comparison_v2.md'), spikePath('../../todo/PLAN_lang_comparison_v2_E1.md')]);
 
 function readText(file, kind) {
   try {
@@ -24,7 +26,14 @@ function readText(file, kind) {
   }
 }
 
-function loadAids({ aid, aidsDir, tokens }) {
+/** The public texts that exempt shingles: the ones named, or the two plans when they exist (a missing one only makes the check stricter). */
+function loadPublicTexts(named) {
+  const files = named.length > 0 ? named : DEFAULT_PUBLIC_TEXTS.filter(f => existsSync(f));
+  const texts = files.map(f => readText(f, 'config'));
+  return texts.find(t => !t.ok) ?? ok(texts.map(t => t.value));
+}
+
+function loadAids({ aid, aidsDir, tokens, publicTexts }) {
   const files = aid.length > 0 ? aid : DEFAULT_AIDS.map(name => path.join(aidsDir ?? DEFAULT_AIDS_DIR(), name));
   const aids = [];
   for (const file of files) {
@@ -34,7 +43,9 @@ function loadAids({ aid, aidsDir, tokens }) {
   }
   const tokensText = tokens === undefined ? ok('') : readText(tokens, 'env');
   if (!tokensText.ok) return tokensText;
-  const needles = aidNeedles({ aids, tokensText: tokensText.value });
+  const exempt = loadPublicTexts(publicTexts);
+  if (!exempt.ok) return exempt;
+  const needles = aidNeedles({ aids, tokensText: tokensText.value, publicTexts: exempt.value });
   return needles.ok ? needles : fail(needles.reason, { kind: 'env' });
 }
 

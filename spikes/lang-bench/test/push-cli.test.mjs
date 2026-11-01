@@ -1,7 +1,7 @@
 // push-check.mjs as a command: argument handling, the loading of the private aids from outside git at run time, and the exit codes.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -88,4 +88,21 @@ test('Setup_remote_mode_runs_step_1_and_prints_what_it_did', t => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, new RegExp(`^remote: added origin ${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
   assert.match(r.stdout, /^origin\/main: [0-9a-f]{12} holds LICENSE$/m);
+});
+
+test('A_public_text_named_with_public_exempts_the_shingles_it_holds', t => {
+  const { repo } = topicBranch(t, { 'README.md': '# T\n\nthe widget that frobnicates every sprocket twice before lunch\n' });
+  const folder = ownedFolder(t, 'two');
+  const aid = path.join(folder, 'two-aid.md');
+  writeFileSync(aid, `${AID_TEXT}Another private sentence about gadgets and their wobbling springs today.\n`);
+  assert.equal(cli(['--repo', repo, '--branch', 'topic', '--aid', aid]).status, 1, 'without the exemption the line is a hit');
+  const publicFile = path.join(folder, 'plan.md');
+  writeFileSync(publicFile, 'Public plan: a widget that frobnicates every sprocket twice before lunch will stall.\n');
+  const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--public', publicFile]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const wholly = path.join(folder, 'aid-only-public.md');
+  writeFileSync(wholly, readFileSync(publicFile, 'utf8'));
+  const refused = cli(['--repo', repo, '--branch', 'topic', '--aid', wholly, '--public', publicFile]);
+  assert.equal(refused.status, 3, 'an aid that is wholly public would check nothing');
+  assert.match(refused.stdout, /would check nothing/);
 });
