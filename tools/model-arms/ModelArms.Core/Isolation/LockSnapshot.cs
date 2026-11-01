@@ -104,7 +104,8 @@ public static class LockSnapshots
             : (requireKind || kind.Length > 0) && kind is not ("closed" or "unlisted") ? Outcome<SavedMode>.Failure($"{where}: 'kind' must be closed or unlisted, got '{kind}'")
             : SnapshotFiles.ModeBits(mode) is Outcome<int>.Fail bad ? Outcome<SavedMode>.Failure($"{where}: {bad.Reason}")
             : device.HasValue != inode.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'dev' and 'ino' come together or not at all")
-            : birthText.Length > 0 && (!birth.HasValue || !device.HasValue) ? Outcome<SavedMode>.Failure($"{where}: 'btime' must be seconds since the epoch and come with 'dev' and 'ino', got '{birthText}'")
+            : birthText.Length > 0 && !birth.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'btime' must be seconds since the epoch, got '{birthText}'")
+            : birthText.Length > 0 && !device.HasValue ? Outcome<SavedMode>.Failure($"{where}: 'btime' comes with 'dev' and 'ino', not alone")
             : Outcome<SavedMode>.Success(new SavedMode(path, kind == "closed" ? IsolationKind.Closed : IsolationKind.Unlisted, mode, device.HasValue ? new NodeIdentity(device.Value, inode!.Value, birth) : null, source));
     }
 

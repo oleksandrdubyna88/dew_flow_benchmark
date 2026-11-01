@@ -53,9 +53,8 @@ public static class RestoreJudgement
 
     private static bool WrongKind(SavedMode saved, PinnedFacts now) => !now.IsFolder && (saved.Kind == IsolationKind.Unlisted || !now.IsFile);
 
-    /// <summary>Another device or inode number, or — the same number, which a file system reuses at once — another birth time. Compared only when BOTH sides carry one: a snapshot from a file system that reports none still holds the rest.</summary>
     private static bool Replaced(SavedMode saved, PinnedFacts now) =>
-        saved.Identity is { } was && now.Identity is { } current && (was.Device != current.Device || was.Inode != current.Inode || (was.Birth is { } born && current.Birth is { } bornNow && born != bornNow));
+        saved.Identity is { } was && now.Identity is { } current && was.IsReplacedBy(current);
 
     private static string Difference(NodeIdentity was, NodeIdentity current) =>
         was.Inode != current.Inode || was.Device != current.Device

@@ -252,7 +252,9 @@ public sealed class IsolationPlanTests
         text.Should().Contain("\"ino\":1234567,\"btime\":\"1761768000.123456789\"");
         text.Split("\"path\":\"/b\"")[1].Should().NotContain("btime", "a file system that reports no birth time records none");
         LockSnapshots.Saved(text).Ok().Modes.Should().Equal(saved.Modes);
-        LockSnapshots.Saved(text.Replace("1761768000.123456789", "soon", StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>();
+        LockSnapshots.Saved(text.Replace("1761768000.123456789", "soon", StringComparison.Ordinal)).Should().BeOfType<Outcome<SavedSnapshot>.Fail>().Which.Reason.Should().Contain("'btime' must be seconds since the epoch, got 'soon'");
+        var alone = """{"run":"part6","digest":"d","since":"t","modes":[{"path":"/a","kind":"closed","mode":"755","btime":"1.5"}]}""";
+        LockSnapshots.Saved(alone).Should().BeOfType<Outcome<SavedSnapshot>.Fail>().Which.Reason.Should().Contain("'btime' comes with 'dev' and 'ino', not alone");
     }
 
     [Fact]
@@ -314,6 +316,9 @@ public sealed class IsolationPlanTests
         { "the same inode number made again (ext4 reuses a freed one)", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2, 200.25m)), true, typeof(EntryVerdict.Skip), "replaced since the lock (inode 2 made again: created 100.5 → 200.25)" },
         { "the same inode and the same birth", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2, 100.5m)), true, typeof(EntryVerdict.Restore), string.Empty },
         { "the same inode, a birth on one side only (a file system that reports none)", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100.5m)), Now(Mode000, new NodeIdentity(1, 2)), true, typeof(EntryVerdict.Restore), string.Empty },
+        { "a birth recorded and none now is not a replacement", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100m)), Now(Mode000, new NodeIdentity(1, 2)), true, typeof(EntryVerdict.Restore), string.Empty },
+        { "a birth one tick later is a replacement", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100m)), Now(Mode000, new NodeIdentity(1, 2, 101m)), true, typeof(EntryVerdict.Skip), "inode 2 made again: created 100 → 101" },
+        { "another inode number whatever the births", Saved(IsolationKind.Closed, "755", new NodeIdentity(1, 2, 100m)), Now(Mode000, new NodeIdentity(1, 3, 100m)), true, typeof(EntryVerdict.Skip), "inode 2 → 3" },
         { "gone", Saved(IsolationKind.Closed, "755"), null, true, typeof(EntryVerdict.Skip), "may still stand at 0 elsewhere" },
         { "gone, unlisted", Saved(IsolationKind.Unlisted, "755"), null, true, typeof(EntryVerdict.Skip), "may still stand at 300 elsewhere" },
         { "outside the bound before every other verdict", Saved(IsolationKind.Closed, "755"), null, false, typeof(EntryVerdict.Fail), "not under any folder this experiment names — not restored (by hand: chmod 755 /x/y)" },

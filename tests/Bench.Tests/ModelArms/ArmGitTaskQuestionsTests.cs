@@ -289,7 +289,7 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
         // already names (git-lfs installs `filter.lfs` into /etc/gitconfig on the CI runner, a developer's own ~/.gitconfig may)
         // is in both lists. The test asserts what it planted: the clone's own two drivers are named after the plant and not
         // before it, and nothing else appears or goes.
-        var planted = new[] { "lfs", "a=b" };
+        string[] planted = ["lfs", "a=b"];
         after.Should().Contain(planted);
         after.Should().BeEquivalentTo(before.Union(planted), "the plant adds exactly its two drivers to whatever the host's scopes already name");
     }

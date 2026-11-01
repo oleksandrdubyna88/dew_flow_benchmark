@@ -6,7 +6,12 @@ namespace ModelArms.Core.Isolation;
 
 /// <summary>Which inode an entry was when it was locked: the device (<c>major &lt;&lt; 32 | minor</c>), the inode number and, where the file system reports it, when the inode was created (<paramref name="Birth"/>: seconds since the epoch, nine decimals; <c>null</c> otherwise). The inode number alone does not tell a folder from the one made again at its name — ext4 reuses a freed number at once. Named <c>NodeIdentity</c>, not <c>FileIdentity</c>, because <c>ModelArms.Core.Experiment.FileIdentity</c> is the trust check's (kind and change time too — and a <c>chmod</c> changes the change time).
 /// It is what tells, at <c>unlock</c>, an entry that was replaced since the lock from the one that was locked; the runtime road cannot read it, so there it is <c>null</c> on both sides.</summary>
-public sealed record NodeIdentity(ulong Device, ulong Inode, decimal? Birth = null);
+public sealed record NodeIdentity(ulong Device, ulong Inode, decimal? Birth = null)
+{
+    /// <summary>Whether <paramref name="current"/> is another node than this one: another device or inode number, or — the same number, which a file system reuses at once — another birth time. The birth is compared only when BOTH sides carry one (a snapshot from a file system that reports none still holds the rest), which is why this is not <c>!=</c>: record equality is strict on all three fields and would call "no birth recorded" a different node.</summary>
+    public bool IsReplacedBy(NodeIdentity current) =>
+        Device != current.Device || Inode != current.Inode || (Birth is { } born && current.Birth is { } bornNow && born != bornNow);
+}
 
 /// <summary>One path of the snapshot: what it is, the 12 permission bits it had before the lock as octal text (<c>stat -c %a</c>: <c>755</c>, <c>2755</c>, <c>0</c>), on the kernel road which inode, and <see cref="Source"/> — the configuration entry that authorised it (<c>isolation.closed[0]</c>), covered by the snapshot's digest, so that
 /// <c>unlock</c> can restore what the lock closed after the block that named it was removed, and a path added to the file by hand (which the digest does not cover) is not restored.</summary>
