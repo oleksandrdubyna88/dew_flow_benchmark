@@ -32,7 +32,7 @@ test('A_clean_branch_passes_every_named_check_with_exit_0', async t => {
   const { repo } = branchWith(t, { 'tasks/01/s01.in': '5\n', 'research/architecture.md': 'notes\n' });
   const result = await run(repo);
   assert.equal(result.exit, EXIT.PASS);
-  assert.deepEqual(result.checks.map(c => c.name), ['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
+  assert.deepEqual(result.checks.map(c => c.name), ['leakcheck', 'secrets', 'attribution', 'run-base-text', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
   assert.ok(result.checks.every(c => c.findings.length === 0));
   assert.match(lines(result).join('\n'), /^leakcheck +PASS/m);
   assert.match(lines(result).at(-2), /^result +PASS \(exit 0\)/);
@@ -88,7 +88,7 @@ test('A_credit_planted_in_a_spec_or_the_readme_outside_the_attribution_section_i
   const { repo } = branchWith(t, { 'README.md': readme, 'tasks/01/NOTES.md': 'adapted from CSES\n' });
   const result = await run(repo);
   assert.deepEqual(checkOf(result, 'attribution').findings.map(f => [f.path, f.line, f.what]), [['README.md', 3, 'link']]);
-  assert.deepEqual(checkOf(result, 'agent-visible-paths').findings.map(f => [f.path, f.what]), [['tasks/01/NOTES.md', 'needle CSES']]);
+  assert.deepEqual(checkOf(result, 'run-base-text').findings.map(f => [f.path, f.what]), [['tasks/01/NOTES.md', 'needle CSES']]);
 });
 
 test('A_branch_carrying_a_known_task_spec_needs_its_credit_lines_in_the_readme_at_the_tip', async t => {
@@ -108,7 +108,7 @@ test('Push_check_scans_a_body_file_with_the_same_rules', () => {
   assert.deepEqual(result.checks.map(c => [c.name, c.findings.map(f => [f.path, f.line, f.what])]), [
     ['leakcheck', [['body.md', 3, 'shingle of synthetic-aid.md']]],
     ['secrets', [['body.md', 5, 'github-fine-grained-pat']]],
-    ['agent-visible-paths', [['body.md', 4, 'plan story id']]],
+    ['run-base-text', [['body.md', 4, 'plan story id']]],
     ['family-names', [['body.md', 4, 'needle dew_flow_benchmark']]],
   ]);
   assert.equal(checkText({ text: 'A plain body with https://github.com/o/r/pull/3\n', label: 'b.md', inputs }).exit, EXIT.PASS, 'links are what a body is for');
@@ -157,7 +157,7 @@ test('A_placement_rule_reads_the_tip_tree_because_a_run_base_carries_the_tip_and
   // the same rule still reads the TIP: a file that is wrong at the tip is a finding
   commit(repo, 'docs: bring it back', { 'todo/tasks/FORMAT.md': 'Story E1.S8a again\n' });
   const again = await run(repo);
-  assert.deepEqual(checkOf(again, 'agent-visible-paths').findings.map(f => [f.path, f.line, f.what]), [['todo/tasks/FORMAT.md', 1, 'plan story id']]);
+  assert.deepEqual(checkOf(again, 'run-base-text').findings.map(f => [f.path, f.line, f.what]), [['todo/tasks/FORMAT.md', 1, 'plan story id']]);
 });
 
 test('The_leak_and_secret_scans_read_every_commit_even_where_a_later_commit_removed_the_text', async t => {

@@ -38,7 +38,7 @@ test('The_cli_prints_one_named_line_per_check_and_exits_0_on_a_clean_branch', t 
   const { repo } = topicBranch(t, { 'tasks/01/s01.in': '5\n' });
   const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t)]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  for (const name of ['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders']) assert.match(r.stdout, new RegExp(`^${name} +PASS`, 'm'));
+  for (const name of ['leakcheck', 'secrets', 'attribution', 'run-base-text', 'family-names', 'known-task-credits', 'stack-folders']) assert.match(r.stdout, new RegExp(`^${name} +PASS`, 'm'));
   assert.match(r.stdout, /^result +PASS \(exit 0\)/m);
 });
 
@@ -88,7 +88,7 @@ test('Text_mode_checks_a_body_file_and_self_mode_the_bench_branch', t => {
   const self = cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', aidFile(t)]);
   assert.equal(self.status, 0, self.stdout + self.stderr);
   assert.match(self.stdout, /^leakcheck +PASS/m);
-  assert.equal(/agent-visible-paths/.test(self.stdout), false, 'the bench check runs only the leak and secret scans');
+  assert.equal(/run-base-text/.test(self.stdout), false, 'the bench check runs only the leak and secret scans');
 });
 
 test('Setup_remote_mode_runs_step_1_and_prints_what_it_did', t => {

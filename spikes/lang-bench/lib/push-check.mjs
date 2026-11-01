@@ -15,7 +15,7 @@ import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-vis
 
 export { EXIT };
 export const COMMIT_MESSAGE = '(commit message)';
-const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
+const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'run-base-text', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
 // History is published, so these read every commit; the others read the tip tree, which is what a run base carries.
 const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
@@ -30,7 +30,7 @@ function scanText(file, text, inputs, { body = false } = {}) {
     leakcheck: findAidHits(file, text, inputs.aids),
     secrets: findSecrets(file, text),
     attribution: readme ? visible.filter(f => f.group !== GROUP_FAMILY) : [],
-    'agent-visible-paths': readme ? [] : visible.filter(f => f.group !== GROUP_FAMILY),
+    'run-base-text': readme ? [] : visible.filter(f => f.group !== GROUP_FAMILY),
     'family-names': visible.filter(f => f.group === GROUP_FAMILY),
   };
 }
@@ -126,7 +126,7 @@ export async function checkSelf({ repo, branch, inputs }) {
 
 /** A PR or review body (consult C6b): the leak, secret and placement scans on the text; links are allowed in a body. */
 export function checkText({ text, label, inputs }) {
-  const names = ['leakcheck', 'secrets', 'agent-visible-paths', 'family-names'];
+  const names = ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
   const byName = emptyChecks(names);
   merge(byName, scanText(label, text, inputs, { body: true }), undefined);
   return verdict(toChecks(names, byName), label);

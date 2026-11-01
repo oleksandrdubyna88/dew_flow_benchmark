@@ -40,10 +40,19 @@ test('An_agent_visible_path_carries_no_plan_id_link_or_known_task_needle', () =>
   ]);
 });
 
-test('The_visible_rules_do_not_apply_outside_the_agent_visible_folders', () => {
+test('Plan_ids_apply_to_the_agent_visible_folders_but_links_and_needles_apply_to_every_path', () => {
   assert.equal(isAgentVisible('research/architecture.md'), false);
-  assert.deepEqual(rules('research/architecture.md', 'E1.S8a D41 https://x.test Redis'), []);
+  assert.deepEqual(rules('research/architecture.md', 'E1.S8a D41').map(f => f.what), [], 'ids stay in the agent-visible folders and the README');
+  for (const p of ['research/architecture.md', 'AGENTS.md', '.agents/PROJECT.md', 'todo/README.md', '.github/workflows/ci.yml', 'LICENSE', 'tasks/01/NOTES.md']) {
+    assert.deepEqual(rules(p, 'see https://x.test about Werewolf').map(f => f.what), ['link', 'needle Werewolf'], p);
+  }
   for (const p of ['csharp/a/x.cs', 'node/a/x.ts', 'tasks/01/s01.in', 'runner/run.py', 'todo/tasks/FORMAT.md']) assert.equal(isAgentVisible(p), true, p);
+});
+
+test('The_gitmodules_file_is_exempt_from_links_and_needles_and_a_pin_file_from_links_only', () => {
+  assert.deepEqual(rules('.gitmodules', 'url = https://github.com/o/r.git # Werewolf'), []);
+  assert.deepEqual(rules('node/t/package.json', '{"registry":"https://registry.npmjs.org/","dependencies":{"redis":"1"}}').map(f => f.what), ['needle redis'], 'a registry URL is a pin file\'s nature, a needle is not');
+  assert.deepEqual(rules('csharp/t/nuget.config', '<add value="https://api.nuget.org/v3/index.json" />').map(f => f.what), []);
 });
 
 test('The_family_names_are_needles_except_in_gitmodules', () => {
