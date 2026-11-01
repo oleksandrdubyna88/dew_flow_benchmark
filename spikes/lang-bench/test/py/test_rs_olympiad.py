@@ -119,6 +119,19 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual(result.status, "PASS")
 
 
+class LifecycleTests(unittest.TestCase):
+    def test_A_group_kill_returns_only_when_nothing_of_the_group_is_left(self):
+        lifecycle = ex.PlainLifecycle()
+        left = 0
+        for _ in range(60):
+            proc = subprocess.Popen(["bash", "-c", "sleep 61 & sleep 61"], start_new_session=True)
+            time.sleep(0.005)
+            lifecycle.kill(proc)
+            proc.wait()
+            left += lifecycle.leftover(proc)
+        self.assertEqual(left, 0, "SIGKILL is delivered at once but the children are gone a moment later: kill must wait for them")
+
+
 class PumpTests(unittest.TestCase):
     def pump(self, argv, data, expected):
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)

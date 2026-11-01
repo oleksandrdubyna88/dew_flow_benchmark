@@ -21,6 +21,7 @@ FLOOR_MS = 1000
 CHUNK = 65536
 TICK_S = 0.05
 TAIL_BYTES = 2048
+GONE_CEILING_MS = 2000
 
 
 class PlainLifecycle:
@@ -30,7 +31,12 @@ class PlainLifecycle:
         return rs_report.NOT_CERTIFIED
 
     def kill(self, proc):
+        """SIGKILL to the whole group, then wait until nothing of it is left: the signal is delivered at once but the children go a moment later."""
         _signal_group(proc.pid, signal.SIGKILL)
+        proc.wait()
+        deadline = now_ms() + GONE_CEILING_MS
+        while self.leftover(proc) and now_ms() < deadline:
+            time.sleep(0.001)
 
     def leftover(self, proc):
         """True when something of the program's process group is still alive after the program was reaped."""
