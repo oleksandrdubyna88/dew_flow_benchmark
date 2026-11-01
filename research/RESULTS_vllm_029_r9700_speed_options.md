@@ -594,6 +594,12 @@ the rounds.
 
 Base spread in this series: 1.36 tok/s at c=1, 6.52 at c=4 (phase A: 3.35 / 5.41).
 
+**Correction (2026-11-01 10:00):** the plan's ship test defines the spread as max − min over the base arm's **9
+values**, not over its 3 round medians as used above. With the plan's definition (medians of 9 values):
+`fcombo` c=1 84.47 vs 76.08 (+8.39, +11.0 %; spread 9.84 → within, not lower), c=4 202.44 vs 178.39 (+24.05,
++13.5 %; spread 10.90 → higher). So `fcombo` still passes (rule 1 through c=4, rule 2 at c=1). `fb1`: +1.25 / +2.61,
+within both spreads → fails, as above. The table above is kept as computed.
+
 - **`fcombo` passes the ship test:** both decode medians are higher by more than the spread, prefill is within the
   spread, GSM8K is within 2 × stderr. The prompt divergences are like `tattn` in phase A (12 of 20 identical, § 3.4):
   a different attention kernel changes the arithmetic, so greedy text can split; GSM8K is the quality gate.
@@ -660,6 +666,8 @@ of every `o7` start shows the patch's line `speed-options option 7: wide-N tile 
 - `o7ref` repeats `fcombo` closely (c=1 85.68 vs 85.39, c=4 203.39 vs 203.61; 20 prompts identical to
   `prompts_fcombo.json`), so the `fcombo` result of § 13.2 holds on another night.
 - Not shipped; production runs `fcombo` without the patch.
+- With the plan's 9-value spread (correction in § 13.2): c=1 85.64 vs 85.66 (spread 3.51), c=4 202.40 vs 203.39
+  (spread 7.86) — within both; the verdict is the same.
 
 ### 13.6 Production
 
