@@ -61,6 +61,17 @@ repository, a remote-tracking ref that is not what `git ls-remote` says now). A 
 text that matched (a secret in a file NAME is masked to `[secret]`). The report also prints `leak tokens N (source)`, the `tip` sha it checked and
 `push git push <url> <tip>:refs/heads/<branch>`: **publish that sha, not the branch name**, so what was checked is what is published.
 
+**The enforced push path (task repository only).** `push-check.mjs --install-hook --repo <task repo>` writes `<repo>/.git/hooks/pre-push` (where git
+looks), a small POSIX `sh` script. For every ref of a push it reads git's stdin line and runs `node <this checker> --repo <repo> --branch <ref>
+--tip <local sha>` (with `--origin-url` and any options given at install baked in), so the commit checked is exactly the commit pushed, and
+`--tip` makes a branch that moved off that sha exit 4. It refuses the push when a check fails or the bench checkout cannot be found, and for
+a ref outside `refs/heads` (a tag is checked by hand, then pushed with `--no-verify`); a deleted ref passes. Installing twice changes nothing; a
+hook that is not ours is refused (exit 4) unless `--force-hook`, which keeps it as `pre-push.foreign`; `--uninstall-hook` removes only a hook
+with our marker line (`# lang-v2-push-check-hook v1`). **It is never installed into the bench repository**: the bench is shared by other
+sessions, so its rule stays the manual `push-check.mjs --self --branch <b>` run before a push (and `--text --self` for a body); the install
+refuses a repository that holds `spikes/lang-bench/push-check.mjs` or whose origin is not the task repository. The team lead installs it in
+`/home/jinx/git/dew_flow_ai_language_comparison` after review.
+
 **The named checks** (one line each): `leakcheck` (six-word shingles of the two private aids, read from `~/rsd/lang-v2/test-design/` at run time,
 and the literal tokens of `leak-tokens.txt` in that folder when it is present, or of `--tokens`), `secrets` (named shapes: fine-grained token,
 `gh[pousr]_`, Anthropic key, any `BEGIN … PRIVATE KEY`, AWS key id; and the values of the two real secret files `~/.config/lang-v2/github-pat` and

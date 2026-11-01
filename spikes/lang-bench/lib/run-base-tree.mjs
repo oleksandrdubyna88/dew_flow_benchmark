@@ -11,6 +11,7 @@ import { cutAttribution } from './attribution.mjs';
 import { decodeBlob } from './push-decode.mjs';
 import { runGitBytes } from './push-git.mjs';
 import { parseKnownNeedles } from './push-needles.mjs';
+import { sequence } from './push-sequence.mjs';
 import { findVisibleRules } from './push-visible.mjs';
 
 export { cutAttribution };
@@ -88,13 +89,6 @@ const removeCredits = out => {
   credits.forEach(e => rmSync(e.abs));
   return credits.map(e => e.rel);
 };
-
-/** Runs the steps in order, each given the last value, stopping at the first fail. */
-async function sequence([step, ...rest], value = null) {
-  if (step === undefined) return ok(value);
-  const result = await step(value);
-  return result.ok ? sequence(rest, result.value) : result;
-}
 
 const freeFolder = out => (emptyOrAbsent(out) ? ok(out) : fail(`the run-base folder ${out} exists and is not empty: it is never merged into`));
 

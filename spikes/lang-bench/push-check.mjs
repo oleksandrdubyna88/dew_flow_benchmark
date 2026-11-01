@@ -6,6 +6,16 @@
 //   node spikes/lang-bench/push-check.mjs --self --branch <b> [--repo <dir>]  the bench's own branch (leak and secret scans only)
 //   node spikes/lang-bench/push-check.mjs --setup-remote --repo <task repo> [--url <u>]
 //
+//   node spikes/lang-bench/push-check.mjs --install-hook --repo <task repo> [--force-hook]    the enforced push path (TASK repository only)
+//   node spikes/lang-bench/push-check.mjs --uninstall-hook --repo <task repo>                 removes only our own hook (marker line)
+//     --install-hook writes <repo>/.git/hooks/pre-push (where git looks: core.hooksPath and worktrees honoured), a small POSIX sh script:
+//     for every ref of a push it runs this command with --branch <ref> --tip <the sha git pushes> and refuses the push on any failure, when
+//     the bench checkout cannot be found, or for a ref outside refs/heads (a tag: check by hand, then --no-verify); a deleted ref passes.
+//     A second install changes nothing; a foreign hook is refused (exit 4) unless --force-hook (it is kept as pre-push.foreign).
+//     NEVER installed into the bench repository (it is shared by other sessions; its rule is the manual --self run before a push): a
+//     repository holding spikes/lang-bench/push-check.mjs, or whose origin is not the task repository, is refused.
+//   --tip <sha> (with --repo --branch): check exactly that commit, as git is about to publish it; the branch moving off it is exit 4.
+//
 //   a branch check refuses (exit 4) when a refs/remotes/origin/* ref is not what the remote has now (ls-remote): run --setup-remote first.
 //
 //   options: --aid <file> (repeatable) | --aids-dir <dir>   the private aids, read at run time (default ~/rsd/lang-v2/test-design/)
@@ -20,15 +30,18 @@
 // A line names the commit, the path, the line and the reason - never the text that matched. The report names the tip it checked; publish
 // exactly that commit: `git push <url> <tip sha>:refs/heads/<branch>`, so what was checked is what is published.
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { checkBranch, checkSelf, checkText, EXIT, formatReport } from './lib/push-check.mjs';
 import { runGit } from './lib/push-git.mjs';
+import { installHook, uninstallHook } from './lib/push-hook.mjs';
 import { loadInputs } from './lib/push-inputs.mjs';
 import { setupRemote } from './lib/push-remote.mjs';
 
 const OPTIONS = {
   repo: { type: 'string' }, branch: { type: 'string' }, text: { type: 'string' }, url: { type: 'string' },
-  self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' },
+  self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' }, tip: { type: 'string' },
+  'install-hook': { type: 'boolean' }, 'uninstall-hook': { type: 'boolean' }, 'force-hook': { type: 'boolean' },
   aid: { type: 'string', multiple: true }, 'aids-dir': { type: 'string' }, tokens: { type: 'string' },
   public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, 'origin-url': { type: 'string' }, 'secret-file': { type: 'string', multiple: true }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
 };
@@ -44,7 +57,7 @@ function parse(argv) {
 }
 
 // --self alone is the bench's branch check; with --text it only narrows the body check to the bench's rules
-const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
+const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v['install-hook'] ? 'install-hook' : null, v['uninstall-hook'] ? 'uninstall-hook' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
 
 const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };
 const report = result => ({ exit: result.exit, text: formatReport(result) });
@@ -84,9 +97,26 @@ const runSelf = v => withInputs(v, async inputs => {
   return repo === undefined || v.branch === undefined ? usage('--self needs --branch (and a git repository)') : report(await checkSelf({ repo, branch: v.branch, inputs }));
 });
 
-const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, inputs, expectedOrigin: v['origin-url'] }))));
+const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, tip: v.tip, inputs, expectedOrigin: v['origin-url'] }))));
 
-const MODES = { 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
+const SELF_PATH = fileURLToPath(import.meta.url);
+/** The options a hook bakes in at install (fixtures, a named aid, ...): each flag given to --install-hook that a check reads. */
+const BAKED = ['aid', 'public', 'secret-file', 'aids-dir', 'tokens', 'bench-repo', 'credits', 'needles', 'template-files'];
+const bakedArgs = v => BAKED.flatMap(name => [].concat(v[name] ?? []).flatMap(value => [`--${name}`, value]));
+
+async function runInstallHook(v) {
+  if (v.repo === undefined) return usage('--install-hook needs --repo');
+  const r = await installHook({ repo: v.repo, checker: SELF_PATH, originUrl: v['origin-url'], extraArgs: bakedArgs(v), force: v['force-hook'] === true });
+  return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
+}
+
+async function runUninstallHook(v) {
+  if (v.repo === undefined) return usage('--uninstall-hook needs --repo');
+  const r = await uninstallHook({ repo: v.repo });
+  return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
+}
+
+const MODES = { 'install-hook': runInstallHook, 'uninstall-hook': runUninstallHook, 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
 
 async function run(v) {
   const modes = modeOf(v);

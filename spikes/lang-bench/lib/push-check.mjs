@@ -1,11 +1,12 @@
 // The pre-push check (parent §4 step 3): the named checks over exactly the commits a push would add, a PR or review body, and the
 // bench's own branch. Every finding is `{ commit?, path, line, what }` - where and which, never the matched text. Exit codes:
 // 0 clean, 1 refused, 3 the environment (git, the network, an unreadable aid), 4 configuration (a branch that is not there).
-import { ok } from '../../minigit-bench/lib/result.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { EXIT } from './push-exit.mjs';
-import { branchTip, changesOf, newCommits, readBlobs, readFileAt, tipTree } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
 import { TASK_REPO_URL, verifyFresh, verifyOrigin } from './push-remote.mjs';
+import { sequence } from './push-sequence.mjs';
 import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
 import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
 import { findStackFolderFiles } from './push-visible.mjs';
@@ -33,20 +34,20 @@ const firstFailure = (...results) => results.find(r => !r.ok);
 const firstCommitMap = (files, keep) => new Map(files.filter(keep).reverse().map(f => [f.path, f.commit]));
 
 /** ok({ commits: [sha], tip }) of a branch: the commits a push would add and the tip it ends at. */
-async function rangeAndTip(repo, branch) {
-  const range = await newCommits(repo, branch);
-  const tip = range.ok ? await branchTip(repo, branch) : range;
-  return tip.ok ? ok({ commits: range.value, tip: tip.value }) : tip;
+async function rangeAndTip(repo, branch, rev) {
+  const tip = await branchTip(repo, branch, rev);
+  const range = tip.ok ? await newCommits(repo, branch, tip.value) : tip;
+  return range.ok ? ok({ commits: range.value, tip: tip.value }) : range;
 }
 
 /** ok({ commits, tip, found, files, tipTree }): the range, the tip it ends at, and the tagged findings of every message and blob in it. */
-async function scanBranch({ repo, branch, inputs, refuseNul }) {
-  const head = await rangeAndTip(repo, branch);
+async function scanBranch({ repo, branch, rev, inputs, refuseNul }) {
+  const head = await rangeAndTip(repo, branch, rev);
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
   if (!changes.ok) return changes;
   const { files, messages } = changes.value;
   const blobs = await readBlobs(repo, files.filter(f => f.mode !== SUBMODULE).map(f => f.oid));
-  const tree = await tipTree(repo, branch);
+  const tree = await tipTree(repo, branch, head.value.tip);
   const bad = firstFailure(blobs, tree);
   if (bad) return bad;
   const entries = scanEntries(files, tree.value);
@@ -56,8 +57,8 @@ async function scanBranch({ repo, branch, inputs, refuseNul }) {
 
 /** Branch-level findings by check name: the README's structure, the credit terms, the stack folders and the tree's shape. */
 async function tipFindings({ repo, branch, inputs, scan }) {
-  const readme = await readFileAt(repo, branch, 'README.md');
-  const modules = await readFileAt(repo, branch, '.gitmodules');
+  const readme = await readFileAt(repo, branch, 'README.md', scan.tip);
+  const modules = await readFileAt(repo, branch, '.gitmodules', scan.tip);
   const failure = firstFailure(readme, modules);
   if (failure) return failure;
   const anyCommit = firstCommitMap(scan.files, () => true);
@@ -76,20 +77,30 @@ async function tipFindings({ repo, branch, inputs, scan }) {
 /** The tagged findings grouped under the named checks, in the named order. */
 const groupChecks = (names, findings) => names.map(name => ({ name, findings: findings.filter(f => f.check === name).map(({ check, atTip, ...f }) => f) }));
 
-/** ok(null) when origin is the task repository and the tracking refs are what it has now. */
-async function verifyRemote(repo, expectedOrigin) {
-  const origin = await verifyOrigin(repo, expectedOrigin);
-  return origin.ok ? verifyFresh(repo) : origin;
-}
+/** ok(null) when origin is the task repository, the tracking refs are what it has now and the branch has not moved off `tip` (when given). */
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
-/** The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. */
-export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_REPO_URL }) {
+const tipShape = tip => (tip === undefined || FULL_SHA.test(tip) ? ok(null) : fail(`--tip must be a full commit sha (40 or 64 hex digits), not ${JSON.stringify(tip.slice(0, 80))}`, { kind: 'config' }));
+
+/** ok(null) when `--tip` is a full sha, origin is the task repository, the tracking refs are what it has now and the branch has not moved off `tip`. */
+const verifyRemote = ({ repo, branch, tip, expectedOrigin }) => sequence([
+  () => tipShape(tip),
+  () => verifyOrigin(repo, expectedOrigin),
+  () => verifyFresh(repo),
+  () => (tip === undefined ? ok(null) : verifyNotMoved(repo, branch, tip)),
+]);
+
+/**
+ * The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. `tip` is the
+ * sha git is about to publish (the pre-push hook passes it): that exact commit is checked, and the branch moving off it is exit 4.
+ */
+export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = TASK_REPO_URL }) {
   const label = `${repo} ${branch}`;
-  const origin = await verifyRemote(repo, expectedOrigin);
-  const scan = origin.ok ? await scanBranch({ repo, branch, inputs, refuseNul: true }) : origin;
-  const tip = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
-  if (!tip.ok) return errorResult(label, tip);
-  const all = [...scan.value.found, ...flatten(tip.value, undefined)];
+  const origin = await verifyRemote({ repo, branch, tip, expectedOrigin });
+  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs, refuseNul: true }) : origin;
+  const tree = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
+  if (!tree.ok) return errorResult(label, tree);
+  const all = [...scan.value.found, ...flatten(tree.value, undefined)];
   return verdict(groupChecks(NAMES, all), label, { commits: scan.value.commits, tip: scan.value.tip, branch, tokens: tokenLine(inputs) });
 }
 

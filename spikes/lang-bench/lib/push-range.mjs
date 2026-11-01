@@ -8,16 +8,27 @@ import { BLOB_MAX_BYTES, runGit, runGitBytes } from './push-git.mjs';
 export const SUBMODULE_MODE = '160000';
 export const SYMLINK_MODE = '120000';
 
-/** ok(sha) of the tip commit of `branch`, or a `config` fail when the branch does not exist. */
-export async function branchTip(repo, branch) {
-  const tip = await runGit(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`], { accept: [0, 1] });
+/** What names the thing checked: the given sha (`rev`, as git is about to publish it) or else the branch's ref. */
+export const revOf = (branch, rev) => rev ?? `refs/heads/${branch}`;
+
+/** ok(sha) of the tip commit of `branch` (or of `rev`), or a `config` fail when it does not exist. */
+export async function branchTip(repo, branch, rev) {
+  const tip = await runGit(repo, ['rev-parse', '--verify', '--quiet', `${revOf(branch, rev)}^{commit}`], { accept: [0, 1] });
   if (!tip.ok) return tip;
-  return tip.value.code === 1 ? fail(`the branch ${branch} does not exist in ${repo}`, { kind: 'config' }) : ok(tip.value.stdout.trim());
+  return tip.value.code === 1 ? fail(`${rev === undefined ? `the branch ${branch}` : `the commit ${rev}`} does not exist in ${repo}`, { kind: 'config' }) : ok(tip.value.stdout.trim());
+}
+
+/** ok(null) when the branch does not exist or points at `tip`; otherwise a `config` fail: the branch moved after the sha was taken. */
+export async function verifyNotMoved(repo, branch, tip) {
+  const now = await runGit(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`], { accept: [0, 1] });
+  if (!now.ok) return now;
+  const sha = now.value.stdout.trim();
+  return now.value.code === 1 || sha === tip ? ok(null) : fail(`the branch ${branch} moved: it is at ${sha} now, the check was asked for ${tip}`, { kind: 'config' });
 }
 
 /** ok([sha]) oldest first, or a `config` fail when the branch does not exist. */
-export async function newCommits(repo, branch) {
-  const tip = await branchTip(repo, branch);
+export async function newCommits(repo, branch, rev) {
+  const tip = await branchTip(repo, branch, rev);
   if (!tip.ok) return tip;
   const list = await runGit(repo, ['rev-list', '--reverse', tip.value, '--not', '--remotes=origin']);
   return list.ok ? ok(list.value.stdout.split('\n').filter(Boolean)) : list;
@@ -71,17 +82,18 @@ export async function readBlobs(repo, oids) {
 }
 
 /** ok(text) of `path` at the tip of `branch`, ok(null) when the path is not there. */
-export async function readFileAt(repo, branch, path) {
-  const exists = await runGit(repo, ['cat-file', '-e', `refs/heads/${branch}:${path}`], { accept: [0, 128] });
+export async function readFileAt(repo, branch, path, rev) {
+  const at = `${revOf(branch, rev)}:${path}`;
+  const exists = await runGit(repo, ['cat-file', '-e', at], { accept: [0, 128] });
   if (!exists.ok) return exists;
   if (exists.value.code !== 0) return ok(null);
-  const blob = await runGit(repo, ['cat-file', 'blob', `refs/heads/${branch}:${path}`], { maxBytes: BLOB_MAX_BYTES });
+  const blob = await runGit(repo, ['cat-file', 'blob', at], { maxBytes: BLOB_MAX_BYTES });
   return blob.ok ? ok(blob.value.stdout) : blob;
 }
 
 /** ok(Map(path -> { oid, mode })) of every entry in the tree at the tip of `branch` (submodule pointers and symlinks included): what a run base would carry. */
-export async function tipTree(repo, branch) {
-  const listing = await runGit(repo, ['ls-tree', '-r', '-z', `refs/heads/${branch}`], { maxBytes: 64 * 1024 * 1024 });
+export async function tipTree(repo, branch, rev) {
+  const listing = await runGit(repo, ['ls-tree', '-r', '-z', revOf(branch, rev)], { maxBytes: 64 * 1024 * 1024 });
   if (!listing.ok) return listing;
   const tree = new Map();
   for (const record of listing.value.stdout.split('\0').filter(Boolean)) {
