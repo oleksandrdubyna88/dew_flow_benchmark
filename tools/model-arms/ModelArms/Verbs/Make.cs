@@ -24,12 +24,17 @@ public static class MakeVerb
 
     public static Task<int> RunAsync(ExperimentInput input) => RunAsync(input, PlatformFactsReader.CurrentRoad);
 
-    internal static async Task<int> RunAsync(ExperimentInput input, PlatformRoad road)
+    internal static Task<int> RunAsync(ExperimentInput input, PlatformRoad road) => RunAsync(input, road, RunArms.Of(input.Experiment.Runs));
+
+    /// <summary>The same walk over the arms handed in only (E5.S4, §8 item 10): <c>chain &lt;run&gt;</c> makes ITS run's arms, where the public verb makes every run's. An arm that is not in <paramref name="arms"/> is not looked at, not marked and not made.</summary>
+    internal static Task<int> RunAsync(ExperimentInput input, IReadOnlyList<string> arms) => RunAsync(input, PlatformFactsReader.CurrentRoad, arms);
+
+    internal static async Task<int> RunAsync(ExperimentInput input, PlatformRoad road, IReadOnlyList<string> arms)
     {
         var passage = await Task.FromResult(Admitted(input))
             .ThenAsync(tools => FlooredAsync(input, tools))
             .Then(tools => Announced(input, road, tools))
-            .Then(tools => Pending(input, tools))
+            .Then(tools => Pending(input, arms, tools))
             .ThenAsync(pending => MadeAsync(input, road, pending));
         return passage.Match(done => done, stop => stop.Print(input.Verb.Error));
     }
@@ -85,11 +90,11 @@ public static class MakeVerb
         return new Passage<ToolPaths>.Through(tools);
     }
 
-    /// <summary>Step 3: the arms of every run, in file order, without those whose marker is there. A marker the kernel cannot answer for is exit 3, never "not made".</summary>
-    private static Passage<Plan> Pending(ExperimentInput input, ToolPaths tools)
+    /// <summary>Step 3: the arms asked for (every run's, in file order, for the public verb), without those whose marker is there. A marker the kernel cannot answer for is exit 3, never "not made".</summary>
+    private static Passage<Plan> Pending(ExperimentInput input, IReadOnlyList<string> arms, ToolPaths tools)
     {
         var pending = new List<string>();
-        foreach (var arm in RunArms.Of(input.Experiment.Runs))
+        foreach (var arm in arms)
         {
             switch (KernelFacts.Present(input.Root.Made(arm)))
             {

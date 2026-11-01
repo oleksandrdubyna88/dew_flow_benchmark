@@ -11,7 +11,7 @@ namespace Bench.Tests.ModelArms;
 /// <summary><c>run-all</c> (E5.S3, D13, parent §4.7): which arms it starts, which it leaves, and what it refuses before it starts any. The refusal rows are in process through the gate with a RECORDING launcher and a liveness map (nothing is started, so the queue is arithmetic over made arms); the rows about an arm that ends, and about two arms at one gate lock, are the real console as a separate process starting real detached runners over the
 /// fake CLI. Linux x86-64 only.
 /// <para>
-/// What this does NOT prove: a real <c>claude</c>; a runner that outlives a closed terminal; the wedged gate-lock holder (parent §4.7, §9: told apart only when a gate step's ceiling runs out); the chain's half of <i>never repeats an exit 5</i> (E5.S4 adds it to the first row below).
+/// What this does NOT prove: a real <c>claude</c>; a runner that outlives a closed terminal; the wedged gate-lock holder (parent §4.7, §9: told apart only when a gate step's ceiling runs out); the chain's half of <i>never repeats an exit 5</i> beyond the one arm the first row hands it.
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class RunAllVerbTests
@@ -35,14 +35,26 @@ public sealed class RunAllVerbTests
         kit.Root.ArmDones("C1").Should().BeEmpty();
         var session = File.ReadAllText(kit.Root.PathsOf("C1").Session("1-code")).Trim();
 
+        // The chain's half (E5.S4, E5 §8 item 13): a chain over the same arm finds a runner that ran and is gone without arm-done, names the resume command and starts nothing.
+        ChainKit.Provide(kit.Root);
+        Directory.CreateDirectory(Path.Combine(kit.Root.Root, "base"));
+        kit.Root.Edit(top =>
+        {
+            top["awake"] = "none";
+            top["runs"] = new JsonObject { ["part6"] = new JsonObject { ["rounds"] = new JsonArray(new JsonArray("C1")) } };
+        });
+        var chain = await ModelArmsBinary.RunAsync(kit.Root, "chain", "part6");
+        chain.Code.Should().Be(5, chain.Error + chain.Output);
+        chain.Error.Should().Contain("C1 stopped without finishing").And.Contain("model-arms run-all C1");
+        kit.Fake.Calls().Should().ContainSingle("the chain did not start the arm again: the operator's own run-all is the ask");
+        kit.Root.ArmDones("C1").Should().BeEmpty();
+
         var second = await kit.RunAsync("C1");
 
         second.Code.Should().Be(0, second.Error + second.Output);
         second.Output.Should().Contain("C1: started").And.Contain("this is the resume you asked for");
         (await IsolationKit.UntilAsync(() => kit.Root.ArmDones("C1").Count == 1, TimeSpan.FromSeconds(90))).Should().BeTrue("the operator's own run-all resumed the arm to its end: " + kit.LogOf("C1"));
         kit.Fake.Calls()[1].After("--resume").Should().Be(session, "the second runner resumed the cut session");
-
-        // E5.S4 adds the chain's half of this test here (E5 §8 item 13): a chain over the same arm hands it to no `Start`.
     }
 
     [Fact]

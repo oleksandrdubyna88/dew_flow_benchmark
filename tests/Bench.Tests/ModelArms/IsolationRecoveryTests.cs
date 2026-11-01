@@ -15,7 +15,7 @@ namespace Bench.Tests.ModelArms;
 /// <summary>Who may change a mode, and what a run does under the isolation (D11, F0): only <c>lock</c> and <c>unlock</c> ever set a mode or restore a snapshot — every other verb reads the two files, prints the one line and goes on by name; <c>unlock</c> is refused beside a live arm unless forced;
 /// <c>lock</c> then <c>run-arm</c> leaves the experiment LOCKED (the re-review's defect was a runner that restored on entry); a runner whose run has an isolation block that is not applied says so once and runs on.
 /// <para>
-/// What this does NOT prove: <c>run-all</c> and <c>chain</c> beyond their <i>not built yet</i> rows (their rows join for real when E5.S3 and E5.S4 build them — the rows are derived from the dispatch); that no process BESIDE the module changes a mode (a same-user <c>chmod</c>, parent §9).
+/// What this does NOT prove: <c>run-all</c> and <c>chain</c> beyond the admission each ends at here (the rows are derived from the dispatch; the chain's own stages are <c>ChainVerbTests</c>); that no process BESIDE the module changes a mode (a same-user <c>chmod</c>, parent §9).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class IsolationRecoveryTests
@@ -61,7 +61,7 @@ public sealed class IsolationRecoveryTests
 
         File.SetUnixFileMode(kit.Pids, (UnixFileMode)0xC0);
         var before = (Snapshot: Bytes(kit.Layout.LockedModes), Applied: Bytes(kit.Layout.LockedModesApplied));
-        var arm = verb is "run-arm" or "run-all" or "checks" ? new[] { "C1" } : [];
+        var arm = verb is "run-arm" or "run-all" or "checks" ? new[] { "C1" } : verb is "chain" ? ["part6"] : [];
         var output = new StringWriter();
 
         var code = await ModelArmsApp.Program.RunAsync([verb, .. arm, "--experiment", kit.Root.Root], output, new StringWriter(), kit.Root.Environment, TestContext.Current.CancellationToken);

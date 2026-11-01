@@ -645,13 +645,12 @@ verb's shape, or a word outside `status|hold`, is refused (`<verb> takes <shape>
 parser's own rule); any other bare token is refused (`'<x>' is not a flag or a value`). `VerbLine.Rest` is the verb and the flag tokens.
 
 **`Program`** (console) maps what happened to the exit codes of D16: `0` the verb did its work; `3` a fault nobody expected (`model-arms <verb>: unexpected <Type>: <message>`) or a host that could not
-say; `4` a line that does not split, a flag the verb cannot read (`CommandLineException`), a verb whose story is not built yet (`model-arms <verb>: not built yet — story <id> of todo/PLAN_model_arms.md`);
+say; `4` a line that does not split, a flag the verb cannot read (`CommandLineException`), (a verb whose story was not built yet answered *not built yet*; the last such arm, `chain`, went with E5.S4 — every verb of the command line is built, and `Program` holds no `NotBuilt`);
 `5` a stop the operator asked for (Ctrl+C, SIGTERM), after which the same command resumes. `Dispatch` has one `"verb" =>` arm per line, and
 `ModelArmsProgramTests.Every_verb_the_command_line_accepts_has_a_dispatch_arm` reads the source and holds the arms equal to `ModelArmsCommandLine.Verbs`. `version` and `help` need no root.
-Which story replaces which `NotBuilt` arm: `init` E1.S11, `validate` E1.S10, `prep-base` E3.S2 (built), `make` E3.S3, `status` E3.S4 (built), `lock` and `unlock` E4.S1, `run-arm` E2.S7, `run-all` E4.S3, `chain` E4.S5,
-`checks` E5.S2, `gate-lock` E2.S6.
+Every verb is dispatched: `chain` was the last `NotBuilt` arm, replaced by E5.S4 (`ExperimentGate.RunAsync(input, ChainVerb.RunAsync)`).
 
-**`ExperimentGate.RunAsync(input, verb)`** is the one road in for every verb that reads an experiment (a later story replaces a `NotBuilt` arm with `ExperimentGate.RunAsync(input, SomeVerb.RunAsync)`).
+**`ExperimentGate.RunAsync(input, verb)`** is the one road in for every verb that reads an experiment (every dispatch arm of a verb that reads an experiment is `ExperimentGate.RunAsync(input, SomeVerb.RunAsync)`).
 Each step refuses what the one before did not, and a refusal ends the walk:
 
 1. The root: `--experiment`, else `MODEL_ARMS_EXPERIMENT` (the map the verb was given, never the process's own); none is exit 4. It is made absolute and its trailing separator trimmed ONCE.
@@ -2227,7 +2226,7 @@ Root or `CAP_DAC_OVERRIDE` (refused before anything, never observed; the verific
 
 ## Keep-awake (E5.S2)
 
-The host is kept awake for a scope (parent D12, §4.8) by an object whose life is the scope: `IHostAwake` (`ModelArms.Core.Ports`, `IAsyncDisposable`, `Describe`). `chain` (E5.S4) will hold one in an `await using` around the whole run; E5.S2 builds the three adapters, the pure choice between them and the factory, and nobody uses them yet.
+The host is kept awake for a scope (parent D12, §4.8) by an object whose life is the scope: `IHostAwake` (`ModelArms.Core.Ports`, `IAsyncDisposable`, `Describe`). `chain` (E5.S4) holds one in an `await using` around the whole run; E5.S2 built the three adapters, the pure choice between them and the factory.
 
 | Piece | Where | What it does |
 |---|---|---|
@@ -2348,3 +2347,173 @@ The Windows launcher (built, never run: no Windows host here; a child outliving 
 `pids/<arm>.log` — append-only, one runner's output per start (the walk's lines; its size per arm was not measured here): retired with the root; a start never truncates it. Nothing else: `run-all` writes no file and starts no process it keeps.
 
 ## chain (E5.S4)
+
+**What is built.** `chain <run>` runs ONE named run (D27) unattended from `make` to `checks`, as `after6.sh` / `after7.sh` did, and never lets the run execute without its isolation or unlock beside a live arm (parent §4.7). It makes the run's arms (`MakeVerb.RunAsync(input, arms)` — the run's own, not every run's: E5 §8 item 10), locks the isolation (`LockVerb.LockAsync`), starts each round's arms DETACHED through `RunAllVerb.StartAsync` and waits for them, unlocks (`UnlockVerb.UnlockAsync`, only here), then checks every arm (`ChecksVerb`), with the stage markers under `chain/<run>/` and the host kept awake (`HostAwakes.StartAsync`) for the whole of it. Every decision is `ChainPlan.Next`'s — pure, one action at a time, from facts read afresh before each (a marker is never proof of the current state, so a restarted chain decides from the files).
+
+| piece | where | what it is |
+|---|---|---|
+| the decision | `ModelArms.Core/Chain/ChainPlan.cs` (C25) | `ArmFacts`, `ChainFacts`, the closed `ChainAction` (`ExitCode` null for an action the chain carries out and goes on from, 5 for `StopArmDied`, `StopOtherRunAlive` and an expired `AwaitStart` / `AwaitExit` / `WaitFor`, 4 for `RefuseMarker`, 0 for `Finished`) and `ChainPlan.Next`. |
+| the bounds | `ModelArms.Core/Chain/ChainWaitCeiling.cs` | `StartupCeiling` (60 s); `OfArm` / `OfRound`, the longest wall by the runners' own budgets, clamped. |
+| the verb | `Verbs/Chain.cs` | `ChainVerb.RunAsync(input)` / `RunAsync(input, ChainSeams)`: the run, its lock, the admission, the awake scope, the trailer. |
+| the run's lock | `Verbs/ChainRunLock.cs` | `chain/<run>/.chain.lock` through the real `FileGateLock`, once, never waited for. |
+| the admission | `Verbs/ChainAdmission.cs` | `pids/`, the PATH, every executable, `chain/executables.txt`. |
+| the facts | `Verbs/ChainGather.cs` | what the chain reads before each decision. |
+| the loop | `Verbs/ChainWalk.cs` | gather, decide, carry out, again; the bounded waits. |
+| the seams | `Verbs/ChainSeams.cs` | the verbs it calls, liveness, awake, host, `Tick`, `Clock` — internal; the run's lock is NOT a seam. |
+| the scoped make | `Verbs/Make.cs` | `MakeVerb.RunAsync(input, arms)`; the public verb passes every run's arms. |
+| the paths | `ArmPaths.cs` | `RootPaths.ChainLock(run)`; the root-level `Locked`, `Unlocked` and `ArmsDone` (E1's spelling before D27) are gone — every stage marker is `RunMarker(run, stage)`. |
+
+### The first-run workflow, and every refusal on the way
+
+`init <root>` → fill `experiment.json` → `validate` → `prep-base` → `make` (optional: the chain makes its own arms) → `chain <run>`. Each step refuses before it does anything, in these words:
+
+| where | exit | the sentence |
+|---|---|---|
+| the gate: no `baseline.json`, no `base/` | 4 | `model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it` (and `base`) |
+| the run is not in `experiment.json` | 4 | `model-arms chain: there is no run <run> — the runs are part6, part7` (no file and no folder made) |
+| the run's lock is held | 4 | `model-arms chain <run>: another chain of <run> holds chain/<run>/.chain.lock by pid N since <utc> — nothing was started` (or `(holder unknown)`: a holder can die between its lock and its note, and a live one may not have written it yet) |
+| `<root>/pids` is a link or a file | 4 | `model-arms chain <run>: <root>/pids is a symbolic link — refused (D17)` |
+| a PATH entry or `HOME` under a forbidden root | 4 | `model-arms chain: <the entry>` (as `run-all`) |
+| an executable the experiment needs is absent | 3 | `model-arms chain: <name> … ` (the resolver's sentence) |
+| the keep-awake the experiment names does not fit the host | 4 | `model-arms chain <run>: awake "wsl" needs a Wsl host; this host is OtherPosix` (`validate`'s own sentence) |
+| a stage's verb refused | its code | `model-arms chain <run>: lock: <why>` / `unlock: <why>`; `make`, `run-all` and `checks` print their own |
+| `locked` stands over a snapshot it does not match | 4 | `model-arms chain <run>: chain/<run>/locked is written but the isolation is not this run's — <the isolation line> — no runner is started`, then `recovery: model-arms lock <run>, then model-arms chain <run> again` (over none or applying) or `recovery: model-arms unlock once no arm is alive, then model-arms lock <run>, then model-arms chain <run> again` (another run's or another set's snapshot, an inconsistent one) |
+| an arm's runner died without `arm-done` | 5 | `model-arms chain <run>: <arm> stopped without finishing — resume it (model-arms run-all <arm>), then start me again` |
+| a started arm's runner never took its lock | 5 | `model-arms chain <run>: <arm> was started <n> s ago and its runner has not taken pids/<arm>.lock — see pids/<arm>.log; resume it (model-arms run-all <arm>), then start me again` |
+| a done runner does not exit within `limits.killGraceSeconds` | 5 | `model-arms chain <run>: <arms> wrote arm-done but the runner has not exited within limits.killGraceSeconds (<n> s) — run me again` |
+| a round outlives its ceiling | 5 | `model-arms chain <run>: <arm> is still running after <n> s, the longest its own step budgets and limit waits allow — no runner was stopped; see pids/<arm>.log, then run me again` |
+| an arm of another run is alive | 5 | `model-arms chain <run>: <arm> of another run is alive — run me again once it has ended` |
+| `unlock` refused at the unlock stage | 5 | `model-arms chain <run>: unlock refused — <arm> is alive; run me again once it has ended` |
+| the operator's stop (Ctrl+C, SIGTERM) | 5 | `model-arms: stopped — run the same command again to resume` (Program.Main) |
+
+Every non-zero exit once the run's lock is held also prints the trailer (below). Exit 0 prints `model-arms chain <run>: done`.
+
+### The chain as a state machine
+
+```mermaid
+flowchart TD
+    entry(["chain run"]) --> named{"run named in experiment.json"}
+    named -- no --> e4a(["exit 4, no run"])
+    named -- yes --> runlock{"chain/run/.chain.lock taken"}
+    runlock -- held by another chain --> e4b(["exit 4, names the holder"])
+    runlock -- taken --> admit["pids/ by name, executables resolved printed and written, awake scope started"]
+    admit --> gather["gather facts: arms, markers, snapshot, digest, liveness"]
+    gather --> next{"ChainPlan.Next, first rule that holds"}
+    next -- "arms-done" --> done(["exit 0, done"])
+    next -- "unlocked, an arm not checked" --> check["Check arm"]
+    next -- "an arm not made" --> make["Make the run's unmade arms"]
+    next -- "locked absent" --> lock["Lock, then write locked"]
+    next -- "locked over the wrong snapshot" --> refuse(["exit 4, RefuseMarker and the recovery"])
+    next -- "ran, gone, no arm-done" --> died(["exit 5, StopArmDied"])
+    next -- "started here, lock not yet taken" --> awaitstart["AwaitStart, tick 1 s, at most 60 s"]
+    next -- "arms not started, none done and exiting" --> start["Start, through run-all"]
+    next -- "done but still exiting" --> awaitexit["AwaitExit, tick at most 60 s, at most the kill grace"]
+    next -- "alive, not done" --> waitfor["WaitFor, tick at most 60 s, at most the round ceiling"]
+    next -- "every arm done, another run alive" --> other(["exit 5, StopOtherRunAlive"])
+    next -- "every arm done, none alive" --> unlock["Unlock, then write unlocked"]
+    check --> gather
+    make --> gather
+    lock --> gather
+    start --> gather
+    unlock --> gather
+    awaitstart --> gather
+    awaitexit --> gather
+    waitfor --> gather
+    awaitstart -- "60 s" --> e5a(["exit 5, runner never took its lock"])
+    awaitexit -- "grace" --> e5b(["exit 5, runner did not exit"])
+    waitfor -- "ceiling" --> e5c(["exit 5, still running"])
+    next -- "unlocked, every arm checked" --> finish["write arms-done last"]
+    finish --> done
+```
+
+Any exit but 0, an exception or the operator's stop leaves the isolation as it stands (no edge reaches `Unlock` except the rule above) and prints the trailer.
+
+### How a decision is made (`ChainPlan.Next`, the first rule that holds)
+
+1. `arms-done` → `Finished`. 2. `unlocked` → the first arm (round order) not `chain/objective-<arm>` → `Check(arm)`; none → `Finished` (`unlocked` is not reconciled: the checks run under any snapshot and print its line, §8 item 12). 3. An arm not `chain/made-<arm>` → `Make`. 4. No `locked` → `Lock` (also over `applying`: `lock` is the one place it is recovered; over another run's snapshot `lock` refuses). 5. **The reconciliation** (parent §4.7): `locked` stands only over an `applied` snapshot of THIS run and THIS digest — or, under no isolation, over no snapshot — else `RefuseMarker`. 6. **The rounds**, at the first round with an arm not done: (a) an arm that ran (`pids/<arm>.pid` is there: a runner held its lock and wrote it) and is neither alive nor done → `StopArmDied`, before anything new is started (§8 item 14); (b) arms this process started whose runner has not yet taken its lock → `AwaitStart`, never read as died (§8 item 46); (c) arms nobody has started → `AwaitExit` while a done runner of this run still holds its lock (`run-all` counts it alive and its queue refusal would trip, §8 item 47), else `Start`; (d) else `WaitFor` the first alive arm. 7. Every arm done and a runner of the run still exiting → `AwaitExit`. 8. An arm of another run alive → `StopOtherRunAlive`. 9. `Unlock`.
+
+**What each fact is read from** (`ChainGather`): the markers and the pid file by the kernel's presence call (`KernelFacts.Present` — a presence it cannot answer is exit 3, never *absent*); `Done` from `out/timing.jsonl` through `BoundedFile` and `TimingLines.IsArmDone`; `Alive` from `RunnerLiveness` (the runner's lock; `Refused` 4, `Unread` 3); `OthersAlive` the same for every other arm of the map; the snapshot from `IsolationFiles.State`; the digest from `LockVerb.PlanOf` — `null` when the run closes nothing and on a Windows host, where `lock` answers *POSIX only* and `locked` therefore stands over no snapshot (deviation 1). No folder is listed: the root, `r/` and `pids/` are at 300 while the isolation stands.
+
+**The markers are written by the chain, after the verb returned** (D11 gate finding 1): `lock` and `unlock` write none and know nothing of them; `Lock` → `Applied`, `AlreadyLocked` or `NoIsolation` → `chain/<run>/locked` (an empty file, staged and renamed by name); `Unlock` → `Restored`, `NothingLocked` or `NoIsolation` → `unlocked`; `arms-done` LAST, after every check (`after6.sh:55`). `make` and `checks` write `made-<arm>` and `objective-<arm>` themselves.
+
+### The waits (every one has a ceiling, and sleeps what REMAINS)
+
+| wait | action | period | ceiling | at the ceiling |
+|---|---|---|---|---|
+| a started arm's runner to take `pids/<arm>.lock` | `AwaitStart` | 1 s | `ChainWaitCeiling.StartupCeiling`, 60 s (the runner's own waits before its lock are ≤ 4 s plus a process start; the shell's own tick) | exit 5 naming `pids/<arm>.log` and `model-arms run-all <arm>` |
+| a done runner to exit (before every `Start` and before `Unlock`) | `AwaitExit` | 60 s | `limits.killGraceSeconds` | exit 5 |
+| a round's arms to finish | `WaitFor` | 60 s | `ChainWaitCeiling.OfRound`: the largest, over the round's arms, of Σ per step `minutes`·60 + kill grace + `tries`·(`waitSeconds` + `minimumRemainingSeconds`) — a `taskCode` step `tasks.max` times — plus, with a gate step, `gateTries`·`gateWaitSeconds` and the gate lock's wait (`GateLockCeiling.For`), plus the startup ceiling; long arithmetic, each product clamped before it is added, at most `GateStep.MaxLockCeiling` | exit 5, no runner stopped |
+
+Each tick is `min(period, bound − elapsed)` by the seam clock, the elapsed span counted from an instant this process recorded (the last `Start`; the first of an unbroken run of `AwaitExit`; the first action in the round), so a grace of 90 s is checked at 0, 60 and 90 s and expires at exactly 90, where a whole period would have expired it at 120. The round's ceiling is generous on purpose (the example's limits give hours per step): it bounds a wedged runner, it does not judge a slow one. A restarted chain counts afresh from its own first action in the round.
+
+### The failure path (D11, parent §4.7 — reviewed against D26)
+
+The chain unlocks ONLY through its `Unlock` stage. Every other exit — a stage's refusal, an arm that died, a wait that ran out, an exception, the operator's stop — **leaves the isolation applied, stops no runner** (no member of the verb, the walk or the gather signals a process, writes a mode or moves a snapshot; `IsolationRecoveryTests.The_only_sites_that_set_a_mode_or_move_a_snapshot_…` still names the same eight files) **and prints the trailer**, last, on stderr:
+
+```
+isolation: <the isolation line, read again>
+model-arms chain <run>: the isolation is left as it stands and no runner was stopped; the arms that outlive this chain are not kept awake — to abandon the run, model-arms unlock once no arm is alive
+```
+
+An exception travels on; the operator's stop travels to `Program.Main` (exit 5). The awake scope ends on every path: the arms that outlive the chain are no longer kept awake, which the trailer says. The run's lock is released last, by the descriptor's own disposal — and by the kernel when the chain is killed: it is opened close-on-exec, so no runner `run-all` starts inherits it (`ChainProcessTests`, `/proc/<runner>/fd`).
+
+### The trust boundary — D26 (a)–(f), by D26's own letters (parent plan line 321)
+
+| | the chain |
+|---|---|
+| (a) a trust path's facts come from the kernel, never a textual join; an unmeasured host said | the run's lock is judged by `FileGateLock` through `GateLockPath` (a link, a folder, a FIFO is refused, exit 4); the markers, the pid file and the lock files are asked by `KernelFacts.Present` (`statx` with `AT_SYMLINK_NOFOLLOW` where it exists) and the timing by `BoundedFile` — a presence it cannot answer is exit 3, never read as *absent*; `pids/` by exclusive `mkdir` and judged after (`RootFolders.Pids`); the markers and `chain/executables.txt` are staged and renamed by name (`ArmFiles.ReplaceFile`), never `WriteFileOnce` (whose failure path lists the folder); **no folder is listed anywhere in the chain's files** (the root is at 300 while it runs; `StatusVerbTests` scans the six files). The road's one line is printed by the gate, and the portable liveness line by this verb |
+| (b) nothing launches by a bare name; a built environment; a chosen cwd | the chain launches nothing itself. `run-all` launches the runners by the real paths of the `setsid` and the module it resolves, `make` and `checks` their tools by theirs; the chain resolves every executable the experiment needs, `setsid` and the module once each to REAL paths, prints them and writes them to `chain/executables.txt` before the first stage. The scan `The_module_launches_nothing_by_a_bare_name` reads the new files and finds none |
+| (c) `HOME`, `XDG_CONFIG_HOME` and PATH under a forbidden root refused | `LaunchAdmission.FirstRefusal` before anything is resolved, with the target and the root as forbidden roots |
+| (d) `<fill me>` refused wherever it stands | not applicable: the chain reads nothing the gate has not refused; the markers are empty files |
+| (e) the root created exclusively | not created here. `chain/<run>/` is made by name, `pids/` exclusively |
+| (f) `experiment.json` re-read after the trust check | the chain runs inside `ExperimentGate`; every verb it calls runs over the same admitted input; the runners it starts pass the gate themselves |
+
+**Residuals, said (the parent's §9 class: an access constraint, not a boundary against a process with this user's rights):** the stage markers are empty files any process of this user can create or remove by name under a 300 root — only `locked` is reconciled with the snapshot, so a forged `unlocked` or `arms-done` is believed (the checks run under any state; a forged `arms-done` ends the chain as finished); `chain/<run>/.chain.lock` excludes a second chain of the same run, not a process that does not ask for it; a `kill -9` leaves at most one `<name>.staging-<32 hex>` file per interrupted write, which nothing in the module sweeps (a listing is forbidden; the operator may delete `*.staging-*` after `unlock`, when the folders list again — §8 item 54); a runner is never stopped, so an arm wedged inside its step is found only by the round's ceiling.
+
+### Tests (E5.S4) — 32 methods, 63 cases
+
+`ChainPlanTests` (15 methods, 40 cases; pure, facts built by hand): the makes in round order; the lock after the last make and before the first start; a died arm stops the chain before anything new is started; a just-started arm is awaited and exits 5 only past 60 s (theory, 4 rows); a finished round starts the next; the next round waits for the last round's done runners (never `Start` beside them); the ceiling (`OfArm` equals the formula computed in the test from the file's own numbers, a `taskCode` step counted `tasks.max` times, a stranger's `minutes` of `int.MaxValue` clamped to `GateStep.MaxLockCeiling`, `OfRound` the largest arm, `WaitFor` expiring at exactly the ceiling); unlock before every check; unlock only when the run is done and nothing of the map is alive (theory); a restarted chain skips marked stages; two runs keep their own markers; the exit wait before `Unlock`; another run alive → exit 5; a `locked` marker over none, another run's, another digest, applying, inconsistent is refused (theory, 5 rows), and under no isolation `locked` stands over none only; every action names its exit code (theory, 15 rows, and the hierarchy has exactly 12 cases). `ChainVerbTests` (15 methods, 21 cases; in process over `ChainKit`): the failure path as a theory of five paths (an arm died, the operator's stop, a stage's refusal, an exception, a round past its ceiling) with a REAL non-runner (`tests/GateHolder`) holding `pids/CR1.lock` — no `unlock` recorded, the holder alive afterwards, the error ending in the trailer, the awake scope disposed; an `unlock` refused at the unlock stage; the root-level members gone and every file a pass leaves under `chain/` accounted for; the awake scope spanning the whole record; an `applying` snapshot handed to `lock`; the markers written after the real `lock` and `unlock` return (over `IsolationKit` with its block kept, the modes really changed and restored); Windows and no-isolation; the executables printed and written before the first stage; an unknown run; only the run's arms made (the recording `Make`, and the real scoped `MakeVerb` over a `MakeKit`); a second chain of the same run refused naming the holder while a chain of another run is not; the startup poll (theory: 3 ticks late, never); the next round started only after the last round's done runners left (the REAL `RunAllVerb.StartAsync` over a recording launcher); the waits sleeping what remains; `pids/` made by name and a link refused. `ChainProcessTests` (1): the real console binary as a process starting a real detached runner, killed, the runner alive, no descriptor of the run's lock in its `/proc/<pid>/fd`, a second chain taking the lock. `RunAllVerbTests` (the chain half of E5.S3's test): after the runner ended without `arm-done`, `chain` over the same arm exits 5 naming `model-arms run-all C1` and the fake's calls stay ONE. `ArmPathsTests` (three rows out, `ChainLock` in), `ModelArmsCommandLineTests` (`chain` one word, 0 and 2 refused), `ModelArmsProgramTests` (`A_verb_not_built_yet_…` deleted with `NotBuilt`), `ModelArmsArchitectureTests` (`ChainPlan`, `ChainWaitCeiling` pure), `StatusVerbTests` (the no-listing scan reads the six `Chain*.cs` files), `IsolationRecoveryTests` (`chain` among the rows, with its run as the positional; the only-eight-sites scan unchanged).
+
+`ChainKit` fakes the verbs the chain calls and the clock, nothing else: the files are real, the run's lock is the real `FileGateLock`, every executable the chain resolves is a real file on a real PATH. `Tick` advances the clock BY the span it was asked for and moves the world one tick (an alive arm finishes and leaves after `ExitTicks` more; a started arm takes its lock after `StartupTicks`); it fails the test after 200 ticks.
+
+### Red first
+
+Against the stubs: `ChainPlan.Next` answering `Finished` — 25 of 40 cases red on an assertion (*Expected type to be ModelArms.Core.Chain.ChainAction+Make, but found ModelArms.Core.Chain.ChainAction+Finished.*, and the same for `Lock`, `Start`, `StopArmDied`, `AwaitStart`, `AwaitExit`, `Unlock`, `StopOtherRunAlive`, `RefuseMarker`, `WaitFor`; and *Expected 4d, 1h and 11m, but found default.* for the ceiling, whose stub answered zero). `ChainVerb.RunAsync` answering 0 at once — all 21 cases red on an assertion (*Expected run.Code to be 5, but found 0*; *Expected value to be 4, but found 0* for an unknown run; *Expected kit.Stages to be equal to {"awake-start", "make C1,…* ; *Expected kit.AwakeAsked to be equal to {HostKind.Wsl}, but found empty collection*; *Expected kit.Record {empty} to contain "make CHH1,CHH2,CHH3"*; *Expected mode to be UserExecute|UserWrite|UserRead, but found None*). The binary answering 0: `ChainProcessTests` *Expected … RunnerLiveness.Of(Layout, arm) is RunnerState.Alive && PidOf(arm) is not null … within 60 s (its log: ), but found False.* and the chain half of `RunAllVerbTests` *Expected chain.Code to be 5, but found 0 (difference of -5).* One row (`…refusal`) was first red for a wrong expectation of the test (a refused lock leaves no snapshot) and corrected before the green run.
+
+### Break-its (each planted in the finished code, the named test watched red, then restored — compared with the file kept before)
+
+| # | planted | test watched red | the real symptom |
+|---|---|---|---|
+| 1 | the reconciliation removed (`ChainPlan.cs`) | `A_locked_marker_whose_runs_snapshot_is_not_applied_is_refused_never_skipped` (4 rows) | `Expected type to be …RefuseMarker, but found …Start.` |
+| 2 | `unlock` in a `finally` (`Chain.cs`) | `A_chain_that_fails_leaves_the_isolation_applied_…` | `Expected kit.Record {…, "awake-dispose", "unlock"} to not have any items matching entry.StartsWith("unlock")` (4 paths) |
+| 3 | `AwaitExit` without its bound (`ChainPlan.cs`) | `Unlock_waits_for_this_runs_done_runners_to_exit_and_exits_5_…`, `The_bounded_wait_sleeps_what_remains_…` | `Expected (expired.Expired, expired.ExitCode) to be equal to …`; `Expected value to be less than 201 because a chain that has ticked more than 200 times is stuck in a wait with no bound …` |
+| 4 | rule 6's died check after the start (`ChainPlan.cs`) | `An_arm_whose_runner_died_without_arm_done_stops_the_chain_naming_the_resume_command` | `Expected type to be …StopArmDied, but found …Start.` |
+| 5 | `OthersAlive` dropped (`ChainPlan.cs`) | `Every_arm_of_the_run_done_and_an_arm_of_another_run_alive_exits_5_…` | `Expected type to be …StopOtherRunAlive, but found …Unlock.` |
+| 6 | the awake scope disposed before `Unlock` (`Chain.cs`, `ChainWalk.cs`) | `The_awake_scope_spans_the_whole_chain` | `Expected kit.Stages to be equal to {"awake-start", "make …", "lock part6", "start …", "start …", "start …", "unlock", "check C1", …` |
+| 7 | the run's lock taken after the executables write (`Chain.cs`) | `A_second_chain_of_the_same_run_exits_4_naming_the_holder_and_starts_nothing` | `Expected File.Exists(kit.Layout.Executables) to be False because the lock is taken before the executables are written, but found True.` |
+| 8 | the lock's descriptor made inheritable (`fcntl(F_SETFD, 0)`, `ChainRunLock.cs`) | `A_killed_chain_frees_its_run_lock_while_its_detached_runner_lives_on` | `Expected DescriptorsOf(pid) {"pipe:[…]", …} not to contain "…/chain/part6/.chain.lock" because pid … holds no descriptor of the run's lock` |
+| 9 | the startup poll removed — died = ran or started here (`ChainPlan.cs`) | `A_just_started_arm_is_awaited_…` (4 rows), `A_started_arm_is_polled_…` | `Expected type to be …AwaitStart, but found …StopArmDied.`; `Expected run.Code to be 0 because model-arms chain part6: C1 stopped without finishing …` |
+| 10 | the `AwaitExit` before `Start` dropped (`ChainPlan.cs`) | `The_next_round_waits_for_the_last_rounds_done_runners_to_exit_before_it_starts`, `The_next_round_is_started_only_after_the_last_rounds_runners_have_exited` | `Expected type to be …AwaitExit, but found …Start.`; `Expected run.Code to be 0 because run-all's queue refusal (4) …: model-arms run-all: 6 arms would be alive at once (C1, CR1, C2, CR2, C3, CR3), but C1 was sized for a gate queue of 3` |
+| 11 | a tick of the whole period (`ChainWalk.cs`) | `The_bounded_wait_sleeps_what_remains_and_expires_at_exactly_the_grace` | `Expected kit.Spans to be equal to {1m, 30s}, but {1m, 1m} differs at index 1.` |
+| 12 | `WaitFor` without its ceiling (`ChainPlan.cs`) | `A_round_is_waited_for_at_most_its_arms_own_walls_then_exits_5`, `A_chain_that_fails_…` (the ceiling path) | `Expected (at.Arm, at.Expired, at.ExitCode) to be equal to …`; the 200-tick guard |
+| 13 | the `RootFolders.Pids` call dropped (`ChainAdmission.cs`) | `The_chain_makes_pids_by_name_before_its_first_stage_and_refuses_a_link_there` | `Expected linked.Record to be empty, but found at least one item {"awake-start"}.` |
+| 14 | the scoped `Make` overload's filter dropped (`Make.cs`) | `The_chain_makes_only_its_runs_arms` | `Expected File.Exists(make.Layout.Made("C1")) to be False because C1 was not in the arms handed to make, but found True.` |
+
+### Not proven (said, not hidden)
+
+A Windows host (the host seam says Windows, the process is Linux; `WindowsAwake` and `WindowsLauncher` are built, not observed); a chain holding SRS arms — before E4.S3 its `Start` stops at `run-all`'s refusal (exit 4, *its scheme runs the task pipeline*), so a run with an SRS arm cannot be chained yet; a real `claude`, a real isolation under a real chain with real runners (`IsolationRecoveryTests` and `ChainVerbTests` prove the halves; the pilot, M2, is the first whole run); a host that sleeps (the keep-awake is faked in process); a wedged gate-lock holder (decided residual, parent §4.7 and §9); the consumer check (E6).
+
+### Deviations from the story
+
+1. **The digest is `null` on a Windows host** (`HostKind.Windows`), not only when the plan is empty. `LockVerb.PlanOf` returns a non-empty plan for a run with closed arms or paths whatever the host, while `lock` there answers `NoIsolation` and writes no snapshot — with the plan's digest the reconciliation would refuse `locked` for ever. The story's *no isolation configured* and *on Windows `NoIsolation` is the only adapter* (D11) both say `locked` stands over no snapshot.
+2. **Six files, not two:** `Chain.cs`, `ChainSeams.cs` and `ChainRunLock.cs`, `ChainAdmission.cs`, `ChainGather.cs`, `ChainWalk.cs` — the story's single verb file would hold complexity over 4 and 800 lines; all six are in the no-listing scan.
+3. **Wording:** the `RefuseMarker` sentence reads *chain/<run>/locked is written but the isolation is not this run's — <isolation line> — no runner is started*, then a `recovery:` line (the story's *the isolation is <state>* with the isolation line as state reads *the isolation is no isolation snapshot*); an expired `AwaitStart` prints one line per arm; `WaitFor`'s elapsed time is printed in seconds; the module is printed as `model-arms → <real path>` and `setsid` as `setsid → <real path>` as `run-all` prints them, every other executable under its configured name.
+4. **The trailer also follows a refusal of steps 3–5** (`pids/`, the executables, the awake start): the run's lock is held by then, and the story says *every exit that is not 0 once the run's lock is held*.
+5. **`ChainWaitCeiling.OfArm` returns `maximum` itself when the sum reaches it** (whole seconds below that), so the clamp is exact against `GateStep.MaxLockCeiling`'s fractional second; an arm whose scheme is not in the experiment has only the startup ceiling.
+6. **`ChainPlan` reads each arm's facts by name from the run's rounds** (an arm missing from `Arms` is *unmade*), so the order of `Arms` is not a contract.
+7. **Tests:** `ExperimentRoot.CompletedBaseline` is `internal` (the chain kit writes the same baseline); the chain half of `RunAllVerbTests` cuts `runs` to `part6`'s one round of `C1`; `IsolationRecoveryTests` gives the `chain` row its run as the positional; `ModelArmsProgramTests.A_verb_not_built_yet_…` is deleted with `NotBuilt`.
+8. **No `Unmeasured`-road check in `chain`'s admission:** on a host where the detached launch is not measured the first `Start` stops with `run-all`'s manual-road sentence (exit 3) after `make` and `lock`; the isolation is left as it stands and the trailer says so.
+
+### Growth this story adds (for §9)
+
+`chain/<run>/.chain.lock` (+ `.holder` while a chain holds it): one empty file per run and a note < 200 bytes, the lock file never deleted, the note removed by its holder before release, a stale one overwritten by the next holder. `chain/executables.txt` replaced whole at each `chain` start (< 2 KB). `chain/<run>/{locked,unlocked,arms-done}`: three empty files per run. Nothing else: a killed chain leaves at most one `<name>.staging-<32 hex>` file per interrupted write (§8 item 54).

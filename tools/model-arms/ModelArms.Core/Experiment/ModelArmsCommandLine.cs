@@ -29,7 +29,7 @@ public static class ModelArmsCommandLine
 
         // run-all takes --experiment only (E5 §8 item 21): --seconds was accepted by no spec, and a flag accepted and ignored is a silent lie.
         new("run-all", 1, int.MaxValue, "run-all <arm>...", "one or more arms", [], [ExperimentFlag]),
-        Fixed("chain", 0, "chain", "no positional argument", ExperimentFlag),
+        Fixed("chain", 1, "chain <run>", "exactly one argument, the run", ExperimentFlag),
         Fixed("checks", 1, "checks <arm>", "exactly one argument, the arm", ExperimentFlag, "--parse-only"),
         Fixed("status", 0, "status", "no positional argument", ExperimentFlag),
         new("gate-lock", 1, 1, "gate-lock status|hold", "exactly one argument, status or hold", ["status", "hold"], [ExperimentFlag, "--seconds"]),

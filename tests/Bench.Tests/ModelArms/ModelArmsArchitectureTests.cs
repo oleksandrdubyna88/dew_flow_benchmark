@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using ModelArms.Core.Chain;
 using ModelArms.Core.Checks;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Isolation;
@@ -106,6 +107,7 @@ public sealed class ModelArmsArchitectureTests
         // E5.S3
 
         // E5.S4
+        typeof(ChainPlan), typeof(ChainWaitCeiling),
     ];
 
     [Fact]

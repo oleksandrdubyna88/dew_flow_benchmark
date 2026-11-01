@@ -163,7 +163,7 @@ internal sealed class ExperimentRoot : IDisposable
     public Experiment ExperimentOf() =>
         ExperimentFile.Read(File.ReadAllText(Path.Combine(Root, "experiment.json")), new ExperimentLocation(Root, Path.Combine(Temp, "example", "home"), string.Empty, "/x/repo")).Ok();
 
-    private static Baseline CompletedBaseline() =>
+    internal static Baseline CompletedBaseline() =>
         BaselineFile.Compose(CommitSha.Parse("6786582e30d3e771549d05ed719478396f8099cd").Ok(), new DateTimeOffset(2026, 10, 29, 12, 30, 15, TimeSpan.Zero), "wsl-ubuntu", new SuiteRun(true, 0, [], 10), new SuiteRun(true, 0, [], 5), "fixture").Ok();
 
     private static async Task InitCloneAsync(string clone)

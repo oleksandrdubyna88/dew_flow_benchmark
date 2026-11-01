@@ -36,13 +36,7 @@ public sealed record RootPaths(string Root)
 
     public string Made(string arm) => Path.Combine(Root, "chain", "made-" + ArmPaths.Segment(arm, "arm"));
 
-    public string Locked => Path.Combine(Root, "chain", "locked");
-
-    public string Unlocked => Path.Combine(Root, "chain", "unlocked");
-
     public string ObjectiveMarker(string arm) => Path.Combine(Root, "chain", "objective-" + ArmPaths.Segment(arm, "arm"));
-
-    public string ArmsDone => Path.Combine(Root, "chain", "arms-done");
 
     public string Executables => Path.Combine(Root, "chain", "executables.txt");
 
@@ -56,9 +50,12 @@ public sealed record RootPaths(string Root)
     /// <summary>The second immutable file of D11's two-file state (<c>{"run","digest","verifiedAt"}</c>): present beside <see cref="LockedModes"/> with the same run and digest, the snapshot is <i>applied</i>. Spelled here for the readers (E3.S4, §8 item 2); E5.S1 writes it.</summary>
     public string LockedModesApplied => Path.Combine(Root, ".locked-modes.applied");
 
-    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The root-level <see cref="Locked"/>, <see cref="Unlocked"/> and <see cref="ArmsDone"/> are E5.S4's to remove.</summary>
+    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The chain is their one writer; the root-level <c>chain/locked|unlocked|arms-done</c> E1 spelled before D27 are gone (E5.S4).</summary>
     public string RunMarker(string run, RunStage stage) =>
         Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), stage switch { RunStage.Locked => "locked", RunStage.Unlocked => "unlocked", _ => "arms-done" });
+
+    /// <summary>The run's own lock (E5.S4, §8 item 45): <c>chain/&lt;run&gt;/.chain.lock</c>, held by the one <c>chain &lt;run&gt;</c> process for its whole invocation — the markers' one writer made true. Never deleted (§4.11): a stale file is not a stale lock.</summary>
+    public string ChainLock(string run) => Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), ".chain.lock");
 
     public string LockLog => Path.Combine(Root, "lock.log");
 

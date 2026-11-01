@@ -87,7 +87,7 @@ public static class Program
             "unlock" => ExperimentGate.RunAsync(input, UnlockVerb.RunAsync),
             "run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),
             "run-all" => ExperimentGate.RunAsync(input, RunAllVerb.RunAsync),
-            "chain" => NotBuilt(input, "E5.S4"),
+            "chain" => ExperimentGate.RunAsync(input, ChainVerb.RunAsync),
             "checks" => ExperimentGate.RunAsync(input, ChecksVerb.RunAsync),
             "status" => ExperimentGate.RunAsync(input, StatusVerb.RunAsync),
             "gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync),
@@ -95,12 +95,6 @@ public static class Program
             "help" => Help.Usage(input),
             _ => Help.Unknown(input),
         };
-    }
-
-    private static Task<int> NotBuilt(VerbInput input, string story)
-    {
-        input.Error.WriteLine($"{Name} {input.Verb}: not built yet — story {story} of todo/PLAN_model_arms.md");
-        return Task.FromResult(ExitCodes.Configuration);
     }
 
     /// <summary>The process's variables as a map, taken once: a verb reads this map and never the process, so a test hands its own.</summary>
