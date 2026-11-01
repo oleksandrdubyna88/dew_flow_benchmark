@@ -139,6 +139,38 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual(result.status, "PASS")
 
 
+class CaptureLimitTests(unittest.TestCase):
+    """What was kept of an output is capped; a verdict never rests on the capture, and the report and the JSON say when the cap was passed."""
+
+    def test_An_exact_output_over_the_cap_is_a_PASS_by_the_stream_and_the_report_says_the_cap_was_passed(self):
+        expected = bytes(range(256)) * 16
+        result = Workspace(self, REPLAY, {"answer.bin": expected}).run(case(expected=expected), capture_cap=1024)
+        self.assertEqual(result.status, "PASS")
+        self.assertIn("  output limit: 4096 bytes read, the first 1024 kept for the report", result.lines)
+        self.assertEqual(result.lifecycle["capture"], {"known": True, "truncated": True, "keptBytes": 1024, "totalBytes": 4096})
+
+    def test_A_wrong_output_over_the_cap_is_a_FAIL_by_byte_mismatch_with_the_same_note(self):
+        expected = b"a" * 8192
+        result = Workspace(self, REPLAY, {"answer.bin": b"a" * 4000 + b"b" + b"a" * 4000}).run(case(expected=expected), capture_cap=1024)
+        self.assertEqual((result.status, result.reason), ("FAIL", "output differs"))
+        self.assertTrue(any(l.startswith("  output limit:") for l in result.lines))
+        self.assertEqual(result.lifecycle["capture"]["truncated"], True)
+
+    def test_An_output_under_the_cap_has_no_note_and_says_it_was_not_truncated(self):
+        result = Workspace(self, REPLAY, {"answer.bin": ANSWER}).run(case(), capture_cap=1024)
+        self.assertEqual([l for l in result.lines if "output limit" in l], [])
+        self.assertEqual(result.lifecycle["capture"], {"known": True, "truncated": False, "keptBytes": len(ANSWER), "totalBytes": len(ANSWER)})
+
+    def test_The_JSON_record_of_a_case_carries_the_capture_beside_the_lifecycle(self):
+        result = Workspace(self, REPLAY, {"answer.bin": ANSWER}).run(case())
+        self.assertIn("capture", rp.case_record(result)["lifecycle"])
+
+    def test_A_capture_taken_up_to_the_cap_is_still_not_what_decides(self):
+        """The refuted approach: compare what was kept. 4096 expected a's, the program prints them then more: only the stream sees the extra."""
+        result = Workspace(self, REPLAY, {"answer.bin": b"a" * 4096 + b"zzzz"}).run(case(expected=b"a" * 4096), capture_cap=1024)
+        self.assertEqual((result.status, result.reason), ("FAIL", "output differs"))
+
+
 class LifecycleTests(unittest.TestCase):
     def test_A_group_kill_returns_only_when_nothing_of_the_group_is_left(self):
         lifecycle = ex.PlainLifecycle()

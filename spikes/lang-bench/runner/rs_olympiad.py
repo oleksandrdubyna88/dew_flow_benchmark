@@ -186,6 +186,9 @@ def _execute(case, config, comparer, stderr_path):
         end = pump.run(started, config.limit_ms)
         wall = (pump.exit_ms or ex.now_ms()) - started
         return _reap(proc, end, wall, config)
+    except BaseException:  # the runner itself is being stopped (a signal): never leave the program under test running
+        config.lifecycle.kill(proc)
+        raise
     finally:
         pump.close()
         if pidfd is not None:
@@ -254,9 +257,10 @@ def run_case(case, config):
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
     memory = config.lifecycle.memory(case.id)
-    lifecycle = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), memory)
+    capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
+    lifecycle = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), memory, capture)
     failed = _judge(case, config, out, comparer)
-    tail = (rp.memory_line(memory),) + rp.leftover_lines(out.leftover)
+    tail = rp.capture_lines(capture) + (rp.memory_line(memory),) + rp.leftover_lines(out.leftover)
     if failed is None:
         return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, lifecycle, out.wall_ms, case.comparison)
     reason, mismatch, lines = failed

@@ -127,7 +127,12 @@ def build(workspace, scratch, ceiling_ms=BUILD_CEILING_MS):
     with open(log, "wb") as out:
         proc = subprocess.Popen(["bash", "build.sh"], cwd=workspace, stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
     pidfd = pidfd_of(proc)
-    done = wait_exit(proc, pidfd, started + ceiling_ms)
+    try:
+        done = wait_exit(proc, pidfd, started + ceiling_ms)
+    except BaseException:  # the runner itself is being stopped (a signal): never leave the build running
+        _signal_group(proc.pid, signal.SIGKILL)
+        proc.wait()
+        raise
     if not done:
         _signal_group(proc.pid, signal.SIGKILL)
     status = proc.wait()

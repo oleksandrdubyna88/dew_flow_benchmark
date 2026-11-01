@@ -25,6 +25,7 @@ if __name__ == "__main__":  # under -I the script's own directory is not on sys.
 import argparse
 import itertools
 import json
+import signal
 import traceback
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -302,10 +303,37 @@ def _after_parsing(plan):
     return _run_olympiad(plan)
 
 
+class _Interrupted(BaseException):
+    """The runner itself was stopped by a signal. A BaseException, so no handler of a case swallows it."""
+
+    def __init__(self, signum):
+        super().__init__(signum)
+        self.signum = signum
+
+
+def _on_signal(signum, frame):
+    for other in (signal.SIGTERM, signal.SIGINT):  # the cleanup that follows must not be interrupted again
+        signal.signal(other, signal.SIG_IGN)
+    raise _Interrupted(signum)
+
+
+def _install_handlers():
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _on_signal)
+
+
+def _stopped(stopped):
+    print(f"run_samples: interrupted by {signal.Signals(stopped.signum).name}: no verdict was reached", file=sys.stderr)
+    return EXIT_RUNNER
+
+
 def main(argv=None):
     configure_streams(sys.stdout, sys.stderr)
+    _install_handlers()
     try:
         return run(sys.argv[1:] if argv is None else argv)
+    except _Interrupted as stopped:
+        return _stopped(stopped)
     except Exception:
         traceback.print_exc()
         return EXIT_RUNNER

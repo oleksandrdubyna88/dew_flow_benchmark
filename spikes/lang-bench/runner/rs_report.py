@@ -166,14 +166,31 @@ def memory_line(memory):
     return f"  memory: peak {memory['peakBytes']} bytes" if memory.get("known") and "peakBytes" in memory else "  memory: not certified"
 
 
-def plain_lifecycle(leftover, stderr=None, memory=None):
+def capture_record(truncated, kept, total):
+    """What was kept of the output for the report: the verdict never rests on it, but a reader must know when the cap was passed."""
+    return {"known": True, "truncated": bool(truncated), "keptBytes": kept, "totalBytes": total}
+
+
+def capture_lines(capture):
+    """The note line of an output that passed the capture cap (a PASS by the stream stays a PASS: the line says only that the rest was not kept)."""
+    if not capture["truncated"]:
+        return ()
+    return (f"  output limit: {capture['totalBytes']} bytes read, the first {capture['keptBytes']} kept for the report",)
+
+
+def _unknown(value, why):
+    return value or {"known": False, "why": why}
+
+
+def plain_lifecycle(leftover, stderr=None, memory=None, capture=None):
     """The lifecycle record of a case run on the plain path (no cgroup): what was not observed is unknown, not zero."""
     return {
         "stop": {"known": False, "why": "this program is not signalled"},
-        "leftover": {"known": True, "found": bool(leftover)} if leftover is not None else {"known": False, "why": "not checked"},
+        "leftover": {"known": True, "found": bool(leftover)} if leftover is not None else _unknown(None, "not checked"),
         "leftoverEvidence": "process group (killpg 0)",
         "memory": memory or NOT_CERTIFIED,
-        "stderr": stderr or {"known": False, "why": "not captured"},
+        "stderr": _unknown(stderr, "not captured"),
+        "capture": _unknown(capture, "not captured"),
     }
 
 

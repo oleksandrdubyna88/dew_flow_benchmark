@@ -5,9 +5,11 @@ import json
 import os
 import py_compile
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 import runner_path  # noqa: F401
@@ -110,6 +112,92 @@ class CacheTests(unittest.TestCase):
         probe = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys, runpy; sys.path.insert(0, sys.argv[1]); import run_samples; print(sys.pycache_prefix)", runner_path.RUNNER_DIR],
                                capture_output=True, text=True)
         self.assertNotIn(probe.stdout.strip(), ("None", ""), "importing the entry sets sys.pycache_prefix")
+
+
+class InterruptTests(unittest.TestCase):
+    """A runner killed by a signal while it captures has no verdict: exit 5, no PASS line, no report, nothing left running or in the temp dir."""
+
+    def start(self, box, marker, seconds):
+        box.write(box.ws, "run.sh", f"touch {marker}\nexec sleep {seconds}\n")
+        box.write(box.root, "limits.json", '{"timeS": 120}')
+        tmp = tempfile.mkdtemp(dir=box.root)
+        self.tmp = tmp
+        proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples],
+                                cwd=box.ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tmp})
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        deadline = time.monotonic() + 15
+        while not os.path.exists(marker) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(os.path.exists(marker), "the case never started")
+        return proc
+
+    def alive(self, seconds):
+        found = []
+        for pid in filter(str.isdigit, os.listdir("/proc")):
+            try:
+                found += [pid] if f"sleep\0{seconds}".encode() in read_file(f"/proc/{pid}/cmdline") else []
+            except OSError:
+                continue
+        return found
+
+    def interrupted(self, sig):
+        box = Box(self)
+        seconds = "66.%d" % (os.getpid() % 1000 + 1000)
+        proc = self.start(box, os.path.join(box.root, "started"), seconds)
+        proc.send_signal(sig)
+        out, err = proc.communicate(timeout=30)
+        self.assertEqual(proc.returncode, 5, (sig, err))
+        self.assertNotIn(b"PASS", out)
+        self.assertNotIn(b"FAIL", out)
+        self.assertEqual(out, b"", "no complete report, no summary line")
+        self.assertIn(b"interrupted", err)
+        deadline = time.monotonic() + 5
+        while self.alive(seconds) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.alive(seconds), [], "the program under test was left running")
+        self.assertEqual(os.listdir(self.tmp), [], "the runner's temp folders were left behind")
+
+    def test_A_SIGTERM_to_the_runner_while_it_captures_is_exit_5_with_no_verdict_and_nothing_left(self):
+        self.interrupted(signal.SIGTERM)
+
+    def test_A_SIGINT_to_the_runner_while_it_captures_is_exit_5_with_no_verdict_and_nothing_left(self):
+        self.interrupted(signal.SIGINT)
+
+    def test_A_signal_during_the_build_is_exit_5_too(self):
+        box = Box(self)
+        marker = os.path.join(box.root, "building")
+        seconds = "67.%d" % (os.getpid() % 1000 + 1000)
+        box.write(box.ws, "build.sh", f"touch {marker}\nexec sleep {seconds}\n")
+        proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, box.samples], cwd=box.ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        deadline = time.monotonic() + 15
+        while not os.path.exists(marker) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=30)
+        self.assertEqual((proc.returncode, out), (5, b""))
+        deadline = time.monotonic() + 5
+        while self.alive(seconds) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.alive(seconds), [], "the build was left running")
+
+
+class OutputLimitTests(unittest.TestCase):
+    def test_An_exact_output_over_the_16_MiB_capture_cap_passes_by_the_stream_and_the_report_and_the_JSON_say_so(self):
+        size = 16 * 1024 * 1024 + 1000
+        box = Box(self, run_sh=f"head -c {size} /dev/zero\n", pairs={"s01.in": b"", "s01.out": b"\0" * size})
+        out_json = os.path.join(box.out, "r.json")
+        code, out, _ = box.cli("--json", out_json, "--limits", self.limits(box))
+        self.assertEqual(code, 0, out)
+        self.assertIn("PASS s01", out)
+        self.assertIn(f"output limit: {size} bytes read, the first {16 * 1024 * 1024} kept for the report", out)
+        capture = read_json(out_json)["cases"][0]["lifecycle"]["capture"]
+        self.assertEqual((capture["truncated"], capture["keptBytes"], capture["totalBytes"]), (True, 16 * 1024 * 1024, size))
+
+    def limits(self, box):
+        box.write(box.root, "limits.json", '{"timeS": 60}')
+        return os.path.join(box.root, "limits.json")
 
 
 class ExpectedBytesTests(unittest.TestCase):
