@@ -1,7 +1,7 @@
 // E1.S5: the preflight — what must be true of the box before a gate, a reference or a session runs on it. The judgement is pure (probe outputs in,
 // problems out, each naming the pin and the value seen); the probes themselves run inside a bwrap box that binds the pinned directories.
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -208,6 +208,21 @@ test('The_preflight_refuses_a_box_whose_PATH_reaches_a_second_dotnet_in_the_box'
   const result = await preflightLang({ stacks, storeRoot, boxPath: [box.dirs.dotnetSdk, fixture], withApphost: false, extraRoBinds: [{ host: fixture, box: fixture }] });
   assert.equal(result.ok, false);
   assert.match(result.problems.join('\n'), new RegExp(`second dotnet.*${path.join(fixture, 'dotnet')}`, 's'));
+});
+
+test('A_symlinked_directory_on_the_PATH_leading_to_the_pinned_dotnet_is_one_dotnet_and_one_leading_elsewhere_is_two', async t => {
+  if (!gate(t)) return;
+  const fixture = ownedFolder(t, 'linkdirs');
+  const box = realBox(fixture);
+  symlinkSync(box.dirs.dotnetSdk, path.join(fixture, 'to-pinned'));
+  const elsewhere = folderWithDotnet(t, 'elsewhere');
+  symlinkSync(elsewhere, path.join(fixture, 'to-other'));
+  const sameFile = await scanDotnetInBox({ prefix: box.prefix([path.join(fixture, 'to-pinned'), box.dirs.dotnetSdk]), pinnedDotnet: box.pinned });
+  assert.deepEqual(sameFile.problems, [], 'two names, one real file');
+  assert.equal(sameFile.hits.length, 2, 'the scan did see both names');
+  const wide = boxArgv({ bwrap: findOnPath('bwrap'), dirs: box.dirs, boxPath: [path.join(fixture, 'to-other'), box.dirs.dotnetSdk], operatorHome: os.homedir(), extraRoBinds: [{ host: fixture, box: fixture }, { host: elsewhere, box: elsewhere }] });
+  const different = await scanDotnetInBox({ prefix: wide, pinnedDotnet: box.pinned });
+  assert.ok(different.problems.some(p => p.includes(path.join(fixture, 'to-other', 'dotnet')) && p.includes(path.join(elsewhere, 'dotnet'))), different.problems.join('\n'));
 });
 
 test('A_PATH_entry_that_exists_only_on_the_host_is_not_counted', async t => {
