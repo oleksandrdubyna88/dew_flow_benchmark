@@ -289,6 +289,50 @@ class ExpectedBytesTests(unittest.TestCase):
         self.assertEqual((cases["s01"]["comparison"], cases["s01"]["rIds"], cases["s02"]["rIds"]), ("bytes", ["R1"], ["R2"]))
 
 
+class NotRegularTests(unittest.TestCase):
+    """A sample is a regular file. A FIFO, a directory, a device or a link to one is named for what it is, and never opened (a FIFO would block)."""
+
+    def box_with(self, make):
+        box = Box(self, pairs={"s01.in": b"7\n"})
+        make(os.path.join(box.samples, "s01.out"))
+        return box
+
+    def refused(self, box, name="s01.out"):
+        code, out, err = box.cli("--parse-only")
+        self.assertEqual((code, out), (4, ""))
+        self.assertIn(f"{name} is not a regular file", err)
+        self.assertNotIn("has no matching", err)
+
+    def test_A_FIFO_as_an_out_file_is_named_not_a_regular_file_and_does_not_hang_the_runner(self):
+        self.refused(self.box_with(os.mkfifo))
+
+    def test_A_FIFO_as_an_in_file_is_named_too(self):
+        box = Box(self, pairs={"s01.out": b"7\n"})
+        os.mkfifo(os.path.join(box.samples, "s01.in"))
+        self.refused(box, "s01.in")
+
+    def test_A_directory_and_a_link_to_a_FIFO_are_not_regular_files_either(self):
+        self.refused(self.box_with(os.mkdir))
+        def link_to_fifo(path):
+            os.mkfifo(path + ".fifo-target")
+            os.symlink(path + ".fifo-target", path)
+        self.refused(self.box_with(link_to_fifo))
+
+    def test_A_FIFO_in_a_full_run_is_exit_4_before_anything_is_built_or_run(self):
+        box = self.box_with(os.mkfifo)
+        box.write(box.ws, "build.sh", "touch built\n")
+        code, out, err = box.cli()
+        self.assertEqual(code, 4)
+        self.assertFalse(os.path.exists(os.path.join(box.ws, "built")))
+
+    def test_A_missing_pair_member_is_still_reported_as_missing_and_a_regular_file_is_fine(self):
+        box = Box(self, pairs={"s01.in": b"7\n"})
+        code, _, err = box.cli("--parse-only")
+        self.assertEqual(code, 4)
+        self.assertIn("has no matching .out", err)
+        self.assertEqual(Box(self).cli("--parse-only")[0], 0)
+
+
 class SampleSizeTests(unittest.TestCase):
     """Every sample is held in memory for the whole run (the program under test must not be able to change what it is compared with): bounded."""
 

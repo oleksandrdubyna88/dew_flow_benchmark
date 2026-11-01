@@ -110,8 +110,18 @@ def _ids_with_suffix(names, suffix):
     return {n[: -len(suffix)]: n for n in names if n.endswith(suffix)}
 
 
-def _files_in(folder):
-    return [n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n))]
+def _sample_names(folder):
+    """Every name that looks like a sample file, whatever it is: a FIFO or a directory is named for what it is, never opened."""
+    return [n for n in os.listdir(folder) if n.endswith((".in", ".out"))]
+
+
+def _irregular_names(folder, names):
+    return {n for n in names if not os.path.isfile(os.path.join(folder, n))}
+
+
+def _irregular_problems(names):
+    return [Problem("samples", 0, f"{shown(n)} is not a regular file (a sample is a file: not a FIFO, a directory, a device or a link to one)")
+            for n in sorted(names)]
 
 
 def _missing(source, other, message):
@@ -122,12 +132,26 @@ def _bad_ids(ins, outs):
     return [Problem(shown(ins[i]), 0, "the id before .in is not a sample id") for i in ins if i in outs and not SAMPLE_ID.match(i)]
 
 
+def _is_regular_pair(pair, irregular):
+    return not {pair.in_name, pair.out_name} & irregular
+
+
+def _valid_ids(ins, outs):
+    return [i for i in sorted(ins) if i in outs and SAMPLE_ID.match(i)]
+
+
+def _regular_pairs(samples_dir, ins, outs, irregular):
+    pairs = [_pair(samples_dir, i, ins[i], outs[i]) for i in _valid_ids(ins, outs)]
+    return [p for p in pairs if _is_regular_pair(p, irregular)]
+
+
 def discover(samples_dir):
-    """(pairs sorted by id, problems): every `<id>.in` has its `<id>.out` and the other way round."""
-    names = _files_in(samples_dir)
+    """(pairs sorted by id, problems): every `<id>.in` has its `<id>.out` and the other way round, and every one of them is a regular file."""
+    names = _sample_names(samples_dir)
     ins, outs = _ids_with_suffix(names, ".in"), _ids_with_suffix(names, ".out")
+    irregular = _irregular_names(samples_dir, names)
     problems = _missing(ins, outs, "has no matching .out file") + _missing(outs, ins, "has no matching .in file") + _bad_ids(ins, outs)
-    return [_pair(samples_dir, i, ins[i], outs[i]) for i in sorted(ins) if i in outs and SAMPLE_ID.match(i)], problems
+    return _regular_pairs(samples_dir, ins, outs, irregular), problems + _irregular_problems(irregular)
 
 
 def _pair(samples_dir, ident, in_name, out_name):
