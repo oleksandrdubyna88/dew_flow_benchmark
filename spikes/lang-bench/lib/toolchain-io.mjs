@@ -1,5 +1,6 @@
 // E1.S5: the installer's only contact with the outside — the official hosts through curl, the official install script, and npm run by the
 // pinned Node. Every command is exe + argv with a ceiling (`common.security`); the argv builders are pure so a test reads them without a network.
+import { writeFileSync } from 'node:fs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 
@@ -16,12 +17,15 @@ export const curlArgv = ({ url, dest }) => ['-fsSL', '--proto', '=https', '--pro
 /** The argv of `dotnet-install.sh`: the exact SDK version, into `installDir`, no PATH edit, the downloaded archive kept at `zipPath` so it can be checked. */
 export const dotnetInstallArgv = ({ scriptPath, version, installDir, zipPath }) => [scriptPath, '--version', version, '--install-dir', installDir, '--no-path', '--keep-zip', '--zip-path', zipPath];
 
-/** `npm install` run by the pinned Node itself, with no user or global npmrc, the official registry, no lifecycle scripts. */
-export function npmInstallArgv({ nodeDir, prefix, spec, cacheDir = '/dev/null', home = '/dev/null' }) {
+/**
+ * `npm install` run by the pinned Node itself, the official registry, no lifecycle scripts. The user and the global npmrc are two DIFFERENT empty files
+ * in `home` (`runNpmInstall` creates them): npm refuses one file loaded as both, and an operator's own .npmrc must never point it elsewhere.
+ */
+export function npmInstallArgv({ nodeDir, prefix, spec, cacheDir, home }) {
   return {
     exe: `${nodeDir}/bin/node`,
     argv: [`${nodeDir}/lib/node_modules/npm/bin/npm-cli.js`, 'install', '--prefix', prefix, spec, '--ignore-scripts', '--no-audit', '--no-fund', '--no-update-notifier', '--registry', NPM_REGISTRY],
-    env: { PATH: `${nodeDir}/bin:${SYSTEM_PATH}`, HOME: home, npm_config_cache: cacheDir, npm_config_userconfig: '/dev/null', npm_config_globalconfig: '/dev/null', LANG: 'C.UTF-8' },
+    env: { PATH: `${nodeDir}/bin:${SYSTEM_PATH}`, HOME: home, npm_config_cache: cacheDir, npm_config_userconfig: `${home}/user.npmrc`, npm_config_globalconfig: `${home}/global.npmrc`, LANG: 'C.UTF-8' },
   };
 }
 
@@ -46,6 +50,7 @@ export const realIo = Object.freeze({
     return runChecked('/bin/bash', dotnetInstallArgv({ scriptPath, version, installDir, zipPath }), { env, cwd: workDir, timeoutMs: INSTALL_MS }, 'dotnet-install.sh');
   },
   runNpmInstall({ nodeDir, prefix, spec, workDir }) {
+    for (const name of ['user.npmrc', 'global.npmrc']) writeFileSync(`${workDir}/${name}`, '');
     const { exe, argv, env } = npmInstallArgv({ nodeDir, prefix, spec, cacheDir: `${workDir}/npm-cache`, home: workDir });
     return runChecked(exe, argv, { env, cwd: workDir, timeoutMs: INSTALL_MS }, 'npm install');
   },

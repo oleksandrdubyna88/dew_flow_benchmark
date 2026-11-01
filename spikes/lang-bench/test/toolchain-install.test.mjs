@@ -193,10 +193,12 @@ test('A_name_that_is_not_a_toolchain_is_refused_naming_the_legal_ones', async t 
 test('The_real_install_commands_are_argv_with_the_pinned_version_and_reach_only_the_official_hosts', () => {
   const dotnet = dotnetInstallArgv({ scriptPath: '/w/dotnet-install.sh', version: '10.0.403', installDir: '/s/dotnet', zipPath: '/w/sdk.tar.gz' });
   assert.deepEqual(dotnet, ['/w/dotnet-install.sh', '--version', '10.0.403', '--install-dir', '/s/dotnet', '--no-path', '--keep-zip', '--zip-path', '/w/sdk.tar.gz']);
-  const npm = npmInstallArgv({ nodeDir: '/s/node', prefix: '/s/ts', spec: 'typescript@6.0.3' });
+  const npm = npmInstallArgv({ nodeDir: '/s/node', prefix: '/s/ts', spec: 'typescript@6.0.3', cacheDir: '/w/npm-cache', home: '/w' });
   assert.deepEqual(npm.argv, ['/s/node/lib/node_modules/npm/bin/npm-cli.js', 'install', '--prefix', '/s/ts', 'typescript@6.0.3', '--ignore-scripts', '--no-audit', '--no-fund', '--no-update-notifier', '--registry', 'https://registry.npmjs.org/']);
   assert.equal(npm.exe, '/s/node/bin/node', 'the pinned Node runs npm, not the host one');
   assert.ok(npm.env.PATH.startsWith('/s/node/bin:'), npm.env.PATH);
-  assert.equal(npm.env.npm_config_userconfig, '/dev/null', 'no user .npmrc can point npm at another registry');
+  assert.equal(npm.env.npm_config_userconfig, '/w/user.npmrc', 'an empty file of ours: no user .npmrc can point npm at another registry');
+  assert.equal(npm.env.npm_config_globalconfig, '/w/global.npmrc');
+  assert.notEqual(npm.env.npm_config_userconfig, npm.env.npm_config_globalconfig, 'npm stops with "double-loading config" when one file is both the user and the global config');
   assert.deepEqual(curlArgv({ url: 'https://nodejs.org/x', dest: '/w/x' }).slice(0, 4), ['-fsSL', '--proto', '=https', '--proto-redir']);
 });
