@@ -2,6 +2,7 @@
 the `cases.txt` manifest, the limits file. Every function returns its value and a list of Problems; none raises for a bad input."""
 import os
 import re
+import stat
 from decimal import Decimal
 from typing import NamedTuple, Optional
 
@@ -37,34 +38,96 @@ class Pair(NamedTuple):
 MAX_SAMPLE_BYTES = 1 << 30
 
 
-def _sizes(pairs):
-    """([sizes in bytes], [problems]): a sample that cannot be measured is 'cannot read', never a size of zero."""
-    sizes, problems = [], []
-    for pair in pairs:
-        for path, name in ((pair.in_path, pair.in_name), (pair.out_path, pair.out_name)):
-            try:
-                sizes.append(os.path.getsize(path))
-            except OSError as e:
-                problems.append(Problem("samples", 0, f"cannot read {shown(name)}: {type(e).__name__}"))
-    return sizes, problems
+READ_CHUNK = 1 << 20
+TOO_LARGE = object()
 
 
-def sample_size_problems(pairs):
-    """A problem when the `.in` and `.out` files of `pairs` together are more than the ceiling: they are all held in memory for the run."""
-    sizes, problems = _sizes(pairs)
-    total = sum(sizes)
-    if problems or total <= MAX_SAMPLE_BYTES:
-        return problems
-    return [Problem("samples", 0, f"the samples are too large to hold in memory: {total} bytes of .in and .out files, the ceiling is {MAX_SAMPLE_BYTES}")]
+class _Budget:
+    """What the samples may still hold in memory, in bytes."""
+
+    def __init__(self, ceiling):
+        self.left = ceiling
 
 
-def load_contents(pair):
-    """`(pair with its input and expected bytes read, problems)`. Every sample is read into memory before anything is built or run, so a
-    program that rewrites a file of the samples directory cannot change what its output is compared with."""
+def _unreadable(name, e):
+    return Problem("samples", 0, f"cannot read {shown(name)}: {type(e).__name__}")
+
+
+def _slurp(fd, budget):
+    """The bytes of an open file, at most the budget left plus one (so that 'more than the budget' is seen), or None when there are more."""
+    data = bytearray()
+    while len(data) <= budget.left:
+        chunk = os.read(fd, min(READ_CHUNK, budget.left + 1 - len(data)))
+        if not chunk:
+            break
+        data += chunk
+    return None if len(data) > budget.left else bytes(data)
+
+
+def _read_open(fd, name, budget):
+    """(bytes, None), (None, Problem) or (None, TOO_LARGE): a regular file by fstat, read within the budget."""
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        return None, Problem("samples", 0, f"{shown(name)} is not a regular file")
+    data = _slurp(fd, budget)
+    if data is None:
+        return None, TOO_LARGE
+    budget.left -= len(data)
+    return data, None
+
+
+def read_sample(path, name, budget):
+    """Open the file once and judge what was opened (O_NONBLOCK, so a FIFO swapped in after the listing cannot block the open)."""
     try:
-        return pair._replace(stdin=read_bytes(pair.in_path), expected=read_bytes(pair.out_path)), []
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
     except OSError as e:
-        return pair, [Problem(pair.out_name, 0, f"cannot read the sample pair: {type(e).__name__}")]
+        return None, _unreadable(name, e)
+    try:
+        return _read_open(fd, name, budget)
+    except OSError as e:
+        return None, _unreadable(name, e)
+    finally:
+        os.close(fd)
+
+
+def _too_large(pairs):
+    return Problem("samples", 0, f"the samples are too large to hold in memory: more than {MAX_SAMPLE_BYTES} bytes of .in and .out files")
+
+
+def _bytes_or_empty(data):
+    return b"" if data is None else data
+
+
+def _then_out(pair, first, budget):
+    """The `.out` file is read unless the `.in` file already used up the budget."""
+    return (None, None) if first is TOO_LARGE else read_sample(pair.out_path, pair.out_name, budget)
+
+
+def _problems_of(*results):
+    return [r for r in results if isinstance(r, Problem)]
+
+
+def _load_pair(pair, budget):
+    """`(pair with its bytes, problems)`, or `(None, TOO_LARGE)` when the budget ran out."""
+    stdin, first = read_sample(pair.in_path, pair.in_name, budget)
+    expected, second = _then_out(pair, first, budget)
+    if TOO_LARGE in (first, second):
+        return None, TOO_LARGE
+    return pair._replace(stdin=_bytes_or_empty(stdin), expected=_bytes_or_empty(expected)), _problems_of(first, second)
+
+
+def load_all(pairs):
+    """`(pairs with their input and expected bytes, problems)`. Every sample is read into memory before anything is built or run, so a
+    program that rewrites a file of the samples directory cannot change what its output is compared with. Each file is opened once,
+    checked as a regular file with fstat, and read for at most what the budget (MAX_SAMPLE_BYTES for all of them) has left, plus one byte:
+    the size limit rests on what was actually read, not on a size looked at earlier."""
+    budget, loaded, problems = _Budget(MAX_SAMPLE_BYTES), [], []
+    for pair in pairs:
+        got, found = _load_pair(pair, budget)
+        if found is TOO_LARGE:
+            return list(pairs), [_too_large(pairs)]
+        loaded.append(got)
+        problems += found
+    return loaded, problems
 
 
 class Limits(NamedTuple):

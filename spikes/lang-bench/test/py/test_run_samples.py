@@ -354,12 +354,11 @@ class SampleSizeTests(unittest.TestCase):
     def test_The_ceiling_is_one_GiB(self):
         self.assertEqual(sm.MAX_SAMPLE_BYTES, 1 << 30)
 
-    def test_Samples_over_the_ceiling_are_exit_4_naming_the_total_and_nothing_is_read_or_run(self):
+    def test_Samples_over_the_ceiling_are_exit_4_and_nothing_is_run(self):
         box = Box(self, run_sh="touch started\n", pairs={"s01.in": b"x" * 600, "s01.out": b"y" * 600, "s02.in": b"", "s02.out": b"z" * 10})
         code, err = self.run_in_process(box, 1000)
         self.assertEqual(code, 4)
         self.assertIn("the samples are too large to hold", err)
-        self.assertIn("1210", err)
         self.assertFalse(os.path.exists(os.path.join(box.ws, "started")))
 
     def test_Samples_exactly_at_the_ceiling_are_held_and_one_byte_more_is_not(self):
@@ -378,22 +377,64 @@ class SampleSizeTests(unittest.TestCase):
             sm.MAX_SAMPLE_BYTES = saved
         self.assertIsInstance(plan, rs.Plan)
 
-    def test_A_sample_that_cannot_be_measured_is_cannot_read_and_not_a_size_of_zero(self):
+    def pair_of(self, box, name):
+        return sm.Pair(name, os.path.join(box.samples, name + ".in"), os.path.join(box.samples, name + ".out"), name + ".in", name + ".out")
+
+    def test_A_sample_that_cannot_be_opened_is_cannot_read_for_each_file_and_not_a_size_of_zero(self):
         gone = sm.Pair("s09", "/nonexistent/s09.in", "/nonexistent/s09.out", "s09.in", "s09.out")
-        problems = sm.sample_size_problems([gone])
+        _, problems = sm.load_all([gone])
         self.assertEqual(len(problems), 2, "one for each of the two files")
         self.assertTrue(all("cannot read" in p.message for p in problems))
         self.assertIn("s09.in", problems[0].message)
         self.assertIn("s09.out", problems[1].message)
 
-    def test_A_sample_that_vanishes_between_listing_and_sizing_is_exit_4(self):
+    def test_A_FIFO_swapped_in_after_the_listing_is_refused_by_what_was_opened_and_does_not_block(self):
+        box = Box(self, pairs={"s01.in": b"", "s01.out": b"x"})
+        os.remove(os.path.join(box.samples, "s01.out"))
+        os.mkfifo(os.path.join(box.samples, "s01.out"))
+        loaded, problems = sm.load_all([self.pair_of(box, "s01")])
+        self.assertEqual([p.message for p in problems], ["s01.out is not a regular file"])
+
+    def test_A_file_is_read_for_at_most_the_budget_left_plus_one_byte_whatever_its_size(self):
+        box = Box(self, pairs={"s01.in": b"", "s01.out": b"x" * 3_000_000})
+        real, total = os.read, []
+
+        def counting(fd, n):
+            data = real(fd, n)
+            total.append(len(data))
+            return data
+
+        saved, sm.MAX_SAMPLE_BYTES, os.read = sm.MAX_SAMPLE_BYTES, 1000, counting
+        try:
+            loaded, problems = sm.load_all([self.pair_of(box, "s01")])
+        finally:
+            os.read, sm.MAX_SAMPLE_BYTES = real, saved
+        self.assertEqual(len(problems), 1)
+        self.assertIn("too large to hold", problems[0].message)
+        self.assertEqual(sum(total), 1001, "the budget and one byte more: the size limit rests on what was read")
+
+    def test_The_budget_is_shared_by_all_the_samples_so_many_small_ones_can_pass_it(self):
+        pairs = {f"s{n:02d}.{ext}": b"x" * 100 for n in range(1, 6) for ext in ("in", "out")}
+        box = Box(self, pairs=pairs)
+        code, err = self.run_in_process(box, 999)
+        self.assertEqual(code, 4)
+        self.assertIn("too large", err)
+        self.assertNotEqual(self.run_in_process(box, 1000)[0], 4)
+
+    def test_A_sample_that_vanishes_after_the_listing_is_exit_4_cannot_read(self):
         box = Box(self)
-        saved = sm.sample_size_problems
-        sm.sample_size_problems = lambda pairs: (os.remove(pairs[0].out_path), saved(pairs))[1]
+        saved = sm.discover
+
+        def vanishing(samples_dir):
+            pairs, problems = saved(samples_dir)
+            os.remove(pairs[0].out_path)
+            return pairs, problems
+
+        sm.discover = vanishing
         try:
             code, err = self.run_in_process(box, 1 << 30)
         finally:
-            sm.sample_size_problems = saved
+            sm.discover = saved
         self.assertEqual(code, 4)
         self.assertIn("cannot read", err)
 

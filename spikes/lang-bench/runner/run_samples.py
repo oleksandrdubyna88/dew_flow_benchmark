@@ -23,7 +23,6 @@ if __name__ == "__main__":  # under -I the script's own directory is not on sys.
     sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
 import argparse
-import itertools
 import json
 import signal
 import traceback
@@ -148,14 +147,8 @@ def _with_manifest(pair, manifest):
 
 
 def _load_all(chosen, manifest):
-    """Every chosen pair with its bytes read, and the problems of those that could not be read (or of samples too large to hold)."""
-    too_large = sm.sample_size_problems(chosen)
-    return (list(chosen), too_large) if too_large else _read_all(chosen, manifest)
-
-
-def _read_all(chosen, manifest):
-    loaded = [sm.load_contents(_with_manifest(p, manifest)) for p in chosen]
-    return [p for p, _ in loaded], list(itertools.chain.from_iterable(found for _, found in loaded))
+    """Every chosen pair with its bytes read once, within the memory budget, and the problems of those that could not be read."""
+    return sm.load_all([_with_manifest(p, manifest) for p in chosen])
 
 
 def _pairs_of(args):
