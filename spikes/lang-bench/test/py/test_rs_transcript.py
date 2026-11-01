@@ -288,6 +288,71 @@ class FormatV21Tests(unittest.TestCase):
         self.assertEqual(checks[0].literal, b"abcc")
 
 
+class UnorderedBindingTests(unittest.TestCase):
+    """A binding made inside an unordered group depends on the order the replies arrive in: the checks that would judge it are refused."""
+
+    GROUP = 'transcript 2\nunordered\n  recv * "${:int=a}\\n"\n  recv * "${:int=b}\\n"\nend\n'
+
+    def refused(self, tail, head=None):
+        transcript, problems = parse((head or self.GROUP) + tail)
+        self.assertIsNone(transcript, tail)
+        self.assertEqual(len(problems), 1, (tail, problems))
+        return problems[0]
+
+    def test_Check_equal_naming_a_binding_of_the_group_is_refused_with_file_and_line(self):
+        problem = self.refused("check equal a 1\n")
+        self.assertEqual((problem.file, problem.line), ("t.out", 6))
+        self.assertIn("unordered group", problem.message)
+
+    def test_The_arrival_order_that_made_it_pass_for_one_order_and_fail_for_the_other_is_no_longer_judged(self):
+        """The review's case: replies 1 then 2 pass `check equal a 1`, replies 2 then 1 fail it, for the very same program."""
+        self.assertEqual(len(rt.parse_transcript((self.GROUP + "check equal a 1\n").encode(), "t.out")[1]), 1)
+
+    def test_Check_equal_naming_a_group_binding_on_either_side_is_refused(self):
+        head = self.GROUP + 'recv c "${:int=z}\\n"\n'
+        self.refused("check equal z b\n", head)
+        self.refused("check equal z a\n", head)
+        self.refused('check equal b "2"\n', head)
+
+    def test_Check_distinct_over_part_of_the_group_is_refused_and_over_all_of_it_is_not(self):
+        self.refused("check distinct a\n")
+        self.assertEqual(parse(self.GROUP + "check distinct a b\n")[1], [])
+        self.assertEqual(parse(self.GROUP + "check distinct b a\n")[1], [])
+
+    def test_Check_distinct_naming_the_whole_group_and_other_bindings_is_allowed_and_a_part_with_them_is_not(self):
+        head = self.GROUP + 'recv c "${:int=z}\\n"\n'
+        self.assertEqual(parse(head + "check distinct a b z\n")[1], [])
+        self.refused("check distinct a z\n", head)
+
+    def test_A_check_over_bindings_outside_the_group_is_allowed_whatever_the_group_binds(self):
+        head = self.GROUP + 'recv c "${:int=y}\\n"\nrecv c "${:int=z}\\n"\n'
+        self.assertEqual(parse(head + "check equal y z\ncheck distinct y z\ncheck equal y 3\n")[1], [])
+
+    def test_A_glob_is_judged_by_the_names_it_stands_for(self):
+        group = 'transcript 2\nunordered\n  recv * "${:int=r1}\\n"\n  recv * "${:int=r2}\\n"\nend\nrecv c "${:int=r3}\\n"\n'
+        self.assertEqual(parse(group + "check distinct r*\n")[1], [], "r* is the whole group and r3")
+        self.refused("check distinct r1 r3\n", group)
+        self.refused("check distinct r1*\n", group)
+
+    def test_Names_with_a_repeat_variable_inside_a_group_are_judged_by_their_literal_head(self):
+        head = 'transcript 2\nrepeat 2 i\n  unordered\n    recv * "${:int=a${i}}\\n"\n    recv * "${:int=b${i}}\\n"\n  end\nend\n'
+        self.assertEqual(parse(head + "check distinct a* b*\n")[1], [])
+        self.refused("check distinct a*\n", head)
+        self.refused("check equal a0 1\n", head)
+
+    def test_Check_equal_is_refused_even_when_the_group_binds_only_that_name_because_the_assignment_still_decides_it(self):
+        head = 'transcript 2\nunordered\n  recv * "${:int=a}\\n"\n  recv * "x\\n"\nend\n'
+        self.refused("check equal a 1\n", head)
+        self.assertEqual(parse(head + "check distinct a\n")[1], [], "a distinct over the group's one binding names all of it")
+
+    def test_A_group_that_binds_nothing_leaves_every_check_alone(self):
+        head = 'transcript 2\nunordered\n  recv * "x"\n  recv * "y"\nend\nrecv c "${:int=a}\\n"\nrecv c "${:int=b}\\n"\n'
+        self.assertEqual(parse(head + "check equal a b\ncheck distinct a b\ncheck equal a 1\n")[1], [])
+
+    def test_An_unordered_group_with_bindings_and_no_check_on_them_is_fine(self):
+        self.assertEqual(parse(self.GROUP)[1], [])
+
+
 class CanonicalTests(unittest.TestCase):
     def test_Strings_are_written_canonically_printable_ASCII_as_is_and_the_rest_escaped(self):
         self.assertEqual(rt.canonical(b'ab "q" \\ \r\n\t\0 \xff\x01'), '"ab \\"q\\" \\\\ \\r\\n\\t\\0 \\xff\\x01"')

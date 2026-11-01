@@ -9,7 +9,7 @@ import itertools
 import re
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import rs_json
 import rs_lex as lex
@@ -489,7 +489,7 @@ def parse_transcript(data, file):
     parser = _Parser(file, problems)
     _feed(parser, lex.split_lines(data, file, problems))
     transcript = parser.finish()
-    problems.extend([] if transcript is None else _binder_problems(transcript))
+    problems.extend([] if transcript is None else _binder_problems(transcript) + _arrival_problems(transcript))
     return (None if problems else transcript), problems
 
 
@@ -633,3 +633,84 @@ def _binder_problems(transcript):
             problems.append(Problem(transcript.file, line, f"the name '{name}' is bound more than once (a name with ${{var}} binds once per round)"))
         seen.add(name)
     return problems
+
+
+# ---- bindings made inside an unordered group (5.4 and 5.5) -----------------------------------------------------------------------
+#
+# Which entry of an `unordered` group takes which observation depends on the order they arrived in. A check that relates a binding of the
+# group to anything outside it would then pass or fail with the arrival order, so it is refused here, at parse time: `check equal` may not
+# name such a binding, and `check distinct` may name all the group's bindings (the whole set is the same under every assignment) or none.
+
+class _Binder(NamedTuple):
+    head: str
+    dynamic: bool
+
+
+def _binder_of(template):
+    """The literal head of a bound name and whether the rest depends on a repeat variable."""
+    literal = list(itertools.takewhile(lambda p: isinstance(p, lex.Lit), template))
+    return _Binder(b"".join(p.data for p in literal).decode("ascii"), len(literal) < len(template))
+
+
+def _unordered_groups(nodes):
+    for node in nodes:
+        if isinstance(node, Unordered):
+            yield node
+        elif isinstance(node, TRepeat):
+            yield from _unordered_groups(node.body)
+
+
+def _bound_fields(entry):
+    flat = itertools.chain.from_iterable(parts_of(entry))
+    return [p for p in flat if isinstance(p, lex.Field) and p.bind]
+
+
+def _group_binders(group):
+    return [_binder_of(p.bind) for e in group.entries for p in _bound_fields(e)]
+
+
+def _could_be(token, binder):
+    """Could `token` (a name, or a prefix glob ending in `*`) stand for a name `binder` binds?"""
+    if token.endswith("*"):
+        prefix = token[:-1]
+        return binder.head.startswith(prefix) or prefix.startswith(binder.head)
+    return token.startswith(binder.head) if binder.dynamic else token == binder.head
+
+
+def _covers(token, binder):
+    """Does `token` stand for every name `binder` binds?"""
+    return binder.head.startswith(token[:-1]) if token.endswith("*") else (not binder.dynamic and token == binder.head)
+
+
+def _is_name(token):
+    return token is not None and not re.match(r"-?[0-9]", token)
+
+
+def _named(check):
+    return [t for t in (*check.names, check.other) if _is_name(t)]
+
+
+def _touches(check, group):
+    names = _named(check)
+    return any(_could_be(t, b) for b in group for t in names)
+
+
+def _names_all(check, group):
+    return all(any(_covers(t, b) for t in check.names) for b in group)
+
+
+def _refuses(check, group):
+    """A check that relates a binding of the group to something else depends on arrival order, unless it is a distinct over the whole group."""
+    whole = check.op == "distinct" and _names_all(check, group)
+    return bool(group) and _touches(check, group) and not whole
+
+
+def _arrival_problems(transcript):
+    groups = [_group_binders(g) for g in _unordered_groups(transcript.nodes)]
+    pairs = itertools.product(checks_of(transcript), groups)
+    return [Problem(transcript.file, c.line, _arrival_message(c)) for c, g in pairs if _refuses(c, g)]
+
+
+def _arrival_message(check):
+    what = "check equal names" if check.op == "equal" else "check distinct names only part of"
+    return f"{what} a binding made inside an unordered group: which entry binds it depends on the order the replies arrive in (name all of the group's bindings in one check distinct, or none)"
