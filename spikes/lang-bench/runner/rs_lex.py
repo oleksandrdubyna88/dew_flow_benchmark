@@ -146,12 +146,16 @@ class Cursor:
         out, self.pos = self.text[self.pos:], len(self.text)
         return out
 
-    def peek_kind(self):
-        """The kind of the next token without consuming it, or None at the end of the line."""
+    def peek(self):
+        """The next token without consuming it (and without recording a problem), or None at the end of the line."""
         pos, ok, mark = self.pos, self.ok, len(self.problems)
         tok = self.take()
         self.pos, self.ok = pos, ok
         del self.problems[mark:]
+        return tok
+
+    def peek_kind(self):
+        tok = self.peek()
         return None if tok is None else tok.kind
 
     def take(self):
