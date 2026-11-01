@@ -1,7 +1,10 @@
 """The runner's command line (E1.S8a part i): kind, samples, build, --parse-only, limits, exit codes 0/1/3/4/5, the JSON result, encodings."""
+import importlib.util
 import io
 import json
 import os
+import py_compile
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,11 +55,60 @@ class Box:
         with open(os.path.join(folder, name), "wb") as f:
             f.write(data if isinstance(data, bytes) else data.encode("utf-8"))
 
-    def cli(self, *args, env=None, samples=True):
-        argv = [sys.executable, "-I", "-B", ENTRY, *args] + ([self.samples] if samples else [])
+    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B")):
+        argv = [sys.executable, *python_flags, entry, *args] + ([self.samples] if samples else [])
         full_env = {"PATH": os.environ["PATH"], "TMPDIR": tempfile.gettempdir(), **(env or {})}
         done = subprocess.run(argv, capture_output=True, cwd=self.ws, env=full_env, timeout=120)
         return done.returncode, done.stdout.decode("utf-8", "backslashreplace"), done.stderr.decode("utf-8", "backslashreplace")
+
+
+class CacheTests(unittest.TestCase):
+    """A bytecode cache planted in the runner's tree must never be read: the pin hashes sources, an unchecked-hash .pyc would run instead."""
+
+    def runner_copy(self):
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        copy = os.path.join(holder.name, "runner")
+        shutil.copytree(runner_path.RUNNER_DIR, copy, ignore=shutil.ignore_patterns("__pycache__"))
+        return copy
+
+    def plant(self, copy, module, source_suffix):
+        """An unchecked-hash cache of `module` with `source_suffix` appended to its source: the source on disk stays the pinned one."""
+        path = os.path.join(copy, module + ".py")
+        evil = os.path.join(os.path.dirname(copy), module + "_evil.py")
+        with open(path, "r", encoding="utf-8") as f, open(evil, "w", encoding="utf-8") as out:
+            out.write(f.read() + source_suffix)
+        py_compile.compile(evil, cfile=self.beside(path), doraise=True, invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
+
+    def beside(self, path):
+        """The cache path next to a source, whatever prefix this process (which imported run_samples) has set for its own imports."""
+        prefix, sys.pycache_prefix = sys.pycache_prefix, None
+        try:
+            return importlib.util.cache_from_source(path)
+        finally:
+            sys.pycache_prefix = prefix
+
+    def test_A_planted_unchecked_hash_cache_is_not_run_in_place_of_the_pinned_source(self):
+        copy = self.runner_copy()
+        self.plant(copy, "rs_olympiad", "\n_judge = lambda *a, **k: None\n")
+        box = Box(self, run_sh="printf 'wrong\\n'\n")
+        code, out, err = box.cli(entry=os.path.join(copy, "run_samples.py"), python_flags=("-I",))
+        self.assertEqual(code, 1, (out, err))
+        self.assertIn("FAIL s03 \u2014 output differs", out)
+
+    def test_The_planted_cache_would_win_if_it_were_read_and_that_is_the_point(self):
+        copy = self.runner_copy()
+        self.plant(copy, "rs_olympiad", "\n_judge = lambda *a, **k: None\n")
+        done = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import rs_olympiad; print(rs_olympiad._judge.__name__)", copy],
+                              capture_output=True, text=True)
+        self.assertEqual(done.stdout.strip(), "<lambda>", "the plain import reads the planted cache: this is the attack, and why run_samples must not")
+
+    def test_The_entry_points_the_cache_prefix_at_a_fresh_folder_before_any_sibling_is_imported(self):
+        code, out, err = Box(self).cli("--parse-only")
+        self.assertEqual((code, err), (0, ""))
+        probe = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys, runpy; sys.path.insert(0, sys.argv[1]); import run_samples; print(sys.pycache_prefix)", runner_path.RUNNER_DIR],
+                               capture_output=True, text=True)
+        self.assertNotIn(probe.stdout.strip(), ("None", ""), "importing the entry sets sys.pycache_prefix")
 
 
 class OlympiadTests(unittest.TestCase):

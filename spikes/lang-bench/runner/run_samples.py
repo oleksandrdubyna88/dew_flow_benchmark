@@ -8,18 +8,22 @@ Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 
 Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every case says
 its memory is not certified. The daemon and web kinds run in part ii of the story; here they parse (--parse-only).
 """
+import atexit
+import os
+import shutil
 import sys
+import tempfile
 
+# No bytecode cache in the runner's tree is ever read: the pin hashes the sources, and an unchecked-hash .pyc planted beside them would run
+# instead. Every module imported from here on (the siblings included) is compiled from its source into a fresh folder removed at exit.
 sys.dont_write_bytecode = True
+sys.pycache_prefix = tempfile.mkdtemp(prefix="runner-pyc-")
+atexit.register(shutil.rmtree, sys.pycache_prefix, True)
 if __name__ == "__main__":  # under -I the script's own directory is not on sys.path
-    import os
     sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
 import argparse
 import json
-import os
-import shutil
-import tempfile
 import traceback
 from dataclasses import dataclass
 from typing import Any, Optional

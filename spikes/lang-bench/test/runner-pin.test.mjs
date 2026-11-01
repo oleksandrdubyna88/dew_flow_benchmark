@@ -68,11 +68,19 @@ test('The_check_passes_for_the_tree_it_was_taken_from', t => {
   assert.equal(verifyPin(dir, computePin(dir).value).ok, true);
 });
 
-test('A_python_cache_folder_is_ignored_but_a_stray_file_is_refused', t => {
+test('A_python_cache_folder_is_refused_because_an_unchecked_cache_would_run_instead_of_the_pinned_source', t => {
   const dir = runnerFolder(t, TREE);
+  assert.equal(computePin(dir).ok, true);
   mkdirSync(path.join(dir, '__pycache__'));
   writeFileSync(path.join(dir, '__pycache__', 'a.cpython-314.pyc'), 'x');
-  assert.equal(computePin(dir).ok, true);
+  const planted = computePin(dir);
+  assert.equal(planted.ok, false);
+  assert.match(planted.reason, /__pycache__/);
+  assert.equal(verifyPin(dir, computePin(runnerFolder(t, TREE)).value).ok, false, 'a planted cache fails the check the workspace copy is held to');
+});
+
+test('A_stray_file_that_is_not_python_is_refused', t => {
+  const dir = runnerFolder(t, TREE);
   writeFileSync(path.join(dir, 'notes.txt'), 'x');
   const pin = computePin(dir);
   assert.equal(pin.ok, false);

@@ -1,7 +1,7 @@
 // The pin of runner/ (E1.S8a): a version, the sha256 of every file, and one manifest hash, as the `runner` key of
 // inputs/specs.d/runner.json. The workspace copy of the runner must equal this tree (E1.S3's check reuses verifyPin).
-// Only `*.py` regular files are pinned; a Python cache folder is ignored; anything else in runner/ is refused, so the frozen
-// tree is exactly its list of files.
+// Only `*.py` regular files are pinned and anything else in runner/ is refused, a `__pycache__` folder included (fail closed): an
+// unchecked-hash .pyc beside the sources would run in place of what the pin hashed. The frozen tree is exactly its list of files.
 import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -11,18 +11,16 @@ const fail = reason => ({ ok: false, reason });
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const VERSION_FILE = 'rs_report.py';
 const VERSION_LINE = /^RUNNER_VERSION = "([0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*)"$/m;
-const IGNORED = new Set(['__pycache__']);
 
-/** The entries of the folder as `{ name, error? }`: a `.py` regular file is fine, a cache folder is ignored, anything else is an error. */
+/** The entries of the folder as `{ name, error? }`: a `.py` regular file is fine, anything else (a cache folder too) is an error. */
 function classify(dir, name) {
-  if (IGNORED.has(name)) return null;
   const stat = lstatSync(path.join(dir, name));
   return stat.isFile() && name.endsWith('.py') ? { name } : { name, error: `${name} is not a regular .py file (a symbolic link, a folder or another kind of file)` };
 }
 
 /** `ok([{ path, sha256 }])` for the runner folder, sorted by path, or `fail`. */
 export function listFiles(dir, readNames = readdirSync) {
-  const entries = readNames(dir).sort().map(name => classify(dir, name)).filter(Boolean);
+  const entries = readNames(dir).sort().map(name => classify(dir, name));
   const bad = entries.find(e => e.error);
   if (bad) return fail(bad.error);
   if (entries.length === 0) return fail(`${dir} holds no .py file`);
