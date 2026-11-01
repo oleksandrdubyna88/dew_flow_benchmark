@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
-import { boxArgv, dotnetCandidates, judgeProbes, preflightLang } from '../lib/preflight-lang.mjs';
+import { boxArgv, judgeDotnetHits, judgeProbes, preflightLang, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
@@ -72,36 +72,28 @@ test('A_probe_that_did_not_run_is_a_problem_and_never_a_pass', () => {
   assert.match(none.problems.join('\n'), /node.*did not run/s);
 });
 
-/** Two directories each holding an executable `dotnet`, standing for the pinned SDK and the distribution's. */
-function twoDotnets(t) {
-  const root = ownedFolder(t, 'pathscan');
-  const dirs = { pinned: path.join(root, 'pinned'), apt: path.join(root, 'apt'), none: path.join(root, 'none') };
-  for (const dir of Object.values(dirs)) mkdirSync(dir);
-  for (const dir of [dirs.pinned, dirs.apt]) { writeFileSync(path.join(dir, 'dotnet'), '#!/bin/sh\n'); chmodSync(path.join(dir, 'dotnet'), 0o755); }
-  return dirs;
-}
+const PINNED = '/store/dotnet-sdk-10.0.403/dotnet';
+const hit = (shown, real = shown) => ({ shown, real });
 
-test('A_PATH_that_still_finds_the_apt_SDK_is_refused', t => {
-  const d = twoDotnets(t);
-  const pinned = path.join(d.pinned, 'dotnet');
-  assert.deepEqual(dotnetCandidates({ boxPath: [d.pinned, d.none], pinnedDotnet: pinned }).problems, [], 'the pinned directory alone is fine');
-  const behind = dotnetCandidates({ boxPath: [d.pinned, d.apt], pinnedDotnet: pinned });
-  assert.equal(behind.problems.length, 1, 'the pinned dotnet is found first, yet a second one is on the PATH');
-  assert.match(behind.problems[0], new RegExp(`${path.join(d.apt, 'dotnet').replace(/[/\\]/g, '.')}.*${pinned.replace(/[/\\]/g, '.')}`, 's'));
-  const first = dotnetCandidates({ boxPath: [d.apt, d.pinned], pinnedDotnet: pinned });
-  assert.ok(first.problems.length >= 1 && first.problems.some(p => p.includes(path.join(d.apt, 'dotnet'))), 'a distribution dotnet found first');
+test('The_hits_of_which_a_dotnet_are_judged_by_where_they_really_are_and_a_second_real_file_is_refused', () => {
+  assert.deepEqual(judgeDotnetHits({ hits: [hit(PINNED)], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: ['/store/dotnet-sdk-10.0.403'] }), [], 'the pinned directory alone is fine');
+  const behind = judgeDotnetHits({ hits: [hit(PINNED), hit('/usr/bin/dotnet', '/usr/lib/dotnet/dotnet')], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: [] });
+  assert.equal(behind.length, 1, 'the pinned dotnet is found first, yet a second one is on the PATH');
+  assert.match(behind[0], /second dotnet.*\/usr\/bin\/dotnet.*\/usr\/lib\/dotnet\/dotnet.*only \/store\/dotnet-sdk-10\.0\.403\/dotnet/s);
+  const first = judgeDotnetHits({ hits: [hit('/usr/bin/dotnet', '/usr/lib/dotnet/dotnet'), hit(PINNED)], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: [] });
+  assert.ok(first.some(p => p.includes('/usr/bin/dotnet')), 'a distribution dotnet found first');
 });
 
-test('A_pinned_directory_listed_twice_or_through_a_link_is_one_dotnet_not_two', t => {
-  const d = twoDotnets(t);
-  assert.deepEqual(dotnetCandidates({ boxPath: [d.pinned, d.pinned, d.none], pinnedDotnet: path.join(d.pinned, 'dotnet') }).problems, []);
+test('One_real_dotnet_reached_through_two_names_is_one_dotnet_not_two', () => {
+  assert.deepEqual(judgeDotnetHits({ hits: [hit(PINNED), hit('/link/dotnet', PINNED), hit(PINNED)], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: [] }), []);
 });
 
-test('A_box_PATH_with_no_dotnet_at_all_is_refused', t => {
-  const d = twoDotnets(t);
-  const none = dotnetCandidates({ boxPath: [d.none], pinnedDotnet: path.join(d.pinned, 'dotnet') });
-  assert.equal(none.problems.length, 1);
-  assert.match(none.problems[0], /no dotnet/);
+test('A_box_PATH_with_no_dotnet_at_all_is_refused_and_so_is_one_without_the_pinned_dotnet', () => {
+  const none = judgeDotnetHits({ hits: [], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: ['/x'] });
+  assert.equal(none.length, 1);
+  assert.match(none[0], /no dotnet/);
+  const other = judgeDotnetHits({ hits: [hit('/opt/dotnet', '/opt/real/dotnet')], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: ['/opt'] });
+  assert.ok(other.some(p => /pinned dotnet .* is not on the box's PATH/.test(p)), other.join('\n'));
 });
 
 test('The_preflight_box_has_no_network_a_hidden_home_and_only_the_pinned_directories_bound_back_read_only', () => {
@@ -174,14 +166,64 @@ test('The_preflight_in_a_real_box_refuses_a_pin_the_toolchain_does_not_meet_nami
   assert.match(result.problems.join('\n'), /a{64}/);
 });
 
-test('The_preflight_in_a_real_box_refuses_a_PATH_that_reaches_the_distributions_SDK', async t => {
+/** The prefix of a box over the real store, with the fixture folder bound read-only at its own path when one is given. */
+function realBox(fixture, { protect = true } = {}) {
+  const dirs = Object.fromEntries(Object.entries(stacks.directories).map(([name, dirName]) => [name, path.join(storeRoot, dirName)]));
+  const extraRoBinds = fixture ? [{ host: fixture, box: fixture }] : [];
+  return { dirs, pinned: path.join(dirs.dotnetSdk, 'dotnet'), prefix: (boxPath) => boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath, operatorHome: os.homedir(), extraRoBinds, protect }) };
+}
+
+/** A folder holding an executable `dotnet` (a script: only its being found matters). */
+function folderWithDotnet(t, what) {
+  const dir = ownedFolder(t, what);
+  writeFileSync(path.join(dir, 'dotnet'), '#!/bin/sh\n');
+  chmodSync(path.join(dir, 'dotnet'), 0o755);
+  return dir;
+}
+
+test('A_PATH_that_still_finds_the_apt_SDK_is_refused', async t => {
   if (!gate(t)) return;
-  if (!existsSync('/usr/bin/dotnet')) return lacks(t, '/usr/bin/dotnet is absent: there is no distribution SDK to reach');
-  const dirs = Object.values(stacks.directories).map(name => path.join(storeRoot, name));
-  const boxPath = [dirs[0], path.join(dirs[1], 'bin'), path.join(dirs[2], 'node_modules', '.bin'), '/usr/bin'];
-  const result = await preflightLang({ stacks, storeRoot, boxPath });
+  if (!existsSync('/usr/lib/dotnet/dotnet')) return lacks(t, 'the host has no apt SDK to reach');
+  const box = realBox(null, { protect: false });
+  const found = await scanDotnetInBox({ prefix: box.prefix([box.dirs.dotnetSdk, '/usr/bin']), pinnedDotnet: box.pinned });
+  assert.equal(found.problems.length, 1, found.problems.join('\n'));
+  assert.match(found.problems[0], /second dotnet.*\/usr\/bin\/dotnet/s);
+  const alone = await scanDotnetInBox({ prefix: box.prefix([box.dirs.dotnetSdk]), pinnedDotnet: box.pinned });
+  assert.deepEqual(alone.problems, [], 'green with the pinned directory alone');
+});
+
+test('A_hidden_apt_SDK_is_not_a_second_dotnet', async t => {
+  if (!gate(t)) return;
+  const box = realBox(null);
+  const found = await scanDotnetInBox({ prefix: box.prefix([box.dirs.dotnetSdk, '/usr/bin']), pinnedDotnet: box.pinned });
+  assert.deepEqual(found.problems, [], '/usr/bin/dotnet leads nowhere inside the box: the distribution is hidden there');
+  const whole = await preflightLang({ stacks, storeRoot, boxPath: [box.dirs.dotnetSdk, path.join(box.dirs.node, 'bin'), path.join(box.dirs.typescript, 'node_modules', '.bin'), '/usr/bin'], withApphost: false });
+  assert.equal(whole.ok, true, JSON.stringify(whole));
+});
+
+test('The_preflight_refuses_a_box_whose_PATH_reaches_a_second_dotnet_in_the_box', async t => {
+  if (!gate(t)) return;
+  const fixture = folderWithDotnet(t, 'second');
+  const box = realBox(fixture);
+  const result = await preflightLang({ stacks, storeRoot, boxPath: [box.dirs.dotnetSdk, fixture], withApphost: false, extraRoBinds: [{ host: fixture, box: fixture }] });
   assert.equal(result.ok, false);
-  assert.match(result.problems.join('\n'), /second dotnet.*\/usr\/bin\/dotnet/s);
+  assert.match(result.problems.join('\n'), new RegExp(`second dotnet.*${path.join(fixture, 'dotnet')}`, 's'));
+});
+
+test('A_PATH_entry_that_exists_only_on_the_host_is_not_counted', async t => {
+  if (!gate(t)) return;
+  const box = realBox(null);
+  const hostOnly = folderWithDotnet(t, 'hostonly');
+  const found = await scanDotnetInBox({ prefix: box.prefix([box.dirs.dotnetSdk, hostOnly]), pinnedDotnet: box.pinned });
+  assert.deepEqual(found.problems, [], `${hostOnly} is hidden by the box's /tmp: its dotnet is not there for the box`);
+});
+
+test('A_second_dotnet_that_is_visible_in_the_box_is_counted_wherever_it_sits_on_the_PATH', async t => {
+  if (!gate(t)) return;
+  const fixture = folderWithDotnet(t, 'visible');
+  const box = realBox(fixture);
+  const found = await scanDotnetInBox({ prefix: box.prefix([fixture, box.dirs.dotnetSdk]), pinnedDotnet: box.pinned });
+  assert.ok(found.problems.some(p => p.includes(path.join(fixture, 'dotnet'))), found.problems.join('\n'));
 });
 
 test('The_preflight_refuses_a_store_that_is_not_there_without_starting_a_box', async t => {

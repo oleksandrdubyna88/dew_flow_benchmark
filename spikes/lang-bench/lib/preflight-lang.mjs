@@ -2,7 +2,6 @@
 // exactly SDK 10.0.403 (runtime 10.0.14), Node 26.13.0, TypeScript at the pinned 6.0 patch, the pinned Python binary, the German locale generated.
 // `judgeProbes` is pure (probe outputs in, problems out, each naming the pin and the value seen); `preflightLang` runs the probes INSIDE a bwrap box
 // that binds the pinned directories read-only, built from v1's primitives (`spikes/minigit-bench/lib/bwrap.mjs`) until the execution layer's box exists.
-import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { bwrapFacts } from '../../minigit-bench/lib/host-checks.mjs';
@@ -74,34 +73,38 @@ export function judgeProbes({ probes, stacks }) {
   return { ok: problems.length === 0, problems, facts: factsFrom(probes, stacks) };
 }
 
-const isExecutableFile = file => {
-  try {
-    accessSync(file, constants.X_OK);
-    return statSync(file).isFile();
-  } catch {
-    return false;
-  }
-};
+const SHOWN = (shown, real) => (real === shown ? shown : `${shown} (${real})`);
 
 /**
- * Every `dotnet` the box's PATH reaches, against the one pinned: a second one (the distribution's, found first or behind the pinned one) is a problem,
- * because `dotnet` on a PATH is whichever comes first and an unattended upgrade can change what that is. One real file listed twice is one dotnet.
+ * The `dotnet` hits a box's PATH has (`hits`: `{ shown, real }`, in PATH order, as seen INSIDE the box) against the pinned one (`pinnedReal`, its in-box `readlink -f`).
+ * A second real file (the distribution's, found first or behind the pinned one) is a problem, because `dotnet` on a PATH is whichever comes first and an unattended
+ * upgrade can change what that is. One real file reached through two names (a listed-twice or symlinked directory) is one dotnet.
  */
-export function dotnetCandidates({ boxPath, pinnedDotnet }) {
-  const pinned = existsSync(pinnedDotnet) ? realpathSync(pinnedDotnet) : pinnedDotnet;
+export function judgeDotnetHits({ hits, pinnedReal, pinnedDotnet, boxPath }) {
   const byReal = new Map();
-  for (const dir of boxPath) {
-    const candidate = path.join(dir, 'dotnet');
-    if (isExecutableFile(candidate) && !byReal.has(realpathSync(candidate))) byReal.set(realpathSync(candidate), candidate);
-  }
-  const others = [...byReal].filter(([real]) => real !== pinned);
-  return {
-    problems: [
-      ...(byReal.size === 0 ? [`no dotnet on the box's PATH (${boxPath.join(':')}); the pinned one is ${pinnedDotnet}`] : []),
-      ...others.map(([real, shown]) => `a second dotnet is on the box's PATH: ${shown}${real === shown ? '' : ` (${real})`}; the pin is only ${pinnedDotnet}`),
-      ...(byReal.size > 0 && !byReal.has(pinned) ? [`the pinned dotnet ${pinnedDotnet} is not on the box's PATH (${boxPath.join(':')})`] : []),
-    ],
-  };
+  for (const { shown, real } of hits) if (!byReal.has(real)) byReal.set(real, shown);
+  return [
+    ...(byReal.size === 0 ? [`no dotnet on the box's PATH (${boxPath.join(':')}); the pinned one is ${pinnedDotnet}`] : []),
+    ...[...byReal].filter(([real]) => real !== pinnedReal).map(([real, shown]) => `a second dotnet is on the box's PATH: ${SHOWN(shown, real)}; the pin is only ${pinnedDotnet}`),
+    ...(byReal.size > 0 && !byReal.has(pinnedReal) ? [`the pinned dotnet ${pinnedDotnet} is not on the box's PATH (${boxPath.join(':')})`] : []),
+  ];
+}
+
+const outputLines = text => (text ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+
+/**
+ * Every `dotnet` the box's PATH reaches, found INSIDE the box (`which -a dotnet` under the box's environment, then each hit's `readlink -f` in the box) and judged
+ * against the pinned one: a hidden distribution SDK is not there for the box, and a PATH entry that exists only on the host is not counted.
+ */
+export async function scanDotnetInBox({ prefix, pinnedDotnet, boxPath = [] }) {
+  const which = await runInBox(prefix, ['/usr/bin/which', '-a', 'dotnet']);
+  if (which === null) return { problems: ['`which -a dotnet` did not run inside the box, so the dotnet its PATH reaches is unknown'], hits: [] };
+  const shown = [...new Set(outputLines(which.stdout))];
+  const resolved = await runInBox(prefix, ['/usr/bin/readlink', '-f', pinnedDotnet, ...shown]);
+  const reals = outputLines(resolved?.stdout);
+  if (resolved === null || reals.length !== shown.length + 1) return { problems: ['`readlink -f` did not resolve the dotnet files inside the box'], hits: [] };
+  const hits = shown.map((name, i) => ({ shown: name, real: reals[i + 1] }));
+  return { problems: judgeDotnetHits({ hits, pinnedReal: reals[0], pinnedDotnet, boxPath }), hits };
 }
 
 export { boxArgv, defaultBoxPath };
@@ -123,31 +126,33 @@ async function hostBwrapProblems() {
 const refused = problems => ({ ...fail(`the preflight found ${problems.length} problem(s)`), problems });
 const FATAL_HOST = /^(bwrap|user namespaces)/;
 
-/** The host's bwrap and the box PATH's dotnet candidates: `{ problems, fatal }` (fatal: there is no box to probe in). */
-async function environmentProblems({ dirs, pathDirs }) {
-  const problems = [...await hostBwrapProblems(), ...dotnetCandidates({ boxPath: pathDirs, pinnedDotnet: path.join(dirs.dotnetSdk, 'dotnet') }).problems];
+/** The host's bwrap: `{ problems, fatal }` (fatal: there is no box to probe in). */
+async function environmentProblems() {
+  const problems = await hostBwrapProblems();
   return { problems, fatal: findOnPath('bwrap') === null || problems.some(p => FATAL_HOST.test(p)) };
 }
 
-async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome }) {
-  const prefix = boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath: pathDirs, operatorHome });
+async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds }) {
+  const prefix = boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath: pathDirs, operatorHome, extraRoBinds });
   const probes = Object.fromEntries(await Promise.all(Object.entries(stacks.probes).map(async ([name, argv]) => [name, await probeInBox({ prefix, argv })])));
-  return judgeProbes({ probes, stacks });
+  const scan = await scanDotnetInBox({ prefix, pinnedDotnet: path.join(dirs.dotnetSdk, 'dotnet'), boxPath: pathDirs });
+  const verdict = judgeProbes({ probes, stacks });
+  return { ...verdict, problems: [...scan.problems, ...verdict.problems] };
 }
 
 /**
  * `preflightLang({ stacks, storeRoot, boxPath?, operatorHome?, withApphost? })` -> `ok({ facts })` or a fail whose `problems` lists everything wrong (all of it, not the first).
  * `boxPath` is the PATH the box under test will have (default: the pinned directories alone); a PATH that also reaches another `dotnet` is refused.
- * `withApphost: false` skips the apphost probe (a few seconds); only a test of something else says so.
+ * `withApphost: false` skips the apphost probe (a few seconds); only a test of something else says so. `extraRoBinds` (`{ host, box }`) are for tests that put a fixture in the box.
  */
-export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true }) {
+export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true, extraRoBinds = [] }) {
   const dirs = storeDirs(stacks, storeRoot);
   const shallow = verifyStore({ stacks, storeRoot });
   if (!shallow.ok) return refused(shallow.problems);
   const pathDirs = boxPath ?? defaultBoxPath(dirs);
-  const environment = await environmentProblems({ dirs, pathDirs });
+  const environment = await environmentProblems();
   if (environment.fatal) return refused(environment.problems);
-  const verdict = await probeAndJudge({ stacks, dirs, pathDirs, operatorHome });
+  const verdict = await probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds });
   const apphost = withApphost ? await runApphostProbe({ stacks, dirs, boxPath: pathDirs, operatorHome }) : { problems: [], root: null };
   const all = [...environment.problems, ...verdict.problems, ...apphost.problems];
   return all.length === 0 ? ok({ facts: { ...verdict.facts, apphostDotnetRoot: apphost.root } }) : refused(all);
