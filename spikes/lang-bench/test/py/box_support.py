@@ -150,15 +150,18 @@ class Scope:
         self.cgroup = f"{base}/{self.unit}.scope"
         test.addCleanup(self.stop)
 
-    def prefix(self, workspace_dir, new_session=True, per_case=False, status_fd=None):
+    def prefix(self, workspace_dir, new_session=True, per_case=False, status_fd=None, holder=None):
         """`systemd-run --user --scope … bwrap --unshare-pid --new-session … --`: the program behind bwrap, in a session of its own.
-        `per_case` gives each case its own scope (`<unit>-{case}`, whose cgroup is `cgroup_template`), `status_fd` the bwrap status descriptor."""
+        `per_case` gives each case its own scope (`<unit>-{case}`, whose cgroup is `cgroup_template`), `status_fd` the bwrap status descriptor.
+        `holder` (a file name, `{case}` allowed) keeps the scope alive after the program: the system removes a scope when its last process exits,
+        so a `sleep` is started in it and its pid written to that file, which the runner is told as the wrapper (E1.S8b's scope holder)."""
         status = [] if status_fd is None else ["--json-status-fd", str(status_fd)]
         box = ["bwrap", *status, "--unshare-pid", *(["--new-session"] if new_session else []), "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin",
                "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                "--bind", workspace_dir, "/ws", "--chdir", "/ws", "--"]
         unit = f"{self.unit}-{{case}}" if per_case else self.unit
-        return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "-p", "Delegate=yes", "--", *box]
+        held = [] if holder is None else ["sh", "-c", 'sleep 40 >/dev/null 2>&1 <&- 7>&- &\necho $! > "$0"\nexec "$@"', holder]
+        return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "-p", "Delegate=yes", "--", *held, *box]
 
     @property
     def cgroup_template(self):

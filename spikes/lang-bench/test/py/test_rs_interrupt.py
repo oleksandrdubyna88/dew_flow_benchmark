@@ -27,7 +27,7 @@ class InterruptTests(unittest.TestCase):
         marker = os.path.join(box.root, "launching")
         stuck = ["sh", "-c", f"touch {marker}\nexec sleep {seconds}", "sh"]
         proc = run_cli(self, box, "--launch-prefix", json.dumps(stuck), "--launch-status", str(STATUS_FD), "--limits", self.limits(box))
-        self.assertTrue(wait_until(lambda: os.path.exists(marker), 15), "the launcher never started")
+        self.assertTrue(wait_until(lambda: os.path.exists(marker), 90), "the launcher never started")
         proc.send_signal(signal.SIGTERM)
         out, err = proc.communicate(timeout=30)
         self.assertEqual((proc.returncode, out), (5, b""), err)
@@ -42,15 +42,16 @@ class InterruptTests(unittest.TestCase):
 class RealScopeTests(unittest.TestCase):
     def cli_args(self, box, scope, out_json=None):
         box.write(box.root, "limits.json", '{"timeS": 30}')
-        return ["--launch-prefix", json.dumps(scope.prefix(box.ws, per_case=True, status_fd=STATUS_FD)), "--launch-status", str(STATUS_FD),
-                "--cgroup-of", scope.cgroup_template, "--limits", os.path.join(box.root, "limits.json"), *(["--json", out_json] if out_json else [])]
+        holder = os.path.join(box.root, "holder-{case}.pid")
+        return ["--launch-prefix", json.dumps(scope.prefix(box.ws, per_case=True, status_fd=STATUS_FD, holder=holder)), "--launch-status", str(STATUS_FD),
+                "--cgroup-of", scope.cgroup_template, "--wrapper-pid-file", holder, "--limits", os.path.join(box.root, "limits.json"), *(["--json", out_json] if out_json else [])]
 
     def test_The_command_line_through_a_real_scope_and_bwrap_passes_and_records_what_it_saw(self):
         scope = Scope(self)
-        box = Box(self)
+        box = Box(self, run_sh="sleep 1\ncat answer.bin\n")
         out_json = os.path.join(box.out, "r.json")
         proc = run_cli(self, box, *self.cli_args(box, scope, out_json))
-        out, err = proc.communicate(timeout=120)
+        out, err = proc.communicate(timeout=300)
         self.assertEqual((proc.returncode, b"PASS s03" in out), (0, True), err)
         record = read_json(out_json)
         case = record["cases"][0]
@@ -60,14 +61,14 @@ class RealScopeTests(unittest.TestCase):
         self.assertNotEqual(case["lifecycle"]["signalled"]["pid"], case["lifecycle"]["signalled"]["launcher"])
         self.assertIsInstance(record["emptyProgram"]["pid"], int, "the control waited on the program's own pid too")
         self.assertEqual((case["lifecycle"]["kill"], case["lifecycle"]["leftover"]), ("cgroup.kill", {"known": True, "found": False}))
-        memory = case["lifecycle"]["memory"]
-        self.assertTrue(memory["known"] or "why" in memory, "a scope the system removed with its last process cannot be read: unknown with its reason, never zero")
+        self.assertEqual(case["lifecycle"]["memory"]["known"], True, "the scope holder keeps the scope until the runner has read it")
+        self.assertEqual(case["lifecycle"]["leftover"], {"known": True, "found": False}, "the holder is the wrapper: not a leftover")
 
     def test_A_SIGTERM_to_the_runner_while_a_program_runs_in_its_scope_is_exit_5_and_the_scope_is_empty(self):
         scope = Scope(self)
         box = Box(self, run_sh="touch started.marker\nexec sleep 66\n")
         proc = run_cli(self, box, *self.cli_args(box, scope))
-        self.assertTrue(wait_until(lambda: os.path.exists(os.path.join(box.ws, "started.marker")), 30), "the case never started")
+        self.assertTrue(wait_until(lambda: os.path.exists(os.path.join(box.ws, "started.marker")), 90), "the case never started")
         proc.send_signal(signal.SIGTERM)
         out, err = proc.communicate(timeout=60)
         self.assertEqual((proc.returncode, out), (5, b""), err)

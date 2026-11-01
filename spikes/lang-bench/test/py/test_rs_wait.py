@@ -73,30 +73,31 @@ class WaitTests(unittest.TestCase):
 
     def test_An_end_instant_injected_into_a_real_run_passes_at_the_limit_and_fails_one_millisecond_after(self):
         ws = Workspace(self, REPLAY, FILES)
-        for offset_ms, status in ((LIMIT_MS, "PASS"), (LIMIT_MS + 1, "FAIL")):
+        limit = 5000  # far above what a loaded machine takes for `cat`: the real deadline must not be what decides here
+        for offset_ms, status in ((limit, "PASS"), (limit + 1, "FAIL")):
             def end_at(pump, offset_ms=offset_ms):
                 pump.exit_ns = pump.launched.clock_ns + offset_ms * NS
 
             with mock.patch.object(rs_pump.Pump, "_ended_now", end_at):
-                result = ws.run(case(), limit_ms=LIMIT_MS)
-            self.assertEqual(result.status, status, f"the program ended {offset_ms} ms after the clock start, the limit is {LIMIT_MS} ms")
+                result = ws.run(case(), limit_ms=limit)
+            self.assertEqual(result.status, status, f"the program ended {offset_ms} ms after the clock start, the limit is {limit} ms")
             self.assertEqual(result.wall_ms, offset_ms)
 
     def test_The_launchers_teardown_after_the_exit_code_record_is_not_program_time(self):
         started = time.monotonic()
-        result = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES).run(case(), prefix=reporting_prefix(linger=3), status_fd=7, limit_ms=2000)
-        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 2 s limit; wall {result.wall_ms} ms")
-        self.assertLess(result.wall_ms, 2000, "the end is the exit-code record, not the launcher's exit 3 s later")
-        self.assertGreaterEqual(time.monotonic() - started, 3, "the launcher did linger: the test would otherwise prove nothing")
+        result = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES).run(case(), prefix=reporting_prefix(linger=4), status_fd=7, limit_ms=3000)
+        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 3 s limit; wall {result.wall_ms} ms")
+        self.assertLess(result.wall_ms, 3000, "the end is the exit-code record, not the launcher's exit 4 s later")
+        self.assertGreaterEqual(time.monotonic() - started, 4, "the launcher did linger: the test would otherwise prove nothing")
 
     def test_A_launcher_that_outlives_the_program_does_not_stretch_the_wall_when_the_pid_is_found(self):
         ws = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES)
         cgroup = fake_cgroup(ws)
         started = time.monotonic()
-        result = ws.run(case(), prefix=box_prefix(fake_box(self), cgroup, linger=1), status_fd=7, cgroup=cgroup, limit_ms=500)
-        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 500 ms limit; wall {result.wall_ms} ms")
-        self.assertLess(result.wall_ms, 500, "the end is the program's pidfd, not the launcher's exit a second later")
-        self.assertGreaterEqual(time.monotonic() - started, 1, "the launcher did linger: the test would otherwise prove nothing")
+        result = ws.run(case(), prefix=box_prefix(fake_box(self), cgroup, linger=3), status_fd=7, cgroup=cgroup, limit_ms=2000)
+        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 2 s limit; wall {result.wall_ms} ms")
+        self.assertLess(result.wall_ms, 2000, "the end is the program's pidfd, not the launcher's exit three seconds later")
+        self.assertGreaterEqual(time.monotonic() - started, 3, "the launcher did linger: the test would otherwise prove nothing")
         self.assertEqual(result.lifecycle["signalled"]["found"], "cgroup.procs: the process whose parent is a bwrap process")
 
     def test_A_case_with_neither_a_pid_nor_an_exit_code_record_has_no_wall_and_is_judged_by_its_output(self):

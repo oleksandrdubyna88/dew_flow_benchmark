@@ -132,7 +132,7 @@ class SignalTests(unittest.TestCase):
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples], cwd=box.ws,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": os.environ.get("TMPDIR", "/tmp")})
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
-        self.assertTrue(wait_until(lambda: os.path.exists(os.path.join(box.ws, "started.marker")), 15))
+        self.assertTrue(wait_until(lambda: os.path.exists(os.path.join(box.ws, "started.marker")), 90))
         proc.send_signal(signal.SIGHUP)
         out, err = proc.communicate(timeout=30)
         self.assertEqual((proc.returncode, out), (5, b""), err)

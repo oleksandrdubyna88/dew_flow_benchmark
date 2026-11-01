@@ -26,8 +26,12 @@ class Family:
         script = f"for i in $(seq {children}); do sleep 30 & echo $! >> {self.pidfile}; done; wait"
         self.box = subprocess.Popen([self.box_path, "-c", script])
         test.addCleanup(lambda: (self.box.kill(), self.box.wait()))
-        assert wait_until(lambda: os.path.exists(self.pidfile) and len(self.children()) == children), "the children never started"
+        assert wait_until(lambda: os.path.exists(self.pidfile) and len(self.children()) == children and self.exec_done(), 60), "the children never started"
         test.addCleanup(self.stop_children)
+
+    def exec_done(self):
+        """A forked child still runs its parent's file (it would look like bwrap); wait until every one is the `sleep` it execs."""
+        return all(cg.comm_of(pid) == "sleep" for pid in self.children())
 
     def children(self):
         with open(self.pidfile) as f:
