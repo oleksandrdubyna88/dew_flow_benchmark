@@ -8,6 +8,7 @@ is not a JSON object is dropped; the buffer is bounded.
 """
 import fcntl
 import os
+import time
 from decimal import Decimal
 
 import rs_json
@@ -61,6 +62,7 @@ class StatusReader:
     def __init__(self):
         self.partial, self.skipping = b"", False
         self.child_pid, self.exit_code, self.problem = None, None, None
+        self.child_seen_ns = self.exit_seen_ns = None  # the instants (time.monotonic_ns) at which those records were read
 
     def feed(self, data):
         """Consume the complete lines of this read and keep only the last incomplete one (at most MAX_LINE bytes): nothing already read is
@@ -111,6 +113,7 @@ class StatusReader:
         if getattr(self, attr) is not None or number is None:
             return self._note(f"{name} is doubled or not a whole number")
         setattr(self, attr, number)
+        setattr(self, "child_seen_ns" if attr == "child_pid" else "exit_seen_ns", time.monotonic_ns())
 
 
 def _object(line):

@@ -130,11 +130,7 @@ def _over_time(case, config, out, comparer):
     """The wall rule: a wall over the limit (in ns, so exactly the limit is not over it) is a time limit even when the program exited by
     itself. A case the deadline cut off is one too; a wall that is unknown (no end instant) cannot be over."""
     over = out.end == "timeout" or (out.wall_ns is not None and out.wall_ns > config.limit_ms * ex.NS_PER_MS)
-    return (rp.time_text(_ceil_ms(out.wall_ns), config.limit_ms, config.basis), None, []) if over else None
-
-
-def _ceil_ms(ns):
-    return -(-ns // ex.NS_PER_MS)
+    return (rp.time_text(ex.ceil_ms(out.wall_ns), config.limit_ms, config.basis), None, []) if over else None
 
 
 def _out_of_memory(case, config, out, comparer):
@@ -179,7 +175,7 @@ def _stderr_record(path):
 
 
 def _wall_ms(out):
-    return None if out.wall_ns is None else _ceil_ms(out.wall_ns)
+    return None if out.wall_ns is None else ex.ceil_ms(out.wall_ns)
 
 
 def run_case(case, config):

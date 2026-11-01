@@ -118,6 +118,12 @@ def now_ms():
     return now_ns() // NS_PER_MS
 
 
+def ceil_ms(ns):
+    """Whole milliseconds, rounded UP: the one rounding of every figure a result reports (wall, launch, empty program), so that subtracting
+    one from another (the F1 control) never mixes two roundings."""
+    return -(-ns // NS_PER_MS)
+
+
 CASE_ID = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 

@@ -203,12 +203,16 @@ def _clock(proc, lifecycle, launcher_fd, pipe_fd, case_id, stderr_path):
         raise OSError("os.pidfd_open is not available: the launch status cannot be awaited")
     reader = rs_status.StatusReader()
     how = _await_child_pid(launcher_fd, reader, pipe_fd, ex.now_ms() + ex.LAUNCH_CEILING_MS)
-    reported = ex.now_ns()
     problem = _problem(how, reader, lifecycle)
     if problem is not None:
         _abandon(proc, lifecycle)
         raise LaunchFailed(case_id, problem, ex.read_tail(stderr_path))
-    return reader, reported
+    return reader, reader.child_seen_ns
+
+
+def launch_ms(spawned, reported):
+    """The time from the spawn to `child-pid`, rounded up like the wall; None without a launch status."""
+    return None if reported is None else ex.ceil_ms(reported - spawned)
 
 
 def _begun(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path):
@@ -216,8 +220,8 @@ def _begun(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path)
     tracker = rs_track.Tracker(proc, lifecycle, box=pipe_fd is not None)
     tracker.attach(reader)
     clock = spawned if reported is None else reported
-    launch_ms = None if reported is None else (reported - spawned) // ex.NS_PER_MS
-    return Launched(proc, launcher_fd, clock, launch_ms, reader, pipe_fd, tracker)
+    launch = launch_ms(spawned, reported)
+    return Launched(proc, launcher_fd, clock, launch, reader, pipe_fd, tracker)
 
 
 def _close_streams(proc):
@@ -258,7 +262,7 @@ def start(config, case_id, lifecycle, stderr_path, cwd, streams=(subprocess.PIPE
 
 
 def _empty_wall(end, pump, launched):
-    return None if end != "exited" or pump.exit_ns is None else (pump.exit_ns - launched.clock_ns) // ex.NS_PER_MS
+    return None if end != "exited" or pump.exit_ns is None else ex.ceil_ms(pump.exit_ns - launched.clock_ns)
 
 
 def time_empty(config, lifecycle_for, stderr_path):

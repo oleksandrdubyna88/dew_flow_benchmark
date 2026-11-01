@@ -32,8 +32,10 @@ class Pump:
         self.comparer, self.stderr_path = comparer or _Nothing(), stderr_path
         self.pending, self.exit_ns, self.sel = memoryview(data), None, selectors.DefaultSelector()
         self.watching, self.pipe_open, self.seek_delay = None, launched.pipe_fd is not None, ex.SEEK_TICK_S
+        self.next_look_ns, self.program_done = 0, False
         self._wire_streams()
         self._wire_ends()
+        self._end_from_record()
 
     # ---- wiring --------------------------------------------------------------------------------------------------------------------
 
@@ -61,7 +63,7 @@ class Pump:
     def _watch_program(self):
         """Register the program's own pidfd once the tracker holds one (a pid that is the launcher's own is awaited through the launcher's)."""
         fd = self.tracker.pidfd
-        if fd is not None and self.watching is None:
+        if fd is not None and self.watching is None and not self.program_done:
             self.watching = fd
             self.sel.register(fd, selectors.EVENT_READ, self.program_exited)
 
@@ -120,8 +122,16 @@ class Pump:
 
     def program_exited(self):
         self._unregister(self.watching)
+        self.watching, self.program_done = None, True
         self._ended_now()
         return self.drain()
+
+    def _end_from_record(self):
+        """bwrap's exit-code record, when it is in hand, is the end, stamped at the instant it was read (not now, and never the launcher's
+        teardown): it may have arrived in the same read as child-pid, before the pump existed."""
+        reader = self.launched.reader
+        if reader is not None and reader.exit_code is not None and self.exit_ns is None:
+            self.exit_ns = reader.exit_seen_ns
 
     def _pull(self):
         """Read the status pipe; at its end (nobody holds the write end) stop watching it."""
@@ -131,16 +141,15 @@ class Pump:
 
     def status_ready(self):
         self._pull()
-        if self.launched.reader.exit_code is not None:
-            self._ended_now()
-            return self.drain()
-        return None
+        self._end_from_record()
+        return self.drain() if self.exit_ns is not None else None
 
     def launcher_gone(self):
         """The launcher exited. On the plain path that is the program's exit; in a box it is only the box's teardown."""
         self._unregister(self.launched.launcher_fd)
         self._pull()
-        if not self.tracker.box or self.launched.reader.exit_code is not None:
+        self._end_from_record()
+        if not self.tracker.box:
             self._ended_now()
         return self.drain()
 
@@ -153,9 +162,19 @@ class Pump:
     # ---- the loop ---------------------------------------------------------------------------------------------------------------------
 
     def _look(self):
-        if self.tracker.tracking():
-            self.tracker.look()
-            self._watch_program()
+        """One look into the cgroup when its tick has elapsed: paced by time, never by I/O (a look costs about 200 µs, and a flood of reads
+        used to pay it on every one)."""
+        if not self.tracker.tracking() or ex.now_ns() < self.next_look_ns:
+            return
+        self.tracker.look()
+        self._watch_program()
+        self.next_look_ns = ex.now_ns() + int(self._tick() * NS_PER_S)
+
+    def _until_look(self):
+        """Seconds the loop may sleep before the next look is due (the plain tick when nothing is looked at)."""
+        if not self.tracker.tracking():
+            return ex.TICK_S
+        return max(0, self.next_look_ns - ex.now_ns()) / NS_PER_S
 
     def step(self, timeout_s):
         for key, _ in self.sel.select(timeout_s):
@@ -178,11 +197,14 @@ class Pump:
 
     def run(self, deadline_ns):
         """The reason the case ended: 'exited', 'mismatch', 'flood' or 'timeout' at `deadline_ns` (a monotonic_ns instant)."""
+        return self.drain() if self.exit_ns is not None else self._loop(deadline_ns)
+
+    def _loop(self, deadline_ns):
         while True:
             remaining = deadline_ns - ex.now_ns()
             if remaining <= 0:
                 return "timeout"
-            reason = self.step(min(remaining / NS_PER_S, self._tick()))
+            reason = self.step(min(remaining / NS_PER_S, self._until_look()))
             if reason:
                 return reason
 
