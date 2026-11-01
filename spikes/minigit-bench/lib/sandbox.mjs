@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
 import { otelEnv } from './otel-receiver.mjs';
-import { bind, chdir, devProc, hiddenPaths, isolation, roBind, roRoot, tmpfs } from './bwrap.mjs';
+import { bind, chdir, devProc, hiddenPaths, isolation, localeEnv, roBind, roRoot, tmpfs } from './bwrap.mjs';
 import { fail, ok } from './result.mjs';
 
 export const BOX_PROXY_PORT = 3128;
@@ -90,7 +90,7 @@ export function sessionLayout(root, rid) {
  * The environment the agent runs with (the same for every arm; the process arm adds its own keys through `extra`): a fixed allow-list, never the parent's. `PATH` is constructed, so no `/mnt` entry and no WSL
  * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot: it may add keys, never replace one of the base (that throws).
  */
-export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, extra = {} }) {
+export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, extra = {}, locale }) {
   const proxy = `http://127.0.0.1:${BOX_PROXY_PORT}`;
   const base = {
     PATH: [`${nodeDir}/bin`, ...(tsDir ? [`${tsDir}/node_modules/.bin`] : []), '/usr/local/bin', '/usr/bin', '/bin'].join(':'),
@@ -102,6 +102,7 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
+    ...localeEnv(locale), // seam W2 (the exploratory pilot): `LANG` and `LC_ALL` set to the given locale, so `extra` cannot replace either; with none given the object is what it always was
   };
   // compared in lower case: `https_proxy` is read by curl and others next to `HTTPS_PROXY`, so a different spelling of a base key replaces it as well
   const baseByLower = new Map(Object.keys(base).map(k => [k.toLowerCase(), k]));

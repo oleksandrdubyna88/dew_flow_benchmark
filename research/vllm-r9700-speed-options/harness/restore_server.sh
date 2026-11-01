@@ -12,6 +12,9 @@ for c in $("$W" list --no-trunc 2>/dev/null | tr -d '\r' | awk 'NR>1{print $NF}'
   echo "restore: stopping test container $c"; "$W" stop "$c" >/dev/null 2>&1 || true
 done
 if "$W" list --no-trunc 2>/dev/null | tr -d '\r' | grep -qE '\svllm$'; then echo "restore: vllm already running"; exit 0; fi
+# A restore_args file (written after a final A/B verdict) gives the kept options when RESTORE_ARGS is not set.
+[ -z "${RESTORE_ARGS:-}" ] && [ -f "$(dirname "$0")/restore_args" ] && RESTORE_ARGS="$(cat "$(dirname "$0")/restore_args")"
+echo "restore: start-vllm.ps1 extra arguments: ${RESTORE_ARGS:-none}"
 read -r -a extra <<< "${RESTORE_ARGS:-}"
 pwsh.exe -NoProfile -File 'C:\Users\strug\vllm\start-vllm.ps1' \
   -Model /root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ -ServedName qwen3.6-35b-a3b \

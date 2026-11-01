@@ -1,0 +1,10 @@
+fbase-1 vllm:spec_decode_num_drafts_total{engine="0",model_name="qwen3.6-35b-a3b"} 10814.0
+fbase-1 vllm:spec_decode_num_drafts_created{engine="0",model_name="qwen3.6-35b-a3b"} 1.7932256575974398e+09
+fbase-1 vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="qwen3.6-35b-a3b"} 21628.0
+fbase-1 vllm:spec_decode_num_draft_tokens_created{engine="0",model_name="qwen3.6-35b-a3b"} 1.7932256575974753e+09
+fbase-1 vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="qwen3.6-35b-a3b"} 19143.0
+fbase-1 vllm:spec_decode_num_accepted_tokens_created{engine="0",model_name="qwen3.6-35b-a3b"} 1.7932256575975132e+09
+fbase-1 vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="qwen3.6-35b-a3b",position="0"} 9911.0
+fbase-1 vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="qwen3.6-35b-a3b",position="1"} 9232.0
+fbase-1 vllm:spec_decode_num_accepted_tokens_per_pos_created{engine="0",model_name="qwen3.6-35b-a3b",position="0"} 1.7932256575975714e+09
+fbase-1 vllm:spec_decode_num_accepted_tokens_per_pos_created{engine="0",model_name="qwen3.6-35b-a3b",position="1"} 1.7932256575975785e+09

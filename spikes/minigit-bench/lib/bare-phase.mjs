@@ -29,9 +29,12 @@ export function maskedSpawn({ mask, stamp, d }) {
 }
 
 /** The workspace of a phase: v1 is exactly the pinned inputs, v2 a copy of the item's v1 tree plus the v2 inputs. */
-const fillFor = ({ ctx, item, layout }) => (item.session.phase === 'v1'
+const v1Fill = ({ ctx, item, layout }) => (item.session.phase === 'v1'
   ? fillV1({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, work: layout.work })
   : fillV2({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, v1Work: ctx.v1WorkOf(item.session), work: layout.work, stack: item.session.stack }));
+
+/** Seam W1 (the exploratory pilot): `ctx.fill({ ctx, item, layout })`, when the run context has one, fills the workspace instead (`ok(workspace)` | `fail`); with none, v1's fill runs exactly as before. */
+const fillFor = a => (a.ctx.fill ?? v1Fill)(a);
 
 function prepare({ ctx, item, d }) {
   const made = sessionLayout(ctx.sessionsRoot, item.rid);
@@ -72,12 +75,15 @@ function plantFor({ ctx, item, partner, d }) {
   return { manifest, tokens: planted.filter(t => t.status === 'planted').map(t => t.token), planted: planted.length };
 }
 
-function sessionPlan({ ctx, item }) {
+function v1Plan({ ctx, item }) {
   return bareSessionPlan({
     layout: item.layout, stack: item.session.stack, phase: item.session.phase, claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir,
     token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')), prices: ctx.prices, operatorHome: ctx.home, harnessSources: ctx.harnessSources, caps: ctx.caps, envExtra: ctx.envExtra ?? {}, over: ctx.planOver ?? {},
   });
 }
+
+/** Seam W1: `ctx.planFor({ ctx, item })`, when the run context has one, makes the plan `launchSession` takes; with none, v1's bare plan. */
+const sessionPlan = a => (a.ctx.planFor ?? v1Plan)(a);
 
 const removeLayouts = prepared => prepared.forEach(x => rmSync(x.layout.dir, { recursive: true, force: true }));
 

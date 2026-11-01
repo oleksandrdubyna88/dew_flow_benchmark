@@ -1,0 +1,17 @@
+{
+  "decidedOn": "2026-10-31",
+  "reason": "The recipe of the pilot's Node cache snapshot (plan D-X4): the one place TypeScript 6.0.3 and the highest @types/node 26 are fetched, inside an agent box through the egress proxy with the registry host list, by `explore.mjs prepare`. The result is hashed (inputs/cache-snapshots.json) and made read-only; every session's seeded copy must re-hash to that value. The C# snapshot is v1's registered cache-csharp-0a5733e2d4f1, re-hashed, not remade. Sessions run with no host allowed.",
+  "hosts": "bare",
+  "stepTimeoutMs": 900000,
+  "stacks": {
+    "node": {
+      "resolve": { "TYPES_NODE": { "argv": ["npm", "view", "@types/node@26", "version", "--json"], "pick": "highest" } },
+      "steps": [
+        { "argv": ["node", "--version"], "expectStdout": "v26.12.1" },
+        { "argv": ["npm", "init", "-y"] },
+        { "argv": ["npm", "install", "--no-audit", "--no-fund", "typescript@6.0.3", "@types/node@{TYPES_NODE}"] }
+      ],
+      "capture": { "npm": "box/npm" }
+    }
+  }
+}

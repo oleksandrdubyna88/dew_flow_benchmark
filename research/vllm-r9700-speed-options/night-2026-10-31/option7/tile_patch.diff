@@ -1,0 +1,24 @@
+--- /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/o7/rdna_hybrid_w4a16.orig.py	2026-10-31 17:55:21.829464733 +0100
++++ /mnt/c/Users/strug/vllm/tmp/vllm-pr-work/work/speed/o7/rdna_hybrid_w4a16.py	2026-10-31 17:56:14.663071900 +0100
+@@ -61,6 +61,7 @@
+ # up to 5).  When M is below this AND K*M fits in LDS, the skinny kernel is
+ # used; otherwise the Triton prefill path handles the GEMM.
+ MAX_SKINNY_BATCH_SIZE = 5
++print("speed-options option 7: wide-N tile patch for M 6-16 active", flush=True)
+ # 64 KiB per-workgroup LDS limit expressed in fp16 elements.
+ # (AMD RDNA has 128 KiB total LDS per CU, but 64 KiB per workgroup.)
+ LDS_CAPACITY_ELEMENTS = 64 * 1024 // 2  # 32768 fp16 elements
+@@ -238,7 +239,12 @@
+     if _on_gfx12x():
+         # Tuned on gfx1201 (Radeon AI PRO R9700, 32 CUs, 32-wide wavefronts)
+         # using Llama-3.1-8B AWQ weight shapes with group_size=128.
+-        if M <= 32:
++        # LOCAL CHANGE (vllm_pr_work speed-options plan, option 7, 2026-10-31): for 6..16 rows and a wide N
++        # (N > 4 K: Qwen3.6 linear_attn.in_proj_qkvz 2048x12288, self_attn.qkv_proj 2048x9216) a 16x16x32
++        # tile with 1 warp was 16-31 % faster than 16x16x128 / 4 warps under a CUDA-graph timer (results § 12.1).
++        if MAX_SKINNY_BATCH_SIZE < M <= 16 and N > 4 * K:
++            BLOCK_M, BLOCK_N, BLOCK_K, num_warps = 16, 16, 32, 1
++        elif M <= 32:
+             BLOCK_M, BLOCK_N, BLOCK_K, num_warps = 16, 16, 128, 4
+         elif M <= 64:
+             if K >= 2 * N:  # tall K (e.g. down_proj)

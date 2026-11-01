@@ -1954,7 +1954,25 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 2. `model-arms init <root>`; copy the two files into it (`experiment.json`, `scenarios.json`); `validate` → 0, the resolved executables printed.
 3. `prep-base` → 0; `baseline.json` read back. 4. `make` → 0, every arm of every run made — **waits for E3.S3**, which builds `make` in parallel; until it lands the pilot stops here. 5. `status` → every arm `made yes`, every step `not started`. 6. `run-arm C1` (the fake as `claude`; `FAKE_CLI_HOME`'s script is the owner's) → 0, `arm-done`. 7. `checks C1` → 0; `status` shows `checked yes`. 8. `checks C1 --parse-only` → the same `objective.json`, byte for byte.
 
-**The log** (to be written here by the main session): the date, the commit, every command with its exit, the printed lines (`<root>`, `<target>`, `<token>` substituted), `objective.out`'s line, each verb's wall time. Then `rm -rf` of the two named `testsToDelete-m2-…` paths, and the log says so. *Not yet run.*
+**The log** (to be written here by the main session): the date, the commit, every command with its exit, the printed lines (`<root>`, `<target>`, `<token>` substituted), `objective.out`'s line, each verb's wall time. Then `rm -rf` of the two named `testsToDelete-m2-…` paths, and the log says so.
+
+**Run 2026-10-31 16:55Z at `a504cfe`** (the main session; WSL, git 2.53.0, node v26.12.1, dotnet 10.0.114). Every verb was started under `env -i` with only `PATH` (the `bin` folder, node's, dotnet's, `/usr/bin`, `/bin`), `HOME`, `LANG=C.UTF-8` and `FAKE_CLI_HOME` — so no secret-shaped variable reached the arm (E3 §8 item 50's workaround). The fake's script: `{"transcripts": true, "stdoutFile": <Fixtures/model-arms/result-success.jsonl>}` (M1's, without a limit or a cut).
+
+| # | command | exit | wall | printed (abridged) |
+|---|---|---|---|---|
+| 1 | the scaffold | 0 (passed) | 0.2 s | `<target>` `/tmp/testsToDelete-m2-target-f0f7a802`, `<root>` `…-root-f0f7a802`, `target.base` `34e9ee6…`, `coai.binary` the FakeCli apphost, `coai.settings` the key-free `{}` |
+| 2 | `init <root>`, the two files copied | 0 | 0.1 s | `created <root>: experiment.json (a template …), scenarios.json (empty), briefs/` |
+| 2 | `validate` | 0 | 0.3 s | git, claude (→ the fake), dotnet, node, npm and `coai.binary` resolved; `<root> is valid on this host (Wsl)` |
+| 3 | `prep-base` | 0 | 7.1 s | `baseline written …: base 34e9ee6…, the main suite 3 tests with 0 failing, the extension 2 tests with 0 failing` |
+| 4 | `make` | 0 | 4.7 s | `no isolation snapshot`; `arm C1 made and built` |
+| 5 | `status` | 0 | 0.2 s | `arm C1 (scheme C): made yes, checked no, runner none recorded`; `1-code` … `4-gate` `not started` |
+| 6 | `run-arm C1` | 0 | 0.7 s | four fresh attempts, each `done (finished)`; the notes the fake never writes named (`1-code done without writing CODE_NOTES …`, the briefs' *names a file that does not exist*); `4-gate: gate lock taken`, `gate status missing`; `arm done` |
+| 7 | `checks C1` | 0 | 3.2 s | `{"arm":"C1","build":true,"format":true,"mcpNewFailures":0,"tsNewFailures":0,"scenarios":"3/3 present, 3 passing","stat":""}` |
+| 7 | `status` | 0 | 0.2 s | `made yes, checked yes`; every step `done (finished)`; last line `{"kind":"arm-done","arm":"C1",…}` |
+| 8 | `checks C1` again, `objective.json` kept | 0 | 3.4 s | `the earlier out/objective is kept as <root>/r/<token>/out/objective.prev-20261031T165545Z`; the same line |
+| 8 | `checks C1 --parse-only` | 0 | 0.4 s | the same line; only git resolved |
+
+**`objective.json`** after (8)'s full run and after `--parse-only`: byte-identical (`cmp`), 891 bytes, sha256 `426e692f505c8df6…`. The first `--parse-only` was compared against nothing (the operator's script looked for the file under the arm's name, not `r/<token>/out/`), hence the second full run. Neither `objective.json` nor `objective.out` holds the token. `stat` is empty because the fake commits nothing. **Then** `rm -rf /tmp/testsToDelete-m2-root-f0f7a802 /tmp/testsToDelete-m2-target-f0f7a802` (and an earlier scaffold's `…-target-0247320e`, from a second scaffold run made to read its header); none is left.
 
 ## M2's key check (the owner, by hand, once; parent §6 step 3, E2 §8 item 34)
 

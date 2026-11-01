@@ -1,0 +1,60 @@
+2026-10-31 17:55:12 NIGHT4 START, deadline 2026-11-01 07:15:00, coai-exp processes 0
+2026-10-31 17:59:17 moe_kernel_ab.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/moe_kernel_ab.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedB1k rc=0
+B1 KERNEL: faster
+final A/B arms: fbase fcombo fb1
+2026-10-31 18:14:17 quiet check rc=124
+2026-10-31 18:34:17 quiet check rc=124
+2026-10-31 18:49:17 quiet check rc=0
+2026-10-31 18:55:08 speed_F.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedF fbase fcombo fb1 rc=143
+2026-10-31 19:10:08 quiet check rc=124
+2026-10-31 19:25:08 quiet check rc=0
+2026-10-31 20:47:32 speed_F.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedF fbase fcombo fb1 rc=143
+2026-10-31 21:02:32 quiet check rc=124
+2026-10-31 21:22:32 quiet check rc=124
+2026-10-31 21:37:32 quiet check rc=0
+2026-10-31 21:43:43 night4_extra.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/night4_extra.sh rc=143
+2026-10-31 21:43:43 NIGHT4 DONE (A/B arm-rounds left: 5, tries 2)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+6431cc3a1b4f39d91005f1b479b23f041037a5bfbdd352b4a4f281a53fe33fdb
+restore: started at 2026-10-31T21:43:46+01:00
+2026-10-31 21:46:23 NIGHT5 START, deadline 2026-11-01 07:15:00, coai-exp processes 0
+2026-10-31 22:01:23 quiet check rc=124
+2026-10-31 22:16:23 quiet check rc=0
+2026-10-31 22:35:48 speed_night5.log env PREFIXTEST=1 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedF fbase fcombo fb1 rc=3
+2026-10-31 22:35:48 not quiet at an arm-round start, waiting
+2026-10-31 22:50:48 quiet check rc=124
+2026-10-31 23:10:48 quiet check rc=124
+2026-10-31 23:30:48 quiet check rc=124
+2026-10-31 23:50:48 quiet check rc=124
+2026-11-01 00:10:48 quiet check rc=124
+2026-11-01 00:30:48 quiet check rc=124
+2026-11-01 00:50:48 quiet check rc=124
+2026-11-01 01:10:49 quiet check rc=124
+2026-11-01 01:30:49 quiet check rc=124
+2026-11-01 01:45:49 quiet check rc=0
+2026-11-01 01:53:09 speed_night5.log env PREFIXTEST=1 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedF fbase fcombo fb1 rc=143
+failed tries: 1
+2026-11-01 02:08:10 quiet check rc=124
+2026-11-01 02:28:10 quiet check rc=124
+2026-11-01 02:48:10 quiet check rc=124
+2026-11-01 03:08:10 quiet check rc=124
+2026-11-01 03:28:10 quiet check rc=124
+2026-11-01 03:43:10 quiet check rc=0
+2026-11-01 04:58:51 speed_night5.log env PREFIXTEST=1 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedF fbase fcombo fb1 rc=0
+2026-11-01 04:58:51 SERIES speedF DONE
+2026-11-01 04:58:51 speedO7: 6 arm-rounds no longer fit
+2026-11-01 04:58:51 NIGHT5 DONE (failed tries 1)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+84bcff7ceb5840efb85609ef5ea6cb8fab91e884384018f3861e07c21f582126
+restore: started at 2026-11-01T04:58:53+01:00
+2026-11-01 05:00:24 NIGHT6 START, deadline 2026-11-01 07:15:00, coai-exp processes 0
+2026-11-01 05:10:24 quiet check rc=0
+2026-11-01 07:07:19 speed_night6.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedO7 o7ref o7 rc=0
+2026-11-01 07:07:19 SERIES speedO7 DONE
+2026-11-01 07:07:19 NIGHT6 DONE (failed tries 0)
+restore: start-vllm.ps1 extra arguments: -MtpTokens 3 -ExtraArgs --attention-backend=TRITON_ATTN
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+2fb67a11bab8329fee9e8e26b2b6b8083eed478243e7a0cc1155f1449b745f89
+restore: started at 2026-11-01T07:07:20+01:00
