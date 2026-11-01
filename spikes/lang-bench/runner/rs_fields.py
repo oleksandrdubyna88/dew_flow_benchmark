@@ -6,6 +6,7 @@ may bind what it matched (V6). Numbers inside a `num` field are compared as exac
 """
 import re
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from fractions import Fraction
 from typing import Any, NamedTuple
 
@@ -15,7 +16,9 @@ from rs_lex import Field, Lit, Var
 MISSING = object()
 MAX_PARTS = 200
 MAX_STEPS = 500_000
-MAX_EXPONENT = 1_000
+MAX_MAGNITUDE = 100_000
+MAX_CHARACTERS = 200_000
+TOO_LARGE_NOTE = "a number too large to compare exactly"
 UTC = timezone.utc
 
 FIELD_PATTERNS = {
@@ -63,20 +66,28 @@ def _ts_numbers(m):
     return (*numbers, micro)
 
 
-def fraction_of(text):
-    """An exact Fraction of a decimal text or Decimal, or None when its exponent is too large to do exact arithmetic with."""
-    exponent = text.as_tuple().exponent if hasattr(text, "as_tuple") else 0
-    return None if abs(exponent) > MAX_EXPONENT else Fraction(text)
+def fraction_of(value):
+    """The exact Fraction of a Decimal (built from the Decimal itself, never through a string, so no digit limit applies), or None when the
+    number is too large to compare exactly: a magnitude beyond 10^100000 or below 10^-100000, or more than 200,000 characters. A number
+    with trailing zeros after the point (`1.` and a thousand zeros) is the number without them: only the magnitude counts, not the exponent."""
+    if not value.is_finite() or abs(value.adjusted()) > MAX_MAGNITUDE or len(str(value)) > MAX_CHARACTERS:
+        return None
+    return Fraction(value)
+
+
+def comparable(*values):
+    """True when every Decimal can be compared exactly."""
+    return all(fraction_of(v) is not None for v in values)
 
 
 def within_tolerance(value, centre, tolerance):
-    """True when |value - centre| <= tolerance, all three exact (Decimal, or a decimal text)."""
+    """True when |value - centre| <= tolerance, all three exact Decimals; False when one is too large to compare exactly."""
     parts = [fraction_of(x) for x in (value, centre, tolerance)]
     return None not in parts and abs(parts[0] - parts[1]) <= parts[2]
 
 
 def _numeric_ok(field, run, clock):
-    return within_tolerance(run.decode("ascii"), field.args[0], field.args[1])
+    return within_tolerance(Decimal(run.decode("ascii")), field.args[0], field.args[1])
 
 
 def base_kind(field):
@@ -229,7 +240,7 @@ def _common_prefix(a, b):
 class _Search:
     def __init__(self, parts, data, variables, clock):
         self.parts, self.data, self.variables, self.clock = parts, data, variables, clock
-        self.failed, self.furthest, self.steps = set(), 0, 0
+        self.failed, self.furthest, self.steps, self.note = set(), 0, 0, ""
 
     def run(self, i, pos):
         """The binds of a match of parts[i:] against data[pos:] to its end, or None."""
@@ -268,7 +279,17 @@ class _Search:
             if rest is not None:
                 return self._bind(field, self.data[pos:end]) + rest
         self.furthest = max(self.furthest, pos + self._reach(field, pos))
+        self._note_size(field, pos)
         return None
+
+    def _note_size(self, field, pos):
+        """A number field that failed on a number too large to compare exactly says so, instead of looking like a plain mismatch."""
+        if field.kind == "num" and self._number_too_large(pos):
+            self.note = TOO_LARGE_NOTE
+
+    def _number_too_large(self, pos):
+        m = FIELD_RX["num"].match(self.data, pos)
+        return m is not None and fraction_of(Decimal(m.group().decode("ascii"))) is None
 
     def _bind(self, field, run):
         return [(bind_name(field.bind, self.variables), Bound(run))] if field.bind else []
@@ -303,4 +324,4 @@ def match_template(parts, data, variables, clock):
     binds = search.run(0, 0)
     if search.steps > MAX_STEPS:
         return TemplateMatch(False, (), search.furthest, "the match was abandoned as too complex")
-    return TemplateMatch(True, tuple(binds)) if binds is not None else TemplateMatch(False, (), search.furthest)
+    return TemplateMatch(True, tuple(binds)) if binds is not None else TemplateMatch(False, (), search.furthest, search.note)

@@ -23,11 +23,11 @@
       },
       {
         "path": "rs_fields.py",
-        "sha256": "f4f03938fd1a88474afd5d0db9e672f2bc092794c1d239ba8a52da65dcfa05e1"
+        "sha256": "bb08dd626f83f9c1be81740e221ab17381aba169f8980648ac66648e0cff8f44"
       },
       {
         "path": "rs_jmatch.py",
-        "sha256": "feb4baef6e2acba80d47091df26cf31584fcd33c69af4fe9af8a1ba560c76ce4"
+        "sha256": "a9dabdb1f97c762f08009038cd78f3d8b5b4d4e963e5a5ca94e1c7162abe6e22"
       },
       {
         "path": "rs_json.py",
@@ -74,7 +74,7 @@
         "sha256": "41310ae49d3882b8caaa0c81371b8f0a73aa4dfeff9fee8574c6f63c93ca0042"
       }
     ],
-    "manifestSha256": "e67b28c0a0cea6f72031284f84f4d38bdf9d7aea0f5f671ad988a66bec80bc6b",
+    "manifestSha256": "b9d2abcb421bac7ca1fa049c7f55e3b729475a54734519bb34b301cbdbc5ca77",
     "version": "0.1.0"
   }
 }

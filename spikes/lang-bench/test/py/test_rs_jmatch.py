@@ -121,6 +121,30 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(check('{"a":"\\ud800${:int}"}', '{"a":"\\ud8007"}').ok)
 
 
+class HugeNumberTests(unittest.TestCase):
+    def test_A_number_field_over_a_5000_digit_number_is_compared_and_does_not_crash(self):
+        digits = "1" * 5000
+        self.assertTrue(check('["${:num %s 0}"]' % digits, "[%s]" % digits).ok)
+        self.assertFalse(check('["${:num %s 0}"]' % digits, "[%s2]" % digits[:-1]).ok)
+
+    def test_A_number_field_over_one_and_a_thousand_and_one_zeros_is_one(self):
+        self.assertTrue(check('["${:num 1 0}"]', "[1." + "0" * 1001 + "]").ok, "the 1000-exponent cap made this a wrong FAIL")
+
+    def test_A_number_too_large_to_compare_is_a_FAIL_that_says_so(self):
+        for text in ("[1e999999999999]", "[1e-999999999999]", "[" + "1" * 300_000 + "]"):
+            result = check('["${:num 1 0.5}"]', text)
+            self.assertFalse(result.ok)
+            self.assertIn("too large to compare exactly", result.diff.text(), text[:12])
+
+    def test_Plain_values_of_that_size_still_compare_by_exact_value_without_a_crash(self):
+        self.assertTrue(check("[1e999999999999]", "[1E+999999999999]").ok)
+        self.assertFalse(check("[1e999999999999]", "[1e999999999998]").ok)
+
+    def test_An_integer_field_over_a_huge_exponent_number_does_not_crash(self):
+        self.assertTrue(check('["${:int}"]', "[1e999999999999]").ok)
+        self.assertFalse(check('["${:uint}"]', "[-1e999999999999]").ok)
+
+
 class UnorderedTests(unittest.TestCase):
     def test_An_unordered_array_matches_its_elements_in_any_order(self):
         self.assertTrue(check('{"l":{"$unordered":[1,2,3]}}', '{"l":[3,1,2]}').ok)

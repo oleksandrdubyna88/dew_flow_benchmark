@@ -168,9 +168,17 @@ def _field_value_ok(field, act, ctx):
     return isinstance(act, str) and rf.field_accepts(field, _bytes_of(act), ctx.clock)
 
 
+def _too_large(field, act):
+    return field.kind == "num" and kind_of(act) == "number" and rf.fraction_of(act) is None
+
+
+def _shown_with_note(field, act):
+    return render(act) + (f" ({rf.TOO_LARGE_NOTE})" if _too_large(field, act) else "")
+
+
 def _diff_field(field, act, ctx, path):
     if not _field_value_ok(field, act, ctx):
-        return Diff(path, rf.field_text(field), render(act))
+        return Diff(path, rf.field_text(field), _shown_with_note(field, act))
     if field.bind:
         raw = _bytes_of(act) if isinstance(act, str) else str(act).encode("ascii")
         ctx.binds.append((rf.bind_name(field.bind, ctx.variables), rf.Bound(raw, act)))

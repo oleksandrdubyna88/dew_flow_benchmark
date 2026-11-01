@@ -94,6 +94,37 @@ class TimeDigitTests(unittest.TestCase):
         self.assertEqual(rf.field_text(parts("${:ts.3~10s=w}")[0]), "${:ts.3~10000ms=w}")
 
 
+class HugeNumberTests(unittest.TestCase):
+    """Output the program chooses can hold a number of any size: never a crash, never a wrong FAIL, and a number too large to compare says so."""
+
+    def test_A_number_of_more_than_4300_digits_is_compared_exactly_and_does_not_crash(self):
+        field = lex.Field("num", (Decimal("1" * 5000), Decimal("0")))
+        self.assertTrue(rf.field_accepts(field, b"1" * 5000, CLOCK))
+        self.assertFalse(rf.field_accepts(field, b"1" * 4999 + b"2", CLOCK))
+
+    def test_A_tolerance_of_more_than_4300_digits_works_too(self):
+        self.assertTrue(rf.within_tolerance(Decimal("1" * 5000), Decimal("1" * 5000 + ".1"), Decimal("1")))
+
+    def test_A_decimal_with_a_thousand_and_one_trailing_zeros_is_the_same_number_as_without_them(self):
+        field = lex.Field("num", (Decimal("1"), Decimal("0")))
+        self.assertTrue(rf.field_accepts(field, b"1." + b"0" * 1001, CLOCK), "a cap on the exponent called 1.000... a different number: a wrong FAIL")
+        self.assertTrue(rf.within_tolerance(Decimal("1." + "0" * 1001), Decimal("1"), Decimal("0")))
+        self.assertFalse(rf.field_accepts(field, b"1." + b"0" * 1001 + b"1", CLOCK))
+
+    def test_A_number_too_large_to_compare_exactly_is_a_FAIL_with_a_note_and_never_a_crash(self):
+        field = lex.Field("num", (Decimal("1"), Decimal("1")))
+        self.assertFalse(rf.field_accepts(field, b"1" + b"0" * 300_000, CLOCK))
+        self.assertIsNone(rf.fraction_of(Decimal("1E+999999999999")))
+        self.assertIsNone(rf.fraction_of(Decimal("1E-999999999999")))
+        self.assertIsNone(rf.fraction_of(Decimal("1" * 300_000)))
+        self.assertFalse(rf.within_tolerance(Decimal("1E+999999999999"), Decimal("1"), Decimal("1")))
+
+    def test_The_note_of_a_failed_template_says_a_number_was_too_large(self):
+        result = match("${:num 1 1}", b"1" * 300_000)
+        self.assertEqual((result.ok, result.note), (False, rf.TOO_LARGE_NOTE))
+        self.assertEqual(match("${:num 1 1}", b"7").note, "", "an ordinary mismatch has no note")
+
+
 class MatchTests(unittest.TestCase):
     def test_A_literal_string_matches_only_the_same_bytes_and_names_the_first_difference(self):
         self.assertTrue(match("0002|ok", b"0002|ok").ok)
