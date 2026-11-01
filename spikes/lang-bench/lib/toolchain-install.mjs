@@ -161,8 +161,13 @@ async function installOne({ name, stacks, storeRoot, io, newFolder }) {
     discard(staging);
     return built;
   }
-  sealTree(staging);
   const treeSha256 = treeRecord(staging);
+  const recorded = stacks.treeSha256?.[name];
+  if (recorded !== undefined && recorded !== treeSha256) {
+    discard(staging);
+    return fail(`the installed ${name} tree hash ${treeSha256} differs from the recorded ${recorded} in stacks-lang.json: the tree was discarded, not registered`);
+  }
+  sealTree(staging); // hashed first, sealed only just before it is renamed into the store
   try {
     renameSync(staging, final);
   } catch (e) {

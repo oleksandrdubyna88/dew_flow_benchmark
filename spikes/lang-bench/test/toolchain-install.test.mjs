@@ -22,6 +22,7 @@ function rig(t, { nodeFiles, scriptText = '#!/bin/bash\n:\n', archiveText = 'sdk
   const serve = ownedFolder(t, 'serve');
   const nodeArchive = makeTarXz(t, path.join(serve, 'node.tar.xz'), nodeFiles ?? { 'node-v26.13.0-linux-x64/bin/node': '#!node\n', 'node-v26.13.0-linux-x64/README.md': 'r\n' });
   const stacks = structuredClone(real);
+  delete stacks.treeSha256; // the committed hashes are those of the real toolchains; a fixture tree has its own
   stacks.artifacts.node.sha256 = hash('sha256', readFileSync(nodeArchive));
   stacks.artifacts.dotnetSdk.sha512 = hash('sha512', archiveText);
   stacks.artifacts.dotnetInstallScript.sha256 = hash('sha256', scriptText);
@@ -226,4 +227,24 @@ test('An_extraction_under_a_restrictive_umask_gives_the_same_tree_hash_as_under_
     assert.equal(process.umask(), outer);
 
   } finally { unsealStore(usual.r.storeRoot); unsealStore(strict.storeRoot); }
+});
+
+test('A_tree_that_differs_from_the_recorded_hash_is_discarded_and_never_registered', async t => {
+  const first = rig(t);
+  const reference = await first.run('node');
+  try {
+    assert.equal(reference.ok, true, JSON.stringify(reference));
+  } finally { unsealStore(first.storeRoot); }
+  const wrong = rig(t);
+  wrong.stacks.treeSha256 = { node: 'f'.repeat(64) };
+  const refused = await wrong.run('node');
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, new RegExp(`tree hash ${reference.value.treeSha256}.*recorded.*f{64}`, 's'), 'names the hash found and the hash recorded');
+  assert.deepEqual(storeEntries(wrong.storeRoot), [], 'the tree was discarded before it was registered');
+  const right = rig(t);
+  right.stacks.treeSha256 = { node: reference.value.treeSha256 };
+  const accepted = await right.run('node');
+  try {
+    assert.equal(accepted.ok, true, JSON.stringify(accepted));
+  } finally { unsealStore(right.storeRoot); }
 });
