@@ -60,14 +60,27 @@ function textRules(file, text, lines, { known, links }) {
 
 const templatePattern = entry => new RegExp(`^${entry.split('<t>').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^/]+')}$`);
 
+const EMPTY_BLOB = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
+const STACK_ROOTS = Object.freeze(['csharp/', 'node/']);
+const STACK_GITKEEPS = new Set(['csharp/.gitkeep', 'node/.gitkeep']);
+const isStack = file => STACK_ROOTS.some(root => file.startsWith(root));
+
+const stackRefusal = (file, templateFiles, allowed) => {
+  if (path.posix.basename(file) === '.gitkeep') return STACK_GITKEEPS.has(file) || allowed.some(re => re.test(file)) ? null : 'stack folder holds a .gitkeep deeper than its root';
+  if (allowed.some(re => re.test(file))) return null;
+  return templateFiles.length === 0 ? 'stack folder holds a file before the template exists' : 'stack folder file outside the template set';
+};
+
 /**
- * The files under `csharp/` and `node/` that the template set does not allow (consult C6a). `templateFiles` is the template's file
- * set with `<t>` for the task folder; absent, only `.gitkeep` is allowed (E1.S3 has not landed).
+ * What the stack folders and the `.gitkeep` placeholders may hold (consult C6a). `entries` is Map(path -> { oid, mode }). A `.gitkeep`
+ * anywhere must be the empty blob (a placeholder is not a place for code), and under `csharp/` or `node/` only at the folder's root;
+ * every other file there must be in the template's file set (`templateFiles`, `<t>` for the task folder), which is empty until E1.S3.
  */
-export function findStackFolderFiles(paths, { templateFiles = [] } = {}) {
+export function findStackFolderFiles(entries, { templateFiles = [] } = {}) {
   const allowed = templateFiles.map(templatePattern);
-  return paths
-    .filter(p => p.startsWith('csharp/') || p.startsWith('node/'))
-    .filter(p => path.posix.basename(p) !== '.gitkeep' && !allowed.some(re => re.test(p)))
-    .map(p => ({ path: p, line: null, what: templateFiles.length === 0 ? 'stack folder holds a file before the template exists' : 'stack folder file outside the template set' }));
+  return [...entries].flatMap(([file, { oid }]) => {
+    const filled = path.posix.basename(file) === '.gitkeep' && oid !== EMPTY_BLOB;
+    const what = filled ? 'a .gitkeep that is not the empty blob' : (isStack(file) ? stackRefusal(file, templateFiles, allowed) : null);
+    return what === null ? [] : [{ path: file, line: null, what }];
+  });
 }

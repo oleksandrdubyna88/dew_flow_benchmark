@@ -90,7 +90,7 @@ async function tipFindings({ repo, branch, inputs, paths, firstCommit, tip }) {
   return ok({
     attribution: structure.ok ? [] : [{ path: 'README.md', line: null, what: structure.reason }],
     credits: checkCreditTerms({ credits: inputs.credits, paths, readmeText: text }).map(withCommit),
-    stack: findStackFolderFiles(paths, { templateFiles: inputs.templateFiles }).map(withCommit),
+    stack: findStackFolderFiles(new Map(paths.map(p => [p, tip.get(p)])), { templateFiles: inputs.templateFiles }).map(withCommit),
     shape: findSubmoduleProblems({ tip, gitmodulesText: modules.value }).map(withCommit),
   });
 }

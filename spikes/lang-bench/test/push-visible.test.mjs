@@ -68,10 +68,22 @@ test('A_pin_file_may_hold_a_registry_url_that_any_other_file_may_not', () => {
   assert.equal(rules('csharp/t/Program.cs', '// https://api.nuget.org\n').length, 1);
 });
 
+const EMPTY = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
+/** tip entries for `paths`; `.gitkeep` files are the empty blob unless named in `filled`. */
+const entriesOf = (paths, filled = []) => new Map(paths.map(p => [p, { oid: p.endsWith('.gitkeep') && !filled.includes(p) ? EMPTY : 'a'.repeat(40), mode: '100644' }]));
+
 test('Push_check_refuses_a_source_file_under_a_stack_folder_outside_the_template_set', () => {
   const paths = ['csharp/.gitkeep', 'node/.gitkeep', 'csharp/01/Program.cs', 'node/01/src/main.ts', 'tasks/.gitkeep'];
-  assert.deepEqual(findStackFolderFiles(paths).map(f => f.path), ['csharp/01/Program.cs', 'node/01/src/main.ts'], 'before the templates exist only .gitkeep is allowed');
+  assert.deepEqual(findStackFolderFiles(entriesOf(paths)).map(f => f.path), ['csharp/01/Program.cs', 'node/01/src/main.ts'], 'before the templates exist only .gitkeep is allowed');
   const templateFiles = ['csharp/<t>/Program.cs', 'csharp/<t>/global.json', 'node/<t>/package.json'];
-  assert.deepEqual(findStackFolderFiles(['csharp/01/Program.cs', 'csharp/01/Extra.cs', 'node/01/package.json', 'node/01/src/main.ts'], { templateFiles }).map(f => f.path),
+  assert.deepEqual(findStackFolderFiles(entriesOf(['csharp/01/Program.cs', 'csharp/01/Extra.cs', 'node/01/package.json', 'node/01/src/main.ts']), { templateFiles }).map(f => f.path),
     ['csharp/01/Extra.cs', 'node/01/src/main.ts'], 'a .cs or .ts file beyond the template skeleton is refused');
+});
+
+test('A_gitkeep_is_allowed_only_as_the_empty_blob_and_in_a_stack_folder_only_at_its_root', () => {
+  const found = paths => findStackFolderFiles(entriesOf(paths, ['csharp/.gitkeep', 'tasks/.gitkeep', 'csharp/01/src/.gitkeep'])).map(f => [f.path, f.what]);
+  assert.deepEqual(found(['csharp/.gitkeep']), [['csharp/.gitkeep', 'a .gitkeep that is not the empty blob']], 'code behind the name of a placeholder');
+  assert.deepEqual(found(['tasks/.gitkeep']), [['tasks/.gitkeep', 'a .gitkeep that is not the empty blob']], 'in any folder');
+  assert.deepEqual(found(['csharp/01/src/.gitkeep']).map(([p]) => p), ['csharp/01/src/.gitkeep'], 'deeper than the stack root');
+  assert.deepEqual(found(['node/.gitkeep', 'csharp/01/.gitkeep']).map(([p]) => p), ['csharp/01/.gitkeep'], 'an empty one at the root is fine, a deeper one is not');
 });
