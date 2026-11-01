@@ -22,6 +22,7 @@ export const shellQuote = text => `'${String(text).replaceAll("'", "'\\''")}'`;
 
 /** The hook's text: a POSIX `sh` script with the checker, the repository and the baked options as single-quoted words. */
 export function hookScript({ checker, repo, originUrl, extraArgs = [] }) {
+  // each baked argument becomes ITS OWN single-quoted word in the script text (written here, at install time): the shell sees literals, never a variable to expand or split
   const baked = ['--origin-url', originUrl, ...extraArgs].map(shellQuote).join(' ');
   return `#!/bin/sh
 ${HOOK_MARKER}
@@ -37,6 +38,7 @@ if ! command -v node >/dev/null 2>&1; then
   echo "push-check hook: node is not on PATH: push refused" >&2
   exit 1
 fi
+set -f # no pathname expansion anywhere in this script
 status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac

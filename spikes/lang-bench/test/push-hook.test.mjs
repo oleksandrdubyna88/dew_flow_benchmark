@@ -7,7 +7,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { HOOK_MARKER } from '../lib/push-hook.mjs';
+import { HOOK_MARKER, hookScript } from '../lib/push-hook.mjs';
 import { commit, git, makeOrigin, makeTaskRepo, ownedFolder } from './support/push-fixtures.mjs';
 
 const CLI = fileURLToPath(new URL('../push-check.mjs', import.meta.url));
@@ -155,4 +155,23 @@ test('The_hook_is_never_installed_into_the_bench_repository_or_a_repository_whos
   assert.equal(wrong.status, 4, 'the default expected origin is the task repository on GitHub');
   assert.equal(existsSync(hookPath(repo)), false);
   assert.equal(run(['--install-hook']).status, 4, '--repo is required');
+});
+
+test('An_option_holding_a_glob_a_space_or_a_quote_reaches_the_checker_literally', t => {
+  const folder = ownedFolder(t, 'hookargs');
+  const argsFile = path.join(folder, 'args.json');
+  const fakeChecker = path.join(folder, 'fake-checker.mjs');
+  writeFileSync(fakeChecker, `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\n`);
+  // files that a glob in the hook's working directory would match: an unquoted expansion would replace the `*` by their names
+  for (const name of ['aXb', 'aYb']) writeFileSync(path.join(folder, name), '');
+  const odd = ['dir/*', 'a b', "it's", '$HOME', '`id`', 'a*b'];
+  const script = hookScript({ checker: fakeChecker, repo: folder, originUrl: 'https://example.invalid/r.git', extraArgs: odd.flatMap(v => ['--aid', v]) });
+  const hook = path.join(folder, 'pre-push');
+  writeFileSync(hook, script, { mode: 0o755 });
+  const sha = 'a'.repeat(40);
+  const r = spawnSync('sh', [hook, 'origin', 'url'], { cwd: folder, input: `refs/heads/topic ${sha} refs/heads/topic ${'0'.repeat(40)}\n`, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  const received = JSON.parse(readFileSync(argsFile, 'utf8'));
+  assert.deepEqual(received.slice(received.indexOf('--origin-url')), ['--origin-url', 'https://example.invalid/r.git', ...odd.flatMap(v => ['--aid', v])], 'each baked argument is one literal word');
+  assert.equal(received.includes('aXb'), false, 'no glob was expanded');
 });
