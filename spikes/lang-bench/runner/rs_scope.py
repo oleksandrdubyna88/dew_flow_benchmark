@@ -18,15 +18,14 @@ class CgroupBusy(ex.EnvironmentProblem):
     """The cgroup directory named for this case already holds a process (or cannot be read): it is not this case's to measure or kill."""
 
 
+class CgroupLost(ex.EnvironmentProblem):
+    """The cgroup directory vanished after the launcher reported its sandbox: the layer's scope is gone, so nothing can be measured or killed
+    through it. Exit 3, never a case status."""
+
+
 def _wait_launcher(proc):
-    """True when the launcher has gone, within the ceiling, by itself. Nothing is killed here."""
-    if proc.returncode is not None:
-        return True
-    pidfd = ex.pidfd_of(proc)
-    try:
-        return ex.wait_exit(proc, pidfd, ex.now_ms() + ex.GONE_CEILING_MS)
-    finally:
-        ex.close_fd(pidfd)
+    """True when the launcher has gone, within the ceiling, by itself. Nothing is killed and nothing is reaped here."""
+    return ex.wait_gone(proc, ex.GONE_CEILING_MS)
 
 
 def _reap_launcher(proc):
@@ -40,8 +39,8 @@ def _reap_launcher(proc):
 class ScopeLifecycle:
     """The same methods as `PlainLifecycle`, over one cgroup directory. `identity` is the bwrap binary's (device, inode)."""
 
-    def __init__(self, directory, identity=None, wrapper_file=None):
-        self.directory, self.identity, self.wrapper_file = directory, identity, wrapper_file
+    def __init__(self, directory, identity=None, wrapper_file=None, box=False):
+        self.directory, self.identity, self.wrapper_file, self.box = directory, identity, wrapper_file, box
         self.road = {"kill": "cgroup.kill", "leftoverEvidence": "cgroup.procs minus bwrap, the launcher and the wrapper, read after the exit and before the kill"}
 
     def memory(self, case_id=None):
@@ -70,10 +69,16 @@ class ScopeLifecycle:
         cg.wait_empty(self.directory)
 
     def _fallback(self, proc, failure):
+        """The cgroup kill could not be written. The launcher's group first, while the leader is not yet reaped; then, if the directory
+        exists, every pid it lists, and a check that it is empty (CleanupFailed when it is not). In a box a directory that is gone is
+        CgroupLost: a scope that vanished after child-pid is not a case status."""
         if proc.returncode is None:
             ex.kill_group(proc)
         if self.present():
-            raise failure
+            cg.kill_pids(self.directory)
+            return cg.wait_empty(self.directory)
+        if self.box:
+            raise CgroupLost(f"the cgroup {self.directory} is gone after child-pid ({failure}): its processes were stopped through the launcher's group")
 
     def settle(self, launched, end):
         exited = end == "exited"
@@ -91,4 +96,4 @@ def lifecycle_for(config, case_id):
     if not config.cgroup:
         return config.lifecycle
     wrapper = config.wrapper_file.replace("{case}", ex.checked_case_id(case_id)) if config.wrapper_file else None
-    return ScopeLifecycle(config.cgroup.replace("{case}", ex.checked_case_id(case_id)), cg.bwrap_identity(config.prefix), wrapper)
+    return ScopeLifecycle(config.cgroup.replace("{case}", ex.checked_case_id(case_id)), cg.bwrap_identity(config.prefix), wrapper, config.status_fd is not None)

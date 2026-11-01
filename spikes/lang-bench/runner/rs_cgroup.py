@@ -8,6 +8,7 @@ group of its own and `os.killpg` of the launcher's group would miss it. Nothing 
 """
 import os
 import shutil
+import signal
 import time
 
 import rs_exec as ex
@@ -31,12 +32,13 @@ def _whole_number(text):
 
 
 def _pids_of(text):
-    numbers = map(_whole_number, text.splitlines())
-    return [number for number in numbers if number is not None]
+    numbers = [_whole_number(line) for line in text.splitlines() if line.strip()]
+    return None if None in numbers else numbers
 
 
 def procs(directory):
-    """Every pid listed in `cgroup.procs`, or None when the file cannot be read (absent is not an empty list)."""
+    """Every pid listed in `cgroup.procs`, or None when the file cannot be read or holds a line that is no pid (absent is not an empty list,
+    and a file that cannot be understood is never an empty one)."""
     text = _text(os.path.join(directory, "cgroup.procs"))
     return None if text is None else _pids_of(text)
 
@@ -132,12 +134,36 @@ def kill(directory):
         raise ex.CleanupFailed(f"cgroup.kill of {directory} could not be written: {type(e).__name__}: {e}") from e
 
 
+def kill_pids(directory):
+    """SIGKILL to each host pid `cgroup.procs` lists: the fallback when `cgroup.kill` cannot be written. A pid that is gone, or one the
+    runner may not signal, is left to the check that follows."""
+    for pid in procs(directory) or []:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def empty(directory):
+    """True when nothing is alive in the cgroup: its directory is gone (the system removes an emptied scope), or every listed pid is a zombie.
+    A file that cannot be read or understood is not empty."""
+    if not os.path.isdir(directory):
+        return True
+    listed = procs(directory)
+    return listed is not None and all(is_zombie(pid) for pid in listed)
+
+
+def _left(directory):
+    left = procs(directory)
+    return "cgroup.procs cannot be read" if left is None else f"{len(left)} still in {directory}"
+
+
 def wait_empty(directory, ceiling_ms=ex.GONE_CEILING_MS):
-    """Wait, backing off from 1 ms to 50 ms, until `cgroup.procs` lists nothing; CleanupFailed when pids are left at the ceiling."""
+    """Wait, backing off from 1 ms to 50 ms, until the cgroup is empty; CleanupFailed when it is not at the ceiling, whether pids are left
+    or `cgroup.procs` cannot be understood."""
     deadline, delay = ex.now_ms() + ceiling_ms, ex.POLL_FIRST_S
-    while procs(directory) and ex.now_ms() < deadline:
+    while not empty(directory) and ex.now_ms() < deadline:
         time.sleep(delay)
         delay = min(delay * 2, ex.POLL_LAST_S)
-    left = procs(directory)
-    if left:
-        raise ex.CleanupFailed(f"a process of the case could not be killed: {len(left)} still in {directory} after {ceiling_ms} ms")
+    if not empty(directory):
+        raise ex.CleanupFailed(f"a process of the case could not be killed: {_left(directory)} after {ceiling_ms} ms")

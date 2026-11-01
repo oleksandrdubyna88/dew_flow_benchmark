@@ -69,16 +69,19 @@ class PlainLifecycle:
         """True when something of the program's process group is still alive after the program was reaped."""
         return group_present(proc)
 
+    def _leftover_after_exit(self, proc):
+        wait_gone(proc, GONE_CEILING_MS)
+        return group_alive(proc.pid)
+
     def settle(self, launched, end):
-        """The case's end: kill what is still running, reap the launcher, then look for what the program left behind."""
-        proc = launched.proc
-        if end != "exited":
+        """The case's end. The launcher is NOT reaped until the group signal is done: its pid is reserved while it is unreaped, and a reaped
+        leader's pid may be someone else's. A launcher that has exited is a zombie that holds the group's id; what is alive in the group
+        besides it is the leftover."""
+        proc, exited = launched.proc, end == "exited"
+        leftover = self._leftover_after_exit(proc) if exited else None
+        if leftover or not exited:
             self.kill(proc)
-        code = launched.status_code(proc.wait())
-        leftover = self.leftover(proc) if end == "exited" else None
-        if leftover:
-            self.kill(proc)
-        return Settled(code, leftover, self.memory())
+        return Settled(launched.status_code(proc.wait()), leftover, self.memory())
 
 
 @dataclass
@@ -144,6 +147,37 @@ def signal_group(pid, sig):
         os.killpg(pid, sig)
     except ProcessLookupError:
         pass
+
+
+def _group_of(pid):
+    """The process group id and state of `pid` from /proc, or None when it is gone."""
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as f:
+            fields = f.read().decode("ascii", "replace").rsplit(")", 1)[-1].split()
+    except OSError:
+        return None
+    return (fields[0], int(fields[2])) if len(fields) > 2 else None
+
+
+def group_alive(pgid):
+    """True when a process of the group `pgid` is alive and not a zombie (the unreaped leader, once exited, is a zombie and does not count)."""
+    found = (_group_of(name) for name in os.listdir("/proc") if name.isdigit())
+    return any(_alive_in(entry, pgid) for entry in found)
+
+
+def _alive_in(entry, pgid):
+    return entry is not None and entry[1] == pgid and entry[0] not in ("Z", "X")
+
+
+def wait_gone(proc, timeout_ms):
+    """True when the process has exited within `timeout_ms`, awaited on its pidfd: it is NOT reaped (no poll, no wait)."""
+    if proc.returncode is not None:
+        return True
+    pidfd = pidfd_of(proc)
+    try:
+        return _exited(proc, pidfd, timeout_ms) if pidfd is not None else proc.poll() is not None
+    finally:
+        close_fd(pidfd)
 
 
 def group_present(proc):

@@ -78,7 +78,7 @@ def fake_box(test):
     return path
 
 
-def box_prefix(box, cgroup=None, linger=None, setup=""):
+def box_prefix(box, cgroup=None, linger=None, setup="", after_report=""):
     """The fake box as a launch prefix: the program runs as ITS child (so its parent is a bwrap process), `child-pid` and `exit-code` go to
     descriptor 7, and with `cgroup` the pids of the box and of the program are written to that folder's fake `cgroup.procs`, the program's
     leaving it when the program ends and the box's when the box does (a real cgroup does the same, a fake file must be told to)."""
@@ -87,7 +87,7 @@ def box_prefix(box, cgroup=None, linger=None, setup=""):
     boxed = f'printf "%s\\n" $$ > "{file}"' if file else ":"
     gone = f': > "{file}"' if file else ":"
     tail = f"\nsleep {linger}" if linger else ""
-    script = (f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n"$@" <&0 &\npid=$!\n{listing}\nwait $pid\nc=$?\n{boxed}\n'
+    script = (f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n{after_report}\n"$@" <&0 &\npid=$!\n{listing}\nwait $pid\nc=$?\n{boxed}\n'
               f'printf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}{tail}\n{gone}\nexit $c')
     return [box, "-c", script, "bwrap"]
 

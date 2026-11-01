@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import runner_path  # noqa: F401
 import rs_exec as ex
@@ -187,6 +188,36 @@ class LifecycleTests(unittest.TestCase):
             proc.wait()
             left += lifecycle.leftover(proc)
         self.assertEqual(left, 0, "SIGKILL is delivered at once but the children are gone a moment later: kill must wait for them")
+
+
+class PlainSettleTests(unittest.TestCase):
+    """C4: a group signal is never sent to a leader that was already reaped (its pid may be someone else's by now)."""
+
+    def test_A_straggler_of_the_plain_path_is_group_killed_before_the_leader_is_reaped(self):
+        marker = "54.%d" % (os.getpid() % 1000 + 1000)
+        seen, started = [], []
+        real, real_popen = ex.signal_group, subprocess.Popen
+
+        def popen(*args, **kwargs):
+            proc = real_popen(*args, **kwargs)
+            started.append(proc)
+            return proc
+
+        def recording(pid, sig):
+            seen.extend(p.returncode for p in started if p.pid == pid)
+            return real(pid, sig)
+
+        with mock.patch.object(ex, "signal_group", recording), mock.patch.object(subprocess, "Popen", popen):
+            result = Workspace(self, f"sleep {marker} &\ncat answer.bin\n", {"answer.bin": ANSWER}).run(case())
+        self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": True})
+        self.assertTrue(seen and all(code is None for code in seen), f"the group signal found returncodes {seen}")
+        self.assertEqual(ProcessTests.alive(self, marker), [], "and the straggler is gone")
+
+    def test_A_clean_case_gets_no_group_signal_at_all(self):
+        seen = []
+        with mock.patch.object(ex, "signal_group", lambda pid, sig: seen.append(pid)):
+            result = Workspace(self, "cat answer.bin\n", {"answer.bin": ANSWER}).run(case())
+        self.assertEqual((result.status, result.lifecycle["leftover"], seen), ("PASS", {"known": True, "found": False}, []))
 
 
 class PumpTests(unittest.TestCase):

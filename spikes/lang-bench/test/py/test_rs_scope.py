@@ -1,6 +1,7 @@
 """A case whose program runs in a cgroup the layer made (E1.S8a part ii-a; B1, B4): the memory read, the leftover evidence, the program's pid,
 and the kill through `cgroup.kill`, always. The real-scope tests need `systemd-run --user --scope` and bwrap and skip with their reason without
 them (they fail under BENCH_REQUIRE_SANDBOX=1)."""
+import json
 import os
 import signal
 import subprocess
@@ -199,13 +200,13 @@ class FakeCgroupTests(unittest.TestCase):
         self.assertTrue(result.reason.startswith("time limit"), result.reason)
         self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
 
-    def test_A_cgroup_kill_that_cannot_be_written_kills_the_launchers_group_too_and_is_still_a_cleanup_failure(self):
+    def test_A_cgroup_kill_that_cannot_be_written_kills_the_launchers_group_too_and_the_empty_check_decides(self):
         seconds = "48.%d" % (os.getpid() % 1000 + 1000)
         ws = Workspace(self, f"sleep {seconds}\n")
         cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
         os.mkdir(os.path.join(cgroup, "cgroup.kill"))  # a directory: the write fails
-        with self.assertRaises(ex.CleanupFailed):
-            ws.run(case(expected=b""), cgroup=cgroup, limit_ms=300)
+        result = ws.run(case(expected=b""), cgroup=cgroup, limit_ms=300)
+        self.assertTrue(result.reason.startswith("time limit"), "the cgroup lists nothing: the fallback found it empty, so the case stands")
         self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
 
     def test_A_cgroup_that_holds_a_foreign_process_before_the_spawn_is_refused_and_nothing_is_started(self):
@@ -240,6 +241,101 @@ class FakeCgroupTests(unittest.TestCase):
         result = ws.run(case(), prefix=box_prefix(fake_box(self), cgroup), status_fd=STATUS_FD, cgroup=cgroup)
         self.assertEqual((result.status, result.lifecycle["signalled"]["comm"]), ("PASS", "bash"))
         self.assertNotEqual(result.lifecycle["signalled"]["pid"], result.lifecycle["signalled"]["launcher"])
+
+
+class SettleOrderTests(unittest.TestCase):
+    """C0, C3/C9, C13: the launcher is never reaped before the kill and its fallback are done, a cgroup that vanishes mid-case is exit 3, and a kill
+    that cannot be written falls back to the pids the cgroup lists."""
+
+    def test_Waiting_for_the_launcher_never_reaps_it_even_at_the_ceiling(self):
+        proc = subprocess.Popen(["true"])
+        self.addCleanup(proc.wait)
+        pidfd = ex.pidfd_open(proc.pid)
+        self.addCleanup(ex.close_fd, pidfd)
+        select_until_readable(pidfd)
+        with mock.patch.object(ex, "GONE_CEILING_MS", 0):
+            self.assertTrue(rs_scope._wait_launcher(proc))
+        self.assertIsNone(proc.returncode, "a reaped leader's pid may be someone else's: the group kill must still find it unreaped")
+
+    def test_A_straggler_of_a_launcher_that_exited_is_group_killed_while_the_leader_is_not_yet_reaped(self):
+        seconds = "50.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, f"sleep {seconds} &\ncat answer.bin\n", FILES)
+        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        os.mkdir(os.path.join(cgroup, "cgroup.kill"))  # the write fails: the fallback is what runs
+        seen = []
+        real = ex.signal_group
+        launcher = {}
+
+        def recording(pid, sig):
+            seen.append(launcher["proc"].returncode if "proc" in launcher else "no proc")
+            return real(pid, sig)
+
+        real_start = rl.start
+
+        def start(*args, **kwargs):
+            started = real_start(*args, **kwargs)
+            launcher["proc"] = started.proc
+            return started
+
+        with mock.patch.object(ex, "signal_group", recording), mock.patch.object(rl, "start", start):
+            result = ws.run(case(), cgroup=cgroup)
+        self.assertEqual(result.status, "PASS")
+        self.assertTrue(seen and all(code is None for code in seen), f"signal_group saw returncodes {seen}: it must always be sent to an unreaped leader")
+        self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
+
+    def test_A_cgroup_that_vanishes_after_child_pid_is_an_environment_failure_and_nothing_is_left(self):
+        seconds = "51.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, f"exec sleep {seconds}\n")
+        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        prefix = box_prefix(fake_box(self), cgroup, after_report=f'rm -r "{cgroup}"')
+        with self.assertRaises(rs_scope.CgroupLost) as raised:
+            ws.run(case(expected=b""), prefix=prefix, status_fd=STATUS_FD, cgroup=cgroup, limit_ms=400)
+        self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
+        self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
+
+    def test_A_cgroup_that_vanishes_after_child_pid_is_exit_3_on_the_command_line(self):
+        import test_run_samples as cli
+        box = cli.Box(self, run_sh="exec sleep 52.%d\n" % (os.getpid() % 1000 + 1000))
+        cgroups = os.path.join(box.root, "cg-{case}")
+        for case_id in ("s03", "empty-program"):
+            os.makedirs(os.path.join(box.root, f"cg-{case_id}"))
+            with open(os.path.join(box.root, f"cg-{case_id}", "cgroup.procs"), "w"):
+                pass
+        prefix = box_prefix(fake_box(self), None, after_report=f'rm -r "{box.root}/cg-{{case}}"')  # `{case}` is the prefix's own placeholder
+        code, out, err = box.cli("--launch-prefix", json.dumps(prefix), "--launch-status", str(STATUS_FD), "--cgroup-of", cgroups)
+        self.assertEqual(code, 3, err)
+        self.assertIn("cgroup", err)
+        self.assertNotIn("PASS", out)
+
+    def test_A_kill_that_cannot_be_written_falls_back_to_the_pids_the_cgroup_lists_and_checks_it_is_empty(self):
+        seconds = "53.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, "", FILES)
+        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        os.mkdir(os.path.join(cgroup, "cgroup.kill"))
+        # a straggler in a session of its own (the launcher's group does not reach it) that lists itself in the fake cgroup
+        ws.write(ws.dir, "run.sh", f'setsid sleep {seconds} &\necho $! > "{cgroup}/cgroup.procs"\ncat answer.bin\n')
+        result = ws.run(case(), cgroup=cgroup)
+        self.assertEqual((result.status, result.lifecycle["leftover"]), ("PASS", {"known": True, "found": True}))
+        self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"the listed pid was not killed: {cmdline_alive(seconds)}")
+
+    def test_A_pid_the_fallback_cannot_kill_is_a_cleanup_failure_after_the_check(self):
+        ws = Workspace(self, "", FILES)
+        cgroup = fake_cgroup(ws, files={"memory.peak": "1", "memory.events": CLEAN_EVENTS})
+        os.mkdir(os.path.join(cgroup, "cgroup.kill"))
+        stubborn = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: (stubborn.kill(), stubborn.wait()))
+        ws.write(ws.dir, "run.sh", f'echo {stubborn.pid} > "{cgroup}/cgroup.procs"\ncat answer.bin\n')
+        with mock.patch.object(cg.os, "kill", side_effect=PermissionError):
+            with self.assertRaises(ex.CleanupFailed) as raised:
+                ws.run(case(), cgroup=cgroup)
+        self.assertIn("still in", str(raised.exception), "named by the check that found the cgroup not empty")
+
+
+def select_until_readable(fd):
+    import selectors
+    with selectors.DefaultSelector() as sel:
+        sel.register(fd, selectors.EVENT_READ)
+        sel.select(10)
 
 
 if __name__ == "__main__":
