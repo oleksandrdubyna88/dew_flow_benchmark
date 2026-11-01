@@ -1,6 +1,6 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **STOPPED 2026-11-01 by change 4.2, stopped for re-review (the owner's staged order: group A, the four olympiad tasks in the bare arm;
+> Status: **Epoch 5 open since 2026-11-01 with 0 changes, approved by the owner — narrowed (D10's arm alternation, the T16 control, is lost; §17 Q-H approved); the bare anchor round in C added (§17 Q-G, D54). Work may start on group A (§14 A1).** *Superseded status of the stop:* STOPPED 2026-11-01 by change 4.2 (the owner's staged order: group A, the four olympiad tasks in the bare arm;
 > then B, the bare arm for all ten; then C, the process arm) — the second change of epoch 4; no v2 code until its whole
 > re-review closes (`common.plan-change-control`).** **The whole-plan revision (step 4) is written, 2026-11-01**, from
 > the Fable consult of change 4.2 (its § 7 as the backbone) and four coai consults (cadence `f25ad04b`; risks `b3a3e5d6`,
@@ -162,7 +162,7 @@ Narrowed: yes — the measured treatment of the process arm got smaller: by D42 
 |---|---|---|---|
 | the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `51a80ba` (planning, not on main) | `dew_flow_benchmark` branch `feat/lang-v2-e1`, pushed, unmerged | fits | kept; rewritten for E1.S8b, E3.S7a, OP-2 to OP-11 as text and the D41 rule (no trap content) before its own gate (judged by the team lead, Opus, 2026-10-31) |
 
-> Epoch 4 · approved 2026-10-31 · by owner · state: stopped
+> Epoch 4 · approved 2026-10-31 · by owner · state: closed
 
 - 4.1 · 2026-10-31 · agent · contract — the known-task needle contract (D18, D33, D39) was underdetermined; found by the spec drafts 06 and 09
   (One cause, two symptoms. (a) D33 named the spec path `todo/tasks/09-werewolf.md`, but "Werewolf" is a D18 needle and
@@ -204,6 +204,12 @@ Narrowed: yes — D10's arm alternation, the control of T16, is lost: under D44 
   against the code and the branches — fits, nothing cut. Two facts for the record: operator step O1b was done and read
   back the same day (the task repository allows squash and rebase merges only); D44's reading "group B is built while
   group A's rounds run, and B's paid sessions start only after A's interim record" is the team lead's, confirmed.)
+  (Resumed 2026-11-01 after the re-review: the plan round PROCEED (codex; Gemini could not take the whole plan), the
+  second full reading (the document gate, four reviewers) PROCEED with its six findings applied (`fc84e1f`, `2a1749e`),
+  the owner's approval of the narrowing (§17 Q-H, answered "approve") and the owner's answer to §17 Q-G ("yes": the bare
+  anchor round is part of group C, D54). Epoch 5 opens below at 0 changes.)
+
+> Epoch 5 · approved 2026-11-01 · by owner · state: open
 
 ## 1. The question, before any solution
 
@@ -328,6 +334,7 @@ the team lead's decisions of that day and this plan's shape around them, for the
 | D51 | **The execution layer whole before A; the runner's part ii re-cut; the memory view asserted.** **E1.S8b is built whole before group A, the netns holder included:** CP2 fixes the series' verdict machinery once; an olympiad program needs no network and gets the holder's loopback-only namespace without a second code path; and a holder added in B would change the layer identity and re-date every A gate and limit (§6.1). **E1.S8a part ii is re-cut:** **ii-a**, needed for A — `--launch-prefix`, `--launch-status` (consult B5), the pidfd waits and the wall rule (B6), `--case-view` (B7), the cgroup memory read and the kill through `cgroup.kill` (B4), V11, V12; **ii-b**, needed for B — `rs_net`, the daemon and web lifecycle, readiness within T, `signal TERM` and G, V3–V5, V7. **Before E2-A calibrates, E1.S8b's probe ASSERTS** — not only prints — what each runtime believes its memory limit is, **through the final execution prefix at `MemoryMax` 256 MiB and 512 MiB**: whether the cgroup is visible inside the box (the `--tmpfs /` base binds no `/sys/fs/cgroup`), .NET's `GC.GetGCMemoryInfo().TotalAvailableMemoryBytes`, Node's `process.constrainedMemory()` and V8's heap limit, against the host's `prog/memory.max`; allocation-churn fixtures with bounded live data complete in both stacks, and over-limit fixtures fail with their memory evidence kept (T-L43). **OP-K (D15: `DOTNET_GCHeapHardLimitPercent`, or a read-only cgroup view in the box) is decided by the team lead on that asserted record before E2-A calibrates** | team lead, 2026-11-01 (on consult Fable § 1.2; the probe from coai risk `19ae7208`) |
 | D52 | **Publication and comparison guards.** (1) **The GitHub broker has a host-side publication gate** (E3.S7a): every outgoing object and API payload — commits, commit messages, PR titles and bodies, comments — is scanned on the host before the broker mirrors or posts it, because mirroring and API-created PRs bypass the task repository's client-side hook; tested with that hook disabled: zero outbound publication calls for forbidden content (T-L45). (2) **The run base is bound** (E1.S7): the approved frozen commit is bound to the generated tree and to the final orphan sha; the push check scans **that exact orphan**, proves locally that its parent list is empty, and refuses a build from a wrong commit before any push (T-L46). (3) **The push check's exemptions are exact** (E1.S1): an exemption names an approved value at an approved place — a path, or a reviewed passage pinned by its hash — never a class of text; the rules "a six-word window inside one whitespace token is not a hit" and "any Markdown text published at `origin/main` is public" give way to such entries, because a passage joined with `/` or `-` is one token and published fragments can be recombined (T-L47). Paraphrase defeats six-word matching, so the semantic review of an aid-informed spec stays with its gate and bias review (D25). (4) **V2 never calls `Decimal.normalize()` before equality** (E1.S8a): under the default context it rounds to 28 digits, so two distinct 30-digit values would compare equal (confirmed by the team lead's re-run; the runner does not call it); numbers compare by exact `Decimal` equality only (T-L44) | team lead, 2026-11-01 (coai risks `b3a3e5d6`, `19ae7208`) |
 | D53 | **The budget per group: information, no new halt.** The $50 per-session cap (D7) holds for every session of every group; for an olympiad session it is a runaway guard only. **No new halt is added:** the owner removed the total ceiling on purpose, and the exploratory plan's $60 pause point is that plan's rule, not imported here. Per group the plan adds **information**: a projection line in each group's pre-registration and a settled ledger line per group (`A: data / pilot / A/A / void / re-run`, the same for B and C), so the owner sees each group's cost before the next group's paid sessions; the pilot formula's cross-check cap (G-18) is computed per arm per group and reported beside $50 (§12) *(Second full reading, 2026-11-01, finding 4:) group C's ledger categories are `C: data / pilot / A/A / anchor / void / re-run`; the `anchor` line is used only if the owner answers Q-G yes.* | team lead, 2026-11-01 (consult Fable § 4) |
+| D54 | **The bare anchor round in group C (the owner's answer to Q-G, 2026-11-01).** One bare round over the ten tasks (n = 1 per task and stack, ≈ 20 sessions), interleaved among C's three process rounds under C's pins, model and CLI copy; never pooled with bare data (D46's never-pool list); reported only as a drift check — the anchor against B per task, beside C's process tables, so the B→C drift that T16 can no longer control is measured, not assumed. Its spend is C's `anchor` ledger line (D53); its sessions carry `role: anchor` in the record; C's pre-registration registers it with its seed and order. | owner, 2026-11-01 |
 
 ## 4. Design
 
@@ -1257,12 +1264,12 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
 - **Q-A — closed by the owner, 2026-10-31: no total ceiling.** The $1000 is removed; the six rounds of both arms run as
   planned; a fixed per-session cap of **$50** stays as a runaway guard (a capped session is censored, never hidden); the
   pilot's cap formula is a reported cross-check that does not bind (D7, §12).
-- **Q-G The optional bare anchor round in C — the owner's call, not decided here (2026-11-01).** One bare round over the ten
+- **Q-G The optional bare anchor round in C — ANSWERED by the owner 2026-11-01: yes (D54).** *Superseded heading: "the owner's call, not decided here (2026-11-01)".* One bare round over the ten
   tasks (n = 1 per task and stack, ≈ 20 sessions), interleaved among C's three process rounds, never pooled with bare data,
   reported as a drift check (the anchor against B, per task). It is the only way to **measure** the B→C drift instead of
   assuming it (T16). Cost: ≈ $100–400 at §12's guesses, less at the exploratory rates for its olympiad part (§12). A named
   option with its cost, not a recommendation to spend.
-- **Q-H The narrowing of epoch 5 — the owner's approval, not decided here (2026-11-01).** The staged order loses D10's arm
+- **Q-H The narrowing of epoch 5 — APPROVED by the owner 2026-11-01** (epoch 5's line says `by owner`). *Superseded heading: "the owner's approval, not decided here (2026-11-01)".* The staged order loses D10's arm
   alternation, the control of T16; nothing else got smaller (the re-review record for epoch 5). Under plan-change-control step 8
   the owner approves first, and epoch 5's line then says `by owner`.
 - **Q-C The bias review sends held-out suites to coai's vendors** before sealing (D25). The agents under test never see
