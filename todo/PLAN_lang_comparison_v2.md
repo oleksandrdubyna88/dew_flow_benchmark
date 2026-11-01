@@ -2,7 +2,17 @@
 
 > Status: **STOPPED 2026-11-01 by change 4.2, stopped for re-review (the owner's staged order: group A, the four olympiad tasks in the bare arm;
 > then B, the bare arm for all ten; then C, the process arm) — the second change of epoch 4; no v2 code until its whole
-> re-review closes (`common.plan-change-control`).** Before the stop: E1.S5 (toolchains) merged (#135); E1.S1's bench
+> re-review closes (`common.plan-change-control`).** **The whole-plan revision (step 4) is written, 2026-11-01**, from
+> the Fable consult of change 4.2 (its § 7 as the backbone) and four coai consults (cadence `f25ad04b`; risks `b3a3e5d6`,
+> `b11c7e5a`, `19ae7208`), verified by the team lead, with the team lead's eight decisions: D44–D53 (the staged series;
+> freeze and pre-registration tags per group; CPC per group with A replicated in B; one model, one alias baseline and one
+> CLI copy for the series; E0 before C only; interim records; two runner manifests with three guards; E1.S8b whole before
+> A; the publication and comparison guards; no new spend halt), §14 rewritten as steps per group, the epics' group map, and
+> the re-review record for epoch 5 below — **`Narrowed: yes`: D10's arm alternation, the control of T16, is lost; nothing
+> else got smaller.** The E1 stories document is re-cut to match (its own commit). **Pending before epoch 5 opens:** the
+> plan round on this revision, then the owner's approval of the narrowing (step 8; §17 Q-H) and the owner's answer to
+> §17 Q-G (the optional bare anchor round in C). Until then the stop stands: no new v2 code, no merge of a pull request
+> carrying v2 work. Before the stop: E1.S5 (toolchains) merged (#135); E1.S1's bench
 > side and E1.S8a part i built and in review; the task repository's history joined to GitHub (task repository PR #1).
 > Operator answers of 2026-11-01, recorded as status (not changes): the credit terms of the known tasks (the rest of Q1 —
 > CC BY-NC-SA 4.0 for specs 01 and 02 by a per-file exception, 09 in own words credited "based on IOI 2018 Werewolf",
@@ -174,6 +184,23 @@ Narrowed: yes — the measured treatment of the process arm got smaller: by D42 
   E4), the rounds and their seeding (D9), the cross-group comparability of results run on different days (model and CLI
   drift), and the budget frame. This second change stopped the plan.)
 
+### Re-review for epoch 5
+
+Narrowed: yes — D10's arm alternation, the control of T16, is lost: under D44 the bare arm (groups A and B) runs before the process arm (group C), so the process effect and the interaction of §9 are read across time windows; nothing else got smaller — the tasks, the arms, the metrics, the acceptance criteria, the Definition of Done, the merge conditions and the release stay, only the order changes; so the owner approves epoch 5 first (plan-change-control step 8; §17 Q-H)
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| E1.S5 toolchains and the preflight, `ab470e06` (#135) | `dew_flow_benchmark` main | fits | kept: group A needs it unchanged, and its pins hold for the whole series (D47) (judged by Opus, the re-review's plan writer, 2026-11-01, on the consult's § 6) |
+| E1.S1 bench side — `push-check`, `generateRunBaseTree`, `needleScan`, `workspace-diff` — `feat/lang-v2-e1-s1` at `dc2d91a4` | `dew_flow_benchmark`, local branch, never pushed, in its code review | fits | kept; a fix forward on the branch before its merge: the two push-check exemptions (a six-word window inside one whitespace token; any Markdown text published at `origin/main`) become exact approved values at approved places (D52); `workspace-diff` and T-L1 run over the task pairs that exist in each group (D44) (judged by Opus, 2026-11-01) |
+| E1.S8a part i — lexer, parsers, matcher, olympiad path, report, `--parse-only`, the pin — `feat/lang-v2-e1-s8a` at `644ccc6a` | `dew_flow_benchmark`, local branch, never pushed, in its code review | fits | kept as group A's olympiad path; a fix forward on the branch before its merge: the test that two distinct 30-digit numbers stay unequal (V2 never calls `Decimal.normalize()` before equality, D52, T-L44); part ii is re-cut into ii-a (group A) and ii-b (group B) in the stories document, and no code of part i is reworked (judged by Opus, 2026-11-01) |
+| the task repository joined to GitHub, `f5b9247` (task repository PR #1) | `dew_flow_ai_language_comparison` main | fits | kept (judged by Opus, 2026-11-01) |
+| the FORMAT v2 draft and the ten spec drafts — branches `docs/format-v2`, `docs/spec-04`, `docs/spec-05`, `docs/specs-olympiad`, `docs/specs-daemon`, `docs/specs-web` | `dew_flow_ai_language_comparison`, local branches, never pushed, ungated | fits | kept as drafts; 01, 02, 03 and 09 run E1's per-task chain first (group A), the six others in group B; FORMAT's sections are classed before its gate (D45) (judged by Opus, 2026-11-01) |
+| the exploratory pilots — task 1 (`cdd3349b`, #131; `research/lang-v2/EXPLORE_task1_2026-11-01*.md`) and the olympiad plan `todo/PLAN_lang_explore_olympiad.md` at `b45b9458` | `dew_flow_benchmark` main (task 1); branch `feat/lang-explore-olympiad`, local (the olympiad plan) | fits | kept as exploratory only and never v2 data; their materials reach v2 only through v2's own chain (the D40 gate, the joint validation, the mutants, the bias review), and group A's `prediction.md` discloses them (D44) (judged by Opus, 2026-11-01) |
+| the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `08bc7a63` (#134) | `dew_flow_benchmark` main | fits | kept and reworked as text, not code (the consult's § 6 says "rework"; this record's verdicts are `fits`, `cut` or `—`): its waves and checkpoints re-cut for 01, 02, 03 and 09 first, E1.S8a part ii split into ii-a and ii-b, E1.S7 deferred to group C except the tag ruleset, one freeze tag per group, its Definition of Done per group — in the commit after this one (judged by Opus, 2026-11-01) |
+
+  (Pending, 2026-11-01: the plan round on this revision, then the owner's approval of the narrowing and the answer to
+  §17 Q-G. The line of epoch 5 is written only after them. Nothing was cut, so no revert is owed.)
+
 ## 1. The question, before any solution
 
 Experiment v1 ([PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md), record
@@ -239,46 +266,47 @@ task repository; a parity audit of the C# and TypeScript rules in `dew_flow_conv
 Rows marked "operator, 2026-10-31" are the operator's decisions of that day, recorded as given (D1–D8 from the morning,
 D20–D31 from the afternoon's instructions A–G). Rows marked "team lead, 2026-10-31, from the coai plan gate" settle
 questions the gate round on `aa5e413` closed (D32, D33). Rows marked "this plan" are proposals for the operator's approval;
-the open questions (§17) name what they do not settle.
+the open questions (§17) name what they do not settle. Rows D44–D53 (2026-11-01) are the epoch-5 re-review of change 4.2:
+the team lead's decisions of that day and this plan's shape around them, for the plan round and the owner's approval.
 
 | # | Decision | Who, when |
 |---|---|---|
 | D1 | **v2 compares C# and TypeScript coding agents on 10 harder tasks**, not the tiny minigit task. v1's finding (cost C#/TS ≈ 0.92, C# slower only in build and test time, every session accepted) motivates harder tasks with **runtime traps**: defects a compiler does not catch, which show in held-out tests | operator, 2026-10-31 |
 | D2 | **A new public GitHub repository `dew_flow_ai_language_comparison`** holds the task workspaces: `csharp/` and `node/` (one sub-folder per task in each), `tasks/` (statements, visible samples, reference notes), and the pinned conventions as in the other `dew_flow` repositories. **Held-out tests and raw records stay outside git** (as v1). Because it is public: no secrets, no raw transcripts, no held-out content; known-problem statements are **paraphrased with credit and a link; the link only in the repository README**, never in the agent's prompt or workspace. The bench harness stays in `dew_flow_benchmark` | operator, 2026-10-31 |
 | D3 | **Tasks: 5 known + 5 original; 4 olympiad, 3 daemons, 3 web APIs; difficulty from a few minutes to about one hour of agent work.** Traps are runtime traps on both sides across the suite. The list is §4.1 (order = expected difficulty; the times are guesses, calibrated by the pilot). Daemons and web APIs are scored by a harness that starts the program, drives held-out scenarios and checks replies, cgroup-accounted memory over time (`memory.peak`; RSS only as a descriptive curve — D13, D14, D36) and a clean SIGTERM stop. Consultant review on 2026-10-31 (codex gpt-6-astra, gemini) shaped the list: CSES 1712 dropped (a one-sided JS trap), CSES 1736 dropped (sums stay below 2^53 at CSES limits, ≈ 4e15, so its JS trap does not fire); gemini's claim that .NET console apps default to Server GC was **rejected** (they default to Workstation GC) — still, the harness fixes GC settings explicitly per stack and records them | operator, 2026-10-31 |
-| D4 | **Method rules from the consultants, adopted:** the agent never sees a CSES/IOI id or title (paraphrased statement only); workspace samples are small and clean and the traps live in held-out tests, so the first-submission pass rate can show a difference; time and memory limits are calibrated on reference solutions in **both** languages, so no limit rejects one runtime's baseline footprint; a **paid pilot (tasks 1, 3, 10 at least)** measures real times before the full series; the bare session wall limit rises from v1's 20 min to **about 75 min**; v1's $6 per-session cap is **re-derived from the pilot** | operator, 2026-10-31 |
+| D4 | **Method rules from the consultants, adopted:** the agent never sees a CSES/IOI id or title (paraphrased statement only); workspace samples are small and clean and the traps live in held-out tests, so the first-submission pass rate can show a difference; time and memory limits are calibrated on reference solutions in **both** languages, so no limit rejects one runtime's baseline footprint; a **paid pilot (tasks 1, 3, 10 at least)** measures real times before the full series; the bare session wall limit rises from v1's 20 min to **about 75 min**; v1's $6 per-session cap is **re-derived from the pilot** *Superseded in part by D44 (2026-11-01): "a paid pilot (tasks 1, 3, 10 at least)" is now §11's pilot table per group (A: bare 1, 3, 9; B: bare 4, 5, 10; C: process 1, 3); the text above stays.* | operator, 2026-10-31 |
 | D5 | **Packages: option A — a pinned offline package cache per stack**, the same discipline as v1's cache snapshots; **the agent has no general network** (the process arm reaches GitHub, as v1's D21–D22) | operator, 2026-10-31 |
 | D6 | **Stacks: both current LTS lines, latest patch, checked 2026-10-31 against the official release indexes.** C#: .NET 10, SDK **10.0.403** (released 2026-10-25; the host has 10.0.114, so it must be upgraded and pinned), runtime 10.0.14, C# 14 (the default for .NET 10; C# 15 ships with .NET 11, RC3 on 2026-10-31, not stable, so out). Web APIs use ASP.NET Core **Minimal API**; daemons the Generic Host (`Microsoft.Extensions.Hosting`); JWT `Microsoft.AspNetCore.Authentication.JwtBearer` 10.x; tests the agent's choice from the cache (xUnit v3 offered). TypeScript: Node **26.13.0** (LTS "Lithium", released 2026-10-28; the host has 26.12.1, so it must be upgraded and pinned), TypeScript **6.0.x** with `strict` — the newest line the pinned `typescript-eslint` 8.72.x supports (its peer range is `<6.1`), so the TS agents get **type-aware lint at the same strength as the C# analyzers**; this matches the conventions plan's D7 (`dew_flow_conventions · todo/PLAN_node_rule_parity.md`); the exact patch is pinned in E1.S5 from npm. **7.0.2 was the earlier pin (v1's toolchain line), superseded by the owner on 2026-10-31 (D1)**: under 7.0.2 `typescript-eslint` cannot parse `.ts` and the lint runs without types (v1's D4 deviation), which would have handicapped TS in the process arm. The Node web stack is the team lead's choice, with the reasons recorded (§4.6): **Fastify 5.12.7** with TypeBox 0.34.x (`@fastify/type-provider-typebox`), `@fastify/jwt` 10.x, pino, `node:test`, `node:net`. Toolchains are pinned in read-only copies with checksums (as `~/rsd/minigit/toolchains/`) and recorded in the pre-registration | operator, 2026-10-31 (stacks); team lead, 2026-10-31 (the Node web stack, reasons in §4.6) |
-| D7 | **Budget: no total ceiling.** The $1000 total of the morning is **removed by the owner on 2026-10-31 (late evening)**; the six rounds of both arms run as planned (D10, D27). **A per-session cap of $50 stays as a runaway guard**, a fixed owner value ("I don't think $6 is enough; let's do 50"): a session is stopped at $50 and recorded as censored (`killed: cap`, `≥ $50`), never hidden; the pilot's cap formula (§12) is superseded for the cap's value and stays as a reported cross-check that does not bind. Pilot, A/A, data, void and re-run spend are still counted on separate lines. *The $1000 ceiling, the arm split, the `budget-frame` halt over the total and the budget approval step are superseded (D1); their text stays in §12 marked so* | operator, 2026-10-31 (the ceiling, the morning); owner, 2026-10-31 (no ceiling; the $50 cap) |
-| D8 | **Same agent as v1: Claude Code (Opus, effort `high`), CLI pinned.** v1 pinned CLI **2.1.310** (`inputs/stacks.json`); v2 **re-pins at its pre-registration** to the newest CLI version installed on that day, copied read-only as v1's `init` does (today that is still 2.1.310); the v1 pin is not inherited. *Superseded in part by D20: v2 runs two arms, not the bare arm alone* | operator, 2026-10-31; the re-pin shape: this plan |
+| D7 | **Budget: no total ceiling.** The $1000 total of the morning is **removed by the owner on 2026-10-31 (late evening)**; the six rounds of both arms run as planned (D10, D27). **A per-session cap of $50 stays as a runaway guard**, a fixed owner value ("I don't think $6 is enough; let's do 50"): a session is stopped at $50 and recorded as censored (`killed: cap`, `≥ $50`), never hidden; the pilot's cap formula (§12) is superseded for the cap's value and stays as a reported cross-check that does not bind. Pilot, A/A, data, void and re-run spend are still counted on separate lines. *The $1000 ceiling, the arm split, the `budget-frame` halt over the total and the budget approval step are superseded (D1); their text stays in §12 marked so* *(2026-11-01, D53:) the $50 cap holds for every group; no new halt is added; per group a projection and a settled ledger line are information.* | operator, 2026-10-31 (the ceiling, the morning); owner, 2026-10-31 (no ceiling; the $50 cap) |
+| D8 | **Same agent as v1: Claude Code (Opus, effort `high`), CLI pinned.** v1 pinned CLI **2.1.310** (`inputs/stacks.json`); v2 **re-pins at its pre-registration** to the newest CLI version installed on that day, copied read-only as v1's `init` does (today that is still 2.1.310); the v1 pin is not inherited. *Superseded in part by D20: v2 runs two arms, not the bare arm alone* *(2026-11-01, D47:) the re-pin is taken once for the series, at group A's pre-registration, and kept through C.* | operator, 2026-10-31; the re-pin shape: this plan |
 | D9 | **Unit of analysis = the task**, with repeated measures: per task, stack and arm, 3 sessions (D20). The 120 sessions are not 120 independent samples (D28) | this plan, per instruction E5 |
-| D10 | **Order: six rounds, arms alternating.** A round runs every task once in one arm; the arm of round 1 is drawn from the seed and the arms alternate (B P B P B P or P B P B P B), so after any even number of rounds both arms hold the same n; the task order inside a round is drawn from the seed; a task's second repeat in an arm runs only after every task has run once in that arm. The two cells of a pair (C# ∥ TS, same task, same arm) start in the same tick on masks `0-5` / `8-13`, swapped per pair as `maskFor` does; the two arms never overlap. The ceiling (D7) cuts whole round pairs (one bare + one process), never one task's repeats | this plan, per instruction E4 |
+| D10 | **Order: six rounds, arms alternating.** A round runs every task once in one arm; the arm of round 1 is drawn from the seed and the arms alternate (B P B P B P or P B P B P B), so after any even number of rounds both arms hold the same n; the task order inside a round is drawn from the seed; a task's second repeat in an arm runs only after every task has run once in that arm. The two cells of a pair (C# ∥ TS, same task, same arm) start in the same tick on masks `0-5` / `8-13`, swapped per pair as `maskFor` does; the two arms never overlap. The ceiling (D7) cuts whole round pairs (one bare + one process), never one task's repeats *Superseded for the staged series by D44 (2026-11-01): the arms no longer alternate — the bare arm runs in groups A and B, the process arm in group C. Inside a group the rule stands: a round runs the group's tasks once in a seeded order, a task's second repeat only after every task of the group ran once, pairs as above. The lost alternation is the narrowing of the epoch-5 re-review (T16). The text above stays.* | this plan, per instruction E4 |
 | D11 | **The bare agent's workspace is a copy of one task folder** (`csharp/<task>/` or `node/<task>/`) at a pinned commit of the task repository, fetched and hash-checked as v1's `fetchInputs` does. The repository's root files, the other stack's folder, `tasks/` and `todo/` are never in the bare box. The bare agent gets **no** conventions. **The process agent's workspace is a single-branch clone of its run base `run/<rid>/main`** in the task repository (v1 §4.2), which carries the conventions, the hooks, the frozen spec and both stack folders; its prompt names its stack's folder | this plan |
 | D12 | **Fixed per-stack scripts in every workspace, frozen inputs with hashes:** `build.sh` and `run.sh` (olympiad: reads stdin, writes stdout; daemon and web API: the long-running program, `PORT` and the task's inputs from the environment). **`run.sh` ends with `exec` of the program, so the started process IS the program (one process; SIGTERM reaches it, never a bash parent)** — change 2.3, D38. The agent fills the code; the harness drives only these two scripts, identically for both stacks. A `PACKAGES.md` lists the offered package set of the stack (D5); the spec tells the agent what is frozen | this plan |
 | D13 | **Scoring per task kind** (§4.3): olympiad — held-out input/expected pairs under calibrated time and memory limits, each case `pass` / `wrong answer` / `time limit` / `memory limit` / `runtime error`; daemon and web API — held-out scenarios driven by the harness, readiness within T, a SIGTERM stop that must end the process within the grace period G with no child left (D14's series defaults and overrides), the **cgroup-accounted memory bound** certified by the program's own cgroup scope (D36). **Accepted** = clean build, every held-out functional case or scenario passed, every lifecycle check passed (readiness, the SIGTERM stop within G, no process left), **and the certified memory claim** (`memory.peak` of the program's own scope within the registered limit, no `oom_kill`). **One memory contract (D36): for a data session a readable `memory.peak` is a precondition — the runner refuses to start one on a host without it, with the named halt `memory-not-certifiable` — so `accepted` always includes the certified memory claim and no CPC denominator is ever touched by certification.** The flag `memory bound not certified` exists only for **non-data runs** (the smoke, the stub fixtures, and the pilot where the operator runs it on a host that cannot certify — allowed, since pilot sessions are void by D16): such a run is reported on its functional, lifecycle and stop checks with the flag and no memory claim. One suite per task runs unchanged against both stacks (D22) | this plan |
 | D14 | **Limits, by kind (change 2.1).** *Olympiad:* time limit = **3 ×** the slower of the two reference solutions' wall, floor 1 s; memory limit = **2 ×** the larger reference peak, floor 256 MB. *Daemon and web API:* the **cgroup-accounted memory bound** = **2 ×** the larger reference peak over **all** the task's load scenarios (task 5 has two), floor **256 MB** — the same floor as olympiad; §4.1's "memory floor for a daemon" is this. **Semantic bounds live in each spec** (max connections, requests, payload bytes, clock semantics, expiry tolerance — spec 05's R32, R33, R23 are the shape). **Timing has series defaults with explicit per-task overrides:** readiness **T = 10 s**, grace **G = 5 s** (provisional), scenario-step deadlines as `FORMAT.md` defines; a spec states its T and G and may override with a reason. **Validation before the freeze:** T, G, the step deadlines and the semantic bounds are run against both draft references through the runner before the spec freezes (D40); a value a reference cannot meet is changed before the freeze, never after. **Calibration after the freeze:** execution time and memory by this rule (E2.S3). The spec states the floors and the rule as guarantees; the exact values go to the runner, never into the spec (change 1.2a). Peak memory is `memory.peak` of the program's own cgroup scope (D36; cgroup accounting includes page cache and kernel memory); **only that certifies a bound**. RSS is sampled — 100 ms for olympiad, 1 s for daemon and web — as a **descriptive curve only**, the one statement of the sampling rates; never `RLIMIT_AS`. **Where a spec states a tolerance around a time boundary, the held-out checks are placed against that tolerance as the private aid says** (D41; the placement rule moved there). The numbers are computed by E2 and pre-registered; a change after the pilot is a dated amendment applied to both stacks | this plan |
-| D15 | **GC and runtime settings, fixed and recorded per stack:** C# `DOTNET_gcServer=0` (Workstation, set explicitly), `DOTNET_TieredCompilation` default, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`; Node: no `--max-old-space-size` flag from the harness (the memory limit is the cgroup's); `NODE_OPTIONS` empty. **Culture (D35): `LANG=de_DE.UTF-8` and `LC_ALL=de_DE.UTF-8` in both boxes, both stacks, every task; no `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch.** **Time zone: the base `TZ` of both boxes is `UTC`**; a test may set another `TZ` for one program through the scenario's `env` where the spec defines time-zone behaviour, and the record names it. Every value is in `agentEnv`'s allow-list, the same in the agent box and the scoring box, and in every session record. **This row is the source of the base environment:** both stacks get the same base plus these documented per-stack variables; `FORMAT.md`'s "the same for both stacks" sentence follows this row (FORMAT v2, E1.S9) | this plan |
-| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the stall timeouts, the time guesses of §4.1 and the limits of D14, and they measure real session costs (the formula's cap as a cross-check beside the owner's fixed $50 cap, D7; no split, D30 superseded). Bare pilot: tasks 1, 3, **4**, **5** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) for the HTTP driver, task 5 (the RESP server) for the TCP/RESP driver, task 10 (the DAG scheduler) for the SIGTERM, RSS and timer checks, so G-16 checks every driver on a real tree before round 1; the pilot option is taken over a hand-check on a reference tree. **Pilot cost, re-derived at the §12 guesses:** 10 bare pilot sessions + 2 A/A at $5–20 → $60–240; 4 process pilot sessions at $30–70 → $120–280; **≈ $180–520 in all**, reported as pilot spend (no data share is computed since the owner removed the total ceiling, D7). Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 | this plan |
+| D15 | **GC and runtime settings, fixed and recorded per stack:** C# `DOTNET_gcServer=0` (Workstation, set explicitly), `DOTNET_TieredCompilation` default, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`; Node: no `--max-old-space-size` flag from the harness (the memory limit is the cgroup's); `NODE_OPTIONS` empty. **Culture (D35): `LANG=de_DE.UTF-8` and `LC_ALL=de_DE.UTF-8` in both boxes, both stacks, every task; no `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch.** **Time zone: the base `TZ` of both boxes is `UTC`**; a test may set another `TZ` for one program through the scenario's `env` where the spec defines time-zone behaviour, and the record names it. Every value is in `agentEnv`'s allow-list, the same in the agent box and the scoring box, and in every session record. **This row is the source of the base environment:** both stacks get the same base plus these documented per-stack variables; `FORMAT.md`'s "the same for both stacks" sentence follows this row (FORMAT v2, E1.S9) *(2026-11-01, D51:) OP-K — whether to set `DOTNET_GCHeapHardLimitPercent`, or to expose a read-only cgroup view in the box — is decided by the team lead on E1.S8b's asserted memory probe before E2-A calibrates, as a dated line here, the same for every task and both stacks.* | this plan |
+| D16 | **The pilot's sessions are void (never data)**, as v1's A/A and pilot were; they fix the stall timeouts, the time guesses of §4.1 and the limits of D14, and they measure real session costs (the formula's cap as a cross-check beside the owner's fixed $50 cap, D7; no split, D30 superseded). Bare pilot: tasks 1, 3, **4**, **5** and 10 as pairs (C# ∥ TS) plus one A/A pair (two identical bare C# sessions of task 3) — task 4 (the Rule API, the smallest web task) for the HTTP driver, task 5 (the RESP server) for the TCP/RESP driver, task 10 (the DAG scheduler) for the SIGTERM, RSS and timer checks, so G-16 checks every driver on a real tree before round 1; the pilot option is taken over a hand-check on a reference tree. **Pilot cost, re-derived at the §12 guesses:** 10 bare pilot sessions + 2 A/A at $5–20 → $60–240; 4 process pilot sessions at $30–70 → $120–280; **≈ $180–520 in all**, reported as pilot spend (no data share is computed since the owner removed the total ceiling, D7). Process pilot: tasks 1 and 3 as pairs (v1's P1 conditions, §11). The go/no-go table is v1's G-1 … G-14 plus §11's G-15 … G-19 *Superseded in part by D44 (2026-11-01): the pilot and the A/A run per group — §11's table; the cost line above is replaced by §12's per-group projection; the text above stays.* | this plan |
 | D17 | **Egress:** bare sessions — no registry, no host; the only road out is the API broker's door. Process sessions — **no direct `github.com` egress either (D42)**: `EGRESS_HOSTS.langProcess` is empty and the GitHub operations go through the local GitHub broker's door, bound to the current run; package installs in both arms resolve from the seeded offline caches (D5). A refused CONNECT is flagged `wanted network`, not voided | this plan |
 | D18 | **Contamination needles for the known tasks** (id, title, site names; `CSES`, `IOI`, `Werewolf`, `RealWorld`, `Conduit`, the public repository's name and URL; **for task 5: the product name `Redis`, the protocol name `RESP` with its versions, `redis.io`, `redis-cli`, and the common client libraries `StackExchange.Redis`, `ioredis`, `node-redis`, `redis` as a package name**) join the scan's needle list, in tool inputs and outputs, and are run over every generated run base and its reachable history (D39). **The matching rule (change 4.1):** a needle matches **case-sensitively on word boundaries** — `\b<needle>\b` with ASCII letters and digits as word characters — so `RESP` does not match "response" and `IOI` does not match the base64 `iOiJ`; product names that are not words (`redis.io`, `redis-cli`, `StackExchange.Redis`, `node-redis`) are an explicit list of exact substrings; base64 and JWT payloads in sample transcripts are excluded from the scan only where FORMAT marks the field as normalised, otherwise they are scanned (T-L37). A hit is **read by hand**: the agent recalling a known problem from memory is a threat of the design (T1), not a void; a fetch or a path reaching outside the box is a void, as v1 | this plan |
 | D19 | **Known-task statements name no source.** The link and the credit live in the task repository's README (D2), in an attribution section that is **outside every agent-visible tree** (D39); `NOTES.md` is dropped. The bare workspace holds the statement, the samples, `PACKAGES.md`, `build.sh`, `run.sh`, the stack's pin files, **and the read-only runner and grammar (`runner/run_samples.py`, `runner/GRAMMAR.md` — D37, change 2.2)**, nothing else | operator, 2026-10-31 (D2); the file list: this plan |
 | D35 | **One declared non-invariant culture for the whole series: `de_DE.UTF-8`** (`LANG` and `LC_ALL`), in **both** the agent box and the scoring box, for both stacks and every task, and in CI's visible-sample runner — **confirmed by the owner, 2026-10-31** (en_US was considered and `de_DE` kept). Recorded in the pre-registration and in D15's allow-list; the locale is generated in the box image (`locale -a` lists it). No `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` and no other invariant switch: a missing `LANG` is not .NET's globalization-invariant mode, and neither is wanted. **Fairness is a declared environment plus the protocol's stated numeric syntax** (spec 04 states its grammar, R15 and 3.6), not equal trap counts. E3's acceptance runs a check inside the actual boxes (T-L32). Closes Q8 | this plan (epoch 3 re-review; consult `3ea9ef36`) |
 | D36 | **Memory certification by the program's own systemd user scope, required before launch.** The scorer runs each program in its own `systemd-run --user --scope` with `MemoryMax=<limit>` and `MemorySwapMax=0` (the bound is on memory, never memory plus swap), launched **outside** `bwrap`; the driver and the build run outside that scope. It verifies that the program and every forked child belong to the scope (`cgroup.procs`), and it keeps `memory.peak`, `memory.events` (`oom_kill`, `max`) and the lifecycle evidence before the scope is removed. The host was probed on 2026-10-31: cgroup2 with the memory controller; `systemd-run --user --scope -p MemoryMax=64M` gives a readable `memory.peak` (2,396,160 B) and `memory.max` — **this host can certify**. The pre-registration records the certifying host; **a host that cannot certify runs no data session: the runner's certification probe runs at start and refuses with the named halt `memory-not-certifiable` (exit 3, resumable on a certifying host)** — so for every data session `accepted` includes the certified memory claim (D13). "RSS bound" is replaced by the **cgroup-accounted memory bound** everywhere, calibration included. The flag `memory bound not certified` is for non-data runs only (smoke, fixtures, a pilot the operator allows on a host that cannot certify); T-L29 is the refusal test; T-L30 adds the fixtures | this plan (epoch 3 re-review; the probe by the team lead) |
-| D37 | **The agent has the scenario runner and the grammar.** The visible-sample runner — the bench's own Python standard-library program, **built early in E1 (E1.S8a) and pinned there**, implementing FORMAT v2's grammar and transcript comparison (D22) — and `FORMAT.md`'s grammar sections are in every workspace as read-only frozen files, `runner/run_samples.py` and `runner/GRAMMAR.md`; the task repository carries the pinned copy with its hash in `inputs/specs.json`; CI's visible-sample runner is that same file; FORMAT v2's examples and every pre-freeze check (D40) run through it; E2.S2 reuses it for the held-out suites and owns no runner; the agent may run the samples with it (`python3 -I runner/run_samples.py samples/`). The ~20-line reading block FORMAT v1 put in every daemon and web spec goes once the runner is present (FORMAT v2, E1.S9). Resolves change 2.2 | this plan (epoch 3 re-review) |
-| D38 | **`run.sh` ends with `exec` of the program.** One process: the pid the harness starts is the program's, SIGTERM reaches it, and the stop and leftover checks are about the program. E1.S3's templates carry it; T-L31 checks it. Resolves change 2.3 | this plan (epoch 3 re-review) |
+| D37 | **The agent has the scenario runner and the grammar.** The visible-sample runner — the bench's own Python standard-library program, **built early in E1 (E1.S8a) and pinned there**, implementing FORMAT v2's grammar and transcript comparison (D22) — and `FORMAT.md`'s grammar sections are in every workspace as read-only frozen files, `runner/run_samples.py` and `runner/GRAMMAR.md`; the task repository carries the pinned copy with its hash in `inputs/specs.json`; CI's visible-sample runner is that same file; FORMAT v2's examples and every pre-freeze check (D40) run through it; E2.S2 reuses it for the held-out suites and owns no runner; the agent may run the samples with it (`python3 -I runner/run_samples.py samples/`). The ~20-line reading block FORMAT v1 put in every daemon and web spec goes once the runner is present (FORMAT v2, E1.S9). Resolves change 2.2 *(2026-11-01, D50:) groups A and B run on two pinned runner manifests — A's of parts i and ii-a, B's with part ii-b — under D50's three guards; each group's manifest hash is in its pre-registration.* | this plan (epoch 3 re-review) |
+| D38 | **`run.sh` ends with `exec` of the program.** One process: the pid the harness starts is the program's, SIGTERM reaches it, and the stop and leftover checks are about the program. E1.S3's templates carry it; T-L31 checks it. Resolves change 2.3 *(Wording, 2026-11-01, the E1 stories' § 12 item 4:) under D43's layered launch the harness starts `systemd-run`; "the pid the harness starts" reads "the process `run.sh` becomes", which the runner finds by its host pid in the scope's `prog/cgroup.procs` (E1.S8a, consult B1). No change of intent.* | this plan (epoch 3 re-review) |
 | D39 | **Attribution lives outside every agent-visible tree.** The cross-repository boundary (`common.planning-docs` § *Across repositories*) is named in the task repository's README attribution section — cut from every run base — and in this plan, never in a `todo/PLAN_*` of the task repository, which would enter every run base (OP-11). The public README keeps its attribution section (D2), and **the run base is an orphan commit of a generated tree**: the frozen tag's tree minus the README's attribution section and minus any credit file, so the process agent's single-branch clone holds exactly one commit of history before its own work. The check: the needle scan (D18, with its case-sensitive word-boundary rule and exact-substring list — change 4.1) runs over the exact generated tree **and** `git rev-list` of the base (one commit), and the cut is refused on any hit of that rule; a spec path, a fixed FORMAT sentence or a normalised sample field never counts as a hit by construction. `NOTES.md` is dropped: credit is the README's section, design reasons live in the bench's internal test-design notes. `FORMAT.md`'s daemon example must not name the real protocol (FORMAT v2) | this plan (epoch 3 re-review) |
 | D41 | **No new trap content anywhere public before the series ends** — plans, stories documents, review bodies, PR descriptions. The test-design aid lives in the private area `~/rsd/lang-v2/test-design/`; this plan's §4.3 trap table and the per-task trap columns are **replaced by a pointer** to `~/rsd/lang-v2/test-design/PLAN-trap-table.md` (mode 0600), moved verbatim on 2026-10-31, sha256 `4acd751a8c0514f8742ad3ecf60eed417a12c53d2eb07e785355b62f2b0a228c`; **and its sibling `PLAN-risky-scenarios.md` (mode 0600), sha256 `84b692d21199cba3ff2783880fba866985ba930b63380db195dad87601a9c5d6`**, which holds, word for word, the per-task riskiest held-out-shaped scenarios that D40, E1.S2, D14's expiry placement, §4.3's web row and G-16 named until the epoch 4 round, §4.3's task-1 trap-balance sentence and D40's per-task count and kind breakdown (added at the second full reading), and the breakdown updated after all ten spec drafts (a dated line, the earlier text kept); the content is kept, only its place changes (D1, D34). The merged history (#124, #127, #128) keeps the earlier rows — a disclosed residual risk (T18), named in the record. Resolves change 3.2's first half | this plan (epoch 4 re-review; consult `16e5f408`) |
 | D42 | **The process agent gets NO direct `github.com` egress.** Its GitHub operations go through a **local GitHub broker** (the shape of the coai bridge) that **serves an isolated bare repository per run**: for each run the broker creates a local bare repository holding **only the orphan run-base commit (D39) and the run's own refs**; the agent's `git clone`, `fetch` and `push` go to that bare repository through the broker's smart-HTTP endpoint and never to GitHub; the broker **mirrors** the run's branch to GitHub and, on the agent's behalf through the GitHub API with the PAT, creates and updates the run's PR and reads its checks and comments — the allowed operations only. Ref filtering alone cannot hide objects that exist in the task repository's object database (a fetch by SHA, an unshallow fetch), so **no object outside the run base can reach the agent**: the objects are not there. **Allowed:** clone and fetch of the run base and the run's own branch; push to its own branch; create and update its own PR; read its own PR's checks and comments. **Denied (the retrieval probes):** the bench repository's history; the task repository's `main` attribution; another run's branch or PR; a fetch by the SHA of a task-repository `main` commit; an unshallow fetch (which gives only the run base); any redirect to a host or path outside the broker. The normal clone, push, PR and checks workflows must succeed while every denied probe fails (T-L35, pilot-tested in G-20). **This narrows the measured treatment:** the process arm no longer has the family's open GitHub access (it cannot read other repositories' history, the task repository's `main` or other runs) — a contract change recorded here, disclosed in T19 and in the record as *"two stacks under the same run-bound GitHub policy"*, and **a narrowing of the plan (the epoch 4 re-review record)**; tasks, arms, metrics and acceptance criteria stay. Resolves change 3.2's second half | this plan (epoch 4 re-review; consult `16e5f408`, verified on this host by the team lead; the bare-repository shape from the second full reading) |
 | D43 | **One reusable execution layer, built in E1 (E1.S8b)** and consumed unchanged by E2's validation and calibration and by E3's scoring: launch; D15's environment with the culture; the program-only systemd scope (D36); the network layout below; deadlines; signals; cleanup. E3 keeps orchestration, scoring aggregation and records. **Network layout:** a private, loopback-only network namespace shared by the driver and the program, with separate filesystem and PID isolation (bwrap, as v1) and separate cgroups (the driver outside the program's scope). Probed on this host 2026-10-31: unprivileged `unshare -rn` gave `net:[4026532221]` against the host's `4026531833`; in it `ip link set lo up` worked and a Python server and a driver exchanged `ping→PING` over `127.0.0.1` with identical `/proc/<pid>/ns/net`; `--mount-proc` was refused, so PID and filesystem isolation come from bwrap. **D40 is not weakened:** the pre-freeze gate runs on this layer in E1. The producer/consumer table of §6.1 names the shared artefact, its probes and what invalidates earlier evidence. Resolves change 3.1 | this plan (epoch 4 re-review; consult `16e5f408`, verified on this host by the team lead) |
 | D40 | **The freeze order (the root cause of the two stops):** before a spec freezes, **both draft references execute the visible samples through the distributed runner in the final sandbox environment**; draft references are allowed before that gate; calibration with held-out cases stays after the freeze. So E1.S6's sample files exist before each spec's conformance gate. **The draft references are written in E1 (E1.S2a) by the team lead with Sonnet coders per the role table, one per stack per task; they live in the bench's private area `~/rsd/lang-v2/refs/` — outside the task repository's git, beside the held-out material — and E2.S1 finalises, validates and calibrates them.** **The D40 gate also runs each task's riskiest held-out-shaped scenarios** through the runner, kept out of git and **listed in the private aid** (`~/rsd/lang-v2/test-design/PLAN-risky-scenarios.md`, D41): some tasks have private pre-freeze scenarios, listed in the private aid with their counts; the public text names none of them | this plan (epoch 3 re-review; consult `3ea9ef36`; the scenario list moved to the private aid at the epoch 4 round) |
-| D20 | **Two arms, as v1's parent plan designed them.** **Bare:** 3 runs per task per stack on pure Opus with the task prompt only. **Process:** 3 runs per task per stack under our rules — the harness, the pinned conventions, the coai gates (plan gate, code gate, consultant), an Opus team lead and Sonnet coders. So each task has **6 repeats per stack**, 120 data sessions. v1's parent plan is reused for how the process arm is run and measured (§4.2, §6, §8); "bare first, process out of scope" is withdrawn everywhere | operator, 2026-10-31 (instruction A) |
-| D21 | **Task specs are written by the team lead**, not by the agents under test (two kinds of "spec", OP-10: the team lead writes the *task* specs; a cornerstone story's *story* spec — the brief a Fable writes per the role table — is a different document). Each of the 10 specs goes through the **coai gates by all the rules, with a consultant**; the gated specs are stored in the new repository at **`todo/tasks/NN-slug.md`**; after the gate they are **FROZEN** (a tag `spec-frozen-<yyyymmdd>` and the hashes in this repository's pre-registration; the harness refuses a session whose spec blob differs). Then, per language and in isolation, the **process-arm agent makes its own plan** from the frozen spec; that plan goes through the gates in its run; **the task spec is never changed**. One story (E1.S2) covers the ten specs with per-task acceptance criteria | operator, 2026-10-31 (instruction B) |
+| D20 | **Two arms, as v1's parent plan designed them.** **Bare:** 3 runs per task per stack on pure Opus with the task prompt only. **Process:** 3 runs per task per stack under our rules — the harness, the pinned conventions, the coai gates (plan gate, code gate, consultant), an Opus team lead and Sonnet coders. So each task has **6 repeats per stack**, 120 data sessions. v1's parent plan is reused for how the process arm is run and measured (§4.2, §6, §8); "bare first, process out of scope" is withdrawn everywhere *(2026-11-01, D44:) the 120 are groups B and C; group A adds 24 bare sessions of four tasks as the pre-registered replication, so the series has 144 data sessions.* | operator, 2026-10-31 (instruction A) |
+| D21 | **Task specs are written by the team lead**, not by the agents under test (two kinds of "spec", OP-10: the team lead writes the *task* specs; a cornerstone story's *story* spec — the brief a Fable writes per the role table — is a different document). Each of the 10 specs goes through the **coai gates by all the rules, with a consultant**; the gated specs are stored in the new repository at **`todo/tasks/NN-slug.md`**; after the gate they are **FROZEN** (a tag `spec-frozen-<yyyymmdd>` and the hashes in this repository's pre-registration; the harness refuses a session whose spec blob differs). Then, per language and in isolation, the **process-arm agent makes its own plan** from the frozen spec; that plan goes through the gates in its run; **the task spec is never changed**. One story (E1.S2) covers the ten specs with per-task acceptance criteria *(2026-11-01, D45:) per group — one freeze tag per group (`spec-frozen-<group>-<yyyymmdd>`), and "after the pre-registration never" reads "after its first pre-registration never": a spec frozen for A never changes in B or C.* | operator, 2026-10-31 (instruction B) |
 | D22 | **Cross-language tests: one shared black-box acceptance suite per task** that runs unchanged against both implementations — stdin/stdout for olympiad tasks, HTTP for web APIs, TCP/RESP and signals for daemons. Written once, in one neutral harness language, **owned by the bench**, not by either stack. A **visible part** (samples in the workspace) and a **held-out part** (outside git). The harness language is **Python 3, standard library only, run with `-I`** — v1's held-out runner — because it is third to both stacks; the argument is §4.3 | operator, 2026-10-31 (instruction C); the language choice: this plan |
-| D23 | **The conventions are pinned in the new repository, as in the other `dew_flow` repos, at a release that passes a conventions parity audit:** every C#/.NET rule in `dew_flow_conventions` has an equivalent Node/TypeScript rule adapted to Node, and the other way round. The audit **runs now, in parallel** (E0.S1); its result is a prerequisite story: missing counterpart rules are written and released in `dew_flow_conventions` **before the v2 pre-registration** (E0.S2), and the new repository pins that release (E0.S3). Threat T14 names the bias the audit controls | operator, 2026-10-31 (instruction D) |
+| D23 | **The conventions are pinned in the new repository, as in the other `dew_flow` repos, at a release that passes a conventions parity audit:** every C#/.NET rule in `dew_flow_conventions` has an equivalent Node/TypeScript rule adapted to Node, and the other way round. The audit **runs now, in parallel** (E0.S1); its result is a prerequisite story: missing counterpart rules are written and released in `dew_flow_conventions` **before the v2 pre-registration** (E0.S2), and the new repository pins that release (E0.S3). Threat T14 names the bias the audit controls *(2026-11-01, D48:) "before the v2 pre-registration" means before group C's pre-registration.* | operator, 2026-10-31 (instruction D) |
 | D24 | **Primary metric: cost per correct solution.** For task t, stack s and arm a: `CPC(t, s, a) = Σ cost of all data attempts of (t, s, a) / number of accepted solutions among them`. Beside it: success rate (accepted / attempts), tokens per model and kind, wall, `model_api`, `active − model_api`. A cheap unfinished run never looks like a winner: it adds to the numerator and nothing to the denominator. A (t, s, a) with **0 accepted** shows **"no correct solution"** plus its attempts and its total spend (labelled spend, not CPC) and is **not dropped**; its C#/TS ratio is **undefined** and reported as an outcome, never as a bound (§9, consult `68a33be2`). A second line counts void attempts in the numerator too (§9) | operator, 2026-10-31 (instruction E1); the void line: this plan |
 | D25 | **The same functional requirements and the same checks for both stacks.** Statements describe the required behaviour neutrally. **The trap list is an INTERNAL test-design aid**, kept with the held-out material in the private area (D41), never in a statement **and, from 2026-10-31, never anywhere public before the series ends — not in this plan, a stories document, a review body or a PR description**; **every held-out test checks behaviour the statement requires**. **Review step:** a reviewer — the coai document gate plus a consultant — checks each statement and its tests for a bias toward or against one language's specifics, before the freeze (D21) and before the suite is sealed. The trap table is kept, on the test-design side (§4.3) | operator, 2026-10-31 (instruction E2) |
-| D26 | **Freeze before any paid data run:** tasks (specs), tests (suites, hashes, counts), budgets (the $50 per-session cap, D7; no ceiling or split since the owner's decision), the analysis (§9), the exclusion grounds (voids, stops) and the re-run grounds — all in the pre-registration, tagged. **Every attempt is kept**, including failed, voided and re-run ones, in the records and the report | operator, 2026-10-31 (instruction E3) |
-| D27 | **Spread the 6 repeats per task over time:** a seeded random task order per round; the paired concurrent C# ∥ TS start of v1 stays; the CPU masks alternate per pair as v1 did; **bare and process rounds interleave** (D10), so one good or bad API day does not decide the result; the start and end time of every session is recorded | operator, 2026-10-31 (instruction E4) |
+| D26 | **Freeze before any paid data run:** tasks (specs), tests (suites, hashes, counts), budgets (the $50 per-session cap, D7; no ceiling or split since the owner's decision), the analysis (§9), the exclusion grounds (voids, stops) and the re-run grounds — all in the pre-registration, tagged. **Every attempt is kept**, including failed, voided and re-run ones, in the records and the report *(2026-11-01, D45:) per group — each group's pre-registration freezes its own tasks, tests, budgets, analysis and grounds before that group's first paid data run, and adds to the earlier groups' tags, never alters them.* | operator, 2026-10-31 (instruction E3) |
+| D27 | **Spread the 6 repeats per task over time:** a seeded random task order per round; the paired concurrent C# ∥ TS start of v1 stays; the CPU masks alternate per pair as v1 did; **bare and process rounds interleave** (D10), so one good or bad API day does not decide the result; the start and end time of every session is recorded *Superseded in part by D44 (2026-11-01): "bare and process rounds interleave (D10)" no longer holds — the arms run in different groups; the spread over time holds inside each group; the cost is T16.* | operator, 2026-10-31 (instruction E4) |
 | D28 | **Analysis is per task:** 10 tasks with repeated measures, not 120 independent samples. Each task is shown; the **overall result is the median of the per-task C#/TS ratios** (primary), the **geometric mean of the per-task ratios** beside it, and the **count of tasks where C# is higher** — per arm and per measure; pre-registered. No expensive task may hide the others: no pooled sum across tasks is a headline | operator, 2026-10-31 (instruction E5); the choice of the median as primary: this plan |
 | D29 | **Known and original tasks are shown separately**, and the report discloses that the five public tasks may be familiar to the model | operator, 2026-10-31 (instruction E6) |
 | D30 | *Superseded by the owner on 2026-10-31 (D1, D7):* the $1000 total is removed, so no split between arms is derived and Q-A is closed. Was: "The $1000 is not changed by this plan. With two arms (120 data sessions) and dearer process sessions, the split between arms is re-derived from the pilot (§12); whether $1000 covers both arms or the process arm needs its own limit is open (Q-A)." What stays: the pilot still measures real costs and reports the formula's cap as a cross-check beside the owner's $50 | operator, 2026-10-31 (instruction F); superseded by the owner, 2026-10-31 |
@@ -286,6 +314,16 @@ the open questions (§17) name what they do not settle.
 | D32 | **v2 builds the process-arm pieces itself** (E3.S6–S9): the coai box and the stdio↔socket bridge, the process templates, rulesets and PATs (the repository side in E1.S7), the process runner, the compliance checker, P0 and the model smoke. They do not exist: v1's E2.S3, E2.S4 and E3.S1–S3 are not built. **v1 is closed after its bare arm; v2 is the active plan.** v1's parent plan gets only a STATUS line saying its process arm moved to this plan — a status update, not a plan change — as a follow-up outside this commit (§16). v1's design (its §4.2, §5.4, §6, §7.2, §8) stays the specification v2 builds to | team lead, 2026-10-31, from the coai plan gate (closes Q-B) |
 | D33 | **Task 9 I/O: option (a).** The spec `todo/tasks/09-switched-routes.md` (the path carries no needle word — change 4.1; `09-werewolf.md` was the earlier name) defines an exact stdin/stdout grammar and the agent implements the parser. There is no frozen helper or adapter code in `csharp/09-*` or `node/09-*`; the workspace holds the same files as every other olympiad task | team lead, 2026-10-31, from the coai plan gate (closes Q3) |
 | D34 | **Metrics are only added, never replaced or dropped.** Every v1 metric stays in every v2 record, per session and per pair: the four cost views (headline recompute, E envelope, O OTel, B broker) with the checks T1–T5; tokens per model and kind, with the 5m / 1h cache-write split; the exclusive time partition (wall spawn to exit, `model_api`, `active − model_api` and the per-category spans); visible and held-out quality as counts, `percent` and `defects`; outcome class, labels, flags and charges; the process arm's compliance items. v2 ADDS beside them: the cost per correct solution (D24, and its void line), the success rate, the per-task medians and geometric means (D28), and the known/original split (D29). A v2 table may lead with a new metric; it never omits a v1 one | operator, 2026-10-31 ("only add metrics") |
+| D44 | **The staged series (change 4.2).** The series is built and run in **three groups, each to its own evidence before the next starts**. **Group A:** the four olympiad tasks 01, 02, 03 and 09, bare arm only. **Group B:** the bare arm for all ten tasks — the six others **and A's four again**: B's runs of 01, 02, 03 and 09 are a **pre-registered replication**, registered at A in that role (not a replacement, not extra repeats), so A's and B's figures for those four stand side by side with the drift table and are never pooled (D46). **Group C:** the process arm for all ten. **Nothing is dropped:** every task, arm, metric, test and acceptance criterion stays; the order of building and running changes. A group's **evidence** is its pre-registration (its own tag, D45), its pilot and, where its arm needs one, its A/A (§11), its three rounds (§4.4) and its interim record (D49). B's building may overlap A's rounds, because nothing of B can change A's pinned manifest (D45); B's paid sessions start only after A's interim record, and C's after B's. Data sessions: A 24 (4 tasks × 2 stacks × 3), B 60 bare, C 60 process — 144, of which D20's 120 are B's and C's. **The exploratory pilots** (task 1 on main; the olympiad plan `todo/PLAN_lang_explore_olympiad.md`) are never v2 data: their references, generators, brute-force checkers and cases may seed E1.S2a and E2.S2 **only through v2's own chain** (the D40 gate, the joint validation, the mutants, the bias review), and A's `prediction.md` discloses that an exploratory run of the same four tasks on another harness came first. For the staged series this supersedes D10's alternation, D27's interleave of the arms, D16's one pilot, D4's pilot set and §14's single order — each marked in place | owner, 2026-11-01 (the staged order); the shape: this plan (epoch-5 re-review; consult Fable § 1–2, § 5; coai cadence `f25ad04b`); B re-runs A's four: the team lead, 2026-11-01 |
+| D45 | **A spec freeze and a pre-registration per group; append only.** Tags `spec-frozen-A-<yyyymmdd>` and `spec-frozen-B-<yyyymmdd>` (C freezes no spec: it runs the ten frozen ones), and `prereg/lang-v2-A-<yyyymmdd>`, `-B-`, `-C-`, each committed before its group's first A/A or pilot launch (E4.S3 per group). Each pre-registration pins an **immutable group manifest**: the task membership; per task the spec and sample hashes and the freeze tag's commit and tag-object shas; FORMAT's sha; the runner manifest and the grammar's hash; the execution layer's identity; the D40 gate records; the registered limits; the certifying host (host, kernel, cgroup, the probe — a WSL kernel update between groups is recorded and re-probed, never a void); the culture and `TZ`; the pins of D47; the package sets and cache hashes; the $50 cap; the group's analysis contract (§9); `prediction.md`; `seed-<group>.sha256`. **Append only across groups:** a later tag may add and may never alter what an earlier tag fixed for a shared task (spec, suite, limits, prompt, the environment allow-list); A's tag is never moved and A's pinned FORMAT is never replaced. **D21's "after the pre-registration never" reads "after its first pre-registration never"**: a spec frozen for A never changes in B or C, even when A's paid rounds find a defect — blind adjudication handles that (§4.3). **FORMAT's sections are classed** `common`, `olympiad`, `daemon` or `web` (E1.S9, one line per section): after A's freeze the `common` and `olympiad` sections are immutable for the series; a `daemon` or `web` section may be amended before B's freeze, and such an amendment touches no olympiad suite (G-17 stands as written); `inputs/specs.json` records FORMAT's sha per group, and an olympiad spec must pass the conformance check under both shas (T-L39). A later FORMAT change is a new dated version naming the tasks it touches; a group that adopts a changed contract for an earlier group's task needs fresh evidence for it (the D40 gate, calibration) before any launch, and its sessions under the two contracts are separate cohorts — never relabelled, never pooled (T-L48). A launch is checked against the selected group's manifest | this plan (epoch-5 re-review; consult Fable § 2.1, § 5 items 1–2; coai risk `b11c7e5a`) |
+| D46 | **CPC per group; A is the replication; never pooled.** `CPC(t, s, a)` (D24) is computed **per group**: for 01, 02, 03 and 09 the bare CPC of A and of B stand side by side with a **drift table** — per task and stack the two groups' CPC, success rate, tokens and time, and every identity that differs between them — and are **never pooled**. **The ten-task bare headline (§9) is B's**; A licenses its four per-task lines and the olympiad per-kind line and is reported as the pre-registered replication of those four. **Never pooled:** (1) A's and B's sessions of one task into one CPC, success rate or time figure; (2) bare and process sessions; (3) sessions under different model ids; (4) sessions under different CLI copies or price tables without the per-version line; (5) A's per-task ratios into B's ten-task median; (6) pilot, A/A, smoke and anchor sessions with data. The drift table is a required section of the record (§9, E6) | team lead, 2026-11-01 (B re-runs A's four, the replication role registered at A — which meets coai cadence `f25ad04b`'s condition); the rule: this plan (consult Fable § 2.5, § 3.2) |
+| D47 | **One model, one alias baseline and one CLI copy for the series.** The Claude CLI is re-pinned **once, at group A's pre-registration** (D8's re-pin, taken once) and kept through C. Pinned for the series the same way: the toolchain checksums (D6's "latest on 2026-10-31" is fixed for the series; no newer patch between groups), effort `high`, the tool list, `--strict-mcp-config`, a fresh `CLAUDE_CONFIG_DIR`, the bare prompt template (finalised at A, byte-stable for B and C; §4.5), D15's allow-list (frozen at A; a key needed later is added for every task or for none), the cache snapshot hashes (the full set built before A, E1.S4) and the layer identity (D51). **The alias baseline is inherited across groups:** v1's alias store lets the FIRST session of a series set the baseline (`spikes/minigit-bench/lib/alias-store.mjs:1`), so three separate series could each accept a different resolved model and no drift would be reported; v2 keeps **one** baseline, set by **the first session of group A**, and every later session of A, B and C is checked against it — a new id stops the series as v1's alias record does (T-L40; duplicate enrollment T-L41; a resume against the wrong manifest T-L42). A forced change of the CLI or the model is an **instrument amendment**: dated, the A/A re-run, reported per version. What `lib/aliases.mjs` cannot see stays as T8 says: a change behind an unchanged id. Closes Q10 | team lead, 2026-11-01 (the inherited baseline, on coai cadence `f25ad04b`); the CLI and pins: this plan (consult Fable § 3.1) |
+| D48 | **E0 is a prerequisite of group C only.** The parity audit and release (D23, E0) control the process arm (T14); the bare box holds one task folder and no conventions (D11, T-L2). So **E0.S3's pin is a prerequisite of group C's pre-registration only**, not of A's or B's; E0 still runs now, in parallel; E4's dependence on E0.S3 is E4-C's | this plan (consult Fable § 1.1) |
+| D49 | **Interim records, and publication after C.** Each group is analysed as soon as its rounds are scored (E6.S1–S2 per group). Its **interim record** (`research/lang-v2/RESULTS_lang_v2_<group>_<date>.md`, generated) carries **counts and rates only** — no case text, no per-case adjudication narrative, no trap coverage table, no reference. A's blind-adjudication packets and verdicts stay in the private area and are published with the final record. **"Published after the series" (§4.3, §5, T2, E6.S3) means after group C.** `leakcheck` on every push uses **every group's** held-out needles, the frozen groups' included. Sealing is one archive per task (§4.3). The series' headline exists only after C | this plan (consult Fable § 5 item 3; coai cadence `f25ad04b`) |
+| D50 | **The runner between A and B: two manifests, three guards.** Group A runs on the runner manifest of E1.S8a parts i and ii-a; part ii-b (networking and lifecycle) grows `runner/` before B, so B has a second manifest. The guards: (1) **an AST and hash test** that the olympiad modules are byte-identical across the two manifests and give identical verdicts and JSON results on the olympiad fixtures (T-L38); (2) **B re-runs the D40 gate and E2.S3's calibration for 01, 02, 03 and 09 on B's identities** before B's pre-registration — no model, no spend; T-L36 marks A's records `stale` for B and the new records are B's; a limit that comes out different is a finding, recorded and resolved before B's tag and never applied to A's sessions; (3) the record's drift table names both manifests. `GRAMMAR.md` stays identical while FORMAT's `common` and `olympiad` sections stay (D45); a FORMAT amendment of a `daemon` or `web` section takes the same guard. The other choice was option (i): build part ii-b before A, one runner identity for the series, at about a day of A's time | team lead, 2026-11-01 (option (ii) of consult Fable § 3.1) |
+| D51 | **The execution layer whole before A; the runner's part ii re-cut; the memory view asserted.** **E1.S8b is built whole before group A, the netns holder included:** CP2 fixes the series' verdict machinery once; an olympiad program needs no network and gets the holder's loopback-only namespace without a second code path; and a holder added in B would change the layer identity and re-date every A gate and limit (§6.1). **E1.S8a part ii is re-cut:** **ii-a**, needed for A — `--launch-prefix`, `--launch-status` (consult B5), the pidfd waits and the wall rule (B6), `--case-view` (B7), the cgroup memory read and the kill through `cgroup.kill` (B4), V11, V12; **ii-b**, needed for B — `rs_net`, the daemon and web lifecycle, readiness within T, `signal TERM` and G, V3–V5, V7. **Before E2-A calibrates, E1.S8b's probe ASSERTS** — not only prints — what each runtime believes its memory limit is, **through the final execution prefix at `MemoryMax` 256 MiB and 512 MiB**: whether the cgroup is visible inside the box (the `--tmpfs /` base binds no `/sys/fs/cgroup`), .NET's `GC.GetGCMemoryInfo().TotalAvailableMemoryBytes`, Node's `process.constrainedMemory()` and V8's heap limit, against the host's `prog/memory.max`; allocation-churn fixtures with bounded live data complete in both stacks, and over-limit fixtures fail with their memory evidence kept (T-L43). **OP-K (D15: `DOTNET_GCHeapHardLimitPercent`, or a read-only cgroup view in the box) is decided by the team lead on that asserted record before E2-A calibrates** | team lead, 2026-11-01 (on consult Fable § 1.2; the probe from coai risk `19ae7208`) |
+| D52 | **Publication and comparison guards.** (1) **The GitHub broker has a host-side publication gate** (E3.S7a): every outgoing object and API payload — commits, commit messages, PR titles and bodies, comments — is scanned on the host before the broker mirrors or posts it, because mirroring and API-created PRs bypass the task repository's client-side hook; tested with that hook disabled: zero outbound publication calls for forbidden content (T-L45). (2) **The run base is bound** (E1.S7): the approved frozen commit is bound to the generated tree and to the final orphan sha; the push check scans **that exact orphan**, proves locally that its parent list is empty, and refuses a build from a wrong commit before any push (T-L46). (3) **The push check's exemptions are exact** (E1.S1): an exemption names an approved value at an approved place — a path, or a reviewed passage pinned by its hash — never a class of text; the rules "a six-word window inside one whitespace token is not a hit" and "any Markdown text published at `origin/main` is public" give way to such entries, because a passage joined with `/` or `-` is one token and published fragments can be recombined (T-L47). Paraphrase defeats six-word matching, so the semantic review of an aid-informed spec stays with its gate and bias review (D25). (4) **V2 never calls `Decimal.normalize()` before equality** (E1.S8a): under the default context it rounds to 28 digits, so two distinct 30-digit values would compare equal (confirmed by the team lead's re-run; the runner does not call it); numbers compare by exact `Decimal` equality only (T-L44) | team lead, 2026-11-01 (coai risks `b3a3e5d6`, `19ae7208`) |
+| D53 | **The budget per group: information, no new halt.** The $50 per-session cap (D7) holds for every session of every group; for an olympiad session it is a runaway guard only. **No new halt is added:** the owner removed the total ceiling on purpose, and the exploratory plan's $60 pause point is that plan's rule, not imported here. Per group the plan adds **information**: a projection line in each group's pre-registration and a settled ledger line per group (`A: data / pilot / A/A / void / re-run`, the same for B and C), so the owner sees each group's cost before the next group's paid sessions; the pilot formula's cross-check cap (G-18) is computed per arm per group and reported beside $50 (§12) | team lead, 2026-11-01 (consult Fable § 4) |
 
 ## 4. Design
 
@@ -346,7 +384,10 @@ apart agree on every held-out case (E2.S1). **Gate and freeze:** each spec goes 
 `purposeText` naming who acts on it (the agents under test, in both stacks, and the suite's author), plus a consultant, plus
 the bias review of D25; every finding resolved; then the tag `spec-frozen-<date>`; the spec's sha256 in `inputs/specs.json`
 here. After the tag the spec changes only by a dated amendment applied to both stacks **before** the pre-registration; after
-the pre-registration never.
+the pre-registration never. *(2026-11-01, D45:) per group — the tag is the group's `spec-frozen-<group>-<date>`, and "the
+pre-registration" is the spec's first one, so a spec frozen for A never changes in B or C. FORMAT's sections are classed
+`common`, `olympiad`, `daemon` or `web`; after A's freeze the `common` and `olympiad` sections are immutable for the series;
+`inputs/specs.json` records FORMAT's sha per group.*
 
 ### 4.2 The two arms (D20; v1 §4.2 reused)
 
@@ -460,6 +501,13 @@ the suite is sealed; Q-C names the residual).
 blind (product defect / spec ambiguity / harness defect) in two steps, stack and arm masked in step 1; a case classed
 ambiguous yields a revised score beside the primary.
 
+**Per group (D44, D45, D49; 2026-11-01).** Sealing is **one archive per task**, `heldout/suite-<task>.enc`, so sealing B's six
+tasks never touches A's sealed bytes. The trap coverage table and the sealed counts are registered per group
+(`inputs/heldout-prereg-lang.json` gains a `group` field; the table's hash per group). The same held-out suites of 01, 02, 03
+and 09 serve A and B, so a group's interim record carries counts and rates only, A's adjudication packets and verdicts stay
+in the private area, and the table, the references and the adjudication detail are published only after group C (D49). A
+defect A's rounds find in a frozen spec is not fixed in the spec: blind adjudication classes the case (D45).
+
 ### 4.4 Cells, pairs, rounds, order (D9, D10, D27)
 
 - Session = (arm, task, stack, repeat n), n ∈ 1..3; 120 data sessions in 60 pairs. `rid = sha256(seed:<arm>:t<task>:<stack>:r<n>:a<attempt>)[0:6]`,
@@ -469,11 +517,19 @@ ambiguous yields a revised score beside the primary.
   before the next pair starts; scoring runs on all CPUs after the cells end.
 - Six rounds, arms alternating, the leading arm and the task order per round from the seed (D10); `seed.sha256` committed
   with the pre-registration, `seed.txt` revealed after the A/A and before round 1 (v1's commit-reveal). Every session's
-  spawn and exit time is in its record (D27).
+  spawn and exit time is in its record (D27). *(Superseded for the staged series, 2026-11-01: the last item of this list.)*
 - The void and re-run rules of v1 (§9) apply per session; a void is re-run once, after the round's own pairs and before the
   next round; a re-run whose partner stands runs alone and is labelled `ran unpaired`. The process arm adopts v1's
   `void: no reviewer` (`call_human` with zero reviewers answering) and keeps `call_human` with ≥ 1 reviewer as a data point.
 - The machine-quiet check before every pair; load during a pair is flagged, never a void (v1 E3b.S2).
+- **Per group (D44; 2026-11-01).** **A:** 3 bare rounds; a round runs the four tasks once each in a seeded order; pairs
+  C# ∥ TS in one tick with swapped masks (`maskFor`); a task's second repeat only after every task of the group ran once.
+  **B:** 3 bare rounds over the ten tasks, the same rules. **C:** 3 process rounds over the ten. **One seed per group**,
+  committed and revealed per group (`seed-A.sha256` at A's tag, `seed-A.txt` revealed after A's A/A; the same for B and C);
+  `rid = sha256(seed:…)` stays distinct because the seeds differ. **`group` is in every session record and in T-L11's list of
+  known fields**; `resume` refuses a series directory whose group manifest is not the selected one (T-L42), and a session
+  already enrolled is refused a second enrollment (T-L41). The six alternating rounds above are superseded for the staged
+  series (D10); the void and re-run rules, the quiet check and the pair rules stand inside each group.
 
 ### 4.5 Prompts
 
@@ -521,7 +577,8 @@ the registered sentence) **Web API tasks add a second varying sentence, the fram
 same shape: *"Use {FRAMEWORK} ({PACKAGE} {VERSION}, listed in PACKAGES.md) for the HTTP server."* — C#: `ASP.NET Core
 Minimal API` (the shared framework of SDK 10.0.403); TypeScript: `Fastify` (`fastify` 5.12.7). So a web workspace's
 `STATEMENT.md` differs across stacks in exactly two sentences, both registered in `prompts-lang.json` (E4.S2); every other
-task differs in one.
+task differs in one. *(2026-11-01, D47:) the bare template is finalised in group A's E4.S2 and stays byte-stable for B and
+C; the process template is finalised in group C's E4.S2.*
 
 ### 4.6 Stacks and packages (D5, D6)
 
@@ -590,6 +647,9 @@ frozen sha into `~/.cache/lang-v2/<sha>/` and checks every workspace file agains
 of one task differ only in the stack sentence and the stack's pin files (v1's `template-diff`). The lifecycle checker reads
 only `todo/PLAN_*.md`, so `todo/tasks/*.md` needs no status line; each spec carries a header naming its gate verdict, its
 freeze tag and the sentence "frozen: changes only by a dated amendment before the v2 pre-registration".
+*(2026-11-01, D45:)* the bare harness fetches each group's frozen sha; the process harness of group C cuts its run bases from
+the last freeze tag (B's), which holds all ten specs with A's four byte-equal to A's tag (T-L39); the specs' "frozen" sentence
+reads per group as D45 says.
 
 ## 6. The harness — `spikes/lang-bench/`, importing `spikes/minigit-bench/`; the boundary with v1
 
@@ -606,9 +666,9 @@ through named seams with tests. v2 does the same one level up: **new modules in 
 | `launchSession` | **as is** |
 | E/O/T/B, T1–T5, `sessionCost`, `crosscheck`, the alias record (v1 D12) | **as is**; the v2 policy starts from v1's `t3 stop` and is re-decided by the v2 A/A |
 | `spansFrom`, `partition`, the categories | **widened:** `build_test` learns `bash build.sh`, `bash run.sh`, `dotnet publish`, `node --test`, `npm test`, the drivers' commands; the process categories (`coai_gate`, `consultant`, `ci_wait`, `sleep300`, `hooks`) as v1 defined them; a test per new literal |
-| Held-out sealing, calibration, leakcheck, adjudication, the Python runner | **as is**, pointed at `~/rsd/lang-v2/`; the archive holds ten suites' held-out parts, the trap coverage table and the mutants' ids; the runner gains the driver modes (D22) |
+| Held-out sealing, calibration, leakcheck, adjudication, the Python runner | **as is**, pointed at `~/rsd/lang-v2/`; the archive holds ten suites' held-out parts, the trap coverage table and the mutants' ids; the runner gains the driver modes (D22). *(2026-11-01, D49: one sealed archive per task, `heldout/suite-<task>.enc`; the table registered per group)* |
 | The scorer pipeline on a pristine copy | **widened:** a `kind` step after the build — the olympiad judge, the daemon driver, the web driver (new `lib/judge-stdio.mjs`, `lib/driver-process.mjs`, `lib/driver-tcp.mjs`, `lib/driver-http.mjs`, `lib/rss-sampler.mjs`, `lib/cgroup-limits.mjs`, each a thin Node wrapper over the Python suite runner) |
-| The bare runner: pairs, masks, voids, re-run, resume, records, prereg guard, spend gate | **widened:** an arm and a task dimension and a `single` phase (no barrier, no v2 copy); six alternating rounds; the schedule drops the v1→v2 rows; the record gains per-kind and per-arm fields; `PREREG_FILES` is the v2 list; the spec-freeze guard |
+| The bare runner: pairs, masks, voids, re-run, resume, records, prereg guard, spend gate | **widened:** an arm and a task dimension and a `single` phase (no barrier, no v2 copy); six alternating rounds; the schedule drops the v1→v2 rows; the record gains per-kind and per-arm fields; `PREREG_FILES` is the v2 list; the spec-freeze guard. *(2026-11-01, D44, D45: a `group` dimension and the group manifest; three rounds per group, not six alternating; `PREREG_FILES` per group; resume checked against the group's manifest)* |
 | The quiet check, CPU sampler, spin probe | **as is** |
 | Cache snapshots | **as is**, with the v2 recipes |
 | `aaVerdicts` G-1 … G-14 | **widened** with G-15 … G-19 (§11) |
@@ -642,6 +702,15 @@ deadlines, SIGTERM and the grace G, cleanup of the scope and the namespace. Its 
 | **E1's freeze** (the D40 gate) | before each spec freezes | the layer with the pinned runner (S8a): both draft references, every visible sample, the riskiest-contract scenarios | T-L33 (netns shared, cgroups separate), T-L34 (sentinel unreadable; scope kill removes descendants, driver survives; identical for both stacks), T-L31 (`exec`), T-L32 (culture) | a change to the layer or the runner **re-runs the D40 gate for every spec frozen on the old one** before the pre-registration; a spec amendment re-runs it for that task |
 | **E2's validation and calibration** (S1, S3) | after the freeze | the same layer, the same runner, the held-out suites | the same probes, plus T-L7/T-L25 (the registration order) | a change to the layer **voids every registered limit** (G-17's rule widened: the calibration ran on another environment) and re-runs calibration; a spec or `FORMAT.md` amendment voids that task's |
 | **E3's scoring** (S4) | every session | the same layer, orchestrated by the runner's phases; E3 adds only aggregation and records | the same probes, run once on the series host before the A/A (G-15/G-16 read them by hand) | a change to the layer after the pre-registration is an instrument amendment: dated, the A/A re-run (v1's rule); after round 1 it stops the series until the A/A is GO again |
+| **Each later group** (B, then C) — added 2026-11-01 (D44, D50) | before that group's pre-registration | the same layer; in B the second runner manifest (part ii-b), and for A's four tasks the D40 gate and E2.S3's calibration re-run on B's identities | T-L36 (A's records `stale` for B), T-L38 (olympiad byte-identity across manifests), T-L39 (A's spec blobs equal across the tags) | the group contract rule below |
+
+**The group contract rule (D44, D45, D50; 2026-11-01).** After a group's pre-registration, a change to a shared artefact —
+FORMAT, the runner, the layer, the record shape, the prompt, the environment allow-list — is one of two things, and the
+change's record says which: **(a) an instrument amendment** — behaviour on an earlier group's path changes: dated, that
+group's A/A re-run, its tasks re-gated and re-calibrated, both identities in the record, the sessions under the two
+identities separate cohorts (D46); or **(b) an addition on another kind's path only** — proven by T-L38's byte-identity and
+verdict-identity test (for the runner) or by FORMAT's section classes (D45). Part ii-b between A and B is case (b) with D50's
+three guards. Nothing in a later group moves an earlier group's tag or replaces its pinned artefacts.
 
 Disjoint: the layer owns how a program runs; the runner owns what is sent and compared; E3 owns which sessions run, in
 what order, and what is recorded. A defect found in the layer by any consumer is fixed in the one place and every
@@ -672,6 +741,11 @@ unchanged. New in v2:
 - **The 18 instrument defects of v1** (RESULTS §11): the fixes of 16–18 are on `feat/minigit-bench-e3b-fix2`, which no paid
   series has run. v2 runs on a harness that carries them; the v2 A/A is the first paid run of that scan. Every void in v2 is
   replayed with the current scan at report time, as v1's `replay.mjs` does, and the record says which voids were the scan's.
+- **Across groups (D44, D49; 2026-11-01).** `leakcheck` uses every group's held-out needles on every push, the frozen
+  groups' included. At A's freeze the four specs and their workspaces are public; the six others stay local until B's
+  freeze (the push check already refuses an un-credited known task). `workspace-diff` and T-L1 run over the task pairs that
+  exist in each group. OP-J (the run branches without the attribution section) stays a question for group C, when the first
+  run base is cut.
 
 ## 8. Accounting and time
 
@@ -685,7 +759,9 @@ model_api > other_tool > hooks`, then `coai_gate > consultant > ci_wait > sleep3
 wall, `model_api`, `active − model_api`; in the process arm **active time** (work categories only) stands beside wall (v1
 §10). `build_test` against `other_tool` descriptive only (v1's V16). Prices: a dated copy re-read on the series' first day.
 New in v2: per-session **scoring time** recorded apart from the agent's wall; per-case runtime of the olympiad tasks as a
-secondary measure; every session's spawn and exit timestamp (D27).
+secondary measure; every session's spawn and exit timestamp (D27). *(2026-11-01, D44, D46:)* prices: a dated copy per
+group, re-read on that group's first day; a group's CPC uses its own prices; when the prices differ between groups, every
+cross-group cost line carries a sentence saying so and shows tokens beside the cost, which do not depend on prices.
 
 ## 9. Pre-registration and analysis (D24, D26, D28, D29)
 
@@ -697,6 +773,27 @@ package sets and cache hashes; the conventions parity release sha (D23); the own
 void (exclusion) grounds and the re-run grounds; `prediction.md`; `seed.sha256`. After the pilot, amendments may change the
 caps, the stall timeouts, the limits (both stacks alike, by D14's formula), the time guesses and the split — never the
 treatment of one stack. `seed.txt` is revealed after the A/A.
+
+**Per group (D44–D47, D49; 2026-11-01) — the form in force for the staged series.** The one tag `prereg/lang-v2-<yyyymmdd>`
+above is superseded by **three tags**, `prereg/lang-v2-A-<yyyymmdd>`, `-B-` and `-C-`, each committed before its group's
+first A/A or pilot launch (E4.S3 per group); each freezes the paragraph above **for its group's tasks**, plus D45's group
+manifest, its projection line (D53) and its seed. Later tags add; they never alter an earlier one (D45).
+
+- **The analysis contract per group.** **A** licenses its four per-task lines and the olympiad per-kind line ("median over k
+  of 4 olympiad tasks"); the known/original split inside A is 3 : 1 and is shown as a listing, not a summary. **B** licenses
+  the ten-task bare lines — the bare headline (D46) — and the A–B drift table of 01, 02, 03 and 09. **C** licenses the process
+  lines, the process effect and the interaction, each with T16's window sentence: they compare across windows and are
+  historical comparisons, not concurrent ones. The series' headline exists only after C.
+- **Predictions.** The whole ten-task prediction below is registered **at A**, before any data. B's and C's `prediction.md`
+  may add lines, each marked "informed by group A" (or "by groups A and B"), and never retract one. A's discloses that
+  exploratory runs of the same four tasks on another harness came before it (D44); measurement rule 4 holds because the
+  prediction precedes A's paid rounds.
+- **The drift table** (D46) is a required section of B's interim record and of the final record: per task of A and per stack,
+  A's and B's figures side by side, and every identity that differs between the groups (runner manifest, FORMAT sha, the
+  prices, the host's kernel). If the owner chooses the bare anchor round in C (Q-G), its sessions are a drift check against B
+  per task and never data.
+- **Identities across groups** are pinned once (D47) and recorded per group: an identity that differs is named in the drift
+  table, never silently absorbed.
 
 **Outcome classes:** v1's twelve rows (`stop: alias drift`, `stop: security`, `stop: auth`, `void: contaminated`,
 `void: harness`, `void: harness (interrupted | disposed)`, `killed: cap`, `void: rate limit`, `void: upstream`, `killed: wall`,
@@ -751,7 +848,7 @@ finding (whether a sign test is shown as a secondary line is Q6). The report dis
 a claim about other tasks, models, CLI versions or the languages in general.
 
 **Prediction (draft, to be written verbatim into `prediction.md` in E4.S2 before the pilot; the pilot may amend the cost
-and time ranges by a dated line, nothing else):**
+and time ranges by a dated line, nothing else; 2026-11-01, D44: registered whole at group A, later groups add only):**
 
 1. Correctness, bare: success rate differs between the stacks on at least 2 of the 10 tasks; over 30 bare sessions each,
    the stacks are within 4 accepted of each other. Basis: the traps are balanced by design (D3, D25); v1 saw no quality
@@ -780,7 +877,7 @@ and time ranges by a dated line, nothing else):**
 | T5 | **Limits favouring one runtime.** A tight time or memory limit rejects the runtime with the larger baseline (JIT warm-up, V8 heap) | D14: limits from both references, 3 × and 2 ×, floors; G-17 re-checks on the series machine; per-case runtime recorded. *"No limit is below 3 × the slower reference or 2 × the larger reference peak."* |
 | T6 | **Harness-induced noise.** v1's 18 instrument defects voided sessions of one stack at a time (RESULTS §11); longer sessions, drivers, cgroups, coai and GitHub add failure modes; a driver hiccup reads as a product defect | The scan's fixes carried; every void kept, replayed and reported (D26); drivers and judge hand-checked (G-15, G-16); a scenario failure is adjudicated blind as product / ambiguity / harness (§4.3); `scored under load` flagged. *"Every void is named with its cause; harness defects are classed apart."* |
 | T7 | **Spec ambiguity in the originals.** Two correct readings give two correct programs and one failing suite | The team lead's specs go through the document gate, a consultant and the bias review before the freeze (D21, D25); two references written apart agree on every case before sealing (E2.S1); blind adjudication; the revised score beside the primary. *"Cases classed ambiguous are dropped for both stacks in the revised score."* |
-| T8 | **The model moves under a long series.** Six rounds take days; a model change behind one id is invisible | v1's alias record (D12) stops on a new id; rounds interleave arms and tasks (D10, D27) so a change hits both stacks, both arms and every task alike; every session's time is in the record. *"A change behind the same model id is not controlled; the interleave spreads it."* |
+| T8 | **The model moves under a long series.** Six rounds take days; a model change behind one id is invisible | v1's alias record (D12) stops on a new id; rounds interleave arms and tasks (D10, D27) so a change hits both stacks, both arms and every task alike; every session's time is in the record. *"A change behind the same model id is not controlled; the interleave spreads it."* *(2026-11-01, D44, D47:) under the staged series the interleave no longer spreads a change across the arms (T16); the controls are one alias baseline for the series, set by group A's first session, one CLI copy, the per-group drift table, and A's four tasks replicated in B.* |
 | T9 | **Prompt-cache warmth and CPU contention.** The two cells of a pair share the machine and the cache state | Same-tick start; masks swapped per pair; the quiet check; load flagged; first-turn cache read per session. *"Warmth and load meet both stacks of a pair alike; flagged pairs are shown apart."* |
 | T10 | **Floor and ceiling effects.** A task nobody passes or everybody passes separates nothing (v1 was at the ceiling) | The difficulty ladder of §4.1; prediction 7 names both cases; CPC shows "no correct solution" with its cost (D24); `percent` and `defects` carry information where `accepted` is at a floor. *"A task at a floor or a ceiling is reported as such and does not count as a difference."* |
 | T11 | **Time partition limits.** One Bash chain takes its highest category (v1's V16); longer sessions have more chains | The mixed-chain count per session; `build_test` against `other_tool` descriptive only; the primary time measures are wall, `model_api`, `active − model_api`. |
@@ -788,12 +885,27 @@ and time ranges by a dated line, nothing else):**
 | T13 | **Public repository, secret or held-out leak.** A link in a workspace or a case in a sample would reach the agent or the public; the process agent's PR bodies are public | D2's rules; `leakcheck` on every push and on every PR body and comment (v1 §7.6 token scan widened); `workspace-diff`; the needles. |
 | T14 | **Rule asymmetry biases the process arm.** v1 measured 34 rules / 331,833 B for C# against 32 / 324,781 B for TS; a rule that exists for one stack and not the other (a build flag, a test runner shape, a logging sink) is a treatment difference the process arm applies to one side only | **The conventions parity audit (D23, E0):** every C#/.NET rule has a Node/TypeScript counterpart and the reverse, released before the pre-registration; rule bytes actually read per session are recorded as v1's V1 asks. *"The process arm compares C#-under-the-family-rules with TS-under-the-family-rules; the rules were audited for parity at release `<sha>`, and the bytes read per session are in the record."* |
 | T15 | **The process arm is a bundle and its wall is mostly waiting** (v1 V1, V3): gates, consultants, CI, `sleep 300`; the bundle's C# half carries the analyzers, `-m:4`, MTP, warnings as errors | The partition; active time beside wall; the compliance score beside `accepted`; the interaction reported with the sentence v1 wrote. *"The process arm's C#/TS difference is C#-under-the-process against TS-under-the-process, not a language effect; process wall time is largely not agent time."* |
-| T16 | **Arm against time.** The two arms never overlap; v1's bare-first run confounded arm with window | D10's strict alternation of arm per round and the seeded lead; after every even round both arms have equal n and spanned the same days. *"Arms alternate by round; a window effect meets both arms."* |
+| T16 | **Arm against time.** The two arms never overlap; v1's bare-first run confounded arm with window | D10's strict alternation of arm per round and the seeded lead; after every even round both arms have equal n and spanned the same days. *"Arms alternate by round; a window effect meets both arms."* **Superseded for the staged series (D44, 2026-11-01), the text above kept:** the arms run in different windows (groups A and B before C), so the process effect and the interaction are read across windows, and a model or price change between B and C is not separated from the arm. Control: one model id and one alias baseline (D47), one CLI copy, the drift table (D46); the sentence in every process-arm table: *"The process arm ran after the bare arm, in a later window; the process effect and the interaction compare across windows and are historical comparisons, not concurrent ones."* The lost alternation is the narrowing of the epoch-5 re-review; the optional bare anchor round in C (Q-G) would measure the B→C drift instead of assuming it. |
 | T18 | **The public history keeps the trap rows.** This plan's §4.3 trap table and the per-task trap columns were public in #124, #127 and #128 before they were moved to the private area (D41); history is not rewritten | No new trap content anywhere public (D41); the process agent has no direct GitHub egress (D42), so the only road to that history is the model's memory of a public repository; the record discloses it and names the three merges. *"The trap design aid was public for one day in the bench's history; sessions could not fetch it, and whether a model recalls it is not controlled."* |
 | T19 | **The GitHub broker narrows the process arm.** A developer under the family's real process reads anything on GitHub; the process agent reads only its run's refs, PR and objects (D42) | Disclosed as a contract (D42), in the record and in every process-arm table; the compliance score and the delivery check are unchanged; the pilot (G-20) shows the normal clone, push, PR and checks workflows succeed under it. *"The process arm's GitHub access is run-bound by a broker serving an isolated bare repository per run; the process-arm result applies to two stacks under the same run-bound GitHub policy, not under the family's open one."* |
 | T17 | **Vendor reviewers saw the held-out cases** (the bias review of D25 sends suites to coai's vendors before sealing) | The agents under test have no network and the suite is sealed; the vendor models are not the agent under test; recorded as a residual (Q-C). *"Reviewers of other vendors read the suites before sealing; the agent under test never did."* |
+| T20 | **Staged groups** (D44, added 2026-11-01). The groups ran on different days; a later group's pre-registration was written knowing the earlier groups' results; interim records existed before the series ended | The whole prediction registered at A, later lines add-only and marked (§9); every group's identities and dates in the record; A's four tasks replicated in B with the drift table (D46); interim records carry counts and rates only (D49). *"Groups A, B and C ran in that order on different days; later pre-registrations knew earlier results, and the predictions they added are marked so."* |
 
 ## 11. Pilot and A/A (D16)
+
+**Per group (D44; 2026-11-01) — the form in force for the staged series.** The pilot and the A/A run per group, each before
+that group's first data pair; the paragraph after this table (one pilot before any data pair) is superseded for the staged
+series and kept; its GO table and the stops stand, each G-row in the group that exercises it.
+
+| Group | A/A | Pilot pairs (void, D16) | G-rows that gate it | Sessions |
+|---|---|---|---|---|
+| A | the bare A/A as D16 says: two identical bare C# sessions of task 3 (an olympiad task); it sets the T3/T5 policy (§6) and the noise floor of the v2 harness's first paid run | bare 1, 3 and **9** — task 9 so that the stall timeout (G-18: the longest quiet gap seen in any pilot session) and the bare wall (≈ 75 min, D4) are also set from a 45–60 min task | G-1 … G-14, G-15, G-17, G-18 | 6 pilot + 2 A/A |
+| B | re-run **only if an instrument identity changed** since A's — the runner manifest (expected, D50), the layer, the CLI copy, the model id, the toolchains (§6.1); the drivers' own control is G-16 on the real pilot trees | bare 4, 5 and 10 — D16's driver tasks | G-1 … G-14, G-16, G-17, G-18 | 6 pilot (+ 2 A/A) |
+| C | none: v1 designed the process arm with P0 and the model smoke, not an A/A, and the three paired repeats give the noise | process 1 and 3 (Q7), after P0 and the model smoke on this repository's templates | G-1 … G-14, G-17, G-18, G-19, G-20 | 4 pilot + P0 + smoke |
+
+Walls and stalls per arm, set by the group's pilot: A's pilot sets the bare wall and stall; B inherits them unless its pilot
+on 4, 5 and 10 shows a longer quiet gap (then a dated amendment, both stacks alike); C's pilot sets the process wall (Q-E
+stays open). The pilot formula's cross-check cap (G-18) is computed per arm per group (D53).
 
 Void spend, before any data pair: the bare A/A (two identical bare C# sessions of task 3, concurrent), then the bare pilot
 pairs of tasks 1, 3, 4, 5 and 10 (task 4 for the HTTP driver, task 5 for the RESP driver, task 10 for the daemon checks — G-16), then the **process pilot pairs of tasks 1 and 3** (v1's P1 conditions: merged with green
@@ -876,6 +988,19 @@ projection is information for the owner, not a gate: the record shows the settle
 bounds any one session; at the guesses no bare session and few process sessions approach it, so censoring should be
 rare — the pilot shows whether that holds (Q-A closed).
 
+**Per group (D53; 2026-11-01).** The cap and the frame above hold for every group; **no new halt**. What is added is
+information: per group a **projection line** in its pre-registration and **settled ledger lines** — `A: data / pilot / A/A /
+void / re-run`, the same for B and C — so the owner sees each group's settled cost before the next group's paid sessions; the
+pilot formula's cross-check cap (G-18) is computed per arm **per group** and reported beside $50. **The projection, with both
+priors named** (neither is evidence; each group's pilot replaces them):
+
+| Group | Sessions | At the exploratory pilot's rates (task 1 ≈ $0.17 a session; the olympiad plan predicts $0.2–6) | At this section's guesses ($5–20 a bare session, $30–70 a process session) |
+|---|---|---|---|
+| A | 24 data + 6 pilot + 2 A/A, bare | ≈ $20–90 | ≈ $160–640 |
+| B | 60 bare data + 6 pilot (+ 2 A/A if an identity changed) | the 24 replication sessions ≈ $20–100; the 36 daemon and web sessions have no exploratory rate — at the guesses $180–720, so ≈ $200–800 for the data (a mixed figure, named so) | ≈ $300–1,200 for the data; the pilot and the A/A ≈ $30–160 more |
+| C | 60 process data + 4 pilot + P0 + the model smoke | — (no process run yet) | ≈ $1,900–4,500 |
+| C, the anchor round if the owner chooses it (Q-G) | ≈ 20 bare sessions | less than the guesses for its olympiad part | ≈ $100–400 |
+
 ## 13. Growth
 
 | Surface | Size at this plan's volumes | Retired by / interrupted |
@@ -888,9 +1013,70 @@ rare — the pilot shows whether that holds (Q-A closed).
 | coai session dirs, vendor CLI stores | as v1 §14 | with the session dir; the vendor stores are the operator's, growth measured and named |
 | Credentials: one fine-grained PAT, one deploy key | live for the series | **teardown** after the last cell is scored and archived, as v1 §14 |
 | Scoring cgroups and the clear suite in the scoring temp dir | one per scoring run | removed by the scorer's finalizer; `heldout-tool.mjs sweep` for leftovers older than 24 h |
+| Session dirs per group — added 2026-11-01 (D44) | A 24 data + 8 pilot and A/A ≈ 32 bare; B 60 data + 6–8 pilot and A/A ≈ 68 bare; C 60 data + 4 pilot ≈ 64 process; with re-runs ≈ 170 sessions; at the sizes above ≈ **85–130 GB** on `/home`, replacing the ≈ 70–110 GB line above for the staged series; the anchor round (Q-G), if chosen, ≈ 8–12 GB more | as the row above, per group; a group's session dirs are kept until E6's archive |
+| Held-out archives per task — added 2026-11-01 (D49) | ten `heldout/suite-<task>.enc` instead of one `suite.enc`; a few MB in all, committed | kept |
 | In-flight states | `launching` sessions, a scorer run, a daemon left by a driver, an open PR of a void session | `retireStale` at every `run`/`resume`; the walls, the scorer's outer limit (≤ 90 min) and the quiet wait (30 min) bound every non-terminal state; the janitor ends any process carrying the cell's marker; an open PR of a void session is closed by the harness with a comment (v1 §14) |
 
 ## 14. Build order
+
+**The staged build order (D44; 2026-11-01) — the order in force.** Steps 0–6 further below are superseded for the staged
+series and kept for their history; every step they name still happens, in the group that needs it (the epics' group map,
+§ *Epics*). Each group runs to its evidence before the next group's paid sessions (D44); building the next group may overlap
+the current group's rounds, because nothing of it can change a pinned manifest (D45).
+
+0. **E0, now and in parallel** — needed before group C's pre-registration only (D48).
+
+**Group A — the four olympiad tasks 01, 02, 03 and 09, bare arm.**
+
+- **A1, E1's slice for A.** E1.S1 (in review; the exact exemptions, D52) and E1.S5 (merged); E1.S8a part i and **part ii-a**;
+  **E1.S8b whole, the netns holder included, with its memory probe asserted at 256 and 512 MiB (D51)**, then **CP2**; E1.S9
+  FORMAT v2 with its section classes (D45), gated; E1.S8 the conformance check; E1.S4 **the full package sets of both stacks,
+  web packages included** (`PACKAGES.md` lists the stack's offered set in every workspace, so the set must be the same in A and
+  B for the same task); E1.S3 phase A, then phase B for the four; **E1.S7's tag ruleset and `main` protection only**, applied
+  and read back before A's freeze; per task 01, 02, 03, 09: S6 → S2 draft → conformance → S2a → the D40 gate on the layer →
+  the document gate, the consultant, the bias review → gated; **CP3 after task 01**; **CP4**; the freeze `spec-frozen-A-<date>`;
+  OP-K decided on the asserted probe before E2-A calibrates (D51).
+- **A2, E2 for the four tasks** (olympiad mode): S1–S4 per task; S5 once, before A's record; one sealed archive per task.
+- **A3, E3's bare slice:** S1 (the `group` dimension and manifest, arm = bare, three rounds over the group's tasks, the inherited
+  alias baseline — T-L40–T-L42), S3 (the judge on the layer), S4 (olympiad scoring), S5 (D15's environment in the agent box,
+  the classifier, G-15/G-17/G-18 in `aaVerdicts`, CPC in the record, the ≤ $0.20 bare smoke on task 1), S10 (the module
+  document for the slice).
+- **A4, E4-A:** the price re-read and the CLI pin (once for the series, D47); the whole ten-task prediction and A's documents;
+  the tag `prereg/lang-v2-A-<date>`; the bare A/A; the pilot pairs 1, 3 and 9; the G-rows of §11; the amendments; `seed-A`
+  revealed.
+- **A5, E5-A:** three bare rounds over the four tasks.
+- **A6, E6-A:** the interim record, counts and rates only (D49); A's settled ledger line before B's paid sessions (D53).
+
+**Group B — the bare arm for all ten tasks.**
+
+- **B1:** E1.S8a part ii-b (the second runner manifest, D50); the six spec chains (04, 05, 06, 07, 08, 10 in §4.1's order, each
+  S6 → S2 → S2a → D40 gate → gated); the freeze `spec-frozen-B-<date>`; **the D40 gate and E2.S3's calibration re-run for 01,
+  02, 03 and 09 on B's identities** (D50; T-L36, T-L38, T-L39).
+- **B2:** E2 for the six tasks; one sealed archive per task.
+- **B3:** E3.S2, the drivers (cornerstone); E3.S4's daemon and web scoring; G-16.
+- **B4, E4-B:** the tag `prereg/lang-v2-B-<date>`; the A/A only if an identity changed (§11); the pilot pairs 4, 5 and 10;
+  `seed-B`.
+- **B5, E5-B:** three bare rounds over the ten tasks.
+- **B6, E6-B:** the interim record with the ten-task bare lines and the A–B drift table (D46, D49).
+
+**Group C — the process arm for all ten.**
+
+- **C1:** E0's release pinned (E0.S3); E1.S7 whole (templates, CI, the remaining rulesets, the deploy key and PAT in use, run
+  bases bound to the frozen commit, D52); E3.S6 (the coai box and bridge); E3.S7a (the GitHub broker with its host-side
+  publication gate, D52); E3.S7 (the process runner); E3.S8 (the compliance checker); E3.S9 (P0 and the model smoke).
+- **C2, E4-C:** the tag `prereg/lang-v2-C-<date>`; the process pilot pairs 1 and 3; G-19, G-20; `seed-C`.
+- **C3, E5-C:** three process rounds over the ten tasks, plus the bare anchor round if the owner chooses it (Q-G).
+- **C4, E6 final:** the blind adjudication of every group's failing cases; the final record; publication of the references,
+  the trap table and the adjudication detail (D49); teardown, archive, retire; this plan and its stories documents promoted
+  with their deviations.
+
+**Group A's critical path, stated so that the estimate can be checked, not promised** (consult Fable § 1.4): S8a ii-a →
+S8b whole → CP2 → S3 phase A → per task 01, 02, 03, 09: S6 → S2 draft → S2a → D40 gate → document gate + consultant + bias
+review, with CP3 after 01 → CP4 → freeze A → E2-A (four tasks) → E3's A slice → E4-A (pre-registration, A/A, pilots) →
+round 1. The team lead's 2–3 days hold only if S8b and CP2 take about one day and the four spec chains run in parallel after
+CP3. No gate — CP1–CP4, the document gates, the consultant, the bias review — is shortened for the estimate.
+
+*Superseded for the staged series (2026-11-01), kept for its history — the single order:*
 
 0. **Conventions parity audit (E0, other repository, now, in parallel):** the audit table; the missing counterpart rules
    written and released in `dew_flow_conventions`; the snapshot branch cut at that release — before step 4.
@@ -944,9 +1130,9 @@ turns host skips into failures).
 | T-L6 | the HTTP driver: a scenario with k concurrent identical requests checks the invariant once; a 5xx or a timeout is `fail`, never `not run` |
 | T-L7 | limit calibration: given two reference measurements, D14's formula gives the registered limits; a reference failing under them is a calibration failure, not a passing suite |
 | T-L8 | trap coverage: every mutant fails exactly its registered cases and no other; both references pass every case; a trap with no catching case is a failure of the table |
-| T-L9 | the order: six rounds with arms strictly alternating and the lead drawn from the seed; every task once per round; rids distinct over arm, task, stack, repeat and attempt; masks swap per pair; a task's second repeat in an arm never precedes another task's first |
+| T-L9 | the order: six rounds with arms strictly alternating and the lead drawn from the seed; every task once per round; rids distinct over arm, task, stack, repeat and attempt; masks swap per pair; a task's second repeat in an arm never precedes another task's first *Superseded for the staged series (D44, 2026-11-01): within a group — three rounds, every task of the group once per round in a seeded order, rids distinct over group, arm, task, stack, repeat and attempt, masks swapped per pair, a task's second repeat never before another task's first; no arm alternation across groups.* |
 | T-L10 | the spend gate with the owner's fixed per-session cap of **$50** for every session of both arms (the runner's one cap constant; the broker's budget and the CLI's `--max-budget-usd` both read it) and **no ceiling line**: a session whose settled spend reaches $50 is stopped and classed `killed: cap`, censored at `≥ $50`, and stays in every table; the round rule refuses round k+1 while round k has an unscored pair; six rounds are planned whatever the settled total; the pilot formula's cap is computed and recorded as a cross-check and binds nothing (a fixture where the formula gives $12 still runs the session to $50) |
-| T-L11 | the record has every per-kind and per-arm field known, `not captured` with a reason, or `n/a (<kind \| arm>)`; spawn and exit timestamps present |
+| T-L11 | the record has every per-kind and per-arm field known, `not captured` with a reason, or `n/a (<kind \| arm>)`; spawn and exit timestamps present *(2026-11-01, D44:) `group` is a known field of every session record.* |
 | T-L12 | the contamination needles for the known tasks hit in tool inputs and outputs and are reported for a hand reading, never auto-voided |
 | T-L13 | offline caches (effect, in a box): with the registries refused by the proxy, `npm install fastify@5.12.7` and `dotnet restore` of the pinned project succeed; a package outside the set fails naming it |
 | T-L14 | D15's env keys are in the box and in the scoring box and in the record; `agentEnv` refuses a clash in any case |
@@ -970,9 +1156,20 @@ turns host skips into failures).
 | T-L33 | **the execution layer's network layout (D43):** a driver and a stub program started by the layer have equal `/proc/<pid>/ns/net` ids, different from the host's, and different cgroup membership (`/proc/<pid>/cgroup`: the program in its scope, the driver not); `lo` is up and the driver reaches the program's port on `127.0.0.1`; no other interface exists in the namespace; the same test body runs for a C# stub and a TS stub and reports the same facts |
 | T-L34 | **the execution layer's isolation and cleanup (D43):** the program cannot read a driver-only sentinel file (a path outside its bwrap binds); killing the program's scope removes every descendant (a forked child included) while the driver survives and collects `memory.peak`, `memory.events`, the exit status and the transcript; after cleanup no process, scope or namespace of the run is left; identical for both stacks |
 | T-L35 | **the GitHub broker (D42):** from inside a process box, clone of the run base, fetch and push of the run's own branch, PR create and update, and reads of the own PR's checks and comments succeed through the broker, and the pushed branch is mirrored to GitHub; a fetch of the bench repository, a read of the task repository's `main` README (the attribution), a fetch of another run's branch, a read of another run's PR, and a redirect to a host or path outside the broker are each refused with a named error and logged; **a fetch by the SHA of a task-repository `main` commit fails (the object is not in the run's bare repository); an unshallow fetch (`--unshallow`, `--depth` widened) gives only the run base**; the PAT appears in no box environment or argv; a direct CONNECT to `github.com` is refused by the proxy |
-| T-L36 | **the shared layer's invalidation rule (§6.1):** a changed layer identity marks every D40 gate record and every registered limit calibrated on the old identity as `stale`, and `register-limits` and `run` refuse until the gate is re-run and calibration re-registered (a test on the pure function over fixture records) |
+| T-L36 | **the shared layer's invalidation rule (§6.1):** a changed layer identity marks every D40 gate record and every registered limit calibrated on the old identity as `stale`, and `register-limits` and `run` refuse until the gate is re-run and calibration re-registered (a test on the pure function over fixture records) *(2026-11-01, D50:) exercised for real at group B, for A's four tasks on B's identities.* |
 | T-L37 | **the needle matching rule (D18, change 4.1):** `RESP` does not match "response", "responses" or `resp_code`; `IOI` does not match the base64 `eyJiOiJ`; `Werewolf` matches "Werewolf" and "the Werewolf problem" but not "werewolf" (case) nor "Werewolves" (boundary); `redis.io` matches as an exact substring inside a URL; a sample transcript field FORMAT marks as normalised (a JWT) is skipped while the same bytes in an un-normalised field are scanned; the generated run-base tree with the spec `09-switched-routes.md` and FORMAT's F-BYTES-W sentence gives zero hits, and the same tree with a planted "Werewolf" in a spec gives one |
 | T-L32 | **the declared culture (D35), inside the actual boxes:** in the agent box and the scoring box, for both stacks, `LANG` and `LC_ALL` are `de_DE.UTF-8` and `locale -a` lists it; a .NET probe prints `CultureInfo.CurrentCulture.Name` = `de-DE`, `double.Parse("1.5")` = 15 under the current culture and 1.5 under `CultureInfo.InvariantCulture`; a Node probe prints `Intl.DateTimeFormat().resolvedOptions().locale` starting `de`; `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` is unset; the same values appear in the session record |
+| T-L38 | **the olympiad path across runner manifests (D50):** the olympiad modules of A's manifest and B's are byte-identical (an AST and hash comparison) and give identical verdicts and identical JSON results on the olympiad fixtures; a planted change in one olympiad module fails the test, while a change in `rs_net` alone passes it |
+| T-L39 | **A's frozen inputs across the tags (D45):** A's spec blobs, samples and FORMAT's `common` and `olympiad` sections are byte-equal at the A and B freeze tags; an olympiad spec passes the conformance check under both FORMAT shas; a planted edit to an A spec, or to an `olympiad` section, at the B tag fails |
+| T-L40 | **cross-group alias drift (D47):** a fixture series whose first group-B session resolves the alias to a model id other than the one group A's first session set stops with the alias-drift class — though a separate series for B would have taken that id as its own baseline; with equal ids it passes |
+| T-L41 | **duplicate enrollment (D44, D45):** a (group, task, stack, repeat, attempt) already enrolled is refused a second enrollment, and a session record carrying two groups is refused; A's replication sessions in B are distinct records with group B |
+| T-L42 | **resume against the wrong manifest (D45):** `resume` over a series directory whose group manifest differs from the selected one is refused before any launch, naming both; a task whose identities changed (the layer, the runner, FORMAT) refuses launch until its D40 gate and calibration were re-run under them |
+| T-L43 | **the asserted memory view (D51):** through the final execution prefix at `MemoryMax` 256 MiB and 512 MiB, the probe asserts — by the policy D15 records — whether the cgroup is visible in the box and what .NET (`GC.GetGCMemoryInfo().TotalAvailableMemoryBytes`) and Node (`process.constrainedMemory()`, V8's heap limit) believe their limit is, against `prog/memory.max`; an allocation-churn fixture with bounded live data completes in both stacks; an over-limit fixture is `memory limit` with `memory.peak` and `memory.events` kept; a probe that only prints a value it should assert fails the test |
+| T-L44 | **exact decimals (D52, V2):** two distinct 30-digit values compare unequal; a matcher that calls `Decimal.normalize()`, or compares under a 28-digit context, before equality makes the test red; `2` and `2.0` still compare equal |
+| T-L45 | **the broker's publication gate (D52):** with the task repository's client-side hook disabled, a run that tries to publish forbidden content — in a commit, a commit message, a PR title or body, a comment — makes zero outbound publication calls; each attempt is refused with a named error and logged; clean content is mirrored or posted |
+| T-L46 | **the bound run base (D52):** the cut binds the approved frozen commit, the generated tree and the final orphan sha; the needle scan runs over that exact orphan; its parent list is empty, checked locally; a build from any other commit is refused before any push |
+| T-L47 | **exact push-check exemptions (D52):** an aid shingle joined by `/` or `-` into one whitespace token is refused; a recombination of published fragments that is not on the approved list is refused; an approved exemption passes only at its approved place and with its pinned hash |
+| T-L48 | **the group manifests (D45):** four specs freeze under A's tag while the six others are drafts; a FORMAT update for B cannot change A's resolved artefacts; a fresh D40 gate pass supersedes a stale record while the stale one stays in the file; results under two contracts never pool silently — the record renderer refuses it |
 
 Live: the bare smoke (E3.S5), P0 and the model smoke (v1's, on this repository), the A/A and the pilots (E4), the by-hand
 G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
@@ -988,7 +1185,8 @@ G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
       prediction (rule 4).
 - [ ] T1–T5 held for every data session, or the breach is in the report with what was done.
 - [ ] Every cost carries its basis; pilot, A/A, data and void spend on separate lines per arm; spend ≤ $1000 or the stop and
-      the missing rounds named; every attempt, void and re-run included, is in the record (D26).
+      the missing rounds named; every attempt, void and re-run included, is in the record (D26). *("Spend ≤ $1000 or the stop"
+      is superseded by D7 — no total ceiling — and by D53: the ledger carries the settled spend per group and per arm.)*
 - [ ] One memory contract held (D13, D36, §4.3, T-L29): every data session ran on the certifying host named in the
       pre-registration, in its own systemd user scope, with `memory.peak` and `memory.events` kept (T-L30), and its
       `accepted` includes the certified memory claim; the halt `memory-not-certifiable` refused every data launch on a
@@ -1020,6 +1218,16 @@ G-15/G-16/G-19 lines, the round-1 read-back of one pair per arm.
       after its bare arm (D32).
 - [ ] `research/lang-v2/` and `research/README.md` updated; the module document describes the extension; this plan and its
       stories documents promoted with deviations; the worktree removed.
+- [ ] *(Added 2026-11-01, D44–D53.)* Three pre-registration tags exist, `prereg/lang-v2-A-…`, `-B-…`, `-C-…`, each committed
+      before its group's first paid session, and one spec freeze tag per group; no later tag altered an earlier one (T-L39).
+- [ ] One alias baseline for the series, set by group A's first session, and one CLI copy (D47); every forced change is a
+      dated instrument amendment with its A/A.
+- [ ] The ledger carries settled lines per group (data, pilot, A/A, void, re-run) beside each group's projection (D53).
+- [ ] No figure of the record pools groups (D46); the drift table is present; the ten-task bare headline is B's; the process
+      effect and the interaction carry T16's window sentence.
+- [ ] Every interim record carries counts and rates only, with no trap content (D49).
+- [ ] The final record names every group's identities — the group manifest, the layer, both runner manifests, FORMAT's shas,
+      the CLI copy, the model id, the toolchains, the host — and its dates.
 
 ## Deviations
 
@@ -1040,6 +1248,14 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
 - **Q-A — closed by the owner, 2026-10-31: no total ceiling.** The $1000 is removed; the six rounds of both arms run as
   planned; a fixed per-session cap of **$50** stays as a runaway guard (a capped session is censored, never hidden); the
   pilot's cap formula is a reported cross-check that does not bind (D7, §12).
+- **Q-G The optional bare anchor round in C — the owner's call, not decided here (2026-11-01).** One bare round over the ten
+  tasks (n = 1 per task and stack, ≈ 20 sessions), interleaved among C's three process rounds, never pooled with bare data,
+  reported as a drift check (the anchor against B, per task). It is the only way to **measure** the B→C drift instead of
+  assuming it (T16). Cost: ≈ $100–400 at §12's guesses, less at the exploratory rates for its olympiad part (§12). A named
+  option with its cost, not a recommendation to spend.
+- **Q-H The narrowing of epoch 5 — the owner's approval, not decided here (2026-11-01).** The staged order loses D10's arm
+  alternation, the control of T16; nothing else got smaller (the re-review record for epoch 5). Under plan-change-control step 8
+  the owner approves first, and epoch 5's line then says `by owner`.
 - **Q-C The bias review sends held-out suites to coai's vendors** before sealing (D25). The agents under test never see
   them, but other vendors' models do. Accept the residual, or review the suites by an in-house Opus judge only and send the
   vendors the specs alone?
@@ -1052,7 +1268,12 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
 - **Q1 Licences and credit.** The licence of the new public repository (our originals, the specs, the workspace templates,
   the visible suites), and the terms under which the known problems may be paraphrased: CSES statements, IOI 2018 Werewolf
   (the IOI's task licence to be read), RealWorld's spec (MIT), Redis's RESP (a protocol; the trademark). v1's D18 found
-  upstream files with no licence; v2's credit text is written after these are read.
+  upstream files with no licence; v2's credit text is written after these are read. **Answered by the owner, 2026-11-01**
+  (E1 stories § 4; recorded in the status as an operator answer, not a change): specs 01 and 02 are CC BY-NC-SA 4.0, the
+  CSES problem set's licence, by a per-file exception the README states; spec 09 is written wholly in our own words, credited
+  "based on IOI 2018 Werewolf"; spec 06 is MIT, credited with RealWorld's MIT notice; spec 05 describes the protocol subset in
+  our own words and never takes the product's name; the terms are the bench's `inputs/credits-lang.json`. The repository's own
+  licence is MIT (the owner, 2026-10-31).
 - **Q4 — answered (D36).** The host was probed on 2026-10-31: cgroup2 with the memory controller; `systemd-run --user
   --scope -p MemoryMax=64M` gives a readable `memory.peak` (2,396,160 B) and `memory.max`. **This host can certify.** The
   scorer runs each program in its own user scope launched outside `bwrap` (D36); certification is required before launch
@@ -1064,7 +1285,8 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
   the ten task medians is possible as a secondary line with the "chosen set, not a sample" sentence; wanted or not?
 - **Q7 The process pilot's task set.** Bare: tasks 1, 3, 4, 5, 10 (D4, plus tasks 4 and 5 for the HTTP and RESP drivers'
   real-tree checks — decided, D16 and G-16). Process: tasks 1 and 3 proposed (D16). Adding task 10 to the process pilot
-  would calibrate the dearest process sessions at a high cost. Which process set?
+  would calibrate the dearest process sessions at a high cost. Which process set? *(2026-11-01, D44: unchanged — it is group
+C's pilot set, §11.)*
 - **Q8 — closed (D35).** One declared non-invariant culture, `de_DE.UTF-8`, in both boxes, both stacks, every task and CI's
   runner; no invariant switch; fairness is the declared environment plus the protocol's stated numeric syntax (spec 04's
   grammar), not equal trap counts; T-L32 checks it inside the boxes.
@@ -1072,7 +1294,8 @@ default when the operator has not answered is now fixed (§12); Q-A keeps only t
   is a package. Is a C# package-free option acceptable as equal footing, or is this asymmetry simply recorded (and read
   against the parity audit)?
 - **Q10 Re-pin of the CLI (D8).** The plan re-pins at pre-registration to the then-current release. If the operator prefers
-  to keep 2.1.310 for comparability with v1, say so before E4.S3.
+  to keep 2.1.310 for comparability with v1, say so before E4.S3. **Closed by D47 (2026-11-01):** one re-pin, at group A's
+  pre-registration, kept through C; a forced change is an instrument amendment.
 - **Q11 Publication of references and specs' final state.** After the series, in the public repository (proposed) — or only
   in the record?
 
@@ -1094,6 +1317,37 @@ Nothing here or in a stories document names a held-out case, mutant or reference
 
 Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 
+**The group map (D44; 2026-11-01).** The epic ids, their stories, the cornerstones and the ledger stay; each story is built in
+the group that first needs it (§14's staged order). The consult's split (Fable § 1.1, § 7 item 11) is the re-split of
+plan-change-control step 7; the E1 stories document is re-cut to it, and the later epics' stories documents are written
+to it when they start.
+
+| Story | Group | Note |
+|---|---|---|
+| E0.S1–S3 | runs now; needed by C | a prerequisite of C's pre-registration only (D48) |
+| E1.S1 | A | in review; the exact exemptions (D52); `workspace-diff` over the pairs that exist per group |
+| E1.S5 | A | merged (#135) |
+| E1.S8a part i, part ii-a | A | ii-a: launch prefix and status, pidfd waits and the wall rule, case view, cgroup memory read and kill, V11, V12 (D51) |
+| E1.S8a part ii-b | B | `rs_net`, daemon and web lifecycle, readiness, `signal TERM` and G, V3–V5, V7; the second runner manifest (D50) |
+| E1.S8b | A, whole | the netns holder included; the memory view asserted at 256 and 512 MiB before E2-A calibrates (D51) |
+| E1.S9, E1.S8 | A | FORMAT's sections classed; FORMAT's sha per group (D45) |
+| E1.S4 | A | the full package sets of both stacks, web packages included |
+| E1.S3 | A (phase A; phase B for 01, 02, 03, 09); B (phase B for the six) | — |
+| E1.S6, E1.S2, E1.S2a | A for 01, 02, 03, 09; B for the six | one freeze tag per group (D45); A's four re-gated on B's identities in B (D50) |
+| E1.S7 | A: the tag ruleset and `main` protection only; C: the rest | the bound run base (D52) |
+| E2.S1–S4 | per task, in the task's group | one sealed archive per task (D49) |
+| E2.S5 | A | once, before A's record |
+| E3.S1 | A; widened in B and C | the `group` dimension and manifest, the inherited alias baseline (D45, D47) |
+| E3.S2 | B | cornerstone |
+| E3.S3, E3.S5 | A | — |
+| E3.S4 | A (olympiad); B (daemon, web); C (process) | — |
+| E3.S6, E3.S7a, E3.S7, E3.S8, E3.S9 | C | the broker's publication gate (D52) |
+| E3.S10 | each group, the slice built | — |
+| E4.S1–S4 | per group | the CLI pin once, at A (D47) |
+| E5.S1–S2 | per group | — |
+| E6.S1–S2 | per group (interim records, D49); final after C | — |
+| E6.S3 | after C | publication (D49) |
+
 ### E0 — Conventions parity audit and release (§14 step 0 · 3 stories · `dew_flow_conventions`, in parallel, now)
 
 - **Goal:** every C#/.NET rule in `dew_flow_conventions` has a Node/TypeScript counterpart adapted to Node, and the reverse,
@@ -1103,6 +1357,7 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   gap table; the new or widened rules; a plan in `dew_flow_conventions/todo/` naming this boundary from that side
   (`common.planning-docs` § *Across repositories*).
 - **Depends on:** nothing — it starts now.
+- **Staged (D48, 2026-11-01):** its release is a prerequisite of group C's pre-registration only; nothing of A or B waits for it.
 - **Done when:** the gap table is empty or every remaining gap is a recorded decision with a reason; the release tag exists;
   `rules.mjs explain` for the process arm's task set gives rule counts and bytes per stack within 10 % of each other, or the
   difference is explained rule by rule in the audit record.
@@ -1131,11 +1386,19 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - **Done when:** T-L1, T-L2, T-L13, T-L20's guard half green; `workspace-diff` clean on ten tasks; both snapshots hashed; the
   preflight passes inside a box on SDK 10.0.403, Node 26.13.0, TS 6.0.x (the pinned patch), the pinned Python; `FORMAT.md` is gated and its
   three examples run (S8); the ten specs conform to it, carry a gate verdict and the freeze tag; the README carries the credits and the Node stack table; `leakcheck` clean.
+- **Staged (D44, D45, D51; 2026-11-01).** *Depends on:* E0.S3 only for group C's conventions pin (D48). *Done when, per group:*
+  **A** — the done-when above for 01, 02, 03 and 09 (`workspace-diff` on four pairs; the four specs gated and frozen under
+  `spec-frozen-A-<date>`), E1.S8b whole with T-L43, part ii-a, the full package sets of both stacks, the tag ruleset and `main`
+  protection read back; **B** — the six other specs under `spec-frozen-B-<date>`, part ii-b, A's four re-gated and
+  re-calibrated on B's identities (D50), T-L38 and T-L39 green; **C** — E1.S7 whole. The stories document is re-cut to this
+  (2026-11-01).
 - S1 — repository skeleton: layout of §5, conventions pin (E0.S3), README with credits and the §4.6 table, LICENSE (Q1), the
   `workspace-diff` check. *Accepted when:* the check passes on an empty task pair and fails on a planted difference; the
   README's links and attribution appear nowhere under `csharp/`, `node/`, `tasks/`, `runner/` or `todo/tasks/`, and the
   generated run-base tree holds none of them (a test greps the tree; D39). The tree generator is this story's
   (`generateRunBaseTree`); the orphan commit and its one-commit `git rev-list` are S7's, tested there after the push (OP-8).
+  *(2026-11-01, D52:) the push check's exemptions are exact approved values at approved places, never a class of text
+  (T-L47).*
 - S2 — **the ten task specs, written by the team lead, gated and frozen** (cornerstone area; D21, D25). Per task, in the
   order of §4.1: the spec at `todo/tasks/NN-slug.md`; the coai document gate with `purposeText` (who acts on it: the agents
   under test in both stacks and the suite's author; what they must be able to do: build a program that passes the hidden
@@ -1143,7 +1406,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   every finding `accept`ed or rejected with a reason; the verdict and notes recorded in `inputs/bias-review/NN.md` (no
   case text). **Per task the spec is gated** — verdict, hash, the amendment rule in force from the gate on — and **one tag
   freezes all ten together after the tenth** (OP-2's reading, now the text): the tag `spec-frozen-<date>` on the commit holding all ten and `FORMAT.md`, their sha256 in
-  `inputs/specs.json`. **Prerequisites:** `FORMAT.md` v2 (S8, S9) is gated before the first spec is gated; every spec
+  `inputs/specs.json`. *(Superseded for the staged series, 2026-11-01, D45: one tag per group — `spec-frozen-A-<date>` on the
+  commit holding 01, 02, 03, 09 and FORMAT, then `spec-frozen-B-<date>` for the six others; a later tag never alters an
+  earlier one.)* **Prerequisites:** `FORMAT.md` v2 (S8, S9) is gated before the first spec is gated; every spec
   conforms to it (a conformance check: header rows, R-ids, the fixed sentences with their slots, the sample table against
   the `samples/` files, the invalid-input and build-bound sentences, T and G stated where the kind has one — olympiad tasks have neither); **the task's `samples/` files (S6)
   exist before its conformance gate** (D40).
@@ -1198,7 +1463,10 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   `run-main`, `template-frozen`, tags; the deploy key as the only bypass actor; the PAT; `GitHub settings` as v1 §6 —
   built here to v1 E2.S4's design (D32). *Accepted when:* v1's P0 checks pass here: a run base cut by the deploy key, a direct push
   with the PAT refused, CI green on a non-default base, a planted violation red per stack, merge blocked until threads
-  resolve. Built here to v1 §6's design (D32), for one repository with two stack folders.
+  resolve. Built here to v1 §6's design (D32), for one repository with two stack folders. *(2026-11-01, D44, D52:) deferred to
+  group C except the tag ruleset and `main` protection, which are applied and read back before A's freeze; the run base is
+  bound — the approved frozen commit, the generated tree and the final orphan sha, the push check over that exact orphan, an
+  empty parent list proven locally, a wrong-commit build refused before any push (T-L46).*
 - S8 — **`todo/tasks/FORMAT.md`, the versioned spec and sample format** (a prerequisite of S2): the spec conventions of §4.1
   (header rows and placeholders, R-ids, byte-exact default, the frozen-list wording, the limits as floors and rule, the
   build bound, the invalid-input sentence, no plan ids, the `⏎` glyph); the `<id>.in` / `<id>.out` pair; the **scenario
@@ -1226,7 +1494,11 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   verdicts; the pinned version and hash are recorded before FORMAT v2's gate; the workspace copy equals the pinned tree
   (S3's check). **`runner/` is a directory** (OP-5, the 800-line rule): standard-library modules with `run_samples.py` as
   the entry, hashed as one manifest in `inputs/specs.json`, the frozen list naming `runner/`; under `-I` Python leaves
-  the script's directory off `sys.path`, so the entry adds its own frozen, read-only directory itself.
+  the script's directory off `sys.path`, so the entry adds its own frozen, read-only directory itself. *(2026-11-01, D50,
+  D51, D52:) part ii is re-cut into ii-a (group A: the launch prefix and status, the pidfd waits and the wall rule, the case
+  view, the cgroup memory read and kill, V11, V12) and ii-b (group B: `rs_net`, the daemon and web lifecycle, readiness,
+  `signal TERM` and G, V3–V5, V7), so A and B run on two runner manifests with D50's guards; V2 never calls
+  `Decimal.normalize()` before equality (T-L44).*
 - S8b — **the execution layer** (D43; a prerequisite of the D40 gate, of E2.S1/S3 and of E3.S4): `spikes/lang-bench/lib/exec-layer/`
   — launch of `run.sh` in a bwrap box (v1's binds) with D15's environment and the culture `de_DE.UTF-8`; the program-only
   `systemd-run --user --scope` with `MemoryMax` and `MemorySwapMax=0` (D36); the **private loopback-only network namespace
@@ -1237,7 +1509,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   `BENCH_REQUIRE_SANDBOX=1` and nothing skipped — equal netns ids and different cgroups for driver and program; the
   driver-only sentinel unreadable from the program; killing the scope removes the descendants while the driver survives
   and collects the evidence; the probes run identically for both stacks; the pre-freeze gate of S2 runs on this layer
-  (D40 not weakened); the layer's identity is in `inputs/specs.json` beside the runner's.
+  (D40 not weakened); the layer's identity is in `inputs/specs.json` beside the runner's. *(2026-11-01, D51:) built whole
+  before group A, the netns holder included; its probe asserts the memory view through the final prefix at 256 and 512 MiB
+  (T-L43) before E2-A calibrates, and OP-K is decided on it.*
 - S9 — **`FORMAT.md` v2**, gated before any spec gate (a prerequisite of S2's gates, like S8), **after S8a exists**. The gaps found by the three
   pilot specs and the consult `3ea9ef36`, each closed in v2: **exact-decimal number comparison in JSON transcripts** (an
   integer and a decimal compared by exact value, `int`/`Decimal`, never float; `-0` equals `0`); an **F-LOAD fixed
@@ -1260,7 +1534,8 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   with the expected verdicts; no plan story, epic, decision or test id remains anywhere in `FORMAT.md` (a grep); the
   daemon example names no real protocol or product (D18's needles find nothing); v2's gate verdict (document gate +
   consultant) is recorded before the first spec gate; its sha256 replaces v1's in `inputs/specs.json`; specs 01, 05 and 04
-  are re-conformed to v2 before their own gates.
+  are re-conformed to v2 before their own gates. *(2026-11-01, D45:) every section of v2 is classed `common`, `olympiad`,
+  `daemon` or `web`, one line per section; after A's freeze the `common` and `olympiad` sections are immutable for the series.*
 - **Cornerstone area:** the specs (S2).
 
 ### E2 — Shared acceptance suites, references, trap coverage, limits, bias review (§14 step 2 · 5 stories)
@@ -1275,6 +1550,10 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - **Done when:** T-L7, T-L8, T-L21, T-L25 green; G-17's conditions hold on the series machine (recorded, re-checked at the
   pilot), including the calibration order; the archive sealed with hashes and counts in `inputs/heldout-prereg-lang.json`;
   the ten bias-review verdicts recorded; `leakcheck` clean on the branch.
+- **Staged (D44, D49, D50; 2026-11-01).** Per task, in the task's group: A runs S1–S4 for 01, 02, 03 and 09 (olympiad mode)
+  and S5 once before A's record; B runs S1–S4 for the six others and re-runs S3's calibration for A's four on B's identities
+  (D50). *Done when, per group:* that group's tasks final, calibrated, bias-reviewed and sealed, **one archive per task**
+  (`heldout/suite-<task>.enc`), the counts and the trap coverage table's hash registered with a `group` field.
 - **Order inside this epic, per task (§14 step 2, D40):** **before the spec freezes** — the samples (E1.S6) and the two
   draft references (S1) exist and the references execute every sample through the runner in the final sandbox environment
   (E1.S2's execution gate; T, G, the step deadlines and the semantic bounds validated on both) → the spec freezes → the
@@ -1330,10 +1609,16 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   each kind in each arm runs end to end in real boxes; the bare smoke (task 1, TS, ≤ $0.20) is read by E/O/T/B with T1–T5; P0 passes on
   the task repository's templates; the model smoke lists the vendors through the bridge; `research/module_tests.md` carries
   the harness's flow catalogue; the module document describes the extension.
+- **Staged (D44, D45, D47; 2026-11-01).** *Depends on:* group A — E1's A slice and E2-A; E1.S7 only for group C. *Done when,
+  per group:* **A** — T-L3, T-L9 (per group), T-L10, T-L11, T-L12, T-L14 … T-L16, T-L18 … T-L20, T-L28 … T-L32, T-L40 …
+  T-L42, the bare smoke; **B** — T-L4 … T-L6, T-L38, E3.S2's module catalogue; **C** — T-L22 … T-L24, T-L35, T-L45, P0, the
+  model smoke.
 - S1 — the arm, task and round dimensions of the runner: `ridOf` with arm and task and a `single` phase, six alternating
   rounds from the seed, the pair without barrier, the void schedule without v2 rows, the prereg guard's v2 list and the
   spec-freeze guard, `EGRESS_HOSTS.langBare` / `langProcess`, timestamps in the record. *Accepted when:* T-L9, T-L10,
-  T-L12, T-L20; `run --dry-run` prints six rounds with their arms.
+  T-L12, T-L20; `run --dry-run` prints six rounds with their arms. *(2026-11-01, D44, D45, D47:) plus the `group` dimension and
+  the immutable group manifest; three rounds per group; one alias baseline for the series; `run --dry-run` prints the
+  group's rounds; T-L40, T-L41, T-L42.*
 - S2 — **the process, TCP and HTTP drivers with RSS sampling and the SIGTERM check** (cornerstone), as thin wrappers over the
   Python suite runner, **started through E1.S8b's execution layer** (the scope, the shared loopback namespace, T and G —
   the drivers add the scenario logic and the records, not a launch path; D43). *Accepted when:* T-L4, T-L5, T-L6; a driver never leaves a
@@ -1381,6 +1666,8 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   completes the normal clone → branch → push → PR → checks → merge workflow through the broker against a `run/smoke-*`
   base while every denied probe fails; the mirrored branch on GitHub equals the bare repository's; the PAT is in no box
   environment or argv; the broker's log is in the session record; G-20 pilot-tests it on both process pilot pairs.
+  *(2026-11-01, D52:) plus a host-side publication gate: every outgoing object and API payload is scanned before it is
+  mirrored or posted, tested with the task repository's client-side hook disabled (T-L45).*
 - S7 — **the process runner**: the process session verbs over v1's bare runner (E3.S1's dimensions) — run base `run/<rid>/main`
   cut from the frozen tag with the deploy key, the single-branch clone with a restricted refspec and `--no-tags`, the PAT in
   the session gitconfig through `gh auth git-credential` (never on an argv), `GH_CONFIG_DIR`, `GH_PROMPT_DISABLED=1`, the
@@ -1413,6 +1700,10 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   both arms; the caps and the split derived; the seed revealed.
 - **Scope:** §9, §11, §12; D4, D8 (the CLI re-pin), D16, D26, D30.
 - **Depends on:** E0.S3 (the parity release pinned), E1–E3 complete.
+- **Staged (D44, D45, D47, D48; 2026-11-01).** Per group: E4-A, E4-B, E4-C, each depending on that group's slices of E1–E3;
+  E0.S3 only for E4-C. *Done when, per group:* its tag `prereg/lang-v2-<group>-<date>` before its first launch; its A/A as §11
+  says (A: yes; B: only on a changed identity; C: none); its pilot; its seed revealed; its projection and settled lines in the
+  ledger (D53). S1's CLI pin is taken once, at E4-A (D47).
 - **Done when:** the tag `prereg/lang-v2-<date>` exists before the A/A's first launch and after E0's release; `AA.md` says
   GO; the bare and process pilot pairs ran; the stall and limit amendments are dated lines and the cap cross-check is in the record (the cap itself is the owner's $50, D7); `seed.txt` revealed;
   pilot spend in the ledger per arm.
@@ -1437,6 +1728,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 - **Goal:** the six alternating rounds run under the pre-registered contract, under the gate, every attempt kept.
 - **Scope:** §4.4 order, §9 voids and re-runs, §12's gate and stop rules, the round-1 read-back per arm.
 - **Depends on:** E4's GO and seed.
+- **Staged (D44; 2026-11-01):** three rounds per group — A: four tasks, bare; B: ten tasks, bare; C: ten tasks, process (plus
+  the bare anchor round if the owner chooses it, Q-G). A group's paid sessions start after the previous group's interim
+  record; S2's read-back runs in each group's first two rounds.
 - **Done when:** six rounds ran, or the gate or a stop ended the series and the record names the missing round pairs; every
   session has `record.json` with its timestamps, every pair its pair record; the read-back lines are dated.
 - S1 — rounds 1–6 with the stop rules; resume after any halt. *Accepted when:* every session is classed; voids re-run by
@@ -1454,6 +1748,8 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
   the specs published, teardown, archive and retire, promotion.
 - **Depends on:** E5.
 - **Done when:** every §16 box is checked.
+- **Staged (D46, D49; 2026-11-01):** S1 and S2 run per group, each group's interim record carrying counts and rates only; B's
+  carries the A–B drift table; S3 (publication) and the final record run after C.
 - S1 — `research/lang-v2/tools/` from `research/minigit/tools/` widened to arms, tasks and kinds; `data/<series>.json`;
   `RESULTS_lang_v2_<date>.md` with generated blocks: per task (CPC or the undefined outcome, success, tokens, time, both
   arms), the overall median, geometric mean and count per arm over the defined ratios with their denominators and the
