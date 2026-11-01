@@ -78,3 +78,22 @@ test('A_notice_that_differs_by_one_word_is_not_the_notice', () => {
   const altered = readmeWith().replace('WITHOUT WARRANTY OF ANY KIND', 'WITH WARRANTY OF ANY KIND');
   assert.equal(check(['todo/tasks/06-blog-api.md'], altered).length, 1);
 });
+
+test('A_credit_in_a_list_item_or_wrapped_over_lines_counts_and_so_does_a_cc_sentence_wrapped_across_lines', () => {
+  const wrap = line => line.replace(/ (?=\S+ \S+$)/, '\n').replace(/ of the /, ' of\nthe ');
+  const asList = readmeWith().replace(/^(Task 0[125] .*)$/gm, '- $1');
+  assert.deepEqual(check(entries.map(e => e.spec), asList), [], 'a Markdown list item');
+  const wrapped = entries.reduce((text, e) => text.replace(e.credit, wrap(e.credit)), readmeWith())
+    .replace('are licensed CC BY-NC-SA 4.0, an', 'are licensed CC\nBY-NC-SA 4.0, an').replace('CC BY-NC-SA 4.0, an exception', 'CC BY-NC-SA\n4.0, an exception');
+  assert.notEqual(wrapped, readmeWith(), 'the fixture really wraps');
+  assert.deepEqual(check(entries.map(e => e.spec), wrapped), []);
+  // a credit whole line was the refuted rule: the same lines, with a prefix, fail it
+  assert.equal(asList.split('\n').some(l => l === entry('01').credit), false);
+});
+
+test('Task_09s_recorded_credit_is_a_substring_of_the_sentence_the_readme_actually_says', () => {
+  const sentence = 'Task 09\'s problem idea is based on IOI 2018 Werewolf (https://stats.ioinformatics.org/tasks/2018/werewolf); its statement is written wholly in our own words and copies no text.';
+  const readme = readmeWith({ without: [entry('09').credit] }).replace(/\n$/, `\n\n${sentence}\n`);
+  assert.deepEqual(check(['todo/tasks/09-switched-routes.md'], readme), []);
+  assert.equal(check(['todo/tasks/09-switched-routes.md'], readme.replace('based on IOI 2018 Werewolf', 'inspired by an olympiad')).length, 1, 'and its absence is still refused');
+});

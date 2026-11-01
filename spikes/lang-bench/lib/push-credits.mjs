@@ -64,18 +64,20 @@ export const carriesKnownText = paths => paths.some(p => KNOWN_SPEC.test(p));
 
 export const knownSpecPaths = credits => credits.known.map(e => e.spec);
 
-function pieceFindings(entry, section, ccFiles) {
-  const out = [];
-  const lines = unquote(section).split('\n').map(squash);
-  if (!lines.includes(squash(entry.credit))) out.push(`credit line of task ${entry.task} is not in the attribution section`);
-  if (entry.fileLicence && !lines.some(l => ccSentence(l, ccFiles))) {
-    out.push(`the CC BY-NC-SA 4.0 exception sentence (naming ${ccFiles.join(', ')}) is not in the attribution section`);
-  }
-  if (entry.upstreamNotice && !squash(unquote(section)).includes(squash(entry.upstreamNotice.text))) out.push(`the MIT notice of task ${entry.task} is not in the attribution section`);
-  return out;
-}
+/** The sentences of the section, whitespace squashed (a sentence wrapped over lines is one), without Markdown quote marks or code ticks. */
+const sentencesOf = section => squash(unquote(section).replaceAll('`', '')).split(/(?<=[.!?])\s+/);
 
-const ccSentence = (line, files) => { const plain = line.replaceAll('`', ''); return plain.includes('CC BY-NC-SA 4.0') && files.every(f => plain.includes(f)); };
+const ccSentence = (sentence, files) => sentence.includes('CC BY-NC-SA 4.0') && files.every(f => sentence.includes(f));
+
+/** What the README's attribution section lacks for one entry: its credit as a substring (a list item or a wrapped line counts), the CC sentence, the notice. */
+function pieceFindings(entry, section, ccFiles) {
+  const squashed = squash(unquote(section));
+  return [
+    ...(squashed.includes(squash(entry.credit)) ? [] : [`credit line of task ${entry.task} is not in the attribution section`]),
+    ...(!entry.fileLicence || sentencesOf(section).some(s => ccSentence(s, ccFiles)) ? [] : [`the CC BY-NC-SA 4.0 exception sentence (naming ${ccFiles.join(', ')}) is not in the attribution section`]),
+    ...(!entry.upstreamNotice || squashed.includes(squash(entry.upstreamNotice.text)) ? [] : [`the MIT notice of task ${entry.task} is not in the attribution section`]),
+  ];
+}
 
 /**
  * Findings `{ path, line, what }` for a branch whose new `paths` may carry a known-task text. `credits` is parseCredits' answer;
