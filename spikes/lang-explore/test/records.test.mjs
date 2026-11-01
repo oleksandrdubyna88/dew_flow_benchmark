@@ -12,7 +12,7 @@ import { sessionCost } from '../../minigit-bench/lib/session-cost.mjs';
 import { loadSmoke } from '../../minigit-bench/lib/smoke-load.mjs';
 import { smokeViews } from '../../minigit-bench/lib/smoke-verdicts.mjs';
 import { spikeDir, tmpDir } from '../../minigit-bench/test/helpers.mjs';
-import { REQUIRED_PATHS, SCORED_PATHS, buildTestTime, cellOfSession, cpcOf, exploreSection, finalOf, finalizeSessionRecord, floorBreaches, isBuildTestCommand, missingPaths, pairRecordOf } from '../lib/records.mjs';
+import { REQUIRED_PATHS, SCORED_PATHS, buildTestTime, cellOfSession, cpcBoth, cpcOf, exploreSection, finalOf, finalizeSessionRecord, floorBreaches, isBuildTestCommand, missingPaths, pairRecordOf } from '../lib/records.mjs';
 import { acceptedOf } from '../lib/score.mjs';
 import { MIB, c, recordOf, scoreOf } from './support.mjs';
 
@@ -129,4 +129,18 @@ test('CPC_is_the_summed_spend_over_the_accepted_count_with_voids_in_the_numerato
   const u = cpcOf([{ record: unknownCost, accepted: true }]);
   assert.equal(u.cpc.known, false, 'an unknown cost is not 0');
   assert.equal(acceptedOf(scoreOf()), true);
+});
+
+test('F4_CPC_is_over_the_data_attempts_and_CPC_all_includes_the_voids_and_an_unknown_void_cost_touches_only_CPC_all', () => {
+  const rec = (usd, cls = 'completed', data = true) => ({ ...recordOf(), class: cls, data, cost: { ...recordOf().cost, headlineUsd: { known: true, value: { usd } }, stopRuleUsd: { known: true, value: usd } } });
+  const sessions = [{ record: rec(0.2), accepted: true }, { record: rec(0.4), accepted: true }, { record: rec(0.3, 'void: upstream', false), accepted: false }];
+  const both = cpcBoth(sessions);
+  assert.deepEqual([both.cpc.sessions, both.cpc.spendUsd.value, both.cpc.cpc.value], [2, 0.6, 0.3], 'D24: the void is not a data attempt');
+  assert.deepEqual([both.cpcAll.sessions, both.cpcAll.spendUsd.value, both.cpcAll.cpc.value], [3, 0.9, 0.45], 'the void was paid for');
+  const unknownVoid = { ...rec(0.3, 'void: upstream', false), cost: { ...rec(0.3).cost, headlineUsd: { known: false, why: 'no figure' }, stopRuleUsd: { known: false, why: 'no figure' } } };
+  const withUnknown = cpcBoth([...sessions.slice(0, 2), { record: unknownVoid, accepted: false }]);
+  assert.equal(withUnknown.cpc.cpc.known, true, 'CPC does not see the void');
+  assert.equal(withUnknown.cpc.cpc.value, 0.3);
+  assert.equal(withUnknown.cpcAll.cpc.known, false, 'CPC_all is unknown, not a sum that skips the void');
+  assert.equal(cpcBoth([{ record: rec(0.5, 'void: upstream', false), accepted: false }]).cpc.cpc.text, 'no correct solution', 'no data attempt: no correct solution (and its spend, 0)');
 });

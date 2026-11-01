@@ -14,18 +14,14 @@ import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
 import { loadHeldout } from './heldout.mjs';
 import { finalizeSessionRecord, missingPaths, pairRecordOf } from './records.mjs';
 import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
-import { calibrationFile } from './paths.mjs';
 import { allOk } from './chain.mjs';
+import { calibrationFor, loadCalibration } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
-import { isRehearsal, loadSeries, planPair, runMapFileOf } from './series.mjs';
+import { isRehearsal, loadSeries, planPair, runMapFileOf, seriesPrompts } from './series.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
-/** The calibration (`explore.mjs calibrate`), or the sentence saying to run it: no paid session starts without limits. */
-export function loadCalibration(home) {
-  const file = calibrationFile(home);
-  return existsSync(file) ? ok(readJson(file)) : fail(`${file} is not there: run \`explore.mjs calibrate\` first (the limits are measured before any paid session)`);
-}
+export { loadCalibration };
 
 const sessionDirOf = (seriesDir, rid) => path.join(seriesDir, 's', rid);
 const scoreOf = dir => { try { return readJson(path.join(dir, 'score', 'score.json')); } catch { return null; } };
@@ -82,7 +78,7 @@ function seriesRefusal(seriesDir, series) {
 
 /** What a pair needs besides its plan: the calibration, the held-out side, the world and the token. -> `ok({ calibration, heldout, world, token })` | the first `fail`. */
 async function prerequisites({ home, series, worldFn, tokenFn }) {
-  const got = await allOk([() => loadCalibration(home), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home)]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir }), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token] = got.value;
   const pins = pinsOk({ explore: world.explore, home, snapshots: world.snapshots });
@@ -111,12 +107,14 @@ async function settleOpen({ ctx, deps, map, resumed, say }) {
  */
 async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, io, abort }) {
   const seams = io.seams ?? {};
+  const prompts = seriesPrompts(series.dir);
+  if (!prompts.ok) return { exit: 4, message: prompts.reason };
   const ctx = await runContext({
-    world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home,
+    world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts: prompts.value,
   });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
-  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
+  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
   const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });

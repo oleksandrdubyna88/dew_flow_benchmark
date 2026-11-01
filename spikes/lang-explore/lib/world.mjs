@@ -63,7 +63,7 @@ function worldOf({ explore, home, snapshots, sources, work }) {
   const defaultCaches = stack => ({ nuget: path.join(snapshots.csharp.dir, 'nuget'), npm: path.join(snapshots.node.dir, 'npm'), stack });
   const scoreFn = args => scoreTree({
     explore, stack: args.stack, source: args.source, files: args.files ?? filesFor(args.stack), sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work,
-    toolchains: { dirs: [paths.nodeDir, paths.tsDir], tsDir: paths.tsDir }, caches: args.caches ?? defaultCaches(args.stack), python: explore.python3.path, operatorHome: home,
+    toolchains: { dirs: [paths.nodeDir, paths.tsDir], tsDir: paths.tsDir }, caches: args.caches ?? defaultCaches(args.stack), python: explore.python3.path, operatorHome: home, say: args.say,
   });
   return { explore, home, paths, snapshots, sources, filesFor, scoreFn, work };
 }

@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
-import { leakcheck } from '../../minigit-bench/lib/heldout-leak.mjs';
+import { leakcheck, normalise } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
@@ -11,10 +11,12 @@ import { loadHeldout } from './heldout.mjs';
 import { loadExplore } from './inputs.mjs';
 import { loadPrompts } from './plan.mjs';
 import { readbackOf } from './readback.mjs';
-import { exploreRoot, REPO } from './paths.mjs';
+import { exploreRoot, REPO, underHome } from './paths.mjs';
 import { noteFor, rehearse } from './rehearse.mjs';
-import { loadCalibration, readToken, runPair } from './run.mjs';
-import { createSeries, latestSeries, loadSeries, pairComplete, stackState } from './series.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { loadCalibration } from './limits.mjs';
+import { readToken, runPair } from './run.mjs';
+import { createSeries, latestSeries, loadSeries, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 
@@ -38,7 +40,7 @@ const firstBad = (...results) => results.find(r => !r.ok);
 
 /** What the series' inputs record besides the limits: the subject, the interpreter, the CLI and the task pins. */
 async function initExtra(explore) {
-  return { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs };
+  return { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, prompts: loadPrompts() };
 }
 
 /** `init`: create a series (the mask draw is made and recorded here). Needs `prepare` and `calibrate` done. */
@@ -101,19 +103,37 @@ export function cmdStatus(values, io) {
   return EXIT.done;
 }
 
-/** `note [--out file]`: the public note, generated from the series' records. */
-export async function cmdNote(values, io) {
+/** Where the note goes: `--out`, else `research/lang-v2/EXPLORE_task1_<the date of the SERIES' creation>.md` (never the date the command happens to run on). */
+export const notePathOf = (values, state) => values.out ?? path.join(REPO, 'research', 'lang-v2', `EXPLORE_task1_${state.createdAt.slice(0, 10)}.md`);
+
+/** The series a command works on, opened: `ok({ dir, state, map })` | `fail`. */
+function openSeriesOf(values, io) {
   const dir = seriesDirOf(values, io.home);
-  if (!dir.ok) return refused(io, dir.reason);
-  const series = loadSeries(dir.value);
-  const world = await (io.worldFn ?? loadWorld)({ home: io.home, work: path.join(dir.value, 'private') });
-  const calibration = loadCalibration(io.home);
-  const bad = firstBad(series, world, calibration);
-  if (bad) return refused(io, bad.reason);
-  const text = noteFor({ series: series.value.state, seriesDir: dir.value, map: series.value.map, world: { ...world.value, calibration: calibration.value }, pins: world.value.explore, rehearsal: false, subject: await subjectOf() });
-  const out = values.out ?? path.join(REPO, 'research', 'lang-v2', `EXPLORE_task1_${new Date().toISOString().slice(0, 10)}.md`);
+  return dir.ok ? loadSeries(dir.value) : dir;
+}
+
+const overwriteProblem = (out, force) => (existsSync(out) && !force ? `${out} exists: the note is not overwritten without --force` : null);
+
+/** What a note needs: the series, the world, the series' inputs and where to write; or the refusal. */
+async function noteInputs(values, io) {
+  const series = openSeriesOf(values, io);
+  if (!series.ok) return series;
+  const world = await (io.worldFn ?? loadWorld)({ home: io.home, work: path.join(series.value.dir, 'private') });
+  const inputs = seriesInputs(series.value.dir);
+  const bad = firstBad(world, inputs);
+  if (bad) return bad;
+  const out = notePathOf(values, series.value.state);
+  const clash = overwriteProblem(out, values.force);
+  return clash ? fail(clash) : ok({ dir: series.value.dir, series: series.value, world: world.value, inputs: inputs.value, out });
+}
+
+/** `note [--out file] [--force]`: the public note, generated from the series' records, under the limits the series was created with. An existing file is never overwritten without `--force`. */
+export async function cmdNote(values, io) {
+  const need = await noteInputs(values, io);
+  if (!need.ok) return refused(io, need.reason);
+  const { dir, series, world, inputs, out } = need.value;
   mkdirSync(path.dirname(out), { recursive: true });
-  writeFileSync(out, text);
+  writeFileSync(out, noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration: { limits: inputs.limits } }, pins: world.explore, rehearsal: false, subject: await subjectOf() }));
   io.say(`note written: ${out}`);
   return EXIT.done;
 }
@@ -124,16 +144,17 @@ const readbackLines = (session, rb) => [
 ];
 
 const plannedSessions = (dir, map) => Object.values(map.sessions).filter(s => existsSync(path.join(dir, 's', s.rid, 'plan.json')));
+const readAll = (dir, map, prompts) => plannedSessions(dir, map).map(s => readSession(dir, s, prompts));
 const allPass = read => read.length > 0 && read.every(x => x.rb.ok);
 const readSession = (dir, s, prompts) => ({ s, rb: readbackOf({ sessionDir: path.join(dir, 's', s.rid), registered: prompts[s.stack] }) });
 
-/** `readback [--series dir]`: what each session was really launched with, against the registered prompt and environment (read back for every session, so one cell per stack is covered). */
+/** `readback [--series dir]`: what each session was really launched with, against the prompts frozen in its series and the registered environment (read back for every session, so one cell per stack is covered). */
 export function cmdReadback(values, io) {
-  const dir = seriesDirOf(values, io.home);
-  if (!dir.ok) return refused(io, dir.reason);
-  const series = loadSeries(dir.value);
+  const series = openSeriesOf(values, io);
   if (!series.ok) return refused(io, series.reason);
-  const read = plannedSessions(dir.value, series.value.map).map(s => readSession(dir.value, s, loadPrompts().prompts));
+  const prompts = seriesPrompts(series.value.dir);
+  if (!prompts.ok) return refused(io, prompts.reason);
+  const read = readAll(series.value.dir, series.value.map, prompts.value.prompts);
   read.forEach(({ s, rb }) => readbackLines(s, rb).forEach(l => io.say(l)));
   return allPass(read) ? EXIT.done : EXIT.failed;
 }
@@ -173,19 +194,45 @@ export async function cmdQuiet(values, io) {
   return r.ok ? EXIT.done : EXIT.halt;
 }
 
-/** The literals the leak check looks for: every held-out expected output line of at least 8 characters (v1's minimum). */
+const BOILERPLATE = /^(?:using|import|from|export)\b|^[{}();,]*$/;
+const sourceLines = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).flatMap(e => readFileSync(path.join(e.parentPath, e.name), 'utf8').split('\n'));
+
+/** The literals the leak check looks for: every held-out expected output line, and every line of the references and mutants of at least 30 characters (generic shorter lines are in every program) that is not an import or bare punctuation. */
 export function leakNeedles(heldout) {
-  const lines = readdirSync(heldout.casesDir).filter(f => f.endsWith('.out')).flatMap(f => readFileSync(path.join(heldout.casesDir, f), 'utf8').split('\n'));
-  return [...new Set(lines.filter(l => l.length >= 8))].join('\n');
+  const outputs = readdirSync(heldout.casesDir).filter(f => f.endsWith('.out')).flatMap(f => readFileSync(path.join(heldout.casesDir, f), 'utf8').split('\n'));
+  const sources = ['refs', 'mutants'].map(d => path.join(heldout.dir ?? path.dirname(heldout.casesDir), d)).filter(existsSync).flatMap(sourceLines).map(l => l.trim()).filter(l => !BOILERPLATE.test(l) && l.length >= 30);
+  return [...new Set([...outputs.filter(l => l.length >= 8), ...sources])].join('\n');
 }
 
-const leakLine = r => (r.ok ? `leakcheck clean: ${r.scanned} files and ${r.history.join(' + ') || 'no history'} scanned for the pilot's held-out outputs` : `leakcheck FAILED: ${r.reason}`);
+/**
+ * v1's shingles of the private test notes: every window of six consecutive words (normalised), one per line, except the windows that already occur in `publicText` (the plans and the pins file, whose
+ * wording the team lead made public: the notes were written beside them and share phrases such as the spec's path).
+ */
+export function leakShingles(notesText, publicText = '') {
+  const words = normalise(notesText).split(' ').filter(Boolean);
+  const windows = new Set(Array.from({ length: Math.max(0, words.length - 5) }, (_, i) => words.slice(i, i + 6).join(' ')));
+  const open = normalise(publicText);
+  return [...windows].filter(w => !open.includes(w)).join('\n');
+}
 
-/** `leakcheck [--range A..B]`: v1's leak check over the repository and the branch range, with the pilot's held-out expected outputs as the needles. */
+/** The normalised text of the files whose wording is public by decision: the plans (`todo/PLAN_*.md`) and this spike's pins. */
+export function decidedPublicText(repo = REPO) {
+  const plans = readdirSync(path.join(repo, 'todo')).filter(f => /^PLAN_.*\.md$/.test(f)).map(f => path.join(repo, 'todo', f));
+  return [...plans, path.join(repo, 'spikes', 'lang-explore', 'inputs', 'explore.json')].filter(existsSync).map(f => readFileSync(f, 'utf8')).join('\n');
+}
+
+const leakLine = r => (r.ok ? `leakcheck clean: ${r.scanned} files and ${r.history.join(' + ') || 'no history'} scanned for the pilot's held-out outputs, reference lines and test-note shingles` : `leakcheck FAILED: ${r.reason}`);
+
+const notesOf = (explore, home) => { const f = underHome(explore.privateNotes.relativePath.split('/'), home); return existsSync(f) ? readFileSync(f, 'utf8') : ''; };
+
+/** `leakcheck [--range A..B]`: v1's leak check over the repository and the branch range, with the pilot's held-out expected outputs, the reference and mutant lines, and the private notes' shingles as the needles. */
 export async function cmdLeakcheck(values, io) {
   const heldout = loadHeldout(io.home);
-  if (!heldout.ok) return refused(io, heldout.reason);
-  const r = await leakcheck({ repoRoot: REPO, tokensText: leakNeedles(heldout.value), ...(values.range ? { range: values.range } : {}) });
+  const explore = loadExplore();
+  const bad = firstBad(heldout, explore);
+  if (bad) return refused(io, bad.reason);
+  const shinglesText = leakShingles(notesOf(explore.value, io.home), decidedPublicText());
+  const r = await leakcheck({ repoRoot: REPO, tokensText: leakNeedles(heldout.value), shinglesText, ...(values.range ? { range: values.range } : {}) });
   io.say(leakLine(r));
   return r.ok ? EXIT.done : EXIT.failed;
 }

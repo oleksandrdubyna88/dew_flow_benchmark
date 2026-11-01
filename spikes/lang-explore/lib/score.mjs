@@ -68,10 +68,28 @@ export const judgeDeadlineMs = ({ limits, cases }) => limits.buildTimeoutMs + ca
 export const caseCount = sets => sets.reduce((n, s) => n + readdirSync(s.dir).filter(f => f.endsWith('.in')).length, 0);
 
 /** Run the Python judge in held-out mode over a config. -> `ok(result)` | `fail`. `kind: 'harness'` when the judge reported a harness failure (a process left in a scope: the pilot stops). */
-export async function runJudge({ python = '/usr/bin/python3', judge = JUDGE, config, configFile, timeoutMs, cpus = '0-13' }) {
+export async function runJudge({ python = '/usr/bin/python3', judge = JUDGE, config, configFile, timeoutMs, cpus = '0-13', say = () => {} }) {
   writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
-  const r = await runBounded('taskset', ['-c', cpus, 'nice', '-n', '19', python, '-I', judge, '--heldout', configFile], { timeoutMs });
-  return r.ok ? judgeResult({ r: r.value, out: config.out, timeoutMs }) : r;
+  const watch = watchProgress(config.progress, say);
+  try {
+    const r = await runBounded('taskset', ['-c', cpus, 'nice', '-n', '19', python, '-I', judge, '--heldout', configFile], { timeoutMs });
+    return r.ok ? judgeResult({ r: r.value, out: config.out, timeoutMs }) : r;
+  } finally {
+    watch.stop();
+  }
+}
+
+/** Say each new line of the judge's progress file while it runs (polled every 500 ms; a last read when it stops). */
+export function watchProgress(file, say) {
+  let offset = 0;
+  const drain = () => {
+    if (!file || !existsSync(file)) return;
+    const text = readFileSync(file, 'utf8');
+    text.slice(offset).split('\n').filter(Boolean).forEach(line => say(line));
+    offset = text.length;
+  };
+  const timer = setInterval(drain, 500);
+  return { stop: () => { clearInterval(timer); drain(); } };
 }
 
 /** What a finished judge process means: its JSON, or the sentence saying why there is none. */
@@ -103,7 +121,7 @@ function heldoutStep(result, cases, traps) {
   };
 }
 
-/** The judge's JSON -> v1's score shape (`build`, `visible`, `heldout`, `upstream`) plus `explore`. `traps` are the held-out ids that catch a stack's overflow trap (counted, never named in a record's public rendering). */
+/** The judge's JSON -> v1's score shape (`build`, `visible`, `heldout`, `upstream`) plus `explore`. `traps` are held-out ids whose failures are counted: the list is read from the private side at run time, and only the count is ever rendered. */
 export function scoreShape({ result, traps = [], frozen = [] }) {
   const visible = bySet(result.cases, 'visible');
   const held = bySet(result.cases, 'heldout');
@@ -126,14 +144,14 @@ export const acceptedOf = score => score.build.ok && score.visible.every(allPass
  * Score a tree end to end. `files` is the frozen workspace (`workspaceFiles`), `sets` the case directories besides the visible samples (`[{ name: 'heldout', dir }]`), `caches` the cache directories to copy for the
  * build. The work directory is created under `work` and removed after. -> `ok(score)` | `fail`.
  */
-export async function scoreTree({ explore, stack, source, files, sets, limits, toolchains, caches, work, traps = [], python, judge, deadlineMs, operatorHome }) {
+export async function scoreTree({ explore, stack, source, files, sets, limits, toolchains, caches, work, traps = [], python, judge, deadlineMs, operatorHome, say = () => {} }) {
   const area = path.join(work, 'judge');
   removeArea(area);
   mkdirSync(area, { recursive: true });
   try {
     const frozen = pristineCopy({ source, dest: path.join(area, 'tree'), stack, files });
     const config = judgeConfig({ explore, files, sets, limits, toolchains, caches, area, operatorHome });
-    const judged = await runJudge({ python, judge, config, configFile: path.join(area, 'config.json'), timeoutMs: deadlineMs ?? judgeDeadlineMs({ limits, cases: caseCount(config.sets) }) });
+    const judged = await runJudge({ python, judge, config: { ...config, outputsDir: path.join(work, 'cases'), progress: path.join(area, 'progress.log') }, configFile: path.join(area, 'config.json'), timeoutMs: deadlineMs ?? judgeDeadlineMs({ limits, cases: caseCount(config.sets) }), say });
     return judged.ok ? ok(scoreShape({ result: judged.value, traps, frozen })) : judged;
   } finally {
     removeArea(area);

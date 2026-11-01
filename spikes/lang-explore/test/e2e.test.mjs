@@ -74,7 +74,7 @@ function fakeHome() {
 
 /** A series with a stub CLI behind a loopback stub upstream, a scripted quiet machine and the reference trees as the agents' work: everything a `runPair` needs, free. `machine` and `worldFn` can be replaced. */
 async function pilotRig(t, { world, calibration }, { machine, worldFn = loadWorld } = {}) {
-  const made = createSeries({ home: realHome, explore: world.explore, calibration, draw: drawMask(() => 1), inputsExtra: { test: true } });
+  const made = createSeries({ home: realHome, explore: world.explore, calibration, draw: drawMask(() => 1), inputsExtra: { test: true, prompts: loadPrompts() } });
   assert.equal(made.ok, true, made.reason);
   const dir = made.value.dir;
   t.after(() => removeArea(dir));

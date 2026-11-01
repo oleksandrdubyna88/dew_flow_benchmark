@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { INPUTS } from '../lib/paths.mjs';
 import { BANNER, DIFFERENCES, predictionRows, renderNote, sessionCells } from '../lib/note.mjs';
-import { cpcOf, exploreSection, pairRecordOf } from '../lib/records.mjs';
+import { cpcBoth, exploreSection, pairRecordOf } from '../lib/records.mjs';
 import { MIB, c, recordOf, resultOf } from './support.mjs';
 import { scoreShape } from '../lib/score.mjs';
 
@@ -28,7 +28,7 @@ const entryOf = (pair, stack, attempt, record, over = {}) => ({ rid: `r${pair}${
 
 function inputFor(sessions) {
   const pairs = [...new Set(sessions.map(s => s.entry.pair))].map(pair => pairRecordOf({ pair, entries: sessions.filter(s => s.entry.pair === pair).map(s => s.entry), recordOf: rid => sessions.find(s => s.entry.rid === rid)?.record ?? null }));
-  const cpc = Object.fromEntries(['csharp', 'node'].map(stack => [stack, cpcOf(sessions.filter(s => s.entry.stack === stack).map(s => ({ record: s.record, accepted: s.record.explore.accepted?.value === true })))]));
+  const cpc = Object.fromEntries(['csharp', 'node'].map(stack => [stack, cpcBoth(sessions.filter(s => s.entry.stack === stack).map(s => ({ record: s.record, accepted: s.record.explore.accepted?.value === true })))]));
   return {
     date: '2026-11-01', seriesId: 'x-20261101-ab12', rehearsal: false, subject: { branch: 'feat/lang-explore-task1', sha: 'a'.repeat(40), harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: 'b'.repeat(12), pilotIdentity: 'c'.repeat(40) },
     pins: PINS, limits: { timeMs: 2000, memoryBytes: 512 * MIB }, sessions, pairs, cpc,
@@ -127,7 +127,29 @@ test('CPC_is_stated_per_stack_with_no_correct_solution_and_its_spend_when_none_w
   const failed = sessionRecord({ stack: 'node', usd: 0.5, failing: ['k001'] });
   const all = [...sessions, { entry: entryOf(1, 'node', 1, failed), record: failed }];
   const text = renderNote(inputFor(all));
-  assert.match(text, /- C#: 3 accepted of 3 session\(s\), spend \$0\.6600, cost per correct solution \$0\.2200/);
-  assert.match(text, /- TypeScript: 0 accepted of 1 session\(s\), spend \$0\.5000, cost per correct solution no correct solution \(spend \$0\.5000\)/);
+  assert.match(text, /- C#, CPC \(data attempts only, D24\): 3 accepted of 3 session\(s\), spend \$0\.6600, cost per correct solution \$0\.2200/);
+  assert.match(text, /- C#, CPC_all \(every session, voids included\): 3 accepted of 3 session\(s\), spend \$0\.6600, cost per correct solution \$0\.2200/);
+  assert.match(text, /- TypeScript, CPC \(data attempts only, D24\): 0 accepted of 1 session\(s\), spend \$0\.5000, cost per correct solution no correct solution \(spend \$0\.5000\)/);
+  const voided = sixSessions().filter(s => s.entry.stack === 'csharp');
+  const bad = sessionRecord({ stack: 'csharp', usd: 0.4, cls: 'void: upstream' });
+  const withVoid = renderNote(inputFor([...voided, { entry: entryOf(4, 'csharp', 1, { ...bad, data: false }, { class: 'void: upstream', data: false }), record: { ...bad, data: false, explore: {} } }]));
+  assert.match(withVoid, /C#, CPC \(data attempts only, D24\): 3 accepted of 3 session\(s\), spend \$0\.6600/);
+  assert.match(withVoid, /C#, CPC_all \(every session, voids included\): 3 accepted of 4 session\(s\), spend \$1\.0600, cost per correct solution \$0\.3533/);
   assert.equal(c('visible', 's01', 'pass').verdict, 'pass');
+});
+
+test('A_session_without_a_record_json_does_not_crash_the_note_and_is_listed_as_an_incident', async () => {
+  const { noteFor } = await import('../lib/rehearse.mjs');
+  const { tmpDir } = await import('../../minigit-bench/test/helpers.mjs');
+  const { mkdirSync } = await import('node:fs');
+  const dir = tmpDir('norecord');
+  mkdirSync(path.join(dir, 'pairs'));
+  const map = { sessions: {
+    aaa111: { rid: 'aaa111', pair: 1, stack: 'csharp', attempt: 1, label: 'paired', status: 'launching', mask: '0-5' },
+    bbb222: { rid: 'bbb222', pair: 1, stack: 'node', attempt: 1, label: 'paired', status: 'planned', mask: '8-13' },
+  } };
+  const text = noteFor({ series: { seriesId: 'x-test' }, seriesDir: dir, map, world: { calibration: { limits: { timeMs: 2000, memoryBytes: 536870912 } } }, pins: PINS, rehearsal: false, subject: { branch: 'b', sha: 'a'.repeat(40), harnessPath: 'p', harnessIdentity: 'i', pilotIdentity: 'j' } });
+  assert.match(text, /pair 1 C# attempt 1: launching; flags: no record\.json/);
+  assert.match(text, /pair 1 TypeScript attempt 1: planned; flags: no record\.json/);
+  assert.ok(text.includes('Exploratory, not evidence'));
 });

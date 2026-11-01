@@ -6,6 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import os from 'node:os';
 import path from 'node:path';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord, treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
+import { toolchainInstallPlan } from '../../minigit-bench/lib/host-checks.mjs';
 import { preflight } from '../../minigit-bench/lib/preflight.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
@@ -64,21 +65,42 @@ function fakeHome() {
   return home;
 }
 
-/** Install TypeScript read-only (when absent) through v1's preflight and check the host's pins in a box; then compare the installed integrity with the recorded one. */
-export async function installToolchain({ explore, home = os.homedir(), preflightFn = preflight }) {
+const INSTALL_MS = 300_000;
+
+/** The install steps of the toolchain when it is absent (v1's plan: `npm install --prefix`, then `chmod -R a-w`), run with the given environment: a COPY with a fresh npm cache, never the process's own. */
+async function installSteps({ explore, tsDir, env, runFn }) {
+  const plan = toolchainInstallPlan({ dir: tsDir, exists: existsSync, version: explore.typescript.version });
+  for (const step of plan?.steps ?? []) {
+    const r = await runFn(step.exe, step.argv, { timeoutMs: INSTALL_MS, env });
+    const why = stepFailure(step, r);
+    if (why) return fail(why);
+  }
+  return ok(null);
+}
+
+/** The sentence saying why an install step failed, or null. */
+function stepFailure(step, r) {
+  if (!r.ok) return `${step.exe} ${step.argv.join(' ')} failed: ${r.reason}`;
+  return r.value.code === 0 ? null : `${step.exe} ${step.argv.join(' ')} failed: ${r.value.stderr.slice(-300)}`;
+}
+
+/**
+ * Install TypeScript read-only (when absent) with a fresh npm cache passed to the install children as a COPY of the environment (the process's own is not changed), then let v1's preflight check the host's pins in a
+ * box; then compare the installed integrity with the recorded one.
+ */
+export async function installToolchain({ explore, home = os.homedir(), preflightFn = preflight, runFn = runBounded }) {
   const stacks = stacksOf(explore);
   if (!stacks.ok) return stacks;
   const paths = pinnedPaths(explore, home);
   mkdirSync(path.dirname(paths.tsDir), { recursive: true, mode: 0o700 });
   const cache = scratch('npm');
   const fake = fakeHome();
-  const before = process.env.npm_config_cache;
-  process.env.npm_config_cache = cache; // the install child inherits it: the operator's ~/.npm is not consulted
   try {
-    const pre = await preflightFn({ home: fake, nodeDir: paths.nodeDir, tsDir: paths.tsDir, claudeBinary: paths.claudeBinary, stacks: stacks.value, install: true });
+    const installed = await installSteps({ explore, tsDir: paths.tsDir, env: { ...process.env, npm_config_cache: cache }, runFn });
+    if (!installed.ok) return installed;
+    const pre = await preflightFn({ home: fake, nodeDir: paths.nodeDir, tsDir: paths.tsDir, claudeBinary: paths.claudeBinary, stacks: stacks.value, install: false });
     return pre.ok ? checkedIntegrity({ explore, tsDir: paths.tsDir, facts: pre.value.facts }) : fail(`${pre.reason}: ${(pre.problems ?? []).join('; ')}`);
   } finally {
-    if (before === undefined) delete process.env.npm_config_cache; else process.env.npm_config_cache = before;
     rmSync(cache, { recursive: true, force: true });
     rmSync(fake, { recursive: true, force: true });
   }
@@ -181,7 +203,7 @@ function recordedStep({ files, version, integrity, say }) {
 async function stepToolchain({ home, say, deps }) {
   const explore = loadExplore((deps.files ?? FILES).explore);
   if (!explore.ok) return explore;
-  const installed = await installToolchain({ explore: explore.value, home, preflightFn: deps.preflight });
+  const installed = await installToolchain({ explore: explore.value, home, preflightFn: deps.preflight, runFn: deps.run });
   if (installed.ok) say(`toolchain installed read-only; the pins hold in the box: ${JSON.stringify(installed.value.facts)}`);
   return installed.ok ? ok({ toolchainFacts: installed.value.facts }) : installed;
 }

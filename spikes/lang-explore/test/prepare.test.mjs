@@ -58,27 +58,37 @@ function toolchain(explore, home, integrity) {
   return dir;
 }
 
-test('The_install_runs_with_a_fresh_npm_cache_a_fake_token_home_and_install_true_then_compares_the_integrity', async () => {
+test('The_install_children_get_a_fresh_npm_cache_in_a_copy_of_the_environment_and_the_process_environment_is_never_changed', async () => {
   const f = files();
   recordIntegrity({ file: f.explore, integrity: INTEGRITY });
   const explore = loadExplore(f.explore).value;
   const home = tmpDir('home');
   toolchain(explore, home, INTEGRITY);
+  const children = [];
+  const runFn = async (exe, argv, opts) => { children.push({ exe, argv, env: opts.env, during: process.env.npm_config_cache }); return { ok: true, value: { code: 0, stdout: '', stderr: '' } }; };
   const seen = [];
-  const preflightFn = async a => { seen.push({ ...a, cache: process.env.npm_config_cache, tokenFile: existsSync(path.join(a.home, '.config', 'minigit-bench', 'claude-oauth-token')) }); return { ok: true, value: { facts: { typescript: '6.0.3' } } }; };
+  const preflightFn = async a => { seen.push({ ...a, tokenFile: existsSync(path.join(a.home, '.config', 'minigit-bench', 'claude-oauth-token')), during: process.env.npm_config_cache }); return { ok: true, value: { facts: { typescript: '6.0.3' } } }; };
   const realCache = process.env.npm_config_cache;
-  const r = await installToolchain({ explore, home, preflightFn });
+  const r = await installToolchain({ explore, home, preflightFn, runFn });
   assert.equal(r.ok, true, r.reason);
-  assert.equal(seen[0].install, true);
+  const tsDir = path.join(home, ...explore.typescript.toolchainDirParts);
+  assert.deepEqual(children.map(c => [c.exe, c.argv]), [['npm', ['install', '--prefix', tsDir, 'typescript@6.0.3']], ['chmod', ['-R', 'a-w', tsDir]]], 'the install is v1\'s plan, run by the pilot with its own environment');
+  for (const c of children) {
+    assert.ok(c.env.npm_config_cache && c.env.npm_config_cache !== realCache, 'a fresh npm cache: the operator\'s is not consulted');
+    assert.equal(c.during, realCache, 'and the process environment is not changed while the child runs');
+  }
+  assert.equal(process.env.npm_config_cache, realCache, 'nor afterwards');
+  assert.equal(seen[0].install, false, 'the preflight only probes: the install was done above');
   assert.notEqual(seen[0].home, home, 'the preflight is handed a throw-away home with a fake token file, not the operator\'s');
   assert.equal(seen[0].tokenFile, true);
-  assert.ok(seen[0].cache && seen[0].cache !== realCache, 'npm gets a fresh cache for the install');
-  assert.equal(process.env.npm_config_cache, realCache, 'and the environment is put back');
-  assert.equal(seen[0].tsDir, path.join(home, ...explore.typescript.toolchainDirParts));
-  const mismatch = await installToolchain({ explore: { ...explore, typescript: { ...explore.typescript, integrity: OTHER } }, home, preflightFn });
+  assert.equal(seen[0].during, realCache);
+  assert.equal(seen[0].tsDir, tsDir);
+  const mismatch = await installToolchain({ explore: { ...explore, typescript: { ...explore.typescript, integrity: OTHER } }, home, preflightFn, runFn });
   assert.equal(mismatch.ok, false);
   assert.match(mismatch.reason, /integrity/);
   assert.equal(installedIntegrity(path.join(home, 'nowhere')), null);
+  const failing = await installToolchain({ explore, home, preflightFn, runFn: async () => ({ ok: true, value: { code: 1, stdout: '', stderr: 'E404 typescript' } }) });
+  assert.match(failing.reason, /npm install .* failed: E404 typescript/);
 });
 
 test('A_failing_preflight_is_the_result_with_every_problem_named', async () => {
@@ -167,6 +177,7 @@ test('Prepare_runs_the_steps_in_order_stops_at_the_first_failure_naming_it_and_k
   const deps = {
     files: f,
     registryIntegrity: async () => { order.push('registry'); return { ok: true, value: INTEGRITY }; },
+    run: async () => ({ ok: true, value: { code: 0, stdout: '', stderr: '' } }), // the install is simulated: no test reaches the network
     preflight: async () => { order.push('preflight'); return { ok: true, value: { facts: {} } }; },
     makeSnapshot: async a => { order.push('snapshot'); return fakeMake()(a); },
     calibrateSpin: async () => { order.push('spin'); return { ok: false, reason: 'the machine is not quiet' }; },

@@ -147,3 +147,11 @@ export function cpcOf(sessions) {
   const cpc = accepted === 0 ? { known: true, value: null, text: NO_SOLUTION, spendUsd: spend.value } : { known: true, value: round(spend.value / accepted), bound: spend.bound };
   return { ...base, spendUsd: { known: true, ...spend }, cpc };
 }
+
+/**
+ * Both cost-per-correct-solution figures of a stack (D24 and the voids): `cpc` is over the DATA attempts (records with `data === true`: a void is not one, so an unknown cost in a void cannot touch it) and
+ * `cpcAll` over every session, voids included (a void was paid for). -> `{ cpc, cpcAll }`, each as `cpcOf` returns.
+ */
+export function cpcBoth(sessions) {
+  return { cpc: cpcOf(sessions.filter(s => s.record.data === true)), cpcAll: cpcOf(sessions) };
+}

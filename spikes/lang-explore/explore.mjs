@@ -8,7 +8,7 @@
 //   node spikes/lang-explore/explore.mjs quiet [--accept-noisy <why>]  the machine-quiet check alone
 //   node spikes/lang-explore/explore.mjs run --pair k --series <dir> [--rerun csharp|node] [--accept-noisy <why>]     SPENDS MONEY: one pair
 //   node spikes/lang-explore/explore.mjs readback [--series <dir>]     what each session was launched with, against the registered prompt and environment
-//   node spikes/lang-explore/explore.mjs status [--series <dir>]       node spikes/lang-explore/explore.mjs note [--out <file>]     node spikes/lang-explore/explore.mjs prune [--series <dir>]
+//   node spikes/lang-explore/explore.mjs status [--series <dir>]       node spikes/lang-explore/explore.mjs note [--out <file>] [--force]     node spikes/lang-explore/explore.mjs prune [--series <dir>]
 //   node spikes/lang-explore/explore.mjs leakcheck [--range A..B]      v1's leak check with the pilot's held-out outputs as the needles
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
@@ -23,7 +23,7 @@ import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, 
 import { prepare } from './lib/prepare.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' } };
+const OPTIONS = { pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, force: { type: 'boolean' } };
 const REEXEC = new Set(['run', 'rehearse']);
 
 async function cmdPrepare(values, io) {
@@ -52,7 +52,7 @@ export async function main(argv, seams = {}) {
   const [command, ...rest] = argv;
   let values;
   try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { process.stderr.write(`explore: usage error: ${e.message}\n`); return EXIT.config; }
-  if (!Object.hasOwn(COMMANDS, command ?? '')) { process.stderr.write(`explore: the commands are ${Object.keys(COMMANDS).join(', ')}\n`); return EXIT.config; }
+  if (!Object.hasOwn(COMMANDS, command ?? '')) { process.stderr.write(`explore: '${command ?? ''}' is not a command; the commands are ${Object.keys(COMMANDS).join(', ')}\n`); return EXIT.config; }
   const abort = { reason: null, exit: 130 };
   const ctl = new AbortController();
   armSignals(abort, ctl);

@@ -88,11 +88,18 @@ function pairTable(pairs) {
     pairs.map(p => [p.pair, ratio(p, 'costUsd'), ratio(p, 'wallMs'), ratio(p, 'modelApiMs'), ratio(p, 'activeMinusModelApiMs'), Object.values(p.masks).join(' / '), Object.values(p.skewsMs).map(ms => `${ms} ms`).join(' / ') || DASH]));
 }
 
+const cpcValue = c => {
+  if (!c.cpc.known) return DASH;
+  return c.cpc.value === null ? `no correct solution (spend ${usd(c.cpc.spendUsd)})` : `${usd(c.cpc.value)}${c.cpc.bound ?? ''}`;
+};
+const cpcLine = c => `${c.accepted} accepted of ${c.sessions} session(s), spend ${c.spendUsd.known ? `${usd(c.spendUsd.value)}${c.spendUsd.bound ?? ''}` : DASH}, cost per correct solution ${cpcValue(c)}`;
+
+/** Per stack, both figures, each labelled: CPC over the data attempts (D24) and CPC_all over every session including the voids. */
 function cpcLines(cpc) {
-  return Object.entries(cpc).map(([stack, c]) => {
-    const value = c.cpc.known ? (c.cpc.value === null ? `no correct solution (spend ${usd(c.cpc.spendUsd)})` : `${usd(c.cpc.value)}${c.cpc.bound ?? ''}`) : DASH;
-    return `- ${cap(stack)}: ${c.accepted} accepted of ${c.sessions} session(s), spend ${usd(c.spendUsd.value)}${c.spendUsd.bound ?? ''}, cost per correct solution ${value}`;
-  });
+  return Object.entries(cpc).flatMap(([stack, c]) => [
+    `- ${cap(stack)}, CPC (data attempts only, D24): ${cpcLine(c.cpc)}`,
+    `- ${cap(stack)}, CPC_all (every session, voids included): ${cpcLine(c.cpcAll)}`,
+  ]);
 }
 
 // ---- the prediction against the observation ---------------------------------------------------------------------------------------------

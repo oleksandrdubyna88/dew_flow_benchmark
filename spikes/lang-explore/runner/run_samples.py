@@ -34,7 +34,8 @@ TAIL = 400
 KINDS = {
     "olympiad": "a program that reads standard input once and writes standard output once",
 }
-VERDICTS = ("pass", "wrong answer", "time limit", "memory limit", "runtime error")
+VERDICTS = ("pass", "wrong answer", "time limit", "memory limit", "runtime error", "build failed")
+SAVED_OUTPUT_CAP = 64 * 1024
 NOT_LOADED = ("not loaded", "not found", "no such unit")
 
 
@@ -214,8 +215,13 @@ def judge_visible(workspace, case_id, stdin, expected):
 # ---- held-out mode -----------------------------------------------------------------------------------------------
 
 def substitute(argv, mapping):
-    """Replace every element that equals a placeholder name (exact match, never a substring)."""
-    return [mapping.get(a, a) for a in argv]
+    """Replace each placeholder wherever it occurs in an element (`@@HOME@@` is also the prefix of NUGET_PACKAGES and npm_config_cache). The placeholders are distinctive, never part of a real value."""
+    out = []
+    for a in argv:
+        for name, value in mapping.items():
+            a = a.replace(name, value)
+        out.append(a)
+    return out
 
 
 def cgroup_dir_of_scope(unit):
@@ -305,14 +311,28 @@ def run_in_scope(run_box, case_dir, stdin, limits):
     started = time.monotonic()
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
-    state = {"killed_for": None}
+    state = {"killed_for": None, "killed": False, "problem": None}
+    lock = threading.Lock()
 
     def kill_for(reason):
-        if state["killed_for"] is None:
-            state["killed_for"] = reason
-            problem = kill_scope(unit)
-            if problem:
-                state["problem"] = problem
+        """Kill the whole scope. A failed `systemctl kill` (or one that raises) falls back to a SIGKILL of the process group; the failure is kept, and the case ends as a harness failure. Callable from the
+        output-cap reader thread and again from the time limit: the first reason stays, but a kill that did not take is tried again."""
+        with lock:
+            if state["killed_for"] is None:
+                state["killed_for"] = reason
+            if state["killed"]:
+                return
+            try:
+                problem = kill_scope(unit)
+            except Exception as e:  # noqa: BLE001 - any failure of the kill is a harness failure, never a lost thread
+                problem = "systemctl kill raised %s: %s" % (type(e).__name__, e)
+            state["problem"] = problem
+            state["killed"] = problem is None
+            if problem is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     out = Capture(proc.stdout, OUTPUT_CAP, on_overflow=lambda: kill_for("output"))
     err = Capture(proc.stderr, OUTPUT_CAP)
@@ -321,15 +341,24 @@ def run_in_scope(run_box, case_dir, stdin, limits):
         proc.wait(timeout=limits["timeMs"] / 1000.0)
     except subprocess.TimeoutExpired:
         kill_for("time")
-        proc.wait()
+        wait_after_kill(proc, unit)
     wall_ms = int((time.monotonic() - started) * 1000)
     if state["killed_for"] is not None:
-        if state.get("problem") or not scope_is_gone(unit):
-            raise HarnessFailure("scope %s: a process remains after the kill%s" % (unit, " (%s)" % state["problem"] if state.get("problem") else ""))
+        wait_after_kill(proc, unit)
+        if state["problem"] or not scope_is_gone(unit):
+            raise HarnessFailure("scope %s: a process remains after the kill%s" % (unit, " (%s)" % state["problem"] if state["problem"] else ""))
     peak, events = parse_measure(measure)
     return {"code": proc.returncode, "killedFor": state["killed_for"], "wallMs": wall_ms,
             "stdout": out.join(5), "stderr": err.join(5), "stdoutOverflow": out.overflow,
             "peakBytes": peak, "maxRssKb": parse_maxrss(measure + ".rss"), "events": events, "unit": unit}
+
+
+def wait_after_kill(proc, unit):
+    """The wait after a kill is bounded: a process that does not end 10 s after SIGKILL is a harness failure, not a hang."""
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        raise HarnessFailure("scope %s: the process did not end 10 s after the kill" % unit)
 
 
 class HarnessFailure(Exception):
@@ -355,6 +384,25 @@ def classify(result, expected, limits):
     return "pass", ""
 
 
+def save_output(cfg, set_name, case_id, data):
+    """Keep the case's stdout (the first 64 KiB) where a hand check can read it: the directory the harness gave (mode 0700, a file 0600)."""
+    directory = cfg.get("outputsDir")
+    if not directory:
+        return
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    fd = os.open(os.path.join(directory, "%s-%s.out" % (set_name, case_id)), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data[:SAVED_OUTPUT_CAP])
+
+
+def progress(cfg, text):
+    """One line of progress for the harness to say while the judge runs (appended to a file it tails)."""
+    path = cfg.get("progress")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text + "\n")
+
+
 def run_case(cfg, built_tree, set_name, case_id, stdin, expected):
     work = cfg["work"]
     case_dir = os.path.join(work, "case-%s-%s" % (set_name, case_id))
@@ -369,6 +417,8 @@ def run_case(cfg, built_tree, set_name, case_id, stdin, expected):
         run_box = substitute(cfg["runBox"], {ph["tree"]: tree, ph["home"]: home, ph["tmp"]: tmp}) + ["bash", "run.sh"]
         result = run_in_scope(run_box, case_dir, stdin, cfg["limits"])
         verdict, detail = classify(result, expected, cfg["limits"])
+        save_output(cfg, set_name, case_id, result["stdout"])
+        progress(cfg, "%s/%s %s %d ms" % (set_name, case_id, verdict, result["wallMs"]))
         return {"set": set_name, "id": case_id, "verdict": verdict, "detail": detail, "wallMs": result["wallMs"],
                 "peakBytes": result["peakBytes"], "maxRssKb": result["maxRssKb"], "events": result["events"], "exit": result["code"],
                 "stderrTail": tail(result["stderr"]), "stdoutBytes": len(result["stdout"]), "expectedBytes": len(expected)}
@@ -404,12 +454,13 @@ def heldout(config_path):
         cfg = json.load(f)
     os.makedirs(cfg["work"], exist_ok=True)
     built, build = build_once(cfg)
+    progress(cfg, "build %s in %d ms" % ("ok" if build["ok"] else "FAILED", build["wallMs"]))
     results, harness_failure = [], None
     cases = [(s["name"], c) for s in cfg["sets"] for c in read_cases(s["dir"])]
     try:
         for set_name, (case_id, stdin, expected) in cases:
             if not build["ok"]:
-                results.append({"set": set_name, "id": case_id, "verdict": "runtime error", "detail": "build failed", "wallMs": 0,
+                results.append({"set": set_name, "id": case_id, "verdict": "build failed", "detail": "the build did not succeed: no case ran", "wallMs": 0,
                                 "peakBytes": None, "events": {}, "exit": None, "stderrTail": "", "stdoutBytes": 0,
                                 "expectedBytes": len(expected)})
                 continue

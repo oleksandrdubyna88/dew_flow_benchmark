@@ -1,7 +1,7 @@
 // `explore.mjs rehearse` (plan section 10 step 7, T-X11): the whole pair path for $0. v1's stub CLI as the CLI and v1's stub upstream as the API, in the real box behind the real broker and proxy, a fake token
 // (the real token file is never read), one C# and TypeScript pair on the masks, each workspace pre-filled with its reference tree; then collect, classify, score, record and render the note exactly as a paid pair.
 // Pass: both sessions `completed`, both scored 100 %, every record's sections free of unknowns without a reason, T1-T5 as v1's stub gives them, and the note renders with its banner.
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +15,7 @@ import { chunksOf, sseAnswer, sseBody, stubUpstream } from '../../minigit-bench/
 import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { loadHeldout, writeSolution } from './heldout.mjs';
 import { BANNER, renderNote } from './note.mjs';
-import { cpcOf } from './records.mjs';
+import { cpcBoth } from './records.mjs';
 import { finalizePair, loadCalibration } from './run.mjs';
 import { runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
@@ -66,10 +66,18 @@ export function rehearsalChecks({ entries, records, noteText }) {
 /** The note of a series from its records (a real pair's, or the rehearsal's). */
 export function noteFor({ series, seriesDir, map, world, pins, rehearsal, subject }) {
   const entries = Object.values(map.sessions).sort((a, b) => a.pair - b.pair || a.attempt - b.attempt);
-  const sessions = entries.map(entry => ({ entry, record: readRecord(seriesDir, entry.rid) }));
-  const pairs = [...new Set(entries.map(e => e.pair))].map(p => JSON.parse(readJsonText(path.join(seriesDir, 'pairs', `p${p}.json`))));
-  const cpc = Object.fromEntries(['csharp', 'node'].map(stack => [stack, cpcOf(sessions.filter(s => s.entry.stack === stack).map(s => ({ record: s.record, accepted: s.record.explore?.accepted?.value === true })))]));
+  const sessions = entries.map(entry => ({ entry, record: recordOrPlaceholder(seriesDir, entry) }));
+  const pairs = [...new Set(entries.map(e => e.pair))].map(p => path.join(seriesDir, 'pairs', `p${p}.json`)).filter(existsSync).map(f => JSON.parse(readJsonText(f)));
+  const cpc = Object.fromEntries(['csharp', 'node'].map(stack => [stack, cpcBoth(sessions.filter(s => s.entry.stack === stack).map(s => ({ record: s.record, accepted: s.record.explore?.accepted?.value === true })))]));
   return renderNote({ date: new Date().toISOString().slice(0, 10), seriesId: series.seriesId, rehearsal, subject, pins, limits: world.calibration.limits, sessions, pairs, cpc });
+}
+
+/** A session's record, or (a session that crashed or was never launched has none) a stand-in that says so: every figure unknown, the flag `no record.json`. */
+function recordOrPlaceholder(seriesDir, entry) {
+  const file = path.join(seriesDir, 's', entry.rid, 'record.json');
+  if (existsSync(file)) return JSON.parse(readJsonText(file));
+  const none = { known: false, why: 'the session has no record.json' };
+  return { ids: { label: entry.label }, class: entry.class ?? entry.status, data: false, flags: ['no record.json'], cost: { headlineUsd: none, stopRuleUsd: none }, time: {}, explore: {} };
 }
 
 /** What a rehearsal needs on disk: the calibration, the held-out side and the world. -> `ok({ calibration, heldout, world })` | the first `fail`. */

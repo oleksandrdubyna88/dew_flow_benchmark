@@ -44,7 +44,7 @@ const readSpin = home => (existsSync(spinFile(home)) ? readJson(spinFile(home)) 
 const snapshotsOfWorld = world => Object.fromEntries(['csharp', 'node'].map(s => [s, { dir: world.snapshots[s].dir, parts: world.snapshots[s].parts }]));
 
 /** The context object, from the pieces `runContext` gathered. */
-function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity }) {
+function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity, prompts = loadPrompts() }) {
   return {
     seriesDir, sessionsRoot: path.join(seriesDir, 's'), home, kind, pair, seed: null, inputsRoot: null, hashes: [], snapshots: snapshotsOfWorld(world), ...snapshotFacts(world.snapshots),
     packageRules: readJson(path.join(INPUTS, 'package-flags.json')).rules, claudeBinary, cliVersion: world.explore.cli.version, nodeDir: world.paths.nodeDir, tsDir: world.paths.tsDir, token,
@@ -53,7 +53,7 @@ function contextOf({ world, calibration, series, seriesDir, kind, pair, token, c
     caps: world.explore.caps, ceilingUsd: NO_TOTAL_USD, bareBudgetUsd: NO_TOTAL_USD, harnessIdentity: identity, preregTag: null, spin: readSpin(home),
     runMapFile: runMapFileOf(seriesDir), ledgerFile: ledgerFileOf(seriesDir), aliasStore: kind === 'rehearsal' ? null : aliasStore(path.join(seriesDir, 'aliases.json')),
     handVerdictsFor: () => [], abortReason: () => abort.reason, abortExit: () => abort.exit, planOver,
-    fill, planFor: a => recordPlan(planForSession(a)), prompts: loadPrompts(), locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
+    fill, planFor: a => recordPlan(planForSession(a)), prompts, locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
   };
 }
 
@@ -68,11 +68,11 @@ const projectDirs = home => () => {
 /**
  * The scoring step of the loop: the judge over the session's tree, with its own caches. Writes `<session>/score/score.json`. A harness failure (a process left in a scope) is `failed`, which stops the pilot.
  */
-export function scoreSessionDep({ world, calibration, heldout, home }) {
+export function scoreSessionDep({ world, calibration, heldout, home, say = () => {} }) {
   return async ({ session, source, stack, nugetCache, npmCache }) => {
     const work = path.join(session, 'score');
     mkdirSync(work, { recursive: true });
-    const scored = await world.scoreFn({ stack, source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: nugetCache, npm: npmCache }, work, operatorHome: home });
+    const scored = await world.scoreFn({ stack, source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: nugetCache, npm: npmCache }, work, operatorHome: home, say });
     if (!scored.ok) return { kind: scored.kind === 'scorer-timeout' ? 'scorer-timeout' : 'failed', reason: scored.reason };
     writeFileSync(path.join(work, 'score.json'), `${JSON.stringify(scored.value, null, 2)}\n`);
     return { kind: 'scored', score: scored.value };

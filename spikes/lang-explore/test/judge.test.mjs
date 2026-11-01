@@ -2,7 +2,7 @@
 // real systemd scope per run. The judge makes no temp path of its own: every directory it writes is under the one these tests give it.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
@@ -24,6 +24,7 @@ async function scopeGate(t) {
 /** Write a stub submission (build.sh, run.sh) and a case directory; score it. `cases` is `{ id: [stdin, expected] }`. -> the score. */
 async function judge({ run, build = 'exit 0', cases, limits = LIMITS, files = {} }) {
   const base = tmpDir('judge');
+  const said = [];
   const source = path.join(base, 'source');
   mkdirSync(source, { recursive: true });
   writeFileSync(path.join(source, 'build.sh'), `#!/usr/bin/env bash\n${build}\n`);
@@ -32,9 +33,9 @@ async function judge({ run, build = 'exit 0', cases, limits = LIMITS, files = {}
   const dir = path.join(base, 'cases');
   mkdirSync(dir);
   for (const [id, [stdin, expected]] of Object.entries(cases)) { writeFileSync(path.join(dir, `${id}.in`), stdin); writeFileSync(path.join(dir, `${id}.out`), expected); }
-  const r = await scoreTree({ explore: EXPLORE, stack: 'node', source, files: {}, sets: [{ name: 'heldout', dir }], limits, toolchains: { dirs: [NODE_DIR], tsDir: path.join(base, 'no-ts') }, caches: {}, work: path.join(base, 'work') });
+  const r = await scoreTree({ explore: EXPLORE, stack: 'node', source, files: {}, sets: [{ name: 'heldout', dir }], limits, toolchains: { dirs: [NODE_DIR], tsDir: path.join(base, 'no-ts') }, caches: {}, work: path.join(base, 'work'), say: l => said.push(l) });
   assert.equal(r.ok, true, r.reason);
-  return r.value;
+  return { ...r.value, outputsDir: path.join(base, 'work', 'cases'), progress: said };
 }
 
 const verdicts = score => Object.fromEntries(score.explore.cases.filter(c => c.set === 'heldout').map(c => [c.id, c.verdict]));
@@ -108,10 +109,10 @@ test('The_certified_peak_of_a_run_that_allocates_is_larger_than_that_of_one_that
 test('A_failed_build_fails_every_case_and_no_case_runs', async t => {
   if (!await scopeGate(t)) return;
   const s = await judge({ build: 'echo broken >&2\nexit 1', run: 'exec cat', cases: { a: ['1\n', '1\n'], b: ['2\n', '2\n'] } });
-  assert.deepEqual(verdicts(s), { a: 'runtime error', b: 'runtime error' });
+  assert.deepEqual(verdicts(s), { a: 'build failed', b: 'build failed' }, 'a failed build is labelled as such, not as a runtime error');
   assert.equal(s.build.ok, false);
   assert.match(s.explore.build.outputTail, /broken/);
-  assert.equal(s.explore.cases.every(c => c.detail === 'build failed' && c.exit === null), true);
+  assert.equal(s.explore.cases.every(c => c.exit === null), true);
   assert.equal(s.heldout.primary100, false);
 });
 
@@ -209,4 +210,72 @@ test('A_peak_that_cannot_be_read_is_a_harness_failure_so_memory_is_never_judged_
     '    print("harness failure:", str(e).split(":")[0])',
   ].join('\n'));
   assert.equal(out, 'harness failure: memory-not-certifiable');
+});
+
+// ---- F5, F6 and the minors ---------------------------------------------------------------------------------------------------------
+
+test('F5_each_cases_stdout_is_kept_capped_at_64_KiB_and_private_so_a_failing_output_can_be_read', async t => {
+  if (!await scopeGate(t)) return;
+  const s = await judge({ run: 'printf "not the answer\n"', cases: ONE });
+  const file = path.join(s.outputsDir, 'heldout-c1.out');
+  assert.equal(readFileSync(file, 'utf8'), 'not the answer\n');
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+  assert.equal(statSync(s.outputsDir).mode & 0o777, 0o700);
+  const flood = await judge({ run: 'exec yes 1234567890', cases: ONE, limits: { ...LIMITS, timeMs: 8000 } });
+  assert.equal(statSync(path.join(flood.outputsDir, 'heldout-c1.out')).size, 65536, 'the flood is cut at 64 KiB');
+});
+
+test('A_failed_build_is_a_build_failed_verdict_and_the_cases_keep_no_output_file', async t => {
+  if (!await scopeGate(t)) return;
+  const s = await judge({ build: 'exit 1', run: 'exec cat', cases: ONE });
+  assert.deepEqual(verdicts(s), { c1: 'build failed' });
+  assert.equal(s.heldout.reason, 'the build failed: no case ran');
+});
+
+test('The_per_case_home_reaches_NUGET_PACKAGES_and_npm_config_cache_and_no_placeholder_is_left_in_the_environment', async t => {
+  if (!await scopeGate(t)) return;
+  const s = await judge({ run: 'printenv NUGET_PACKAGES npm_config_cache HOME TMPDIR', cases: ONE });
+  const lines = readFileSync(path.join(s.outputsDir, 'heldout-c1.out'), 'utf8').trim().split('\n');
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every(l => !l.includes('@@')), lines.join(' | '));
+  const home = lines[2];
+  assert.equal(lines[0], `${home}/.nuget/packages`, 'NUGET_PACKAGES is inside the per-case home');
+  assert.equal(lines[1], `${home}/.npm`);
+});
+
+test('Scoring_reports_each_case_through_the_say_callback_as_it_ends', async t => {
+  if (!await scopeGate(t)) return;
+  const s = await judge({ run: 'exec cat', cases: { c1: ['a\n', 'a\n'], c2: ['b\n', 'b\n'] } });
+  assert.ok(s.progress.some(l => /heldout\/c1 pass/.test(l)) && s.progress.some(l => /heldout\/c2 pass/.test(l)), s.progress.join(' | '));
+  assert.ok(s.progress.some(l => /build ok/.test(l)));
+});
+
+test('F6_a_kill_that_raises_falls_back_to_the_process_group_the_wait_is_bounded_and_the_run_is_a_harness_failure', async t => {
+  if (!await scopeGate(t)) return;
+  const caseDir = JSON.stringify(tmpDir('f6'));
+  const prog = [
+    'import time',
+    'j.kill_scope = lambda unit: (_ for _ in ()).throw(RuntimeError("systemctl is not answering"))',
+    'started = time.monotonic()',
+    'try:',
+    `    j.run_in_scope(["sleep", "30"], ${caseDir}, b"", {"memoryBytes": 1 << 28, "timeMs": 700})`,
+    '    print("no failure")',
+    'except j.HarnessFailure as e:',
+    '    print("harness failure after", int(time.monotonic() - started) < 15)',
+  ].join('\n');
+  const out = await inJudge(prog);
+  assert.equal(out, 'harness failure after True');
+  const flood = [
+    'import time',
+    'calls = []',
+    'def failing(unit): calls.append(unit); raise RuntimeError("boom")',
+    'j.kill_scope = failing',
+    'started = time.monotonic()',
+    'try:',
+    `    j.run_in_scope(["yes", "x"], ${caseDir}, b"", {"memoryBytes": 1 << 28, "timeMs": 20000})`,
+    '    print("no failure")',
+    'except j.HarnessFailure as e:',
+    '    print("harness failure", int(time.monotonic() - started) < 15, len(calls) >= 1)',
+  ].join('\n');
+  assert.equal(await inJudge(flood), 'harness failure True True', 'the output-cap path: the failed kill is retried by the fallback instead of waiting for the time limit');
 });

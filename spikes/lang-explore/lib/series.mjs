@@ -152,6 +152,18 @@ export function latestSeries(home) {
   return sorted.length > 0 ? sorted.at(-1)[1] : null;
 }
 
+/** The series' `inputs.json` (limits, caps, subject, the registered prompts frozen at `init`). -> `ok(inputs)` | `fail`. */
+export function seriesInputs(dir) {
+  try { return ok(JSON.parse(readFileSync(path.join(dir, 'inputs.json'), 'utf8'))); } catch (e) { return fail(`${dir}/inputs.json is unreadable: ${e.message}`); }
+}
+
+/** The prompts frozen into the series at `init`: what a session of this series is sent and read back against, whatever `inputs/prompts.json` says later. */
+export function seriesPrompts(dir) {
+  const inputs = seriesInputs(dir);
+  if (!inputs.ok) return inputs;
+  return inputs.value.prompts ? ok(inputs.value.prompts) : fail(`${dir}/inputs.json holds no frozen prompts: make the series with \`explore.mjs init\``);
+}
+
 /** Is this series a rehearsal (its inputs say so)? */
 export function isRehearsal(dir) {
   try { return JSON.parse(readFileSync(path.join(dir, 'inputs.json'), 'utf8')).rehearsal === true; } catch { return false; }
