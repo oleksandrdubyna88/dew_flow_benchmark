@@ -3,7 +3,7 @@
 // plan, machine and judge. Afterwards each session's record gains its `explore` section and the pair's record is written.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { runLoop } from '../../minigit-bench/lib/bare-series.mjs';
+import { reconcile, runLoop } from '../../minigit-bench/lib/bare-series.mjs';
 import { loadSessionDir } from '../../minigit-bench/lib/smoke-load.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
@@ -88,8 +88,14 @@ async function runLocked({ series, pair, rerun, io }) {
   const need = await prerequisites({ home: io.home, series, worldFn: io.worldFn, tokenFn: io.tokenFn });
   if (!need.ok) return { exit: 4, message: need.reason };
   writeRunMap(runMapFileOf(series.dir), planned.value.map);
-  io.say(`pair ${pair}: planned ${planned.value.planned.map(p => `${p.rid} (${p.stack}, mask ${p.mask}, ${p.label})`).join(' and ')}`);
+  if (planned.value.resumed) io.say(`pair ${pair}: resuming ${planned.value.resumed.join(', ')} (left open by a halt or a failure; no new session is planned)`);
+  else io.say(`pair ${pair}: planned ${planned.value.planned.map(p => `${p.rid} (${p.stack}, mask ${p.mask}, ${p.label})`).join(' and ')}`);
   return loopAndFinalize({ series, pair, planned: planned.value, ...need.value, io, abort: io.abort });
+}
+
+/** A resume first lets v1 settle what a crash left `launching` (charge from the broker ledger, class `void: harness`, or plan again a session that never paid); a fresh pair has nothing to settle. */
+async function settleOpen({ ctx, deps, map, resumed, say }) {
+  return resumed ? reconcile({ ctx, deps, map, say }) : ok(map);
 }
 
 /**
@@ -104,7 +110,9 @@ async function loopAndFinalize({ series, pair, planned, calibration, heldout, wo
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
   const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
-  const result = await runLoop({ ctx: ctx.value, deps, map: planned.map, signal: io.signal, say: io.say });
+  const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
+  if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
+  const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });
   const fin = finalizePair({ seriesDir: series.dir, map: result.map, pair });
   return { exit: result.exit, message: result.message, pairFile: fin.pairFile, problems: fin.problems };
 }

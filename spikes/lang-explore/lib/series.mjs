@@ -32,6 +32,9 @@ export const sessionsOf = (map, pair, stack) => Object.values(map.sessions).filt
 const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
 const isStopped = s => s.status === 'ran' && s.data === false;
 
+/** The sessions of a pair that a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. A resume launches, settles and scores these; it plans no new session. */
+export const openSessions = (map, pair) => sessionsOf(map, pair).filter(s => s.status === 'planned' || s.status === 'launching' || (s.status === 'ran' && s.data === true));
+
 const voidState = attempts => (attempts >= MAX_ATTEMPTS ? 'void-final' : 'void-rerunnable');
 
 /** The state of a stack's LAST session in a pair (`attempts` sessions so far). */
@@ -69,11 +72,19 @@ const rerunProblem = (map, pair, stack) => {
 
 /**
  * The plan of `run --pair k [--rerun <stack>]`: the run-map with its sessions planned, and what was planned. A new pair plans both stacks (attempt 1, `paired`, the draw's masks); a re-run plans the one stack
- * (attempt 2, `ran unpaired`) and only when its last session is a void. -> `ok({ map, planned })` | `fail(sentence)`.
+ * (attempt 2, `ran unpaired`) and only when its last session is a void. A pair with sessions a halt or a failure left open (see `openSessions`) is RESUMED: the map comes back unchanged with
+ * `planned: []` and `resumed: [rid]`. -> `ok({ map, planned, resumed? })` | `fail(sentence)`.
  */
 export function planPair({ map, pair, pairs, draw, rerun = null, kind = 'pilot', rand = () => randomBytes(4).toString('hex') }) {
   const refused = barrierProblem({ map, pair, pairs });
   if (refused) return fail(refused);
+  const open = openSessions(map, pair);
+  if (open.length > 0) return ok({ map, planned: [], resumed: open.map(s => s.rid) }); // F2: what a halt or a failure left open is resumed, never planned again
+  return planNew({ map, pair, draw, rerun, kind, rand });
+}
+
+/** A pair with nothing open: a re-run of a void, or (never run) both stacks. */
+function planNew({ map, pair, draw, rerun, kind, rand }) {
   if (rerun !== null) return planRerun({ map, pair, draw, stack: rerun, kind, rand });
   if (sessionsOf(map, pair).length > 0) return fail(`pair ${pair} has already been run (${stateLine(map, pair)}): a void is re-run with --rerun <stack>`);
   return planAll({ map, entries: STACK_ORDER.map(stack => ({ stack, attempt: 1, label: 'paired' })), pair, draw, kind, rand });

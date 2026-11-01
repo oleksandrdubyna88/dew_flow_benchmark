@@ -16,7 +16,9 @@ import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers
 import { statusLines } from '../lib/commands.mjs';
 import { loadPrompts } from '../lib/plan.mjs';
 import { readbackOf } from '../lib/readback.mjs';
-import { createSeries, drawMask, loadSeries } from '../lib/series.mjs';
+import { createSeries, drawMask, loadSeries, planPair, runMapFileOf } from '../lib/series.mjs';
+import { transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
+import { sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
 import { loadCalibration, runPair } from '../lib/run.mjs';
 import { machineFor, pilotQuiet } from '../lib/machine.mjs';
 import { missingPaths } from '../lib/records.mjs';
@@ -70,22 +72,33 @@ function fakeHome() {
   return home;
 }
 
-test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_refuses_what_is_not_next', { timeout: 600_000 }, async t => {
-  const got = await worldOrNull(t);
-  if (!got) return;
-  const { world, calibration } = got;
+/** A series with a stub CLI behind a loopback stub upstream, a scripted quiet machine and the reference trees as the agents' work: everything a `runPair` needs, free. `machine` and `worldFn` can be replaced. */
+async function pilotRig(t, { world, calibration }, { machine, worldFn = loadWorld } = {}) {
   const made = createSeries({ home: realHome, explore: world.explore, calibration, draw: drawMask(() => 1), inputsExtra: { test: true } });
   assert.equal(made.ok, true, made.reason);
   const dir = made.value.dir;
   t.after(() => removeArea(dir));
   const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 20));
   t.after(() => stub.close());
-  const quiet = { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 };
-  const machine = machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => quiet, sleepFn: async () => {} });
   const stubDir = tmpDir('e2e-stub');
-  const seams = { fill: referenceFill({ world, heldout: loadHeldout(realHome).value }), claudeBinary: stubClaude(stubDir), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, machine, preflightHome: fakeHome(), stub: true };
   const said = [];
-  const io = { home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn: loadWorld, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams };
+  const rig = {
+    dir, said, quiet: { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 },
+    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome).value }), claudeBinary: stubClaude(stubDir), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
+  };
+  const machineOf = sample => machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => sample, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
+  rig.machineOf = machineOf;
+  rig.io = (over = {}) => ({ home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams: { ...rig.seams, machine: machine ?? machineOf(rig.quiet) }, ...over });
+  return rig;
+}
+
+test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_refuses_what_is_not_next', { timeout: 600_000 }, async t => {
+  const got = await worldOrNull(t);
+  if (!got) return;
+  const { world, calibration } = got;
+  const rig = await pilotRig(t, got);
+  const { dir, said } = rig;
+  const io = rig.io();
   // the barrier: pair 2 and 3 are refused before pair 1 exists, and nothing is launched
   const early = await runPair({ seriesDir: dir, pair: 2, io });
   assert.equal(early.exit, 4);
@@ -115,4 +128,60 @@ test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_
   // the barrier after pair 1: pair 3 still needs pair 2; pair 1 cannot be run twice
   assert.match((await runPair({ seriesDir: dir, pair: 3, io })).message, /pair 2 is not finished/);
   assert.match((await runPair({ seriesDir: dir, pair: 1, io })).message, /pair 1 has already been run/);
+});
+
+const LOUD = { hostCpus: 6, harnessCpus: 0.05, foreignCpus: 5.9, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 };
+const statusesOf = dir => Object.values(loadSeries(dir).value.map.sessions).map(s => `${s.status}${s.class ? `:${s.class}` : ''}`).sort();
+
+test('F2_a_pair_halted_by_the_quiet_check_and_then_by_a_judge_failure_is_resumed_without_a_new_paid_session', { timeout: 600_000 }, async t => {
+  const got = await worldOrNull(t);
+  if (!got) return;
+  const rig = await pilotRig(t, got);
+  const ledger = () => readLedger(path.join(rig.dir, 'ledger.ndjson'));
+  // 1. the machine is never quiet: the run halts (exit 3), the sessions stay planned, nothing is spent
+  const halted = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ seams: { ...rig.seams, machine: rig.machineOf(LOUD) } }) });
+  assert.equal(halted.exit, 3, halted.message);
+  assert.deepEqual(statusesOf(rig.dir), ['planned', 'planned']);
+  assert.equal(ledger().length, 0);
+  const rids = Object.keys(loadSeries(rig.dir).value.map.sessions).sort();
+  // 2. the same command resumes; the judge fails after both sessions ran: exit 5, both ran with data, both charged
+  const failing = async a => { const w = await loadWorld(a); return w.ok ? { ...w, value: { ...w.value, scoreFn: async () => ({ ok: false, kind: 'harness', reason: 'harness failure: a process remains (scripted)' }) } } : w; };
+  const failed = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ worldFn: failing }) });
+  assert.equal(failed.exit, 5, failed.message);
+  assert.match(failed.message, /scoring .*failed/);
+  assert.deepEqual(statusesOf(rig.dir), ['ran:completed', 'ran:completed']);
+  assert.equal(ledger().length, 2, 'both sessions are charged once');
+  const spent = ledger().map(l => l.usd);
+  // 3. a rerun scores what ran: no new session, no new charge
+  const resumed = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  assert.equal(resumed.exit, 0, resumed.message);
+  assert.deepEqual(statusesOf(rig.dir), ['scored:completed', 'scored:completed']);
+  assert.deepEqual(Object.keys(loadSeries(rig.dir).value.map.sessions).sort(), rids, 'the same two sessions: nothing was planned again');
+  assert.deepEqual(ledger().map(l => l.usd), spent, 'and nothing was charged again');
+  assert.ok(rig.said.some(l => /resuming/.test(l)));
+  assert.deepEqual(resumed.problems, []);
+});
+
+test('F2_a_session_left_launching_by_a_hard_crash_is_settled_and_charged_once_from_the_broker_ledger', { timeout: 600_000 }, async t => {
+  const got = await worldOrNull(t);
+  if (!got) return;
+  const rig = await pilotRig(t, got);
+  const series = loadSeries(rig.dir).value;
+  const planned = planPair({ map: series.map, pair: 1, pairs: 3, draw: series.state.draw });
+  let map = planned.value.map;
+  for (const e of planned.value.planned) {
+    map = transition(map, e.rid, 'launching', { startedAt: new Date().toISOString() }).value;
+    const layout = sessionLayout(path.join(rig.dir, 's'), e.rid).value;
+    writeFileSync(path.join(layout.dir, 'broker.ndjson'), [{ event: 'forwarding', seq: 1 }, { event: 'settled', seq: 1, chargedUsd: 0.0123 }].map(l => `${JSON.stringify(l)}\n`).join(''));
+  }
+  writeRunMap(runMapFileOf(rig.dir), map);
+  const r = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  assert.equal(r.exit, 0, `${r.message}\n${rig.said.join('\n')}`);
+  const sessions = Object.values(loadSeries(rig.dir).value.map.sessions);
+  assert.ok(sessions.every(s => s.status === 'ran' && /^void: harness/.test(s.class)), JSON.stringify(sessions.map(s => [s.status, s.class])));
+  const lines = readLedger(path.join(rig.dir, 'ledger.ndjson'));
+  assert.deepEqual(lines.map(l => l.usd), [0.0123, 0.0123], 'charged from the broker ledger, once per session');
+  const again = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  assert.match(again.message, /already been run/, 'two voids are not resumed: they are re-run alone or the pair stays');
+  assert.equal(readLedger(path.join(rig.dir, 'ledger.ndjson')).length, 2, 'and not charged twice');
 });

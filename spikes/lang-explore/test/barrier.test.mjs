@@ -113,3 +113,42 @@ test('A_series_directory_is_created_private_with_its_inputs_and_loads_back', () 
   assert.equal(createSeries({ home, explore: EXPLORE, calibration, draw: DRAW, date: new Date('2026-11-01T10:00:00Z'), rand: () => 'ab12' }).ok, false, 'a series id is never reused');
   assert.equal(loadSeries(tmpDir('nothing')).ok, false);
 });
+
+// ---- F2: a halted or failed pair resumes -------------------------------------------------------------------------------------------
+
+/** A pair planned, with its sessions moved to the given statuses (`planned`, `launching`, `ran-data`, `scored`, `void`). */
+function pairIn(statuses) {
+  let map = openSeries({ seriesId: 'x-test', caps: EXPLORE.caps });
+  const planned = planPair({ map, pair: 1, pairs: 3, draw: DRAW, rand });
+  map = planned.value.map;
+  planned.value.planned.forEach((e, i) => {
+    const to = statuses[i];
+    if (to === 'planned') return;
+    map = transition(map, e.rid, 'launching', {}).value;
+    if (to === 'launching') return;
+    map = transition(map, e.rid, 'ran', to === 'void' ? { class: 'void: harness', data: false } : { class: 'completed', data: true }).value;
+    if (to === 'scored') map = transition(map, e.rid, 'scored', {}).value;
+  });
+  return map;
+}
+
+test('F2_a_pair_whose_sessions_are_planned_launching_or_ran_unscored_is_resumed_with_the_map_unchanged', () => {
+  for (const statuses of [['planned', 'planned'], ['launching', 'launching'], ['ran-data', 'ran-data'], ['scored', 'ran-data'], ['scored', 'planned'], ['void', 'launching']]) {
+    const map = pairIn(statuses);
+    const r = planPair({ map, pair: 1, pairs: 3, draw: DRAW, rand });
+    assert.equal(r.ok, true, `${statuses}: ${r.reason}`);
+    assert.deepEqual(r.value.planned, [], `${statuses}: nothing new is planned (no new paid session)`);
+    assert.equal(r.value.map, map, `${statuses}: the map is returned as it is`);
+    assert.equal(r.value.resumed.length, statuses.filter(x => x !== 'scored' && x !== 'void').length, statuses.join());
+  }
+});
+
+test('F2_a_pair_that_is_finished_is_still_refused_and_a_rerun_waits_for_the_open_sessions_of_the_pair', () => {
+  const done = pairIn(['scored', 'scored']);
+  assert.match(planPair({ map: done, pair: 1, pairs: 3, draw: DRAW }).reason, /already been run/);
+  const open = pairIn(['void', 'planned']);
+  const r = planPair({ map: open, pair: 1, pairs: 3, draw: DRAW, rerun: 'csharp', rand });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(r.value.planned, [], 'the open session is resumed first; the re-run is asked for again afterwards');
+  assert.equal(r.value.resumed.length, 1);
+});

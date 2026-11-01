@@ -10,6 +10,13 @@
 > before that round: the v2 plan's epoch 4 is on `main` (#129, `90d0395`); TypeScript pinned at 6.0.3; spec 01 re-pinned at its
 > FORMAT v2 conformance. This pilot touches no approved plan's text: the boundary with v1 and v2 is recorded here only (§9).
 
+> Deviation note, 2026-11-01 (code review F2; the approved body above is unchanged): §7's recovery sentence "a crashed pair is re-run under the next
+> pair number" is REPLACED by a resume. `explore.mjs run --pair k` on a pair whose sessions a halt or a failure left open (planned; `launching` after a crash;
+> or ended with data and not yet scored) plans NO new session: v1's `reconcile` first settles a `launching` session (charged once from the broker ledger, class
+> `void: harness`, or planned again when nothing was paid), then v1's loop launches what is planned and scores what is unscored. A new pair number is never
+> spent on a crash, so the paid session of a crashed run is not lost to the barrier. Rehearsal series are named `r-<yyyymmdd>-<4 hex>`, so no command picks one
+> by mistake; `run` takes `--series` (required).
+
 ## Plan changes
 
 > Epoch 1 · approved 2026-10-31 · by reviewers · state: open
