@@ -204,11 +204,13 @@ class ScopeFallbackTests(unittest.TestCase):
             ws.run(case(), cgroup=cgroup)
         self.assertTrue(wait_until(lambda: sleepers(seconds) == []), "and the launcher's group was killed first")
 
-    def test_D1_a_cgroup_that_never_existed_is_a_cleanup_failure_too_and_nothing_is_left(self):
+    def test_F4_a_cgroup_that_never_existed_is_an_environment_problem_and_not_a_cleanup_failure_and_nothing_is_left(self):
         seconds = "59.%d" % (os.getpid() % 1000 + 1000)
-        with self.assertRaises(ex.CleanupFailed):
+        with self.assertRaises(rs_scope.CgroupMissing) as raised:
             Workspace(self, f"sleep {seconds} & sleep {seconds}\n").run(case(expected=b""), cgroup="/no/such/cgroup", limit_ms=300)
-        self.assertTrue(wait_until(lambda: sleepers(seconds) == []))
+        self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
+        self.assertNotIsInstance(raised.exception, ex.CleanupFailed, "exit 3 (the environment), not exit 5 (the runner failed)")
+        self.assertTrue(wait_until(lambda: sleepers(seconds) == []), "the launcher's group was killed first")
 
 
 if __name__ == "__main__":

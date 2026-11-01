@@ -22,6 +22,11 @@ class CgroupInvalid(ex.EnvironmentProblem):
     """The directory named for this case is not a cgroup2 node: nothing read from it or written to it means anything."""
 
 
+class CgroupMissing(ex.EnvironmentProblem):
+    """`--cgroup-of` names a directory that does not exist and never did (on the plain path, where no launcher creates it): the launcher's
+    group was stopped, and nothing can be measured through it. Exit 3."""
+
+
 class CgroupLost(ex.EnvironmentProblem):
     """The cgroup directory vanished after the launcher reported `child-pid`: the layer's scope is gone, so nothing can be measured or killed
     through it. Exit 3, never a case status."""
@@ -48,7 +53,7 @@ class ScopeLifecycle:
 
     def __init__(self, directory, identity=None, wrapper_file=None, box=False):
         self.directory, self.identity, self.wrapper_file, self.box = directory, identity, wrapper_file, box
-        self.confirmed, self.box_fd = False, None
+        self.confirmed, self.box_fd, self.existed = False, None, False
         self.road = {"kill": "cgroup.kill", "leftoverEvidence": "cgroup.procs minus bwrap, the launcher and the wrapper, read after the exit and before the kill"}
 
     def memory(self, case_id=None):
@@ -61,7 +66,8 @@ class ScopeLifecycle:
     def check_free(self):
         """Before the spawn the directory must not exist, or be a cgroup2 node that holds no process and whose counters are zero (they are
         not reset between cases, and a stale `oom_kill` would be a verdict the program never earned: refused, exit 3)."""
-        if not self.present():
+        self.existed = self.present()
+        if not self.existed:
             return
         if not cg.is_cgroup2(self.directory):
             raise CgroupInvalid(f"{self.directory} is not a cgroup2 node (no cgroup.controllers): nothing read from it or written to it means anything")
@@ -131,7 +137,14 @@ class ScopeLifecycle:
             return cg.wait_empty(self.directory, was_readable=was_readable)
         if self.box:
             raise CgroupLost(f"the cgroup {self.directory} is gone after child-pid ({failure}): its processes were stopped through the launcher's group")
-        raise failure
+        raise self._missing(failure, was_readable)
+
+    def _missing(self, failure, was_readable):
+        """What a cgroup that is not there at the kill is: one that was there (listed before the spawn or just before the kill) and went is
+        the runner's cleanup failing to hold it (CleanupFailed, exit 5); one that never existed is the environment (exit 3)."""
+        if was_readable or self.existed:
+            return failure
+        return CgroupMissing(f"the cgroup {self.directory} does not exist ({failure}): the launcher's group was stopped")
 
     def _seen(self, launched):
         """A counter counts only for a cgroup the case was seen in. With a box: the box was confirmed in it, or some process was listed in it.
