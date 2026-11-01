@@ -24,7 +24,7 @@ class Family:
         self.dir = Folder(test, {"cgroup.procs": ""}).dir
         self.pidfile = os.path.join(self.dir, "children")
         script = f"for i in $(seq {children}); do sleep 30 & echo $! >> {self.pidfile}; done; wait"
-        self.box = subprocess.Popen([self.box_path, "-c", script])
+        self.box = subprocess.Popen([self.box_path, "-c", script], stderr=subprocess.DEVNULL)  # a killed child makes bash print a line the Node parser would take for a result
         test.addCleanup(lambda: (self.box.kill(), self.box.wait()))
         assert wait_until(lambda: os.path.exists(self.pidfile) and len(self.children()) == children and self.exec_done(), 60), "the children never started"
         test.addCleanup(self.stop_children)
