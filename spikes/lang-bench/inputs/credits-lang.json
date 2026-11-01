@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "decided": {
+    "by": "owner",
+    "on": "2026-11-01"
+  },
+  "repositoryLicence": "MIT",
+  "known": [
+    {
+      "task": "01",
+      "spec": "todo/tasks/01-descent-to-one.md",
+      "basis": "adapted",
+      "source": {
+        "name": "CSES Problem Set",
+        "url": "https://cses.fi/problemset/task/1068"
+      },
+      "fileLicence": {
+        "spdx": "CC-BY-NC-SA-4.0",
+        "readAt": "https://cses.fi/problemset/text/2433",
+        "readOn": "2026-11-01"
+      },
+      "upstreamNotice": null,
+      "copiedText": "adapted",
+      "credit": "Task 01 is adapted from the CSES Problem Set problem \"Weird Algorithm\" (https://cses.fi/problemset/task/1068) by Antti Laaksonen, used under CC BY-NC-SA 4.0."
+    },
+    {
+      "task": "02",
+      "spec": "todo/tasks/02-open-areas.md",
+      "basis": "adapted",
+      "source": {
+        "name": "CSES Problem Set",
+        "url": "https://cses.fi/problemset/task/1192"
+      },
+      "fileLicence": {
+        "spdx": "CC-BY-NC-SA-4.0",
+        "readAt": "https://cses.fi/problemset/text/2433",
+        "readOn": "2026-11-01"
+      },
+      "upstreamNotice": null,
+      "copiedText": "adapted",
+      "credit": "Task 02 is adapted from the CSES Problem Set problem \"Counting Rooms\" (https://cses.fi/problemset/task/1192) by Antti Laaksonen, used under CC BY-NC-SA 4.0."
+    },
+    {
+      "task": "05",
+      "spec": "todo/tasks/05-key-value-server.md",
+      "basis": "own-words",
+      "source": {
+        "name": "the RESP protocol",
+        "url": "https://redis.io/docs/latest/develop/reference/protocol-spec/"
+      },
+      "fileLicence": null,
+      "upstreamNotice": null,
+      "copiedText": "none",
+      "nameRule": "the product name is never the task's name",
+      "credit": "Task 05 describes a subset of the RESP wire protocol in its own words; the protocol is specified at https://redis.io/docs/latest/develop/reference/protocol-spec/."
+    },
+    {
+      "task": "06",
+      "spec": "todo/tasks/06-blog-api.md",
+      "basis": "adapted",
+      "source": {
+        "name": "RealWorld \"Conduit\"",
+        "url": "https://github.com/gothinkster/realworld"
+      },
+      "fileLicence": null,
+      "upstreamNotice": {
+        "spdx": "MIT",
+        "text": "MIT License\n\nCopyright (c) 2021 Thinkster\nCopyright (c) 2026 c4ffein\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+      },
+      "copiedText": "adapted",
+      "credit": "Task 06 is adapted from the RealWorld \"Conduit\" API specification (https://github.com/gothinkster/realworld), used under the MIT licence; its notice is reproduced below."
+    },
+    {
+      "task": "09",
+      "spec": "todo/tasks/09-switched-routes.md",
+      "basis": "idea-only",
+      "source": {
+        "name": "IOI 2018, Werewolf",
+        "url": "https://stats.ioinformatics.org/tasks/2018/werewolf"
+      },
+      "fileLicence": null,
+      "upstreamNotice": null,
+      "licenceFound": false,
+      "copiedText": "none",
+      "credit": "based on IOI 2018 Werewolf"
+    }
+  ]
+}
