@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
-import { boxArgv, judgeDotnetHits, judgeProbes, preflightLang, scanDotnetInBox } from '../lib/preflight-lang.mjs';
+import { boxArgv, judgeDotnetHits, judgeProbes, preflightLang, probeArgvFor, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { sealTree, treeRecord, unsealTree } from '../lib/toolchain-store.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
@@ -65,6 +65,22 @@ test('A_box_without_the_German_locale_is_refused_with_the_command_that_generates
   const problems = problemsOf({ ...good(), locales: 'C.utf8\nPOSIX\n' });
   assert.match(problems, /de_DE\.utf8/);
   assert.match(problems, /sudo locale-gen de_DE\.UTF-8/);
+});
+
+test('The_locale_remedy_is_derived_from_the_pinned_locale_not_written_down_for_one_locale', () => {
+  const french = { ...stacks, locale: 'fr_FR.utf8' };
+  const problems = judgeProbes({ probes: { ...good(), locales: 'C.utf8\nPOSIX\n' }, stacks: french }).problems.join('\n');
+  assert.match(problems, /fr_FR\.utf8/);
+  assert.match(problems, /sudo locale-gen fr_FR\.UTF-8/);
+  assert.doesNotMatch(problems, /de_DE/);
+});
+
+test('The_Python_probe_hashes_the_pinned_path_not_a_hard_coded_one', () => {
+  const elsewhere = { ...stacks, python: { ...stacks.python, path: '/opt/py/python3' } };
+  assert.deepEqual(probeArgvFor('pythonSha256', elsewhere), ['/usr/bin/sha256sum', '/opt/py/python3']);
+  assert.deepEqual(probeArgvFor('pythonSha256', stacks), ['/usr/bin/sha256sum', stacks.python.path]);
+  assert.deepEqual(probeArgvFor('node', stacks), stacks.probes.node, 'every other probe is its argv as pinned');
+  assert.match(judgeProbes({ probes: { ...good(), pythonSha256: `${'a'.repeat(64)}  /opt/py/python3\n` }, stacks: elsewhere }).problems.join('\n'), /\/opt\/py\/python3 has sha256/);
 });
 
 test('A_probe_that_did_not_run_is_a_problem_and_never_a_pass', () => {

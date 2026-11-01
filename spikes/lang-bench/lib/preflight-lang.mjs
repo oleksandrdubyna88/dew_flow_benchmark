@@ -16,7 +16,7 @@ const PROBE_MS = 60_000;
 const lines = text => text.split('\n').map(l => l.trim()).filter(Boolean);
 const plainVersion = text => /\d+\.\d+\.\d+/.exec(text ?? '')?.[0] ?? null;
 const normalisedLocale = name => name.toLowerCase().replace(/-/g, '');
-const didNotRun = (stacks, name) => `${name}: \`${stacks.probes[name].join(' ')}\` did not run (or failed) inside the box`;
+const didNotRun = (stacks, name) => `${name}: \`${probeArgvFor(name, stacks).join(' ')}\` did not run (or failed) inside the box`;
 
 function nodeProblem(out, stacks) {
   const seen = plainVersion(out);
@@ -48,9 +48,15 @@ function pythonProblem(out, stacks) {
   return seen === stacks.python.sha256 ? null : `${stacks.python.path} has sha256 ${seen ?? '(unreadable)'}, the pin is ${stacks.python.sha256}`;
 }
 
+/** `de_DE.utf8` -> `de_DE.UTF-8`: the spelling `locale-gen` takes for the locale `locale -a` lists. */
+const localeGenName = locale => locale.replace(/\.utf-?8$/i, '.UTF-8');
+
+/** A probe's argv: as pinned in stacks-lang.json, except that the Python probe hashes the pinned `python.path` (one place says which file it is). */
+export const probeArgvFor = (name, stacks) => (name === 'pythonSha256' ? [...stacks.probes[name], stacks.python.path] : stacks.probes[name]);
+
 function localeProblem(out, stacks) {
   const generated = lines(out).some(name => normalisedLocale(name) === normalisedLocale(stacks.locale));
-  return generated ? null : `the locale ${stacks.locale} is not generated on this host: run \`sudo locale-gen de_DE.UTF-8\` (then \`locale -a\` must list ${stacks.locale})`;
+  return generated ? null : `the locale ${stacks.locale} is not generated on this host: run \`sudo locale-gen ${localeGenName(stacks.locale)}\` (then \`locale -a\` must list ${stacks.locale})`;
 }
 
 const CHECKS = Object.freeze({ node: nodeProblem, dotnetSdks: sdkProblem, dotnetRuntimes: runtimeProblem, tsc: typescriptProblem, pythonSha256: pythonProblem, locales: localeProblem });
@@ -134,7 +140,7 @@ async function environmentProblems() {
 
 async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds }) {
   const prefix = boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath: pathDirs, operatorHome, extraRoBinds });
-  const probes = Object.fromEntries(await Promise.all(Object.entries(stacks.probes).map(async ([name, argv]) => [name, await probeInBox({ prefix, argv })])));
+  const probes = Object.fromEntries(await Promise.all(Object.keys(stacks.probes).map(async name => [name, await probeInBox({ prefix, argv: probeArgvFor(name, stacks) })])));
   const scan = await scanDotnetInBox({ prefix, pinnedDotnet: path.join(dirs.dotnetSdk, 'dotnet'), boxPath: pathDirs });
   const verdict = judgeProbes({ probes, stacks });
   return { ...verdict, problems: [...scan.problems, ...verdict.problems] };

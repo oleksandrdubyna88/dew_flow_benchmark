@@ -34,7 +34,7 @@
     "dotnetSdks": ["dotnet", "--list-sdks"],
     "dotnetRuntimes": ["dotnet", "--list-runtimes"],
     "tsc": ["tsc", "--version"],
-    "pythonSha256": ["/usr/bin/sha256sum", "/usr/bin/python3"],
+    "pythonSha256": ["/usr/bin/sha256sum"],
     "locales": ["/usr/bin/locale", "-a"]
   },
   "treeSha256": {

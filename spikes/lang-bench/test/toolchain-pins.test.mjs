@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { dotnetOfficial, loadStacksLang, newestPatch, nodeOfficial, typescriptOfficial } from '../lib/toolchain-pins.mjs';
+import { dotnetOfficial, loadStacksLang, nodeOfficial, typescriptOfficial } from '../lib/toolchain-pins.mjs';
 
 const stacksJson = () => JSON.parse(readFileSync(fileURLToPath(new URL('../inputs/stacks-lang.json', import.meta.url)), 'utf8'));
 const SHA512_A = 'a'.repeat(128);
@@ -86,12 +86,6 @@ test('The_TypeScript_integrity_is_npms_dist_integrity_of_exactly_the_pinned_vers
   assert.equal(found.ok, true, JSON.stringify(found));
   assert.deepEqual(found.value, { tarball: 'https://registry.invalid/typescript-6.0.3.tgz', integrity: 'sha512-6.0.3' });
   assert.equal(typescriptOfficial(packument(['6.0.2']), '6.0.3').ok, false);
-});
-
-test('The_newest_patch_of_a_line_is_the_highest_plain_release_never_a_dev_or_candidate_build', () => {
-  const versions = ['6.0.0-dev.20260416', '6.0.1-rc', '6.0.2', '6.0.10', '6.0.3', '6.1.0', '7.0.2', '6.0.0-beta'];
-  assert.equal(newestPatch(packument(versions), '6.0'), '6.0.10', 'numeric, not lexical: 6.0.10 is newer than 6.0.3');
-  assert.equal(newestPatch(packument(['6.0.1-rc']), '6.0'), null);
 });
 
 test('A_recorded_tree_hash_must_be_64_hex_and_belong_to_a_toolchain_directory', () => {

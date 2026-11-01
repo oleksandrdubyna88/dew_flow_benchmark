@@ -89,11 +89,3 @@ export function typescriptOfficial(packument, version) {
   return ok({ tarball: dist.tarball, integrity: dist.integrity });
 }
 
-const numbers = v => v.split('.').map(Number);
-const newerThan = (a, b) => { const [x, y] = [numbers(a), numbers(b)]; return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
-
-/** The highest plain `<line>.<patch>` in a packument; a dev, beta or candidate build is never one. `null` when the line has none. */
-export function newestPatch(packument, line) {
-  const patches = Object.keys(packument?.versions ?? {}).filter(v => PLAIN_VERSION.test(v) && v.startsWith(`${line}.`));
-  return patches.sort(newerThan).at(-1) ?? null;
-}
