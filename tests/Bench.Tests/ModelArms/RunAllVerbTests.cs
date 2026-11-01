@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Isolation;
 using ModelArms.Core.Steps;
 using ModelArms.Verbs;
@@ -80,6 +81,178 @@ public sealed class RunAllVerbTests
         var start = timing.OfType<TimingLine.Start>().Single(line => line.Step.EndsWith("gate", StringComparison.Ordinal));
         var end = timing.OfType<TimingLine.End>().Single(line => line.Step.EndsWith("gate", StringComparison.Ordinal));
         return (start.StartUtc, end.EndUtc);
+    }
+
+    [Fact]
+    public async Task A_second_run_all_straight_after_the_first_counts_the_arms_the_first_started_and_two_at_once_never_leave_four_alive()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        kit.Script(new JsonObject { ["holdAfterLine"] = 1 });
+
+        var first = await kit.RunAsync("C1", "CR1", "C2");
+        var second = await kit.RunAsync("CR2");
+
+        first.Code.Should().Be(0, first.Error + first.Output);
+        second.Code.Should().Be(4, "the first call returned only when its three runners held their locks, so the second counts them: 3 + 1 > a queue of 3 — " + second.Error + second.Output);
+        second.Error.Should().Contain("4 arms would be alive at once");
+        kit.AliveCount().Should().Be(3);
+        kit.PidOf("CR2").Should().BeNull("the refused arm started nothing");
+    }
+
+    [Fact]
+    public async Task Run_all_holds_its_root_lock_until_each_runner_it_started_has_taken_its_own()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        var started = new System.Collections.Concurrent.ConcurrentDictionary<string, long>();
+        var launcher = new RecordingLauncher(arm => started[arm] = TimeProvider.System.GetTimestamp());
+        var delay = TimeSpan.FromMilliseconds(800);
+        RunnerState Liveness(RootPaths _, string arm) =>
+            started.TryGetValue(arm, out var at) && TimeProvider.System.GetElapsedTime(at) >= delay ? new RunnerState.Alive("pid 4242", 4242) : new RunnerState.Gone();
+        var seams = new RunAllSeams(_ => launcher, Liveness, DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+
+        var first = Task.Run(() => kit.InProcessAsync(seams, "C1", "CR1", "C2"), TestContext.Current.CancellationToken);
+        (await IsolationKit.UntilAsync(() => started.Count == 3, Fast)).Should().BeTrue("the first call started its three arms");
+        var second = await kit.InProcessAsync(seams, "CR2");
+        var done = await first;
+
+        second.Code.Should().Be(4, "the first call is still waiting for its runners to take their locks and holds the root lock: " + second.Error + second.Output);
+        second.Error.Should().Contain("another run-all holds");
+        done.Code.Should().Be(0, done.Error + done.Output);
+        done.Error.Should().NotContain("did not take its lock");
+        started.Keys.Should().BeEquivalentTo("C1", "CR1", "C2");
+        started.Keys.Select(arm => Liveness(kit.Layout, arm)).Should().AllBeOfType<RunnerState.Alive>("the call returned only once every runner it started held its lock");
+    }
+
+    [Fact]
+    public async Task A_launcher_that_cannot_keep_the_log_makes_run_all_say_so_and_one_that_can_does_not()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+
+        var silent = await kit.InProcessAsync(RunAllKit.Seams(new RecordingLauncher { WritesLog = false }, new Dictionary<string, string>()), "C1");
+        var logged = await kit.InProcessAsync(RunAllKit.Seams(new RecordingLauncher(), new Dictionary<string, string>()), "C1");
+
+        silent.Code.Should().Be(0, silent.Error);
+        silent.Output.Should().Contain("the runners' output is not kept in pids/<arm>.log").And.Contain("not observed");
+        logged.Output.Should().NotContain("not kept in pids");
+    }
+
+    [Fact]
+    public async Task Run_all_says_it_is_waiting_stops_waiting_for_a_runner_that_has_already_ended_and_points_at_its_log()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var launcher = new RecordingLauncher(_ => File.WriteAllText(kit.Layout.PidFile("C1"), "4242\n"));
+        var seams = new RunAllSeams(_ => launcher, (_, _) => new RunnerState.Gone(), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Output.Should().Contain("waiting up to 15 s for the runners to take their locks (C1)");
+        run.Error.Should().Contain("C1: its runner started and has already ended — see pids/C1.log");
+        run.Error.Should().NotContain("did not take its lock");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "an arm whose runner ended is not waited for until the bound");
+    }
+
+    [Fact]
+    public async Task A_pid_file_rewritten_in_the_same_tick_by_a_new_runner_is_still_seen_and_its_ending_flushed_to_the_error_writer()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var pidFile = kit.Layout.PidFile("C1");
+        File.WriteAllText(pidFile, "4242\n");
+        var tick = File.GetLastWriteTimeUtc(pidFile);
+        var launcher = new RecordingLauncher(_ =>
+        {
+            File.WriteAllText(pidFile, "4343\n");
+            File.SetLastWriteTimeUtc(pidFile, tick);
+        });
+        var seams = new RunAllSeams(_ => launcher, (_, _) => new RunnerState.Gone(), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+        var error = new FlushSpy();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(seams, new StringWriter(), error, "C1");
+
+        File.GetLastWriteTimeUtc(pidFile).Should().Be(tick, "the rewrite kept the file's time: only the content tells");
+        run.Error.Should().Contain("C1: its runner started and has already ended — see pids/C1.log");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "the ended runner was seen at once, not at the bound");
+        error.FlushedAfterLastLine.Should().BeTrue("the notice is flushed to the error writer as soon as it is written");
+    }
+
+    [Fact]
+    public async Task A_runner_that_took_its_lock_between_the_two_looks_is_alive_not_ended()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var launcher = new RecordingLauncher(_ => File.WriteAllText(kit.Layout.PidFile("C1"), "4343\n"));
+        var asked = 0;
+        var seams = new RunAllSeams(_ => launcher, (_, _) => launcher.Starts.Count == 0 || Interlocked.Increment(ref asked) == 1 ? new RunnerState.Gone() : new RunnerState.Alive("pid 4343", 4343), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Error.Should().NotContain("already ended", "the lock was held on the second look");
+        run.Error.Should().NotContain("did not take its lock");
+    }
+
+    [Fact]
+    public async Task The_wait_polls_with_a_backoff_from_50_ms_to_500_ms_and_a_runner_that_never_shows_is_pointed_at_its_log()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        var launcher = new RecordingLauncher();
+        var polls = new List<long>();
+        var seams = new RunAllSeams(_ => launcher, (_, _) =>
+        {
+            if (launcher.Starts.Count > 0)
+            {
+                polls.Add(TimeProvider.System.GetTimestamp());
+            }
+
+            return new RunnerState.Gone();
+        }, DetachedRoad.Setsid, TimeSpan.FromSeconds(3));
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Error.Should().Contain("C1: its runner did not take its lock within 15 s — see pids/C1.log");
+        var gaps = polls.Zip(polls.Skip(1), (a, b) => TimeProvider.System.GetElapsedTime(a, b).TotalMilliseconds).ToList();
+        gaps.Count.Should().BeGreaterThan(5);
+        gaps[0].Should().BeInRange(30, 200, "the first pause is about 50 ms");
+        gaps.Should().OnlyContain(gap => gap < 900, "no pause is longer than the 500 ms cap");
+        gaps.Skip(3).Max().Should().BeGreaterThan(400, "the pause doubled up to the cap");
+        polls.Count.Should().BeLessThan(20, "3 s at a fixed 50 ms would be 60 polls");
+    }
+
+    [Fact]
+    public async Task Two_run_all_calls_at_the_same_moment_over_a_queue_of_three_never_start_four_arms()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1", "CR1", "C2", "CR2");
+        kit.Script(new JsonObject { ["holdAfterLine"] = 1 });
+
+        var both = await Task.WhenAll(kit.RunAsync("C1", "CR1", "C2"), kit.RunAsync("CR2"));
+        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
+        both.Select(run => run.Code).Order().Should().Equal([0, 4], "one call wins whichever starts first; the other is refused — by the lock while the first counts, by the count (3 + 1 > 3) once the first has returned");
+        kit.AliveCount().Should().BeLessThanOrEqualTo(3, string.Join(" | ", both.Select(run => run.Error + run.Output)));
+    }
+
+    [Fact]
+    public async Task A_run_all_that_finds_another_run_all_holding_the_root_lock_is_refused_naming_it_and_waits_for_nothing()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var gate = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50));
+        using var held = gate.TryAcquire(kit.Layout.RunAllLock);
+        held.Should().NotBeNull();
+        var launcher = new RecordingLauncher();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(RunAllKit.Seams(launcher, new Dictionary<string, string>()), "C1");
+
+        run.Code.Should().Be(4, run.Error + run.Output);
+        run.Error.Should().Contain(kit.Layout.RunAllLock).And.Contain("another run-all holds");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "the lock is never waited for");
+        launcher.Starts.Should().BeEmpty();
     }
 
     public static TheoryData<string, string, bool, int, string, int> Queues() => new()

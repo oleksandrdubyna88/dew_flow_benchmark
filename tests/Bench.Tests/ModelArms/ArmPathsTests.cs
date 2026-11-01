@@ -33,6 +33,7 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.PidFile), Paths.PidFile("C1"), At("pids/C1.pid")),
         (nameof(RootPaths.RunnerLock), Paths.RunnerLock("C1"), At("pids/C1.lock")),
         (nameof(RootPaths.PidLog), Paths.PidLog("C1"), At("pids/C1.log")),
+        (nameof(RootPaths.RunAllLock), Paths.RunAllLock, At("pids/.run-all.lock")),
         (nameof(RootPaths.Chain), Paths.Chain, At("chain")),
         (nameof(RootPaths.Made), Paths.Made("C1"), At("chain/made-C1")),
         (nameof(RootPaths.ObjectiveMarker), Paths.ObjectiveMarker("C1"), At("chain/objective-C1")),

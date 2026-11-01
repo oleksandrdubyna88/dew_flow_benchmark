@@ -32,6 +32,9 @@ public sealed record RootPaths(string Root)
 
     public string PidLog(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".log");
 
+    /// <summary><c>run-all</c>'s own lock (E5.S3 review): held EXCLUSIVE, never waited for, for the whole of one <c>run-all</c> call — until each runner it started holds its own lock — so two calls cannot both count the same queue as empty. Never deleted.</summary>
+    public string RunAllLock => Path.Combine(Root, "pids", ".run-all.lock");
+
     public string Chain => Path.Combine(Root, "chain");
 
     public string Made(string arm) => Path.Combine(Root, "chain", "made-" + ArmPaths.Segment(arm, "arm"));

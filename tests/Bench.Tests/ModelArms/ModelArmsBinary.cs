@@ -43,6 +43,15 @@ internal static class ModelArmsBinary
         return (done.ExitCode, done.StandardOutput, done.StandardError);
     }
 
+    /// <summary><c>/bin/sh -c &lt;script&gt; &lt;arguments&gt;</c> (so <c>$0</c> is the first argument) in the fixture's environment, run to its end with <c>--experiment &lt;root&gt;</c> appended after the arguments: how a test gives the console a descriptor it did not open itself.</summary>
+    public static async Task<(int Code, string Output, string Error)> RunShellAsync(ExperimentRoot root, string script, IReadOnlyList<string> arguments)
+    {
+        var attempt = await ProcessRunner.RunAsync(
+            "/bin/sh", ["-c", script, .. arguments, "--experiment", root.Root], root.Temp, Short, string.Empty, EnvironmentOf(root), TestContext.Current.CancellationToken);
+        var done = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+        return (done.ExitCode, done.StandardOutput, done.StandardError);
+    }
+
     /// <summary>The binary started as a task, its stdout lines kept as they arrive with the instant each came. <see cref="IAsyncDisposable.DisposeAsync"/> kills the child's tree if it still lives and waits for it, so no test
     /// leaves a process behind.</summary>
     public static Child Start(ExperimentRoot root, params string[] arguments) =>

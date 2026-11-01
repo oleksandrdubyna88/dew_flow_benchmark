@@ -17,5 +17,8 @@ public abstract record DetachedStart
 /// <c>workingDirectory</c> is chosen. <b>No pid is returned</b>: whoever is started names itself, and an arm is alive when its own lock is held (D13).</summary>
 public interface IDetachedLauncher
 {
+    /// <summary>Whether the launcher keeps what the program writes in the <c>log</c> it is handed. <c>true</c> by default; the Windows launcher cannot (it has no way to give a child a file as stdout without a pipe that ties the child to its starter), says <c>false</c>, and <c>run-all</c> prints that once.</summary>
+    bool WritesLog => true;
+
     DetachedStart Start(string executable, IReadOnlyList<string> arguments, string log, IReadOnlyDictionary<string, string> environment, string workingDirectory);
 }
