@@ -2,14 +2,34 @@
   "decidedOn": "2026-10-31",
   "readOn": "2026-11-01",
   "reason": "The toolchains every gate, reference and session of the language comparison v2 runs on, pinned (parent D6, D22). Each lives read-only under ~/rsd/lang-v2/toolchains/ (storeRoot, parts under the home), installed from the official artefact and checked against the checksum its publisher lists; the preflight reads every pin back from inside a box with the probe argv below. TypeScript is the newest 6.0 patch npm listed on readOn (6.0.3; 7.0.2 is superseded, D6).",
-  "pins": { "dotnetSdk": "10.0.403", "dotnetRuntime": "10.0.14", "node": "26.13.0", "typescript": "6.0.3" },
+  "pins": {
+    "dotnetSdk": "10.0.403",
+    "dotnetRuntime": "10.0.14",
+    "node": "26.13.0",
+    "typescript": "6.0.3"
+  },
   "typescriptLine": "6.0",
-  "python": { "path": "/usr/bin/python3", "version": "3.14.4", "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41" },
+  "python": {
+    "path": "/usr/bin/python3",
+    "version": "3.14.4",
+    "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41"
+  },
   "locale": "de_DE.utf8",
-  "storeRoot": ["rsd", "lang-v2", "toolchains"],
-  "directories": { "dotnetSdk": "dotnet-sdk-10.0.403", "node": "node-v26.13.0-linux-x64", "typescript": "typescript-6.0.3" },
+  "storeRoot": [
+    "rsd",
+    "lang-v2",
+    "toolchains"
+  ],
+  "directories": {
+    "dotnetSdk": "dotnet-sdk-10.0.403",
+    "node": "node-v26.13.0-linux-x64",
+    "typescript": "typescript-6.0.3"
+  },
   "artifacts": {
-    "dotnetInstallScript": { "url": "https://raw.githubusercontent.com/dotnet/install-scripts/5147e32300a8e908f5d737c8cff63a76b4b63531/src/dotnet-install.sh", "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e" },
+    "dotnetInstallScript": {
+      "url": "https://raw.githubusercontent.com/dotnet/install-scripts/5147e32300a8e908f5d737c8cff63a76b4b63531/src/dotnet-install.sh",
+      "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
+    },
     "dotnetSdk": {
       "metadataUrl": "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/10.0/releases.json",
       "rid": "linux-x64",
@@ -30,12 +50,29 @@
     }
   },
   "probes": {
-    "node": ["node", "--version"],
-    "dotnetSdks": ["dotnet", "--list-sdks"],
-    "dotnetRuntimes": ["dotnet", "--list-runtimes"],
-    "tsc": ["tsc", "--version"],
-    "pythonSha256": ["/usr/bin/sha256sum"],
-    "locales": ["/usr/bin/locale", "-a"]
+    "node": [
+      "node",
+      "--version"
+    ],
+    "dotnetSdks": [
+      "dotnet",
+      "--list-sdks"
+    ],
+    "dotnetRuntimes": [
+      "dotnet",
+      "--list-runtimes"
+    ],
+    "tsc": [
+      "tsc",
+      "--version"
+    ],
+    "pythonSha256": [
+      "/usr/bin/sha256sum"
+    ],
+    "locales": [
+      "/usr/bin/locale",
+      "-a"
+    ]
   },
   "treeSha256": {
     "dotnetSdk": "0e0db10781b19cdc1053640f9445c595ab39bb9d413ad3fcefe7f8b86ede8a10",

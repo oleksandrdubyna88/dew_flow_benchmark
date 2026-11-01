@@ -135,3 +135,11 @@ test('The_committed_record_is_the_installed_store_every_tree_hash_equal_and_ever
   const result = verifyStore({ stacks, storeRoot, deep: true });
   assert.deepEqual(result.problems, []);
 });
+
+test('The_committed_pins_file_round_trips_byte_for_byte_through_the_one_serialisation_recordTrees_writes', () => {
+  const text = readFileSync(realPath, 'utf8');
+  assert.equal(`${JSON.stringify(JSON.parse(text), null, 2)}\n`, text, 'stacks-lang.json is written as JSON.stringify(json, null, 2) plus a newline, so recording a hash changes nothing else');
+  const again = recordTrees(text, JSON.parse(text).treeSha256);
+  assert.equal(again.ok, true, JSON.stringify(again));
+  assert.equal(again.value, text, 'recording what is already recorded is a byte-for-byte no-op');
+});

@@ -30,11 +30,9 @@ export function verifyStore({ stacks, storeRoot, deep = false }) {
   return { ok: problems.length === 0, problems };
 }
 
-const BLOCK = /,\n {2}"treeSha256": \{[^}]*\}/;
-
 /**
  * The text of stacks-lang.json with `treeSha256` holding `trees` merged over what is recorded -> ok(text) | fail. A hash already recorded is never moved
- * (a tree that changed is a finding, not an update); the rest of the file is byte-for-byte as it was.
+ * (a tree that changed is a finding, not an update). The file is `JSON.stringify(json, null, 2)` plus a newline, the one serialisation (a test pins that the committed file round-trips through it).
  */
 export function recordTrees(text, trees) {
   let json;
@@ -47,9 +45,7 @@ export function recordTrees(text, trees) {
   const moved = Object.keys(trees).find(name => existing[name] !== undefined && existing[name] !== trees[name]);
   if (moved) return fail(`treeSha256.${moved} is recorded as ${existing[moved]}, the store now has ${trees[moved]}: a recorded hash is never moved`);
   const merged = Object.fromEntries(Object.entries({ ...existing, ...trees }).sort(([a], [b]) => a.localeCompare(b)));
-  const lines = Object.entries(merged).map(([name, hash]) => `    ${JSON.stringify(name)}: ${JSON.stringify(hash)}`);
-  const block = `,\n  "treeSha256": {\n${lines.join(',\n')}\n  }`;
-  const out = json.treeSha256 ? text.replace(BLOCK, () => block) : text.replace(/\n\}\s*$/, () => `${block}\n}\n`);
+  const out = `${JSON.stringify({ ...json, treeSha256: merged }, null, 2)}\n`;
   const reread = loadStacksLang(JSON.parse(out));
   return reread.ok && JSON.stringify(JSON.parse(out).treeSha256) === JSON.stringify(merged) ? ok(out) : fail(`recording the tree hashes would have produced an invalid stacks-lang.json: ${reread.reason ?? 'the block did not land'}`);
 }
