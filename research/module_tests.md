@@ -248,13 +248,14 @@ The verdict ids of the smoke (derived from `SMOKE_ASSUMPTIONS`; each is computed
 - **One real session.** The committed fixture is one paid run on one day; it proves the verdict rules read a real stream, not that every session behaves so.
 - **Concurrency beyond a few requests**, and a run of days: the broker's budget and the janitor are exercised at the scale of seconds.
 
-## The language-comparison runner scenarios (E1.S8a part i, `spikes/lang-bench/`)
+## The language-comparison runner scenarios (E1.S8a parts i and ii-a, `spikes/lang-bench/`)
 
 The third harness here is the Node suite of the language-comparison bench (`node spikes/lang-bench/run-tests.mjs`, lowered priority, at most
 `min(8, CPUs - 1)` workers). Node test files start the Python units of `test/py/` under `python3 -I -B` in an owned `TMPDIR`
 (`test/support/py-units.mjs`) and register one Node test per Python test, so every guarantee appears under its own name. The design is
 [module_lang_bench.md](module_lang_bench.md). This is **part i**: the lexer, both parsers, the matcher, the olympiad path, the report, the
-command line, the pin. Part ii (processes, networking, the daemon and web runs, signals) adds its own rows.
+command line, the pin. **Part ii-a** (the execution layer's options for the olympiad path: launch prefix and status, the case clock, the pidfd waits, the cgroup, the case view,
+V11 and V12) adds the rows marked ii-a. Part ii-b (networking, the daemon and web runs, signals) adds its own rows.
 
 | Flow | Status | Test files |
 |---|---|---|
@@ -269,11 +270,21 @@ command line, the pin. Part ii (processes, networking, the daemon and web runs, 
 | The command line: kind, `--parse-only`, limits, exit codes 0/1/3/4/5, B10 encodings in five locales | covered | `test/runner-cli.test.mjs` |
 | The pin and `specs-record.mjs` | covered | `test/runner-pin.test.mjs`, `test/specs-record.test.mjs` |
 | Module and function shape, standard-library imports, no float in a comparison | covered | `test/runner-shape.test.mjs` |
-| Running a daemon or web scenario (processes, sockets, signals, the cgroup) | not covered | part ii |
+| ii-a: the cgroup reads (`memory.peak`, `memory.events`, `cgroup.procs` minus bwrap and the wrapper, `wrapper.pid`, the `cgroup.kill` write and the empty wait) | covered | `test/runner-cgroup.test.mjs` (fake cgroup files; real processes under a link named `bwrap`) |
+| ii-a: the launch status (bwrap's lines, a partial line, junk, a bound; the descriptor number and the per-case pipe) | covered | `test/runner-status.test.mjs` |
+| ii-a: a launch that fails is exit 3 and never a case verdict (`A_launch_prefix_that_exits_before_run_sh_is_launch_failed_never_a_case_verdict`, test 10), the stderr bounded, a silent launcher killed at the ceiling, no descriptor left; the case clock at `child-pid`, `launchMs`, `emptyProgramMs`; V11 (`The_program_environment_is_exactly_the_V11_set` beside `A_planted_extra_key_is_still_found`, test 14); V12 stderr and the 600 s bound; the layer options on the command line | covered | `test/runner-launch.test.mjs` |
+| ii-a: every wait a pidfd and a select, and the wall rule (`A_polling_wait_would_accept_an_exit_fifty_ms_past_the_limit_and_that_is_the_point`, test 9; a late-noticed exit is a time limit; a launcher that outlives the program does not stretch the wall; a scan finds no `wait(timeout)`) | covered | `test/runner-wait.test.mjs` |
+| ii-a: the case view (`Every_case_starts_in_a_fresh_view`, test 11, beside the shared-workspace refutation; fixtures in the view; a stale `.scenario` refused; samples and views never overlap) | covered | `test/runner-view.test.mjs` |
+| ii-a: the scope lifecycle on a real transient user scope behind bwrap (`A_group_kill_would_miss_a_program_behind_new_session_and_that_is_the_point`, test 8; the program's pid; a lingering child as the leftover evidence; the peak read before the kill) and on fake cgroup files (`memory limit` from `oom_kill`, the template, unknown and never zero, the `fork` finding) | covered | `test/runner-scope.test.mjs` (the real-scope tests skip with their reason without `systemd-run --user` or bwrap, and fail under `BENCH_REQUIRE_SANDBOX=1`) |
+| Running a daemon or web scenario (processes, sockets, signals, readiness, V3, V5, V7, `overflow`) | not covered | part ii-b |
 
-**What this part does not prove.** Memory is never judged without a cgroup (every case says `not certified`); the plain path's group kill is
-tested, the scope path's `cgroup.kill` is part ii and the execution layer's; the three pilot specs' samples do not exist yet (E1.S6), so the
-runner has only run FORMAT's own examples and toys; a behaviour beyond the scenarios written here is not proven.
+**What this part does not prove.** Memory is never judged without a cgroup (every case says `not certified`); with one, `memory.peak` and `memory.events` are what the
+kernel reports for the directory named, not that the layer's limit is the right one (that is E1.S8b's probe). The scope path is proven on a plain delegated user scope behind
+bwrap, not on E1.S8b's layer (its `prog/` leaf, `scope-entry.sh`, `nsenter` and a private network namespace do not exist yet), and `wrapper.pid` is proven only as a file. The
+status lines are proven from bwrap 0.11's real output and from shell launchers; `exit-code` for a program killed by a signal is whatever bwrap writes. The runner does not
+signal the program in this part (an olympiad program is only waited for and killed), so B1's pid choice is proven for the wait and the record, not for a `TERM`. A scope
+interrupted while the runner itself is stopped by a signal is proven on the plain path only. The three pilot specs' samples do not exist yet (E1.S6), so the runner has only run
+FORMAT's own examples and toys; a behaviour beyond the scenarios written here is not proven.
 
 ## What the harness does NOT prove
 
