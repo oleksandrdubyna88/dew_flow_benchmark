@@ -1,12 +1,12 @@
 // The run base's tree (parent D39, E1.S1 brief items 1-2): the tree at a ref, from `git archive` (never a checkout in a working tree),
 // minus the README's `## Attribution` section and minus any credit file; and the needle scan over a tree. The orphan commit of this tree
 // is E1.S7's. Expected failures are values: ok(value) | fail(reason, extra).
-import { spawnSync } from 'node:child_process';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { refuseInsideWorktree } from '../../minigit-bench/lib/git-guard.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { cutAttribution } from './attribution.mjs';
 import { decodeBlob } from './push-decode.mjs';
 import { runGitBytes } from './push-git.mjs';
@@ -69,10 +69,14 @@ async function archiveOf(repo, ref) {
   return tar.ok ? tar : fail(`git archive ${ref} failed in ${repo}: ${tar.reason}`, { kind: 'config' });
 }
 
-function extract(tar, out) {
+/** ok(out) with the archive unpacked by `tar`, run through the shared launcher (exe + argv, timeout, process-tree kill). */
+async function extract(tar, out) {
   mkdirSync(out, { recursive: true });
-  const r = spawnSync('tar', ['-x', '--no-same-owner', '--no-same-permissions', '-C', out, '-f', '-'], { input: tar, timeout: TAR_TIMEOUT_MS, env: { PATH: process.env.PATH, HOME: os.homedir(), LANG: 'C.UTF-8' } });
-  return r.status === 0 ? ok(out) : fail(`tar could not unpack the archive into ${out}: ${String(r.stderr).trim().slice(-200) || r.error?.message}`);
+  const r = await runBounded('tar', ['-x', '--no-same-owner', '--no-same-permissions', '-C', out, '-f', '-'], { input: tar, timeoutMs: TAR_TIMEOUT_MS, env: { PATH: process.env.PATH, HOME: os.homedir(), LANG: 'C.UTF-8' } });
+  if (!r.ok) return fail(`tar could not be started: ${r.reason}`);
+  const { code, timedOut, stderr } = r.value;
+  if (timedOut) return fail(`tar did not finish within ${TAR_TIMEOUT_MS} ms unpacking into ${out}`);
+  return code === 0 ? ok(out) : fail(`tar could not unpack the archive into ${out}: ${stderr.trim().slice(-200)}`);
 }
 
 function cutReadme(out) {
