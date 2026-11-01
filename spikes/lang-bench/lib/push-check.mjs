@@ -9,7 +9,7 @@ import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
-import { findOwnSecrets, findSecrets } from './push-secrets.mjs';
+import { findOwnSecrets, findSecrets, maskSecrets } from './push-secrets.mjs';
 import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
@@ -33,6 +33,17 @@ function scanText(file, text, inputs, { body = false } = {}) {
     'run-base-text': readme ? [] : visible.filter(f => f.group !== GROUP_FAMILY),
     'family-names': visible.filter(f => f.group === GROUP_FAMILY),
   };
+}
+
+/**
+ * A file's PATH is text too: the needles, the family's names, the secret shapes and the aids' shingles are scanned in it. A finding
+ * names the path as the position, with any secret masked, and has no line.
+ */
+function scanPath(file, inputs) {
+  const shown = maskSecrets(file);
+  const found = scanText(file, file, inputs);
+  const onPath = findings => findings.map(f => ({ ...f, path: shown, line: null }));
+  return Object.fromEntries(Object.entries(found).filter(([name]) => name !== 'attribution').map(([name, findings]) => [name, onPath(findings)]));
 }
 
 const emptyChecks = names => Object.fromEntries(names.map(name => [name, []]));
@@ -66,6 +77,7 @@ async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
   const byName = emptyChecks(names);
   for (const { commit, text } of changes.value.messages) merge(byName, scanText(COMMIT_MESSAGE, text, inputs), commit, { atTip: false });
   const seen = new Set();
+  const pathsDone = new Set();
   const tipCommit = new Map();
   for (const { commit, path, oid, mode } of changes.value.files) {
     const atTip = tip.value.get(path)?.oid === oid;
@@ -74,6 +86,7 @@ async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
     seen.add(`${path}\0${oid}`);
     const { text, nul } = decodeBlob(blobs.value.get(oid));
     merge(byName, scanText(path, text, inputs), commit, { atTip });
+    if (!pathsDone.has(path)) { pathsDone.add(path); merge(byName, scanPath(path, inputs), commit, { atTip }); }
     if (nul && refuseNul) merge(byName, { 'tree-shape': [{ path, line: null, what: NUL_REASON }] }, commit, { atTip });
   }
   return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()], tip: tip.value });

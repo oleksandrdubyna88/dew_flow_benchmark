@@ -16,6 +16,9 @@ export const SECRET_SHAPES = Object.freeze([
   { name: 'aws-access-key-id', re: /AKIA[0-9A-Z]{16}/g },
 ]);
 
+/** `text` with every secret shape replaced by `[secret]`: for a path, which a report must name. */
+export const maskSecrets = (text, shapes = SECRET_SHAPES) => shapes.reduce((masked, { re }) => masked.replace(re, '[secret]'), text);
+
 /** `[{ path, line, what }]` for every shape found in `text`, in order of position. */
 export function findSecrets(path, text, shapes = SECRET_SHAPES) {
   const lineOf = lineIndex(text);

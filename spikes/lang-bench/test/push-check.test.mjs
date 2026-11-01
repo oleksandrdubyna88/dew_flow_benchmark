@@ -243,3 +243,13 @@ test('A_symlink_in_the_pushed_tree_is_refused_by_the_tree_shape_check_and_its_ta
   assert.equal(checkOf(result, 'secrets').findings.length, 1, 'the link target is the blob text and is scanned');
   assert.notEqual(sha, linked);
 });
+
+test('A_file_name_is_scanned_for_needles_family_names_and_secret_shapes_like_the_text_inside_it', async t => {
+  const { repo, sha } = branchWith(t, { 'tasks/09-Werewolf/samples/s01.in': '1\n', 'research/dew_flow_benchmark-notes.md': 'x\n', [`research/${SECRET}.txt`]: 'x\n', 'tasks/01/plain.in': '1\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'run-base-text').findings.map(f => [f.commit, f.path, f.line, f.what]), [[sha, 'tasks/09-Werewolf/samples/s01.in', null, 'needle Werewolf']]);
+  assert.deepEqual(checkOf(result, 'family-names').findings.map(f => [f.path, f.what]), [['research/dew_flow_benchmark-notes.md', 'needle dew_flow_benchmark']]);
+  assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.path, f.line, f.what]), [['research/[secret].txt', null, 'github-fine-grained-pat']], 'the path is the position, so the secret in it is masked');
+  assert.equal(formatReport(result).includes(SECRET.slice(0, 16)), false);
+});
