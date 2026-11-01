@@ -115,6 +115,14 @@ test('A_credit_inside_an_html_comment_does_not_count', () => {
   assert.deepEqual(check([entry('02').spec], visibleToo), []);
 });
 
+test('A_credit_after_an_unclosed_html_comment_does_not_count', () => {
+  // CommonMark hides everything after an unclosed `<!--`, so a credit there is not shown; removing only closed comments would keep it
+  const unclosed = readmeWith({ without: [entry('02').credit] }).replace(/\n$/, `\n\n<!-- ${entry('02').credit}\n`);
+  assert.deepEqual(check([entry('02').spec], unclosed).map(f => f.what), ['credit line of task 02 is not in the attribution section']);
+  const closedThenVisible = `${readmeWith()}\n<!-- a note -->\nmore text\n`;
+  assert.deepEqual(check([entry('02').spec], closedThenVisible), []);
+});
+
 test('A_known_spec_at_another_name_is_unrecorded_but_a_workspace_path_is_never_unrecorded', () => {
   assert.match(check(['todo/tasks/01-other-name.md'], readmeWith())[0].what, /no entry for this path/);
   assert.deepEqual(check(['csharp/01-descent/x.cs'], readmeWith()), []);

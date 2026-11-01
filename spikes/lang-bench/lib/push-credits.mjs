@@ -102,13 +102,22 @@ function pieceFindings(entry, section, ccFiles) {
   ]).concat(ccMissing(entry, section, ccFiles));
 }
 
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+/**
+ * The text a reader sees of the README's HTML comments: one left-to-right scan cuts each `<!--` up to its first `-->`, and an unclosed `<!--`
+ * up to the end (CommonMark hides the rest of the document behind it). One scan, so a cut can never join two halves into a new `<!--`.
+ */
+function withoutComments(text) {
+  const open = text.indexOf('<!--');
+  if (open < 0) return text;
+  const close = text.indexOf('-->', open + 4);
+  return close < 0 ? text.slice(0, open) : text.slice(0, open) + withoutComments(text.slice(close + 3));
+}
 const finding = (path, what) => ({ path, line: null, what });
 
 /** Findings for the README's attribution section against the tasks in play: what is missing, once each. */
 function readmeFindings({ credits, tasks, readmeText }) {
   if (readmeText === null) return [finding('README.md', 'the README is missing: the credit terms cannot be checked')];
-  const section = attributionText(readmeText.replace(HTML_COMMENT, ''));
+  const section = attributionText(withoutComments(readmeText));
   const ccFiles = credits.known.filter(e => e.fileLicence).map(e => e.spec);
   const missing = credits.known.filter(e => tasks.has(e.task)).flatMap(e => pieceFindings(e, section, ccFiles));
   return [...new Set(missing)].map(what => finding('README.md', what));

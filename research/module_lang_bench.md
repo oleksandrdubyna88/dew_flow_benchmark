@@ -182,7 +182,7 @@ elsewhere in it), `run-base-text` (links and the D18 needles in every file's tex
 plan, probe, gate and decision ids in `csharp/ node/ tasks/ runner/ todo/tasks/` and the README), `family-names` (`dew_flow_*` other than the
 repository's own and `PLAN_lang_comparison`, in every file's text and path at the tip, in commit messages, `.gitmodules` excepted),
 `known-task-credits` (a known-task text — the spec, or a task folder under `tasks/ csharp/ node/`, anywhere in the range or anywhere in the tip tree — needs its entry
-in `inputs/credits-lang.json` and, in the README's attribution section outside HTML comments, its credit as a substring, the CC BY-NC-SA 4.0
+in `inputs/credits-lang.json` and, in the README's attribution section outside HTML comments (an unclosed `<!--` hides the rest of the README, as CommonMark renders it), its credit as a substring, the CC BY-NC-SA 4.0
 sentence naming both files, and RealWorld's MIT notice), `stack-folders` (a `.gitkeep` is the empty blob only, and only at the root of `csharp/` and
 `node/` until E1.S3 writes `templates/stack-files.json`, a JSON list of path patterns with `<t>` for the task folder) and `tree-shape` (no symlink,
 no submodule but `.agents/conventions`, no `.gitmodules` path or URL but the conventions repository's, no file with a NUL byte in a task repository;
