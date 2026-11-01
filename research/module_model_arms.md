@@ -2379,7 +2379,24 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 
 ### The real-git pilot (spec, by hand — a story step, not a CI test)
 
-**Not run.** Building git 2.39.4 and 2.45.0 from source (zlib 1.3.1 built static into the prefix, `CFLAGS="-g -O2 -std=gnu17"` for GCC 15) was not authorised in the session that built this story. The story's commands (`E4 §5`, E4.S0 *The real-git pilot*) stay as written; nothing is logged here for the versions, the tarball sums, the per-class `passed/failed/skipped` or the trace2 version set. The suite ran on the host's git 2.53.0 only (above the floor). The pilot is owed before E4.S0 is merged (parent DoD: *its pilot logged*), and a red there that shows a guard not holding on an admitted version means D23's table is wrong — stop, log, and raise a ledger entry (spec item 11).
+**Ran 2026-11-01** (the owner asked for it), on Linux (WSL), from `feat/model-arms-e6` at `83081127`, by the commands above: zlib 1.3.1, git 2.39.4 and git 2.45.0 downloaded from zlib.net and kernel.org, every tarball's sha256 checked (`OK` ×3), built into `~/.cache/model-arms-git-pilot` (zlib static, `CFLAGS="-g -O2 -std=gnu17"`), each printing its own version. Per version, each class run with that git first on PATH and `GIT_TRACE2_EVENT` set:
+
+| class | git 2.39.4 | git 2.45.0 |
+|---|---|---|
+| ArmGitWideningTests | 35/35 | 35/35 |
+| GitFloorTests | 43/43 | 43/43 |
+| ValidateVerbTests | 41/41 | 41/41 |
+| RunArmSchemeTests | 30/30 | 30/30 |
+| MakeVerbTests | 36/36 | 36/36 |
+| ChecksVerbTests | 36/36 | 36/36 |
+| StepGitTests | 12/12 | 12/12 |
+| PrepBaseTests | 19/19 | 19/19 |
+| TaskWorktreesTests (E4.S2) | 83/83 | 83/83 |
+| TaskRecoveryTests (E4.S2) | 33/33 | 33/33 |
+| PickBackTests (E4.S2) | 19/19 | 19/19 |
+| ArmGitTaskQuestionsTests (E4.S2) | 23/23 | 23/23 |
+
+0 failed on either version; the trace2 record's `exe` set was exactly `"2.39.4"` and exactly `"2.45.0"` — the fixtures and every `ArmGit` question ran THAT git. The guards the floor exists for (the filter neutralisation, `GIT_ALLOW_PROTOCOL`, `GIT_NO_LAZY_FETCH`, the planted sentinels of E4.S2) hold on the oldest maintenance line the floor admits and on the first feature release. The optional control on 2.44.0 was not run. The prefix was removed after this log was written.
 
 ### Deviations from the story
 
@@ -2545,7 +2562,7 @@ Red first against `47b6d9e` for every item (38 red of 41 new or edited cases on 
 
 ### Not proven (said, not hidden)
 
-- **The real-git pilot was NOT run.** The story's step — E4.S0's pilot loop with `TaskWorktreesTests`, `TaskRecoveryTests` and `PickBackTests` on git 2.39.4 and 2.45.0 built from source — needs a build of external code, which this session was not authorised to do (as for E4.S0). The suite ran on the host's git 2.53.0 only. Owed before the story is merged; a red there is a finding for the owner (`--keep-redundant-commits`, `--allow-empty`, `-q` on `worktree add`, `:(exclude)` and `--force --force` are older than 2.39).
+- **The real-git pilot ran** (2026-11-01, E4.S0's section): `TaskWorktreesTests` 83/83, `TaskRecoveryTests` 33/33, `PickBackTests` 19/19 and `ArmGitTaskQuestionsTests` 23/23 on git 2.39.4 and on git 2.45.0, built from source, each trace2 record naming only that version.
 - **Windows**: every test that plants a program, links a folder or starts a shim skips; the allow-list, `--force --force` over a lock and the links are unobserved there.
 - **LFS worktrees**: filters are neutralised, so a worktree's LFS files are pointer files and a build that needs their content fails (exit 3); git-lfs is absent here; the warning line is tested only through `FilterDriversAsync`.
 - **The editor pins** are unobserved as neutralisations (M-j); a later git's `--textconv` default; a model process still running in the clone (E3 §8 item 17).
@@ -3271,7 +3288,7 @@ Each section above keeps its own *Not proven*; this is the module's whole as of 
 - **M2's key check — OPEN, the owner's.** Whether the key `make` writes into `mcp-coai.json` reaches the real `coai-mcp` (two `providers` answers side by side), or the settings-file road is the delivery (*M2's key check*). Until it runs, `McpConfig`'s `env` member is a request, unverified.
 - **The delegation re-run (M3 step 14) — not run.** The A–D calls with the real `claude` and haiku (E2 §8 item 43) were not made in M3 (*What did not run*); the analysis plan's first line carries it.
 - **The owner's own `experiment.json` — OPEN, the owner's.** Written once into a root outside every checkout and read by `status` without a refusal; the worked example validates, the owner's file has not been seen.
-- **The real-git pilot — not run.** E4.S0 and E4.S2 on git 2.39.4 and 2.45.0 built from source needed a build of external code nobody authorised; every git test ran on the host's git. A red there means D23's table is wrong.
+- **The real-git pilot ran** (2026-11-01): E4.S0's and E4.S2's git classes all green on git 2.39.4 and 2.45.0 built from source (E4.S0's section holds the table); the optional 2.44.0 control was not run.
 - **Hosts.** Linux x86-64 with glibc and WSL2 are the only hosts observed (M1–M3). macOS and FreeBSD run on the portable road, were never run on a real host, and `run-all`/`chain` refuse there with the manual road (exit 3) — against the owner's "do not forbid" ruling (E5 §8 item 30); Windows is built and never run (`WindowsAwake`, `WindowsLauncher`, the modes and links); Linux arm64 and a `setsid` other than util-linux 2.41.3 are refused or unmeasured.
 - **The readers.** The seven checked-in readers run over a fake arm of each scheme (`ConsumerCompatibilityTests`); not proven: their arithmetic (run, not judged), the fitted prices of `metrics.mjs`, `compare.mjs` over a CR, CHH or SRS arm (its list holds none), the judges, the mutation and survival readers, `make-tables.mjs`'s part-6 and part-7 sections, and the double count of a resumed step's cost in `metrics.mjs` (measured, carried to the analysis plan, not fixed).
 - **The chain over SRS.** M3 ran `chain` over an SRS arm end to end with the fake for the first time (SRS1 in the round); a real SRS arm — a real split, real parallel coders — has not run.
