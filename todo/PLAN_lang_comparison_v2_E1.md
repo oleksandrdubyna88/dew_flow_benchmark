@@ -20,7 +20,12 @@ written into the stories they name, each cited `(consult <id>)`; D4 adjusted by 
 owner (E1.S8b); (2) the facts and owner decisions of 2026-11-01 (§4): the deploy key and the fine-grained PAT exist, the
 repository's merge settings, and the credit terms of the known tasks (the rest of the parent's Q1). The parent is read at
 main `d47a346` (epoch 4, holding change 4.1). What this revision could say only by changing the parent is listed, not
-applied, in §12.
+applied, in §12. **Classified by the team lead, 2026-11-01: not a change in the parent** — no story added, removed or moved,
+no epic order or parent contract changed; the consult's fixes make the briefs meet what the parent already requires (D36, D38,
+D43), a fix that only satisfies the plan as written (`common.plan-change-control`); the one contract-touching item is held to
+the delegated-scope design (§12 item 3). **The coai document gate passed (proceed), 2026-11-01**; its findings are applied as
+the team lead decided them (E1.S7's scenarios, the pid rule, the delegated scope as E1.S8b's required design, §4 step 1's
+remote, the test-runner scaffold, `UNCLEAR.md`, this sentence).
 
 ## 1. The epic, restated (parent § *Epics*, E1)
 
@@ -227,7 +232,12 @@ the receiver's until it is read back).**
 per push:
 
 1. **The remote, idempotently.** `URL=https://github.com/oleksandrdubyna88/dew_flow_ai_language_comparison.git` (HTTPS: SSH to
-   GitHub times out from this host). `git -C <task repo> remote get-url origin`: no `origin` → `git remote add origin "$URL"`;
+   GitHub times out from this host; *made exact after the document gate, 2026-11-01:* port 22 times out from this host;
+   `ssh.github.com:443` works and is used **only** by E1.S7's run-base cuts with the deploy key; S1's branch pushes —
+   `chore/join-remote` and every later one — go over HTTPS with gh's credential helper, `git -c credential.helper= -c
+   'credential.helper=!gh auth git-credential' push https://github.com/oleksandrdubyna88/dew_flow_ai_language_comparison.git
+   <branch>`, which is the owner's account and needs no new credential).
+   `git -C <task repo> remote get-url origin`: no `origin` → `git remote add origin "$URL"`;
    an `origin` with another URL → `git remote set-url origin "$URL"`, the old URL printed; the same URL → nothing. Then `git
    fetch origin` and check that `origin/main` exists and holds `LICENSE`. Running the step twice changes nothing. **Recovery:**
    a fetch that fails (network, auth) leaves the local branches untouched — fix the cause and re-run step 1; a wrong remote
@@ -266,7 +276,7 @@ per push:
 4. Push `chore/join-remote` alone and open its PR into `main` (a normal merge on GitHub, CI from E1.S7 not yet required); then
    every other local branch alone, each its own PR. **A tag is never in a push with anything else**; the freeze tag, when it
    exists, is pushed alone and checked to have started no unexpected workflow (`common.task-lifecycle` §3).
-   *(2026-11-01, consult D7:)* after operator step O1, the join PR is merged **with a merge commit**, never squash or rebase
+   *(2026-11-01, consult D7:)* after operator step O1a, the join PR is merged **with a merge commit**, never squash or rebase
    (either would leave `origin/main` unrelated to the local branches again); then local `main` is fast-forwarded to
    `origin/main` (`git merge --ff-only origin/main`) **before any other branch is pushed**. The local branches all descend
    from the local `main` the join merged, so each later PR's diff is its own work.
@@ -277,12 +287,12 @@ per push:
 
 | Id | Title | Size | Depends on | Model |
 |---|---|---|---|---|
-| E1.S1 | Repository skeleton from the remote, the attribution cut, the provisional conventions pin, the pre-push check and the first pushes | S (~350 lines) | the remote (exists) | coder sonnet; operator for the credit terms |
+| E1.S1 | Repository skeleton from the remote, the attribution cut, the provisional conventions pin, the pre-push check and the first pushes | S (~350 lines) | the remote (exists); branches from S8a part i's scaffold commit | coder sonnet; operator for the credit terms |
 | E1.S8a | The baseline visible-sample runner `runner/`, pinned | L (~2,000 Python + ~900 tests) — **two coder briefs, each with its own review** (consult A): part i ≈ 1,100 + ≈ 500 tests, part ii ≈ 900 + ≈ 400 tests (estimated) | — | coder sonnet · brief opus |
 | E1.S8b | **The execution layer**: bwrap launch, D15's environment with the culture, the program-only scope, the shared loopback-only netns, deadlines, signals, cleanup; probes T-L30 … T-L34 | L (~900 + ~700 tests) | S8a (part ii), S5 | coder sonnet · brief opus |
 | E1.S9 | `FORMAT.md` v2, checked against the runner, gated before any spec gate | M (the document; ~150 lines of tools) | S8a (part i's `--parse-only`; the gate after CP1) | writer: team lead (opus) · extractor: sonnet |
 | E1.S8 | FORMAT v1 (built; its gate is v2's) and the conformance check derived from v2 | M (~550) | S9 draft, S8a (part i) | coder sonnet |
-| E1.S5 | Toolchains pinned read-only with checksums (TypeScript 6.0.x); the preflight | S (~300) | — | coder sonnet |
+| E1.S5 | Toolchains pinned read-only with checksums (TypeScript 6.0.x); the preflight | S (~300) | — ; branches from S8a part i's scaffold commit | coder sonnet |
 | E1.S4 | Package sets and the two cache snapshots; `PACKAGES.md` from the manifest | M (~350) | S5 | coder sonnet |
 | E1.S3 | The workspaces: templates (phase A), the ten task pairs after the freeze (phase B) | M (~600) | S4, S5, S8a, S8b; phase B: S2 frozen, S6 | coder sonnet |
 | E1.S6 | The visible samples, per task, before the spec's conformance gate | M (10 tasks) | S9, S8 | author: team lead (opus) |
@@ -296,7 +306,10 @@ to v2): S6 → S2 draft and conformance → S2a → **the D40 pre-freeze gate on
 bias review → gated. W5: the freeze commit and tag after the tenth; S3 phase B. S7 any time after S1's first push and S3
 phase A. *(Superseded 2026-11-01 by the waves below, consult A.)*
 
-**Waves, revised 2026-11-01 (consult A).** W1: **S8a part i** ∥ S5 ∥ S1; then **S8a part ii**. W2: **S8b** (needs S8a part ii and
+**Waves, revised 2026-11-01 (consult A).** W1: **S8a part i** ∥ S5 ∥ S1; then **S8a part ii**. *(After the document gate,
+2026-11-01:)* the **first commit of S8a part i is the test-runner scaffold** — `spikes/lang-bench/run-tests.mjs` and its
+preload `lib/lower-priority.mjs` — and S1 and S5 branch from that commit, so all three W1 briefs have a test runner.
+W2: **S8b** (needs S8a part ii and
 S5) ∥ **S9** drafted the moment part i's `--parse-only` exists, gated after **CP1** ∥ S4 ∥ **S7 part *conventions snapshot***.
 **CP2** after S8b. W3: S8 (needs only part i) ∥ S3 phase A (on S8b's layer, after CP2). W4, per task in the order of §4.1 (01,
 05, 04 first, re-conformed to v2): S6 → S2 draft and conformance → S2a → **the D40 gate on S8b's layer, behind the gate lock**
@@ -364,15 +377,16 @@ that cannot publish a leak — so every later story fills a skeleton rather than
   `.gitmodules`, *then* none (consult D5).
 - *Given* `credits-lang.json` and a README whose attribution section lacks one entry's `credit` line, the CC BY-NC-SA exception
   sentence for 01 and 02, or RealWorld's MIT notice, *then* the branch carrying that spec is refused naming the missing piece.
-- *Given* the join PR, *then* it is merged with a merge commit after operator step O1 has been read back, and local `main` is
-  fast-forwarded to `origin/main` before the next push (consult D7).
+- *Given* the join PR, *then* it is merged with a merge commit after operator step O1a has been read back, O1b switches merge
+  commits off right after, and local `main` is fast-forwarded to `origin/main` before the next push (consult D7, OP-H).
 
 **Acceptance (parent S1 and OP-8 as its text).** `workspace-diff` passes on an empty task pair and fails on a planted
 difference; the README's links and attribution appear nowhere under `csharp/`, `node/`, `tasks/`, `runner/` or `todo/tasks/`,
 and the generated run-base tree holds none of them (a test greps the tree; the one-commit `git rev-list` is S7's, after the
 push). Plus: `push-check` exits 0 for every pushed branch and its output is kept with the PR; the conventions pin is the current
 `release` and `pin-check` is green; the first pushes happened as §4 says, with the shas recorded. Plus (2026-11-01): the join PR
-merged with a merge commit after O1 was read back, and local `main` fast-forwarded before any other push (consult D7);
+merged with a merge commit after O1a was read back, O1b read back right after, and local `main` fast-forwarded before any
+other push (consult D7, OP-H);
 `credits-lang.json` holds the owner's terms in §4's shape and the README's attribution section carries every credit line, the
 per-file exception and the MIT notice; every PR body of the epic went through `--text` and every E1 bench branch through
 `--self` (consult C6b).
@@ -400,8 +414,9 @@ stack's pin-file list (C#: `global.json`, `nuget.config`, `Directory.Build.props
 `package-lock.json`, `tsconfig.json`, `.npmrc`, `eslint.config.mjs`), then bytes; `STATEMENT.md` may differ only on the lines
 after `<!-- stack-sentence -->` and `<!-- framework-sentence -->`. (4) `push-check`: compose the checks of §4 over
 `git rev-list <branch> --not --remotes=origin`; read the aid files and the token list only from paths given by argument; print
-positions only. (5) The README text is the team lead's; you write its structure check. Commands:
-`node spikes/lang-bench/run-tests.mjs test/run-base-tree.test.mjs test/workspace-diff.test.mjs test/push-check.test.mjs`.
+positions only. (5) The README text is the team lead's; you write its structure check. *(2026-11-01:)* branch from the first
+commit of E1.S8a part i, the test-runner scaffold (`run-tests.mjs` and its preload); do not write a runner of your own.
+Commands: `node spikes/lang-bench/run-tests.mjs test/run-base-tree.test.mjs test/workspace-diff.test.mjs test/push-check.test.mjs`.
 **Added 2026-11-01.** (6) The needles match by D18's rule of change 4.1 — case-sensitive on word boundaries (`\b<needle>\b`,
 ASCII letters and digits as word characters) plus an explicit list of exact substrings (`redis.io`, `redis-cli`, …); a
 normalised field FORMAT marks is not scanned (T-L37). (7) The secret shapes of §4 step 3, by name (consult D2). (8) The
@@ -564,7 +579,8 @@ consult's B1, B4 and B6 — part ii below; they stay true for the plain path whe
 **Two coder briefs inside this one story, each with its own Opus review (consult A).** The story stays one of the parent's
 twelve; its size needs two coders and two reviews.
 
-- **Part i (branch `feat/lang-v2-e1-s8a-i`, in place of the one branch named above):** the lexer, both parsers, the
+- **Part i (branch `feat/lang-v2-e1-s8a-i`, in place of the one branch named above):** its **first commit is the test-runner
+  scaffold** (`run-tests.mjs` and its preload), from which S1 and S5 branch (§5); then the lexer, both parsers, the
   matcher (V2, V6, V9, V10), the olympiad path with B9's streaming comparison, the report, `--parse-only`,
   `pin-runner.mjs`, `specs-record.mjs` (§3), `run-tests.mjs` and the preload; tests (1), (2), (5), (6), (12), (13). Its
   `--parse-only` unblocks S9's draft and S8. CP1 reads it with the S9 draft.
@@ -575,15 +591,21 @@ twelve; its size needs two coders and two reviews.
 - **Whom to signal (B1).** With `--cgroup-of`, `signal TERM` goes to **the program's pid**: the one pid in the scope's
   `cgroup.procs` that is neither a `bwrap` process (`/proc/<pid>/comm`) nor the layer's wrapper (whose pid it writes to
   `<out-dir>/wrapper.pid`, E1.S8b); D38 guarantees exactly one, and a count other than one is the lifecycle finding `fork`.
-  Without `--cgroup-of` (the plain tests) it is the `Popen` pid. bwrap 0.11.1 does not forward SIGTERM (§2).
-- **How to kill (B4).** With `--cgroup-of`, the kill at G is writing `1` to the scope's `cgroup.kill` (cgroup2, kernel ≥ 5.14;
+  Without `--cgroup-of` (the plain tests) it is the `Popen` pid. bwrap 0.11.1 does not forward SIGTERM (§2). *(After the
+  document gate, 2026-11-01:)* under E1.S8b's delegated scope `--cgroup-of` names `prog/`, which holds no wrapper, so the
+  program is the one pid in `prog/cgroup.procs` that is not a `bwrap` process; the runner identifies and signals it **only by
+  host pids**, read from the host's view of that file, and never uses a pid seen inside the box (1 or 2).
+- **How to kill (B4).** With `--cgroup-of`, the kill at G is writing `1` to the scope's `cgroup.kill` (*after the document
+  gate:* `prog/cgroup.kill`) (cgroup2, kernel ≥ 5.14;
   this host 6.18); `os.killpg` stays for the plain path only — behind `--new-session` the program is in its own group. The
   leftover evidence is `cgroup.procs` minus the `bwrap` pids and the wrapper, read after the program's exit and **before** the
   kill; the result says which road it took.
-- **Launch status (B5).** `--launch-status FD`: the `child-pid` event marks the sandbox ready and gives the clock start;
+- **Launch status (B5).** `--launch-status FD`: the `child-pid` event marks the sandbox ready and gives the clock start — it
+  is the launch-success signal, **not the pid authority** (after the document gate);
   `exit-code` the program's status. No `child-pid` before the launcher exits → exit 3 `launch failed` with the prefix's stderr.
-- **Every wait (B6; the pilot's F1).** `os.pidfd_open(pid)` + `select` with the exact remaining time, for the program's pid (from
-  `child-pid` or `cgroup.procs`), never `Popen.wait(timeout=…)`'s poll; the rule: **a case whose measured wall exceeds its
+- **Every wait (B6; the pilot's F1).** `os.pidfd_open(pid)` + `select` with the exact remaining time, for the program's host pid (from
+  `cgroup.procs`; *superseded after the document gate: "from `child-pid` or `cgroup.procs`"*), never
+  `Popen.wait(timeout=…)`'s poll; the rule: **a case whose measured wall exceeds its
   limit is `time limit` even when the process exited by itself**; the case clock starts at the `child-pid` event, so the
   `systemd-run`/`nsenter`/`bwrap` set-up is not in the wall. The record keeps `wallMs` (the program) beside `launchMs`, and once
   per run the runner times an empty program through the same prefix (`emptyProgramMs`), the control F1 asks for.
@@ -616,7 +638,9 @@ identity.mjs}`; `spikes/lang-bench/exec-probe.mjs` (the host probe, printed and 
 `test/exec-layer-{netns,isolation,scope,env,exec,cleanup}.test.mjs`; `test/fixtures/exec-stubs/{csharp,node,python}/**`.
 *(2026-11-01:)* the identity goes to this story's own file `inputs/specs.d/exec-layer.json` (§3); new
 `lib/exec-layer/scope-wrap.sh` (consult B2) and `lib/exec-layer/case-view.mjs` (consult B7), both inside the identity's tree;
-`test/exec-layer-runner.test.mjs` (T-L30 and T-L31 through the runner and the real prefix).
+`test/exec-layer-runner.test.mjs` (T-L30 and T-L31 through the runner and the real prefix). *(After the document gate,
+2026-11-01:)* `lib/exec-layer/scope-entry.sh` (the delegated scope's first process, below) is the primary design;
+`scope-wrap.sh` stays only as the fallback.
 
 **The shape — the launch hierarchy validated on this host by the team lead, 2026-10-31, unprivileged** (`ping→PING` passed;
 the program's cgroup was `…/app.slice/run-p…scope`, its netns `net:[4026532221]`, the driver's cgroup `0::/non-systemd` in the
@@ -641,7 +665,9 @@ and those four fail as written (§2). Item 2's prefix becomes:
 - **`-p OOMPolicy=continue` (B3).** This host's `DefaultOOMPolicy=stop`, which a scope without `Delegate=` inherits: an OOM
   kill would stop the whole scope and remove its cgroup, so `memory limit` could never be read. The pilot's judge carries the
   same fix, dated 2026-10-31.
-- **`scope-wrap` (B2).** The program's exit ends the bwrap monitor at once, the scope empties and systemd removes its cgroup
+- **`scope-wrap` (B2)** — *superseded (by the team lead after the document gate, 2026-11-01): kept as the fallback; the
+  required design is the delegated scope below.* The program's exit ends the bwrap monitor at once, the scope empties and
+  systemd removes its cgroup
   within milliseconds — before the layer can read `memory.peak`. `scope-wrap.sh` is a POSIX `sh` script of about 20 lines (dash
   on this host), hashed into the layer's identity: it writes its own pid to `<out-dir>/wrapper.pid`, runs its argv, and after
   the command's exit copies its own cgroup's `memory.peak`, `memory.events` and `cgroup.procs` to `<out-dir>` and exits with the
@@ -652,12 +678,45 @@ and those four fail as written (§2). Item 2's prefix becomes:
   `cgroup.kill` (E1.S8a part ii). `--unshare-pid --new-session` stay.
 - **`--json-status-fd <N>` (B5).** bwrap writes `{"child-pid": …}` once the sandbox is set up and later `{"exit-code": …}`;
   the layer passes the descriptor to the runner as `--launch-status N`. It also gives the program's pid (B1) and the clock
-  start (B6).
+  start (B6). *(Superseded after the document gate, 2026-11-01: it is the launch-success signal and the clock start only; the
+  program's pid comes from `prog/cgroup.procs`, below.)*
 - **The runner signals the program, never the launcher (B1),** by the rule of E1.S8a part ii.
 - **A fresh view per case (B7).** `case-view.mjs` makes, per case and outside the timed window, a writable copy of the built
   tree in an owned folder (the pilot judge's shape) and binds it as the workspace; `{case}` in the prefix and the runner's
   `--case-view` name it; it is removed with the case. bwrap 0.11's `--overlay-src <built> --tmp-overlay` is an optimisation CP2
   may take once T-L34 passes with it.
+
+*The prefix above, with `scope-wrap`, is superseded (by the team lead after the document gate, 2026-11-01): kept as the
+fallback.* Its `-p OOMPolicy=continue`, `-p MemorySwapMax=0`, no `--die-with-parent`, `--json-status-fd` and the fresh view
+per case carry over unchanged to the required design.
+
+**The shape, delegated scope — the REQUIRED design (the team lead, after the document gate, 2026-11-01).** It keeps D43's
+"program-only scope" literally true: the program's cgroup holds the launch chain and nothing else.
+
+`systemd-run --user --scope --unit=<owned name> -p Delegate=yes -p OOMPolicy=continue -p MemorySwapMax=0 <scope-entry>
+<out-dir> <memory.max bytes> nsenter -t <netns holder> -U -n --preserve-credentials bwrap --json-status-fd <N> <v2 box> -- bash
+run.sh`
+
+- **Two leaf cgroups inside the scope.** `scope-entry.sh` (POSIX `sh`, about 20 lines, in the layer's identity) is the scope's
+  first process. It creates the leaves `holder/` and `prog/` under the scope's cgroup; forks the **scope holder** — a small
+  `sleep` bounded by the case wall plus a margin, so a crashed layer's holder still ends — and moves it into `holder/`; moves
+  itself into `prog/`; enables `+memory` in the scope's `cgroup.subtree_control` (the scope's own cgroup now holds no
+  process, as cgroup2 requires); writes `memory.max` and `memory.swap.max` = 0 in `prog/`; writes the scope's cgroup path and
+  the scope holder's pid to `<out-dir>`; and execs its argv. Every move stays inside the delegated subtree, which is what an
+  unprivileged process may do. So the launch chain (`nsenter` → `bwrap` → `bash run.sh` → the program) runs in `prog/`, and the
+  scope holder is the only process outside it. (The scope holder is not item 1's netns holder; the two are named apart.)
+- **`prog/` outlasts the program.** While the scope holder lives the scope stays, so the layer reads `prog/`'s `memory.peak`,
+  `memory.events` and `cgroup.procs` after the program's exit and kills through `prog/cgroup.kill`. Then the scope holder exits,
+  the scope empties and systemd ends it. `--cgroup-of` names `prog/`.
+- **Verified at CP2 first** (probe line (f) in the brief): a delegated user scope on this host can create `prog/` and write
+  `memory.max` there. If CP2 finds the delegated scope impossible on this host, the wrapper fallback changes D43's program-only
+  scope: that is change 4.2 and the full stop (§12 item 3).
+
+**The pid namespace and `/proc` (after the document gate, 2026-11-01).** The box mounts a fresh `--proc /proc` for bwrap's pid
+namespace; that is bwrap's own mount, allowed inside its user namespace. `unshare --mount-proc` — which the D43 probe saw
+refused — is a different tool and is not used. The runner identifies and signals the program **only by host pids**, read from
+the host's view of `prog/cgroup.procs`; it never uses the pid seen inside the box (1 or 2). `--json-status-fd` is the
+launch-success signal (consult B5), not the pid authority.
 
 **The box's binds — no home, nothing broad.** `--tmpfs /` is the base, never `--ro-bind / /`; then read-only only what a program
 needs: `/usr` (with the `/bin`, `/lib`, `/lib64`, `/sbin` links), the locale archive `/usr/lib/locale/locale-archive` (for
@@ -685,7 +744,10 @@ holder's fresh one.
   gone, they are read from the wrapper's copies in `<out-dir>`; neither available is `memory: not certified` for that case,
   reported as a layer defect (the tests below exist to make it impossible); (3) `cgroup.kill`, then `systemctl --user stop
   <unit>`; (4) the holder (SIGTERM, SIGKILL after 2 s); (5) the case view removed; (6) the confirmation that no process,
-  scope, holder or view of the case is left.
+  scope, holder or view of the case is left. *(Under the required delegated scope, after the document gate, 2026-11-01:)* step
+  (2) reads `prog/`'s files, which exist after the exit while the scope holder lives — the wrapper's copies belong to the
+  fallback only; step (3) is `prog/cgroup.kill`, then the scope holder exits and the scope ends with it (`systemctl --user stop
+  <unit>` stays the last resort for a scope that does not end); step (4) is the netns holder, as before.
 - **Certification** — the layer refuses to start a data run when `memory.peak` is not readable (the named halt
   `memory-not-certifiable`, exit 3); a non-data run proceeds with `memory bound not certified` (D13, D36).
 
@@ -720,14 +782,21 @@ holder's fresh one.
   is bound), beside the `de-DE` probe (B10, T-L32). *Given* `exec-probe.mjs`, *then* its record lists allow-listed environment
   keys only, never the host's (consult C6c, D2), and prints what each runtime believes its memory limit is under
   `MemoryMax=256M` (B8, below).
+- **After the document gate, 2026-11-01.** The B2, B3 and B4 scenarios above run against the **delegated scope**: `memory.peak`
+  read from `prog/` after a 10 ms exit (not from a wrapper's copy), `oom_kill ≥ 1` from `prog/memory.events`, the lingering
+  child from `prog/cgroup.procs` and the kill through `prog/cgroup.kill`. *Given* a running case, *then* `prog/cgroup.procs`
+  holds only the launch chain's pids and `holder/cgroup.procs` only the scope holder. *Given* the program, *then* the pid the
+  runner signals is the host pid from `prog/cgroup.procs`, never 1 or 2. *Given* this host, *then* a delegated user scope
+  creates `prog/` and writes `memory.max` and `memory.swap.max` there (probe line (f)).
 
 **Acceptance (parent S8b).** T-L33, T-L34, T-L30, T-L31, T-L32 (scoring-box half) green on the series host with
 `BENCH_REQUIRE_SANDBOX=1` and nothing skipped; the program cannot read a sentinel under `$HOME` nor `/mnt/c`, cannot start
 `cmd.exe` and cannot reach the user bus; the probes identical for both stacks; the layer's identity in
 `inputs/specs.json` beside the runner's; `exec-probe.mjs` output recorded with its date and host; the pre-freeze gate of S2
 runs on this layer (D40 not weakened). Plus (2026-11-01): T-L30 and T-L31 run **through the runner and the real prefix**, not
-by hand (consult B); the consult's B1–B5, B7 and B10 scenarios above green; the probe record carries the wrapper's baseline
-`memory.peak`, the empty-program launch time, each runtime's believed memory limit and allow-listed keys only; CP2 recorded
+by hand (consult B); the consult's B1–B5, B7 and B10 scenarios above green, B2–B4 against the delegated scope; the probe
+record carries the delegated-scope line (f) (and the wrapper's baseline `memory.peak` only under the fallback), the
+empty-program launch time, each runtime's believed memory limit and allow-listed keys only; CP2 recorded
 before S3 phase A and the first D40 gate.
 
 **Test plan (red, green, red).** (1) `A_box_with_its_own_network_namespace_would_leave_the_driver_unable_to_connect_and_that_is_the_point`
@@ -748,6 +817,12 @@ the read, a false clean stop), green without it, red again (B4). (9) T-L31 throu
 runner's `signal TERM` step, never by `kill` (B1). (10) `A_failed_launch_prefix_is_launch_failed_and_never_a_program_verdict`
 (B5). (11) `Two_cases_never_share_a_writable_view` (B7). (12) `The_box_prints_nothing_to_stderr_for_bash_c_true` (B10). (13)
 `The_probe_record_holds_only_allow_listed_keys` beside its companion that still finds a planted host key (consult C6c).
+**After the document gate, 2026-11-01 — against the delegated scope.** (6) becomes: red with the program in the scope's own
+cgroup and no scope holder (the cgroup is gone at the read), green with `prog/` and the scope holder, red again with the scope
+holder removed; (7) and (8) run through the delegated prefix and read `prog/`'s files. (14)
+`A_delegated_scope_holds_only_the_launch_chain_in_prog` (D43 literally: `prog/cgroup.procs` only the chain, `holder/` only the
+scope holder). (15) `A_pid_seen_inside_the_box_would_signal_the_wrong_process_and_that_is_the_point` — red signalling the
+in-box pid (1 or 2) or the `child-pid` value, green with the host pid from `prog/cgroup.procs`, red again.
 
 **Docs.** `research/module_lang_bench.md` (the layer, its shape, its probe, its identity, the invalidation rule of parent §6.1);
 `research/module_tests.md` (the layer's flows: shared netns, separate cgroups, sentinel, scope kill, culture, refusal).
@@ -772,7 +847,12 @@ F1 control), (c) an empty stderr from `bash -c true` in the box, (d) **what each
 (consult B8: .NET sizes its GC hard limit to about 75 % of a detected container limit, so the effective bound and the verdict
 label could differ by stack), and (e) only allow-listed environment keys (consult C6c, D2). **B8 stays a probe line here:**
 whether to set `DOTNET_GCHeapHardLimitPercent` is D15's decision, made by the team lead on that probe record before E2
-calibrates; this story sets nothing for it (§9 OP-K).
+calibrates; this story sets nothing for it (§9 OP-K). **After the document gate, 2026-11-01:** build *The shape, delegated
+scope* — `-p Delegate=yes`, `scope-entry.sh`, the `holder/` and `prog/` leaves, `--cgroup-of` naming `prog/` — and the pid
+rule of *The pid namespace and `/proc`*; build `scope-wrap.sh` only if CP2 has found the delegated scope impossible, and not
+before §12 item 3's full stop has run. The probe also records (f) **that a delegated user scope on this host can create
+`prog/` and write `memory.max` (and `memory.swap.max` = 0) there**, verified at CP2; (a) the wrapper's baseline is recorded only
+under the fallback.
 
 ---
 
@@ -898,7 +978,9 @@ found, green with the pinned directory alone, red again); `A_TypeScript_outside_
 **Brief (Sonnet coder).** Downloads with `curl -fsSL` into an owned folder, verify, extract, `chmod -R a-w`; the SDK by
 `dotnet-install.sh --version 10.0.403 --install-dir <dir> --no-path` (the script's own sha256 recorded); TypeScript by `npm view
 typescript@6.0 version` → the newest patch, then `npm install --prefix <dir> typescript@<that>` with the pinned Node; never apt.
-The preflight probes inside a box built by S8b's `box.mjs` once it exists (v1's bwrap primitives until then).
+The preflight probes inside a box built by S8b's `box.mjs` once it exists (v1's bwrap primitives until then). *(2026-11-01:)*
+branch from the first commit of E1.S8a part i, the test-runner scaffold (`spikes/lang-bench/run-tests.mjs` and its preload);
+run the tests with it: `node spikes/lang-bench/run-tests.mjs test/toolchain-pins.test.mjs test/preflight-lang.test.mjs`.
 
 ---
 
@@ -1156,7 +1238,11 @@ reference to an owned pristine folder, runs the runner over the task's `samples/
 - **The unclear lists are gate artefacts (C4):** each coder's "requirements I found unclear" list — or the sentence "no
   requirement unclear" — is kept at `~/rsd/lang-v2/refs/<NN-slug>/<stack>/UNCLEAR.md` (outside git: it is about the draft spec,
   and its wording is kept out of public), and the record names its sha256, its item count and, per item, the commit of the
-  spec text change that closed it; a gate run with an open item is refused.
+  spec text change that closed it; a gate run with an open item is refused. *(After the document gate, 2026-11-01:)*
+  `prefreeze.mjs` reads `~/rsd/lang-v2/refs/<NN-slug>/<stack>/UNCLEAR.md` **directly** and refuses to write a `pass` record
+  while any item in it is open or while the file is missing. Each item is a task-list line — `- [ ] <question>` open, `- [x]
+  <question> — closed by <commit>` closed; a file holding only the sentence "no requirement unclear" counts as closed; any
+  other content is exit 4 naming the line.
 - **The gate lock and the load (consult A; the pilot's F5):** the tool takes the gate lock of §3 for its whole run and refuses
   if it is held; the record keeps `/proc/loadavg` at start and end and the `underLoad` flag, with §3's re-run rule.
 - **The record** per gate run is now `{ result, on, runnerManifest, execLayer, formatSha256, specSha256, samplesSha256,
@@ -1183,7 +1269,9 @@ the tool's own tests use toy programs, never a reference. Added 2026-11-01:
 `A_gate_record_of_an_earlier_spec_text_would_freeze_a_pass_the_text_never_had_and_that_is_the_point` (C1: red comparing
 the identities only, green with `specSha256`, `formatSha256` and `samplesSha256`, red with the spec hash dropped);
 `A_private_pair_count_other_than_expected_is_refused` (C2); `A_prefreeze_run_without_limits_is_refused` (C3);
-`A_gate_run_with_an_open_unclear_item_is_refused` (C4); `A_gate_run_while_the_lock_is_held_is_refused` beside
+`A_gate_run_with_an_open_unclear_item_is_refused` (C4); *(after the document gate)*
+`A_pass_record_is_refused_while_UNCLEAR_md_is_missing_or_has_an_open_item` beside
+`The_sentence_no_requirement_unclear_counts_as_closed`; `A_gate_run_while_the_lock_is_held_is_refused` beside
 `A_lock_whose_owner_is_gone_is_removed_and_named` (consult A).
 
 **Docs.** `research/module_lang_bench.md` (the tool, its record, the private area).
@@ -1257,7 +1345,9 @@ each on the operator's go and reads it back before and after every write:
 | the tag ruleset | `refs/tags/spec-frozen-*` | update, deletion and force push restricted for everyone; creation by the repository's admin | none (the deploy key is not a bypass actor here) |
 
 The freeze itself is enforced by the tag, `specBlobMatches` and the amendment rule, not by a frozen `main`. **The tag ruleset
-exists and is read back before W5** (C7b).
+exists and is read back before W5** (C7b). **E1.S7 creates the rulesets only after operator step O1b** (after the document
+gate, 2026-11-01): the join's merge commit is then already on `main`, merge commits are off again, and `template-frozen`'s
+linear-history rule holds for every later, squash-merged PR.
 
 **Two coder briefs inside this one story, each with its own Opus review (consult A).** Part *conventions snapshot*
 (`lib/conventions-snapshot.mjs`, `test/conventions-snapshot.test.mjs`, the private snapshot) needs no GitHub write and runs in
@@ -1295,8 +1385,9 @@ snapshot path is refused. **Added 2026-11-01:** *given* `cutRunBase`, *then* the
 pinned host key and `IdentitiesOnly`, and a host key off the pin is refused (D1); *given* any `githubLang` call, *then*
 `process.env.GH_TOKEN` is undefined afterwards and no `.git/config` holds a token (D3); *given* the template tree, *then*
 `.gitmodules` passes the host check by its path while a URL planted anywhere else fails (D5); *given* the rulesets' data,
-*then* `main`'s ruleset restricts no update and requires no linear history, `run-main`'s only bypass actor is the deploy key,
-and each applied ruleset reads back equal to its data (D6, C7c).
+*then* `main`'s ruleset restricts no update and **requires linear history** (*superseded after OP-H's decision and the document
+gate, 2026-11-01: "requires no linear history"*), `run-main`'s only bypass actor is the deploy key, and each applied ruleset
+reads back equal to its data (D6, C7c).
 
 **Acceptance (parent S7, OP-8 as its text).** v1's P0 checks pass here — a run base cut by the deploy key, a direct push with the
 PAT refused, CI green on a non-default base, a planted violation red per stack, merge blocked until threads resolve — run from
@@ -1348,7 +1439,8 @@ own and is removed by it, then swept by owner and age under `common.test-leftove
 | Execution-layer probes `inputs/exec-probe-<date>.json` (E1.S8b) | KB each, one per probe day | kept in git | — |
 | Spec briefs `~/rsd/lang-v2/test-design/spec-briefs/NN.md` (E1.S2) | KB each, ten | kept with the test-design aid (parent §13) | — |
 | **Added 2026-11-01.** Per-case views of the built tree (E1.S8b, consult B7) | one built tree per live case (≈ 0.1–0.3 GB with `bin/`, `obj/`, `node_modules/`); cases run one at a time, so ≤ 0.3 GB live | **removed by the case's cleanup** (step 5); never kept | owned name; swept by owner and age like the gate-run scratch |
-| The wrapper's copies `<out-dir>` per case (E1.S8b, consult B2) | three small files, KB per case | the case's evidence goes into the runner's JSON result; the folder is removed with the case | owned name, swept |
+| The wrapper's copies `<out-dir>` per case (E1.S8b, consult B2; the fallback only, after the document gate) | three small files, KB per case | the case's evidence goes into the runner's JSON result; the folder is removed with the case | owned name, swept |
+| The scope holder and the `holder/`, `prog/` leaves (E1.S8b, the delegated scope, after the document gate) | one `sleep` and two cgroups per live case; one case at a time | ended by the case's cleanup; the cgroups go with the scope | the holder's `sleep` is bounded by the case wall plus a margin, so it ends by itself after a crash |
 | The gate lock `~/.cache/lang-v2/gate.lock` (§3) | one file, bytes | removed by its holder in `finally`; a lock whose owner is gone is removed by the next taker, named | a crash leaves it with a dead owner: the next taker's check ends it |
 | The writers' files `inputs/specs.d/*.json`, `inputs/specs.json`, `inputs/credits-lang.json`, `inputs/checkpoints.md` (§3, §4, §5) | KB | **kept in git** (append-only where they record a gate, a checkpoint or a freeze) | `specs.json` is regenerated, never half-written (written beside and moved over) |
 | Unclear lists `~/rsd/lang-v2/refs/<NN-slug>/<stack>/UNCLEAR.md` (E1.S2a, consult C4) | KB each, twenty | kept with the references | — |
@@ -1414,9 +1506,12 @@ D1's precondition**, which is met (§4). Every fix is written into its story abo
 - [ ] E1.S8a and E1.S7 each built as two coder briefs with two reviews; the epic still twelve stories.
 - [ ] `inputs/specs.json` equals the assembly of the four writers' files; no story wrote another's file (§3).
 - [ ] Every D40 gate run held the gate lock and recorded its load; no flagged result stood without its re-run (§3).
-- [ ] Operator steps O1 … O3 done on the operator's go and read back; OP-H decided by the team lead before O1; OP-J answered by
+- [ ] Operator steps O1a, O1b, O2 and O3 done on the operator's go and read back (OP-H decided 2026-11-01); the rulesets created
+      after O1b; OP-J answered by
       the owner before the first run base.
 - [ ] `inputs/credits-lang.json` holds the owner's terms of 2026-11-01 and the README's attribution section matches it.
+- [ ] *(After the document gate.)* E1.S8b runs on the delegated scope, its probe line (f) verified at CP2 — or §12 item 3's full
+      stop ran before the wrapper fallback was built.
 - [ ] Every consult fix written into a story (B1–B10, C1–C7, D1–D3, D5–D7) has its named test green or its live P0 line
       recorded; B8's probe line recorded for D15's decision.
 
@@ -1445,7 +1540,10 @@ text, so it is listed here and not applied. Lines are of the parent at main `d47
    Proposed: "the program's systemd scope (the program and the layer's measured wrapper only)". D36 `:248` stays true as it
    is (the driver and the build are outside the scope). CP2 may instead take a delegated scope (`-p Delegate=yes`), with a
    holder in one leaf cgroup and the program alone in a child cgroup whose files outlast its exit; that keeps "program-only"
-   as written and needs no parent wording.
+   as written and needs no parent wording. *(After the document gate, by the team lead, 2026-11-01:)* the delegated scope is now
+   E1.S8b's **required** design, so D43, §6.1 and the E1 epic's S8b need no wording change, and the proposal above stands only
+   for the fallback. **If CP2 finds the delegated scope impossible on this host, the wrapper fallback changes D43's
+   program-only scope: that is change 4.2 and the full stop (`common.plan-change-control`).**
 4. **D38 `:250` and T-L31 `:951` ("the pid the harness starts is the program's").** Under D43's layered launch the harness
    starts `systemd-run`, and the program is the process `run.sh` execs into, behind `nsenter` and `bwrap`. Proposed: "the
    process `run.sh` becomes is the program (no bash parent in the scope); the runner signals that pid, found in the scope's
