@@ -1,4 +1,4 @@
-// The commits a push would add - `git rev-list <branch> --not --remotes=origin` - and what each one adds. Every scan of the push
+// The commits a push would add - `git rev-list <tip> --not <published base>`, the base being the destination's own remote ref or else origin/main - and what each one adds. Every scan of the push
 // check runs over exactly this: the messages and, per added or changed path, the blob as that commit left it. A file added by one
 // commit and removed by the next is in the history a push publishes, so it is scanned; a blob that several paths or commits share
 // is read once (the first commit that introduced the path owns the finding).
@@ -26,12 +26,40 @@ export async function verifyNotMoved(repo, branch, tip) {
   return now.value.code === 1 || sha === tip ? ok(null) : fail(`the branch ${branch} moved: it is at ${sha} now, the check was asked for ${tip}`, { kind: 'config' });
 }
 
-/** ok([sha]) oldest first, or a `config` fail when the branch does not exist. */
-export async function newCommits(repo, branch, rev) {
+/**
+ * ok(refname | null): the PUBLISHED BASE, what the destination already holds - the remote ref of the branch being updated (`dest`, default the
+ * branch) if there is one, otherwise `origin/main`, otherwise nothing (an empty remote: everything is new). Never "any remote ref": a blob that
+ * only another branch holds is not in the destination.
+ */
+export async function publishedBase(repo, dest) {
+  for (const ref of [`refs/remotes/origin/${dest}`, 'refs/remotes/origin/main']) {
+    const found = await runGit(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { accept: [0, 1] });
+    if (!found.ok || found.value.code === 0) return found.ok ? ok(ref) : found;
+  }
+  return ok(null);
+}
+
+const notBase = base => (base === null ? [] : ['--not', base]);
+
+/** ok([sha]) oldest first: every commit of the tip that the published base does not hold, or a `config` fail when the branch does not exist. */
+export async function newCommits(repo, branch, rev, dest = branch) {
   const tip = await branchTip(repo, branch, rev);
-  if (!tip.ok) return tip;
-  const list = await runGit(repo, ['rev-list', '--reverse', tip.value, '--not', '--remotes=origin']);
+  const base = tip.ok ? await publishedBase(repo, dest) : tip;
+  if (!base.ok) return base;
+  const list = await runGit(repo, ['rev-list', '--reverse', tip.value, ...notBase(base.value)]);
   return list.ok ? ok(list.value.stdout.split('\n').filter(Boolean)) : list;
+}
+
+/**
+ * ok(Set(object id)): the objects NEW to the destination, `git rev-list --objects <tip> --not <published base>`. This is the one rule for what is
+ * scanned and counted: it covers every parent of every merge and skips only what the destination already holds (a merge of origin/main brings
+ * main's blobs in; they are not charged to the branch).
+ */
+export async function newObjects(repo, tip, dest) {
+  const base = await publishedBase(repo, dest);
+  if (!base.ok) return base;
+  const listing = await runGit(repo, ['rev-list', '--objects', tip, ...notBase(base.value)], { maxBytes: 256 * 1024 * 1024, timeoutMs: 300_000 });
+  return listing.ok ? ok(new Set(listing.value.stdout.split('\n').map(line => line.split(' ')[0]).filter(Boolean))) : listing;
 }
 
 /** Records of `git diff-tree --raw -z`: added or changed entries only (no deletion). A submodule pointer has mode 160000 and no blob to read. */
@@ -45,25 +73,31 @@ function parseRaw(raw, commit) {
   return files;
 }
 
-async function changesOfCommit(repo, commit) {
-  const head = await runGit(repo, ['log', '-1', '--format=%P%x00%B', commit]);
-  if (!head.ok) return head;
-  const [parents, message] = head.value.stdout.split('\0');
-  const firstParent = parents.trim().split(' ')[0];
-  const base = firstParent === '' ? ['--root'] : [firstParent];
-  const diff = await runGit(repo, ['diff-tree', '-r', '-z', '--no-renames', '--no-commit-id', ...base, commit]);
-  return diff.ok ? ok({ message: { commit, text: message }, files: parseRaw(diff.value.stdout, commit) }) : diff;
+/** ok(Map(commit -> { parents: [sha], text })) for `commits`, from ONE `git log --no-walk --stdin` (not one process per commit). */
+async function logOf(repo, commits) {
+  if (commits.length === 0) return ok(new Map());
+  const log = await runGit(repo, ['log', '--no-walk=unsorted', '--stdin', '--format=%x01%H%x00%P%x00%B'], { input: `${commits.join('\n')}\n`, maxBytes: 256 * 1024 * 1024 });
+  if (!log.ok) return log;
+  const entries = log.value.stdout.split('\x01').filter(Boolean).map(chunk => { const [commit, parents, ...text] = chunk.split('\0'); return [commit, { parents: parents.split(' ').filter(Boolean), text: text.join('\0') }]; });
+  return ok(new Map(entries));
 }
 
-/** ok({ messages: [{ commit, text }], files: [{ commit, path, oid, mode }] }). A merge is compared with its first parent only. */
+async function filesOfCommit(repo, commit, parents) {
+  const base = parents.length === 0 ? ['--root'] : [parents[0]];
+  const diff = await runGit(repo, ['diff-tree', '-r', '-z', '--no-renames', '--no-commit-id', ...base, commit]);
+  return diff.ok ? ok(parseRaw(diff.value.stdout, commit)) : diff;
+}
+
+/** ok({ messages: [{ commit, text }], files: [{ commit, path, oid, mode }] }): messages from one `git log`, files from each commit's diff against its first parent (a merge's other parents are covered by their own commits of the range). */
 export async function changesOf(repo, commits) {
-  const messages = [];
+  const log = await logOf(repo, commits);
+  if (!log.ok) return log;
+  const messages = commits.map(commit => ({ commit, text: log.value.get(commit)?.text ?? '' }));
   const files = [];
   for (const commit of commits) {
-    const one = await changesOfCommit(repo, commit);
+    const one = await filesOfCommit(repo, commit, log.value.get(commit)?.parents ?? []);
     if (!one.ok) return one;
-    messages.push(one.value.message);
-    files.push(...one.value.files);
+    files.push(...one.value);
   }
   return ok({ messages, files });
 }
@@ -119,15 +153,4 @@ export async function tipTree(repo, branch, rev) {
     tree.set(record.slice(tab + 1), { oid, mode });
   }
   return ok(tree);
-}
-
-/**
- * ok(Set(object id)) of every object reachable from the remotes (`git rev-list --objects --remotes=origin`): what is already published. A blob in
- * this set is public and was checked when it was pushed, so a branch that merely brings it in (a merge of origin/main, a rebase onto it) is not
- * charged for it: it is neither scanned nor counted toward a size ceiling.
- */
-export async function publishedObjects(repo) {
-  const listing = await runGit(repo, ['rev-list', '--objects', '--remotes=origin'], { maxBytes: 256 * 1024 * 1024, timeoutMs: 300_000 });
-  if (!listing.ok) return listing;
-  return ok(new Set(listing.value.stdout.split('\n').map(line => line.split(' ')[0]).filter(Boolean)));
 }

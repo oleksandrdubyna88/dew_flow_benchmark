@@ -214,3 +214,16 @@ test('Progress_lines_go_to_stderr_and_the_report_on_stdout_stays_exactly_the_rep
   assert.equal(/push-check: scanning/.test(r.stdout), false, 'nothing of the progress is in the report');
   assert.match(r.stdout, /^result +PASS \(exit 0\)/m);
 });
+
+test('The_messages_of_every_commit_of_the_range_are_read_in_one_git_log_call', t => {
+  const { repo } = topicBranch(t, { 'tasks/01/s01.in': '5\n' });
+  for (const n of [2, 3, 4]) commit(repo, `feat: commit ${n}`, { [`tasks/0${n}/s01.in`]: '5\n' });
+  const stubs = ownedFolder(t, 'logstub');
+  const calls = path.join(stubs, 'calls.txt');
+  const real = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  writeFileSync(path.join(stubs, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${calls}\nexec ${real} "$@"\n`, { mode: 0o755 });
+  const r = spawnSync(process.execPath, [CLI, ...withOrigin(withPublic(withSecrets(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t)])))], { encoding: 'utf8', env: { ...process.env, PATH: `${stubs}:${process.env.PATH}` } });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const logCalls = readFileSync(calls, 'utf8').split('\n').filter(l => /(^| )log( |$)/.test(l));
+  assert.equal(logCalls.length, 1, `one git log for the messages of 4 commits, saw: ${logCalls.join(' | ')}`);
+});

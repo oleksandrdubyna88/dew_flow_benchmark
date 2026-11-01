@@ -48,7 +48,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     refs/heads/*) branch="\${local_ref#refs/heads/}" ;;
     *) branch="detached/\${remote_ref#refs/heads/}" ;;
   esac
-  node "$CHECKER" --repo "$REPO" --branch "$branch" --tip "$local_sha" ${baked} 1>&2 || status=1
+  node "$CHECKER" --repo "$REPO" --branch "$branch" --dest "\${remote_ref#refs/heads/}" --tip "$local_sha" ${baked} 1>&2 || status=1
 done
 exit $status
 `;

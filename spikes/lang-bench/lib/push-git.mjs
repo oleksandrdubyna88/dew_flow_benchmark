@@ -18,9 +18,9 @@ function launchFailure(launched, what, { timeoutMs, maxBytes }) {
 }
 
 /** ok({ code, stdout, stderr }) for any exit code the caller listed in `accept` (default: 0); otherwise a fail with git's own words. */
-export async function runGit(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes, accept = [0], config = [] } = {}) {
+export async function runGit(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes, accept = [0], config = [], input } = {}) {
   const argv = ['-C', repo, ...config.flatMap(c => ['-c', c]), ...args];
-  const r = await runBounded('git', argv, { env: ENV, timeoutMs, maxBytes });
+  const r = await runBounded('git', argv, { env: ENV, timeoutMs, maxBytes, input });
   const bad = launchFailure(r, `git ${args[0]}`, { timeoutMs, maxBytes });
   if (bad) return bad;
   const { code, stdout, stderr } = r.value;

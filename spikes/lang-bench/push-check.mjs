@@ -44,7 +44,7 @@ const OPTIONS = {
   self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' }, tip: { type: 'string' },
   'install-hook': { type: 'boolean' }, 'uninstall-hook': { type: 'boolean' }, 'force-hook': { type: 'boolean' },
   aid: { type: 'string', multiple: true }, 'aids-dir': { type: 'string' }, tokens: { type: 'string' },
-  public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, 'origin-url': { type: 'string' }, 'secret-file': { type: 'string', multiple: true }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
+  public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, 'origin-url': { type: 'string' }, dest: { type: 'string' }, 'secret-file': { type: 'string', multiple: true }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
 };
 
 const usage = reason => ({ exit: EXIT.CONFIG, text: `push-check: ${reason}\nusage: see the header of ${import.meta.url.replace('file://', '')}\n` });
@@ -100,7 +100,7 @@ const runSelf = v => withInputs(v, async inputs => {
   return repo === undefined || v.branch === undefined ? usage('--self needs --branch (and a git repository)') : report(await checkSelf({ repo, branch: v.branch, inputs, progress }));
 });
 
-const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, tip: v.tip, inputs, expectedOrigin: v['origin-url'], progress }))));
+const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, tip: v.tip, dest: v.dest, inputs, expectedOrigin: v['origin-url'], progress }))));
 
 const SELF_PATH = fileURLToPath(import.meta.url);
 /** The options a hook bakes in at install (fixtures, a named aid, ...): each flag given to --install-hook that a check reads. */

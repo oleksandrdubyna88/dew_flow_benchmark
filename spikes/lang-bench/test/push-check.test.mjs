@@ -474,3 +474,60 @@ test('A_gzipped_secret_added_and_then_removed_in_the_range_is_refused_because_ev
   const self = await checkSelf({ repo, branch: 'topic', inputs });
   assert.equal(self.checks.some(c => c.name === 'tree-shape'), false, 'the bench branch does not refuse binaries');
 });
+
+/** A task repository whose origin has `main` (LICENSE) and a second branch `other` holding `files`; returns { repo, bare }. */
+function repoWithOtherRemoteBranch(t, files) {
+  const bare = makeOrigin(t);
+  const seed = path.join(path.dirname(bare), 'seed-other');
+  git(path.dirname(bare), 'clone', '-q', bare, seed);
+  git(seed, 'checkout', '-q', '-b', 'other');
+  commit(seed, 'feat: another branch', files);
+  git(seed, 'push', '-q', 'origin', 'other');
+  const repo = makeTaskRepo(t, { origin: bare });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'origin/main');
+  return { repo, bare };
+}
+
+test('A_blob_present_only_on_another_remote_branch_is_scanned_when_a_new_branch_adds_it_and_refused_if_it_leaks', async t => {
+  const { repo } = repoWithOtherRemoteBranch(t, { 'notes/leak.md': `a\n${PUBLISHED_LEAK}\n` });
+  const sha = commit(repo, 'feat: the same file on a new branch', { 'notes/leak.md': `a\n${PUBLISHED_LEAK}\n` });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED, 'the destination (origin/main) does not hold that blob: another branch is not the destination');
+  assert.deepEqual(checkOf(result, 'leakcheck').findings.map(f => [f.commit, f.path]), [[sha, 'notes/leak.md']]);
+});
+
+test('A_merge_whose_second_parent_is_an_unpushed_branch_carrying_a_secret_is_refused', async t => {
+  const repo = makeTaskRepo(t, { origin: makeOrigin(t) });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'origin/main');
+  commit(repo, 'feat: clean work', { 'tasks/01/s01.in': '5\n' });
+  git(repo, 'checkout', '-q', '-b', 'side', 'origin/main');
+  const secretCommit = commit(repo, 'feat: a side branch with a secret', { 'cfg/app.ini': `key = ${SECRET}\n` });
+  git(repo, 'checkout', '-q', 'topic');
+  git(repo, 'merge', '-q', '--no-ff', '-m', 'chore: merge the side branch', 'side');
+  commit(repo, 'feat: more clean work', { 'tasks/01/s02.in': '6\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.commit, f.path, f.what]), [[secretCommit, 'cfg/app.ini', 'github-fine-grained-pat']]);
+});
+
+test('A_commit_message_of_a_merged_unpushed_branch_is_read_too_and_all_messages_come_from_one_git_log', async t => {
+  const repo = makeTaskRepo(t, { origin: makeOrigin(t) });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'origin/main');
+  commit(repo, 'feat: clean work', { 'tasks/01/s01.in': '5\n' });
+  git(repo, 'checkout', '-q', '-b', 'side', 'origin/main');
+  const leaky = commit(repo, `feat: side work\n\nthe token was ${SECRET}`, { 'tasks/02/s01.in': '5\n' });
+  git(repo, 'checkout', '-q', 'topic');
+  git(repo, 'merge', '-q', '--no-ff', '-m', 'chore: merge side', 'side');
+  const result = await run(repo);
+  assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.commit, f.path]), [[leaky, '(commit message)']]);
+});
+
+test('The_published_base_is_the_remote_ref_of_the_branch_being_updated_when_there_is_one', async t => {
+  const { repo } = repoWithOtherRemoteBranch(t, { 'notes/leak.md': `a\n${PUBLISHED_LEAK}\n` });
+  git(repo, 'checkout', '-q', '-B', 'topic', 'origin/other');
+  commit(repo, 'feat: clean work on the branch that already holds the file', { 'tasks/01/s01.in': '5\n' });
+  const updating = await checkBranch({ repo, branch: 'topic', dest: 'other', inputs });
+  assert.equal(updating.exit, EXIT.PASS, 'updating origin/other: its own file is not new to it');
+  const asNewBranch = await checkBranch({ repo, branch: 'topic', inputs });
+  assert.equal(asNewBranch.exit, EXIT.REFUSED, 'pushed as a new branch the destination is origin/main, which does not hold that file');
+});

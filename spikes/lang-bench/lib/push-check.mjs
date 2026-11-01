@@ -4,7 +4,7 @@
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { EXIT } from './push-exit.mjs';
-import { branchTip, changesOf, newCommits, publishedObjects, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, newObjects, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
 import { TASK_REPO_URL, verifyFresh, verifyOrigin } from './push-remote.mjs';
 import { sequence } from './push-sequence.mjs';
 import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
@@ -39,22 +39,22 @@ const firstCommitMap = (files, keep) => new Map(files.filter(keep).reverse().map
 const whereOf = files => new Map([...files].reverse().map(f => [f.oid, { path: f.path, commit: f.commit }]));
 
 /** ok({ commits: [sha], tip }) of a branch: the commits a push would add and the tip it ends at. */
-async function rangeAndTip(repo, branch, rev) {
+async function rangeAndTip(repo, branch, rev, dest) {
   const tip = await branchTip(repo, branch, rev);
-  const range = tip.ok ? await newCommits(repo, branch, tip.value) : tip;
+  const range = tip.ok ? await newCommits(repo, branch, tip.value, dest) : tip;
   return range.ok ? ok({ commits: range.value, tip: tip.value }) : range;
 }
 
 /** ok({ commits, tip, found, files, tipTree }): the range, the tip it ends at, and the tagged findings of every message and blob in it. */
-async function scanBranch({ repo, branch, rev, inputs, refuseNul, progress }) {
-  const head = await rangeAndTip(repo, branch, rev);
+async function scanBranch({ repo, branch, rev, dest, inputs, refuseNul, progress }) {
+  const head = await rangeAndTip(repo, branch, rev, dest);
   if (head.ok) progress(`scanning ${head.value.commits.length} commits`);
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
   if (!changes.ok) return changes;
   const { files, messages } = changes.value;
-  const published = await publishedObjects(repo);
-  if (!published.ok) return published;
-  const readable = files.filter(f => f.mode !== SUBMODULE && !published.value.has(f.oid));
+  const fresh = await newObjects(repo, head.value.tip, dest ?? branch);
+  if (!fresh.ok) return fresh;
+  const readable = files.filter(f => f.mode !== SUBMODULE && fresh.value.has(f.oid));
   progress(`reading ${new Set(readable.map(f => f.oid)).size} blobs`);
   const blobs = await readBlobs(repo, readable.map(f => f.oid), { ...inputs.limits, where: whereOf(readable) });
   const tree = await tipTree(repo, branch, head.value.tip);
@@ -105,11 +105,11 @@ const verifyRemote = ({ repo, branch, tip, expectedOrigin }) => sequence([
  * The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. `tip` is the
  * sha git is about to publish (the pre-push hook passes it): that exact commit is checked, and the branch moving off it is exit 4.
  */
-export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = TASK_REPO_URL, progress = NO_PROGRESS }) {
+export async function checkBranch({ repo, branch, inputs, tip, dest, expectedOrigin = TASK_REPO_URL, progress = NO_PROGRESS }) {
   const label = `${repo} ${branch}`;
   progress('verifying origin and the remote-tracking refs');
   const origin = await verifyRemote({ repo, branch, tip, expectedOrigin });
-  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs: { ...inputs, aidMode: 'task' }, refuseNul: true, progress }) : origin;
+  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, dest, inputs: { ...inputs, aidMode: 'task' }, refuseNul: true, progress }) : origin;
   if (scan.ok) progress('checking the tip tree: README, credit terms, stack folders, tree shape');
   const tree = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
   if (!tree.ok) return errorResult(label, tree);
