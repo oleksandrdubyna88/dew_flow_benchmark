@@ -30,6 +30,17 @@ class Pair(NamedTuple):
     out_name: str
     r_ids: tuple = ()
     comparison: Optional[str] = None
+    stdin: bytes = b""
+    expected: bytes = b""
+
+
+def load_contents(pair):
+    """`(pair with its input and expected bytes read, problems)`. Every sample is read into memory before anything is built or run, so a
+    program that rewrites a file of the samples directory cannot change what its output is compared with."""
+    try:
+        return pair._replace(stdin=read_bytes(pair.in_path), expected=read_bytes(pair.out_path)), []
+    except OSError as e:
+        return pair, [Problem(pair.out_name, 0, f"cannot read the sample pair: {type(e).__name__}")]
 
 
 class Limits(NamedTuple):

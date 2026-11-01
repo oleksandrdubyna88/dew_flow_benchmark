@@ -112,6 +112,46 @@ class CacheTests(unittest.TestCase):
         self.assertNotIn(probe.stdout.strip(), ("None", ""), "importing the entry sets sys.pycache_prefix")
 
 
+class ExpectedBytesTests(unittest.TestCase):
+    """The program under test runs in the same file system as the samples: whatever it writes there must not become the expected output."""
+
+    def two_cases(self, run_sh=None, build_sh=":\n"):
+        box = Box(self, pairs={"s01.in": b"", "s01.out": b"right-one\n", "s02.in": b"", "s02.out": b"right-two\n"})
+        script = run_sh or f"printf 'wrong\\n'\nprintf 'wrong\\n' > {box.samples}/s02.out\nprintf 'wrong\\n' > {box.samples}/s01.out\n"
+        box.write(box.ws, "run.sh", script)
+        box.write(box.ws, "build.sh", build_sh)
+        return box
+
+    def test_A_run_sh_that_rewrites_the_expected_output_of_a_later_case_still_gets_FAIL_on_that_case(self):
+        box = self.two_cases()
+        code, out, _ = box.cli()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL s01 \u2014 output differs", out)
+        self.assertIn("FAIL s02 \u2014 output differs", out, "s02 was compared with what s01's run wrote into s02.out")
+
+    def test_A_build_sh_that_rewrites_the_expected_output_does_not_change_it_either(self):
+        box = self.two_cases(run_sh="printf 'wrong\\n'\n")
+        box.write(box.ws, "build.sh", f"printf 'wrong\\n' > {box.samples}/s01.out\nprintf 'wrong\\n' > {box.samples}/s02.out\n")
+        code, out, _ = box.cli()
+        self.assertEqual(code, 1)
+        self.assertEqual([l.split(" ")[0] for l in out.splitlines() if l[:4] in ("FAIL", "PASS")], ["FAIL", "FAIL"])
+
+    def test_A_stub_that_rewrites_the_expected_output_to_its_own_output_is_not_a_PASS(self):
+        """The refuted approach: read each .out just before its case runs, so an earlier case's program can rewrite it."""
+        box = self.two_cases()
+        box.cli()
+        self.assertEqual(read_file(os.path.join(box.samples, "s02.out")), b"wrong\n", "the stub did rewrite the file: the attack is real")
+
+    def test_A_run_sh_that_rewrites_cases_txt_does_not_change_the_comparison_or_the_requirement_ids_of_the_record(self):
+        box = self.two_cases(run_sh="printf 'right-one\\n'\n")
+        box.write(box.samples, "cases.txt", "s01 bytes R1\ns02 bytes R2\n")
+        box.write(box.ws, "run.sh", f"printf 'right-one\\n'\nprintf 's01 json R9\\ns02 json R9\\n' > {box.samples}/cases.txt\n")
+        out_json = os.path.join(box.out, "r.json")
+        box.cli("--json", out_json)
+        cases = {c["id"]: c for c in read_json(out_json)["cases"]}
+        self.assertEqual((cases["s01"]["comparison"], cases["s01"]["rIds"], cases["s02"]["rIds"]), ("bytes", ["R1"], ["R2"]))
+
+
 class TemporaryFolderTests(unittest.TestCase):
     """The runner makes a folder for its bytecode prefix (and one for the run): whichever way a run ends normally, none is left behind."""
 

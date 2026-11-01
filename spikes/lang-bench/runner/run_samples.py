@@ -23,6 +23,7 @@ if __name__ == "__main__":  # under -I the script's own directory is not on sys.
     sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
 import argparse
+import itertools
 import json
 import traceback
 from dataclasses import dataclass
@@ -145,11 +146,18 @@ def _with_manifest(pair, manifest):
     return pair._replace(r_ids=rids, comparison=comparison)
 
 
+def _load_all(chosen, manifest):
+    """Every chosen pair with its bytes read, and the problems of those that could not be read."""
+    loaded = [sm.load_contents(_with_manifest(p, manifest)) for p in chosen]
+    return [p for p, _ in loaded], list(itertools.chain.from_iterable(found for _, found in loaded))
+
+
 def _pairs_of(args):
     pairs, problems = sm.discover(args.samples_dir)
     manifest, more = sm.cases_manifest(args.samples_dir, {p.id for p in pairs})
     chosen = _chosen(pairs, args.only)
-    return [_with_manifest(p, manifest) for p in chosen], problems + more + _empty_selection(args, chosen)
+    loaded, unreadable = _load_all(chosen, manifest)
+    return loaded, problems + more + _empty_selection(args, chosen) + unreadable
 
 
 def _limits_of(args):
@@ -190,8 +198,8 @@ def make_plan(args):
 # ---- parsing ----------------------------------------------------------------------------------------------------------------------
 
 def _scenario_problems(pair):
-    scenario, p1 = rs_script.parse_script(sm.read_bytes(pair.in_path), pair.in_name)
-    transcript, p2 = rs_transcript.parse_transcript(sm.read_bytes(pair.out_path), pair.out_name)
+    scenario, p1 = rs_script.parse_script(pair.stdin, pair.in_name)
+    transcript, p2 = rs_transcript.parse_transcript(pair.expected, pair.out_name)
     both = rs_pair.validate_pair(scenario, transcript) if scenario and transcript else []
     return p1 + p2 + both
 
@@ -218,7 +226,7 @@ def _build_failed(plan, done):
 def _run_cases(plan, scratch):
     limit, basis = _limit_and_basis(plan)
     config = ex.Config(os.path.abspath(plan.args.workspace), scratch, plan.prefix, limit, basis)
-    return [ro.run_case(ro.Case(p.id, sm.read_bytes(p.in_path), sm.read_bytes(p.out_path), p.r_ids, p.comparison), config) for p in plan.pairs]
+    return [ro.run_case(ro.Case(p.id, p.stdin, p.expected, p.r_ids, p.comparison), config) for p in plan.pairs]
 
 
 def _execute(plan, scratch):
