@@ -41,11 +41,13 @@ internal sealed class SrsKit : IDisposable
     public const string Arm = "SRS1";
 
     private readonly JsonObject _script = [];
+    private readonly string _taskLine;
 
-    private SrsKit(MakeKit kit, FakeCli fake)
+    private SrsKit(MakeKit kit, FakeCli fake, string taskLine)
     {
         Kit = kit;
         Fake = fake;
+        _taskLine = taskLine;
         Root.Scratch("staged");
     }
 
@@ -61,7 +63,11 @@ internal sealed class SrsKit : IDisposable
 
     public string WrapperLog => Path.Combine(Root.Temp, "wrapper.log");
 
-    public static async Task<SrsKit> CreateAsync()
+    /// <summary>The line every task's file holds when the caller names none: the task's id, which is no line a reader of the code counts (E6.S1 names a longer one).</summary>
+    public const string IdLine = "$id";
+
+    /// <param name="taskLine">The one line the wrapper writes into <c>&lt;id&gt;.txt</c> of a FRESH task call, shell text with <c>$id</c> for the task's id; <see cref="IdLine"/> when none is given.</param>
+    public static async Task<SrsKit> CreateAsync(string taskLine = IdLine)
     {
         MakeKit.Posix();
         var kit = await MakeKit.CreateAsync(Arm);
@@ -69,16 +75,21 @@ internal sealed class SrsKit : IDisposable
         {
             var made = await kit.MakeAsync();
             made.Code.Should().Be(0, "the arm is made by make itself: " + made.Everything);
-            var fake = new FakeCli();
-            var built = new SrsKit(kit, fake);
-            built.Install();
-            return built;
+            return Over(kit, taskLine);
         }
         catch
         {
             kit.Dispose();
             throw;
         }
+    }
+
+    /// <summary>The kit over a <see cref="MakeKit"/> that has ALREADY made its arms (E6.S1: one root holding four): the fake, the wrapper as <c>claude</c> and the small limits are installed on it. The kit then owns <paramref name="kit"/> and disposes it.</summary>
+    public static SrsKit Over(MakeKit kit, string taskLine = IdLine)
+    {
+        var built = new SrsKit(kit, new FakeCli(), taskLine);
+        built.Install();
+        return built;
     }
 
     /// <summary>The valid list of five: t1–t4 independent (t1 owns two files and delivers S1), t5 owns the plan and depends on every other — batches <c>[[t1 t2 t3 t4], [t5]]</c>.</summary>
@@ -258,7 +269,7 @@ internal sealed class SrsKit : IDisposable
             has=-
             if [ "$id" != - ]; then
               if [ "$how" = fresh ]; then
-                echo "$id" > "$id.txt"
+                echo "{{_taskLine}}" > "$id.txt"
                 '{{ExperimentRoot.RealGit}}' add -- "$id.txt"
                 '{{ExperimentRoot.RealGit}}' -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false commit -q -m "task $id"
               fi

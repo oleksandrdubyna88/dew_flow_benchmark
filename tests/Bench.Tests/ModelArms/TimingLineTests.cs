@@ -10,7 +10,7 @@ namespace Bench.Tests.ModelArms;
 /// notice and the transcript path (plan C6, D5, D6, D7; E2 §8 items 32, 41, 44). The expected literals are written out by hand from the shell (<c>run-arm.sh</c> of the part-6
 /// experiment, <c>coai-exp2/run-arm.sh:98-108</c>), so a key renamed in the code cannot quietly agree with itself.
 /// <para>
-/// What this does NOT prove: that <c>metrics.mjs</c> reads a line this build wrote (E5's compatibility test reads the files through the pinned consumer), that claude puts a transcript at
+/// What this does NOT prove: that <c>metrics.mjs</c> reads a line this build wrote (E6's <c>ConsumerCompatibilityTests</c> reads the files through the pinned readers), that claude puts a transcript at
 /// the path <c>SessionTranscripts.PathOf</c> spells when <c>CLAUDE_CONFIG_DIR</c> is set (read, not measured), or that the shell's line a recorded arm wrote is the only shape
 /// in the wild — the previous generations' lines are read tolerantly, but only the arm-C file and the 2026-10-28 pair are fixtures.
 /// </para></summary>
