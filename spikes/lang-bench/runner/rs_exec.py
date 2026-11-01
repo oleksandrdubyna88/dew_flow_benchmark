@@ -133,11 +133,12 @@ def build(workspace, scratch, ceiling_ms=BUILD_CEILING_MS):
         _signal_group(proc.pid, signal.SIGKILL)
         proc.wait()
         raise
+    finally:
+        _close(pidfd)
     if not done:
         _signal_group(proc.pid, signal.SIGKILL)
     status = proc.wait()
     _signal_group(proc.pid, signal.SIGKILL)
-    _close(pidfd)
     return BuildResult(True, status, now_ms() - started, not done, read_tail(log))
 
 

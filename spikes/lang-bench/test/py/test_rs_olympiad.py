@@ -290,6 +290,44 @@ class ProcessTests(unittest.TestCase):
         self.assertTrue(done.timed_out)
         self.assertLess(time.monotonic() - started, 5)
 
+    def build_with_recorded_pidfd(self, ws, wait=None, ceiling_ms=60_000):
+        """Runs ex.build with the pidfd it opens recorded; returns (the fds opened, the error the build raised or None)."""
+        opened, real = [], ex.pidfd_of
+
+        def recording(proc):
+            fd = real(proc)
+            opened.append(fd)
+            return fd
+
+        saved = (ex.pidfd_of, ex.wait_exit)
+        ex.pidfd_of = recording
+        if wait is not None:
+            ex.wait_exit = wait
+        try:
+            ex.build(ws.dir, ws.scratch, ceiling_ms=ceiling_ms)
+            return opened, None
+        except BaseException as e:  # noqa: B902  (the point: even a BaseException)
+            return opened, e
+        finally:
+            ex.pidfd_of, ex.wait_exit = saved
+
+    def is_closed(self, fd):
+        try:
+            os.fstat(fd)
+            return False
+        except OSError:
+            return True
+
+    def test_The_pidfd_of_a_build_is_closed_when_it_ends_normally_when_it_times_out_and_when_it_is_interrupted(self):
+        def stopped(proc, pidfd, deadline):
+            raise KeyboardInterrupt()
+
+        for name, build_sh, wait, ceiling in (("normal", ":\n", None, 60_000), ("timeout", "sleep 61\n", None, 200), ("interrupted", "sleep 61\n", stopped, 60_000)):
+            opened, error = self.build_with_recorded_pidfd(Workspace(self, "", {"build.sh": build_sh}), wait, ceiling)
+            self.assertEqual(len(opened), 1, name)
+            self.assertTrue(self.is_closed(opened[0]), f"the build's pidfd was left open ({name})")
+            self.assertEqual(isinstance(error, KeyboardInterrupt), name == "interrupted", name)
+
     def test_The_launch_argv_fills_the_case_into_every_prefix_element(self):
         self.assertEqual(ex.launch_argv(["a", "{case}-x", "{case}"], "s1"), ["a", "s1-x", "s1", "bash", "run.sh"])
         self.assertEqual(ex.launch_argv(None, "s1"), ["bash", "run.sh"])
