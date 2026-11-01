@@ -71,7 +71,7 @@ with `<t>` for the task folder).
 never the history, so every other rule reads the files as they stand at the branch tip (credited to the commit that brought the blob). Needles
 match by D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
 (`inputs/needles-lang.json`, the public list). A six-word run that the parent plan or the stories document already holds is public and is not an
-aid hit (`--public <file>` names other public texts); an aid left with no run of its own is exit 3, because it would check nothing.
+aid hit (`--public <file>` names other public texts); an aid left with no run of its own is exit 3, because it would check nothing. A whitespace-delimited token with `/`, `\` or `_` (a path, a snake_case name) is left out of the word list on both sides, so a pointer that shares only a path with an aid is not a hit while a verbatim copy of prose still is; the fine-grained token shape requires a digit and a capital, so a snake_case name starting `github_pat_` is not a token.
 
 **The credit terms** (`inputs/credits-lang.json`, the owner's of 2026-11-01): CSES problem pages and licence page read on that date, RealWorld's
 notice copied verbatim from its `LICENSE` as it stood then (two copyright lines), the protocol page, the olympiad's statistics page for task 09.
