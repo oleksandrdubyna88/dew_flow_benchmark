@@ -202,3 +202,28 @@ test('The_real_install_commands_are_argv_with_the_pinned_version_and_reach_only_
   assert.notEqual(npm.env.npm_config_userconfig, npm.env.npm_config_globalconfig, 'npm stops with "double-loading config" when one file is both the user and the global config');
   assert.deepEqual(curlArgv({ url: 'https://nodejs.org/x', dest: '/w/x' }).slice(0, 4), ['-fsSL', '--proto', '=https', '--proto-redir']);
 });
+
+/** Runs `fn` with the process umask set to `mask`, then puts the old one back. */
+async function underUmask(mask, fn) {
+  const before = process.umask(mask);
+  try {
+    return await fn();
+  } finally {
+    process.umask(before);
+  }
+}
+
+test('An_extraction_under_a_restrictive_umask_gives_the_same_tree_hash_as_under_the_usual_one', async t => {
+  const outer = process.umask();
+  const usual = await underUmask(0o022, async () => { const r = rig(t); const done = await r.run('node'); return { r, done }; });
+  const strict = await underUmask(0o022, async () => rig(t)); // the fixture archive is made under the usual umask in both cases
+  const tight = await underUmask(0o077, async () => { const done = await strict.run('node'); return { ...done, umaskAfter: process.umask() }; });
+  try {
+    assert.equal(usual.done.ok, true, JSON.stringify(usual.done));
+    assert.equal(tight.ok, true, JSON.stringify(tight));
+    assert.equal(tight.value.treeSha256, usual.done.value.treeSha256, 'the tree hash is that of the files as the archive holds them, not as this user\'s umask left them');
+    assert.equal(tight.umaskAfter, 0o077, 'the caller\'s umask is put back by the installer itself');
+    assert.equal(process.umask(), outer);
+
+  } finally { unsealStore(usual.r.storeRoot); unsealStore(strict.storeRoot); }
+});

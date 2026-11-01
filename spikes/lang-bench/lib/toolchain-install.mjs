@@ -13,6 +13,21 @@ import { checkDigest, sdkVersionsIn, sealTree, treeRecord, unsealTree } from './
 export const TOOLCHAIN_NAMES = Object.freeze(['dotnetSdk', 'node', 'typescript']);
 const EXTRACT_MS = 300_000;
 
+/**
+ * The tree hash covers the read and execute bits of every file, and an extraction leaves them as the umask allows: under 077 the same archive hashes
+ * differently than under 022. The installer therefore runs under 022 (every child it starts inherits it) and puts the caller's umask back.
+ */
+export const INSTALL_UMASK = 0o022;
+
+async function withInstallUmask(fn) {
+  const before = process.umask(INSTALL_UMASK);
+  try {
+    return await fn();
+  } finally {
+    process.umask(before);
+  }
+}
+
 const parseJson = (text, what) => {
   try {
     return ok(JSON.parse(text));
@@ -128,7 +143,11 @@ function discard(dir) {
  * `newFolder(what, parent)` makes an owned folder (removed by its owner); `io` is lib/toolchain-io.mjs's `realIo` or a test's fixture.
  * A directory already in the store is left exactly as it is: `present`, `treeSha256: null` (not examined — `verifyRecordedTrees` examines).
  */
-export async function installToolchain({ name, stacks, storeRoot, io, newFolder }) {
+export function installToolchain(options) {
+  return withInstallUmask(() => installOne(options));
+}
+
+async function installOne({ name, stacks, storeRoot, io, newFolder }) {
   if (!TOOLCHAIN_NAMES.includes(name)) return fail(`'${name}' is not a toolchain; the legal names are ${TOOLCHAIN_NAMES.join(', ')}`);
   const final = path.join(storeRoot, stacks.directories[name]);
   if (existsSync(final)) return ok({ name, dir: final, state: 'present', treeSha256: null });
