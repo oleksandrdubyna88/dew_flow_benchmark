@@ -49,13 +49,13 @@ export function scanEntries(files, tip) {
     .filter(e => e.firstBlob && e.mode !== SUBMODULE);
 }
 
-/** Tagged findings of one entry's decoded blob, its path (once) and, where asked, its NUL byte. */
+/** Tagged findings of one entry's decoded blob (none when `bytes` is undefined: the blob is already published), its path (once) and, where asked, its NUL byte. */
 export function entryFindings(entry, bytes, inputs, { refuseNul }) {
   const { commit, path } = entry;
-  const { text, nul } = decodeBlob(bytes);
+  const { text, nul } = bytes === undefined ? { text: null, nul: false } : decodeBlob(bytes);
   const refusal = nul && refuseNul ? [{ check: 'tree-shape', commit, path, line: null, what: NUL_REASON }] : [];
   return [
-    ...flatten(scanText(path, text, inputs), commit),
+    ...(text === null ? [] : flatten(scanText(path, text, inputs), commit)),
     ...(entry.firstOfPath ? flatten(scanPath(path, inputs), commit) : []),
     ...refusal,
   ].map(f => ({ ...f, atTip: entry.atTip }));

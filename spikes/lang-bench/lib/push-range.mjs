@@ -120,3 +120,14 @@ export async function tipTree(repo, branch, rev) {
   }
   return ok(tree);
 }
+
+/**
+ * ok(Set(object id)) of every object reachable from the remotes (`git rev-list --objects --remotes=origin`): what is already published. A blob in
+ * this set is public and was checked when it was pushed, so a branch that merely brings it in (a merge of origin/main, a rebase onto it) is not
+ * charged for it: it is neither scanned nor counted toward a size ceiling.
+ */
+export async function publishedObjects(repo) {
+  const listing = await runGit(repo, ['rev-list', '--objects', '--remotes=origin'], { maxBytes: 256 * 1024 * 1024, timeoutMs: 300_000 });
+  if (!listing.ok) return listing;
+  return ok(new Set(listing.value.stdout.split('\n').map(line => line.split(' ')[0]).filter(Boolean)));
+}

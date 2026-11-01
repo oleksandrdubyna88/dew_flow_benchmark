@@ -412,3 +412,40 @@ test('A_range_with_one_17_MiB_blob_is_refused_and_its_content_was_never_read', a
   assert.match(result.error, /17825792 bytes/);
   assert.match(result.error, /[0-9a-f]{40}/);
 });
+
+const PUBLISHED_LEAK = 'the widget that frobnicates every sprocket twice before dinner';
+
+/** A task repository whose ORIGIN already holds a README and a note carrying text the check would refuse, and a branch `topic` of the OLD local main. */
+function branchOfOldMain(t) {
+  const bare = makeOrigin(t);
+  const seed = path.join(path.dirname(bare), 'seed-merge');
+  git(path.dirname(bare), 'clone', '-q', bare, seed);
+  commit(seed, 'feat: published earlier', { 'README.md': `# T\n\nsee https://example.org/x\n${PUBLISHED_LEAK}\n`, 'notes/p.md': `${PUBLISHED_LEAK}\n` });
+  git(seed, 'push', '-q', 'origin', 'HEAD:main');
+  const repo = makeTaskRepo(t, { origin: bare, files: { 'local.txt': 'local file\n' } });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'main');
+  git(repo, 'merge', '-q', '--allow-unrelated-histories', '-m', 'chore: merge origin/main', 'origin/main');
+  return repo;
+}
+
+test('A_branch_that_merges_origin_main_passes_when_its_own_commits_are_clean_because_published_blobs_are_not_scanned_again', async t => {
+  const repo = branchOfOldMain(t);
+  commit(repo, 'feat: a clean file', { 'tasks/01/s01.in': '5\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.PASS, formatReport(result));
+});
+
+test('A_branch_that_merges_origin_main_and_adds_a_new_leaking_blob_still_fails_and_only_for_the_new_one', async t => {
+  const repo = branchOfOldMain(t);
+  const sha = commit(repo, 'feat: a new leak', { 'notes/new.md': `a\n${PUBLISHED_LEAK}\n` });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'leakcheck').findings.map(f => [f.commit, f.path]), [[sha, 'notes/new.md']], 'the published README and note are not reported');
+});
+
+test('A_blob_already_published_is_not_read_or_counted_toward_the_size_ceiling', async t => {
+  const repo = branchOfOldMain(t);
+  commit(repo, 'feat: a clean file', { 'tasks/01/s01.in': '5\n' });
+  const result = await run(repo, { limits: { maxTotalBytes: 40 } });
+  assert.equal(result.exit, EXIT.PASS, formatReport(result));
+});

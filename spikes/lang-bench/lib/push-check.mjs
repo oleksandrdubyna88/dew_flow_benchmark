@@ -4,7 +4,7 @@
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { EXIT } from './push-exit.mjs';
-import { branchTip, changesOf, newCommits, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, publishedObjects, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
 import { TASK_REPO_URL, verifyFresh, verifyOrigin } from './push-remote.mjs';
 import { sequence } from './push-sequence.mjs';
 import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
@@ -52,7 +52,9 @@ async function scanBranch({ repo, branch, rev, inputs, refuseNul, progress }) {
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
   if (!changes.ok) return changes;
   const { files, messages } = changes.value;
-  const readable = files.filter(f => f.mode !== SUBMODULE);
+  const published = await publishedObjects(repo);
+  if (!published.ok) return published;
+  const readable = files.filter(f => f.mode !== SUBMODULE && !published.value.has(f.oid));
   progress(`reading ${new Set(readable.map(f => f.oid)).size} blobs`);
   const blobs = await readBlobs(repo, readable.map(f => f.oid), { ...inputs.limits, where: whereOf(readable) });
   const tree = await tipTree(repo, branch, head.value.tip);
