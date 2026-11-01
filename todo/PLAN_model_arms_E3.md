@@ -1178,6 +1178,7 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
       `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)*
 - [ ] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
       logged) or its fallback recorded here and in the parent's §11.
+      (Progress: M2 ran 2026-10-31 at `a504cfe`, every verb 0, `objective.json` byte-identical — logged; the key check is still the owner's.)
 - [x] §8 item 2 answered by the owner (2026-10-30: a fix, not a change), and the stories followed the answer (the proposal).
 - [x] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
       residuals); `research/module_tests.md`'s `prep-base`, `make`, `status`, `checks` rows `covered`, and the E5 rows' ids corrected.
