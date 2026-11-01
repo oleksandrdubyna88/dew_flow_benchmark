@@ -16,14 +16,20 @@ const closed = (what, ref, repo, reason) => fail(`the public text ${what} cannot
 const badList = (list, reason) => fail(`the public-texts list ${list} is not valid: ${reason}; the check does not run without it`, { kind: 'env' });
 const SAFE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\0\n]+\.(?:md|txt)$/;
 
+const listProblem = texts => {
+  if (!Array.isArray(texts)) return 'it needs schema 1 and a `texts` list';
+  const bad = texts.find(p => typeof p !== 'string' || !SAFE_PATH.test(p));
+  if (bad !== undefined) return `${JSON.stringify(String(bad).slice(0, 80))} is not a repository-relative .md or .txt path`;
+  return new Set(texts).size === texts.length ? null : 'a path is listed twice';
+};
+
+const parseJson = text => { try { return JSON.parse(text); } catch { return null; } };
+
 /** ok([path]) from the list file's text: schema 1, `texts` a list of distinct repository-relative `.md` or `.txt` paths that do not climb out. */
 export function parsePublicList(text, list = PUBLIC_LIST_PATH) {
-  let file;
-  try { file = JSON.parse(text); } catch { return badList(list, 'not JSON'); }
-  if (file?.schema !== 1 || !Array.isArray(file.texts)) return badList(list, 'it needs schema 1 and a `texts` list');
-  const bad = file.texts.find(p => typeof p !== 'string' || !SAFE_PATH.test(p));
-  if (bad !== undefined) return badList(list, `${JSON.stringify(String(bad).slice(0, 80))} is not a repository-relative .md or .txt path`);
-  return new Set(file.texts).size === file.texts.length ? ok(file.texts) : badList(list, 'a path is listed twice');
+  const file = parseJson(text);
+  const problem = file === null ? 'not JSON' : file.schema === 1 ? listProblem(file.texts) : 'it needs schema 1 and a `texts` list';
+  return problem === null ? ok(file.texts) : badList(list, problem);
 }
 
 /** ok([text]) for `files` at `ref`, in order, from one batch process; a missing or oversize file is a fail naming it. */

@@ -8,51 +8,65 @@ const ENV = Object.freeze({ PATH: process.env.PATH, HOME: os.homedir(), LANG: 'C
 const DEFAULT_TIMEOUT_MS = 60_000;
 export const BLOB_MAX_BYTES = 16 * 1024 * 1024;
 
+const ENV_KIND = Object.freeze({ kind: 'env' });
+
+/** null when the launcher ran the process to its end within its limits; otherwise the `env` fail saying which limit (or the start) failed. */
+function launchFailure(launched, what, { timeoutMs, maxBytes }) {
+  if (!launched.ok) return fail(launched.reason, ENV_KIND);
+  if (launched.value.timedOut) return fail(`${what} did not finish within ${timeoutMs} ms`, ENV_KIND);
+  return launched.value.truncated ? fail(`${what} produced more than ${maxBytes ?? 'the allowed number of'} bytes`, ENV_KIND) : null;
+}
+
 /** ok({ code, stdout, stderr }) for any exit code the caller listed in `accept` (default: 0); otherwise a fail with git's own words. */
 export async function runGit(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes, accept = [0], config = [] } = {}) {
   const argv = ['-C', repo, ...config.flatMap(c => ['-c', c]), ...args];
   const r = await runBounded('git', argv, { env: ENV, timeoutMs, maxBytes });
-  if (!r.ok) return fail(r.reason, { kind: 'env' });
-  const { code, stdout, stderr, timedOut, truncated } = r.value;
-  if (timedOut) return fail(`git ${args[0]} did not finish within ${timeoutMs} ms`, { kind: 'env' });
-  if (truncated) return fail(`git ${args[0]} produced more than ${maxBytes ?? 'the allowed number of'} bytes`, { kind: 'env' });
-  if (!accept.includes(code)) return fail(`git ${args.join(' ')} exited ${code}: ${stderr.trim().slice(-300)}`, { kind: 'env', code });
-  return ok({ code, stdout, stderr });
+  const bad = launchFailure(r, `git ${args[0]}`, { timeoutMs, maxBytes });
+  if (bad) return bad;
+  const { code, stdout, stderr } = r.value;
+  return accept.includes(code) ? ok({ code, stdout, stderr }) : fail(`git ${args.join(' ')} exited ${code}: ${stderr.trim().slice(-300)}`, { kind: 'env', code });
 }
 
 /** ok(Buffer) of a git command's stdout, bytes untouched (a blob is not always text), through the shared launcher; a failure or a timeout is a value. */
 export async function runGitBytes(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = BLOB_MAX_BYTES } = {}) {
   const r = await runBounded('git', ['-C', repo, ...args], { env: ENV, timeoutMs, maxBytes, bytes: true });
-  if (!r.ok) return fail(r.reason, { kind: 'env' });
-  const { code, stderr, timedOut, truncated, stdoutBytes } = r.value;
-  if (timedOut) return fail(`git ${args[0]} did not finish within ${timeoutMs} ms`, { kind: 'env' });
-  if (truncated) return fail(`git ${args[0]} produced more than ${maxBytes} bytes`, { kind: 'env' });
-  return code === 0 ? ok(stdoutBytes) : fail(`git ${args[0]} failed (exit ${code}): ${stderr.trim().slice(-300)}`, { kind: 'env' });
+  const bad = launchFailure(r, `git ${args[0]}`, { timeoutMs, maxBytes });
+  if (bad) return bad;
+  return r.value.code === 0 ? ok(r.value.stdoutBytes) : fail(`git ${args[0]} failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
 }
 
 export const BATCH_MAX_OBJECT_BYTES = BLOB_MAX_BYTES;
 export const BATCH_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const HEADER_ALLOWANCE = 160;
 
-/** The objects of a `cat-file --batch` answer, name -> Buffer, plus the names git said are missing; or a fail naming the first limit crossed. */
-function parseBatch(out, names, { maxObjectBytes, maxTotalBytes }) {
+const limitProblem = (size, name, total, { maxObjectBytes, maxTotalBytes }) => [
+  [size > maxObjectBytes, `${name} is ${size} bytes, over the ${maxObjectBytes}-byte ceiling for one object: not read, so not clean`],
+  [total + size > maxTotalBytes, `the objects of one check hold more than ${maxTotalBytes} bytes: refused, not read in full`],
+].find(([over]) => over)?.[1];
+
+/** One answer of `cat-file --batch` at `at`: `{ ok, missing, value?, size?, next }` or the fail naming the limit crossed or the line that makes no sense. */
+function readEntry(out, at, name, limits, total) {
+  const eol = out.indexOf(0x0a, at);
+  if (eol === -1) return fail(`git cat-file --batch ended before ${name}`, ENV_KIND);
+  const header = out.toString('latin1', at, eol);
+  if (header.endsWith(' missing')) return { ok: true, missing: true, next: eol + 1 };
+  const size = Number(header.split(' ')[2]);
+  const problem = Number.isInteger(size) ? limitProblem(size, name, total, limits) : `git cat-file --batch answered ${JSON.stringify(header.slice(0, 80))} for ${name}`;
+  return problem ? fail(problem, ENV_KIND) : { ok: true, missing: false, size, value: out.subarray(eol + 1, eol + 1 + size), next: eol + 2 + size };
+}
+
+/** The objects of a `cat-file --batch` answer, name -> Buffer, plus the names git said are missing; or a fail naming the first limit crossed. A loop, not recursion: a check can name tens of thousands of blobs. */
+function parseBatch(out, names, limits) {
   const found = new Map();
   const missing = [];
   let at = 0;
   let total = 0;
   for (const name of names) {
-    const eol = out.indexOf(0x0a, at);
-    if (eol === -1) return fail(`git cat-file --batch ended before ${name}`, { kind: 'env' });
-    const header = out.toString('latin1', at, eol);
-    at = eol + 1;
-    if (header.endsWith(' missing')) { missing.push(name); continue; }
-    const size = Number(header.split(' ')[2]);
-    total += size;
-    if (!Number.isInteger(size)) return fail(`git cat-file --batch answered ${JSON.stringify(header.slice(0, 80))} for ${name}`, { kind: 'env' });
-    if (size > maxObjectBytes) return fail(`${name} is ${size} bytes, over the ${maxObjectBytes}-byte ceiling for one object: not read, so not clean`, { kind: 'env' });
-    if (total > maxTotalBytes) return fail(`the objects of one check hold more than ${maxTotalBytes} bytes: refused, not read in full`, { kind: 'env' });
-    found.set(name, out.subarray(at, at + size));
-    at += size + 1;
+    const entry = readEntry(out, at, name, limits, total);
+    if (!entry.ok) return entry;
+    at = entry.next;
+    total += entry.size ?? 0;
+    if (entry.missing) missing.push(name); else found.set(name, entry.value);
   }
   return { ...ok(found), missing };
 }
@@ -65,9 +79,8 @@ export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_
   if (names.length === 0) return { ...ok(new Map()), missing: [] };
   const budget = maxTotalBytes + names.length * HEADER_ALLOWANCE + 1024;
   const r = await runBounded('git', ['-C', repo, 'cat-file', '--batch'], { env: ENV, timeoutMs, maxBytes: budget, input: `${names.join('\n')}\n`, bytes: true });
-  if (!r.ok) return fail(r.reason, { kind: 'env' });
-  if (r.value.timedOut) return fail(`git cat-file --batch did not finish within ${timeoutMs} ms`, { kind: 'env' });
-  if (r.value.truncated) return fail(`the objects of one check hold more than ${maxTotalBytes} bytes: refused, not read in full`, { kind: 'env' });
-  if (r.value.code !== 0) return fail(`git cat-file --batch failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, { kind: 'env' });
+  const bad = launchFailure(r, 'git cat-file --batch', { timeoutMs, maxBytes: maxTotalBytes });
+  if (bad) return bad;
+  if (r.value.code !== 0) return fail(`git cat-file --batch failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
   return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes });
 }

@@ -2,13 +2,21 @@
 // output, the archive extraction, the batch reads. It must pass bytes through untouched, feed stdin, bound the output, and on a timeout kill
 // the whole process tree - the descendants too, not only the child.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { runGitBytes } from '../lib/push-git.mjs';
 import { runBatchCatFile } from '../lib/push-git.mjs';
 import { commit, git, makeTaskRepo } from './support/push-fixtures.mjs';
 
-const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+/** Running, not merely still in the process table: a killed process waiting to be reaped is a zombie (state Z) and is gone. */
+const alive = pid => {
+  try {
+    process.kill(pid, 0);
+    return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, 'utf8'));
+  } catch { return false; }
+};
+const settled = async pid => { for (let i = 0; i < 30 && alive(pid); i += 1) await new Promise(r => setTimeout(r, 100)); return !alive(pid); };
 
 test('Bytes_that_are_not_text_come_back_untouched_and_stdin_is_fed', async () => {
   const r = await runBounded('cat', [], { input: Buffer.from([0xff, 0xfe, 0, 1, 0x80]), bytes: true, timeoutMs: 10_000 });
@@ -22,7 +30,7 @@ test('A_timeout_kills_the_children_of_the_child_too_and_says_it_timed_out', asyn
   assert.equal(r.value.timedOut, true);
   const grandchild = Number(r.value.stdout.trim());
   assert.ok(grandchild > 1, `the child printed its background pid (${r.value.stdout})`);
-  assert.equal(alive(grandchild), false, 'the whole process tree is gone, not only the child');
+  assert.equal(await settled(grandchild), true, 'the whole process tree is gone, not only the child');
 });
 
 test('Output_beyond_the_ceiling_is_truncated_and_said_so_for_bytes_as_for_text', async () => {
