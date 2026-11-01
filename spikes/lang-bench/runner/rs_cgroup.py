@@ -243,11 +243,13 @@ def _left(directory):
 
 
 def wait_empty(directory, ceiling_ms=ex.GONE_CEILING_MS, was_readable=False):
-    """Wait, backing off from 1 ms to 50 ms, until the cgroup is empty; CleanupFailed when it is not at the ceiling, whether pids are left
-    or `cgroup.procs` cannot be understood. `was_readable`: the caller read `cgroup.procs` before, so its files vanishing is the cgroup dying."""
+    """Wait, backing off from 1 ms to 50 ms, until one look finds the cgroup empty; CleanupFailed when none does by the ceiling, whether pids
+    are left or `cgroup.procs` cannot be understood. `was_readable`: the caller read `cgroup.procs` before, so its files vanishing is the
+    cgroup dying. The first look that finds it empty decides: a dying cgroup answers differently from one read to the next, and a second look
+    to confirm the first would contradict it (that was a flake)."""
     deadline, delay = ex.now_ms() + ceiling_ms, ex.POLL_FIRST_S
-    while not empty(directory, was_readable) and ex.now_ms() < deadline:
+    while not empty(directory, was_readable):
+        if ex.now_ms() >= deadline:
+            raise ex.CleanupFailed(f"a process of the case could not be killed: {_left(directory)} after {ceiling_ms} ms")
         time.sleep(delay)
         delay = min(delay * 2, ex.POLL_LAST_S)
-    if not empty(directory, was_readable):
-        raise ex.CleanupFailed(f"a process of the case could not be killed: {_left(directory)} after {ceiling_ms} ms")

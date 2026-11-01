@@ -167,8 +167,16 @@ class StatusRuleTests(unittest.TestCase):
         self.assertIn("malformed", self.failed(f"echo '[1, 2]' >&{STATUS_FD}").reason)
 
     def test_A_duplicate_child_pid_is_launch_failed(self):
-        failure = self.failed("", f'printf \'{{"child-pid": 6}}\\n\' >&{STATUS_FD}')
-        self.assertIn("doubled", failure.reason)
+        # ONE write holds both lines: two writes could be read one at a time, and a record that arrives after the clock started is the case
+        both = f'printf \'{{"child-pid": 5}}\\n{{"child-pid": 6}}\\n\' >&{STATUS_FD}\n"$@"'
+        with self.assertRaises(rl.LaunchFailed) as raised:
+            Workspace(self, REPLAY, FILES).run(case(), prefix=["sh", "-c", both, "sh"], status_fd=STATUS_FD)
+        self.assertIn("doubled", raised.exception.reason)
+
+    def test_A_second_child_pid_that_arrives_after_the_first_was_read_is_the_case_and_no_launch_failure(self):
+        later = f'printf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\nsleep 0.3\nprintf \'{{"child-pid": 6}}\\n\' >&{STATUS_FD}\n"$@"'
+        result = Workspace(self, REPLAY, FILES).run(case(), prefix=["sh", "-c", later, "sh"], status_fd=STATUS_FD)
+        self.assertEqual((result.status, result.reason), ("PASS", ""))
 
     def test_An_unknown_record_before_child_pid_is_launch_failed(self):
         failure = self.failed(f'printf \'{{"something": 1}}\\n\' >&{STATUS_FD}')

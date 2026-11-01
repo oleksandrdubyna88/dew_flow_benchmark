@@ -97,6 +97,19 @@ class UnreadableProcsTests(unittest.TestCase):
         with self.assertRaises(ex.CleanupFailed):
             cg.wait_empty(lingering, 30, was_readable=False)
 
+    def test_The_wait_decides_on_the_first_look_that_finds_it_empty_and_never_looks_again_to_contradict_it(self):
+        # the cause of the real-scope flake: a dying cgroup answers differently from one read to the next, and the wait looked twice
+        answers = iter([False, True, False, False])
+        calls = []
+
+        def flipping(directory, was_readable=False):
+            calls.append(1)
+            return next(answers)
+
+        with mock.patch.object(cg, "empty", flipping):
+            cg.wait_empty(Folder(self).dir, 2000)
+        self.assertEqual(len(calls), 2, "it returned as soon as one look found the cgroup empty")
+
     def test_A_directory_that_is_gone_or_lists_only_zombies_is_empty(self):
         cg.wait_empty(os.path.join(Folder(self).dir, "gone"), 30)
         corpse = subprocess.Popen(["true"])
