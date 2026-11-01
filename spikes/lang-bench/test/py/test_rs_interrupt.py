@@ -8,7 +8,7 @@ import sys
 import unittest
 
 import runner_path  # noqa: F401
-from box_support import STATUS_FD, Scope, wait_until
+from box_support import STATUS_FD, Scope, sleepers, wait_until
 from test_run_samples import ENTRY, Box, read_json
 
 
@@ -18,17 +18,6 @@ def run_cli(test, box, *args):
                                  "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", ""), "DBUS_SESSION_BUS_ADDRESS": os.environ.get("DBUS_SESSION_BUS_ADDRESS", "")})
     test.addCleanup(lambda: proc.poll() is None and proc.kill())
     return proc
-
-
-def alive(seconds):
-    found = []
-    for pid in filter(str.isdigit, os.listdir("/proc")):
-        try:
-            with open(f"/proc/{pid}/cmdline", "rb") as f:
-                found += [pid] if f"sleep\0{seconds}".encode() in f.read() else []
-        except OSError:
-            continue
-    return found
 
 
 class InterruptTests(unittest.TestCase):
@@ -43,7 +32,7 @@ class InterruptTests(unittest.TestCase):
         out, err = proc.communicate(timeout=30)
         self.assertEqual((proc.returncode, out), (5, b""), err)
         self.assertIn(b"interrupted", err)
-        self.assertTrue(wait_until(lambda: not alive(seconds)), "the launcher was left running")
+        self.assertTrue(wait_until(lambda: not sleepers(seconds)), "the launcher was left running")
 
     def limits(self, box):
         box.write(box.root, "limits.json", '{"timeS": 120}')

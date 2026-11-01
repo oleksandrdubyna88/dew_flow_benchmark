@@ -140,3 +140,4 @@ class Tracker:
 
     def close(self):
         ex.close_fd(self.pidfd)
+        self.pidfd = None

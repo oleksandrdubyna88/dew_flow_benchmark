@@ -2,6 +2,8 @@
 the empty program, and the program's environment."""
 import fcntl
 import os
+import signal
+import subprocess
 import unittest
 from unittest import mock
 
@@ -10,8 +12,10 @@ import rs_exec as ex
 import rs_launch as rl
 import rs_layer as layer
 import rs_olympiad as ro
+import rs_pump
 import rs_report as rp
-from box_support import ANSWER, BASH_OWN_KEYS, STATUS_FD, Workspace, case, failing_prefix, reporting_prefix, wait_until
+from box_support import (ANSWER, BASH_OWN_KEYS, STATUS_FD, Workspace, box_prefix, case, failing_prefix, fake_box, fake_cgroup, reporting_prefix,
+                         sleepers, wait_until)
 
 REPLAY = "cat answer.bin\n"
 FILES = {"answer.bin": ANSWER}
@@ -125,6 +129,124 @@ class ClockTests(unittest.TestCase):
         silent = ["sh", "-c", f'printf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\n"$@"\nexit 4', "sh"]
         result = Workspace(self, REPLAY, FILES).run(case(), prefix=silent, status_fd=STATUS_FD)
         self.assertEqual((result.status, result.reason), ("FAIL", "exit status 4"))
+
+
+class StatusRuleTests(unittest.TestCase):
+    """P2: before child-pid the status stream follows its rules or the launch has failed; after it everything is the case."""
+
+    def launch(self, before, after="", run_sh=REPLAY):
+        script = f'{before}\nprintf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\n{after}\n"$@"'
+        return Workspace(self, run_sh, FILES).run(case(), prefix=["sh", "-c", script, "sh"], status_fd=STATUS_FD)
+
+    def failed(self, before, after=""):
+        with self.assertRaises(rl.LaunchFailed) as raised:
+            self.launch(before, after)
+        return raised.exception
+
+    def test_A_malformed_record_before_child_pid_is_launch_failed_never_a_verdict(self):
+        failure = self.failed(f"echo 'this is not json' >&{STATUS_FD}")
+        self.assertIn("the launch status is malformed", failure.reason)
+
+    def test_A_record_that_is_not_an_object_is_launch_failed_too(self):
+        self.assertIn("malformed", self.failed(f"echo '[1, 2]' >&{STATUS_FD}").reason)
+
+    def test_A_duplicate_child_pid_is_launch_failed(self):
+        failure = self.failed("", f'printf \'{{"child-pid": 6}}\\n\' >&{STATUS_FD}')
+        self.assertIn("doubled", failure.reason)
+
+    def test_An_unknown_record_before_child_pid_is_launch_failed(self):
+        failure = self.failed(f'printf \'{{"something": 1}}\\n\' >&{STATUS_FD}')
+        self.assertIn("unknown record before child-pid", failure.reason)
+
+    def test_After_child_pid_junk_and_unknown_records_are_the_case_and_no_launch_failure(self):
+        result = self.launch("", f"echo junk >&{STATUS_FD}; printf '{{\"x\": 1}}\\n' >&{STATUS_FD}")
+        self.assertEqual((result.status, result.reason), ("PASS", ""))
+
+    def test_A_launcher_that_reports_and_exits_at_once_without_a_program_is_an_ordinary_end_judged_by_the_output(self):
+        ws = Workspace(self, REPLAY, FILES)
+        prefix = ["sh", "-c", f'printf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\nexit 0', "sh"]
+        result = ws.run(case(), prefix=prefix, status_fd=STATUS_FD)
+        self.assertEqual((result.status, result.reason), ("FAIL", "output ends early"))
+
+
+class InterruptWindowTests(unittest.TestCase):
+    """No interrupt window may leave a launcher or a program alive (Opus 11, 18)."""
+
+    def config(self, ws, **overrides):
+        return ws.config(prefix=["sh", "-c", 'exec "$@"', "sh"], **overrides)
+
+    def start(self, ws):
+        return rl.start(self.config(ws), "s03", ex.PlainLifecycle(), os.path.join(ws.scratch, "s.err"), ws.dir)
+
+    def test_A_launcher_is_registered_from_the_moment_it_exists_and_abandon_active_stops_it(self):
+        seconds = "71.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, f"exec sleep {seconds}\n")
+        launched = self.start(ws)
+        self.addCleanup(launched.close)
+        self.assertEqual([entry[0] for entry in rl.ACTIVE], [launched.proc])
+        self.assertTrue(wait_until(lambda: sleepers(seconds)))
+        rl.abandon_active()
+        self.assertEqual(rl.ACTIVE, [])
+        self.assertTrue(wait_until(lambda: sleepers(seconds) == []), "the launcher and its program are stopped")
+        launched.close()
+
+    def test_A_case_that_ends_is_forgotten_so_abandon_active_never_touches_a_finished_launcher(self):
+        ws = Workspace(self, REPLAY, FILES)
+        launched = self.start(ws)
+        launched.close()
+        self.assertEqual(rl.ACTIVE, [])
+        launched.proc.wait()
+
+    def test_An_interrupt_right_after_the_spawn_leaves_the_launcher_registered_and_abandon_active_kills_it(self):
+        seconds = "72.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, f"exec sleep {seconds}\n")
+        with mock.patch.object(rl, "_begin_or_abandon", side_effect=KeyboardInterrupt):  # the interrupt lands outside every handler
+            with self.assertRaises(KeyboardInterrupt):
+                self.start(ws)
+        self.assertEqual(len(rl.ACTIVE), 1, "still registered")
+        self.assertTrue(wait_until(lambda: sleepers(seconds)))
+        rl.abandon_active()
+        self.assertTrue(wait_until(lambda: sleepers(seconds) == []))
+
+    def test_An_interrupt_while_the_pump_is_made_leaves_no_program_running(self):
+        seconds = "73.%d" % (os.getpid() % 1000 + 1000)
+        ws = Workspace(self, f"exec sleep {seconds}\n")
+        with mock.patch.object(rs_pump.Pump, "__init__", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                ws.run(case(expected=b""))
+        self.assertTrue(wait_until(lambda: sleepers(seconds) == []), "the pump is made inside the try: the program is killed")
+        self.assertEqual(rl.ACTIVE, [])
+
+    def test_The_stopping_signals_wait_while_the_launcher_is_spawned_and_come_back_after(self):
+        blocked = lambda: signal.pthread_sigmask(signal.SIG_BLOCK, [])
+        self.assertFalse(set(rl.STOPPING_SIGNALS) & blocked())
+        with rl._deferred_signals():
+            self.assertEqual(set(rl.STOPPING_SIGNALS) & blocked(), set(rl.STOPPING_SIGNALS))
+        self.assertFalse(set(rl.STOPPING_SIGNALS) & blocked())
+
+    def test_A_launcher_that_was_reaped_is_never_sent_a_group_kill_and_one_that_was_not_is(self):
+        reaped = subprocess.Popen(["true"])
+        reaped.wait()
+        running = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: (running.kill(), running.wait()))
+        with mock.patch.object(ex, "signal_group") as sent:
+            rl._abandon(reaped, ex.PlainLifecycle())
+            self.assertEqual(sent.call_count, 0, "the pid of a reaped launcher may be someone else's by now")
+        with mock.patch.object(ex, "signal_group", wraps=ex.signal_group) as sent:
+            rl._abandon(running, ex.PlainLifecycle())
+            self.assertEqual(sent.call_count, 1)
+        self.assertIsNotNone(running.poll() if running.poll() is not None else running.wait())
+
+
+class SeekTests(unittest.TestCase):
+    def test_A_program_that_is_never_found_does_not_hold_back_its_input_or_output(self):
+        ws = Workspace(self, "cat\n")
+        cgroup = fake_cgroup(ws)  # cgroup.procs stays empty: the pid is never found
+        data = os.urandom(200_000)
+        result = ws.run(case(expected=data, stdin=data), prefix=box_prefix(fake_box(self)), status_fd=STATUS_FD, cgroup=cgroup, limit_ms=5000)
+        self.assertEqual((result.status, result.reason), ("PASS", ""))
+        self.assertLess(result.wall_ms, 900, "the old seek waited up to a second before the first byte moved")
+        self.assertIsNone(result.lifecycle["signalled"]["pid"])
 
 
 class EmptyProgramTests(unittest.TestCase):

@@ -116,10 +116,6 @@ class FixtureTests(unittest.TestCase):
             self.assertEqual(f.read(), b"first")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class FreshViewTests(unittest.TestCase):
     """The program starts in the view of its own case (B7); the filesystem of one case is never assumed to be the next one's."""
 
@@ -176,3 +172,7 @@ class FreshViewTests(unittest.TestCase):
             self.assertEqual(code, 4, err)
             self.assertIn(what, err)
             self.assertNotIn("started", err, "refused before the build and before any case")
+
+
+if __name__ == "__main__":
+    unittest.main()

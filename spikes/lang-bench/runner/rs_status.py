@@ -53,8 +53,9 @@ def release(number):
 
 class StatusReader:
     """Collects the lines of one case: `child_pid` and `exit_code` stay None until their line is whole. `problem` names the first thing that
-    breaks the rules (P2): a line that is not one JSON object, a doubled or invalid `child-pid` or `exit-code`, a record that is neither
-    before `child-pid`. Before `child-pid` a problem is a failed launch; after the clock has started everything is the case and it is ignored."""
+    breaks the rules (P2): a line that is not one JSON object or a record that is neither before `child-pid`, a doubled or invalid
+    `child-pid` or `exit-code`. Before `child-pid` a problem is a failed launch; after it the lines that are not status records are the case
+    and are ignored, and the launch is judged on what the runner had read when it took the clock."""
 
     def __init__(self):
         self.buffer, self.child_pid, self.exit_code, self.problem = b"", None, None, None
@@ -73,7 +74,7 @@ class StatusReader:
             return
         record = _object(line)
         if record is None:
-            return self._note("a line that is not one JSON object")
+            return self._note("a line that is not one JSON object") if self.child_pid is None else None
         self._keys(record)
 
     def _keys(self, record):

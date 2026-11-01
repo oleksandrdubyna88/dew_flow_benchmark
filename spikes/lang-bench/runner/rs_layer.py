@@ -121,7 +121,7 @@ def _kernel_problem(args):
 def _pidfd_problem(args):
     try:
         os.close(os.pidfd_open(os.getpid()))
-    except (AttributeError, OSError) as e:
+    except (AttributeError, OSError, TypeError) as e:
         return f"os.pidfd_open is not available ({type(e).__name__}): every wait for an exit needs it"
     return None
 

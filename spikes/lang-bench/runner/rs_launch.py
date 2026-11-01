@@ -54,10 +54,12 @@ class Launched:
         return returncode if code is None else code
 
     def close(self):
+        """Close what the case holds, once: a second call finds nothing (a closed number may be somebody else's by now)."""
         _forget(self.proc)
         self.tracker.close()
         ex.close_fd(self.launcher_fd)
         ex.close_fd(self.pipe_fd)
+        self.launcher_fd = self.pipe_fd = None
 
 
 class EmptyRun(NamedTuple):

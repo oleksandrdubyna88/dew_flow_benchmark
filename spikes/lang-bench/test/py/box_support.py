@@ -190,6 +190,18 @@ def wait_until(predicate, seconds=5):
     return predicate()
 
 
+def sleepers(seconds):
+    """The pids whose command line is `sleep <seconds>`: how a test finds out whether a program of its own is still alive."""
+    found = []
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                found += [pid] if f"sleep\0{seconds}".encode() in f.read() else []
+        except OSError:
+            continue
+    return found
+
+
 def read_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
