@@ -93,3 +93,25 @@ export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_
   if (r.value.code !== 0) return fail(`git cat-file --batch failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
   return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes, where });
 }
+
+/**
+ * ok(Map(name -> { oid, type, size })) with `.missing`, from ONE `git cat-file --batch-check`: sizes only, no content. `names` are object names
+ * (`<rev>:<path>`, or a blob id). This is what a size ceiling is checked against BEFORE `runBatchCatFile` reads any content.
+ */
+export async function runBatchCheck(repo, names, { timeoutMs = 120_000 } = {}) {
+  if (names.length === 0) return { ...ok(new Map()), missing: [] };
+  const maxBytes = names.length * 256 + 4096;
+  const r = await runBounded('git', ['-C', repo, 'cat-file', '--batch-check'], { env: ENV, timeoutMs, maxBytes, input: `${names.join('\n')}\n` });
+  const bad = launchFailure(r, 'git cat-file --batch-check', { timeoutMs, maxBytes });
+  if (bad) return bad;
+  if (r.value.code !== 0) return fail(`git cat-file --batch-check failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
+  const lines = r.value.stdout.split('\n').filter(Boolean);
+  if (lines.length !== names.length) return fail(`git cat-file --batch-check answered ${lines.length} lines for ${names.length} names`, ENV_KIND);
+  const found = new Map();
+  const missing = [];
+  lines.forEach((line, i) => {
+    const [oid, type, size] = line.split(' ');
+    if (type === 'missing') missing.push(names[i]); else found.set(names[i], { oid, type, size: Number(size) });
+  });
+  return { ...ok(found), missing };
+}

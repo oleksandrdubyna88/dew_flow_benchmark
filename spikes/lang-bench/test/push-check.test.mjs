@@ -401,3 +401,14 @@ test('A_check_that_refuses_a_blob_names_its_path_and_commit_in_the_error_and_nev
   assert.match(result.error, /2200 bytes/);
   assert.equal(formatReport(result).includes('PRIVATEBODY'), false);
 });
+
+test('A_range_with_one_17_MiB_blob_is_refused_and_its_content_was_never_read', async t => {
+  const { repo } = branchWith(t, { 'data/big.bin': Buffer.alloc(17 * 1024 * 1024, 0x61), 'a.txt': 'x\n' });
+  let contentReads = 0;
+  const result = await run(repo, { limits: { readBatch: async () => { contentReads += 1; return { ok: true, value: new Map(), missing: [] }; } } });
+  assert.equal(result.exit, EXIT.ENVIRONMENT);
+  assert.equal(contentReads, 0, 'the batch content reader was not called');
+  assert.match(result.error, /data\/big\.bin in /);
+  assert.match(result.error, /17825792 bytes/);
+  assert.match(result.error, /[0-9a-f]{40}/);
+});

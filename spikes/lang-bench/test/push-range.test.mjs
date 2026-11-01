@@ -1,6 +1,7 @@
 // The commits a push would add, and what each of them adds: the unit every scan of the push check runs over.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { runBatchCheck } from '../lib/push-git.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, tipTree } from '../lib/push-range.mjs';
 import { commit, git, makeOrigin, makeTaskRepo } from './support/push-fixtures.mjs';
 
@@ -125,4 +126,42 @@ test('An_aggregate_over_the_ceiling_names_the_blob_that_crossed_it_with_its_sha_
   assert.ok(crossing, 'a blob sha is named');
   assert.match(refused.reason, new RegExp(`${crossing.path.replace('.', '\\.')} in `));
   assert.match(refused.reason, /\d+ bytes/);
+});
+
+test('The_sizes_come_from_batch_check_before_any_content_and_a_missing_object_is_named', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'alpha\n', 'big.txt': 'x'.repeat(5000) } });
+  const oids = [git(repo, 'rev-parse', 'main:a.txt'), git(repo, 'rev-parse', 'main:big.txt'), '0'.repeat(40)];
+  const sizes = await runBatchCheck(repo, oids);
+  assert.equal(sizes.ok, true, sizes.reason);
+  assert.deepEqual([sizes.value.get(oids[0]).size, sizes.value.get(oids[1]).size], [6, 5000]);
+  assert.deepEqual(sizes.missing, [oids[2]]);
+});
+
+test('An_oversize_blob_is_refused_before_any_content_is_read_and_the_refusal_names_sha_size_path_and_commit_never_content', async t => {
+  const repo = makeTaskRepo(t, { files: { 'small.txt': 'ok\n', 'dir/big.txt': 'SECRETCONTENT'.repeat(100) } });
+  const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
+  const big = files.find(f => f.path === 'dir/big.txt');
+  const where = new Map(files.map(f => [f.oid, { path: f.path, commit: f.commit }]));
+  const calls = [];
+  const refused = await readBlobs(repo, files.map(f => f.oid), { maxObjectBytes: 1000, where, readBatch: async () => { calls.push(1); throw new Error('the content reader must not run'); } });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.kind, 'env');
+  assert.equal(calls.length, 0, 'no content was read');
+  assert.match(refused.reason, new RegExp(big.oid));
+  assert.match(refused.reason, /1300 bytes/);
+  assert.match(refused.reason, /dir\/big\.txt in /);
+  assert.ok(refused.reason.includes(big.commit.slice(0, 10)));
+  assert.equal(refused.reason.includes('SECRETCONTENT'), false);
+});
+
+test('An_aggregate_over_the_ceiling_is_refused_before_reading_and_names_the_largest_blobs', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'a'.repeat(300), 'b.txt': 'b'.repeat(500), 'c.txt': 'c'.repeat(400) } });
+  const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
+  const where = new Map(files.map(f => [f.oid, { path: f.path, commit: f.commit }]));
+  let reads = 0;
+  const refused = await readBlobs(repo, files.map(f => f.oid), { maxTotalBytes: 1000, where, readBatch: async () => { reads += 1; return { ok: true, value: new Map(), missing: [] }; } });
+  assert.equal(refused.ok, false);
+  assert.equal(reads, 0);
+  assert.match(refused.reason, /more than 1000 bytes/);
+  assert.ok(refused.reason.indexOf('b.txt') < refused.reason.indexOf('c.txt') && refused.reason.indexOf('c.txt') < refused.reason.indexOf('a.txt'), 'largest first');
 });

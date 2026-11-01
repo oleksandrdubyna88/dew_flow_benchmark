@@ -3,7 +3,7 @@
 // commit and removed by the next is in the history a push publishes, so it is scanned; a blob that several paths or commits share
 // is read once (the first commit that introduced the path owns the finding).
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { BLOB_MAX_BYTES, runBatchCatFile, runGit } from './push-git.mjs';
+import { BATCH_MAX_OBJECT_BYTES, BATCH_MAX_TOTAL_BYTES, BLOB_MAX_BYTES, describeObject, runBatchCatFile, runBatchCheck, runGit } from './push-git.mjs';
 
 export const SUBMODULE_MODE = '160000';
 export const SYMLINK_MODE = '120000';
@@ -68,15 +68,34 @@ export async function changesOf(repo, commits) {
   return ok({ messages, files });
 }
 
+const LARGEST_NAMED = 3;
+
+/** The fail for an object over `maxObjectBytes`, or for sizes together over `maxTotalBytes` (naming the largest); null when all is within. Sizes only: no content has been read. */
+function sizeRefusal(sizes, { maxObjectBytes, maxTotalBytes, where }) {
+  const bySize = [...sizes].sort(([, a], [, b]) => b.size - a.size);
+  const [name, biggest] = bySize[0] ?? [];
+  const total = bySize.reduce((sum, [, { size }]) => sum + size, 0);
+  if (biggest?.size > maxObjectBytes) return fail(`${describeObject(name, where)} is ${biggest.size} bytes, over the ${maxObjectBytes}-byte ceiling for one object: refused before any content was read, so not clean`, { kind: 'env' });
+  const largest = bySize.slice(0, LARGEST_NAMED).map(([n, { size }]) => `${describeObject(n, where)} ${size} bytes`).join('; ');
+  return total > maxTotalBytes ? fail(`the blobs of one check hold more than ${maxTotalBytes} bytes (${total}): refused before any content was read; largest: ${largest}`, { kind: 'env' }) : null;
+}
+
 /**
- * ok(Map(oid -> Buffer)) for the distinct blob ids, all read by ONE `git cat-file --batch` process. One blob over `maxObjectBytes`, or the blobs of
- * one check together over `maxTotalBytes` (default 256 MiB), is a fail: not read, so not clean. A blob git does not have is a fail too.
+ * ok(Map(oid -> Buffer)) for the distinct blob ids. The sizes come FIRST, from one `git cat-file --batch-check` (no content): one blob over
+ * `maxObjectBytes` (16 MiB), or the blobs together over `maxTotalBytes` (256 MiB), is refused naming the offender (sha, size, path and commit
+ * where `limits.where` knows them) before anything is read. Only then does one `git cat-file --batch` read the content (`limits.readBatch`
+ * replaces that reader, for a test that must see it was not called). A blob git does not have is a fail.
  */
 export async function readBlobs(repo, oids, limits = {}) {
+  const { readBatch = runBatchCatFile, maxObjectBytes = BATCH_MAX_OBJECT_BYTES, maxTotalBytes = BATCH_MAX_TOTAL_BYTES, where } = limits;
   const unique = [...new Set(oids)];
-  const read = await runBatchCatFile(repo, unique, limits);
-  if (!read.ok) return read;
-  return read.missing.length > 0 ? fail(`git has no blob ${read.missing.slice(0, 3).join(', ')}: the history is not read in full, so it is not clean`, { kind: 'env' }) : ok(read.value);
+  const sizes = await runBatchCheck(repo, unique);
+  if (!sizes.ok) return sizes;
+  if (sizes.missing.length > 0) return fail(`git has no blob ${sizes.missing.slice(0, 3).join(', ')}: the history is not read in full, so it is not clean`, { kind: 'env' });
+  const refusal = sizeRefusal(sizes.value, { maxObjectBytes, maxTotalBytes, where });
+  if (refusal) return refusal;
+  const read = await readBatch(repo, unique, { ...limits, maxObjectBytes, maxTotalBytes });
+  return read.ok ? ok(read.value) : read;
 }
 
 /** ok(text) of `path` at the tip of `branch`, ok(null) when the path is not there. */
