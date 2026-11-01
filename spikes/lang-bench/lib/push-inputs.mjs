@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { parseCredits } from './push-credits.mjs';
 import { aidNeedles, parseKnownNeedles } from './push-needles.mjs';
+import { readPublicPlans } from './push-public.mjs';
 
 const spikePath = relative => fileURLToPath(new URL(`../${relative}`, import.meta.url));
 export const DEFAULT_AIDS = Object.freeze(['PLAN-trap-table.md', 'PLAN-risky-scenarios.md']);
@@ -15,8 +16,7 @@ export const DEFAULT_AIDS_DIR = () => path.join(os.homedir(), 'rsd', 'lang-v2', 
 const DEFAULT_CREDITS = spikePath('inputs/credits-lang.json');
 const DEFAULT_NEEDLES = spikePath('inputs/needles-lang.json');
 const DEFAULT_TEMPLATE_FILES = spikePath('templates/stack-files.json');
-// Public by definition: the plans that name the aids' paths and titles. A shingle they hold leaks nothing (see aidNeedles).
-const DEFAULT_PUBLIC_TEXTS = Object.freeze([spikePath('../../todo/PLAN_lang_comparison_v2.md'), spikePath('../../todo/PLAN_lang_comparison_v2_E1.md')]);
+const BENCH_REPO = spikePath('');
 
 function readText(file, kind) {
   try {
@@ -26,14 +26,14 @@ function readText(file, kind) {
   }
 }
 
-/** The public texts that exempt shingles: the ones named, or the two plans when they exist (a missing one only makes the check stricter). */
-function loadPublicTexts(named) {
-  const files = named.length > 0 ? named : DEFAULT_PUBLIC_TEXTS.filter(f => existsSync(f));
-  const texts = files.map(f => readText(f, 'config'));
+/** The public texts that exempt shingles: the files named, else the published plans (origin/main of the bench repository, fail closed). */
+async function loadPublicTexts({ publicTexts, benchRepo }) {
+  if (publicTexts.length === 0) return readPublicPlans({ repo: benchRepo ?? BENCH_REPO });
+  const texts = publicTexts.map(f => readText(f, 'config'));
   return texts.find(t => !t.ok) ?? ok(texts.map(t => t.value));
 }
 
-function loadAids({ aid, aidsDir, tokens, publicTexts }) {
+async function loadAids({ aid, aidsDir, tokens, publicTexts, benchRepo }) {
   const files = aid.length > 0 ? aid : DEFAULT_AIDS.map(name => path.join(aidsDir ?? DEFAULT_AIDS_DIR(), name));
   const aids = [];
   for (const file of files) {
@@ -43,7 +43,7 @@ function loadAids({ aid, aidsDir, tokens, publicTexts }) {
   }
   const tokensText = tokens === undefined ? ok('') : readText(tokens, 'env');
   if (!tokensText.ok) return tokensText;
-  const exempt = loadPublicTexts(publicTexts);
+  const exempt = await loadPublicTexts({ publicTexts, benchRepo });
   if (!exempt.ok) return exempt;
   const needles = aidNeedles({ aids, tokensText: tokensText.value, publicTexts: exempt.value });
   return needles.ok ? needles : fail(needles.reason, { kind: 'env' });
@@ -70,8 +70,8 @@ function loadTemplateFiles(explicit) {
 }
 
 /** ok(inputs) for checkBranch / checkText / checkSelf, or a fail with a `kind`. The credit terms are parsed lazily by the check: a bad file is a value. */
-export function loadInputs(options) {
-  const aids = loadAids(options);
+export async function loadInputs(options) {
+  const aids = await loadAids(options);
   if (!aids.ok) return aids;
   const known = loadKnown(options.needles ?? DEFAULT_NEEDLES);
   if (!known.ok) return known;

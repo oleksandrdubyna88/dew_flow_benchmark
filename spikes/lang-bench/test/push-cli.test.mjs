@@ -15,7 +15,10 @@ function aidFile(t) {
   writeFileSync(file, AID_TEXT);
   return file;
 }
-const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
+const UNRELATED_PUBLIC = fileURLToPath(new URL('./fixtures/public-unrelated.md', import.meta.url));
+/** Tests that do not exercise the published-plans default name an unrelated public text, so they never read the real bench repository. */
+const withPublic = args => (args.includes('--public') || args.includes('--bench-repo') || args.includes('--setup-remote') ? args : [...args, '--public', UNRELATED_PUBLIC]);
+const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...withPublic(args)], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
 
 function topicBranch(t, files) {
   const repo = makeTaskRepo(t, { origin: makeOrigin(t) });
@@ -105,4 +108,37 @@ test('A_public_text_named_with_public_exempts_the_shingles_it_holds', t => {
   const refused = cli(['--repo', repo, '--branch', 'topic', '--aid', wholly, '--public', publicFile]);
   assert.equal(refused.status, 3, 'an aid that is wholly public would check nothing');
   assert.match(refused.stdout, /would check nothing/);
+});
+
+/** A bench-like repository whose origin/main holds the two plan files with `published`; `--bench-repo` points the check at it. */
+function benchWithPlans(t, published) {
+  const repo = makeTaskRepo(t, { origin: makeOrigin(t), files: { 'todo/PLAN_lang_comparison_v2.md': published, 'todo/PLAN_lang_comparison_v2_E1.md': 'stories\n' } });
+  git(repo, 'push', '-q', 'origin', 'main:main', '--force');
+  git(repo, 'fetch', '-q', 'origin');
+  return repo;
+}
+
+test('The_default_public_texts_are_the_published_plans_and_a_plan_edited_in_the_working_tree_exempts_nothing', t => {
+  const { repo } = topicBranch(t, { 'README.md': '# T\n\nthe widget that frobnicates every sprocket twice before lunch\n' });
+  const folder = ownedFolder(t, 'pub');
+  const aid = path.join(folder, 'two-aid.md');
+  writeFileSync(aid, `${AID_TEXT}Another private sentence about gadgets and their wobbling springs today.\n`);
+  const bench = benchWithPlans(t, 'nothing relevant\n');
+  writeFileSync(path.join(bench, 'todo/PLAN_lang_comparison_v2.md'), 'a widget that frobnicates every sprocket twice before lunch will stall\n');
+  const refused = cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]);
+  assert.equal(refused.status, 1, 'the working-tree edit exempts nothing\n' + refused.stdout);
+  git(bench, 'checkout', '-q', '--', '.');
+  writeFileSync(path.join(bench, 'todo/PLAN_lang_comparison_v2.md'), 'a widget that frobnicates every sprocket twice before lunch will stall\n');
+  commit(bench, 'docs: publish it', {});
+  git(bench, 'push', '-q', 'origin', 'main:main');
+  git(bench, 'fetch', '-q', 'origin');
+  assert.equal(cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]).status, 0, 'a published text exempts what it holds');
+});
+
+test('A_check_whose_published_plans_cannot_be_read_does_not_run', t => {
+  const { repo } = topicBranch(t, { 'a.txt': 'x\n' });
+  const bare = makeTaskRepo(t, { origin: makeOrigin(t), files: { 'unrelated.txt': 'x\n' } });
+  const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t), '--bench-repo', bare]);
+  assert.equal(r.status, 3);
+  assert.match(r.stdout, /public text todo\/PLAN_lang_comparison_v2\.md cannot be read at origin\/main/);
 });

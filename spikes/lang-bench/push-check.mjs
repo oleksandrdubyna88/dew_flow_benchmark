@@ -7,7 +7,8 @@
 //   node spikes/lang-bench/push-check.mjs --setup-remote --repo <task repo> [--url <u>]
 //
 //   options: --aid <file> (repeatable) | --aids-dir <dir>   the private aids, read at run time (default ~/rsd/lang-v2/test-design/)
-//            --public <file> (repeatable)  texts that are public already (default: the two plans); their six-word runs are not aid hits
+//            --public <file> (repeatable)  texts that are public already; their six-word runs are not aid hits. Default: the two plans as
+//                            published at origin/main of the bench repository (--bench-repo <dir>), never the working tree; unreadable = exit 3
 //            --tokens <file>  literal leak tokens, one per line, outside git     --credits <file>  --needles <file>  --template-files <file>
 //
 // Exit 0 clean · 1 refused · 3 environment (git, the network, an aid that cannot be read) · 4 configuration. Nothing is pushed, ever.
@@ -23,7 +24,7 @@ const OPTIONS = {
   repo: { type: 'string' }, branch: { type: 'string' }, text: { type: 'string' }, url: { type: 'string' },
   self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' },
   aid: { type: 'string', multiple: true }, 'aids-dir': { type: 'string' }, tokens: { type: 'string' },
-  public: { type: 'string', multiple: true }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
+  public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
 };
 
 const usage = reason => ({ exit: EXIT.CONFIG, text: `push-check: ${reason}\nusage: see the header of ${import.meta.url.replace('file://', '')}\n` });
@@ -52,7 +53,7 @@ async function run(v) {
     const r = await setupRemote({ repo: v.repo, ...(v.url === undefined ? {} : { url: v.url }) });
     return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
   }
-  const inputs = loadInputs({ aid: v.aid ?? [], publicTexts: v.public ?? [], aidsDir: v['aids-dir'], tokens: v.tokens, credits: v.credits, needles: v.needles, templateFiles: v['template-files'] });
+  const inputs = await loadInputs({ aid: v.aid ?? [], publicTexts: v.public ?? [], benchRepo: v['bench-repo'], aidsDir: v['aids-dir'], tokens: v.tokens, credits: v.credits, needles: v.needles, templateFiles: v['template-files'] });
   if (!inputs.ok) return { exit: inputs.kind === 'config' ? EXIT.CONFIG : EXIT.ENVIRONMENT, text: `push-check: ${inputs.reason}\n` };
   return runChecks(modes[0], v, inputs.value);
 }
