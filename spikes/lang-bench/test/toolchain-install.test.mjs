@@ -8,7 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { installToolchain } from '../lib/toolchain-install.mjs';
-import { curlArgv, dotnetInstallArgv, npmInstallArgv, realIo } from '../lib/toolchain-io.mjs';
+import { curlArgv, dotnetInstallArgv, npmInstallArgv, realIo, underInstallUmask } from '../lib/toolchain-io.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import os from 'node:os';
 import { sealTree, treeRecord, unsealTree, writablePaths } from '../lib/toolchain-store.mjs';
@@ -37,6 +37,7 @@ function rig(t, { nodeFiles, scriptText = '#!/bin/bash\n:\n', archiveText = 'sdk
   ]);
   const calls = { downloads: [], scripts: [], npm: [] };
   const io = {
+    extractTarXz: realIo.extractTarXz, // the real tar, through the real umask wrapper
     fetchText: async url => (text.has(url) ? { ok: true, value: text.get(url) } : { ok: false, reason: `no fixture for ${url}` }),
     download: async (url, dest) => {
       calls.downloads.push(url);
@@ -216,19 +217,34 @@ async function underUmask(mask, fn) {
   }
 }
 
-test('An_extraction_under_a_restrictive_umask_gives_the_same_tree_hash_as_under_the_usual_one', async t => {
+test('An_extraction_under_a_restrictive_caller_umask_gives_the_same_tree_hash_and_leaves_the_umask_as_it_was', async t => {
   const outer = process.umask();
-  const usual = await underUmask(0o022, async () => { const r = rig(t); const done = await r.run('node'); return { r, done }; });
-  const strict = await underUmask(0o022, async () => rig(t)); // the fixture archive is made under the usual umask in both cases
-  const tight = await underUmask(0o077, async () => { const done = await strict.run('node'); return { ...done, umaskAfter: process.umask() }; });
+  const usual = rig(t);
+  const strict = rig(t);
+  const reference = await underUmask(0o022, () => usual.run('node'));
+  const seen = [];
+  const tight = await underUmask(0o077, async () => { const done = await strict.run('node'); seen.push(process.umask()); return done; });
   try {
-    assert.equal(usual.done.ok, true, JSON.stringify(usual.done));
+    assert.equal(reference.ok, true, JSON.stringify(reference));
     assert.equal(tight.ok, true, JSON.stringify(tight));
-    assert.equal(tight.value.treeSha256, usual.done.value.treeSha256, 'the tree hash is that of the files as the archive holds them, not as this user\'s umask left them');
-    assert.equal(tight.umaskAfter, 0o077, 'the caller\'s umask is put back by the installer itself');
+    assert.equal(tight.value.treeSha256, reference.value.treeSha256, 'the tree hash is that of the files as the archive holds them, not as the caller\'s umask left them');
+    assert.deepEqual(seen, [0o077], 'the installer did not change the process umask');
     assert.equal(process.umask(), outer);
+  } finally { unsealStore(usual.storeRoot); unsealStore(strict.storeRoot); }
+});
 
-  } finally { unsealStore(usual.r.storeRoot); unsealStore(strict.storeRoot); }
+test('Library_code_never_calls_process_umask_the_children_get_theirs_through_a_wrapper', () => {
+  const lib = fileURLToPath(new URL('../lib/', import.meta.url));
+  const offenders = readdirSync(lib).filter(name => name.endsWith('.mjs') && /process\.umask\(/.test(readFileSync(path.join(lib, name), 'utf8')));
+  assert.deepEqual(offenders, [], 'a process-wide umask change from library code reaches every other caller in the process');
+});
+
+test('An_install_child_is_started_through_a_shell_that_sets_umask_022_and_execs_the_exact_argv', () => {
+  const wrapped = underInstallUmask('tar', ['-xJf', 'a b.tar.xz', '-C', "it's"]);
+  assert.equal(wrapped.exe, '/bin/sh');
+  assert.deepEqual(wrapped.argv, ['-c', 'umask 022 && exec "$@"', 'sh', 'tar', '-xJf', 'a b.tar.xz', '-C', "it's"], 'the argv travels as arguments, never spliced into the shell string');
+  const npm = npmInstallArgv({ nodeDir: '/s/node', prefix: '/s/ts', spec: 'typescript@6.0.3', cacheDir: '/w/c', home: '/w' });
+  assert.equal(underInstallUmask(npm.exe, npm.argv).argv.at(3), '/s/node/bin/node');
 });
 
 test('A_tree_that_differs_from_the_recorded_hash_is_discarded_and_never_registered', async t => {
@@ -300,7 +316,7 @@ test('The_first_install_into_a_store_root_that_does_not_exist_yet_has_nothing_to
   } finally { unsealStore(root); }
 });
 
-test('Two_npm_installs_of_the_same_package_into_differently_named_folders_have_the_same_tree_hash', async t => {
+test('Two_npm_installs_of_the_same_package_into_differently_named_folders_and_caller_umasks_have_the_same_tree_hash', async t => {
   const nodeDir = path.join(os.homedir(), ...real.storeRoot, real.directories.node);
   if (!existsSync(path.join(nodeDir, 'bin', 'node'))) {
     if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and the pinned Node is not installed at ${nodeDir}`);
@@ -313,13 +329,12 @@ test('Two_npm_installs_of_the_same_package_into_differently_named_folders_have_t
   assert.equal(packed.status, 0, packed.stderr);
   const parent = ownedFolder(t, 'npminst');
   const hashes = [];
-  for (const name of ['stage-aaaaaa', 'stage-zzzzzz']) {
+  for (const [name, mask] of [['stage-aaaaaa', 0o022], ['stage-zzzzzz', 0o077]]) {
     const prefix = path.join(parent, name);
-    mkdirSync(prefix);
     const work = ownedFolder(t, 'npmwork');
-    const ran = await realIo.runNpmInstall({ nodeDir, prefix, spec: tarball, workDir: work });
+    const ran = await underUmask(mask, async () => { mkdirSync(prefix, { mode: 0o755 }); return realIo.runNpmInstall({ nodeDir, prefix, spec: tarball, workDir: work }); });
     assert.equal(ran.ok, true, JSON.stringify(ran));
     hashes.push(treeRecord(prefix));
   }
-  assert.equal(hashes[0], hashes[1], 'the tree hash must not depend on the staging folder\'s random name');
+  assert.equal(hashes[0], hashes[1], 'the tree hash must not depend on the staging folder\'s random name or on the caller\'s umask');
 });

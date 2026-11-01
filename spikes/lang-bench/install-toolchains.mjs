@@ -12,11 +12,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { INSTALL_UMASK, installToolchain, TOOLCHAIN_NAMES } from './lib/toolchain-install.mjs';
-import { realIo } from './lib/toolchain-io.mjs';
+import { installToolchain, TOOLCHAIN_NAMES } from './lib/toolchain-install.mjs';
+import { INSTALL_UMASK, realIo } from './lib/toolchain-io.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { checkStoreRoot } from './lib/toolchain-store.mjs';
 import { recordTrees, verifyStore } from './lib/toolchain-verify.mjs';
+
+process.umask(INSTALL_UMASK); // the command, not the library, may change its own umask: once, before any async work (the children are also wrapped by lib/toolchain-io.mjs)
 
 const OPTIONS = { only: { type: 'string' }, record: { type: 'boolean' }, verify: { type: 'boolean' }, deep: { type: 'boolean' }, store: { type: 'string' }, stacks: { type: 'string' } };
 const EXIT = Object.freeze({ done: 0, problem: 1, usage: 2 });
@@ -103,5 +105,4 @@ function fail(code, line) {
   return code;
 }
 
-process.umask(INSTALL_UMASK); // every child (tar, dotnet-install.sh, npm) inherits it: the tree hash depends on the modes an extraction leaves
 process.exitCode = await main(process.argv.slice(2));

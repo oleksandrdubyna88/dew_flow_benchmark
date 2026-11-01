@@ -4,7 +4,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { sweepStaleStaging } from './toolchain-stale.mjs';
 import { dotnetOfficial, nodeOfficial, typescriptOfficial } from './toolchain-pins.mjs';
@@ -12,22 +11,6 @@ import { checkDigest, sdkVersionsIn, sealTree, treeRecord, unsealTree } from './
 
 
 export const TOOLCHAIN_NAMES = Object.freeze(['dotnetSdk', 'node', 'typescript']);
-const EXTRACT_MS = 300_000;
-
-/**
- * The tree hash covers the read and execute bits of every file, and an extraction leaves them as the umask allows: under 077 the same archive hashes
- * differently than under 022. The installer therefore runs under 022 (every child it starts inherits it) and puts the caller's umask back.
- */
-export const INSTALL_UMASK = 0o022;
-
-async function withInstallUmask(fn) {
-  const before = process.umask(INSTALL_UMASK);
-  try {
-    return await fn();
-  } finally {
-    process.umask(before);
-  }
-}
 
 const parseJson = (text, what) => {
   try {
@@ -67,12 +50,6 @@ async function crossCheck(name, stacks, io) {
   return listed === pinned ? ok(null) : fail(`${source} now lists ${listed} for ${name}, the pin in stacks-lang.json is ${pinned}: the pin is not moved silently`);
 }
 
-async function tarExtract(archive, dest) {
-  const r = await runBounded('tar', ['-xJf', archive, '-C', dest, '--strip-components=1', '--no-same-owner'], { timeoutMs: EXTRACT_MS });
-  if (!r.ok) return r;
-  return r.value.code === 0 ? ok(null) : fail(`tar -xJf ${archive} exited ${r.value.code}: ${r.value.stderr.trim().slice(-300)}`);
-}
-
 async function buildNode({ stacks, io, staging, work }) {
   const a = stacks.artifacts.node;
   const archive = path.join(work, a.file);
@@ -80,7 +57,7 @@ async function buildNode({ stacks, io, staging, work }) {
   if (!got.ok) return got;
   const checked = await checkDigest({ file: archive, algorithm: 'sha256', encoding: 'hex', expected: a.sha256, label: `the Node tarball ${a.file}` });
   if (!checked.ok) return checked;
-  const unpacked = await tarExtract(archive, staging);
+  const unpacked = await io.extractTarXz(archive, staging);
   return unpacked.ok && !existsSync(path.join(staging, 'bin', 'node')) ? fail(`the Node tarball ${a.file} holds no bin/node`) : unpacked;
 }
 
@@ -140,20 +117,16 @@ function discard(dir) {
 }
 
 /**
- * `installToolchain({ name, stacks, storeRoot, io, newFolder })` -> ok({ name, dir, state: 'installed' | 'present', treeSha256 }) | fail(reason).
+ * `installToolchain({ name, stacks, storeRoot, io, newFolder, owned?, log? })` -> ok({ name, dir, state: 'installed' | 'present', treeSha256, swept }) | fail(reason).
  * `newFolder(what, parent)` makes an owned folder (removed by its owner); `io` is lib/toolchain-io.mjs's `realIo` or a test's fixture.
  * A directory already in the store is left exactly as it is: `present`, `treeSha256: null` (not examined — `verifyRecordedTrees` examines).
- */
-/**
  * With `owned` (the owned-name helper bound to `bench`), the stale staging folders of interrupted installs are collected first and named through `log`;
- * the folders removed are `value.swept`.
+ * the folders removed are `value.swept`. The process umask is never touched: the install children are started under umask 022 by `io`.
  */
-export function installToolchain(options) {
-  return withInstallUmask(async () => {
-    const swept = options.owned ? sweepStaleStaging({ storeRoot: options.storeRoot, owned: options.owned, log: options.log }) : [];
-    const done = await installOne(options);
-    return done.ok ? ok({ ...done.value, swept }) : done;
-  });
+export async function installToolchain(options) {
+  const swept = options.owned ? sweepStaleStaging({ storeRoot: options.storeRoot, owned: options.owned, log: options.log }) : [];
+  const done = await installOne(options);
+  return done.ok ? ok({ ...done.value, swept }) : done;
 }
 
 async function installOne({ name, stacks, storeRoot, io, newFolder }) {
