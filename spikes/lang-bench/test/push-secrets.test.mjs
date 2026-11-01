@@ -38,3 +38,10 @@ test('A_shape_shorter_than_its_length_rule_is_not_a_secret', () => {
 test('The_secret_scan_still_finds_a_planted_secret_after_a_reformat_over_lines', () => {
   assert.equal(namesIn(`before\n\n\t  key: "${fineGrained}"\n`).length, 1, 'the scan is alive on an indented, quoted token');
 });
+
+test('A_snake_case_identifier_that_starts_like_a_fine_grained_token_is_not_one', () => {
+  // the shape is random base62: a name made of lower-case words has neither a digit nor a capital (found when the bench's own branch was checked)
+  assert.deepEqual(namesIn('test(\'A_secret_shape_list_without_github_pat_would_pass_a_fine_grained_token_and_that_is_the_point\')\n'), []);
+  assert.deepEqual(namesIn(`${'github_pat'}_lowercase_words_only_and_more_of_them_here\n`), []);
+  assert.deepEqual(namesIn(`${'github_pat'}_${'11AAAAAAAAAAAAAAAAAAAAAA'}\n`), ['github-fine-grained-pat'], 'a digit and a capital make it a token');
+});

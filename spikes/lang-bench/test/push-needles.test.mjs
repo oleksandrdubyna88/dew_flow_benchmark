@@ -78,3 +78,11 @@ test('A_needle_file_with_a_short_or_empty_entry_is_refused', () => {
   assert.equal(parseKnownNeedles({ schema: 1, words: [''], substrings: [] }).ok, false);
   assert.equal(parseKnownNeedles({ schema: 2, words: ['CSES'], substrings: [] }).ok, false);
 });
+
+test('A_path_or_identifier_is_not_part_of_a_shingle_but_the_prose_around_it_still_is', () => {
+  const aid = { name: 'a.md', text: 'Notes.\ncopied word for word from notes/alpha/beta/gamma/delta/epsilon.md and the sprocket table of the month please.\n' };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  assert.deepEqual(findAidHits('p', 'The plan: sprocket `notes/alpha/beta/gamma/delta/epsilon.md`.\n', needles), [], 'a pointer that shares only path words with the aid is not a hit');
+  const copy = 'x\ncopied word for word from notes/alpha/beta/gamma/delta/epsilon.md and the sprocket table of the month please.\n';
+  assert.equal(findAidHits('p', copy, needles).length, 1, 'a verbatim copy still matches, its identifiers dropped on both sides');
+});

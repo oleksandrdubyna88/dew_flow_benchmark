@@ -7,7 +7,8 @@
 import { lineIndex } from './push-text.mjs';
 
 export const SECRET_SHAPES = Object.freeze([
-  { name: 'github-fine-grained-pat', re: /github_pat_[A-Za-z0-9_]{20,}/g },
+  // base62 and random: a digit and a capital are always among 20 characters, a snake_case name made of words has neither
+  { name: 'github-fine-grained-pat', re: /github_pat_(?=[A-Za-z0-9_]*[0-9])(?=[A-Za-z0-9_]*[A-Z])[A-Za-z0-9_]{20,}/g },
   { name: 'github-classic-token', re: /ghp_[A-Za-z0-9]{36}/g },
   { name: 'github-oauth-token', re: /gho_[A-Za-z0-9]{36}/g },
   { name: 'github-server-token', re: /ghs_[A-Za-z0-9]{36}/g },
