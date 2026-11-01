@@ -17,7 +17,7 @@ import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from '.
 import { calibrationFile } from './paths.mjs';
 import { allOk } from './chain.mjs';
 import { pinsOk } from './pins.mjs';
-import { loadSeries, planPair, runMapFileOf } from './series.mjs';
+import { isRehearsal, loadSeries, planPair, runMapFileOf } from './series.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
@@ -62,8 +62,8 @@ export const readToken = home => readSecretFile({ home, parts: TOKEN_FILE_PARTS,
  */
 export async function runPair({ seriesDir, pair, rerun = null, io }) {
   const series = loadSeries(seriesDir);
-  if (!series.ok) return { exit: 4, message: series.reason };
-  if (series.value.map.stopped) return { exit: 2, message: `the series is stopped (${series.value.map.stopped.rule}): a stop is final for its series` };
+  const refusal = seriesRefusal(seriesDir, series);
+  if (refusal) return refusal;
   const lock = acquireSeriesLock({ seriesDir });
   if (!lock.ok) return { exit: 4, message: lock.reason };
   try {
@@ -71,6 +71,13 @@ export async function runPair({ seriesDir, pair, rerun = null, io }) {
   } finally {
     lock.value.release();
   }
+}
+
+/** Why a series cannot run a paid pair, as a result, or null: it is not a series, it is a rehearsal's, or it is stopped. */
+function seriesRefusal(seriesDir, series) {
+  if (!series.ok) return { exit: 4, message: series.reason };
+  if (isRehearsal(seriesDir)) return { exit: 4, message: `${seriesDir} is a rehearsal series (stub CLI): a paid pair runs on a series made by \`explore.mjs init\`` };
+  return series.value.map.stopped ? { exit: 2, message: `the series is stopped (${series.value.map.stopped.rule}): a stop is final for its series` } : null;
 }
 
 /** What a pair needs besides its plan: the calibration, the held-out side, the world and the token. -> `ok({ calibration, heldout, world, token })` | the first `fail`. */

@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { leakcheck } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { main } from '../explore.mjs';
-import { EXIT, cmdInit, cmdPrune, cmdQuiet, leakNeedles, statusLines } from '../lib/commands.mjs';
+import { EXIT, cmdInit, cmdPrune, cmdQuiet, cmdRun, leakNeedles, statusLines } from '../lib/commands.mjs';
 import { calibrationFile, exploreRoot } from '../lib/paths.mjs';
 import { createSeries, drawMask, loadSeries } from '../lib/series.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
@@ -139,4 +139,18 @@ test('A_pair_is_refused_before_anything_is_launched_when_there_is_no_calibration
   const early = await runPair({ seriesDir: made.value.dir, pair: 2, io: base });
   assert.match(early.message, /pair 1 is not finished/);
   assert.deepEqual(Object.keys(loadSeries(made.value.dir).value.map.sessions), [], 'nothing was planned');
+});
+
+test('F3_run_requires_series_and_a_rehearsal_series_is_refused_by_run', async () => {
+  const home = homeWithCalibration();
+  const real = createSeries({ home, explore: EXPLORE, calibration: CALIBRATION });
+  assert.ok(real.ok);
+  const noSeries = io(home);
+  assert.equal(await cmdRun({ pair: '1' }, noSeries), EXIT.config, 'with a series present, run still does not guess it');
+  assert.match(noSeries.said[0], /run needs --series <dir>/);
+  const rehearsal = createSeries({ home, explore: EXPLORE, calibration: CALIBRATION, prefix: 'r' });
+  const { runPair } = await import('../lib/run.mjs');
+  const refused = await runPair({ seriesDir: rehearsal.value.dir, pair: 1, io: { home, say: () => {}, abort: {}, worldFn: () => { throw new Error('unused'); }, tokenFn: () => { throw new Error('unused'); } } });
+  assert.equal(refused.exit, 4);
+  assert.match(refused.message, /rehearsal series/);
 });

@@ -6,7 +6,7 @@
 //   node spikes/lang-explore/explore.mjs rehearse                      FREE: one pair end to end with v1's stub CLI and stub upstream, a fake token; exit 0 when every criterion holds
 //   node spikes/lang-explore/explore.mjs init                          creates a series (the mask draw is made and recorded)
 //   node spikes/lang-explore/explore.mjs quiet [--accept-noisy <why>]  the machine-quiet check alone
-//   node spikes/lang-explore/explore.mjs run --pair k [--series <dir>] [--rerun csharp|node] [--accept-noisy <why>]     SPENDS MONEY: one pair
+//   node spikes/lang-explore/explore.mjs run --pair k --series <dir> [--rerun csharp|node] [--accept-noisy <why>]     SPENDS MONEY: one pair
 //   node spikes/lang-explore/explore.mjs readback [--series <dir>]     what each session was launched with, against the registered prompt and environment
 //   node spikes/lang-explore/explore.mjs status [--series <dir>]       node spikes/lang-explore/explore.mjs note [--out <file>]     node spikes/lang-explore/explore.mjs prune [--series <dir>]
 //   node spikes/lang-explore/explore.mjs leakcheck [--range A..B]      v1's leak check with the pilot's held-out outputs as the needles

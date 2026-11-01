@@ -87,7 +87,7 @@ async function prerequisites({ home, worldFn }) {
 export async function rehearse({ io }) {
   const need = await prerequisites({ home: io.home, worldFn: io.worldFn });
   if (!need.ok) return { exit: 4, message: need.reason };
-  const made = createSeries({ home: io.home, explore: need.value.world.explore, calibration: need.value.calibration, inputsExtra: { rehearsal: true }, draw: drawMask() });
+  const made = createSeries({ home: io.home, explore: need.value.world.explore, calibration: need.value.calibration, inputsExtra: { rehearsal: true }, draw: drawMask(), prefix: 'r' });
   const lock = made.ok ? acquireSeriesLock({ seriesDir: made.value.dir }) : made;
   if (!lock.ok) return { exit: 4, message: lock.reason };
   try {

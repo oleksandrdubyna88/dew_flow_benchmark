@@ -13,8 +13,8 @@ export const MASKS = Object.freeze({ low: '0-5', high: '8-13' });
 export const STACK_ORDER = Object.freeze(['csharp', 'node']);
 export const MAX_ATTEMPTS = 2;
 
-/** `x-<yyyymmdd>-<4 hex>`. */
-export const seriesIdOf = ({ date, rand }) => `x-${date.toISOString().slice(0, 10).replaceAll('-', '')}-${rand}`;
+/** `<prefix>-<yyyymmdd>-<4 hex>`: `x` for a series of the pilot, `r` for a rehearsal (so no command picks a rehearsal by its name). */
+export const seriesIdOf = ({ date, rand, prefix = 'x' }) => `${prefix}-${date.toISOString().slice(0, 10).replaceAll('-', '')}-${rand}`;
 
 /** The draw that decides pair 1: C# on the high mask or not. Recorded in the series; a random draw, not a choice. */
 export const drawMask = (rand = () => randomInt(2)) => ({ csharpHigh: rand() === 1, method: 'crypto.randomInt(2) at init' });
@@ -119,8 +119,8 @@ export const runMapFileOf = dir => path.join(dir, 'run-map.json');
 export const ledgerFileOf = dir => path.join(dir, 'ledger.ndjson');
 
 /** Create a series directory (mode 0700) with its state, run-map, empty ledger and the run's inputs. -> `ok({ dir, state })` | `fail`. */
-export function createSeries({ home, explore, calibration, inputsExtra = {}, draw = drawMask(), date = new Date(), rand = () => randomBytes(2).toString('hex') }) {
-  const id = seriesIdOf({ date, rand: rand() });
+export function createSeries({ home, explore, calibration, inputsExtra = {}, draw = drawMask(), date = new Date(), prefix = 'x', rand = () => randomBytes(2).toString('hex') }) {
+  const id = seriesIdOf({ date, rand: rand(), prefix });
   const dir = path.join(exploreRoot(home), id);
   if (existsSync(dir)) return fail(`${dir} already exists: a series id is never reused`);
   mkdirSync(path.join(dir, 's'), { recursive: true, mode: 0o700 });
@@ -129,7 +129,7 @@ export function createSeries({ home, explore, calibration, inputsExtra = {}, dra
   mkdirSync(path.join(dir, 'private'), { mode: 0o700 });
   const state = { seriesId: id, createdAt: date.toISOString(), draw, pairs: explore.pairs };
   writeFileSync(stateFile(dir), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  writeFileSync(path.join(dir, 'inputs.json'), `${JSON.stringify({ seriesId: id, limits: calibration.limits, caps: explore.caps, locale: explore.locale, envExtra: explore.envExtra, ...inputsExtra }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(path.join(dir, 'inputs.json'), `${JSON.stringify({ seriesId: id, limits: calibration.limits, caps: explore.caps, locale: explore.locale, envExtra: explore.envExtra, ...(prefix === 'r' ? { rehearsal: true } : {}), ...inputsExtra }, null, 2)}\n`, { mode: 0o600 });
   writeFileSync(ledgerFileOf(dir), '', { mode: 0o600 });
   writeRunMap(runMapFileOf(dir), openSeries({ seriesId: id, caps: explore.caps }));
   return ok({ dir, state });
@@ -142,9 +142,17 @@ export function loadSeries(dir) {
   return map.ok ? ok({ dir, state: JSON.parse(readFileSync(stateFile(dir), 'utf8')), map: map.value }) : map;
 }
 
-/** The newest series directory under the explore root, or null. */
+const createdAtOf = dir => { try { return JSON.parse(readFileSync(stateFile(dir), 'utf8')).createdAt ?? ''; } catch { return ''; } };
+
+/** The newest series of the pilot (`x-...`, never a rehearsal) under the explore root by its creation time, or null. */
 export function latestSeries(home) {
   const root = exploreRoot(home);
-  const dirs = existsSync(root) ? readdirSync(root).filter(n => /^x-\d{8}-[0-9a-f]{4}$/.test(n)).sort() : [];
-  return dirs.length > 0 ? path.join(root, dirs.at(-1)) : null;
+  const dirs = existsSync(root) ? readdirSync(root).filter(n => /^x-\d{8}-[0-9a-f]{4}$/.test(n)).map(n => path.join(root, n)) : [];
+  const sorted = dirs.map(d => [createdAtOf(d), d]).sort((a, b) => a[0].localeCompare(b[0]));
+  return sorted.length > 0 ? sorted.at(-1)[1] : null;
+}
+
+/** Is this series a rehearsal (its inputs say so)? */
+export function isRehearsal(dir) {
+  try { return JSON.parse(readFileSync(path.join(dir, 'inputs.json'), 'utf8')).rehearsal === true; } catch { return false; }
 }

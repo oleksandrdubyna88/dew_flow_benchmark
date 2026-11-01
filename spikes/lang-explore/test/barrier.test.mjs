@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { openSeries, transition } from '../../minigit-bench/lib/run-map.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { MASKS, barrierProblem, createSeries, drawMask, loadSeries, maskOf, pairComplete, planPair, seriesIdOf, stackState } from '../lib/series.mjs';
+import { MASKS, barrierProblem, createSeries, drawMask, latestSeries, loadSeries, maskOf, pairComplete, planPair, seriesIdOf, stackState } from '../lib/series.mjs';
 
 const EXPLORE = loadExplore().value;
 const DRAW = { csharpHigh: true, method: 'test' };
@@ -151,4 +151,21 @@ test('F2_a_pair_that_is_finished_is_still_refused_and_a_rerun_waits_for_the_open
   assert.equal(r.ok, true, r.reason);
   assert.deepEqual(r.value.planned, [], 'the open session is resumed first; the re-run is asked for again afterwards');
   assert.equal(r.value.resumed.length, 1);
+});
+
+// ---- F3: no command picks a rehearsal series ----------------------------------------------------------------------------------------
+
+test('F3_a_rehearsal_series_is_named_r_and_latest_series_never_returns_it_and_sorts_by_creation_time', () => {
+  const home = tmpDir('latest');
+  const calibration = { limits: { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 } };
+  const make = (date, rand, prefix) => createSeries({ home, explore: EXPLORE, calibration, date: new Date(date), rand: () => rand, ...(prefix ? { prefix } : {}) });
+  assert.equal(seriesIdOf({ date: new Date('2026-11-01T10:00:00Z'), rand: 'ab12', prefix: 'r' }), 'r-20261101-ab12');
+  const first = make('2026-11-01T08:00:00Z', 'ffff');
+  const second = make('2026-11-01T09:00:00Z', '0001');
+  const rehearsal = make('2026-11-01T11:00:00Z', 'cccc', 'r');
+  assert.equal(path.basename(rehearsal.value.dir), 'r-20261101-cccc');
+  assert.equal(JSON.parse(readFileSync(path.join(rehearsal.value.dir, 'inputs.json'), 'utf8')).rehearsal, true);
+  assert.equal(latestSeries(home), second.value.dir, 'the newest by creation time (ffff sorts last by name, 0001 was created later), and not the rehearsal made after it');
+  assert.notEqual(latestSeries(home), first.value.dir);
+  assert.equal(latestSeries(tmpDir('empty')), null);
 });

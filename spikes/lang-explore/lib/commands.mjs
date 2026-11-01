@@ -56,6 +56,7 @@ export async function cmdInit(values, io) {
 
 /** `run --pair k [--rerun <stack>] [--accept-noisy <reason>]`: ONE pair. SPENDS MONEY. */
 export async function cmdRun(values, io) {
+  if (!values.series) return refused(io, 'run needs --series <dir>: a paid pair is never started on a series this command guessed (`explore.mjs init` prints the directory)');
   const dir = seriesDirOf(values, io.home);
   if (!dir.ok) return refused(io, dir.reason);
   const r = await runPair({ seriesDir: dir.value, pair: Number(values.pair), rerun: values.rerun ?? null, io: { ...io, worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)), acceptNoisy: values['accept-noisy'] ?? null } });
