@@ -10,7 +10,6 @@ Without a launch status there is no box: the launcher execs the program and is t
 seen in two successive looks (a tool that is gone a moment later is no fork) and what the leftover read finds after the program's exit.
 It is reported as observed and never decides which pid is the program.
 """
-import os
 import time
 
 import rs_cgroup as cg
@@ -20,11 +19,6 @@ FOUND = "cgroup.procs: the process whose parent is a bwrap process"
 LAUNCHER = "the launcher's own pid (no launch status: the launcher execs the program)"
 ORPHAN = "an orphan was taken for the program: it was still alive when the program ended, so it was a leftover"
 NOT_YET = "no process with a bwrap parent was seen in cgroup.procs"
-
-
-def _ended(pid):
-    """True for a pid that is not there or is a zombie; None counts as not alive (there is no process to speak of)."""
-    return pid is not None and (cg.is_zombie(pid) or not os.path.exists(f"/proc/{pid}"))
 
 
 def _length(found):
@@ -133,7 +127,7 @@ class Tracker:
         """The program's pid when the program has really ended, else None. This is read after the program's end: a process taken for the
         program that is still alive then was an ORPHAN of a program that was gone before the first look (it had become a child of bwrap's
         init). It is a leftover, and it was never the program."""
-        gone = _ended(self.pid)
+        gone = self.pidfd is None or ex.pidfd_ready(self.pidfd)
         self.orphan = self.pid is not None and not gone
         return self.pid if gone else None
 

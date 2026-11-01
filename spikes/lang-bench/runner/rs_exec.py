@@ -8,6 +8,7 @@ every wait for an exit is `os.pidfd_open` + `select` with the exact remaining ti
 """
 import os
 import re
+import select
 import selectors
 import signal
 import subprocess
@@ -65,6 +66,11 @@ class PlainLifecycle:
     def mismatch(self, child_pid):
         """No cgroup, nothing to confirm."""
         return None
+
+    box_fd = None
+
+    def release_box(self):
+        """Nothing was pinned."""
 
     def kill(self, proc):
         kill_group(proc)
@@ -252,6 +258,11 @@ def pidfd_open(pid):
         return os.pidfd_open(pid)
     except (AttributeError, OSError):
         return None
+
+
+def pidfd_ready(fd):
+    """True when the process behind the pidfd has exited (the descriptor is readable); the process is not touched."""
+    return bool(select.select([fd], [], [], 0)[0])
 
 
 def pidfd_of(proc):

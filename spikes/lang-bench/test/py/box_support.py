@@ -1,5 +1,6 @@
 """Shared fixtures of the part ii-a unit tests: a temporary workspace whose run.sh is the stub under test, fake launchers (shell
 one-liners that write bwrap's status lines), and the real transient user scope the kill tests need. Stubs are toys, never a task."""
+import contextlib
 import glob
 import json
 import os
@@ -52,7 +53,7 @@ class Workspace:
         self._write_finals(overrides.get("cgroup"))
         if real:
             return ro.run_case(case, self.config(**overrides))
-        with mock.patch.object(cg, "is_cgroup2", lambda directory: True), mock.patch.object(cg, "member_of", lambda pid, directory: True):
+        with fake_cgroup2():
             return ro.run_case(case, self.config(**overrides))
 
     def _write_finals(self, cgroup):
@@ -77,6 +78,14 @@ def reporting_prefix(setup="", linger=None):
     tail = f"\nsleep {linger}" if linger else ""
     script = f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n"$@"\nc=$?\nprintf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}{tail}\nexit $c'
     return ["sh", "-c", script, "sh"]
+
+
+@contextlib.contextmanager
+def fake_cgroup2(box_is_inside=True):
+    """Let a fake cgroup folder pass for a cgroup2 node the box is in (`box_is_inside` None: a box that cannot be judged)."""
+    with mock.patch.object(cg, "is_cgroup2", lambda directory: True), mock.patch.object(cg, "member_of", lambda pid, directory: box_is_inside), \
+            mock.patch.object(cg, "in_cgroup", lambda pid, directory: box_is_inside), mock.patch.object(cg, "cgroup2_root", lambda directory: "/"):
+        yield
 
 
 def fake_cgroup(ws, name="cg", files=None, final=None):

@@ -8,6 +8,7 @@ group of its own and `os.killpg` of the launcher's group would miss it. Nothing 
 """
 import errno
 import os
+import re
 import shutil
 import signal
 import time
@@ -138,22 +139,70 @@ def kill(directory):
         raise ex.CleanupFailed(f"cgroup.kill of {directory} could not be written: {type(e).__name__}: {e}") from e
 
 
+def _still_listed(directory, pid):
+    return pid in (procs(directory) or [])
+
+
+def _signal_through_pidfd(directory, pid):
+    """Pin `pid` with a pidfd, check that it is STILL listed in the cgroup, and only then signal it, through that pidfd: a pid that left the
+    cgroup between the listing and the signal (and may be someone else's now) is never signalled. A pid the runner may not signal is left to
+    the emptiness check that follows."""
+    fd = ex.pidfd_open(pid)
+    try:
+        if fd is not None and _still_listed(directory, pid):
+            signal.pidfd_send_signal(fd, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    finally:
+        ex.close_fd(fd)
+
+
 def kill_pids(directory):
-    """SIGKILL to each host pid `cgroup.procs` lists: the fallback when `cgroup.kill` cannot be written. A pid that is gone, or one the
-    runner may not signal, is left to the check that follows."""
+    """SIGKILL to each host pid `cgroup.procs` lists, each through a pidfd: the fallback when `cgroup.kill` cannot be written."""
     for pid in procs(directory) or []:
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+        _signal_through_pidfd(directory, pid)
 
 
-CGROUP_ROOT = "/sys/fs/cgroup"
+def _mountinfo():
+    return _text("/proc/self/mountinfo") or ""
+
+
+def _unescape(path):
+    """A mount point as /proc/self/mountinfo writes it: a space, a tab, a line feed and a backslash are octal escapes."""
+    return re.sub(r"\\([0-7]{3})", lambda found: chr(int(found.group(1), 8)), path)
+
+
+def _mounts():
+    """(mount point, file system type) of every mount in /proc/self/mountinfo."""
+    found = []
+    for line in _mountinfo().splitlines():
+        head, _, tail = line.partition(" - ")
+        fields, kind = head.split(), tail.split()
+        if len(fields) > 4 and kind:
+            found.append((_unescape(fields[4]), kind[0]))
+    return found
+
+
+def _under(path, mount):
+    return mount == "/" or path == mount or path.startswith(mount + "/")
+
+
+def _nearest_mount(real):
+    above = [(mount, kind) for mount, kind in _mounts() if _under(real, mount)]
+    return max(above, key=lambda entry: len(entry[0]), default=None)
+
+
+def cgroup2_root(directory):
+    """The mount point of the cgroup2 hierarchy `directory` (resolved, links followed) lies under, or None: the nearest mount above it decides,
+    and one that is not cgroup2 (a v1 hierarchy, a tmpfs, a plain folder under /) is no root."""
+    nearest = _nearest_mount(os.path.realpath(directory))
+    return nearest[0] if nearest and nearest[1] == "cgroup2" else None
 
 
 def is_cgroup2(directory):
-    """True when the directory is a cgroup2 node: it holds `cgroup.controllers` (a plain folder, or a cgroup v1 one, does not)."""
-    return os.path.exists(os.path.join(directory, "cgroup.controllers"))
+    """True when the directory is a cgroup2 node: it holds `cgroup.controllers` AND lies under a cgroup2 mount (a controllers file in a plain
+    folder is only a file)."""
+    return os.path.exists(os.path.join(directory, "cgroup.controllers")) and cgroup2_root(directory) is not None
 
 
 def _proc_cgroup(pid):
@@ -170,15 +219,28 @@ def pid_cgroup_path(pid):
     return lines[0] if lines else None
 
 
+def _cgroup_path(directory):
+    """The path of `directory` from its cgroup2 mount root, both resolved ('' for the root itself), or None when it is under none."""
+    root = cgroup2_root(directory)
+    if root is None:
+        return None
+    here = os.path.relpath(os.path.realpath(directory), os.path.realpath(root))
+    return "" if here == "." else "/" + here
+
+
 def member_of(pid, directory):
     """True when `pid` is in the cgroup `directory` or a descendant of it, False when it is somewhere else, None when it cannot be told (the
-    process is gone: a program that ended before it was looked at)."""
-    path = pid_cgroup_path(pid)
+    process is gone: a program that ended before it was looked at). Normalised cgroup-relative paths are compared, never raw strings."""
+    path, here = pid_cgroup_path(pid), _cgroup_path(directory)
     if path is None:
         return None
-    here = os.path.relpath(os.path.realpath(directory), CGROUP_ROOT)
-    prefix = "" if here == "." else "/" + here
-    return path == prefix or path.startswith(prefix + "/")
+    return here is not None and (path == here or path.startswith(here + "/"))
+
+
+def in_cgroup(pid, directory):
+    """Like `member_of`, but for the box itself: it must be IN the named cgroup, not in a descendant of it."""
+    path, here = pid_cgroup_path(pid), _cgroup_path(directory)
+    return None if path is None else here is not None and path == here
 
 
 def stale_counters(directory):
@@ -208,7 +270,7 @@ def _gone(directory, was_readable):
     return failed == errno.ENODEV or (was_readable and failed == errno.ENOENT)
 
 
-def _populated(directory):
+def populated_of(directory):
     """`populated` of `cgroup.events` (1 while the cgroup or a descendant holds a live process), or None when the file does not say."""
     value = dict(_pairs(_text(os.path.join(directory, "cgroup.events")) or "")).get("populated")
     return _whole_number(value)
@@ -223,7 +285,7 @@ def empty(directory, was_readable=False):
     listed pid is a zombie. A file that cannot be read or understood, in a cgroup that never was readable, is not empty."""
     if _gone(directory, was_readable):
         return True
-    populated = _populated(directory)
+    populated = populated_of(directory)
     return _all_dead(procs(directory)) if populated is None else populated == 0
 
 

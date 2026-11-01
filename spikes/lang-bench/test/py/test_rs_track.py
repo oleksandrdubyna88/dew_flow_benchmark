@@ -11,6 +11,7 @@ import rs_cgroup as cg
 import rs_exec as ex
 import rs_scope
 import rs_track as tr
+from unittest import mock
 from box_support import wait_until
 from test_rs_cgroup import Folder, copy_of_bash
 
@@ -155,6 +156,29 @@ class OrphanTests(unittest.TestCase):
         self.assertIsNone(tracker.signalled()["pid"])
         self.assertIn("orphan", tracker.signalled()["found"])
         self.assertEqual(tracker.fork(tracker.leftover()), {"known": True, "found": True, "count": 2})
+
+    def test_F7_the_end_of_the_program_is_judged_by_its_pidfd_and_not_by_whether_proc_has_its_pid(self):
+        family, launcher = Family(self, 1), launcher_of(self)
+        child = family.children()[0]
+        family.list(child)
+        tracker = family.tracker(launcher)
+        tracker.look()
+        os.kill(child, 9)
+        self.assertTrue(wait_until(lambda: cg.is_zombie(child) or not os.path.exists(f"/proc/{child}")))
+        # the pid is "alive" to /proc (a recycled pid looks exactly like this) but the pidfd says the program exited
+        with mock.patch.object(cg, "is_zombie", return_value=False), mock.patch.object(os.path, "exists", return_value=True):
+            self.assertEqual(tracker.leftover(), [], "the pidfd decides: the program ended")
+        self.assertEqual(tracker.signalled()["pid"], child)
+
+    def test_F7_a_process_whose_pidfd_is_still_quiet_is_alive_whatever_proc_says(self):
+        family, launcher = Family(self, 1), launcher_of(self)
+        child = family.children()[0]
+        family.list(child)
+        tracker = family.tracker(launcher)
+        tracker.look()
+        with mock.patch.object(os.path, "exists", return_value=False):  # /proc "has no such pid" (a refused read looks like this)
+            self.assertEqual(tracker.leftover(), [child])
+        self.assertTrue(tracker.orphan)
 
     def test_The_program_that_really_ended_is_not_its_own_leftover(self):
         family, launcher = Family(self, 1), launcher_of(self)

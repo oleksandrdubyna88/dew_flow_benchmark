@@ -195,15 +195,15 @@ def _problem(how, reader, lifecycle):
     return found
 
 
-def _stop_unconfirmed(proc, child_pid):
-    """Stop a box that is not in the cgroup it was said to be in, WITHOUT writing to that cgroup (it is not the box's): SIGKILL through a
-    pidfd of child-pid (the box's init: its pid namespace goes with it), then the launcher's own group while its leader is unreaped."""
-    fd = ex.pidfd_open(child_pid)
+def _stop_unconfirmed(proc, lifecycle):
+    """Stop a box that is not in the cgroup it was said to be in, WITHOUT writing to that cgroup (it is not the box's): SIGKILL through the
+    pidfd of child-pid that was opened before the box was judged (the box's init: its pid namespace goes with it), then the launcher's own
+    group while its leader is unreaped."""
     try:
-        if fd is not None:
-            signal.pidfd_send_signal(fd, signal.SIGKILL)
-    finally:
-        ex.close_fd(fd)
+        if lifecycle.box_fd is not None:
+            signal.pidfd_send_signal(lifecycle.box_fd, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
     if proc.returncode is None:
         ex.kill_group(proc)
 
@@ -211,9 +211,12 @@ def _stop_unconfirmed(proc, child_pid):
 def _confirm_box(proc, reader, lifecycle, case_id, stderr_path):
     """After child-pid the box must belong to the cgroup named for it (`/proc/<child-pid>/cgroup`), else it is stopped and the launch failed."""
     reason = lifecycle.mismatch(reader.child_pid)
-    if reason is not None:
-        _stop_unconfirmed(proc, reader.child_pid)
-        raise LaunchFailed(case_id, reason, ex.read_tail(stderr_path))
+    try:
+        if reason is not None:
+            _stop_unconfirmed(proc, lifecycle)
+            raise LaunchFailed(case_id, reason, ex.read_tail(stderr_path))
+    finally:
+        lifecycle.release_box()
 
 
 def _clock(proc, lifecycle, launcher_fd, pipe_fd, case_id, stderr_path):

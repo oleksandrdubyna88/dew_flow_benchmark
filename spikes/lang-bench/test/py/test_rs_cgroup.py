@@ -3,6 +3,7 @@ and the kill by `cgroup.kill`. Fake files stand in for the cgroup here; the real
 import errno
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,42 @@ class MemoryTests(unittest.TestCase):
         record = cg.memory(Folder(self, {"memory.events": "oom 1\noom_kill 2\n"}).dir)
         self.assertEqual((record["known"], record["oomKill"]), (False, 2))
         self.assertNotIn("peakBytes", record)
+
+
+class KillPidsTests(unittest.TestCase):
+    """F5: the fallback kill signals through a pidfd opened for each listed pid, after checking the pid is still listed."""
+
+    def listed_sleeper(self):
+        proc = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (proc.kill(), proc.wait()))
+        return proc, Folder(self, {"cgroup.procs": f"{proc.pid}\n"}).dir
+
+    def test_A_listed_pid_is_killed_through_its_pidfd_and_never_by_pid(self):
+        proc, folder = self.listed_sleeper()
+        with mock.patch.object(os, "kill", side_effect=AssertionError("os.kill: a pid, not a pidfd")):
+            cg.kill_pids(folder)
+        self.assertTrue(time_until(lambda: proc.poll() is not None), "killed")
+
+    def test_A_pid_that_is_no_longer_listed_when_its_pidfd_is_open_is_not_signalled(self):
+        proc, folder = self.listed_sleeper()
+        listings = iter([[proc.pid], []])  # the first read lists it, the re-check after the pidfd is open does not
+        with mock.patch.object(cg, "procs", lambda directory: next(listings)):
+            cg.kill_pids(folder)
+        time.sleep(0.2)
+        self.assertIsNone(proc.poll(), "a pid that left the cgroup (and may be someone else's now) is left alone")
+
+    def test_A_pid_that_cannot_be_signalled_is_left_to_the_emptiness_check(self):
+        proc, folder = self.listed_sleeper()
+        with mock.patch.object(signal, "pidfd_send_signal", side_effect=PermissionError):
+            cg.kill_pids(folder)
+        self.assertIsNone(proc.poll())
+
+
+def time_until(predicate, seconds=5):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and not predicate():
+        time.sleep(0.01)
+    return predicate()
 
 
 class UnreadableProcsTests(unittest.TestCase):

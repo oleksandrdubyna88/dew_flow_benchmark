@@ -48,7 +48,7 @@ class ScopeLifecycle:
 
     def __init__(self, directory, identity=None, wrapper_file=None, box=False):
         self.directory, self.identity, self.wrapper_file, self.box = directory, identity, wrapper_file, box
-        self.confirmed = False
+        self.confirmed, self.box_fd = False, None
         self.road = {"kill": "cgroup.kill", "leftoverEvidence": "cgroup.procs minus bwrap, the launcher and the wrapper, read after the exit and before the kill"}
 
     def memory(self, case_id=None):
@@ -68,20 +68,46 @@ class ScopeLifecycle:
         self._refuse_if_used()
 
     def _refuse_if_used(self):
-        held, stale = cg.procs(self.directory), cg.stale_counters(self.directory)
-        if held is None or held:
+        held, stale = self._holds_a_process(), cg.stale_counters(self.directory)
+        if held:
             raise CgroupBusy(f"the cgroup {self.directory} already holds a process or cannot be read: it is not this case's to measure or kill")
         if stale:
             raise CgroupBusy(f"the cgroup {self.directory} is not new: {', '.join(stale)} (counters are not reset between cases)")
 
+    def _holds_a_process(self):
+        """`populated` of cgroup.events when it says (1: a live process is in it or below it; 0: none, whatever zombies are still listed),
+        else the listing, where one that cannot be read counts as held."""
+        populated = cg.populated_of(self.directory)
+        if populated is not None:
+            return populated == 1
+        held = cg.procs(self.directory)
+        return held is None or bool(held)
+
     def mismatch(self, child_pid):
-        """After child-pid: why the box is NOT in this cgroup, or None. A box already gone is not a mismatch (it only leaves the cgroup
-        unconfirmed, so its memory stays unknown)."""
+        """After child-pid: why the box is NOT in this cgroup, or None. The pidfd of `child-pid` is opened FIRST and kept (`box_fd`): the
+        membership is judged only while it says the box is still running, and a box that has to be stopped is stopped through it. A box
+        already gone is not a mismatch (it only leaves the cgroup unconfirmed, so its memory stays unknown). The box must be IN the named
+        cgroup, not in a descendant of it."""
         if not cg.is_cgroup2(self.directory):
             return f"{self.directory} is not a cgroup2 node"
-        inside = cg.member_of(child_pid, self.directory)
+        self.box_fd = ex.pidfd_open(child_pid)
+        inside = self._inside(child_pid)
         self.confirmed = inside is True
-        return f"the box (child-pid {child_pid}) is not in the cgroup {self.directory}" if inside is False else None
+        return None if inside is not False else self._where(child_pid)
+
+    def _inside(self, child_pid):
+        """True or False while the box (pinned by `box_fd`) still runs, None when it is gone and cannot be judged."""
+        running = self.box_fd is not None and not ex.pidfd_ready(self.box_fd)
+        return cg.in_cgroup(child_pid, self.directory) if running else None
+
+    def _where(self, child_pid):
+        """The reason, naming the cgroup that was expected and the one the box was seen in (from /proc/<child-pid>/cgroup)."""
+        root, seen = cg.cgroup2_root(self.directory) or "", cg.pid_cgroup_path(child_pid)
+        return f"the box (child-pid {child_pid}) is not in the cgroup {self.directory}: it is in {root.rstrip('/')}{seen}"
+
+    def release_box(self):
+        ex.close_fd(self.box_fd)
+        self.box_fd = None
 
     def kill(self, proc):
         """`1` into `cgroup.kill`, the launcher reaped, and then no pid left in the cgroup or CleanupFailed. A cgroup that is missing, or one

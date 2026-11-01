@@ -329,12 +329,13 @@ class SettleOrderTests(unittest.TestCase):
 
     def test_A_pid_the_fallback_cannot_kill_is_a_cleanup_failure_after_the_check(self):
         ws = Workspace(self, "", FILES)
-        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS, "cgroup.events": "populated 1\n"})
+        cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS, "cgroup.events": "populated 0\n"})
         plant_unwritable_kill(cgroup)
         stubborn = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(lambda: (stubborn.kill(), stubborn.wait()))
-        ws.write(ws.dir, "run.sh", f'echo {stubborn.pid} > "{cgroup}/cgroup.procs"\ncat answer.bin\n')
-        with mock.patch.object(cg.os, "kill", side_effect=PermissionError):
+        # the cgroup is empty before the spawn (the runner insists) and the program is what puts a live process in it
+        ws.write(ws.dir, "run.sh", f'echo {stubborn.pid} > "{cgroup}/cgroup.procs"\nprintf "populated 1\\n" > "{cgroup}/cgroup.events"\ncat answer.bin\n')
+        with mock.patch.object(signal, "pidfd_send_signal", side_effect=PermissionError):
             with self.assertRaises(ex.CleanupFailed) as raised:
                 ws.run(case(), cgroup=cgroup)
         self.assertIn("still in", str(raised.exception), "named by the check that found the cgroup not empty")

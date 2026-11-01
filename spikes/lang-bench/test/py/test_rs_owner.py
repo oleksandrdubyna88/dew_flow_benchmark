@@ -12,7 +12,7 @@ import rs_cgroup as cg
 import rs_exec as ex
 import rs_launch as rl
 import rs_scope
-from box_support import ANSWER, STATUS_FD, Scope, Workspace, case, fake_box, box_prefix, fake_cgroup, require_scope, sleepers, wait_until
+from box_support import ANSWER, STATUS_FD, Scope, Workspace, case, fake_box, box_prefix, fake_cgroup, fake_cgroup2, require_scope, sleepers, wait_until
 from test_rs_cgroup import Folder
 
 FILES = {"answer.bin": ANSWER}
@@ -28,10 +28,35 @@ class CgroupKindTests(unittest.TestCase):
         self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
         self.assertFalse(os.path.exists(os.path.join(ws.dir, "started.marker")))
 
-    def test_A_cgroup2_node_is_known_by_its_controllers_file(self):
-        self.assertTrue(cg.is_cgroup2(Folder(self, {"cgroup.controllers": "memory pids\n"}).dir))
-        self.assertFalse(cg.is_cgroup2(Folder(self, {"cgroup.procs": ""}).dir))
+    def test_A_cgroup2_node_is_a_directory_with_controllers_under_the_cgroup2_mount(self):
         self.assertTrue(cg.is_cgroup2("/sys/fs/cgroup"))
+        self.assertFalse(cg.is_cgroup2(Folder(self, {"cgroup.procs": ""}).dir), "no controllers file")
+        self.assertFalse(cg.is_cgroup2(Folder(self, {"cgroup.controllers": "memory pids\n"}).dir), "a controllers file outside the mount is a file, not a cgroup")
+
+    def test_E3_E9_a_directory_outside_the_cgroup2_mount_that_holds_a_controllers_file_is_refused_before_the_spawn_and_nothing_is_written_to_it(self):
+        ws = Workspace(self, "touch started.marker\n")
+        outside = ws.make_dir("outside")
+        ws.write(outside, "cgroup.controllers", "memory\n")
+        before = sorted(os.listdir(outside))
+        with self.assertRaises(rs_scope.CgroupInvalid):
+            ws.run(case(expected=b""), cgroup=outside, real=True)
+        self.assertEqual(sorted(os.listdir(outside)), before, "nothing was written to it")
+        self.assertFalse(os.path.exists(os.path.join(ws.dir, "started.marker")))
+
+    def test_E3_the_mount_root_comes_from_mountinfo_and_a_mount_that_is_not_cgroup2_is_no_root(self):
+        info = ("36 35 0:30 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n"
+                "40 35 0:31 / /sys/fs/cgroup/legacy rw - cgroup cgroup rw,cpu\n"
+                "41 35 0:32 / /mnt/with\\040space rw - cgroup2 cgroup2 rw\n")
+        with mock.patch.object(cg, "_mountinfo", return_value=info):
+            self.assertEqual(cg.cgroup2_root("/sys/fs/cgroup/user.slice/x"), "/sys/fs/cgroup")
+            self.assertIsNone(cg.cgroup2_root("/sys/fs/cgroup/legacy/sub"), "the nearest mount is a v1 hierarchy")
+            self.assertIsNone(cg.cgroup2_root("/tmp/elsewhere"))
+            self.assertEqual(cg.cgroup2_root("/mnt/with space/a"), "/mnt/with space")
+
+    def test_E3_a_path_with_dots_or_a_link_is_resolved_before_it_is_compared(self):
+        with mock.patch.object(cg, "_proc_cgroup", return_value="0::/a/b\n"), mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"):
+            self.assertTrue(cg.in_cgroup(1, "/sys/fs/cgroup/a/x/../b"))
+            self.assertFalse(cg.in_cgroup(1, "/sys/fs/cgroup/a/b/../c"))
 
     def test_cgroup_kill_is_opened_and_never_created(self):
         folder = Folder(self).dir
@@ -47,7 +72,7 @@ class StaleCounterTests(unittest.TestCase):
     def refused(self, files):
         ws = Workspace(self, "touch started.marker\n", FILES)
         cgroup = fake_cgroup(ws, files=files)
-        with self.assertRaises(rs_scope.CgroupBusy) as raised:
+        with fake_cgroup2(), self.assertRaises(rs_scope.CgroupBusy) as raised:
             ws.run(case(expected=b""), cgroup=cgroup, real=True)
         self.assertFalse(os.path.exists(os.path.join(ws.dir, "started.marker")), "nothing was started")
         return str(raised.exception)
@@ -61,7 +86,8 @@ class StaleCounterTests(unittest.TestCase):
     def test_Zero_counters_and_absent_counters_are_fine(self):
         for files in ({"cgroup.controllers": "", "memory.peak": "0", "memory.events": "oom_kill 0\n"}, {"cgroup.controllers": ""}):
             ws = Workspace(self, "cat answer.bin\n", FILES)
-            rs_scope.ScopeLifecycle(fake_cgroup(ws, files=files)).check_free()
+            with fake_cgroup2():
+                rs_scope.ScopeLifecycle(fake_cgroup(ws, files=files)).check_free()
 
     def test_The_counters_are_read_through_one_function_that_names_what_it_found(self):
         self.assertEqual(cg.stale_counters(Folder(self, {"memory.peak": "9", "memory.events": "oom_kill 2\n"}).dir), ["memory.peak is 9", "oom_kill is 2"])
@@ -90,21 +116,86 @@ class EmptinessTests(unittest.TestCase):
         self.assertTrue(cg.empty(Folder(self, {"cgroup.events": "garbage\n", "cgroup.procs": ""}).dir), "an events file that cannot be read falls back to the listing")
 
 
+class BoxPathTests(unittest.TestCase):
+    """F3: the box must be IN the named cgroup, not in a descendant of it; and an existing cgroup is free only when `populated` says 0."""
+
+    def lifecycle(self, observed, directory="/sys/fs/cgroup/run/box.scope"):
+        life = rs_scope.ScopeLifecycle(directory, box=True)
+        self.box = subprocess.Popen(["sleep", "30"])  # a real process: its pidfd is what the judgement pins first
+        self.addCleanup(lambda: (self.box.kill(), self.box.wait()))
+        patches = (mock.patch.object(cg, "_proc_cgroup", return_value=f"0::{observed}\n"), mock.patch.object(cg, "is_cgroup2", return_value=True),
+                   mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"))
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        return life
+
+    def test_A_box_in_a_strict_descendant_of_the_named_cgroup_is_a_mismatch(self):
+        self.assertIsNone(self.lifecycle("/run/box.scope").mismatch(self.box.pid))
+        reason = self.lifecycle("/run/box.scope/sub").mismatch(self.box.pid)
+        self.assertIn("is not in the cgroup", reason)
+        self.assertIn("/run/box.scope/sub", reason, "E8: the observed path is named")
+
+    def test_A_box_in_the_parent_or_a_neighbour_is_a_mismatch_too(self):
+        for observed in ("/run", "/run/box.scope2", "/run/other.scope"):
+            self.assertIsNotNone(self.lifecycle(observed).mismatch(self.box.pid), observed)
+
+    def test_F5_the_pidfd_of_child_pid_is_opened_before_membership_is_judged_and_the_box_is_stopped_through_that_pidfd(self):
+        box = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (box.kill(), box.wait()))
+        life = self.lifecycle("/run/elsewhere")
+        order, real_open = [], ex.pidfd_open
+
+        def opening(pid):
+            order.append("pidfd_open")
+            return real_open(pid)
+
+        def judging(pid, directory):
+            order.append("in_cgroup")
+            return False
+
+        launcher = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: (launcher.kill(), launcher.wait()))
+        reader = type("R", (), {"child_pid": box.pid})()
+        with mock.patch.object(ex, "pidfd_open", opening), mock.patch.object(cg, "in_cgroup", judging), \
+                mock.patch.object(os, "kill", side_effect=AssertionError("os.kill: a pid, not a pidfd")):
+            with self.assertRaises(rl.LaunchFailed):
+                rl._confirm_box(launcher, reader, life, "s03", os.devnull)
+        self.assertEqual(order, ["pidfd_open", "in_cgroup"], "a pid that is judged first may be someone else's by the time it is signalled")
+        self.assertTrue(wait_until(lambda: box.poll() is not None), "the box was killed through its pidfd")
+
+    def test_populated_one_in_cgroup_events_makes_an_existing_cgroup_busy_whatever_cgroup_procs_says(self):
+        ws = Workspace(self, "cat answer.bin\n", FILES)
+        busy = fake_cgroup(ws, files={"cgroup.events": "populated 1\n"})
+        with fake_cgroup2(), self.assertRaises(rs_scope.CgroupBusy):
+            rs_scope.ScopeLifecycle(busy).check_free()
+
+    def test_populated_zero_makes_it_free_even_when_a_zombie_is_still_listed(self):
+        ws = Workspace(self, "cat answer.bin\n", FILES)
+        corpse = subprocess.Popen(["true"])
+        self.addCleanup(corpse.wait)
+        self.assertTrue(wait_until(lambda: cg.is_zombie(corpse.pid)))
+        free = fake_cgroup(ws, files={"cgroup.events": "populated 0\n", "cgroup.procs": f"{corpse.pid}\n"})
+        with fake_cgroup2():
+            rs_scope.ScopeLifecycle(free).check_free()
+
+
 class MembershipTests(unittest.TestCase):
     def test_A_pid_belongs_to_the_cgroup_or_a_descendant_of_it_and_not_to_a_neighbour_with_the_same_prefix(self):
-        with mock.patch.object(cg, "_proc_cgroup", return_value="0::/user.slice/app.slice/box.scope/prog\n"):
+        with mock.patch.object(cg, "_proc_cgroup", return_value="0::/user.slice/app.slice/box.scope/prog\n"), \
+                mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"):
             self.assertTrue(cg.member_of(1, "/sys/fs/cgroup/user.slice/app.slice/box.scope"))
             self.assertTrue(cg.member_of(1, "/sys/fs/cgroup/user.slice/app.slice/box.scope/prog"))
             self.assertFalse(cg.member_of(1, "/sys/fs/cgroup/user.slice/app.slice/box.sco"))
             self.assertFalse(cg.member_of(1, "/sys/fs/cgroup/user.slice/app.slice/other.scope"))
-        with mock.patch.object(cg, "_proc_cgroup", return_value=None):
+        with mock.patch.object(cg, "_proc_cgroup", return_value=None), mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"):
             self.assertIsNone(cg.member_of(1, "/sys/fs/cgroup/x"), "a process that is gone belongs to nobody the runner can tell")
 
     def test_Memory_is_unknown_when_no_process_of_the_box_was_ever_seen_in_the_cgroup(self):
         ws = Workspace(self, "cat answer.bin\n", FILES)
         cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": "oom_kill 0\n"})
         ws.write(ws.dir, "run.sh", f'printf "oom_kill 1\\n" > "{cgroup}/memory.events"\ncat answer.bin\n')
-        with mock.patch.object(cg, "member_of", return_value=None), mock.patch.object(cg, "is_cgroup2", return_value=True):
+        with fake_cgroup2(box_is_inside=None):
             result = ws.run(case(), prefix=box_prefix(fake_box(self)), status_fd=STATUS_FD, cgroup=cgroup, real=True)
         self.assertEqual(result.status, "PASS", "a counter of a cgroup the box was never seen in is not this case's: no memory limit")
         self.assertEqual(result.lifecycle["memory"]["known"], False)
@@ -171,6 +262,9 @@ class WrongCgroupTests(unittest.TestCase):
             ws.run(case(expected=b""), prefix=scope.prefix(ws.dir, status_fd=STATUS_FD, holder=holder_file), status_fd=STATUS_FD, cgroup=wrong,
                    wrapper_file=holder_file, real=True)
         self.assertIn("not in the cgroup", raised.exception.reason)
+        self.assertIn(wrong, raised.exception.reason, "E8: it names the cgroup that was expected")
+        self.assertIn(scope.unit, raised.exception.reason, "E8: and the one the box was seen in, from /proc/<child-pid>/cgroup")
+        self.assertEqual(raised.exception.stderr.strip(), "", "even though the prefix wrote nothing on standard error")
         self.assertTrue(wait_until(lambda: sleepers(seconds) == []), f"alive after the refusal: {sleepers(seconds)}")
         self.assertTrue(wait_until(lambda: scope.pids() == []), f"left in the box's own scope: {scope.pids()}")
 
@@ -180,9 +274,10 @@ class WrongCgroupTests(unittest.TestCase):
         ws = Workspace(self, f"exec sleep {seconds}\n")
         wrong = fake_cgroup(ws, "wrong", files={"cgroup.kill": "untouched", "cgroup.controllers": ""})
         holder_file = os.path.join(ws.root, "holder.pid")
-        with self.assertRaises(rl.LaunchFailed):
-            ws.run(case(expected=b""), prefix=scope.prefix(ws.dir, status_fd=STATUS_FD, holder=holder_file), status_fd=STATUS_FD, cgroup=wrong,
-                   wrapper_file=holder_file, real=True)
+        with mock.patch.object(cg, "is_cgroup2", return_value=True), mock.patch.object(cg, "cgroup2_root", return_value="/"):
+            with self.assertRaises(rl.LaunchFailed):  # the folder passes for a node; the box's real cgroup is another path
+                ws.run(case(expected=b""), prefix=scope.prefix(ws.dir, status_fd=STATUS_FD, holder=holder_file), status_fd=STATUS_FD, cgroup=wrong,
+                       wrapper_file=holder_file, real=True)
         with open(os.path.join(wrong, "cgroup.kill")) as f:
             self.assertEqual(f.read(), "untouched", "the kill of a case never goes to a cgroup that is not the box's")
         self.assertTrue(wait_until(lambda: sleepers(seconds) == []))
