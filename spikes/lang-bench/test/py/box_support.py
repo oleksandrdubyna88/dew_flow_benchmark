@@ -3,6 +3,7 @@ one-liners that write bwrap's status lines), and the real transient user scope t
 import glob
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -50,11 +51,45 @@ def case(expected=ANSWER, stdin=b"7\n", ident="s03", fixtures=None):
     return ro.Case(ident, stdin, expected, (), None, fixtures)
 
 
-def reporting_prefix(setup=""):
-    """A fake bwrap: `{"child-pid": P}` on descriptor 7 after `setup` (a shell fragment), then the program as a child, then
-    `{"exit-code": C}`. The launcher stays the program's parent, so it is a launcher and not the program."""
-    script = f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n"$@"\nc=$?\nprintf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}\nexit $c'
+def reporting_prefix(setup="", linger=None):
+    """A fake box: `{"child-pid": P}` on descriptor 7 after `setup` (a shell fragment), then the program as a child, then `{"exit-code": C}`,
+    then `linger` seconds of teardown. The launcher stays the program's parent, so it is a launcher and not the program, and (it is not
+    bwrap) no program pid is found: the end of the case is the `exit-code` record."""
+    tail = f"\nsleep {linger}" if linger else ""
+    script = f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n"$@"\nc=$?\nprintf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}{tail}\nexit $c'
     return ["sh", "-c", script, "sh"]
+
+
+def fake_cgroup(ws, name="cg", files=None):
+    """A folder that stands in for a cgroup: an empty `cgroup.procs` (nothing in it yet, as the runner requires) and the given files."""
+    path = ws.make_dir(name)
+    for file_name, text in {"cgroup.procs": "", **(files or {})}.items():
+        ws.write(path, file_name, text)
+    return path
+
+
+def fake_box(test):
+    """A COPY of bash named `bwrap` in an owned folder: the stand-in for the box binary. It is a bwrap process by identity (device and
+    inode of the file the prefix names), which a second copy of bash named bwrap in a workspace is not."""
+    holder = tempfile.TemporaryDirectory()
+    test.addCleanup(holder.cleanup)
+    path = os.path.join(holder.name, "bwrap")
+    shutil.copy(shutil.which("bash"), path)
+    return path
+
+
+def box_prefix(box, cgroup=None, linger=None, setup=""):
+    """The fake box as a launch prefix: the program runs as ITS child (so its parent is a bwrap process), `child-pid` and `exit-code` go to
+    descriptor 7, and with `cgroup` the pids of the box and of the program are written to that folder's fake `cgroup.procs`, the program's
+    leaving it when the program ends and the box's when the box does (a real cgroup does the same, a fake file must be told to)."""
+    file = f"{cgroup}/cgroup.procs" if cgroup else None
+    listing = f'printf "%s\\n%s\\n" $$ $pid > "{file}"' if file else ":"
+    boxed = f'printf "%s\\n" $$ > "{file}"' if file else ":"
+    gone = f': > "{file}"' if file else ":"
+    tail = f"\nsleep {linger}" if linger else ""
+    script = (f'{setup}\nprintf \'{{"child-pid": %s}}\\n\' $$ >&{STATUS_FD}\n"$@" <&0 &\npid=$!\n{listing}\nwait $pid\nc=$?\n{boxed}\n'
+              f'printf \'{{"exit-code": %s}}\\n\' $c >&{STATUS_FD}{tail}\n{gone}\nexit $c')
+    return [box, "-c", script, "bwrap"]
 
 
 def failing_prefix():

@@ -4,12 +4,12 @@ output for the report is capped, and a capped capture is never what decides: a P
 byte and nothing more. A wall time over the limit is a time limit even when the program exited by itself.
 """
 import os
-import selectors
 import signal
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import rs_exec as ex
 import rs_launch as rl
+import rs_pump
 import rs_report as rp
 import rs_scope
 import rs_view
@@ -78,107 +78,12 @@ class Comparer:
 
 class Outcome(NamedTuple):
     end: str
-    wall_ms: int
+    wall_ns: Optional[int]
     returncode: int
     leftover: object
     memory: dict
     launched: object
     road: dict
-
-
-class _Pump:
-    """Moves bytes between the program and the runner without ever blocking on either: input out, output in, exit on a pidfd."""
-
-    def __init__(self, proc, pidfd, data, comparer, stderr_path):
-        self.proc, self.pidfd, self.comparer, self.stderr_path = proc, pidfd, comparer, stderr_path
-        self.pending, self.exit_ms, self.eof = memoryview(data), None, False
-        self.sel = selectors.DefaultSelector()
-        os.set_blocking(proc.stdout.fileno(), False)
-        self.sel.register(proc.stdout, selectors.EVENT_READ, self.read_output)
-        self._start_input()
-        if pidfd is not None:
-            self.sel.register(pidfd, selectors.EVENT_READ, self.exited)
-
-    def _start_input(self):
-        if not len(self.pending):
-            return self.proc.stdin.close()
-        os.set_blocking(self.proc.stdin.fileno(), False)
-        self.sel.register(self.proc.stdin, selectors.EVENT_WRITE, self.write_input)
-
-    def write_input(self):
-        try:
-            self.pending = self.pending[os.write(self.proc.stdin.fileno(), self.pending[:ex.CHUNK]):]
-        except BlockingIOError:
-            return None
-        except BrokenPipeError:
-            self.pending = self.pending[len(self.pending):]
-        return self._input_done() if not len(self.pending) else None
-
-    def _input_done(self):
-        self.sel.unregister(self.proc.stdin)
-        self.proc.stdin.close()
-
-    def read_output(self):
-        try:
-            chunk = os.read(self.proc.stdout.fileno(), ex.CHUNK)
-        except BlockingIOError:
-            return None
-        if not chunk:
-            self.sel.unregister(self.proc.stdout)
-            return None
-        self.comparer.feed(chunk)
-        return "mismatch" if self.comparer.mismatch is not None else None
-
-    def exited(self):
-        self.exit_ms = ex.now_ms()
-        return self.drain()
-
-    def drain(self):
-        """What the program wrote before it exited is in the pipe already: read it, but never wait for an end a stray child may hold open."""
-        while self.comparer.mismatch is None and self._more():
-            pass
-        return "mismatch" if self.comparer.mismatch is not None else "exited"
-
-    def _more(self):
-        try:
-            chunk = os.read(self.proc.stdout.fileno(), ex.CHUNK)
-        except (BlockingIOError, ValueError, OSError):
-            return False
-        self.comparer.feed(chunk)
-        return bool(chunk)
-
-    def flooded(self):
-        try:
-            return os.path.getsize(self.stderr_path) > ex.STDERR_KILL_BYTES
-        except OSError:
-            return False
-
-    def step(self, timeout_s):
-        for key, _ in self.sel.select(timeout_s):
-            reason = key.data()
-            if reason:
-                return reason
-        return "flood" if self.flooded() else self._polled()
-
-    def _polled(self):
-        if self.pidfd is None and self.proc.poll() is not None:
-            return self.exited()
-        return None
-
-    def run(self, started_ms, limit_ms):
-        while True:
-            remaining = started_ms + limit_ms - ex.now_ms()
-            if remaining <= 0:
-                return "timeout"
-            reason = self.step(min(remaining / 1000, ex.TICK_S))
-            if reason:
-                return reason
-
-    def close(self):
-        self.sel.close()
-        for stream in (self.proc.stdin, self.proc.stdout):
-            if stream and not stream.closed:
-                stream.close()
 
 
 def _launch(case, config, lifecycle, stderr_path):
@@ -190,20 +95,29 @@ def _launch(case, config, lifecycle, stderr_path):
     return rl.start(config, case.id, lifecycle, stderr_path, cwd)
 
 
+def _wall_ns(pump, launched, ended):
+    """The program's wall in ns: from the case clock to the end instant the pump took. A case cut off by the deadline ends now; one whose
+    end instant is unknown (a box that gave neither a pid nor an exit-code record) has no wall."""
+    if ended == "timeout":
+        return ex.now_ns() - launched.clock_ns
+    return None if pump.exit_ns is None else pump.exit_ns - launched.clock_ns
+
+
 def _execute(case, config, comparer, stderr_path):
     lifecycle = rs_scope.lifecycle_for(config, case.id)
-    launched = _launch(case, config, lifecycle, stderr_path)
-    pump = _Pump(launched.proc, launched.pidfd, case.stdin, comparer, stderr_path)
+    launched, pump = _launch(case, config, lifecycle, stderr_path), None
     try:
-        end = pump.run(launched.clock_ms, config.limit_ms)
-        wall = (pump.exit_ms or ex.now_ms()) - launched.clock_ms
+        pump = rs_pump.Pump(launched, case.stdin, comparer, stderr_path)
+        end = pump.run(launched.clock_ns + config.limit_ms * ex.NS_PER_MS)
+        wall = _wall_ns(pump, launched, end)
         settled = lifecycle.settle(launched, end)
         return Outcome(end, wall, settled.code, settled.leftover, settled.memory, launched, lifecycle.road)
     except BaseException:  # the runner itself is being stopped (a signal): never leave the program under test running
         lifecycle.kill(launched.proc)
         raise
     finally:
-        pump.close()
+        if pump is not None:
+            pump.close()
         launched.close()
 
 
@@ -214,8 +128,14 @@ def _exit_reason(code):
 
 
 def _over_time(case, config, out, comparer):
-    over = out.end == "timeout" or out.wall_ms > config.limit_ms
-    return (rp.time_text(out.wall_ms, config.limit_ms, config.basis), None, []) if over else None
+    """The wall rule: a wall over the limit (in ns, so exactly the limit is not over it) is a time limit even when the program exited by
+    itself. A case the deadline cut off is one too; a wall that is unknown (no end instant) cannot be over."""
+    over = out.end == "timeout" or (out.wall_ns is not None and out.wall_ns > config.limit_ms * ex.NS_PER_MS)
+    return (rp.time_text(_ceil_ms(out.wall_ns), config.limit_ms, config.basis), None, []) if over else None
+
+
+def _ceil_ms(ns):
+    return -(-ns // ex.NS_PER_MS)
 
 
 def _out_of_memory(case, config, out, comparer):
@@ -241,8 +161,8 @@ def _short(case, config, out, comparer):
 
 
 def _judge(case, config, out, comparer):
-    """(reason, first mismatch dict or None, detail lines) of a failed case, or None for a pass: time, memory, then output, then status."""
-    for check in (_over_time, _out_of_memory, _mismatched, _flooded, _bad_exit, _short):
+    """(reason, first mismatch dict or None, detail lines) of a failed case, or None for a pass: memory, time, then output, then status."""
+    for check in (_out_of_memory, _over_time, _mismatched, _flooded, _bad_exit, _short):
         failed = check(case, config, out, comparer)
         if failed is not None:
             return failed
@@ -259,18 +179,19 @@ def _stderr_record(path):
     return {"known": True, "bytes": size, "truncated": size > ex.CAPTURE_CAP, "tail": ex.read_tail(path)}
 
 
+def _wall_ms(out):
+    return None if out.wall_ns is None else _ceil_ms(out.wall_ns)
+
+
 def run_case(case, config):
     """Run `bash run.sh` for one olympiad case and judge it -> CaseResult. Raises LaunchFailed (no verdict) when no sandbox was reported."""
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
-    program = out.launched.program
-    record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, program)
+    record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, out.launched.tracker)
     failed = _judge(case, config, out, comparer)
-    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(program)
-    launch_ms = out.launched.launch_ms
-    if failed is None:
-        return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, record, out.wall_ms, case.comparison, launch_ms)
-    reason, mismatch, lines = failed
-    return CaseResult(case.id, "FAIL", reason, 0, case.r_ids, tuple(lines) + tail, mismatch, record, out.wall_ms, case.comparison, launch_ms)
+    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
+    verdict = ("PASS", "", 1, None, []) if failed is None else ("FAIL", failed[0], 0, failed[1], failed[2])
+    lines = tuple(verdict[4]) + tail
+    return CaseResult(case.id, verdict[0], verdict[1], verdict[2], case.r_ids, lines, verdict[3], record, _wall_ms(out), case.comparison, out.launched.launch_ms)

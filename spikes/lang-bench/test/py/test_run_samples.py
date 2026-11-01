@@ -794,7 +794,7 @@ class ResultTests(unittest.TestCase):
         box.cli("--json", out_json)
         record = read_json(out_json)
         self.assertEqual((record["format"], record["grammar"], record["kind"]), (1, 2, "olympiad"))
-        self.assertEqual(sorted(record), ["build", "cases", "emptyProgramMs", "format", "grammar", "kind", "launch", "python", "runner"])
+        self.assertEqual(sorted(record), ["build", "cases", "emptyProgram", "emptyProgramMs", "format", "grammar", "kind", "launch", "python", "runner"])
         case = record["cases"][0]
         self.assertEqual((case["id"], case["status"], case["entries"]), ("s03", "PASS", 1))
         self.assertEqual(case["lifecycle"]["memory"], {"known": False, "why": "not certified"})

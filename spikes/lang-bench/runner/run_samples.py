@@ -2,6 +2,7 @@
 
     python3 -I run_samples.py [--workspace DIR] [--kind olympiad|daemon|web] [--no-build] [--limits FILE] [--launch-prefix JSON]
                               [--launch-status FD] [--cgroup-of TEMPLATE] [--case-view TEMPLATE]
+                              [--wrapper-pid-file TEMPLATE]
                               [--json OUT] [--only ID] [--parse-only] SAMPLES_DIR
 
 Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash, a case view that
@@ -15,8 +16,9 @@ The execution layer's options (E1.S8b builds the layer; this runner only reads w
                          its write end at FD in the launcher. `{"child-pid": P}` is the sandbox ready and the start of the case clock;
                          no `child-pid` before the launcher exits is exit 3 `launch failed` with the prefix's stderr, never a case verdict.
   --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
-                         after the program's exit and before any kill; the kill is `cgroup.kill`. `wrapper.pid` is looked for beside
-                         the `--json` file. Host pids only.
+                         after the program's exit and before any kill; the kill is `cgroup.kill`. Host pids only.
+  --wrapper-pid-file T   (with --cgroup-of) the file in which the layer's wrapper writes its pid (`{case}` filled in); the wrapper is then not
+                         taken for a leftover. Without the flag nothing is excluded as a wrapper; E1.S8b's delegated scope has none.
   --case-view TEMPLATE   the fresh writable view of the built tree the layer made for the case (`{case}` filled in): the program starts in
                          it and a scenario's `.scenario/` fixtures are written into it first. The samples directory may not lie in it.
 """
@@ -92,7 +94,7 @@ def build_parser():
     p.add_argument("--json", dest="json_out")
     p.add_argument("--only")
     p.add_argument("--parse-only", action="store_true")
-    for name in ("--cgroup-of", "--launch-status", "--case-view"):
+    for name in ("--cgroup-of", "--launch-status", "--case-view", "--wrapper-pid-file"):
         p.add_argument(name)
     return p
 
@@ -119,7 +121,7 @@ def _prefix_of(text):
 
 
 def _argument_problems(args):
-    problems = layer.status_problems(args)
+    problems = layer.status_problems(args) + layer.cgroup_problems(args)
     problems += [] if os.path.isdir(args.samples_dir) else [f"{sm.shown(args.samples_dir)} is not a directory"]
     problems += [] if args.launch_prefix is None or _prefix_of(args.launch_prefix) is not None else ["--launch-prefix must be a JSON array of strings"]
     return problems
@@ -198,7 +200,7 @@ def make_plan(args):
     kind, failure = _kind_of(args)
     pairs, pair_problems = _pairs_of(args)
     limits, limit_problems = _limits_of(args)
-    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + layer.view_problems(args, pairs))
+    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + layer.plan_problems(args, pairs))
     if failure:
         return failure
     return Failure(EXIT_CONFIG, found) if found else Plan(kind, args, pairs, limits, _launch_prefix(args))
@@ -249,7 +251,7 @@ def _run_cases(plan, scratch):
     limit, basis = _limit_and_basis(plan)
     config, results, empty = layer.config_of(plan, scratch, limit, basis), [], None
     try:
-        empty = rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr"))
+        empty = layer.empty_record(rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr")))
         for pair in plan.pairs:
             results.append(_run_one(pair, config))
     except rl.LaunchFailed as failed:
@@ -277,7 +279,7 @@ def _execute(plan, scratch):
 def _write_json(plan, build, results, info):
     if plan.args.json_out:
         with open(plan.args.json_out, "w", encoding="utf-8") as f:
-            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results], info.launch, info.empty_ms), f, indent=2, ensure_ascii=False)
+            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results], info.launch, info.empty), f, indent=2, ensure_ascii=False)
 
 
 def _report(plan, build, results, info):
@@ -299,12 +301,24 @@ def _exit_code(results):
     return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
 
 
-def _run_olympiad(plan):
+def _environment_failure(plan):
+    """The Failure (exit 3) of a host that cannot run the case or a workspace that is not there, else None."""
+    host = layer.host_problems(plan.args)
+    if host:
+        return Failure(EXIT_ENVIRONMENT, [f"the host cannot run this: {problem}" for problem in host])
     if not os.path.isdir(plan.args.workspace):
         return Failure(EXIT_ENVIRONMENT, [f"workspace {sm.shown(plan.args.workspace)} is not a directory"])
+    return None
+
+
+def _run_olympiad(plan):
+    return _environment_failure(plan) or _run_cases_and_report(plan)
+
+
+def _run_cases_and_report(plan):
     try:
         build, results, info = _scratch_run(plan)
-    except (OSError, rs_view.ViewError) as e:
+    except (OSError, ex.EnvironmentProblem) as e:
         return Failure(EXIT_ENVIRONMENT, [f"cannot start a program: {type(e).__name__}: {e}"])
     if info.launch["failed"]:
         _write_json(plan, build, results, info)
@@ -362,17 +376,22 @@ class _Interrupted(BaseException):
 
 
 def _on_signal(signum, frame):
-    for other in (signal.SIGTERM, signal.SIGINT):  # the cleanup that follows must not be interrupted again
+    for other in rl.STOPPING_SIGNALS:  # the cleanup that follows must not be interrupted again
         signal.signal(other, signal.SIG_IGN)
     raise _Interrupted(signum)
 
 
 def _install_handlers():
-    for sig in (signal.SIGTERM, signal.SIGINT):
+    for sig in rl.STOPPING_SIGNALS:
         signal.signal(sig, _on_signal)
 
 
 def _stopped(stopped):
+    """The runner was stopped by a signal: every launcher still registered is stopped first (cgroup.kill, or the group on the plain path)."""
+    try:
+        rl.abandon_active()
+    except ex.CleanupFailed as failed:
+        print(f"run_samples: {failed}", file=sys.stderr)
     print(f"run_samples: interrupted by {signal.Signals(stopped.signum).name}: no verdict was reached", file=sys.stderr)
     return EXIT_RUNNER
 

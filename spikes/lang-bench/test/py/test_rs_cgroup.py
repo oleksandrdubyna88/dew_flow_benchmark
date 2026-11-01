@@ -1,6 +1,7 @@
 """What the runner reads from the cgroup the layer names (E1.S8a part ii-a; B1, B4): memory.peak, memory.events, cgroup.procs, wrapper.pid,
 and the kill by `cgroup.kill`. Fake files stand in for the cgroup here; the real scope is in test_rs_scope.py."""
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,13 +50,19 @@ class MemoryTests(unittest.TestCase):
         folder = Folder(self, {"memory.peak": "10", "memory.events": "oom 0\noom_kill 0\n"})
         self.assertEqual(cg.memory(folder.dir)["oomKill"], 0)
 
-    def test_A_file_that_cannot_be_read_is_unknown_and_never_zero(self):
-        for files in ({}, {"memory.peak": "5"}, {"memory.events": "oom_kill 0"}, {"memory.peak": "x", "memory.events": "oom_kill 0"},
-                      {"memory.peak": "5", "memory.events": "oom_kill many"}, {"memory.peak": "5", "memory.events": ""}):
+    def test_A_file_that_cannot_be_read_is_unknown_and_never_zero_and_what_was_read_is_kept_on_its_own(self):
+        for files, kept in (({}, []), ({"memory.peak": "5"}, ["peakBytes"]), ({"memory.events": "oom_kill 0"}, ["events", "oomKill"]),
+                            ({"memory.peak": "x", "memory.events": "oom_kill 0"}, ["events", "oomKill"]),
+                            ({"memory.peak": "5", "memory.events": "oom_kill many"}, ["peakBytes"]), ({"memory.peak": "5", "memory.events": ""}, ["peakBytes"])):
             record = cg.memory(Folder(self, files).dir)
             self.assertEqual(record["known"], False, files)
             self.assertIn("why", record)
-            self.assertNotIn("peakBytes", record)
+            self.assertEqual(sorted(k for k in record if k not in ("known", "why")), sorted(kept), files)
+
+    def test_An_oom_kill_is_read_from_memory_events_even_when_memory_peak_cannot_be_read(self):
+        record = cg.memory(Folder(self, {"memory.events": "oom 1\noom_kill 2\n"}).dir)
+        self.assertEqual((record["known"], record["oomKill"]), (False, 2))
+        self.assertNotIn("peakBytes", record)
 
 
 class ProcsTests(unittest.TestCase):
@@ -66,18 +73,75 @@ class ProcsTests(unittest.TestCase):
         self.assertIsNone(cg.procs(Folder(self).dir))
         self.assertEqual(cg.procs(Folder(self, {"cgroup.procs": ""}).dir), [])
 
-    def test_The_program_is_what_is_neither_bwrap_nor_the_wrapper_nor_gone(self):
-        program, box, wrapper = sleeper(self), sleeper(self, "bwrap"), sleeper(self, "wrapper-sh")
-        folder = Folder(self, {"cgroup.procs": f"{box}\n{wrapper}\n{program}\n4194303\n"})
-        self.assertEqual(cg.program_candidates(folder.dir, wrapper), [program])
-        self.assertEqual(cg.program_candidates(folder.dir, None), [wrapper, program], "without a wrapper pid the wrapper is a candidate")
-        self.assertIsNone(cg.program_candidates(Folder(self).dir))
+    def test_The_wrapper_pid_is_read_from_the_file_named_and_from_nowhere_else(self):
+        self.assertEqual(cg.wrapper_pid(os.path.join(Folder(self, {"wrapper.pid": "812\n"}).dir, "wrapper.pid")), 812)
+        self.assertIsNone(cg.wrapper_pid(os.path.join(Folder(self).dir, "wrapper.pid")))
+        self.assertIsNone(cg.wrapper_pid(os.path.join(Folder(self, {"wrapper.pid": "not a pid"}).dir, "wrapper.pid")))
+        self.assertIsNone(cg.wrapper_pid(None), "no flag, no wrapper: nothing is excluded")
 
-    def test_The_wrapper_pid_is_read_from_the_out_directory_when_the_file_is_there(self):
-        self.assertEqual(cg.wrapper_pid(Folder(self, {"wrapper.pid": "812\n"}).dir), 812)
-        self.assertIsNone(cg.wrapper_pid(Folder(self).dir))
-        self.assertIsNone(cg.wrapper_pid(Folder(self, {"wrapper.pid": "not a pid"}).dir))
-        self.assertIsNone(cg.wrapper_pid(None))
+
+def copy_of_bash(test, name="bwrap"):
+    holder = tempfile.TemporaryDirectory()
+    test.addCleanup(holder.cleanup)
+    path = os.path.join(holder.name, name)
+    shutil.copy(shutil.which("bash"), path)
+    return path
+
+
+def run_copy(test, path):
+    """A process running the very file `path`, stopped when the test ends."""
+    proc = subprocess.Popen([path, "-c", "sleep 30"])
+    test.addCleanup(lambda: (proc.kill(), proc.wait()))
+    deadline = time.monotonic() + 10
+    while cg._file_id(f"/proc/{proc.pid}/exe") != cg._file_id(path) and time.monotonic() < deadline:
+        time.sleep(0.005)
+    return proc.pid
+
+
+class IdentityTests(unittest.TestCase):
+    """A bwrap process is told by the file it runs (device and inode of /proc/<pid>/exe), never by its name."""
+
+    def test_The_identity_is_the_file_the_prefix_names_and_a_prefix_without_bwrap_has_none(self):
+        box = copy_of_bash(self)
+        self.assertEqual(cg.bwrap_identity(["env", "A=1", box, "--json-status-fd", "7"]), cg._file_id(box))
+        self.assertIsNone(cg.bwrap_identity(["env", "A=1"]))
+        self.assertIsNone(cg.bwrap_identity([]))
+        self.assertIsNone(cg.bwrap_identity(None))
+        self.assertIsNone(cg.bwrap_identity(["/no/such/bwrap"]))
+        which = shutil.which("bwrap")
+        self.assertEqual(cg.bwrap_identity(["bwrap"]), cg._file_id(which) if which else None)
+
+    def test_A_process_running_the_file_is_bwrap_and_a_copy_of_bash_named_bwrap_that_is_another_file_is_not(self):
+        box, hidden = copy_of_bash(self), copy_of_bash(self)
+        identity = cg.bwrap_identity([box])
+        real, other = run_copy(self, box), run_copy(self, hidden)
+        self.assertTrue(cg.is_bwrap(real, identity))
+        self.assertFalse(cg.is_bwrap(other, identity), "a program that copies bash to ./bwrap must NOT hide")
+        self.assertEqual(os.path.basename(hidden), os.path.basename(box), "the two have the same name; only the file tells them apart")
+        self.assertFalse(cg.is_bwrap(real, None))
+        self.assertFalse(cg.is_bwrap(None, identity))
+        self.assertFalse(cg.is_bwrap(4194303, identity), "a process that is gone is not bwrap")
+
+    def test_A_link_to_the_file_is_the_same_file_and_a_comm_that_says_bwrap_proves_nothing(self):
+        box = copy_of_bash(self)
+        link = os.path.join(os.path.dirname(box), "box-link")
+        os.symlink(box, link)
+        self.assertEqual(cg.bwrap_identity([link]), None, "only an element named bwrap names the box")
+        impostor = run_copy(self, copy_of_bash(self))
+        self.assertEqual(cg.comm_of(impostor), "bwrap")
+        self.assertFalse(cg.is_bwrap(impostor, cg.bwrap_identity([box])))
+
+    def test_The_parent_of_a_process_is_read_from_its_stat_even_when_the_name_has_brackets_and_spaces(self):
+        child = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (child.kill(), child.wait()))
+        self.assertEqual(cg.ppid_of(child.pid), os.getpid())
+        self.assertIsNone(cg.ppid_of(4194303))
+        weird = os.path.join(Folder(self).dir, "a) b (c")
+        shutil.copy(sys.executable, weird)
+        proc = subprocess.Popen([weird, "-I", "-c", "import time; time.sleep(30)"])
+        self.addCleanup(lambda: (proc.kill(), proc.wait()))
+        time.sleep(0.2)
+        self.assertEqual(cg.ppid_of(proc.pid), os.getpid())
 
 
 class KillTests(unittest.TestCase):

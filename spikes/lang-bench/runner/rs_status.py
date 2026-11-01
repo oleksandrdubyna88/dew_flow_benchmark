@@ -52,10 +52,12 @@ def release(number):
 
 
 class StatusReader:
-    """Collects the lines of one case: `child_pid` and `exit_code` stay None until their line is whole."""
+    """Collects the lines of one case: `child_pid` and `exit_code` stay None until their line is whole. `problem` names the first thing that
+    breaks the rules (P2): a line that is not one JSON object, a doubled or invalid `child-pid` or `exit-code`, a record that is neither
+    before `child-pid`. Before `child-pid` a problem is a failed launch; after the clock has started everything is the case and it is ignored."""
 
     def __init__(self):
-        self.buffer, self.child_pid, self.exit_code = b"", None, None
+        self.buffer, self.child_pid, self.exit_code, self.problem = b"", None, None, None
 
     def feed(self, data):
         self.buffer = (self.buffer + data)[-MAX_BUFFER:]
@@ -63,15 +65,37 @@ class StatusReader:
         for line in lines:
             self._line(line)
 
+    def _note(self, message):
+        self.problem = self.problem or message
+
     def _line(self, line):
-        parsed = rs_json.parse(line)
-        value = parsed.value if parsed.ok and isinstance(parsed.value, dict) else {}
-        self.child_pid = self.child_pid or _whole(value.get("child-pid"))
-        self.exit_code = _first(self.exit_code, _whole(value.get("exit-code")))
+        if not line.strip():
+            return
+        record = _object(line)
+        if record is None:
+            return self._note("a line that is not one JSON object")
+        self._keys(record)
+
+    def _keys(self, record):
+        if not ({"child-pid", "exit-code"} & record.keys()) and self.child_pid is None:
+            self._note("an unknown record before child-pid")
+        for key, attr in (("child-pid", "child_pid"), ("exit-code", "exit_code")):
+            self._set_if(record, key, attr)
+
+    def _set_if(self, record, key, attr):
+        if key in record:
+            self._set(attr, record[key], key)
+
+    def _set(self, attr, raw, name):
+        number = _whole(raw)
+        if getattr(self, attr) is not None or number is None:
+            return self._note(f"{name} is doubled or not a whole number")
+        setattr(self, attr, number)
 
 
-def _first(kept, found):
-    return found if kept is None else kept
+def _object(line):
+    parsed = rs_json.parse(line)
+    return parsed.value if parsed.ok and isinstance(parsed.value, dict) else None
 
 
 def _whole(value):

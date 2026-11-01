@@ -3,7 +3,8 @@ path, and the wait.
 
 The execution layer (E1.S8b) hands the runner a launch prefix, a launch status descriptor, a cgroup and a case view; `rs_scope.py` is the
 lifecycle that reads and kills through that cgroup, `PlainLifecycle` here is the one with no box. Wall time is `time.monotonic_ns()` and
-every wait for an exit is `os.pidfd_open` + `select` with the exact remaining time, never `Popen.wait(timeout=...)`'s polling.
+every wait for an exit is `os.pidfd_open` + `select` with the exact remaining time, never `Popen.wait(timeout=...)`'s polling. One clock,
+`time.monotonic_ns`, serves every start, end and deadline of a case.
 """
 import os
 import re
@@ -26,18 +27,17 @@ TAIL_BYTES = 2048
 GONE_CEILING_MS = 2000
 TEST_CEILING_MS = 600_000
 LAUNCH_CEILING_MS = 60_000
-SEEK_MS = 1000
+SEEK_TICK_S = 0.001
+TRACK_TICK_S = 0.02
+RECHECK_S = 0.02
 EMPTY_CASE = "empty-program"
 RUN_PROGRAM = ("bash", "run.sh")
 POLL_FIRST_S = 0.001
 POLL_LAST_S = 0.05
 
 
-class Program(NamedTuple):
-    """The program's host pid (None when it could not be told), how it was found, and how many candidates there were."""
-    pid: Optional[int]
-    found: str
-    count: Optional[int]
+class EnvironmentProblem(Exception):
+    """Something the runner does not own is wrong (a view that is missing, a cgroup that holds a foreign process): exit 3, never a verdict."""
 
 
 class Settled(NamedTuple):
@@ -50,6 +50,7 @@ class Settled(NamedTuple):
 class PlainLifecycle:
     """How the plain path (no `--cgroup-of`) finds leftovers, kills and reads memory: through the process group of the launcher."""
     road = {"kill": "killpg", "leftoverEvidence": "process group (killpg 0)"}
+    directory = identity = wrapper_file = None
 
     def memory(self, case_id=None):
         return rs_report.NOT_CERTIFIED
@@ -58,16 +59,15 @@ class PlainLifecycle:
         """Whether what this lifecycle kills through exists (a process group always does)."""
         return True
 
+    def check_free(self):
+        """A process group is the launcher's own: there is nothing a foreign process could be holding."""
+
     def kill(self, proc):
         kill_group(proc)
 
     def leftover(self, proc, program=None):
         """True when something of the program's process group is still alive after the program was reaped."""
         return group_present(proc)
-
-    def program_of(self, proc):
-        """No box, no cgroup: the launcher execs the program (D38), so the launcher's pid is the program's."""
-        return Program(proc.pid, "launcher pid (no --cgroup-of)", 1)
 
     def settle(self, launched, end):
         """The case's end: kill what is still running, reap the launcher, then look for what the program left behind."""
@@ -93,7 +93,7 @@ class Config:
     status_fd: Optional[int] = None
     cgroup: Optional[str] = None
     case_view: Optional[str] = None
-    out_dir: Optional[str] = None
+    wrapper_file: Optional[str] = None
 
 
 class BuildResult(NamedTuple):
@@ -104,8 +104,15 @@ class BuildResult(NamedTuple):
     tail: str = ""
 
 
+NS_PER_MS = 1_000_000
+
+
+def now_ns():
+    return time.monotonic_ns()
+
+
 def now_ms():
-    return time.monotonic_ns() // 1_000_000
+    return now_ns() // NS_PER_MS
 
 
 CASE_ID = re.compile(r"[A-Za-z0-9_-]+\Z")

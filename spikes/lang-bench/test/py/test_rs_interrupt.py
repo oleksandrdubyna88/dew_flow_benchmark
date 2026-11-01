@@ -67,7 +67,9 @@ class RealScopeTests(unittest.TestCase):
         case = record["cases"][0]
         self.assertIsInstance(case["launchMs"], int)
         self.assertIsInstance(record["emptyProgramMs"], int)
-        self.assertEqual(case["lifecycle"]["signalled"]["found"], "cgroup.procs minus bwrap and wrapper")
+        self.assertEqual(case["lifecycle"]["signalled"]["found"], "cgroup.procs: the process whose parent is a bwrap process")
+        self.assertNotEqual(case["lifecycle"]["signalled"]["pid"], case["lifecycle"]["signalled"]["launcher"])
+        self.assertIsInstance(record["emptyProgram"]["pid"], int, "the control waited on the program's own pid too")
         self.assertEqual((case["lifecycle"]["kill"], case["lifecycle"]["leftover"]), ("cgroup.kill", {"known": True, "found": False}))
         self.assertEqual(case["lifecycle"]["memory"]["known"], True)
 

@@ -1,17 +1,18 @@
 """rs_cgroup: what the runner reads from, and does to, the cgroup2 directory the execution layer names with `--cgroup-of` (B1, B4).
 
-Every pid here is a HOST pid, read from the host's view of `cgroup.procs`; a pid seen inside the box (1 or 2) is never used. The program
-is the pid in `cgroup.procs` that is neither a `bwrap` process (`/proc/<pid>/comm`) nor the layer's wrapper (the pid it writes to
-`wrapper.pid` in its out directory, when there is one). `cgroup.kill` is the kill at the time limit: behind `--new-session` the program
-is in a group of its own and `os.killpg` of the launcher's group would miss it. Nothing here signals one pid.
+Every pid here is a HOST pid, read from the host's view of `cgroup.procs`; a pid seen inside the box (1 or 2) is never used. A bwrap
+process is known by IDENTITY, never by its name: `/proc/<pid>/exe` is the very file (device and inode) of the bwrap binary the launch prefix
+names, so a program that copies bash to `./bwrap` hides nothing. The program is the process whose parent is a bwrap process (`bash run.sh`
+execs it: D38) and the launcher pid is never a candidate (rs_track.py). `cgroup.kill` is the kill: behind `--new-session` the program is in a
+group of its own and `os.killpg` of the launcher's group would miss it. Nothing here signals one pid.
 """
 import os
+import shutil
 import time
 
 import rs_exec as ex
 
-BOX_COMM = "bwrap"
-WRAPPER_FILE = "wrapper.pid"
+BOX_NAME = "bwrap"
 EVENT_NAMES = ("low", "high", "max", "oom", "oom_kill", "oom_group_kill")
 
 
@@ -41,24 +42,58 @@ def procs(directory):
 
 
 def comm_of(pid):
-    """`/proc/<pid>/comm` without its line feed, or None when the process is gone."""
+    """`/proc/<pid>/comm` without its line feed, or None when the process is gone. Evidence for the record only: never used to tell bwrap."""
     text = _text(f"/proc/{pid}/comm")
     return text.rstrip("\n") if text is not None else None
 
 
-def wrapper_pid(out_dir):
-    """The pid in `<out_dir>/wrapper.pid`, or None when there is no such file (the delegated scope has no wrapper)."""
-    return _whole_number(_text(os.path.join(out_dir, WRAPPER_FILE))) if out_dir else None
+def _file_id(path):
+    """(device, inode) of what `path` leads to, or None."""
+    try:
+        status = os.stat(path)
+    except OSError:
+        return None
+    return (status.st_dev, status.st_ino)
 
 
-def _is_program(pid, wrapper):
-    return pid != wrapper and comm_of(pid) not in (None, BOX_COMM)
+def _box_path(element):
+    return element if "/" in element else shutil.which(element)
 
 
-def program_candidates(directory, wrapper=None):
-    """The pids of `cgroup.procs` that are neither bwrap nor the wrapper nor already gone, or None when the file cannot be read."""
-    pids = procs(directory)
-    return None if pids is None else [pid for pid in pids if _is_program(pid, wrapper)]
+def _first_box(prefix):
+    return next((element for element in prefix if os.path.basename(element) == BOX_NAME), None)
+
+
+def bwrap_identity(prefix):
+    """(device, inode) of the bwrap binary the launch prefix names (the first element whose base name is `bwrap`, looked up on PATH when it
+    has no directory), or None when the prefix has no bwrap. What `/proc/<pid>/exe` must equal for a process to be a bwrap process."""
+    named = _first_box(prefix or [])
+    path = _box_path(named) if named else None
+    return _file_id(path) if path else None
+
+
+def is_bwrap(pid, identity):
+    """True when `pid` runs the very file `identity` names. A process that is gone, or one whose exe cannot be read, is not."""
+    return pid is not None and identity is not None and _file_id(f"/proc/{pid}/exe") == identity
+
+
+def is_zombie(pid):
+    """True for a process that has exited and waits to be reaped (or is gone): it is no program and no leftover, and it has no exe to read."""
+    text = _text(f"/proc/{pid}/stat")
+    fields = text.rsplit(")", 1)[-1].split() if text else []
+    return not fields or fields[0] in ("Z", "X")
+
+
+def ppid_of(pid):
+    """The parent pid from `/proc/<pid>/stat`, or None when the process is gone."""
+    text = _text(f"/proc/{pid}/stat")
+    fields = text.rsplit(")", 1)[-1].split() if text else []
+    return _whole_number(fields[1]) if len(fields) > 1 else None
+
+
+def wrapper_pid(path):
+    """The pid in the file `--wrapper-pid-file` names, or None when no file was named or it holds no pid."""
+    return _whole_number(_text(path)) if path else None
 
 
 def _pairs(text):
@@ -70,13 +105,22 @@ def _events(text):
     return values if values and None not in values.values() else None
 
 
+def _events_of(directory):
+    return _events(_text(os.path.join(directory, "memory.events")) or "")
+
+
+def _kept(**named):
+    return {key: value for key, value in named.items() if value is not None}
+
+
 def memory(directory):
-    """The memory record of a case: `{known: true, peakBytes, events, oomKill}`, or `{known: false, why}` when a file cannot be read."""
+    """The memory record of a case. `known` is true only when `memory.peak` and `memory.events` were both read; whichever was read is kept
+    on its own, so an `oom_kill` is judged from `memory.events` even when `memory.peak` cannot be read."""
     peak = _whole_number(_text(os.path.join(directory, "memory.peak")))
-    events = _events(_text(os.path.join(directory, "memory.events")) or "")
-    if peak is None or events is None:
-        return {"known": False, "why": "memory.peak or memory.events could not be read from the cgroup"}
-    return {"known": True, "peakBytes": peak, "events": events, "oomKill": events.get("oom_kill", 0)}
+    events = _events_of(directory)
+    read = _kept(peakBytes=peak, events=events, oomKill=None if events is None else events.get("oom_kill", 0))
+    known = peak is not None and events is not None
+    return {"known": True, **read} if known else {"known": False, "why": "memory.peak or memory.events could not be read from the cgroup", **read}
 
 
 def kill(directory):

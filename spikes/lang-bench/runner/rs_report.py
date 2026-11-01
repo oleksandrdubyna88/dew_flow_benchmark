@@ -1,7 +1,7 @@
 """rs_report: the lines the runner prints (FORMAT v2 5.5) and the JSON result it writes.
 
 Everything here returns text or plain dicts; nothing prints. The JSON result is
-`{ format: 1, runner, grammar: 2, kind, build, launch, emptyProgramMs, cases: [{ id, status, reason, rIds, entries, firstMismatch,
+`{ format: 1, runner, grammar: 2, kind, build, launch, emptyProgramMs, emptyProgram, cases: [{ id, status, reason, rIds, entries, firstMismatch,
 lifecycle, wallMs, launchMs }], python }`; what was not measured is `{ known: false, why }`, never zero. `wallMs` is the program's wall from
 the case clock (the launcher's `child-pid` with `--launch-status`, else the spawn), `launchMs` the time from the spawn to that line,
 `emptyProgramMs` an empty program timed through the same prefix once per run, `launch` is `{ failed, stderr }` (a launch that failed
@@ -33,7 +33,7 @@ class CaseResult:
     lines: tuple = ()
     first_mismatch: Optional[dict] = None
     lifecycle: Optional[dict] = None
-    wall_ms: int = 0
+    wall_ms: Optional[int] = 0
     comparison: Optional[str] = None
     launch_ms: Optional[int] = None
 
@@ -189,33 +189,26 @@ def _unknown(value, why):
 PLAIN_ROAD = {"kill": "killpg", "leftoverEvidence": "process group (killpg 0)"}
 
 
-def signalled_record(program):
-    """Which pid the runner knows as the program's and how it found it. An olympiad program is never signalled (`signal` is null): the
-    pid is what the exit was awaited on."""
-    if program is None:
-        return {"signal": None, "pid": None, "found": "not looked for"}
-    return {"signal": None, "pid": program.pid, "found": program.found}
+def fork_lines(fork):
+    return (f"  fork: {fork['count']} processes in the program's cgroup where one was expected",) if fork.get("found") else ()
 
 
-def fork_record(program):
-    """The finding `fork`: more than one candidate in the program's cgroup where D38 promises exactly one. Unknown when it was not counted."""
-    if program is None or program.count is None:
-        return {"known": False, "why": "the processes of the program's cgroup were not counted"}
-    return {"known": True, "found": program.count > 1, "count": program.count}
+def _observed(tracker, leftover):
+    if tracker is None:
+        return {"signal": None, "pid": None, "found": "not looked for"}, {"known": False, "why": "the processes of the program's cgroup were not counted"}
+    return tracker.signalled(), tracker.fork(leftover)
 
 
-def fork_lines(program):
-    return (f"  fork: {program.count} processes in the program's cgroup where one was expected",) if program is not None and (program.count or 0) > 1 else ()
-
-
-def plain_lifecycle(leftover, stderr=None, memory=None, capture=None, road=None, program=None):
+def plain_lifecycle(leftover, stderr=None, memory=None, capture=None, road=None, tracker=None):
     """The lifecycle record of a case: what was not observed is unknown, not zero. `road` names the way the leftovers were found and the
-    kill was done (the plain path: the process group; the scope path: `cgroup.procs` and `cgroup.kill`), so a reader knows which road ran."""
+    kill was done (the plain path: the process group; the scope path: `cgroup.procs` and `cgroup.kill`), so a reader knows which road ran.
+    `tracker` (rs_track.Tracker) tells which pid the program is and whether the case forked; both are observations, never verdicts."""
     road = road or PLAIN_ROAD
+    signalled, fork = _observed(tracker, leftover)
     return {
         "stop": {"known": False, "why": "this program is not signalled"},
-        "signalled": signalled_record(program),
-        "fork": fork_record(program),
+        "signalled": signalled,
+        "fork": fork,
         "leftover": {"known": True, "found": bool(leftover)} if leftover is not None else _unknown(None, "not checked"),
         "leftoverEvidence": road["leftoverEvidence"],
         "kill": road["kill"],
@@ -229,10 +222,14 @@ def _launch_ms(value):
     return value if value is not None else {"known": False, "why": "no launch status: the case clock starts at the spawn"}
 
 
+def _wall(value):
+    return value if value is not None else {"known": False, "why": "no end instant: no pid was found and bwrap wrote no exit-code record"}
+
+
 def case_record(result):
     return {
         "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "comparison": result.comparison, "entries": result.entries,
-        "firstMismatch": result.first_mismatch, "lifecycle": result.lifecycle, "wallMs": result.wall_ms,
+        "firstMismatch": result.first_mismatch, "lifecycle": result.lifecycle, "wallMs": _wall(result.wall_ms),
         "launchMs": _launch_ms(result.launch_ms),
     }
 
@@ -241,10 +238,14 @@ NO_LAUNCH = {"failed": False, "stderr": ""}
 NO_EMPTY = {"known": False, "why": "no empty program was timed"}
 
 
-def run_record(kind, build, cases, launch=None, empty_program_ms=None):
-    """The JSON result. `launch` is `{failed, stderr}`; `empty_program_ms` is milliseconds or None (then `{known: false, why}`)."""
+def _empty_ms(empty):
+    return NO_EMPTY if empty is None or empty.get("ms") is None else empty["ms"]
+
+
+def run_record(kind, build, cases, launch=None, empty=None):
+    """The JSON result. `launch` is `{failed, stderr}`; `empty` is the control `{ms, launchMs, pid, found}` or None (then `{known: false, why}`)."""
     return {
         "format": RESULT_FORMAT, "runner": RUNNER_VERSION, "grammar": GRAMMAR, "kind": kind, "build": build,
-        "launch": launch or NO_LAUNCH, "emptyProgramMs": NO_EMPTY if empty_program_ms is None else empty_program_ms,
+        "launch": launch or NO_LAUNCH, "emptyProgramMs": _empty_ms(empty), "emptyProgram": empty or NO_EMPTY,
         "cases": cases, "python": sys.version,
     }

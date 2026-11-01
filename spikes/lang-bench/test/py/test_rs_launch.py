@@ -8,6 +8,7 @@ from unittest import mock
 import runner_path  # noqa: F401
 import rs_exec as ex
 import rs_launch as rl
+import rs_layer as layer
 import rs_olympiad as ro
 import rs_report as rp
 from box_support import ANSWER, BASH_OWN_KEYS, STATUS_FD, Workspace, case, failing_prefix, reporting_prefix, wait_until
@@ -90,14 +91,14 @@ class LaunchFailedTests(unittest.TestCase):
 class ClockTests(unittest.TestCase):
     def test_The_case_clock_starts_at_child_pid_so_the_set_up_of_the_box_is_not_in_the_wall(self):
         ws = Workspace(self, REPLAY, FILES)
-        result = ws.run(case(), prefix=reporting_prefix("sleep 0.4"), status_fd=STATUS_FD, limit_ms=20_000)
+        result = ws.run(case(), prefix=reporting_prefix("sleep 1.5"), status_fd=STATUS_FD, limit_ms=20_000)
         self.assertEqual(result.status, "PASS")
-        self.assertGreaterEqual(result.launch_ms, 400)
-        self.assertLess(result.wall_ms, 300, f"wall {result.wall_ms} ms must not contain the 400 ms the launcher took before child-pid")
+        self.assertGreaterEqual(result.launch_ms, 1500)
+        self.assertLess(result.wall_ms, result.launch_ms, f"wall {result.wall_ms} ms must not contain the 1.5 s the launcher took before child-pid")
 
     def test_A_set_up_slower_than_the_limit_is_still_no_time_limit(self):
         ws = Workspace(self, REPLAY, FILES)
-        result = ws.run(case(), prefix=reporting_prefix("sleep 0.5"), status_fd=STATUS_FD, limit_ms=300)
+        result = ws.run(case(), prefix=reporting_prefix("sleep 1.5"), status_fd=STATUS_FD, limit_ms=1000)
         self.assertEqual((result.status, result.reason), ("PASS", ""))
 
     def test_Without_a_launch_status_the_clock_starts_at_the_spawn_and_the_launch_time_is_unknown_not_zero(self):
@@ -130,14 +131,16 @@ class EmptyProgramTests(unittest.TestCase):
     def timed(self, ws, **overrides):
         return rl.time_empty(ws.config(**overrides), lambda config, case_id: config.lifecycle, os.path.join(ws.scratch, "empty.stderr"))
 
+    def ms(self, ws, **overrides):
+        return self.timed(ws, **overrides).wall_ms
+
     def test_An_empty_program_is_timed_through_the_same_prefix_and_clock(self):
         ws = Workspace(self, REPLAY, FILES)
-        plain = self.timed(ws)
-        self.assertIsInstance(plain, int)
-        slow = self.timed(ws, prefix=reporting_prefix("sleep 0.3"), status_fd=STATUS_FD)
-        self.assertLess(slow, 250, "from child-pid on, so the 300 ms set-up is no part of it")
-        slow_to_exit = self.timed(ws, prefix=reporting_prefix("sleep 0.0\n:"), status_fd=STATUS_FD)
-        self.assertIsInstance(slow_to_exit, int)
+        self.assertIsInstance(self.ms(ws), int)
+        run = self.timed(ws, prefix=reporting_prefix("sleep 1.5"), status_fd=STATUS_FD)
+        self.assertGreaterEqual(run.launch_ms, 1500)
+        self.assertLess(run.wall_ms, 1000, "from child-pid on, so the 1.5 s set-up is no part of it")
+        self.assertEqual(run.program["pid"], None, "no bwrap, no pid: the end was the exit-code record")
 
     def test_The_empty_program_gets_the_prefix_with_its_own_case_name_and_no_workspace_files_are_run(self):
         ws = Workspace(self, "echo ran > ran.txt\n")
@@ -151,6 +154,13 @@ class EmptyProgramTests(unittest.TestCase):
         with self.assertRaises(rl.LaunchFailed):
             self.timed(Workspace(self, REPLAY, FILES), prefix=failing_prefix(), status_fd=STATUS_FD)
 
+    def test_The_empty_program_says_which_pid_it_waited_on_and_how_long_the_launch_took(self):
+        run = self.timed(Workspace(self, REPLAY, FILES))
+        self.assertEqual((run.program["pid"], run.program["launcher"]), (run.program["launcher"], run.program["launcher"]), "no box: the launcher is the program")
+        self.assertIsNone(run.launch_ms, "no launch status: unknown, not zero")
+        record = layer.empty_record(run)
+        self.assertEqual(sorted(record), ["comm", "found", "launchMs", "ms", "pid"])
+
     def test_The_JSON_result_carries_emptyProgramMs_once_per_run(self):
         import test_run_samples as cli
         box = cli.Box(self)
@@ -158,6 +168,7 @@ class EmptyProgramTests(unittest.TestCase):
         self.assertEqual(box.cli("--json", out_json)[0], 0)
         record = cli.read_json(out_json)
         self.assertIsInstance(record["emptyProgramMs"], int)
+        self.assertEqual(sorted(record["emptyProgram"]), ["comm", "found", "launchMs", "ms", "pid"])
         self.assertEqual(record["launch"], {"failed": False, "stderr": ""})
 
 
@@ -259,12 +270,14 @@ class CommandLineTests(unittest.TestCase):
         os.mkdir(cgroups)
         for sub in (views, cgroups):
             os.mkdir(os.path.join(sub, "s03"))
+            os.mkdir(os.path.join(sub, "empty-program"))  # the control's {case}: the layer provides one by that name
         for name in ("run.sh", "build.sh", "answer.bin"):
             with open(os.path.join(box.ws, name), "rb") as src, open(os.path.join(views, "s03", name), "wb") as dst:
                 dst.write(src.read())
-        for name, text in (("memory.peak", "5000"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", "")):
-            with open(os.path.join(cgroups, "s03", name), "w") as f:
-                f.write(text)
+        for case_name in ("s03", "empty-program"):
+            for name, text in (("memory.peak", "5000"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", "")):
+                with open(os.path.join(cgroups, case_name, name), "w") as f:
+                    f.write(text)
         out_json = os.path.join(box.out, "r.json")
         code, out, err = box.cli("--launch-prefix", json.dumps(reporting_prefix()), "--launch-status", str(STATUS_FD), "--cgroup-of", os.path.join(cgroups, "{case}"),
                                  "--case-view", os.path.join(views, "{case}"), "--json", out_json)
@@ -275,6 +288,7 @@ class CommandLineTests(unittest.TestCase):
         self.assertIsInstance(case_record["launchMs"], int)
         self.assertEqual(case_record["lifecycle"]["memory"]["peakBytes"], 5000)
         self.assertEqual(sorted(case_record["lifecycle"]), ["capture", "fork", "kill", "leftover", "leftoverEvidence", "memory", "signalled", "stderr", "stop"])
+        self.assertEqual(set(case_record["lifecycle"]["signalled"]), {"signal", "pid", "found", "comm", "launcher"})
         self.assertEqual((record["launch"], isinstance(record["emptyProgramMs"], int)), ({"failed": False, "stderr": ""}, True))
 
     def test_An_oom_kill_in_the_cgroup_is_memory_limit_and_exit_1_on_the_command_line(self):

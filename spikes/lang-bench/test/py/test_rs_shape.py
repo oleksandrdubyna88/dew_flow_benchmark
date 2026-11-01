@@ -7,7 +7,7 @@ import unittest
 import shape_scan as scan
 
 # Modules whose arithmetic is wall time, not a comparison of sample content: the only ones allowed a float or a true division.
-TIME_MODULES = {"rs_exec.py", "rs_launch.py", "rs_olympiad.py", "rs_report.py", "run_samples.py"}
+TIME_MODULES = {"rs_exec.py", "rs_launch.py", "rs_olympiad.py", "rs_pump.py", "rs_report.py", "run_samples.py"}
 
 
 def sources():

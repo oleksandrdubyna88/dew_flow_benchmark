@@ -8,8 +8,11 @@ import unittest
 
 import runner_path  # noqa: F401
 import rs_exec as ex
+import rs_launch as rl
+import rs_pump
 import rs_olympiad as ro
 import rs_report as rp
+from rs_track import Tracker
 
 ANSWER = b"7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1\n"
 
@@ -191,11 +194,12 @@ class PumpTests(unittest.TestCase):
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         self.addCleanup(lambda: [s.close() for s in (proc.stdin, proc.stdout) if s and not s.closed])
         proc.wait()
-        return proc, ro._Pump(proc, None, data, ro.Comparer(expected, 1024), os.devnull)
+        launched = rl.Launched(proc, None, ex.now_ns(), None, None, None, Tracker(proc, ex.PlainLifecycle(), box=False))
+        return proc, rs_pump.Pump(launched, data, ro.Comparer(expected, 1024), os.devnull)
 
     def test_Output_already_in_the_pipe_when_the_exit_is_seen_is_read_before_the_verdict(self):
         proc, pump = self.pump(["printf", "%0100d", "7"], b"", b"0" * 99 + b"7")
-        self.assertEqual(pump.exited(), "exited")
+        self.assertEqual(pump.program_exited(), "exited")
         self.assertTrue(pump.comparer.exact, "without the drain the 100 bytes are never read")
 
     def test_Input_written_to_a_program_that_has_already_gone_is_dropped_quietly_not_raised(self):

@@ -82,12 +82,38 @@ class FixtureTests(unittest.TestCase):
             vw.write_fixtures(view, {"a": b"x"})
         self.assertEqual(os.listdir(target), [])
 
-    def test_A_fixture_name_that_leaves_the_folder_is_refused(self):
-        for name in ("../escape", "a/b", "", ".."):
+    def test_A_fixture_path_that_leaves_the_folder_is_refused_and_nothing_is_written_outside(self):
+        for name in ("../escape", "a/../../escape", "/abs/escape", "", "..", "a/..", "x\0y"):
             view = folder(self)
-            with self.assertRaises(vw.ViewError):
+            with self.assertRaises(vw.ViewError, msg=name):
                 vw.write_fixtures(view, {name: b"x"})
-            self.assertEqual(os.listdir(os.path.dirname(view)).count("escape"), 0)
+            self.assertEqual(sorted(os.listdir(os.path.dirname(view))).count("escape"), 0)
+            self.assertEqual(os.listdir(view), [".scenario"], "only the folder the runner made")
+
+    def test_A_nested_relative_fixture_path_is_written_inside_the_scenario_folder(self):
+        view = folder(self)
+        vw.write_fixtures(view, {"data/in.txt": b"1", "./top.txt": b"2", "data//more/x.bin": b"3"})
+        base = os.path.join(view, ".scenario")
+        found = sorted(os.path.relpath(os.path.join(d, f), base) for d, _, files in os.walk(base) for f in files)
+        self.assertEqual(found, ["data/in.txt", "data/more/x.bin", "top.txt"])
+
+    def test_A_fixture_path_through_a_planted_link_is_refused_and_nothing_is_written_through_it(self):
+        base, outside = folder(self), folder(self)
+        os.symlink(outside, os.path.join(base, "d"))
+        with self.assertRaises(vw.ViewError):
+            vw.confined_write(base, "d/x", b"escaped")
+        os.symlink(os.path.join(outside, "target"), os.path.join(base, "f"))
+        with self.assertRaises(vw.ViewError):
+            vw.confined_write(base, "f", b"escaped")
+        self.assertEqual(os.listdir(outside), [], "nothing was written outside the folder")
+
+    def test_A_fixture_that_is_already_there_is_never_written_through(self):
+        base = folder(self)
+        vw.confined_write(base, "a/x", b"first")
+        with self.assertRaises(vw.ViewError):
+            vw.confined_write(base, "a/x", b"second")
+        with open(os.path.join(base, "a", "x"), "rb") as f:
+            self.assertEqual(f.read(), b"first")
 
 
 if __name__ == "__main__":

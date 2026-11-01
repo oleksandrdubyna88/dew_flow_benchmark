@@ -26,15 +26,30 @@ class ReaderTests(unittest.TestCase):
         reader = st.StatusReader()
         self.assertEqual((reader.child_pid, reader.exit_code), (None, None))
 
-    def test_Anything_that_is_not_a_status_object_is_dropped_and_the_next_line_still_counts(self):
-        reader = st.StatusReader()
-        reader.feed(b'garbage\n[1]\n{"child-pid": "9"}\n{"child-pid": 1.5}\n{"child-pid": true}\n{"child-pid": NaN}\n\xff\xfe\n{"child-pid": 5}\n')
-        self.assertEqual(reader.child_pid, 5)
+    def test_Anything_that_is_not_a_status_object_is_a_problem_and_the_next_line_is_still_read(self):
+        for junk in (b"garbage\n", b"[1]\n", b'{"child-pid": "9"}\n', b'{"child-pid": 1.5}\n', b'{"child-pid": true}\n', b'{"child-pid": NaN}\n', b"\xff\xfe\n"):
+            reader = st.StatusReader()
+            reader.feed(junk + b'{"child-pid": 5}\n')
+            self.assertIsNotNone(reader.problem, junk)
+            self.assertEqual(reader.child_pid, 5, junk)
 
-    def test_The_first_child_pid_and_the_first_exit_code_stand(self):
+    def test_A_well_formed_stream_has_no_problem_and_a_blank_line_is_none(self):
         reader = st.StatusReader()
-        reader.feed(b'{"child-pid": 5}\n{"child-pid": 6}\n{"exit-code": 0}\n{"exit-code": 9}\n')
-        self.assertEqual((reader.child_pid, reader.exit_code), (5, 0))
+        reader.feed(b'\n{ "child-pid": 7, "mnt-namespace": 1 }\n\n{ "exit-code": 0 }\n')
+        self.assertEqual((reader.child_pid, reader.exit_code, reader.problem), (7, 0, None))
+
+    def test_The_first_child_pid_and_the_first_exit_code_stand_and_a_second_one_is_a_problem(self):
+        for lines in (b'{"child-pid": 5}\n{"child-pid": 6}\n', b'{"child-pid": 5}\n{"exit-code": 0}\n{"exit-code": 9}\n'):
+            reader = st.StatusReader()
+            reader.feed(lines)
+            self.assertEqual((reader.child_pid, reader.problem is not None), (5, True), lines)
+        self.assertEqual(reader.exit_code, 0)
+
+    def test_A_record_that_is_neither_before_child_pid_is_a_problem_and_after_it_it_is_not(self):
+        before, after = st.StatusReader(), st.StatusReader()
+        before.feed(b'{"something": 1}\n')
+        after.feed(b'{"child-pid": 5}\n{"something": 1}\n')
+        self.assertEqual((before.problem is not None, after.problem), (True, None))
 
     def test_An_exit_code_of_zero_is_a_code_and_not_absent(self):
         reader = st.StatusReader()

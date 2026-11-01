@@ -11,7 +11,7 @@ import rs_exec as ex
 SCENARIO_DIR = ".scenario"
 
 
-class ViewError(Exception):
+class ViewError(ex.EnvironmentProblem):
     """The view of a case is missing, or already holds a `.scenario` the runner did not make: the environment, not a verdict."""
 
 
@@ -50,8 +50,8 @@ def require(view):
 
 
 def write_fixtures(view, fixtures):
-    """Write `{name: bytes}` into `<view>/.scenario/`. A `.scenario` that is already there is refused (it is not ours); nothing is
-    followed through a link (O_NOFOLLOW). With no fixtures nothing is created."""
+    """Write `{path: bytes}` into `<view>/.scenario/`, every path confined to that folder. A `.scenario` that is already there is refused (it
+    is not ours); with no fixtures nothing is created."""
     if not fixtures:
         return
     folder = os.path.join(view, SCENARIO_DIR)
@@ -60,16 +60,52 @@ def write_fixtures(view, fixtures):
     except FileExistsError as e:
         raise ViewError(f"{folder} already exists: a fresh view holds no {SCENARIO_DIR}") from e
     for name, data in fixtures.items():
-        _write_new(os.path.join(folder, _plain_name(name)), data)
+        confined_write(folder, name, data)
 
 
-def _plain_name(name):
-    if name in ("", ".", "..") or os.sep in name or "\0" in name:
-        raise ViewError(f"fixture name {name!r} is not a plain file name")
-    return name
+def _refused(name, parts):
+    return not parts or name.startswith("/") or ".." in parts or "\0" in name
 
 
-def _write_new(path, data):
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+def _components(name):
+    """The path's components, normalised: a fixture path is relative, free of `..` and NUL, and never leaves the folder."""
+    parts = [part for part in name.split("/") if part not in ("", ".")]
+    if _refused(name, parts):
+        raise ViewError(f"fixture path {name!r} is not a relative path inside the case view")
+    return parts
+
+
+def _descend(parent, part):
+    """The folder `part` of the open folder `parent` (made when it is not there), opened without following a link; `parent` is closed."""
+    try:
+        try:
+            os.mkdir(part, 0o700, dir_fd=parent)
+        except FileExistsError:
+            pass
+        return os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    except OSError as e:
+        raise ViewError(f"fixture folder {part!r} is a link or not a folder: {type(e).__name__}") from e
+    finally:
+        os.close(parent)
+
+
+def confined_write(base, name, data):
+    """Create the file `name` (a relative path) under the folder `base`, one component at a time with O_NOFOLLOW, so that no link on the way
+    leads out of `base` and a file that is already there is never written through."""
+    parts = _components(name)
+    fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    for part in parts[:-1]:
+        fd = _descend(fd, part)
+    try:
+        _write_new(fd, parts[-1], data)
+    finally:
+        os.close(fd)
+
+
+def _write_new(parent, name, data):
+    try:
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+    except OSError as e:
+        raise ViewError(f"fixture {name!r} could not be created: {type(e).__name__}") from e
     with os.fdopen(fd, "wb") as f:
         f.write(data)
