@@ -36,5 +36,10 @@
     "tsc": ["tsc", "--version"],
     "pythonSha256": ["/usr/bin/sha256sum", "/usr/bin/python3"],
     "locales": ["/usr/bin/locale", "-a"]
+  },
+  "treeSha256": {
+    "dotnetSdk": "0e0db10781b19cdc1053640f9445c595ab39bb9d413ad3fcefe7f8b86ede8a10",
+    "node": "309e1ddb3e89bb09c19dcd3b1468fb6f4ee878d6e52c30d930f28fc759e6bc0f",
+    "typescript": "36dbb26c8a1afe6edbd919d6f121f8d7579e36d07d14f5a8eed4cf21062b7649"
   }
 }
