@@ -25,6 +25,7 @@ is not built; a daemon or web run ends with exit 5 and says so.
 | `runner/rs_launch.py`, `rs_status.py` | starting a case through the prefix, the `child-pid` wait and `LaunchFailed`, the empty program; bwrap's JSON status lines and the per-case pipe |
 | `runner/rs_scope.py`, `rs_cgroup.py` | the lifecycle through `--cgroup-of`: ownership, memory, the always-written `cgroup.kill`; bwrap by identity, `cgroup.procs`, `memory.peak` and `memory.events` |
 | `runner/rs_track.py`, `rs_pump.py` | which process is the program and what else the case leaves (`fork`); the pump: stdin, stdout, the look, the end on the pidfd or the `exit-code` record |
+| `runner/rs_stop.py` | the runner stopped by SIGTERM, SIGINT or SIGHUP: the handler, and the stop of every launcher still registered |
 | `runner/rs_view.py`, `rs_layer.py` | the case view and its `.scenario` fixtures; the layer's options as the command line takes them, `RunInfo` |
 | `runner/rs_samples.py`, `rs_report.py` | pairs, `cases.txt`, limits; report lines and the JSON result |
 | `pin-runner.mjs`, `lib/runner-pin.mjs` | the pin: writes `inputs/specs.d/runner.json` (`runner: { version, files, manifestSha256 }`), `--check` |
@@ -65,6 +66,19 @@ which the layer made before the case starts (a missing view is exit 3): the prog
 path is relative, free of `..`, and made one component at a time with `O_NOFOLLOW`, so a link on the way refuses it; a `.scenario` already there is refused), and the samples
 directory may not lie in a view nor a view in the samples (exit 4). **With more than one case, a `--cgroup-of`, `--case-view` or `--wrapper-pid-file` template without `{case}` is
 exit 4.** Nothing is read back from a view, and the runner never assumes the filesystem persists from one case to the next.
+
+*What a cgroup must be (round 4).* The directory named by `--cgroup-of` must be a cgroup2 node (`cgroup.controllers` is there) or the spawn is refused (exit 3). Its counters are
+not reset between cases, so an existing cgroup whose `memory.peak` or `oom_kill` is above zero before the spawn is refused too (exit 3); the runner does not judge an *increase*:
+a stale counter would be a verdict the program never earned. After `child-pid` the box must BELONG to the cgroup: `/proc/<child-pid>/cgroup` names it or a descendant of it, else the
+box is stopped through a pidfd of `child-pid` (and the launcher's group), nothing is written to the wrong cgroup, and the launch has failed (exit 3). A box that is already gone at
+that look cannot be confirmed: that is no failure, but its memory is then unknown (`known: false`; the counters of a cgroup the box was never seen in are not this case's, and no
+`memory limit` is judged from them). `cgroup.kill` is opened and never created. For emptiness the runner trusts `populated 0` of `cgroup.events` when it is there; a pid of 0, or a
+pid whose stat cannot be read, counts as alive (only a stat that says zombie is dead). The wait for emptiness decides on the FIRST look that finds the cgroup empty: a cgroup the
+kernel is taking down answers differently from one read to the next, and a second look to confirm the first once made the real-scope tests fail 5 times in 20. A process taken for the program
+that is still alive when the program has ended was an orphan (the program was gone before the first look and its child became a child of bwrap's init): it is a leftover and its pid is
+not reported as the program's. The look into the cgroup is paced by TIME (1 ms backing off to 20 ms while the program is not found, then every 20 ms), never by I/O: a look costs about
+200 µs and a program printing 64 MiB used to pay it on every read (79 ms became 190 ms). `wallMs`, `launchMs` and `emptyProgramMs` are rounded UP, all three, so the F1 subtraction
+mixes no two roundings. An `exit-code` record that arrives in the same read as `child-pid` is the end of the case at the instant it was read, never the launcher's teardown.
 
 *Host prerequisites (P1).* At the start of a run the host must be Linux 5.14 or newer and have a working `os.pidfd_open`, and cgroup v2 at `/sys/fs/cgroup` when `--cgroup-of`
 is given; each missing one is named in an exit 3, never a crash.
