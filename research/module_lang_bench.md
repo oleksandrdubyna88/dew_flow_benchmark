@@ -128,12 +128,19 @@ and the literal tokens of `leak-tokens.txt` in that folder when it is present, o
 elsewhere in it), `run-base-text` (links and the D18 needles in every file's text and path, `.gitmodules` excepted and pin files excepted from links;
 plan, probe, gate and decision ids in `csharp/ node/ tasks/ runner/ todo/tasks/` and the README), `family-names` (`dew_flow_*` other than the
 repository's own and `PLAN_lang_comparison`, in every file's text and path at the tip, in commit messages, `.gitmodules` excepted),
-`known-task-credits` (a known-task text — the spec, or a task folder under `tasks/ csharp/ node/`, added anywhere in the range — needs its entry
+`known-task-credits` (a known-task text — the spec, or a task folder under `tasks/ csharp/ node/`, anywhere in the range or anywhere in the tip tree — needs its entry
 in `inputs/credits-lang.json` and, in the README's attribution section outside HTML comments, its credit as a substring, the CC BY-NC-SA 4.0
 sentence naming both files, and RealWorld's MIT notice), `stack-folders` (a `.gitkeep` is the empty blob only, and only at the root of `csharp/` and
 `node/` until E1.S3 writes `templates/stack-files.json`, a JSON list of path patterns with `<t>` for the task folder) and `tree-shape` (no symlink,
 no submodule but `.agents/conventions`, no `.gitmodules` path or URL but the conventions repository's, no file with a NUL byte in a task repository;
 UTF-16 is decoded and other binaries are read as latin1 for every scan).
+
+**The whole tip tree, bounded and visible.** `stack-folders`, the symlink rule and the credit terms read the whole tip tree (`scan.tree`), not only the
+range's files, because a run base carries the whole tree. `verifyFresh` compares the local `refs/remotes/origin/*` with `git ls-remote --heads origin`
+both ways (a ref the remote lacks or has elsewhere, and a remote branch never fetched). Every external process goes through the one shared launcher
+(`runBounded`: exe + argv, timeout, process-tree kill; `input` and `bytes` options added for the archive extraction and the byte reads); the blobs of one
+check are read by one `git cat-file --batch` under an aggregate ceiling (256 MiB, one blob 16 MiB; exit 3 beyond it). The command prints progress
+(`push-check: scanning N commits`, `reading N blobs`, ...) on stderr; stdout is the report.
 
 **What reads what.** History is published, so the leak and secret scans read every commit and every message. A run base carries the tip tree and
 never the history, so every other rule reads the files as they stand at the tip (credited to the commit that brought the blob). Needles match by
