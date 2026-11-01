@@ -461,32 +461,116 @@ already do not, and keeps claude's own login (`CLAUDE_*` / `ANTHROPIC_*`); the p
 of its record is believed on the arm branch, and picks every other source — a change the branch already holds lands as one empty
 commit with the task's author and message, never as nothing.
 
-**Part (a) — `ArmChildEnvironment` strips `SSH_AUTH_SOCK` and every inherited `GIT_*`.** `spec: Fable (to be written)`. Fixed by the
-entry and by this document: the two rules are `TargetEnvironment`'s (`TargetEnvironment.cs:18`, `:27` — the socket by name, `GIT_` as a
-prefix, both whatever the case); the `CLAUDE_*` / `ANTHROPIC_*` exception is unchanged (no name of either rule carries those prefixes);
-`TMPDIR` and the scout flags are unchanged; `TargetEnvironmentTests` is not edited. The floor of tests the spec keeps, each red at
-`16e7fd20`: `ArmChildEnvironmentTests.The_ssh_agent_and_every_inherited_git_variable_never_reach_the_arms_session` — `[Theory]`, rows
-at least `SSH_AUTH_SOCK`, `ssh_auth_sock`, `GIT_DIR`, `Git_Dir`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, `GIT_SSH_COMMAND` (red:
-`Expected … not to contain key "SSH_AUTH_SOCK"`); `Claudes_own_names_pass_even_when_secret_shaped` and
-`Home_path_locale_and_claudes_own_variables_pass_through_untouched` unedited and green; and the wiring — the fake's logged
-`EnvironmentNames` of a real step launch (`StepRunner` → `StepLaunch` → `ArmChildEnvironment.Of` → the replacing overload, E4 §5 E4.S0
-item 3's pattern) holds neither name. **Questions the spec must settle:**
+**Scenarios and brief (a) — spec by Fable (2026-11-01).** A security judgement (`common.subagent-models`: the environment of the session
+that runs arbitrary commands by design is the boundary D19 draws), written against `16e7fd20` — equal to `1310360d` for every file named
+here (`git diff --stat 16e7fd20 HEAD -- tools tests` is empty). Fixed by the entry and by this document, and kept: the two rules are
+`TargetEnvironment`'s (`TargetEnvironment.cs:18`, `:27` — the socket by whole name, `GIT_` as a prefix, both whatever the case); the
+`CLAUDE_*` / `ANTHROPIC_*` exception is unchanged; `TMPDIR`, `PWD`/`OLDPWD` (`StepLaunch.cs:63-72`) and the scout flags are unchanged;
+`TargetEnvironmentTests`, `SecretShapedTests` and `ModelArmsArchitectureTests` are not edited. The six questions, settled:
 
-1. **One place for the two rules** — the lesson of ledger 2.2 (two lists drift): move `TargetEnvironment`'s `IsGit` and `AgentSocket`
-   beside `SecretShaped` in Core and ask them from both environments, or ask `TargetEnvironment`'s from `ArmChildEnvironment`; either
-   way `TargetEnvironmentTests` runs unedited.
-2. **What stays a residual, and is said** (parent §9, the class doc's *Residuals*, the module doc): agent variables outside the two
-   rules (`SSH_AGENT_PID`, `GPG_AGENT_INFO`, `GNUPGHOME`, `SSH_ASKPASS`, …) and the files under `HOME` (`~/.ssh`, `~/.gnupg`,
-   `~/.gitconfig`). Widening past the entry's two names is a new ledger entry, never this story's.
-3. **The gate step.** The arm's claude starts `coai-mcp` (and through it the `creds` CLI) under this environment: whether either needs
-   `SSH_AUTH_SOCK` or a `GIT_*` (read `dew_flow_connect_other_ais` · `src_mcp`), what a gate round loses if so, and whether M2's key-check
-   road is unchanged.
-4. **Where the changed condition is said:** runs after E6.S4 differ from part 6's measured conditions (the entry's words). The module
-   doc's E4.S0 section and *Not proven, gathered* (no longer *the owner's open question*), the analysis plan's carried list; a marker in
-   the arm's own files is a layout change D5 governs — the default is none.
-5. **The case rule.** Linux names are case-sensitive and git reads only upper-case `GIT_*`; stripping `git_dir` follows
-   `TargetEnvironment` and this class's "whatever the case" — confirm, or rule otherwise with the reason.
-6. **D26 (a)–(f)** for the changed class and the threat text: the class doc, parent §9, the module doc.
+1. **One place for the two rules — one predicate, where the two shared ones already live.** `ArmChildEnvironment` (Core, `Experiment`)
+   gains `public const string AgentSocket = "SSH_AUTH_SOCK"` (moved from `TargetEnvironment.cs:18`; nothing else referenced it) and
+   `internal static bool IsAgentSocketOrGit(string name) => name.Equals(AgentSocket, StringComparison.OrdinalIgnoreCase) || name.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)`;
+   `Stripped` (`:42-43`) gains `|| IsAgentSocketOrGit(name)` as its OWN disjunct beside `IsSecretNotClaudes(name)` — never inside it.
+   `TargetEnvironment.Stripped` (`:25`) drops its `IsGit(name)` and its `AgentSocket` equality (`:27` deleted) and asks
+   `ArmChildEnvironment.IsAgentSocketOrGit(name)` — the direction `IsThisRepositorys` and `IsScoutFlag` already travel (`Launch` asks
+   `Experiment`), so no new public static class and `ModelArmsArchitectureTests.PureDeciders` stays as it is. The scan below (not memory —
+   `common.security` § *Enumerate the sites mechanically*) found a THIRD spelling of the prefix: `GitEnvironment.Of` (`HostChecks.cs:86-91`,
+   `:89` — the harness's own git for `validate`, and through `ArmGit.cs:52` every arm git) asks the same predicate; the only behaviour
+   that moves is `validate`'s four local `rev-parse` questions losing the socket too, which none of them needs (`ValidateVerbTests.cs:444-449`
+   unedited). Why not `SecretShaped`: the socket and `GIT_*` are not secret NAMES — a capability and steering — and a rule routed through
+   `IsSecretShaped` would fall under `IsSecretNotClaudes`'s exception, where it must not be (item 5). Why not a new class: a third file
+   (`PureDeciders`) edited for a predicate whose two siblings already live here. Code changed: ≈ 12 lines.
+2. **What stays, and is said.** Outside the two names and NOT stripped here: `SSH_AGENT_PID`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`,
+   `GPG_AGENT_INFO`, `GPG_TTY`, `GNUPGHOME`, `EMAIL` (git's identity fallback), `PAGER`, `EDITOR`/`VISUAL` (git runs them; claude's git
+   calls are non-interactive and pass `-m`), `XDG_CONFIG_HOME` (git's config road without the prefix; D26 (c) refuses one under a
+   forbidden root and passes an ordinary one); and the FILES under `HOME` — `~/.ssh/id_*`, `~/.ssh/config`, `~/.gitconfig`, `~/.gnupg`:
+   the strip closes the agent's road (a signature or a push with no passphrase asked), not the key files', which the owner's trust model
+   leaves open (ledger 3.2's note: a model sharing `HOME` can already write `~/.bashrc`). Widening past the entry's two names is a new
+   ledger entry, never this story's. Named in the class doc's *Residuals*, parent §9 and the module doc.
+3. **The gate step — read 2026-11-01 in `dew_flow_connect_other_ais` · `src_mcp`** (grep over the non-test sources `core`, `runners`,
+   `src`, `storage`, `normalizer` for `SSH_AUTH_SOCK`, `GIT_[A-Z_]+`, `ssh` and every `ProcessRequest("git"`): nothing reads
+   `SSH_AUTH_SOCK` or a `GIT_*`. Every git launch is a LOCAL question or operation on the repository it is handed (`ContextAssembler`,
+   `WorkRangeReader`, `GitHistory`, `SnapshotListing`, `FilesystemInvariant`, `FeatureRefs`, the worktrees of `ReviewTreeRoot` /
+   `WorktreeManager`, `SubmodulePopulator` from a LOCAL source url with `protocol.file.allow=always` for that one call) — no fetch, no
+   push, no ssh. The vault road is `creds config -` with the key on stdin (`KeyVault.cs`: "An agent is never in this chain"), the key
+   arriving through `mcp-coai.json`'s `env` member (`McpConfig.VaultKeyVariable`), never through the arm's inherited environment — M2's
+   key-check road is unchanged; `dew_flow_creds_for_devs` · `src_cli` reads neither name either. `coai-mcp`'s `ProcessLauncher` inherits
+   its whole environment by default, so the strip reaches ITS git too — the right outcome: an inherited `GIT_DIR` would have steered its
+   `rev-parse --show-toplevel` to another repository. A gate round loses nothing. Proven by reading, not by a run: a real gate round
+   through `coai-mcp` under a real claude stays unobserved (*Not proven, gathered*), and the module doc says so.
+4. **Where the changed condition is said.** The module doc: the `ArmChildEnvironment` paragraph (`:408-416`) gains the two names in its
+   minus list; the E4.S0 section's *Residuals, said* (`:2331`) and its *Not proven* line (`:2384`) stop saying "the owner's open question"
+   and point at a new section *The arm's session without the ssh agent and ambient git (E6.S4 a)* — purpose, the decision above, the
+   tests table, red first, the break-its, *Not proven* — in the shape of the E4.S0 section (§6 wave C: each part its own sections);
+   *Not proven, gathered* (`:3302`) drops the residual phrase and gains **Runs after E6.S4 differ from part 6's measured conditions** —
+   the arm's session has no ssh agent and no inherited `GIT_*`; part 6 ran with both. `todo/PLAN_model_arms_analysis.md`'s carried list
+   gains one clause: a run after E6.S4 (2026-11-01, its commit) ran without the operator's ssh agent and inherited `GIT_*` in the arm's
+   session, part 6 with both — a comparison across that line says so. No marker in the arm's files (a layout change D5 governs, a new
+   entry); the line is a date and a commit. The parent's D19 and §9: "until it lands … the operator starts the arms from a shell without
+   an ssh agent" becomes "built by E6.S4 (a)" — wording (`common.plan-change-control` § *What counts*), no entry. E4 §5 E4.S0 item 4, E4
+   §8 item 22 and this document's §8 item 26 already say superseded or decided.
+5. **The case rule — confirmed: whatever the case**, and the exception's scope decided with it. (i) One rule for two environments:
+   `TargetEnvironment` already strips `git_work_tree` (`TargetEnvironmentTests.cs:26`) and item 1 makes the rule shared, so a
+   case-sensitive arm rule would be a second rule. (ii) On Windows, where the module is also built (`WindowsLauncher`, `WindowsAwake`),
+   environment names are case-insensitive: `git_dir` IS `GIT_DIR` to git. (iii) On Linux a lower-case `git_dir` or `ssh_auth_sock` is
+   read by nothing, so dropping it costs the measured subject nothing it could notice; the class doc says so as the rule's residual.
+   **The exception stays the SECRET rule's alone.** The sets are disjoint by construction — a name starting `GIT_` cannot start `CLAUDE_`
+   or `ANTHROPIC_`, and `SSH_AUTH_SOCK` starts neither — so the entry's "no name of either rule carries those prefixes" is true of the
+   prefixes, and item 1 makes it true of the CODE: `IsAgentSocketOrGit` is asked outside the exception. Hence `GIT_CLAUDE_X` and
+   `GIT_ANTHROPIC_DIR` are stripped (git reads every `GIT_*` as its own whatever follows, and no login travels in one), while
+   `CLAUDE_GIT_X` and `ANTHROPIC_GIT_DIR` are kept (not `GIT_` names, not secret-shaped; git never reads them). A name that merely
+   contains `GIT` (`GITHUB_ACTIONS`, `MY_GIT_DIR`) or resembles the socket (`SSH_AUTH_SOCKET`) is kept: the rule is a prefix and a whole
+   name, never a search.
+6. **D26 (a)–(f).** No adapter and no launch is added; (b) is the one row that moves — the arm's claude still goes by the real path from
+   the chosen cwd under an environment the module built, now narrower by two names; (a), (c)–(f) have nothing new. The review names (b)
+   and says so of the rest; the threat text (the class docs of `ArmChildEnvironment`, `TargetEnvironment` and `GitEnvironment`, parent
+   §9, the module doc) says what the socket and the prefix ARE — a capability, steering — not what stripping them achieves on a real host
+   (`common.security` § *A measure you have not OBSERVED working*).
+
+*Scenarios (a).* Red at `16e7fd20` on an ASSERTION (the message's shape as FluentAssertions prints it); the parent map's names are the
+bench's own (`StepBench.cs:145-162`) plus what each test plants.
+
+| Test | Given / When / Then | Red (at `16e7fd20`) |
+|---|---|---|
+| `ArmChildEnvironmentTests.The_ssh_agent_and_every_inherited_git_variable_never_reach_the_arms_session` (new `[Theory]`, part (a)'s floor) | rows `SSH_AUTH_SOCK`, `ssh_auth_sock`, `Ssh_Auth_Sock`, `GIT_DIR`, `Git_Dir`, `git_work_tree`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, `GIT_CONFIG_VALUE_0`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_CEILING_DIRECTORIES`, `GIT_CONFIG_GLOBAL`, `GIT_EXEC_PATH`; Given `HOME=/home/op`, `KEEP_ME=yes` and the row with a value; When `Of`; Then `child.Should().NotContainKey(row)` and `child.Keys.Should().Equal(["HOME", "KEEP_ME", ArmChildEnvironment.TmpDir])` | `Expected child not to contain key "SSH_AUTH_SOCK" because …, but found it anyhow` — one per row, 14 |
+| `ArmChildEnvironmentTests.A_GIT_name_is_stripped_whatever_follows_and_claudes_own_names_holding_GIT_are_kept` (new) | Given `GIT_CLAUDE_X`, `GIT_ANTHROPIC_DIR`, `CLAUDE_GIT_X`, `ANTHROPIC_GIT_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `HOME`; Then the two `GIT_*` absent and the four `CLAUDE_*` / `ANTHROPIC_*` present with their values | `Expected child not to contain key "GIT_CLAUDE_X"` (the four kept rows are green before and after: the exception's scope) |
+| `ArmChildEnvironmentTests.A_name_that_only_contains_GIT_or_resembles_the_socket_is_kept` (new `[Theory]` — the positive the file needs, `common.testing` § *A file full of negative assertions*) | rows `GITHUB_ACTIONS`, `GITLAB_CI`, `MY_GIT_DIR`, `DIGIT`, `LEGIT_MODE`, `SSH_AUTH_SOCKET`, `SSH_AGENT_PID`, `EMAIL`, `PAGER`, `XDG_CONFIG_HOME`; Then `child.Should().ContainKey(row)` with its value | GREEN at `16e7fd20` by design; its red is B3 |
+| `ArmChildEnvironmentTests.The_agent_socket_and_the_git_prefix_are_spelled_in_one_file_of_Core` (new; a scan across lines over every `.cs` under `tools/model-arms/ModelArms.Core`, from `Cli.Repository.Root` as the architecture tests read) | the literals `"SSH_AUTH_SOCK"` and `"GIT_"` (the quoted four characters, so `"GIT_NO_LAZY_FETCH"` is no hit) appear in `Experiment/ArmChildEnvironment.cs` — the companion: the scan still finds the sanctioned site (`common.testing` § *A structural test that matches nothing*) — and in NO other file, each hit named file:line | `Expected sites outside Experiment/ArmChildEnvironment.cs to be empty, but found {"Launch/TargetEnvironment.cs:18", "Launch/TargetEnvironment.cs:27", "Experiment/HostChecks.cs:89"}` — the enumeration item 1 worked from |
+| `StepRunnerTests.Every_launch_carries_the_arms_environment_and_no_scout_flag` (edited — the wiring at the REAL launch layer: `StepRunner` → `StepLaunch.Ask` → `ArmChildEnvironment.Of` → `AgentEnvironment.Only` → the fake's logged `EnvironmentNames`, `FakeCli/Program.cs:696`) | gains `bench.Parent["SSH_AUTH_SOCK"] = "/run/user/1000/keyring/ssh"`, `["GIT_DIR"] = "/nowhere"`, `["GIT_CONFIG_COUNT"] = "1"`, `["GIT_SSH_COMMAND"] = "ssh -i /home/op/.ssh/id_ed25519"` (the harness's own git is `GitEnvironment.Of(TargetEnvironment.Of(…))`, so the planted `GIT_DIR` steers nothing — `StepGitTests.cs:48` plants the same); the `NotContain` list gains the four names; `Contain` unchanged | `Expected call.EnvironmentNames {…} to not contain {"SSH_AUTH_SOCK", "GIT_DIR", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND"}, but found {"GIT_CONFIG_COUNT", "GIT_DIR", "GIT_SSH_COMMAND", "SSH_AUTH_SOCK"}` |
+| `StepGitTests.An_ambient_GIT_DIR_in_the_parent_environment_does_not_change_which_head_the_before_snapshot_reads` (edited: `:36` INVERTED — today it pins the opposite, "the arm's claude gets its environment untouched") | real git; the parent's `GIT_DIR` / `GIT_WORK_TREE` name another repository; the `.before` is still the clone's HEAD (unchanged) AND `bench.Fake.Calls().Single().EnvironmentNames.Should().NotContain(["GIT_DIR", "GIT_WORK_TREE"], "since ledger 3.2 the arm's claude is stripped of inherited GIT_* like the harness's git (D19, E6.S4)")`; the class doc's "a `GIT_*`-free environment" names both | `Expected … to not contain {"GIT_DIR", "GIT_WORK_TREE"}, but found {"GIT_DIR", "GIT_WORK_TREE"}` |
+| Unedited and green: `Claudes_own_names_pass_even_when_secret_shaped`, `Home_path_locale_and_claudes_own_variables_pass_through_untouched` (`EDITOR` kept — a residual by design), every `TargetEnvironmentTests`, `SecretShapedTests`, `ModelArmsArchitectureTests`, `ValidateVerbTests`, `ArmGitWideningTests` | — | — |
+
+*Break-its (a)*, each planted in the finished code, observed red, restored byte for byte (the module doc's method): **B1** `|| IsAgentSocketOrGit(name)`
+deleted from `ArmChildEnvironment.Stripped` → the theory red (14 rows), `A_GIT_name_is_stripped…` red, AND both wiring tests red at the
+fake's logged names — the production line whose absence a user would notice, at both layers (`common.testing` § *Revert the line the
+observable BEHAVIOUR depends on*); `TargetEnvironmentTests` stays green (it asks a predicate that still exists), which is why the wiring
+rows exist. **B2** the predicate moved INSIDE the exception (`IsSecretNotClaudes` = `(IsSecretShaped(name) || IsAgentSocketOrGit(name)) && !ClaudesOwn…`)
+→ `GIT_CLAUDE_X` and `GIT_ANTHROPIC_DIR` red, everything else green: the exception's scope is a tested fact. **B3** `StartsWith("GIT_")`
+→ `Contains("GIT_")` and `Equals(AgentSocket)` → `StartsWith(AgentSocket)` → `MY_GIT_DIR` and `SSH_AUTH_SOCKET` red. **B4**
+`TargetEnvironment` given back a private `IsGit` → the scan red naming `Launch/TargetEnvironment.cs:<line>` while every behaviour test
+stays green — the drift only the scan catches (§10 item 6). **B5** the companion: `"SSH_AUTH_SOCK"` spelled in `ArmChildEnvironment.cs`
+as a concatenation → the companion assertion red (the scan found nothing).
+
+*Brief (a).* Strip, never widen past the two names (item 2); the exception's clause, `TMPDIR`, `PWD`/`OLDPWD`, `SecretShaped` and
+`CoaiEnvironment.IsSecretName` untouched. Red first, in this order: the theory and the two edited wiring tests, run, each red on its
+message above; the scan, run, red with the three sites; then the code (`ArmChildEnvironment`, `TargetEnvironment`, `GitEnvironment`);
+green; the break-its. Docs in the same commit: `ArmChildEnvironment.cs`'s summary — the first paragraph gains the two names and what they
+are (a capability; steering), the *Residuals* paragraph (`:23-24`) rewritten to item 2's list and the part-6 sentence;
+`TargetEnvironment.cs`'s summary points its `GIT_*` and socket sentences at `ArmChildEnvironment.IsAgentSocketOrGit` and its last
+paragraph says the arm's session strips both through the same predicate (ledger 3.2); `GitEnvironment`'s summary names the predicate and
+the socket; `StepGitTests`' class doc; the module doc, the analysis plan and the parent's D19 / §9 wording as item 4 says;
+`research/module_tests.md`'s `run-arm` row (`:111`) gains "the arm's claude without the operator's ssh agent or inherited `GIT_*`" where
+it names the environment. Size of (a): ≈ 12 code, ≈ 95 tests, ≈ 70 docs.
+
+*Commands (a).* The build; `--filter-class "*ArmChildEnvironmentTests"`, `"*TargetEnvironmentTests"`, `"*SecretShapedTests"`,
+`"*StepRunnerTests"`, `"*StepGitTests"`, `"*ModelArmsArchitectureTests"`, `"*ValidateVerbTests"` and `"*ArmGitWideningTests"`
+(`GitEnvironment`'s callers), `"*RunArmSchemeTests"`, `"*GateStepTests"`; `--filter-namespace "Bench.Tests.ModelArms"`; the whole suite
+once; `node .agents/conventions/tools/plan-lifecycle.mjs`. `StepGitTests`' shim row stays Linux only (unchanged).
+
+*Not proven by (a), said in the module doc.* That a real claude under this environment authenticates and runs a gate round through
+`coai-mcp` (no test starts one — M3 step 14 and the real gate round stay the owner's); a model's `ssh` reading a key FILE under `HOME`;
+a secret under an innocent name; `HOME`'s git config.
 
 **Part (b) — the pick-back without its patch-id skip** (spec: Opus, here).
 
