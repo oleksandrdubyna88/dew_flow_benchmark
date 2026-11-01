@@ -76,13 +76,20 @@ function seriesRefusal(seriesDir, series) {
   return series.value.map.stopped ? { exit: 2, message: `the series is stopped (${series.value.map.stopped.rule}): a stop is final for its series` } : null;
 }
 
-/** What a pair needs besides its plan: the calibration, the held-out side, the world and the token. -> `ok({ calibration, heldout, world, token })` | the first `fail`. */
+/** What a pair needs besides its plan: the calibration, the held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
 async function prerequisites({ home, series, worldFn, tokenFn }) {
-  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir }), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home)]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir }), () => loadHeldout(home), () => worldFn({ home, work: path.join(series.dir, 'private') }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
   if (!got.ok) return got;
-  const [calibration, heldout, world, token] = got.value;
+  const [calibration, heldout, world, token, prompts] = got.value;
   const pins = pinsOk({ explore: world.explore, home, snapshots: world.snapshots });
-  return pins.ok ? ok({ calibration, heldout, world, token }) : pins;
+  return pins.ok ? ok({ calibration, heldout, world, token, prompts }) : pins;
+}
+
+/** The plan reaches the run map only now, when everything the pair needs is in hand: a pair that cannot start leaves run-map.json as it was. */
+function commitPlan({ series, pair, planned, say }) {
+  writeRunMap(runMapFileOf(series.dir), planned.map);
+  if (planned.resumed) say(`pair ${pair}: resuming ${planned.resumed.join(', ')} (left open by a halt or a failure; no new session is planned)`);
+  else say(`pair ${pair}: planned ${planned.planned.map(p => `${p.rid} (${p.stack}, mask ${p.mask}, ${p.label})`).join(' and ')}`);
 }
 
 async function runLocked({ series, pair, rerun, io }) {
@@ -90,9 +97,6 @@ async function runLocked({ series, pair, rerun, io }) {
   if (!planned.ok) return { exit: 4, message: planned.reason };
   const need = await prerequisites({ home: io.home, series, worldFn: io.worldFn, tokenFn: io.tokenFn });
   if (!need.ok) return { exit: 4, message: need.reason };
-  writeRunMap(runMapFileOf(series.dir), planned.value.map);
-  if (planned.value.resumed) io.say(`pair ${pair}: resuming ${planned.value.resumed.join(', ')} (left open by a halt or a failure; no new session is planned)`);
-  else io.say(`pair ${pair}: planned ${planned.value.planned.map(p => `${p.rid} (${p.stack}, mask ${p.mask}, ${p.label})`).join(' and ')}`);
   return loopAndFinalize({ series, pair, planned: planned.value, ...need.value, io, abort: io.abort });
 }
 
@@ -105,16 +109,15 @@ async function settleOpen({ ctx, deps, map, resumed, say }) {
  * The loop over the planned pair, then the records. `io.seams` (`{ claudeBinary, planOver, machine, preflightHome, stub }`) is for tests only: a stub CLI behind a loopback stub upstream, a scripted machine. A real run
  * passes none, so it launches the pinned CLI copy against the real API behind the real machine.
  */
-async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, io, abort }) {
+async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, prompts, io, abort }) {
   const seams = io.seams ?? {};
-  const prompts = seriesPrompts(series.dir);
-  if (!prompts.ok) return { exit: 4, message: prompts.reason };
   const ctx = await runContext({
-    world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts: prompts.value,
+    world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts,
   });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
   const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
+  commitPlan({ series, pair, planned, say: io.say });
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
   const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });

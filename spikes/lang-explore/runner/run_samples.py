@@ -385,14 +385,24 @@ def classify(result, expected, limits):
 
 
 def save_output(cfg, set_name, case_id, data):
-    """Keep the case's stdout (the first 64 KiB) where a hand check can read it: the directory the harness gave (mode 0700, a file 0600)."""
+    """Keep the case's stdout (the first 64 KiB) where a hand check can read it: the directory the harness gave (mode 0700, a file 0600).
+    A failure to keep it (no room, no rights, a path in the way) is a harness failure with its message, not a traceback."""
     directory = cfg.get("outputsDir")
     if not directory:
         return
-    os.makedirs(directory, mode=0o700, exist_ok=True)
-    fd = os.open(os.path.join(directory, "%s-%s.out" % (set_name, case_id)), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(data[:SAVED_OUTPUT_CAP])
+    name = "%s-%s.out" % (set_name, case_id)
+    try:
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        fd = os.open(os.path.join(directory, name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            f = os.fdopen(fd, "wb")
+        except BaseException:
+            os.close(fd)
+            raise
+        with f:
+            f.write(data[:SAVED_OUTPUT_CAP])
+    except OSError as e:
+        raise HarnessFailure("could not keep the output of %s in %s: %s" % (name, directory, e))
 
 
 def progress(cfg, text):

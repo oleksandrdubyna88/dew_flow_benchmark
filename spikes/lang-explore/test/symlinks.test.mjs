@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { pristineCopy } from '../lib/score.mjs';
-import { frozenChanges, pathKind, restoreFrozen } from '../lib/workspace.mjs';
+import { assertInside, frozenChanges, pathKind, restoreFrozen } from '../lib/workspace.mjs';
 
 const FROZEN = {
   'run.sh': { bytes: Buffer.from('exec true\n'), mode: 0o755 },
@@ -87,4 +87,32 @@ test('An_untouched_tree_is_copied_with_no_change_reported_and_the_modes_kept', (
   const changed = pristineCopy({ source: r.source, dest: r.dest, stack: 'node', files: FROZEN });
   assert.deepEqual(changed, []);
   assert.equal(lstatSync(path.join(r.dest, 'run.sh')).mode & 0o777, 0o755);
+});
+
+test('Containment_a_directory_that_resolves_outside_the_copy_is_refused_and_so_is_a_sibling_that_only_shares_the_prefix', () => {
+  const r = rig();
+  const root = path.join(path.dirname(r.dest), 'tree');
+  mkdirSync(path.join(root, 'inner'), { recursive: true });
+  symlinkSync(path.join(r.host, 'dir'), path.join(root, 'out'));
+  assertInside(root, root);
+  assertInside(root, path.join(root, 'inner'));
+  assert.throws(() => assertInside(root, path.join(root, 'out')), /refused: .* resolves to .*host\/dir, outside the scoring copy/);
+  const sibling = `${root}-evil`;
+  mkdirSync(sibling);
+  assert.throws(() => assertInside(root, sibling), /outside the scoring copy/, 'a directory named like the root plus a suffix is not inside it');
+  const viaLinkedRoot = path.join(path.dirname(r.dest), 'alias');
+  symlinkSync(root, viaLinkedRoot);
+  assertInside(viaLinkedRoot, path.join(viaLinkedRoot, 'inner')); // a root reached through a link is compared by what it resolves to
+});
+
+test('Containment_restoring_through_an_intermediate_directory_link_leaves_the_host_untouched_and_ends_inside_the_copy', () => {
+  const r = rig();
+  const root = path.join(path.dirname(r.dest), 'tree');
+  mkdirSync(root);
+  symlinkSync(path.join(r.host, 'dir'), path.join(root, 'samples'));
+  restoreFrozen({ root, rel: 'samples/s01.in', file: FROZEN['samples/s01.in'] });
+  assert.equal(read(path.join(r.host, 'dir', 's01.in')), SENTINEL, 'the host sentinel is unchanged');
+  assert.equal(lstatSync(path.join(root, 'samples')).isDirectory(), true);
+  assertInside(root, path.join(root, 'samples'));
+  assert.equal(read(path.join(root, 'samples', 's01.in')), '1\n');
 });

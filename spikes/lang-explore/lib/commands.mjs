@@ -56,9 +56,17 @@ export async function cmdInit(values, io) {
   return EXIT.done;
 }
 
+/** Why `run`'s arguments cannot start a paid pair, or null: `--series` is a directory this command did not guess, `--pair` a positive integer. */
+function runArguments(values) {
+  if (!values.series) return 'run needs --series <dir>: a paid pair is never started on a series this command guessed (`explore.mjs init` prints the directory)';
+  if (!/^[1-9]\d*$/.test(String(values.pair ?? ''))) return `run needs --pair <k>, a positive whole number (got ${values.pair === undefined ? 'nothing' : `'${values.pair}'`})`;
+  return null;
+}
+
 /** `run --pair k [--rerun <stack>] [--accept-noisy <reason>]`: ONE pair. SPENDS MONEY. */
 export async function cmdRun(values, io) {
-  if (!values.series) return refused(io, 'run needs --series <dir>: a paid pair is never started on a series this command guessed (`explore.mjs init` prints the directory)');
+  const asked = runArguments(values);
+  if (asked) return refused(io, asked);
   const dir = seriesDirOf(values, io.home);
   if (!dir.ok) return refused(io, dir.reason);
   const r = await runPair({ seriesDir: dir.value, pair: Number(values.pair), rerun: values.rerun ?? null, io: { ...io, worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)), acceptNoisy: values['accept-noisy'] ?? null } });

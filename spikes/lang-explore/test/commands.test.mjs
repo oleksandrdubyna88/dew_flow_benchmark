@@ -186,6 +186,22 @@ test('F3_run_requires_series_and_a_rehearsal_series_is_refused_by_run', async ()
   assert.match(refused.message, /rehearsal series/);
 });
 
+test('Run_needs_a_positive_whole_number_for_pair_and_says_what_it_got_before_anything_else_is_read', async () => {
+  const home = homeWithCalibration();
+  const real = createSeries({ home, explore: EXPLORE, calibration: CALIBRATION });
+  for (const pair of [undefined, '', '0', '-1', '1.5', 'abc', '1e3', ' 1', '01']) {
+    const c = io(home);
+    assert.equal(await cmdRun({ series: real.value.dir, ...(pair === undefined ? {} : { pair }) }, c), EXIT.config, `pair ${JSON.stringify(pair)}`);
+    assert.match(c.said[0], /run needs --pair <k>, a positive whole number/, `pair ${JSON.stringify(pair)}`);
+  }
+  const named = io(home);
+  await cmdRun({ series: real.value.dir, pair: 'x' }, named);
+  assert.match(named.said[0], /\(got 'x'\)/);
+  const none = io(home);
+  await cmdRun({ series: real.value.dir }, none);
+  assert.match(none.said[0], /\(got nothing\)/);
+});
+
 // ---- the coai review's items on the commands -------------------------------------------------------------------------------------------
 
 test('The_note_goes_to_a_filename_dated_by_the_series_never_over_an_existing_file_without_force_and_under_the_series_limits', async () => {

@@ -1,6 +1,6 @@
 // The workspace of a session (plan D-X6, spec 01's R13): exactly the frozen files, per stack. The spec and the format texts are read from the local task repository at their pinned shas (`git show`) and
 // checked against their sha256; they are never committed here. Everything is a pure function of its inputs except `loadSources` (reads git) and `fillWorkspace` / `fillerFor` (write the files).
-import { chmodSync, closeSync, constants, fchmodSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { chmodSync, closeSync, constants, fchmodSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -145,12 +145,20 @@ export function frozenChanges({ files, work }) {
   });
 }
 
-/** Make every directory on the way to `rel` under `root` a real directory: a link or another entry in its place is removed (the link, never its target), then the directory is made. */
+/** Refuse unless `dir` really lies inside `root`: both resolved through every link, `dir` equal to `root` or below it. A link anywhere on the way that leads out of `root` is caught here, whatever made it. */
+export function assertInside(root, dir) {
+  const real = realpathSync(root);
+  const inside = realpathSync(dir);
+  if (inside !== real && !inside.startsWith(real + path.sep)) throw new Error(`refused: ${dir} resolves to ${inside}, outside the scoring copy ${real}`);
+}
+
+/** Make every directory on the way to `rel` under `root` a real directory: a link or another entry in its place is removed (the link, never its target), then the directory is made and checked to lie inside `root`. */
 function realDirsTo(root, rel) {
   let current = root;
   for (const part of rel.split('/').slice(0, -1)) {
     current = path.join(current, part);
     ensureRealDir(current);
+    assertInside(root, current);
   }
   return current;
 }

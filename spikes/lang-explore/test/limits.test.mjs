@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { calibrationFor, limitsProblems, loadCalibration, seriesLimits } from '../lib/limits.mjs';
+import { calibrationFor, limitsProblems, loadCalibration, seriesLimits, validLimits } from '../lib/limits.mjs';
 import { calibrationFile, exploreRoot } from '../lib/paths.mjs';
 import { createSeries } from '../lib/series.mjs';
 import { runPair } from '../lib/run.mjs';
@@ -70,4 +70,36 @@ test('F7_a_series_is_scored_under_the_limits_it_was_created_with_and_a_changed_c
   writeFileSync(path.join(made.value.dir, 'inputs.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(made.value.dir, 'inputs.json'), 'utf8')), limits: { ...GOOD, timeMs: 1 } }));
   writeFileSync(calibrationFile(home), JSON.stringify({ limits: GOOD }));
   assert.match(calibrationFor({ home, seriesDir: made.value.dir }).reason, /inputs\.json are not usable/, 'a series whose own limits are not usable is refused too');
+});
+
+test('A_malformed_explore_json_is_a_failure_naming_it_and_never_a_TypeError', () => {
+  const home = homeWith(GOOD);
+  const made = createSeries({ home, explore: EXPLORE, calibration: { limits: GOOD } });
+  const broken = tmpDir('bad-explore');
+  const garbled = path.join(broken, 'explore.json');
+  writeFileSync(garbled, '{ not json');
+  const missingLimits = path.join(broken, 'no-limits.json');
+  const { limits, ...rest } = JSON.parse(readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'inputs', 'explore.json'), 'utf8'));
+  writeFileSync(missingLimits, JSON.stringify(rest));
+  for (const file of [garbled, missingLimits, path.join(broken, 'absent.json')]) {
+    const exploreFn = () => loadExplore(file);
+    assert.doesNotThrow(() => calibrationFor({ home, seriesDir: made.value.dir, exploreFn }), file);
+    const got = calibrationFor({ home, seriesDir: made.value.dir, exploreFn });
+    assert.equal(got.ok, false, file);
+    assert.ok(got.reason.includes(file) || /explore\.json/.test(got.reason), got.reason);
+    assert.doesNotThrow(() => loadCalibration(home, exploreFn));
+    assert.equal(loadCalibration(home, exploreFn).ok, false);
+  }
+});
+
+test('The_live_calibration_and_the_series_own_limits_go_through_the_one_validator_which_returns_an_outcome', () => {
+  assert.deepEqual(validLimits(GOOD, REG, 'x'), { ok: true, value: GOOD });
+  const bad = validLimits({ ...GOOD, timeMs: 1 }, REG, 'the thing is not usable');
+  assert.equal(bad.ok, false);
+  assert.match(bad.reason, /^the thing is not usable: timeMs 1 is under the registered floor of 2000$/);
+  const home = homeWith({ ...GOOD, timeMs: 1 });
+  assert.match(loadCalibration(home).reason, /is not a usable calibration: timeMs 1 is under the registered floor/);
+  const made = createSeries({ home: homeWith(GOOD), explore: EXPLORE, calibration: { limits: GOOD } });
+  writeFileSync(path.join(made.value.dir, 'inputs.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(made.value.dir, 'inputs.json'), 'utf8')), limits: { ...GOOD, timeMs: 1 } }));
+  assert.match(calibrationFor({ home: homeWith(GOOD), seriesDir: made.value.dir }).reason, /the limits in .*inputs\.json are not usable: timeMs 1 is under/);
 });

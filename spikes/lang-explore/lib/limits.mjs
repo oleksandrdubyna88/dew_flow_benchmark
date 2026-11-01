@@ -30,16 +30,22 @@ export function limitsProblems(limits, registered) {
   return BOUNDS.filter(([violated]) => violated(limits, registered)).map(([, sentence]) => sentence(limits, registered));
 }
 
+/** The one validator of limits, for the live calibration and for a series' own: `ok(limits)`, or a `fail` that starts with `subject` and lists the problems. */
+export function validLimits(limits, registered, subject) {
+  const problems = limitsProblems(limits, registered);
+  return problems.length === 0 ? ok(limits) : fail(`${subject}: ${problems.join('; ')}`);
+}
+
 const readJsonOr = file => { try { return ok(JSON.parse(readFileSync(file, 'utf8'))); } catch (e) { return fail(`${file} is unreadable: ${e.message}`); } };
 
-/** The calibration (`explore.mjs calibrate`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. */
-export function loadCalibration(home) {
+/** The calibration (`explore.mjs calibrate`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. `exploreFn` loads the registered inputs (a test passes its own). */
+export function loadCalibration(home, exploreFn = loadExplore) {
   const file = calibrationFile(home);
   if (!existsSync(file)) return fail(`${file} is not there: run \`explore.mjs calibrate\` first (the limits are measured before any paid session)`);
-  const got = chainSync([() => loadExplore(), () => readJsonOr(file)]);
+  const got = chainSync([() => exploreFn(), () => readJsonOr(file)]);
   if (!got.ok) return got;
-  const problems = limitsProblems(got.value[1]?.limits, got.value[0].limits);
-  return problems.length === 0 ? ok(got.value[1]) : fail(`${file} is not a usable calibration: ${problems.join('; ')}`);
+  const valid = validLimits(got.value[1]?.limits, got.value[0].limits, `${file} is not a usable calibration`);
+  return valid.ok ? ok(got.value[1]) : valid;
 }
 
 /** The synchronous `allOk`: the values of steps that each return `ok(value)`, or the first `fail`. */
@@ -62,20 +68,20 @@ const same = (a, b) => KEYS.every(k => a?.[k] === b?.[k]);
 
 const movedSentence = (live, own) => `calibration.json (TL ${live.timeMs} ms, ML ${live.memoryBytes} B) differs from the limits this series was created with (TL ${own.timeMs} ms, ML ${own.memoryBytes} B): the limits of a series do not move between pairs. Calibrate again only before \`init\`, and make a new series`;
 
-/** The series' own limits, valid (they were checked when the series was made, and are checked again). -> `ok(limits)` | `fail`. */
-function ownLimits(seriesDir) {
+/** The series' own limits, valid (they were checked when the series was made, and are checked again) against the registered ones `registered`. -> `ok(limits)` | `fail`. */
+function ownLimits(seriesDir, registered) {
   const own = seriesLimits(seriesDir);
-  if (!own.ok) return own;
-  const problems = limitsProblems(own.value, loadExplore().value.limits);
-  return problems.length === 0 ? own : fail(`the limits in ${seriesDir}/inputs.json are not usable: ${problems.join('; ')}`);
+  return own.ok ? validLimits(own.value, registered, `the limits in ${seriesDir}/inputs.json are not usable`) : own;
 }
 
 /**
  * The calibration a pair of this series is scored under: the series' own limits (read from its inputs.json), valid, and equal to the live calibration file. A calibration file that changed since `init` is refused,
  * naming both. -> `ok(calibration)` with `limits` the series' | `fail`.
  */
-export function calibrationFor({ home, seriesDir }) {
-  const got = chainSync([() => loadCalibration(home), () => ownLimits(seriesDir)]);
+export function calibrationFor({ home, seriesDir, exploreFn = loadExplore }) {
+  const explore = exploreFn();
+  if (!explore.ok) return explore;
+  const got = chainSync([() => loadCalibration(home, () => explore), () => ownLimits(seriesDir, explore.value.limits)]);
   if (!got.ok) return got;
   const [live, own] = got.value;
   return same(own, live.limits) ? ok({ ...live, limits: own }) : fail(movedSentence(live.limits, own));

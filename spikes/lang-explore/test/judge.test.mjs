@@ -279,3 +279,35 @@ test('F6_a_kill_that_raises_falls_back_to_the_process_group_the_wait_is_bounded_
   ].join('\n');
   assert.equal(await inJudge(flood), 'harness failure True True', 'the output-cap path: the failed kill is retried by the fallback instead of waiting for the time limit');
 });
+
+test('save_output_closes_the_descriptor_when_fdopen_fails_and_reports_a_write_error_as_a_harness_failure_not_a_traceback', async () => {
+  const dir = tmpDir('save-output');
+  const out = await inJudge([
+    'import os',
+    `base = ${JSON.stringify(dir)}`,
+    'seen = []',
+    'real_open, real_fdopen = os.open, os.fdopen',
+    'def spy_open(*a, **k):',
+    '    fd = real_open(*a, **k); seen.append(fd); return fd',
+    'def bad_fdopen(*a, **k):',
+    '    raise OSError("fdopen refused")',
+    'os.open, os.fdopen = spy_open, bad_fdopen',
+    'try:',
+    '    j.save_output({"outputsDir": os.path.join(base, "a")}, "heldout", "c1", b"x")',
+    '    print("no error")',
+    'except j.HarnessFailure as e:',
+    '    print("harness failure:", "fdopen refused" in str(e))',
+    'try:',
+    '    os.fstat(seen[0]); print("fd leaked")',
+    'except OSError:',
+    '    print("fd closed")',
+    'os.open, os.fdopen = real_open, real_fdopen',
+    'open(os.path.join(base, "file"), "w").close()',
+    'try:',
+    '    j.save_output({"outputsDir": os.path.join(base, "file", "sub")}, "heldout", "c1", b"x")',
+    '    print("no error")',
+    'except j.HarnessFailure as e:',
+    '    print("harness failure:", "heldout-c1" in str(e))',
+  ].join('\n'));
+  assert.equal(out, 'harness failure: True\nfd closed\nharness failure: True');
+});

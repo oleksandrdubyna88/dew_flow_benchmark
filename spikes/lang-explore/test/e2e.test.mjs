@@ -162,6 +162,25 @@ test('F2_a_pair_halted_by_the_quiet_check_and_then_by_a_judge_failure_is_resumed
   assert.deepEqual(resumed.problems, []);
 });
 
+test('A_pair_that_cannot_start_leaves_run_map_json_as_it_was_whatever_it_is_missing', { timeout: 600_000 }, async t => {
+  const got = await worldOrNull(t);
+  if (!got) return;
+  const rig = await pilotRig(t, got);
+  const mapFile = runMapFileOf(rig.dir);
+  const before = readFileSync(mapFile, 'utf8');
+  const noWorld = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ worldFn: async () => ({ ok: false, reason: 'the world is not there (scripted)' }) }) });
+  assert.equal(noWorld.exit, 4);
+  assert.equal(readFileSync(mapFile, 'utf8'), before, 'a failed prerequisite leaves the run map untouched');
+  const inputsFile = path.join(rig.dir, 'inputs.json');
+  const { prompts, ...unfrozen } = JSON.parse(readFileSync(inputsFile, 'utf8'));
+  writeFileSync(inputsFile, JSON.stringify(unfrozen));
+  const noPrompts = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  assert.equal(noPrompts.exit, 4);
+  assert.match(noPrompts.message, /holds no frozen prompts/);
+  assert.equal(readFileSync(mapFile, 'utf8'), before, 'so does a series without its frozen prompts: no session is planned for a pair that cannot start');
+  assert.deepEqual(rig.said.filter(l => /planned|resuming/.test(l)), [], 'and nothing was announced');
+});
+
 test('F2_a_session_left_launching_by_a_hard_crash_is_settled_and_charged_once_from_the_broker_ledger', { timeout: 600_000 }, async t => {
   const got = await worldOrNull(t);
   if (!got) return;
