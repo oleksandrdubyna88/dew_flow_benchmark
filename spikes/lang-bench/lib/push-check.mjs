@@ -61,7 +61,7 @@ async function scanBranch({ repo, branch, rev, dest, inputs, refuseNul, progress
   if (treeBad) return treeBad;
   const entries = scanEntries(files, tree.value).map(e => ({ ...e, fresh: fresh.value.has(e.oid) }));
   const covered = new Set(entries.filter(e => e.fresh).map(e => `${e.path}\0${e.oid}`));
-  const placement = placementScan ? placementEntries(tree.value, pairs.value, files, covered) : [];
+  const placement = placementScan ? placementEntries(tree.value, pairs.value, files, covered, head.value.tip) : [];
   const wanted = [...readable, ...placement];
   progress(`reading ${new Set(wanted.map(f => f.oid)).size} blobs`);
   const blobs = await readBlobs(repo, wanted.map(f => f.oid), { ...inputs.limits, where: whereOf(wanted) });

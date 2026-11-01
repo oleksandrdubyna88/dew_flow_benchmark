@@ -55,13 +55,13 @@ export const PLACEMENT_CHECKS = Object.freeze(new Set(['run-base-text', 'family-
 
 /**
  * Entries for the tip tree's (path, blob) pairs that the published base does not hold and that no fresh range entry already covers: a published
- * blob at a NEW path. Only their placement is checked (the bytes are public, so leak, secret and NUL rules do not run again).
+ * blob at a NEW path. `tipCommit` names the finding's commit for a path no commit of the range touched (a finding always names one). Only their placement is checked (the bytes are public, so leak, secret and NUL rules do not run again).
  */
-export function placementEntries(tree, baseKeys, files, covered) {
+export function placementEntries(tree, baseKeys, files, covered, tipCommit) {
   const firstCommit = new Map([...files].reverse().map(f => [f.path, f.commit]));
   return [...tree]
     .filter(([path, { oid, mode }]) => mode !== SUBMODULE && !baseKeys.has(`${path}\0${oid}`) && !covered.has(`${path}\0${oid}`))
-    .map(([path, { oid, mode }]) => ({ commit: firstCommit.get(path), path, oid, mode, atTip: true, firstOfPath: false, placementOnly: true }));
+    .map(([path, { oid, mode }]) => ({ commit: firstCommit.get(path) ?? tipCommit, path, oid, mode, atTip: true, firstOfPath: false, placementOnly: true }));
 }
 
 export function entryFindings(entry, bytes, inputs, { refuseNul }) {
