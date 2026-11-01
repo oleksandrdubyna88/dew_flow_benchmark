@@ -3,7 +3,7 @@
 // commit and removed by the next is in the history a push publishes, so it is scanned; a blob that several paths or commits share
 // is read once (the first commit that introduced the path owns the finding).
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { BLOB_MAX_BYTES, runGit } from './push-git.mjs';
+import { BLOB_MAX_BYTES, runGit, runGitBytes } from './push-git.mjs';
 
 export const SUBMODULE_MODE = '160000';
 export const SYMLINK_MODE = '120000';
@@ -51,17 +51,17 @@ export async function changesOf(repo, commits) {
   return ok({ messages, files });
 }
 
-/** ok(Map(oid -> text)) for the distinct blob ids, read eight at a time; a blob over the ceiling is a fail (not scanned, so not clean). */
+/** ok(Map(oid -> Buffer)) for the distinct blob ids, read eight at a time; a blob over the ceiling is a fail (not scanned, so not clean). */
 export async function readBlobs(repo, oids) {
-  const texts = new Map();
+  const blobs = new Map();
   const unique = [...new Set(oids)];
   for (let i = 0; i < unique.length; i += 8) {
-    const batch = await Promise.all(unique.slice(i, i + 8).map(oid => runGit(repo, ['cat-file', 'blob', oid], { maxBytes: BLOB_MAX_BYTES })));
+    const batch = await Promise.all(unique.slice(i, i + 8).map(oid => runGitBytes(repo, ['cat-file', 'blob', oid])));
     const bad = batch.find(r => !r.ok);
     if (bad) return bad;
-    batch.forEach((r, n) => texts.set(unique[i + n], r.value.stdout));
+    batch.forEach((r, n) => blobs.set(unique[i + n], r.value));
   }
-  return ok(texts);
+  return ok(blobs);
 }
 
 /** ok(text) of `path` at the tip of `branch`, ok(null) when the path is not there. */

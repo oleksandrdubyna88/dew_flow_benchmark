@@ -4,6 +4,7 @@
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { attributionSection, outsideAttribution } from './attribution.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
+import { decodeBlob } from './push-decode.mjs';
 import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
@@ -19,6 +20,7 @@ const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
 // History is published, so these read every commit; the others read the tip tree, which is what a run base carries.
 const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
 const MAX_PRINTED = 100;
+const NUL_REASON = 'file holds a NUL byte (binary or UTF-16): the text scans cannot be trusted on it';
 
 /** The findings of one text, by named check. `file` decides which placement rules apply. */
 function scanText(file, text, inputs, { body = false } = {}) {
@@ -55,7 +57,7 @@ const toChecks = (names, byName) => names.map(name => ({ name, findings: byName[
  * Scan every message and every distinct (path, blob) of the range. The leak and secret scans read all of them; the placement rules
  * read only the blob that is at the tip, credited to the first commit that brought it. `paths` are the range's files still at the tip.
  */
-async function scanRange(repo, branch, commits, inputs, names) {
+async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
   const changes = await changesOf(repo, commits);
   if (!changes.ok) return changes;
   const blobs = await readBlobs(repo, changes.value.files.filter(f => f.mode !== SUBMODULE_MODE).map(f => f.oid));
@@ -70,7 +72,9 @@ async function scanRange(repo, branch, commits, inputs, names) {
     if (atTip && !tipCommit.has(path)) tipCommit.set(path, commit);
     if (mode === SUBMODULE_MODE || seen.has(`${path}\0${oid}`)) continue;
     seen.add(`${path}\0${oid}`);
-    merge(byName, scanText(path, blobs.value.get(oid), inputs), commit, { atTip });
+    const { text, nul } = decodeBlob(blobs.value.get(oid));
+    merge(byName, scanText(path, text, inputs), commit, { atTip });
+    if (nul && refuseNul) merge(byName, { 'tree-shape': [{ path, line: null, what: NUL_REASON }] }, commit, { atTip });
   }
   return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()], tip: tip.value });
 }
@@ -98,7 +102,7 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   if (!origin.ok) return errorResult(label, origin);
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
-  const scanned = await scanRange(repo, branch, range.value, inputs, NAMES);
+  const scanned = await scanRange(repo, branch, range.value, inputs, NAMES, { refuseNul: true });
   if (!scanned.ok) return errorResult(label, scanned);
   const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit, tip: scanned.value.tip });
   if (!tip.ok) return errorResult(label, tip);
@@ -106,7 +110,7 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   byName.attribution = [...tip.value.attribution, ...byName.attribution];
   byName['known-task-credits'] = tip.value.credits;
   byName['stack-folders'] = tip.value.stack;
-  byName['tree-shape'] = tip.value.shape;
+  byName['tree-shape'] = [...byName['tree-shape'], ...tip.value.shape];
   return verdict(toChecks(NAMES, byName), label, { commits: range.value.length });
 }
 
@@ -115,7 +119,7 @@ export async function checkSelf({ repo, branch, inputs }) {
   const label = `${repo} ${branch} (bench branch)`;
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
-  const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES);
+  const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES, { refuseNul: false });
   if (!scanned.ok) return errorResult(label, scanned);
   return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length });
 }

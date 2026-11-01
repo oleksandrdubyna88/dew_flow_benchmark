@@ -67,7 +67,7 @@ test('Blobs_are_read_once_by_id_and_a_file_at_a_branch_tip_is_read_by_path', asy
   const oids = [...new Set(files.map(f => f.oid))];
   assert.equal(oids.length, 2, 'two paths with identical bytes are one blob');
   const blobs = (await readBlobs(repo, oids)).value;
-  assert.equal(blobs.get(files.find(f => f.path === 'a.txt').oid), 'same\n');
+  assert.equal(blobs.get(files.find(f => f.path === 'a.txt').oid).toString(), 'same\n');
   assert.equal((await readFileAt(repo, 'main', 'README.md')).value, 'tip readme\n');
   assert.equal((await readFileAt(repo, 'main', 'NOPE.md')).value, null, 'absent is null, not an empty text');
 });

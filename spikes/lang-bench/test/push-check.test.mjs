@@ -202,3 +202,22 @@ test('The_conventions_mount_as_the_gitmodules_say_passes_the_tree_shape_check', 
   const result = await run(repo);
   assert.equal(result.exit, EXIT.PASS, formatReport(result));
 });
+
+const LE16 = text => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+const NUL_REASON = 'file holds a NUL byte (binary or UTF-16): the text scans cannot be trusted on it';
+
+test('A_file_with_a_nul_byte_is_refused_in_a_task_repository_and_its_text_is_scanned_anyway', async t => {
+  const { repo, sha } = branchWith(t, { 'tasks/a.bin': Buffer.from([0x1f, 0x8b, 0, 0, 1]), 'notes.md': LE16(`k=${SECRET}\nthe widget that frobnicates every sprocket twice before dinner\n`) });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => [f.path, f.what]), [['notes.md', NUL_REASON], ['tasks/a.bin', NUL_REASON]]);
+  assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.commit, f.path, f.line]), [[sha, 'notes.md', 1]], 'a UTF-16 file is decoded, so its token is found too');
+  assert.equal(checkOf(result, 'leakcheck').findings.length, 1);
+});
+
+test('The_bench_branch_decodes_a_utf16_file_and_scans_other_binaries_as_latin1_without_refusing_them', async t => {
+  const { repo, sha } = branchWith(t, { 'notes.md': LE16(`k=${SECRET}\n`), 'image.png': Buffer.from([0x89, 0x50, 0, 0, 0x0d]) });
+  const result = await checkSelf({ repo, branch: 'topic', inputs });
+  assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.commit, f.path]), [[sha, 'notes.md']]);
+  assert.equal(result.checks.length, 2, 'only the leak and the secret scans');
+});

@@ -1,5 +1,6 @@
 // One way to ask git (exe + argv, a ceiling on the wait, a bounded buffer): the push check's every question to a repository.
 // A non-zero exit is a value, never a throw. `kind` says whose fault: `config` (a branch that is not there), `env` (git or the network).
+import { execFile } from 'node:child_process';
 import os from 'node:os';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
@@ -18,4 +19,13 @@ export async function runGit(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBy
   if (truncated) return fail(`git ${args[0]} produced more than ${maxBytes ?? 'the allowed number of'} bytes`, { kind: 'env' });
   if (!accept.includes(code)) return fail(`git ${args.join(' ')} exited ${code}: ${stderr.trim().slice(-300)}`, { kind: 'env', code });
   return ok({ code, stdout, stderr });
+}
+
+/** ok(Buffer) of a git command's stdout, bytes untouched (a blob is not always text); a failure or a timeout is a value. */
+export function runGitBytes(repo, args, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = BLOB_MAX_BYTES } = {}) {
+  return new Promise(resolve => {
+    execFile('git', ['-C', repo, ...args], { env: ENV, encoding: 'buffer', timeout: timeoutMs, maxBuffer: maxBytes, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
+      resolve(error ? fail(`git ${args[0]} failed: ${error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? `more than ${maxBytes} bytes` : String(stderr).trim().slice(-300) || error.message}`, { kind: 'env' }) : ok(stdout));
+    });
+  });
 }
