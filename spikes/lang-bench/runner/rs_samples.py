@@ -34,6 +34,24 @@ class Pair(NamedTuple):
     expected: bytes = b""
 
 
+MAX_SAMPLE_BYTES = 1 << 30
+
+
+def _size_of(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def sample_size_problems(pairs):
+    """A problem when the `.in` and `.out` files of `pairs` together are more than the ceiling: they are all held in memory for the run."""
+    total = sum(_size_of(p.in_path) + _size_of(p.out_path) for p in pairs)
+    if total <= MAX_SAMPLE_BYTES:
+        return []
+    return [Problem("samples", 0, f"the samples are too large to hold in memory: {total} bytes of .in and .out files, the ceiling is {MAX_SAMPLE_BYTES}")]
+
+
 def load_contents(pair):
     """`(pair with its input and expected bytes read, problems)`. Every sample is read into memory before anything is built or run, so a
     program that rewrites a file of the samples directory cannot change what its output is compared with."""

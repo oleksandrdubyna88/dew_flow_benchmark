@@ -240,6 +240,57 @@ class ExpectedBytesTests(unittest.TestCase):
         self.assertEqual((cases["s01"]["comparison"], cases["s01"]["rIds"], cases["s02"]["rIds"]), ("bytes", ["R1"], ["R2"]))
 
 
+class SampleSizeTests(unittest.TestCase):
+    """Every sample is held in memory for the whole run (the program under test must not be able to change what it is compared with): bounded."""
+
+    def run_in_process(self, box, ceiling):
+        saved, sm.MAX_SAMPLE_BYTES = sm.MAX_SAMPLE_BYTES, ceiling
+        err, real = io.StringIO(), (sys.stdout, sys.stderr)
+        sys.stdout, sys.stderr = io.StringIO(), err
+        try:
+            code = rs.run([box.samples, "--workspace", box.ws])
+        finally:
+            (sys.stdout, sys.stderr), sm.MAX_SAMPLE_BYTES = real, saved
+        return code, err.getvalue()
+
+    def test_The_ceiling_is_one_GiB(self):
+        self.assertEqual(sm.MAX_SAMPLE_BYTES, 1 << 30)
+
+    def test_Samples_over_the_ceiling_are_exit_4_naming_the_total_and_nothing_is_read_or_run(self):
+        box = Box(self, run_sh="touch started\n", pairs={"s01.in": b"x" * 600, "s01.out": b"y" * 600, "s02.in": b"", "s02.out": b"z" * 10})
+        code, err = self.run_in_process(box, 1000)
+        self.assertEqual(code, 4)
+        self.assertIn("the samples are too large to hold", err)
+        self.assertIn("1210", err)
+        self.assertFalse(os.path.exists(os.path.join(box.ws, "started")))
+
+    def test_Samples_exactly_at_the_ceiling_are_held_and_one_byte_more_is_not(self):
+        box = Box(self, pairs={"s01.in": b"", "s01.out": b"a" * 10})
+        self.assertEqual(self.run_in_process(box, 10)[0], 1)
+        code, err = self.run_in_process(box, 9)
+        self.assertEqual(code, 4)
+
+    def test_Only_the_chosen_cases_count_toward_the_ceiling(self):
+        box = Box(self, pairs={"s01.in": b"", "s01.out": b"a" * 10, "s02.in": b"", "s02.out": b"b" * 5000})
+        saved, sm.MAX_SAMPLE_BYTES = sm.MAX_SAMPLE_BYTES, 100
+        try:
+            args = rs.build_parser().parse_args([box.samples, "--workspace", box.ws, "--only", "s01"])
+            plan = rs.make_plan(args)
+        finally:
+            sm.MAX_SAMPLE_BYTES = saved
+        self.assertIsInstance(plan, rs.Plan)
+
+    def test_A_pair_that_cannot_be_read_is_a_configuration_problem_and_not_a_crash(self):
+        box = Box(self)
+        os.chmod(os.path.join(box.samples, "s03.out"), 0)
+        try:
+            code, err = self.run_in_process(box, 1 << 30)
+        finally:
+            os.chmod(os.path.join(box.samples, "s03.out"), 0o644)
+        self.assertEqual(code, 4, err)
+        self.assertIn("cannot read", err)
+
+
 class TemporaryFolderTests(unittest.TestCase):
     """The runner makes a folder for its bytecode prefix (and one for the run): whichever way a run ends normally, none is left behind."""
 
