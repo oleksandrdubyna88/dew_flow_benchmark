@@ -29,3 +29,11 @@ export function attributionText(readmeText) {
   const section = attributionSection(readmeText);
   return section.ok ? readmeText.split('\n').slice(section.value.firstLine - 1).join('\n') : '';
 }
+
+/** ok(text before the `## Attribution` heading, exactly), or the structure's fail: the run-base cut (D39) of a README. */
+export function cutAttribution(readmeText) {
+  const section = attributionSection(readmeText);
+  if (!section.ok) return section;
+  const before = readmeText.split('\n').slice(0, section.value.firstLine - 1);
+  return ok(before.length === 0 ? '' : `${before.join('\n')}\n`);
+}
