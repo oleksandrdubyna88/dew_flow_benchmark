@@ -164,6 +164,21 @@ class ForkTests(unittest.TestCase):
         self.assertEqual(tracker.fork(None), {"known": True, "found": False, "count": 1})
 
 
+class SeekPaceTests(unittest.TestCase):
+    def test_The_look_backs_off_from_1_ms_to_the_tracking_tick_while_the_program_is_not_found(self):
+        import rs_launch as rl
+        import rs_pump
+        launcher = launcher_of(self)
+        tracker = tr.Tracker(launcher, rs_scope.ScopeLifecycle(Folder(self, {"cgroup.procs": ""}).dir, None, None), box=True)
+        launched = rl.Launched(launcher, None, ex.now_ns(), None, None, None, tracker)
+        pump = rs_pump.Pump(launched, b"", None, os.devnull)
+        self.addCleanup(pump.close)
+        ticks = [pump._tick() for _ in range(8)]
+        self.assertEqual(ticks[:6], [0.001, 0.002, 0.004, 0.008, 0.016, ex.TRACK_TICK_S])
+        self.assertEqual(set(ticks[5:]), {ex.TRACK_TICK_S}, "and stays there")
+        self.assertEqual(ticks, sorted(ticks))
+
+
 class PlainTests(unittest.TestCase):
     def test_Without_a_launch_status_the_launcher_is_the_program(self):
         launcher = launcher_of(self)

@@ -13,6 +13,7 @@ from decimal import Decimal
 import rs_json
 
 MAX_BUFFER = 64 * 1024
+MAX_LINE = 64 * 1024
 FIRST_USABLE_FD = 3
 
 
@@ -58,13 +59,31 @@ class StatusReader:
     and are ignored, and the launch is judged on what the runner had read when it took the clock."""
 
     def __init__(self):
-        self.buffer, self.child_pid, self.exit_code, self.problem = b"", None, None, None
+        self.partial, self.skipping = b"", False
+        self.child_pid, self.exit_code, self.problem = None, None, None
 
     def feed(self, data):
-        self.buffer = (self.buffer + data)[-MAX_BUFFER:]
-        *lines, self.buffer = self.buffer.split(b"\n")
+        """Consume the complete lines of this read and keep only the last incomplete one (at most MAX_LINE bytes): nothing already read is
+        split again."""
+        *lines, self.partial = (self.partial + self._past_overflow(data)).split(b"\n")
         for line in lines:
             self._line(line)
+        if len(self.partial) > MAX_LINE:
+            self._overflow()
+
+    def _past_overflow(self, data):
+        """While the rest of an over-long line goes by, nothing is kept: only what follows its line feed counts."""
+        if not self.skipping:
+            return data
+        _, newline, rest = data.partition(b"\n")
+        self.skipping = not newline
+        return rest
+
+    def _overflow(self):
+        """A line longer than MAX_LINE: before `child-pid` the protocol is broken; after it, it is junk of the case and is dropped."""
+        if self.child_pid is None:
+            self._note(f"a status line longer than {MAX_LINE} bytes")
+        self.partial, self.skipping = b"", True
 
     def _note(self, message):
         self.problem = self.problem or message

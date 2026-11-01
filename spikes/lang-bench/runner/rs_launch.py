@@ -21,6 +21,7 @@ import rs_exec as ex
 import rs_pump
 import rs_status
 import rs_track
+import rs_view
 
 EMPTY_PROGRAM = ("bash", "-c", ":")
 STOPPING_SIGNALS = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
@@ -111,13 +112,13 @@ def abandon_active():
 
 def _spawn(argv, cwd, stderr_path, status_fd, streams):
     """The launcher in a session of its own, with the V11 environment and the status descriptor at its number."""
-    with open(stderr_path, "wb") as err:
-        try:
+    try:
+        with open(stderr_path, "wb") as err:
             return subprocess.Popen(argv, cwd=cwd, stdin=streams[0], stdout=streams[1], stderr=err, start_new_session=True,
                                     env=ex.program_env(), pass_fds=() if status_fd is None else (status_fd,))
-        finally:
-            if status_fd is not None:
-                rs_status.release(status_fd)
+    finally:
+        if status_fd is not None:
+            rs_status.release(status_fd)
 
 
 def _spawn_registered(config, argv, cwd, stderr_path, streams, lifecycle):
@@ -266,7 +267,7 @@ def time_empty(config, lifecycle_for, stderr_path):
     record says which pid the wait was on, and the launch time."""
     lifecycle = lifecycle_for(config, ex.EMPTY_CASE)
     streams = (subprocess.DEVNULL, subprocess.DEVNULL)
-    launched = start(config, ex.EMPTY_CASE, lifecycle, stderr_path, config.workspace, streams, EMPTY_PROGRAM)
+    launched = start(config, ex.EMPTY_CASE, lifecycle, stderr_path, rs_view.start_dir(config, ex.EMPTY_CASE), streams, EMPTY_PROGRAM)
     pump = None
     try:
         pump = rs_pump.Pump(launched, b"", None, stderr_path)

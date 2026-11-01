@@ -246,12 +246,20 @@ def _run_one(pair, config):
     return result
 
 
+def _timed_empty(config, scratch):
+    """The empty-program control, announced before and told after (it can take as long as a launch)."""
+    progress("timing the empty program through the launch prefix…")
+    record = layer.empty_record(rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr")))
+    progress(f"empty program: {record['ms']} ms" if record["ms"] is not None else "empty program: unknown (its end was not seen)")
+    return record
+
+
 def _run_cases(plan, scratch):
     """(results, RunInfo): the empty program is timed first; a launch that fails stops the run (the cases done so far are kept)."""
     limit, basis = _limit_and_basis(plan)
     config, results, empty = layer.config_of(plan, scratch, limit, basis), [], None
     try:
-        empty = layer.empty_record(rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr")))
+        empty = _timed_empty(config, scratch)
         for pair in plan.pairs:
             results.append(_run_one(pair, config))
     except rl.LaunchFailed as failed:

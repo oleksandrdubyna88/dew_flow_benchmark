@@ -220,6 +220,21 @@ class PlainSettleTests(unittest.TestCase):
         self.assertEqual((result.status, result.lifecycle["leftover"], seen), ("PASS", {"known": True, "found": False}, []))
 
 
+class LauncherFdTests(unittest.TestCase):
+    def test_The_launchers_pidfd_is_unregistered_once_launcher_gone_has_handled_it(self):
+        proc = subprocess.Popen(["true"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(lambda: [s.close() for s in (proc.stdin, proc.stdout) if s and not s.closed])
+        fd = ex.pidfd_of(proc)
+        self.addCleanup(ex.close_fd, fd)
+        launched = rl.Launched(proc, fd, ex.now_ns(), None, None, None, Tracker(proc, ex.PlainLifecycle(), box=False))
+        pump = rs_pump.Pump(launched, b"", ro.Comparer(b"", 1024), os.devnull)
+        self.addCleanup(pump.close)
+        self.assertIn(fd, pump.sel.get_map())
+        pump.launcher_gone()
+        self.assertNotIn(fd, pump.sel.get_map(), "it would fire again at every later wake-up")
+        pump.launcher_gone()  # handled twice is harmless
+
+
 class PumpTests(unittest.TestCase):
     def pump(self, argv, data, expected):
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)

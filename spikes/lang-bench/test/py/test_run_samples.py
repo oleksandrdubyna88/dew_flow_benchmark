@@ -130,9 +130,9 @@ class ProgressTests(unittest.TestCase):
     def test_A_full_run_says_when_the_build_and_each_case_start_and_end(self):
         pairs = {"s01.in": b"", "s01.out": ANSWER, "s02.in": b"", "s02.out": b"other\n"}
         code, out, err = Box(self, pairs=pairs).cli()
-        got = [re.sub(r" \([^)]*\)$", "", l) for l in self.lines(err)]
-        self.assertEqual(got, ["run_samples: build started", "run_samples: build finished", "run_samples: s01 started", "run_samples: s01 PASS",
-                               "run_samples: s02 started", "run_samples: s02 FAIL"])
+        got = [re.sub(r" \([^)]*\)$", "", re.sub(r"empty program: \d+ ms", "empty program: N ms", l)) for l in self.lines(err)]
+        self.assertEqual(got, ["run_samples: build started", "run_samples: build finished", "run_samples: timing the empty program through the launch prefix…",
+                               "run_samples: empty program: N ms", "run_samples: s01 started", "run_samples: s01 PASS", "run_samples: s02 started", "run_samples: s02 FAIL"])
 
     def test_The_build_line_carries_the_exit_status_and_the_case_line_its_wall_time(self):
         _, _, err = Box(self, build_sh="exit 2\n").cli()
@@ -161,9 +161,11 @@ class ProgressTests(unittest.TestCase):
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples], cwd=box.ws,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
-        first, second, third = proc.stderr.readline(), proc.stderr.readline(), proc.stderr.readline()
+        first, second, empty_before, empty_after, third = (proc.stderr.readline() for _ in range(5))
         self.assertEqual(first, b"run_samples: build started\n")
         self.assertIn(b"build finished", second)
+        self.assertIn(b"timing the empty program", empty_before)
+        self.assertIn(b"empty program: ", empty_after)
         self.assertEqual(third, b"run_samples: s03 started\n")
         self.assertIsNone(proc.poll(), "the case is still running when its start line has been read")
         proc.communicate(timeout=30)

@@ -116,6 +116,28 @@ class FixtureTests(unittest.TestCase):
             self.assertEqual(f.read(), b"first")
 
 
+class DescentFdTests(unittest.TestCase):
+    """C7: every directory descriptor opened on the way down is closed, whatever refuses the path."""
+
+    def open_fds(self):
+        return sorted(os.listdir("/proc/self/fd"))
+
+    def test_No_descriptor_is_left_after_a_refused_path_or_a_failed_step(self):
+        base, outside = folder(self), folder(self)
+        os.mkdir(os.path.join(base, "a"))
+        os.symlink(outside, os.path.join(base, "a", "b"))
+        locked = os.path.join(base, "locked")
+        os.mkdir(locked, 0o500)
+        self.addCleanup(os.chmod, locked, 0o700)
+        before = self.open_fds()
+        for name in ("a/b/x", "../x", "a/../../x", "locked/inner/x", "a/b", "/abs"):
+            with self.assertRaises(vw.ViewError, msg=name):
+                vw.confined_write(base, name, b"x")
+            self.assertEqual(self.open_fds(), before, f"a descriptor leaked refusing {name!r}")
+        vw.confined_write(base, "ok/deep/x", b"1")
+        self.assertEqual(self.open_fds(), before, "and none after a write that succeeds")
+
+
 class FreshViewTests(unittest.TestCase):
     """The program starts in the view of its own case (B7); the filesystem of one case is never assumed to be the next one's."""
 

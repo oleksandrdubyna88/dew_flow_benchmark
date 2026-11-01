@@ -85,10 +85,10 @@ class WaitTests(unittest.TestCase):
 
     def test_The_launchers_teardown_after_the_exit_code_record_is_not_program_time(self):
         started = time.monotonic()
-        result = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES).run(case(), prefix=reporting_prefix(linger=4), status_fd=7, limit_ms=3000)
-        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 3 s limit; wall {result.wall_ms} ms")
-        self.assertLess(result.wall_ms, 3000, "the end is the exit-code record, not the launcher's exit 4 s later")
-        self.assertGreaterEqual(time.monotonic() - started, 4, "the launcher did linger: the test would otherwise prove nothing")
+        result = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES).run(case(), prefix=reporting_prefix(linger=1.5), status_fd=7, limit_ms=1000)
+        self.assertEqual((result.status, result.reason), ("PASS", ""), f"a 50 ms program under a 1 s limit; wall {result.wall_ms} ms")
+        self.assertLess(result.wall_ms, 1000, "the end is the exit-code record, not the launcher's exit 1.5 s later")
+        self.assertGreaterEqual(time.monotonic() - started, 1.5, "the launcher did linger: the test would otherwise prove nothing")
 
     def test_A_launcher_that_outlives_the_program_does_not_stretch_the_wall_when_the_pid_is_found(self):
         ws = Workspace(self, "sleep 0.05\ncat answer.bin\n", FILES)

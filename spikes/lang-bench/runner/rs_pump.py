@@ -31,7 +31,7 @@ class Pump:
         self.launched, self.proc, self.tracker = launched, launched.proc, launched.tracker
         self.comparer, self.stderr_path = comparer or _Nothing(), stderr_path
         self.pending, self.exit_ns, self.sel = memoryview(data), None, selectors.DefaultSelector()
-        self.watching, self.pipe_open = None, launched.pipe_fd is not None
+        self.watching, self.pipe_open, self.seek_delay = None, launched.pipe_fd is not None, ex.SEEK_TICK_S
         self._wire_streams()
         self._wire_ends()
 
@@ -113,7 +113,13 @@ class Pump:
         if self.exit_ns is None:
             self.exit_ns = ex.now_ns()
 
+    def _unregister(self, fd):
+        """Stop watching a descriptor that has been handled: a pidfd stays readable for ever and would wake the selector at every look."""
+        if fd is not None and fd in self.sel.get_map():
+            self.sel.unregister(fd)
+
     def program_exited(self):
+        self._unregister(self.watching)
         self._ended_now()
         return self.drain()
 
@@ -132,6 +138,7 @@ class Pump:
 
     def launcher_gone(self):
         """The launcher exited. On the plain path that is the program's exit; in a box it is only the box's teardown."""
+        self._unregister(self.launched.launcher_fd)
         self._pull()
         if not self.tracker.box or self.launched.reader.exit_code is not None:
             self._ended_now()
@@ -165,7 +172,8 @@ class Pump:
 
     def _tick(self):
         if self.tracker.seeking():
-            return ex.SEEK_TICK_S
+            delay, self.seek_delay = self.seek_delay, min(self.seek_delay * 2, ex.TRACK_TICK_S)
+            return delay
         return ex.TRACK_TICK_S if self.tracker.tracking() else ex.TICK_S
 
     def run(self, deadline_ns):

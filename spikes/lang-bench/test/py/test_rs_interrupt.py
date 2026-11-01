@@ -59,7 +59,7 @@ class RealScopeTests(unittest.TestCase):
         self.assertIsInstance(record["emptyProgramMs"], int)
         self.assertEqual(case["lifecycle"]["signalled"]["found"], "cgroup.procs: the process whose parent is a bwrap process")
         self.assertNotEqual(case["lifecycle"]["signalled"]["pid"], case["lifecycle"]["signalled"]["launcher"])
-        self.assertIsInstance(record["emptyProgram"]["pid"], int, "the control waited on the program's own pid too")
+        self.assertIn("found", record["emptyProgram"], "the control says how it found its pid (an empty program can be gone before it is looked for)")
         self.assertEqual((case["lifecycle"]["kill"], case["lifecycle"]["leftover"]), ("cgroup.kill", {"known": True, "found": False}))
         self.assertEqual(case["lifecycle"]["memory"]["known"], True, "the scope holder keeps the scope until the runner has read it")
         self.assertEqual(case["lifecycle"]["leftover"], {"known": True, "found": False}, "the holder is the wrapper: not a leftover")

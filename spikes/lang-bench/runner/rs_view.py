@@ -42,6 +42,12 @@ def overlaps_samples(template, case_ids, samples_dir):
     return [reason for case_id, view in views for reason in _overlap_reasons(case_id, view, samples_dir)]
 
 
+def start_dir(config, case_id):
+    """Where a program of this case starts: its own view when `--case-view` is given (it must exist), else the workspace. The empty-program
+    control starts in the view of `empty-program`, the same way a case does."""
+    return require(view_of(config.case_view, case_id)) if config.case_view else config.workspace
+
+
 def require(view):
     """The view directory, which must exist: the layer makes it before the case starts."""
     if not os.path.isdir(view):

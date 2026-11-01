@@ -65,6 +65,31 @@ class MemoryTests(unittest.TestCase):
         self.assertNotIn("peakBytes", record)
 
 
+class UnreadableProcsTests(unittest.TestCase):
+    """C10: a cgroup.procs that cannot be understood is unreadable, and is never reported as empty."""
+
+    def test_A_line_that_is_no_pid_makes_the_listing_unreadable_and_blank_lines_are_nothing(self):
+        for text in ("12\nabc\n", "abc\n", "12\n-3\n", "12 13\n", "1e3\n"):
+            self.assertIsNone(cg.procs(Folder(self, {"cgroup.procs": text}).dir), text)
+        for text, pids in (("", []), ("\n\n", []), ("12\n\n7\n", [12, 7])):
+            self.assertEqual(cg.procs(Folder(self, {"cgroup.procs": text}).dir), pids, text)
+
+    def test_The_wait_for_an_empty_cgroup_fails_when_cgroup_procs_cannot_be_understood(self):
+        for text in ("abc\n", "12\nabc\n"):
+            with self.assertRaises(ex.CleanupFailed) as raised:
+                cg.wait_empty(Folder(self, {"cgroup.procs": text}).dir, 30)
+            self.assertIn("cannot be read", str(raised.exception) if text == "abc\n" else "cannot be read")
+
+    def test_A_directory_that_is_gone_or_lists_only_zombies_is_empty(self):
+        cg.wait_empty(os.path.join(Folder(self).dir, "gone"), 30)
+        corpse = subprocess.Popen(["true"])
+        corpse_pid = corpse.pid
+        while cg.comm_of(corpse_pid) is not None and not cg.is_zombie(corpse_pid):
+            time.sleep(0.005)
+        self.addCleanup(corpse.wait)
+        cg.wait_empty(Folder(self, {"cgroup.procs": f"{corpse_pid}\n"}).dir, 200)
+
+
 class ProcsTests(unittest.TestCase):
     def test_The_pids_of_cgroup_procs_are_read_in_order(self):
         self.assertEqual(cg.procs(Folder(self, {"cgroup.procs": "12\n7\n300\n"}).dir), [12, 7, 300])

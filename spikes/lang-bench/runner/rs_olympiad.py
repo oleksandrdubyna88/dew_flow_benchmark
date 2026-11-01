@@ -88,9 +88,8 @@ class Outcome(NamedTuple):
 
 def _launch(case, config, lifecycle, stderr_path):
     """Start the case in its own view when `--case-view` is given (fixtures written into it first), else in the workspace."""
-    cwd = config.workspace
+    cwd = rs_view.start_dir(config, case.id)
     if config.case_view:
-        cwd = rs_view.require(rs_view.view_of(config.case_view, case.id))
         rs_view.write_fixtures(cwd, case.fixtures)
     return rl.start(config, case.id, lifecycle, stderr_path, cwd)
 

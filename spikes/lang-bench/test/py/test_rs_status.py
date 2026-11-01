@@ -56,12 +56,35 @@ class ReaderTests(unittest.TestCase):
         reader.feed(b'{"exit-code": 0}\n')
         self.assertEqual(reader.exit_code, 0)
 
-    def test_The_buffer_is_bounded_whatever_a_launcher_writes(self):
+    def test_The_incomplete_line_is_bounded_whatever_a_launcher_writes_and_a_line_too_long_before_child_pid_is_a_problem(self):
         reader = st.StatusReader()
-        reader.feed(b"x" * (10 * st.MAX_BUFFER))
-        self.assertLessEqual(len(reader.buffer), st.MAX_BUFFER)
+        reader.feed(b"x" * (10 * st.MAX_LINE))
+        self.assertLessEqual(len(reader.partial), st.MAX_LINE)
+        self.assertIn("longer than", reader.problem)
         reader.feed(b'\n{"child-pid": 8}\n')
         self.assertEqual(reader.child_pid, 8)
+
+    def test_Every_complete_line_of_a_big_read_is_consumed_and_none_is_cut_away_by_a_buffer_bound(self):
+        reader = st.StatusReader()
+        filler = b'{"x": 1}\n' * 20_000  # 180 kB, past any buffer bound
+        reader.feed(b'{"child-pid": 8}\n' + filler + b'{"exit-code": 4}\n')
+        self.assertEqual((reader.child_pid, reader.exit_code), (8, 4), "the first and the last line of one big read both count")
+
+    def test_Junk_longer_than_the_bound_after_child_pid_is_dropped_without_a_problem_and_the_next_line_counts(self):
+        reader = st.StatusReader()
+        reader.feed(b'{"child-pid": 8}\n' + b"x" * (3 * st.MAX_LINE))
+        self.assertIsNone(reader.problem)
+        reader.feed(b'\n{"exit-code": 2}\n')
+        self.assertEqual(reader.exit_code, 2)
+
+    def test_The_work_per_read_does_not_grow_with_what_was_read_before(self):
+        reader = st.StatusReader()
+        reader.feed(b'{"child-pid": 8}\n')
+        reader.feed(b"y" * (st.MAX_LINE - 100))
+        before = len(reader.partial)
+        for _ in range(50):
+            reader.feed(b"z")
+        self.assertEqual(len(reader.partial), before + 50, "the partial line is appended to, never re-split with everything before it")
 
 
 class DescriptorTests(unittest.TestCase):

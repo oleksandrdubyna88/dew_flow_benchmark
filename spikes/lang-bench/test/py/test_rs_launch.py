@@ -131,6 +131,21 @@ class ClockTests(unittest.TestCase):
         self.assertEqual((result.status, result.reason), ("FAIL", "exit status 4"))
 
 
+class StatusOverflowTests(unittest.TestCase):
+    def test_A_status_line_that_never_ends_before_child_pid_is_launch_failed(self):
+        flood = f"head -c 300000 /dev/zero | tr '\\0' x >&{STATUS_FD}"
+        script = f'{flood}\nprintf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\n"$@"'
+        with self.assertRaises(rl.LaunchFailed) as raised:
+            Workspace(self, REPLAY, FILES).run(case(), prefix=["sh", "-c", script, "sh"], status_fd=STATUS_FD)
+        self.assertIn("longer than", raised.exception.reason)
+
+    def test_Bounded_junk_after_child_pid_is_ignored_and_the_exit_code_after_it_is_still_read(self):
+        junk = f"head -c 300000 /dev/zero | tr '\\0' x >&{STATUS_FD}; echo >&{STATUS_FD}"
+        script = f'printf \'{{"child-pid": 5}}\\n\' >&{STATUS_FD}\n"$@"\n{junk}\nprintf \'{{"exit-code": 3}}\\n\' >&{STATUS_FD}\nexit 0'
+        result = Workspace(self, REPLAY, FILES).run(case(), prefix=["sh", "-c", script, "sh"], status_fd=STATUS_FD)
+        self.assertEqual((result.status, result.reason), ("FAIL", "exit status 3"), "the exit-code record that follows the junk is the status")
+
+
 class StatusRuleTests(unittest.TestCase):
     """P2: before child-pid the status stream follows its rules or the launch has failed; after it everything is the case."""
 
@@ -242,6 +257,30 @@ class InterruptWindowTests(unittest.TestCase):
         self.assertIsNotNone(running.poll() if running.poll() is not None else running.wait())
 
 
+class SpawnTests(unittest.TestCase):
+    def test_A_standard_error_file_that_cannot_be_opened_releases_the_status_descriptor_and_the_pipe(self):
+        ws = Workspace(self, REPLAY, FILES)
+        before = open_descriptors()
+        with self.assertRaises(OSError):
+            rl.start(ws.config(prefix=reporting_prefix(), status_fd=STATUS_FD), "s03", ex.PlainLifecycle(), ws.dir, ws.dir)  # a folder: open() fails
+        self.assertEqual(open_descriptors(), before, "the pipe's two ends are closed again")
+        self.assertFalse(fd_is_open(STATUS_FD))
+        self.assertEqual(rl.ACTIVE, [])
+
+
+class ProgressTests(unittest.TestCase):
+    def test_The_empty_program_is_announced_before_it_is_timed_and_its_time_is_told_after(self):
+        import test_run_samples as cli
+        code, out, err = cli.Box(self).cli()
+        self.assertEqual(code, 0, err)
+        lines = err.splitlines()
+        before = [i for i, line in enumerate(lines) if "timing the empty program through the launch prefix" in line]
+        after = [i for i, line in enumerate(lines) if line.startswith("run_samples: empty program: ") and line.endswith(" ms")]
+        started = [i for i, line in enumerate(lines) if line.endswith("s03 started")]
+        self.assertTrue(before and after and started and before[0] < after[0] < started[0], lines)
+        self.assertNotIn("empty program", out, "progress goes to standard error, standard output stays the report")
+
+
 class SeekTests(unittest.TestCase):
     def test_A_program_that_is_never_found_does_not_hold_back_its_input_or_output(self):
         ws = Workspace(self, "cat\n")
@@ -279,6 +318,21 @@ class EmptyProgramTests(unittest.TestCase):
     def test_A_failing_launch_of_the_empty_program_is_a_launch_failure_too(self):
         with self.assertRaises(rl.LaunchFailed):
             self.timed(Workspace(self, REPLAY, FILES), prefix=failing_prefix(), status_fd=STATUS_FD)
+
+    def test_The_empty_program_starts_in_the_view_of_empty_program_when_a_case_view_is_set(self):
+        ws = Workspace(self, REPLAY, FILES)
+        views = ws.make_dir("views")
+        os.mkdir(os.path.join(views, ex.EMPTY_CASE))
+        marker = os.path.join(ws.root, "cwd.txt")
+        prefix = ["sh", "-c", f'pwd -P > "{marker}"\nexec "$@"', "sh"]
+        self.timed(ws, prefix=prefix, case_view=os.path.join(views, "{case}"))
+        with open(marker) as f:
+            self.assertEqual(f.read().strip(), os.path.realpath(os.path.join(views, ex.EMPTY_CASE)), "not the workspace: the view is what the layer made for it")
+
+    def test_A_case_view_the_layer_did_not_make_for_the_empty_program_is_an_environment_error(self):
+        ws = Workspace(self, REPLAY, FILES)
+        with self.assertRaises(ex.EnvironmentProblem):
+            self.timed(ws, case_view=os.path.join(ws.make_dir("views"), "{case}"))
 
     def test_The_empty_program_says_which_pid_it_waited_on_and_how_long_the_launch_took(self):
         run = self.timed(Workspace(self, REPLAY, FILES))
