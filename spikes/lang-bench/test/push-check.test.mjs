@@ -231,3 +231,15 @@ test('A_bench_body_runs_only_the_leak_and_secret_scans_so_its_plan_ids_and_famil
   const leaky = checkText({ text: `${body}the widget that frobnicates every sprocket twice before dinner\ntoken ${SECRET}\n`, label: 'b.md', inputs, self: true });
   assert.deepEqual(leaky.checks.map(c => [c.name, c.findings.length]), [['leakcheck', 1], ['secrets', 1]]);
 });
+
+test('A_symlink_in_the_pushed_tree_is_refused_by_the_tree_shape_check_and_its_target_text_is_scanned', async t => {
+  const { repo, sha } = branchWith(t, { 'tasks/ok.md': 'fine\n' });
+  const { symlinkSync } = await import('node:fs');
+  symlinkSync(`/home/someone/.config/${SECRET}`, path.join(repo, 'tasks', 'key'));
+  const linked = commit(repo, 'feat: a link', {});
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => [f.commit, f.path, f.what]), [[linked, 'tasks/key', 'symlink: a link can point outside the tree it is checked in']]);
+  assert.equal(checkOf(result, 'secrets').findings.length, 1, 'the link target is the blob text and is scanned');
+  assert.notEqual(sha, linked);
+});

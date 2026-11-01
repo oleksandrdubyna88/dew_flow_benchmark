@@ -1,6 +1,6 @@
 // The shape of the tree a push carries. A submodule is a pointer to code that no scan here can read, so the only one allowed is the
 // conventions mount, from the conventions repository; anything else is refused by path (or, in `.gitmodules`, by line).
-import { SUBMODULE_MODE } from './push-range.mjs';
+import { SUBMODULE_MODE, SYMLINK_MODE } from './push-range.mjs';
 
 export const CONVENTIONS_PATH = '.agents/conventions';
 export const CONVENTIONS_URL = 'https://github.com/oleksandrdubyna88/dew_flow_conventions.git';
@@ -23,4 +23,9 @@ export function findSubmoduleProblems({ tip, gitmodulesText }) {
     ...links.map(([path]) => ({ path, line: null, what: 'submodule outside the conventions mount' })),
     ...(gitmodulesText === null ? [] : gitmodulesProblems(gitmodulesText)),
   ];
+}
+
+/** Findings for every symlink among `entries` (Map path -> { oid, mode }): a link can point outside the tree it is checked in. */
+export function findSymlinks(entries) {
+  return [...entries].filter(([, entry]) => entry.mode === SYMLINK_MODE).map(([path]) => ({ path, line: null, what: 'symlink: a link can point outside the tree it is checked in' }));
 }

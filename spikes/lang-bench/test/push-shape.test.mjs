@@ -1,7 +1,7 @@
 // The shape of the tree a push carries: which submodules may exist (only the conventions mount, and only from the conventions repository).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONVENTIONS_PATH, CONVENTIONS_URL, findSubmoduleProblems } from '../lib/push-shape.mjs';
+import { CONVENTIONS_PATH, CONVENTIONS_URL, findSubmoduleProblems, findSymlinks } from '../lib/push-shape.mjs';
 
 const gitlink = path => [path, { oid: '1'.repeat(40), mode: '160000' }];
 const MODULES = (url, path = CONVENTIONS_PATH) => `[submodule "m"]\n\tpath = ${path}\n\turl = ${url}\n`;
@@ -24,4 +24,9 @@ test('A_gitmodules_url_other_than_the_conventions_repository_is_refused_by_line'
 test('The_gitmodules_scan_still_finds_the_allowed_entry_it_must_not_flag', () => {
   assert.equal(findSubmoduleProblems({ tip: new Map([gitlink(CONVENTIONS_PATH)]), gitmodulesText: MODULES(CONVENTIONS_URL) }).length, 0);
   assert.equal(findSubmoduleProblems({ tip: new Map([gitlink(CONVENTIONS_PATH)]), gitmodulesText: MODULES(`${CONVENTIONS_URL}x`) }).length, 1, 'the scan is alive');
+});
+
+test('A_symlink_is_refused_by_path_in_a_task_repository', () => {
+  const tip = new Map([['tasks/key', { oid: '2'.repeat(40), mode: '120000' }], ['tasks/ok.md', { oid: '3'.repeat(40), mode: '100644' }], ['run.sh', { oid: '4'.repeat(40), mode: '100755' }]]);
+  assert.deepEqual(findSymlinks(tip).map(f => [f.path, f.line, f.what]), [['tasks/key', null, 'symlink: a link can point outside the tree it is checked in']]);
 });

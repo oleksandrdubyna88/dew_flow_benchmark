@@ -10,7 +10,7 @@ import { EXIT } from './push-exit.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
 import { findOwnSecrets, findSecrets } from './push-secrets.mjs';
-import { findSubmoduleProblems } from './push-shape.mjs';
+import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
 export { EXIT };
@@ -91,7 +91,7 @@ async function tipFindings({ repo, branch, inputs, paths, firstCommit, tip }) {
     attribution: structure.ok ? [] : [{ path: 'README.md', line: null, what: structure.reason }],
     credits: checkCreditTerms({ credits: inputs.credits, paths, readmeText: text }).map(withCommit),
     stack: findStackFolderFiles(new Map(paths.map(p => [p, tip.get(p)])), { templateFiles: inputs.templateFiles }).map(withCommit),
-    shape: findSubmoduleProblems({ tip, gitmodulesText: modules.value }).map(withCommit),
+    shape: [...findSubmoduleProblems({ tip, gitmodulesText: modules.value }), ...findSymlinks(new Map(paths.map(p => [p, tip.get(p)])))].map(withCommit),
   });
 }
 
