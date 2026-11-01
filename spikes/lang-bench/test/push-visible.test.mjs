@@ -87,3 +87,11 @@ test('A_gitkeep_is_allowed_only_as_the_empty_blob_and_in_a_stack_folder_only_at_
   assert.deepEqual(found(['csharp/01/src/.gitkeep']).map(([p]) => p), ['csharp/01/src/.gitkeep'], 'deeper than the stack root');
   assert.deepEqual(found(['node/.gitkeep', 'csharp/01/.gitkeep']).map(([p]) => p), ['csharp/01/.gitkeep'], 'an empty one at the root is fine, a deeper one is not');
 });
+
+test('Family_name_findings_are_deduplicated_per_line_in_linear_time', () => {
+  const started = Date.now();
+  const found = rules('runner/big.py', '# see dew_flow_benchmark and dew_flow_benchmark\n'.repeat(40_000));
+  const elapsed = Date.now() - started;
+  assert.equal(found.length, 40_000, 'one finding per line and name');
+  assert.ok(elapsed < 3_000, `deduplication must not be quadratic: ${elapsed} ms`);
+});

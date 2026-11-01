@@ -63,7 +63,8 @@ export function diffTaskPair({ csharp, node }) {
   const [csFiles, ndFiles] = [withoutPins(cs, CSHARP_PINS), withoutPins(nd, NODE_PINS)];
   const names = [...new Set([...csFiles.keys(), ...ndFiles.keys()])].sort();
   const findings = [...linkFindings(cs), ...linkFindings(nd), ...names.map(rel => pathFinding(rel, csFiles.get(rel), ndFiles.get(rel))).filter(f => f !== null)];
-  const unique = findings.filter((f, i) => findings.findIndex(o => o.path === f.path) === i).sort((a, b) => a.path.localeCompare(b.path, 'en'));
+  const seen = new Set();
+  const unique = findings.filter(f => (seen.has(f.path) ? false : seen.add(f.path) && true)).sort((a, b) => a.path.localeCompare(b.path, 'en'));
   return { ok: unique.length === 0, findings: unique };
 }
 

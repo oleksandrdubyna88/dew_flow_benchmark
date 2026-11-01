@@ -58,10 +58,13 @@ function shingleHitsOfReading(path, text, needles, mode, invisible) {
   return hits;
 }
 
-/** One finding per (line, aid), over every reading of the text. */
+/** One finding per (line, aid), over every reading of the text: a Set keyed by line and finding, so it stays linear however many findings there are. */
 function shingleHits(path, text, needles, mode) {
-  const all = readings(text).flatMap(invisible => shingleHitsOfReading(path, text, needles, mode, invisible));
-  return all.filter((h, i) => all.findIndex(o => o.line === h.line && o.what === h.what) === i);
+  const seen = new Set();
+  return readings(text).flatMap(invisible => shingleHitsOfReading(path, text, needles, mode, invisible)).filter(h => {
+    const key = `${h.line}\0${h.what}`;
+    return seen.has(key) ? false : seen.add(key) && true;
+  });
 }
 
 function literalHits(path, text, literals) {

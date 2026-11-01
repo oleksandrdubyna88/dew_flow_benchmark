@@ -191,3 +191,17 @@ test('A_text_with_none_of_them_reads_the_same_as_before_and_an_entity_that_is_no
   assert.equal(findAidHits('p', `${SENTENCE}\n`, needles).length, 1);
   assert.equal(findAidHits('p', 'fish &amp; chips &unknown; &#99999999999; &#xZZ; stay as they are\n', needles).length, 0);
 });
+
+test('Shingle_findings_are_deduplicated_per_line_and_aid_in_linear_time', () => {
+  const needles = aidNeedles({ aids: [{ name: 'a.md', text: `Notes.\n${SENTENCE}.\n` }] }).value;
+  const line = `${SENTENCE} and then some more words after it\n`;
+  const one = findAidHits('p', `${SENTENCE} ${SENTENCE}\n`, needles);
+  assert.equal(one.length, 1, 'many windows on one line are one finding');
+  const many = line.repeat(40_000);
+  const started = Date.now();
+  const hits = findAidHits('p', many, needles);
+  const elapsed = Date.now() - started;
+  assert.equal(hits.length, 40_000, 'one per line');
+  assert.deepEqual([hits[0].line, hits.at(-1).line], [1, 40_000]);
+  assert.ok(elapsed < 3_000, `deduplication must not be quadratic: ${elapsed} ms for 40000 findings`);
+});

@@ -75,5 +75,6 @@ export function findOwnSecrets(path, text, own) {
     const at = plain !== -1 ? plain : (broken === -1 ? -1 : map[broken]);
     return at === -1 ? [] : [{ path, line: lineOf(at), what: `own secret value (${label})` }];
   });
-  return found.filter((f, i) => found.findIndex(o => o.line === f.line && o.what === f.what) === i).sort((a, b) => a.line - b.line);
+  const seen = new Set();
+  return found.filter(f => { const key = `${f.line}\0${f.what}`; return seen.has(key) ? false : seen.add(key) && true; }).sort((a, b) => a.line - b.line);
 }

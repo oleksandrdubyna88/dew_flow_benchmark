@@ -24,11 +24,14 @@ export const isAgentVisible = file => AGENT_VISIBLE.some(prefix => file.startsWi
 
 const ruleHits = (lines, { what, re }, group) => lines.flatMap((text, i) => (re.test(text) ? [{ line: i + 1, col: text.search(re), what, group }] : []));
 
+/** An Array.filter callback that keeps the first of each key, in linear time (a Set, not a findIndex scan of the findings so far). */
+const uniqueBy = keyOf => { const seen = new Set(); return item => { const key = keyOf(item); return seen.has(key) ? false : seen.add(key) && true; }; };
+
 function familyHits(lines) {
   return lines.flatMap((text, i) => [...text.matchAll(FAMILY)]
     .filter(m => m[0] !== OWN_NAME)
     .map(m => ({ line: i + 1, col: m.index, what: `needle ${m[0]}`, group: GROUP_FAMILY })))
-    .filter((h, i, all) => all.findIndex(o => o.line === h.line && o.what === h.what) === i);
+    .filter(uniqueBy(h => `${h.line}\0${h.what}`));
 }
 
 /**
