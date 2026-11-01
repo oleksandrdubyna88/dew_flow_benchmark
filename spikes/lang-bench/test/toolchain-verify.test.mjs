@@ -2,7 +2,8 @@
 // record in inputs/stacks-lang.json — and writing that record without ever moving a hash that is already there.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -86,7 +87,8 @@ test('A_deep_check_without_a_recorded_hash_is_a_refusal_not_a_pass', t => {
 });
 
 test('Recording_tree_hashes_adds_them_keeps_the_rest_and_never_moves_one_already_recorded', () => {
-  const text = `${JSON.stringify(real, null, 2)}\n`;
+  const { treeSha256: _recorded, ...unrecorded } = real; // the committed file already carries the real hashes
+  const text = `${JSON.stringify(unrecorded, null, 2)}\n`;
   const trees = { dotnetSdk: 'a'.repeat(64), node: 'b'.repeat(64), typescript: 'c'.repeat(64) };
   const recorded = recordTrees(text, trees);
   assert.equal(recorded.ok, true, JSON.stringify(recorded));
@@ -94,7 +96,7 @@ test('Recording_tree_hashes_adds_them_keeps_the_rest_and_never_moves_one_already
   assert.deepEqual(parsed.treeSha256, trees);
   const shuffled = JSON.parse(recordTrees(text, { typescript: trees.typescript, node: trees.node, dotnetSdk: trees.dotnetSdk }).value);
   assert.deepEqual(Object.keys(shuffled.treeSha256), ['dotnetSdk', 'node', 'typescript'], 'sorted keys: the same record is the same bytes whatever order it was found in');
-  assert.deepEqual({ ...parsed, treeSha256: undefined }, { ...real, treeSha256: undefined }, 'nothing else changed');
+  assert.deepEqual({ ...parsed, treeSha256: undefined }, { ...unrecorded, treeSha256: undefined }, 'nothing else changed');
   assert.equal(loadStacksLang(parsed).ok, true);
   assert.equal(recordTrees(recorded.value, trees).value, recorded.value, 'recording the same hashes again is a no-op');
   const moved = recordTrees(recorded.value, { ...trees, node: 'd'.repeat(64) });
@@ -121,4 +123,15 @@ test('The_command_refuses_a_store_inside_a_git_worktree_and_an_unknown_flag', ()
   const unknown = spawnSync(process.execPath, [cli, '--frobnicate'], { encoding: 'utf8' });
   assert.equal(unknown.status, 2);
   assert.match(unknown.stderr, /--frobnicate/);
+});
+
+test('The_committed_record_is_the_installed_store_every_tree_hash_equal_and_every_directory_sealed', t => {
+  const storeRoot = path.join(os.homedir(), ...real.storeRoot);
+  const stacks = loadStacksLang(real).value;
+  if (!Object.values(stacks.directories).every(name => existsSync(path.join(storeRoot, name)))) {
+    if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and the pinned toolchains are not installed under ${storeRoot}`);
+    return t.skip(`the pinned toolchains are not installed under ${storeRoot} (node spikes/lang-bench/install-toolchains.mjs)`);
+  }
+  const result = verifyStore({ stacks, storeRoot, deep: true });
+  assert.deepEqual(result.problems, []);
 });
