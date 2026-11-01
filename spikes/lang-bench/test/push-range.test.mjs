@@ -82,3 +82,19 @@ test('The_tip_tree_lists_every_entry_at_the_branch_tip_with_its_mode_gitlinks_in
   assert.deepEqual(tree.get('dir/b.txt'), { oid: git(repo, 'rev-parse', 'main:dir/b.txt'), mode: '100644' });
   assert.equal(tree.get('sub').mode, '160000');
 });
+
+test('The_blobs_of_one_check_are_read_in_one_process_under_an_aggregate_ceiling_that_refuses_clearly', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'x'.repeat(700), 'b.txt': 'y'.repeat(700), 'c.txt': 'z'.repeat(700) } });
+  const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
+  const oids = files.map(f => f.oid);
+  const fine = await readBlobs(repo, oids, { maxTotalBytes: 10_000 });
+  assert.equal(fine.ok, true, fine.reason);
+  assert.equal(fine.value.size, oids.length);
+  const over = await readBlobs(repo, oids, { maxTotalBytes: 1_000 });
+  assert.equal(over.ok, false);
+  assert.equal(over.kind, 'env');
+  assert.match(over.reason, /more than 1000 bytes/);
+  assert.match(over.reason, /refused/);
+  const missing = await readBlobs(repo, ['0'.repeat(40)]);
+  assert.equal(missing.ok, false, 'a blob git does not have is a failure, never an empty text');
+});

@@ -370,3 +370,10 @@ test('A_symlink_or_a_stack_file_that_was_pushed_earlier_is_still_found_in_the_wh
   assert.deepEqual(checkOf(result, 'stack-folders').findings.map(f => f.path), ['csharp/01/Program.cs'], 'a file of the tip that no commit of the range touched');
   assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => f.path), ['link']);
 });
+
+test('A_check_whose_blobs_together_exceed_the_ceiling_is_refused_with_exit_3_and_never_passed', async t => {
+  const { repo } = branchWith(t, { 'a.txt': 'x'.repeat(2000), 'b.txt': 'y'.repeat(2000) });
+  const result = await run(repo, { limits: { maxTotalBytes: 1000 } });
+  assert.equal(result.exit, EXIT.ENVIRONMENT);
+  assert.match(result.error, /more than 1000 bytes/);
+});

@@ -46,7 +46,7 @@ async function scanBranch({ repo, branch, rev, inputs, refuseNul }) {
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
   if (!changes.ok) return changes;
   const { files, messages } = changes.value;
-  const blobs = await readBlobs(repo, files.filter(f => f.mode !== SUBMODULE).map(f => f.oid));
+  const blobs = await readBlobs(repo, files.filter(f => f.mode !== SUBMODULE).map(f => f.oid), inputs.limits);
   const tree = await tipTree(repo, branch, head.value.tip);
   const bad = firstFailure(blobs, tree);
   if (bad) return bad;

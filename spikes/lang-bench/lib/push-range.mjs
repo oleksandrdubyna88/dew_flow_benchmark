@@ -3,7 +3,7 @@
 // commit and removed by the next is in the history a push publishes, so it is scanned; a blob that several paths or commits share
 // is read once (the first commit that introduced the path owns the finding).
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { BLOB_MAX_BYTES, runGit, runGitBytes } from './push-git.mjs';
+import { BLOB_MAX_BYTES, runBatchCatFile, runGit } from './push-git.mjs';
 
 export const SUBMODULE_MODE = '160000';
 export const SYMLINK_MODE = '120000';
@@ -68,17 +68,15 @@ export async function changesOf(repo, commits) {
   return ok({ messages, files });
 }
 
-/** ok(Map(oid -> Buffer)) for the distinct blob ids, read eight at a time; a blob over the ceiling is a fail (not scanned, so not clean). */
-export async function readBlobs(repo, oids) {
-  const blobs = new Map();
+/**
+ * ok(Map(oid -> Buffer)) for the distinct blob ids, all read by ONE `git cat-file --batch` process. One blob over `maxObjectBytes`, or the blobs of
+ * one check together over `maxTotalBytes` (default 256 MiB), is a fail: not read, so not clean. A blob git does not have is a fail too.
+ */
+export async function readBlobs(repo, oids, limits = {}) {
   const unique = [...new Set(oids)];
-  for (let i = 0; i < unique.length; i += 8) {
-    const batch = await Promise.all(unique.slice(i, i + 8).map(oid => runGitBytes(repo, ['cat-file', 'blob', oid])));
-    const bad = batch.find(r => !r.ok);
-    if (bad) return bad;
-    batch.forEach((r, n) => blobs.set(unique[i + n], r.value));
-  }
-  return ok(blobs);
+  const read = await runBatchCatFile(repo, unique, limits);
+  if (!read.ok) return read;
+  return read.missing.length > 0 ? fail(`git has no blob ${read.missing.slice(0, 3).join(', ')}: the history is not read in full, so it is not clean`, { kind: 'env' }) : ok(read.value);
 }
 
 /** ok(text) of `path` at the tip of `branch`, ok(null) when the path is not there. */
