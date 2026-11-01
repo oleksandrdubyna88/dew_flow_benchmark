@@ -13,6 +13,9 @@ public sealed record FileIdentity(ulong Device, ulong Inode, FileKind Kind, deci
 {
     /// <summary>No identity was captured (a fact built by hand, or a platform that reads none).</summary>
     public static FileIdentity Unknown { get; } = new(0, 0, FileKind.Unknown, 0m);
+
+    /// <summary>When the inode was created (seconds since the epoch, nine decimals), where the file system reports it (<c>STATX_BTIME</c>); <c>null</c> where it does not — not captured is not zero. An inode number is reused: a folder deleted and made again can come back with the same one, and only this tells them apart.</summary>
+    public decimal? Birth { get; init; }
 }
 
 /// <summary>Which reader produced a <see cref="FileFacts"/>: the kernel's <c>statx</c> (owner, mode and identity) or the runtime's own facts (mode, kind when a link or a folder, length and write time). Two facts of different sources are

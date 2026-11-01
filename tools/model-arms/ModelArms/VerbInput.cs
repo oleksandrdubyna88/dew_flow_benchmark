@@ -3,11 +3,13 @@ using ModelArms.Core.Experiment;
 
 namespace ModelArms;
 
-/// <summary>Where the files that travel with the binary are: the worked example and the shipped briefs, both beside the executable.</summary>
-public sealed record ModuleFiles(string ExampleFile, string ShippedBriefs)
+/// <summary>Where the files that travel with the binary are: the worked example, the shipped briefs and the Windows keep-awake script (E5.S2), all beside the executable — and the executable itself (<see cref="Executable"/>), which <c>run-all</c> resolves and launches by its real path (E5 §8 item 5):
+/// never <c>Environment.ProcessPath</c>, which in an in-process test is the test host and under <c>dotnet model-arms.dll</c> is <c>dotnet</c>.</summary>
+public sealed record ModuleFiles(string ExampleFile, string ShippedBriefs, string KeepAwakeScript, string Executable)
 {
     public static ModuleFiles Beside(string baseDirectory) =>
-        new(Path.Combine(baseDirectory, "examples", "part6.experiment.json"), Path.Combine(baseDirectory, "briefs"));
+        new(Path.Combine(baseDirectory, "examples", "part6.experiment.json"), Path.Combine(baseDirectory, "briefs"), Path.Combine(baseDirectory, "windows", "keep-awake.ps1"),
+            Path.Combine(baseDirectory, OperatingSystem.IsWindows() ? "model-arms.exe" : "model-arms"));
 }
 
 /// <summary>Everything a verb is given: its name, its positional words, its flags, the two writers, the environment as a map (never read from the

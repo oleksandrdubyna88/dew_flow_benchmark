@@ -25,11 +25,13 @@ public sealed record StepContext(
     int ScenarioCount,
     TaskFacts Task,
     string Problems,
-    bool DeriveOutputs = true)
+    bool DeriveOutputs = true,
+    SchemeEntry.Step? Placed = null)
 {
-    /// <summary>The scheme entry at <see cref="Position"/>. A position that is not a step entry is a caller's bug.</summary>
+    /// <summary>The step this context runs: <see cref="Placed"/> when the task pipeline names one of the <c>tasks</c> block's three steps (the split, its fix, a task's coder — the block's entry at <see cref="Position"/> is not a step), else the scheme entry at <see cref="Position"/>, which for any other position is a caller's bug.</summary>
     public SchemeEntry.Step Step =>
-        Scheme.Entries[Position] as SchemeEntry.Step
+        Placed
+        ?? Scheme.Entries[Position] as SchemeEntry.Step
         ?? throw new InvalidOperationException($"position {Position} of scheme {Scheme.Name} is not a step entry — a tasks block runs its steps through the task pipeline");
 
     /// <summary>The step's configuration: <c>Experiment.Steps[Step.Id]</c>.</summary>

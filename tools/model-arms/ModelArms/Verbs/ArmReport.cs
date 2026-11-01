@@ -3,6 +3,7 @@ using Bench.Domain;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 using Bench.Infrastructure.Process;
 
 namespace ModelArms.Verbs;
@@ -14,6 +15,7 @@ internal static class ArmReport
     private const int MarkerLimit = 4 * 1024;
     private const int PidLimit = 64;
     private const int TimingLimit = 16 * 1024 * 1024;
+    private const int BatchesLimit = 1024 * 1024;
 
     public static IEnumerable<string> Lines(Core.Experiment.Experiment experiment, RootPaths root, StatusReads reads, ArmMap map, string arm)
     {
@@ -33,13 +35,50 @@ internal static class ArmReport
         yield return $"arm {arm} (scheme {scheme.Name}): made {StatusVerb.Marker(reads, root.Made(arm))}, checked {StatusVerb.Marker(reads, root.ObjectiveMarker(arm))}, runner {Runner(reads, root.PidFile(arm), map.Scrub)}";
         var timing = reads.Read(paths.Timing, TimingLimit);
         var lines = timing is BoundedRead.Bytes bytes ? TimingLines.Read(Encoding.UTF8.GetString(bytes.Value)) : [];
+        string Line(string stem) => "  " + StepStatuses.Line(stem, Decided(StepStatuses.Of(Evidence(reads, paths, stem, lines)), timing), map.Scrub);
         foreach (var entry in scheme.Entries)
         {
-            yield return entry is SchemeEntry.Step step ? "  " + StepStatuses.Line(step.Name, Decided(StepStatuses.Of(Evidence(reads, paths, step.Name, lines)), timing), map.Scrub) : "  tasks: listed when the task pipeline lands (E4)";
+            foreach (var line in entry is SchemeEntry.Step step ? [Line(step.Name)] : Pipeline(reads, paths, Line))
+            {
+                yield return line;
+            }
         }
 
         yield return "  last line: " + LastLine(timing);
     }
+
+    /// <summary>A <c>tasks</c> entry (E4.S3): the split's line, the split fix's only when that stem has a session file, a stream or a marker (each asked by name — a fix that never ran is not listed as not started), then one line per task of <c>work/batches.json</c> in batch order. No batches yet, or a file that does not read,
+    /// is one line saying so; no folder is ever listed.</summary>
+    private static IEnumerable<string> Pipeline(StatusReads reads, ArmPaths paths, Func<string, string> line)
+    {
+        yield return line(TaskStems.Split);
+        if (Began(reads, paths, TaskStems.SplitFix))
+        {
+            yield return line(TaskStems.SplitFix);
+        }
+
+        switch (reads.Read(paths.BatchesJson, BatchesLimit))
+        {
+            case BoundedRead.Bytes bytes:
+                var read = BatchesFile.Read(Encoding.UTF8.GetString(bytes.Value), paths.Work);
+                foreach (var each in read.Match(batches => batches.TaskIds.Select(id => line(TaskStems.Coder(id))), reason => [$"  tasks: unreadable — batches.json: {ExecutableRule.Printable(reason.Replace('\n', ' '))}"]))
+                {
+                    yield return each;
+                }
+
+                break;
+            case BoundedRead.Refused refused:
+                yield return "  tasks: unreadable — " + ExecutableRule.Printable(refused.Reason);
+                break;
+            default:
+                yield return "  tasks: no batches yet";
+                break;
+        }
+    }
+
+    /// <summary>Whether the step left anything by its name: its session file, its first stream, its marker or its continue marker. A probe the kernel could not answer counts as "left something" — the step's own line then says why it cannot be read.</summary>
+    private static bool Began(StatusReads reads, ArmPaths paths, string stem) =>
+        new[] { paths.Session(stem), paths.Stream(stem, 1), paths.Done(stem), paths.Continue(stem) }.Any(path => reads.Present(path) is not Outcome<bool>.Ok { Value: false });
 
     /// <summary>A refused <c>timing.jsonl</c> is NOT an absent one: a step that no marker decided (not <c>unreadable</c>, <c>continuing</c> or <c>done</c>) is read from end lines nobody could read, so it is <c>unreadable — timing.jsonl: why</c> rather than <i>interrupted</i> or <i>not started</i>.</summary>
     private static StepState Decided(StepState state, BoundedRead timing) =>

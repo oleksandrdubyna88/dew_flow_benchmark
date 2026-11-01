@@ -56,22 +56,26 @@
     "CHH": ["1-code:code", "2-hA:hA", "3-hB:hB", "4-hfix:hfix", "5-review:review", "6-fix:fix", "7-gate:gate"]
   },
   // A run is its rounds: they run one after another, and the arms of a round run at the same time (an arm's scheme is its letters, SRS2 → SRS).
-  // A later part adds a run; closedArms are folders closed (000) while the run's arms work, and closed names more paths to close.
+  // A later part adds a run; closedArms are folders closed (000) while the run's arms work, and closed names more paths to close (part 7: after7.sh's EXTRA_CLOSED; the shell closed
+  // chain/, here it is chain/part6 because the next run writes its markers in chain/part7).
   "runs": {
     "part6": { "rounds": [["C1", "CR1", "SRS1"], ["C2", "CR2", "SRS2"], ["C3", "CR3", "SRS3"]] },
     "part7": { "rounds": [["CHH1", "CHH2", "CHH3"]], "closedArms": ["C1", "CR1", "SRS1", "C2", "CR2", "SRS2", "C3", "CR3", "SRS3"],
-               "closed": ["<root>/judge-abs", "<root>/judge-coai", "<root>/chain/part6"] }
+               "closed": ["<root>/judge-abs", "<root>/judge-coai", "<root>/mut6", "<root>/coai-findings.json", "<root>/metrics6.json", "<root>/judge-abs.log", "<root>/judge-coai.out",
+                         "<root>/mut6.log", "<root>/chain.log", "<root>/chain/part6", "<root>/PROTOCOL.md", "/example/lmc-part6"] }
   },
   "limits": { "waitSeconds": 900, "tries": 40, "gateWaitSeconds": 1800, "gateTries": 8, "minimumRemainingSeconds": 300, "killGraceSeconds": 600 },
   // The tasks block names its three step ids, and its outputs are handed to the steps after it, as the shell handed CODE_NOTES to SRS's reviewers
   // though no SRS step wrote it.
   "tasks": { "min": 4, "max": 7, "maxParallel": 4, "split": "split", "splitFix": "splitFix", "taskCode": "taskCode", "outputs": { "CODE_NOTES": "notes/code.md" } },
   // The PERMISSION lists (--allowedTools / --disallowedTools): write and read steps, the gate's own tools, and what no step may read.
+  // tools.deny is handed to the CLI as written — a placeholder like <root> is not expanded there, so the entry that denies arms.map.json (which the 300 root still lets an arm read by its fixed name)
+  // must be your root's absolute path: replace /example/root. Read(//proc/**) is denied, but Bash(ls *) and Bash(cat *) stay allowed, so a sibling runner's /proc/<pid>/cwd still shows its token: a residual the shell had too.
   "tools": {
     "write": ["Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Agent", "Bash(git *)", "Bash(dotnet *)", "Bash(node *)", "Bash(npm *)", "Bash(npx *)", "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(sed *)", "Bash(awk *)", "Bash(wc *)", "Bash(diff *)", "Bash(mkdir *)", "Bash(cd *)", "Bash(echo *)", "Bash(pwd)", "Bash(sort *)", "Bash(uniq *)", "Bash(tee *)", "Bash(cp *)", "Bash(mv *)", "Bash(test *)", "Bash(date *)", "Bash(timeout *)", "Bash(xargs *)", "Bash(./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests *)"],
     "read": ["Read", "Glob", "Grep", "TodoWrite", "Bash(git *)", "Bash(dotnet *)", "Bash(node *)", "Bash(npm *)", "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)", "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(sed *)", "Bash(awk *)", "Bash(wc *)", "Bash(diff *)", "Bash(cd *)", "Bash(echo *)", "Bash(pwd)", "Bash(sort *)", "Bash(test *)", "Bash(./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests *)"],
     "gate": ["mcp__coai__providers", "mcp__coai__open", "mcp__coai__review_plan", "mcp__coai__review_code", "mcp__coai__resolve", "mcp__coai__status"],
-    "deny": ["Read(//example/home/.claude/**)", "Read(//example/home/.codex/**)", "Read(//example/home/.gemini/**)", "Read(//example/home/.antigravity/**)", "Read(//example/home/.vibe/**)", "Read(//proc/**)", "Read(//example/old-experiment/**)", "Read(//example/vault/**)"]
+    "deny": ["Read(//example/home/.claude/**)", "Read(//example/home/.codex/**)", "Read(//example/home/.gemini/**)", "Read(//example/home/.antigravity/**)", "Read(//example/home/.vibe/**)", "Read(//proc/**)", "Read(//example/old-experiment/**)", "Read(//example/vault/**)", "Read(//example/root/arms.map.json)"]
   },
   "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/vault/connectOtherAis/wsl-ubuntu/settings.json", "side": "wsl-ubuntu" },
   // Closed (000) and unlisted (300) while the arms run; <root> and ~ are expanded.

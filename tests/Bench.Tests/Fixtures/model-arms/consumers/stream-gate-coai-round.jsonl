@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","cwd":"__CWD__","tools":["Read"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_review","name":"mcp__coai__review_code","input":{"again":false}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_review","content":[{"type":"text","text":"{\"verdict\":\"revise\",\"gatingCount\":1,\"threshold\":\"major\",\"reviewers\":{\"asked\":2,\"answered\":2},\"findings\":[{\"severity\":\"major\",\"category\":\"correctness\",\"file\":\"src/A.cs\",\"line\":12,\"title\":\"consumers\",\"why\":\"a reader must read what the gate found\",\"fix\":\"read it\",\"providers\":[\"p1\"],\"role\":\"correctness\",\"gating\":true}],\"cost\":{\"tokensIn\":4321,\"tokensOut\":765}}"}]}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_resolve","name":"mcp__coai__resolve","input":{"decisions":"[{\"finding\":0,\"action\":\"accept\",\"reason\":\"consumers\"}]"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_resolve","content":[{"type":"text","text":"{\"recorded\":1}"}]}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"The gate is blocked."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"The gate is blocked.","terminal_reason":"completed","num_turns":4,"duration_ms":2400,"total_cost_usd":1.25,"modelUsage":{"claude-sonnet-5-5":{"inputTokens":120,"outputTokens":60,"cacheReadInputTokens":4000,"cacheCreationInputTokens":300,"costUSD":1.25}}}

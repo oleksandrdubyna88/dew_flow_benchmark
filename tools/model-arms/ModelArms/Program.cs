@@ -83,11 +83,11 @@ public static class Program
             "validate" => ExperimentGate.RunAsync(input, ValidateVerb.RunAsync),
             "prep-base" => ExperimentGate.RunAsync(input, PrepBaseVerb.RunAsync),
             "make" => ExperimentGate.RunAsync(input, MakeVerb.RunAsync),
-            "lock" => NotBuilt(input, "E5.S1"),
-            "unlock" => NotBuilt(input, "E5.S1"),
+            "lock" => ExperimentGate.RunAsync(input, LockVerb.RunAsync),
+            "unlock" => ExperimentGate.RunAsync(input, UnlockVerb.RunAsync),
             "run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),
-            "run-all" => NotBuilt(input, "E5.S3"),
-            "chain" => NotBuilt(input, "E5.S4"),
+            "run-all" => ExperimentGate.RunAsync(input, RunAllVerb.RunAsync),
+            "chain" => ExperimentGate.RunAsync(input, ChainVerb.RunAsync),
             "checks" => ExperimentGate.RunAsync(input, ChecksVerb.RunAsync),
             "status" => ExperimentGate.RunAsync(input, StatusVerb.RunAsync),
             "gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync),
@@ -95,12 +95,6 @@ public static class Program
             "help" => Help.Usage(input),
             _ => Help.Unknown(input),
         };
-    }
-
-    private static Task<int> NotBuilt(VerbInput input, string story)
-    {
-        input.Error.WriteLine($"{Name} {input.Verb}: not built yet — story {story} of todo/PLAN_model_arms.md");
-        return Task.FromResult(ExitCodes.Configuration);
     }
 
     /// <summary>The process's variables as a map, taken once: a verb reads this map and never the process, so a test hands its own.</summary>

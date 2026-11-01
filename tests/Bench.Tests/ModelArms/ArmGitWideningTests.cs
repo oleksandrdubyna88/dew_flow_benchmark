@@ -8,95 +8,10 @@ namespace Bench.Tests.ModelArms;
 /// <summary><see cref="ArmGit"/> as E3 widened it (C14): the questions <c>prep-base</c> asks of the base clone and the ones <c>make</c> and <c>checks</c> ask of an arm's, each against a REAL git over real folders, each started by the real path it was handed with <c>-c core.fsmonitor=false</c> —
 /// the class is the one place the module asks git, so one test per answer the later verbs read.
 /// <para>
-/// What this does NOT prove: Windows (the shims are shell scripts); a git other than the host's (every plant is observed on the host's git first, so a git that runs a program these flags do not name turns a test red rather than passing silently); <c>smudge=</c> is neutralised by the same mechanism as <c>clean=</c>
-/// but no question here writes a worktree — E4's does, and its test must observe it.
+/// What this does NOT prove: Windows (the shims are shell scripts); a git other than the host's (every plant is observed on the host's git first, so a git that runs a program these flags do not name turns a test red rather than passing silently); <c>smudge=</c> is neutralised by the same mechanism as <c>clean=</c> and is observed on a <c>worktree add</c> by <c>TaskWorktreesTests</c> (E4.S2).
 /// </para></summary>
-public sealed class ArmGitWideningTests : IDisposable
+public sealed class ArmGitWideningTests : ArmGitTestBase
 {
-    private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    private readonly TempFolder _temp = new();
-
-    private IReadOnlyDictionary<string, string> Environment => new Dictionary<string, string>(StringComparer.Ordinal) { ["HOME"] = _temp.Folder("home"), ["PATH"] = "/usr/bin:/bin" };
-
-    private ArmGit In(string folder, string? git = null) => new(git ?? ExperimentRoot.RealGit, folder, Environment);
-
-    public void Dispose() => _temp.Dispose();
-
-    private int _dirtied;
-
-    private string Sentinel => _temp.Combine("sentinel.log");
-
-    private bool Ran => File.Exists(Sentinel);
-
-    /// <summary>A program a clone's config or hooks folder can name: it appends a line to the sentinel and, as a filter must, passes its input through.</summary>
-    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    private string PlantProgram(string name, string? body = null)
-    {
-        return ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 ran\" >> '{Sentinel}'\n{body ?? "cat"}\n");
-    }
-
-    /// <summary>Makes <paramref name="file"/> stat-dirty without changing a byte: a distinct, older modification time every call — a repeated one would let a later "no program ran" prove nothing, because git would find the index already refreshed.</summary>
-    private void Redirty(string file) => File.SetLastWriteTimeUtc(file, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(++_dirtied));
-
-    /// <summary>The host's git, EXIT CODE IGNORED, under the scratch environment: for proving a plant live (a plant that makes git fail still ran its program).</summary>
-    private async Task HostGitAsync(string folder, params string[] arguments)
-    {
-        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, arguments, folder, TimeSpan.FromSeconds(60), string.Empty, Environment, Ct);
-        attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe);
-    }
-
-    /// <summary>The plant is LIVE: the host's own git, asked the same kind of question over a stat-dirty file, ran the program. Then the sentinel is deleted and the file made dirty again, so the question under test starts from the same state.</summary>
-    private async Task ProveLiveAsync(string folder, string dirtyFile, params string[] hostQuestion)
-    {
-        Redirty(dirtyFile);
-        await HostGitAsync(folder, hostQuestion);
-        Ran.Should().BeTrue("the plant must be proven live with the host's git first, or 'no program ran' proves nothing");
-        File.Delete(Sentinel);
-        Redirty(dirtyFile);
-    }
-
-    private async Task<string> ClonedAsync()
-    {
-        var (source, _, _) = await SourceAsync();
-        var clone = Path.Combine(_temp.Path, "clone");
-        (await In(_temp.Path).CloneAsync(source, "plan", clone, Ct)).Ok();
-        return clone;
-    }
-
-    /// <summary>A clone holding a submodule <c>sub</c> (a file <c>s.txt</c>) at the superproject's HEAD.</summary>
-    private async Task<(string Clone, string Sub, string ModuleFolder)> WithSubmoduleAsync()
-    {
-        var clone = await ClonedAsync();
-        var sub = _temp.Folder("subsrc");
-        await TargetBench.GitAsync(sub, "init", "--quiet", "--initial-branch", "main");
-        _temp.File("one\n", "subsrc", "s.txt");
-        await CommitAllAsync(sub, "sub first");
-        await TargetBench.GitAsync(clone, "-c", "protocol.file.allow=always", "submodule", "add", "--quiet", sub, "sub");
-        await CommitAllAsync(clone, "add the submodule");
-        return (clone, Path.Combine(clone, "sub"), Path.Combine(clone, ".git", "modules", "sub"));
-    }
-
-    private static async Task CommitAllAsync(string folder, string message)
-    {
-        await TargetBench.GitAsync(folder, "add", "-A");
-        await TargetBench.GitAsync(folder, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message);
-    }
-
-    /// <summary>A source of two commits: <c>a.txt</c>, then <c>src/B.cs</c> and <c>a.txt</c> changed.</summary>
-    private async Task<(string Source, string First, string Second)> SourceAsync()
-    {
-        var source = _temp.Folder("source");
-        await TargetBench.GitAsync(source, "init", "--quiet", "--initial-branch", "plan");
-        _temp.File("one\n", "source", "a.txt");
-        await CommitAllAsync(source, "first");
-        var first = (await TargetBench.GitAsync(source, "rev-parse", "HEAD")).Trim();
-        _temp.File("class B { }\n", "source", "src", "B.cs");
-        _temp.File("one\ntwo\n", "source", "a.txt");
-        await CommitAllAsync(source, "second");
-        return (source, first, (await TargetBench.GitAsync(source, "rev-parse", "HEAD")).Trim());
-    }
-
     [Fact]
     public async Task A_clone_is_made_detached_at_a_commit_and_an_arm_branches_from_there()
     {
@@ -202,7 +117,7 @@ public sealed class ArmGitWideningTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var (source, first, _) = await SourceAsync();
         var marker = Path.Combine(_temp.Path, "git-calls");
-        var shim = RecordingShim(marker);
+        var shim = Sentinel.RecordingShim(_temp, marker);
         var clone = Path.Combine(_temp.Path, "clone");
         var environment = GitEnvironment.Of(new Dictionary<string, string>(Environment, StringComparer.Ordinal) { ["GIT_DIR"] = "/nonexistent" });
         var git = new ArmGit(shim, _temp.Path, environment);
@@ -219,7 +134,7 @@ public sealed class ArmGitWideningTests : IDisposable
         await inClone.MentionsAsync("x", ["src"], Ct);
         await inClone.SubmoduleUpdateAsync("nowhere", Ct);
 
-        var calls = Blocks(marker);
+        var calls = Sentinel.Blocks(marker);
         calls.Should().HaveCountGreaterThanOrEqualTo(10);
         calls.Should().OnlyContain(call => call.Call.StartsWith("-c core.fsmonitor=false ", StringComparison.Ordinal), "every question the class asks is hardened");
         calls.Should().OnlyContain(call => call.Call.Contains(" -c submodule.recurse=false ", StringComparison.Ordinal), "no question lets a checkout recurse into a submodule (a recurse=true config would run the submodule's own filters)");
@@ -246,70 +161,6 @@ public sealed class ArmGitWideningTests : IDisposable
         }
     }
 
-    /// <summary>The filter drivers the HOST's git itself reports in <paramref name="folder"/> under <paramref name="environment"/> — the same HOME, the same PATH, the SYSTEM scope the host has (a CI runner with git-lfs installed has <c>filter.lfs.*</c> there): <c>config --name-only -z --get-regexp ^filter\.</c>, asked of the host's git directly, never through <see cref="ArmGit"/>.</summary>
-    private async Task<IReadOnlyList<string>> HostDriversAsync(string folder, IReadOnlyDictionary<string, string> environment)
-    {
-        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["config", "--name-only", "-z", "--get-regexp", @"^filter\."], folder, TimeSpan.FromSeconds(60), string.Empty, GitEnvironment.Of(environment), Ct);
-        var done = attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe).Subject;
-        done.Result.ExitCode.Should().BeOneOf([0, 1], "git config --get-regexp: 1 is no match");
-        return [.. done.Result.StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(name => name[7..name.LastIndexOf('.')]).Distinct(StringComparer.Ordinal)];
-    }
-
-    /// <summary>The <c>GIT_CONFIG_*</c> lines ArmGit must hand a question for those drivers, as it emits them: four pairs per driver in the order git listed them (<c>clean</c>, <c>smudge</c>, <c>process</c> empty, <c>required</c> false) and their count — none for no driver. Built here from the HOST's list, not copied from ArmGit, so a driver git reads that the neutralisation does not name fails.</summary>
-    private static IReadOnlyList<string> Neutralisation(IReadOnlyList<string> drivers)
-    {
-        string[] variables = ["clean", "smudge", "process", "required"];
-        string[] values = ["", "", "", "false"];
-        var lines = drivers.SelectMany((driver, d) => variables.SelectMany((variable, v) => new[] { $"GIT_CONFIG_KEY_{(d * 4) + v}=filter.{driver}.{variable}", $"GIT_CONFIG_VALUE_{(d * 4) + v}={values[v]}" })).ToList();
-        return drivers.Count == 0 ? [] : [$"GIT_CONFIG_COUNT={drivers.Count * 4}", .. lines];
-    }
-
-    private static bool IsEnumeration(string call) => call.Contains(" config --name-only -z --get-regexp ", StringComparison.Ordinal);
-
-    private static bool Smudges(string call) => call.Contains(" clone ", StringComparison.Ordinal) || call.Contains(" --detach ", StringComparison.Ordinal) || call.Contains(" submodule update ", StringComparison.Ordinal);
-
-    /// <summary>What one recorded call's <c>GIT_*</c> variables must be: <paramref name="fixedLines"/> plus — for a question that is neutralised (not the driver enumeration itself, not a question that writes the base's worktree) — exactly <paramref name="neutralisation"/>, whatever that is on this host.</summary>
-    private static void GitVariablesShould(string call, IEnumerable<string> env, IReadOnlyList<string> fixedLines, IReadOnlyList<string> neutralisation, string because) =>
-        env.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Should().BeEquivalentTo(IsEnumeration(call) || Smudges(call) ? fixedLines : [.. fixedLines, .. neutralisation], $"{call}: {because}");
-
-    private const string Attributes = "info/attributes";
-
-    private void AppendConfig(string folder, string text) => File.AppendAllText(Path.Combine(folder, "config"), text);
-
-    private void AppendAttributes(string gitFolder, string text)
-    {
-        Directory.CreateDirectory(Path.Combine(gitFolder, "info"));
-        File.AppendAllText(Path.Combine(gitFolder, Attributes), text);
-    }
-
-    /// <summary>The recording shim: one block per call — <c>CALL &lt;argv&gt;</c>, then <c>ENV name=value</c> for every <c>GIT_*</c> and the names the tests care about — appended to <paramref name="marker"/>, then the host's git.</summary>
-    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    private string RecordingShim(string marker)
-    {
-        var shim = ShimFiles.Write(
-            _temp.Combine("bin", "recording-git"),
-            $"#!/bin/sh\necho \"CALL $*\" >> '{marker}'\n/usr/bin/env | while IFS= read -r l; do case \"$l\" in GIT_*|GITHUB_TOKEN=*|CLAUDE_CODE_OAUTH_TOKEN=*|BENCH_DB=*|SSH_AUTH_SOCK=*|KEEP_ME=*) echo \"ENV ${{l%%=*}}=${{l#*=}}\" >> '{marker}';; esac; done\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
-        return shim;
-    }
-
-    private static IReadOnlyList<(string Call, IReadOnlyList<string> Env)> Blocks(string marker)
-    {
-        var blocks = new List<(string, List<string>)>();
-        foreach (var line in File.ReadAllLines(marker))
-        {
-            if (line.StartsWith("CALL ", StringComparison.Ordinal))
-            {
-                blocks.Add((line[5..], []));
-            }
-            else if (line.StartsWith("ENV ", StringComparison.Ordinal))
-            {
-                blocks[^1].Item2.Add(line[4..]);
-            }
-        }
-
-        return [.. blocks.Select(block => (block.Item1, (IReadOnlyList<string>)block.Item2))];
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -329,12 +180,12 @@ public sealed class ArmGitWideningTests : IDisposable
             ["GIT_DIR"] = "/nonexistent",
         };
 
-        _ = await new ArmGit(RecordingShim(marker), source, parent).HeadAsync(Ct); // the answer is not the point: what the call was started with is
+        _ = await new ArmGit(Sentinel.RecordingShim(_temp, marker), source, parent).HeadAsync(Ct); // the answer is not the point: what the call was started with is
 
-        var calls = Blocks(marker);
+        var calls = Sentinel.Blocks(marker);
         calls.Should().NotBeEmpty();
         var host = Neutralisation(await HostDriversAsync(source, parent));
-        foreach (var (call, env) in calls)
+        foreach (var (call, _, env) in calls)
         {
             var names = env.Select(line => line.Split('=')[0]).ToList();
             names.Should().Contain("KEEP_ME", $"{call}: a variable no rule names passes").And.NotContain(["GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "BENCH_DB", "SSH_AUTH_SOCK", "GIT_DIR"], $"{call}: the class reduces whatever it is handed, so no secret reaches a program git might still run");
@@ -361,7 +212,7 @@ public sealed class ArmGitWideningTests : IDisposable
         await HostGitAsync(clone, "checkout", "-q", "-b", "probe");
         Ran.Should().BeTrue("post-checkout is live too");
         await HostGitAsync(clone, "checkout", "-q", "plan");
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
         Redirty(a);
 
         (await In(clone).UncommittedCountAsync(Ct)).Ok().Should().Be(0);
@@ -433,10 +284,10 @@ public sealed class ArmGitWideningTests : IDisposable
         File.WriteAllText(gitconfig, "[filter \"planted\"]\n\tclean = /bin/false\n");
         var planted = await HostDriversAsync(clone, Environment);
 
-        (await In(clone, RecordingShim(marker)).UncommittedCountAsync(Ct)).Ok();
+        (await In(clone, Sentinel.RecordingShim(_temp, marker)).UncommittedCountAsync(Ct)).Ok();
 
         planted.Should().Contain("planted", "a driver of the GLOBAL config is read by git too");
-        var status = Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.ToList();
+        var status = Sentinel.Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.ToList();
         status.Where(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal)).Should().BeEquivalentTo(Neutralisation(planted), "every driver git reads is named: the planted one and the host's own, four pairs each, counted");
         status.Should().Contain($"GIT_CONFIG_KEY_{(planted.ToList().IndexOf("planted") * 4)}=filter.planted.clean").And.Contain($"GIT_CONFIG_KEY_{(planted.ToList().IndexOf("planted") * 4) + 3}=filter.planted.required").And.Contain($"GIT_CONFIG_COUNT={planted.Count * 4}");
 
@@ -444,9 +295,9 @@ public sealed class ArmGitWideningTests : IDisposable
         File.Delete(marker);
         var remaining = await HostDriversAsync(clone, Environment);
         remaining.Should().NotContain("planted", "removing the plant removes the driver git reads");
-        (await In(clone, RecordingShim(marker)).UncommittedCountAsync(Ct)).Ok();
+        (await In(clone, Sentinel.RecordingShim(_temp, marker)).UncommittedCountAsync(Ct)).Ok();
 
-        Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.Where(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal)).Should().BeEquivalentTo(Neutralisation(remaining), "nothing planted: only the neutralisation of the drivers the host's own git reads (none on a host with none)");
+        Sentinel.Blocks(marker).Single(block => block.Call.Contains(" status ", StringComparison.Ordinal)).Env.Where(line => line.StartsWith("GIT_CONFIG_", StringComparison.Ordinal)).Should().BeEquivalentTo(Neutralisation(remaining), "nothing planted: only the neutralisation of the drivers the host's own git reads (none on a host with none)");
     }
 
     [Fact]
@@ -466,7 +317,7 @@ public sealed class ArmGitWideningTests : IDisposable
         (await In(clone).UncommittedCountAsync(Ct)).Ok().Should().Be(0, "an uncommitted edit inside a submodule is not a line (the count's deviation from the shell, E3 §8 item 40)");
 
         await TargetBench.GitAsync(sub, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-a", "-m", "sub second");
-        File.Delete(Sentinel); // the host's own commit just ran the plant over the staged file: the next question starts clean
+        File.Delete(SentinelFile); // the host's own commit just ran the plant over the staged file: the next question starts clean
         (await In(clone).UncommittedCountAsync(Ct)).Ok().Should().Be(1, "a changed submodule COMMIT is still a line");
         Ran.Should().BeFalse();
     }
@@ -485,7 +336,7 @@ public sealed class ArmGitWideningTests : IDisposable
         await CommitAllAsync(clone, "bump the gitlink");
         await HostGitAsync(clone, "diff", before, "HEAD");
         Ran.Should().BeTrue("the plant must be proven live with the host's git first: under diff.submodule=diff git spawns a diff in the submodule and runs its diff.z.command");
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
 
         var patch = (await In(clone).DiffAsync(before, Ct)).Ok();
 
@@ -509,7 +360,7 @@ public sealed class ArmGitWideningTests : IDisposable
         var second = (await TargetBench.GitAsync(source, "rev-parse", "HEAD")).Trim();
         var clone = Path.Combine(_temp.Path, "partial");
         await TargetBench.GitAsync(_temp.Path, "clone", "--quiet", "--no-local", "--filter=blob:none", "file://" + source, clone);
-        var transport = ShimFiles.Write(_temp.Combine("plant", "ssh-transport"), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+        var transport = ShimFiles.Write(_temp.Combine("plant", "ssh-transport"), $"#!/bin/sh\necho \"$0 $*\" >> '{SentinelFile}'\nexit 1\n");
         await TargetBench.GitAsync(clone, "config", "remote.origin.url", "ssh://example.invalid/x");
         await TargetBench.GitAsync(clone, "config", "core.sshCommand", transport);
         return (clone, first, second);
@@ -526,7 +377,7 @@ public sealed class ArmGitWideningTests : IDisposable
         var (clone, first, _) = await PromisorCloneAsync();
         await HostGitAsync(clone, "diff", "--numstat", first, "HEAD");
         Ran.Should().BeTrue("the plant must be proven live with the host's git first (no GIT_NO_LAZY_FETCH in its environment): diffing against a blob the partial clone lacks fetches it from the promisor remote the clone names, through the program its config names");
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
         var numstat = await In(clone).NumstatAsync(first, Ct).WaitAsync(Wall, Ct);
@@ -556,12 +407,12 @@ public sealed class ArmGitWideningTests : IDisposable
         await TargetBench.GitAsync(sub, "update-index", "--refresh");
         File.SetLastWriteTimeUtc(kept, new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         await TargetBench.GitAsync(sub, "status", "--short"); // records the future time: the entry is racily clean, so every later check hashes it
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
         await HostGitAsync(clone, "checkout", "-q", "-b", "probe", before);
         Ran.Should().BeTrue("the plant must be proven live with the host's git first: with submodule.recurse=true a checkout that moves the gitlink runs the checkout in the submodule, which hashes the racily-clean file through the submodule's own clean filter");
         await HostGitAsync(clone, "checkout", "-q", "plan");
         await TargetBench.GitAsync(sub, "status", "--short");
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
 
         var detached = await In(clone).DetachAsync(before, Ct);
 
@@ -572,7 +423,7 @@ public sealed class ArmGitWideningTests : IDisposable
 
     /// <summary>A program a transport can name: it appends a line and EXITS AT ONCE (one that read its stdin would hang git).</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    private string TransportSentinel(string name) => ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+    private string TransportSentinel(string name) => ShimFiles.Write(_temp.Combine("plant", name), $"#!/bin/sh\necho \"$0 $*\" >> '{SentinelFile}'\nexit 1\n");
 
     [Theory]
     [InlineData("ssh")]
@@ -595,7 +446,7 @@ public sealed class ArmGitWideningTests : IDisposable
                 await TargetBench.GitAsync(clone, "config", "protocol.ext.allow", "always");
                 break;
             case "vcs":
-                ShimFiles.Write(_temp.Combine("bin", "git-remote-foo"), $"#!/bin/sh\necho \"$0 $*\" >> '{Sentinel}'\nexit 1\n");
+                ShimFiles.Write(_temp.Combine("bin", "git-remote-foo"), $"#!/bin/sh\necho \"$0 $*\" >> '{SentinelFile}'\nexit 1\n");
                 environment["PATH"] = _temp.Combine("bin") + ":/usr/bin:/bin";
                 await TargetBench.GitAsync(clone, "config", "remote.origin.url", "/nonexistent");
                 await TargetBench.GitAsync(clone, "config", "remote.origin.vcs", "foo");
@@ -610,7 +461,7 @@ public sealed class ArmGitWideningTests : IDisposable
         var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["diff", "--numstat", first, "HEAD"], clone, TimeSpan.FromSeconds(60), string.Empty, environment, Ct);
         attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(attempt.Describe);
         Ran.Should().BeTrue("the plant must be proven live with the host's git first (no GIT_NO_LAZY_FETCH in its environment): the per-protocol key the clone wrote has priority over protocol.allow");
-        File.Delete(Sentinel);
+        File.Delete(SentinelFile);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
         var numstat = await new ArmGit(ExperimentRoot.RealGit, clone, environment, new ArmGitSeams(LazyFetchSwitch: false)).NumstatAsync(first, Ct).WaitAsync(Wall, Ct);
@@ -631,12 +482,12 @@ public sealed class ArmGitWideningTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var marker = _temp.Combine("calls.log");
         var folder = _temp.Folder("anywhere");
-        var shim = RecordingShim(marker);
+        var shim = Sentinel.RecordingShim(_temp, marker);
 
         _ = await new ArmGit(shim, folder, Environment, new ArmGitSeams(LazyFetchSwitch: false)).HeadAsync(Ct);
 
         var host = Neutralisation(await HostDriversAsync(folder, Environment));
-        var older = Blocks(marker);
+        var older = Sentinel.Blocks(marker);
         older.Should().NotBeEmpty();
         foreach (var call in older)
         {
@@ -646,9 +497,32 @@ public sealed class ArmGitWideningTests : IDisposable
         File.Delete(marker);
         _ = await new ArmGit(shim, folder, Environment, ArmGitSeams.Real).HeadAsync(Ct);
 
-        foreach (var call in Blocks(marker))
+        foreach (var call in Sentinel.Blocks(marker))
         {
             GitVariablesShould(call.Call, call.Env, ["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], host, "the real seam sets both");
         }
+    }
+
+    /// <summary><c>git --version</c> is the floor's question (E4.S0, D23): pinned like the others, sealed (no transport, no <c>GIT_*</c> of the parent's, no secret-named variable), ONE launch — it opens no repository, so the filter drivers of a clone are not enumerated first — started in the folder the <see cref="ArmGit"/> is built over. <c>PGPASSWORD</c> is planted in the parent's map: the recording shim records the name (<see cref="Sentinel"/>), so its absence is observed and not assumed.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task The_version_question_is_pinned_sealed_and_reads_no_repository()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
+        var folder = _temp.Folder("not-a-repository");
+        var marker = _temp.Combine("calls.log");
+        var parent = new Dictionary<string, string>(Environment, StringComparer.Ordinal) { ["PGPASSWORD"] = "hunter2", ["GIT_DIR"] = "/nonexistent" };
+        var host = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, ["--version"], folder, TimeSpan.FromSeconds(60), string.Empty, Environment, Ct);
+        var expected = host.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>(host.Describe).Subject.Result.StandardOutput.Split('\n')[0].Trim();
+
+        var version = await new ArmGit(Sentinel.RecordingShim(_temp, marker), folder, parent).VersionAsync(Ct);
+
+        version.Ok().Should().Be(expected, "the first line the host's own git prints, trimmed");
+        var call = Sentinel.Blocks(marker).Should().ContainSingle("one launch: the question opens no repository, so no filter driver is enumerated first").Subject;
+        call.Call.Should().StartWith("-c core.fsmonitor=false -c core.hooksPath= -c submodule.recurse=false ").And.EndWith(" --version");
+        call.Cwd.Should().Be(folder, "the folder the ArmGit is built over");
+        call.Env.Should().Contain(["GIT_ALLOW_PROTOCOL=", "GIT_NO_LAZY_FETCH=1"], "sealed: no transport, and the lazy-fetch switch");
+        call.Env.Should().NotContain(line => line.StartsWith("GIT_DIR=", StringComparison.Ordinal), "no GIT_* of the parent reaches git");
+        call.Env.Should().NotContain(line => line.StartsWith("PGPASSWORD=", StringComparison.Ordinal), "no secret-named variable reaches git");
     }
 }

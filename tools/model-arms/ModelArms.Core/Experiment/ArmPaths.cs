@@ -27,39 +27,52 @@ public sealed record RootPaths(string Root)
 
     public string PidFile(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".pid");
 
+    /// <summary>The runner's own lock (D13, E5.S1): held by the <c>run-arm</c> process for its life, free the moment it dies — the one answer to whether an arm runs. Never deleted (§4.11): a stale file is not a stale lock.</summary>
+    public string RunnerLock(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".lock");
+
     public string PidLog(string arm) => Path.Combine(Root, "pids", ArmPaths.Segment(arm, "arm") + ".log");
+
+    /// <summary><c>run-all</c>'s own lock (E5.S3 review): held EXCLUSIVE, never waited for, for the whole of one <c>run-all</c> call — until each runner it started holds its own lock — so two calls cannot both count the same queue as empty. Never deleted.</summary>
+    public string RunAllLock => Path.Combine(Root, "pids", ".run-all.lock");
 
     public string Chain => Path.Combine(Root, "chain");
 
     public string Made(string arm) => Path.Combine(Root, "chain", "made-" + ArmPaths.Segment(arm, "arm"));
 
-    public string Locked => Path.Combine(Root, "chain", "locked");
-
-    public string Unlocked => Path.Combine(Root, "chain", "unlocked");
-
     public string ObjectiveMarker(string arm) => Path.Combine(Root, "chain", "objective-" + ArmPaths.Segment(arm, "arm"));
-
-    public string ArmsDone => Path.Combine(Root, "chain", "arms-done");
 
     public string Executables => Path.Combine(Root, "chain", "executables.txt");
 
     public string GateLock => Path.Combine(Root, ".gate.lock");
+
+    /// <summary>D11's lock over every change of a mode (E5.S1): taken EXCLUSIVE by <c>lock</c> and <c>unlock</c>, held SHARED by every runner for its life, so no runner starts during a restore and no restore starts beside a runner.</summary>
+    public string IsolationLock => Path.Combine(Root, ".isolation.lock");
 
     public string LockedModes => Path.Combine(Root, ".locked-modes");
 
     /// <summary>The second immutable file of D11's two-file state (<c>{"run","digest","verifiedAt"}</c>): present beside <see cref="LockedModes"/> with the same run and digest, the snapshot is <i>applied</i>. Spelled here for the readers (E3.S4, §8 item 2); E5.S1 writes it.</summary>
     public string LockedModesApplied => Path.Combine(Root, ".locked-modes.applied");
 
-    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The root-level <see cref="Locked"/>, <see cref="Unlocked"/> and <see cref="ArmsDone"/> are E5.S4's to remove.</summary>
+    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The chain is their one writer; the root-level <c>chain/locked|unlocked|arms-done</c> E1 spelled before D27 are gone (E5.S4).</summary>
     public string RunMarker(string run, RunStage stage) =>
         Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), stage switch { RunStage.Locked => "locked", RunStage.Unlocked => "unlocked", _ => "arms-done" });
+
+    /// <summary>The run's own lock (E5.S4, §8 item 45): <c>chain/&lt;run&gt;/.chain.lock</c>, held by the one <c>chain &lt;run&gt;</c> process for its whole invocation — the markers' one writer made true. Never deleted (§4.11): a stale file is not a stale lock.</summary>
+    public string ChainLock(string run) => Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), ".chain.lock");
 
     public string LockLog => Path.Combine(Root, "lock.log");
 
     /// <summary>Where <c>unlock</c> moves <see cref="LockedModes"/> to once it has restored the modes; the stamp is UTC, like <c>20261029T101500Z</c>.</summary>
     public string LockedModesRestored(string stamp) => Path.Combine(Root, ".locked-modes.restored-" + ArmPaths.Segment(stamp, "stamp"));
 
+    /// <summary>Where <c>unlock</c> moves <see cref="LockedModesApplied"/> to, beside <see cref="LockedModesRestored"/> (the same stamp rules, a <c>-2</c>… suffix for a second cycle in one second).</summary>
+    public string LockedModesAppliedRestored(string stamp) => Path.Combine(Root, ".locked-modes.applied.restored-" + ArmPaths.Segment(stamp, "stamp"));
+
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
+
+    /// <summary>The stderr of the <paramref name="n"/>th launch of the keep-awake child (E5.S2) of the chain that started at <paramref name="stamp"/> (UTC, like <c>20261031T101500Z</c>): one file per launch because the session creates it new (<c>CreateNew</c>).</summary>
+    public string KeepAwakeErr(string stamp, int n) =>
+        Path.Combine(Root, "keep-awake." + ArmPaths.Segment(stamp, "stamp") + "." + n.ToString(CultureInfo.InvariantCulture) + ".err");
 
     /// <summary>What <c>prep-base</c> writes at the root (<c>prep-base.sh:5</c>, <c>:14-17</c>): a line per stage, and each tool's log. An earlier attempt's copies are moved aside into <see cref="PrepBasePrevious"/> before the next attempt creates its own.</summary>
     public string PrepBaseLog => Path.Combine(Root, "prep-base.log");

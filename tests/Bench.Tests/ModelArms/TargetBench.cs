@@ -91,7 +91,7 @@ internal sealed class TargetBench : IDisposable
         }
     }
 
-    /// <summary>Sets what a shim prints or exits with: <c>build.out</c>, <c>build.rc</c>, <c>suite.out</c>, <c>suite.rc</c>, <c>suite.sleep</c> (seconds, after the output), <c>npm.out</c>, <c>npm.rc</c>, <c>ext.out</c>, <c>ext.rc</c>; and, for the objective checks' trust-boundary scenarios (E3.S5), <c>build.hook</c>, <c>suite.hook</c>, <c>ext.hook</c> — shell text the shim runs after it has printed (the arm's own code, doing what an arm's code can).</summary>
+    /// <summary>Sets what a shim prints or exits with: <c>build.out</c>, <c>build.rc</c>, <c>suite.out</c>, <c>suite.rc</c>, <c>suite.sleep</c> (seconds, after the output), <c>npm.out</c>, <c>npm.rc</c>, <c>ext.out</c>, <c>ext.rc</c>; <c>git.version</c> — the text the git shim prints (and exits 0) for <c>--version</c>, the floor's question (E4.S0; absent: the host's git answers); and, for the objective checks' trust-boundary scenarios (E3.S5), <c>build.hook</c>, <c>suite.hook</c>, <c>ext.hook</c> — shell text the shim runs after it has printed (the arm's own code, doing what an arm's code can).</summary>
     public void Say(string canned, string text) => File.WriteAllText(Path.Combine(_canned, canned), text);
 
     /// <summary>Every call recorded so far, in order.</summary>
@@ -243,7 +243,7 @@ internal sealed class TargetBench : IDisposable
         File.Delete(Path.Combine(bin, "node"));
         File.CreateSymbolicLink(Path.Combine(bin, "node"), PinnedConsumer.NodePath);
         Root.UsePath(string.Join(Path.PathSeparator, bin, "/usr/bin", "/bin"));
-        Root.ShimScript(Path.Combine(bin, "git"), Prelude("git") + $"exec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        Root.ShimScript(Path.Combine(bin, "git"), Prelude("git") + "if [ -f \"$CANNED/git.version\" ]; then for a; do :; done; if [ \"$a\" = --version ]; then show git.version; exit 0; fi; fi\n" + $"exec '{ExperimentRoot.RealGit}' \"$@\"\n");
         Root.ShimScript(
             Path.Combine(bin, "dotnet"),
             Prelude("dotnet") + """
