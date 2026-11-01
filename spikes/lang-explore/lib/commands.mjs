@@ -223,9 +223,10 @@ export function leakShingles(notesText, publicText = '') {
   return [...windows].filter(w => !open.includes(w)).join('\n');
 }
 
-/** The normalised text of the files whose wording is public by decision: the plans (`todo/PLAN_*.md`) and this spike's pins. */
+/** The normalised text of the files whose wording is public by decision: the plans (`todo/PLAN_*.md`, and `research/PLAN_*.md` once promoted) and this spike's pins. */
 export function decidedPublicText(repo = REPO) {
-  const plans = readdirSync(path.join(repo, 'todo')).filter(f => /^PLAN_.*\.md$/.test(f)).map(f => path.join(repo, 'todo', f));
+  const plansIn = dir => (existsSync(path.join(repo, dir)) ? readdirSync(path.join(repo, dir)).filter(f => /^PLAN_.*\.md$/.test(f)).map(f => path.join(repo, dir, f)) : []);
+  const plans = [...plansIn('todo'), ...plansIn('research')];
   return [...plans, path.join(repo, 'spikes', 'lang-explore', 'inputs', 'explore.json')].filter(existsSync).map(f => readFileSync(f, 'utf8')).join('\n');
 }
 

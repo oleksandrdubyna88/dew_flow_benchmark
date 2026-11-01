@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { leakcheck } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { main } from '../explore.mjs';
-import { EXIT, cmdInit, cmdPrune, cmdQuiet, cmdRun, leakNeedles, leakShingles, statusLines } from '../lib/commands.mjs';
+import { EXIT, cmdInit, cmdPrune, cmdQuiet, cmdRun, decidedPublicText, leakNeedles, leakShingles, statusLines } from '../lib/commands.mjs';
 import { calibrationFile, exploreRoot } from '../lib/paths.mjs';
 import { createSeries, drawMask, loadSeries } from '../lib/series.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
@@ -118,6 +118,18 @@ test('The_leak_needles_are_held_out_output_lines_and_reference_lines_of_8_or_mor
     assert.match(dirty.reason, /held-out text found in .*note\.md/);
     assert.ok(!dirty.reason.includes('xyzzy') && !dirty.reason.includes('frobnicate'), 'a hit names the file, never the needle');
   }
+});
+
+test('A_plan_promoted_to_research_stays_public_by_decision_beside_the_plans_in_todo', () => {
+  const repo = tmpDir('public-text');
+  for (const d of ['todo', 'research', path.join('spikes', 'lang-explore', 'inputs')]) mkdirSync(path.join(repo, d), { recursive: true });
+  writeFileSync(path.join(repo, 'todo', 'PLAN_open.md'), 'open plan wording\n');
+  writeFileSync(path.join(repo, 'research', 'PLAN_done.md'), 'promoted plan wording\n');
+  writeFileSync(path.join(repo, 'research', 'notes.md'), 'research prose that is no plan\n');
+  const text = decidedPublicText(repo);
+  assert.ok(text.includes('open plan wording'));
+  assert.ok(text.includes('promoted plan wording'), 'moving a plan to research/ does not turn its public wording into needles');
+  assert.ok(!text.includes('research prose that is no plan'), 'only plans are public by decision');
 });
 
 test('The_private_notes_become_six_word_shingles_that_find_a_copied_sentence', async () => {
