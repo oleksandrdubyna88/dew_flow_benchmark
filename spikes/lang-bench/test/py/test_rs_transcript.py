@@ -370,6 +370,51 @@ class UnorderedBindingTests(unittest.TestCase):
         self.assertEqual(parse(self.GROUP)[1], [])
 
 
+class ArrivalMessageTests(unittest.TestCase):
+    """The refusal says which binding of the group the check names and which bindings the group makes, so the transcript can be repaired."""
+
+    def message(self, text):
+        transcript, problems = parse(text)
+        self.assertIsNone(transcript)
+        self.assertEqual(len(problems), 1, problems)
+        return problems[0].message
+
+    GROUP = 'transcript 2\nunordered\n  recv * "${:int=a}\\n"\n  recv * "${:int=b}\\n"\n  recv * "${:int=c}\\n"\nend\n'
+
+    def test_Check_equal_names_the_binding_it_used_and_lists_the_bindings_of_the_group(self):
+        message = self.message(self.GROUP + "check equal b 2\n")
+        self.assertIn("check equal names `b`", message)
+        self.assertIn("(the group binds a, b, c)", message)
+
+    def test_Check_distinct_over_part_of_the_group_names_what_it_took_and_what_it_left_out(self):
+        message = self.message(self.GROUP + "check distinct a c\n")
+        self.assertIn("check distinct names `a`, `c`", message)
+        self.assertIn("(the group binds a, b, c)", message)
+        self.assertIn("leaves out `b`", message)
+
+    def test_Check_equal_against_a_name_names_only_the_binding_that_belongs_to_the_group(self):
+        head = self.GROUP + 'recv d "${:int=z}\\n"\n'
+        message = self.message(head + "check equal z a\n")
+        self.assertIn("names `a`", message)
+        self.assertNotIn("`z`", message)
+
+    def test_A_glob_is_named_as_written_and_a_repeat_name_is_listed_with_its_variable(self):
+        head = 'transcript 2\nrepeat 2 i\n  unordered\n    recv * "${:int=a${i}}\\n"\n    recv * "${:int=b${i}}\\n"\n  end\nend\n'
+        message = self.message(head + "check distinct a*\n")
+        self.assertIn("check distinct names `a*`", message)
+        self.assertIn("(the group binds a${i}, b${i})", message)
+        self.assertIn("leaves out `b${i}`", message)
+
+    def test_A_JSON_array_is_described_the_same_way(self):
+        message = self.message('transcript 2\nreply c 200\n  body json {"$unordered":["${:int=a}","${:int=b}"]}\ncheck equal a 1\n')
+        self.assertIn("check equal names `a`", message)
+        self.assertIn("(the group binds a, b)", message)
+        self.assertIn("unordered JSON array", message)
+
+    def test_The_repair_is_still_told(self):
+        self.assertIn("name all of the group's bindings in one check distinct, or none", self.message(self.GROUP + "check equal a 1\n"))
+
+
 class JsonUnorderedBindingTests(unittest.TestCase):
     """The same rule for bindings made inside a JSON {"$unordered": [...]} array: which element takes which value depends on arrival order."""
 

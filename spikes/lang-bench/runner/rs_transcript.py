@@ -13,6 +13,7 @@ from typing import Any, NamedTuple, Optional
 
 import rs_json
 import rs_lex as lex
+from rs_arrival import Group, binder_of, first_refusing, message as arrival_message
 from rs_lex import NAME, Cursor, Problem, StrExpr, take_single_string, take_str_expr
 from rs_script import take_choice, take_int, take_token
 
@@ -635,22 +636,7 @@ def _binder_problems(transcript):
     return problems
 
 
-# ---- bindings made inside an unordered group (5.4 and 5.5) -----------------------------------------------------------------------
-#
-# Which entry of an `unordered` group takes which observation depends on the order they arrived in. A check that relates a binding of the
-# group to anything outside it would then pass or fail with the arrival order, so it is refused here, at parse time: `check equal` may not
-# name such a binding, and `check distinct` may name all the group's bindings (the whole set is the same under every assignment) or none.
-
-class _Binder(NamedTuple):
-    head: str
-    dynamic: bool
-
-
-def _binder_of(template):
-    """The literal head of a bound name and whether the rest depends on a repeat variable."""
-    literal = list(itertools.takewhile(lambda p: isinstance(p, lex.Lit), template))
-    return _Binder(b"".join(p.data for p in literal).decode("ascii"), len(literal) < len(template))
-
+# ---- bindings made inside an unordered group (5.4 and 5.5): the rule is rs_arrival's --------------------------------------------
 
 def _unordered_groups(nodes):
     for node in nodes:
@@ -666,53 +652,17 @@ def _bound_fields(entry):
 
 
 def _group_binders(group):
-    return [_binder_of(p.bind) for e in group.entries for p in _bound_fields(e)]
-
-
-def _could_be(token, binder):
-    """Could `token` (a name, or a prefix glob ending in `*`) stand for a name `binder` binds?"""
-    if token.endswith("*"):
-        prefix = token[:-1]
-        return binder.head.startswith(prefix) or prefix.startswith(binder.head)
-    return token.startswith(binder.head) if binder.dynamic else token == binder.head
-
-
-def _covers(token, binder):
-    """Does `token` stand for every name `binder` binds?"""
-    return binder.head.startswith(token[:-1]) if token.endswith("*") else (not binder.dynamic and token == binder.head)
-
-
-def _is_name(token):
-    return token is not None and not re.match(r"-?[0-9]", token)
-
-
-def _named(check):
-    return [t for t in (*check.names, check.other) if _is_name(t)]
-
-
-def _touches(check, group):
-    names = _named(check)
-    return any(_could_be(t, b) for b in group for t in names)
-
-
-def _names_all(check, group):
-    return all(any(_covers(t, b) for t in check.names) for b in group)
-
-
-def _refuses(check, group):
-    """A check that relates a binding of the group to something else depends on arrival order, unless it is a distinct over the whole group."""
-    whole = check.op == "distinct" and _names_all(check, group)
-    return bool(group) and _touches(check, group) and not whole
+    return Group("group", tuple(binder_of(p.bind) for e in group.entries for p in _bound_fields(e)))
 
 
 def _json_strings(value):
-    """Every string of an expected JSON value, member names excluded."""
+    """Every string of an expected JSON value in document order, member names excluded."""
     stack = [value]
     while stack:
         node = stack.pop()
         if isinstance(node, str):
             yield node
-        stack.extend(rs_json.children_of(node))
+        stack.extend(reversed(rs_json.children_of(node)))
 
 
 def _json_unordered_arrays(value):
@@ -730,7 +680,7 @@ def _string_parts(elements):
 
 
 def _array_binders(elements):
-    return [_binder_of(p.bind) for p in _string_parts(elements) if isinstance(p, lex.Field) and p.bind]
+    return Group("JSON array", tuple(binder_of(p.bind) for p in _string_parts(elements) if isinstance(p, lex.Field) and p.bind))
 
 
 def _json_bodies(transcript):
@@ -750,15 +700,5 @@ def _all_groups(transcript):
 
 def _arrival_problems(transcript):
     groups = _all_groups(transcript)
-    refused = [c for c in checks_of(transcript) if _refused_by_any(c, groups)]
-    return [Problem(transcript.file, c.line, _arrival_message(c)) for c in refused]
-
-
-def _refused_by_any(check, groups):
-    return any(_refuses(check, g) for g in groups)
-
-
-def _arrival_message(check):
-    what = "check equal names" if check.op == "equal" else "check distinct names only part of"
-    return (f"{what} a binding made inside an unordered group or an unordered JSON array: which entry binds it depends on the order the "
-            "replies arrive in (name all of the group's bindings in one check distinct, or none)")
+    found = [(c, first_refusing(c, groups)) for c in checks_of(transcript)]
+    return [Problem(transcript.file, c.line, arrival_message(c, g)) for c, g in found if g is not None]

@@ -2,6 +2,10 @@
   "runner": {
     "files": [
       {
+        "path": "rs_arrival.py",
+        "sha256": "3a7f9640cf9a3466fa4bee2c02e712f9870c31e57934e16c917637038eeebdb8"
+      },
+      {
         "path": "rs_assign.py",
         "sha256": "61903c0943f3f376a188fa31fab3f24c68266a18cd80dccb6632d5174e89d9f9"
       },
@@ -67,14 +71,14 @@
       },
       {
         "path": "rs_transcript.py",
-        "sha256": "0cc94e0806e662aad7188cfc87b6d8dd8050adeed95388a6435b07fe5b8668ae"
+        "sha256": "6e8ce80ea8191fb1f1aea3704f9d61b8fbdf0e7b658dfb74c55d1b76b73d7140"
       },
       {
         "path": "run_samples.py",
         "sha256": "53ab01a209715f8eee2665416234f4ba9e65fafe2c885851a26e16d911570954"
       }
     ],
-    "manifestSha256": "5f79ec15138feaff26dce831addab1db5012cdf8c41449eeb5dd066ca3210aa0",
+    "manifestSha256": "d3c20d9bd80f906fdfaf75c45aa2cc9bb7f7dcb273603d79ea5c45fd1f2e8262",
     "version": "0.1.0"
   }
 }
