@@ -96,7 +96,8 @@ class KillTests(unittest.TestCase):
         self.assertTrue(wait_until(lambda: scope.pids() == []), f"left in the scope: {scope.pids()}")
 
     def test_A_hidden_child_that_is_a_copy_of_bash_named_bwrap_is_a_leftover_and_is_killed(self):
-        script = "cp /usr/bin/bash ./bwrap\n./bwrap -c 'sleep 60; true' &\ncat answer.bin\n"
+        # the hidden child is nothing but a copy of bash named bwrap, waiting on a FIFO it holds open itself: no other process gives it away
+        script = "cp /usr/bin/bash ./bwrap\nmkfifo hold\n./bwrap -c 'read -t 60 x' <> hold &\ncat answer.bin\n"
         result, scope, _ = run_in_scope(self, script, expected=ANSWER)
         self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": True}, "a name is no identity: the copy is not bwrap and hides nothing")
         self.assertIn("  leftover: process still running after the exit (killed)", result.lines)
