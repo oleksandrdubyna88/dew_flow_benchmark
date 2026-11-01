@@ -141,33 +141,42 @@ public sealed class ArmChildEnvironmentTests
         child.Should().Contain(new KeyValuePair<string, string>(name, "kept-value"), $"{name} is neither the socket's whole name nor a GIT_ prefix");
     }
 
-    /// <summary>The drift guard (<c>common.security</c> — enumerate the sites mechanically, leave the scan behind): the socket's name and the prefix are spelled in ONE file of Core, so a fourth spelling is red here while every behaviour test stays green.
-    /// The companion proves the scan still finds the sanctioned site.</summary>
+    /// <summary>The drift guard (<c>common.security</c> — enumerate the sites mechanically, leave the scan behind): the socket's name and the prefix are spelled in ONE file of the module (every <c>.cs</c> under <c>tools/model-arms</c>, the adapters included), so a fourth spelling is red here while every behaviour test stays green.
+    /// The allow-list is the one file; no other file of the module spells either quoted literal today (<c>ArmGit</c>'s own pins spell whole names such as <c>"GIT_NO_LAZY_FETCH"</c>, which are no hit). The companion asserts EACH literal separately at the sanctioned site.</summary>
     [Fact]
-    public void The_agent_socket_and_the_git_prefix_are_spelled_in_one_file_of_Core()
+    public void The_agent_socket_and_the_git_prefix_are_spelled_in_one_file_of_the_module()
     {
-        const string Sanctioned = "Experiment/ArmChildEnvironment.cs";
-        var core = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms.Core");
-        var sites = Directory.EnumerateFiles(core, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !Path.GetRelativePath(core, path).Split(Path.DirectorySeparatorChar).Any(part => part is "obj" or "bin"))
-            .SelectMany(path => SpellingSites(path, core))
-            .ToList();
+        var sites = SpellingSites();
 
-        sites.Where(site => !site.StartsWith(Sanctioned + ":", StringComparison.Ordinal)).Should().BeEmpty($"sites outside {Sanctioned}: the two literals live there alone, and every other file asks ArmChildEnvironment.IsAgentSocketOrGit");
-        sites.Count(site => site.StartsWith(Sanctioned + ":", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(2, "the scan still finds the sanctioned site — the socket's name and the prefix — or it matches nothing and passes forever");
+        sites.SelectMany(file => file.Value.Select(line => $"{file.Key}:{line.Line}")).Where(site => !site.StartsWith(Sanctioned + ":", StringComparison.Ordinal))
+            .Should().BeEmpty($"sites outside {Sanctioned}: the two literals live there alone, and every other file asks ArmChildEnvironment.IsAgentSocketOrGit");
     }
 
-    private static IEnumerable<string> SpellingSites(string path, string core)
+    [Theory]
+    [InlineData("\"SSH_AUTH_SOCK\"")]
+    [InlineData("\"GIT_\"")]
+    public void The_scan_still_finds_each_literal_at_the_sanctioned_site(string literal)
     {
-        var relative = Path.GetRelativePath(core, path).Replace('\\', '/');
-        var lines = File.ReadAllLines(path);
-        for (var index = 0; index < lines.Length; index++)
+        SpellingSites().GetValueOrDefault(Sanctioned, []).Should().Contain(site => site.Text.Contains(literal, StringComparison.Ordinal), $"{literal} is spelled in {Sanctioned} — or the scan matches nothing and passes forever");
+    }
+
+    private const string Sanctioned = "ModelArms.Core/Experiment/ArmChildEnvironment.cs";
+
+    private static Dictionary<string, List<(int Line, string Text)>> SpellingSites()
+    {
+        var module = Path.Combine(Cli.Repository.Root, "tools", "model-arms");
+        var sites = new Dictionary<string, List<(int Line, string Text)>>();
+        foreach (var path in Directory.EnumerateFiles(module, "*.cs", SearchOption.AllDirectories).Where(path => !Path.GetRelativePath(module, path).Split(Path.DirectorySeparatorChar).Any(part => part is "obj" or "bin")))
         {
-            if (lines[index].Contains("\"SSH_AUTH_SOCK\"", StringComparison.Ordinal) || lines[index].Contains("\"GIT_\"", StringComparison.Ordinal))
+            var lines = File.ReadAllLines(path);
+            var hits = Enumerable.Range(0, lines.Length).Where(index => lines[index].Contains("\"SSH_AUTH_SOCK\"", StringComparison.Ordinal) || lines[index].Contains("\"GIT_\"", StringComparison.Ordinal)).Select(index => (index + 1, lines[index])).ToList();
+            if (hits.Count > 0)
             {
-                yield return $"{relative}:{index + 1}";
+                sites[Path.GetRelativePath(module, path).Replace('\\', '/')] = hits;
             }
         }
+
+        return sites;
     }
 
     [Fact]

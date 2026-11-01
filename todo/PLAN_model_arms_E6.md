@@ -545,8 +545,8 @@ bench's own (`StepBench.cs:145-162`) plus what each test plants.
 deleted from `ArmChildEnvironment.Stripped` → the theory red (14 rows), `A_GIT_name_is_stripped…` red, AND both wiring tests red at the
 fake's logged names — the production line whose absence a user would notice, at both layers (`common.testing` § *Revert the line the
 observable BEHAVIOUR depends on*); `TargetEnvironmentTests` stays green (it asks a predicate that still exists), which is why the wiring
-rows exist. **B2** the predicate moved INSIDE the exception (`IsSecretNotClaudes` = `(IsSecretShaped(name) || IsAgentSocketOrGit(name)) && !ClaudesOwn…`)
-→ `GIT_CLAUDE_X` and `GIT_ANTHROPIC_DIR` red, everything else green: the exception's scope is a tested fact. **B3** `StartsWith("GIT_")`
+rows exist. **B2** (as planted, 2026-11-01 — the inside-move alone stays GREEN, since the exception tests the name's prefix and no `GIT_` name starts `CLAUDE_` or `ANTHROPIC_`) the predicate moved INSIDE the exception (`IsSecretNotClaudes` = `(IsSecretShaped(name) || IsAgentSocketOrGit(name)) && !ClaudesOwn…`, the `Stripped` disjunct removed) AND the exception widened from `StartsWith` to `Contains`
+→ `GIT_CLAUDE_X` red (`A_GIT_name_is_stripped…`), everything else green: the exception's scope is a tested fact for the two together. **B3** `StartsWith("GIT_")`
 → `Contains("GIT_")` and `Equals(AgentSocket)` → `StartsWith(AgentSocket)` → `MY_GIT_DIR` and `SSH_AUTH_SOCKET` red. **B4**
 `TargetEnvironment` given back a private `IsGit` → the scan red naming `Launch/TargetEnvironment.cs:<line>` while every behaviour test
 stays green — the drift only the scan catches (§10 item 6). **B5** the companion: `"SSH_AUTH_SOCK"` spelled in `ArmChildEnvironment.cs`

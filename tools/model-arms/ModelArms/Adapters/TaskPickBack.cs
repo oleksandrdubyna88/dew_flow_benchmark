@@ -79,13 +79,13 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
         }
 
         c.Probe.Reached(TaskPoint.Read, id);
-        var plan = PickBackOrder.Decide([.. lists.Task.Select(sha => lists.ById[sha])], entries, lists.Branch);
+        var plan = PickBackOrder.Decide(lists.Task, entries, lists.Branch);
         foreach (var unbelieved in plan.NotBelieved)
         {
             c.Log.Line($"{record} line {entries.IndexOf(unbelieved) + 1}: {unbelieved.PickedSha} is not on the arm branch — not believed");
         }
 
-        return await RunPlanAsync(id, plan, entries, ct);
+        return await RunPlanAsync(id, plan, lists.ById, entries, ct);
     }
 
     private async Task<Taken<Lists>> ListsAsync(string id, string before, CancellationToken ct)
@@ -105,7 +105,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
 
     private static Taken<Lists> Stopped(Halt halt) => new Taken<Lists>.Halted(halt);
 
-    private async Task<Halt?> RunPlanAsync(string id, PickPlan plan, List<PickEntry> entries, CancellationToken ct)
+    private async Task<Halt?> RunPlanAsync(string id, PickPlan plan, IReadOnlyDictionary<string, PickSource> patchIds, List<PickEntry> entries, CancellationToken ct)
     {
         int byRecord = 0, made = 0;
         foreach (var step in plan.Steps)
@@ -114,7 +114,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
             {
                 byRecord++;
             }
-            else if (await PickOneAsync(id, (PickStep.Pick)step, entries, ct) is { } halt)
+            else if (await PickOneAsync(id, (PickStep.Pick)step, patchIds, entries, ct) is { } halt)
             {
                 return halt;
             }
@@ -243,7 +243,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
         return $"{facts.AuthorName} <{facts.AuthorEmail}>, \"{(subject.Length > SubjectCut ? subject[..SubjectCut] : subject)}\"";
     }
 
-    private async Task<Halt?> PickOneAsync(string id, PickStep.Pick pick, List<PickEntry> entries, CancellationToken ct)
+    private async Task<Halt?> PickOneAsync(string id, PickStep.Pick pick, IReadOnlyDictionary<string, PickSource> patchIds, List<PickEntry> entries, CancellationToken ct)
     {
         if (c.LockHalt(id) is { } locked)
         {
@@ -271,7 +271,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
             return TaskContext.Failed(id, afterFailed.Reason);
         }
 
-        Append(id, entries, new PickEntry.Picked(pick.Source, ((Outcome<string>.Ok)after).Value, pick.PatchId));
+        Append(id, entries, new PickEntry.Picked(pick.Source, ((Outcome<string>.Ok)after).Value, patchIds.TryGetValue(pick.Source, out var known) ? known.PatchId : string.Empty));
         c.Probe.Reached(TaskPoint.Recorded, id);
         return null;
     }

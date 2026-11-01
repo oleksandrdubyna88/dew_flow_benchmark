@@ -141,36 +141,35 @@ public sealed class PickBackTests
         PickRecord.Open([picked, intent]).Should().Be(intent);
     }
 
-    private static PickSource S(char sha, string patch = "") => new(Sha(sha), patch);
-
     [Fact]
     public void A_source_is_carried_by_the_record_only_when_its_completion_is_believed()
     {
         var record = new PickEntry[] { new PickEntry.Picked(Sha('a'), Sha('1'), "p1"), new PickEntry.Picked(Sha('b'), Sha('2'), "p2") };
 
-        var plan = PickBackOrder.Decide([S('a', "p1"), S('b', "p2"), S('c', "p3")], record, [Sha('1')]);
+        var plan = PickBackOrder.Decide([Sha('a'), Sha('b'), Sha('c')], record, [Sha('1')]);
 
-        plan.Steps.Should().Equal(new PickStep.Carried(Sha('a'), Sha('1'), "the record"), new PickStep.Pick(Sha('b'), "p2"), new PickStep.Pick(Sha('c'), "p3"));
+        plan.Steps.Should().Equal(new PickStep.Carried(Sha('a'), Sha('1')), new PickStep.Pick(Sha('b')), new PickStep.Pick(Sha('c')));
         plan.NotBelieved.Should().Equal(new PickEntry.Picked(Sha('b'), Sha('2'), "p2"));
     }
 
+    /// <summary>The decider takes no patch-id (E6.S4 b, ledger 3.3): a source with no line at all is picked whatever the branch holds.</summary>
     [Fact]
-    public void A_source_with_no_line_at_all_is_picked_whatever_its_patch_id()
+    public void A_source_with_no_line_at_all_is_picked_whatever_the_branch_holds()
     {
-        var plan = PickBackOrder.Decide([S('a', "same"), S('b', "other")], [], [Sha('9')]);
+        var plan = PickBackOrder.Decide([Sha('a'), Sha('b')], [], [Sha('9')]);
 
-        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"), new PickStep.Pick(Sha('b'), "other"));
+        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a')), new PickStep.Pick(Sha('b')));
         plan.NotBelieved.Should().BeEmpty();
     }
 
     [Fact]
-    public void A_source_with_an_unbelieved_completion_and_a_matching_patch_id_is_picked_not_skipped()
+    public void A_source_with_an_unbelieved_completion_is_picked_not_skipped()
     {
         var record = new PickEntry[] { new PickEntry.Picked(Sha('a'), Sha('1'), "same") };
 
-        var plan = PickBackOrder.Decide([S('a', "same")], record, [Sha('9')]);
+        var plan = PickBackOrder.Decide([Sha('a')], record, [Sha('9')]);
 
-        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"));
+        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a')));
         plan.NotBelieved.Should().HaveCount(1);
     }
 
@@ -179,15 +178,15 @@ public sealed class PickBackTests
     {
         var record = new PickEntry[] { new PickEntry.Intent(Sha('a'), Sha('0')) };
 
-        var plan = PickBackOrder.Decide([S('a', "same"), S('b')], record, [Sha('9'), Sha('8')]);
+        var plan = PickBackOrder.Decide([Sha('a'), Sha('b')], record, [Sha('9'), Sha('8')]);
 
-        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"), new PickStep.Pick(Sha('b'), string.Empty));
+        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a')), new PickStep.Pick(Sha('b')));
     }
 
     [Fact]
     public void The_order_of_the_sources_is_kept()
     {
-        var plan = PickBackOrder.Decide([S('c'), S('a'), S('b')], [], []);
+        var plan = PickBackOrder.Decide([Sha('c'), Sha('a'), Sha('b')], [], []);
 
         plan.Steps.Select(step => ((PickStep.Pick)step).Source).Should().Equal(Sha('c'), Sha('a'), Sha('b'));
     }
