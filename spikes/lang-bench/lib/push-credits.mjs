@@ -59,6 +59,9 @@ export function parseCredits(text) {
   return ok(Object.freeze(file));
 }
 
+/** True when any of `paths` is a known task's spec (by the `todo/tasks/NN-*.md` shape, whatever the terms file says). */
+export const carriesKnownText = paths => paths.some(p => KNOWN_SPEC.test(p));
+
 export const knownSpecPaths = credits => credits.known.map(e => e.spec);
 
 function pieceFindings(entry, section, ccFiles) {

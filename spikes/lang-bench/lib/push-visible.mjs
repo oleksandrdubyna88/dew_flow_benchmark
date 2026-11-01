@@ -16,38 +16,43 @@ const ID_RULES = Object.freeze([
 ]);
 const LINK = /https?:\/\//;
 const FAMILY = /dew_flow_[a-z_]+|PLAN_lang_comparison/g;
+/** The `group` of a finding says which named line of the push check reports it. */
+export const GROUP_FAMILY = 'family-names';
+export const GROUP_VISIBLE = 'agent-visible-paths';
 
 export const isAgentVisible = file => AGENT_VISIBLE.some(prefix => file.startsWith(prefix));
 
-const ruleHits = (lines, { what, re }) => lines.flatMap((text, i) => (re.test(text) ? [{ line: i + 1, col: text.search(re), what }] : []));
+const ruleHits = (lines, { what, re }, group) => lines.flatMap((text, i) => (re.test(text) ? [{ line: i + 1, col: text.search(re), what, group }] : []));
 
 function familyHits(lines) {
   return lines.flatMap((text, i) => [...text.matchAll(FAMILY)]
     .filter(m => m[0] !== OWN_NAME)
-    .map(m => ({ line: i + 1, col: m.index, what: `needle ${m[0]}` })))
+    .map(m => ({ line: i + 1, col: m.index, what: `needle ${m[0]}`, group: GROUP_FAMILY })))
     .filter((h, i, all) => all.findIndex(o => o.line === h.line && o.what === h.what) === i);
 }
 
 /**
  * The rules of one file's text (README text arrives with its attribution section emptied). Plan ids, links and the known-task
  * needles apply to the agent-visible folders and the README; the family's names apply to every file, because the whole tree except
- * the README's section is what a run base carries (consult D5), and `.gitmodules` is the one path excluded.
+ * the README's section is what a run base carries (consult D5), and `.gitmodules` is the one path excluded. `assumeVisible` and
+ * `links: false` are for a PR or review body (`--text`): it is public like a README, and links are what a body is for.
  */
-export function findVisibleRules(file, text, { known }) {
+export function findVisibleRules(file, text, { known, assumeVisible = false, links = true }) {
   const lines = text.split('\n');
-  const visible = isAgentVisible(file) || file === 'README.md';
+  const visible = assumeVisible || isAgentVisible(file) || file === 'README.md';
   const rules = [
-    ...(visible ? visibleRules(file, text, lines, known) : []),
+    ...(visible ? visibleRules(file, text, lines, { known, links }) : []),
     ...(file === GITMODULES ? [] : familyHits(lines)),
   ];
-  return rules.sort((a, b) => a.line - b.line || a.col - b.col).map(({ line, what }) => ({ path: file, line, what }));
+  return rules.sort((a, b) => a.line - b.line || a.col - b.col).map(({ line, what, group }) => ({ path: file, line, what, group }));
 }
 
-function visibleRules(file, text, lines, known) {
+function visibleRules(file, text, lines, { known, links }) {
+  const isPin = PIN_FILES.has(path.posix.basename(file));
   return [
-    ...ID_RULES.flatMap(rule => ruleHits(lines, rule)),
-    ...(PIN_FILES.has(path.posix.basename(file)) ? [] : ruleHits(lines, { what: 'link', re: LINK })),
-    ...findKnownNeedles(file, text, known).map(h => ({ line: h.line, col: lines[h.line - 1].length, what: h.what })),
+    ...ID_RULES.flatMap(rule => ruleHits(lines, rule, GROUP_VISIBLE)),
+    ...(links && !isPin ? ruleHits(lines, { what: 'link', re: LINK }, GROUP_VISIBLE) : []),
+    ...findKnownNeedles(file, text, known).map(h => ({ line: h.line, col: lines[h.line - 1].length, what: h.what, group: GROUP_VISIBLE })),
   ];
 }
 

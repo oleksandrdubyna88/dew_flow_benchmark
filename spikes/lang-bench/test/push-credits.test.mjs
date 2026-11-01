@@ -44,7 +44,7 @@ test('A_credit_terms_file_with_a_placeholder_or_a_missing_field_is_refused_namin
   assert.match(parseCredits(JSON.stringify({ ...JSON.parse(CREDITS_TEXT), known: JSON.parse(CREDITS_TEXT).known.slice(1) })).reason, /task 01/);
 });
 
-test('Push_check_refuses_known_task_text_without_credit_terms', () => {
+test('The_credit_check_refuses_known_task_text_without_credit_terms', () => {
   const noTerms = checkCreditTerms({ credits: { ok: false, reason: 'no terms file' }, paths: ['todo/tasks/05-key-value-server.md'], readmeText: readmeWith() });
   assert.deepEqual(noTerms.map(f => [f.path, f.what]), [['todo/tasks/05-key-value-server.md', 'known-task text without its credit terms (no terms file)']]);
   const otherPath = check(['todo/tasks/09-werewolf.md'], readmeWith());
