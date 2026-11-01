@@ -48,6 +48,12 @@ class ShapeTests(unittest.TestCase):
         found = scan.float_uses(ast.parse("a = 1.5\nb = float('2')\nc = 3 / 4\n"))
         self.assertEqual(sorted(what for _, what in found), ["1.5", "float", "true division"])
 
+    def test_Every_json_parse_in_the_runner_keeps_numbers_exact(self):
+        calls = [(name, line, kw) for name, tree, _ in sources() for line, kw in scan.json_loads_calls(tree)]
+        self.assertTrue(calls, "the scan found no json.loads call to check")
+        bad = [(n, line) for n, line, kw in calls if not {"parse_float", "parse_int", "parse_constant", "object_pairs_hook"} <= kw]
+        self.assertEqual(bad, [])
+
 
 if __name__ == "__main__":
     unittest.main()
