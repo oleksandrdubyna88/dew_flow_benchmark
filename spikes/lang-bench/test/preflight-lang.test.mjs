@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
-import { dotnetCandidates, judgeProbes, preflightLang } from '../lib/preflight-lang.mjs';
+import { boxArgv, dotnetCandidates, judgeProbes, preflightLang } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
@@ -37,7 +37,7 @@ test('A_second_SDK_in_dotnet_list_sdks_is_refused_naming_both', () => {
   const problems = problemsOf({ ...good(), dotnetSdks: '10.0.114 [/usr/lib/dotnet/sdk]\n10.0.403 [/store/sdk]\n' });
   assert.match(problems, /10\.0\.114/);
   assert.match(problems, /10\.0\.403/);
-  assert.match(problemsOf({ ...good(), dotnetSdks: '10.0.114 [/usr/lib/dotnet/sdk]\n' }), /SDK.*10\.0\.114.*10\.0\.403/s, 'the wrong SDK alone is refused too');
+  assert.match(problemsOf({ ...good(), dotnetSdks: '10.0.114 [/usr/lib/dotnet/sdk]\n' }), /list-sdks lists 10\.0\.114.*SDK 10\.0\.403/s, 'the wrong SDK alone is refused too');
   assert.match(problemsOf({ ...good(), dotnetSdks: '' }), /SDK/);
 });
 
@@ -47,7 +47,7 @@ test('A_runtime_other_than_the_pinned_one_is_refused', () => {
 
 test('A_TypeScript_outside_the_pinned_line_is_refused', () => {
   const outside = problemsOf({ ...good(), tsc: 'Version 7.0.2\n' });
-  assert.match(outside, /typescript.*7\.0\.2.*6\.0/s);
+  assert.match(outside, /typescript is 7\.0\.2, outside the 6\.0 line/);
   assert.match(problemsOf({ ...good(), tsc: 'Version 6.0.2\n' }), /typescript.*6\.0\.2.*6\.0\.3/s, 'inside the line but not the pinned patch');
   assert.match(problemsOf({ ...good(), tsc: '' }), /typescript/);
 });
@@ -101,6 +101,19 @@ test('A_box_PATH_with_no_dotnet_at_all_is_refused', t => {
   const none = dotnetCandidates({ boxPath: [d.none], pinnedDotnet: path.join(d.pinned, 'dotnet') });
   assert.equal(none.problems.length, 1);
   assert.match(none.problems[0], /no dotnet/);
+});
+
+test('The_preflight_box_has_no_network_a_hidden_home_and_only_the_pinned_directories_bound_back_read_only', () => {
+  const dirs = { dotnetSdk: '/home/op/store/sdk', node: '/home/op/store/node', typescript: '/home/op/store/ts' };
+  const argv = boxArgv({ bwrap: '/usr/bin/bwrap', dirs, boxPath: ['/home/op/store/sdk'], operatorHome: '/home/op', exists: () => true });
+  const at = (...tokens) => argv.findIndex((_, i) => tokens.every((tok, k) => argv[i + k] === tok));
+  assert.ok(argv.includes('--unshare-net') && argv.includes('--unshare-pid') && argv.includes('--die-with-parent'), 'no network, own pid namespace, dies with its parent');
+  assert.notEqual(at('--ro-bind', '/', '/'), -1, 'the root is read-only');
+  const homeHidden = at('--tmpfs', '/home/op');
+  assert.notEqual(homeHidden, -1, 'the operator home is replaced by an empty tmpfs');
+  for (const dir of Object.values(dirs)) assert.ok(at('--ro-bind', dir, dir) > homeHidden, `${dir} is bound back read-only AFTER the home is hidden, so it shows`);
+  assert.ok(argv.includes('--clearenv'), 'the environment is the allow-list only');
+  assert.equal(argv.at(-1), '--');
 });
 
 // ---- inside a real box, on the real store -----------------------------------------------------------------------------------------------
