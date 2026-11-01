@@ -102,12 +102,16 @@ test('A_multi_word_needle_wrapped_over_lines_is_found_and_reported_where_it_star
   assert.equal(findKnownNeedles('p', 'Counting-Rooms and CountingRooms and counting rooms\n', known).length, 0, 'only whitespace joins the words, and case still counts');
 });
 
-test('A_window_wholly_inside_one_whitespace_token_is_a_path_or_a_url_and_not_a_hit', () => {
-  const aid = { name: 'a.md', text: 'Notes.\nsee reports/alpha/beta/gamma/delta/epsilon.md and https://example.org/one/two/three/four/five for details.\n' };
-  const needles = aidNeedles({ aids: [aid] }).value;
-  const pathsOnly = 'check reports/alpha/beta/gamma/delta/epsilon.md or https://example.org/one/two/three/four/five today\n';
-  assert.deepEqual(findAidHits('p', pathsOnly, needles), [], 'a line naming only paths and URLs passes');
-  assert.deepEqual(findAidHits('reports/alpha/beta/gamma/delta/epsilon.md', 'reports/alpha/beta/gamma/delta/epsilon.md', needles), [], 'a path scanned as text is one token');
+test('A_one_token_window_is_exempt_only_when_the_token_is_verbatim_in_the_public_texts_a_made_up_joined_passage_is_a_hit', () => {
+  const aid = { name: 'a.md', text: 'Notes.\nsee todo/PLAN_lang_comparison_v2.md and a-made-up-six-word-joined-passage-here for details.\n' };
+  const publicText = 'The plan is todo/PLAN_lang_comparison_v2.md in the repository.\n';
+  const needles = aidNeedles({ aids: [aid], publicTexts: [publicText] }).value;
+  assert.deepEqual(findAidHits('p', 'check todo/PLAN_lang_comparison_v2.md today\n', needles), [], 'a path the public texts hold verbatim is not a hit');
+  assert.deepEqual(findAidHits('todo/PLAN_lang_comparison_v2.md', 'todo/PLAN_lang_comparison_v2.md', needles), [], 'nor as a path scanned as text');
+  const joined = findAidHits('p', 'copied a-made-up-six-word-joined-passage-here from the aid\n', needles);
+  assert.deepEqual(joined.map(h => [h.line, h.what, h.tokens]), [[1, 'shingle of a.md', 1]], 'six words joined by hyphens are ONE token and still a hit: joining is not an exemption');
+  const slashed = findAidHits('p', 'a/made/up/six/word/passage/here\n', aidNeedles({ aids: [{ name: 'b.md', text: 'Notes.\na/made/up/six/word/passage/here\n' }], publicTexts: [publicText] }).value);
+  assert.equal(slashed.length, 1, 'and so is a slash-joined one');
 });
 
 test('A_real_aid_sentence_copied_into_a_path_heavy_line_is_still_a_hit_because_its_windows_span_tokens', () => {

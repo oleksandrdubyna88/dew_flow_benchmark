@@ -17,18 +17,12 @@ export function lineIndex(text) {
 }
 
 /**
- * The words of `text` as v1's `normalise` reads them (lower-cased runs of a-z0-9, every other character a separator), each with the line
- * it starts on and the number of the whitespace-delimited token it sits in. No token is dropped: a leaked passage cannot hide behind
- * markup, a slash or an underscore every few words, because its six-word windows still span tokens.
- *
- * The rule that keeps paths out of the shingle scan: a window of six words lying wholly inside ONE whitespace token (a path, a URL, an
- * identifier such as `todo/PLAN_x_y.md`) is not prose and is not a hit (`windowIsOneToken`); a window that spans two or more tokens is
- * checked as ever.
+ * The words of `text` as v1's `normalise` reads them (lower-cased runs of a-z0-9, every other character a separator), each with the line it
+ * starts on and the number of the whitespace-delimited token it sits in (a finding reports how many tokens its window spans, never which
+ * words). No token is dropped and no window is exempt for being inside one token: a passage joined with `/` or `-` is ONE token and still
+ * a hit. A path or URL is not a hit only because the approved public texts hold its words (see aidNeedles and lib/push-public.mjs).
  */
 export function wordsWithLines(text) {
   const lineOf = lineIndex(text);
   return [...text.toLowerCase().matchAll(/\S+/g)].flatMap((token, n) => [...token[0].matchAll(/[a-z0-9]+/g)].map(m => ({ word: m[0], line: lineOf(token.index + m.index), token: n })));
 }
-
-/** True when every word of `window` (entries of wordsWithLines) sits in the same whitespace token. */
-export const windowIsOneToken = window => window.every(w => w.token === window[0].token);

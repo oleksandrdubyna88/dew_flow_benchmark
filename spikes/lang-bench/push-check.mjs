@@ -19,8 +19,9 @@
 //   a branch check refuses (exit 4) when a refs/remotes/origin/* ref is not what the remote has now (ls-remote): run --setup-remote first.
 //
 //   options: --aid <file> (repeatable) | --aids-dir <dir>   the private aids, read at run time (default ~/rsd/lang-v2/test-design/)
-//            --public <file> (repeatable)  texts that are public already; their six-word runs are not aid hits. Default: the two plans as
-//                            published at origin/main of the bench repository (--bench-repo <dir>), never the working tree; unreadable = exit 3
+//            --public <file> (repeatable)  texts that are public already; their six-word runs are not aid hits. Default: the two plans plus the
+//                            files listed in inputs/public-texts.json, as published at origin/main of the bench repository (--bench-repo <dir>),
+//                            never the working tree; unreadable = exit 3
 //            --secret-file <file> (repeatable)  real secret files whose values must appear nowhere (default: ~/.config/lang-v2/github-pat and
 //                            deploy_key_lang_v2 when they exist; read at run time, never printed)
 //            --tokens <file>  literal leak tokens, one per line, outside git (default: leak-tokens.txt in the aids folder when it is present;
