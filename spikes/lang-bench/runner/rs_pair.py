@@ -1,6 +1,5 @@
 """rs_pair: a scenario script and its expected transcript checked together (FORMAT v2 section 7, item 6): the transcript's entries
 correspond one to one, after expansion, to the entries the script produces, and every variable a transcript string uses is bound."""
-import itertools
 import re
 
 import rs_assign
@@ -8,20 +7,11 @@ import rs_lex as lex
 from rs_check import Produced  # noqa: F401
 from rs_lex import Problem
 from rs_script import produced_entries
-from rs_transcript import binders, checks_of, expand, static_name, uses
+from rs_transcript import binders, checks_of, expand, slot_sizes, static_name, uses
 
 
 def _fits(produced, entry):
     return produced.kind == entry.kind and entry.conn in (produced.conn, "*")
-
-
-def _slot_sizes(entries):
-    """How many consecutive entries each slot holds: one for an ordered entry, the whole run for an unordered group."""
-    sizes = []
-    for key, run in itertools.groupby(entries, key=lambda e: e.group):
-        n = sum(1 for _ in run)
-        sizes.extend([1] * n if key is None else [n])
-    return sizes
 
 
 def _slot_problem(file, produced, entries):
@@ -38,7 +28,7 @@ def _correspondence(scenario, transcript):
     if len(produced) != len(entries):
         return [Problem(transcript.file, 1, f"the transcript holds {len(entries)} entries but the script produces {len(produced)}")]
     i = 0
-    for n in _slot_sizes(entries):
+    for n in slot_sizes(entries):
         problem = _slot_problem(transcript.file, produced[i:i + n], entries[i:i + n])
         if problem is not None:
             return [problem]

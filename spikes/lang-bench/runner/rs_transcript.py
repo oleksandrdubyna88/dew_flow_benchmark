@@ -8,6 +8,7 @@ the writer of strings in the transcript's canonical form.
 import itertools
 import re
 from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any, Optional
 
 import rs_json
@@ -90,6 +91,38 @@ def abbreviate(data, limit=120):
     if len(data) <= limit:
         return canonical(data)
     return f"{canonical(data[:60])}...({len(data) - 100} bytes)...{canonical(data[-40:])}"
+
+
+# ---- what the runner observed ---------------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Actual:
+    """One observation: the kinds of an expected entry, and the actual-only kinds of 5.1 (`exit-signal` is the entry `exit signal NAME`).
+    `headers` holds every occurrence as (name, value) bytes in arrival order; `at` is the UTC time the entry was recorded."""
+    kind: str
+    conn: str = ""
+    data: bytes = b""
+    status: int = 0
+    headers: tuple = ()
+    body: bytes = b""
+    name: str = ""
+    at: Optional[datetime] = None
+
+
+_WITH_DATA = lambda a: f"{a.kind} {a.conn} {abbreviate(a.data)}"
+_ACTUAL_TEXT = {
+    "ready": lambda a: "ready", "recv": lambda a: f"recv {a.conn} {abbreviate(a.data)}", "reply": lambda a: f"reply {a.conn} {a.status}",
+    "quiet": lambda a: f"quiet {a.conn}", "closed": lambda a: f"closed {a.conn}", "exit": lambda a: f"exit {a.status}",
+    "not-ready": lambda a: "not-ready", "refused": lambda a: f"refused {a.conn}", "timeout": _WITH_DATA, "eof": _WITH_DATA,
+    "noise": _WITH_DATA, "bad-reply": _WITH_DATA, "open": lambda a: f"open {a.conn}", "early-exit": lambda a: f"early-exit {a.status}",
+    "exit-timeout": lambda a: "exit-timeout", "exit-signal": lambda a: f"exit signal {a.name}",
+    "capture-failed": lambda a: f"capture-failed {a.name}", "overflow": lambda a: f"overflow {a.conn}",
+}
+
+
+def render_actual(actual):
+    """The actual transcript's line for an observation (5.1)."""
+    return _ACTUAL_TEXT[actual.kind](actual)
 
 
 # ---- the expected JSON body ---------------------------------------------------------------------------------------------------
@@ -447,6 +480,15 @@ def _count(node):
         return 1
     multiplier = node.count if isinstance(node, TRepeat) else 1
     return multiplier * sum(_count(n) for n in _children(node))
+
+
+def slot_sizes(entries):
+    """How many consecutive expanded entries each slot holds: one for an ordered entry, the whole run for an unordered group."""
+    sizes = []
+    for key, run in itertools.groupby(entries, key=lambda e: e.group):
+        n = sum(1 for _ in run)
+        sizes.extend([1] * n if key is None else [n])
+    return sizes
 
 
 def expand(transcript):
