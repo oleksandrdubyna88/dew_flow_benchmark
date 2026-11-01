@@ -221,3 +221,13 @@ test('The_bench_branch_decodes_a_utf16_file_and_scans_other_binaries_as_latin1_w
   assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.commit, f.path]), [[sha, 'notes.md']]);
   assert.equal(result.checks.length, 2, 'only the leak and the secret scans');
 });
+
+test('A_bench_body_runs_only_the_leak_and_secret_scans_so_its_plan_ids_and_family_names_are_not_refused', () => {
+  const body = 'Bench PR: the E1.S4 story in dew_flow_benchmark, see https://github.com/o/r/pull/3 and Werewolf.\n';
+  assert.equal(checkText({ text: body, label: 'b.md', inputs }).exit, EXIT.REFUSED, 'a task-repository body refuses a bench pointer');
+  const bench = checkText({ text: body, label: 'b.md', inputs, self: true });
+  assert.equal(bench.exit, EXIT.PASS);
+  assert.deepEqual(bench.checks.map(c => c.name), ['leakcheck', 'secrets']);
+  const leaky = checkText({ text: `${body}the widget that frobnicates every sprocket twice before dinner\ntoken ${SECRET}\n`, label: 'b.md', inputs, self: true });
+  assert.deepEqual(leaky.checks.map(c => [c.name, c.findings.length]), [['leakcheck', 1], ['secrets', 1]]);
+});

@@ -124,12 +124,15 @@ export async function checkSelf({ repo, branch, inputs }) {
   return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length });
 }
 
-/** A PR or review body (consult C6b): the leak, secret and placement scans on the text; links are allowed in a body. */
-export function checkText({ text, label, inputs }) {
-  const names = ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
+/**
+ * A PR or review body (consult C6b): the leak, secret and placement scans on the text; links are allowed in a body. With `self`
+ * (a body of the bench's own PR) only the leak and secret scans run, like the bench branch's.
+ */
+export function checkText({ text, label, inputs, self = false }) {
+  const names = self ? SELF_NAMES : ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
   const byName = emptyChecks(names);
   merge(byName, scanText(label, text, inputs, { body: true }), undefined);
-  return verdict(toChecks(names, byName), label);
+  return verdict(toChecks(names, byName), self ? `${label} (bench body)` : label);
 }
 
 const where = f => `${f.path}${f.line === null ? ':' : `:${f.line}`}`;

@@ -2,7 +2,7 @@
 // The pre-push check of the language comparison's task repository (parent §4 step 3), and step 1's remote.
 //
 //   node spikes/lang-bench/push-check.mjs --repo <task repo> --branch <b>     the branch's new commits (git rev-list <b> --not --remotes=origin)
-//   node spikes/lang-bench/push-check.mjs --text <file>                       a PR or review body, with the same scans
+//   node spikes/lang-bench/push-check.mjs --text <file> [--self]              a PR or review body, with the same scans (--self: a body of a bench PR, leak and secret scans only)
 //   node spikes/lang-bench/push-check.mjs --self --branch <b> [--repo <dir>]  the bench's own branch (leak and secret scans only)
 //   node spikes/lang-bench/push-check.mjs --setup-remote --repo <task repo> [--url <u>]
 //
@@ -37,7 +37,8 @@ function parse(argv) {
   }
 }
 
-const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v.text === undefined ? null : 'text', v.self ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
+// --self alone is the bench's branch check; with --text it only narrows the body check to the bench's rules
+const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
 
 async function selfRepo(v) {
   if (v.repo !== undefined) return v.repo;
@@ -61,7 +62,7 @@ async function run(v) {
 async function runChecks(mode, v, inputs) {
   if (mode === 'text') {
     const body = readOrNull(v.text);
-    return body === null ? usage(`${v.text} cannot be read`) : report(checkText({ text: body, label: v.text, inputs }));
+    return body === null ? usage(`${v.text} cannot be read`) : report(checkText({ text: body, label: v.text, inputs, self: v.self === true }));
   }
   const repo = mode === 'self' ? await selfRepo(v) : v.repo;
   if (repo === undefined || v.branch === undefined) return usage(mode === 'self' ? '--self needs --branch (and a git repository)' : '--branch needs --repo');

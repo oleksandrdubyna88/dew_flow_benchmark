@@ -149,3 +149,14 @@ test('A_check_whose_published_plans_cannot_be_read_does_not_run', t => {
   assert.equal(r.status, 3);
   assert.match(r.stdout, /public text todo\/PLAN_lang_comparison_v2\.md cannot be read at origin\/main/);
 });
+
+test('Text_with_self_checks_a_bench_body_by_the_leak_and_secret_scans_only', t => {
+  const body = path.join(ownedFolder(t, 'benchbody'), 'body.md');
+  writeFileSync(body, 'Bench PR for the E1.S4 story in dew_flow_benchmark.\n');
+  const aid = aidFile(t);
+  assert.equal(cli(['--text', body, '--aid', aid]).status, 1, 'without --self the body is a task-repository body');
+  const r = cli(['--text', body, '--self', '--aid', aid]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /bench body/);
+  assert.equal(/family-names/.test(r.stdout), false);
+});
