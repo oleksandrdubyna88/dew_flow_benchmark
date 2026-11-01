@@ -57,9 +57,11 @@ measurement programme, and each one cost a wrong number to learn. The catalogue 
 | `src/Bench.Contracts` | wire shapes, shared by every surface |
 | `src/Bench.Application` | use cases and ports |
 | `src/Bench.Infrastructure` | adapters |
+| `src/Bench.Hosting` | the flag parser, exit codes and shutdown signal the console hosts share — depends on nothing |
 | `src/Bench.Api` | minimal-API group over the same use cases |
 | `hosts/Cli` | `bench` — the first surface, and the one an agent drives |
 | `hosts/Api` | `bench-api` — the read surface. It serves reports and starts nothing |
+| `tools/model-arms` | `model-arms` — a console of its own, not part of the benchmark: the launcher of the owner's part-6 and part-7 experiment (headless Claude Code arms on one frozen plan). Nothing in `src/` or `hosts/` references it. Its first run, from `init` to `chain`, with every refusal quoted, is in [research/module_model_arms.md](research/module_model_arms.md) (*The first run, whole*) |
 | `tests/Bench.Tests` | xUnit v3 on Microsoft Testing Platform, incl. the architecture guard |
 
 The CLI's exit codes are a contract, because its first consumer is an agent: `0` pass · `1` a real
