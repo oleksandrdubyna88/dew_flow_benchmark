@@ -213,5 +213,89 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(unexpected_keys(env_of(ws), dict(os.environ)), [])
 
 
+class StreamTests(unittest.TestCase):
+    """V12 for an olympiad case: standard error is always a file, the 16 MiB cap names what is kept, and truncation is recorded."""
+
+    def test_A_standard_error_over_16_MiB_is_recorded_as_truncated_and_the_report_keeps_only_a_tail(self):
+        result = Workspace(self, "head -c 17000000 /dev/zero >&2\ncat answer.bin\n", FILES).run(case())
+        stderr = result.lifecycle["stderr"]
+        self.assertEqual((result.status, stderr["bytes"], stderr["truncated"]), ("PASS", 17_000_000, True))
+        self.assertLessEqual(len(stderr["tail"]), ex.TAIL_BYTES * 4)
+
+    def test_A_standard_error_under_the_cap_is_not_truncated(self):
+        stderr = Workspace(self, "echo oops >&2\ncat answer.bin\n", FILES).run(case()).lifecycle["stderr"]
+        self.assertEqual((stderr["bytes"], stderr["truncated"], stderr["tail"]), (5, False, "oops\n"))
+
+    def test_The_caps_are_the_ones_of_V12(self):
+        self.assertEqual((ex.CAPTURE_CAP, ex.TEST_CEILING_MS), (16 * 1024 * 1024, 600_000))
+
+    def test_A_registered_limit_above_the_600_s_bound_for_one_test_is_refused_with_exit_4(self):
+        import test_run_samples as cli
+        box = cli.Box(self)
+        box.write(box.root, "limits.json", '{"timeS": 601}')
+        self.assertEqual(box.cli("--limits", os.path.join(box.root, "limits.json"))[0], 4)
+        box.write(box.root, "limits.json", '{"timeS": 600}')
+        self.assertEqual(box.cli("--limits", os.path.join(box.root, "limits.json"))[0], 0)
+
+
+class CommandLineTests(unittest.TestCase):
+    """The options of the execution layer as the command line takes them."""
+
+    def test_The_status_option_needs_the_prefix_a_descriptor_number_and_a_free_one(self):
+        import test_run_samples as cli
+        box = cli.Box(self)
+        for args in (("--launch-status", "7"), ("--launch-status", "x", "--launch-prefix", "[]"), ("--launch-status", "1", "--launch-prefix", "[]"),
+                     ("--launch-status", "-3", "--launch-prefix", "[]")):
+            code, _, err = box.cli(*args)
+            self.assertEqual(code, 4, args)
+            self.assertIn("--launch-status", err)
+
+    def test_The_layer_options_together_give_a_PASS_and_a_result_with_every_new_field(self):
+        import json
+        import test_run_samples as cli
+        box = cli.Box(self)
+        views, cgroups = os.path.join(box.root, "views"), os.path.join(box.root, "cg")
+        os.mkdir(views)
+        os.mkdir(cgroups)
+        for sub in (views, cgroups):
+            os.mkdir(os.path.join(sub, "s03"))
+        for name in ("run.sh", "build.sh", "answer.bin"):
+            with open(os.path.join(box.ws, name), "rb") as src, open(os.path.join(views, "s03", name), "wb") as dst:
+                dst.write(src.read())
+        for name, text in (("memory.peak", "5000"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", "")):
+            with open(os.path.join(cgroups, "s03", name), "w") as f:
+                f.write(text)
+        out_json = os.path.join(box.out, "r.json")
+        code, out, err = box.cli("--launch-prefix", json.dumps(reporting_prefix()), "--launch-status", str(STATUS_FD), "--cgroup-of", os.path.join(cgroups, "{case}"),
+                                 "--case-view", os.path.join(views, "{case}"), "--json", out_json)
+        self.assertEqual(code, 0, err)
+        self.assertIn("  memory: peak 5000 bytes", out)
+        record = cli.read_json(out_json)
+        case_record = record["cases"][0]
+        self.assertIsInstance(case_record["launchMs"], int)
+        self.assertEqual(case_record["lifecycle"]["memory"]["peakBytes"], 5000)
+        self.assertEqual(sorted(case_record["lifecycle"]), ["capture", "fork", "kill", "leftover", "leftoverEvidence", "memory", "signalled", "stderr", "stop"])
+        self.assertEqual((record["launch"], isinstance(record["emptyProgramMs"], int)), ({"failed": False, "stderr": ""}, True))
+
+    def test_An_oom_kill_in_the_cgroup_is_memory_limit_and_exit_1_on_the_command_line(self):
+        import test_run_samples as cli
+        box = cli.Box(self)
+        cg = os.path.join(box.root, "cg")
+        os.makedirs(os.path.join(cg, "s03"))
+        for name, text in (("memory.peak", "9"), ("memory.events", "oom_kill 1\n"), ("cgroup.procs", "")):
+            with open(os.path.join(cg, "s03", name), "w") as f:
+                f.write(text)
+        code, out, _ = box.cli("--cgroup-of", os.path.join(cg, "{case}"))
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL s03 — memory limit", out)
+
+    def test_A_case_view_that_is_missing_is_exit_3_the_environment(self):
+        import test_run_samples as cli
+        box = cli.Box(self)
+        code, _, err = box.cli("--case-view", os.path.join(box.root, "views", "{case}"))
+        self.assertEqual(code, 3)
+        self.assertIn("is not a directory", err)
+
+
 if __name__ == "__main__":
     unittest.main()

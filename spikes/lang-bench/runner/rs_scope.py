@@ -27,7 +27,9 @@ def _reap_launcher(proc):
 
 
 def _done_seeking(found, proc, deadline_ms):
-    return bool(found) or found is None or proc.poll() is not None or ex.now_ms() >= deadline_ms
+    """A candidate showed, the launcher is gone, or the time is up. An unreadable `cgroup.procs` is not an end: without a launch status the
+    layer may not have made the cgroup yet, a moment after the spawn."""
+    return bool(found) or proc.poll() is not None or ex.now_ms() >= deadline_ms
 
 
 class ScopeLifecycle:

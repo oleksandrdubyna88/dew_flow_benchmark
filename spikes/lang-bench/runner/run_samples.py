@@ -39,18 +39,18 @@ import json
 import signal
 import traceback
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Optional
+from typing import Any, Optional
 
 import rs_exec as ex
 import rs_json
 import rs_launch as rl
+import rs_layer as layer
 import rs_olympiad as ro
 import rs_pair
 import rs_report as rp
 import rs_samples as sm
 import rs_scope
 import rs_script
-import rs_status
 import rs_transcript
 import rs_view
 from rs_lex import Problem
@@ -97,13 +97,6 @@ def build_parser():
     return p
 
 
-class RunInfo(NamedTuple):
-    """What the run observed besides the cases: the empty program's time, and whether a launch failed (with its reason and stderr)."""
-    empty_ms: Optional[int] = None
-    launch: dict = rp.NO_LAUNCH
-    reason: str = ""
-
-
 @dataclass
 class Plan:
     kind: str
@@ -125,27 +118,8 @@ def _prefix_of(text):
     return parsed.value if parsed.ok and _is_string_list(parsed.value) else None
 
 
-def _fd_number(text):
-    return int(text) if text.isascii() and text.isdigit() else None
-
-
-def _status_problem(args):
-    """What is wrong with `--launch-status`: it needs the prefix that writes it, and a free descriptor number of 3 or more."""
-    if args.launch_prefix is None:
-        return "--launch-status needs --launch-prefix: the prefix's launcher is what writes the status"
-    number = _fd_number(args.launch_status)
-    return "--launch-status must be a descriptor number" if number is None else rs_status.check_number(number)
-
-
-def _status_problems(args):
-    if args.launch_status is None:
-        return []
-    problem = _status_problem(args)
-    return [problem] if problem else []
-
-
 def _argument_problems(args):
-    problems = _status_problems(args)
+    problems = layer.status_problems(args)
     problems += [] if os.path.isdir(args.samples_dir) else [f"{sm.shown(args.samples_dir)} is not a directory"]
     problems += [] if args.launch_prefix is None or _prefix_of(args.launch_prefix) is not None else ["--launch-prefix must be a JSON array of strings"]
     return problems
@@ -195,13 +169,6 @@ def _pairs_of(args):
     return loaded, problems + more + _empty_selection(args, chosen) + unreadable
 
 
-def _view_problems(args, pairs):
-    """The samples directory and a case view must not contain one another (a held-out run never puts the samples in the box's binds)."""
-    if args.case_view is None:
-        return []
-    return [Problem(sm.shown(args.samples_dir), 0, text) for text in rs_view.overlaps_samples(args.case_view, [p.id for p in pairs], args.samples_dir)]
-
-
 def _limits_of(args):
     return sm.load_limits(args.limits) if args.limits else (sm.Limits(), [])
 
@@ -231,7 +198,7 @@ def make_plan(args):
     kind, failure = _kind_of(args)
     pairs, pair_problems = _pairs_of(args)
     limits, limit_problems = _limits_of(args)
-    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + _view_problems(args, pairs))
+    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + layer.view_problems(args, pairs))
     if failure:
         return failure
     return Failure(EXIT_CONFIG, found) if found else Plan(kind, args, pairs, limits, _launch_prefix(args))
@@ -277,31 +244,17 @@ def _run_one(pair, config):
     return result
 
 
-def _config_of(plan, scratch):
-    limit, basis = _limit_and_basis(plan)
-    args = plan.args
-    return ex.Config(os.path.abspath(args.workspace), scratch, plan.prefix, limit, basis, status_fd=_status_fd(args), cgroup=args.cgroup_of,
-                     case_view=args.case_view, out_dir=os.path.dirname(os.path.abspath(args.json_out)) if args.json_out else None)
-
-
-def _status_fd(args):
-    return None if args.launch_status is None else _fd_number(args.launch_status)
-
-
-def _launch_failure(failed):
-    return RunInfo(None, {"failed": True, "stderr": failed.stderr}, failed.reason)
-
-
 def _run_cases(plan, scratch):
     """(results, RunInfo): the empty program is timed first; a launch that fails stops the run (the cases done so far are kept)."""
-    config, results, empty = _config_of(plan, scratch), [], None
+    limit, basis = _limit_and_basis(plan)
+    config, results, empty = layer.config_of(plan, scratch, limit, basis), [], None
     try:
         empty = rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr"))
         for pair in plan.pairs:
             results.append(_run_one(pair, config))
     except rl.LaunchFailed as failed:
-        return results, _launch_failure(failed)
-    return results, RunInfo(empty)
+        return results, layer.launch_failure(failed)
+    return results, layer.RunInfo(empty)
 
 
 def _build_outcome(done):
@@ -318,7 +271,7 @@ def _execute(plan, scratch):
     record = {"ran": True, "status": done.status, "wallMs": done.wall_ms, "timedOut": done.timed_out}
     if done.status == 0 and not done.timed_out:
         return (record, *_run_cases(plan, scratch))
-    return record, _build_failed(plan, done), RunInfo()
+    return record, _build_failed(plan, done), layer.RunInfo()
 
 
 def _write_json(plan, build, results, info):
@@ -346,11 +299,6 @@ def _exit_code(results):
     return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
 
 
-def _launch_lines(info):
-    """The exit 3 text of a failed launch: the reason, then the bounded tail of the prefix's standard error."""
-    return [f"launch failed: {info.reason}"] + ["  " + line for line in info.launch["stderr"].splitlines()]
-
-
 def _run_olympiad(plan):
     if not os.path.isdir(plan.args.workspace):
         return Failure(EXIT_ENVIRONMENT, [f"workspace {sm.shown(plan.args.workspace)} is not a directory"])
@@ -360,7 +308,7 @@ def _run_olympiad(plan):
         return Failure(EXIT_ENVIRONMENT, [f"cannot start a program: {type(e).__name__}: {e}"])
     if info.launch["failed"]:
         _write_json(plan, build, results, info)
-        return Failure(EXIT_ENVIRONMENT, _launch_lines(info))
+        return Failure(EXIT_ENVIRONMENT, layer.launch_lines(info))
     _report(plan, build, results, info)
     return _exit_code(results)
 
