@@ -68,6 +68,8 @@ DECIMAL = re.compile(r"-?[0-9]+(\.[0-9]+)?\Z")
 COUNT = re.compile(r"\*([0-9]+)(?= |\Z)")
 CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
 VARIABLE_IN_NAME = re.compile(r"(\$\{[a-z][a-z0-9_]*\})")
+TS_SPEC = re.compile(r"ts(?:\.([0-9]))?(?:~(.*))?\Z")
+CAPTURE_TS = re.compile(r"ts(?:\.[0-9])?\Z")
 FIELD_KINDS = ("int", "uint", "hex", "uuid", "token", "ts")
 SIMPLE_ESCAPES = {"\\": b"\\", '"': b'"', "$": b"$", "r": b"\r", "n": b"\n", "t": b"\t", "0": b"\0"}
 HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
@@ -336,7 +338,8 @@ def parse_field(body):
 
 
 def _field_of(words, bind):
-    build = _FIELD_BUILDERS.get("ts~" if words[0].startswith("ts~") else words[0])
+    key = "ts+" if words[0][:3] in ("ts~", "ts.") else words[0]
+    build = _FIELD_BUILDERS.get(key)
     return build(words, bind) if build else None
 
 
@@ -344,9 +347,25 @@ def _plain_field(words, bind):
     return Field(words[0], (), bind) if len(words) == 1 else None
 
 
-def _window_field(words, bind):
-    window = duration_ms(words[0][3:])
-    return Field("ts~", (window,), bind) if len(words) == 1 and window is not None else None
+_TS_KINDS = {(False, False): "ts", (False, True): "ts~", (True, False): "ts.", (True, True): "ts.~"}
+
+
+def _ts_valid(m, words):
+    return m is not None and len(words) == 1 and (m.group(2) is None or duration_ms(m.group(2)) is not None)
+
+
+def _ts_field(words, bind):
+    m = TS_SPEC.match(words[0])
+    if not _ts_valid(m, words):
+        return None
+    digits, text = m.group(1), m.group(2)
+    return Field(_TS_KINDS[(digits is not None, text is not None)], _ts_args(digits, text), bind)
+
+
+def _ts_args(digits, text):
+    """The digit count and the window in ms, whichever the field has, in that order."""
+    found = [int(digits)] if digits is not None else []
+    return tuple(found + ([duration_ms(text)] if text is not None else []))
 
 
 def _num_field(words, bind):
@@ -355,7 +374,7 @@ def _num_field(words, bind):
     return Field("num", (Decimal(words[1]), Decimal(words[2])), bind)
 
 
-_FIELD_BUILDERS = {**{k: _plain_field for k in FIELD_KINDS}, "ts~": _window_field, "num": _num_field}
+_FIELD_BUILDERS = {**{k: _plain_field for k in FIELD_KINDS}, "ts+": _ts_field, "num": _num_field}
 
 
 def take_str_expr(cursor):

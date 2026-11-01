@@ -80,6 +80,48 @@ class EntryTests(unittest.TestCase):
         self.assertIn("ghost", result.detail)
 
 
+class JsonRecvTests(unittest.TestCase):
+    """`recv <conn> json <JSON>`: the reply's bytes, read as UTF-8, are one JSON value that matches the expected one (5.2)."""
+
+    def test_A_reply_that_is_the_expected_value_matches_whatever_its_whitespace_and_its_final_line_feed(self):
+        expected = entry('recv c json {"a": [1, 2], "b": null}')
+        for data in (b'{"b":null,"a":[1,2]}\n', b'  {"a" : [1,2.0], "b" : null}\r\n', b'\n{"a":[1,2],"b":null}'):
+            self.assertTrue(rm.match_entry(expected, recv("c", data)).ok, data)
+
+    def test_A_byte_compare_would_refuse_the_same_reply_and_that_is_the_point(self):
+        self.assertFalse(rm.match_entry(entry('recv c "{\\"a\\":1}\\n"'), recv("c", b'{ "a": 1 }\n')).ok)
+        self.assertTrue(rm.match_entry(entry('recv c json {"a":1}'), recv("c", b'{ "a": 1 }\n')).ok)
+
+    def test_A_difference_names_the_path_and_both_values(self):
+        result = rm.match_entry(entry('recv c json {"a":{"b":[1,2]}}'), recv("c", b'{"a":{"b":[1,3]}}\n'))
+        self.assertEqual((result.ok, result.part, result.detail), (False, "json $.a.b[1]", "expected 2, actual 3"))
+
+    def test_Exact_decimal_rules_apply_two_is_two_point_zero_and_large_integers_stay_distinct(self):
+        self.assertTrue(rm.match_entry(entry("recv c json [2]"), recv("c", b"[2.0]\n")).ok)
+        self.assertFalse(rm.match_entry(entry("recv c json [9007199254740993]"), recv("c", b"[9007199254740992]\n")).ok)
+
+    def test_Fields_and_variables_work_inside_the_JSON_and_bind(self):
+        result = rm.match_entry(entry('recv c json {"id":"${:uuid=o}","n":"${:int=k}"}'), recv("c", b'{"id":"%s","n":7}\n' % UUID))
+        self.assertEqual({n: b.raw for n, b in result.binds}, {"o": UUID, "k": b"7"})
+
+    def test_A_reply_that_is_not_JSON_is_bad_json_or_bad_utf8_at_its_entry(self):
+        expected = entry('recv c json {"a":1}')
+        for data, kind in ((b"{", "bad-json"), (b'{"a":1,"a":1}', "bad-json"), (b'{"a":NaN}', "bad-json"), (b'{"a":"\xff"}', "bad-utf8"), (b"", "bad-json"), (b'{"a":1} {"a":1}', "bad-json")):
+            result = rm.match_entry(expected, recv("c", data))
+            self.assertEqual((result.ok, result.kind), (False, kind), data)
+
+    def test_Lines_of_standard_output_each_compare_as_their_own_JSON_value(self):
+        text = 'recv stdout json {"n":1}\nrecv stdout json {"n":2}\n'
+        verdict = compare(text, [recv("stdout", b'{"n": 1}\n'), recv("stdout", b'{"n":2}\n')])
+        self.assertTrue(verdict.ok)
+        verdict = compare(text, [recv("stdout", b'{"n": 1}\n'), recv("stdout", b'{"n":3}\n')])
+        self.assertEqual((verdict.reason, verdict.part), ("entry 2 of 2 differs", "json $.n"))
+
+    def test_The_report_line_of_a_JSON_recv_entry_shows_the_JSON(self):
+        import rs_report
+        self.assertEqual(rs_report.expected_text(entry('recv c json {"a": 1}')), 'recv c json {"a": 1}')
+
+
 class ReplyTests(unittest.TestCase):
     def test_A_reply_matches_on_status_and_listed_headers_and_body(self):
         expected = entry('reply a 201\nheader "location" "/orders/7"\nbody json {"id":7}')

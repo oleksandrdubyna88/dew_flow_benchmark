@@ -173,9 +173,8 @@ class NameTests(unittest.TestCase):
 
 
 class StepTests(unittest.TestCase):
-    def test_A_send_goes_to_a_tcp_connection_or_stdin_and_a_request_only_to_an_http_one(self):
-        self.assertEqual(body('send c1 "x"', 'send stdin "x"')[1], [])
-        self.assertEqual(len(body('send h "x"')[1]), 1)
+    def test_A_send_goes_to_a_tcp_or_http_connection_or_stdin_and_a_request_only_to_an_http_one(self):
+        self.assertEqual(body('send c1 "x"', 'send stdin "x"', 'send h "x"')[1], [])
         self.assertEqual(len(body('send stdout "x"')[1]), 1)
         self.assertEqual(len(body('request c1 GET "/"')[1]), 1)
 
@@ -271,6 +270,54 @@ class GroupTests(unittest.TestCase):
 
     def test_Nested_repeats_that_expand_past_the_step_ceiling_are_refused(self):
         self.assertTrue(body("repeat 100000 i", "repeat 100000 j", "sleep 1ms", "end", "end")[1])
+
+
+def ending(*lines, head=HEAD):
+    """A script whose end is the trigger, the wait-exit and `lines` (what stands after the wait-exit)."""
+    return parse(head + "signal TERM\nwait-exit within 5s\n" + "".join(l + "\n" for l in lines))
+
+
+STDOUT_HEAD = 'scenario 2\ndefault within 1s\nstart ready stdout "ok" within 10s\n'
+
+
+class FormatV21Tests(unittest.TestCase):
+    """Statements v2.1 allows: steps after the end, `expect stdout closed`, `send` on an http connection."""
+
+    def test_Reads_and_waits_may_stand_after_wait_exit_where_v2_1_allows_them(self):
+        scenario, problems = ending("recv c1 lines 1", "expect c1 quiet for 10ms", "sleep 5ms", "close c1", head=HEAD)
+        self.assertEqual(problems, [])
+        self.assertEqual([n.op for n in scenario.body][-6:], ["signal", "wait_exit", "recv", "quiet", "sleep", "close"])
+
+    def test_Standard_output_lines_written_when_the_program_stops_are_read_after_the_wait_exit(self):
+        scenario, problems = parse(STDOUT_HEAD + "signal TERM\nwait-exit within 5s\nrecv stdout lines 1\n")
+        self.assertEqual(problems, [])
+        self.assertEqual(scenario.body[-1].op, "recv")
+
+    def test_A_send_after_the_wait_exit_is_refused_because_nothing_more_is_sent_to_the_program(self):
+        for later in ('send c1 "x"', "connect d tcp", 'request h GET "/"', "signal TERM", "shutdown c1"):
+            _, problems = ending(later)
+            self.assertEqual(len(problems), 1, later)
+            self.assertEqual(problems[0].line, 8, later)
+
+    def test_Expect_closed_applies_to_standard_output_as_well_as_to_connections(self):
+        scenario, problems = parse(STDOUT_HEAD + "close stdin\nexpect stdout closed\nwait-exit within 5s\n")
+        self.assertEqual(problems, [])
+        self.assertEqual([(e.kind, e.conn) for e in rs.produced_entries(scenario)], [("ready", ""), ("closed", "stdout"), ("exit", "")])
+
+    def test_Expect_closed_does_not_apply_to_stdin(self):
+        self.assertEqual(len(parse(STDOUT_HEAD + "expect stdin closed\nclose stdin\nwait-exit within 5s\n")[1]), 1)
+
+    def test_Expect_quiet_applies_to_standard_output(self):
+        self.assertEqual(parse(STDOUT_HEAD + "expect stdout quiet for 10ms\nclose stdin\nwait-exit within 5s\n")[1], [])
+
+    def test_A_send_on_an_http_connection_is_a_raw_request_and_its_reply_is_read_by_recv(self):
+        scenario, problems = body('send h "GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n" split 4 pause 1ms', "recv h")
+        self.assertEqual(problems, [])
+        self.assertEqual([(e.kind, e.conn) for e in rs.produced_entries(scenario)], [("ready", ""), ("reply", "h"), ("exit", "")])
+
+    def test_A_send_to_standard_output_and_a_request_on_a_tcp_connection_are_still_refused(self):
+        self.assertEqual(len(body('send stdout "x"')[1]), 1)
+        self.assertEqual(len(body('request c1 GET "/"')[1]), 1)
 
 
 class ProducedEntryTests(unittest.TestCase):

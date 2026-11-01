@@ -7,7 +7,11 @@
       },
       {
         "path": "rs_check.py",
-        "sha256": "141d67abef3a6c312917738b23860de468171d9f83b171d8ce8792a0d59d297f"
+        "sha256": "b77a8ec8e66e137a12cafa7752c358226349c59d8ad39c10edcd29d0f73461aa"
+      },
+      {
+        "path": "rs_end.py",
+        "sha256": "be92c8076a1efe3e030463d986220d02a3485ff2a3a3b09b0689566c6ecc1ff3"
       },
       {
         "path": "rs_exec.py",
@@ -15,7 +19,7 @@
       },
       {
         "path": "rs_fields.py",
-        "sha256": "91c3bafc9e5efbbfe6e502733980b385a9d992e9fa978b008eca668f29705eeb"
+        "sha256": "f4f03938fd1a88474afd5d0db9e672f2bc092794c1d239ba8a52da65dcfa05e1"
       },
       {
         "path": "rs_jmatch.py",
@@ -27,11 +31,11 @@
       },
       {
         "path": "rs_lex.py",
-        "sha256": "5d13f95808e68eb9c3b439006d39afa26d7b6cd5446aa7e8cbc3a06a5e30a5b5"
+        "sha256": "0ac743339bcacc9faff685d4f592a2f61e2287b9d45b5ec13c1fc8ae8807bdbc"
       },
       {
         "path": "rs_match.py",
-        "sha256": "0b335fab28b1c2cd93ec48827095267105bb9f9ebb5ae832f14000afd7b0750f"
+        "sha256": "d02de43b6c79b540f0cb8824a7104bdda8efd6237d72386a81911488dd542e5c"
       },
       {
         "path": "rs_model.py",
@@ -47,7 +51,7 @@
       },
       {
         "path": "rs_report.py",
-        "sha256": "098d78d67239cc0cf308f082efea5da8357fe82cb7acd63c9c9600134bd60939"
+        "sha256": "ea2d8bb6f03c02e72e58de7eb367288aa8656ebabcf08877fc6519f1f986a9bc"
       },
       {
         "path": "rs_samples.py",
@@ -55,18 +59,18 @@
       },
       {
         "path": "rs_script.py",
-        "sha256": "9338587a5c6507aa2d316cf3868d77ed687b6ec5d8f32dcc133ba5952943d2b8"
+        "sha256": "8a2a189f5a5083af9f828446e7281f3b580a96d3b2d7d31a1b8566f3298f388e"
       },
       {
         "path": "rs_transcript.py",
-        "sha256": "eb62c92e2bdf43f51c339e7a7fc630a56073feb6501055f268dfbc832f22f9a6"
+        "sha256": "15fbb2ba7ccac66e5ddd06a77aa70b9a42556ee67d768c0ed04bb6c3c7dd36a8"
       },
       {
         "path": "run_samples.py",
         "sha256": "41310ae49d3882b8caaa0c81371b8f0a73aa4dfeff9fee8574c6f63c93ca0042"
       }
     ],
-    "manifestSha256": "6ce5d65118a3d7fe817273f930b1d2bff68106d57c7fbf75175f55a884d55dfb",
+    "manifestSha256": "247bb8bba92c1093ee0c361b440d23a4ec13d9cf773384eb26eec4a165f03dd0",
     "version": "0.1.0"
   }
 }

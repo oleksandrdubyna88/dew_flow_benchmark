@@ -63,6 +63,37 @@ class FieldTests(unittest.TestCase):
         self.assertEqual(rf.field_text(lex.Field("int", (), (lex.Lit(b"r"), lex.Var("i")))), "${:int=r${i}}")
 
 
+class TimeDigitTests(unittest.TestCase):
+    """`${:ts.<d>}`: a time with exactly d fraction digits, d from 0 to 9; `${:ts.<d>~<window>}` also within the window of the clock."""
+
+    def accepts(self, field_text, run):
+        field = parts(field_text)[0]
+        return rf.field_accepts(field, run, CLOCK)
+
+    def test_A_time_with_exactly_d_fraction_digits_matches_and_every_other_count_does_not(self):
+        times = {0: b"2026-01-02T03:04:05Z", 1: b"2026-01-02T03:04:05.1Z", 3: b"2026-01-02T03:04:05.123Z", 9: b"2026-01-02T03:04:05.123456789Z"}
+        for d in (0, 1, 3, 9):
+            for have, run in times.items():
+                self.assertEqual(self.accepts("${:ts.%d}" % d, run), d == have, (d, have))
+
+    def test_Ts_zero_means_no_fraction_and_no_dot(self):
+        self.assertFalse(self.accepts("${:ts.0}", b"2026-01-02T03:04:05.Z"))
+        self.assertFalse(self.accepts("${:ts.3}", b"2026-01-02T03:04:05.Z"))
+
+    def test_The_digit_count_field_still_needs_a_real_time(self):
+        self.assertFalse(self.accepts("${:ts.3}", b"2026-02-30T03:04:05.123Z"))
+
+    def test_The_digit_count_and_the_window_apply_together(self):
+        self.assertTrue(self.accepts("${:ts.3~10s}", b"2026-01-02T03:04:10.000Z"))
+        self.assertFalse(self.accepts("${:ts.3~10s}", b"2026-01-02T03:04:10Z"), "wrong digit count")
+        self.assertFalse(self.accepts("${:ts.3~10s}", b"2026-01-02T03:05:10.000Z"), "outside the window")
+
+    def test_The_digit_count_fields_match_inside_a_string_with_a_fixed_length_so_the_shortest_run_is_the_only_run(self):
+        self.assertTrue(match("at ${:ts.3}!", b"at 2026-01-02T03:04:05.123Z!").ok)
+        self.assertFalse(match("at ${:ts.3}!", b"at 2026-01-02T03:04:05.12Z!").ok)
+        self.assertEqual(rf.field_text(parts("${:ts.3~10s=w}")[0]), "${:ts.3~10000ms=w}")
+
+
 class MatchTests(unittest.TestCase):
     def test_A_literal_string_matches_only_the_same_bytes_and_names_the_first_difference(self):
         self.assertTrue(match("+OK\\r\\n", b"+OK\r\n").ok)

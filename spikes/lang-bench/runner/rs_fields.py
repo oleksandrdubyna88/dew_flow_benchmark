@@ -27,9 +27,9 @@ FIELD_PATTERNS = {
     "ts": rb"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z",
     "num": rb"-?[0-9]+(\.[0-9]+)?",
 }
-FIELD_PATTERNS["ts~"] = FIELD_PATTERNS["ts"]
 FIELD_RX = {kind: re.compile(pattern) for kind, pattern in FIELD_PATTERNS.items()}
-FIXED_LENGTH = {"uuid": (36, 36), "ts": (20, 30), "ts~": (20, 30)}
+BASE_KIND = {"ts~": "ts", "ts.": "ts", "ts.~": "ts"}
+TS_LENGTH = (20, 30)
 TS_PARTS = re.compile(rb"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?Z\Z")
 
 
@@ -63,11 +63,6 @@ def _ts_numbers(m):
     return (*numbers, micro)
 
 
-def _within_window(run, window_ms, clock):
-    ts = parse_ts(run)
-    return ts is not None and abs(ts - clock) <= timedelta(milliseconds=window_ms)
-
-
 def fraction_of(text):
     """An exact Fraction of a decimal text or Decimal, or None when its exponent is too large to do exact arithmetic with."""
     exponent = text.as_tuple().exponent if hasattr(text, "as_tuple") else 0
@@ -84,25 +79,66 @@ def _numeric_ok(field, run, clock):
     return within_tolerance(run.decode("ascii"), field.args[0], field.args[1])
 
 
-_EXTRA_CHECKS = {
-    "ts": lambda field, run, clock: parse_ts(run) is not None,
-    "ts~": lambda field, run, clock: _within_window(run, field.args[0], clock),
-    "num": _numeric_ok,
-}
+def base_kind(field):
+    """The kind whose pattern a field uses: `ts.<d>` and the windowed times are times."""
+    return BASE_KIND.get(field.kind, field.kind)
+
+
+def ts_digits(field):
+    """The exact fraction digit count of a `ts.<d>` field (0 to 9), or None for a time of any count."""
+    return field.args[0] if field.kind in ("ts.", "ts.~") else None
+
+
+def ts_window(field):
+    """The window in ms of a windowed time field, or None."""
+    index = {"ts~": 0, "ts.~": 1}.get(field.kind)
+    return None if index is None else field.args[index]
+
+
+def _digits_ok(field, run):
+    digits = ts_digits(field)
+    return digits is None or len(run) == 20 + (digits + 1 if digits else 0)
+
+
+def _ts_ok(field, run, clock):
+    window = ts_window(field)
+    ts = parse_ts(run)
+    return ts is not None and _digits_ok(field, run) and (window is None or abs(ts - clock) <= timedelta(milliseconds=window))
+
+
+_EXTRA_CHECKS = {"ts": _ts_ok, "num": _numeric_ok}
 
 
 def field_accepts(field, run, clock):
-    """Does `run` (bytes) match the field: its pattern in full, and for `ts`, `ts~` and `num` a real time, the window, the tolerance."""
-    if FIELD_RX[field.kind].fullmatch(run) is None:
+    """Does `run` (bytes) match the field: its pattern in full, and for a time a real one with its digit count and window, for `num` the tolerance."""
+    if FIELD_RX[base_kind(field)].fullmatch(run) is None:
         return False
-    return _EXTRA_CHECKS.get(field.kind, lambda *_: True)(field, run, clock)
+    return _EXTRA_CHECKS.get(base_kind(field), lambda *_: True)(field, run, clock)
+
+
+def length_bounds(field, room):
+    """The fewest and most bytes a field can match: fixed for a uuid and for a time with a digit count, `room` at most otherwise."""
+    if field.kind == "uuid":
+        return 36, 36
+    return _time_bounds(field) if base_kind(field) == "ts" else (1, room)
+
+
+def _time_bounds(field):
+    digits = ts_digits(field)
+    exact = 20 + (digits + 1 if digits else 0)
+    return TS_LENGTH if digits is None else (exact, exact)
+
+
+def _field_args(field):
+    digit = "" if ts_digits(field) is None else f".{ts_digits(field)}"
+    window = "" if ts_window(field) is None else f"~{ts_window(field)}ms"
+    return {"ts": lambda: digit + window, "num": lambda: f" {field.args[0]} {field.args[1]}"}.get(base_kind(field), lambda: "")()
 
 
 def field_text(field):
-    """A field as it is written in a transcript: `${:uint}`, `${:ts~10s}`, `${:num 1.5 0.25=x}`."""
-    args = {"ts~": lambda a: f"~{a[0]}ms", "num": lambda a: f" {a[0]} {a[1]}"}.get(field.kind, lambda a: "")(field.args)
+    """A field as it is written in a transcript: `${:uint}`, `${:ts.3~10000ms}`, `${:num 1.5 0.25=x}`."""
     bind = "=" + "".join(p.data.decode("ascii") if isinstance(p, Lit) else "${" + p.name + "}" for p in field.bind) if field.bind else ""
-    return "${:" + field.kind.rstrip("~") + args + bind + "}"
+    return "${:" + base_kind(field) + _field_args(field) + bind + "}"
 
 
 # ---- variables ------------------------------------------------------------------------------------------------------------------
@@ -238,12 +274,12 @@ class _Search:
         return [(bind_name(field.bind, self.variables), Bound(run))] if field.bind else []
 
     def _reach(self, field, pos):
-        m = FIELD_RX[field.kind].match(self.data, pos)
+        m = FIELD_RX[base_kind(field)].match(self.data, pos)
         return 0 if m is None else m.end() - pos
 
     def _ends(self, i, pos, field):
         """The candidate end positions of a field starting at `pos`, shortest first."""
-        low, high = FIXED_LENGTH.get(field.kind, (1, len(self.data) - pos))
+        low, high = length_bounds(field, len(self.data) - pos)
         return self._ends_before(self.parts[i + 1] if i + 1 < len(self.parts) else None, pos, low, high)
 
     def _ends_before(self, nxt, pos, low, high):

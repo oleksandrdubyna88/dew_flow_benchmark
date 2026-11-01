@@ -69,7 +69,18 @@ def _m_exit(exp, act, variables, clock):
     return OK if act.status == exp.status else _fail("", f"expected exit {exp.status}, actual {act.status}")
 
 
+def _json_result(found, label):
+    """A Result from a JSON body comparison: the path of the first difference goes in `part` after `label`."""
+    if found.ok:
+        return Result(True, binds=found.binds)
+    if found.diff is None:
+        return _fail(label, found.message, found.kind)
+    return _fail(f"{label} {found.diff.path}", f"expected {found.diff.expected}, actual {found.diff.actual}")
+
+
 def _m_recv(exp, act, variables, clock):
+    if exp.body is not None:
+        return _json_result(rs_jmatch.match_json_body(exp.body[1], act.data, variables, clock), "json")
     return _bytes_result(exp.expr, act.data, variables, clock)
 
 
@@ -120,12 +131,7 @@ def _body_str(exp, act, variables, clock):
 
 
 def _body_json(exp, act, variables, clock):
-    found = rs_jmatch.match_json_body(exp.body[1], act.body, variables, clock)
-    if found.ok:
-        return Result(True, binds=found.binds)
-    if found.diff is None:
-        return _fail("body", found.message, found.kind)
-    return _fail(f"body {found.diff.path}", f"expected {found.diff.expected}, actual {found.diff.actual}")
+    return _json_result(rs_jmatch.match_json_body(exp.body[1], act.body, variables, clock), "body")
 
 
 _BODIES = {"empty": _body_empty, "str": _body_str, "json": _body_json}

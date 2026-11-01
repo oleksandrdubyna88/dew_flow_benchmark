@@ -3,6 +3,7 @@ statement) and the entries a script produces (FORMAT v2 5.1), for the one-to-one
 import re
 
 import rs_lex as lex
+from rs_end import check_end
 from rs_lex import Problem
 from rs_model import BUILT_IN_CONNECTIONS, MAX_EXPANDED_STEPS, Produced, Repeat, Step, Together
 
@@ -51,13 +52,7 @@ class _Checker:
             if setup.kind == "file":
                 self.bind(setup.name, "file", setup.line)
         self.nodes(self.s.body)
-        self.ending()
-        return self.problems
-
-    def ending(self):
-        last = self.s.body[-1] if self.s.body else None
-        if not (isinstance(last, Step) and last.op == "wait_exit"):
-            self.problem(self.s.start.line, "the last statement of a scenario is wait-exit")
+        return self.problems + check_end(self.s)
 
     def use(self, expr, line):
         for name in lex.vars_of(expr):
@@ -105,7 +100,7 @@ def _c_connect(c, step):
 
 
 def _c_send(c, step):
-    if c.kind_of(step, ("tcp", "stdin"), "send") is None:
+    if c.kind_of(step, ("tcp", "http", "stdin"), "send") is None:
         return
     c.use(step.args["data"], step.line)
     _check_offsets(c, step)
@@ -171,7 +166,7 @@ def _c_quiet(c, step):
 
 
 def _c_closed(c, step):
-    c.kind_of(step, ("tcp", "http"), "expect closed")
+    c.kind_of(step, ("tcp", "http", "stdout"), "expect closed")
 
 
 def _c_close(c, step):

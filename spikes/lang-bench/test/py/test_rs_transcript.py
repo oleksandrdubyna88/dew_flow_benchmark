@@ -238,6 +238,56 @@ class CorrespondenceTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
 
 
+class FormatV21Tests(unittest.TestCase):
+    def test_A_JSON_recv_entry_holds_one_expected_JSON_value_with_its_text(self):
+        entry = rt.expand(ok('transcript 2\nrecv c json {"a": [1, 2.0], "t": "${:token=k}"}\n'))[0]
+        self.assertEqual((entry.kind, entry.conn, entry.body[0], entry.expr), ("recv", "c", "json", None))
+        self.assertEqual(entry.body[2], '{"a": [1, 2.0], "t": "${:token=k}"}')
+
+    def test_A_JSON_recv_entry_must_hold_usable_JSON(self):
+        for text in ("recv c json", "recv c json {nope}", 'recv c json {"a":1,"a":2}', "recv c json NaN", 'recv c json {"$unordered":1}', 'recv c json {"a":"${:float}"}'):
+            self.assertEqual(len(parse("transcript 2\n" + text + "\n")[1]), 1, text)
+
+    def test_A_JSON_recv_entry_binds_and_uses_names_like_a_JSON_body(self):
+        self.assertEqual(len(parse('transcript 2\nrecv c json {"a":"${:int=n}"}\nrecv c json {"a":"${:int=n}"}\n')[1]), 1)
+        scenario, _ = rs.parse_script(b'scenario 2\ndefault within 1s\nstart ready port within 1s\nconnect c tcp\nrecv c lines 1\nsignal TERM\nwait-exit within 5s\n', "t.in")
+        transcript = ok('transcript 2\nready\nrecv c json {"a":"${:int=n}"}\nexit 0\ncheck equal n 1\n')
+        self.assertEqual(rp.validate_pair(scenario, transcript), [])
+        transcript = ok('transcript 2\nready\nrecv c json {"a":"${ghost}"}\nexit 0\n')
+        self.assertTrue(any("ghost" in p.message for p in rp.validate_pair(scenario, transcript)))
+
+    def test_A_time_field_with_a_digit_count_parses_with_and_without_a_window(self):
+        cases = {"${:ts.0}": ("ts.", (0,)), "${:ts.3}": ("ts.", (3,)), "${:ts.9}": ("ts.", (9,)),
+                 "${:ts.3~10s}": ("ts.~", (3, 10_000)), "${:ts~10s}": ("ts~", (10_000,)), "${:ts}": ("ts", ())}
+        for text, (kind, args) in cases.items():
+            entry = rt.expand(ok(f'transcript 2\nrecv c "{text}"\n'))[0]
+            field = entry.expr.items[0].parts[0]
+            self.assertEqual((field.kind, field.args), (kind, args), text)
+
+    def test_A_time_field_with_a_bad_digit_count_is_a_problem(self):
+        for text in ("${:ts.}", "${:ts.10}", "${:ts.x}", "${:ts.3~}", "${:ts.3~601s}", "${:ts.-1}", "${:ts~10s.3}"):
+            self.assertEqual(len(parse(f'transcript 2\nrecv c "{text}"\n')[1]), 1, text)
+
+    def test_A_time_field_may_bind_and_a_capture_may_name_a_digit_count_type(self):
+        self.assertEqual(parse('transcript 2\nrecv c "${:ts.3=when}"\n')[1], [])
+        script = lambda t: rs.parse_script(f'scenario 2\ndefault within 1s\nstart ready port within 1s\nconnect h http\nrequest h GET "/"\nrecv h capture a json $.t as {t}\nsignal TERM\nwait-exit within 5s\n'.encode(), "t.in")[1]
+        self.assertEqual(script("ts.3"), [])
+        self.assertEqual(script("ts"), [])
+        self.assertEqual(len(script("ts.12")), 1)
+
+    def test_Check_equal_takes_a_string_and_keeps_its_bytes(self):
+        checks = rt.checks_of(ok('transcript 2\nrecv c "${:token=a}"\ncheck equal a "ab\\r\\xff"\n'))
+        self.assertEqual((checks[0].op, checks[0].names, checks[0].other, checks[0].literal), ("equal", ("a",), None, b"ab\r\xff"))
+
+    def test_A_check_string_is_literal_text_only(self):
+        for text in ('check equal a "${b}"', 'check equal a "${:int}"', 'check equal a "x" "y" extra', "check equal a \"unclosed"):
+            self.assertTrue(parse('transcript 2\nrecv c "${:token=a}"\n' + text + "\n")[1], text)
+
+    def test_Adjacent_strings_of_a_check_are_joined_like_any_string_expression(self):
+        checks = rt.checks_of(ok('transcript 2\nrecv c "${:token=a}"\ncheck equal a "ab" "c"*2\n'))
+        self.assertEqual(checks[0].literal, b"abcc")
+
+
 class CanonicalTests(unittest.TestCase):
     def test_Strings_are_written_canonically_printable_ASCII_as_is_and_the_rest_escaped(self):
         self.assertEqual(rt.canonical(b'ab "q" \\ \r\n\t\0 \xff\x01'), '"ab \\"q\\" \\\\ \\r\\n\\t\\0 \\xff\\x01"')

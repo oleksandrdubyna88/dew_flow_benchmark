@@ -71,9 +71,13 @@ def expr_text(expr):
     return " ".join(_item_text(i) for i in expr.items)
 
 
+def _recv_text(entry):
+    return f"recv {entry.conn} json {entry.body[2]}" if entry.body is not None else f"recv {entry.conn} {expr_text(entry.expr)}"
+
+
 _EXPECTED_TEXT = {
     "ready": lambda e: "ready", "quiet": lambda e: f"quiet {e.conn}", "closed": lambda e: f"closed {e.conn}", "exit": lambda e: f"exit {e.status}",
-    "recv": lambda e: f"recv {e.conn} {expr_text(e.expr)}", "reply": lambda e: f"reply {e.conn} {e.status}",
+    "recv": _recv_text, "reply": lambda e: f"reply {e.conn} {e.status}",
 }
 
 

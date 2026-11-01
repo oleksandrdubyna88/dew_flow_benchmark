@@ -57,6 +57,7 @@ class Check:
     op: str
     names: tuple
     other: Optional[str] = None
+    literal: Optional[bytes] = None
 
 
 @dataclass(frozen=True)
@@ -207,10 +208,25 @@ def _t_ready(cur, parser):
     return _entry("ready", "", cur)
 
 
+def _is_json_word(tok):
+    return tok is not None and tok.kind == "word" and tok.text == "json"
+
+
+def _recv_json(cur, conn):
+    body = _json_expected(cur)
+    return None if body is None else _entry("recv", conn, cur, body=body)
+
+
+def _recv_bytes(cur, conn):
+    expr = take_str_expr(cur)
+    return None if expr is None else _entry("recv", conn, cur, expr=expr)
+
+
 def _t_recv(cur, parser):
     conn = take_entry_conn(cur)
-    expr = None if conn is None else take_str_expr(cur)
-    return None if expr is None else _entry("recv", conn, cur, expr=expr)
+    if conn is None:
+        return None
+    return (_recv_json if _is_json_word(cur.peek()) else _recv_bytes)(cur, conn)
 
 
 def _t_conn_only(kind):
@@ -306,13 +322,45 @@ def _check_distinct(cur):
         if name is None:
             return None
         names.append(name)
-    return (tuple(names), None) if names else cur.fail("check distinct needs at least one name")
+    return (tuple(names), None, None) if names else cur.fail("check distinct needs at least one name")
+
+
+def _only_literals(expr):
+    return all(isinstance(p, lex.Lit) for item in expr.items for p in item.parts)
+
+
+def _literal_bytes(cur):
+    """The bytes of a string expression made of literal text only (no variable, no field), or None after a problem."""
+    expr = take_str_expr(cur)
+    if expr is None:
+        return None
+    if not _only_literals(expr):
+        return cur.fail("a check compares with literal text: no variable or field inside the string")
+    return _joined(expr)
+
+
+def _joined(expr):
+    return b"".join(b"".join(p.data for p in item.parts) * item.count for item in expr.items)
+
+
+_OPERAND = re.compile(r"-?[0-9]+(\.[0-9]+)?\Z|[a-z][a-z0-9_]*\Z")
 
 
 def _check_equal(cur):
     name = _name_token(cur, NAME, "a bound name")
-    other = None if name is None else _name_token(cur, re.compile(r"-?[0-9]+(\.[0-9]+)?\Z|[a-z][a-z0-9_]*\Z"), "a decimal or a bound name")
-    return None if other is None else ((name,), other)
+    if name is None:
+        return None
+    return _equal_to_string(cur, name) if cur.peek_kind() == "str" else _equal_to_operand(cur, name)
+
+
+def _equal_to_string(cur, name):
+    literal = _literal_bytes(cur)
+    return None if literal is None else ((name,), None, literal)
+
+
+def _equal_to_operand(cur, name):
+    other = _name_token(cur, _OPERAND, "a decimal, a bound name or a string")
+    return None if other is None else ((name,), other, None)
 
 
 _CHECKS = {"distinct": _check_distinct, "equal": _check_equal}

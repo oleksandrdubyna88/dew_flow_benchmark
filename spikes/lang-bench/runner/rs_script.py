@@ -166,12 +166,19 @@ def read_mode(cur):
     return None if args is None else (tok.text, *args)
 
 
+def take_capture_type(cur):
+    """A type of 5.3 for `capture ... as`: int, uint, hex, uuid, token, ts, or ts.<d> (no window, tolerance or binding)."""
+    tok = cur.take()
+    known = tok is not None and (tok.text in CAPTURE_TYPES or bool(lex.CAPTURE_TS.match(tok.text)))
+    return tok.text if known else cur.fail("a capture type (int, uint, hex, uuid, token, ts, ts.<d>) is expected")
+
+
 def _optional_as(cur):
     nxt = cur.peek()
     if nxt is None or nxt.text != "as":
         return ""
     cur.take()
-    return take_choice(CAPTURE_TYPES)(cur)
+    return take_capture_type(cur)
 
 
 def _capture_head(cur):
