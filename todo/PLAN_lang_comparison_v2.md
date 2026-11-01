@@ -1100,6 +1100,9 @@ Cornerstones: 3 of 3 — E1.S2, E2.S2, E3.S2
 
 ### E1 — The task repository: the format document and its v2, the runner and the execution layer, specs gated and frozen after a pre-freeze execution gate, workspaces with the runner, toolchains, caches, process templates (§14 step 1 · 12 stories)
 
+- **Stories:** [PLAN_lang_comparison_v2_E1.md](PLAN_lang_comparison_v2_E1.md) — written 2026-10-31 when the epic started (an
+  epic's stories document, not a plan change); cornerstone E1.S2 (`model: fable`), the ledger unchanged; its open points
+  (§9 there) are listed, not decided.
 - **Goal:** ten specs written by the team lead, gated and frozen; ten workspaces per stack an agent can start in, identical
   across stacks but for the stack, on pinned toolchains and offline caches; the process arm's run-base machinery; in a
   public repository that leaks nothing.
