@@ -93,7 +93,7 @@ function contentsOfSdk(stacks, dir) {
 
 async function buildTypescript({ stacks, io, staging, work, storeRoot, step }) {
   const nodeDir = path.join(storeRoot, stacks.directories.node);
-  if (!existsSync(path.join(nodeDir, 'bin', 'node'))) return fail(`TypeScript is installed with the pinned Node, which is not in the store yet: install ${stacks.directories.node} first`);
+  if (!existsSync(path.join(nodeDir, 'bin', 'node'))) return fail(`TypeScript is installed with the pinned Node, which is not in the store yet (${stacks.directories.node}): install 'node' first (install-toolchains.mjs --only node)`);
   step(`installing typescript@${stacks.pins.typescript} with the pinned Node and npm`);
   const ran = await io.runNpmInstall({ nodeDir, prefix: staging, spec: `typescript@${stacks.pins.typescript}`, workDir: work });
   if (!ran.ok) return ran;

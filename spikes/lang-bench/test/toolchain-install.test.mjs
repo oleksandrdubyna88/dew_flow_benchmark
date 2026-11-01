@@ -166,6 +166,7 @@ test('TypeScript_is_installed_by_the_pinned_node_and_the_integrity_in_the_lock_i
   const noNode = await r.run('typescript');
   assert.equal(noNode.ok, false, 'TypeScript is installed with the pinned Node, which must be in the store first');
   assert.match(noNode.reason, /node-v26\.13\.0-linux-x64/);
+  assert.ok(noNode.reason.includes("install 'node' first (install-toolchains.mjs --only node)"), `names the CLI option: ${noNode.reason}`);
   assert.deepEqual(r.calls.npm, []);
   const node = await r.run('node');
   assert.equal(node.ok, true, JSON.stringify(node));
