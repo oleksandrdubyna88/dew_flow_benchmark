@@ -45,7 +45,7 @@ class RefusedTests(unittest.TestCase):
         for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
             with open(os.path.join(cg, name), "w") as f:
                 f.write(text)
-        self.assertEqual(box.cli("--cgroup-of", cg)[0], 0)
+        self.assertEqual(box.cli("--cgroup-of", cg, fake_cgroup2=True)[0], 0)
 
     def test_With_more_than_one_case_a_template_without_case_is_exit_4_for_each_of_the_three_flags(self):
         box = Box(self, pairs={**PAIRS})
@@ -116,7 +116,7 @@ class OwnershipTests(unittest.TestCase):
         for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", f"{foreign.pid}\n"), ("cgroup.controllers", "")):
             with open(os.path.join(cg, name), "w") as f:
                 f.write(text)
-        code, out, err = box.cli("--cgroup-of", cg)
+        code, out, err = box.cli("--cgroup-of", cg, fake_cgroup2=True)
         self.assertEqual(code, 3, err)
         self.assertIn("already holds a process", err)
         self.assertFalse(os.path.exists(os.path.join(box.ws, "started.marker")))

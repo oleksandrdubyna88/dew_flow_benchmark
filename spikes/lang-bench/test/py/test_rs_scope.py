@@ -1,6 +1,8 @@
 """A case whose program runs in a cgroup the layer made (E1.S8a part ii-a; B1, B4): the memory read, the leftover evidence, the program's pid,
 and the kill through `cgroup.kill`, always. The real-scope tests need `systemd-run --user --scope` and bwrap and skip with their reason without
 them (they fail under BENCH_REQUIRE_SANDBOX=1)."""
+import contextlib
+import io
 import json
 import os
 import signal
@@ -311,7 +313,7 @@ class SettleOrderTests(unittest.TestCase):
         ws = Workspace(self, f"exec sleep {seconds}\n")
         cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
         prefix = box_prefix(fake_box(self), cgroup, after_report=f'rm -r "{cgroup}"')
-        with self.assertRaises(rs_scope.CgroupLost) as raised:
+        with self.assertRaises(rs_scope.CgroupLost) as raised, contextlib.redirect_stderr(io.StringIO()):
             ws.run(case(expected=b""), prefix=prefix, status_fd=STATUS_FD, cgroup=cgroup, limit_ms=400)
         self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
         self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
@@ -325,9 +327,10 @@ class SettleOrderTests(unittest.TestCase):
             with open(os.path.join(box.root, f"cg-{case_id}", "cgroup.procs"), "w"):
                 pass
         prefix = box_prefix(fake_box(self), None, after_report=f'rm -r "{box.root}/cg-{{case}}"')  # `{case}` is the prefix's own placeholder
-        code, out, err = box.cli("--launch-prefix", json.dumps(prefix), "--launch-status", str(STATUS_FD), "--cgroup-of", cgroups)
+        code, out, err = box.cli("--launch-prefix", json.dumps(prefix), "--launch-status", str(STATUS_FD), "--cgroup-of", cgroups,
+                                fake_cgroup2=True)
         self.assertEqual(code, 3, err)
-        self.assertIn("cgroup", err)
+        self.assertIn("is gone after child-pid", err, "exit 3 for the right reason: not 'not a cgroup2 node'")
         self.assertNotIn("PASS", out)
 
     def test_A_kill_that_cannot_be_written_falls_back_to_the_pids_the_cgroup_lists_and_checks_it_is_empty(self):

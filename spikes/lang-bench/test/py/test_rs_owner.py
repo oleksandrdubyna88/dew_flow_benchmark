@@ -121,8 +121,8 @@ class BoxPathTests(unittest.TestCase):
 
     def lifecycle(self, observed, directory="/sys/fs/cgroup/run/box.scope"):
         life = rs_scope.ScopeLifecycle(directory, box=True)
-        self.box = subprocess.Popen(["sleep", "30"])  # a real process: its pidfd is what the judgement pins first
-        self.addCleanup(lambda: (self.box.kill(), self.box.wait()))
+        box = self.box = subprocess.Popen(["sleep", "30"])  # a real process: its pidfd is what the judgement pins first
+        self.addCleanup(lambda: (box.kill(), box.wait()))  # this box, not the last one a second call put in self.box
         patches = (mock.patch.object(cg, "_proc_cgroup", return_value=f"0::{observed}\n"), mock.patch.object(cg, "is_cgroup2", return_value=True),
                    mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"))
         for patch in patches:

@@ -483,7 +483,7 @@ class CommandLineTests(unittest.TestCase):
             for name, text in (("memory.peak", "0"), ("memory.events", "oom_kill 0\n"), ("cgroup.procs", ""), ("cgroup.controllers", ""), ("cgroup.kill", "")):
                 with open(os.path.join(cg, case_name, name), "w") as f:
                     f.write(text)
-        code, out, err = box.cli("--cgroup-of", os.path.join(cg, "{case}"))
+        code, out, err = box.cli("--cgroup-of", os.path.join(cg, "{case}"), fake_cgroup2=True)
         self.assertEqual(code, 1, err)
         self.assertIn("FAIL s03 — memory limit", out)
 

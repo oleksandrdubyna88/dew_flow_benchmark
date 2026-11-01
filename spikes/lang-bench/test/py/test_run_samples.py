@@ -19,6 +19,10 @@ import rs_samples as sm
 import run_samples as rs
 
 ENTRY = os.path.join(runner_path.RUNNER_DIR, "run_samples.py")
+# The CLI with the cgroup2 checks that a fake folder cannot pass (no mount, no real box) answered "yes": the same as `box_support.fake_cgroup2`.
+FAKE_CGROUP2_ENTRY = (f"import sys; sys.path.insert(0, {runner_path.RUNNER_DIR!r}); import rs_cgroup as cg; cg.is_cgroup2 = lambda d: True; "
+                      "cg.member_of = cg.in_cgroup = lambda pid, d: True; cg.cgroup2_root = lambda d: '/'; "
+                      "import run_samples; sys.exit(run_samples.main(sys.argv[1:]))")
 FORMAT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "runner", "format")
 ANSWER = b"7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1\n"
 OLYMPIAD = "a program that reads standard input once and writes standard output once"
@@ -70,10 +74,11 @@ class Box:
         self.write(self.root, "generous-limits.json", '{"timeS": 60}')
         return (*args, "--limits", os.path.join(self.root, "generous-limits.json"))
 
-    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B"), generous=True):
+    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B"), generous=True, fake_cgroup2=False):
         """Runs the CLI. A generous time limit is given unless the test names one (or passes generous=False to meet the floor): the machine is
-        often loaded and a wall time is not what most of these tests are about."""
-        argv = [sys.executable, *python_flags, entry, *self._limited(args, generous)] + ([self.samples] if samples else [])
+        often loaded and a wall time is not what most of these tests are about. `fake_cgroup2`: fake cgroup folders pass the cgroup2 checks."""
+        start = ("-c", FAKE_CGROUP2_ENTRY) if fake_cgroup2 else (entry,)
+        argv = [sys.executable, *python_flags, *start, *self._limited(args, generous)] + ([self.samples] if samples else [])
         full_env = {"PATH": os.environ["PATH"], "TMPDIR": tempfile.gettempdir(), **(env or {})}
         done = subprocess.run(argv, capture_output=True, cwd=self.ws, env=full_env, timeout=120)
         return done.returncode, done.stdout.decode("utf-8", "backslashreplace"), done.stderr.decode("utf-8", "backslashreplace")

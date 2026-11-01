@@ -110,7 +110,7 @@ class InterruptKeepsItsExitTests(unittest.TestCase):
             shutil.rmtree(cgroup)
             raise KeyboardInterrupt
 
-        with mock.patch.object(ro, "Outcome", interrupt_after_the_scope_went):
+        with mock.patch.object(ro, "Outcome", interrupt_after_the_scope_went), contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(KeyboardInterrupt):
                 ws.run(case(), prefix=box_prefix(fake_box(self), cgroup), status_fd=STATUS_FD, cgroup=cgroup)
 
@@ -145,8 +145,7 @@ class StopSignalTests(unittest.TestCase):
             f"def teardown():\n    open({note!r}, 'a').write('x'); time.sleep(0.3)\n"
             "rl.abandon_active = teardown\n"
             "rs_stop.install_handlers()\n"
-            "print('ready', flush=True)\n"
-            "try:\n    time.sleep(30)\nexcept rs_stop.Interrupted as i:\n    rs_stop.stopped(i)\n"
+            "try:\n    print('ready', flush=True)\n    time.sleep(30)\nexcept rs_stop.Interrupted as i:\n    rs_stop.stopped(i)\n"
         )
         proc = subprocess.Popen([sys.executable, "-I", "-B", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
@@ -225,7 +224,7 @@ class ScopeFallbackTests(unittest.TestCase):
 
     def test_F4_a_cgroup_that_never_existed_is_an_environment_problem_and_not_a_cleanup_failure_and_nothing_is_left(self):
         seconds = "59.%d" % (os.getpid() % 1000 + 1000)
-        with self.assertRaises(rs_scope.CgroupMissing) as raised:
+        with self.assertRaises(rs_scope.CgroupMissing) as raised, contextlib.redirect_stderr(io.StringIO()):
             Workspace(self, f"sleep {seconds} & sleep {seconds}\n").run(case(expected=b""), cgroup="/no/such/cgroup", limit_ms=300)
         self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
         self.assertNotIsInstance(raised.exception, ex.CleanupFailed, "exit 3 (the environment), not exit 5 (the runner failed)")
