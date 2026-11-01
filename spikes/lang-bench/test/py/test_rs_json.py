@@ -52,6 +52,55 @@ class ExactNumberTests(unittest.TestCase):
             self.assertFalse(rj.values_equal(value(left), value(right)), (left, right))
 
 
+A30 = "123456789012345678901234567890"
+B30 = "123456789012345678901234567891"
+
+
+class NoNormalisingTests(unittest.TestCase):
+    """V2 never calls Decimal.normalize() before an equality: it rounds to the context's 28 digits, so two 30-digit numbers that differ in the
+    last digit would be called equal. Checked through every matcher a number reaches."""
+
+    def test_Two_distinct_30_digit_numbers_stay_unequal_in_the_JSON_value_comparison_and_two_and_two_point_zero_stay_equal(self):
+        self.assertEqual(len(A30), 30)
+        self.assertFalse(rj.values_equal(value(A30), value(B30)))
+        self.assertFalse(rj.values_equal(value("[%s]" % A30), value("[%s]" % B30)))
+        self.assertFalse(rj.values_equal(value('{"n":%s.5}' % A30), value('{"n":%s.5}' % B30)))
+        self.assertTrue(rj.values_equal(value("2"), value("2.0")))
+        self.assertTrue(rj.values_equal(value(A30), value(A30 + ".000")))
+
+    def test_The_normalising_compare_would_call_the_two_30_digit_numbers_equal_and_that_is_the_point(self):
+        self.assertEqual(value(A30).normalize(), value(B30).normalize(), "Decimal.normalize() rounds to 28 digits: the refuted approach")
+
+    def test_The_same_holds_in_the_JSON_body_matcher(self):
+        import rs_jmatch as jm
+        from datetime import datetime, timezone
+        clock = datetime.now(timezone.utc)
+
+        def body(expected, actual):
+            return jm.match_json_body(value(expected), actual.encode(), {}, clock).ok
+
+        self.assertFalse(body('{"n":%s}' % A30, '{"n":%s}' % B30))
+        self.assertTrue(body('{"n":2}', '{"n":2.0}'))
+        self.assertFalse(body('[%s]' % A30, '[%s]' % B30))
+
+    def test_The_same_holds_in_the_number_field_with_a_tolerance_of_zero_and_in_the_checks(self):
+        import rs_checks
+        import rs_fields as rf
+        import rs_lex as lex
+        from datetime import datetime, timezone
+        clock = datetime.now(timezone.utc)
+        field = lex.Field("num", (Decimal(A30), Decimal(0)))
+        self.assertTrue(rf.field_accepts(field, A30.encode(), clock))
+        self.assertFalse(rf.field_accepts(field, B30.encode(), clock))
+        self.assertTrue(rf.field_accepts(lex.Field("num", (Decimal(2), Decimal(0))), b"2.0", clock))
+        a, b = rf.Bound(A30.encode(), value(A30)), rf.Bound(B30.encode(), value(B30))
+        check = lambda op, names, other=None: type("C", (), {"op": op, "names": names, "other": other, "literal": None})()
+        self.assertIsNone(rs_checks.run_checks([check("distinct", ("a", "b"))], {"a": a, "b": b}))
+        self.assertIsNotNone(rs_checks.run_checks([check("equal", ("a",), "b")], {"a": a, "b": b}))
+        self.assertIsNotNone(rs_checks.run_checks([check("equal", ("a",), B30)], {"a": a}))
+        self.assertIsNone(rs_checks.run_checks([check("equal", ("a",), A30)], {"a": a}))
+
+
 class RefusalTests(unittest.TestCase):
     def test_A_repeated_member_name_is_refused_and_named(self):
         parsed = rj.parse(b'{"id":1,"item":"x","id":2}')
