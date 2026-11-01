@@ -336,6 +336,14 @@ class CheckNamespaceTests(unittest.TestCase):
         number = 'reply a 200\nbody json {"v":"${:int=a}"}\ncheck equal a "5"\n'
         self.assertFalse(compare(number, [reply("a", 200, body=b'{"v":5}')]).ok, "a string never matches a number")
 
+    def test_The_message_of_a_string_check_against_a_JSON_number_shows_the_number_without_quotes(self):
+        number = 'reply a 200\nbody json {"v":"${:int=a}"}\ncheck equal a "5"\n'
+        self.assertEqual(compare(number, [reply("a", 200, body=b'{"v":5}')]).reason, 'check: a is 5, expected "5"')
+        number = 'reply a 200\nbody json {"v":"${:num 5 1=a}"}\ncheck equal a "5"\n'
+        self.assertEqual(compare(number, [reply("a", 200, body=b'{"v":5.50}')]).reason, 'check: a is 5.50, expected "5"')
+        other = 'reply a 200\nbody json {"v":"${:token=a}"}\ncheck equal a "x"\n'
+        self.assertEqual(compare(other, [reply("a", 200, body=b'{"v":"y"}')]).reason, 'check: a is "y", expected "x"', "a JSON string keeps its quotes")
+
     def test_A_string_with_characters_beyond_ASCII_compares_by_its_UTF_8_bytes_and_by_JSON_characters(self):
         text = 'recv c1 "x"\ncheck equal a "caf\\xc3\\xa9"\n'
         as_json = rf.Bound("caf\u00e9".encode(), rs_json.parse('"caf\\u00e9"').value)

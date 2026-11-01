@@ -77,7 +77,8 @@ def _string_equal(value, literal):
 
 
 def _shown(value):
-    return rs_json.render(value.json) if _typed(value) and isinstance(value.json, str) else canonical(value.raw)
+    """A value as the message shows it: JSON as JSON (a string with quotes, a number without), bytes as a quoted string."""
+    return rs_json.render(value.json) if _typed(value) else canonical(value.raw)
 
 
 def _equal_string(name, value, literal):
