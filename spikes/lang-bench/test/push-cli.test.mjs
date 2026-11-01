@@ -187,3 +187,19 @@ test('The_default_secret_files_are_looked_for_under_the_home_config_and_used_whe
   assert.equal(defaults.status, 1, defaults.stdout + defaults.stderr);
   assert.match(defaults.stdout, /docs\/notes\.md:1 own secret value \(github-pat\)/);
 });
+
+test('The_default_token_file_in_the_aids_folder_is_used_when_present_and_the_report_prints_the_token_count', t => {
+  const folder = ownedFolder(t, 'aidsdir');
+  writeFileSync(path.join(folder, 'PLAN-trap-table.md'), AID_TEXT);
+  writeFileSync(path.join(folder, 'PLAN-risky-scenarios.md'), 'Another private sentence about gadgets and their wobbling springs today.\n');
+  const { repo } = topicBranch(t, { 'research/n.md': 'see QUUX-marker-77 here\n' });
+  const none = cli(['--repo', repo, '--branch', 'topic', '--aids-dir', folder]);
+  assert.equal(none.status, 0, none.stdout);
+  assert.match(none.stdout, /^leak tokens +0 \(no token file in the aids folder\)$/m);
+  writeFileSync(path.join(folder, 'leak-tokens.txt'), 'zz-first-token\nQuux-Marker-77\n');
+  const withTokens = cli(['--repo', repo, '--branch', 'topic', '--aids-dir', folder]);
+  assert.equal(withTokens.status, 1, withTokens.stdout);
+  assert.match(withTokens.stdout, /^leak tokens +2 \(/m);
+  assert.match(withTokens.stdout, /research\/n\.md:1 leak token 2/);
+  assert.equal(/quux/i.test(withTokens.stdout.replace(/leak token/g, '')), false, 'the token itself is never printed');
+});

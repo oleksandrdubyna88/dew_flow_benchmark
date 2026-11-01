@@ -11,7 +11,8 @@
 //                            published at origin/main of the bench repository (--bench-repo <dir>), never the working tree; unreadable = exit 3
 //            --secret-file <file> (repeatable)  real secret files whose values must appear nowhere (default: ~/.config/lang-v2/github-pat and
 //                            deploy_key_lang_v2 when they exist; read at run time, never printed)
-//            --tokens <file>  literal leak tokens, one per line, outside git     --credits <file>  --needles <file>  --template-files <file>
+//            --tokens <file>  literal leak tokens, one per line, outside git (default: leak-tokens.txt in the aids folder when it is present;
+//                            the report prints the token count, 0 when there is none)     --credits <file>  --needles <file>  --template-files <file>
 //
 // Exit 0 clean · 1 refused · 3 environment (git, the network, an aid that cannot be read) · 4 configuration. Nothing is pushed, ever.
 // A line names the commit, the path, the line and the reason - never the text that matched. The report names the tip it checked; publish

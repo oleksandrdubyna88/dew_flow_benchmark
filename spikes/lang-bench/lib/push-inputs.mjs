@@ -13,6 +13,8 @@ import { readPublicPlans } from './push-public.mjs';
 
 const spikePath = relative => fileURLToPath(new URL(`../${relative}`, import.meta.url));
 export const DEFAULT_AIDS = Object.freeze(['PLAN-trap-table.md', 'PLAN-risky-scenarios.md']);
+/** The literal tokens' default home: this file in the aids folder, used when it is present (the plan names the folder; the tool reads, never a person). */
+export const DEFAULT_TOKENS_FILE = 'leak-tokens.txt';
 export const DEFAULT_AIDS_DIR = () => path.join(os.homedir(), 'rsd', 'lang-v2', 'test-design');
 const DEFAULT_CREDITS = spikePath('inputs/credits-lang.json');
 const DEFAULT_NEEDLES = spikePath('inputs/needles-lang.json');
@@ -36,6 +38,12 @@ async function loadPublicTexts({ publicTexts, benchRepo }) {
   return texts.find(t => !t.ok) ?? ok(texts.map(t => t.value));
 }
 
+/** The default token file when it exists, else null (`existsSync` on the one name: the folder is never listed). */
+function defaultTokenFile(aidsDir) {
+  const file = path.join(aidsDir ?? DEFAULT_AIDS_DIR(), DEFAULT_TOKENS_FILE);
+  return existsSync(file) ? file : null;
+}
+
 async function loadAids({ aid, aidsDir, tokens, publicTexts, benchRepo }) {
   const files = aid.length > 0 ? aid : DEFAULT_AIDS.map(name => path.join(aidsDir ?? DEFAULT_AIDS_DIR(), name));
   const aids = [];
@@ -44,12 +52,13 @@ async function loadAids({ aid, aidsDir, tokens, publicTexts, benchRepo }) {
     if (!text.ok) return fail(`aid file ${text.reason}: the check does not pass without its aids`, { kind: 'env' });
     aids.push({ name: path.basename(file), text: text.value });
   }
-  const tokensText = tokens === undefined ? ok('') : readText(tokens, 'env');
+  const tokenFile = tokens ?? defaultTokenFile(aidsDir);
+  const tokensText = tokenFile === null ? ok('') : readText(tokenFile, 'env');
   if (!tokensText.ok) return tokensText;
   const exempt = await loadPublicTexts({ publicTexts, benchRepo });
   if (!exempt.ok) return exempt;
   const needles = aidNeedles({ aids, tokensText: tokensText.value, publicTexts: exempt.value });
-  return needles.ok ? needles : fail(needles.reason, { kind: 'env' });
+  return needles.ok ? ok({ ...needles.value, tokenInfo: tokenFile === null ? 'no token file in the aids folder' : `from ${path.basename(tokenFile)}` }) : fail(needles.reason, { kind: 'env' });
 }
 
 function loadKnown(file) {

@@ -54,6 +54,8 @@ function merge(into, found, commit, { atTip = true } = {}) {
   }
 }
 
+const tokenLine = inputs => `${inputs.aids.literals.length} (${inputs.aids.tokenInfo ?? 'given directly'})`;
+
 const verdict = (checks, label, extra = {}) => ({
   exit: checks.some(c => c.findings.length > 0) ? EXIT.REFUSED : EXIT.PASS,
   label,
@@ -126,7 +128,7 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   byName['known-task-credits'] = tip.value.credits;
   byName['stack-folders'] = tip.value.stack;
   byName['tree-shape'] = [...byName['tree-shape'], ...tip.value.shape];
-  return verdict(toChecks(NAMES, byName), label, { commits: range.value.length, tip: tipSha.value, branch });
+  return verdict(toChecks(NAMES, byName), label, { commits: range.value.length, tip: tipSha.value, branch, tokens: tokenLine(inputs) });
 }
 
 /** The bench's own branch (consult C6b, D2): only the leak and the secret scans, over the new commits. */
@@ -138,7 +140,7 @@ export async function checkSelf({ repo, branch, inputs }) {
   if (!tipSha.ok) return errorResult(label, tipSha);
   const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES, { refuseNul: false });
   if (!scanned.ok) return errorResult(label, scanned);
-  return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length, tip: tipSha.value, branch });
+  return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length, tip: tipSha.value, branch, tokens: tokenLine(inputs) });
 }
 
 /**
@@ -149,7 +151,7 @@ export function checkText({ text, label, inputs, self = false }) {
   const names = self ? SELF_NAMES : ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
   const byName = emptyChecks(names);
   merge(byName, scanText(label, text, inputs, { body: true }), undefined);
-  return verdict(toChecks(names, byName), self ? `${label} (bench body)` : label);
+  return verdict(toChecks(names, byName), self ? `${label} (bench body)` : label, { tokens: tokenLine(inputs) });
 }
 
 const where = f => `${f.path}${f.line === null ? ':' : `:${f.line}`}`;
@@ -159,6 +161,7 @@ const findingLine = f => `  ${f.commit ? `${f.commit.slice(0, 10)} ` : ''}${wher
 export function formatReport(result) {
   const out = [`push-check: ${result.label}${result.commits === undefined ? '' : ` (${result.commits} new commit${result.commits === 1 ? '' : 's'})`}`];
   if (result.error) out.push(`error: ${result.error}`);
+  if (result.tokens) out.push(`${'leak tokens'.padEnd(20)} ${result.tokens}`);
   if (result.tip) out.push(`${'tip'.padEnd(20)} ${result.tip}`, `${'push'.padEnd(20)} git push <url> ${result.tip}:refs/heads/${result.branch}`);
   for (const { name, findings } of result.checks) {
     out.push(`${name.padEnd(20)} ${findings.length === 0 ? 'PASS' : `FAIL (${findings.length})`}`);
