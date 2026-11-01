@@ -8,13 +8,14 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 export const TASK_REPO_URL = 'https://github.com/oleksandrdubyna88/dew_flow_ai_language_comparison.git';
 export const FETCH_CONFIG = Object.freeze(['credential.helper=', 'credential.helper=!gh auth git-credential']);
 const FETCH_TIMEOUT_MS = 120_000;
-const NO_SUCH_REMOTE = 2;
+// `git remote get-url` on a missing remote: 2 in git 2.x, 128 in builds that fold it into the generic fatal exit
+const NO_SUCH_REMOTE = [2, 128];
 
 /** ok(url) when origin's fetch and push URLs are both `expected`; otherwise a `config` fail saying which is not. */
 export async function verifyOrigin(repo, expected = TASK_REPO_URL) {
-  const fetchUrl = await runGit(repo, ['remote', 'get-url', 'origin'], { accept: [0, NO_SUCH_REMOTE] });
+  const fetchUrl = await runGit(repo, ['remote', 'get-url', 'origin'], { accept: [0, ...NO_SUCH_REMOTE] });
   if (!fetchUrl.ok) return fetchUrl;
-  if (fetchUrl.value.code === NO_SUCH_REMOTE) return fail(`${repo} has no origin: run --setup-remote first`, { kind: 'config' });
+  if (fetchUrl.value.code !== 0) return fail(`${repo} has no origin: run --setup-remote first`, { kind: 'config' });
   const pushUrl = await runGit(repo, ['remote', 'get-url', '--push', 'origin']);
   if (!pushUrl.ok) return pushUrl;
   const notExpected = [['URL', fetchUrl.value.stdout.trim()], ['push URL', pushUrl.value.stdout.trim()]].find(([, url]) => url !== expected);
@@ -50,10 +51,10 @@ const done = (exit, lines) => ({ exit, lines });
 
 /** The remote step: returns the line it printed and whether git still agrees; a git failure is a value. */
 async function setRemote(repo, url) {
-  const current = await runGit(repo, ['remote', 'get-url', 'origin'], { accept: [0, NO_SUCH_REMOTE] });
+  const current = await runGit(repo, ['remote', 'get-url', 'origin'], { accept: [0, ...NO_SUCH_REMOTE] });
   if (!current.ok) return current;
   const old = current.value.stdout.trim();
-  if (current.value.code === NO_SUCH_REMOTE) {
+  if (current.value.code !== 0) {
     const added = await runGit(repo, ['remote', 'add', 'origin', url]);
     return added.ok ? { ...added, line: `remote: added origin ${url}` } : added;
   }
