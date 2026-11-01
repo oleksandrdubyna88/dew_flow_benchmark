@@ -16,7 +16,7 @@ import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers
 import { statusLines } from '../lib/commands.mjs';
 import { loadPrompts } from '../lib/plan.mjs';
 import { readbackOf } from '../lib/readback.mjs';
-import { createSeries, drawMask, loadSeries, planPair, runMapFileOf } from '../lib/series.mjs';
+import { createSeries, drawMask, latestSeries, loadSeries, planPair, runMapFileOf } from '../lib/series.mjs';
 import { transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
 import { loadCalibration, runPair } from '../lib/run.mjs';
@@ -25,14 +25,18 @@ import { missingPaths } from '../lib/records.mjs';
 import { loadHeldout } from '../lib/heldout.mjs';
 import { noteFor, referenceFill, rehearse } from '../lib/rehearse.mjs';
 import { removeArea } from '../lib/score.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
+import { resolveTask } from '../lib/tasks.mjs';
 import { loadWorld } from '../lib/world.mjs';
+
+const TASK = resolveTask(loadExplore().value, '01').value;
 
 /** The world of this host, or null (`hostLacks`) when `prepare`, `calibrate`, the held-out side or the task repository is missing. */
 async function worldOrNull(t) {
   if (!sandboxGate(t)) return null;
-  const calibration = loadCalibration(realHome);
+  const calibration = loadCalibration(realHome, TASK);
   if (!calibration.ok) return hostLacks(t, calibration.reason) && null;
-  const world = await loadWorld({ home: realHome, work: tmpDir('e2e-world') });
+  const world = await loadWorld({ home: realHome, work: tmpDir('e2e-world'), task: TASK });
   return world.ok ? { world: world.value, calibration: calibration.value } : (hostLacks(t, world.reason) && null);
 }
 
@@ -42,7 +46,7 @@ test('The_rehearsal_runs_a_pair_end_to_end_for_free_and_every_criterion_holds', 
   const got = await worldOrNull(t);
   if (!got) return;
   const said = [];
-  const r = await rehearse({ io: { home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, signal: undefined, worldFn: loadWorld, subject } });
+  const r = await rehearse({ task: TASK, io: { home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, signal: undefined, worldFn: loadWorld, subject } });
   t.after(() => r.seriesDir && removeArea(r.seriesDir));
   assert.equal(r.exit, 0, `${r.message}\n${JSON.stringify(r.checks)}\n${said.join('\n')}`);
   assert.deepEqual(r.checks.map(c => c.ok), [true, true, true, true, true]);
@@ -74,21 +78,24 @@ function fakeHome() {
 
 /** A series with a stub CLI behind a loopback stub upstream, a scripted quiet machine and the reference trees as the agents' work: everything a `runPair` needs, free. `machine` and `worldFn` can be replaced. */
 async function pilotRig(t, { world, calibration }, { machine, worldFn = loadWorld } = {}) {
-  const made = createSeries({ home: realHome, explore: world.explore, calibration, draw: drawMask(() => 1), inputsExtra: { test: true, prompts: loadPrompts() } });
+  const latestBefore = latestSeries(realHome, '01');
+  // prefix `t`: a test series is never an `x-` series, so no command that takes "the newest series of a task" can pick it up while it exists (review F2)
+  const made = createSeries({ home: realHome, explore: world.explore, calibration, task: '01', prefix: 't', draw: drawMask(() => 1), inputsExtra: { test: true, prompts: loadPrompts() } });
   assert.equal(made.ok, true, made.reason);
   const dir = made.value.dir;
   t.after(() => removeArea(dir));
+  assert.equal(latestSeries(realHome, '01'), latestBefore, 'the rig\'s series is invisible to `status`, `note` and `prune` of the real task 1');
   const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 20));
   t.after(() => stub.close());
   const stubDir = tmpDir('e2e-stub');
   const said = [];
   const rig = {
-    dir, said, quiet: { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 },
-    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome).value }), claudeBinary: stubClaude(stubDir), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
+    dir, said, explore: world.explore, quiet: { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 },
+    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome, TASK).value }), claudeBinary: stubClaude(stubDir), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
   };
   const machineOf = sample => machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => sample, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
   rig.machineOf = machineOf;
-  rig.io = (over = {}) => ({ home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams: { ...rig.seams, machine: machine ?? machineOf(rig.quiet) }, ...over });
+  rig.io = (over = {}) => ({ home: realHome, seriesNameOk: name => /^t-\d{8}-[0-9a-f]{4}$/.test(name), say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams: { ...rig.seams, machine: machine ?? machineOf(rig.quiet) }, ...over });
   return rig;
 }
 
@@ -100,11 +107,11 @@ test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_
   const { dir, said } = rig;
   const io = rig.io();
   // the barrier: pair 2 and 3 are refused before pair 1 exists, and nothing is launched
-  const early = await runPair({ seriesDir: dir, pair: 2, io });
+  const early = await runPair({ seriesDir: dir, pair: 2, explore: world.explore, task: TASK, io });
   assert.equal(early.exit, 4);
   assert.match(early.message, /pair 1 is not finished \(csharp: none, node: none\)/);
   assert.deepEqual(Object.keys(loadSeries(dir).value.map.sessions), []);
-  const r = await runPair({ seriesDir: dir, pair: 1, io });
+  const r = await runPair({ seriesDir: dir, pair: 1, explore: world.explore, task: TASK, io });
   assert.equal(r.exit, 0, `${r.message}\n${said.join('\n')}`);
   assert.deepEqual(r.problems, []);
   const series = loadSeries(dir).value;
@@ -122,12 +129,12 @@ test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_
   const pair = JSON.parse(readFileSync(path.join(dir, 'pairs', 'p1.json'), 'utf8'));
   assert.equal(pair.cells.csharp.missing, false);
   assert.match(statusLines({ dir, ...series }).join('\n'), /pair 1: finished/);
-  const note = noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration }, pins: world.explore, rehearsal: false, subject });
+  const note = noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration }, pins: world.explore, task: TASK, rehearsal: false, subject, date: '2026-11-01' });
   assert.match(note, /Exploratory, not evidence/);
   assert.match(note, /\| 1 \| C# \| completed/);
   // the barrier after pair 1: pair 3 still needs pair 2; pair 1 cannot be run twice
-  assert.match((await runPair({ seriesDir: dir, pair: 3, io })).message, /pair 2 is not finished/);
-  assert.match((await runPair({ seriesDir: dir, pair: 1, io })).message, /pair 1 has already been run/);
+  assert.match((await runPair({ seriesDir: dir, pair: 3, explore: world.explore, task: TASK, io })).message, /pair 2 is not finished/);
+  assert.match((await runPair({ seriesDir: dir, pair: 1, explore: world.explore, task: TASK, io })).message, /pair 1 has already been run/);
 });
 
 const LOUD = { hostCpus: 6, harnessCpus: 0.05, foreignCpus: 5.9, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 };
@@ -139,21 +146,21 @@ test('F2_a_pair_halted_by_the_quiet_check_and_then_by_a_judge_failure_is_resumed
   const rig = await pilotRig(t, got);
   const ledger = () => readLedger(path.join(rig.dir, 'ledger.ndjson'));
   // 1. the machine is never quiet: the run halts (exit 3), the sessions stay planned, nothing is spent
-  const halted = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ seams: { ...rig.seams, machine: rig.machineOf(LOUD) } }) });
+  const halted = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io({ seams: { ...rig.seams, machine: rig.machineOf(LOUD) } }) });
   assert.equal(halted.exit, 3, halted.message);
   assert.deepEqual(statusesOf(rig.dir), ['planned', 'planned']);
   assert.equal(ledger().length, 0);
   const rids = Object.keys(loadSeries(rig.dir).value.map.sessions).sort();
   // 2. the same command resumes; the judge fails after both sessions ran: exit 5, both ran with data, both charged
   const failing = async a => { const w = await loadWorld(a); return w.ok ? { ...w, value: { ...w.value, scoreFn: async () => ({ ok: false, kind: 'harness', reason: 'harness failure: a process remains (scripted)' }) } } : w; };
-  const failed = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ worldFn: failing }) });
+  const failed = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io({ worldFn: failing }) });
   assert.equal(failed.exit, 5, failed.message);
   assert.match(failed.message, /scoring .*failed/);
   assert.deepEqual(statusesOf(rig.dir), ['ran:completed', 'ran:completed']);
   assert.equal(ledger().length, 2, 'both sessions are charged once');
   const spent = ledger().map(l => l.usd);
   // 3. a rerun scores what ran: no new session, no new charge
-  const resumed = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  const resumed = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io() });
   assert.equal(resumed.exit, 0, resumed.message);
   assert.deepEqual(statusesOf(rig.dir), ['scored:completed', 'scored:completed']);
   assert.deepEqual(Object.keys(loadSeries(rig.dir).value.map.sessions).sort(), rids, 'the same two sessions: nothing was planned again');
@@ -168,13 +175,13 @@ test('A_pair_that_cannot_start_leaves_run_map_json_as_it_was_whatever_it_is_miss
   const rig = await pilotRig(t, got);
   const mapFile = runMapFileOf(rig.dir);
   const before = readFileSync(mapFile, 'utf8');
-  const noWorld = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io({ worldFn: async () => ({ ok: false, reason: 'the world is not there (scripted)' }) }) });
+  const noWorld = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io({ worldFn: async () => ({ ok: false, reason: 'the world is not there (scripted)' }) }) });
   assert.equal(noWorld.exit, 4);
   assert.equal(readFileSync(mapFile, 'utf8'), before, 'a failed prerequisite leaves the run map untouched');
   const inputsFile = path.join(rig.dir, 'inputs.json');
   const { prompts, ...unfrozen } = JSON.parse(readFileSync(inputsFile, 'utf8'));
   writeFileSync(inputsFile, JSON.stringify(unfrozen));
-  const noPrompts = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  const noPrompts = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io() });
   assert.equal(noPrompts.exit, 4);
   assert.match(noPrompts.message, /holds no frozen prompts/);
   assert.equal(readFileSync(mapFile, 'utf8'), before, 'so does a series without its frozen prompts: no session is planned for a pair that cannot start');
@@ -194,13 +201,13 @@ test('F2_a_session_left_launching_by_a_hard_crash_is_settled_and_charged_once_fr
     writeFileSync(path.join(layout.dir, 'broker.ndjson'), [{ event: 'forwarding', seq: 1 }, { event: 'settled', seq: 1, chargedUsd: 0.0123 }].map(l => `${JSON.stringify(l)}\n`).join(''));
   }
   writeRunMap(runMapFileOf(rig.dir), map);
-  const r = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  const r = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io() });
   assert.equal(r.exit, 0, `${r.message}\n${rig.said.join('\n')}`);
   const sessions = Object.values(loadSeries(rig.dir).value.map.sessions);
   assert.ok(sessions.every(s => s.status === 'ran' && /^void: harness/.test(s.class)), JSON.stringify(sessions.map(s => [s.status, s.class])));
   const lines = readLedger(path.join(rig.dir, 'ledger.ndjson'));
   assert.deepEqual(lines.map(l => l.usd), [0.0123, 0.0123], 'charged from the broker ledger, once per session');
-  const again = await runPair({ seriesDir: rig.dir, pair: 1, io: rig.io() });
+  const again = await runPair({ seriesDir: rig.dir, pair: 1, explore: rig.explore, task: TASK, io: rig.io() });
   assert.match(again.message, /already been run/, 'two voids are not resumed: they are re-run alone or the pair stays');
   assert.equal(readLedger(path.join(rig.dir, 'ledger.ndjson')).length, 2, 'and not charged twice');
 });

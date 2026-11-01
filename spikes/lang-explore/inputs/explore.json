@@ -28,5 +28,62 @@
   "limits": { "timeFloorMs": 2000, "timeFactor": 3, "memoryFloorBytes": 536870912, "memoryFactor": 2, "calibrationCeilingMs": 30000, "buildTimeoutMs": 600000, "outputCapBytes": 1048576 },
   "locale": "de_DE.UTF-8",
   "envExtra": { "DOTNET_gcServer": "0", "NODE_OPTIONS": "" },
-  "pairs": 3
+  "pairs": 3,
+  "olympiad": {
+    "reason": "The pins of the olympiad pilot (todo/PLAN_lang_explore_olympiad.md, D-O2 to D-O8): tasks 02, 03 and 09 on the same harness. The spec drafts are ungated: they are pinned by sha256 at the task repository's branch docs/specs-olympiad, commit 3f115d1, and FORMAT v2.1 on that branch. A later amendment moves a pin in one dated line before pair 1 of its task, never between pairs.",
+    "decidedOn": "2026-11-01",
+    "planTasks": ["02", "03", "09"],
+    "pausePoint": { "usd": 60, "projectedFloorUsd": 5, "projectedFactor": 3, "pairSessions": 2 },
+    "material": { "minCases": 15, "minMutants": 6 }
+  },
+  "tasks": {
+    "01": {
+      "title": "Descent to one",
+      "spec": { "sha": "d622768", "path": "todo/tasks/01-descent-to-one.md", "sha256": "d890bb3fab5f9b4e6899a8578e852526cdab25a9316eda0860f21f6c3706742e" },
+      "format": { "sha": "1531de8", "path": "todo/tasks/FORMAT.md", "sha256": "5b476946bf9f0a61f87845bead56043953777d038269a117000af149ec8f3d9c", "label": "v2" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/01.md", "sha256": "0eb311642c70460d07fa5d32e57a741decbe61cd8f99ba0e4705831e77d8e89e" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration.json"],
+      "noteLabel": "1",
+      "draft": false,
+      "baselineCommit": "90d039534d9ed90de2f1d570347c11b192271328",
+      "heldoutBorn": "2026-10-31T22:48:23.863Z"
+    },
+    "02": {
+      "title": "Open areas",
+      "spec": { "sha": "3f115d1", "path": "todo/tasks/02-open-areas.md", "sha256": "8705219dc6177cca7cec164dfd7cfe0714de95f940edbcf25d1f4ec002f86710" },
+      "format": { "sha": "3f115d1", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/02.md", "sha256": "9f982b2f229ba56db0f8b0edb3104451b6bcbe4e8b514b7a82f74b7e658c3038" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-02"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-02.json"],
+      "noteLabel": "02",
+      "draft": true,
+      "baselineCommit": "90d039534d9ed90de2f1d570347c11b192271328",
+      "heldoutBorn": "2026-11-01T10:46:45.036Z"
+    },
+    "03": {
+      "title": "Wrapping arithmetic",
+      "spec": { "sha": "3f115d1", "path": "todo/tasks/03-wrapping-arithmetic.md", "sha256": "5d1aaab93439e0212f54f41debaff676a0380da5672f90fb42c7fc43729d3505" },
+      "format": { "sha": "3f115d1", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/03.md", "sha256": "51d3a07706758efcd8f592abe05ff7c524c32fb28a492f1d6f2b8baabe84ec08" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-03"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-03.json"],
+      "noteLabel": "03",
+      "draft": true,
+      "baselineCommit": "90d039534d9ed90de2f1d570347c11b192271328",
+      "heldoutBorn": "2026-11-01T10:47:19.386Z"
+    },
+    "09": {
+      "title": "Switched routes",
+      "spec": { "sha": "3f115d1", "path": "todo/tasks/09-switched-routes.md", "sha256": "afa52d53e201db06ec772a20a98a801c99f7ef74fa05a12f4b2ae41d300907d4" },
+      "format": { "sha": "3f115d1", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/09.md", "sha256": "bd8ce97e7e9c1f57404b508dd485417304f3aaf9864f00bfd68cab09645d15ee" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-09"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-09.json"],
+      "noteLabel": "09",
+      "draft": true,
+      "baselineCommit": "90d039534d9ed90de2f1d570347c11b192271328",
+      "heldoutBorn": "2026-11-01T10:48:42.434Z"
+    }
+  }
 }

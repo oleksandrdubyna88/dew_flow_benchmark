@@ -1,11 +1,12 @@
-// The limits a series is scored under (F7 and the coai review): the calibration is measured once (`explore.mjs calibrate`, `~/rsd/lang-v2/explore/calibration.json`), checked for shape and for the registered
+// The limits a series is scored under (F7 and the coai review): the calibration is measured once (`explore.mjs calibrate`, the task's calibration file (see tasks.mjs)), checked for shape and for the registered
 // bounds, and COPIED into the series' `inputs.json` at `init`. A pair reads TL and ML from the series, never from the live calibration file, and refuses when that file has changed since: the limits of a
 // series cannot move between pairs. Failures are values.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadExplore } from './inputs.mjs';
-import { calibrationFile } from './paths.mjs';
+import { materialProblem } from './material.mjs';
+import { taskPaths } from './tasks.mjs';
 
 const MAX_TIME_FACTOR = 10; // an effective TL above ten calibration ceilings is not a limit
 const MAX_MEMORY_BYTES = 64 * 1024 ** 3;
@@ -38,14 +39,20 @@ export function validLimits(limits, registered, subject) {
 
 const readJsonOr = file => { try { return ok(JSON.parse(readFileSync(file, 'utf8'))); } catch (e) { return fail(`${file} is unreadable: ${e.message}`); } };
 
-/** The calibration (`explore.mjs calibrate`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. `exploreFn` loads the registered inputs (a test passes its own). */
-export function loadCalibration(home, exploreFn = loadExplore) {
-  const file = calibrationFile(home);
-  if (!existsSync(file)) return fail(`${file} is not there: run \`explore.mjs calibrate\` first (the limits are measured before any paid session)`);
+/** The calibration of `task` (`explore.mjs calibrate --task NN`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. `exploreFn` loads the registered inputs (a test passes its own). */
+export function loadCalibration(home, task, exploreFn = loadExplore) {
+  const file = taskPaths(task, home).calibrationFile;
+  if (!existsSync(file)) return fail(`${file} is not there: run \`explore.mjs calibrate --task ${task.id}\` first (the limits are measured before any paid session)`);
   const got = chainSync([() => exploreFn(), () => readJsonOr(file)]);
   if (!got.ok) return got;
   const valid = validLimits(got.value[1]?.limits, got.value[0].limits, `${file} is not a usable calibration`);
-  return valid.ok ? ok(got.value[1]) : valid;
+  return valid.ok ? bound({ calibration: got.value[1], task, home }) : valid;
+}
+
+/** The calibration, when the held-out folder is still the material it was made over; else the sentence saying it moved. */
+function bound({ calibration, task, home }) {
+  const moved = materialProblem({ calibration, task, home });
+  return moved ? fail(moved) : ok(calibration);
 }
 
 /** The synchronous `allOk`: the values of steps that each return `ok(value)`, or the first `fail`. */
@@ -66,7 +73,7 @@ export function seriesLimits(seriesDir) {
 
 const same = (a, b) => KEYS.every(k => a?.[k] === b?.[k]);
 
-const movedSentence = (live, own) => `calibration.json (TL ${live.timeMs} ms, ML ${live.memoryBytes} B) differs from the limits this series was created with (TL ${own.timeMs} ms, ML ${own.memoryBytes} B): the limits of a series do not move between pairs. Calibrate again only before \`init\`, and make a new series`;
+const movedSentence = (live, own) => `the calibration file (TL ${live.timeMs} ms, ML ${live.memoryBytes} B) differs from the limits this series was created with (TL ${own.timeMs} ms, ML ${own.memoryBytes} B): the limits of a series do not move between pairs. Calibrate again only before \`init\`, and make a new series`;
 
 /** The series' own limits, valid (they were checked when the series was made, and are checked again) against the registered ones `registered`. -> `ok(limits)` | `fail`. */
 function ownLimits(seriesDir, registered) {
@@ -78,10 +85,10 @@ function ownLimits(seriesDir, registered) {
  * The calibration a pair of this series is scored under: the series' own limits (read from its inputs.json), valid, and equal to the live calibration file. A calibration file that changed since `init` is refused,
  * naming both. -> `ok(calibration)` with `limits` the series' | `fail`.
  */
-export function calibrationFor({ home, seriesDir, exploreFn = loadExplore }) {
+export function calibrationFor({ home, seriesDir, task, exploreFn = loadExplore }) {
   const explore = exploreFn();
   if (!explore.ok) return explore;
-  const got = chainSync([() => loadCalibration(home, () => explore), () => ownLimits(seriesDir, explore.value.limits)]);
+  const got = chainSync([() => loadCalibration(home, task, () => explore), () => ownLimits(seriesDir, explore.value.limits)]);
   if (!got.ok) return got;
   const [live, own] = got.value;
   return same(own, live.limits) ? ok({ ...live, limits: own }) : fail(movedSentence(live.limits, own));
