@@ -32,6 +32,24 @@ internal sealed class RecordingLauncher(Action<string>? seen = null) : IDetached
     }
 }
 
+/// <summary>An error writer that remembers whether it was flushed after its last line.</summary>
+internal sealed class FlushSpy : StringWriter
+{
+    public bool FlushedAfterLastLine { get; private set; }
+
+    public override void WriteLine(string? value)
+    {
+        base.WriteLine(value);
+        FlushedAfterLastLine = false;
+    }
+
+    public override void Flush()
+    {
+        base.Flush();
+        FlushedAfterLastLine = true;
+    }
+}
+
 /// <summary>What the <c>run-all</c> scenarios share (E5.S3): an experiment root whose arms are made the way <c>make</c> leaves them, the fake CLI as <c>claude</c>, the host's <c>setsid</c> by its real path and LINKED into <c>&lt;temp&gt;/bin</c> (as <c>git</c> is, <c>ExperimentRoot.RealGit</c>), and the test's two ways to run the verb — as a SEPARATE
 /// process (<see cref="RunAsync"/>: the console's own binary, so the detached runners are not children of the test host) and in process through the gate with the seams of the test's choosing (<see cref="InProcessAsync"/>).
 /// <para>

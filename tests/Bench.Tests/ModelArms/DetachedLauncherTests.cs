@@ -124,7 +124,7 @@ public sealed class DetachedLauncherTests
 
         var started = new SetsidLauncher(RunAllKit.HostSetsid).Start("/bin/sh", ["-c", "grep -E 'SigIgn|SigBlk' /proc/$$/status"], log, ChildEnvironment(), temp.Path);
 
-        started.Should().BeOfType<DetachedStart.Started>();
+        started.Should().BeOfType<DetachedStart.Started>(started.ToString());
         var text = await LogAsync(log, "SigIgn");
         text.Should().MatchRegex(@"SigIgn:\s+0000000000000000", "SIGPIPE is ignored by this runtime and would cross exec without the defaulted set (M-3)");
         text.Should().MatchRegex(@"SigBlk:\s+0000000000000000");
@@ -139,7 +139,7 @@ public sealed class DetachedLauncherTests
 
         var started = new SetsidLauncher(RunAllKit.HostSetsid).Start("/bin/sh", ["-c", "echo $PPID; sleep 2"], log, ChildEnvironment(), temp.Path);
 
-        started.Should().BeOfType<DetachedStart.Started>();
+        started.Should().BeOfType<DetachedStart.Started>(started.ToString());
         var parent = int.Parse((await LogAsync(log, "\n")).Trim(), System.Globalization.CultureInfo.InvariantCulture);
         parent.Should().NotBe(Environment.ProcessId, "setsid forked, because the child leads its own group (M-2): without that it IS the runner and its parent is the launcher (M-1)");
         await Task.Delay(TimeSpan.FromSeconds(2.5), TestContext.Current.CancellationToken);

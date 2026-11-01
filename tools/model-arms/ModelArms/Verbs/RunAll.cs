@@ -263,16 +263,16 @@ internal static class RunAllVerb
             input.Verb.Output.WriteLine($"{Name}: the runners' output is not kept in pids/<arm>.log on this road (Windows: not observed — no Windows host here)");
         }
 
-        var started = new Dictionary<string, long>(StringComparer.Ordinal);
+        var started = new Dictionary<string, string>(StringComparer.Ordinal);
         var codes = placed.Arms.Select(arm => probed.Alive.TryGetValue(arm, out var holder) ? Left(input, arm, holder) : Started(probed, launcher, arm, started)).ToList();
         Settle(input, seams, started);
         input.Verb.Output.Flush();
         return codes.Contains(ExitCodes.Configuration) ? ExitCodes.Configuration : codes.Contains(ExitCodes.Environment) ? ExitCodes.Environment : ExitCodes.Pass;
     }
 
-    /// <summary>Holds the call's lock until each runner it started has taken its own (alive, or its lock refused or unread — either way a later call can see it), polled with a backoff from 50 ms doubling to 500 ms for at most <see cref="SettleSeconds"/> seconds; one line says so first. A runner that has started and ALREADY ENDED (its pid file is newer than before the start, its lock free) is not waited for: a line points at its log.
+    /// <summary>Holds the call's lock until each runner it started has taken its own (alive, or its lock refused or unread — either way a later call can see it), polled with a backoff from 50 ms doubling to 500 ms for at most <see cref="SettleSeconds"/> seconds; one line says so first. A runner that has started and ALREADY ENDED (its pid file differs from before the start, its lock free) is not waited for: a line points at its log.
     /// A runner that has not shown by the bound is a stderr note naming its log, never a failure: the start was accepted, and a slow host is not a dead runner.</summary>
-    private static void Settle(ExperimentInput input, RunAllSeams seams, Dictionary<string, long> started)
+    private static void Settle(ExperimentInput input, RunAllSeams seams, Dictionary<string, string> started)
     {
         if (started.Count == 0 || seams.Settle <= TimeSpan.Zero)
         {
@@ -281,6 +281,12 @@ internal static class RunAllVerb
 
         input.Verb.Output.WriteLine($"{Name}: waiting up to {SettleSeconds} s for the runners to take their locks ({string.Join(", ", started.Keys)})");
         input.Verb.Output.Flush();
+        Reported(input, Waited(input, seams, started));
+    }
+
+    /// <summary>The poll loop: the arms still unseen when every one has shown or the bound has passed.</summary>
+    private static List<string> Waited(ExperimentInput input, RunAllSeams seams, Dictionary<string, string> started)
+    {
         var begun = TimeProvider.System.GetTimestamp();
         var pending = started.Keys.ToList();
         var pause = SettlePoll;
@@ -294,14 +300,19 @@ internal static class RunAllVerb
             }
         }
 
+        return pending;
+    }
+
+    private static void Reported(ExperimentInput input, List<string> pending)
+    {
         foreach (var arm in pending)
         {
             input.Verb.Error.WriteLine($"{Name} {arm}: its runner did not take its lock within {SettleSeconds} s — see pids/{arm}.log; a run-all run now may not count it");
         }
     }
 
-    /// <summary>True when nothing more is to be waited for on <paramref name="arm"/>: its lock is held (or refused, or unread) or its runner has already ended — said, with its log.</summary>
-    private static bool Shown(ExperimentInput input, RunAllSeams seams, string arm, long stampBefore)
+    /// <summary>True when nothing more is to be waited for on <paramref name="arm"/>: its lock is held (or refused, or unread), or its runner has already ended — said, with its log, and only when the lock is STILL free after the pid file was seen to change (a runner that took its lock between the two looks is alive, not ended).</summary>
+    private static bool Shown(ExperimentInput input, RunAllSeams seams, string arm, string stampBefore)
     {
         if (seams.Liveness(input.Root, arm) is not RunnerState.Gone)
         {
@@ -313,12 +324,24 @@ internal static class RunAllVerb
             return false;
         }
 
+        if (seams.Liveness(input.Root, arm) is not RunnerState.Gone)
+        {
+            return true;
+        }
+
         input.Verb.Error.WriteLine($"{Name} {arm}: its runner started and has already ended — see pids/{arm}.log");
+        input.Verb.Error.Flush();
         return true;
     }
 
-    /// <summary>When the arm's pid file was last written (the runner writes it, by rename, after taking its lock); a file that is absent has the epoch's stamp. A newer stamp with the lock free means a runner of THIS start lived and ended.</summary>
-    private static long PidStamp(ExperimentInput input, string arm) => File.GetLastWriteTimeUtc(input.Root.PidFile(arm)).Ticks;
+    /// <summary>What the arm's pid file said and when it was written, as one comparable text: the runner writes it, by rename, after taking its lock, so a different stamp with the lock free means a runner of THIS start lived and ended. The pid is part of it because a rewrite inside the file system's timestamp resolution leaves the time unchanged; the started process's own pid is not known (<c>setsid</c> forks), so the file's content stands for it. Absent: the empty stamp.</summary>
+    private static string PidStamp(ExperimentInput input, string arm)
+    {
+        var path = input.Root.PidFile(arm);
+        var ticks = File.GetLastWriteTimeUtc(path).Ticks;
+        var content = BoundedFile.Read(path, 64, PlatformFactsReader.CurrentRoad) is BoundedRead.Bytes bytes ? System.Text.Encoding.ASCII.GetString(bytes.Value).Trim() : string.Empty;
+        return $"{ticks}|{content}";
+    }
 
     private static int Left(ExperimentInput input, string arm, string holder)
     {
@@ -327,7 +350,7 @@ internal static class RunAllVerb
     }
 
     /// <summary>One arm started; whatever it comes to is that arm's line and code, and the next arm is still tried.</summary>
-    private static int Started(Probed probed, IDetachedLauncher launcher, string arm, Dictionary<string, long> started)
+    private static int Started(Probed probed, IDetachedLauncher launcher, string arm, Dictionary<string, string> started)
     {
         var input = probed.Equipped.Placed.Input;
         try
@@ -348,7 +371,7 @@ internal static class RunAllVerb
         }
     }
 
-    private static int Said(ExperimentInput input, string arm, DetachedStart.Started accepted, bool resume, Dictionary<string, long> started, long stamp)
+    private static int Said(ExperimentInput input, string arm, DetachedStart.Started accepted, bool resume, Dictionary<string, string> started, string stamp)
     {
         started[arm] = stamp;
         input.Verb.Output.WriteLine($"{arm}: started — its runner writes pids/{arm}.pid{(resume ? ResumeWords : string.Empty)}");

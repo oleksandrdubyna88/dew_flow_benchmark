@@ -143,6 +143,47 @@ public sealed class RunAllVerbTests
     }
 
     [Fact]
+    public async Task A_pid_file_rewritten_in_the_same_tick_by_a_new_runner_is_still_seen_and_its_ending_flushed_to_the_error_writer()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var pidFile = kit.Layout.PidFile("C1");
+        File.WriteAllText(pidFile, "4242\n");
+        var tick = File.GetLastWriteTimeUtc(pidFile);
+        var launcher = new RecordingLauncher(_ =>
+        {
+            File.WriteAllText(pidFile, "4343\n");
+            File.SetLastWriteTimeUtc(pidFile, tick);
+        });
+        var seams = new RunAllSeams(_ => launcher, (_, _) => new RunnerState.Gone(), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+        var error = new FlushSpy();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = await kit.InProcessAsync(seams, new StringWriter(), error, "C1");
+
+        File.GetLastWriteTimeUtc(pidFile).Should().Be(tick, "the rewrite kept the file's time: only the content tells");
+        run.Error.Should().Contain("C1: its runner started and has already ended — see pids/C1.log");
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "the ended runner was seen at once, not at the bound");
+        error.FlushedAfterLastLine.Should().BeTrue("the notice is flushed to the error writer as soon as it is written");
+    }
+
+    [Fact]
+    public async Task A_runner_that_took_its_lock_between_the_two_looks_is_alive_not_ended()
+    {
+        await using var kit = await RunAllKit.MakeAsync("C1");
+        Directory.CreateDirectory(kit.Layout.Pids);
+        var launcher = new RecordingLauncher(_ => File.WriteAllText(kit.Layout.PidFile("C1"), "4343\n"));
+        var asked = 0;
+        var seams = new RunAllSeams(_ => launcher, (_, _) => launcher.Starts.Count == 0 || Interlocked.Increment(ref asked) == 1 ? new RunnerState.Gone() : new RunnerState.Alive("pid 4343", 4343), DetachedRoad.Setsid, TimeSpan.FromSeconds(10));
+
+        var run = await kit.InProcessAsync(seams, "C1");
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        run.Error.Should().NotContain("already ended", "the lock was held on the second look");
+        run.Error.Should().NotContain("did not take its lock");
+    }
+
+    [Fact]
     public async Task The_wait_polls_with_a_backoff_from_50_ms_to_500_ms_and_a_runner_that_never_shows_is_pointed_at_its_log()
     {
         await using var kit = await RunAllKit.MakeAsync("C1");
