@@ -1445,7 +1445,11 @@ the twenty launches are otherwise independent.
 `samplesSha256` with that group's. A's records stay valid for A and become `stale` for B once part ii-b makes B's runner
 manifest (T-L36); in group B the tool **re-runs the D40 gate for 01, 02, 03 and 09 on B's identities** — no model, no spend —
 and the new records are B's, the old ones kept. A re-gated result that differs from A's (a pass become a fail) is a finding:
-recorded, resolved before B's tag, and never applied to A's sessions. Material of the exploratory pilots reaches a draft
+recorded, resolved before B's tag, and never applied to A's sessions. *(Superseded 2026-11-01 by the parent's D50 guard (2),
+the team lead's ruling at the second full reading, finding 1:)* a re-gated or re-calibrated result that differs from A's is
+**a drift finding, recorded in the drift table with its cause and never registered; the task's replication is suspended as an
+instrument finding if a reference fails under A's limit**. B's replication runs under A's registered limits, unchanged; the
+re-run is a check only. Material of the exploratory pilots reaches a draft
 reference only through this chain (parent D44). *Test:* `An_A_record_is_valid_for_A_and_stale_for_B`.
 
 ---
