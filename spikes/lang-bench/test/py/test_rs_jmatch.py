@@ -121,6 +121,23 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(check('{"a":"\\ud800${:int}"}', '{"a":"\\ud8007"}').ok)
 
 
+class TrialTests(unittest.TestCase):
+    def test_A_trial_context_is_an_isolated_copy_so_no_binding_or_variable_leaks_between_candidates(self):
+        ctx = jm.Ctx({"v": rf.Bound(b"1")}, CLOCK)
+        trial = ctx.trial()
+        trial.binds.append(("x", rf.Bound(b"2")))
+        trial.variables["w"] = rf.Bound(b"3")
+        self.assertEqual((ctx.binds, sorted(ctx.variables)), ([], ["v"]))
+        self.assertIsNot(trial.variables, ctx.variables)
+
+    def test_Candidates_tried_in_the_assignment_search_leave_no_binding_in_the_context(self):
+        result = check('{"l":{"$unordered":[{"id":"${:uint=a}","t":"x"},{"id":"${:uint=b}","t":"y"},{"id":"${:uint=c}","t":"z"}]}}',
+                       '{"l":[{"id":3,"t":"z"},{"id":1,"t":"x"},{"id":2,"t":"y"}]}')
+        self.assertTrue(result.ok)
+        self.assertEqual({n: b.raw for n, b in result.binds}, {"a": b"1", "b": b"2", "c": b"3"})
+        self.assertEqual(len(result.binds), 3, "each binding once: candidate evaluations left nothing behind")
+
+
 class HugeNumberTests(unittest.TestCase):
     def test_A_number_field_over_a_5000_digit_number_is_compared_and_does_not_crash(self):
         digits = "1" * 5000

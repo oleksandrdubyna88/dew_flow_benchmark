@@ -362,6 +362,61 @@ class UnorderedBindingTests(unittest.TestCase):
         self.assertEqual(parse(self.GROUP)[1], [])
 
 
+class JsonUnorderedBindingTests(unittest.TestCase):
+    """The same rule for bindings made inside a JSON {"$unordered": [...]} array: which element takes which value depends on arrival order."""
+
+    HEAD = 'transcript 2\nreply c 200\n  body json {"$unordered":["${:int=a}","${:int=b}"]}\n'
+
+    def refused(self, tail, head=None):
+        transcript, problems = parse((head or self.HEAD) + tail)
+        self.assertIsNone(transcript, tail)
+        self.assertEqual(len(problems), 1, (tail, problems))
+        return problems[0]
+
+    def test_Check_equal_naming_a_binding_inside_a_JSON_unordered_array_is_refused_with_file_and_line(self):
+        problem = self.refused("check equal a 1\n")
+        self.assertEqual((problem.file, problem.line), ("t.out", 4))
+        self.assertIn("unordered", problem.message)
+
+    def test_The_review_case_replies_1_2_failed_and_2_1_passed_for_the_same_program_and_is_no_longer_judged(self):
+        self.assertEqual(len(rt.parse_transcript((self.HEAD + "check equal a 1\n").encode(), "t.out")[1]), 1)
+
+    def test_Check_distinct_over_part_of_the_array_is_refused_and_over_all_of_it_is_not(self):
+        head = 'transcript 2\nreply c 200\n  body json {"$unordered":[{"id":"${:int=a}","k":"${:token}"},{"id":"${:int=b}","k":"${:token}"},{"id":"${:int=c}","k":"${:token}"}]}\n'
+        self.refused("check distinct a\n", head)
+        self.refused("check distinct a b\n", head)
+        self.assertEqual(parse(head + "check distinct a b c\n")[1], [])
+        self.assertEqual(parse(head + "check distinct c b a\n")[1], [])
+
+    def test_Check_equal_naming_a_binding_of_the_array_on_either_side_is_refused(self):
+        head = self.HEAD + 'recv d "${:int=z}\\n"\n'
+        self.refused("check equal z a\n", head)
+        self.refused('check equal b "2"\n', head)
+
+    def test_A_JSON_recv_entry_is_judged_like_a_reply(self):
+        head = 'transcript 2\nrecv c json {"$unordered":["${:int=a}","${:int=b}"]}\n'
+        self.refused("check equal a 1\n", head)
+        self.assertEqual(parse(head + "check distinct a b\n")[1], [])
+
+    def test_Bindings_outside_the_array_and_arrays_that_bind_nothing_leave_every_check_alone(self):
+        head = 'transcript 2\nreply c 200\n  body json {"id":"${:int=y}","l":{"$unordered":[1,2]}}\nrecv d "${:int=z}\\n"\n'
+        self.assertEqual(parse(head + "check equal y z\ncheck distinct y z\ncheck equal y 3\n")[1], [])
+
+    def test_A_binding_beside_the_array_in_the_same_object_is_not_part_of_the_group(self):
+        head = 'transcript 2\nreply c 200\n  body json {"id":"${:int=y}","l":{"$unordered":["${:int=a}","${:int=b}"]}}\n'
+        self.assertEqual(parse(head + "check equal y 3\ncheck distinct a b\n")[1], [])
+        self.refused("check distinct y a\n", head)
+
+    def test_A_nested_array_is_a_group_of_its_own_and_part_of_the_outer_one(self):
+        head = 'transcript 2\nreply c 200\n  body json {"$unordered":[{"x":{"$unordered":["${:int=a}","${:int=b}"]}},"${:int=c}"]}\n'
+        self.assertEqual(parse(head + "check distinct a b c\n")[1], [])
+        self.refused("check distinct a b\n", head)
+
+    def test_A_group_of_entries_and_a_JSON_array_inside_it_are_both_judged(self):
+        head = 'transcript 2\nunordered\n  reply * 200\n    body json {"$unordered":["${:int=a}","${:int=b}"]}\n  recv * "x"\nend\n'
+        self.refused("check equal a 1\n", head)
+
+
 class CanonicalTests(unittest.TestCase):
     def test_Strings_are_written_canonically_printable_ASCII_as_is_and_the_rest_escaped(self):
         self.assertEqual(rt.canonical(b'ab "q" \\ \r\n\t\0 \xff\x01'), '"ab \\"q\\" \\\\ \\r\\n\\t\\0 \\xff\\x01"')

@@ -41,7 +41,8 @@ class Ctx:
         self.variables, self.clock, self.binds = variables, clock, []
 
     def trial(self):
-        return Ctx(self.variables, self.clock)
+        """An isolated copy for trying one candidate: its bindings and variables are its own and are dropped with it."""
+        return Ctx(dict(self.variables), self.clock)
 
 
 @functools.lru_cache(maxsize=4096)

@@ -27,7 +27,7 @@
       },
       {
         "path": "rs_jmatch.py",
-        "sha256": "a9dabdb1f97c762f08009038cd78f3d8b5b4d4e963e5a5ca94e1c7162abe6e22"
+        "sha256": "cbb85cac73d2e8efe83b08cb05ff715d884cc148921438479e8e78be652b7750"
       },
       {
         "path": "rs_json.py",
@@ -67,14 +67,14 @@
       },
       {
         "path": "rs_transcript.py",
-        "sha256": "2cd4f66d4dfcb65fd48444ad58048ed24ab12ffbfc57319211813d1aa303bbee"
+        "sha256": "0cc94e0806e662aad7188cfc87b6d8dd8050adeed95388a6435b07fe5b8668ae"
       },
       {
         "path": "run_samples.py",
         "sha256": "ed33758491773ce691e86f9cb2f0245932a14d9da5e26674f96bb707140f761a"
       }
     ],
-    "manifestSha256": "294e1728e1a0808e3575c3b43ffdbe72dcb9ee877807fba9407c03aeba559a88",
+    "manifestSha256": "7aed2073343857924e8903a002777ad04e345806f7c6101773b8a3828515fbbc",
     "version": "0.1.0"
   }
 }

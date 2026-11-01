@@ -705,12 +705,60 @@ def _refuses(check, group):
     return bool(group) and _touches(check, group) and not whole
 
 
+def _json_strings(value):
+    """Every string of an expected JSON value, member names excluded."""
+    stack = [value]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, str):
+            yield node
+        stack.extend(rs_json.children_of(node))
+
+
+def _json_unordered_arrays(value):
+    """The list of elements of every `{"$unordered": [...]}` object in an expected JSON value, outer ones and nested ones alike."""
+    stack = [value]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict) and "$unordered" in node:
+            yield node["$unordered"]
+        stack.extend(rs_json.children_of(node))
+
+
+def _string_parts(elements):
+    return itertools.chain.from_iterable(lex.template_parts(s) or [] for s in _json_strings(elements))
+
+
+def _array_binders(elements):
+    return [_binder_of(p.bind) for p in _string_parts(elements) if isinstance(p, lex.Field) and p.bind]
+
+
+def _json_bodies(transcript):
+    return [e.body[1] for e, _ in walk(transcript.nodes) if e.body is not None and e.body[0] == "json"]
+
+
+def _json_groups(transcript):
+    """The binders of every JSON `$unordered` array in the transcript, one list per array."""
+    arrays = itertools.chain.from_iterable(_json_unordered_arrays(b) for b in _json_bodies(transcript))
+    return [_array_binders(a) for a in arrays]
+
+
+def _all_groups(transcript):
+    """The binders of every unordered group of entries and every unordered JSON array, one list each."""
+    return [_group_binders(g) for g in _unordered_groups(transcript.nodes)] + _json_groups(transcript)
+
+
 def _arrival_problems(transcript):
-    groups = [_group_binders(g) for g in _unordered_groups(transcript.nodes)]
-    pairs = itertools.product(checks_of(transcript), groups)
-    return [Problem(transcript.file, c.line, _arrival_message(c)) for c, g in pairs if _refuses(c, g)]
+    groups = _all_groups(transcript)
+    refused = [c for c in checks_of(transcript) if _refused_by_any(c, groups)]
+    return [Problem(transcript.file, c.line, _arrival_message(c)) for c in refused]
+
+
+def _refused_by_any(check, groups):
+    return any(_refuses(check, g) for g in groups)
 
 
 def _arrival_message(check):
     what = "check equal names" if check.op == "equal" else "check distinct names only part of"
-    return f"{what} a binding made inside an unordered group: which entry binds it depends on the order the replies arrive in (name all of the group's bindings in one check distinct, or none)"
+    return (f"{what} a binding made inside an unordered group or an unordered JSON array: which entry binds it depends on the order the "
+            "replies arrive in (name all of the group's bindings in one check distinct, or none)")
