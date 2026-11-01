@@ -96,9 +96,9 @@ class TimeDigitTests(unittest.TestCase):
 
 class MatchTests(unittest.TestCase):
     def test_A_literal_string_matches_only_the_same_bytes_and_names_the_first_difference(self):
-        self.assertTrue(match("+OK\\r\\n", b"+OK\r\n").ok)
-        result = match("$5\\r\\nmango\\r\\n", b"$5\r\nmelon\r\n")
-        self.assertEqual((result.ok, result.furthest), (False, 5), "the first difference is at byte 5 (counting from 0): 'a' against 'e'")
+        self.assertTrue(match("0002|ok", b"0002|ok").ok)
+        result = match("0004|kiwi", b"0004|kiwx")
+        self.assertEqual((result.ok, result.furthest), (False, 8), "the first difference is at byte 8 (counting from 0): 'i' against 'x'")
 
     def test_A_field_matches_the_shortest_run_that_lets_the_rest_match(self):
         result = match("${:token}.${:token}", b"a.b.c")

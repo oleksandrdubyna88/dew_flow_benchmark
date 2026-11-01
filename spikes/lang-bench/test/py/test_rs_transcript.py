@@ -53,6 +53,15 @@ class ExampleTests(unittest.TestCase):
             transcript, p2 = rt.parse_transcript(fixture(name + ".out"), name + ".out")
             self.assertEqual(p1 + p2 + rp.validate_pair(scenario, transcript), [], name)
 
+    def test_The_fixtures_are_FORMATs_current_examples_and_nothing_of_the_earlier_daemon_example_remains(self):
+        names = ("x2.in", "x2.out", "x3.in", "x3.out")
+        texts = {n: fixture(n).decode("utf-8") for n in names}
+        self.assertIn("a toy store over an invented framed protocol", texts["x2.in"])
+        self.assertIn("a toy order endpoint with idempotency keys. No task of", texts["x3.in"])
+        for name, text in texts.items():
+            for old in ("RESP", "PING", "PONG", "mango", "SET", "+OK", "$16384"):
+                self.assertNotIn(old, text, f"{name} still holds a piece of the earlier daemon example")
+
     def test_The_parsed_transcript_is_frozen(self):
         transcript, _ = rt.parse_transcript(fixture("x3.out"), "x3.out")
         with self.assertRaises(Exception):

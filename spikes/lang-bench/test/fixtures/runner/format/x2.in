@@ -1,38 +1,38 @@
 scenario 2
-# Illustrative only: a toy key-value store with PING, SET and GET in RESP
-# framing. It is not a task of this repository and fixes nothing about one.
+# Illustrative only: a toy store over an invented framed protocol (four digits
+# of payload length, '|', the payload). No task of this repository.
 default within 2s
 start ready port within 10s
 connect c1 tcp
 
-# 1. One SET split across two partial writes: no reply may come before the
-#    frame is complete (the first part is 30 bytes and ends inside "mango").
-send c1 "*3\r\n$3\r\nSET\r\n$5\r\nfruit\r\n$5\r\nma"
+# 1. One frame in two writes: no reply may come before it is complete.
+send c1 "0014|put fruit ki"
 expect c1 quiet for 200ms
-send c1 "ngo\r\n"
-recv c1 until "\r\n"
+send c1 "wi"
+recv c1 bytes 7
 
-# 2. Two commands pipelined in one write; the replies come back in order.
-send c1 "*2\r\n$3\r\nGET\r\n$5\r\nfruit\r\n*1\r\n$4\r\nPING\r\n"
-recv c1 until "\r\n" count 2
-recv c1 until "\r\n"
+# 2. Two requests in one write; the replies come back in order.
+send c1 "0010|take fruit" "0002|hi"
+recv c1 bytes 9
+recv c1 bytes 7
 
-# 3. The same GET written in three pieces, cut at byte offsets 1 and 9.
-send c1 "*2\r\n$3\r\nGET\r\n$5\r\nfruit\r\n" split 1,9 pause 50ms
-recv c1 until "\r\n" count 2
+# 3. split cuts the joined bytes: of these 15, offset 12 falls inside the
+#    second string.
+send c1 "0010|" "take fruit" split 2,12 pause 50ms
+recv c1 bytes 9
 
-# 4. A slow reader: 'lazy' pipelines 64 GETs of a 16 KiB value in one write
-#    and reads nothing; meanwhile c1 is still served. Then 'lazy' reads its
-#    64 replies of 16394 bytes each, 4096 bytes at a time.
-send c1 "*3\r\n$3\r\nSET\r\n$3\r\nbig\r\n$16384\r\n" "v"*16384 "\r\n"
-recv c1 until "\r\n"
+# 4. A slow reader: 'lazy' asks for a 9000-byte text 64 times in one write and
+#    reads nothing; meanwhile c1 is still served. Then 'lazy' reads its 64
+#    replies of 9005 bytes each, 4096 bytes at a time.
+send c1 "9008|put big " "z"*9000
+recv c1 bytes 7
 connect lazy tcp rcvbuf 4096
-send lazy "*2\r\n$3\r\nGET\r\n$3\r\nbig\r\n"*64
+send lazy "0008|take big"*64
 sleep 200ms
-send c1 "*1\r\n$4\r\nPING\r\n"
-recv c1 until "\r\n" within 500ms
+send c1 "0002|hi"
+recv c1 bytes 7 within 500ms
 repeat 64 i
-  recv lazy bytes 16394 chunk 4096 pause 2ms within 5s
+  recv lazy bytes 9005 chunk 4096 pause 2ms within 5s
 end
 
 # 5. The stop.

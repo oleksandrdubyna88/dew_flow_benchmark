@@ -1,6 +1,6 @@
 scenario 2
-# Illustrative only: a toy order endpoint with idempotency keys. It is not a
-# task of this repository and fixes nothing about one.
+# Illustrative only: a toy order endpoint with idempotency keys. No task of
+# this repository.
 default within 2s
 start ready port within 10s
 connect a http

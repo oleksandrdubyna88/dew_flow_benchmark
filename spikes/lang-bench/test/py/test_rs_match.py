@@ -54,9 +54,9 @@ class EntryTests(unittest.TestCase):
                 self.assertFalse(rm.match_entry(entry(text), Actual(kind, "c1")).ok, (kind, text))
 
     def test_A_recv_matches_its_bytes_and_a_difference_names_the_first_differing_byte(self):
-        self.assertTrue(rm.match_entry(entry('recv c1 "$5\\r\\nmango\\r\\n"'), recv("c1", b"$5\r\nmango\r\n")).ok)
-        result = rm.match_entry(entry('recv c1 "$5\\r\\nmango\\r\\n"'), recv("c1", b"$5\r\nmelon\r\n"))
-        self.assertEqual((result.ok, result.detail), (False, "first difference at byte 5"))
+        self.assertTrue(rm.match_entry(entry('recv c1 "0004|kiwi"'), recv("c1", b"0004|kiwi")).ok)
+        result = rm.match_entry(entry('recv c1 "0004|kiwi"'), recv("c1", b"0004|kiwx"))
+        self.assertEqual((result.ok, result.detail), (False, "first difference at byte 8"))
 
     def test_A_recv_that_is_a_prefix_or_an_extension_of_the_expected_bytes_differs_at_the_length_of_the_shorter(self):
         self.assertEqual(rm.match_entry(entry('recv c1 "abc"'), recv("c1", b"ab")).detail, "first difference at byte 2")
@@ -183,7 +183,7 @@ class ReplyTests(unittest.TestCase):
 
 class CompareTests(unittest.TestCase):
     def test_Matching_transcripts_pass_with_their_entry_count(self):
-        verdict = compare('ready\nrecv c1 "+OK\\r\\n"\nexit 0\n', [Actual("ready"), recv("c1", b"+OK\r\n"), Actual("exit", status=0)])
+        verdict = compare('ready\nrecv c1 "0002|ok"\nexit 0\n', [Actual("ready"), recv("c1", b"0002|ok"), Actual("exit", status=0)])
         self.assertEqual((verdict.ok, verdict.entries), (True, 3))
 
     def test_The_first_differing_entry_is_named_by_its_position_and_the_total(self):
@@ -355,9 +355,10 @@ class FormatExampleTests(unittest.TestCase):
         return parsed
 
     def x2_correct(self):
-        lazy = b"$16384\r\n" + b"v" * 16384 + b"\r\n"
-        out = [Actual("ready"), Actual("quiet", "c1"), recv("c1", b"+OK\r\n"), recv("c1", b"$5\r\nmango\r\n"), recv("c1", b"+PONG\r\n"),
-               recv("c1", b"$5\r\nmango\r\n"), recv("c1", b"+OK\r\n"), recv("c1", b"+PONG\r\n")]
+        """What the toy of FORMAT 6.2 (four digits of length, '|', the payload) sends back, step by step."""
+        lazy = b"9000|" + b"z" * 9000
+        out = [Actual("ready"), Actual("quiet", "c1"), recv("c1", b"0002|ok"), recv("c1", b"0004|kiwi"), recv("c1", b"0002|ok"),
+               recv("c1", b"0004|kiwi"), recv("c1", b"0002|ok"), recv("c1", b"0002|ok")]
         return out + [recv("lazy", lazy)] * 64 + [Actual("exit", status=0)]
 
     def test_The_daemon_example_passes_for_a_correct_toy(self):
@@ -368,7 +369,7 @@ class FormatExampleTests(unittest.TestCase):
     def test_A_toy_that_answers_a_split_frame_early_fails_at_entry_2_with_noise(self):
         t = self.load("x2.out")
         actual = self.x2_correct()
-        actual[1] = Actual("noise", "c1", data=b"+OK\r\n")
+        actual[1] = Actual("noise", "c1", data=b"0002|ok")
         verdict = rm.compare(rt.expand(t), rt.checks_of(t), actual)
         self.assertEqual((verdict.index, verdict.reason, verdict.actual.kind), (2, "entry 2 of 73 differs", "noise"))
 

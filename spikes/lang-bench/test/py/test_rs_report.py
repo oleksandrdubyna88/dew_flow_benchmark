@@ -7,11 +7,12 @@ import rs_report as rp
 import rs_transcript as rt
 from rs_transcript import Actual
 
+# The layout of FORMAT 5.6's example (head, step, expect and actual in columns, the first difference), over the toy of FORMAT 6.2.
 FORMAT_EXAMPLE = """FAIL s02 — entry 4 of 9 differs
-  step    s02.in:14   recv c1 until "\\r\\n" count 2
-  expect  s02.out:6   recv c1 "$5\\r\\nmango\\r\\n"
-  actual              recv c1 "$5\\r\\nmelon\\r\\n"
-  first difference at byte 5"""
+  step    s02.in:14   recv c1 bytes 9
+  expect  s02.out:6   recv c1 "0004|kiwi"
+  actual              recv c1 "0004|kiwx"
+  first difference at byte 8"""
 
 
 def verdict_for(expected_text, actual):
@@ -25,10 +26,10 @@ class RenderTests(unittest.TestCase):
         result = rp.CaseResult("s03", "PASS", entries=1)
         self.assertEqual(rp.render_case(result), ["PASS s03 — 1 entries"])
 
-    def test_The_mismatch_report_of_the_format_example_is_reproduced_line_for_line(self):
-        expected = 'ready\nquiet c1\nrecv c1 "a"\n# the fourth entry is on line 6\nrecv c1 "$5\\r\\nmango\\r\\n"\n' + "quiet c1\n" * 5
+    def test_The_mismatch_report_has_the_layout_of_the_format_example_line_for_line(self):
+        expected = 'ready\nquiet c1\nrecv c1 "a"\n# the fourth entry is on line 6\nrecv c1 "0004|kiwi"\n' + "quiet c1\n" * 5
         actual = [Actual("ready"), Actual("quiet", "c1"), Actual("recv", "c1", data=b"a"),
-                  Actual("recv", "c1", data=b"$5\r\nmelon\r\n", step_line=14, step_text='recv c1 until "\\r\\n" count 2')]
+                  Actual("recv", "c1", data=b"0004|kiwx", step_line=14, step_text="recv c1 bytes 9")]
         verdict = verdict_for(expected, actual + [Actual("quiet", "c1")] * 5)
         self.assertEqual("\n".join(rp.render_verdict("s02", verdict, "s02.in", "s02.out")), FORMAT_EXAMPLE)
 
