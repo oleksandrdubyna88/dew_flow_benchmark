@@ -327,11 +327,12 @@ class ResultTests(unittest.TestCase):
 
 class EncodingTests(unittest.TestCase):
     def test_A_non_UTF_8_locale_does_not_turn_a_FAIL_into_a_crash(self):
+        # -X utf8=0: in the C locale Python 3.14 would otherwise switch to UTF-8 mode by itself and the stream would be UTF-8 without any help.
         box = Box(self, run_sh="printf 'wrong\\n'\n")
         box.write(box.samples, "éè-note.txt", "ignored")
         locales = ["C", "POSIX", "de_DE.utf8", "en_US.ISO-8859-1", "de_DE.ISO-8859-1"]
         for locale in locales:
-            code, out, err = box.cli(env={"LC_ALL": locale, "LANG": locale})
+            code, out, err = box.cli(env={"LC_ALL": locale, "LANG": locale}, python_flags=("-I", "-B", "-X", "utf8=0"))
             self.assertEqual(code, 1, (locale, err))
             self.assertNotIn("Traceback", err, locale)
             self.assertIn("FAIL s03 — output differs", out, locale)
