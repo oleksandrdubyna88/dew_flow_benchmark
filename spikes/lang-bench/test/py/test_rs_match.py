@@ -264,14 +264,15 @@ class CheckTests(unittest.TestCase):
     def test_Check_equal_compares_a_bound_number_with_a_decimal_or_with_another_name_exactly(self):
         base = 'recv c1 "${:num 0 100=a}"\nrecv c1 "${:num 0 100=b}"\n'
         self.assertTrue(compare(base + "check equal a 3.0\n", self.tokens(b"3", b"4")).ok)
-        self.assertTrue(compare(base + "check equal a b\n", self.tokens(b"3", b"3.00")).ok)
+        self.assertTrue(compare(base + "check equal a b\n", self.tokens(b"3", b"3")).ok)
+        self.assertFalse(compare(base + "check equal a b\n", self.tokens(b"3", b"3.00")).ok, "bytes are compared as bytes; a JSON number is the exact-decimal case")
         verdict = compare(base + "check equal a b\n", self.tokens(b"3", b"4"))
         self.assertEqual(verdict.reason, "check: a (3) is not equal to b (4)")
         self.assertFalse(compare(base + "check equal a 9007199254740993\n", self.tokens(b"9007199254740992", b"1")).ok)
 
     def test_A_check_over_a_value_that_is_not_a_number_fails_naming_it(self):
         verdict = compare('recv c1 "${:token=t}"\ncheck equal t 3\n', self.tokens(b"abc"))
-        self.assertEqual(verdict.reason, "check: t (abc) is not a number")
+        self.assertEqual(verdict.reason, "check: t is abc, expected 3")
 
     def test_A_check_over_a_name_nothing_bound_fails_instead_of_passing(self):
         verdict = compare('recv c1 "x"\ncheck distinct r*\n', self.tokens(b"x"))
@@ -284,6 +285,66 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(verdict.reason, "check: a and b are equal")
         verdict = compare(text.replace('"${:token=b}"', '"nope"'), self.tokens(b"same", b"same"))
         self.assertTrue(verdict.reason.startswith("entry 2"))
+
+
+class CheckNamespaceTests(unittest.TestCase):
+    """5.5: one namespace for checks - the script's captures and the transcript's bindings alike - and `equal` compares values, not numbers only."""
+
+    def tokens(self, *values):
+        return [recv("c1", v) for v in values]
+
+    def test_Check_equal_of_two_names_holding_the_same_token_passes(self):
+        text = 'recv c1 "${:token=a}\\n"\nrecv c1 "${:token=b}\\n"\ncheck equal a b\n'
+        self.assertTrue(compare(text, self.tokens(b"abc\n", b"abc\n")).ok)
+        verdict = compare(text, self.tokens(b"abc\n", b"abd\n"))
+        self.assertEqual(verdict.reason, "check: a (abc) is not equal to b (abd)")
+
+    def test_Check_equal_of_two_names_compares_JSON_values_exactly_and_bytes_otherwise(self):
+        text = 'reply a 200\nbody json {"x":"${:num 2 0=p}","y":"${:num 2 0=q}"}\ncheck equal p q\n'
+        self.assertTrue(compare(text, [reply("a", 200, body=b'{"x":2,"y":2.0}')]).ok)
+        self.assertFalse(compare(text.replace("q}", "q}").replace("num 2 0=q", "num 3 1=q"), [reply("a", 200, body=b'{"x":2,"y":3}')]).ok)
+
+    def test_Check_distinct_sees_a_capture_the_script_bound(self):
+        text = 'recv c1 "${:token=b}\\n"\ncheck distinct id b\n'
+        self.assertTrue(compare(text, self.tokens(b"x\n"), {"id": rf.Bound(b"y")}).ok)
+        verdict = compare(text, self.tokens(b"x\n"), {"id": rf.Bound(b"x")})
+        self.assertEqual(verdict.reason, "check: id and b are equal")
+
+    def test_A_glob_stands_for_captures_and_bindings_alike_in_one_namespace(self):
+        text = 'recv c1 "${:token=r1}\\n"\ncheck distinct r*\n'
+        self.assertTrue(compare(text, self.tokens(b"y\n"), {"r0": rf.Bound(b"x")}).ok)
+        verdict = compare(text, self.tokens(b"x\n"), {"r0": rf.Bound(b"x")})
+        self.assertEqual(verdict.reason, "check: r0 and r1 are equal")
+
+    def test_Check_equal_of_a_name_and_a_decimal_reports_the_value_and_the_expectation(self):
+        text = 'recv c1 "${:uint=total}\\n"\ncheck equal total 64\n'
+        self.assertTrue(compare(text, self.tokens(b"64\n")).ok)
+        self.assertEqual(compare(text, self.tokens(b"63\n")).reason, "check: total is 63, expected 64")
+
+    def test_Check_equal_of_a_JSON_number_and_a_decimal_is_exact_and_a_JSON_string_is_never_a_number(self):
+        text = 'reply a 200\nbody json {"v":"${:num 5 1=a}"}\ncheck equal a 5\n'
+        self.assertTrue(compare(text, [reply("a", 200, body=b'{"v":5.0}')]).ok)
+        text = 'reply a 200\nbody json {"v":"${:token=a}"}\ncheck equal a 5\n'
+        self.assertEqual(compare(text, [reply("a", 200, body=b'{"v":"5"}')]).reason, 'check: a is "5", expected 5')
+
+    def test_Check_equal_of_a_name_and_a_string_matches_bytes_or_a_JSON_string_and_never_a_number(self):
+        raw = 'recv c1 "${:token=a}"\ncheck equal a "abc"\n'
+        self.assertTrue(compare(raw, self.tokens(b"abc")).ok)
+        self.assertEqual(compare(raw, self.tokens(b"abd")).reason, 'check: a is "abd", expected "abc"')
+        text = 'reply a 200\nbody json {"v":"${:token=a}"}\ncheck equal a "abc"\n'
+        self.assertTrue(compare(text, [reply("a", 200, body=b'{"v":"abc"}')]).ok)
+        number = 'reply a 200\nbody json {"v":"${:int=a}"}\ncheck equal a "5"\n'
+        self.assertFalse(compare(number, [reply("a", 200, body=b'{"v":5}')]).ok, "a string never matches a number")
+
+    def test_A_string_with_characters_beyond_ASCII_compares_by_its_UTF_8_bytes_and_by_JSON_characters(self):
+        text = 'recv c1 "x"\ncheck equal a "caf\\xc3\\xa9"\n'
+        as_json = rf.Bound("caf\u00e9".encode(), rs_json.parse('"caf\\u00e9"').value)
+        self.assertTrue(compare(text, self.tokens(b"x"), {"a": as_json}).ok)
+        self.assertTrue(compare(text, self.tokens(b"x"), {"a": rf.Bound("caf\u00e9".encode())}).ok)
+        self.assertFalse(compare(text, self.tokens(b"x"), {"a": rf.Bound(b"cafe")}).ok)
+
+    def test_A_check_name_that_nothing_bound_fails_instead_of_passing(self):
+        self.assertIn("ghost", compare('recv c1 "x"\ncheck equal ghost 1\n', self.tokens(b"x")).reason)
 
 
 class FormatExampleTests(unittest.TestCase):

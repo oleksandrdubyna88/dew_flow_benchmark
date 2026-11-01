@@ -4,19 +4,15 @@
 group by one-to-one assignment), binds what fields matched, and then evaluates the V6 `check` lines in file order. The first
 difference becomes a `Verdict`; the report module (rs_report) only prints it.
 """
-import re
 from datetime import datetime
-from decimal import Decimal
 from typing import Any, NamedTuple, Optional
 
 import rs_assign
 import rs_fields as rf
 import rs_jmatch
-import rs_json
 import rs_transcript as rt
+from rs_checks import run_checks
 from rs_transcript import abbreviate
-
-DECIMAL_TEXT = re.compile(rb"-?[0-9]+(\.[0-9]+)?\Z")
 
 
 class Result(NamedTuple):
@@ -225,89 +221,9 @@ def compare(expected, checks, actual, variables=None, ended_by=""):
         return verdict
     if len(expected) != len(actual):
         return Verdict(False, f"expected {len(expected)} entries, actual {len(actual)}", 0, len(expected), None, None, "count", ended_by)
-    failed = run_checks(checks, run.bound)
+    failed = run_checks(checks, run.variables)
     return Verdict(False, f"check: {failed}", 0, len(expected), None, None, "check", failed) if failed else Verdict(True, entries=len(expected))
 
 
 def compare_transcript(transcript, actual, variables=None, ended_by=""):
     return compare(rt.expand(transcript), rt.checks_of(transcript), actual, variables, ended_by)
-
-
-# ---- the V6 checks ---------------------------------------------------------------------------------------------------------------
-
-def _expand_token(token, bound):
-    return [n for n in bound if n.startswith(token[:-1])] if token.endswith("*") else [token]
-
-
-def _names_of(check, bound):
-    return [n for token in check.names for n in _expand_token(token, bound)]
-
-
-def _values_equal(a, b):
-    if a.json is not rf.MISSING and b.json is not rf.MISSING:
-        return rs_json.values_equal(a.json, b.json)
-    return a.raw == b.raw
-
-
-def _first_equal(names, bound):
-    return next((f"{a} and {b} are equal" for i, a in enumerate(names) for b in names[i + 1:] if _values_equal(bound[a], bound[b])), None)
-
-
-def _first_unbound(names, bound):
-    return next((n for n in names if n not in bound), None)
-
-
-def _unmatched_glob(check, bound):
-    return next((t for t in check.names if t.endswith("*") and not _expand_token(t, bound)), None)
-
-
-def _distinct(check, bound):
-    glob = _unmatched_glob(check, bound)
-    if glob:
-        return f"{glob} matches no bound name"
-    names = _names_of(check, bound)
-    absent = _first_unbound(names, bound)
-    return f"{absent} is not bound" if absent else _first_equal(names, bound)
-
-
-def _number(value):
-    if value.json is not rf.MISSING:
-        return value.json if isinstance(value.json, Decimal) else None
-    return Decimal(value.raw.decode("ascii")) if DECIMAL_TEXT.match(value.raw) else None
-
-
-def _operand(token, bound):
-    if re.match(r"-?[0-9]", token):
-        return Decimal(token), token
-    return (_number(bound[token]), f"{token} ({_text(bound[token])})") if token in bound else (None, f"{token} (not bound)")
-
-
-def _text(value):
-    return rs_json.render(value.json) if value.json is not rf.MISSING else value.raw.decode("utf-8", "replace")
-
-
-def _not_a_number(operand):
-    return f"{operand[1]} is not a number" if operand[0] is None else None
-
-
-def _compare_operands(left, right):
-    return _not_a_number(left) or _not_a_number(right) or (None if left[0] == right[0] else f"{left[1]} is not equal to {right[1]}")
-
-
-def _equal(check, bound):
-    name = check.names[0]
-    if name not in bound:
-        return f"{name} is not bound"
-    return _compare_operands(_operand(name, bound), _operand(check.other, bound))
-
-
-_CHECKERS = {"distinct": _distinct, "equal": _equal}
-
-
-def run_checks(checks, bound):
-    """The first failed check as text, or None."""
-    for check in checks:
-        failed = _CHECKERS[check.op](check, bound)
-        if failed:
-            return failed
-    return None
