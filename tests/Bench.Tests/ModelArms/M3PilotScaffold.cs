@@ -27,10 +27,10 @@ public sealed class M3PilotScaffold
     private const string FakeGate = "m3-fake-gate";
 
     [Fact(Explicit = true)]
-    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public async Task Writes_the_scratch_target_root_home_and_claude_for_the_pilot()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "the pilot's scratch is made with POSIX paths, a real git and a shell wrapper");
+        Assert.SkipWhen(!OperatingSystem.IsLinux(), "the pilot's scratch is made with POSIX paths, a real git, a shell wrapper and /proc/self/status");
         var temp = Path.GetTempPath().TrimEnd('/');
         var (id, manifest) = ClaimManifest(temp);
         var names = new[] { "target", "root", "home", "old", "bin", "fake", "d28", "deleg", "home14", "keep" };
@@ -40,9 +40,9 @@ public sealed class M3PilotScaffold
 
         // Every path is in the manifest BEFORE it exists (the manifest itself is already there, claimed exclusively).
         var entries = new JsonArray([.. paths.Select(each => (JsonNode?)new JsonObject { ["name"] = each.Key, ["path"] = each.Value }), (JsonNode?)new JsonObject { ["name"] = "manifest", ["path"] = manifest }]);
-        await File.WriteAllTextAsync(manifest, new JsonObject { ["id"] = id, ["uid"] = uid, ["paths"] = entries }.ToJsonString(M2PilotScaffold.Pretty) + "\n", TestContext.Current.CancellationToken);
         try
         {
+            await File.WriteAllTextAsync(manifest, new JsonObject { ["id"] = id, ["uid"] = uid, ["paths"] = entries }.ToJsonString(M2PilotScaffold.Pretty) + "\n", TestContext.Current.CancellationToken);
             var baseSha = await M2PilotScaffold.MakeTargetAsync(paths["target"]);
             Directory.CreateDirectory(files);
             var settings = await M2PilotScaffold.CoaiSettingsAsync(files);
@@ -80,16 +80,78 @@ public sealed class M3PilotScaffold
             Say("M3 scaffold — the environment of every verb: env -i PATH=" + PathOf(paths["bin"]) + $" HOME={paths["home"]} LANG=C.UTF-8 FAKE_CLI_HOME={paths["fake"]}" + (OperatingSystem.IsLinux() && System.Environment.GetEnvironmentVariable("WSL_DISTRO_NAME") is { Length: > 0 } ? " WSL_DISTRO_NAME=… WSL_INTEROP=…" : string.Empty));
             Say("M3 scaffold — experiment.json:\n" + experiment);
         }
-        catch
+        catch (Exception failure)
         {
-            // Nothing is half-made and left: what this run created is removed by the manifest's own names, the unlocked folders only.
-            foreach (var name in names.Where(name => Directory.Exists(paths[name])))
+            // Nothing is half-made and left: what this run created is removed by the manifest's own names, best effort per path, the manifest last.
+            // The ORIGINAL exception is rethrown as it was; what the cleanup could not remove is said on the output and carried in its Data.
+            var left = new List<string>();
+            foreach (var name in names)
             {
-                Directory.Delete(paths[name], recursive: true);
+                Remove(paths[name], left);
             }
 
-            File.Delete(manifest);
+            Remove(manifest, left);
+            if (left.Count > 0)
+            {
+                var text = "cleanup left (remove by hand): " + string.Join(", ", left);
+                failure.Data["cleanup"] = text;
+                Say("M3 scaffold — " + text);
+            }
+
             throw;
+        }
+    }
+
+    /// <summary>Removes one path the scaffold named: a folder with owner access restored first, each deletion's failure caught and recorded in <paramref name="left"/>.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    private static void Remove(string path, List<string> left)
+    {
+        try
+        {
+            if (Directory.Exists(path) && new DirectoryInfo(path).LinkTarget is null)
+            {
+                Open(path, left);
+                Directory.Delete(path, recursive: true);
+            }
+            else if (File.Exists(path) || new FileInfo(path).LinkTarget is not null)
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
+        {
+            left.Add(path);
+        }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    private static void Open(string folder, List<string> left)
+    {
+        const UnixFileMode Owner = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        try
+        {
+            File.SetUnixFileMode(folder, File.GetUnixFileMode(folder) | Owner);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
+            {
+                var info = new FileInfo(entry);
+                if (info.LinkTarget is not null)
+                {
+                    continue;
+                }
+
+                if (Directory.Exists(entry))
+                {
+                    Open(entry, left);
+                }
+                else
+                {
+                    File.SetUnixFileMode(entry, File.GetUnixFileMode(entry) | UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                }
+            }
+        }
+        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
+        {
+            left.Add(folder);
         }
     }
 
@@ -111,6 +173,7 @@ public sealed class M3PilotScaffold
         }
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     private static string Uid() =>
         File.ReadLines("/proc/self/status").First(line => line.StartsWith("Uid:", StringComparison.Ordinal)).Split('\t', StringSplitOptions.RemoveEmptyEntries)[1];
 
@@ -217,11 +280,16 @@ public sealed class M3PilotScaffold
         var briefs = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "briefs");
         var split = Quote(RunArmKit.Opening(Path.Combine(briefs, "x-split.template.md")));
         var git = Quote(M2PilotScaffold.HostTool("git"));
+        var fakeHomeQ = Quote(fakeHome);
+        var gateFirst = Quote(Path.Combine(bin, "gate-first"));
+        var gateFirstArm = Quote(Path.Combine(bin, "gate-first", "arm"));
+        var wrapperLog = Quote(Path.Combine(fakeHome, "wrapper.log"));
+        var fakeCli = Quote(Bench.Tests.Probes.Driver.FakeCli.Executable);
         var tasks = Tasks();
         var text = $$"""
             #!/bin/sh
             # The pilot's claude: the model's file writes the fake cannot do, then the fake (M3PilotScaffold).
-            IN='{{fakeHome}}'/wrapper-in-$$
+            IN={{fakeHomeQ}}/wrapper-in-$$
             cat > "$IN"
             case " $* " in *" --session-id "*) how=fresh;; *) how=resume;; esac
             here="$(pwd -P)"
@@ -234,8 +302,8 @@ public sealed class M3PilotScaffold
             case "$here" in */wt/*) id="${here##*/}";; esac
             if [ "$id" = - ]; then id="$(sed -n 's/.*ONE task, \*\*\(t[0-9]*\)\*\*.*/\1/p' "$IN" | head -n 1)"; [ -n "$id" ] || id=-; fi
             if [ "$kind" = gate ]; then
-              if mkdir '{{bin}}/gate-first' 2>/dev/null; then
-                echo "$token" > '{{bin}}/gate-first/arm'
+              if mkdir {{gateFirst}} 2>/dev/null; then
+                echo "$token" > {{gateFirstArm}}
                 printf '%s\n' '{"status":"blocked","why":"pilot"}' > "$arm/notes/gate.json"
                 what=blocked
               else
@@ -257,8 +325,8 @@ public sealed class M3PilotScaffold
             else
               what="$kind"
             fi
-            echo "$token $how $what" >> '{{fakeHome}}/wrapper.log'
-            exec '{{Bench.Tests.Probes.Driver.FakeCli.Executable}}' "$@" < "$IN"
+            echo "$token $how $what" >> {{wrapperLog}}
+            exec {{fakeCli}} "$@" < "$IN"
 
             """;
         var path = Path.Combine(bin, "claude");

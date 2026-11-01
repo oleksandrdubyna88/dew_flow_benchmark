@@ -6,7 +6,7 @@
 ## Purpose
 
 The owner compares coding pipelines ("arms") of headless Claude Code sessions on one frozen plan in a target repository: three schemes
-(C, CR, SRS) times three runs in part 6, and part 7's CHH, every arm ending in the product's multi-vendor code gate. The harness that launched those runs was a
+(C, CR, SRS) in part 6, whose run holds three rounds of one arm of each scheme, and part 7's CHH, whose run holds one round of three CHH arms, every arm ending in the product's multi-vendor code gate (the worked example's `runs`). The harness that launched those runs was a
 set of bash scripts with inline node and the experiment's facts as constants at the top of each script. This module is its port to C#,
 a console of its own beside the benchmark, not part of it. It ports the RUN half (launch, resume, limits, the gate step, the
 chain, isolation by file modes, keep-awake, the objective checks); the analysis half is a later plan, and until it lands the shell's
@@ -757,16 +757,16 @@ The order, each step refusing what the one before did not leave (D18), and the r
 
 | # | command | exit | what it prints / refuses |
 |---|---|---|---|
-| 1 | `model-arms validate --experiment <root>` before anything exists | 4 | `model-arms validate: <root> does not exist — `model-arms init <root>` creates it` |
+| 1 | `model-arms validate --experiment <root>` before anything exists | 4 | `` model-arms validate: <root> does not exist — `model-arms init <root>` creates it `` |
 | 2 | `model-arms init <root>` | 0 | `created <root>: experiment.json (a template — replace every <fill me>), scenarios.json (empty), briefs/ (template overrides by name). Next: model-arms validate --experiment <root>` |
 | 2 | `init <root>` again | 4 | `model-arms init: <root> already exists — init creates a new root and never writes into an existing one` |
 | 3 | fill `experiment.json` and `scenarios.json` (the worked example beside the binary shows a filled file; the unfilled template is refused with every `<fill me>` listed, *The first run: init and validate*) | | |
 | 4 | `validate` | 0 | `resolved executables:` — `git`, `claude`, `dotnet`, `node`, `npm`, `pwsh.exe` on WSL, `coai.binary` — then `model-arms validate: <root> is valid on this host (Wsl)` |
-| 5 | `make` before `prep-base` | 4 | `model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 5 | `make` before `prep-base` | 4 | `` model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it `` |
 | 5 | `run-arm C1` before `prep-base` | 4 | the same, with `run-arm:` — the baseline is the first file every arm verb asks for |
 | 5 | `chain nosuch` before `prep-base` | 4 | the same, with `chain:` — the run is not looked up until the baseline is there |
 | 6 | `prep-base` | 0 | `baseline written to <root>/baseline.json: base <sha>, the main suite 3 tests with 0 failing, the extension 2 tests with 0 failing` |
-| 7 | `run-arm C1` after `prep-base`, before `make` | 4 | `model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it` |
+| 7 | `run-arm C1` after `prep-base`, before `make` | 4 | `` model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it `` |
 | 7 | `chain nosuch` after `prep-base` | 4 | `model-arms chain: there is no run nosuch — the runs are pilot` |
 | 8 | `make` | 0 | `no isolation snapshot`, then `model-arms make: arm <arm> made and built` per arm |
 | 9 | `status` | 0 | every arm `made yes`, every step `not started`, `isolation: no isolation snapshot` |
@@ -2253,16 +2253,16 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 | 1 | the scaffold, `Bench.Tests --explicit only --filter-method "*Writes_the_scratch_target_root_home_and_claude_for_the_pilot"` | 0 | 1.67 s | `M3 scaffold — manifest: /tmp/testsToDelete-m3-manifest-<id>.json (uid 1000, id <id>)`; the ten paths; `target.base: 1b03e80c49cea53cc27dea5466cf271ae3d06a21`; `coai.binary` the FakeCli apphost, `coai.settings` `<target>/.git/m3-pilot/coai-settings.json (no key in either file)`; the two files to copy; the environment line |
 | 2 | `ma version` | 0 | 0.03 s | `model-arms 1.0.0+86c9d1cd…` |
 | 2 | `ma help` | 0 | 0.03 s | the fourteen verbs, one usage line each, then `A verb that reads an experiment takes --experiment <root>, else the MODEL_ARMS_EXPERIMENT variable.` |
-| 2 | `ma validate --experiment <root>` | 4 | 0.1 s | `model-arms validate: <root> does not exist — `model-arms init <root>` creates it` |
+| 2 | `ma validate --experiment <root>` | 4 | 0.1 s | `` model-arms validate: <root> does not exist — `model-arms init <root>` creates it `` |
 | 3 | `ma init <root>` | 0 | 0.09 s | `created <root>: experiment.json (a template — replace every <fill me>), scenarios.json (empty), briefs/ (template overrides by name). Next: model-arms validate --experiment <root>` |
 | 3 | `ma init <root>` again | 4 | 0.06 s | `model-arms init: <root> already exists — init creates a new root and never writes into an existing one` |
 | 3 | `cp <target>/.git/m3-pilot/{experiment,scenarios}.json <root>/` | 0 | 0.01 s | (the root's files keep their 0600) |
 | 4 | `ma validate` | 0 | 0.31 s | `resolved executables:` git → `/usr/bin/git`; claude → `<bin>/claude` (the wrapper); dotnet → `/usr/lib/dotnet/dotnet`; node; npm; `pwsh.exe` → `/mnt/c/Users/…/WindowsApps/pwsh.exe`; `coai.binary` → the FakeCli apphost; `<root> is valid on this host (Wsl)` |
-| 5 | `ma make` (before `prep-base`) | 4 | 0.16 s | `model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
-| 5 | `ma run-arm C1` (before `prep-base`) | 4 | 0.16 s | `model-arms run-arm: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
-| 5 | `ma chain nosuch` (before `prep-base`) | 4 | 0.16 s | `model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 5 | `ma make` (before `prep-base`) | 4 | 0.16 s | `` model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it `` |
+| 5 | `ma run-arm C1` (before `prep-base`) | 4 | 0.16 s | `` model-arms run-arm: <root>/baseline.json is missing — `model-arms prep-base` writes it `` |
+| 5 | `ma chain nosuch` (before `prep-base`) | 4 | 0.16 s | `` model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it `` |
 | 6 | `ma prep-base` | 0 | 8.20 s | `baseline written to <root>/baseline.json: base 1b03e80c…, the main suite 3 tests with 0 failing, the extension 2 tests with 0 failing` |
-| 5 | `ma run-arm C1` (after `prep-base`, before `make`) | 4 | 0.16 s | `model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it` |
+| 5 | `ma run-arm C1` (after `prep-base`, before `make`) | 4 | 0.16 s | `` model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it `` |
 | 5 | `ma chain nosuch` (after `prep-base`) | 4 | 0.16 s | `model-arms chain: there is no run nosuch — the runs are pilot` |
 | 6 | `ma make` | 0 | 16.24 s | `no isolation snapshot`; `arm C1 made and built`, `arm CR1 …`, `arm SRS1 …`, `arm CHH1 …` |
 | 6 | `ma status` | 0 | 0.19 s | `isolation: no isolation snapshot`; `run pilot: locked no, unlocked no, arms done no`; four arms `made yes, checked no, runner none recorded`, every step `not started`, SRS1 `1-split: not started`, `tasks: no batches yet` |
@@ -3091,7 +3091,7 @@ The `ModelArms` namespace on the merged tree (E5.S1–E5.S3): 1709 cases, 0 fail
 
 | where | exit | the sentence |
 |---|---|---|
-| the gate: no `baseline.json`, no `base/` | 4 | `model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it` (and `base`) |
+| the gate: no `baseline.json`, no `base/` | 4 | `` model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it `` (and `base`) |
 | the run is not in `experiment.json` | 4 | `model-arms chain: there is no run <run> — the runs are part6, part7` (no file and no folder made) |
 | the run's lock is held | 4 | `model-arms chain <run>: another chain of <run> holds chain/<run>/.chain.lock by pid N since <utc> — nothing was started` (or `(holder unknown)`: a holder can die between its lock and its note, and a live one may not have written it yet) |
 | `<root>/pids` is a link or a file | 4 | `model-arms chain <run>: <root>/pids is a symbolic link — refused (D17)` |

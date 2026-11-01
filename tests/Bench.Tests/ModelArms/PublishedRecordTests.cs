@@ -16,15 +16,30 @@ public sealed class PublishedRecordTests
     public void The_published_record_holds_no_mcp_config_and_no_coai_data()
     {
         var record = Path.Combine(Cli.Repository.Root, "research", "local-model-coding", "data");
-        var found = Scan(record);
+        var entries = Scan(record, out var files);
 
-        found.Files.Should().Contain(path => path.EndsWith("data/part6/arms/C1/objective.json", StringComparison.Ordinal), "the scan must still see a known file of the record, or an empty scan would pass");
-        var named = found.Files.Where(path => ForbiddenFiles.Contains(Path.GetFileName(path), StringComparer.Ordinal)).ToList();
+        files.Should().Contain(path => path.EndsWith("data/part6/arms/C1/objective.json", StringComparison.Ordinal), "the scan must still see a known file of the record, or an empty scan would pass");
+        var named = files.Where(path => ForbiddenFiles.Contains(path[(path.LastIndexOf('/') + 1)..], StringComparer.Ordinal)).ToList();
         named.Should().BeEmpty("a file named {0} holds (or may hold) the owner's key and is never published", string.Join(" or ", ForbiddenFiles));
-        found.Folders.Where(path => Path.GetFileName(path) == ForbiddenFolder).Should().BeEmpty("a folder named coai-data holds a copy of the panel's settings and is never published");
+        entries.Where(path => path.Split('/').Contains(ForbiddenFolder, StringComparer.Ordinal)).Should().BeEmpty("a folder named coai-data holds a copy of the panel's settings and nothing under such a folder is ever published");
     }
 
-    private static (List<string> Files, List<string> Folders) Scan(string root) =>
-        ([.. Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Select(path => path.Replace('\\', '/'))],
-         [.. Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Select(path => path.Replace('\\', '/'))]);
+    /// <summary>One traversal under <paramref name="root"/>: every entry, files and folders, as a '/'-separated path RELATIVE to <paramref name="root"/>'s parent so a segment of the root itself never matches; the files also come out alone.</summary>
+    private static List<string> Scan(string root, out List<string> files)
+    {
+        var parent = Path.GetDirectoryName(root)!;
+        var all = new List<string>();
+        files = [];
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(parent, entry).Replace('\\', '/');
+            all.Add(relative);
+            if (File.Exists(entry))
+            {
+                files.Add(relative);
+            }
+        }
+
+        return all;
+    }
 }
