@@ -11,7 +11,7 @@ clear_cache() { "$W" run --rm --name vllmprtest-moe-clear -v "vllm-cache:/root/.
 run() { echo "=== $(date '+%F %T') chunk $1"; "$@" || { echo "=== STOP: chunk failed or disk gate ($(date '+%T'))"; clear_cache; exit 1; }; clear_cache; }
 "$W" stop vllm >/dev/null 2>&1; sleep 10
 "$D/disk_gate.sh" check || { echo "STOP: disk gate"; exit 1; }
-if [ ! -s "$S/linear_bench.json" ]; then
+if [ ! -s "$S/linear_bench.json" ] && { [ -z "${ONLY:-}" ] || [ "${ONLY:-}" = none ]; }; then
   echo "=== $(date '+%F %T') phase C: linear_bench"
   timeout 5400 "$W" run --rm --name vllmprtest-linear --gpus all --shm-size 16g -e HIP_VISIBLE_DEVICES=0 \
     -e TRITON_CACHE_DIR=/root/.cache/vllm/triton-linear -v "vllm-cache:/root/.cache/vllm" -v "$WT\\work:/work" "$IMG" \
@@ -20,6 +20,18 @@ if [ ! -s "$S/linear_bench.json" ]; then
   "$D/disk_gate.sh" check || { echo "STOP: disk gate"; exit 1; }
 fi
 export TUNE_DTYPE=auto TUNE_ACT=bfloat16
-CANDIDATES=/moe/coarse_candidates.json run "$D/tune_chunk.sh" draft-coarse-largeM 256 1024 2048
-for bs in 1 2 4 12; do run "$D/tune_chunk.sh" "draft-bs-$bs" "$bs"; done
+# DEADLINE (epoch s, 0 = none): a chunk starts only when its expected time (the int4 chunk times of 2026-10-26) ends
+# before it, so the operator's server is back in the morning. A skipped chunk runs on a later resume.
+DEADLINE=${DEADLINE:-0}
+fits() { (( DEADLINE == 0 || $(date +%s) + $1 < DEADLINE )) || { echo "=== $(date '+%F %T') SKIP $2: expected ${1}s ends after the deadline"; return 1; }; }
+# ONLY=<chunk> runs phase C (when not done) and that one chunk; ONLY=none runs phase C only.
+ONLY=${ONLY:-}
+if [ -z "$ONLY" ] || [ "$ONLY" = draft-coarse-largeM ]; then
+  fits 1500 draft-coarse-largeM && CANDIDATES=/moe/coarse_candidates.json run "$D/tune_chunk.sh" draft-coarse-largeM 256 1024 2048
+fi
+for bs_s in 1:3500 2:3500 4:5000 12:8500; do
+  bs=${bs_s%:*}; [ -n "$ONLY" ] && [ "$ONLY" != "draft-bs-$bs" ] && continue
+  fits "${bs_s#*:}" "draft-bs-$bs" || break
+  run "$D/tune_chunk.sh" "draft-bs-$bs" "$bs"
+done
 echo "=== $(date '+%F %T') PHASE C+B1 DONE"

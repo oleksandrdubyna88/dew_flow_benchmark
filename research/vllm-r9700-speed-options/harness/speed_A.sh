@@ -9,16 +9,21 @@ set -u
 OUT="$1"; shift; mkdir -p "$OUT"; D="$(dirname "$0")"; W="/mnt/c/Program Files/WSL/wslc.exe"
 ARMS=("${@:-base mtp1 mtp3 mnbt8k tattn fp8kv}"); read -r -a ARMS <<< "${ARMS[*]}"
 export MAXLEN=131072
+O7_SRC='C:\Users\strug\vllm\tmp\vllm-pr-work\work\speed\o7\rdna_hybrid_w4a16.py'
+O7_DST=/opt/python/lib/python3.14/site-packages/vllm/model_executor/kernels/linear/mixed_precision/rdna_hybrid_w4a16.py
 # The operator's sampling defaults (temperature 0.3, top_p 0.9, top_k 20, repetition_penalty 1.05): MTP acceptance
 # depends on them. The first run without them (model default temperature 1.0) gave 75.9 tok/s and was discarded.
 export GENCONFIG='C:\Users\strug\vllm\genconfig'
 trap '"$D/restore_server.sh"' EXIT
 arm_args() {
-  local mtp=2; case "$1" in mtp1) mtp=1;; mtp3) mtp=3;; esac
+  # Final A/B (plan "Final A/B"): fbase = base, fcombo = the kept options together (mtp3 + tattn). Own names, so the
+  # round-1 prompts/GSM8K files of phase A are not overwritten.
+  # Option 7 (night of 2026-10-31): o7ref = fcombo; o7 = fcombo with the tile patch mounted (mo).
+  local mtp=2; case "$1" in mtp1) mtp=1;; mtp3|fcombo|o7ref|o7) mtp=3;; esac
   echo "--generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens $mtp"
   case "$1" in
     mnbt8k) echo "--max-num-batched-tokens 8192";;
-    tattn) echo "--attention-backend TRITON_ATTN";;
+    tattn|fcombo|o7ref|o7) echo "--attention-backend TRITON_ATTN";;
     fp8kv) echo "--kv-cache-dtype fp8";;
   esac
 }
@@ -35,30 +40,50 @@ for round in 1 2 3; do for arm in "${ARMS[@]}"; do
   [ -f "$OUT/done_$arm-$round" ] && continue
   [ -f "$OUT/unsupported_$arm" ] && continue
   "$D/disk_gate.sh" check || { echo "STOP: disk gate"; exit 1; }
+  # QUIETCHECK=1 (night of 2026-10-31): each arm-round starts only on a quiet PC (1-min WSL load < 4, no coai-exp
+  # process); otherwise exit 3, and the driver waits for wait_quiet.sh and resumes.
+  if [ "${QUIETCHECK:-0}" = 1 ]; then
+    n=$(pgrep -f "coai-exp" | while read -r p; do grep -qa "keep-awake" "/proc/$p/cmdline" 2>/dev/null || echo "$p"; done | wc -l)
+    l=$(cut -d' ' -f1 /proc/loadavg)
+    if (( n > 0 )) || ! awk "BEGIN{exit !($l < 4)}"; then echo "NOT QUIET: $arm round $round (load $l, coai-exp $n)"; exit 3; fi
+  fi
   name="vllmprtest-sp-$arm-$round"; read -r -a a <<< "$(arm_args "$arm" | tr '\n' ' ')"
-  echo "=== $(date '+%F %T') $arm round $round: ${a[*]}"
-  if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e VLLM_TUNED_CONFIG_FOLDER=/work/moe/tune/merged -- "${a[@]}"; then
+  # fb1 (phase B1 end-to-end) = base with the merged BF16 draft MoE file next to the production int4 file.
+  tf=/work/moe/tune/merged; [ "$arm" = fb1 ] && tf=/work/moe/tune/merged_b1
+  mo=(); [ "$arm" = o7 ] && mo=(-v "$O7_SRC:$O7_DST:ro")
+  echo "=== $(date '+%F %T') $arm round $round (WSL load $(cut -d' ' -f1-3 /proc/loadavg)): ${a[*]}"
+  if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e "VLLM_TUNED_CONFIG_FOLDER=$tf" "${mo[@]}" -- "${a[@]}"; then
     echo "RETRY: first start failed"; "$W" stop "$name" >/dev/null 2>&1; sleep 60
-    if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e VLLM_TUNED_CONFIG_FOLDER=/work/moe/tune/merged -- "${a[@]}"; then
+    if ! "$D/serve.sh" "$name" C "$OUT/server_$arm-$round.log" -e "VLLM_TUNED_CONFIG_FOLDER=$tf" "${mo[@]}" -- "${a[@]}"; then
       echo "UNSUPPORTED: $arm did not start twice"; grep -E "Error|error:" "$OUT/server_$arm-$round.log" | tail -3 | cut -c1-300
       "$W" stop "$name" >/dev/null 2>&1; touch "$OUT/unsupported_$arm"; sleep 20; continue
     fi
   fi
-  grep -E "Using configuration from|Using default MoE config|RDNAHybrid|GPU KV cache size|max_num_scheduled_tokens|Fused multi-step|attention backend|Cannot use ROCm" \
+  grep -E "option 7: wide-N|Using configuration from|Using default MoE config|RDNAHybrid|GPU KV cache size|max_num_scheduled_tokens|Fused multi-step|attention backend|Cannot use ROCm" \
     "$OUT/server_$arm-$round.log" | cut -c1-240 | sort -u
+  b0=$(cat "$OUT/bench.txt" 2>/dev/null | wc -l)  # bench lines before this arm-round
   "$D/bench.sh" "$name" "$arm-$round" | tee -a "$OUT/bench.txt"
   prefill "$name" "$arm-$round" 8192 | tee -a "$OUT/bench.txt"
   prefill "$name" "$arm-$round" 32768 | tee -a "$OUT/bench.txt"
   "$W" exec "$name" python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/metrics').read().decode())" 2>&1 \
     | tr -d '\r' | grep -E '^vllm:spec_decode' | sed "s/^/$arm-$round /" >> "$OUT/spec_metrics.txt"
+  # PREFIXTEST=1: the § 6.1 prefix-cache check, after the measurements (so it does not change them).
+  [ "${PREFIXTEST:-0}" = 1 ] && "$W" exec "$name" python3 /work/speed/prefixtest.py http://127.0.0.1:8000 qwen3.6-35b-a3b \
+    "$arm-$round" 2>&1 | tr -d '\r' | tail -2 | tee -a "$OUT/prefixtest.txt"
   if [ "$round" = 1 ]; then
     "$W" exec "$name" python3 /work/harness.py collect --url http://127.0.0.1:8000 --model qwen3.6-35b-a3b \
       --out "/work/speed/prompts_$arm.json" 2>&1 | tr -d '\r' | tail -1
     "$W" exec "$name" python3 /work/harness.py gsm8k --url http://127.0.0.1:8000 --model qwen3.6-35b-a3b \
       --data /work/gsm8k/test.jsonl --n 200 --out "/work/speed/gsm8k_$arm.json" 2>&1 | tr -d '\r' | tail -1
   fi
+  # The arm-round counts as done only when its server still runs and all six decode bench lines exist (a stopped
+  # container makes every later step fail fast; on 2026-10-31 that left a false done marker).
+  alive=0; "$W" list --no-trunc 2>/dev/null | tr -d '\r' | grep -qE "[[:space:]]$name\$" && alive=1
+  lines=$(tail -n +$((b0 + 1)) "$OUT/bench.txt" | grep -cE "^$arm-$round c=[14] r=[123] Output token throughput")
   "$W" logs "$name" 2>&1 | tr -d '\r' > "$OUT/server_$arm-$round.log"
-  "$W" stop "$name" >/dev/null 2>&1; touch "$OUT/done_$arm-$round"; sleep 10
+  "$W" stop "$name" >/dev/null 2>&1
+  if (( alive == 0 || lines < 6 )); then echo "LOST: $arm round $round (server alive $alive, bench lines $lines)"; exit 1; fi
+  touch "$OUT/done_$arm-$round"; sleep 10
 done; done
 "$D/disk_gate.sh" check
 echo "=== $(date '+%F %T') PHASE A DONE"

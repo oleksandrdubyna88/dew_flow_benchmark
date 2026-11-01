@@ -1,0 +1,22 @@
+2026-10-31 16:55:40,712	WARNING authentication_token_setup.py:85 -- Token authentication is enabled for this Ray cluster. Set RAY_AUTH_MODE=disabled to opt out. For more information, see https://docs.ray.io/en/latest/ray-security/token-auth.html
+2026-10-31 16:55:40,712	INFO authentication_token_setup.py:50 -- Generated new authentication token and saved to /root/.ray/auth_token
+2026-10-31 16:55:43,480	INFO worker.py:2033 -- Started a local Ray instance.
+Namespace(model='/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ', tp_size=1, enable_expert_parallel=False, dtype='auto', use_deep_gemm=False, save_dir='./', seed=0, batch_size=[1, 2, 3, 4, 6, 8, 12, 16], tune=False, trust_remote_code=True, model_prefix=None)
+[36m(pid=392)[0m WARNING 10-31 16:55:46 [rocm.py:134] Using CUDA_VISIBLE_DEVICES on ROCm is deprecated and support will be removed in vLLM v0.26.0. Please use HIP_VISIBLE_DEVICES instead.
+[36m(BenchmarkWorker pid=392)[0m WARNING 10-31 16:55:52 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/fused_moe/configs/E=256,N=512,device_name=AMD_Radeon_R9700.json
+Batch size: 1, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 79.71 us
+Batch size: 2, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 231.59 us
+Batch size: 3, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 319.46 us
+Batch size: 4, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 393.03 us
+Batch size: 6, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 546.08 us
+Batch size: 8, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 693.23 us
+Batch size: 12, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 900.45 us
+Batch size: 16, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 1, 'SPLIT_K': 1, 'num_warps': 4, 'num_stages': 2}
+Kernel time: 1109.60 us

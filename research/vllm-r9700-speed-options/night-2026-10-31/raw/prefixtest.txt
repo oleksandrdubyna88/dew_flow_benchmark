@@ -1,0 +1,16 @@
+fcombo-1 prefixtest len=8192 A cold=2.1s A hit=0.5s A hit=0.51s B cold=2.15s B hit=0.48s A partial=0.49s
+fcombo-1 prefixtest len=1024 A cold=0.22s A hit=0.22s A hit=0.2s B cold=0.19s B hit=0.2s A partial=0.19s
+fb1-1 prefixtest len=8192 A cold=2.01s A hit=0.47s A hit=0.47s B cold=2.02s B hit=0.48s A partial=0.47s
+fb1-1 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
+fbase-2 prefixtest len=8192 A cold=2.14s A hit=0.5s A hit=0.51s B cold=2.3s B hit=0.51s A partial=0.5s
+fbase-2 prefixtest len=1024 A cold=0.33s A hit=0.28s A hit=0.28s B cold=0.19s B hit=0.43s A partial=0.35s
+fcombo-2 prefixtest len=8192 A cold=2.08s A hit=0.49s A hit=0.5s B cold=2.1s B hit=0.49s A partial=0.5s
+fcombo-2 prefixtest len=1024 A cold=0.33s A hit=0.23s A hit=0.21s B cold=0.22s B hit=0.2s A partial=0.2s
+fb1-2 prefixtest len=8192 A cold=1.97s A hit=0.46s A hit=0.46s B cold=1.96s B hit=0.46s A partial=0.47s
+fb1-2 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.19s B cold=0.18s B hit=0.18s A partial=0.19s
+fbase-3 prefixtest len=8192 A cold=2.0s A hit=0.47s A hit=0.47s B cold=1.96s B hit=0.46s A partial=0.46s
+fbase-3 prefixtest len=1024 A cold=0.2s A hit=0.19s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
+fcombo-3 prefixtest len=8192 A cold=2.03s A hit=0.48s A hit=0.48s B cold=2.01s B hit=0.48s A partial=0.48s
+fcombo-3 prefixtest len=1024 A cold=0.21s A hit=0.2s A hit=0.2s B cold=0.19s B hit=0.19s A partial=0.19s
+fb1-3 prefixtest len=8192 A cold=2.0s A hit=0.47s A hit=0.46s B cold=1.94s B hit=0.46s A partial=0.46s
+fb1-3 prefixtest len=1024 A cold=0.2s A hit=0.18s A hit=0.18s B cold=0.18s B hit=0.18s A partial=0.18s
