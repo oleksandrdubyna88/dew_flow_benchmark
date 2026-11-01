@@ -314,6 +314,45 @@ public sealed class FileGateLockTests
         }
     }
 
+    [Fact]
+    public void A_shared_take_is_held_beside_another_shared_take_and_refuses_an_exclusive_one()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "/proc/locks is Linux's; the share mode on Windows is the file system's (documented, not observed)");
+        using var temp = new TempFolder();
+        var path = temp.Combine(".isolation.lock");
+        var gateLock = Lock();
+
+        var first = gateLock.TakeShared(path).Should().BeOfType<GateLockAnswer.Held>().Subject;
+        var second = gateLock.TakeShared(path).Should().BeOfType<GateLockAnswer.Held>("any number of shared holders coexist").Subject;
+
+        gateLock.Take(path, create: true, note: true).Should().BeOfType<GateLockAnswer.Busy>("an exclusive take beside shared holders is refused");
+        File.ReadAllLines("/proc/locks").Should().Contain(line => line.Contains("FLOCK", StringComparison.Ordinal) && line.Contains("ADVISORY", StringComparison.Ordinal) && line.Contains("READ", StringComparison.Ordinal) && line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[4] == Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "the EFFECT: a shared (READ) flock held by this pid — not only the share mode that was sent");
+        File.Exists(path + ".holder").Should().BeFalse("a shared holder writes no note: the note is the exclusive holder's");
+        first.Handle.Dispose();
+        gateLock.Take(path, create: true, note: false).Should().BeOfType<GateLockAnswer.Busy>("one shared holder is left");
+        second.Handle.Dispose();
+
+        var exclusive = gateLock.Take(path, create: true, note: false);
+        exclusive.Should().BeOfType<GateLockAnswer.Held>("both shared holders are gone");
+        ((GateLockAnswer.Held)exclusive).Handle.Dispose();
+        gateLock.TakeShared(path + ".never").Should().BeOfType<GateLockAnswer.Held>("a missing file is made first and then held shared");
+    }
+
+    [Fact]
+    public void A_shared_take_that_is_not_honoured_is_unread()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the honour check is off Windows");
+        using var temp = new TempFolder();
+        var path = temp.Combine(".isolation.lock");
+        var dishonoured = new FileGateLock(TimeProvider.System, Poll) { SecondOpen = file => new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite) };
+
+        var answer = dishonoured.TakeShared(path);
+
+        answer.Should().BeOfType<GateLockAnswer.Unread>("a file system that lets the second open through does not honour the lock: nothing is held");
+        Lock().Take(path, create: false, note: false).Should().BeOfType<GateLockAnswer.Held>("the dropped shared stream holds nothing");
+    }
+
     private static async Task ReapAsync(Task<ProcessAttempt>? child)
     {
         if (child is null)

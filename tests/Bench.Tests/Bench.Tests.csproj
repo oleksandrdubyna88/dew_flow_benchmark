@@ -42,6 +42,8 @@
     <ProjectReference Include="..\FakeCli\FakeCli.csproj" ReferenceOutputAssembly="false" />
     <!-- The test-only holder of the gate lock (model arms E2.S6): launched from its own output folder, never referenced as an assembly. -->
     <ProjectReference Include="..\GateHolder\GateHolder.csproj" ReferenceOutputAssembly="false" />
+    <!-- The test-only killed lock (model arms E5.S1): a lock that SIGKILLs itself half-way, launched from its own output folder. -->
+    <ProjectReference Include="..\LockCrasher\LockCrasher.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

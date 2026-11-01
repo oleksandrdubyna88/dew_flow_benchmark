@@ -45,15 +45,6 @@ public sealed partial class ModelArmsProgramTests
     }
 
     [Fact]
-    public async Task A_verb_not_built_yet_is_refused_naming_its_epic_with_exit_4()
-    {
-        var (code, _, error) = await RunAsync(["chain", "--experiment", "/x"]);
-
-        code.Should().Be(4);
-        error.Should().Contain("E5.S4").And.Contain("chain");
-    }
-
-    [Fact]
     public async Task Version_and_help_need_no_experiment_root()
     {
         var version = await RunAsync(["version"]);
@@ -488,9 +479,6 @@ public sealed partial class ModelArmsProgramTests
     }
 
     // The portable road: the Mac's road is handed to the gate through its seams on this Linux host, so the units run here and the composition on a real Mac is unobserved (E3 §8 item 25).
-    private static GateSeams MacSeams(GateSeams? from = null) =>
-        (from ?? GateSeams.Real) with { Road = PlatformKit.MacRoad, ReadFacts = (path, kind) => RootFacts.ReadFacts(path, kind, PlatformKit.MacRoad) };
-
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private static void Close(ExperimentRoot root, string rootMode)
     {
@@ -521,7 +509,7 @@ public sealed partial class ModelArmsProgramTests
         using var root = await new ExperimentRoot().WithTargetAsync();
         Close(root, "700");
 
-        var good = await ThroughValidateAsync(root, MacSeams());
+        var good = await ThroughValidateAsync(root, PlatformKit.MacSeams());
 
         good.Code.Should().Be(0, good.Error);
         var lines = good.Error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -529,7 +517,7 @@ public sealed partial class ModelArmsProgramTests
         lines[0].Should().Contain("NOT verified", "the line comes before any other gate line");
 
         Close(root, "775");
-        var open = await ThroughValidateAsync(root, MacSeams());
+        var open = await ThroughValidateAsync(root, PlatformKit.MacSeams());
 
         open.Code.Should().Be(4);
         open.Error.Should().Contain("775").And.Contain("chmod go-w");
@@ -538,7 +526,7 @@ public sealed partial class ModelArmsProgramTests
 
         Close(root, "700");
         var experiment = Path.Combine(root.Root, "experiment.json");
-        var longer = MacSeams(GateSeams.Real with
+        var longer = PlatformKit.MacSeams(GateSeams.Real with
         {
             AfterRead = _ =>
             {
@@ -561,7 +549,7 @@ public sealed partial class ModelArmsProgramTests
         using var root = await new ExperimentRoot().WithTargetAsync();
         Close(root, "700");
         var path = Path.Combine(root.Root, "experiment.json");
-        var seams = MacSeams(GateSeams.Real with
+        var seams = PlatformKit.MacSeams(GateSeams.Real with
         {
             AfterRead = _ =>
             {
@@ -592,7 +580,7 @@ public sealed partial class ModelArmsProgramTests
         await MakeFifoAsync(path);
         File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("600", 8));
 
-        var pass = Task.Run(() => root.PassAsync(MacSeams(), "status"), TestContext.Current.CancellationToken); // on a worker: an unbounded read blocks its caller before the first await
+        var pass = Task.Run(() => root.PassAsync(PlatformKit.MacSeams(), "status"), TestContext.Current.CancellationToken); // on a worker: an unbounded read blocks its caller before the first await
         var finished = await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken));
         PlatformKit.ReleaseFifo(path);
 
@@ -615,7 +603,7 @@ public sealed partial class ModelArmsProgramTests
         await MakeFifoAsync(path);
         File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("600", 8));
 
-        var run = Task.Run(() => ThroughValidateAsync(root, MacSeams()), TestContext.Current.CancellationToken);
+        var run = Task.Run(() => ThroughValidateAsync(root, PlatformKit.MacSeams()), TestContext.Current.CancellationToken);
         var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken));
         PlatformKit.ReleaseFifo(path);
 

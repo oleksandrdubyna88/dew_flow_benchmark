@@ -71,14 +71,17 @@ internal sealed class ChecksKit : IDisposable
     }
 
     /// <summary>The verb through the gate, as the console runs it, with the clock and wall handed in (a clock that ticks, no wall of its own, by default).</summary>
-    public async Task<ChecksRun> RunAsync(bool parseOnly = false, ChecksSeams? seams = null, CancellationToken? stopping = null)
+    public Task<ChecksRun> RunAsync(bool parseOnly = false, ChecksSeams? seams = null, CancellationToken? stopping = null) => RunAsync(Root, Name, parseOnly, seams, stopping);
+
+    /// <summary><c>checks &lt;arm&gt;</c> through the gate on ANY experiment root whose arm is made, the bench's recording shims on its PATH (E6.S1: the root of <c>ConsumerArms</c> is a kit over no one arm). The instance method calls this with its own root and arm.</summary>
+    public static async Task<ChecksRun> RunAsync(ExperimentRoot root, string arm, bool parseOnly = false, ChecksSeams? seams = null, CancellationToken? stopping = null)
     {
-        string[] args = ["checks", Name, "--experiment", Root.Root, .. parseOnly ? new[] { "--parse-only" } : []];
+        string[] args = ["checks", arm, "--experiment", root.Root, .. parseOnly ? new[] { "--parse-only" } : []];
         var line = ModelArmsCommandLine.Split(args).Ok();
         var output = new StringWriter();
         var error = new StringWriter();
         var input = new ModelArmsApp.VerbInput(
-            line.Verb, line.Positionals, CommandLine.Parse(line.Rest), output, error, Root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping ?? TestContext.Current.CancellationToken);
+            line.Verb, line.Positionals, CommandLine.Parse(line.Rest), output, error, root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping ?? TestContext.Current.CancellationToken);
         var used = seams ?? new ChecksSeams(new TickingClock(), null);
         var code = await ModelArmsApp.ExperimentGate.RunAsync(input, seen => ChecksVerb.RunAsync(seen, used), ModelArmsApp.GateSeams.Real);
         return new ChecksRun(code, output.ToString(), error.ToString());

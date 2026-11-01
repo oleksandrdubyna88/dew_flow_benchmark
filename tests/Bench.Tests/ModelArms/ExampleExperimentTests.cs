@@ -35,6 +35,27 @@ public sealed partial class ExampleExperimentTests
     }
 
     [Fact]
+    public async Task Validate_warns_once_about_a_deny_list_that_does_not_deny_reading_this_roots_arms_map()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the worked example and the location use POSIX absolute paths");
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.Edit(top =>
+        {
+            var deny = top["tools"]!["deny"]!.AsArray();
+            var other = deny.Single(each => each!.GetValue<string>().EndsWith("arms.map.json)", StringComparison.Ordinal));
+            deny.Remove(other);
+            deny.Add("Read(//some/other/root/arms.map.json)");
+        });
+        var error = new StringWriter();
+
+        var code = await ArmsProgram.RunAsync(["validate", "--experiment", root.Root], new StringWriter(), error, root.Environment, TestContext.Current.CancellationToken);
+
+        code.Should().Be(0, "a warning, not a refusal: validate's contract is unchanged — " + error);
+        error.ToString().Should().Contain($"warning: tools.deny has no Read(/{root.Root}/arms.map.json)").And.Contain("a root at 300 still lets an arm read arms.map.json by its name").And.Contain("`Bash(cat *)` still reads it");
+        System.Text.RegularExpressions.Regex.Matches(error.ToString(), "warning: tools.deny").Should().ContainSingle("one line");
+    }
+
+    [Fact]
     public void The_example_binds_every_file_the_shell_wrote()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the worked example and the location use POSIX absolute paths");

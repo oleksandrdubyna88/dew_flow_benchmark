@@ -42,6 +42,19 @@ public abstract record SourceAnswer
     public sealed record Unanswered(string Reason) : SourceAnswer;
 }
 
+/// <summary>What the resolved git said to <c>--version</c> (D23, E4.S0), or why it was not asked. Closed: <see cref="Read"/> is the first line of stdout, trimmed — whatever it is, <see cref="GitFloor.Admit"/> judges it; <see cref="Unanswered"/> git ran or was started and did not answer (does not start, exits non-zero, timed out) — exit 3; <see cref="NotAsked"/> git is absent or refused,
+/// or PATH or a config folder is refused: a finding whose cause is already printed, mirrored on <see cref="SourceAnswer.NotAsked"/>, exit 3.</summary>
+public abstract record GitVersionAnswer
+{
+    private GitVersionAnswer() { }
+
+    public sealed record Read(string Text) : GitVersionAnswer;
+
+    public sealed record Unanswered(string Reason) : GitVersionAnswer;
+
+    public sealed record NotAsked(string Reason) : GitVersionAnswer;
+}
+
 /// <summary>Everything the console read about the host that <see cref="HostChecks.Decide"/> judges. A fact it could not establish is never a guess: git that did not
 /// answer is <see cref="SourceAnswer.Unanswered"/>, not "no".
 /// <para>
@@ -58,6 +71,8 @@ public sealed record HostFacts(
 {
     public required SourceAnswer Source { get; init; }
 
+    public required GitVersionAnswer Version { get; init; }
+
     public required IReadOnlyList<string> PathRefusals { get; init; }
 
     public required IReadOnlyList<string> EnvironmentRefusals { get; init; }
@@ -65,13 +80,13 @@ public sealed record HostFacts(
     public required IReadOnlyDictionary<string, Outcome<string>> Templates { get; init; }
 }
 
-/// <summary>The environment git is launched under: the verb's map minus every <c>GIT_*</c> name (ordinal, ignoring case). A parent's <c>GIT_DIR</c>,
-/// <c>GIT_WORK_TREE</c>, <c>GIT_CEILING_DIRECTORIES</c>, <c>GIT_CONFIG_*</c>, <c>GIT_EXEC_PATH</c> or <c>GIT_SSH*</c> would redirect the question or name a program.
+/// <summary>The environment git is launched under: the verb's map minus every name <see cref="ArmChildEnvironment.IsAgentSocketOrGit"/> accepts — every <c>GIT_*</c> (ordinal, ignoring case) and the ssh agent's socket <c>SSH_AUTH_SOCK</c>, the one rule the arm's session and the target's tools ask too (E6.S4 a). A parent's <c>GIT_DIR</c>,
+/// <c>GIT_WORK_TREE</c>, <c>GIT_CEILING_DIRECTORIES</c>, <c>GIT_CONFIG_*</c>, <c>GIT_EXEC_PATH</c> or <c>GIT_SSH*</c> would redirect the question or name a program; the socket is a capability, and no local question needs it.
 /// <c>HOME</c> and <c>PATH</c> pass: the operator's own global config is theirs, and PATH was judged.</summary>
 public static class GitEnvironment
 {
     public static IReadOnlyDictionary<string, string> Of(IReadOnlyDictionary<string, string> environment) =>
-        environment.Where(variable => !variable.Key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase))
+        environment.Where(variable => !ArmChildEnvironment.IsAgentSocketOrGit(variable.Key))
             .ToDictionary(variable => variable.Key, variable => variable.Value, StringComparer.Ordinal);
 }
 
@@ -112,12 +127,23 @@ public static class HostChecks
         .. ExecutableProblems(facts),
         .. facts.PathRefusals.Select(Wrong),
         .. facts.EnvironmentRefusals.Select(Wrong),
+        .. GitFloorProblems(facts),
         .. SourceProblems(experiment.Target, facts),
         .. ScenarioProblems(facts),
         .. CoaiProblems(experiment, facts),
         .. HostProblems(experiment, facts),
         .. TemplateProblems(experiment, facts),
     ];
+
+    /// <summary>One WARNING line, never a refusal (validate's contract is unchanged): the isolation leaves <c>arms.map.json</c> readable by its fixed name under a root at 300 — every token, so a sibling's <c>r/&lt;token&gt;</c> (a residual the shell shared) — and <c>tools.deny</c> lacks the entry that denies the Read tool on THIS root's map. <c>tools.deny</c> reaches the CLI as written, with no
+    /// <c>&lt;root&gt;</c> placeholder, so the entry is an absolute path the operator writes (<c>init</c> blanks every value and cannot). It would not stop <c>Bash(cat *)</c>, which the tool sets allow, so even present it narrows the residual and does not close it. POSIX roots only.</summary>
+    public static IReadOnlyList<string> Warnings(Experiment experiment)
+    {
+        var wanted = $"Read(/{experiment.Root}/arms.map.json)";
+        return experiment.Root.StartsWith('/') && !experiment.Tools.Deny.Contains(wanted, StringComparer.Ordinal)
+            ? [$"warning: tools.deny has no {wanted} — a root at 300 still lets an arm read arms.map.json by its name (every token, so a sibling's folder); add the entry for THIS root (an absolute path: tools.deny is passed to the CLI as written) — it narrows the residual, `Bash(cat *)` still reads it"]
+            : [];
+    }
 
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;
 
@@ -143,6 +169,19 @@ public static class HostChecks
             ExecutableAnswer.Refused refused => [Wrong(refused.Reason)],
             _ => [],
         };
+
+    /// <summary>D23: the git's version against the floor. Every finding is the environment (exit 3): the host's git is too old, unreadable or unasked. A refusal of a version names the git it is about, by the real path the resolution found.</summary>
+    private static IEnumerable<HostProblem> GitFloorProblems(HostFacts facts) =>
+        facts.Version switch
+        {
+            GitVersionAnswer.Read read => GitFloor.Admit(read.Text).Match(_ => [], reason => (IEnumerable<HostProblem>)[new HostProblem($"git at {ExecutableRule.Shown(RealGit(facts))}: {reason}", Environment: true)]),
+            GitVersionAnswer.Unanswered unanswered => [new(unanswered.Reason, Environment: true)],
+            GitVersionAnswer.NotAsked notAsked => [new(notAsked.Reason, Environment: true)],
+            _ => [],
+        };
+
+    private static string RealGit(HostFacts facts) =>
+        facts.Executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer is ExecutableAnswer.Found found ? found.Real : "(not resolved)";
 
     private static IEnumerable<HostProblem> SourceProblems(TargetFacts target, HostFacts facts) =>
         facts.Source switch
@@ -178,11 +217,15 @@ public static class HostChecks
     ];
 
     private static IEnumerable<HostProblem> AwakeProblems(AwakeChoice awake, HostKind host) =>
+        AwakeProblem(awake, host) is { Length: > 0 } problem ? [Wrong(problem)] : [];
+
+    /// <summary>The sentence for a named awake adapter the host cannot run (<c>awake "wsl"</c> off WSL, <c>awake "windows"</c> off Windows), or the empty text. One sentence for two callers: <c>validate</c> prints it among its findings and <c>chain</c>, which does not run <c>validate</c>, refuses with it (E5.S2, <see cref="Isolation.HostAwakeSelection"/>).</summary>
+    internal static string AwakeProblem(AwakeChoice awake, HostKind host) =>
         (awake, host) switch
         {
-            (AwakeChoice.Wsl, not HostKind.Wsl) => [Wrong(NeedsHost("wsl", HostKind.Wsl, host))],
-            (AwakeChoice.Windows, not HostKind.Windows) => [Wrong(NeedsHost("windows", HostKind.Windows, host))],
-            _ => [],
+            (AwakeChoice.Wsl, not HostKind.Wsl) => NeedsHost("wsl", HostKind.Wsl, host),
+            (AwakeChoice.Windows, not HostKind.Windows) => NeedsHost("windows", HostKind.Windows, host),
+            _ => string.Empty,
         };
 
     private static string NeedsHost(string awake, HostKind needed, HostKind actual) =>

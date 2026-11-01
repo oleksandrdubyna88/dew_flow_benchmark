@@ -5,8 +5,8 @@ using ModelArms.Core.Experiment;
 
 namespace ModelArms.Adapters;
 
-/// <summary>The seven fields of <c>struct statx</c> the module uses, as the kernel reported them.</summary>
-internal readonly record struct StatxAnswer(uint Mask, uint Uid, ushort Mode, ulong Inode, long CtimeSec, uint CtimeNsec, uint DevMajor, uint DevMinor);
+/// <summary>The fields of <c>struct statx</c> the module uses, as the kernel reported them; the birth time is asked for and may not be reported (<see cref="KernelFacts.BirthBit"/>).</summary>
+internal readonly record struct StatxAnswer(uint Mask, uint Uid, ushort Mode, ulong Inode, long CtimeSec, uint CtimeNsec, uint DevMajor, uint DevMinor, long BtimeSec = 0, uint BtimeNsec = 0);
 
 /// <summary>The kernel asked directly: D17's trust facts and the question "is there a directory entry by this name", with no process, no text and no locale. A program
 /// started by name is looked up by the runtime in the CURRENT DIRECTORY before PATH, so an arm's <c>stat</c> or <c>id</c> in the target would answer the check that exists
@@ -30,6 +30,11 @@ internal static class KernelFacts
     private const int OpenCloseOnExec = 0x80000;
     private const int OpenSmallFile = OpenNoCtty | OpenNonBlock | OpenNoFollow | OpenCloseOnExec;
     private const uint StatxBasicStats = 0x7ff;
+
+    /// <summary><c>STATX_BTIME</c>: the file system reports when the inode was CREATED. Asked for beside the basic stats and never required — a file system without it leaves the bit clear and <see cref="FileIdentity.Birth"/> is <c>null</c>. It is what tells a folder made again from the one that stood there: ext4 hands a freed inode number to the very next file made, so the device and inode alone call a replaced folder the same one.</summary>
+    internal const uint BirthBit = 0x800;
+
+    private const uint StatxAsked = StatxBasicStats | BirthBit;
 
     // The facts the module uses and the statx mask bit that says the kernel reported each (STATX_TYPE, _MODE, _UID, _INO, _CTIME).
     private static readonly (uint Bit, string Name)[] Needed = [(0x1, "type"), (0x2, "mode"), (0x8, "owner"), (0x100, "inode"), (0x80, "ctime")];
@@ -84,7 +89,7 @@ internal static class KernelFacts
     {
         try
         {
-            return StatxCall(fd, string.Empty, AtEmptyPath, StatxBasicStats, out var buffer) == 0 ? Decode(label, Answer(buffer)) : new FactsRead.Unread($"{label}: {Marshal.GetLastPInvokeErrorMessage()}");
+            return StatxCall(fd, string.Empty, AtEmptyPath, StatxAsked, out var buffer) == 0 ? Decode(label, Answer(buffer)) : new FactsRead.Unread($"{label}: {Marshal.GetLastPInvokeErrorMessage()}");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
@@ -200,7 +205,10 @@ internal static class KernelFacts
         }
 
         var mode = new RootFacts.RawMode(raw.Mode);
-        var identity = new FileIdentity(((ulong)raw.DevMajor << 32) | raw.DevMinor, raw.Inode, mode.Kind, raw.CtimeSec + (raw.CtimeNsec / 1_000_000_000m));
+        var identity = new FileIdentity(((ulong)raw.DevMajor << 32) | raw.DevMinor, raw.Inode, mode.Kind, raw.CtimeSec + (raw.CtimeNsec / 1_000_000_000m))
+        {
+            Birth = (raw.Mask & BirthBit) != 0 ? raw.BtimeSec + (raw.BtimeNsec / 1_000_000_000m) : null,
+        };
         return new FactsRead.Read(new FileFacts(full, (int)raw.Uid, mode.Permissions) { Identity = identity });
     }
 
@@ -209,9 +217,9 @@ internal static class KernelFacts
             ? Outcome<bool>.Success(false)
             : Outcome<bool>.Failure($"'{path}': {Marshal.GetPInvokeErrorMessage(errno)}");
 
-    private static int Statx(string path, out StatxBuffer buffer) => StatxCall(AtFdCwd, path, AtSymlinkNoFollow, StatxBasicStats, out buffer);
+    private static int Statx(string path, out StatxBuffer buffer) => StatxCall(AtFdCwd, path, AtSymlinkNoFollow, StatxAsked, out buffer);
 
-    private static StatxAnswer Answer(StatxBuffer b) => new(b.Mask, b.Uid, b.Mode, b.Ino, b.CtimeSec, b.CtimeNsec, b.DevMajor, b.DevMinor);
+    private static StatxAnswer Answer(StatxBuffer b) => new(b.Mask, b.Uid, b.Mode, b.Ino, b.CtimeSec, b.CtimeNsec, b.DevMajor, b.DevMinor, b.BtimeSec, b.BtimeNsec);
 
     private static bool IsUnixLike() => OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD();
 
@@ -230,6 +238,12 @@ internal static class KernelFacts
 
         [FieldOffset(32)]
         public ulong Ino;
+
+        [FieldOffset(80)]
+        public long BtimeSec;
+
+        [FieldOffset(88)]
+        public uint BtimeNsec;
 
         [FieldOffset(96)]
         public long CtimeSec;

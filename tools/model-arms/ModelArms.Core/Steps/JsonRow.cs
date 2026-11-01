@@ -68,6 +68,18 @@ internal sealed class JsonRow
         : value.ValueKind == JsonValueKind.Array && TryTexts(value, out var items) ? items
         : Wrong<IReadOnlyList<string>>(name, "a list of text", []);
 
+    /// <summary>The objects of an array field, each as a row of its own (the isolation snapshot's <c>modes</c>); an absent field is no rows, and an item that is not an object is the first problem.</summary>
+    public IReadOnlyList<JsonRow> Rows(string name) =>
+        !Find(name, out var value) ? []
+        : value.ValueKind == JsonValueKind.Array && TryRows(value, out var rows) ? rows
+        : Wrong<IReadOnlyList<JsonRow>>(name, "a list of objects", []);
+
+    /// <summary>A whole non-negative number, or <c>null</c> when the field is absent; a field of another kind is the first problem (a device and an inode need all 64 bits, so <see cref="Int"/> is no reader of them).</summary>
+    public ulong? ULong(string name) =>
+        !Find(name, out var value) ? null
+        : value.ValueKind == JsonValueKind.Number && value.TryGetUInt64(out var number) ? number
+        : Wrong<ulong?>(name, "a whole non-negative number", null);
+
     /// <summary>True when the field is exactly the text <paramref name="expected"/>; any other value, of any kind, is false and no problem.</summary>
     public bool Is(string name, string expected) => Find(name, out var value) && value.ValueKind == JsonValueKind.String && TryText(value, out var text) && text == expected;
 
@@ -120,6 +132,23 @@ internal sealed class JsonRow
         instant = default;
         return TryText(element, out var text)
             && DateTimeOffset.TryParseExact(text, LineJson.UtcFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out instant);
+    }
+
+    private static bool TryRows(JsonElement array, out IReadOnlyList<JsonRow> rows)
+    {
+        var read = new List<JsonRow>();
+        rows = read;
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            read.Add(new JsonRow(item.Clone()));
+        }
+
+        return true;
     }
 
     private static bool TryTexts(JsonElement array, out IReadOnlyList<string> items)

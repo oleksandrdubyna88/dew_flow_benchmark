@@ -15,16 +15,15 @@ public sealed class ModelArmsCommandLineTests
     [Fact]
     public void The_verb_and_its_positionals_are_taken_first_and_the_rest_reaches_CommandLine_Parse_unchanged()
     {
-        var line = ModelArmsCommandLine.Split(["run-all", "C1", "CR1", "--experiment", "/r", "--seconds", "5"]).Ok();
+        var line = ModelArmsCommandLine.Split(["run-all", "C1", "CR1", "--experiment", "/r"]).Ok();
 
         line.Verb.Should().Be("run-all");
         line.Positionals.Should().Equal("C1", "CR1");
-        line.Rest.Should().Equal("run-all", "--experiment", "/r", "--seconds", "5");
+        line.Rest.Should().Equal("run-all", "--experiment", "/r");
 
         var flags = CommandLine.Parse(line.Rest);
         flags.Verb.Should().Be("run-all");
         flags.Value("experiment").Should().Be("/r");
-        flags.Int("seconds", 0).Should().Be(5);
         flags.Operand(0).Should().BeEmpty("the positionals were taken first; the shared parser sees none");
     }
 
@@ -99,14 +98,18 @@ public sealed class ModelArmsCommandLineTests
         refused.Should().Contain("'--experimnt' is not a flag of validate").And.Contain("--experiment");
         ModelArmsCommandLine.Split(["init", "/r", "--experiment", "/x"]).Reason().Should().Contain("'--experiment' is not a flag of init").And.Contain("no flags");
         ModelArmsCommandLine.Split(["version", "--seconds", "3"]).Failed().Should().BeTrue("version takes no flags");
+        ModelArmsCommandLine.Split(["run-all", "C1", "--seconds", "5", "--experiment", "/r"]).Reason().Should().Contain("'--seconds' is not a flag of run-all").And.Contain("--experiment", "run-all takes --experiment only: a flag accepted and ignored is a silent lie");
     }
 
     public static TheoryData<string[]> LegalLines() => new()
     {
         { ["validate", "--experiment", "/r"] },
+        { ["lock", "part6", "--experiment", "/r"] },
+        { ["chain", "part6", "--experiment", "/r"] },
+        { ["unlock", "--force", "--experiment", "/r"] },
         { ["gate-lock", "hold", "--seconds", "3", "--experiment", "/r"] },
         { ["checks", "C1", "--parse-only", "--experiment", "/r"] },
-        { ["run-all", "C1", "--seconds", "5", "--experiment", "/r"] },
+        { ["run-all", "C1", "CR1", "--experiment", "/r"] },
         { ["init", "/r"] },
         { ["help"] },
     };
@@ -126,6 +129,7 @@ public sealed class ModelArmsCommandLineTests
             var args = verb switch
             {
                 "run-arm" or "checks" => new[] { verb, "C1", "--experiment", "/r" },
+                "lock" or "chain" => [verb, "part6", "--experiment", "/r"],
                 "run-all" => [verb, "C1", "--experiment", "/r"],
                 "gate-lock" => [verb, "status", "--experiment", "/r"],
                 _ => [verb, "--experiment", "/r"],
@@ -133,5 +137,17 @@ public sealed class ModelArmsCommandLineTests
 
             ModelArmsCommandLine.Split(args).Failed().Should().BeFalse($"{verb} reads an experiment and takes --experiment");
         }
+    }
+
+    [Theory]
+    [InlineData(new[] { "lock", "--experiment", "/r" }, "lock takes exactly one argument, the run: model-arms lock <run>")]
+    [InlineData(new[] { "lock", "a", "b" }, "lock takes exactly one argument, the run: model-arms lock <run>")]
+    [InlineData(new[] { "chain", "--experiment", "/r" }, "chain takes exactly one argument, the run: model-arms chain <run>")]
+    [InlineData(new[] { "chain", "part6", "part7" }, "chain takes exactly one argument, the run: model-arms chain <run>")]
+    [InlineData(new[] { "unlock", "part6" }, "unlock takes no positional argument: model-arms unlock [--force]")]
+    [InlineData(new[] { "lock", "part6", "--force" }, "'--force' is not a flag of lock")]
+    public void Lock_and_chain_take_exactly_a_run_and_unlock_takes_no_run(string[] args, string reason)
+    {
+        ModelArmsCommandLine.Split(args).Reason().Should().Contain(reason);
     }
 }

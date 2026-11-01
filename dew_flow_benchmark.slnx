@@ -26,5 +26,6 @@
     <Project Path="tests/FakeCoai/FakeCoai.csproj" />
     <Project Path="tests/FakeCli/FakeCli.csproj" />
     <Project Path="tests/GateHolder/GateHolder.csproj" />
+    <Project Path="tests/LockCrasher/LockCrasher.csproj" />
   </Folder>
 </Solution>

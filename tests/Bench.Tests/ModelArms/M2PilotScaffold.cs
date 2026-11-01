@@ -20,15 +20,15 @@ namespace Bench.Tests.ModelArms;
 /// </para></summary>
 public sealed class M2PilotScaffold
 {
-    private const string PlanBranch = "docs/plan-m2-scratch";
-    private const string PlanFile = "todo/PLAN_m2_scratch.md";
-    private const string Solution = "scratch.slnx";
-    private const string SuiteDll = "src_mcp/tests/bin/Debug/net10.0/ScratchTests.dll";
+    internal const string PlanBranch = "docs/plan-m2-scratch";
+    internal const string PlanFile = "todo/PLAN_m2_scratch.md";
+    internal const string Solution = "scratch.slnx";
+    internal const string SuiteDll = "src_mcp/tests/bin/Debug/net10.0/ScratchTests.dll";
 
-    private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    internal static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    private static readonly string[] CsScenarios = ["A_scratch_scenario_passes", "Another_scratch_scenario_passes"];
-    private const string NodeScenario = "a scratch node scenario passes";
+    internal static readonly string[] CsScenarios = ["A_scratch_scenario_passes", "Another_scratch_scenario_passes"];
+    internal const string NodeScenario = "a scratch node scenario passes";
 
     [Fact(Explicit = true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
@@ -73,9 +73,9 @@ public sealed class M2PilotScaffold
     /// <summary>The host checks the scaffold CAN run, run: <c>validate</c> through the gate over a throwaway root (<c>testsToDelete-m2-probe-&lt;id&gt;</c>, removed in <c>finally</c>) holding the two files, with a PATH of its own — an empty <c>claude</c> and links to the host's <c>git</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c>. It starts none of the target's tools and no claude or coai
     /// (the executables it resolves are empty files or the host's own, asked only the questions validate asks of git). A file that parses but that <c>validate</c> refuses — a gate step with no coai, a binary under the target, a settings file that is not there — is red HERE, not at the pilot's step 2.</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    private static async Task ValidatesOnAProbeRootAsync(string experiment, string scenarios, string id)
+    internal static async Task ValidatesOnAProbeRootAsync(string experiment, string scenarios, string id, string pilot = "m2")
     {
-        var probe = Path.Combine(Path.GetTempPath(), $"testsToDelete-m2-probe-{id}");
+        var probe = Path.Combine(Path.GetTempPath(), $"testsToDelete-{pilot}-probe-{id}");
         try
         {
             var root = Directory.CreateDirectory(Path.Combine(probe, "root")).FullName;
@@ -125,17 +125,17 @@ public sealed class M2PilotScaffold
     }
 
     /// <summary>The host's own <paramref name="name"/> by its real path, found on the test process's PATH the way the module finds an executable.</summary>
-    private static string HostTool(string name) =>
+    internal static string HostTool(string name) =>
         ExecutableResolution.Resolve(name, (System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator), [], ModelArmsApp.Adapters.RootFacts.Host, OperatingSystem.IsWindows()) is ExecutableAnswer.Found found
             ? found.Real
             : throw new InvalidOperationException($"{name} must resolve on the PATH this test runs under: the pilot needs it too");
 
     /// <summary>The coai server's executable the experiment names: <c>M2_COAI_BINARY</c> when set (a PATH, never a key), else the fake CLI's apphost — a stand-in the fake pilot never starts (the gate step's MCP config only NAMES it); an absolute path outside the target and the root, as D17 asks of an executable.</summary>
-    private static string CoaiBinary() =>
+    internal static string CoaiBinary() =>
         System.Environment.GetEnvironmentVariable("M2_COAI_BINARY") is { Length: > 0 } named ? Path.GetFullPath(named) : Bench.Tests.Probes.Driver.FakeCli.Executable;
 
     /// <summary>The key-free settings file the experiment names: <c>M2_COAI_SETTINGS</c> when set, else <c>{}</c> written beside <c>experiment.json</c> (<c>make</c> copies its bytes into each arm; a file holding no key keeps the fake pilot's arms key-free).</summary>
-    private static async Task<string> CoaiSettingsAsync(string files)
+    internal static async Task<string> CoaiSettingsAsync(string files)
     {
         if (System.Environment.GetEnvironmentVariable("M2_COAI_SETTINGS") is { Length: > 0 } named)
         {
@@ -147,14 +147,14 @@ public sealed class M2PilotScaffold
         return path;
     }
 
-    private static void Say(string text)
+    internal static void Say(string text)
     {
         Console.Out.WriteLine(text);
         TestContext.Current.TestOutputHelper?.WriteLine(text);
     }
 
     /// <summary>The target repository: the rules repository inside it first (its own repository, committed), then the target's files, the rules added as the submodule at the path it already is at, one commit on the plan branch. Returns that commit — <c>target.base</c>.</summary>
-    private static async Task<string> MakeTargetAsync(string target)
+    internal static async Task<string> MakeTargetAsync(string target)
     {
         var rules = Path.Combine(target, ".agents", "conventions");
         Directory.CreateDirectory(Path.Combine(rules, "tools"));
@@ -218,14 +218,14 @@ public sealed class M2PilotScaffold
         tree["coai"] = new JsonObject { ["binary"] = coaiBinary, ["settings"] = coaiSettings, ["side"] = "wsl-ubuntu" };
         tree.AsObject().Remove("isolation");
         var home = System.Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
-        var text = tree.ToJsonString(Pretty).Replace("//example/home", "/" + home, StringComparison.Ordinal);
-        text.Should().NotContain("/example/", "every path of the example is replaced or removed (the deny list's //example/home is the operator's own home)");
+        var text = tree.ToJsonString(Pretty).Replace("//example/home", "/" + home, StringComparison.Ordinal).Replace("//example/root/arms.map.json", "/" + root + "/arms.map.json", StringComparison.Ordinal);
+        text.Should().NotContain("/example/", "every path of the example is replaced or removed (the deny list's //example/home is the operator's own home, //example/root the pilot's root)");
         var read = ExperimentFile.Read(text, new ExperimentLocation(root, home, string.Empty, Cli.Repository.Root)).Ok();
         read.Coai.Configured.Should().BeTrue("every kept scheme has a gate step, and a gate step needs the coai server's MCP config — only the KEY is the owner's");
         return text;
     }
 
-    private static string Scenarios()
+    internal static string Scenarios()
     {
         var text = new JsonArray(
             Scenario("S1", "cs", CsScenarios[0]),

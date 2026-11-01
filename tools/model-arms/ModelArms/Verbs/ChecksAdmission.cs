@@ -23,19 +23,18 @@ internal sealed record ChecksPlan(ExperimentInput Input, string Arm, Core.Experi
 }
 
 /// <summary>Admission for <c>checks</c> (plan D17 c/d, D18, D26; E3.S5 steps 1–4): each refusal ends the verb before a program is launched — the arm's scheme (a <c>tasks</c> block is allowed: the objective checks measure what the arm left and need no step of the pipeline) and its token from <c>arms.map.json</c> read through <see cref="BoundedFile"/>; the
-/// PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit; <c>git</c> and — for a full run — <c>dotnet</c>, <c>lowPriority[0]</c>, <c>build[0]</c>, <c>suite[0]</c> and <c>extension[0]</c> resolved to REAL paths and printed; the arm's runner, which must not be alive; <c>baseline.json</c> and <c>scenarios.json</c>. Exit 3 is the host (a program that is not there),
+/// PATH, <c>HOME</c> and <c>XDG_CONFIG_HOME</c> the children inherit; <c>git</c> and — for a full run — <c>dotnet</c>, <c>lowPriority[0]</c>, <c>build[0]</c>, <c>suite[0]</c> and <c>extension[0]</c> resolved to REAL paths, <c>git --version</c> asked of the resolved git and held against the floor (D23, E4.S0: the one launch admission itself makes, from the experiment root, under the hardened environment; <c>--parse-only</c> included), and the paths printed; the arm's runner, which must not be alive; <c>baseline.json</c> and <c>scenarios.json</c>. Exit 3 is the host (a program that is not there),
 /// exit 4 a wrong configuration or a refused file.</summary>
 internal static class ChecksAdmission
 {
     private const string Verb = "checks";
     private const string Name = "model-arms " + Verb;
-    private const int PidLimit = 64;
     private const int TimingLimit = 16 * 1024 * 1024;
 
     public static Task<Passage<ChecksPlan>> AdmitAsync(ExperimentInput input) =>
-        Task.FromResult(ArmChoices.Of(input, Verb, allowTasks: true))
+        Task.FromResult(ArmChoices.Of(input, Verb))
             .Then(choice => Place(input, choice))
-            .Then(placed => Equip(input, placed))
+            .ThenAsync(placed => EquipAsync(input, placed))
             .Then(equipped => Idle(equipped))
             .ThenAsync(equipped => ReadAsync(equipped));
 
@@ -54,15 +53,24 @@ internal static class ChecksAdmission
             reason => Passage<Located>.Stop(ExitCodes.Configuration, $"{Name}: arms.map.json is refused: {reason}"));
 
     /// <summary>Step 2: the PATH and the two configuration folders judged, then each executable resolved ONCE to the real path that is printed and launched (D17 c, d); the isolation line printed — nothing is restored.</summary>
-    private static Passage<Resolved> Equip(ExperimentInput input, Located placed)
+    private static async Task<Passage<Resolved>> EquipAsync(ExperimentInput input, Located placed)
     {
         var roots = ExecutableRule.ForbiddenRoots(input.Experiment.Target.Source, input.Experiment.Root);
         var refusal = LaunchAdmission.FirstRefusal(input.Verb.Environment, roots);
         var parseOnly = input.Verb.Flags.Has("parse-only");
-        return refusal.Length > 0
-            ? Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
-            : Resolve(input, roots, Needed(input.Experiment.Target, parseOnly)).Bind(resolved => Printed(input, placed, resolved, parseOnly));
+        if (refusal.Length > 0)
+        {
+            return Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}");
+        }
+
+        return await Task.FromResult(Resolve(input, roots, Needed(input.Experiment.Target, parseOnly)))
+            .ThenAsync(resolved => FlooredAsync(input, resolved))
+            .Then(resolved => Printed(input, placed, resolved, parseOnly));
     }
+
+    /// <summary>D23, E4.S0: the resolved git's version against the floor, <c>--parse-only</c> INCLUDED (git is resolved for it too and the report's git facts are asked of it): the one launch admission itself makes, from the experiment root, under the hardened environment. Nothing is printed before a refusal.</summary>
+    private static async Task<Passage<Dictionary<string, string>>> FlooredAsync(ExperimentInput input, Dictionary<string, string> resolved) =>
+        (await LaunchAdmission.FloorAsync(Verb, resolved["git"], input.Verb.Environment, input.Root.Root, input.Verb.Stopping)).Map(_ => resolved);
 
     /// <summary>Each name resolved in turn, once; the first that does not resolve ends the walk with its sentence (exit 3 absent, 4 refused).</summary>
     private static Passage<Dictionary<string, string>> Resolve(ExperimentInput input, IReadOnlyList<string> roots, IEnumerable<string> names)
@@ -102,21 +110,18 @@ internal static class ChecksAdmission
 
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;
 
-    /// <summary>Step 3: a live runner is a refusal — <c>checks</c> measures a finished or stopped arm and would run the build and the tests under a runner that is still writing the clone. A pid file that cannot be read, or holds no pid, is a refusal too: whether the runner is alive cannot be told.</summary>
+    /// <summary>Step 3: a live runner is a refusal — <c>checks</c> measures a finished or stopped arm and would run the build and the tests under a runner that is still writing the clone. Whether the runner is alive is asked of <see cref="RunnerLiveness"/> (D13): its lock decides, and a pid file alone counts only when the pid's command line is this arm's runner — a pid number a dead runner left to an unrelated process is no runner. A lock that cannot be judged is exit 4 (a path that is not the root's file), a host that cannot say exit 3.</summary>
     private static Passage<Resolved> Idle(Resolved equipped)
     {
         var (input, placed) = (equipped.Input, equipped.Placed);
-        var pidFile = input.Root.PidFile(placed.Choice.Arm);
-        var refusal = BoundedFile.Read(pidFile, PidLimit, PlatformFactsReader.CurrentRoad) switch
+        var arm = placed.Choice.Arm;
+        return RunnerLiveness.Of(input.Root, arm) switch
         {
-            BoundedRead.Absent => string.Empty,
-            BoundedRead.Refused refused => $"{Name}: {pidFile} cannot be read — whether {placed.Choice.Arm}'s runner is alive cannot be told: {ExecutableRule.Printable(refused.Reason)}",
-            BoundedRead.Bytes bytes => RunnerPid.Parse(Encoding.UTF8.GetString(bytes.Value).Trim()) is { } pid
-                ? WorkerLiveness.ProcessIsAlive(pid) ? $"{Name}: {placed.Choice.Arm}'s runner (pid {pid}) is alive — checks measures a finished or stopped arm" : string.Empty
-                : $"{Name}: {pidFile} holds no pid — whether {placed.Choice.Arm}'s runner is alive cannot be told",
-            _ => string.Empty,
+            RunnerState.Alive alive => Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s runner is alive ({ExecutableRule.Printable(alive.Holder)}) — checks measures a finished or stopped arm"),
+            RunnerState.Refused refused => Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s runner lock cannot be read — whether the runner is alive cannot be told: {ExecutableRule.Printable(refused.Reason)}"),
+            RunnerState.Unread unread => Passage<Resolved>.Stop(ExitCodes.Environment, $"{Name}: {arm}'s runner lock cannot be read — whether the runner is alive cannot be told: {ExecutableRule.Printable(unread.Reason)}"),
+            _ => new Passage<Resolved>.Through(equipped),
         };
-        return refusal.Length > 0 ? Passage<Resolved>.Stop(ExitCodes.Configuration, refusal) : new Passage<Resolved>.Through(equipped);
     }
 
     /// <summary>Step 4: <c>baseline.json</c> through the bounded road and <c>BaselineFile.Read</c>, and <c>scenarios.json</c> as the gate judged it; the arm's timing is looked at last — an arm with no <c>arm-done</c> line is one warning, never a refusal.</summary>

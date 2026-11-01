@@ -7,6 +7,7 @@ using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 using ModelArms.Verbs;
 using Xunit;
 
@@ -179,10 +180,22 @@ public sealed class StatusVerbTests
     [Fact]
     public void The_verbs_source_holds_no_way_to_list_a_folder_and_the_scan_still_finds_one_where_one_lives()
     {
-        foreach (var file in new[] { "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs" })
+        foreach (var file in new[]
+        {
+            "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs",
+            "ModelArms/Verbs/Lock.cs", "ModelArms/Verbs/Unlock.cs", "ModelArms/Verbs/SnapshotAside.cs", "ModelArms/Verbs/RunnerLiveness.cs", "ModelArms/Verbs/IsolationLocking.cs",
+            "ModelArms/Adapters/PosixFolderIsolation.cs", "ModelArms/Adapters/NoIsolation.cs", "ModelArms/Adapters/FolderIsolations.cs", "ModelArms/Adapters/RootFolders.cs", "ModelArms/Adapters/LockLog.cs",
+            "ModelArms/Adapters/RootLogFile.cs", "ModelArms/Adapters/WslHostAwake.cs", "ModelArms/Adapters/WindowsAwake.cs", "ModelArms/Adapters/NoAwake.cs", "ModelArms/Adapters/HostAwakes.cs", "ModelArms/Verbs/RunAll.cs",
+            "ModelArms/Verbs/Chain.cs", "ModelArms/Verbs/ChainSeams.cs", "ModelArms/Verbs/ChainRunLock.cs", "ModelArms/Verbs/ChainAdmission.cs", "ModelArms/Verbs/ChainGather.cs", "ModelArms/Verbs/ChainWalk.cs",
+        })
         {
             Forbidden.Where(word => Source(file).Contains(word, StringComparison.Ordinal)).Should().BeEmpty($"{file}: a verb that lists an unlisted folder fails at mode 300, the one state the isolation exists for");
         }
+
+        // The runtime road's VERIFICATION is the attempt to list a folder (it must fail before a name is read): the one place it is named, once.
+        var runtime = Source("ModelArms/Adapters/RuntimeFolderIsolation.cs");
+        Forbidden.Where(word => runtime.Contains(word, StringComparison.Ordinal)).Should().Equal(["Enumerate"], "RuntimeFolderIsolation lists nothing but the attempt that must fail");
+        System.Text.RegularExpressions.Regex.Matches(runtime, "Enumerate").Should().ContainSingle("the attempt to list is made in exactly one place");
 
         var instance = Source("ModelArms/Adapters/BaseCopy.cs");
         instance.Should().Contain("EnumerateFileSystemInfos", "the live instance the scan must still find is BaseCopy's listing of the base's folders (E3.S3) — a scan that matches nothing passes forever");
@@ -411,6 +424,40 @@ public sealed class StatusVerbTests
     }
 
     [Fact]
+    public async Task An_srs_arm_lists_its_split_its_fix_and_every_task_coder_by_name()
+    {
+        using var kit = new StatusKit("SRS1");
+        var paths = kit.Paths("SRS1");
+        var tasks = new[] { "t1", "t2", "t3" }.Select(id => new PlannedTask(id, [$"src/{id}.cs"], id + ".md", [], [])).ToList();
+        kit.Put(paths.BatchesJson, BatchesFile.Write(new TaskBatches([["t1", "t2"], ["t3"]], tasks), paths.Work));
+        kit.Done("SRS1", "1-split", "finished");
+        kit.Done("SRS1", "2-t1-code", "finished");
+        kit.Stream("SRS1", "2-t2-code", 1);
+        var asked = new List<string>();
+        var recording = new StatusReads(
+            (path, limit) => Asked(asked, path, StatusReads.Real.Read(path, limit)),
+            path => Asked(asked, path, StatusReads.Real.Present(path)));
+
+        var run = await kit.RunAsync(recording);
+
+        run.Code.Should().Be(0, run.Error);
+        var stems = run.Lines.Where(line => line.StartsWith("  ", StringComparison.Ordinal) && !line.StartsWith("  last line", StringComparison.Ordinal)).Select(line => line.Trim().Split(':')[0]).ToList();
+        stems.Should().Equal(["1-split", "2-t1-code", "2-t2-code", "2-t3-code", "3-hreview", "4-review", "5-fix", "6-gate"], "the split, then one line per task of batches.json in batch order, then the steps after the block — and no split fix that never ran");
+        run.Lines.Should().Contain("  1-split: done (finished)").And.Contain("  2-t1-code: done (finished)").And.Contain("  2-t3-code: not started");
+        run.Lines.Single(line => line.StartsWith("  2-t2-code:", StringComparison.Ordinal)).Should().NotContain("not started", "a stream with no end line is an attempt that began");
+        var expected = kit.NamesAskedFor(["SRS1"], attempts: 3, taskIds: ["t1", "t2", "t3"]);
+        asked.Where(path => !expected.Contains(path)).Should().BeEmpty("every name asked is one ArmPaths spells for the pipeline's stems — derived from those members, and nothing is listed");
+        asked.Should().Contain([paths.BatchesJson, paths.Done("1-split"), paths.Stream("2-t3-code", 1), paths.Done("1b-split-fix")], "the scan is alive: batches.json, the split's marker, a coder's stream and the fix's marker (asked by name, found absent) are asked for");
+
+        kit.Stream("SRS1", "1b-split-fix", 1);
+        (await kit.RunAsync()).Lines.Should().Contain(line => line.StartsWith("  1b-split-fix: ", StringComparison.Ordinal), "the fix is listed once it has a stream");
+        kit.Put(paths.BatchesJson, "{ not json");
+        var refused = await kit.RunAsync();
+        refused.Code.Should().Be(0, refused.Error);
+        refused.Lines.Should().Contain(line => line.StartsWith("  tasks: unreadable — ", StringComparison.Ordinal), "batches.json that does not read is said so, never read as no tasks");
+    }
+
+    [Fact]
     public async Task A_scheme_the_experiment_lacks_and_a_task_entry_are_one_line_each()
     {
         using var kit = new StatusKit("C1", "SRS1", "X1");
@@ -420,7 +467,8 @@ public sealed class StatusVerbTests
 
         run.Code.Should().Be(0, run.Error);
         run.Lines.Should().Contain("arm X1: its scheme X is not among the experiment's schemes (C, CR, SRS, CHH)");
-        run.Lines.Should().Contain("  tasks: listed when the task pipeline lands (E4)");
+        run.Lines.Should().Contain("  1-split: not started", "the block's split is listed by its stem (E4.S3)");
+        run.Lines.Should().Contain("  tasks: no batches yet", "no batches.json: the coders are not listed, and no listing stands in for them");
         run.Lines.Should().Contain("  3-hreview: done (finished)");
         Regex.Matches(run.Output, "^  tasks:", RegexOptions.Multiline).Should().ContainSingle();
     }
