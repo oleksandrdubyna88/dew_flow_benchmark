@@ -361,6 +361,30 @@ class ProcessTests(unittest.TestCase):
             return False
         return True
 
+    def test_Without_a_pidfd_the_wait_polls_every_tick_and_not_every_five_milliseconds(self):
+        slept = []
+
+        class Alive:
+            def poll(self):
+                return None
+
+        real = ex.time.sleep
+        ex.time.sleep = slept.append
+        try:
+            self.assertFalse(ex._exited(Alive(), None, 1000))
+            self.assertFalse(ex._exited(Alive(), None, 20))
+        finally:
+            ex.time.sleep = real
+        self.assertEqual(slept, [ex.TICK_S, 0.02], "a full tick, or what is left of the wait when that is less")
+        self.assertEqual(ex.TICK_S, 0.05)
+
+    def test_Without_a_pidfd_a_program_that_exits_is_still_noticed_within_a_tick(self):
+        proc = subprocess.Popen(["bash", "-c", "exit 3"])
+        started = time.monotonic()
+        self.assertTrue(ex.wait_exit(proc, None, ex.now_ms() + 5000))
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertEqual(proc.returncode, 3)
+
     def test_A_case_id_with_anything_but_letters_digits_underscore_and_hyphen_is_refused_before_it_reaches_an_argv(self):
         for bad in ("", "a b", "a;b", "$(touch x)", "a/b", "..", "a\nb", "s01\u00e9", "a\x00b", "x'y", '"q"'):
             with self.assertRaises(ValueError, msg=repr(bad)):

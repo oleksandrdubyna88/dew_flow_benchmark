@@ -119,7 +119,7 @@ def wait_exit(proc, pidfd, deadline_ms):
 
 def _exited(proc, pidfd, remaining_ms):
     if pidfd is None:
-        time.sleep(min(remaining_ms / 1000, 0.005))
+        time.sleep(min(remaining_ms / 1000, TICK_S))
         return proc.poll() is not None
     with selectors.DefaultSelector() as sel:
         sel.register(pidfd, selectors.EVENT_READ)
