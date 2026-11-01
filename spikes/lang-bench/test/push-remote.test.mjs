@@ -66,3 +66,19 @@ test('An_origin_main_without_a_license_is_exit_3_not_a_pass', async t => {
   assert.equal(result.exit, EXIT.ENVIRONMENT);
   assert.ok(result.lines.at(-1).startsWith('origin/main: no LICENSE'), result.lines.join('\n'));
 });
+
+test('A_remote_tracking_ref_whose_branch_is_gone_is_pruned_and_tags_are_not_fetched', async t => {
+  const origin = makeOrigin(t);
+  const work = path.join(ownedFolder(t, 'clone2'), 'w');
+  git(path.dirname(work), 'clone', '-q', origin, work);
+  git(work, 'push', '-q', 'origin', 'HEAD:refs/heads/old');
+  const repo = makeTaskRepo(t, { origin });
+  git(work, 'tag', 'v-fixture');
+  git(work, 'push', '-q', 'origin', 'v-fixture');
+  assert.ok(git(repo, 'for-each-ref', 'refs/remotes/origin/old'), 'the fixture starts with the tracking ref');
+  git(origin, 'branch', '-q', '-D', 'old');
+  const result = await setupRemote({ repo, url: origin });
+  assert.equal(result.exit, EXIT.PASS, result.lines.join('\n'));
+  assert.equal(git(repo, 'for-each-ref', 'refs/remotes/origin/old'), '', 'a stale tracking ref would hide commits from the range');
+  assert.equal(git(repo, 'tag', '--list'), '', 'a tag is never fetched here (a tag is pushed alone)');
+});

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { checkBranch, checkSelf, checkText, EXIT, formatReport } from '../lib/push-check.mjs';
+import { checkBranch as checkBranchAgainst, checkSelf, checkText, EXIT, formatReport } from '../lib/push-check.mjs';
+import { TASK_REPO_URL } from '../lib/push-remote.mjs';
 import { commit, git, makeOrigin, makeTaskRepo } from './support/push-fixtures.mjs';
 import { loadInputsForTest, realCredits } from './support/push-inputs.mjs';
 
@@ -12,6 +13,9 @@ const AID_TEXT = 'Header.\nA widget that frobnicates every sprocket twice before
 const SECRET = `${'github_pat'}_${'aB3dE5gH7jK9mN1pQ3sT5vW7yZ'}_${'aB3dE5gH7jK9mN1pQ3sT5v'}`;
 const inputs = loadInputsForTest({ aidText: AID_TEXT });
 const credits = realCredits();
+// The fixtures' origin is a local bare repository, so the expected URL is whatever their origin says (the real default is TASK_REPO_URL).
+const originOf = repo => { try { return git(repo, 'remote', 'get-url', 'origin'); } catch { return TASK_REPO_URL; } };
+const checkBranch = args => checkBranchAgainst({ expectedOrigin: originOf(args.repo), ...args });
 const lines = result => formatReport(result).split('\n');
 const checkOf = (result, name) => result.checks.find(c => c.name === name);
 
@@ -162,4 +166,17 @@ test('The_leak_and_secret_scans_read_every_commit_even_where_a_later_commit_remo
   const result = await run(repo);
   assert.equal(result.exit, EXIT.REFUSED);
   assert.deepEqual([checkOf(result, 'secrets').findings[0].commit, checkOf(result, 'leakcheck').findings[0].commit], [sha, sha]);
+});
+
+test('A_branch_check_refuses_when_origin_is_not_the_task_repository_because_the_range_is_measured_against_origin', async t => {
+  const { repo } = branchWith(t, { 'a.txt': 'x\n' });
+  const wrong = await checkBranchAgainst({ repo, branch: 'topic', inputs });
+  assert.equal(wrong.exit, EXIT.CONFIG);
+  assert.match(wrong.error, /origin's URL is .* not the task repository https:\/\/github\.com\/oleksandrdubyna88\/dew_flow_ai_language_comparison\.git/);
+  git(repo, 'remote', 'set-url', '--push', 'origin', 'https://example.invalid/elsewhere.git');
+  const pushElsewhere = await checkBranch({ repo, branch: 'topic', inputs });
+  assert.equal(pushElsewhere.exit, EXIT.CONFIG, 'a push URL that differs is refused too');
+  assert.match(pushElsewhere.error, /push URL/);
+  const noOrigin = makeTaskRepo(t, {});
+  assert.equal((await checkBranchAgainst({ repo: noOrigin, branch: 'main', inputs })).exit, EXIT.CONFIG);
 });

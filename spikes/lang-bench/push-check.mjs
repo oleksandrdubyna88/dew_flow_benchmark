@@ -24,7 +24,7 @@ const OPTIONS = {
   repo: { type: 'string' }, branch: { type: 'string' }, text: { type: 'string' }, url: { type: 'string' },
   self: { type: 'boolean' }, 'setup-remote': { type: 'boolean' },
   aid: { type: 'string', multiple: true }, 'aids-dir': { type: 'string' }, tokens: { type: 'string' },
-  public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
+  public: { type: 'string', multiple: true }, 'bench-repo': { type: 'string' }, 'origin-url': { type: 'string' }, credits: { type: 'string' }, needles: { type: 'string' }, 'template-files': { type: 'string' },
 };
 
 const usage = reason => ({ exit: EXIT.CONFIG, text: `push-check: ${reason}\nusage: see the header of ${import.meta.url.replace('file://', '')}\n` });
@@ -65,7 +65,7 @@ async function runChecks(mode, v, inputs) {
   }
   const repo = mode === 'self' ? await selfRepo(v) : v.repo;
   if (repo === undefined || v.branch === undefined) return usage(mode === 'self' ? '--self needs --branch (and a git repository)' : '--branch needs --repo');
-  return report(await (mode === 'self' ? checkSelf : checkBranch)({ repo, branch: v.branch, inputs }));
+  return report(await (mode === 'self' ? checkSelf : checkBranch)({ repo, branch: v.branch, inputs, ...(v['origin-url'] === undefined ? {} : { expectedOrigin: v['origin-url'] }) }));
 }
 
 const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };

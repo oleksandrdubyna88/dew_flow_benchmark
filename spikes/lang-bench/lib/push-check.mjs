@@ -5,11 +5,13 @@ import { ok } from '../../minigit-bench/lib/result.mjs';
 import { attributionSection, outsideAttribution } from './attribution.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { findAidHits } from './push-needles.mjs';
+import { EXIT } from './push-exit.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, tipTree } from './push-range.mjs';
+import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
 import { findSecrets } from './push-secrets.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
-export const EXIT = Object.freeze({ PASS: 0, REFUSED: 1, ENVIRONMENT: 3, CONFIG: 4 });
+export { EXIT };
 export const COMMIT_MESSAGE = '(commit message)';
 const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
@@ -87,8 +89,10 @@ async function tipFindings({ repo, branch, inputs, paths, firstCommit }) {
 }
 
 /** The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. */
-export async function checkBranch({ repo, branch, inputs }) {
+export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_REPO_URL }) {
   const label = `${repo} ${branch}`;
+  const origin = await verifyOrigin(repo, expectedOrigin);
+  if (!origin.ok) return errorResult(label, origin);
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
   const scanned = await scanRange(repo, branch, range.value, inputs, NAMES);

@@ -18,7 +18,14 @@ function aidFile(t) {
 const UNRELATED_PUBLIC = fileURLToPath(new URL('./fixtures/public-unrelated.md', import.meta.url));
 /** Tests that do not exercise the published-plans default name an unrelated public text, so they never read the real bench repository. */
 const withPublic = args => (args.includes('--public') || args.includes('--bench-repo') || args.includes('--setup-remote') ? args : [...args, '--public', UNRELATED_PUBLIC]);
-const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...withPublic(args)], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
+// The fixtures' origin is a local bare repository: a branch check is told to expect it (the real default is the task repository's URL).
+function withOrigin(args) {
+  const repo = args[args.indexOf('--repo') + 1];
+  if (!args.includes('--repo') || !args.includes('--branch') || args.includes('--self') || args.includes('--origin-url')) return args;
+  const url = spawnSync('git', ['-C', repo, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
+  return url === '' ? args : [...args, '--origin-url', url];
+}
+const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...withOrigin(withPublic(args))], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
 
 function topicBranch(t, files) {
   const repo = makeTaskRepo(t, { origin: makeOrigin(t) });
