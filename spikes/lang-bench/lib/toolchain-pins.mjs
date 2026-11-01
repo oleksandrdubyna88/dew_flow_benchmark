@@ -40,6 +40,12 @@ function artifactProblems(json) {
   ];
 }
 
+function treeProblems(json) {
+  if (json.treeSha256 === undefined) return [];
+  return Object.entries(json.treeSha256).filter(([name, hash]) => !DIRECTORY_KEYS.includes(name) || !SHA256_HEX.test(hash))
+    .map(([name]) => `treeSha256.${name} must be 64 hex characters and name a toolchain directory (${DIRECTORY_KEYS.join(', ')})`);
+}
+
 function otherProblems(json) {
   return [
     ...PROBE_KEYS.filter(k => !isArgv(json.probes?.[k])).map(k => `probes.${k} must be an argv array (exe + argv, never a shell string)`),
@@ -53,7 +59,7 @@ function otherProblems(json) {
 export function loadStacksLang(json) {
   if (!json || typeof json !== 'object') return fail('stacks-lang.json is a JSON object');
   const pins = pinProblems(json);
-  const problems = [...pins, ...(pins.length === 0 ? directoryProblems(json) : []), ...artifactProblems(json), ...otherProblems(json)];
+  const problems = [...pins, ...(pins.length === 0 ? directoryProblems(json) : []), ...artifactProblems(json), ...treeProblems(json), ...otherProblems(json)];
   return problems.length === 0 ? ok(Object.freeze({ ...json })) : fail(`stacks-lang.json: ${problems.join('; ')}`, { problems });
 }
 

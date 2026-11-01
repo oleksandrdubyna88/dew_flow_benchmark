@@ -93,3 +93,14 @@ test('The_newest_patch_of_a_line_is_the_highest_plain_release_never_a_dev_or_can
   assert.equal(newestPatch(packument(versions), '6.0'), '6.0.10', 'numeric, not lexical: 6.0.10 is newer than 6.0.3');
   assert.equal(newestPatch(packument(['6.0.1-rc']), '6.0'), null);
 });
+
+test('A_recorded_tree_hash_must_be_64_hex_and_belong_to_a_toolchain_directory', () => {
+  const withTrees = trees => ({ ...stacksJson(), treeSha256: trees });
+  assert.equal(loadStacksLang(withTrees({ node: 'a'.repeat(64) })).ok, true);
+  const short = loadStacksLang(withTrees({ node: 'abc' }));
+  assert.equal(short.ok, false);
+  assert.match(short.reason, /treeSha256\.node/);
+  const stray = loadStacksLang(withTrees({ python: 'a'.repeat(64) }));
+  assert.equal(stray.ok, false);
+  assert.match(stray.reason, /treeSha256\.python/);
+});
