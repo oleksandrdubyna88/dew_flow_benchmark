@@ -1,0 +1,32 @@
+{
+  "decidedOn": "2026-10-31",
+  "reason": "The pins of the exploratory pilot (todo/PLAN_lang_explore_task1.md, D-X2 to D-X8, section 10 step 1). Exploratory, not evidence: nothing here is a pre-registration. A later amendment moves a pin in one dated line before pair 1, never between pairs. Paths are parts under the operator's home.",
+  "cli": {
+    "version": "2.1.310",
+    "pathParts": ["rsd", "minigit", "toolchains", "claude-2.1.310"],
+    "sha256": "b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56",
+    "model": "opus",
+    "effort": "high"
+  },
+  "node": { "version": "26.12.1", "dirParts": [".nvm", "versions", "node", "v26.12.1"] },
+  "dotnet": { "sdk": "10.0.114", "runtime": "10.0.14", "note": "deviation: v2 D6 pins SDK 10.0.403, which is not installed here" },
+  "typescript": {
+    "version": "6.0.3",
+    "integrity": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==",
+    "toolchainDirParts": ["rsd", "lang-v2", "explore", "toolchains", "typescript-6.0.3"],
+    "note": "integrity is read from the registry by `explore.mjs prepare` (npm view typescript@6.0.3 dist.integrity) and written here; the operator's ~/.npm copy is never used"
+  },
+  "csharpSnapshot": { "dirParts": ["rsd", "minigit", "toolchains", "cache-csharp-0a5733e2d4f1"], "treeSha256": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8", "note": "v1's registered snapshot (made under SDK 10.0.114), used in place and re-hashed by prepare" },
+  "python3": { "path": "/usr/bin/python3", "version": "3.14.4", "sha256": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41" },
+  "specs": {
+    "repoName": "dew_flow_ai_language_comparison",
+    "spec01": { "sha": "d622768", "path": "todo/tasks/01-descent-to-one.md", "sha256": "d890bb3fab5f9b4e6899a8578e852526cdab25a9316eda0860f21f6c3706742e" },
+    "format": { "sha": "1531de8", "path": "todo/tasks/FORMAT.md", "sha256": "5b476946bf9f0a61f87845bead56043953777d038269a117000af149ec8f3d9c" }
+  },
+  "privateNotes": { "relativePath": "rsd/lang-v2/test-design/01.md", "sha256": "0eb311642c70460d07fa5d32e57a741decbe61cd8f99ba0e4705831e77d8e89e" },
+  "caps": { "capUsd": 50, "wallMs": 4500000, "stallMs": 2700000 },
+  "limits": { "timeFloorMs": 2000, "timeFactor": 3, "memoryFloorBytes": 536870912, "memoryFactor": 2, "calibrationCeilingMs": 30000, "buildTimeoutMs": 600000, "outputCapBytes": 1048576 },
+  "locale": "de_DE.UTF-8",
+  "envExtra": { "DOTNET_gcServer": "0", "NODE_OPTIONS": "" },
+  "pairs": 3
+}
