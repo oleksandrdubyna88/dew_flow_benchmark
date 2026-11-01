@@ -112,6 +112,29 @@ class CacheTests(unittest.TestCase):
         self.assertNotIn(probe.stdout.strip(), ("None", ""), "importing the entry sets sys.pycache_prefix")
 
 
+class TemporaryFolderTests(unittest.TestCase):
+    """The runner makes a folder for its bytecode prefix (and one for the run): whichever way a run ends normally, none is left behind."""
+
+    def leftovers(self, box, *args):
+        tmp = tempfile.mkdtemp(dir=box.root)
+        box.cli(*args, env={"TMPDIR": tmp})
+        return sorted(os.listdir(tmp))
+
+    def test_A_full_run_leaves_nothing_in_the_temp_folder(self):
+        self.assertEqual(self.leftovers(Box(self)), [])
+
+    def test_A_failing_run_a_parse_only_run_and_a_configuration_error_leave_nothing_either(self):
+        self.assertEqual(self.leftovers(Box(self, run_sh="printf wrong\\n")), [])
+        self.assertEqual(self.leftovers(Box(self), "--parse-only"), [])
+        self.assertEqual(self.leftovers(Box(self), "--no-such-flag"), [])
+        self.assertEqual(self.leftovers(Box(self, pairs={})), [])
+
+    def test_The_prefix_folder_is_removed_by_the_runner_when_the_interpreter_exits(self):
+        probe = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys, tempfile, os; sys.path.insert(0, sys.argv[1]); import run_samples; "
+                                "print(sys.pycache_prefix)", runner_path.RUNNER_DIR], capture_output=True, text=True, env={"TMPDIR": tempfile.mkdtemp(dir=Box(self).root)})
+        self.assertFalse(os.path.exists(probe.stdout.strip()), "the prefix folder outlived the interpreter")
+
+
 class OlympiadTests(unittest.TestCase):
     def test_The_format_olympiad_example_with_a_replay_stub_prints_PASS_s03_1_entries_and_exits_0(self):
         code, out, err = Box(self).cli()
