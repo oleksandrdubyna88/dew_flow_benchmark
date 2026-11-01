@@ -206,6 +206,8 @@ internal sealed class SrsKit : IDisposable
     /// <summary><c>checks SRS1</c> through the gate, as the console runs it.</summary>
     public async Task<ChecksRun> ChecksAsync()
     {
+        // The in-process runner wrote its own pid (E5.S1) into pids/<arm>.pid and that pid is this test host, which is alive: `checks` reads a live pid as a live runner. The runner has ended, so its pid file goes (a real runner's pid dies with it).
+        File.Delete(Path.Combine(Root.Root, "pids", $"{Arm}.pid"));
         var line = ModelArmsCommandLine.Split(["checks", Arm, "--experiment", Root.Root]).Ok();
         var output = new StringWriter();
         var error = new StringWriter();

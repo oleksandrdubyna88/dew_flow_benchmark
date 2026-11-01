@@ -316,12 +316,10 @@ public sealed class RunAllVerbTests
     [InlineData("X1", "belongs to scheme X")]
     [InlineData("C9", "C9")]
     [InlineData("C1 C1", "C1 is named twice")]
-    [InlineData("SRS1", "task pipeline")]
     public async Task An_unknown_an_unmade_or_a_twice_named_arm_is_refused_with_exit_4_and_nothing_started(string given, string sentence)
     {
         await using var kit = await RunAllKit.MakeAsync("C1");
         kit.Root.Write("chain/made-X1", "made\n");
-        kit.Root.Write("chain/made-SRS1", "made\n");
         var launcher = new RecordingLauncher();
 
         var run = await kit.InProcessAsync(RunAllKit.Seams(launcher, new Dictionary<string, string>()), given.Split(' '));

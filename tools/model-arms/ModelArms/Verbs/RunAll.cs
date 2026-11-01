@@ -96,7 +96,7 @@ internal static class RunAllVerb
             reason => Passage<Held>.Stop(ExitCodes.Environment, $"{Name}: {reason}"));
     }
 
-    /// <summary>Step 1: an arm named twice, then each arm's scheme (the task pipeline refused by the same constant <c>run-arm</c> uses).</summary>
+    /// <summary>Step 1: an arm named twice, then each arm's scheme.</summary>
     private static Passage<IReadOnlyList<string>> Chosen(ExperimentInput input, IReadOnlyList<string> arms)
     {
         if (arms.GroupBy(arm => arm, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1) is { } twice)
@@ -106,7 +106,7 @@ internal static class RunAllVerb
 
         foreach (var arm in arms)
         {
-            if (ArmChoices.Of(input, Verb, arm, RunArmAdmission.AllowsTasks) is Passage<ArmChoice>.Stopped stopped)
+            if (ArmChoices.Of(input, Verb, arm) is Passage<ArmChoice>.Stopped stopped)
             {
                 return new Passage<IReadOnlyList<string>>.Stopped(stopped.ExitCode, stopped.Lines);
             }
