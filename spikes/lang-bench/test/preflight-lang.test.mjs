@@ -267,16 +267,13 @@ test('The_preflight_refuses_a_store_that_is_not_there_without_starting_a_box', a
 
 test('A_host_without_bwrap_is_refused_naming_it_and_no_probe_is_attempted', async t => {
   if (!installed()) return lacks(t, `the pinned toolchains are not installed under ${storeRoot}`);
+  const hostPath = path.join(ownedFolder(t, 'nopath'), 'nothing-here'); // given as a parameter: the test never touches process.env
   const before = process.env.PATH;
-  process.env.PATH = path.join(ownedFolder(t, 'nopath'), 'nothing-here');
-  try {
-    const result = await preflightLang({ stacks, storeRoot });
-    assert.equal(result.ok, false);
-    assert.match(result.problems.join('\n'), /bwrap is not installed/);
-    assert.doesNotMatch(result.problems.join('\n'), /did not run/, 'there was no box to probe in');
-  } finally {
-    process.env.PATH = before;
-  }
+  const result = await preflightLang({ stacks, storeRoot, hostPath });
+  assert.equal(process.env.PATH, before);
+  assert.equal(result.ok, false);
+  assert.match(result.problems.join('\n'), /bwrap is not installed/);
+  assert.doesNotMatch(result.problems.join('\n'), /did not run/, 'there was no box to probe in');
 });
 
 test('An_apphost_in_a_box_without_the_hiding_resolves_the_distributions_dotnet_root_and_that_is_the_point', async t => {

@@ -121,9 +121,11 @@ async function probeInBox({ prefix, argv }) {
   return r !== null && r.code === 0 ? r.stdout : null;
 }
 
-async function hostBwrapProblems() {
+async function hostBwrapProblems(hostPath) {
   const run = async (exe, argv) => {
-    const r = await runBounded(exe, argv, { timeoutMs: PROBE_MS });
+    const exePath = findOnPath(exe, hostPath);
+    if (exePath === null) return null;
+    const r = await runBounded(exePath, argv, { timeoutMs: PROBE_MS, env: { PATH: hostPath, LANG: 'C.UTF-8' } });
     return r.ok ? r.value : null;
   };
   return bwrapFacts({ bwrap: await run('bwrap', ['--version']), unshare: await run('unshare', ['-Ur', 'true']) }).problems;
@@ -133,13 +135,13 @@ const refused = problems => ({ ...fail(`the preflight found ${problems.length} p
 const FATAL_HOST = /^(bwrap|user namespaces)/;
 
 /** The host's bwrap: `{ problems, fatal }` (fatal: there is no box to probe in). */
-async function environmentProblems() {
-  const problems = await hostBwrapProblems();
-  return { problems, fatal: findOnPath('bwrap') === null || problems.some(p => FATAL_HOST.test(p)) };
+async function environmentProblems(hostPath) {
+  const problems = await hostBwrapProblems(hostPath);
+  return { problems, fatal: findOnPath('bwrap', hostPath) === null || problems.some(p => FATAL_HOST.test(p)) };
 }
 
-async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds }) {
-  const prefix = boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath: pathDirs, operatorHome, extraRoBinds });
+async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds, hostPath }) {
+  const prefix = boxArgv({ bwrap: findOnPath('bwrap', hostPath), dirs, boxPath: pathDirs, operatorHome, extraRoBinds });
   const probes = Object.fromEntries(await Promise.all(Object.keys(stacks.probes).map(async name => [name, await probeInBox({ prefix, argv: probeArgvFor(name, stacks) })])));
   const scan = await scanDotnetInBox({ prefix, pinnedDotnet: path.join(dirs.dotnetSdk, 'dotnet'), boxPath: pathDirs });
   const verdict = judgeProbes({ probes, stacks });
@@ -149,17 +151,17 @@ async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBind
 /**
  * `preflightLang({ stacks, storeRoot, boxPath?, operatorHome?, withApphost? })` -> `ok({ facts })` or a fail whose `problems` lists everything wrong (all of it, not the first).
  * `boxPath` is the PATH the box under test will have (default: the pinned directories alone); a PATH that also reaches another `dotnet` is refused.
- * `withApphost: false` skips the apphost probe (a few seconds); only a test of something else says so. `extraRoBinds` (`{ host, box }`) are for tests that put a fixture in the box.
+ * `withApphost: false` skips the apphost probe (a few seconds); only a test of something else says so. `extraRoBinds` (`{ host, box }`) are for tests that put a fixture in the box. `hostPath` is the PATH `bwrap` and `unshare` are found on (default: this process's); a test gives its own instead of changing `process.env`.
  */
-export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true, extraRoBinds = [] }) {
+export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true, extraRoBinds = [], hostPath = process.env.PATH ?? '' }) {
   const dirs = storeDirs(stacks, storeRoot);
   const shallow = verifyStore({ stacks, storeRoot, deep: true }); // every tree hash, not only the versions the tools print: a binary replaced in place still answers --version
   if (!shallow.ok) return refused(shallow.problems);
   const pathDirs = boxPath ?? defaultBoxPath(dirs);
-  const environment = await environmentProblems();
+  const environment = await environmentProblems(hostPath);
   if (environment.fatal) return refused(environment.problems);
-  const verdict = await probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds });
-  const apphost = withApphost ? await runApphostProbe({ stacks, dirs, boxPath: pathDirs, operatorHome }) : { problems: [], root: null };
+  const verdict = await probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds, hostPath });
+  const apphost = withApphost ? await runApphostProbe({ stacks, dirs, boxPath: pathDirs, operatorHome, hostPath }) : { problems: [], root: null };
   const all = [...environment.problems, ...verdict.problems, ...apphost.problems];
   return all.length === 0 ? ok({ facts: { ...verdict.facts, apphostDotnetRoot: apphost.root } }) : refused(all);
 }

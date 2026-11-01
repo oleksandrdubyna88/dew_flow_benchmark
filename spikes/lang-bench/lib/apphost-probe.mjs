@@ -38,9 +38,9 @@ const tail = text => (text ?? '').trim().slice(-300);
  * `runApphostProbe({ stacks, dirs, boxPath, operatorHome, protect })` -> `{ problems, root }`. `root` is the dotnet root the apphost used (`null` when unread).
  * `protect: false` runs the same probe in a box WITHOUT the hiding and DOTNET_ROOT (a test's way to show the open road).
  */
-export async function runApphostProbe({ stacks, dirs, boxPath, operatorHome = os.homedir(), protect = true }) {
+export async function runApphostProbe({ stacks, dirs, boxPath, operatorHome = os.homedir(), protect = true, hostPath = process.env.PATH ?? '' }) {
   void stacks;
-  const bwrap = findOnPath('bwrap');
+  const bwrap = findOnPath('bwrap', hostPath);
   if (bwrap === null) return { problems: ['bwrap is not installed: the apphost probe cannot run'], root: null };
   const work = mkdtempSync(path.join(os.tmpdir(), `testsToDelete-u${process.getuid?.() ?? 0}-bench-apphost-`));
   try {
