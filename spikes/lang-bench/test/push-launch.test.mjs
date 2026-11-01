@@ -2,12 +2,14 @@
 // output, the archive extraction, the batch reads. It must pass bytes through untouched, feed stdin, bound the output, and on a timeout kill
 // the whole process tree - the descendants too, not only the child.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { runGitBytes } from '../lib/push-git.mjs';
 import { runBatchCatFile } from '../lib/push-git.mjs';
-import { commit, git, makeTaskRepo } from './support/push-fixtures.mjs';
+import { commit, git, makeTaskRepo, ownedFolder } from './support/push-fixtures.mjs';
 
 /** Running, not merely still in the process table: a killed process waiting to be reaped is a zombie (state Z) and is gone. */
 const alive = pid => {
@@ -98,4 +100,29 @@ test('Bytes_mode_neither_decodes_stdout_to_text_nor_joins_the_buffer_twice', asy
   assert.equal(text.value.stdout.length, BIG);
   assert.deepEqual(counts.text, { concats: 1, decodes: 1 }, 'text mode is unchanged: one join, one decode');
   assert.equal('stdoutBytes' in text.value, false);
+});
+
+test('The_batch_readers_work_in_chunks_of_at_most_500_objects_and_keep_the_ceilings_across_the_chunks', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'x'.repeat(400) } });
+  const stubs = ownedFolder(t, 'chunkstub');
+  const calls = path.join(stubs, 'calls.txt');
+  const real = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  writeFileSync(path.join(stubs, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${calls}\nexec ${real} "$@"\n`, { mode: 0o755 });
+  const script = `
+    import { runBatchCatFile, runBatchCheck } from ${JSON.stringify(new URL('../lib/push-git.mjs', import.meta.url).href)};
+    const names = Array.from({ length: 1201 }, () => 'main:a.txt');
+    const check = await runBatchCheck(${JSON.stringify(repo)}, names);
+    const read = await runBatchCatFile(${JSON.stringify(repo)}, names, { maxTotalBytes: 1_000_000 });
+    const over = await runBatchCatFile(${JSON.stringify(repo)}, names, { maxTotalBytes: 450_000 });
+    console.log(JSON.stringify({ check: check.ok, read: read.ok, over: over.ok, reason: over.reason ?? null }));
+  `;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { ...process.env, PATH: `${stubs}:${process.env.PATH}` } });
+  assert.equal(r.status, 0, r.stderr);
+  const answer = JSON.parse(r.stdout.trim());
+  assert.deepEqual([answer.check, answer.read, answer.over], [true, true, false]);
+  assert.match(answer.reason, /more than 450000 bytes/, 'the total counts across chunks: it crosses the ceiling in the third chunk');
+  const lines = readFileSync(calls, 'utf8').split('\n');
+  const count = flag => lines.filter(l => l.includes(`cat-file ${flag}`)).length;
+  assert.equal(count('--batch-check'), 3, '1201 names in chunks of 500, 500 and 201');
+  assert.equal(count('--batch') - count('--batch-check'), 3 + 3, 'two full runs of three chunks (the third run stops at the chunk that crosses the ceiling, still three)');
 });

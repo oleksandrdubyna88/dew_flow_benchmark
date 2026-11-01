@@ -69,7 +69,7 @@ function parseBatch(out, names, limits) {
   const found = new Map();
   const missing = [];
   let at = 0;
-  let total = 0;
+  let total = limits.totalBefore ?? 0;
   for (const name of names) {
     const entry = readEntry(out, at, name, limits, total);
     if (!entry.ok) return entry;
@@ -77,29 +77,45 @@ function parseBatch(out, names, limits) {
     total += entry.size ?? 0;
     if (entry.missing) missing.push(name); else found.set(name, entry.value);
   }
-  return { ...ok(found), missing };
+  return { ...ok(found), missing, total };
 }
 
-/**
- * ok(Map(name -> Buffer)) with `.missing` (names git does not have), all read by ONE `git cat-file --batch` process: `names` are object
- * names (`<rev>:<path>`, or a blob id). A single object over `maxObjectBytes`, or the objects together over `maxTotalBytes`, is a fail.
- */
-export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_OBJECT_BYTES, maxTotalBytes = BATCH_MAX_TOTAL_BYTES, timeoutMs = 120_000, where } = {}) {
-  if (names.length === 0) return { ...ok(new Map()), missing: [] };
-  const budget = maxTotalBytes + names.length * HEADER_ALLOWANCE + 1024;
+/** One chunk of runBatchCatFile: ONE `git cat-file --batch` process over `names` (object names: `<rev>:<path>`, or a blob id), starting from `totalBefore` bytes already read. */
+async function catFileChunk(repo, names, { maxObjectBytes, maxTotalBytes, timeoutMs, where, totalBefore }) {
+  const budget = maxTotalBytes - totalBefore + names.length * HEADER_ALLOWANCE + 1024;
   const r = await runBounded('git', ['-C', repo, 'cat-file', '--batch'], { env: ENV, timeoutMs, maxBytes: budget, input: `${names.join('\n')}\n`, bytes: true });
   const bad = launchFailure(r, 'git cat-file --batch', { timeoutMs, maxBytes: maxTotalBytes });
   if (bad) return bad;
   if (r.value.code !== 0) return fail(`git cat-file --batch failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
-  return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes, where });
+  return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes, where, totalBefore });
 }
 
+export const BATCH_CHUNK = 500;
+
+/** `names` in runs of at most BATCH_CHUNK: one git process must not be fed an unbounded list. */
+const chunksOf = names => Array.from({ length: Math.ceil(names.length / BATCH_CHUNK) }, (_, i) => names.slice(i * BATCH_CHUNK, (i + 1) * BATCH_CHUNK));
+
 /**
- * ok(Map(name -> { oid, type, size })) with `.missing`, from ONE `git cat-file --batch-check`: sizes only, no content. `names` are object names
- * (`<rev>:<path>`, or a blob id). This is what a size ceiling is checked against BEFORE `runBatchCatFile` reads any content.
+ * ok(Map(name -> Buffer)) with `.missing` (names git does not have): `git cat-file --batch` in chunks of at most 500 names, each chunk one process; the per-object ceiling holds for
+ * every object and the TOTAL ceiling across the chunks (each chunk starts from what the earlier ones read). A single object over `maxObjectBytes`, or the objects together over
+ * `maxTotalBytes`, is a fail naming the offender.
  */
-export async function runBatchCheck(repo, names, { timeoutMs = 120_000 } = {}) {
-  if (names.length === 0) return { ...ok(new Map()), missing: [] };
+export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_OBJECT_BYTES, maxTotalBytes = BATCH_MAX_TOTAL_BYTES, timeoutMs = 120_000, where } = {}) {
+  const found = new Map();
+  const missing = [];
+  let totalBefore = 0;
+  for (const chunk of chunksOf(names)) {
+    const read = await catFileChunk(repo, chunk, { maxObjectBytes, maxTotalBytes, timeoutMs, where, totalBefore });
+    if (!read.ok) return read;
+    for (const [name, bytes] of read.value) found.set(name, bytes);
+    missing.push(...read.missing);
+    totalBefore = read.total;
+  }
+  return { ...ok(found), missing };
+}
+
+/** One chunk of runBatchCheck: ONE `git cat-file --batch-check` over `names`: sizes only, no content. */
+async function checkChunk(repo, names, { timeoutMs }) {
   const maxBytes = names.length * 256 + 4096;
   const r = await runBounded('git', ['-C', repo, 'cat-file', '--batch-check'], { env: ENV, timeoutMs, maxBytes, input: `${names.join('\n')}\n` });
   const bad = launchFailure(r, 'git cat-file --batch-check', { timeoutMs, maxBytes });
@@ -113,5 +129,21 @@ export async function runBatchCheck(repo, names, { timeoutMs = 120_000 } = {}) {
     const [oid, type, size] = line.split(' ');
     if (type === 'missing') missing.push(names[i]); else found.set(names[i], { oid, type, size: Number(size) });
   });
+  return { ...ok(found), missing };
+}
+
+/**
+ * ok(Map(name -> { oid, type, size })) with `.missing`: `git cat-file --batch-check` in chunks of at most 500 names, sizes only, no content. This is what a size
+ * ceiling is checked against BEFORE `runBatchCatFile` reads any content.
+ */
+export async function runBatchCheck(repo, names, { timeoutMs = 120_000 } = {}) {
+  const found = new Map();
+  const missing = [];
+  for (const chunk of chunksOf(names)) {
+    const answer = await checkChunk(repo, chunk, { timeoutMs });
+    if (!answer.ok) return answer;
+    for (const [name, entry] of answer.value) found.set(name, entry);
+    missing.push(...answer.missing);
+  }
   return { ...ok(found), missing };
 }
