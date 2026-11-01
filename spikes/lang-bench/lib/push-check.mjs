@@ -2,57 +2,19 @@
 // bench's own branch. Every finding is `{ commit?, path, line, what }` - where and which, never the matched text. Exit codes:
 // 0 clean, 1 refused, 3 the environment (git, the network, an unreadable aid), 4 configuration (a branch that is not there).
 import { ok } from '../../minigit-bench/lib/result.mjs';
-import { attributionSection, outsideAttribution } from './attribution.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
-import { decodeBlob } from './push-decode.mjs';
-import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
-import { branchTip, changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, readBlobs, readFileAt, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
-import { findOwnSecrets, findSecrets, maskSecrets } from './push-secrets.mjs';
+import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
 import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
-import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
+import { findStackFolderFiles } from './push-visible.mjs';
 
 export { EXIT };
-export const COMMIT_MESSAGE = '(commit message)';
+export { COMMIT_MESSAGE };
 const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'run-base-text', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
-// History is published, so these read every commit; the others read the tip tree, which is what a run base carries.
-const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
 const MAX_PRINTED = 100;
-const NUL_REASON = 'file holds a NUL byte (binary or UTF-16): the text scans cannot be trusted on it';
-
-/** The findings of one text, by named check. `file` decides which placement rules apply. */
-function scanText(file, text, inputs, { body = false } = {}) {
-  const readme = file === 'README.md';
-  const visible = findVisibleRules(file, readme ? outsideAttribution(text) : text, { known: inputs.known, assumeVisible: body, links: !body });
-  return {
-    leakcheck: findAidHits(file, text, inputs.aids),
-    secrets: [...findSecrets(file, text), ...findOwnSecrets(file, text, inputs.ownSecrets ?? [])],
-    attribution: readme ? visible.filter(f => f.group !== GROUP_FAMILY) : [],
-    'run-base-text': readme ? [] : visible.filter(f => f.group !== GROUP_FAMILY),
-    'family-names': visible.filter(f => f.group === GROUP_FAMILY),
-  };
-}
-
-/**
- * A file's PATH is text too: the needles, the family's names, the secret shapes and the aids' shingles are scanned in it. A finding
- * names the path as the position, with any secret masked, and has no line.
- */
-function scanPath(file, inputs) {
-  const shown = maskSecrets(file);
-  const found = scanText(file, file, inputs);
-  const onPath = findings => findings.map(f => ({ ...f, path: shown, line: null }));
-  return Object.fromEntries(Object.entries(found).filter(([name]) => name !== 'attribution').map(([name, findings]) => [name, onPath(findings)]));
-}
-
-const emptyChecks = names => Object.fromEntries(names.map(name => [name, []]));
-
-function merge(into, found, commit, { atTip = true } = {}) {
-  for (const [name, findings] of Object.entries(found)) {
-    if (name in into && (atTip || HISTORY_CHECKS.has(name))) into[name].push(...findings.map(f => ({ commit, ...f })));
-  }
-}
 
 const tokenLine = inputs => `${inputs.aids.literals.length} (${inputs.aids.tokenInfo ?? 'given directly'})`;
 
@@ -64,85 +26,73 @@ const verdict = (checks, label, extra = {}) => ({
 });
 
 const errorResult = (label, failure) => ({ exit: failure.kind === 'config' ? EXIT.CONFIG : EXIT.ENVIRONMENT, label, checks: [], error: failure.reason });
-const toChecks = (names, byName) => names.map(name => ({ name, findings: byName[name] }));
 
-/**
- * Scan every message and every distinct (path, blob) of the range. The leak and secret scans read all of them; the placement rules
- * read only the blob that is at the tip, credited to the first commit that brought it. `paths` are the range's files still at the tip.
- */
-async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
-  const changes = await changesOf(repo, commits);
-  if (!changes.ok) return changes;
-  const blobs = await readBlobs(repo, changes.value.files.filter(f => f.mode !== SUBMODULE_MODE).map(f => f.oid));
-  const tip = await tipTree(repo, branch);
-  if (!blobs.ok || !tip.ok) return blobs.ok ? tip : blobs;
-  const byName = emptyChecks(names);
-  for (const { commit, text } of changes.value.messages) merge(byName, scanText(COMMIT_MESSAGE, text, inputs), commit, { atTip: false });
-  const seen = new Set();
-  const pathsDone = new Set();
-  const tipCommit = new Map();
-  const anyCommit = new Map();
-  for (const { commit, path, oid, mode } of changes.value.files) {
-    const atTip = tip.value.get(path)?.oid === oid;
-    if (!anyCommit.has(path)) anyCommit.set(path, commit);
-    if (atTip && !tipCommit.has(path)) tipCommit.set(path, commit);
-    if (mode === SUBMODULE_MODE || seen.has(`${path}\0${oid}`)) continue;
-    seen.add(`${path}\0${oid}`);
-    const { text, nul } = decodeBlob(blobs.value.get(oid));
-    merge(byName, scanText(path, text, inputs), commit, { atTip });
-    if (!pathsDone.has(path)) { pathsDone.add(path); merge(byName, scanPath(path, inputs), commit, { atTip }); }
-    if (nul && refuseNul) merge(byName, { 'tree-shape': [{ path, line: null, what: NUL_REASON }] }, commit, { atTip });
-  }
-  return ok({ byName, firstCommit: tipCommit, anyCommit, paths: [...tipCommit.keys()], tip: tip.value });
+const firstFailure = (...results) => results.find(r => !r.ok);
+
+/** The first commit that brought each path, keeping only the files `keep` allows. */
+const firstCommitMap = (files, keep) => new Map(files.filter(keep).reverse().map(f => [f.path, f.commit]));
+
+/** ok({ commits: [sha], tip }) of a branch: the commits a push would add and the tip it ends at. */
+async function rangeAndTip(repo, branch) {
+  const range = await newCommits(repo, branch);
+  const tip = range.ok ? await branchTip(repo, branch) : range;
+  return tip.ok ? ok({ commits: range.value, tip: tip.value }) : tip;
 }
 
-/** Branch-level findings: the README's structure, the credit terms and the stack folders, with the commit that brought the path. */
-async function tipFindings({ repo, branch, inputs, paths, addedPaths, firstCommit, anyCommit, tip }) {
+/** ok({ commits, tip, found, files, tipTree }): the range, the tip it ends at, and the tagged findings of every message and blob in it. */
+async function scanBranch({ repo, branch, inputs, refuseNul }) {
+  const head = await rangeAndTip(repo, branch);
+  const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
+  if (!changes.ok) return changes;
+  const { files, messages } = changes.value;
+  const blobs = await readBlobs(repo, files.filter(f => f.mode !== SUBMODULE).map(f => f.oid));
+  const tree = await tipTree(repo, branch);
+  const bad = firstFailure(blobs, tree);
+  if (bad) return bad;
+  const entries = scanEntries(files, tree.value);
+  const found = keptFindings([...messageFindings(messages, inputs), ...entries.flatMap(e => entryFindings(e, blobs.value.get(e.oid), inputs, { refuseNul }))]);
+  return ok({ commits: head.value.commits.length, tip: head.value.tip, found, files, tree: tree.value });
+}
+
+/** Branch-level findings by check name: the README's structure, the credit terms, the stack folders and the tree's shape. */
+async function tipFindings({ repo, branch, inputs, scan }) {
   const readme = await readFileAt(repo, branch, 'README.md');
   const modules = await readFileAt(repo, branch, '.gitmodules');
-  if (!readme.ok || !modules.ok) return readme.ok ? modules : readme;
-  const text = readme.value;
-  const structure = text !== null && (carriesKnownText(addedPaths) || /^## Attribution\s*$/m.test(text)) ? attributionSection(text) : ok(null);
-  const withCommit = f => ({ commit: firstCommit.get(f.path), ...f });
+  const failure = firstFailure(readme, modules);
+  if (failure) return failure;
+  const anyCommit = firstCommitMap(scan.files, () => true);
+  const atTip = firstCommitMap(scan.files, f => scan.tree.get(f.path)?.oid === f.oid);
+  const tipEntries = new Map([...atTip.keys()].map(p => [p, scan.tree.get(p)]));
+  const added = [...anyCommit.keys()];
+  const withCommit = (commits, f) => ({ commit: commits.get(f.path), ...f });
   return ok({
-    attribution: structure.ok ? [] : [{ path: 'README.md', line: null, what: structure.reason }],
-    credits: checkCreditTerms({ credits: inputs.credits, paths: addedPaths, readmeText: text }).map(f => ({ commit: anyCommit.get(f.path) ?? firstCommit.get(f.path), ...f })),
-    stack: findStackFolderFiles(new Map(paths.map(p => [p, tip.get(p)])), { templateFiles: inputs.templateFiles }).map(withCommit),
-    shape: [...findSubmoduleProblems({ tip, gitmodulesText: modules.value }), ...findSymlinks(new Map(paths.map(p => [p, tip.get(p)])))].map(withCommit),
+    attribution: attributionFindings(readme.value, added, carriesKnownText),
+    'known-task-credits': checkCreditTerms({ credits: inputs.credits, paths: added, readmeText: readme.value }).map(f => withCommit(anyCommit, f)),
+    'stack-folders': findStackFolderFiles(tipEntries, { templateFiles: inputs.templateFiles }).map(f => withCommit(atTip, f)),
+    'tree-shape': [...findSubmoduleProblems({ tip: scan.tree, gitmodulesText: modules.value }), ...findSymlinks(tipEntries)].map(f => withCommit(atTip, f)),
   });
 }
+
+/** The tagged findings grouped under the named checks, in the named order. */
+const groupChecks = (names, findings) => names.map(name => ({ name, findings: findings.filter(f => f.check === name).map(({ check, atTip, ...f }) => f) }));
 
 /** The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. */
 export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_REPO_URL }) {
   const label = `${repo} ${branch}`;
   const origin = await verifyOrigin(repo, expectedOrigin);
-  if (!origin.ok) return errorResult(label, origin);
-  const range = await newCommits(repo, branch);
-  if (!range.ok) return errorResult(label, range);
-  const tipSha = await branchTip(repo, branch);
-  if (!tipSha.ok) return errorResult(label, tipSha);
-  const scanned = await scanRange(repo, branch, range.value, inputs, NAMES, { refuseNul: true });
-  if (!scanned.ok) return errorResult(label, scanned);
-  const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, addedPaths: [...scanned.value.anyCommit.keys()], firstCommit: scanned.value.firstCommit, anyCommit: scanned.value.anyCommit, tip: scanned.value.tip });
+  const scan = origin.ok ? await scanBranch({ repo, branch, inputs, refuseNul: true }) : origin;
+  const tip = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
   if (!tip.ok) return errorResult(label, tip);
-  const byName = scanned.value.byName;
-  byName.attribution = [...tip.value.attribution, ...byName.attribution];
-  byName['known-task-credits'] = tip.value.credits;
-  byName['stack-folders'] = tip.value.stack;
-  byName['tree-shape'] = [...byName['tree-shape'], ...tip.value.shape];
-  return verdict(toChecks(NAMES, byName), label, { commits: range.value.length, tip: tipSha.value, branch, tokens: tokenLine(inputs) });
+  const all = [...scan.value.found, ...flatten(tip.value, undefined)];
+  return verdict(groupChecks(NAMES, all), label, { commits: scan.value.commits, tip: scan.value.tip, branch, tokens: tokenLine(inputs) });
 }
 
 /** The bench's own branch (consult C6b, D2): only the leak and the secret scans, over the new commits. */
 export async function checkSelf({ repo, branch, inputs }) {
   const label = `${repo} ${branch} (bench branch)`;
-  const range = await newCommits(repo, branch);
-  if (!range.ok) return errorResult(label, range);
-  const tipSha = await branchTip(repo, branch);
-  if (!tipSha.ok) return errorResult(label, tipSha);
-  const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES, { refuseNul: false });
-  if (!scanned.ok) return errorResult(label, scanned);
-  return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length, tip: tipSha.value, branch, tokens: tokenLine(inputs) });
+  const scan = await scanBranch({ repo, branch, inputs, refuseNul: false });
+  if (!scan.ok) return errorResult(label, scan);
+  return verdict(groupChecks(SELF_NAMES, scan.value.found), label, { commits: scan.value.commits, tip: scan.value.tip, branch, tokens: tokenLine(inputs) });
 }
 
 /**
@@ -151,26 +101,30 @@ export async function checkSelf({ repo, branch, inputs }) {
  */
 export function checkText({ text, label, inputs, self = false }) {
   const names = self ? SELF_NAMES : ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
-  const byName = emptyChecks(names);
-  merge(byName, scanText(label, text, inputs, { body: true }), undefined);
-  return verdict(toChecks(names, byName), self ? `${label} (bench body)` : label, { tokens: tokenLine(inputs) });
+  const found = flatten(scanText(label, text, inputs, { body: true }), undefined);
+  return verdict(groupChecks(names, found), self ? `${label} (bench body)` : label, { tokens: tokenLine(inputs) });
 }
 
 const where = f => `${f.path}${f.line === null ? ':' : `:${f.line}`}`;
 const findingLine = f => `  ${f.commit ? `${f.commit.slice(0, 10)} ` : ''}${where(f)} ${f.what}`;
+const plural = n => `${n} new commit${n === 1 ? '' : 's'}`;
+const row = (label, value) => `${label.padEnd(20)} ${value}`;
+const RESULT_WORDS = Object.freeze({ [EXIT.PASS]: 'PASS', [EXIT.REFUSED]: 'REFUSED', [EXIT.ENVIRONMENT]: 'ENVIRONMENT', [EXIT.CONFIG]: 'CONFIGURATION' });
 
-/** The report: one named line per check, its findings underneath (capped), and the result line. */
+const headerLines = result => [
+  `push-check: ${result.label}${result.commits === undefined ? '' : ` (${plural(result.commits)})`}`,
+  ...(result.error ? [`error: ${result.error}`] : []),
+  ...(result.tokens ? [row('leak tokens', result.tokens)] : []),
+  ...(result.tip ? [row('tip', result.tip), row('push', `git push <url> ${result.tip}:refs/heads/${result.branch}`)] : []),
+];
+
+const checkLines = ({ name, findings }) => [
+  row(name, findings.length === 0 ? 'PASS' : `FAIL (${findings.length})`),
+  ...findings.slice(0, MAX_PRINTED).map(findingLine),
+  ...(findings.length > MAX_PRINTED ? [`  ... and ${findings.length - MAX_PRINTED} more`] : []),
+];
+
+/** The report: a header, one named line per check with its findings underneath (capped), and the result line. */
 export function formatReport(result) {
-  const out = [`push-check: ${result.label}${result.commits === undefined ? '' : ` (${result.commits} new commit${result.commits === 1 ? '' : 's'})`}`];
-  if (result.error) out.push(`error: ${result.error}`);
-  if (result.tokens) out.push(`${'leak tokens'.padEnd(20)} ${result.tokens}`);
-  if (result.tip) out.push(`${'tip'.padEnd(20)} ${result.tip}`, `${'push'.padEnd(20)} git push <url> ${result.tip}:refs/heads/${result.branch}`);
-  for (const { name, findings } of result.checks) {
-    out.push(`${name.padEnd(20)} ${findings.length === 0 ? 'PASS' : `FAIL (${findings.length})`}`);
-    out.push(...findings.slice(0, MAX_PRINTED).map(findingLine));
-    if (findings.length > MAX_PRINTED) out.push(`  ... and ${findings.length - MAX_PRINTED} more`);
-  }
-  const word = { [EXIT.PASS]: 'PASS', [EXIT.REFUSED]: 'REFUSED', [EXIT.ENVIRONMENT]: 'ENVIRONMENT', [EXIT.CONFIG]: 'CONFIGURATION' }[result.exit];
-  out.push(`${'result'.padEnd(20)} ${word} (exit ${result.exit})`, '');
-  return out.join('\n');
+  return [...headerLines(result), ...result.checks.flatMap(checkLines), row('result', `${RESULT_WORDS[result.exit]} (exit ${result.exit})`), ''].join('\n');
 }

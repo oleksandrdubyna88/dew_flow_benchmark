@@ -62,7 +62,7 @@ a fetch over HTTPS with gh's credential helper for that one command, `origin/mai
 time, and optional literal tokens from `--tokens`), `secrets` (seven named shapes, `lib/push-secrets.mjs`), `attribution` (the README closes with
 one `## Attribution` section; no link, known-task needle or plan id elsewhere in it), `run-base-text` (plan, probe, gate and decision ids,
 links and the D18 needles in `csharp/ node/ tasks/ runner/ todo/tasks/`), `family-names` (`dew_flow_*` other than the repository's own and
-`PLAN_lang_comparison`, in every file but `.gitmodules`), `known-task-credits` (a known-task spec needs its entry in `inputs/credits-lang.json`
+`PLAN_lang_comparison`, in every file's text and path at the tip, `.gitmodules` excepted), `known-task-credits` (a known-task spec needs its entry in `inputs/credits-lang.json`
 and, in the README's attribution section, its credit line, the CC BY-NC-SA 4.0 exception sentence naming both files, and RealWorld's MIT notice)
 and `stack-folders` (only `.gitkeep` under `csharp/` and `node/` until E1.S3 writes `templates/stack-files.json`, a JSON list of path patterns
 with `<t>` for the task folder).

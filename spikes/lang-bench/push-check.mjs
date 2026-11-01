@@ -44,37 +44,52 @@ function parse(argv) {
 // --self alone is the bench's branch check; with --text it only narrows the body check to the bench's rules
 const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
 
-async function selfRepo(v) {
-  if (v.repo !== undefined) return v.repo;
-  const top = await runGit(process.cwd(), ['rev-parse', '--show-toplevel']);
-  return top.ok ? top.value.stdout.trim() : undefined;
+const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };
+const report = result => ({ exit: result.exit, text: formatReport(result) });
+const NO_MODE = 'give one of --branch, --text, --self or --setup-remote';
+const modeProblem = modes => (modes.length === 0 ? NO_MODE : `one mode at a time, not ${modes.join(' and ')}`);
+
+const inputOptions = v => ({
+  aid: v.aid ?? [], publicTexts: v.public ?? [], secretFiles: v['secret-file'] ?? [], benchRepo: v['bench-repo'], aidsDir: v['aids-dir'],
+  tokens: v.tokens, credits: v.credits, needles: v.needles, templateFiles: v['template-files'],
+});
+
+/** Load the inputs, then `use(inputs)`; an input that cannot be loaded ends the run with its kind's exit code. */
+async function withInputs(v, use) {
+  const inputs = await loadInputs(inputOptions(v));
+  if (!inputs.ok) return { exit: inputs.kind === 'config' ? EXIT.CONFIG : EXIT.ENVIRONMENT, text: `push-check: ${inputs.reason}\n` };
+  return use(inputs.value);
 }
+
+async function selfRepo(v) {
+  const top = v.repo === undefined ? await runGit(process.cwd(), ['rev-parse', '--show-toplevel']) : null;
+  return v.repo ?? (top.ok ? top.value.stdout.trim() : undefined);
+}
+
+async function runSetupRemote(v) {
+  if (v.repo === undefined) return usage('--setup-remote needs --repo');
+  const r = await setupRemote({ repo: v.repo, url: v.url });
+  return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
+}
+
+const runText = v => withInputs(v, inputs => {
+  const body = readOrNull(v.text);
+  return body === null ? usage(`${v.text} cannot be read`) : report(checkText({ text: body, label: v.text, inputs, self: v.self === true }));
+});
+
+const runSelf = v => withInputs(v, async inputs => {
+  const repo = await selfRepo(v);
+  return repo === undefined || v.branch === undefined ? usage('--self needs --branch (and a git repository)') : report(await checkSelf({ repo, branch: v.branch, inputs }));
+});
+
+const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, inputs, expectedOrigin: v['origin-url'] }))));
+
+const MODES = { 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
 
 async function run(v) {
   const modes = modeOf(v);
-  if (modes.length !== 1) return usage(modes.length === 0 ? 'give one of --branch, --text, --self or --setup-remote' : `one mode at a time, not ${modes.join(' and ')}`);
-  if (modes[0] === 'setup-remote') {
-    if (v.repo === undefined) return usage('--setup-remote needs --repo');
-    const r = await setupRemote({ repo: v.repo, ...(v.url === undefined ? {} : { url: v.url }) });
-    return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
-  }
-  const inputs = await loadInputs({ aid: v.aid ?? [], publicTexts: v.public ?? [], benchRepo: v['bench-repo'], secretFiles: v['secret-file'] ?? [], aidsDir: v['aids-dir'], tokens: v.tokens, credits: v.credits, needles: v.needles, templateFiles: v['template-files'] });
-  if (!inputs.ok) return { exit: inputs.kind === 'config' ? EXIT.CONFIG : EXIT.ENVIRONMENT, text: `push-check: ${inputs.reason}\n` };
-  return runChecks(modes[0], v, inputs.value);
+  return modes.length === 1 ? MODES[modes[0]](v) : usage(modeProblem(modes));
 }
-
-async function runChecks(mode, v, inputs) {
-  if (mode === 'text') {
-    const body = readOrNull(v.text);
-    return body === null ? usage(`${v.text} cannot be read`) : report(checkText({ text: body, label: v.text, inputs, self: v.self === true }));
-  }
-  const repo = mode === 'self' ? await selfRepo(v) : v.repo;
-  if (repo === undefined || v.branch === undefined) return usage(mode === 'self' ? '--self needs --branch (and a git repository)' : '--branch needs --repo');
-  return report(await (mode === 'self' ? checkSelf : checkBranch)({ repo, branch: v.branch, inputs, ...(v['origin-url'] === undefined ? {} : { expectedOrigin: v['origin-url'] }) }));
-}
-
-const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };
-const report = result => ({ exit: result.exit, text: formatReport(result) });
 
 const parsed = parse(process.argv.slice(2));
 const outcome = parsed.error ? usage(parsed.error) : await run(parsed.values);

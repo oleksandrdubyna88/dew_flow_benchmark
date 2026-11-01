@@ -24,22 +24,24 @@ const isText = v => typeof v === 'string' && v.trim() !== '' && !PLACEHOLDER.tes
 const squash = s => s.replace(/\s+/g, ' ').trim();
 const unquote = s => s.split('\n').map(l => l.replace(/^\s*>\s?/, '')).join('\n');
 
-function problemsOfSources(e) {
-  const out = [];
-  if (!isText(e.source?.name)) out.push('source.name');
-  if (!HTTPS.test(e.source?.url ?? '')) out.push('source.url');
-  if (!isText(e.credit) || e.credit.includes('\n')) out.push('credit (one non-empty line, no placeholder)');
-  if (!/^todo\/tasks\/[^/]+\.md$/.test(e.spec ?? '')) out.push('spec');
-  return out;
-}
+/** The messages of the `[good, message]` rules that do not hold: a rule table, not a chain of ifs. */
+const failed = rules => rules.filter(([good]) => !good).map(([, message]) => message);
 
-function problemsOfLicences(e) {
-  const out = [];
-  const fl = e.fileLicence;
-  if (fl !== null && !(isText(fl?.spdx) && HTTPS.test(fl?.readAt ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(fl?.readOn ?? ''))) out.push('fileLicence (null, or spdx + readAt + readOn)');
-  if (e.upstreamNotice !== null && !(isText(e.upstreamNotice?.spdx) && typeof e.upstreamNotice?.text === 'string' && e.upstreamNotice.text.trim() !== '')) out.push('upstreamNotice (null, or spdx + text)');
-  return out;
-}
+const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v ?? '');
+const hasNotice = n => isText(n?.spdx) && typeof n?.text === 'string' && n.text.trim() !== '';
+const hasFileLicence = l => isText(l?.spdx) && HTTPS.test(l?.readAt ?? '') && isDate(l?.readOn);
+
+const problemsOfSources = e => failed([
+  [isText(e.source?.name), 'source.name'],
+  [HTTPS.test(e.source?.url ?? ''), 'source.url'],
+  [isText(e.credit) && !e.credit.includes('\n'), 'credit (one non-empty line, no placeholder)'],
+  [/^todo\/tasks\/[^/]+\.md$/.test(e.spec ?? ''), 'spec'],
+]);
+
+const problemsOfLicences = e => failed([
+  [e.fileLicence === null || hasFileLicence(e.fileLicence), 'fileLicence (null, or spdx + readAt + readOn)'],
+  [e.upstreamNotice === null || hasNotice(e.upstreamNotice), 'upstreamNotice (null, or spdx + text)'],
+]);
 
 const COPIED = { adapted: 'adapted', 'own-words': 'none', 'idea-only': 'none' };
 
@@ -51,7 +53,7 @@ const basisRules = e => [
   [e.basis !== 'idea-only' || e.licenceFound === false, 'licenceFound (false for an idea-only task)'],
 ];
 
-const problemsOfBasis = e => (BASES.has(e.basis) ? basisRules(e).filter(([good]) => !good).map(([, message]) => message) : [`basis (one of ${[...BASES].join(', ')})`]);
+const problemsOfBasis = e => (BASES.has(e.basis) ? failed(basisRules(e)) : [`basis (one of ${[...BASES].join(', ')})`]);
 
 const problemsOf = e => [...problemsOfSources(e), ...problemsOfLicences(e), ...problemsOfBasis(e)];
 
@@ -88,14 +90,16 @@ const sentencesOf = section => squash(unquote(section).replaceAll('`', '')).spli
 
 const ccSentence = (sentence, files) => sentence.includes('CC BY-NC-SA 4.0') && files.every(f => sentence.includes(f));
 
+const ccMissing = (entry, section, ccFiles) => (entry.fileLicence && !sentencesOf(section).some(s => ccSentence(s, ccFiles))
+  ? [`the CC BY-NC-SA 4.0 exception sentence (naming ${ccFiles.join(', ')}) is not in the attribution section`] : []);
+
 /** What the README's attribution section lacks for one entry: its credit as a substring (a list item or a wrapped line counts), the CC sentence, the notice. */
 function pieceFindings(entry, section, ccFiles) {
   const squashed = squash(unquote(section));
-  return [
-    ...(squashed.includes(squash(entry.credit)) ? [] : [`credit line of task ${entry.task} is not in the attribution section`]),
-    ...(!entry.fileLicence || sentencesOf(section).some(s => ccSentence(s, ccFiles)) ? [] : [`the CC BY-NC-SA 4.0 exception sentence (naming ${ccFiles.join(', ')}) is not in the attribution section`]),
-    ...(!entry.upstreamNotice || squashed.includes(squash(entry.upstreamNotice.text)) ? [] : [`the MIT notice of task ${entry.task} is not in the attribution section`]),
-  ];
+  return failed([
+    [squashed.includes(squash(entry.credit)), `credit line of task ${entry.task} is not in the attribution section`],
+    [!entry.upstreamNotice || squashed.includes(squash(entry.upstreamNotice.text)), `the MIT notice of task ${entry.task} is not in the attribution section`],
+  ]).concat(ccMissing(entry, section, ccFiles));
 }
 
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
