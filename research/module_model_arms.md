@@ -1,6 +1,6 @@
 # Module — Model arms: the launcher of the part-6 experiment, in C#
 
-> Status: **built and piloted, 2026-11-01 — the run half of parts 6 and 7 as a C# module (epics E1–E6); M1 and M2 ran against the fake CLI, and M3, the attended pilot of every verb, ran on 2026-11-01 (its log is below); M2's key check ran (a placeholder key: delivery observed) and the real-git pilot of E4.S0/E4.S2 ran on git 2.39.4 and 2.45.0; still the owner's: M3 step 14, a REAL key's vendor keys loaded (the owner's key and the `creds` CLI) and the owner's own `experiment.json` read by `status` — see *Not proven, gathered*.**
+> Status: **built and piloted, 2026-11-01, and on `main` via PR #132 (merged 2026-11-01, `3a0effcc`) — the run half of parts 6 and 7 as a C# module (epics E1–E6); M1 and M2 ran against the fake CLI, and M3, the attended pilot of every verb, ran on 2026-11-01 (its log is below); M2's key check ran (a placeholder key: delivery observed) and the real-git pilot of E4.S0/E4.S2 ran on git 2.39.4 and 2.45.0; still the owner's: M3 step 14, a REAL key's vendor keys loaded (the owner's key and the `creds` CLI) and the owner's own `experiment.json` read by `status` — see *Not proven, gathered*.**
 > Plan: [PLAN_model_arms.md](../todo/PLAN_model_arms.md) (the design) with its stories documents `PLAN_model_arms_E1.md` … `_E6.md` in `todo/` (they promote together once the owner's open Definition-of-Done lines close). The analysis half of the experiment is not here: it is the plan [PLAN_model_arms_analysis.md](../todo/PLAN_model_arms_analysis.md).
 
 ## Purpose

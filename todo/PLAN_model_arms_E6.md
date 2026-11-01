@@ -1,6 +1,6 @@
 # PLAN — E6 stories: the compatibility contract and the record of the model-arms module
 
-> Status: **E6.S1–E6.S3 BUILT 2026-11-01 except the promotion, delivered with E4 and E5 in PR #132 (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); E6.S4 — the parent's entries 3.2 and 3.3 — added by the parent's re-review for epoch 4 (2026-11-01), NOT built: it waits for epoch 4's approval and lands before #132 merges; the promotion waits for the owner's open lines (§11).** Stories written 2026-10-31; E6.S4 written 2026-11-01 by the judge (part (b)'s spec; part (a)'s is Fable's, to be written). Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
+> Status: **E6.S1–E6.S4 BUILT 2026-11-01 except the promotion, and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered with E4 and E5 (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); E6.S4 — the parent's entries 3.2 and 3.3, added by the parent's re-review for epoch 4 (2026-11-01) — built and gated on #132's branch before #132 merged; the promotion waits for the owner's open lines (§11).** Stories written 2026-10-31; E6.S4 written 2026-11-01 by the judge (part (b)'s spec; part (a)'s is Fable's, to be written). Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
 > §4.3, §4.12; §5; §6 step 6; §7's E6 tests; §9; §10; `## Epics` E6; plan-gate round 1's F2), written at `cc02d09` on
 > `feat/model-arms-e6` (E1–E3 on `main`; E4.S0 built; E4.S1–E4.S3 and E5.S1–E5.S4 being built on their own branches against
 > [PLAN_model_arms_E4.md](PLAN_model_arms_E4.md) and [PLAN_model_arms_E5.md](PLAN_model_arms_E5.md)) by the judge role (Opus), as the
@@ -847,7 +847,7 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 - [ ] M3 ran all fifteen steps — every verb, the four schemes, one run locked and unlocked (by hand and by the chain), two limited attempts
       resumed, one interrupted arm resumed by `run-all`, one blocked gate continued, the A–D re-run with its CLI version — logged in
       `research/module_model_arms.md`, its scratch removed.
-- [ ] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 is approved and before #132 merges: part (a) to Fable's spec, its
+- [x] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 was approved and before #132 merged (done, 2026-11-01, `3a0effcc`): part (a) to Fable's spec, its
       theory red at `16e7fd20` then green, the `CLAUDE_*` / `ANTHROPIC_*` rows green; part (b) — the two named tests red then green, the
       log line edited; the docs say runs after it differ from part 6's conditions; #132's code gate passed with it.
 - [ ] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
