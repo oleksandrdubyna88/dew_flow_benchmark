@@ -61,6 +61,8 @@ function parse(argv) {
 const modeOf = v => [v['setup-remote'] ? 'setup-remote' : null, v['install-hook'] ? 'install-hook' : null, v['uninstall-hook'] ? 'uninstall-hook' : null, v.text === undefined ? null : 'text', v.self && v.text === undefined ? 'self' : null, v.branch !== undefined && !v.self ? 'branch' : null].filter(Boolean);
 
 const readOrNull = file => { try { return readFileSync(file, 'utf8'); } catch { return null; } };
+/** Progress goes to stderr, one line per phase, so a long check is not silent and stdout stays exactly the report. */
+const progress = line => process.stderr.write(`push-check: ${line}\n`);
 const report = result => ({ exit: result.exit, text: formatReport(result) });
 const NO_MODE = 'give one of --branch, --text, --self or --setup-remote';
 const modeProblem = modes => (modes.length === 0 ? NO_MODE : `one mode at a time, not ${modes.join(' and ')}`);
@@ -95,10 +97,10 @@ const runText = v => withInputs(v, inputs => {
 
 const runSelf = v => withInputs(v, async inputs => {
   const repo = await selfRepo(v);
-  return repo === undefined || v.branch === undefined ? usage('--self needs --branch (and a git repository)') : report(await checkSelf({ repo, branch: v.branch, inputs }));
+  return repo === undefined || v.branch === undefined ? usage('--self needs --branch (and a git repository)') : report(await checkSelf({ repo, branch: v.branch, inputs, progress }));
 });
 
-const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, tip: v.tip, inputs, expectedOrigin: v['origin-url'] }))));
+const runBranch = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--branch needs --repo') : report(await checkBranch({ repo: v.repo, branch: v.branch, tip: v.tip, inputs, expectedOrigin: v['origin-url'], progress }))));
 
 const SELF_PATH = fileURLToPath(import.meta.url);
 /** The options a hook bakes in at install (fixtures, a named aid, ...): each flag given to --install-hook that a check reads. */

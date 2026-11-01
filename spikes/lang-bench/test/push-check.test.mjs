@@ -377,3 +377,17 @@ test('A_check_whose_blobs_together_exceed_the_ceiling_is_refused_with_exit_3_and
   assert.equal(result.exit, EXIT.ENVIRONMENT);
   assert.match(result.error, /more than 1000 bytes/);
 });
+
+test('A_check_reports_its_phases_through_the_progress_callback_in_order_and_says_how_much_it_reads', async t => {
+  const { repo } = branchWith(t, { 'a.txt': 'x\n', 'b.txt': 'y\n' });
+  const seen = [];
+  const result = await checkBranch({ repo, branch: 'topic', inputs, progress: line => seen.push(line) });
+  assert.equal(result.exit, EXIT.PASS);
+  assert.deepEqual(seen.map(l => l.replace(/\d+/g, 'N')), ['verifying origin and the remote-tracking refs', 'scanning N commits', 'reading N blobs', 'scanning N files and N messages', 'checking the tip tree: README, credit terms, stack folders, tree shape']);
+  assert.equal(seen[1], 'scanning 1 commits', 'the one commit of the branch off origin/main');
+  const quiet = await checkBranch({ repo, branch: 'topic', inputs });
+  assert.equal(quiet.exit, EXIT.PASS, 'no callback is no output and no failure');
+  const self = [];
+  await checkSelf({ repo, branch: 'topic', inputs, progress: line => self.push(line) });
+  assert.deepEqual(self.map(l => l.replace(/\d+/g, 'N')), ['scanning N commits', 'reading N blobs', 'scanning N files and N messages']);
+});

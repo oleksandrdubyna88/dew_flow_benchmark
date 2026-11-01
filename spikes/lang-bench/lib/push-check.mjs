@@ -16,6 +16,8 @@ export { COMMIT_MESSAGE };
 const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'run-base-text', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
 const MAX_PRINTED = 100;
+/** The default for `progress`: a callback taking one line of text, which a library caller leaves silent and the command writes to stderr. */
+const NO_PROGRESS = () => {};
 
 const tokenLine = inputs => `${inputs.aids.literals.length} (${inputs.aids.tokenInfo ?? 'given directly'})`;
 
@@ -41,16 +43,20 @@ async function rangeAndTip(repo, branch, rev) {
 }
 
 /** ok({ commits, tip, found, files, tipTree }): the range, the tip it ends at, and the tagged findings of every message and blob in it. */
-async function scanBranch({ repo, branch, rev, inputs, refuseNul }) {
+async function scanBranch({ repo, branch, rev, inputs, refuseNul, progress }) {
   const head = await rangeAndTip(repo, branch, rev);
+  if (head.ok) progress(`scanning ${head.value.commits.length} commits`);
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
   if (!changes.ok) return changes;
   const { files, messages } = changes.value;
-  const blobs = await readBlobs(repo, files.filter(f => f.mode !== SUBMODULE).map(f => f.oid), inputs.limits);
+  const readable = files.filter(f => f.mode !== SUBMODULE);
+  progress(`reading ${new Set(readable.map(f => f.oid)).size} blobs`);
+  const blobs = await readBlobs(repo, readable.map(f => f.oid), inputs.limits);
   const tree = await tipTree(repo, branch, head.value.tip);
   const bad = firstFailure(blobs, tree);
   if (bad) return bad;
   const entries = scanEntries(files, tree.value);
+  progress(`scanning ${entries.length} files and ${messages.length} messages`);
   const found = keptFindings([...messageFindings(messages, inputs), ...entries.flatMap(e => entryFindings(e, blobs.value.get(e.oid), inputs, { refuseNul }))]);
   return ok({ commits: head.value.commits.length, tip: head.value.tip, found, files, tree: tree.value });
 }
@@ -94,10 +100,12 @@ const verifyRemote = ({ repo, branch, tip, expectedOrigin }) => sequence([
  * The check of a branch's new commits (§4 step 3). `inputs`: aids, known, credits (parseCredits' answer), templateFiles. `tip` is the
  * sha git is about to publish (the pre-push hook passes it): that exact commit is checked, and the branch moving off it is exit 4.
  */
-export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = TASK_REPO_URL }) {
+export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = TASK_REPO_URL, progress = NO_PROGRESS }) {
   const label = `${repo} ${branch}`;
+  progress('verifying origin and the remote-tracking refs');
   const origin = await verifyRemote({ repo, branch, tip, expectedOrigin });
-  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs, refuseNul: true }) : origin;
+  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs, refuseNul: true, progress }) : origin;
+  if (scan.ok) progress('checking the tip tree: README, credit terms, stack folders, tree shape');
   const tree = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
   if (!tree.ok) return errorResult(label, tree);
   const all = [...scan.value.found, ...flatten(tree.value, undefined)];
@@ -105,9 +113,9 @@ export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = 
 }
 
 /** The bench's own branch (consult C6b, D2): only the leak and the secret scans, over the new commits. */
-export async function checkSelf({ repo, branch, inputs }) {
+export async function checkSelf({ repo, branch, inputs, progress = NO_PROGRESS }) {
   const label = `${repo} ${branch} (bench branch)`;
-  const scan = await scanBranch({ repo, branch, inputs, refuseNul: false });
+  const scan = await scanBranch({ repo, branch, inputs, refuseNul: false, progress });
   if (!scan.ok) return errorResult(label, scan);
   return verdict(groupChecks(SELF_NAMES, scan.value.found), label, { commits: scan.value.commits, tip: scan.value.tip, branch, tokens: tokenLine(inputs) });
 }

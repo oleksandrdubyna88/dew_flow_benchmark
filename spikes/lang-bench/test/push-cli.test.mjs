@@ -203,3 +203,14 @@ test('The_default_token_file_in_the_aids_folder_is_used_when_present_and_the_rep
   assert.match(withTokens.stdout, /research\/n\.md:1 leak token 2/);
   assert.equal(/quux/i.test(withTokens.stdout.replace(/leak token/g, '')), false, 'the token itself is never printed');
 });
+
+test('Progress_lines_go_to_stderr_and_the_report_on_stdout_stays_exactly_the_report', t => {
+  const { repo } = topicBranch(t, { 'tasks/01/s01.in': '5\n' });
+  const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t)]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /^push-check: verifying origin and the remote-tracking refs$/m);
+  assert.match(r.stderr, /^push-check: scanning \d+ commits$/m);
+  assert.match(r.stderr, /^push-check: reading \d+ blobs$/m);
+  assert.equal(/push-check: scanning/.test(r.stdout), false, 'nothing of the progress is in the report');
+  assert.match(r.stdout, /^result +PASS \(exit 0\)/m);
+});
