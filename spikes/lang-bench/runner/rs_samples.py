@@ -89,8 +89,44 @@ def read_sample(path, name, budget):
         os.close(fd)
 
 
+UNITS = ("B", "KiB", "MiB", "GiB", "TiB")
+LARGEST_SHOWN = 3
+
+
+def human(size):
+    """A size in binary units with one decimal, by integer arithmetic: 1.5 MiB, 110.0 MiB, 1.0 GiB (bytes below 1 KiB)."""
+    unit = 0
+    while unit < len(UNITS) - 1 and size >> (10 * (unit + 1)):
+        unit += 1
+    if unit == 0:
+        return f"{size} B"
+    return f"{size >> (10 * unit)}.{(size * 10 >> (10 * unit)) % 10} {UNITS[unit]}"
+
+
+def _file_sizes(pairs):
+    """[(size, case id, file name)] of every sample file that can be measured, largest first."""
+    sizes = []
+    for pair in pairs:
+        for path, name in ((pair.in_path, pair.in_name), (pair.out_path, pair.out_name)):
+            try:
+                sizes.append((os.path.getsize(path), pair.id, name))
+            except OSError:
+                continue
+    return sorted(sizes, key=lambda item: (-item[0], item[2]))
+
+
+def too_large_message(pairs, ceiling):
+    """Why the samples cannot be held, in human units, with the largest files and the way out: run fewer cases at a time."""
+    head = f"the samples are too large to hold in memory: more than {human(ceiling)} of .in and .out files (the ceiling is {human(ceiling)})"
+    largest = _file_sizes(pairs)[:LARGEST_SHOWN]
+    if not largest:
+        return head
+    names = ", ".join(f"{name} {human(size)}" for size, _, name in largest)
+    return f"{head}; largest: {names}; run fewer cases at a time with --only <case>, for example --only {largest[0][1]}"
+
+
 def _too_large(pairs):
-    return Problem("samples", 0, f"the samples are too large to hold in memory: more than {MAX_SAMPLE_BYTES} bytes of .in and .out files")
+    return Problem("samples", 0, too_large_message(pairs, MAX_SAMPLE_BYTES))
 
 
 def _bytes_or_empty(data):

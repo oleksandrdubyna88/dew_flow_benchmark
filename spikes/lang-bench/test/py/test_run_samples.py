@@ -424,6 +424,28 @@ class SampleSizeTests(unittest.TestCase):
             (sys.stdout, sys.stderr), sm.MAX_SAMPLE_BYTES = real, saved
         return code, err.getvalue()
 
+    def test_Sizes_are_written_in_binary_units_with_one_decimal_and_without_a_float(self):
+        for size, text in ((0, "0 B"), (1000, "1000 B"), (1024, "1.0 KiB"), (1536 * 1024, "1.5 MiB"), (1 << 20, "1.0 MiB"), (110 * (1 << 20), "110.0 MiB"),
+                           (1 << 30, "1.0 GiB"), (3 * (1 << 30) + (1 << 29), "3.5 GiB")):
+            self.assertEqual(sm.human(size), text, size)
+
+    def test_The_too_large_message_gives_human_units_names_the_largest_files_and_suggests_only(self):
+        big = 3 * 1024
+        pairs = {"s01.in": b"", "s01.out": b"a" * big, "s02.in": b"x" * 2048, "s02.out": b"b" * 100, "s03.in": b"", "s03.out": b"c" * 10,
+                 "s04.in": b"", "s04.out": b"d" * 5}
+        box = Box(self, pairs=pairs)
+        code, err = self.run_in_process(box, 1024)
+        self.assertEqual(code, 4)
+        self.assertIn("the ceiling is 1.0 KiB", err)
+        self.assertNotIn("bytes of .in", err, "units, not a long number of bytes")
+        self.assertRegex(err, r"largest: s01\.out 3\.0 KiB, s02\.in 2\.0 KiB, s02\.out 100 B")
+        self.assertNotIn("s03.out", err.split("largest:")[1].split("\n")[0], "only the three largest")
+        self.assertIn("--only", err)
+        self.assertIn("--only s01", err)
+
+    def test_The_message_with_a_default_ceiling_says_GiB(self):
+        self.assertIn("1.0 GiB", sm.too_large_message([], 1 << 30))
+
     def test_The_ceiling_is_one_GiB(self):
         self.assertEqual(sm.MAX_SAMPLE_BYTES, 1 << 30)
 
