@@ -1,16 +1,84 @@
 # Module — Model arms: the launcher of the part-6 experiment, in C#
 
-> Status: **E1.S2 built, 2026-10-29 — the two projects, their references and the architecture guard exist; every other section below is an empty heading owned by the story named in it.**
-> Plan: [PLAN_model_arms_E1.md](../todo/PLAN_model_arms_E1.md) (stories) under [PLAN_model_arms.md](../todo/PLAN_model_arms.md) (the design). Nothing here launches a model yet.
+> Status: **built and piloted, 2026-11-01 — the run half of parts 6 and 7 as a C# module (epics E1–E6); M1 and M2 ran against the fake CLI, and M3, the attended pilot of every verb, ran on 2026-11-01 (its log is below); what is still the owner's is M2's key check, the real-git pilot of E4.S0/E4.S2 and the owner's own `experiment.json` read by `status` — see *Not proven, gathered*.**
+> Plan: [PLAN_model_arms.md](../todo/PLAN_model_arms.md) (the design) with its stories documents `PLAN_model_arms_E1.md` … `_E6.md` in `todo/` (they promote together once the owner's open Definition-of-Done lines close). The analysis half of the experiment is not here: it is the plan [PLAN_model_arms_analysis.md](../todo/PLAN_model_arms_analysis.md).
 
 ## Purpose
 
 The owner compares coding pipelines ("arms") of headless Claude Code sessions on one frozen plan in a target repository: three schemes
-(C, CR, SRS) times three runs, every arm ending in the product's multi-vendor code gate. The harness that launched those runs was a
+(C, CR, SRS) times three runs in part 6, and part 7's CHH, every arm ending in the product's multi-vendor code gate. The harness that launched those runs was a
 set of bash scripts with inline node and the experiment's facts as constants at the top of each script. This module is its port to C#,
-a console of its own beside the benchmark, not part of it. It ports the RUN half only (launch, resume, limits, the gate step, the
-chain, isolation by file modes, the objective checks); the analysis half is a later plan. Its behaviour is the shell harness's, its
+a console of its own beside the benchmark, not part of it. It ports the RUN half (launch, resume, limits, the gate step, the
+chain, isolation by file modes, keep-awake, the objective checks); the analysis half is a later plan, and until it lands the shell's
+readers run unmodified over what this module writes (*The consumer check*). Its behaviour is the shell harness's, its
 facts live in one refusing experiment file, and it is built so a decision can be tested without starting a process.
+
+### The verbs as built
+
+`model-arms <verb> [words] [--flags]`. Every verb that reads an experiment takes `--experiment <root>` (else `MODEL_ARMS_EXPERIMENT`) and goes through the one gate (*The command line*). The exit codes are D16's: `0` the verb did its work, `3` the host (a program not found, a fault nobody expected), `4` configuration (a refusal the operator fixes), `5` a stop after which the same command resumes.
+
+| verb | words · flags | what it does | exits |
+|---|---|---|---|
+| `init` | `<root>` | makes a NEW root (mode 0700) holding the experiment template, an empty `scenarios.json` and `briefs/`; reads no experiment; never writes into an existing root | 0 · 3 · 4 |
+| `validate` | — | reads `experiment.json` and `scenarios.json`, checks the host (git floor, executables by their real paths, the platform road) and prints what it resolved | 0 · 3 · 4 |
+| `prep-base` | — | clones the target at `target.base` into `base/`, runs the build and the two suites there and writes `baseline.json` | 0 · 3 · 4 |
+| `make` | — | copies `base/` into one folder per arm of every run (`r/<token>/`), extends `arms.map.json`, writes the two MCP configs and `chain/made-<arm>` last | 0 · 3 · 4 |
+| `lock` | `<run>` | closes the run's folders by file mode, in a crash-safe order, and observes that it worked (D11) | 0 · 3 · 4 |
+| `unlock` | `--force` | restores the modes from the snapshot; refuses while a runner lives | 0 · 3 · 4 |
+| `run-arm` | `<arm>` | runs the arm's scheme step by step in the foreground, resuming what a stop left | 0 · 3 · 4 · 5 |
+| `run-all` | `<arm>…` | starts each given arm that is not alive as a DETACHED runner (`setsid`) and returns | 0 · 3 · 4 |
+| `chain` | `<run>` | one run unattended: make, lock, start the round's arms, wait, unlock, check, `arms-done`; keeps the host awake | 0 · 3 · 4 · 5 |
+| `checks` | `<arm>` · `--parse-only` | build, suites, formatter and scenario presence in the arm's clone → `out/objective.json`; `--parse-only` re-reads the logs it wrote | 0 · 3 · 4 |
+| `status` | — | prints the isolation, the run's markers and every arm's steps from the files; changes nothing | 0 · 3 · 4 |
+| `gate-lock` | `status` or `hold` · `--seconds N` | tells who holds the gate lock, or holds it for N seconds | 0 · 3 · 4 · 5 |
+| `version`, `help` | — | need no root | 0 |
+
+`ModuleTestsCatalogTests` holds this table's verbs equal to the dispatch, and `research/module_tests.md` gives each its scenario class.
+
+### A step's states (E2, D6, D7)
+
+One step of one arm, as `StepRunner` decides it from the files (`.session`, `.done`, the stream, `timing.jsonl`, `.continue`) — a restart reads the same facts and goes on from the same state.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NotStarted
+    NotStarted --> Running: fresh attempt with a session id, start line
+    Running --> Finished: result line, not an error
+    Running --> HardDeadline: the wall killed the tree, no result
+    Running --> Limited: 429 or 529 or the limit words
+    Running --> Errored: error result that is not a limit
+    Running --> Interrupted: no result, the process is gone or the operator stopped
+    Limited --> Running: wait limits.waitSeconds, resume the same session
+    Interrupted --> Running: the same command again resumes
+    Errored --> Running: the same command again resumes
+    Finished --> GateBlocked: gate only, notes/gate.json says blocked
+    GateBlocked --> Running: out/step.continue, wait limits.gateWaitSeconds, resume
+    Finished --> Done: outputs reconciled, step.done written
+    HardDeadline --> Done
+    Done --> [*]
+```
+
+`NotStarted` also names a launch the host refused (exit 3). Interrupted and Errored end the run with exit 5 and write nothing that would stop a resume; a Limited step that outlives `limits.tries` waits ends it with 3. `.continue` is deleted when the step is done (so nobody sees it after the fact, M3).
+
+### The root's layout, as M3 left it
+
+```
+<root>/                       0700 — init makes it; lock takes it to 0300 for the run
+  experiment.json  scenarios.json  briefs/        the operator's inputs (0600); briefs override the shipped ones by name
+  baseline.json  base/  base-*.log  base-results/  prep-base.log      prep-base: the frozen starting point
+  arms.map.json                  arm name → token (written by make, extended, never rewritten)
+  r/<token>/                     one arm: arm/ (the clone)  notes/  work/  out/  wt/ tmp/  coai-data/  mcp-none.json  mcp-coai.json
+      out/                       <step>.a<N>.{jsonl,err,prompt.md}  <step>.{session,done,before,diff}  timing.jsonl  objective.{json,out}  objective/
+                                 SRS: batch-<i>.done  pick-<id>.json  picked-<id>  task-<id>.before  task-<id>-coder.{head,diff}
+      notes/ work/               what the model writes: review.json, gate.json … · tasks.json, batches.json, t<n>.md
+  pids/                          <arm>.{pid,lock,log,log.prev}   the detached runners
+  chain/                         made-<arm>  objective-<arm>  executables.txt  <run>/{locked,unlocked,arms-done,.chain.lock}
+  .gate.lock  .isolation.lock    the two file locks, never deleted
+  .locked-modes[.applied]        the snapshot, only while locked (after unlock: .restored-<stamp> beside lock.log)
+  keep-awake.log  keep-awake.<stamp>.<n>.err
+```
+
+The shell's own layout and every name the module writes beyond it are held in both directions by `ConsumerCompatibilityTests` (*The consumer check*); the one rename is `task-<id>-haiku.*` → `task-<id>-coder.*`.
 
 ## Projects and the guard
 
@@ -33,10 +101,10 @@ flowchart LR
 | Project | Role | References |
 |---|---|---|
 | `tools/model-arms/ModelArms.Core` (`ModelArms.Core`) | Every decision of the module: the experiment's facts and their refusals, paths, the arm map, the launch options, the briefs. **Pure by construction** (plan D1): opens no file, starts no process, reads no clock, no environment. | `Bench.Domain`, `Bench.Application`; no packages |
-| `tools/model-arms/ModelArms` (assembly `model-arms`) | The only project that touches the world. Today a stub `Program.Main` that answers the configuration exit code so the executable links. | `ModelArms.Core`, `Bench.Infrastructure`, `Bench.Hosting` |
+| `tools/model-arms/ModelArms` (assembly `model-arms`) | The only project that touches the world: the dispatch of the fourteen verbs (`Program.cs`), the adapters (files, processes, clock, environment, the detached launcher, keep-awake) and the verbs. | `ModelArms.Core`, `Bench.Infrastructure`, `Bench.Hosting` |
 
 The console also carries two content globs, so no later story edits its project file to ship a file: `tools/model-arms/briefs/*.template.md`
-and `tools/model-arms/examples/*.json` are copied beside the binary under `briefs/` and `examples/`. Both folders are empty until their stories.
+and `tools/model-arms/examples/*.json` are copied beside the binary under `briefs/` and `examples/` (the eleven shipped briefs and the worked part-6 example).
 Both projects are in `dew_flow_benchmark.slnx` under a `/tools/` folder, and `Bench.Tests` references both as ordinary references so their
 assemblies are in the test output on purpose, not by accident.
 
@@ -194,6 +262,7 @@ HEAD after the fix, and its brief at position 3 sees `CODE_NOTES`, `HA_JSON`, `H
 `hreview.md` and `split.md`, which CR and SRS bind, the example binds ten, `CODE_NOTES` once. `ExampleExperimentTests.The_example_binds_every_file_the_shell_wrote` holds the set; a scheme placing `4-hfix` before `2-hA` and `3-hB` is refused by the rehearsal
 naming the scheme, the position and both fields (`hfix.template.md at schemes.X[1] (4-hfix): the brief has unfilled fields: {{HA_JSON}} {{HB_JSON}}`). That the two calls write two distinct verdict
 CONTENTS is E2.S8's CHH scenario.
+**Checked against the example as it landed (E6.S3, 2026-11-01).** The bindings above hold for `part6.experiment.json` as shipped, and M3's CHH1 ran them end to end (`1-code` … `7-gate`, `2-hA` interrupted and resumed). One thing the stories document of E6 recorded differently: `runs.part7.closed` holds the shell's twelve paths (`after7.sh:40-42`'s set, pinned by `Part_7_of_the_example_closes_everything_the_shell_closed_…`), not three; the owner's own file carries whatever the owner writes (that line is open).
 
 **Runs.** `runs` replaces `rounds`: a map of run name → `{ rounds: [[arms]…], closedArms: [arm names], closed: [paths] }`. `chain <run>` runs one and keeps its markers under `chain/<run>/` (E5); `closedArms`
 are folders resolved through the arm map at lock time and closed for the run (part 7 closed part 6's nine arms this way); `closed` are more paths, expanded. An arm is in one round of one run;
@@ -682,6 +751,29 @@ What the tests do NOT prove: the race itself (the swap test stands inside the wi
 tests); that a verb reads `scenarios.json` from the path the gate judged (the gate judges `RootPaths.Of(scenarios)` and passes the root on; the verb that reads the file, E1.S10, reads that same path and is the
 next reader of it).
 
+## The first run, whole (parent §4.12, as M3 ran it)
+
+The order, each step refusing what the one before did not leave (D18), and the refusal an operator meets if they skip ahead — every line quoted from M3's log below (`<root>` is the experiment root; exits in the left column):
+
+| # | command | exit | what it prints / refuses |
+|---|---|---|---|
+| 1 | `model-arms validate --experiment <root>` before anything exists | 4 | `model-arms validate: <root> does not exist — `model-arms init <root>` creates it` |
+| 2 | `model-arms init <root>` | 0 | `created <root>: experiment.json (a template — replace every <fill me>), scenarios.json (empty), briefs/ (template overrides by name). Next: model-arms validate --experiment <root>` |
+| 2 | `init <root>` again | 4 | `model-arms init: <root> already exists — init creates a new root and never writes into an existing one` |
+| 3 | fill `experiment.json` and `scenarios.json` (the worked example beside the binary shows a filled file; the unfilled template is refused with every `<fill me>` listed, *The first run: init and validate*) | | |
+| 4 | `validate` | 0 | `resolved executables:` — `git`, `claude`, `dotnet`, `node`, `npm`, `pwsh.exe` on WSL, `coai.binary` — then `model-arms validate: <root> is valid on this host (Wsl)` |
+| 5 | `make` before `prep-base` | 4 | `model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 5 | `run-arm C1` before `prep-base` | 4 | the same, with `run-arm:` — the baseline is the first file every arm verb asks for |
+| 5 | `chain nosuch` before `prep-base` | 4 | the same, with `chain:` — the run is not looked up until the baseline is there |
+| 6 | `prep-base` | 0 | `baseline written to <root>/baseline.json: base <sha>, the main suite 3 tests with 0 failing, the extension 2 tests with 0 failing` |
+| 7 | `run-arm C1` after `prep-base`, before `make` | 4 | `model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it` |
+| 7 | `chain nosuch` after `prep-base` | 4 | `model-arms chain: there is no run nosuch — the runs are pilot` |
+| 8 | `make` | 0 | `no isolation snapshot`, then `model-arms make: arm <arm> made and built` per arm |
+| 9 | `status` | 0 | every arm `made yes`, every step `not started`, `isolation: no isolation snapshot` |
+| 10 | `chain <run>` (or `lock`, `run-all`, `unlock`, `checks` by hand) | 0 · 5 | the table of refusals in *chain (E5.S4)*; a stop prints `model-arms chain <run>: <arm> stopped without finishing — resume it (model-arms run-all <arm>), then start me again` and leaves the isolation applied |
+
+A chain that stopped is finished by `run-all <arm>` for the stopped arm and `chain <run>` again: the second `chain` reconciles its `locked` marker with the applied snapshot, starts nothing, waits for the runners, unlocks, checks every arm and writes `arms-done` (M3 steps 9–11). The owner's own `experiment.json` is read by `status` once, outside every checkout, before the first real run — that line is still open (*Not proven, gathered*).
+
 ## The first run: init and validate (E1.S11)
 
 The order of a first run, each step refusing what the one before did not leave (D18): **`init <root>`** → the operator fills `experiment.json` and `scenarios.json` → **`validate`** → **`prep-base`** (the baseline, E3.S2). `init` is the only verb that does not go through `ExperimentGate`: there is no experiment to read and the root it is asked about does not exist yet.
@@ -1010,7 +1102,7 @@ the projects folder. `ISessionTranscripts.Exists(cwd, id)` and `IGateLock` (`Try
 
 The FIRST missing output whose input is absent answers. A `HardDeadline` review with no result is resumable, not done with a hole (D21 over D8 for this one case, §8 item 3).
 
-**What this does NOT prove.** That the runner reads these facts correctly from disk (E2.S4's restart matrix does) or writes the regenerated bytes equal to the first run's; that `metrics.mjs` reads a line this build wrote (E5's compatibility test, through the pinned consumer); that claude honours `--resume` after a limit
+**What this does NOT prove.** That the runner reads these facts correctly from disk (E2.S4's restart matrix does) or writes the regenerated bytes equal to the first run's; that `metrics.mjs` reads a line this build wrote (E6.S1's `ConsumerCompatibilityTests`, through the pinned consumer); that claude honours `--resume` after a limit
 (the pilot); anything about the transcript path beyond the slug rule above.
 
 **Deviations from the story's text**, each because the landed contract or a row that failed first said so:
@@ -2148,6 +2240,79 @@ The scaffold is code: `M2PilotScaffold.Writes_the_scratch_target_and_root_for_th
 
 *Not yet run.* The key check needs `make` (E3.S3) and the owner's key: neither is available to this story.
 
+## M3 — the attended pilot of the whole module (by hand; the main session's brief, run 2026-11-01)
+
+**What it is.** Every verb, all four schemes (C, CR, SRS, CHH), over the fake CLI: one run `pilot` whose one round is `C1`, `CR1`, `SRS1`, `CHH1`; the run locked and unlocked by hand and by the chain; two limited attempts resumed; one interrupted arm resumed by `run-all`; one blocked gate continued; the D28 reader run by hand over the pilot's root. The scaffold is code: `M3PilotScaffold.Writes_the_scratch_target_root_home_and_claude_for_the_pilot` (`Explicit = true`; `--explicit only` runs it). It claims a manifest `testsToDelete-m3-manifest-<id>.json` exclusively (the id, the uid, the exact path of everything it makes, written before each exists) and then makes: `<target>` (M2's tiny .NET solution, `src_vs_code`, the rules repository as the submodule), `<root>` (a NAME; `init` makes it), `<home>` (a scratch HOME with `.claude/projects`, `file-history`, `session-env`, `shell-snapshots`, so **the isolation's `~/.claude/*` are the pilot's and the operator's own `~/.claude` is never touched**), `<old>` (a folder the isolation closes), `<bin>` (`claude` as a shell wrapper over the fake, links to the host's `git`, `node`, `npm`, `dotnet`), `<fake>` (`FAKE_CLI_HOME` and its script), `<d28>`, `<deleg>`, `<home14>`, `<keep>`. Names are `/tmp/testsToDelete-m3-<what>-<id>`, M2's form — the legacy form of `common.test-leftovers` §1 (this repository has not reached the producer stage of that rollout), so no sweep collects them and the teardown below is the only thing that removes them.
+
+*What the wrapper plays* (the model's file writes, which the fake cannot do): the split's fresh call writes `work/tasks.json` (`t1`–`t4`, `t5` owning the plan; `t1`–`t3` deliver `S1`–`S3`) and `work/t<n>.md`; a task coder's fresh call writes and commits `<id>.txt`; the FIRST gate call of the pilot writes `notes/gate.json` as `{"status":"blocked","why":"pilot"}` and every later gate call `{"status":"proceed"}` (a marker folder `gate-first/` in `<bin>`, made by `mkdir`, names the arm it blocked); then it execs the fake. *What the fake replays* — by prompt text, never by call number: the opening of `hr-review-fix.template.md` → the 2026-10-28 429 line (so BOTH `hreview` steps, CR1's `2-hreview` and SRS1's `3-hreview`, take a limit on their first attempt), the opening of `hA-trace.template.md` (CHH1's only) → `stream-no-result.jsonl`, everything else and every resume → `result-success.jsonl`; the gate steps' model `m3-fake-gate` has `delayMs` 10000 (the fake reads it per model), every other step's model is `m3-fake`. Limits: `waitSeconds` 30, `tries` 3, `gateWaitSeconds` 30, `gateTries` 2, `minimumRemainingSeconds` 30, `killGraceSeconds` 60, every step 2 minutes; `awake: auto`, `coai` the fake as the stand-in binary with a key-free `{}` settings file.
+
+**Run 2026-11-01 01:54Z–01:59Z at `86c9d1cd`** (the E6 branch after E6.S1; the binary built Release from it; the scaffold is this story's). WSL2, git 2.53.0, node v26.12.1, dotnet 10.0.114. Every verb ran as `env -i PATH=<bin>:<node's>:/usr/lib/dotnet:/usr/bin:/bin:<the WindowsApps folder holding pwsh.exe> HOME=<home> LANG=C.UTF-8 FAKE_CLI_HOME=<fake> WSL_DISTRO_NAME=… WSL_INTEROP=…` with `--experiment <root>`, **its working directory `<keep>`**, the binary by its path `./tools/model-arms/ModelArms/bin/Release/net10.0/model-arms` (written `ma` below). No secret-shaped variable reached an arm; the real `claude` and `coai-mcp` were never started. Walls are the command's own, to 0.01 s.
+
+| # | command | exit | wall | printed (`<root>`, `<target>`, `<home>`, `<token>` substituted) |
+|---|---|---|---|---|
+| 1 | the scaffold, `Bench.Tests --explicit only --filter-method "*Writes_the_scratch_target_root_home_and_claude_for_the_pilot"` | 0 | 1.67 s | `M3 scaffold — manifest: /tmp/testsToDelete-m3-manifest-<id>.json (uid 1000, id <id>)`; the ten paths; `target.base: 1b03e80c49cea53cc27dea5466cf271ae3d06a21`; `coai.binary` the FakeCli apphost, `coai.settings` `<target>/.git/m3-pilot/coai-settings.json (no key in either file)`; the two files to copy; the environment line |
+| 2 | `ma version` | 0 | 0.03 s | `model-arms 1.0.0+86c9d1cd…` |
+| 2 | `ma help` | 0 | 0.03 s | the fourteen verbs, one usage line each, then `A verb that reads an experiment takes --experiment <root>, else the MODEL_ARMS_EXPERIMENT variable.` |
+| 2 | `ma validate --experiment <root>` | 4 | 0.1 s | `model-arms validate: <root> does not exist — `model-arms init <root>` creates it` |
+| 3 | `ma init <root>` | 0 | 0.09 s | `created <root>: experiment.json (a template — replace every <fill me>), scenarios.json (empty), briefs/ (template overrides by name). Next: model-arms validate --experiment <root>` |
+| 3 | `ma init <root>` again | 4 | 0.06 s | `model-arms init: <root> already exists — init creates a new root and never writes into an existing one` |
+| 3 | `cp <target>/.git/m3-pilot/{experiment,scenarios}.json <root>/` | 0 | 0.01 s | (the root's files keep their 0600) |
+| 4 | `ma validate` | 0 | 0.31 s | `resolved executables:` git → `/usr/bin/git`; claude → `<bin>/claude` (the wrapper); dotnet → `/usr/lib/dotnet/dotnet`; node; npm; `pwsh.exe` → `/mnt/c/Users/…/WindowsApps/pwsh.exe`; `coai.binary` → the FakeCli apphost; `<root> is valid on this host (Wsl)` |
+| 5 | `ma make` (before `prep-base`) | 4 | 0.16 s | `model-arms make: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 5 | `ma run-arm C1` (before `prep-base`) | 4 | 0.16 s | `model-arms run-arm: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 5 | `ma chain nosuch` (before `prep-base`) | 4 | 0.16 s | `model-arms chain: <root>/baseline.json is missing — `model-arms prep-base` writes it` |
+| 6 | `ma prep-base` | 0 | 8.20 s | `baseline written to <root>/baseline.json: base 1b03e80c…, the main suite 3 tests with 0 failing, the extension 2 tests with 0 failing` |
+| 5 | `ma run-arm C1` (after `prep-base`, before `make`) | 4 | 0.16 s | `model-arms run-arm: <root>/arms.map.json is missing — `model-arms make` writes it` |
+| 5 | `ma chain nosuch` (after `prep-base`) | 4 | 0.16 s | `model-arms chain: there is no run nosuch — the runs are pilot` |
+| 6 | `ma make` | 0 | 16.24 s | `no isolation snapshot`; `arm C1 made and built`, `arm CR1 …`, `arm SRS1 …`, `arm CHH1 …` |
+| 6 | `ma status` | 0 | 0.19 s | `isolation: no isolation snapshot`; `run pilot: locked no, unlocked no, arms done no`; four arms `made yes, checked no, runner none recorded`, every step `not started`, SRS1 `1-split: not started`, `tasks: no batches yet` |
+| 7 | `ma gate-lock status` | 0 | 0.17 s | `model-arms gate-lock: free` |
+| 8 | `ma lock pilot` | 0 | 0.27 s | `model-arms lock pilot: locked — closed 1, unlisted 7, verified at 2026-11-01T01:55:48Z` |
+| 8 | `ls <root>` | 2 | 0.01 s | `ls: cannot open directory '<root>': Permission denied` |
+| 8 | `stat -c %a <old>` | 0 | 0.01 s | `0` |
+| 8 | `ma lock pilot` again | 0 | 0.26 s | `model-arms lock pilot: already locked for pilot since 2026-11-01T01:55:48Z` |
+| 8 | `ma status` | 0 | 0.19 s | `isolation: isolation applied for pilot since 2026-11-01T01:55:48Z` |
+| 8 | `ma unlock` | 0 | 0.28 s | `model-arms unlock: unlocked — restored 8 of 8` |
+| 8 | `ls <root>` · `stat -c %a <old>` · `ma status` | 0 · 0 · 0 | 0.01 s · 0.01 s · 0.18 s | the root lists · `755` · `isolation: no isolation snapshot` |
+| 9 | `ma chain pilot` (own terminal, attended) | **5** | 67.0 s | below |
+| 9 | `ma status` after it | 0 | 0.24 s | below |
+| 10 | `ma run-all CHH1` | 0 | 0.64 s | `CHH1: started — its runner writes pids/CHH1.pid (it ran before and ended without arm-done: this is the resume you asked for)`; `model-arms run-all: waiting up to 15 s for the runners to take their locks (CHH1)` |
+| 10 | `ma status` (once CHH1 showed `arm-done`) | 0 | 0.25 s | CHH1 every step `done (finished)`, last line `{"kind":"arm-done","arm":"CHH1","done_utc":"2026-11-01T01:57:45Z"}` |
+| 11 | `ma chain pilot` again | 0 | 18.87 s | `keep-awake: … held, checked every 2 min`; `model-arms chain pilot: unlock`; `unlocked — restored 8 of 8`; `check C1` … `check CHH1`, each with its `objective` line; `every arm checked`; `model-arms chain pilot: done` |
+| 12 | `ma status` | 0 | 0.24 s | `isolation: no isolation snapshot`; `run pilot: locked yes, unlocked yes, arms done yes`; four arms `made yes, checked yes` |
+| 12 | `cp <root>/r/<SRS1's token>/out/objective.json <keep>/objective.json` | 0 | 0.01 s | |
+| 12 | `ma checks SRS1 --parse-only` | 0 | 0.42 s | `resolved executables:` git only; `no isolation snapshot`; `{"arm":"SRS1","build":true,"format":true,"mcpNewFailures":0,"tsNewFailures":0,"scenarios":"3/3 present, 3 passing","stat":"5 files changed, 5 insertions(+)"}` |
+| 12 | `cmp <keep>/objective.json <root>/r/<SRS1's token>/out/objective.json` | 0 | 0.01 s | equal — 1009 bytes, sha256 `d11574e5ce0f3ba1…` |
+| 13 | `node research/local-model-coding/harness/part6/metrics6.mjs <root>/arms.map.json` (cwd `<d28>` holding the link `r` → `<root>/r`, `HOME=<home>`, the worktree's file by its absolute path) | 0 | 0.04 s | the table, four arms; `<d28>/metrics6.json` written there and nowhere else (`<d28>` holds `r` and `metrics6.json`) |
+| 14 | the delegation re-run A–D | **not run** | — | see *What did not run* |
+| 15 | the recovery sequence T1–T5 | | | below |
+
+**Step 9, `chain pilot`** printed the resolved executables (with `setsid` and `model-arms` by their real paths) before the first launch; `no isolation snapshot`; `keep-awake: waiting up to 15 s for the script's confirmation` then `keep-awake: pwsh.exe \\wsl.localhost\Ubuntu\…\keep-awake.ps1, held, checked every 2 min`; `model-arms chain pilot: lock`; `locked — closed 1, unlisted 7, verified at 2026-11-01T01:56:01Z`; `start C1, CR1, SRS1, CHH1`; `isolation applied for pilot since 2026-11-01T01:56:01Z`; `<arm>: started — its runner writes pids/<arm>.pid` for the four; `model-arms run-all: waiting up to 15 s for the runners to take their locks (C1, CR1, SRS1, CHH1)`; and, when the last of the other three arms had written `arm-done`: `model-arms chain pilot: CHH1 stopped without finishing — resume it (model-arms run-all CHH1), then start me again`, `isolation: isolation applied for pilot since 2026-11-01T01:56:01Z`, `model-arms chain pilot: the isolation is left as it stands and no runner was stopped; the arms that outlive this chain are not kept awake — to abandon the run, model-arms unlock once no arm is alive` — **exit 5**. Read around it:
+
+- **Keep-awake (WSL).** `tasklist.exe /FI "IMAGENAME eq pwsh.exe"` from another terminal, 8 s in, listed `pwsh.exe 35360 Console`; after the chain's exit 5 it said `INFO: No tasks are running which match the specified criteria.`, and so after the second chain (step 11).
+- **The gate lock, read while a gate stood.** `ma gate-lock status` 8 s in, inside C1's first gate call (`start` line without its `end`): `model-arms gate-lock: held by pid <C1's runner> since 2026-11-01T01:56:02Z`.
+- **The limited attempts** (`out/timing.jsonl`): CR1 `2-hreview` attempt 1 `end: limited` at `01:56:02Z`, attempt 2 `how: resume` at `01:56:32Z` with the same session id, `end: finished`; SRS1 `3-hreview` attempt 1 `limited` at `01:56:19Z`, attempt 2 `resume` at `01:56:49Z`, the same session. Thirty seconds apart, `limits.waitSeconds`.
+- **The blocked gate** was C1's `4-gate` (`<bin>/gate-first/arm` named C1's token): attempt 1 `end: finished` at `01:56:12Z` (10 s, the delay), then `{"kind":"gate-wait","arm":"C1","step":"4-gate","after":1,"wait":1,"why":"pilot"}`, attempt 2 `how: resume` at `01:56:44Z` with the same session, `finished` at `01:56:54Z`, `arm-done`. The wrapper's log: `<C1> fresh blocked`, `<C1> resume proceed`.
+- **The interruption.** CHH1's `2-hA` attempt 1 `end: interrupted` (`result: false`) at `01:56:02Z`, then `{"kind":"stopped","arm":"CHH1","step":"2-hA","exit":5,"why":"2-hA INTERRUPTED (no result line and no limit — the process ended without saying how) — run me again to resume it"}`. After the chain's exit: `ls <root>` refused, `stat -c %a <old>` `0`, `status` `isolation applied for pilot …`, `run pilot: locked yes, unlocked no, arms done no`; C1, CR1 and SRS1 `done (finished)` with `arm-done` at `01:56:54Z`, `01:56:42Z`, `01:57:05Z`; CHH1 `2-hA: resumable — interrupted at attempt 1`, `3-hB` … `7-gate: not started`.
+- **Four gates through one lock.** The gate calls ran one after another (`01:56:02`–`:12`, `:32`–`:42`, `:44`–`:54`, `:55`–`01:57:05`, then CHH1's after its resume): none outlasted a 30 s gate-wait, so the lock queue's ceiling (E5.S3) was not the limit and the delay was kept.
+
+**Step 13 (D28 by hand)** printed `arm  cost$  active m  span m  att …` for four arms (cost `0` everywhere: the fake's success line carries no cost) with `att` 5, 6, 11, 8 for C1, CR1, SRS1, CHH1; `metrics6.json` holds per step `attempts`, `sessions` and `wall_s`: `2-hreview` (CR1) and `3-hreview` (SRS1) `attempts: 2, sessions: 1`, CHH1 `2-hA` `attempts: 2, sessions: 1`, C1 `4-gate` `attempts: 2, sessions: 1, wall_s: 20`, every other gate `wall_s: 10`, SRS1's five `t-code` steps `attempts: 1`.
+
+**The teardown (step 15), the recovery sequence.** T1: `ps` showed no `model-arms`, `fake-cli` or `setsid`; `status` `runner pid <n> gone` for every arm. T2: `ma unlock` → `model-arms unlock: nothing locked` (the second chain had unlocked), exit 0. T3: `status` `isolation: no isolation snapshot`; `ls <root>` lists; `stat -c %a <old>` `755`, its original mode; `gate-lock status` `free`. T4: the manifest parsed; its uid (1000) is the caller's; each of its eleven paths is named `testsToDelete-m3-*-<id>` and is owned by uid 1000. T5: the manifest's ten folders removed one by one — never a glob — and the manifest last; `ls -d /tmp/testsToDelete-m3-*` finds nothing; nothing was kept. The operator's `~/.claude` and `~/.claude/projects` were `drwxr-xr-x` before and after.
+
+### Findings of the pilot (observed, not fixed)
+
+1. **The early refusals of the first run come in the order of the files, not of the spec's wording.** The spec asked step 5's `run-arm C1` to name `arms.map.json` or `chain/made-C1` and `chain nosuch` to name the run, "after 3–4 and before 6". Before `prep-base` both name `baseline.json` instead (`RootRequirements` asks for the baseline first), so the sentences the spec expects appear only after `prep-base` and before `make`; both orders are logged above and quoted in *The first run, whole*.
+2. **`out/<gate>.continue` was not seen during the wait.** The blocked gate's wait ran while the chain was unwatched; what is recorded is the `gate-wait` line, attempt 2 as a resume of the same session 32 s later and the step done. By design the marker is deleted when the step is done (*The step runner*), so it is not in the final tree either. The marker's presence during a wait is exercised by `GateStepTests`, `StepRestartTests` and `StatusVerbTests`, not by this pilot.
+3. **The part-7 `closed` list of the example holds twelve paths, not three.** `todo/PLAN_model_arms_E6.md` §8 item 4 says three; the example (as E5.S1's review round R1 left it) carries the shell's whole set, pinned by the `Part_7_of_the_example_closes_everything_the_shell_closed_…` test. The CHH walk-through above (*The CHH walk*) stands as it was; item 4's difference no longer exists.
+4. **The second `chain pilot` is silent about its reconciliation.** It prints no line saying the `locked` marker was found over an applied snapshot of this run; it acts on it (starts nothing, unlocks) and prints `unlock`. Said here so a reader does not look for the line.
+5. **`unlock` after the chain's own unlock says `nothing locked`** (exit 0), not *restored* or *no snapshot*; the sequence T2 accepts it.
+
+### What did not run
+
+- **Step 14, the delegation re-run (E2 §8 item 43): NOT run.** It needs the real `claude` logged in by hand inside `<home14>`, which the brief of this run forbade (the real `claude` is never started here); `<deleg>` and `<home14>` were made empty and removed unused. The A–D table is therefore absent, and the analysis plan's first line must say the re-run is still to be made on the build the first real experiment uses.
+- **Not part of M3 by design:** M2's key check (the real `claude` and `coai-mcp`, the owner's key), a second `run-all CHH1` "at once" (a race the fake decides; the refusal is pinned by `DetachedLauncherTests.An_arm_whose_lock_is_held_is_left_alone`), anything off WSL (macOS and FreeBSD refuse `run-all` and `chain` with the manual road, exit 3).
+
 ## The secret-shaped names and the git floor (E4.S0)
 
 **Purpose.** Two exposures E3 left, closed in a pull request of their own before any story that launches a process (parent ledger 2.2 and 2.3; E3 §8 items 50 and 51). (1) The arm's own claude session — the one process that runs arbitrary commands by design — was stripped by the shared `CoaiEnvironment.IsSecretName` alone, while the target's tools were stripped by a wider list of `TargetEnvironment`'s own: the model under test saw `PGPASSWORD`, `DATABASE_URL`, `*_PAT`, `*_CREDENTIALS` and npm auth tokens whenever the operator's shell held them. (2) Every git guard is an environment variable an older git ignores in silence (`GIT_NO_LAZY_FETCH`, `GIT_ALLOW_PROTOCOL`, `GIT_CONFIG_COUNT`), and no git floor was enforced.
@@ -3075,3 +3240,39 @@ A Windows host (the host seam says Windows, the process is Linux; `WindowsAwake`
 ### Growth this story adds (for §9)
 
 `chain/<run>/.chain.lock` (+ `.holder` while a chain holds it): one empty file per run and a note < 200 bytes, the lock file never deleted, the note removed by its holder before release, a stale one overwritten by the next holder. `chain/executables.txt` replaced whole at each `chain` start (< 2 KB). `chain/<run>/{locked,unlocked,arms-done}`: three empty files per run. Nothing else: a killed chain leaves at most one `<name>.staging-<32 hex>` file per interrupted write (§8 item 54).
+
+## The published record (E6.S3, E2 §8 item 14)
+
+Two files in an arm hold or may hold the owner's key and are never part of a record that is published: `mcp-coai.json` (its `env` carries `COAI_CREDS_KEY` when `make` ran with the key exported; mode 0600) and the copy of the panel's settings under `coai-data/`. `mcp-none.json` carries no key but is the same kind of file and is excluded with them. The module writes nothing into `research/`, so the guard is a scan: `PublishedRecordTests.The_published_record_holds_no_mcp_config_and_no_coai_data` walks `research/local-model-coding/data/` and fails on a file named `mcp-coai.json` or `mcp-none.json` or a folder named `coai-data`; its companion asserts the scan still finds `data/part6/arms/C1/objective.json`, so a scan that matches nothing cannot pass (red seen with a planted `data/part6/arms/C1/mcp-coai.json`). It does not prove that nothing else secret-shaped is published, nor that a record is only ever published from that folder.
+
+## Growth, as built (parent §9)
+
+Nothing the module writes is deleted by a verb; the operator retires a root (it holds `mcp-coai.json`, which may hold the key, so a root is removed whole and at once when its experiment is over). What grows, by whom it is written:
+
+| what | grows with | notes |
+|---|---|---|
+| `r/<token>/` (the clone, `out/`, `notes/`, `work/`, `wt/`, `coai-data/`) | one folder per arm | the clone is the size of the target; per attempt a stream, an `.err` and a prompt; per snapshotting step a `.before` and a `.diff`; SRS: a worktree per task under `wt/` while a batch runs (dropped after the pick-back) |
+| `out/objective.prev-<stamp>` | each `checks` re-run that finds an earlier `objective.json` | the earlier file is kept, never overwritten (E3.S5) |
+| `lock.log`, `.locked-modes*.restored-<stamp>[-n]` | one line, and one pair, per `lock`/`unlock` | E5.S1 |
+| `.isolation.lock.holder`, `.gate.lock.holder`, `pids/<arm>.lock.holder` | a note under 200 bytes while held | removed by the holder |
+| `pids/<arm>.{pid,lock,log,log.prev}`, `pids/.run-all.lock` | one set per arm; `.log` renamed to `.log.prev` at each start | the arm's logs are bounded by two runs |
+| `chain/made-<arm>`, `objective-<arm>`, `executables.txt`, `<run>/{locked,unlocked,arms-done,.chain.lock}` | empty markers, replaced whole | |
+| `keep-awake.log`, `keep-awake.<stamp>.<n>.err` | a line per event; an `.err` per keep-awake start | E5.S2 |
+| `base/`, `base-*.log`, `base-results/`, `baseline.json`, `prep-base.log` | once per root | the frozen starting point |
+| `<name>.staging-<32 hex>` | a death between a write's stage and its rename | never read |
+
+A killed run leaves what it had written and nothing running (the runners hold locks, not state). M3 measured no sizes.
+
+## Not proven, gathered
+
+Each section above keeps its own *Not proven*; this is the module's whole as of the E6.S3 build, grouped.
+
+- **A real claude.** Every step ran against the fake CLI, which replays recorded shapes (M1–M3). That `--resume` after a limit or a cut behaves as the shell observed, that the model writes a `tasks.json` the checker accepts or a `gate.json` the gate step reads, a real multi-hour task's diff and cherry-pick, a real gate round through `coai-mcp`: unobserved. The first real step is the owner's.
+- **M2's key check — OPEN, the owner's.** Whether the key `make` writes into `mcp-coai.json` reaches the real `coai-mcp` (two `providers` answers side by side), or the settings-file road is the delivery (*M2's key check*). Until it runs, `McpConfig`'s `env` member is a request, unverified.
+- **The delegation re-run (M3 step 14) — not run.** The A–D calls with the real `claude` and haiku (E2 §8 item 43) were not made in M3 (*What did not run*); the analysis plan's first line carries it.
+- **The owner's own `experiment.json` — OPEN, the owner's.** Written once into a root outside every checkout and read by `status` without a refusal; the worked example validates, the owner's file has not been seen.
+- **The real-git pilot — not run.** E4.S0 and E4.S2 on git 2.39.4 and 2.45.0 built from source needed a build of external code nobody authorised; every git test ran on the host's git. A red there means D23's table is wrong.
+- **Hosts.** Linux x86-64 with glibc and WSL2 are the only hosts observed (M1–M3). macOS and FreeBSD run on the portable road, were never run on a real host, and `run-all`/`chain` refuse there with the manual road (exit 3) — against the owner's "do not forbid" ruling (E5 §8 item 30); Windows is built and never run (`WindowsAwake`, `WindowsLauncher`, the modes and links); Linux arm64 and a `setsid` other than util-linux 2.41.3 are refused or unmeasured.
+- **The readers.** The seven checked-in readers run over a fake arm of each scheme (`ConsumerCompatibilityTests`); not proven: their arithmetic (run, not judged), the fitted prices of `metrics.mjs`, `compare.mjs` over a CR, CHH or SRS arm (its list holds none), the judges, the mutation and survival readers, `make-tables.mjs`'s part-6 and part-7 sections, and the double count of a resumed step's cost in `metrics.mjs` (measured, carried to the analysis plan, not fixed).
+- **The chain over SRS.** M3 ran `chain` over an SRS arm end to end with the fake for the first time (SRS1 in the round); a real SRS arm — a real split, real parallel coders — has not run.
+- **Residuals the design decided and states** (not defects): the gate lock's wedged holder, a pid reused by a process with the same argv, a same-user `chmod` beside the module, a power loss between a snapshot's rename and its journal, the ancestors above a root (D17), `SSH_AUTH_SOCK` and inherited `GIT_*` reaching the arm's claude (the owner's open question, E6 §8 item 26 (a)).

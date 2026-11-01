@@ -87,7 +87,7 @@ internal static class RunArmKit
     }
 
     /// <summary>The first line of <paramref name="template"/> up to its first placeholder: what every prompt filled from it starts with.</summary>
-    private static string Opening(string template)
+    internal static string Opening(string template)
     {
         var first = File.ReadAllText(template).Split('\n')[0];
         var at = first.IndexOf("{{", StringComparison.Ordinal);
