@@ -161,8 +161,8 @@ tasks' sources (the rest of Q1 — the push of a known-task text waits for it, b
   permission (verified: `GET /repos/{owner}/{repo}/issues/comments` succeeds with it); `Issues: write` would be needed only if
   the broker must post conversation comments — an open point for E3.S7a (§9 OP-I), **no change to the PAT now** (consult D4,
   adjusted by the team lead).
-- **The repository allows squash, merge and rebase today and has 0 rulesets.** Allowing merge commits for the join PR only, then switching them off again (consult D7, C7a; OP-H decided),
-  is a GitHub write: operator steps O1a and O1b below.
+- **The repository allows squash, merge and rebase today and has 0 rulesets.** Allowing merge commits for the join PR only,
+  then switching them off again (consult D7, C7a; OP-H decided), is a GitHub write: operator steps O1a and O1b below.
 - **The credit terms of the known tasks, decided by the owner on 2026-11-01** (the parent's open question Q1, *Licences and
   credit*; recorded here, and in the parent at its next change, §12):
   - **specs 01 and 02, adapted from CSES:** those two spec files are licensed **CC BY-NC-SA 4.0**, the CSES problem set's
