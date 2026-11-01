@@ -79,7 +79,10 @@ UTF-16 is decoded and other binaries are read as latin1 for every scan).
 never the history, so every other rule reads the files as they stand at the tip (credited to the commit that brought the blob). Needles match by
 D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
 (`inputs/needles-lang.json`, the public list); a multi-word needle is matched over the whole text with any whitespace between its words. Shingles
-tokenise like v1's `normalise` and drop nothing. A six-word run that the parent plan or the stories document already holds is public and is not an
+tokenise like v1's `normalise` and drop nothing, with one rule (the team lead's, after the review): **a six-word window that lies wholly inside ONE
+whitespace-delimited token of the checked text (a path, a URL, an identifier such as `todo/PLAN_x_y.md`) is not prose and is not a hit; a window
+that spans two or more tokens is checked as ever**, so a passage with `_word_` or `word/` every few words, or a real aid sentence copied into a
+path-heavy line, is still refused. A finding says how many tokens its window spans (`[window spans N tokens]`), never which words. A six-word run that the parent plan or the stories document already holds is public and is not an
 aid hit; those two texts, and every other `.md` file at that ref, are read with `git show origin/main:<path>` of the bench repository, never from
 the working tree (`--public <file>` names the public texts instead, in tests); an aid left with no run of its own is exit 3, because it would check nothing.
 

@@ -101,3 +101,37 @@ test('A_multi_word_needle_wrapped_over_lines_is_found_and_reported_where_it_star
   assert.equal(lineByLine.filter(h => h.what === 'needle Weird Algorithm').length, 0);
   assert.equal(findKnownNeedles('p', 'Counting-Rooms and CountingRooms and counting rooms\n', known).length, 0, 'only whitespace joins the words, and case still counts');
 });
+
+test('A_window_wholly_inside_one_whitespace_token_is_a_path_or_a_url_and_not_a_hit', () => {
+  const aid = { name: 'a.md', text: 'Notes.\nsee reports/alpha/beta/gamma/delta/epsilon.md and https://example.org/one/two/three/four/five for details.\n' };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  const pathsOnly = 'check reports/alpha/beta/gamma/delta/epsilon.md or https://example.org/one/two/three/four/five today\n';
+  assert.deepEqual(findAidHits('p', pathsOnly, needles), [], 'a line naming only paths and URLs passes');
+  assert.deepEqual(findAidHits('reports/alpha/beta/gamma/delta/epsilon.md', 'reports/alpha/beta/gamma/delta/epsilon.md', needles), [], 'a path scanned as text is one token');
+});
+
+test('A_real_aid_sentence_copied_into_a_path_heavy_line_is_still_a_hit_because_its_windows_span_tokens', () => {
+  const aid = { name: 'a.md', text: 'Notes.\nthe violet engine whistles beneath seven copper bridges at dawn.\n' };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  const heavy = 'src/a/b/c.md: the violet engine whistles beneath seven copper bridges at dawn. see https://x.test/y/z\n';
+  assert.deepEqual(findAidHits('p', heavy, needles).map(f => [f.line, f.what]), [[1, 'shingle of a.md']]);
+  const words = 'the violet engine whistles beneath seven copper bridges at dawn'.split(' ');
+  const marked = words.map((w, i) => (i % 5 === 2 ? `_${w}_` : i % 5 === 4 ? `${w}/` : w)).join(' ');
+  assert.equal(findAidHits('p', `${marked}\n`, needles).length, 1, 'markup and slashes every few words leave windows that span tokens');
+});
+
+test('A_window_of_six_words_that_straddles_two_tokens_by_one_word_is_checked', () => {
+  const aid = { name: 'a.md', text: 'Notes.\ntodo/tasks/alpha/beta/gamma/delta then more words.\n' };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  assert.equal(findAidHits('p', 'x todo/tasks/alpha/beta/gamma/delta then more words\n', needles).length, 1, 'the one-token window is skipped, the spanning ones are not');
+});
+
+test('A_shingle_finding_says_how_many_tokens_its_window_spans_and_never_which_words', () => {
+  const aid = { name: 'a.md', text: 'Notes.\nthe violet engine whistles beneath seven copper bridges at dawn.\n' };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  const [hit] = findAidHits('p', 'the violet engine whistles beneath seven copper bridges at dawn\n', needles);
+  assert.equal(hit.tokens, 6, 'six plain words are six tokens');
+  const [joined] = findAidHits('p', 'the violet engine whistles beneath-seven-copper bridges at dawn\n', needles);
+  assert.equal(joined.tokens, 5, 'the first window is five tokens: the, violet, engine, whistles and one joined token');
+  assert.equal(JSON.stringify(hit).includes('violet'), false);
+});

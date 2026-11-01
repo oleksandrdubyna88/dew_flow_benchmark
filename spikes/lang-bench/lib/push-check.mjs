@@ -112,7 +112,8 @@ export function checkText({ text, label, inputs, self = false }) {
 }
 
 const where = f => `${f.path}${f.line === null ? ':' : `:${f.line}`}`;
-const findingLine = f => `  ${f.commit ? `${f.commit.slice(0, 10)} ` : ''}${where(f)} ${f.what}`;
+const span = f => (f.tokens === undefined ? '' : ` [window spans ${f.tokens} tokens]`);
+const findingLine = f => `  ${f.commit ? `${f.commit.slice(0, 10)} ` : ''}${where(f)} ${f.what}${span(f)}`;
 const plural = n => `${n} new commit${n === 1 ? '' : 's'}`;
 const row = (label, value) => `${label.padEnd(20)} ${value}`;
 const RESULT_WORDS = Object.freeze({ [EXIT.PASS]: 'PASS', [EXIT.REFUSED]: 'REFUSED', [EXIT.ENVIRONMENT]: 'ENVIRONMENT', [EXIT.CONFIG]: 'CONFIGURATION' });

@@ -308,3 +308,9 @@ test('A_family_name_in_a_commit_message_is_refused_because_the_task_repository_i
   assert.deepEqual(checkOf(result, 'family-names').findings.map(f => [f.commit, f.path, f.line, f.what]), [[sha, '(commit message)', 1, 'needle dew_flow_benchmark']]);
   assert.equal((await checkSelf({ repo, branch: 'topic', inputs })).exit, EXIT.PASS, 'the bench branch may name its own family');
 });
+
+test('The_report_prints_the_token_span_of_a_shingle_finding_and_not_its_words', async t => {
+  const { repo } = branchWith(t, { 'notes/x.md': 'a\nthe widget that frobnicates every sprocket twice before dinner\n' });
+  const report = formatReport(await run(repo));
+  assert.match(report, /notes\/x\.md:2 shingle of synthetic-aid\.md \[window spans \d+ tokens\]/);
+});

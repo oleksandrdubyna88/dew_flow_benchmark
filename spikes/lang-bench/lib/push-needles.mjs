@@ -6,7 +6,7 @@
 //    characters, plus exact substrings for names that are not words. These are public (they are in the plan), so a finding names the needle.
 import { parseTokens, SHINGLE_WORDS } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { lineIndex, wordsWithLines } from './push-text.mjs';
+import { lineIndex, windowIsOneToken, wordsWithLines } from './push-text.mjs';
 
 const shinglesOf = text => {
   const words = wordsWithLines(text).map(w => w.word);
@@ -35,9 +35,10 @@ function shingleHits(path, text, shingles) {
   const seen = new Set();
   const hits = [];
   for (let i = 0; i + SHINGLE_WORDS <= words.length; i += 1) {
-    const aid = shingles.get(words.slice(i, i + SHINGLE_WORDS).map(w => w.word).join(' '));
+    const window = words.slice(i, i + SHINGLE_WORDS);
+    const aid = windowIsOneToken(window) ? undefined : shingles.get(window.map(w => w.word).join(' '));
     const key = aid === undefined ? null : `${words[i].line}\0${aid}`;
-    if (key !== null && !seen.has(key)) { seen.add(key); hits.push({ path, line: words[i].line, what: `shingle of ${aid}` }); }
+    if (key !== null && !seen.has(key)) { seen.add(key); hits.push({ path, line: words[i].line, what: `shingle of ${aid}`, tokens: new Set(window.map(w => w.token)).size }); }
   }
   return hits;
 }
