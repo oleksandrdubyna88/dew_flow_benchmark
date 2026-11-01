@@ -14,7 +14,8 @@
 //            --tokens <file>  literal leak tokens, one per line, outside git     --credits <file>  --needles <file>  --template-files <file>
 //
 // Exit 0 clean · 1 refused · 3 environment (git, the network, an aid that cannot be read) · 4 configuration. Nothing is pushed, ever.
-// A line names the commit, the path, the line and the reason - never the text that matched.
+// A line names the commit, the path, the line and the reason - never the text that matched. The report names the tip it checked; publish
+// exactly that commit: `git push <url> <tip sha>:refs/heads/<branch>`, so what was checked is what is published.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { checkBranch, checkSelf, checkText, EXIT, formatReport } from './lib/push-check.mjs';

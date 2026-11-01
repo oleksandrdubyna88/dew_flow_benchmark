@@ -7,7 +7,7 @@ import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { decodeBlob } from './push-decode.mjs';
 import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
-import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
 import { findOwnSecrets, findSecrets, maskSecrets } from './push-secrets.mjs';
 import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
@@ -115,6 +115,8 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   if (!origin.ok) return errorResult(label, origin);
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
+  const tipSha = await branchTip(repo, branch);
+  if (!tipSha.ok) return errorResult(label, tipSha);
   const scanned = await scanRange(repo, branch, range.value, inputs, NAMES, { refuseNul: true });
   if (!scanned.ok) return errorResult(label, scanned);
   const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit, tip: scanned.value.tip });
@@ -124,7 +126,7 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   byName['known-task-credits'] = tip.value.credits;
   byName['stack-folders'] = tip.value.stack;
   byName['tree-shape'] = [...byName['tree-shape'], ...tip.value.shape];
-  return verdict(toChecks(NAMES, byName), label, { commits: range.value.length });
+  return verdict(toChecks(NAMES, byName), label, { commits: range.value.length, tip: tipSha.value, branch });
 }
 
 /** The bench's own branch (consult C6b, D2): only the leak and the secret scans, over the new commits. */
@@ -132,9 +134,11 @@ export async function checkSelf({ repo, branch, inputs }) {
   const label = `${repo} ${branch} (bench branch)`;
   const range = await newCommits(repo, branch);
   if (!range.ok) return errorResult(label, range);
+  const tipSha = await branchTip(repo, branch);
+  if (!tipSha.ok) return errorResult(label, tipSha);
   const scanned = await scanRange(repo, branch, range.value, inputs, SELF_NAMES, { refuseNul: false });
   if (!scanned.ok) return errorResult(label, scanned);
-  return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length });
+  return verdict(toChecks(SELF_NAMES, scanned.value.byName), label, { commits: range.value.length, tip: tipSha.value, branch });
 }
 
 /**
@@ -155,6 +159,7 @@ const findingLine = f => `  ${f.commit ? `${f.commit.slice(0, 10)} ` : ''}${wher
 export function formatReport(result) {
   const out = [`push-check: ${result.label}${result.commits === undefined ? '' : ` (${result.commits} new commit${result.commits === 1 ? '' : 's'})`}`];
   if (result.error) out.push(`error: ${result.error}`);
+  if (result.tip) out.push(`${'tip'.padEnd(20)} ${result.tip}`, `${'push'.padEnd(20)} git push <url> ${result.tip}:refs/heads/${result.branch}`);
   for (const { name, findings } of result.checks) {
     out.push(`${name.padEnd(20)} ${findings.length === 0 ? 'PASS' : `FAIL (${findings.length})`}`);
     out.push(...findings.slice(0, MAX_PRINTED).map(findingLine));

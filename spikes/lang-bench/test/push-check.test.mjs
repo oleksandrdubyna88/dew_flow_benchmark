@@ -253,3 +253,15 @@ test('A_file_name_is_scanned_for_needles_family_names_and_secret_shapes_like_the
   assert.deepEqual(checkOf(result, 'secrets').findings.map(f => [f.path, f.line, f.what]), [['research/[secret].txt', null, 'github-fine-grained-pat']], 'the path is the position, so the secret in it is masked');
   assert.equal(formatReport(result).includes(SECRET.slice(0, 16)), false);
 });
+
+test('The_report_names_the_tip_it_checked_and_the_push_that_publishes_exactly_that_commit', async t => {
+  const { repo, sha } = branchWith(t, { 'a.txt': 'x\n' });
+  const result = await run(repo);
+  assert.equal(result.tip, sha);
+  const report = formatReport(result);
+  assert.match(report, new RegExp(`^tip +${sha}$`, 'm'));
+  assert.match(report, new RegExp(`^push +git push <url> ${sha}:refs/heads/topic$`, 'm'));
+  const self = await checkSelf({ repo, branch: 'topic', inputs });
+  assert.match(formatReport(self), new RegExp(`^tip +${sha}$`, 'm'));
+  assert.equal(formatReport(checkText({ text: 'x\n', label: 'b.md', inputs })).includes('refs/heads'), false, 'a body has no tip');
+});

@@ -8,12 +8,18 @@ import { BLOB_MAX_BYTES, runGit, runGitBytes } from './push-git.mjs';
 export const SUBMODULE_MODE = '160000';
 export const SYMLINK_MODE = '120000';
 
-/** ok([sha]) oldest first, or a `config` fail when the branch does not exist. */
-export async function newCommits(repo, branch) {
+/** ok(sha) of the tip commit of `branch`, or a `config` fail when the branch does not exist. */
+export async function branchTip(repo, branch) {
   const tip = await runGit(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`], { accept: [0, 1] });
   if (!tip.ok) return tip;
-  if (tip.value.code === 1) return fail(`the branch ${branch} does not exist in ${repo}`, { kind: 'config' });
-  const list = await runGit(repo, ['rev-list', '--reverse', tip.value.stdout.trim(), '--not', '--remotes=origin']);
+  return tip.value.code === 1 ? fail(`the branch ${branch} does not exist in ${repo}`, { kind: 'config' }) : ok(tip.value.stdout.trim());
+}
+
+/** ok([sha]) oldest first, or a `config` fail when the branch does not exist. */
+export async function newCommits(repo, branch) {
+  const tip = await branchTip(repo, branch);
+  if (!tip.ok) return tip;
+  const list = await runGit(repo, ['rev-list', '--reverse', tip.value, '--not', '--remotes=origin']);
   return list.ok ? ok(list.value.stdout.split('\n').filter(Boolean)) : list;
 }
 
