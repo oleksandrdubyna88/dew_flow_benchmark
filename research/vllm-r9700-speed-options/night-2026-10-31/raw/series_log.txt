@@ -487,3 +487,289 @@ speed_F.log:fcombo-2 prefill32768 r=1 Output token throughput (tok/s):         4
 speed_F.log:fcombo-2 prefill32768 r=1 Mean TTFT (ms):                          22468.71  
 speed_F.log:fcombo-2 prefill32768 r=1 Median TTFT (ms):                        22468.71  
 speed_F.log:restore: skipped once (planned restart)
+OK: no new disk event (newest 4566)
+=== 2026-11-01 05:10:38 o7ref round 1 (WSL load 0.10 0.18 0.28): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+8137fddc05b18dab1eb77a9954be7d534f040cf7396a3cb0486e3a66827488ca
+READY (waited 230 s here)
+(APIServer pid=1) WARNING 11-01 04:11:30 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=183) INFO 11-01 04:11:56 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=183) INFO 11-01 04:14:14 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=183) INFO 11-01 04:14:20 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=183) WARNING 11-01 04:14:14 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=183) WARNING 11-01 04:14:26 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+o7ref-1 c=1 r=1 Output token throughput (tok/s):         85.34     
+o7ref-1 c=1 r=1 Mean TTFT (ms):                          2077.71   
+o7ref-1 c=1 r=1 Mean TPOT (ms):                          7.67      
+o7ref-1 c=1 r=2 Output token throughput (tok/s):         82.84     
+o7ref-1 c=1 r=2 Mean TTFT (ms):                          2102.24   
+o7ref-1 c=1 r=2 Mean TPOT (ms):                          7.98      
+o7ref-1 c=1 r=3 Output token throughput (tok/s):         85.66     
+o7ref-1 c=1 r=3 Mean TTFT (ms):                          2095.10   
+o7ref-1 c=1 r=3 Mean TPOT (ms):                          7.60      
+o7ref-1 c=4 r=1 Output token throughput (tok/s):         200.06    
+o7ref-1 c=4 r=1 Mean TTFT (ms):                          4117.67   
+o7ref-1 c=4 r=1 Mean TPOT (ms):                          11.58     
+o7ref-1 c=4 r=2 Output token throughput (tok/s):         200.63    
+o7ref-1 c=4 r=2 Mean TTFT (ms):                          4202.19   
+o7ref-1 c=4 r=2 Mean TPOT (ms):                          11.24     
+o7ref-1 c=4 r=3 Output token throughput (tok/s):         199.80    
+o7ref-1 c=4 r=3 Mean TTFT (ms):                          4202.56   
+o7ref-1 c=4 r=3 Mean TPOT (ms):                          11.44     
+o7ref-1 prefill8192 r=1 Output token throughput (tok/s):         17.97     
+o7ref-1 prefill8192 r=1 Mean TTFT (ms):                          5642.99   
+o7ref-1 prefill8192 r=1 Median TTFT (ms):                        1950.97   
+o7ref-1 prefill8192 r=2 Output token throughput (tok/s):         15.92     
+o7ref-1 prefill8192 r=2 Mean TTFT (ms):                          6150.71   
+o7ref-1 prefill8192 r=2 Median TTFT (ms):                        1974.48   
+o7ref-1 prefill8192 r=3 Output token throughput (tok/s):         16.02     
+o7ref-1 prefill8192 r=3 Mean TTFT (ms):                          6153.77   
+o7ref-1 prefill8192 r=3 Median TTFT (ms):                        2012.38   
+o7ref-1 prefill32768 r=1 Output token throughput (tok/s):         5.60      
+o7ref-1 prefill32768 r=1 Mean TTFT (ms):                          18566.08  
+o7ref-1 prefill32768 r=1 Median TTFT (ms):                        15330.23  
+o7ref-1 prefill32768 r=2 Output token throughput (tok/s):         5.56      
+o7ref-1 prefill32768 r=2 Mean TTFT (ms):                          19725.77  
+o7ref-1 prefill32768 r=2 Median TTFT (ms):                        15437.51  
+o7ref-1 prefill32768 r=3 Output token throughput (tok/s):         5.53      
+o7ref-1 prefill32768 r=3 Mean TTFT (ms):                          19434.89  
+o7ref-1 prefill32768 r=3 Median TTFT (ms):                        15348.11  
+wrote /work/speed/prompts_o7ref.json
+gsm8k n=200 correct=170 accuracy=0.8500 stderr=0.0252
+OK: no new disk event (newest 4566)
+=== 2026-11-01 05:32:36 o7 round 1 (WSL load 0.26 0.41 0.37): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+74f607f31d3641b921012d694d9bfa5b31cd6c5365d8f3e77893d9a617b4ee34
+READY (waited 230 s here)
+(APIServer pid=1) WARNING 11-01 04:33:19 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=178) INFO 11-01 04:33:44 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=178) INFO 11-01 04:36:02 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=178) INFO 11-01 04:36:10 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=178) WARNING 11-01 04:36:02 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=178) WARNING 11-01 04:36:16 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed-options option 7: wide-N tile patch for M 6-16 active
+o7-1 c=1 r=1 Output token throughput (tok/s):         85.97     
+o7-1 c=1 r=1 Mean TTFT (ms):                          2086.31   
+o7-1 c=1 r=1 Mean TPOT (ms):                          7.57      
+o7-1 c=1 r=2 Output token throughput (tok/s):         83.65     
+o7-1 c=1 r=2 Mean TTFT (ms):                          2096.93   
+o7-1 c=1 r=2 Mean TPOT (ms):                          7.87      
+o7-1 c=1 r=3 Output token throughput (tok/s):         85.82     
+o7-1 c=1 r=3 Mean TTFT (ms):                          2137.48   
+o7-1 c=1 r=3 Mean TPOT (ms):                          7.49      
+o7-1 c=4 r=1 Output token throughput (tok/s):         202.40    
+o7-1 c=4 r=1 Mean TTFT (ms):                          4375.56   
+o7-1 c=4 r=1 Mean TPOT (ms):                          10.88     
+o7-1 c=4 r=2 Output token throughput (tok/s):         205.51    
+o7-1 c=4 r=2 Mean TTFT (ms):                          4135.33   
+o7-1 c=4 r=2 Mean TPOT (ms):                          11.10     
+o7-1 c=4 r=3 Output token throughput (tok/s):         207.55    
+o7-1 c=4 r=3 Mean TTFT (ms):                          4199.50   
+o7-1 c=4 r=3 Mean TPOT (ms):                          10.96     
+o7-1 prefill8192 r=1 Output token throughput (tok/s):         18.00     
+o7-1 prefill8192 r=1 Mean TTFT (ms):                          5637.99   
+o7-1 prefill8192 r=1 Median TTFT (ms):                        1913.38   
+o7-1 prefill8192 r=2 Output token throughput (tok/s):         15.92     
+o7-1 prefill8192 r=2 Mean TTFT (ms):                          6175.16   
+o7-1 prefill8192 r=2 Median TTFT (ms):                        1958.37   
+o7-1 prefill8192 r=3 Output token throughput (tok/s):         16.08     
+o7-1 prefill8192 r=3 Mean TTFT (ms):                          6137.79   
+o7-1 prefill8192 r=3 Median TTFT (ms):                        1983.31   
+o7-1 prefill32768 r=1 Output token throughput (tok/s):         5.63      
+o7-1 prefill32768 r=1 Mean TTFT (ms):                          18472.80  
+o7-1 prefill32768 r=1 Median TTFT (ms):                        15214.22  
+o7-1 prefill32768 r=2 Output token throughput (tok/s):         5.58      
+o7-1 prefill32768 r=2 Mean TTFT (ms):                          19672.04  
+o7-1 prefill32768 r=2 Median TTFT (ms):                        15360.45  
+o7-1 prefill32768 r=3 Output token throughput (tok/s):         5.49      
+o7-1 prefill32768 r=3 Mean TTFT (ms):                          19624.48  
+o7-1 prefill32768 r=3 Median TTFT (ms):                        15356.61  
+wrote /work/speed/prompts_o7.json
+gsm8k n=200 correct=170 accuracy=0.8500 stderr=0.0252
+OK: no new disk event (newest 4566)
+=== 2026-11-01 05:54:32 o7ref round 2 (WSL load 0.35 0.34 0.36): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+3260078c39e03c2cd7c25ad21482fb2e3db051dcedf8d0051569dae998fe8a0e
+READY (waited 220 s here)
+(APIServer pid=1) WARNING 11-01 04:55:14 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 04:55:40 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=177) INFO 11-01 04:57:57 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=177) INFO 11-01 04:58:04 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=177) WARNING 11-01 04:57:58 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=177) WARNING 11-01 04:58:10 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+o7ref-2 c=1 r=1 Output token throughput (tok/s):         85.73     
+o7ref-2 c=1 r=1 Mean TTFT (ms):                          2098.90   
+o7ref-2 c=1 r=1 Mean TPOT (ms):                          7.58      
+o7ref-2 c=1 r=2 Output token throughput (tok/s):         83.40     
+o7ref-2 c=1 r=2 Mean TTFT (ms):                          2124.81   
+o7ref-2 c=1 r=2 Mean TPOT (ms):                          7.85      
+o7ref-2 c=1 r=3 Output token throughput (tok/s):         86.35     
+o7ref-2 c=1 r=3 Mean TTFT (ms):                          2113.93   
+o7ref-2 c=1 r=3 Mean TPOT (ms):                          7.47      
+o7ref-2 c=4 r=1 Output token throughput (tok/s):         207.03    
+o7ref-2 c=4 r=1 Mean TTFT (ms):                          4136.10   
+o7ref-2 c=4 r=1 Mean TPOT (ms):                          10.90     
+o7ref-2 c=4 r=2 Output token throughput (tok/s):         205.56    
+o7ref-2 c=4 r=2 Mean TTFT (ms):                          4129.65   
+o7ref-2 c=4 r=2 Mean TPOT (ms):                          11.00     
+o7ref-2 c=4 r=3 Output token throughput (tok/s):         205.71    
+o7ref-2 c=4 r=3 Mean TTFT (ms):                          4190.10   
+o7ref-2 c=4 r=3 Mean TPOT (ms):                          11.01     
+o7ref-2 prefill8192 r=1 Output token throughput (tok/s):         17.96     
+o7ref-2 prefill8192 r=1 Mean TTFT (ms):                          5657.05   
+o7ref-2 prefill8192 r=1 Median TTFT (ms):                        1918.09   
+o7ref-2 prefill8192 r=2 Output token throughput (tok/s):         16.09     
+o7ref-2 prefill8192 r=2 Mean TTFT (ms):                          6089.39   
+o7ref-2 prefill8192 r=2 Median TTFT (ms):                        1936.60   
+o7ref-2 prefill8192 r=3 Output token throughput (tok/s):         16.09     
+o7ref-2 prefill8192 r=3 Mean TTFT (ms):                          6126.32   
+o7ref-2 prefill8192 r=3 Median TTFT (ms):                        1951.52   
+o7ref-2 prefill32768 r=1 Output token throughput (tok/s):         5.54      
+o7ref-2 prefill32768 r=1 Mean TTFT (ms):                          18814.18  
+o7ref-2 prefill32768 r=1 Median TTFT (ms):                        15331.66  
+o7ref-2 prefill32768 r=2 Output token throughput (tok/s):         5.56      
+o7ref-2 prefill32768 r=2 Mean TTFT (ms):                          19767.85  
+o7ref-2 prefill32768 r=2 Median TTFT (ms):                        15391.21  
+o7ref-2 prefill32768 r=3 Output token throughput (tok/s):         5.45      
+o7ref-2 prefill32768 r=3 Mean TTFT (ms):                          19771.02  
+o7ref-2 prefill32768 r=3 Median TTFT (ms):                        15438.00  
+OK: no new disk event (newest 4566)
+=== 2026-11-01 06:12:41 o7 round 2 (WSL load 0.40 0.41 0.37): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+a7362fc7e7307c911436554d0042ea8ce0902607d986c9535cd7c0e50a107371
+READY (waited 220 s here)
+(APIServer pid=1) WARNING 11-01 05:13:23 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 05:13:48 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=177) INFO 11-01 05:16:07 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=177) INFO 11-01 05:16:14 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=177) WARNING 11-01 05:16:07 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=177) WARNING 11-01 05:16:20 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed-options option 7: wide-N tile patch for M 6-16 active
+o7-2 c=1 r=1 Output token throughput (tok/s):         85.91     
+o7-2 c=1 r=1 Mean TTFT (ms):                          2087.69   
+o7-2 c=1 r=1 Mean TPOT (ms):                          7.58      
+o7-2 c=1 r=2 Output token throughput (tok/s):         83.16     
+o7-2 c=1 r=2 Mean TTFT (ms):                          2137.14   
+o7-2 c=1 r=2 Mean TPOT (ms):                          7.87      
+o7-2 c=1 r=3 Output token throughput (tok/s):         85.80     
+o7-2 c=1 r=3 Mean TTFT (ms):                          2142.76   
+o7-2 c=1 r=3 Mean TPOT (ms):                          7.48      
+o7-2 c=4 r=1 Output token throughput (tok/s):         194.98    
+o7-2 c=4 r=1 Mean TTFT (ms):                          4111.80   
+o7-2 c=4 r=1 Mean TPOT (ms):                          11.87     
+o7-2 c=4 r=2 Output token throughput (tok/s):         203.51    
+o7-2 c=4 r=2 Mean TTFT (ms):                          4231.67   
+o7-2 c=4 r=2 Mean TPOT (ms):                          11.05     
+o7-2 c=4 r=3 Output token throughput (tok/s):         201.35    
+o7-2 c=4 r=3 Mean TTFT (ms):                          4248.42   
+o7-2 c=4 r=3 Mean TPOT (ms):                          11.44     
+o7-2 prefill8192 r=1 Output token throughput (tok/s):         17.99     
+o7-2 prefill8192 r=1 Mean TTFT (ms):                          5642.45   
+o7-2 prefill8192 r=1 Median TTFT (ms):                        1899.60   
+o7-2 prefill8192 r=2 Output token throughput (tok/s):         16.01     
+o7-2 prefill8192 r=2 Mean TTFT (ms):                          6131.13   
+o7-2 prefill8192 r=2 Median TTFT (ms):                        1962.36   
+o7-2 prefill8192 r=3 Output token throughput (tok/s):         16.04     
+o7-2 prefill8192 r=3 Mean TTFT (ms):                          6156.63   
+o7-2 prefill8192 r=3 Median TTFT (ms):                        1950.99   
+o7-2 prefill32768 r=1 Output token throughput (tok/s):         5.56      
+o7-2 prefill32768 r=1 Mean TTFT (ms):                          18738.38  
+o7-2 prefill32768 r=1 Median TTFT (ms):                        15211.20  
+o7-2 prefill32768 r=2 Output token throughput (tok/s):         5.60      
+o7-2 prefill32768 r=2 Mean TTFT (ms):                          19602.71  
+o7-2 prefill32768 r=2 Median TTFT (ms):                        15297.12  
+o7-2 prefill32768 r=3 Output token throughput (tok/s):         5.49      
+o7-2 prefill32768 r=3 Mean TTFT (ms):                          19615.74  
+o7-2 prefill32768 r=3 Median TTFT (ms):                        15373.27  
+OK: no new disk event (newest 4566)
+=== 2026-11-01 06:30:51 o7ref round 3 (WSL load 0.57 0.51 0.47): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+f227efa782c64a2df2ddd0d74ed05ee4a69df0a89df082226b5e1240c01aded6
+READY (waited 220 s here)
+(APIServer pid=1) WARNING 11-01 05:31:33 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 05:31:58 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=177) INFO 11-01 05:34:16 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=177) INFO 11-01 05:34:23 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=177) WARNING 11-01 05:34:17 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=177) WARNING 11-01 05:34:29 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+o7ref-3 c=1 r=1 Output token throughput (tok/s):         85.68     
+o7ref-3 c=1 r=1 Mean TTFT (ms):                          2098.96   
+o7ref-3 c=1 r=1 Mean TPOT (ms):                          7.59      
+o7ref-3 c=1 r=2 Output token throughput (tok/s):         83.02     
+o7ref-3 c=1 r=2 Mean TTFT (ms):                          2128.49   
+o7ref-3 c=1 r=2 Mean TPOT (ms):                          7.90      
+o7ref-3 c=1 r=3 Output token throughput (tok/s):         85.69     
+o7ref-3 c=1 r=3 Mean TTFT (ms):                          2136.02   
+o7ref-3 c=1 r=3 Mean TPOT (ms):                          7.51      
+o7ref-3 c=4 r=1 Output token throughput (tok/s):         199.17    
+o7ref-3 c=4 r=1 Mean TTFT (ms):                          4130.60   
+o7ref-3 c=4 r=1 Mean TPOT (ms):                          11.80     
+o7ref-3 c=4 r=2 Output token throughput (tok/s):         203.39    
+o7ref-3 c=4 r=2 Mean TTFT (ms):                          4096.50   
+o7ref-3 c=4 r=2 Mean TPOT (ms):                          11.34     
+o7ref-3 c=4 r=3 Output token throughput (tok/s):         204.46    
+o7ref-3 c=4 r=3 Mean TTFT (ms):                          4256.81   
+o7ref-3 c=4 r=3 Mean TPOT (ms):                          11.04     
+o7ref-3 prefill8192 r=1 Output token throughput (tok/s):         17.94     
+o7ref-3 prefill8192 r=1 Mean TTFT (ms):                          5659.35   
+o7ref-3 prefill8192 r=1 Median TTFT (ms):                        1939.07   
+o7ref-3 prefill8192 r=2 Output token throughput (tok/s):         15.90     
+o7ref-3 prefill8192 r=2 Mean TTFT (ms):                          6176.54   
+o7ref-3 prefill8192 r=2 Median TTFT (ms):                        1952.29   
+o7ref-3 prefill8192 r=3 Output token throughput (tok/s):         16.06     
+o7ref-3 prefill8192 r=3 Mean TTFT (ms):                          6138.80   
+o7ref-3 prefill8192 r=3 Median TTFT (ms):                        1940.43   
+o7ref-3 prefill32768 r=1 Output token throughput (tok/s):         5.55      
+o7ref-3 prefill32768 r=1 Mean TTFT (ms):                          18795.40  
+o7ref-3 prefill32768 r=1 Median TTFT (ms):                        15289.02  
+o7ref-3 prefill32768 r=2 Output token throughput (tok/s):         5.55      
+o7ref-3 prefill32768 r=2 Mean TTFT (ms):                          19779.41  
+o7ref-3 prefill32768 r=2 Median TTFT (ms):                        15419.47  
+o7ref-3 prefill32768 r=3 Output token throughput (tok/s):         5.46      
+o7ref-3 prefill32768 r=3 Mean TTFT (ms):                          19738.55  
+o7ref-3 prefill32768 r=3 Median TTFT (ms):                        15478.60  
+OK: no new disk event (newest 4566)
+=== 2026-11-01 06:49:00 o7 round 3 (WSL load 0.29 0.39 0.43): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+3a0f26853a6292616a040e822b43863011daf9bb9697baced02c97a87a0d28eb
+READY (waited 230 s here)
+(APIServer pid=1) WARNING 11-01 05:49:44 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 05:50:09 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=177) INFO 11-01 05:52:28 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=177) INFO 11-01 05:52:35 [kv_cache_utils.py:2032] GPU KV cache size: 232,700 tokens, Maximum concurrency for 131,072 tokens per request: 1.78x
+(EngineCore pid=177) WARNING 11-01 05:52:28 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=177) WARNING 11-01 05:52:40 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+speed-options option 7: wide-N tile patch for M 6-16 active
+o7-3 c=1 r=1 Output token throughput (tok/s):         85.64     
+o7-3 c=1 r=1 Mean TTFT (ms):                          2106.46   
+o7-3 c=1 r=1 Mean TPOT (ms):                          7.58      
+o7-3 c=1 r=2 Output token throughput (tok/s):         83.05     
+o7-3 c=1 r=2 Mean TTFT (ms):                          2131.84   
+o7-3 c=1 r=2 Mean TPOT (ms):                          7.89      
+o7-3 c=1 r=3 Output token throughput (tok/s):         85.46     
+o7-3 c=1 r=3 Mean TTFT (ms):                          2134.67   
+o7-3 c=1 r=3 Mean TPOT (ms):                          7.55      
+o7-3 c=4 r=1 Output token throughput (tok/s):         201.80    
+o7-3 c=4 r=1 Mean TTFT (ms):                          4179.89   
+o7-3 c=4 r=1 Mean TPOT (ms):                          11.18     
+o7-3 c=4 r=2 Output token throughput (tok/s):         201.97    
+o7-3 c=4 r=2 Mean TTFT (ms):                          4222.89   
+o7-3 c=4 r=2 Mean TPOT (ms):                          11.18     
+o7-3 c=4 r=3 Output token throughput (tok/s):         207.38    
+o7-3 c=4 r=3 Mean TTFT (ms):                          4199.43   
+o7-3 c=4 r=3 Mean TPOT (ms):                          10.98     
+o7-3 prefill8192 r=1 Output token throughput (tok/s):         17.94     
+o7-3 prefill8192 r=1 Mean TTFT (ms):                          5658.59   
+o7-3 prefill8192 r=1 Median TTFT (ms):                        1925.61   
+o7-3 prefill8192 r=2 Output token throughput (tok/s):         16.00     
+o7-3 prefill8192 r=2 Mean TTFT (ms):                          6126.34   
+o7-3 prefill8192 r=2 Median TTFT (ms):                        1947.42   
+o7-3 prefill8192 r=3 Output token throughput (tok/s):         16.07     
+o7-3 prefill8192 r=3 Mean TTFT (ms):                          6133.22   
+o7-3 prefill8192 r=3 Median TTFT (ms):                        1951.98   
+o7-3 prefill32768 r=1 Output token throughput (tok/s):         5.61      
+o7-3 prefill32768 r=1 Mean TTFT (ms):                          18546.63  
+o7-3 prefill32768 r=1 Median TTFT (ms):                        15236.84  
+o7-3 prefill32768 r=2 Output token throughput (tok/s):         5.59      
+o7-3 prefill32768 r=2 Mean TTFT (ms):                          19631.57  
+o7-3 prefill32768 r=2 Median TTFT (ms):                        15367.86  
+o7-3 prefill32768 r=3 Output token throughput (tok/s):         5.47      
+o7-3 prefill32768 r=3 Mean TTFT (ms):                          19716.87  
+o7-3 prefill32768 r=3 Median TTFT (ms):                        15367.95  
+OK: no new disk event (newest 4566)
+=== 2026-11-01 07:07:19 PHASE A DONE
+restore: skipped once (planned restart)

@@ -9,7 +9,7 @@
 > **Update 2026-11-01 (§ 13):** the final A/B ran all 3 rounds: **`fcombo` (`mtp3 + tattn`) passes** (+12.2 % at
 > c=1, +14.1 % at c=4, GSM8K equal), and the production server now starts with it. The tuned BF16 draft MoE file
 > (option 3) is 3–15 % faster as a kernel but gives no end-to-end gain. The prefix-cache hypothesis of § 6.1 is
-> rejected. Option 7 end-to-end: see § 13.5.
+> rejected. The option 7 tile patch is 1.4 % faster per token at c=4, inside the spread: not shipped (§ 13.5).
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -40,7 +40,7 @@ server flags.
 |---|---|---|---|
 | 1a + 6 | The combination `mtp3 + tattn` (`fcombo`) | **passes** the ship test; **in production since 2026-11-01** | +12.2 % at c=1, +14.1 % at c=4; TPOT −13 % / −17 %; prefill within spread; GSM8K 169 vs 171 of 200 |
 | 3 | Tuned BF16 MoE file for the MTP draft layer (`fb1`) | **fails** (no end-to-end gain) | kernel −9.4 % (bs 1) to −2.5 % (bs 16); end-to-end +1.6 % / +1.5 %, inside the spread; TPOT equal |
-| 7 | Hybrid linear kernel, tile patch | see § 13.5 | — |
+| 7 | Hybrid linear kernel, tile patch for wide-N shapes at M 6–16 (`o7`, on top of `fcombo`) | **fails** (gain inside the spread) | c=1 +0.1 %, c=4 −0.7 % tok/s; c=4 TPOT −1.4 % (spread 3.9 %); 20 prompts identical; GSM8K equal |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -371,7 +371,7 @@ cross the guard.
 
 7. The stall of § 6.1 (one request per run, ~12 s, never on a prefix-cache hit): find its cause, for example with
    a request trace of the bench's first measured request; `fcombo-1` ran 2 of 3 c=1 runs without it.
-8. Option 7: see § 13.5.
+8. Option 7 (§ 13.5): the patch is real but small (~0.5 ms of a ~39 ms c=4 step); not worth a local patch. Upstream idea stays: a HIP path for 6–8 rows.
 9. Phase B2 and `mtp3 + tattn + mnbt8k` stay open.
 
 ## 10. Files
@@ -398,7 +398,7 @@ cross the guard.
 | `night-2026-10-31/server_logs/` | Server log per arm-round of the final A/B; `*_STOPPED_*` for the two runs stopped by the RAM guard |
 | `night-2026-10-31/quality/` | `gsm8k_fcombo.json`, `prompts_fcombo.json`, `gsm8k_fb1.json`, `prompts_fb1.json` (`fbase`: `night-2026-10-28/quality/`) |
 | `night-2026-10-31/phaseB1_kernel_ab/` | `default-<n>.log`, `tuned-<n>.log`, `summary.log`, `decision.txt`, and the merged BF16 file |
-| `night-2026-10-31/option7/` | `rdna_hybrid_w4a16.patched.py` (mounted over the image file for arm `o7`) and `tile_patch.diff` |
+| `night-2026-10-31/option7/` | `rdna_hybrid_w4a16.patched.py` (mounted over the image file for arm `o7`), `tile_patch.diff`, `bench_option7.txt`, `spec_metrics_option7.txt` (§ 13.5); quality files `gsm8k_o7*.json`, `prompts_o7*.json` are in `quality/` |
 | `harness/` (2026-10-31) | `night4.sh`, `night5.sh`, `night6.sh`, `night4_extra.sh` (drivers), `merge_b1.py`, `moe_kernel_ab.sh` + `.py`, `speed_A.sh` (arms `fb1`, `o7ref`, `o7`; `QUIETCHECK`; complete-round check), `ram_guard_all.sh` (process-group stop) |
 
 Reproduce a comparison: `python3 -I harness/harness.py compare quality/prompts_base.json quality/prompts_mtp3.json`
@@ -634,7 +634,36 @@ Base spread in this series: 1.36 tok/s at c=1, 6.52 at c=4 (phase A: 3.35 / 5.41
 - **Per-round quiet check:** `speed_A.sh` with `QUIETCHECK=1` starts an arm-round only at WSL load < 4 and no
   coai-exp process, else exits 3 and the driver waits (not a failed try). It held the series from 22:35 to 01:45.
 
+### 13.5 Option 7 end to end — `o7ref` vs `o7`, 3 rounds
+
+`o7ref` = `fcombo`; `o7` = `fcombo` with `night-2026-10-31/option7/rdna_hybrid_w4a16.patched.py` mounted over the
+image file: on gfx12x, for 5 < M ≤ 16 and N > 4 K (`in_proj_qkvz` 2048 × 12288, `qkv_proj` 2048 × 9216) the
+Triton tile is 16/16/32 with 1 warp instead of 16/16/128 with 4 warps (§ 12.1: those two shapes were 16–31 %
+faster at every M; the other shapes' "gains" were within the timer noise, so they are not changed). The server log
+of every `o7` start shows the patch's line `speed-options option 7: wide-N tile patch for M 6-16 active`.
+2026-11-01 05:10–07:07, WSL load ≤ 0.6, no stop. Prediction (written before the run, `night4_extra.sh`): c=4
++2–5 %, c=1 equal.
+
+| | `o7ref` rounds → median | `o7` rounds → median | change |
+|---|---|---|---|
+| c=1 tok/s | 85.34 / 85.73 / 85.68 → 85.68 | 85.82 / 85.80 / 85.46 → 85.80 | +0.1 % (spread 0.39) |
+| c=4 tok/s | 200.06 / 205.71 / 203.39 → 203.39 | 205.51 / 201.35 / 201.97 → 201.97 | −0.7 % (spread 5.65) |
+| c=1 mean TPOT | 7.67 / 7.58 / 7.59 ms | 7.57 / 7.58 / 7.58 ms | −0.1 % |
+| c=4 mean TPOT | 11.44 / 11.00 / 11.34 ms | 10.96 / 11.44 / 11.18 ms | −1.4 % (spread 0.44 ms) |
+| prefill 8k / 32k median TTFT | 1.94 / 15.39 s | 1.95 / 15.36 s | +0.5 % / −0.2 % |
+| GSM8K-200 | 170 (85.0 %) | 170 (85.0 %) | pass |
+| 20 greedy prompts | — | 20 identical to `o7ref` | — |
+
+- **Fails:** no decode median moves by more than the spread. The prediction (+2–5 % at c=4) was too high: it
+  assumed a ~12 ms step, but at c=4 with MTP 3 one step takes ~39 ms (TPOT 11.3 ms × 3.46 accepted tokens), so the
+  kernel's ~0.5 ms saving is ~1.4 % — which matches the measured TPOT change, inside the spread.
+- `o7ref` repeats `fcombo` closely (c=1 85.68 vs 85.39, c=4 203.39 vs 203.61; 20 prompts identical to
+  `prompts_fcombo.json`), so the `fcombo` result of § 13.2 holds on another night.
+- Not shipped; production runs `fcombo` without the patch.
+
 ### 13.6 Production
 
 `fcombo` passed, so the production server starts with `-MtpTokens 3 -ExtraArgs --attention-backend=TRITON_ATTN`
-(`restore_args`, read by `restore_server.sh`). `start-vllm.ps1` itself is unchanged.
+(`restore_args`, read by `restore_server.sh`). `start-vllm.ps1` itself is unchanged. Restarted 2026-11-01 07:07, ready
+07:11; its log shows `Using TRITON_ATTN backend (selected via --attention-backend)` and
+`num_speculative_tokens: 3`; a test request (17 × 23) answered 391.
