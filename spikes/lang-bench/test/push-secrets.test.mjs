@@ -68,3 +68,21 @@ test('A_secret_file_that_holds_nothing_usable_is_refused_instead_of_checking_not
   assert.equal(parseOwnSecrets([{ label: 'empty', text: '\n\n' }]).ok, false);
   assert.match(parseOwnSecrets([{ label: 'short', text: 'abc\n' }]).reason, /short/);
 });
+
+test('The_base64_forms_of_a_real_secret_value_are_found_at_every_alignment_and_never_printed', () => {
+  const value = `fixture-token-value-${'Zq9'.repeat(8)}`;
+  const own = parseOwnSecrets([{ label: 'github-pat', text: `${value}\n` }]);
+  assert.equal(own.ok, true);
+  const b64 = text => Buffer.from(text).toString('base64');
+  for (const [name, encoded] of [['full', b64(value)], ['aligned at 0', b64(value).replace(/=+$/, '')], ['after 1 byte', b64(`x${value}`)], ['after 2 bytes', b64(`xx${value}`)], ['after 3 bytes', b64(`xyz${value}`)]]) {
+    const found = findOwnSecrets('docs/n.md', `intro\nAuthorization: Basic ${encoded}\n`, own.value);
+    assert.deepEqual(found.map(f => [f.line, f.what]), [[2, 'own secret value (github-pat, base64)']], name);
+    assert.equal(JSON.stringify(found).includes(encoded.slice(8, 24)), false, name);
+  }
+  assert.deepEqual(findOwnSecrets('docs/n.md', 'plain prose with no secret in it at all\n', own.value), []);
+});
+
+test('A_short_value_does_not_get_a_base64_form_that_would_match_everywhere', () => {
+  const own = parseOwnSecrets([{ label: 'x', text: `${'a'.repeat(16)}\n` }]);
+  assert.ok(own.value.every(v => v.value.length >= 16));
+});

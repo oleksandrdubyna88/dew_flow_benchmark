@@ -30,6 +30,18 @@ export function findSecrets(path, text, shapes = SECRET_SHAPES) {
 
 const MIN_OWN_LENGTH = 16;
 
+const LEADING_CHARS_OF_PAD = [0, 2, 3]; // base64 characters that a pad of 0, 1 or 2 bytes in front of a value leaves partly or wholly pad
+
+/** The base64 spellings of `value` that a copy of it can take inside any base64 text: the full padded form, and the characters fully determined by the value at each of the three alignments. */
+export function base64Forms(value) {
+  const aligned = [0, 1, 2].map(pad => {
+    const encoded = Buffer.from(' '.repeat(pad) + value).toString('base64').replace(/=+$/, '');
+    const partialTail = (pad + Buffer.byteLength(value)) % 3 === 0 ? 0 : 1;
+    return encoded.slice(LEADING_CHARS_OF_PAD[pad], encoded.length - partialTail);
+  });
+  return [...new Set([Buffer.from(value).toString('base64'), ...aligned])].filter(form => form.length >= MIN_OWN_LENGTH);
+}
+
 /**
  * ok([{ label, value }]) from the real secret files (`[{ label, text }]`, read by the caller at run time, by path): every line of at
  * least 16 characters that is not a PEM header or footer, because a copied key is copied line by line. A file with no such line would
@@ -40,7 +52,7 @@ export function parseOwnSecrets(files) {
   for (const { label, text } of files) {
     const own = [...new Set(text.split('\n').map(l => l.trim()).filter(l => l.length >= MIN_OWN_LENGTH && !l.startsWith('-----')))];
     if (own.length === 0) return fail(`the secret file ${label} holds no value of at least ${MIN_OWN_LENGTH} characters: it would check nothing`);
-    values.push(...own.map(value => ({ label, value })));
+    values.push(...own.flatMap(value => [{ label, value }, ...base64Forms(value).map(form => ({ label: `${label}, base64`, value: form }))]));
   }
   return ok(values);
 }
