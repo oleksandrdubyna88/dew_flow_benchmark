@@ -54,7 +54,7 @@ export function exploreSection({ score, audit }) {
     passRate: known({ visible: e.passRate.visible, heldout: e.passRate.heldout, visibleCases: visible.length, heldoutCases: held.length }),
     verdicts: known(e.verdicts), limits: known(e.limits), buildMs: known(e.build.wallMs ?? null),
     trapHits: known({ hits: e.trapHits, trapCases: e.trapCases }), frozenChanges: known(e.frozenChanges),
-    cases: known(e.cases.map(c => ({ set: c.set, id: c.id, verdict: c.verdict, wallMs: c.wallMs, peakBytes: c.peakBytes, oomKills: c.events?.oom_kill ?? 0, exit: c.exit }))),
+    cases: known(e.cases.map(c => ({ set: c.set, id: c.id, verdict: c.verdict, wallMs: c.wallMs, peakBytes: c.peakBytes, maxRssKbDescriptive: c.maxRssKb ?? null, oomKills: c.events?.oom_kill ?? 0, exit: c.exit }))),
     wall: known({ visible: stats(visible.map(c => c.wallMs)), heldout: stats(held.map(c => c.wallMs)) }),
     peak: known({ visible: stats(visible.map(c => c.peakBytes).filter(Number.isFinite)), heldout: stats(held.map(c => c.peakBytes).filter(Number.isFinite)) }),
     floorBreaches: known(floorBreaches(e.cases)),

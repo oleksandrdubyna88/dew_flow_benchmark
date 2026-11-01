@@ -101,6 +101,8 @@ test('The_certified_peak_of_a_run_that_allocates_is_larger_than_that_of_one_that
   assert.deepEqual([verdicts(idle), verdicts(heavy)], [{ c1: 'pass' }, { c1: 'pass' }]);
   const peak = s => s.explore.cases.find(x => x.set === 'heldout').peakBytes;
   assert.ok(peak(heavy) - peak(idle) > 50 * 1024 * 1024, `a 60 MiB allocation shows in memory.peak: ${peak(idle)} -> ${peak(heavy)}`);
+  const rss = x => x.explore.cases.find(c => c.set === 'heldout').maxRssKb;
+  assert.ok(rss(heavy) > 0 && rss(idle) > 0, `GNU time's ru_maxrss is kept beside the peak, as description (it is bwrap's own wait4 figure and under-reports the program: the cgroup peak certifies): ${rss(idle)} / ${rss(heavy)} KiB`);
 });
 
 test('A_failed_build_fails_every_case_and_no_case_runs', async t => {
@@ -204,7 +206,7 @@ test('A_peak_that_cannot_be_read_is_a_harness_failure_so_memory_is_never_judged_
     '    j.classify(r, b"x", {"timeMs": 1000, "memoryBytes": 1 << 28})',
     '    print("no error")',
     'except j.HarnessFailure as e:',
-    '    print("harness failure")',
+    '    print("harness failure:", str(e).split(":")[0])',
   ].join('\n'));
-  assert.equal(out, 'harness failure');
+  assert.equal(out, 'harness failure: memory-not-certifiable');
 });

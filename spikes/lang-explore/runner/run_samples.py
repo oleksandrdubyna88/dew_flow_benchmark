@@ -225,12 +225,23 @@ def cgroup_dir_of_scope(unit):
     return path if os.path.isdir(path) else None
 
 
+# GNU time reports ru_maxrss (from wait4, of the box's own process, so it UNDER-reports the program) beside the cgroup's memory.peak: description only, the peak certifies.
 WRAPPER = (
-    'out=$1; shift; "$@"; rc=$?; '
+    'out=$1; shift; /usr/bin/time -f "%M" -o "$out.rss" "$@"; rc=$?; '
     'cg=/sys/fs/cgroup$(sed -n "s/^0:://p" /proc/self/cgroup); '
     '{ echo "peak $(cat "$cg/memory.peak")"; echo "rc $rc"; sed "s/^/ev /" "$cg/memory.events"; } > "$out" 2>/dev/null; '
     'exit $rc'
 )
+
+
+def parse_maxrss(path):
+    """The last numeric line of GNU time's output file (KiB), or None."""
+    try:
+        with open(path, encoding="ascii") as f:
+            numbers = [line.strip() for line in f if line.strip().isdigit()]
+    except OSError:
+        return None
+    return int(numbers[-1]) if numbers else None
 
 
 def parse_measure(path):
@@ -318,7 +329,7 @@ def run_in_scope(run_box, case_dir, stdin, limits):
     peak, events = parse_measure(measure)
     return {"code": proc.returncode, "killedFor": state["killed_for"], "wallMs": wall_ms,
             "stdout": out.join(5), "stderr": err.join(5), "stdoutOverflow": out.overflow,
-            "peakBytes": peak, "events": events, "unit": unit}
+            "peakBytes": peak, "maxRssKb": parse_maxrss(measure + ".rss"), "events": events, "unit": unit}
 
 
 class HarnessFailure(Exception):
@@ -335,7 +346,7 @@ def classify(result, expected, limits):
     if oom or (result["peakBytes"] is not None and result["peakBytes"] >= limits["memoryBytes"]):
         return "memory limit", "the scope reached %d bytes" % limits["memoryBytes"]
     if result["peakBytes"] is None:
-        raise HarnessFailure("memory.peak could not be read: memory is not certifiable here")
+        raise HarnessFailure("memory-not-certifiable: memory.peak could not be read from the case's scope, and no other measurement of memory passes or fails a test")
     if result["code"] != 0:
         return "runtime error", "exit status %s" % result["code"]
     at = first_difference(expected, result["stdout"])
@@ -359,7 +370,7 @@ def run_case(cfg, built_tree, set_name, case_id, stdin, expected):
         result = run_in_scope(run_box, case_dir, stdin, cfg["limits"])
         verdict, detail = classify(result, expected, cfg["limits"])
         return {"set": set_name, "id": case_id, "verdict": verdict, "detail": detail, "wallMs": result["wallMs"],
-                "peakBytes": result["peakBytes"], "events": result["events"], "exit": result["code"],
+                "peakBytes": result["peakBytes"], "maxRssKb": result["maxRssKb"], "events": result["events"], "exit": result["code"],
                 "stderrTail": tail(result["stderr"]), "stdoutBytes": len(result["stdout"]), "expectedBytes": len(expected)}
     finally:
         remove_tree(case_dir)
