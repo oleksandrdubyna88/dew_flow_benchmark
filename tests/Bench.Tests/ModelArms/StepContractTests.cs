@@ -485,6 +485,19 @@ public sealed class StepContractTests
     }
 
     [Theory]
+    [InlineData("1-split")]
+    [InlineData("1-SPLIT")]
+    [InlineData("1b-split-fix")]
+    [InlineData("2-t3-code")]
+    public void A_scheme_entry_may_not_take_a_name_the_task_pipeline_owns(string name)
+    {
+        PosixPaths();
+
+        HasLine(Refused(root => Scheme(root, "C")[1] = name + ":review"), "schemes.C[1]", $"{name} is the task pipeline's own step name");
+        Accepted(root => Scheme(root, "C")[1] = "2-code:review").Schemes.Single(scheme => scheme.Name == "C").Entries[1].Should().Be(new SchemeEntry.Step("2-code", new("review")), "2-code is not one of the pipeline's three shapes");
+    }
+
+    [Theory]
     [InlineData("work/tasks.json")]
     [InlineData("work/batches.json")]
     [InlineData("work/t1.md")]

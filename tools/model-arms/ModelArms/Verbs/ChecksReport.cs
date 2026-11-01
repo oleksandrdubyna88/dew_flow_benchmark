@@ -5,6 +5,7 @@ using ModelArms.Adapters;
 using ModelArms.Core.Checks;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 
 namespace ModelArms.Verbs;
 
@@ -19,6 +20,7 @@ internal sealed record GitFacts(string HeadShort, long Commits, int Uncommitted,
 internal static class ChecksReport
 {
     private const string Name = "model-arms checks";
+    private const int BatchesLimit = 1024 * 1024;
     private const int CtrfLimit = 64 * 1024 * 1024;
     private const int MarkerLimit = 4 * 1024;
 
@@ -92,9 +94,27 @@ internal static class ChecksReport
         return text is Outcome<string>.Ok ok ? ok.Value : string.Empty;
     }
 
-    /// <summary>The steps whose <c>.done</c> says <c>hard-deadline</c> (step 8): each marker by name through the bounded road; one that is absent or refused is not on its deadline.</summary>
+    /// <summary>The steps whose <c>.done</c> says <c>hard-deadline</c> (step 8): each marker by name through the bounded road; one that is absent or refused is not on its deadline. A scheme with a <c>tasks</c> entry also asks for each task coder of <c>work/batches.json</c> (E4.S3): a file that is absent or does not read names no coder, and one line says so.</summary>
     public static IReadOnlyList<string> StepsOnDeadline(ChecksPlan plan) =>
-        DeadlineSteps.Of(plan.Scheme, stem => Done(plan.Paths.Done(stem)));
+        DeadlineSteps.Of(plan.Scheme, TaskIdsOf(plan), stem => Done(plan.Paths.Done(stem)));
+
+    private static IReadOnlyList<string> TaskIdsOf(ChecksPlan plan)
+    {
+        if (!plan.Scheme.Entries.Any(entry => entry is SchemeEntry.Tasks))
+        {
+            return [];
+        }
+
+        var read = BoundedFile.Read(plan.Paths.BatchesJson, BatchesLimit, PlatformFactsReader.CurrentRoad);
+        var batches = read is BoundedRead.Bytes bytes ? BatchesFile.Read(Encoding.UTF8.GetString(bytes.Value), plan.Paths.Work) : Outcome<TaskBatches>.Failure(read is BoundedRead.Refused refused ? refused.Reason : "work/batches.json is absent");
+        return batches.Match(
+            found => found.TaskIds,
+            reason =>
+            {
+                plan.Warn($"the task coders are not checked for a deadline — {ExecutableRule.Printable(reason)}");
+                return [];
+            });
+    }
 
     /// <summary>Step 9: the report, the summary, the marker. A failed write is the verb's exit 3 — nothing after it is written, so a marker never stands for a report that is not there.</summary>
     public static Passage<int> Publish(ChecksPlan plan, ObjectiveFacts facts, ChecksSeams seams)

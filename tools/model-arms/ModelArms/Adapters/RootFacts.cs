@@ -128,6 +128,6 @@ public static class RootFacts
     }
 
     /// <summary>Where a trust path points when it is itself a symbolic link (made absolute and the trailing separators trimmed — <c>GetFullPath</c> collapses <c>link//</c> and <c>link/.</c>: <c>readlink("link/")</c> follows the link and
-    /// reports none), or null for a path that is not one. An ancestor may be a link; the last segment may not.</summary>
-    private static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))).LinkTarget;
+    /// reports none), or null for a path that is not one. An ancestor may be a link; the last segment may not. Internal since E4.S2: the task worktrees ask it of each component of a <c>node_modules</c> link's parent — the one site that reads a link's text.</summary>
+    internal static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))).LinkTarget;
 }

@@ -1166,7 +1166,7 @@ cornerstone (the ledger stays 3 of 3); its §8 item 2 was proposed to the owner 
 | E3.S4 | `status` (by name, never enumerating; the deadline and continuing columns; the snapshot's state) | F0, F1/F4, D11 | `ModelArms/Verbs/Status.cs`, `StatusVerbTests.cs` | `status` green over a mode-300 root on Linux |
 | E3.S5 | The `checks` verb, M2's pilot and M2's key check | §4.9, §6 step 3 | `ModelArms/Verbs/Checks.cs`, `ChecksVerbTests.cs`, `research/module_model_arms.md` (the pilot's log; the key check's two `providers` answers) | `checks --parse-only` over the fixtures; the pilot logged; the key check observed or its fallback recorded |
 
-### E4 — The task pipeline (L, with E4.S0; was M) — security judgements: E4.S0 and E4.S2's git road (Fable, outside the quota); no cornerstone (the quota is spent)
+### E4 — The task pipeline (L, with E4.S0; was M) — security judgements: E4.S0 and E4.S2's git road (Fable, outside the quota); no cornerstone (the quota is spent) — BUILT on `feat/model-arms-e4` (2026-11-01), not yet merged
 
 **Goal.** First (E4.S0, wave 0 — the re-review for epoch 3): the arm's own claude session strips every secret-shaped name the
 target's tools strip (D19, ledger 2.2), and no verb runs git in an arm on a git below the floor its guards need (D23, ledger 2.3). Then

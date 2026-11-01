@@ -7,6 +7,7 @@ using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
+using ModelArms.Core.Tasks;
 using ModelArms.Verbs;
 using Xunit;
 
@@ -411,6 +412,40 @@ public sealed class StatusVerbTests
     }
 
     [Fact]
+    public async Task An_srs_arm_lists_its_split_its_fix_and_every_task_coder_by_name()
+    {
+        using var kit = new StatusKit("SRS1");
+        var paths = kit.Paths("SRS1");
+        var tasks = new[] { "t1", "t2", "t3" }.Select(id => new PlannedTask(id, [$"src/{id}.cs"], id + ".md", [], [])).ToList();
+        kit.Put(paths.BatchesJson, BatchesFile.Write(new TaskBatches([["t1", "t2"], ["t3"]], tasks), paths.Work));
+        kit.Done("SRS1", "1-split", "finished");
+        kit.Done("SRS1", "2-t1-code", "finished");
+        kit.Stream("SRS1", "2-t2-code", 1);
+        var asked = new List<string>();
+        var recording = new StatusReads(
+            (path, limit) => Asked(asked, path, StatusReads.Real.Read(path, limit)),
+            path => Asked(asked, path, StatusReads.Real.Present(path)));
+
+        var run = await kit.RunAsync(recording);
+
+        run.Code.Should().Be(0, run.Error);
+        var stems = run.Lines.Where(line => line.StartsWith("  ", StringComparison.Ordinal) && !line.StartsWith("  last line", StringComparison.Ordinal)).Select(line => line.Trim().Split(':')[0]).ToList();
+        stems.Should().Equal(["1-split", "2-t1-code", "2-t2-code", "2-t3-code", "3-hreview", "4-review", "5-fix", "6-gate"], "the split, then one line per task of batches.json in batch order, then the steps after the block — and no split fix that never ran");
+        run.Lines.Should().Contain("  1-split: done (finished)").And.Contain("  2-t1-code: done (finished)").And.Contain("  2-t3-code: not started");
+        run.Lines.Single(line => line.StartsWith("  2-t2-code:", StringComparison.Ordinal)).Should().NotContain("not started", "a stream with no end line is an attempt that began");
+        var expected = kit.NamesAskedFor(["SRS1"], attempts: 3, taskIds: ["t1", "t2", "t3"]);
+        asked.Where(path => !expected.Contains(path)).Should().BeEmpty("every name asked is one ArmPaths spells for the pipeline's stems — derived from those members, and nothing is listed");
+        asked.Should().Contain([paths.BatchesJson, paths.Done("1-split"), paths.Stream("2-t3-code", 1), paths.Done("1b-split-fix")], "the scan is alive: batches.json, the split's marker, a coder's stream and the fix's marker (asked by name, found absent) are asked for");
+
+        kit.Stream("SRS1", "1b-split-fix", 1);
+        (await kit.RunAsync()).Lines.Should().Contain(line => line.StartsWith("  1b-split-fix: ", StringComparison.Ordinal), "the fix is listed once it has a stream");
+        kit.Put(paths.BatchesJson, "{ not json");
+        var refused = await kit.RunAsync();
+        refused.Code.Should().Be(0, refused.Error);
+        refused.Lines.Should().Contain(line => line.StartsWith("  tasks: unreadable — ", StringComparison.Ordinal), "batches.json that does not read is said so, never read as no tasks");
+    }
+
+    [Fact]
     public async Task A_scheme_the_experiment_lacks_and_a_task_entry_are_one_line_each()
     {
         using var kit = new StatusKit("C1", "SRS1", "X1");
@@ -420,7 +455,8 @@ public sealed class StatusVerbTests
 
         run.Code.Should().Be(0, run.Error);
         run.Lines.Should().Contain("arm X1: its scheme X is not among the experiment's schemes (C, CR, SRS, CHH)");
-        run.Lines.Should().Contain("  tasks: listed when the task pipeline lands (E4)");
+        run.Lines.Should().Contain("  1-split: not started", "the block's split is listed by its stem (E4.S3)");
+        run.Lines.Should().Contain("  tasks: no batches yet", "no batches.json: the coders are not listed, and no listing stands in for them");
         run.Lines.Should().Contain("  3-hreview: done (finished)");
         Regex.Matches(run.Output, "^  tasks:", RegexOptions.Multiline).Should().ContainSingle();
     }

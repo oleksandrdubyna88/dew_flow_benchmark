@@ -33,7 +33,7 @@ internal static class ChecksAdmission
     private const int TimingLimit = 16 * 1024 * 1024;
 
     public static Task<Passage<ChecksPlan>> AdmitAsync(ExperimentInput input) =>
-        Task.FromResult(ArmChoices.Of(input, Verb, allowTasks: true))
+        Task.FromResult(ArmChoices.Of(input, Verb))
             .Then(choice => Place(input, choice))
             .ThenAsync(placed => EquipAsync(input, placed))
             .Then(equipped => Idle(equipped))
