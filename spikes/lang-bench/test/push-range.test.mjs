@@ -98,3 +98,31 @@ test('The_blobs_of_one_check_are_read_in_one_process_under_an_aggregate_ceiling_
   const missing = await readBlobs(repo, ['0'.repeat(40)]);
   assert.equal(missing.ok, false, 'a blob git does not have is a failure, never an empty text');
 });
+
+test('An_oversize_blob_is_refused_naming_sha_size_path_and_commit_never_content', async t => {
+  const repo = makeTaskRepo(t, { files: { 'small.txt': 'ok\n', 'dir/big.txt': 'SECRETCONTENT'.repeat(100) } });
+  const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
+  const big = files.find(f => f.path === 'dir/big.txt');
+  const where = new Map(files.map(f => [f.oid, { path: f.path, commit: f.commit }]));
+  const refused = await readBlobs(repo, files.map(f => f.oid), { maxObjectBytes: 1000, where });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.kind, 'env');
+  assert.match(refused.reason, new RegExp(big.oid));
+  assert.match(refused.reason, /1300 bytes/);
+  assert.match(refused.reason, /dir\/big\.txt in /);
+  assert.ok(refused.reason.includes(big.commit.slice(0, 10)));
+  assert.equal(refused.reason.includes('SECRETCONTENT'), false);
+});
+
+test('An_aggregate_over_the_ceiling_names_the_blob_that_crossed_it_with_its_sha_size_path_and_commit', async t => {
+  const repo = makeTaskRepo(t, { files: { 'a.txt': 'a'.repeat(300), 'b.txt': 'b'.repeat(500), 'c.txt': 'c'.repeat(400) } });
+  const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
+  const where = new Map(files.map(f => [f.oid, { path: f.path, commit: f.commit }]));
+  const refused = await readBlobs(repo, files.map(f => f.oid), { maxTotalBytes: 1000, where });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /more than 1000 bytes/);
+  const crossing = files.find(f => refused.reason.includes(f.oid));
+  assert.ok(crossing, 'a blob sha is named');
+  assert.match(refused.reason, new RegExp(`${crossing.path.replace('.', '\\.')} in `));
+  assert.match(refused.reason, /\d+ bytes/);
+});

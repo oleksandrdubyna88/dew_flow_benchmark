@@ -35,6 +35,9 @@ const firstFailure = (...results) => results.find(r => !r.ok);
 /** The first commit that brought each path, keeping only the files `keep` allows. */
 const firstCommitMap = (files, keep) => new Map(files.filter(keep).reverse().map(f => [f.path, f.commit]));
 
+/** Map(blob id -> { path, commit }) of the first place each blob came from, so a refusal can say where an oversize blob is. */
+const whereOf = files => new Map([...files].reverse().map(f => [f.oid, { path: f.path, commit: f.commit }]));
+
 /** ok({ commits: [sha], tip }) of a branch: the commits a push would add and the tip it ends at. */
 async function rangeAndTip(repo, branch, rev) {
   const tip = await branchTip(repo, branch, rev);
@@ -51,7 +54,7 @@ async function scanBranch({ repo, branch, rev, inputs, refuseNul, progress }) {
   const { files, messages } = changes.value;
   const readable = files.filter(f => f.mode !== SUBMODULE);
   progress(`reading ${new Set(readable.map(f => f.oid)).size} blobs`);
-  const blobs = await readBlobs(repo, readable.map(f => f.oid), inputs.limits);
+  const blobs = await readBlobs(repo, readable.map(f => f.oid), { ...inputs.limits, where: whereOf(readable) });
   const tree = await tipTree(repo, branch, head.value.tip);
   const bad = firstFailure(blobs, tree);
   if (bad) return bad;

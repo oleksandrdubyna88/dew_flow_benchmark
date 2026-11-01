@@ -391,3 +391,13 @@ test('A_check_reports_its_phases_through_the_progress_callback_in_order_and_says
   await checkSelf({ repo, branch: 'topic', inputs, progress: line => self.push(line) });
   assert.deepEqual(self.map(l => l.replace(/\d+/g, 'N')), ['scanning N commits', 'reading N blobs', 'scanning N files and N messages']);
 });
+
+test('A_check_that_refuses_a_blob_names_its_path_and_commit_in_the_error_and_never_the_content', async t => {
+  const { repo, sha } = branchWith(t, { 'data/big.txt': 'PRIVATEBODY'.repeat(200), 'a.txt': 'x\n' });
+  const result = await run(repo, { limits: { maxObjectBytes: 1000 } });
+  assert.equal(result.exit, EXIT.ENVIRONMENT);
+  assert.match(result.error, /data\/big\.txt in /);
+  assert.ok(result.error.includes(sha.slice(0, 10)));
+  assert.match(result.error, /2200 bytes/);
+  assert.equal(formatReport(result).includes('PRIVATEBODY'), false);
+});

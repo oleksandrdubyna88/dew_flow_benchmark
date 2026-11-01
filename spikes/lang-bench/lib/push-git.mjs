@@ -39,9 +39,18 @@ export const BATCH_MAX_OBJECT_BYTES = BLOB_MAX_BYTES;
 export const BATCH_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const HEADER_ALLOWANCE = 160;
 
-const limitProblem = (size, name, total, { maxObjectBytes, maxTotalBytes }) => [
-  [size > maxObjectBytes, `${name} is ${size} bytes, over the ${maxObjectBytes}-byte ceiling for one object: not read, so not clean`],
-  [total + size > maxTotalBytes, `the objects of one check hold more than ${maxTotalBytes} bytes: refused, not read in full`],
+/**
+ * How a refusal names an object: its name (a blob sha), and where it was found when the caller knows (`where`: name -> { path, commit }).
+ * Never its content.
+ */
+export const describeObject = (name, where = new Map()) => {
+  const at = where.get(name);
+  return at === undefined ? `object ${name}` : `blob ${name} (${at.path} in ${String(at.commit ?? '?').slice(0, 10)})`;
+};
+
+const limitProblem = (size, name, total, { maxObjectBytes, maxTotalBytes, where }) => [
+  [size > maxObjectBytes, `${describeObject(name, where)} is ${size} bytes, over the ${maxObjectBytes}-byte ceiling for one object: not read, so not clean`],
+  [total + size > maxTotalBytes, `the objects of one check hold more than ${maxTotalBytes} bytes: ${describeObject(name, where)} of ${size} bytes crossed it; refused, not read in full`],
 ].find(([over]) => over)?.[1];
 
 /** One answer of `cat-file --batch` at `at`: `{ ok, missing, value?, size?, next }` or the fail naming the limit crossed or the line that makes no sense. */
@@ -75,12 +84,12 @@ function parseBatch(out, names, limits) {
  * ok(Map(name -> Buffer)) with `.missing` (names git does not have), all read by ONE `git cat-file --batch` process: `names` are object
  * names (`<rev>:<path>`, or a blob id). A single object over `maxObjectBytes`, or the objects together over `maxTotalBytes`, is a fail.
  */
-export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_OBJECT_BYTES, maxTotalBytes = BATCH_MAX_TOTAL_BYTES, timeoutMs = 120_000 } = {}) {
+export async function runBatchCatFile(repo, names, { maxObjectBytes = BATCH_MAX_OBJECT_BYTES, maxTotalBytes = BATCH_MAX_TOTAL_BYTES, timeoutMs = 120_000, where } = {}) {
   if (names.length === 0) return { ...ok(new Map()), missing: [] };
   const budget = maxTotalBytes + names.length * HEADER_ALLOWANCE + 1024;
   const r = await runBounded('git', ['-C', repo, 'cat-file', '--batch'], { env: ENV, timeoutMs, maxBytes: budget, input: `${names.join('\n')}\n`, bytes: true });
   const bad = launchFailure(r, 'git cat-file --batch', { timeoutMs, maxBytes: maxTotalBytes });
   if (bad) return bad;
   if (r.value.code !== 0) return fail(`git cat-file --batch failed (exit ${r.value.code}): ${r.value.stderr.trim().slice(-300)}`, ENV_KIND);
-  return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes });
+  return parseBatch(r.value.stdoutBytes, names, { maxObjectBytes, maxTotalBytes, where });
 }
