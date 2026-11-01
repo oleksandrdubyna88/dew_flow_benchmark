@@ -33,6 +33,7 @@ FIELD_PATTERNS = {
 FIELD_RX = {kind: re.compile(pattern) for kind, pattern in FIELD_PATTERNS.items()}
 BASE_KIND = {"ts~": "ts", "ts.": "ts", "ts.~": "ts"}
 TS_LENGTH = (20, 30)
+PURE_CLASS = frozenset({"hex", "token"})
 TS_PARTS = re.compile(rb"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?Z\Z")
 
 
@@ -122,9 +123,16 @@ _EXTRA_CHECKS = {"ts": _ts_ok, "num": _numeric_ok}
 
 def field_accepts(field, run, clock):
     """Does `run` (bytes) match the field: its pattern in full, and for a time a real one with its digit count and window, for `num` the tolerance."""
-    if FIELD_RX[base_kind(field)].fullmatch(run) is None:
+    return field_accepts_at(field, run, 0, len(run), clock)
+
+
+def field_accepts_at(field, data, pos, end, clock):
+    """The same for `data[pos:end]`, matched in place: no slice of the data is made unless the field has more to check than its pattern."""
+    kind = base_kind(field)
+    if FIELD_RX[kind].fullmatch(data, pos, end) is None:
         return False
-    return _EXTRA_CHECKS.get(base_kind(field), lambda *_: True)(field, run, clock)
+    extra = _EXTRA_CHECKS.get(kind)
+    return True if extra is None else extra(field, data[pos:end], clock)
 
 
 def length_bounds(field, room):
@@ -241,6 +249,7 @@ class _Search:
     def __init__(self, parts, data, variables, clock):
         self.parts, self.data, self.variables, self.clock = parts, data, variables, clock
         self.failed, self.furthest, self.steps, self.note = set(), 0, 0, ""
+        self.spans, self.missing = {}, {}
 
     def run(self, i, pos):
         """The binds of a match of parts[i:] against data[pos:] to its end, or None."""
@@ -273,7 +282,7 @@ class _Search:
     def _field(self, i, pos, field):
         for end in self._ends(i, pos, field):
             self.steps += 1
-            if not field_accepts(field, self.data[pos:end], self.clock):
+            if not self._accepts(field, pos, end):
                 continue
             rest = self.run(i + 1, end)
             if rest is not None:
@@ -294,14 +303,48 @@ class _Search:
     def _bind(self, field, run):
         return [(bind_name(field.bind, self.variables), Bound(run))] if field.bind else []
 
+    def _accepts(self, field, pos, end):
+        """A class field (hex, token) takes every non-empty prefix of its run; any other field is matched in place."""
+        if base_kind(field) in PURE_CLASS:
+            return 0 < end - pos <= self._reach(field, pos)
+        return field_accepts_at(field, self.data, pos, end, self.clock)
+
+    def _known_stop(self, kind, pos):
+        start, stop = self.spans.get(kind, (0, 0))
+        return stop if kind in PURE_CLASS and start <= pos < stop else None
+
     def _reach(self, field, pos):
-        m = FIELD_RX[base_kind(field)].match(self.data, pos)
-        return 0 if m is None else m.end() - pos
+        """How far the pattern of `field` runs from `pos`; for a class field the run found once serves every start inside it."""
+        kind = base_kind(field)
+        known = self._known_stop(kind, pos)
+        if known is not None:
+            return known - pos
+        m = FIELD_RX[kind].match(self.data, pos)
+        end = pos if m is None else m.end()
+        if kind in PURE_CLASS:
+            self.spans[kind] = (pos, end)
+        return end - pos
+
+    def _find(self, literal, start):
+        """`data.find(literal, start)`, remembering that a literal missing from one start is missing from every later one."""
+        if start >= self.missing.get(literal, len(self.data) + 1):
+            return -1
+        at = self.data.find(literal, start)
+        if at == -1:
+            self.missing[literal] = start
+        return at
+
+    def _literal_missing_after(self, i, pos):
+        """Is the first literal after part `i` absent from the data at or after `pos`? Then nothing can match from here."""
+        later = next((p for p in self.parts[i + 1:] if isinstance(p, Lit)), None)
+        return later is not None and self._find(later.data, pos) == -1
 
     def _ends(self, i, pos, field):
         """The candidate end positions of a field starting at `pos`, shortest first."""
         low, high = length_bounds(field, len(self.data) - pos)
-        return self._ends_before(self.parts[i + 1] if i + 1 < len(self.parts) else None, pos, low, high)
+        if self._literal_missing_after(i, pos + low):
+            return []
+        return self._ends_before(self.parts[i + 1] if i + 1 < len(self.parts) else None, pos, low, min(high, self._reach(field, pos)))
 
     def _ends_before(self, nxt, pos, low, high):
         if nxt is None:
@@ -311,10 +354,10 @@ class _Search:
         return range(pos + low, min(len(self.data), pos + high) + 1)
 
     def _literal_ends(self, pos, literal, low, high):
-        ends, at = [], self.data.find(literal, pos + low)
+        ends, at = [], self._find(literal, pos + low)
         while at != -1 and at - pos <= high:
             ends.append(at)
-            at = self.data.find(literal, at + 1)
+            at = self._find(literal, at + 1)
         return ends
 
 

@@ -94,6 +94,57 @@ class TimeDigitTests(unittest.TestCase):
         self.assertEqual(rf.field_text(parts("${:ts.3~10s=w}")[0]), "${:ts.3~10000ms=w}")
 
 
+class AdjacentFieldTests(unittest.TestCase):
+    """Fields written next to each other have many ways to split a long run: the matcher must not try each one against the whole run."""
+
+    def best_ms(self, template, data, tries=3):
+        times = []
+        for _ in range(tries):
+            started = time.monotonic()
+            result = match(template, data)
+            times.append((time.monotonic() - started) * 1000)
+        return min(times), result
+
+    def test_Two_adjacent_token_fields_over_20_kB_that_cannot_match_fail_in_under_50_ms(self):
+        elapsed, result = self.best_ms("${:token}${:token}!", b"a" * 20_000)
+        self.assertEqual((result.ok, result.note), (False, ""))
+        self.assertLess(elapsed, 50, f"{elapsed:.0f} ms: every split of the run was tried against the whole run")
+
+    def test_Two_adjacent_token_fields_that_fail_at_the_very_end_cost_in_proportion_to_the_data_not_its_square(self):
+        small, result = self.best_ms("${:token}${:token}!", b"a" * 20_000 + b"!x")
+        large, _ = self.best_ms("${:token}${:token}!", b"a" * 40_000 + b"!x")
+        self.assertEqual((result.ok, result.note), (False, ""))
+        self.assertLess(large, 3 * small + 20, f"{small:.0f} ms for 20 kB, {large:.0f} ms for 40 kB: not linear")
+
+    def test_A_literal_missing_from_the_rest_of_the_data_is_looked_for_once_not_at_every_start(self):
+        elapsed, result = self.best_ms("${:token} ${:token}!", b"a " * 100_000)
+        self.assertEqual((result.ok, result.note), (False, ""))
+        self.assertLess(elapsed, 50, f"{elapsed:.0f} ms: the missing literal was searched for from every position")
+
+    def test_Two_adjacent_token_fields_over_20_kB_that_can_match_pass_in_under_50_ms_with_the_shortest_run_first(self):
+        elapsed, result = self.best_ms("${:token=a}${:token=b}", b"a" * 20_000)
+        self.assertTrue(result.ok)
+        self.assertEqual([(n, len(v.raw)) for n, v in result.binds], [("a", 1), ("b", 19_999)])
+        self.assertLess(elapsed, 50)
+
+    def test_Three_adjacent_hex_fields_before_a_literal_that_is_not_there_fail_without_being_abandoned(self):
+        elapsed, result = self.best_ms("${:hex}${:hex}${:hex}z", b"a" * 3_000)
+        self.assertEqual((result.ok, result.note), (False, ""))
+        self.assertLess(elapsed, 50)
+
+    def test_A_field_run_stops_at_the_first_byte_outside_its_class_and_a_later_literal_still_decides(self):
+        self.assertTrue(match("${:hex}${:hex}.", b"ab12.").ok)
+        self.assertFalse(match("${:hex}${:hex}.", b"ab1g.").ok)
+        self.assertTrue(match("${:token}.${:hex}", b"x.y.ab").ok)
+
+    def test_The_shortcut_for_a_class_field_agrees_with_the_pattern_it_stands_for(self):
+        for kind, good, bad in (("hex", b"0af", b"0aF"), ("token", b"a.b_c~d-9", b"a b")):
+            self.assertTrue(rf.field_accepts(lex.Field(kind), good, CLOCK))
+            self.assertFalse(rf.field_accepts(lex.Field(kind), bad, CLOCK))
+            self.assertTrue(match("${:%s}" % kind, good).ok)
+            self.assertFalse(match("${:%s}" % kind, bad).ok)
+
+
 class HugeNumberTests(unittest.TestCase):
     """Output the program chooses can hold a number of any size: never a crash, never a wrong FAIL, and a number too large to compare says so."""
 
@@ -168,13 +219,13 @@ class MatchTests(unittest.TestCase):
     def test_Fields_that_cannot_match_do_not_make_the_matcher_exponential(self):
         template = "${:hex}" * 12 + "z"
         started = time.monotonic()
-        result = match(template, b"a" * 2000)
+        result = match(template, b"a" * 2000 + b"zz")
         self.assertFalse(result.ok)
         self.assertIn("too complex", result.note)
         self.assertLess(time.monotonic() - started, 5.0)
 
     def test_A_memo_of_failed_positions_lets_an_ambiguous_failure_end_cleanly_inside_the_step_budget(self):
-        result = match("${:hex}" * 8 + "!", b"a" * 40 + b"z")
+        result = match("${:hex}" * 8 + "z", b"a" * 40 + b"zz")
         self.assertEqual((result.ok, result.note), (False, ""), "without the memo this search is abandoned as too complex")
 
     def test_A_string_of_more_than_two_hundred_parts_is_refused_instead_of_recursing_without_end(self):
