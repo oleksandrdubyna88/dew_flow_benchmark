@@ -43,14 +43,18 @@ function sameBytes(rel, a, b) {
 
 const linkFindings = files => [...files].filter(([, f]) => f.link).map(([rel]) => ({ path: rel, what: 'symlink' }));
 
-const missingSide = (cs, nd) => (cs === undefined ? 'only in node' : 'only in csharp');
+const missingSide = cs => (cs === undefined ? 'only in node' : 'only in csharp');
 
-/** The finding for one path: present on one side only, or on both with different bytes; null when it agrees (links are reported on their own). */
-function pathFinding(rel, cs, nd) {
-  const oneSided = cs === undefined || nd === undefined;
-  const difference = oneSided || cs.link || nd.link ? null : sameBytes(rel, cs, nd);
-  const what = oneSided ? missingSide(cs, nd) : difference;
+/** The finding for a path on both sides: different bytes, or null (links are reported on their own). */
+function bothFinding(rel, cs, nd) {
+  const what = cs.link || nd.link ? null : sameBytes(rel, cs, nd);
   return what === null ? null : { path: rel, what };
+}
+
+/** The finding for one path: present on one side only, or on both with different bytes; null when it agrees. */
+function pathFinding(rel, cs, nd) {
+  if (cs === undefined || nd === undefined) return { path: rel, what: missingSide(cs) };
+  return bothFinding(rel, cs, nd);
 }
 
 /** `{ ok, findings }` for one task: the `csharp` folder against the `node` folder. */
