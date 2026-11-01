@@ -1,7 +1,8 @@
 """rs_launch: starting a case's program through the launch prefix and finding out whether it really started (B5, B6, B1).
 
 With `--launch-status N` the launcher (the layer's `systemd-run … bwrap --json-status-fd N … bash run.sh`) must report `child-pid` before
-it exits: the line is the START OF THE CASE CLOCK and the proof that the launcher started; it does not say the box is complete. bwrap writes it right after it clones the sandbox, BEFORE the
+it exits: the line is the START OF THE CASE CLOCK and the proof that the launcher started; it does not say the box is complete. bwrap writes
+it right after it clones the sandbox, BEFORE the
 box's mounts are made, so a few milliseconds of box set-up are inside the case clock; the plan fixes the start at `child-pid` and it is not
 moved. No `child-pid` before the launcher exits (or within LAUNCH_CEILING_MS), a malformed or doubled status line before it, an unknown
 record before it, or a cgroup that does not exist after it, is `LaunchFailed` with the tail of the prefix's standard error: exit 3, never a

@@ -1,6 +1,7 @@
 """rs_status: the launch status the layer's bwrap writes with `--json-status-fd N` (B5), read here as `--launch-status N`.
 
-bwrap writes one JSON object per line: `{"child-pid": P}` right after it clones the sandbox (before its mounts are made), later `{"exit-code": C}`. The runner makes one
+bwrap writes one JSON object per line: `{"child-pid": P}` right after it clones the sandbox (before its mounts are made), later
+`{"exit-code": C}`. The runner makes one
 pipe per case and puts its write end at descriptor number N in the launcher (the prefix names the same N for bwrap), so a case's lines
 cannot be mixed with another case's. `child-pid` is the launch-success signal and the clock start: it is NOT the pid authority (the
 program's pid comes from `cgroup.procs`, and a pid seen inside the box is never used). `exit-code` is the program's status. A line that

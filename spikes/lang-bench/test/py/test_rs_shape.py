@@ -81,6 +81,13 @@ class ShapeTests(unittest.TestCase):
         tree = ast.parse("def f(a, b):\n    if a and b or a:\n        for x in a:\n            while b:\n                pass\n")
         self.assertEqual(scan.complexity(scan.functions(tree)[0]), 6)
 
+    def test_F9_no_runner_line_is_longer_than_160_characters(self):
+        long_lines = []
+        for name, _, path in sources():
+            with open(path, encoding="utf-8") as f:
+                long_lines += [f"{name}:{number} ({len(line.rstrip())})" for number, line in enumerate(f, 1) if len(line.rstrip()) > 160]
+        self.assertEqual(long_lines, [])
+
     def test_Every_runner_file_is_within_the_size_ceiling(self):
         bad = [(name, scan.line_count(p)) for name, _, p in sources()]
         self.assertEqual([x for x in bad if x[1] > scan.MAX_FILE_LINES], [])

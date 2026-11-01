@@ -228,7 +228,8 @@ def _wall(value):
 
 def case_record(result):
     return {
-        "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "comparison": result.comparison, "entries": result.entries,
+        "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "comparison": result.comparison,
+        "entries": result.entries,
         "firstMismatch": result.first_mismatch, "lifecycle": result.lifecycle, "wallMs": _wall(result.wall_ms),
         "launchMs": _launch_ms(result.launch_ms),
     }

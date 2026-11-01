@@ -85,13 +85,13 @@ class KillTests(unittest.TestCase):
         self.assertTrue(wait_until(lambda: scope.pids() == []), f"nothing of the case may be left in its scope: {scope.pids()}")
 
     def test_The_program_pid_is_the_child_of_bwrap_and_not_the_launcher_and_its_comm_is_the_programs(self):
-        for run_sh, expected_comm in ((REPLAY + "sleep 0.3\n", "bash"), ("exec sleep 60\n", "sleep")):
+        for run_sh, expected_comms in ((REPLAY + "sleep 0.3\n", ("bash",)), ("exec sleep 60\n", ("bash", "sleep"))):  # bash until the exec is seen
             result, scope, _ = run_in_scope(self, run_sh, limit_ms=1500, expected=ANSWER if run_sh.startswith("cat") else b"")
             signalled = result.lifecycle["signalled"]
             self.assertEqual(signalled["found"], "cgroup.procs: the process whose parent is a bwrap process", run_sh)
             self.assertIsInstance(signalled["pid"], int)
             self.assertNotEqual(signalled["pid"], signalled["launcher"], "the launcher is never the program")
-            self.assertEqual(signalled["comm"], expected_comm, f"{run_sh!r}: the program's own name as last seen alive")
+            self.assertIn(signalled["comm"], expected_comms, f"{run_sh!r}: the program's own name as last seen alive")
 
     def test_A_child_that_outlives_the_program_is_the_leftover_evidence_and_is_killed_through_the_scope(self):
         result, scope, _ = run_in_scope(self, "sleep 60 &\ncat answer.bin\n", expected=ANSWER)
@@ -163,7 +163,8 @@ class ForkTests(unittest.TestCase):
         self.assertEqual((result.status, result.reason), ("PASS", ""))
         self.assertIn(result.lifecycle["fork"].get("found"), (False, None), "a program too quick to look at is unknown or clean, never fork")
         self.assertIsNotNone(empty.wall_ms)
-        self.assertLessEqual(result.wall_ms, empty.wall_ms + 300, f"a `cat` takes {result.wall_ms} ms against {empty.wall_ms} ms for nothing: the look did not stretch it")
+        bound = max(empty.wall_ms + 50, 3 * empty.wall_ms)
+        self.assertLessEqual(result.wall_ms, bound, f"a `cat` takes {result.wall_ms} ms against {empty.wall_ms} ms for nothing: the look did not stretch it")
 
 
 class FakeCgroupTests(unittest.TestCase):

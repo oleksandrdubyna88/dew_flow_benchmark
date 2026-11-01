@@ -13,7 +13,8 @@ case says its memory is not certified. The daemon and web kinds run in part ii-b
 The execution layer's options (E1.S8b builds the layer; this runner only reads what it hands over):
   --launch-prefix JSON   a JSON array of strings put before `bash run.sh`; `{case}` in any element is replaced by the case id.
   --launch-status FD     the descriptor number the prefix gives bwrap as `--json-status-fd FD`. The runner makes a pipe per case and puts
-                         its write end at FD in the launcher. `{"child-pid": P}` is the start of the case clock (bwrap writes it right after it clones the sandbox, before its mounts);
+                         its write end at FD in the launcher. `{"child-pid": P}` is the start of the case clock (bwrap writes it right after
+                         it clones the sandbox, before its mounts);
                          no `child-pid` before the launcher exits is exit 3 `launch failed` with the prefix's stderr, never a case verdict.
   --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
                          after the program's exit and before any kill; the kill is `cgroup.kill`. Host pids only.

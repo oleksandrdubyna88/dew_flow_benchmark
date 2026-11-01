@@ -5,7 +5,8 @@ The runner never measures or kills a cgroup this case does not own: the director
 (else `CgroupBusy`, exit 3). The order at the end of a case is fixed: the program's end is seen, `cgroup.procs` is read (the leftover
 evidence), `memory.peak` and `memory.events` are read, the launcher gets a bounded moment to write its `exit-code` and go, and then
 `cgroup.kill` is ALWAYS written, a leftover found or not, and `cgroup.procs` must read empty or the cleanup has failed. A kill first would
-hide a lingering child (`cgroup.kill` does not reset `memory.peak`: the peak is read first so that it is read while the cgroup is still there). Where the cgroup is missing or the kill cannot be written, the launcher's process group is killed
+hide a lingering child (`cgroup.kill` does not reset `memory.peak`: the peak is read first so that it is read while the cgroup is still
+there). Where the cgroup is missing or the kill cannot be written, the launcher's process group is killed
 as well.
 """
 import os
@@ -54,7 +55,8 @@ class ScopeLifecycle:
     def __init__(self, directory, identity=None, wrapper_file=None, box=False):
         self.directory, self.identity, self.wrapper_file, self.box = directory, identity, wrapper_file, box
         self.confirmed, self.box_fd, self.existed = False, None, False
-        self.road = {"kill": "cgroup.kill", "leftoverEvidence": "cgroup.procs minus bwrap, the launcher and the wrapper, read after the exit and before the kill"}
+        self.road = {"kill": "cgroup.kill",
+                     "leftoverEvidence": "cgroup.procs minus bwrap, the launcher and the wrapper, read after the exit and before the kill"}
 
     def memory(self, case_id=None):
         return cg.memory(self.directory)

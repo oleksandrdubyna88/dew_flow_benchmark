@@ -39,7 +39,8 @@ def _size_problems(scenario):
     for node in scenario.body:
         total += expanded_steps(node)
         if total > MAX_EXPANDED_STEPS:
-            return [Problem(scenario.file, node.line, f"the script expands to more than {MAX_EXPANDED_STEPS} steps in all (repeats counted each time they run)")]
+            return [Problem(scenario.file, node.line,
+                            f"the script expands to more than {MAX_EXPANDED_STEPS} steps in all (repeats counted each time they run)")]
     return []
 
 

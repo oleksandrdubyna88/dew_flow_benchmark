@@ -7,7 +7,8 @@ a wake-up of the pump (every millisecond until the program shows, then every 20 
 Without a launch status there is no box: the launcher execs the program and is the program.
 
 `fork` is judged over the whole case from what is NOT bwrap, not the launcher, not the wrapper and not the program: the most such processes
-seen in looks at least 100 ms apart (a tool that is gone a moment later, or was only slow to be scheduled, is no fork) and what the leftover read finds after the program's exit.
+seen in looks at least 100 ms apart (a tool that is gone a moment later, or was only slow to be scheduled, is no fork) and what the leftover
+read finds after the program's exit.
 It is reported as observed and never decides which pid is the program.
 """
 import time

@@ -1,4 +1,6 @@
 """No group signal ever goes to a reaped leader (N8), an interrupt keeps its own exit (N9), and the group scan is cheap and cannot raise (D4, D6)."""
+import contextlib
+import io
 import os
 import shutil
 import signal
@@ -83,6 +85,23 @@ class ReapedLeaderTests(unittest.TestCase):
 
 
 class InterruptKeepsItsExitTests(unittest.TestCase):
+    def test_F9_the_swallowed_problem_leaves_a_one_line_note_on_standard_error(self):
+        ws = Workspace(self, "cat answer.bin\n", FILES)
+        cgroup = fake_cgroup(ws)
+
+        def interrupt_after_the_scope_went(*args, **kwargs):
+            shutil.rmtree(cgroup)
+            raise KeyboardInterrupt
+
+        err = io.StringIO()
+        with mock.patch.object(ro, "Outcome", interrupt_after_the_scope_went), contextlib.redirect_stderr(err):
+            with self.assertRaises(KeyboardInterrupt):
+                ws.run(case(), prefix=box_prefix(fake_box(self), cgroup), status_fd=STATUS_FD, cgroup=cgroup)
+        lines = err.getvalue().splitlines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("while stopping", lines[0])
+        self.assertIn("CgroupLost", lines[0])
+
     def test_An_interrupt_after_settle_on_a_scope_that_is_already_gone_stays_the_interrupt_and_is_not_CgroupLost(self):
         ws = Workspace(self, "cat answer.bin\n", FILES)
         cgroup = fake_cgroup(ws)

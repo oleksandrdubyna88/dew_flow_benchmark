@@ -5,6 +5,7 @@ byte and nothing more. A wall time over the limit is a time limit even when the 
 """
 import os
 import signal
+import sys
 from typing import NamedTuple, Optional
 
 import rs_exec as ex
@@ -107,8 +108,8 @@ def _stop_quietly(lifecycle, proc):
     CgroupLost, so the interrupt keeps its exit. A cleanup that fails otherwise (CleanupFailed) still speaks."""
     try:
         lifecycle.kill(proc)
-    except ex.EnvironmentProblem:
-        pass
+    except ex.EnvironmentProblem as problem:
+        print(f"run_samples: {type(problem).__name__} while stopping the program (the interrupt keeps its exit): {problem}", file=sys.stderr)
 
 
 def _execute(case, config, comparer, stderr_path):
@@ -198,4 +199,5 @@ def run_case(case, config):
     tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
     verdict = ("PASS", "", 1, None, []) if failed is None else ("FAIL", failed[0], 0, failed[1], failed[2])
     lines = tuple(verdict[4]) + tail
-    return CaseResult(case.id, verdict[0], verdict[1], verdict[2], case.r_ids, lines, verdict[3], record, _wall_ms(out), case.comparison, out.launched.launch_ms)
+    return CaseResult(case.id, verdict[0], verdict[1], verdict[2], case.r_ids, lines, verdict[3], record, _wall_ms(out), case.comparison,
+                      out.launched.launch_ms)
