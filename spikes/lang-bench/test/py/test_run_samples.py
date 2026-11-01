@@ -4,6 +4,7 @@ import io
 import json
 import os
 import py_compile
+import re
 import shutil
 import signal
 import subprocess
@@ -112,6 +113,54 @@ class CacheTests(unittest.TestCase):
         probe = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys, runpy; sys.path.insert(0, sys.argv[1]); import run_samples; print(sys.pycache_prefix)", runner_path.RUNNER_DIR],
                                capture_output=True, text=True)
         self.assertNotIn(probe.stdout.strip(), ("None", ""), "importing the entry sets sys.pycache_prefix")
+
+
+class ProgressTests(unittest.TestCase):
+    """Progress goes to standard error as it happens; standard output stays the report and nothing else."""
+
+    def lines(self, err):
+        return [l for l in err.splitlines() if l.strip()]
+
+    def test_A_full_run_says_when_the_build_and_each_case_start_and_end(self):
+        pairs = {"s01.in": b"", "s01.out": ANSWER, "s02.in": b"", "s02.out": b"other\n"}
+        code, out, err = Box(self, pairs=pairs).cli()
+        got = [re.sub(r" \([^)]*\)$", "", l) for l in self.lines(err)]
+        self.assertEqual(got, ["run_samples: build started", "run_samples: build finished", "run_samples: s01 started", "run_samples: s01 PASS",
+                               "run_samples: s02 started", "run_samples: s02 FAIL"])
+
+    def test_The_build_line_carries_the_exit_status_and_the_case_line_its_wall_time(self):
+        _, _, err = Box(self, build_sh="exit 2\n").cli()
+        self.assertRegex(err, r"run_samples: build finished \(exit 2, \d+ ms\)")
+        _, _, err = Box(self).cli()
+        self.assertRegex(err, r"run_samples: s03 PASS \(\d+ ms\)")
+
+    def test_Standard_output_holds_only_the_report_and_no_progress(self):
+        _, out, _ = Box(self).cli()
+        self.assertNotIn("run_samples:", out)
+        self.assertEqual(out.splitlines()[0], "PASS s03 — 1 entries")
+
+    def test_No_build_means_no_build_lines_and_parse_only_means_no_progress_at_all(self):
+        box = Box(self)
+        self.assertNotIn("build", box.cli("--no-build")[2])
+        self.assertEqual(box.cli("--parse-only")[2], "")
+
+    def test_A_failing_build_says_so_and_starts_no_case(self):
+        _, _, err = Box(self, build_sh="exit 1\n").cli()
+        self.assertIn("build finished (exit 1", err)
+        self.assertNotIn("s03 started", err)
+
+    def test_The_lines_arrive_while_the_case_is_still_running_not_at_the_end(self):
+        box = Box(self, run_sh="sleep 3\ncat answer.bin\n")
+        box.write(box.root, "limits.json", '{"timeS": 30}')
+        proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples], cwd=box.ws,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        first, second, third = proc.stderr.readline(), proc.stderr.readline(), proc.stderr.readline()
+        self.assertEqual(first, b"run_samples: build started\n")
+        self.assertIn(b"build finished", second)
+        self.assertEqual(third, b"run_samples: s03 started\n")
+        self.assertIsNone(proc.poll(), "the case is still running when its start line has been read")
+        proc.communicate(timeout=30)
 
 
 class InterruptTests(unittest.TestCase):
@@ -317,7 +366,7 @@ class TemporaryFolderTests(unittest.TestCase):
 class OlympiadTests(unittest.TestCase):
     def test_The_format_olympiad_example_with_a_replay_stub_prints_PASS_s03_1_entries_and_exits_0(self):
         code, out, err = Box(self).cli()
-        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(code, 0)
         self.assertIn("PASS s03 — 1 entries", out.splitlines())
 
     def test_A_stub_that_drops_the_final_line_feed_prints_FAIL_s03_with_the_first_differing_byte_and_exits_1(self):

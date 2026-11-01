@@ -229,17 +229,35 @@ def _build_failed(plan, done):
     return [rp.CaseResult(p.id, "FAIL", "build failed", 0, p.r_ids, (f"  {note}",) + tail, comparison=p.comparison) for p in plan.pairs]
 
 
+def progress(message):
+    """One progress line on standard error, at once: standard output stays the report."""
+    print(f"run_samples: {message}", file=sys.stderr, flush=True)
+
+
+def _run_one(pair, config):
+    progress(f"{pair.id} started")
+    result = ro.run_case(ro.Case(pair.id, pair.stdin, pair.expected, pair.r_ids, pair.comparison), config)
+    progress(f"{pair.id} {result.status} ({result.wall_ms} ms)")
+    return result
+
+
 def _run_cases(plan, scratch):
     limit, basis = _limit_and_basis(plan)
     config = ex.Config(os.path.abspath(plan.args.workspace), scratch, plan.prefix, limit, basis)
-    return [ro.run_case(ro.Case(p.id, p.stdin, p.expected, p.r_ids, p.comparison), config) for p in plan.pairs]
+    return [_run_one(p, config) for p in plan.pairs]
+
+
+def _build_outcome(done):
+    return "timed out" if done.timed_out else f"exit {done.status}"
 
 
 def _execute(plan, scratch):
     """(build record, results): the build first unless --no-build; a build that fails fails every case."""
     if plan.args.no_build:
         return {"ran": False}, _run_cases(plan, scratch)
+    progress("build started")
     done = ex.build(os.path.abspath(plan.args.workspace), scratch)
+    progress(f"build finished ({_build_outcome(done)}, {done.wall_ms} ms)")
     record = {"ran": True, "status": done.status, "wallMs": done.wall_ms, "timedOut": done.timed_out}
     return record, (_run_cases(plan, scratch) if done.status == 0 and not done.timed_out else _build_failed(plan, done))
 
