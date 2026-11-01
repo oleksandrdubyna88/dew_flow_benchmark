@@ -41,7 +41,7 @@ async function install({ stacks, stacksFile, storeRoot, only, record }) {
   try {
     const trees = {};
     for (const name of only) {
-      const done = await installToolchain({ name, stacks, storeRoot, io: realIo, owned: owned.helper, log: complain, newFolder: (what, parent) => owned.helper.ownedDir(scope, what, { parent }) });
+      const done = await installToolchain({ name, stacks, storeRoot, io: realIo, owned: owned.helper, log: complain, progress: complain, newFolder: (what, parent) => owned.helper.ownedDir(scope, what, { parent }) });
       if (!done.ok) return `${name}: ${done.reason}`;
       say(JSON.stringify({ name, state: done.value.state, dir: done.value.dir, treeSha256: done.value.treeSha256 }));
       if (done.value.treeSha256) trees[name] = done.value.treeSha256;
@@ -54,6 +54,7 @@ async function install({ stacks, stacksFile, storeRoot, only, record }) {
 
 function recordInto(stacksFile, trees) {
   if (Object.keys(trees).length === 0) return null;
+  complain(`recording ${Object.keys(trees).join(', ')} tree hash(es) in ${stacksFile}`);
   const next = recordTrees(readFileSync(stacksFile, 'utf8'), trees);
   if (!next.ok) return next.reason;
   writeFileSync(stacksFile, next.value);

@@ -325,6 +325,26 @@ test('A_symlink_named_like_a_stale_staging_folder_is_left_alone_and_its_target_i
   } finally { unsealTree(target); unsealStore(r.storeRoot); }
 });
 
+test('A_long_install_says_one_line_before_each_check_download_verify_extract_and_seal_step_naming_the_toolchain', async t => {
+  const r = rig(t);
+  const lines = [];
+  const done = await installToolchain({ name: 'node', stacks: r.stacks, storeRoot: r.storeRoot, io: r.io, newFolder: r.newFolder, progress: line => lines.push(line) });
+  try {
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.ok(lines.every(line => line.startsWith('node: ') && !line.includes('\n')), `one line per step, each naming the toolchain: ${lines.join(' | ')}`);
+    const verbs = lines.map(line => /^node: (\w+)/.exec(line)[1]);
+    assert.deepEqual(verbs, ['checking', 'downloading', 'verifying', 'extracting', 'hashing', 'sealing']);
+    assert.ok(lines[1].includes(r.stacks.artifacts.node.url), 'the download line names what is fetched');
+  } finally { unsealStore(r.storeRoot); }
+  const sdk = rig(t);
+  const sdkLines = [];
+  const sdkDone = await installToolchain({ name: 'dotnetSdk', stacks: sdk.stacks, storeRoot: sdk.storeRoot, io: sdk.io, newFolder: sdk.newFolder, progress: line => sdkLines.push(line) });
+  try {
+    assert.equal(sdkDone.ok, true, JSON.stringify(sdkDone));
+    assert.deepEqual(sdkLines.map(line => /^dotnetSdk: (\w+)/.exec(line)[1]), ['checking', 'downloading', 'verifying', 'installing', 'verifying', 'hashing', 'sealing']);
+  } finally { unsealStore(sdk.storeRoot); }
+});
+
 test('The_first_install_into_a_store_root_that_does_not_exist_yet_has_nothing_to_collect', async t => {
   if (!ownedApi) return t.skip('the conventions mount is absent: no owner records to read');
   const r = rig(t);

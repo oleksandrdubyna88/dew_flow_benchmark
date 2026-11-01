@@ -50,29 +50,36 @@ async function crossCheck(name, stacks, io) {
   return listed === pinned ? ok(null) : fail(`${source} now lists ${listed} for ${name}, the pin in stacks-lang.json is ${pinned}: the pin is not moved silently`);
 }
 
-async function buildNode({ stacks, io, staging, work }) {
+async function buildNode({ stacks, io, staging, work, step }) {
   const a = stacks.artifacts.node;
   const archive = path.join(work, a.file);
+  step(`downloading ${a.url}`);
   const got = await io.download(a.url, archive);
   if (!got.ok) return got;
+  step(`verifying the sha256 of ${a.file}`);
   const checked = await checkDigest({ file: archive, algorithm: 'sha256', encoding: 'hex', expected: a.sha256, label: `the Node tarball ${a.file}` });
   if (!checked.ok) return checked;
+  step(`extracting ${a.file}`);
   const unpacked = await io.extractTarXz(archive, staging);
   return unpacked.ok && !existsSync(path.join(staging, 'bin', 'node')) ? fail(`the Node tarball ${a.file} holds no bin/node`) : unpacked;
 }
 
 const versionsUnder = (dir, rel) => (existsSync(path.join(dir, rel)) ? readdirSync(path.join(dir, rel)).sort() : []);
 
-async function buildDotnet({ stacks, io, staging, work }) {
+async function buildDotnet({ stacks, io, staging, work, step }) {
   const script = stacks.artifacts.dotnetInstallScript;
   const scriptPath = path.join(work, 'dotnet-install.sh');
+  step(`downloading the install script ${script.url}`);
   const got = await io.download(script.url, scriptPath);
   if (!got.ok) return got;
+  step('verifying the sha256 of the install script');
   const scriptOk = await checkDigest({ file: scriptPath, algorithm: 'sha256', encoding: 'hex', expected: script.sha256, label: 'the dotnet install script' });
   if (!scriptOk.ok) return fail(`${scriptOk.reason} — it was not run`);
   const zipPath = path.join(work, 'dotnet-sdk.tar.gz');
+  step(`installing SDK ${stacks.pins.dotnetSdk} with the script (it downloads and extracts the archive; this takes a while)`);
   const ran = await io.runDotnetInstall({ scriptPath, version: stacks.pins.dotnetSdk, installDir: staging, zipPath, workDir: work });
   if (!ran.ok) return ran;
+  step('verifying the sha512 of the SDK archive the script downloaded');
   const archive = await checkDigest({ file: zipPath, algorithm: 'sha512', encoding: 'hex', expected: stacks.artifacts.dotnetSdk.sha512, label: `the SDK archive the script downloaded from ${stacks.artifacts.dotnetSdk.url}` });
   return archive.ok ? contentsOfSdk(stacks, staging) : archive;
 }
@@ -84,11 +91,13 @@ function contentsOfSdk(stacks, dir) {
   return runtimes.length === 1 && runtimes[0] === stacks.pins.dotnetRuntime ? ok(null) : fail(`the SDK bundles runtime ${runtimes.join(', ') || '(none)'}; the pin is ${stacks.pins.dotnetRuntime}`);
 }
 
-async function buildTypescript({ stacks, io, staging, work, storeRoot }) {
+async function buildTypescript({ stacks, io, staging, work, storeRoot, step }) {
   const nodeDir = path.join(storeRoot, stacks.directories.node);
   if (!existsSync(path.join(nodeDir, 'bin', 'node'))) return fail(`TypeScript is installed with the pinned Node, which is not in the store yet: install ${stacks.directories.node} first`);
+  step(`installing typescript@${stacks.pins.typescript} with the pinned Node and npm`);
   const ran = await io.runNpmInstall({ nodeDir, prefix: staging, spec: `typescript@${stacks.pins.typescript}`, workDir: work });
   if (!ran.ok) return ran;
+  step('verifying the integrity npm recorded in its lock file');
   return lockIntegrity(stacks, staging);
 }
 
@@ -117,11 +126,12 @@ function discard(dir) {
 }
 
 /**
- * `installToolchain({ name, stacks, storeRoot, io, newFolder, owned?, log? })` -> ok({ name, dir, state: 'installed' | 'present', treeSha256, swept }) | fail(reason).
+ * `installToolchain({ name, stacks, storeRoot, io, newFolder, owned?, log?, progress? })` -> ok({ name, dir, state: 'installed' | 'present', treeSha256, swept }) | fail(reason).
  * `newFolder(what, parent)` makes an owned folder (removed by its owner); `io` is lib/toolchain-io.mjs's `realIo` or a test's fixture.
  * A directory already in the store is left exactly as it is: `present`, `treeSha256: null` (not examined — `verifyRecordedTrees` examines).
  * With `owned` (the owned-name helper bound to `bench`), the stale staging folders of interrupted installs are collected first and named through `log`;
  * the folders removed are `value.swept`. The process umask is never touched: the install children are started under umask 022 by `io`.
+ * `progress(line)` gets one line before each step (check, download, verify, extract or install, hash, seal), each starting `<name>: `.
  */
 export async function installToolchain(options) {
   const swept = options.owned ? sweepStaleStaging({ storeRoot: options.storeRoot, owned: options.owned, log: options.log }) : [];
@@ -129,26 +139,30 @@ export async function installToolchain(options) {
   return done.ok ? ok({ ...done.value, swept }) : done;
 }
 
-async function installOne({ name, stacks, storeRoot, io, newFolder }) {
+async function installOne({ name, stacks, storeRoot, io, newFolder, progress = () => {} }) {
+  const step = what => progress(`${name}: ${what}`);
   if (!TOOLCHAIN_NAMES.includes(name)) return fail(`'${name}' is not a toolchain; the legal names are ${TOOLCHAIN_NAMES.join(', ')}`);
   const final = path.join(storeRoot, stacks.directories[name]);
   if (existsSync(final)) return ok({ name, dir: final, state: 'present', treeSha256: null });
+  step('checking the official source against the pin');
   const agreed = await crossCheck(name, stacks, io);
   if (!agreed.ok) return agreed;
   mkdirSync(storeRoot, { recursive: true, mode: 0o755 });
   const staging = newFolder(`stage-${name}`, storeRoot);
   const work = newFolder(`dl-${name}`, os.tmpdir());
-  const built = await BUILDERS[name]({ stacks, io, staging, work, storeRoot });
+  const built = await BUILDERS[name]({ stacks, io, staging, work, storeRoot, step });
   if (!built.ok) {
     discard(staging);
     return built;
   }
+  step('hashing the installed tree');
   const treeSha256 = treeRecord(staging);
   const recorded = stacks.treeSha256?.[name];
   if (recorded !== undefined && recorded !== treeSha256) {
     discard(staging);
     return fail(`the installed ${name} tree hash ${treeSha256} differs from the recorded ${recorded} in stacks-lang.json: the tree was discarded, not registered`);
   }
+  step('sealing it read-only and moving it into the store');
   sealTree(staging); // hashed first, sealed only just before it is renamed into the store
   try {
     renameSync(staging, final);
