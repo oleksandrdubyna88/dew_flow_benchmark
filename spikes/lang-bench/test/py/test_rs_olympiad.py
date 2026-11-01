@@ -297,6 +297,7 @@ class ProcessTests(unittest.TestCase):
         def recording(proc):
             fd = real(proc)
             opened.append(fd)
+            self.build_pgid = proc.pid
             return fd
 
         saved = (ex.pidfd_of, ex.wait_exit)
@@ -327,6 +328,38 @@ class ProcessTests(unittest.TestCase):
             self.assertEqual(len(opened), 1, name)
             self.assertTrue(self.is_closed(opened[0]), f"the build's pidfd was left open ({name})")
             self.assertEqual(isinstance(error, KeyboardInterrupt), name == "interrupted", name)
+
+    def test_A_build_that_times_out_or_is_interrupted_is_stopped_through_the_group_kill_that_waits_until_the_group_is_gone(self):
+        def stopped(proc, pidfd, deadline):
+            raise KeyboardInterrupt()
+
+        for name, wait, ceiling in (("timeout", None, 150), ("interrupted", stopped, 60_000)):
+            calls = []
+            real = ex.kill_group
+            ex.kill_group = lambda proc: (calls.append(proc.pid), real(proc))
+            try:
+                ws = Workspace(self, "", {"build.sh": "sleep 61 &\nsleep 61 &\nwait\n"})
+                self.build_with_recorded_pidfd(ws, wait, ceiling)
+            finally:
+                ex.kill_group = real
+            self.assertEqual(calls, [self.build_pgid], f"the {name} build was not stopped through kill_group")
+            self.assertFalse(self.group_exists(self.build_pgid), f"the {name} build's group was not gone when it returned")
+
+    def test_The_group_kill_returns_only_when_nothing_of_the_group_is_left(self):
+        left = 0
+        for _ in range(60):
+            proc = subprocess.Popen(["bash", "-c", "sleep 61 & sleep 61"], start_new_session=True)
+            time.sleep(0.005)
+            ex.kill_group(proc)
+            left += self.group_exists(proc.pid)
+        self.assertEqual(left, 0)
+
+    def group_exists(self, pgid):
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return False
+        return True
 
     def test_The_launch_argv_fills_the_case_into_every_prefix_element(self):
         self.assertEqual(ex.launch_argv(["a", "{case}-x", "{case}"], "s1"), ["a", "s1-x", "s1", "bash", "run.sh"])

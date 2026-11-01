@@ -31,20 +31,11 @@ class PlainLifecycle:
         return rs_report.NOT_CERTIFIED
 
     def kill(self, proc):
-        """SIGKILL to the whole group, then wait until nothing of it is left: the signal is delivered at once but the children go a moment later."""
-        _signal_group(proc.pid, signal.SIGKILL)
-        proc.wait()
-        deadline = now_ms() + GONE_CEILING_MS
-        while self.leftover(proc) and now_ms() < deadline:
-            time.sleep(0.001)
+        kill_group(proc)
 
     def leftover(self, proc):
         """True when something of the program's process group is still alive after the program was reaped."""
-        try:
-            os.killpg(proc.pid, 0)
-        except ProcessLookupError:
-            return False
-        return True
+        return group_present(proc)
 
 
 @dataclass
@@ -80,6 +71,25 @@ def _signal_group(pid, sig):
         os.killpg(pid, sig)
     except ProcessLookupError:
         pass
+
+
+def group_present(proc):
+    """True while anything of the process group `proc` leads is alive (a reaped leader's group still counts)."""
+    try:
+        os.killpg(proc.pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def kill_group(proc):
+    """SIGKILL to the whole group, reap the leader, then wait until nothing of the group is left: the signal is delivered at once but the
+    children go a moment later (2 s ceiling)."""
+    _signal_group(proc.pid, signal.SIGKILL)
+    proc.wait()
+    deadline = now_ms() + GONE_CEILING_MS
+    while group_present(proc) and now_ms() < deadline:
+        time.sleep(0.001)
 
 
 def pidfd_of(proc):
@@ -130,13 +140,12 @@ def build(workspace, scratch, ceiling_ms=BUILD_CEILING_MS):
     try:
         done = wait_exit(proc, pidfd, started + ceiling_ms)
     except BaseException:  # the runner itself is being stopped (a signal): never leave the build running
-        _signal_group(proc.pid, signal.SIGKILL)
-        proc.wait()
+        kill_group(proc)
         raise
     finally:
         _close(pidfd)
     if not done:
-        _signal_group(proc.pid, signal.SIGKILL)
+        kill_group(proc)
     status = proc.wait()
     _signal_group(proc.pid, signal.SIGKILL)
     return BuildResult(True, status, now_ms() - started, not done, read_tail(log))
