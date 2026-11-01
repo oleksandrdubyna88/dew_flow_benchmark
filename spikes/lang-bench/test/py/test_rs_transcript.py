@@ -1,4 +1,5 @@
 """The expected transcript (.out) parser, its validation, and its one-to-one correspondence with the script (FORMAT v2 section 5, V1, V6)."""
+import hashlib
 import os
 import unittest
 
@@ -53,14 +54,21 @@ class ExampleTests(unittest.TestCase):
             transcript, p2 = rt.parse_transcript(fixture(name + ".out"), name + ".out")
             self.assertEqual(p1 + p2 + rp.validate_pair(scenario, transcript), [], name)
 
-    def test_The_fixtures_are_FORMATs_current_examples_and_nothing_of_the_earlier_daemon_example_remains(self):
-        names = ("x2.in", "x2.out", "x3.in", "x3.out")
-        texts = {n: fixture(n).decode("utf-8") for n in names}
-        self.assertIn("a toy store over an invented framed protocol", texts["x2.in"])
-        self.assertIn("a toy order endpoint with idempotency keys. No task of", texts["x3.in"])
-        for name, text in texts.items():
-            for old in ("RESP", "PING", "PONG", "mango", "SET", "+OK", "$16384"):
-                self.assertNotIn(old, text, f"{name} still holds a piece of the earlier daemon example")
+    # sha256 of the four blocks of FORMAT v2.1 (docs/format-v2, commit 66ad032) section 6.2 and 6.3, as the format shows them.
+    FORMAT_BLOCKS = {
+        "x2.in": "3db5762eb3f629c4075f772e247a455e4642ce9f7a435f28fa87310824aaa843",
+        "x2.out": "52cb9f0985e4aef0d3d716b47dbed92bbda50ec1199ee726832ddd3d68649262",
+        "x3.in": "9a977cbb0aabb37620f84c89a8763cd5135ec1ee90596d62d4f000858286b04d",
+        "x3.out": "bd5c1447df8bde327a783011b6590dd4febcfde37b39cdb0cd2b8d3837df5fd8",
+    }
+
+    def test_The_fixtures_are_byte_equal_to_the_worked_examples_of_FORMAT_v2_1(self):
+        for name, digest in self.FORMAT_BLOCKS.items():
+            self.assertEqual(hashlib.sha256(fixture(name)).hexdigest(), digest, f"{name} is not the block FORMAT v2.1 shows")
+
+    def test_The_fixture_check_notices_a_changed_byte(self):
+        changed = fixture("x2.in").replace(b"scenario 2", b"scenario 3", 1)
+        self.assertNotEqual(hashlib.sha256(changed).hexdigest(), self.FORMAT_BLOCKS["x2.in"])
 
     def test_The_parsed_transcript_is_frozen(self):
         transcript, _ = rt.parse_transcript(fixture("x3.out"), "x3.out")
