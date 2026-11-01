@@ -122,7 +122,7 @@ public sealed class DetachedLauncherTests
         using var temp = new TempFolder();
         var log = temp.Combine("child.log");
 
-        var started = new SetsidLauncher(RunAllKit.HostSetsid).Start("/bin/sh", ["-c", "grep -E 'SigIgn|SigBlk' /proc/$$/status"], log, ChildEnvironment(), temp.Path);
+        var started = new SetsidLauncher(RunAllKit.HostSetsid).Start("/bin/sh", ["-c", "exec grep -E 'SigIgn|SigBlk' /proc/self/status"], log, ChildEnvironment(), temp.Path);
 
         started.Should().BeOfType<DetachedStart.Started>(started.ToString());
         var text = await LogAsync(log, "SigIgn");
