@@ -160,16 +160,17 @@ def _launch_prefix(args):
     return _prefix_of(args.launch_prefix) if args.launch_prefix else None
 
 
-def _names_normalised(pair):
-    return "normalised" in (pair.comparison or "").split("+")
+def _beyond_bytes(pair):
+    return pair.comparison is not None and pair.comparison != "bytes"
 
 
 def _unsupported(kind, pairs):
-    """An olympiad case whose manifest line says `normalised` would be compared byte for byte: the normalisations are not built, so it is refused."""
+    """The olympiad comparison is byte-exact only: a manifest line that names normalised, json or relational (alone or joined) would be
+    compared byte for byte all the same, so it is refused."""
     if kind != "olympiad":
         return []
     return [Problem("cases.txt", 0, f"{p.id}: the comparison {p.comparison!r} is not supported for olympiad (only bytes is built)")
-            for p in pairs if _names_normalised(p)]
+            for p in pairs if _beyond_bytes(p)]
 
 
 def make_plan(args):

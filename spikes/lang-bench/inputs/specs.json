@@ -71,10 +71,10 @@
       },
       {
         "path": "run_samples.py",
-        "sha256": "5dde1d477d536b595a700ba0e78232cdea4a4da9d53e80e961761328e939b54b"
+        "sha256": "4067be5391573d88cbed07164b47ba0a1d575c4988e4c16b144c6668bbe02fa1"
       }
     ],
-    "manifestSha256": "5e199cb998b9d1deeee6b4b2cce483a0c0929b24b7a2d84525bfa876471c5048",
+    "manifestSha256": "93982be5788d49d6e7bb12ede61a8b1145d2c911777db43f4f69657f90bd0c7e",
     "version": "0.1.0"
   }
 }
