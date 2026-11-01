@@ -218,8 +218,8 @@ public sealed class M2PilotScaffold
         tree["coai"] = new JsonObject { ["binary"] = coaiBinary, ["settings"] = coaiSettings, ["side"] = "wsl-ubuntu" };
         tree.AsObject().Remove("isolation");
         var home = System.Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
-        var text = tree.ToJsonString(Pretty).Replace("//example/home", "/" + home, StringComparison.Ordinal);
-        text.Should().NotContain("/example/", "every path of the example is replaced or removed (the deny list's //example/home is the operator's own home)");
+        var text = tree.ToJsonString(Pretty).Replace("//example/home", "/" + home, StringComparison.Ordinal).Replace("//example/root/arms.map.json", "/" + root + "/arms.map.json", StringComparison.Ordinal);
+        text.Should().NotContain("/example/", "every path of the example is replaced or removed (the deny list's //example/home is the operator's own home, //example/root the pilot's root)");
         var read = ExperimentFile.Read(text, new ExperimentLocation(root, home, string.Empty, Cli.Repository.Root)).Ok();
         read.Coai.Configured.Should().BeTrue("every kept scheme has a gate step, and a gate step needs the coai server's MCP config — only the KEY is the owner's");
         return text;

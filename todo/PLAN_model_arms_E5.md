@@ -1,6 +1,6 @@
 # PLAN — E5 stories: isolation, keep-awake, the detached arms and the chain of the model-arms module
 
-> Status: **stories written 2026-10-31, nothing implemented yet.** Epic E5 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D10–D13,
+> Status: **BUILT 2026-11-01 on `feat/model-arms-e5` (E5.S1–E5.S4, each through an Opus review and the coai code gate; ModelArms suite 1787, 0 failed); pull requests not opened (the repository's three-open cap — the owner's); Windows, macOS and FreeBSD unobserved.** Stories written 2026-10-31. Epic E5 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D10–D13,
 > D16, D17 (c)/(d), D26, D27; §4.7, §4.8, §4.11; §6 step 5; §7's E5 tests; §9; §10), written at `f0d6868` on `feat/model-arms-e5`
 > (E1–E3 on `main`, E4 not built) by the judge role (Opus), as the epic starts — `common.plan-change-control` § *What counts as a
 > change*: writing them is not a change. The parent's epoch 3 holds ONE entry (3.1); a second accepted change stops the plan, so every
@@ -1605,7 +1605,7 @@ NAME under it — `experiment.json` and `.locked-modes` included; (b) a forged o
 only onto entries at their locked or saved mode; (c) an unlinked or replaced `pids/<arm>.lock` lets a second runner of a live arm start (§8 item 44 — liveness still says
 `Alive` from the believed pid); (d) an entry deleted and a new object given the same device and inode reads as the same entry at `unlock` (inode reuse); (e) a `chmod` by any
 same-user process beside the module (the parent's own line); (f) on the runtime road, a link planted between the check and the chmod is followed and a replaced entry is not
-told apart — the printed line; (g) `unlock --force` restores beside a runner that may be live — D11's meaning, the operator's choice, said by its loud line. None is a hole
+told apart — the printed line; (g) `unlock --force` restores beside a runner that may be live — D11's meaning, the operator's choice, said by its loud line. (h) `<root>/arms.map.json` is readable by its fixed name under a 300 root — every token, so a sibling's `r/<token>` and its session folder — and a sibling runner's `/proc/<pid>/cwd` shows its token: both shared with the shell harness; the example's `tools.deny` denies the Read tool on the map by an absolute path the operator fills in (`tools.deny` is passed to the CLI as written, no `<root>` placeholder), and `Bash(cat *)`/`Bash(ls *)` stay allowed, so neither is closed (review round R1). None is a hole
 the module claims to close; each is one sentence where the operator reads.
 
 ## 10. Risk items for the coai gate

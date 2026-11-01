@@ -11,7 +11,11 @@ internal static class PlatformKit
     /// <summary>macOS 15 on arm64: the portable roads everywhere, the holder believed by its start second.</summary>
     public static PlatformRoad MacRoad { get; } = PlatformRoads.Of(new PlatformFacts(false, false, true, false, false, false, "macOS 15"));
 
+    /// <summary>Windows: no POSIX modes, so no folder isolation (the trust check is not performed).</summary>
+    public static PlatformRoad WindowsRoad { get; } = PlatformRoads.Of(new PlatformFacts(true, false, false, false, true, false, "Windows test host"));
+
     /// <summary>Linux x86-64 with a working <c>statx</c>: the road this suite's host takes.</summary>
+
     public static PlatformRoad LinuxRoad { get; } = PlatformRoads.Of(new PlatformFacts(false, true, false, false, true, true, "Linux test host"));
 
     /// <summary>The gate's seams with the Mac's road handed in (<paramref name="from"/> or the real ones, edited): the portable roads everywhere, and the facts read by that road. Shared by the two classes that drive the gate on the portable road.</summary>

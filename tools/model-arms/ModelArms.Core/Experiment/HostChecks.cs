@@ -135,6 +135,16 @@ public static class HostChecks
         .. TemplateProblems(experiment, facts),
     ];
 
+    /// <summary>One WARNING line, never a refusal (validate's contract is unchanged): the isolation leaves <c>arms.map.json</c> readable by its fixed name under a root at 300 — every token, so a sibling's <c>r/&lt;token&gt;</c> (a residual the shell shared) — and <c>tools.deny</c> lacks the entry that denies the Read tool on THIS root's map. <c>tools.deny</c> reaches the CLI as written, with no
+    /// <c>&lt;root&gt;</c> placeholder, so the entry is an absolute path the operator writes (<c>init</c> blanks every value and cannot). It would not stop <c>Bash(cat *)</c>, which the tool sets allow, so even present it narrows the residual and does not close it. POSIX roots only.</summary>
+    public static IReadOnlyList<string> Warnings(Experiment experiment)
+    {
+        var wanted = $"Read(/{experiment.Root}/arms.map.json)";
+        return experiment.Root.StartsWith('/') && !experiment.Tools.Deny.Contains(wanted, StringComparer.Ordinal)
+            ? [$"warning: tools.deny has no {wanted} — a root at 300 still lets an arm read arms.map.json by its name (every token, so a sibling's folder); add the entry for THIS root (an absolute path: tools.deny is passed to the CLI as written) — it narrows the residual, `Bash(cat *)` still reads it"]
+            : [];
+    }
+
     private static string First(IReadOnlyList<string> command) => command.Count > 0 ? command[0] : string.Empty;
 
     private static bool KeepsAwakeWithPowerShell(AwakeChoice awake, HostKind host) =>
@@ -207,11 +217,15 @@ public static class HostChecks
     ];
 
     private static IEnumerable<HostProblem> AwakeProblems(AwakeChoice awake, HostKind host) =>
+        AwakeProblem(awake, host) is { Length: > 0 } problem ? [Wrong(problem)] : [];
+
+    /// <summary>The sentence for a named awake adapter the host cannot run (<c>awake "wsl"</c> off WSL, <c>awake "windows"</c> off Windows), or the empty text. One sentence for two callers: <c>validate</c> prints it among its findings and <c>chain</c>, which does not run <c>validate</c>, refuses with it (E5.S2, <see cref="Isolation.HostAwakeSelection"/>).</summary>
+    internal static string AwakeProblem(AwakeChoice awake, HostKind host) =>
         (awake, host) switch
         {
-            (AwakeChoice.Wsl, not HostKind.Wsl) => [Wrong(NeedsHost("wsl", HostKind.Wsl, host))],
-            (AwakeChoice.Windows, not HostKind.Windows) => [Wrong(NeedsHost("windows", HostKind.Windows, host))],
-            _ => [],
+            (AwakeChoice.Wsl, not HostKind.Wsl) => NeedsHost("wsl", HostKind.Wsl, host),
+            (AwakeChoice.Windows, not HostKind.Windows) => NeedsHost("windows", HostKind.Windows, host),
+            _ => string.Empty,
         };
 
     private static string NeedsHost(string awake, HostKind needed, HostKind actual) =>

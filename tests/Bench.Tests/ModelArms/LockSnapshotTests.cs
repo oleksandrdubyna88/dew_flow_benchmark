@@ -35,6 +35,11 @@ public sealed class LockSnapshotTests
         { "both refused", Refused("a is a link"), Refused("b is a link"), typeof(LockState.Inconsistent), "a is a link" },
         { "a snapshot refused beside an applied file", Refused(".locked-modes is a link"), Text(Applied), typeof(LockState.Inconsistent), ".locked-modes is a link" },
         { "an applied file refused with no snapshot", Absent, Refused(".locked-modes.applied is a link"), typeof(LockState.Inconsistent), ".locked-modes.applied is a link" },
+        { "a good header over modes that are not a list", Text("""{"run":"part7","digest":"d1","since":"2026-10-30T10:00:00Z","modes":"x"}"""), Absent, typeof(LockState.Inconsistent), "modes" },
+        { "a good header over a mode that is not octal", Text("""{"run":"part7","digest":"d1","since":"2026-10-30T10:00:00Z","modes":[{"path":"/r","mode":"zz"}]}"""), Absent, typeof(LockState.Inconsistent), "mode" },
+        { "a good header over a path that is not fully qualified", Text("""{"run":"part7","digest":"d1","since":"2026-10-30T10:00:00Z","modes":[{"path":"r","mode":"755"}]}"""), Absent, typeof(LockState.Inconsistent), "path" },
+        { "a good header over a path with a NUL", Text("""{"run":"part7","digest":"d1","since":"2026-10-30T10:00:00Z","modes":[{"path":"/r\u0000x","mode":"755"}]}"""), Absent, typeof(LockState.Inconsistent), "path" },
+        { "an applied snapshot whose modes are corrupt is not applied", Text("""{"run":"part7","digest":"d1","since":"2026-10-30T10:00:00Z","modes":[{"path":"/r","mode":"zz"}]}"""), Text(Applied), typeof(LockState.Inconsistent), "mode" },
         { "a snapshot that is not JSON", Text("not json"), Absent, typeof(LockState.Inconsistent), ".locked-modes" },
         { "a snapshot with no run", Text("""{"digest":"d1","since":"2026-10-30T10:00:00Z","modes":[]}"""), Absent, typeof(LockState.Inconsistent), "run" },
         { "a snapshot with no digest", Text("""{"run":"part7","since":"2026-10-30T10:00:00Z","modes":[]}"""), Absent, typeof(LockState.Inconsistent), "digest" },
@@ -57,14 +62,14 @@ public sealed class LockSnapshotTests
     public void The_applying_state_names_the_snapshots_time_and_the_applied_state_the_verification_time()
     {
         LockSnapshots.State(Text(Snapshot), Absent).Should().Be(new LockState.Applying("part7", "2026-10-30T10:00:00Z"));
-        LockSnapshots.State(Text(Snapshot), Text(Applied)).Should().Be(new LockState.Applied("part7", "2026-10-30T10:00:05Z"), "it has been applied since the verification said so");
+        LockSnapshots.State(Text(Snapshot), Text(Applied)).Should().Be(new LockState.Applied("part7", "2026-10-30T10:00:05Z", "d1"), "it has been applied since the verification said so — and the closed set it was applied for travels with it");
     }
 
     [Fact]
     public void Each_state_prints_the_one_line_every_verb_but_lock_and_unlock_shows()
     {
         IsolationLine.Of(new LockState.None()).Should().Be("no isolation snapshot");
-        IsolationLine.Of(new LockState.Applied("part7", "2026-10-30T10:00:05Z")).Should().Be("isolation applied for part7 since 2026-10-30T10:00:05Z");
+        IsolationLine.Of(new LockState.Applied("part7", "2026-10-30T10:00:05Z", "d1")).Should().Be("isolation applied for part7 since 2026-10-30T10:00:05Z");
         IsolationLine.Of(new LockState.Applying("part7", "2026-10-30T10:00:00Z")).Should().Be("a lock was interrupted — run `lock part7` or `unlock`");
         IsolationLine.Of(new LockState.Inconsistent("the files disagree")).Should().Be("isolation snapshot inconsistent — the files disagree");
     }

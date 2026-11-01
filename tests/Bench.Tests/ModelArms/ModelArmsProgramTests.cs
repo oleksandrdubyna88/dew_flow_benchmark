@@ -45,15 +45,6 @@ public sealed partial class ModelArmsProgramTests
     }
 
     [Fact]
-    public async Task A_verb_not_built_yet_is_refused_naming_its_epic_with_exit_4()
-    {
-        var (code, _, error) = await RunAsync(["chain", "--experiment", "/x"]);
-
-        code.Should().Be(4);
-        error.Should().Contain("E5.S4").And.Contain("chain");
-    }
-
-    [Fact]
     public async Task Version_and_help_need_no_experiment_root()
     {
         var version = await RunAsync(["version"]);

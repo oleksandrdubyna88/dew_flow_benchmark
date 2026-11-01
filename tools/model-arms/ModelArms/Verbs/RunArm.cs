@@ -22,10 +22,14 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 /// <para>
 /// <b>The gate lock's ceiling (E2 §8 items 59 and 61) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> — for each of the other arms of the arm's own round (the largest round of the run that names it; every arm of
 /// <c>arms.map.json</c> only when no run does, and the log says so), the longest gate step's minutes plus the kill grace plus the usage-limit waits the runner may spend under the lock and the floor of each resumed attempt (<c>limits.tries</c> × (<c>limits.waitSeconds</c> + <c>limits.minimumRemainingSeconds</c>)); never less than
-/// one such span. What remains is a wedged holder, which only a heartbeat (E5.S3's <c>run-all</c>) tells from a slow one: it is told apart only when the ceiling runs out. <c>run-all</c> sizes its own the same way from the round it starts, or builds the heartbeat.
+/// one such span. What remains is a wedged holder, which only a heartbeat (out of bounds for E5) tells from a slow one: it is told apart only when the ceiling runs out. <c>run-all</c> (E5.S3) sizes nothing of its own: it refuses to have more arms alive than the smallest queue any of them was sized from, so a ceiling is never outrun by the arms it started.
 /// </para>
 /// <para>
-/// What this does NOT do: detach (E5.S3); run the objective checks (<c>checks</c>, E3.S5).
+/// <b>The runner is identified by two locks held for its life</b> (E5.S1, D13): <c>pids/&lt;arm&gt;.lock</c> — the answer to whether the arm runs, free the instant the process dies — and the SHARED <c>.isolation.lock</c>, so no <c>lock</c> or <c>unlock</c> changes a mode while it runs; its pid is written to <c>pids/&lt;arm&gt;.pid</c>. Both are taken by <see cref="RunArmAdmission"/> before anything else and
+/// disposed here after the walk, whatever it came to.
+/// </para>
+/// <para>
+/// What this does NOT do: detach (<c>run-all</c> starts it detached, E5.S3); run the objective checks (<c>checks</c>, E3.S5).
 /// </para></summary>
 public static class RunArmVerb
 {
@@ -36,7 +40,21 @@ public static class RunArmVerb
     internal static async Task<int> RunAsync(ExperimentInput input, RunArmSeams seams)
     {
         var admitted = await RunArmAdmission.AdmitAsync(input);
-        return await admitted.Match(plan => WalkAsync(plan, seams), stop => Task.FromResult(Refused(input, stop)));
+        return await admitted.Match(plan => HeldAsync(plan, seams), stop => Task.FromResult(Refused(input, stop)));
+    }
+
+    /// <summary>The walk, with the runner's two locks released after it whatever it came to (the kernel releases them when the process dies).</summary>
+    private static async Task<int> HeldAsync(ArmPlan plan, RunArmSeams seams)
+    {
+        try
+        {
+            return await WalkAsync(plan, seams);
+        }
+        finally
+        {
+            plan.RunnerLock.Dispose();
+            plan.IsolationHold.Dispose();
+        }
     }
 
     private static int Refused(ExperimentInput input, Passage<ArmPlan>.Stopped stop) => stop.Print(input.Verb.Error);

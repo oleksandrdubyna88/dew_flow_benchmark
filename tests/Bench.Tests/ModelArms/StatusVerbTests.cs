@@ -180,10 +180,22 @@ public sealed class StatusVerbTests
     [Fact]
     public void The_verbs_source_holds_no_way_to_list_a_folder_and_the_scan_still_finds_one_where_one_lives()
     {
-        foreach (var file in new[] { "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs" })
+        foreach (var file in new[]
+        {
+            "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs",
+            "ModelArms/Verbs/Lock.cs", "ModelArms/Verbs/Unlock.cs", "ModelArms/Verbs/SnapshotAside.cs", "ModelArms/Verbs/RunnerLiveness.cs", "ModelArms/Verbs/IsolationLocking.cs",
+            "ModelArms/Adapters/PosixFolderIsolation.cs", "ModelArms/Adapters/NoIsolation.cs", "ModelArms/Adapters/FolderIsolations.cs", "ModelArms/Adapters/RootFolders.cs", "ModelArms/Adapters/LockLog.cs",
+            "ModelArms/Adapters/RootLogFile.cs", "ModelArms/Adapters/WslHostAwake.cs", "ModelArms/Adapters/WindowsAwake.cs", "ModelArms/Adapters/NoAwake.cs", "ModelArms/Adapters/HostAwakes.cs", "ModelArms/Verbs/RunAll.cs",
+            "ModelArms/Verbs/Chain.cs", "ModelArms/Verbs/ChainSeams.cs", "ModelArms/Verbs/ChainRunLock.cs", "ModelArms/Verbs/ChainAdmission.cs", "ModelArms/Verbs/ChainGather.cs", "ModelArms/Verbs/ChainWalk.cs",
+        })
         {
             Forbidden.Where(word => Source(file).Contains(word, StringComparison.Ordinal)).Should().BeEmpty($"{file}: a verb that lists an unlisted folder fails at mode 300, the one state the isolation exists for");
         }
+
+        // The runtime road's VERIFICATION is the attempt to list a folder (it must fail before a name is read): the one place it is named, once.
+        var runtime = Source("ModelArms/Adapters/RuntimeFolderIsolation.cs");
+        Forbidden.Where(word => runtime.Contains(word, StringComparison.Ordinal)).Should().Equal(["Enumerate"], "RuntimeFolderIsolation lists nothing but the attempt that must fail");
+        System.Text.RegularExpressions.Regex.Matches(runtime, "Enumerate").Should().ContainSingle("the attempt to list is made in exactly one place");
 
         var instance = Source("ModelArms/Adapters/BaseCopy.cs");
         instance.Should().Contain("EnumerateFileSystemInfos", "the live instance the scan must still find is BaseCopy's listing of the base's folders (E3.S3) — a scan that matches nothing passes forever");
