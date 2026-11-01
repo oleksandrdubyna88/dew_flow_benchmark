@@ -8,7 +8,7 @@ import { scoreBoxArgv, scoreEnv } from '../../minigit-bench/lib/bwrap.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { excludedDirs, nodeFs } from '../../minigit-bench/lib/score-deps.mjs';
-import { frozenChanges } from './workspace.mjs';
+import { frozenChanges, restoreFrozen } from './workspace.mjs';
 import { SPIKE } from './paths.mjs';
 
 export const JUDGE = path.join(SPIKE, 'runner', 'run_samples.py');
@@ -51,10 +51,7 @@ export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, e
 export function pristineCopy({ source, dest, stack, files }) {
   nodeFs.copyTree(source, dest, excludedDirs(stack));
   const changed = frozenChanges({ files, work: dest });
-  for (const rel of changed.map(c => c.path)) {
-    mkdirSync(path.dirname(path.join(dest, rel)), { recursive: true });
-    writeFileSync(path.join(dest, rel), files[rel].bytes, { mode: files[rel].mode });
-  }
+  for (const rel of changed.map(c => c.path)) restoreFrozen({ root: dest, rel, file: files[rel] });
   return changed;
 }
 

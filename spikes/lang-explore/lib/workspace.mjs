@@ -1,6 +1,6 @@
 // The workspace of a session (plan D-X6, spec 01's R13): exactly the frozen files, per stack. The spec and the format texts are read from the local task repository at their pinned shas (`git show`) and
 // checked against their sha256; they are never committed here. Everything is a pure function of its inputs except `loadSources` (reads git) and `fillWorkspace` / `fillerFor` (write the files).
-import { chmodSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, fchmodSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -115,12 +115,68 @@ export const fillerFor = ({ explore, sources, typesNode }) => ({ item, layout })
   return fillWorkspace({ files: workspaceFiles({ explore, stack, sources, typesNode }), work: layout.work });
 };
 
-/** The frozen files of a workspace the agent changed or removed: `[{ path, state: 'changed' | 'absent' }]` (the file list is `workspaceFiles`'s, minus the sources the agent writes). */
+const lstatOrNull = p => { try { return lstatSync(p); } catch { return null; } };
+
+/** `'absent'`, `'plain'` (every directory on the way is a real directory and the file is a regular file) or `'odd'` (a link or another kind of entry anywhere on the path). Never reads through a link. */
+export function pathKind(root, rel) {
+  const parts = rel.split('/');
+  let current = root;
+  for (const [i, part] of parts.entries()) {
+    current = path.join(current, part);
+    const kind = entryKind(lstatOrNull(current), i === parts.length - 1);
+    if (kind !== 'plain') return kind;
+  }
+  return 'plain';
+}
+
+/** One path component: `absent`, `plain` (a regular file when `last`, else a real directory) or `odd`. */
+function entryKind(st, last) {
+  if (st === null) return 'absent';
+  return (last ? st.isFile() : st.isDirectory()) ? 'plain' : 'odd';
+}
+
+/** The frozen files of a workspace the agent changed or removed: `[{ path, state: 'changed' | 'absent' }]`. A link, or a path through one, is `changed` and is never read. */
 export function frozenChanges({ files, work }) {
   return Object.entries(files).flatMap(([rel, f]) => {
-    let got = null;
-    try { got = readFileSync(path.join(work, rel)); } catch { return [{ path: rel, state: 'absent' }]; }
-    return got.equals(f.bytes) ? [] : [{ path: rel, state: 'changed' }];
+    const kind = pathKind(work, rel);
+    if (kind === 'absent') return [{ path: rel, state: 'absent' }];
+    if (kind === 'odd') return [{ path: rel, state: 'changed' }];
+    return readFileSync(path.join(work, rel)).equals(f.bytes) ? [] : [{ path: rel, state: 'changed' }];
   });
 }
 
+/** Make every directory on the way to `rel` under `root` a real directory: a link or another entry in its place is removed (the link, never its target), then the directory is made. */
+function realDirsTo(root, rel) {
+  let current = root;
+  for (const part of rel.split('/').slice(0, -1)) {
+    current = path.join(current, part);
+    ensureRealDir(current);
+  }
+  return current;
+}
+
+/** `dir` is a real directory afterwards: a link or another entry there is removed (the link, never its target) and the directory made. */
+function ensureRealDir(dir) {
+  const st = lstatOrNull(dir);
+  if (st?.isDirectory()) return;
+  if (st !== null) rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir);
+}
+
+/**
+ * Put a frozen file back under `root`, safely: every directory on the way is made real (an agent's link in its place is removed, not followed), a non-regular entry at the file is removed, and the bytes are
+ * written with O_NOFOLLOW, so nothing is ever written through a link onto the host.
+ */
+export function restoreFrozen({ root, rel, file }) {
+  const dir = realDirsTo(root, rel);
+  const target = path.join(dir, path.basename(rel));
+  const st = lstatOrNull(target);
+  if (st !== null && !st.isFile()) rmSync(target, { recursive: true, force: true });
+  const fd = openSync(target, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, file.mode);
+  try {
+    writeSync(fd, file.bytes);
+    fchmodSync(fd, file.mode);
+  } finally {
+    closeSync(fd);
+  }
+}
