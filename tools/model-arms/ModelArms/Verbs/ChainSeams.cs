@@ -16,7 +16,9 @@ internal sealed record ChainSeams(
     Func<ExperimentInput, HostKind, CancellationToken, Task<Passage<IHostAwake>>> Awake,
     Func<ExperimentInput, Task<HostKind>> Host,
     Func<TimeSpan, CancellationToken, Task> Tick,
-    TimeProvider Clock)
+    TimeProvider Clock,
+    PlatformRoad Road,
+    DetachedRoad Detached)
 {
     public static ChainSeams Real { get; } = new(
         MakeVerb.RunAsync,
@@ -28,5 +30,7 @@ internal sealed record ChainSeams(
         HostAwakes.StartAsync,
         HostFactsReader.HostKindAsync,
         Task.Delay,
-        TimeProvider.System);
+        TimeProvider.System,
+        PlatformFactsReader.CurrentRoad,
+        DetachedRoads.Current);
 }

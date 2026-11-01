@@ -88,25 +88,57 @@ public abstract record ChainAction
 /// waits for the operator), an arm just started is awaited (§8 item 46), the arms not yet started are started — after the finished runners of this run have exited (§8 item 47) — and else the round is waited for under its ceiling (§8 item 49); (7) every arm done, a runner of the run still exiting is awaited; (8) an arm of another run alive stops the chain; (9) unlock.</summary>
 public static class ChainPlan
 {
-    public static ChainAction Next(ChainFacts facts) =>
-        Finishing(facts) ?? Checking(facts) ?? Making(facts) ?? Locking(facts) ?? Reconciled(facts) ?? Rounds(facts) ?? Closing(facts);
+    /// <summary>Whether a rule holds for the facts, and what it says if it does — a closed answer, so "this rule is silent" is a value and not a null.</summary>
+    private abstract record Ruling
+    {
+        private Ruling()
+        {
+        }
 
-    private static ChainAction? Finishing(ChainFacts facts) => facts.ArmsDone ? new ChainAction.Finished() : null;
+        public sealed record Holds(ChainAction Action) : Ruling;
+
+        public sealed record Silent : Ruling;
+    }
+
+    private static readonly Ruling Quiet = new Ruling.Silent();
+
+    /// <summary>A round of the run with the facts it is read from.</summary>
+    private sealed record InRound(ChainFacts Facts, IReadOnlyList<ArmFacts> Round);
+
+    public static ChainAction Next(ChainFacts facts) => First(facts, Finishing, Checking, Making, Locking, Reconciled, Rounds, Closing);
+
+    /// <summary>The first rule that holds, in order; the last rule of each list always does.</summary>
+    private static ChainAction First<T>(T state, params Func<T, Ruling>[] rules)
+    {
+        foreach (var rule in rules)
+        {
+            if (rule(state) is Ruling.Holds holds)
+            {
+                return holds.Action;
+            }
+        }
+
+        throw new InvalidOperationException("no rule of the chain holds: the last of each list answers for every fact");
+    }
+
+    private static Ruling Say(ChainAction action) => new Ruling.Holds(action);
+
+    private static Ruling Finishing(ChainFacts facts) => facts.ArmsDone ? Say(new ChainAction.Finished()) : Quiet;
 
     /// <summary>Rule 2: after <c>unlocked</c> the checks, the first arm not checked; none left is the end. <c>unlocked</c> is not reconciled — the checks run under any snapshot and print its line (§8 item 12).</summary>
-    private static ChainAction? Checking(ChainFacts facts) =>
-        !facts.Unlocked ? null
-        : ArmsOf(facts).FirstOrDefault(arm => !arm.Checked) is { } unchecked_ ? new ChainAction.Check(unchecked_.Arm)
-        : new ChainAction.Finished();
+    private static Ruling Checking(ChainFacts facts) =>
+        !facts.Unlocked ? Quiet
+        : ArmsOf(facts).FirstOrDefault(arm => !arm.Checked) is { } notChecked ? Say(new ChainAction.Check(notChecked.Arm))
+        : Say(new ChainAction.Finished());
 
-    private static ChainAction? Making(ChainFacts facts) =>
-        ArmsOf(facts).FirstOrDefault(arm => !arm.Made) is { } unmade ? new ChainAction.Make(unmade.Arm) : null;
+    private static Ruling Making(ChainFacts facts) =>
+        ArmsOf(facts).FirstOrDefault(arm => !arm.Made) is { } unmade ? Say(new ChainAction.Make(unmade.Arm)) : Quiet;
 
-    private static ChainAction? Locking(ChainFacts facts) => facts.Locked ? null : new ChainAction.Lock();
+    private static Ruling Locking(ChainFacts facts) => facts.Locked ? Quiet : Say(new ChainAction.Lock());
 
     /// <summary>Rule 5: <c>locked</c> stands only over what it claims. Under no isolation (<see cref="ChainFacts.Digest"/> null) only over no snapshot — a stale one is refused, never run under.</summary>
-    private static ChainAction? Reconciled(ChainFacts facts) =>
-        Stands(facts) ? null : new ChainAction.RefuseMarker(RunStage.Locked, StateWords(facts));
+    private static Ruling Reconciled(ChainFacts facts) =>
+        Stands(facts) ? Quiet : Say(new ChainAction.RefuseMarker(RunStage.Locked, StateWords(facts)));
 
     private static bool Stands(ChainFacts facts) =>
         facts.Digest is null
@@ -117,48 +149,44 @@ public static class ChainPlan
         IsolationLine.Of(facts.Snapshot)
         + (facts.Snapshot is LockState.Applied applied && string.Equals(applied.Run, facts.Run.Name, StringComparison.Ordinal) ? " with another closed set" : string.Empty);
 
-    /// <summary>Rule 6, at the first round with an arm not done; null when every round is done.</summary>
-    private static ChainAction? Rounds(ChainFacts facts) =>
-        CurrentRound(facts) is { } round ? InRound(facts, round) : null;
+    /// <summary>Rule 6, at the first round with an arm not done; silent when every round is done.</summary>
+    private static Ruling Rounds(ChainFacts facts) =>
+        facts.Run.Rounds.Select(round => round.Select(arm => FactsOf(facts, arm)).ToList()).FirstOrDefault(round => round.Any(arm => !arm.Done)) is { } current
+            ? Say(First(new InRound(facts, current), Died, Starting, Starts, Waiting))
+            : Quiet;
 
-    /// <summary>The facts of the arms of the first round that has one not done, in round order; null when none has.</summary>
-    internal static IReadOnlyList<ArmFacts>? CurrentRound(ChainFacts facts) =>
-        facts.Run.Rounds.Select(round => round.Select(arm => FactsOf(facts, arm)).ToList()).FirstOrDefault(round => round.Any(arm => !arm.Done));
-
-    private static ChainAction InRound(ChainFacts facts, IReadOnlyList<ArmFacts> round) =>
-        Died(round) ?? Starting(facts, round) ?? Starts(facts, round) ?? Waiting(facts, round);
-
-    private static ChainAction? Died(IReadOnlyList<ArmFacts> round) =>
-        round.FirstOrDefault(arm => !arm.Done && !arm.Alive && arm.Ran) is { } died ? new ChainAction.StopArmDied(died.Arm) : null;
+    private static Ruling Died(InRound where) =>
+        where.Round.FirstOrDefault(arm => !arm.Done && !arm.Alive && arm.Ran) is { } died ? Say(new ChainAction.StopArmDied(died.Arm)) : Quiet;
 
     /// <summary>6 (b): started here, not yet holding the runner's lock — a runner that has not taken <c>pids/&lt;arm&gt;.lock</c> is not dead.</summary>
-    private static ChainAction? Starting(ChainFacts facts, IReadOnlyList<ArmFacts> round) =>
-        round.Where(arm => facts.StartedHere.Contains(arm.Arm) && Unstarted(arm)).Select(arm => arm.Arm).ToList() is { Count: > 0 } starting
-            ? new ChainAction.AwaitStart(starting, facts.StartingFor >= ChainWaitCeiling.StartupCeiling)
-            : null;
+    private static Ruling Starting(InRound where) =>
+        where.Round.Where(arm => where.Facts.StartedHere.Contains(arm.Arm) && Unstarted(arm)).Select(arm => arm.Arm).ToList() is { Count: > 0 } starting
+            ? Say(new ChainAction.AwaitStart(starting, where.Facts.StartingFor >= ChainWaitCeiling.StartupCeiling))
+            : Quiet;
 
     /// <summary>6 (c): arms nobody has started — after the finished runners of this run have gone, because <c>run-all</c> counts an exiting runner alive and its queue refusal would trip.</summary>
-    private static ChainAction? Starts(ChainFacts facts, IReadOnlyList<ArmFacts> round)
+    private static Ruling Starts(InRound where)
     {
-        var toStart = round.Where(arm => !facts.StartedHere.Contains(arm.Arm) && Unstarted(arm)).Select(arm => arm.Arm).ToList();
-        return toStart.Count == 0 ? null : Exiting(facts) ?? new ChainAction.Start(toStart);
+        var toStart = where.Round.Where(arm => !where.Facts.StartedHere.Contains(arm.Arm) && Unstarted(arm)).Select(arm => arm.Arm).ToList();
+        return toStart.Count == 0 ? Quiet : Exiting(where.Facts) is Ruling.Holds exiting ? exiting : Say(new ChainAction.Start(toStart));
     }
 
     /// <summary>Neither done, alive nor ran.</summary>
     private static bool Unstarted(ArmFacts arm) => !arm.Done && !arm.Alive && !arm.Ran;
 
-    private static ChainAction Waiting(ChainFacts facts, IReadOnlyList<ArmFacts> round) =>
-        new ChainAction.WaitFor(round.First(arm => arm.Alive && !arm.Done).Arm, facts.WaitedFor >= facts.WaitCeiling);
+    private static Ruling Waiting(InRound where) =>
+        Say(new ChainAction.WaitFor(where.Round.First(arm => arm.Alive && !arm.Done).Arm, where.Facts.WaitedFor >= where.Facts.WaitCeiling));
 
     /// <summary>Rules 7 to 9, every arm done.</summary>
-    private static ChainAction Closing(ChainFacts facts) =>
-        Exiting(facts) ?? (facts.OthersAlive.Count > 0 ? new ChainAction.StopOtherRunAlive(facts.OthersAlive[0]) : new ChainAction.Unlock());
+    private static Ruling Closing(ChainFacts facts) =>
+        Exiting(facts) is Ruling.Holds exiting ? exiting
+        : Say(facts.OthersAlive.Count > 0 ? new ChainAction.StopOtherRunAlive(facts.OthersAlive[0]) : new ChainAction.Unlock());
 
     /// <summary>This run's runners that wrote <c>arm-done</c> and still hold their lock, awaited at most the kill grace.</summary>
-    private static ChainAction? Exiting(ChainFacts facts) =>
+    private static Ruling Exiting(ChainFacts facts) =>
         ArmsOf(facts).Where(arm => arm.Done && arm.Alive).Select(arm => arm.Arm).ToList() is { Count: > 0 } exiting
-            ? new ChainAction.AwaitExit(exiting, facts.AwaitedFor >= facts.Grace)
-            : null;
+            ? Say(new ChainAction.AwaitExit(exiting, facts.AwaitedFor >= facts.Grace))
+            : Quiet;
 
     private static IEnumerable<ArmFacts> ArmsOf(ChainFacts facts) =>
         facts.Run.Rounds.SelectMany(round => round).Distinct(StringComparer.Ordinal).Select(arm => FactsOf(facts, arm));

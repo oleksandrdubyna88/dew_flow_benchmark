@@ -10,14 +10,28 @@ namespace ModelArms.Verbs;
 internal static class ChainAdmission
 {
     /// <summary>The printed lines, or the stop. Exit 3 is a program the host lacks, 4 a wrong configuration.</summary>
-    public static Passage<string> Admit(ExperimentInput input, string run, HostKind host)
+    public static Passage<string> Admit(ExperimentInput input, RunSpec run, HostKind host, DetachedRoad detached)
     {
-        var name = $"model-arms chain {run}";
+        var name = $"model-arms chain {run.Name}";
+        if (detached == DetachedRoad.Unmeasured)
+        {
+            return Unmeasured(input, run, name);
+        }
+
         var pids = RootFolders.Pids(input.Root).Match<Passage<string>>(
             made => new Passage<string>.Through(made),
             stop => new Passage<string>.Stopped(stop.ExitCode, [.. stop.Lines.Select(line => $"{name}: {line}")]));
         return pids.Bind(_ => Resolved(input, host)).Bind(resolved => Announced(input, name, resolved));
     }
+
+    /// <summary>A host nobody measured the detached launch on (<c>common.platform-limits</c>: it fails closed): the chain would lock the isolation and then fail at its first <c>Start</c>, so it refuses HERE, before <c>pids/</c>, the executables, the awake scope, <c>make</c> and <c>lock</c>, with the manual road <c>run-all</c> prints.</summary>
+    private static Passage<string> Unmeasured(ExperimentInput input, RunSpec run, string name) =>
+        Passage<string>.Stop(
+            ExitCodes.Environment,
+            [
+                $"{name}: starting a detached arm is {DetachedRoads.Measured} — nothing was made or locked; on this host start each arm of the run by hand:",
+                .. ChainGather.RunArmNames(run).Select(arm => RunAllVerb.HandCommand(input, arm)),
+            ]);
 
     private static Passage<IReadOnlyList<(string Name, string Real)>> Resolved(ExperimentInput input, HostKind host)
     {

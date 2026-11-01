@@ -144,14 +144,17 @@ internal static class RunAllVerb
             return new Passage<Placed>.Through(placed);
         }
 
-        var root = placed.Input.Root;
         return Passage<Placed>.Stop(
             ExitCodes.Environment,
             [
                 $"{Name}: starting a detached arm is {DetachedRoads.Measured} — on this host start each one by hand:",
-                .. placed.Arms.Select(arm => $"  setsid {placed.Input.Verb.Module.Executable} run-arm {arm} --experiment {root.Root} < /dev/null >> {root.PidLog(arm)} 2>&1 &"),
+                .. placed.Arms.Select(arm => HandCommand(placed.Input, arm)),
             ]);
     }
+
+    /// <summary>The line that starts one arm's runner by hand where the detached launch is not measured; <c>chain</c> prints the same for its run's arms.</summary>
+    internal static string HandCommand(ExperimentInput input, string arm) =>
+        $"  setsid {input.Verb.Module.Executable} run-arm {arm} --experiment {input.Root.Root} < /dev/null >> {input.Root.PidLog(arm)} 2>&1 &";
 
     /// <summary>Step 4: the PATH and configuration folders the runners inherit, <c>setsid</c> (on its road) and the module resolved to their REAL paths, <c>pids/</c> made by name; then what will be launched is printed, with the isolation line, before anything starts.</summary>
     private static Passage<Equipped> Equipping(Placed placed, RunAllSeams seams)

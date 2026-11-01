@@ -63,6 +63,11 @@ internal sealed class ChainKit : IAsyncDisposable
 
     public HostKind Host { get; set; } = HostKind.OtherPosix;
 
+    /// <summary>The platform road the chain chooses its folder isolation by; null is this host's.</summary>
+    public PlatformRoad? Road { get; set; }
+
+    public DetachedRoad Detached { get; set; } = DetachedRoad.Setsid;
+
     public int StartupTicks { get; set; }
 
     public int ExitTicks { get; set; }
@@ -157,7 +162,9 @@ internal sealed class ChainKit : IAsyncDisposable
             },
             _ => Task.FromResult(Host),
             TickAsync,
-            Clock);
+            Clock,
+            Road ?? PlatformFactsReader.CurrentRoad,
+            Detached);
 
     /// <summary><c>chain &lt;run&gt;</c> through the gate with the kit's seams (or the ones handed in); an exception travels to the test with the writers' text kept in <see cref="Output"/> and <see cref="Error"/>.</summary>
     public async Task<ChainRun> RunAsync(string run = "part6", CancellationToken? stopping = null, ChainSeams? seams = null)
@@ -254,7 +261,7 @@ internal sealed class ChainKit : IAsyncDisposable
             return 0;
         }
 
-        var seams = new RunAllSeams(_ => launcher, (root, arm) => Seams().Liveness(root, arm), DetachedRoad.Setsid);
+        var seams = new RunAllSeams(_ => launcher, (root, arm) => Seams().Liveness(root, arm), DetachedRoad.Setsid, TimeSpan.Zero);
         return await RunAllVerb.StartAsync(input, arms, seams);
     }
 

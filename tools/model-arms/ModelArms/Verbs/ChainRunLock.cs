@@ -17,7 +17,7 @@ internal static class ChainRunLock
         var name = $"model-arms chain {run}";
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? input.Root.Chain);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

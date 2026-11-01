@@ -58,7 +58,7 @@ internal static class ChainVerb
     private static async Task<int> HeldAsync(ExperimentInput input, ChainSeams seams, RunSpec spec)
     {
         var host = await seams.Host(input);
-        var ready = ChainAdmission.Admit(input, spec.Name, host);
+        var ready = ChainAdmission.Admit(input, spec, host, seams.Detached);
         if (ready is Passage<string>.Stopped stop)
         {
             return stop.Print(input.Verb.Error);
@@ -71,7 +71,7 @@ internal static class ChainVerb
         }
 
         await using var awake = ((Passage<IHostAwake>.Through)started).Value;
-        return await new ChainWalk(input, seams, spec, host).RunAsync();
+        return await new ChainWalk(input, seams, spec).RunAsync();
     }
 
     /// <summary>On every exit that is not 0 once the run's lock is held: the isolation as it stands now (read again) and the reminder that nothing was undone.</summary>

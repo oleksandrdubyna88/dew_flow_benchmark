@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
+using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using Xunit;
 
@@ -37,7 +38,7 @@ public sealed class ChainProcessTests
         await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
         Directory.Exists($"/proc/{runner}").Should().BeTrue("the detached runner outlives the chain that started it");
-        var real = new FileInfo(lockPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? Path.GetFullPath(lockPath);
+        var real = Path.Combine(RealPath.Of(Path.GetDirectoryName(lockPath)!).Ok(), Path.GetFileName(lockPath)); // the kernel names a descriptor by its real path: a link in a parent folder (a /tmp that is one) must not hide a match
         foreach (var pid in kit.Fake.Calls().Select(call => call.Pid).Append(runner).Distinct())
         {
             DescriptorsOf(pid).Should().NotContain(real, $"pid {pid} holds no descriptor of chain/part6/.chain.lock: the lock's handle is close-on-exec, so the launch did not hand it on");

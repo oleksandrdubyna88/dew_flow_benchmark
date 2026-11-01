@@ -242,19 +242,21 @@ public sealed class ChainVerbTests
     }
 
     [Theory]
-    [InlineData("wsl without a block", HostKind.Wsl)]
-    [InlineData("windows", HostKind.Windows)]
-    public async Task On_windows_or_without_isolation_the_chain_runs_under_no_isolation_and_the_hosts_awake_adapter(string row, HostKind host)
+    [InlineData("wsl without a block", HostKind.Wsl, false)]
+    [InlineData("windows", HostKind.Windows, true)]
+    [InlineData("a host whose road has no folder isolation, the block kept", HostKind.Wsl, true)]
+    public async Task On_windows_or_without_isolation_the_chain_runs_under_no_isolation_and_the_hosts_awake_adapter(string row, HostKind host, bool noAdapter)
     {
         await using var kit = await ChainKit.CreateAsync();
         kit.Host = host;
-        if (host == HostKind.Wsl)
+        if (noAdapter)
         {
-            kit.Root.Edit(top => top.AsObject().Remove("isolation"));
+            kit.Road = PlatformKit.WindowsRoad;
+            kit.LockResult = () => new LockOutcome.NoIsolation("isolation by file modes is POSIX only — nothing to lock on Windows");
         }
         else
         {
-            kit.LockResult = () => new LockOutcome.NoIsolation("isolation by file modes is POSIX only — nothing to lock on Windows");
+            kit.Root.Edit(top => top.AsObject().Remove("isolation"));
         }
 
         var run = await kit.RunAsync();
@@ -264,6 +266,90 @@ public sealed class ChainVerbTests
         kit.Marked("part6", RunStage.Locked).Should().BeTrue("`locked` is written over NoIsolation and stands over no snapshot");
         File.Exists(kit.Layout.LockedModes).Should().BeFalse();
         kit.Marked("part6", RunStage.ArmsDone).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_runner_that_finishes_between_the_reads_of_its_arm_is_a_finished_arm_never_a_died_one()
+    {
+        await using var kit = await ChainKit.CreateAsync();
+        Part6Arms.ToList().ForEach(kit.MarkMade);
+        kit.MarkStage("part6", RunStage.Locked);
+        kit.WriteSnapshot("part6", kit.DigestOf("part6"));
+        kit.WritePid("C1");
+        var flipped = false;
+        var inner = kit.Seams();
+        var seams = inner with
+        {
+            Liveness = (root, arm) =>
+            {
+                if (arm != "C1" || flipped)
+                {
+                    return inner.Liveness(root, arm);
+                }
+
+                flipped = true;
+                kit.FinishNow("C1");
+                return new RunnerState.Gone();
+            },
+        };
+
+        var run = await kit.RunAsync(seams: seams);
+
+        flipped.Should().BeTrue();
+        run.Error.Should().NotContain("stopped without finishing", "the runner appended arm-done and exited between the chain's reads: the lock is read BEFORE the timing, so the finished line is seen");
+        run.Code.Should().Be(0, run.Error + run.Output);
+        kit.Record.Should().NotContain("start C1", "a finished arm is not started again").And.Contain("start CR1,SRS1");
+    }
+
+    [Theory]
+    [InlineData("make and lock")]
+    [InlineData("checks")]
+    public async Task A_plan_that_cannot_be_made_stops_neither_the_makes_nor_the_lock_nor_the_checks(string stage)
+    {
+        await using var kit = await ChainKit.CreateAsync();
+        var experiment = kit.Root.ExperimentOf();
+        var arms = experiment.Runs.SelectMany(run => run.Rounds.SelectMany(round => round)).Where(arm => arm != "C1").Distinct().ToList();
+        var token = (byte)0x70;
+        kit.Root.Write("arms.map.json", ArmMap.Extend(ArmMap.Empty, arms, () => [0, 0, 0, 0, 0, 0, 0, ++token]).ToJson());
+        ArmMap.Read(File.ReadAllText(kit.Layout.ArmMapFile)).Ok().TokenOf("C1").Should().BeOfType<Bench.Domain.Outcome<string>.Fail>("part7 closes C1 and the map has no C1: its plan cannot be made");
+        if (stage == "checks")
+        {
+            new[] { "CHH1", "CHH2", "CHH3" }.ToList().ForEach(kit.MarkMade);
+            kit.MarkStage("part7", RunStage.Locked);
+            kit.MarkStage("part7", RunStage.Unlocked);
+        }
+        else
+        {
+            kit.LockResult = () => new LockOutcome.Stopped(ExitCodes.Configuration, "the lock of the row");
+        }
+
+        var run = await kit.RunAsync("part7");
+
+        if (stage == "checks")
+        {
+            run.Code.Should().Be(0, run.Error + run.Output);
+            kit.Stages.Should().Contain(["check CHH1", "check CHH2", "check CHH3"]);
+            return;
+        }
+
+        run.Code.Should().Be(4);
+        run.Error.Should().Contain("the lock of the row", "the chain reached its own make and its own lock before anything needed the plan: " + run.Error);
+        kit.Stages.Should().Equal("awake-start", "make CHH1,CHH2,CHH3", "lock part7", "awake-dispose");
+    }
+
+    [Fact]
+    public async Task A_host_where_the_detached_launch_is_not_measured_is_refused_before_make_and_lock()
+    {
+        await using var kit = await ChainKit.CreateAsync();
+        kit.Detached = DetachedRoad.Unmeasured;
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(3, run.Error);
+        run.Error.Should().Contain("starting a detached arm is").And.Contain("by hand").And.Contain("run-arm C1");
+        kit.Record.Should().BeEmpty("nothing was made, locked or kept awake on a host the chain cannot launch on");
+        File.Exists(kit.Layout.Executables).Should().BeFalse();
+        kit.Marked("part6", RunStage.Locked).Should().BeFalse();
     }
 
     [Fact]

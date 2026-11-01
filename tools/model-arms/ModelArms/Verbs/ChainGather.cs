@@ -12,14 +12,14 @@ internal static class ChainGather
 {
     private const int TimingLimit = 16 * 1024 * 1024;
 
-    public static Passage<ChainFacts> Read(ExperimentInput input, ChainSeams seams, RunSpec run, HostKind host, IReadOnlySet<string> startedHere)
+    public static Passage<ChainFacts> Read(ExperimentInput input, ChainSeams seams, RunSpec run, IReadOnlySet<string> startedHere)
     {
         var name = $"model-arms chain {run.Name}";
         return IsolationLocking.MapOf(input, PlatformFactsReader.CurrentRoad).Bind(map =>
             Each(RunArmNames(run), arm => ArmOf(input, seams, map, arm, name)).Bind(arms =>
                 Others(input, seams, map, run).Bind(others =>
                     Markers(input, run, name).Bind(markers =>
-                        Digest(input, run, host).Map(digest => Facts(input, run, map, arms, others, markers, digest, startedHere))))));
+                        Digest(input, seams, run, arms, markers).Map(digest => Facts(input, run, map, arms, others, markers, digest, startedHere))))));
     }
 
     /// <summary>This run's arms in round order, once each.</summary>
@@ -67,8 +67,8 @@ internal static class ChainGather
         Present(input.Root.Made(arm), name).Bind(made =>
             Present(input.Root.ObjectiveMarker(arm), name).Bind(@checked =>
                 Present(input.Root.PidFile(arm), name).Bind(ran =>
-                    DoneOf(input, map, arm, name).Bind(done =>
-                        Alive(input, seams, arm).Map(alive => new ArmFacts(arm, made, done, alive, ran, @checked))))));
+                    Alive(input, seams, arm).Bind(alive =>
+                        DoneOf(input, map, arm, name).Map(done => new ArmFacts(arm, made, done, alive, ran, @checked))))));
 
     /// <summary>The map's arms this run does not name, asked whether their runner holds its lock.</summary>
     private static Passage<IReadOnlyList<string>> Others(ExperimentInput input, ChainSeams seams, ArmMap map, RunSpec run)
@@ -92,6 +92,8 @@ internal static class ChainGather
             present => new Passage<bool>.Through(present),
             reason => Passage<bool>.Stop(ExitCodes.Environment, $"{name}: cannot tell whether {path} is there: {reason}"));
 
+    // The order above is the point: the pid file, then the runner's lock, THEN the timing. A runner appends its `arm-done` line and exits; read in the other order, the chain could see "no arm-done" and then "no lock" for an arm that finished between the two reads, and stop a finished arm as died. In this order a runner that finishes between the reads is seen alive (awaited) or done.
+
     /// <summary>Whether the arm's <c>out/timing.jsonl</c> says it finished (<see cref="TimingLines.IsArmDone"/>); an arm with no token yet, or no timing, has not.</summary>
     private static Passage<bool> DoneOf(ExperimentInput input, ArmMap map, string arm, string name)
     {
@@ -113,7 +115,16 @@ internal static class ChainGather
             Present(input.Root.RunMarker(run.Name, RunStage.Unlocked), name).Bind(unlocked =>
                 Present(input.Root.RunMarker(run.Name, RunStage.ArmsDone), name).Map(done => (locked, unlocked, done))));
 
-    /// <summary>The digest of this run's plan — <c>null</c> when it closes nothing (no isolation) and on Windows, where <c>lock</c> answers <i>isolation by file modes is POSIX only</i> and the only adapter is <c>NoIsolation</c> (D11): <c>locked</c> then stands over no snapshot. A plan that cannot be made is the stop <see cref="LockVerb.PlanOf"/> gives.</summary>
-    private static Passage<string?> Digest(ExperimentInput input, RunSpec run, HostKind host) =>
-        host == HostKind.Windows ? new Passage<string?>.Through(null) : LockVerb.PlanOf(input, run.Name).Map(plan => plan?.Digest);
+    /// <summary>The digest of this run's plan — needed ONLY by the reconciliation (rule 5), so it is asked only when rules 1 to 4 do not already decide: a plan that cannot be made (a <c>closedArms</c> entry never made, an arm the map lacks) must not stop the chain's own make, lock or checks. <c>null</c> when it is not asked, when the run closes nothing, and when the folder isolation of this road is
+    /// <see cref="NoIsolation"/> (<see cref="FolderIsolations.For"/> — the SAME choice <c>lock</c> makes, so the two cannot drift: on Windows <c>lock</c> says <i>POSIX only</i> and <c>locked</c> stands over no snapshot). A plan that cannot be made is the stop <see cref="LockVerb.PlanOf"/> gives.</summary>
+    private static Passage<string?> Digest(ExperimentInput input, ChainSeams seams, RunSpec run, IReadOnlyList<ArmFacts> arms, (bool Locked, bool Unlocked, bool ArmsDone) markers)
+    {
+        if (!markers.Locked || markers.Unlocked || markers.ArmsDone || arms.Any(arm => !arm.Made))
+        {
+            return new Passage<string?>.Through(null);
+        }
+
+        using var isolation = FolderIsolations.For(seams.Road, hands: null, events: null);
+        return isolation.Applies ? LockVerb.PlanOf(input, run.Name).Map(plan => plan?.Digest) : new Passage<string?>.Through(null);
+    }
 }
