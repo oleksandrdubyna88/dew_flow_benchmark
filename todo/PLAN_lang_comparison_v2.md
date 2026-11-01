@@ -200,6 +200,10 @@ Narrowed: yes — D10's arm alternation, the control of T16, is lost: under D44 
 
   (Pending, 2026-11-01: the plan round on this revision, then the owner's approval of the narrowing and the answer to
   §17 Q-G. The line of epoch 5 is written only after them. Nothing was cut, so no revert is owed.)
+  (Confirmed 2026-11-01 by the team lead (Opus, main session), judging apart from the writer: every verdict above checked
+  against the code and the branches — fits, nothing cut. Two facts for the record: operator step O1b was done and read
+  back the same day (the task repository allows squash and rebase merges only); D44's reading "group B is built while
+  group A's rounds run, and B's paid sessions start only after A's interim record" is the team lead's, confirmed.)
 
 ## 1. The question, before any solution
 
