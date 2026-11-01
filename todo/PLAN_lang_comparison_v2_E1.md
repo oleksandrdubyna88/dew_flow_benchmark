@@ -25,7 +25,16 @@ no epic order or parent contract changed; the consult's fixes make the briefs me
 D43), a fix that only satisfies the plan as written (`common.plan-change-control`); the one contract-touching item is held to
 the delegated-scope design (§12 item 3). **The coai document gate passed (proceed), 2026-11-01**; its findings are applied as
 the team lead decided them (E1.S7's scenarios, the pid rule, the delegated scope as E1.S8b's required design, §4 step 1's
-remote, the test-runner scaffold, `UNCLEAR.md`, this sentence).
+remote, the test-runner scaffold, `UNCLEAR.md`, this sentence). **Re-cut 2026-11-01 for the parent's epoch-5 re-review**
+(parent `ee6ae22f`, the staged series D44–D53; the epoch-5 re-review judged this document `fits`, reworked as text): the
+stories are built in the group that first needs them — **group A** (the olympiad tasks 01, 02, 03, 09, bare arm), **group B**
+(the bare arm for all ten), **group C** (the process arm). §5 gains the story map by group and the waves per group, with
+CP3 and CP4 for 01, 02, 03 and 09 first; E1.S8a part ii is split into ii-a (A) and ii-b (B); E1.S8b is built whole before A,
+the netns holder included, with its memory view asserted; E1.S7 waits for group C except the tag ruleset and `main`'s
+protection; each group freezes under its own tag; the Definition of Done is per group. Done before this re-cut: E1.S5 merged
+(#135); E1.S1's bench side and E1.S8a part i built and in their code review (local branches). The parent is **stopped for
+re-review** until its plan round and the owner's approval; nothing here starts before epoch 5 opens. Still twelve stories,
+still one cornerstone (E1.S2); this document keeps no ledger.
 
 ## 1. The epic, restated (parent § *Epics*, E1)
 
@@ -39,6 +48,13 @@ hashed; the preflight passes inside a box on SDK 10.0.403, Node 26.13.0, **TypeS
 the pinned Python; the execution layer's probes T-L30 … T-L34 green on the series host (E1.S8b); `FORMAT.md` v2 gated and its
 three examples run; the ten specs conform to it, carry a gate verdict and the freeze tag; the README carries the credits and
 the Node stack table; `leakcheck` clean.
+
+**Done when, per group (parent D44, D45, D51; 2026-11-01).** **A** — the done-when above for 01, 02, 03 and 09:
+`workspace-diff` on those four pairs, their specs gated and frozen under `spec-frozen-A-<yyyymmdd>`, the layer whole with its
+memory view asserted (T-L43), E1.S8a parts i and ii-a pinned, both stacks' full package sets hashed, the tag ruleset and
+`main`'s protection read back. **B** — the six others gated and frozen under `spec-frozen-B-<yyyymmdd>`, part ii-b pinned as
+the second runner manifest (T-L38), A's four re-gated on B's identities (parent D50), A's blobs equal across the two tags
+(T-L39). **C** — E1.S7 whole (templates, CI, the remaining rulesets, run bases bound to the frozen commit, parent D52).
 
 **Not in this epic** (do not build here): the held-out suites, mutants, trap coverage table and limit calibration (E2); the
 drivers' scenario logic and records, the judge's case loop, scoring per kind, D15's environment in the **agent** box, the
@@ -319,6 +335,43 @@ ruleset exists and was read back** (consult C7b) — then S3 phase B. **S7 part 
 phase A and the operator's steps O2 and O3. S1's `chore/join-remote` is merged before any other task-repository branch is
 pushed (§3).
 
+**The story map by group (parent D44, D50, D51; 2026-11-01) — the order in force.** The waves above are superseded for the
+staged series and kept for their history.
+
+| Story | Group A (01, 02, 03, 09; bare) | Group B (the six others; bare) | Group C (process) |
+|---|---|---|---|
+| E1.S1 | built, in review; fix forward: exact exemptions (D52, T-L47) | `workspace-diff` and the push check over B's pairs | — |
+| E1.S5 | merged (#135) | — | — |
+| E1.S8a | part i (built, in review; the V2 test of D52 added); **part ii-a** | **part ii-b** — the second runner manifest (D50, T-L38) | — |
+| E1.S8b | **whole**, the netns holder included; CP2; the memory view asserted (T-L43) | — (the same identity) | — |
+| E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) | — |
+| E1.S4 | the full sets of both stacks, web packages included | — | — |
+| E1.S3 | phase A; phase B for the four | phase B for the six | — |
+| E1.S6, E1.S2, E1.S2a | 01, 02, 03, 09; freeze A | the six; A's four re-gated on B's identities (D50); freeze B | — |
+| E1.S7 | **the tag ruleset and `main`'s protection only**, read back before A's freeze | — | everything else: templates, CI, `run-main`, the deploy key's road, the PAT, the conventions snapshot, the bound run base (D52) |
+
+**Waves per group (2026-11-01).**
+
+- **W-A1:** S8a part i ∥ S5 ∥ S1 (all three built; S1 and S8a part i finish their reviews with the fixes forward of D52); then
+  **S8a part ii-a**.
+- **W-A2:** **S8b whole** (needs ii-a and S5) ∥ **S9** (sections classed), gated after **CP1** ∥ S4 ∥ **S7's tag ruleset and
+  `main` protection** (after S1's first pushes and operator step O3's go). **CP2** after S8b, with T-L43's asserted record;
+  the team lead decides OP-K on it before E2-A calibrates (§9).
+- **W-A3:** S8 ∥ S3 phase A (after CP2).
+- **W-A4, per task, 01 first, then 02, 03 and 09:** S6 → S2 draft and conformance → S2a → **the D40 gate on S8b's layer,
+  behind the gate lock** (§3) → S2's document gate, consultant and bias review → gated. **CP3** after task 01 has run this
+  chain end to end, before 02, 03 and 09.
+- **W-A5:** **CP4**, then the freeze commit and the tag `spec-frozen-A-<yyyymmdd>` — precondition: the tag ruleset exists and
+  was read back (consult C7b) — then S3 phase B for the four.
+- **W-B1:** S8a part ii-b — may start while A's rounds run, since nothing of it changes A's pinned manifest (parent D45).
+- **W-B2, per task, the pilot specs 05 and 04 first, then 06, 07, 08, 10:** the same chain as W-A4; **CP3-B** after the first of
+  them has run it end to end; beside it, **the D40 gate re-run for 01, 02, 03 and 09 on B's identities** (D50; their A
+  records stay valid for A and are `stale` for B).
+- **W-B3:** **CP4-B**, then the freeze `spec-frozen-B-<yyyymmdd>` (the tag ruleset already covers it), then S3 phase B for the
+  six.
+- **W-C:** E1.S7's part *conventions snapshot* and the rest of part *GitHub*, before group C's pre-registration; OP-J answered
+  by the owner before the first run base is cut.
+
 **Review checkpoints inside the epic (consult A).** Not one gate at the end: each is an Opus judge's reading
 (`common.subagent-models`), its findings resolved like a review's, recorded as a dated line in
 `spikes/lang-bench/inputs/checkpoints.md` (append-only, no trap content), and it blocks what it names until it is recorded.
@@ -329,6 +382,11 @@ pushed (§3).
 | CP2 | after S8b, before the first `prefreeze` run and before S3 phase A | the launch hierarchy's probes T-L30 … T-L34 against the consult's B1–B7 and B10 (signal delivery, the scope's lifetime, `OOMPolicy`, the kill domain, launch failure, timing, the per-case view, locale): the series' verdict machinery is fixed here, and a later change re-dates every evidence (parent §6.1) | S3 phase A, every D40 gate |
 | CP3 | after task 01 has run W4 end to end (S6 → S2 draft → conformance → S2a → D40 gate → document gate → gated) | a retrospective of the per-task chain: it runs ten times, and a defect found at task ten is nine tasks of rework | W4 for tasks 05, 04 and the other seven |
 | CP4 | before the freeze commit | the staleness records (S2a), the tag procedure (S2, consult C7) and the push-check output of every spec PR, in one sitting | the freeze commit and tag |
+
+*(2026-11-01, the staged series:)* CP1 and CP2 run once, in group A. **CP3 and CP4 are group A's** — CP3 after task 01, CP4
+before `spec-frozen-A-…`. Group B adds **CP3-B** (after the first of its six tasks, the first daemon or web chain — a new
+chain shape, so it gets its own retrospective) and **CP4-B** (before `spec-frozen-B-…`, also reading the re-gated A records
+and T-L38/T-L39). Each is recorded in `inputs/checkpoints.md` before what it blocks.
 
 ---
 
@@ -427,6 +485,24 @@ over the bench's own new commits. (11) `credits-lang.json`: validate §4's shape
 fields its `basis` needs), then check the README's attribution section for each `credit` line verbatim, the per-file
 exception sentence naming the two CC BY-NC-SA files, and the MIT notice of an entry with `upstreamNotice`.
 
+**Exact exemptions — a fix forward on `feat/lang-v2-e1-s1` before its merge (parent D52, coai risk `b3a3e5d6`; 2026-11-01).**
+The branch built two exemptions as classes of text: a six-word window wholly inside one whitespace token is not a shingle hit
+(`c90a0645`), and any Markdown text published at `origin/main` is public (`f70f2783`). Both are bypasses: a passage joined with
+`/` or `-` is one token, and published fragments can be recombined — an accidental publication would become tomorrow's
+exemption. **They are replaced by exact entries:** `spikes/lang-bench/inputs/push-exemptions.json`, one entry per approved
+value at an approved place — `{ path, line or anchor, sha256 of the exact passage or value, reason, approvedBy, on }` —
+reviewed by the team lead before it is added and never derived from what is published; a hit is exempt only when its path and
+its passage hash equal an entry's. Paraphrase defeats six-word matching, so the semantic control of an aid-informed text stays
+with its gate and bias review (E1.S2), as before. *Scenarios:* *given* an aid shingle joined by `/` into one token, *then* the
+push check refuses it; *given* a passage from a published note recombined with another, *then* it is refused unless an entry
+names it; *given* an approved entry, *then* the same passage at another path, or with one byte changed, is refused. *Tests
+(red, green, red):* `A_one_token_exemption_would_pass_a_slash_joined_aid_passage_and_that_is_the_point` (red on the branch as
+built, green with exact entries, red with the class rule restored);
+`A_published_text_exemption_would_pass_a_recombined_passage_and_that_is_the_point`;
+`An_exemption_holds_only_at_its_path_and_hash` beside its companion `The_shingle_scan_still_finds_a_planted_aid_passage`
+(T-L47). **Per group (D44):** `workspace-diff` and T-L1 run over the task pairs that exist in the pushed tree, so A's four
+pairs pass before the six others exist.
+
 ---
 
 ## E1.S8a — the baseline visible-sample runner `runner/`, pinned
@@ -451,7 +527,7 @@ row while S9 is drafted; the runner follows in the same branch and S9 is gated a
 | # | v2 decision | Runner behaviour |
 |---|---|---|
 | V1 | the version: `scenario 2` / `transcript 2` | any other version is a format error naming the file (exit 4); v1 files are re-conformed, never run |
-| V2 | **exact-decimal JSON numbers**: an integer and a decimal compared by exact value (`int`/`Decimal`, never `float`); `-0` equals `0`; `2` equals `2.0` | `json.loads(text, parse_float=Decimal, parse_int=Decimal, parse_constant=<refuse>, object_pairs_hook=<refuse duplicate names>)` — `NaN`, `Infinity` and `-Infinity` refused, a repeated member name refused; numbers compared by exact numeric value (`Decimal` equality, or after `Decimal.normalize()`), **never by string or by `as_tuple()`** |
+| V2 | **exact-decimal JSON numbers**: an integer and a decimal compared by exact value (`int`/`Decimal`, never `float`); `-0` equals `0`; `2` equals `2.0` | `json.loads(text, parse_float=Decimal, parse_int=Decimal, parse_constant=<refuse>, object_pairs_hook=<refuse duplicate names>)` — `NaN`, `Infinity` and `-Infinity` refused, a repeated member name refused; numbers compared by exact numeric value (`Decimal` equality, or after `Decimal.normalize()`), **never by string or by `as_tuple()`**. *(Superseded 2026-11-01, parent D52: "or after `Decimal.normalize()`" is struck — under the default context it rounds to 28 digits, so two distinct 30-digit values would compare equal (the team lead's re-run); numbers compare by exact `Decimal` equality only, and test (1b) proves it. Part i does not call it.)* |
 | V3 | **default request headers**: `Host: 127.0.0.1:<PORT>` and, with a body, `Content-Length: <n>`, nothing else; a `header` line whose name equals a default (ASCII case-insensitive) replaces it in place | the serialiser of v1 §4.3 with the replacement rule |
 | V4 | **`connect` retries** a refused connection every 50 ms until its deadline; still refused → `refused <conn>`, the scenario ends | as stated; the readiness probe keeps v1's 50 ms retry within T |
 | V5 | **a closed HTTP connection**: a request that meets a connection the program closed before a single response byte arrived is rewritten once on a new connection within the same step deadline; a second close is `eof <conn> ""` | at most one reconnect per request |
@@ -535,7 +611,10 @@ skipping with their reason only where bwrap is absent (never under `BENCH_REQUIR
 with `json.loads` defaults, green with V2, red with `parse_int=Decimal` removed; beside it
 `A_repeated_member_name_is_refused`, `Two_and_two_point_zero_are_equal`, `Minus_zero_equals_zero`,
 `NaN_and_Infinity_are_refused`, and `A_string_or_tuple_compare_would_call_2_and_2_point_0_different_and_that_is_the_point`
-(red with `str()` or `as_tuple()` equality, green with numeric equality). (2)
+(red with `str()` or `as_tuple()` equality, green with numeric equality). **(1b), added 2026-11-01 (parent D52, T-L44):**
+`A_normalize_before_equality_would_make_two_distinct_30_digit_values_equal_and_that_is_the_point` — red with
+`Decimal.normalize()` (or a 28-digit context) before equality, green with exact `Decimal` equality, red again; beside it
+`Two_and_two_point_zero_are_still_equal`. It lands on part i's branch before its merge. (2)
 `A_split_offset_counts_the_joined_bytes_not_the_first_string`. (3) `A_program_that_ignores_SIGTERM_is_killed_with_its_group`
 — red before the group kill (the stub's marker survives in `/proc/*/environ`), green, red with `killpg` replaced by `kill`.
 (4) `An_unread_flood_ends_the_scenario_instead_of_the_runner`. (5) `Every_runner_import_is_standard_library_or_a_sibling`
@@ -585,7 +664,20 @@ twelve; its size needs two coders and two reviews.
   `pin-runner.mjs`, `specs-record.mjs` (§3), `run-tests.mjs` and the preload; tests (1), (2), (5), (6), (12), (13). Its
   `--parse-only` unblocks S9's draft and S8. CP1 reads it with the S9 draft.
 - **Part ii (branch `feat/lang-v2-e1-s8a-ii`, after part i merged):** `rs_proc`, `rs_net`, daemon and web, lifecycle, V3–V5,
-  V7, V11, V12, and the consult's B1, B4–B7; tests (3), (4), (7)–(11), (14). S8b starts after it.
+  V7, V11, V12, and the consult's B1, B4–B7; tests (3), (4), (7)–(11), (14). S8b starts after it. *(Superseded 2026-11-01 by
+  the split below, parent D51; the content is unchanged, only its order.)*
+- **Part ii-a — group A (branch `feat/lang-v2-e1-s8a-iia`, after part i merged; 2026-11-01, parent D51).** What the olympiad
+  path needs from `rs_proc` and `rs_exec`: `--launch-prefix`; `--launch-status` (B5: no `child-pid` before the launcher exits
+  is exit 3 `launch failed`); every wait by `pidfd_open` + `select` and the wall rule (B6), with `launchMs` and
+  `emptyProgramMs`; `--case-view` (B7); `--cgroup-of` — the memory read of `memory.peak`, `memory.events` and `cgroup.procs`
+  and the kill at the time limit through `cgroup.kill` (B4); V11, the program's environment; V12's stream caps and the 600 s
+  bound. Tests (8), (9), (10), (11), (14). **S8b starts after it.** Its manifest is group A's (parent D50).
+- **Part ii-b — group B (branch `feat/lang-v2-e1-s8a-iib`, before B's first D40 gate).** `rs_net`; the daemon and web paths;
+  the lifecycle — readiness within T (V4), `signal TERM` to the program's host pid (B1) and the stop at G, the leftover check;
+  V3, V5, V7; V12's connection-buffer bound (`overflow <conn>`). Tests (3), (4), (7). It makes **the second runner manifest**:
+  T-L38 (an AST and hash comparison of the olympiad modules, and identical verdicts and JSON results on the olympiad fixtures,
+  under both manifests) must be green before B's first D40 gate; a change it needs in an olympiad module is an instrument
+  amendment for group A (parent §6.1's group contract rule), never folded in silently.
 
 **Part ii's process rules (2026-11-01, consult B).**
 - **Whom to signal (B1).** With `--cgroup-of`, `signal TERM` goes to **the program's pid**: the one pid in the scope's
@@ -854,6 +946,30 @@ before §12 item 3's full stop has run. The probe also records (f) **that a dele
 `prog/` and write `memory.max` (and `memory.swap.max` = 0) there**, verified at CP2; (a) the wrapper's baseline is recorded only
 under the fallback.
 
+**Staged series — built whole before group A (parent D51; 2026-11-01).** The whole story — the netns holder of *The shape*'s
+item 1 included — is built and probed before A, and CP2 runs once: the olympiad program needs no network, and the holder's
+loopback-only namespace gives it none without a second code path; a holder added in B would change the layer identity and
+re-date every A gate and limit (parent §6.1). The identity then holds through B and C.
+
+**The memory view, asserted (coai risk `19ae7208`; parent D51, T-L43).** Probe line (d) above *printed* what each runtime
+believes; it now **asserts**, and it runs **through the final execution prefix** (the delegated scope, `nsenter`, the v2 box)
+at `MemoryMax` **256 MiB and 512 MiB**. The box's binds (`--tmpfs /` base) mount no `/sys/fs/cgroup`, and .NET finds its
+memory limit through the cgroup mount, so its "75 % of `memory.max`" may never apply and a host-sized GC could meet the kernel's
+OOM kill — differently by stack. The probe records and checks: whether a cgroup is visible inside the box; .NET's
+`GC.GetGCMemoryInfo().TotalAvailableMemoryBytes`; Node's `process.constrainedMemory()` and V8's `heap_size_limit`; each against
+the host's `prog/memory.max`. **What it asserts is the policy D15 records** — the team lead decides OP-K on this record before
+E2-A calibrates (§9): set `DOTNET_GCHeapHardLimitPercent` (or a hard limit) through D15's allow-list, or expose a read-only
+cgroup view in the box, or accept and record the runtimes' own view; the same choice for every task and both stacks. Fixtures:
+an **allocation-churn** program per stack with bounded live data (well under the limit) allocating far more than the limit
+over its run must complete with `pass`; an **over-limit** program per stack must end `memory limit` with `memory.peak` and
+`memory.events` kept. *Tests (red, green, red):*
+`A_memory_probe_that_only_prints_would_let_the_stacks_meet_different_bounds_and_that_is_the_point` (red when the probe prints
+and exits 0 on a mismatch, green when it asserts the recorded policy, red again);
+`Allocation_churn_with_bounded_live_data_completes_in_both_stacks_at_256_and_512_MiB`;
+`An_over_limit_program_is_memory_limit_with_its_evidence_kept`. *Acceptance, added:* T-L43 green on the series host through
+the final prefix at both limits, under `BENCH_REQUIRE_SANDBOX=1`; the asserted record in `inputs/exec-probe-<date>.json`; OP-K's
+decision a dated D15 line before E2-A's first calibration.
+
 ---
 
 ## E1.S9 — `FORMAT.md` v2, checked against the runner, gated before any spec gate
@@ -903,6 +1019,15 @@ author or an agent reading a sample?"). **Extractor:** `grammar-extract.mjs <FOR
 to the line before `## 6.`, prefixes `# Scenario and sample grammar (from FORMAT.md v<version>, sha256 <hex>)`, LF line ends;
 refuses when a heading is missing.
 
+**Section classes (parent D45; 2026-11-01).** Before the gate, every section of v2 gets one class line — `common`,
+`olympiad`, `daemon` or `web` — in a table at the top of FORMAT (a section that serves two kinds is `common`). After A's freeze
+the `common` and `olympiad` sections are **immutable for the series**; a `daemon` or `web` section may be amended before B's
+freeze as a new dated version naming the tasks it touches, and such an amendment touches no olympiad suite. FORMAT's sha is
+recorded **per group** in `inputs/specs.d/format.json` (`format: { A: { version, sha256, gate }, B: … }`), and `GRAMMAR.md`'s
+sha with it. *Scenarios:* *given* v2, *then* every `##` section has exactly one class; *given* a B amendment, *then* the bytes of
+every `common` and `olympiad` section equal A's. *Tests:* `Every_FORMAT_section_has_exactly_one_class`;
+`A_B_amendment_that_touches_an_olympiad_section_is_refused_and_that_is_the_point` (T-L39's FORMAT half).
+
 ---
 
 ## E1.S8 — FORMAT v1 (built; its gate is v2's) and the conformance check derived from v2
@@ -943,6 +1068,9 @@ negative test.
 <repo>/todo/tasks/FORMAT.md [--needles <file>]`; one line per check, `ok` or `FAIL <check> — <what, where>`; exit 0 / 1 / 4.
 Fixed sentences from FORMAT's `text` blocks by id (the table of §2.1 maps id → kinds → section). The runner through
 `runBounded`, 60 s.
+
+**Per group (parent D45; 2026-11-01).** The checker takes `--format` per group; in group B every olympiad spec of A is checked
+again under B's FORMAT sha and must pass under both (T-L39). *Test:* `An_olympiad_spec_conforms_under_A_and_B_FORMAT`.
 
 ---
 
@@ -1018,6 +1146,11 @@ the linter's peer range, green under the pin).
 and the `PACKAGES.md` renderer (package, version, purpose). Snapshots read-only after registration; the toolchains of S5 in
 the box.
 
+**Built whole in group A (parent D47; 2026-11-01).** Both stacks' full sets — the web packages included — are built and hashed
+before A, though A's tasks use none of the web pieces: `PACKAGES.md` lists the stack's offered set in every workspace, so a
+smaller set in A would make B's re-run of 01, 02, 03 and 09 differ from A's in an input the agent sees. The snapshot hashes
+are pinned for the series.
+
 ---
 
 ## E1.S3 — the workspaces
@@ -1070,6 +1203,9 @@ bin/Release/net10.0/App.dll`. Node: `build.sh` = `npm ci --offline` and `npx --o
 = … `exec node src/main.ts`. Neither script sets D15's variables (the layer does). Generate into a worktree of the task
 repository, never into a checkout someone works in.
 
+**Per group (2026-11-01).** Phase A once, in group A; phase B per group — the four pairs after A's freeze, the six after B's.
+The workspaces of A's four are not regenerated in B: their files and hashes stay those of A's tag (T-L39).
+
 ---
 
 ## E1.S6 — the visible samples
@@ -1103,6 +1239,9 @@ private notes (`~/rsd/lang-v2/test-design/`, D41) and formally in E2 once the tr
 **Brief (team lead).** One sample per kind of behaviour section 1 names, at most five; every deadline stated in the file; T and G
 as the spec states them; open the private notes on the host before writing and never copy anything held-out-shaped into
 `samples/`.
+
+**Per group (2026-11-01).** 01, 02, 03 and 09 in group A, the six others in group B. Material of the exploratory pilots may
+inform a sample only through this chain (parent D44); nothing is copied from them unchecked.
 
 ---
 
@@ -1156,6 +1295,20 @@ the frozen hashes, the tag pushed alone. From its gate on, a spec changes only b
   product's name; 09 is written wholly in our own words from the problem idea only, with no copied text; 06 is an adaptation of
   an MIT spec. The team lead's review of each against its source is recorded in that spec's gate record (the push check cannot
   prove "own words").
+
+**One freeze per group (parent D44, D45; 2026-11-01) — supersedes "one tag freezes all ten after the tenth" above, which
+stays for its history.** Group A gates 01, 02, 03 and 09 and freezes them under **`spec-frozen-A-<yyyymmdd>`** on the commit
+holding those four and FORMAT (the six others may exist as drafts on their own branches; they are not in A's rows); group B
+gates the six and freezes under **`spec-frozen-B-<yyyymmdd>`**, on a commit holding all ten, A's four byte-equal to A's tag
+(T-L39). C freezes nothing; its run bases are cut from B's tag. The freeze procedure (C7) is unchanged per tag:
+`planFreeze({ repo, group, rows })` refuses rows of the group that do not name one and the same tag, or rows of another group;
+the record keeps per group the commit sha and the tag-object sha. **"After the pre-registration never" reads per group:** a
+spec frozen for A never changes in B or C, even when A's rounds find a defect — blind adjudication handles it (parent §4.3).
+Each group's pre-registration pins its immutable manifest (parent D45), and a launch checks against it. *Scenarios:* *given*
+A's four gated and the six still drafts, *then* `planFreeze` for group A passes; *given* a B freeze commit whose A spec blob
+differs from A's tag, *then* it is refused. *Tests:* `Four_specs_freeze_under_A_while_six_are_drafts`;
+`A_B_freeze_that_changes_an_A_spec_is_refused_and_that_is_the_point` (T-L48, T-L39). *Acceptance, per group:* the group's
+verdicts and its tag exist before E2.S1 finalises a reference of that group; CP3 and CP4 (A), CP3-B and CP4-B (B) recorded.
 
 **Scenarios.** *Given* a gated spec edited outside its header rows without an amendment item, *then* the check fails naming it.
 *Given* the frozen tag and a run base whose spec blob differs, *then* `specBlobMatches` refuses it. *Given* a known task, *then*
@@ -1286,6 +1439,18 @@ outside every git tree and outside `~/rsd/lang-v2/`) holding only its inputs —
 or `refs/`, since a shared parent folder is enough for one coder to read the other stack's code — and its result is
 copied into `refs/<NN-slug>/<stack>/` when it has finished; the two stacks' coders of one task never run at the same time;
 the twenty launches are otherwise independent.
+
+**Per group, and the re-gate in B (parent D45, D50; 2026-11-01).** Staleness is judged **against a selected group manifest**:
+`gate-staleness.mjs` takes `--group` and compares a record's `runnerManifest`, `execLayer`, `formatSha256`, `specSha256` and
+`samplesSha256` with that group's. A's records stay valid for A and become `stale` for B once part ii-b makes B's runner
+manifest (T-L36); in group B the tool **re-runs the D40 gate for 01, 02, 03 and 09 on B's identities** — no model, no spend —
+and the new records are B's, the old ones kept. A re-gated result that differs from A's (a pass become a fail) is a finding:
+recorded, resolved before B's tag, and never applied to A's sessions. *(Superseded 2026-11-01 by the parent's D50 guard (2),
+the team lead's ruling at the second full reading, finding 1:)* a re-gated or re-calibrated result that differs from A's is
+**a drift finding, recorded in the drift table with its cause and never registered; the task's replication is suspended as an
+instrument finding if a reference fails under A's limit**. B's replication runs under A's registered limits, unchanged; the
+re-run is a check only. Material of the exploratory pilots reaches a draft
+reference only through this chain (parent D44). *Test:* `An_A_record_is_valid_for_A_and_stale_for_B`.
 
 ---
 
@@ -1420,6 +1585,23 @@ an argv or a long-lived environment variable; nothing of the broker is built her
 PAT* and *The rulesets, as data* exactly as written (the key exists, `~/.config/lang-v2/deploy_key_lang_v2`; the PAT exists,
 `~/.config/lang-v2/github-pat`).
 
+**Deferred to group C, except the tag ruleset and `main`'s protection (parent D44; 2026-11-01).** In group A this story builds
+only: **the tag ruleset** (`refs/tags/spec-frozen-*`, as in the table above — it then covers A's tag and B's) and **`main`'s
+protection** — `template-frozen` with a pull request required, conversation resolution, no force push, no deletion and
+linear history, **without** the per-stack required checks, which join when this story's CI lands in group C (a ruleset update
+on the operator's go, read back); both applied from `lib/github-lang.mjs`'s data on operator step O3's go and read back before
+A's freeze (C7b). Everything else — the templates, CI, `run-main`, the deploy key's road, the PAT's use, `cutRunBase`,
+`exportRunBase`, part *conventions snapshot*, P0 — is built in group C, before C's pre-registration (§9 OP-L).
+
+**The bound run base (parent D52, coai risk `b3a3e5d6`; T-L46).** `cutRunBase({ rid, tag, approvedCommit })` binds three
+things and refuses on any mismatch **before any push**: the approved frozen commit (the tag's peeled sha, compared by sha), the
+generated tree made from exactly that commit, and the final orphan sha made by `git commit-tree` from that tree; the push
+check then runs over **that exact orphan** — its tree and its one-commit history — and proves locally that its parent list is
+empty (`git cat-file -p <orphan>` has no `parent` line). C's run bases are cut from B's tag, which holds all ten specs.
+*Tests (red, green, red):* `A_run_base_built_from_another_commit_is_refused_before_any_push` (red when the cut takes the tag
+name instead of the bound sha, green bound, red again); `The_push_check_scans_the_exact_orphan_it_will_push`;
+`The_orphan_has_no_parent_proven_locally`.
+
 ---
 
 ## 8. Growth: what E1's stores weigh and who retires them (`common.planning-docs`, parent §13)
@@ -1445,6 +1627,9 @@ own and is removed by it, then swept by owner and age under `common.test-leftove
 | The writers' files `inputs/specs.d/*.json`, `inputs/specs.json`, `inputs/credits-lang.json`, `inputs/checkpoints.md` (§3, §4, §5) | KB | **kept in git** (append-only where they record a gate, a checkpoint or a freeze) | `specs.json` is regenerated, never half-written (written beside and moved over) |
 | Unclear lists `~/rsd/lang-v2/refs/<NN-slug>/<stack>/UNCLEAR.md` (E1.S2a, consult C4) | KB each, twenty | kept with the references | — |
 | `~/.config/lang-v2/known_hosts_github` (operator step O2) | bytes | kept while the deploy key is | — |
+| **Added 2026-11-01 (the staged series).** Gate records of A's four re-run on B's identities (E1.S2a, parent D50) | ≈ 8 more lines (4 tasks × 2 references), KB | **kept in git**, append only; A's records stay beside them | as the gate records above |
+| `inputs/push-exemptions.json` (E1.S1, parent D52) | one entry per approved passage; KB | kept in git; an entry is removed only by a reviewed change | — |
+| The memory-view probe records at 256 and 512 MiB (E1.S8b, T-L43) | KB per probe day | kept in git with `inputs/exec-probe-<date>.json` | — |
 
 ## 9. Open points
 
@@ -1465,10 +1650,13 @@ this revision is a change; what would need one is §12. OP-H … OP-K below cite
 | OP-H | §4 operator step O1 against `common.pull-requests` rule 1 ("merged by rebase … or by squash … Merge commits are off"), which the task repository mounts through its conventions pin and the process agent reads | The team lead accepted merge commits only for the task repository (consult C7a, D7). The shared rule says the opposite for the family's repositories. Options for the team lead before O1's write: (a) merge commits only, with the deviation named in the task repository's README and a note to the conventions owner — the process agent's rules then disagree with the repository's setting; (b) allow merge commits beside rebase and squash (the join and the freeze need merge commits; C7a's sha comparison already guards the tag); (c) a `local.*` rule in the task repository that narrows rule 1 for it — it would enter every run base and change what the process agent is told. | not a change to the parent (no parent decision names the merge method). **Decided by the team lead, 2026-11-01: (b) narrowed to the join PR only** — merge commits are allowed for the one join merge (O1a) and switched off again right after it (O1b); every other PR, the freeze commit and every amendment is squash-merged as rule 1 says, so the process agent's rules and the repository's setting agree; C7a's sha comparison guards the tag |
 | OP-I | parent D42 (`:253`: the broker "creates and updates the run's PR and reads its checks and comments") | Consult D4, **adjusted by the team lead:** the public repository lets the PAT read conversation comments without the Issues permission (verified 2026-11-01). `Issues: write` is needed only if the broker must **post** conversation comments; E3.S7a decides that when it designs the broker's allowed operations. No change to the PAT now. | not a change (E3.S7a's open point) |
 | OP-J | §4's credit terms; D39 (`:251`: the run base is "the frozen tag's tree minus the README's attribution section and minus any credit file") | Specs 01 and 02 are CC BY-NC-SA 4.0 by the README's per-file exception. Every run base is pushed to this public repository as `run/<rid>/main` without the attribution section (D39), so those branches carry the two files without their notice; the repository's `main` README carries it. Whether that satisfies the licence's attribution term for the run branches is the owner's to confirm before the first run base is cut (E1.S7 part *GitHub*); if not, the cut keeps one neutral licence line that names no source (D19's rule) — which the team lead would then weigh against D39. | not a change yet; the owner's question |
-| OP-K | parent D15 (`:242`) | Consult B8: .NET may size its GC hard limit to about 75 % of a detected container limit, so the two stacks could meet one `MemoryMax` with different effective bounds and verdict labels. E1.S8b's probe records what each runtime believes its limit is; **whether to set `DOTNET_GCHeapHardLimitPercent` is D15's decision, made by the team lead on that record before E2 calibrates.** | not a change here; a D15 decision for the team lead |
+| OP-K | parent D15 (`:242`) | Consult B8: .NET may size its GC hard limit to about 75 % of a detected container limit, so the two stacks could meet one `MemoryMax` with different effective bounds and verdict labels. E1.S8b's probe records what each runtime believes its limit is; **whether to set `DOTNET_GCHeapHardLimitPercent` is D15's decision, made by the team lead on that record before E2 calibrates.** | not a change here; a D15 decision for the team lead. *(2026-11-01, parent D51:) the probe now asserts the memory view through the final prefix at 256 and 512 MiB (E1.S8b, T-L43); the team lead decides OP-K on that asserted record before E2-A calibrates, as a dated D15 line* |
+| OP-L | E1.S7, *Deferred to group C* (2026-11-01) | Group A gets `main`'s protection without the per-stack required checks, because CI is E1.S7's and is built in group C; the checks join `template-frozen` then, by a ruleset update read back. Until then a spec PR merges on review alone — as every task-repository PR has so far. | not a change (the order of the parent's D44; a reading) |
 
 **Read together:** none of these is a change; OP-A was resolved as (c). Epoch 4 stays at 0 changes. *(2026-11-01: epoch 4 holds
-4.1 from another cause; OP-H … OP-K add none, and §12 lists what would.)*
+4.1 from another cause; OP-H … OP-K add none, and §12 lists what would.)* *(Later on 2026-11-01: epoch 4 was stopped by change
+4.2, the owner's staged order, and the parent's whole-plan revision (`ee6ae22f`) is the baseline epoch 5 will be approved on;
+OP-L adds no change; epoch 5 opens only after the parent's plan round and the owner's approval.)*
 
 ## 10. Risk items (for the gate's `riskItems`)
 
@@ -1487,6 +1675,12 @@ redesign, but without B1–B4 the runner and the layer go green on stubs and eve
 wrong; item 2 (E1.S2, E1.S2a) **go with fixes** (C1–C7); item 3 **E1.S1 go with fixes; E1.S7's GitHub part go with fixes behind
 D1's precondition**, which is met (§4). Every fix is written into its story above.
 
+**The coai risk consults of 2026-11-01** (codex, for the parent's change 4.2; verified by the team lead; parent D51, D52):
+item 3 — the push check's class exemptions become exact entries (E1.S1), the run base is bound and its exact orphan scanned
+(E1.S7), and the broker gets a host-side publication gate (E3.S7a, not this epic); item 2 — the per-group freeze with an
+immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted through the final prefix at 256 and 512 MiB
+(E1.S8b) and V2 without `Decimal.normalize()` (E1.S8a). Each is written into its story above with its named tests.
+
 ## 11. Definition of Done (E1)
 
 - [ ] The parent's E1 done-when holds (§1), with `BENCH_REQUIRE_SANDBOX=1` and nothing skipped.
@@ -1494,7 +1688,8 @@ D1's precondition**, which is met (§4). Every fix is written into its story abo
 - [ ] The runner is pinned and the execution layer probed and identified in `inputs/specs.json` before FORMAT v2's gate and the
       first D40 gate; FORMAT v2 gated before the first spec gate; every spec's samples existed before its conformance gate;
       every spec passed the D40 gate on the current runner and layer before its document gate (no record `stale`).
-- [ ] The ten specs gated, frozen under one tag, their hashes, R-ids, T and G in `inputs/specs.json`.
+- [ ] The ten specs gated, frozen under one tag, their hashes, R-ids, T and G in `inputs/specs.json`. *(Superseded for the staged
+      series, 2026-11-01: per group, below.)*
 - [ ] No trap content, held-out case, reference, mutant or riskiest scenario in either repository or in any PR, commit or review
       body (D41; `leakcheck` with the aid's shingles; the hash test).
 - [ ] Every push went through `push-check`, one branch per push; tags alone.
@@ -1514,6 +1709,17 @@ D1's precondition**, which is met (§4). Every fix is written into its story abo
       stop ran before the wrapper fallback was built.
 - [ ] Every consult fix written into a story (B1–B10, C1–C7, D1–D3, D5–D7) has its named test green or its live P0 line
       recorded; B8's probe line recorded for D15's decision.
+- [ ] *(Added 2026-11-01 — per group, the parent's D44–D53.)* **Group A:** 01, 02, 03 and 09 gated and frozen under
+      `spec-frozen-A-<yyyymmdd>`, their hashes, R-ids, T and G in `inputs/specs.json` under group A; E1.S8a parts i and
+      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it;
+      FORMAT v2's sections classed; both stacks' full package sets hashed; the tag ruleset and `main`'s protection read back
+      before A's tag; CP1–CP4 recorded; the fixes forward on E1.S1 (exact exemptions, T-L47) and E1.S8a (test (1b), T-L44)
+      merged with their branches.
+- [ ] **Group B:** part ii-b pinned as the second runner manifest with T-L38 green; the six gated and frozen under
+      `spec-frozen-B-<yyyymmdd>`; A's four re-gated on B's identities, their old records kept; T-L39 green; CP3-B and CP4-B
+      recorded.
+- [ ] **Group C:** E1.S7 whole, the required checks added to `main`'s protection and read back, the bound run base
+      (T-L46), OP-J answered before the first run base.
 
 ## 12. Parent changes this revision would need (not applied)
 
@@ -1555,3 +1761,9 @@ text, so it is listed here and not applied. Lines are of the parent at main `d47
    change (the approach) and so the full stop; it also departs from `common.subagent-models`' coder row, a policy question
    for the conventions. Not applied; C4's required part (the unclear lists and the item-by-item consultant question) is in
    E1.S2 and E1.S2a.
+
+*(2026-11-01, after the parent's whole-plan revision `ee6ae22f`:)* items 1 and 4 are applied in the parent (Q1's answer under
+Q1; D38's and T-L31's wording); item 2 is not needed (the assembled record stands); item 5 stays not applied. **In item 3,
+"change 4.2" named a hypothetical change; the parent's real change 4.2 is the owner's staged order.** If CP2 finds the
+delegated scope impossible on this host, the wrapper fallback changes D43's program-only scope: that is a change of epoch 5
+once it opens — and since epoch 5 starts at 0 changes, the first such change is recorded, and a second stops the plan again.
