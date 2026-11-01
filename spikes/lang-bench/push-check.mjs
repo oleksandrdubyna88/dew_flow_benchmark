@@ -122,7 +122,7 @@ async function runUninstallHook(v) {
   return { exit: r.exit, text: `${r.lines.join('\n')}\n` };
 }
 
-const runTag = v => withInputs(v, async inputs => (v.repo === undefined ? usage('--tag needs --repo') : report(await checkTag({ repo: v.repo, tag: v.tag, inputs }))));
+const runTag = v => (v.repo === undefined ? usage('--tag needs --repo <path of the task repository>') : withInputs(v, async inputs => report(await checkTag({ repo: v.repo, tag: v.tag, inputs }))));
 
 const MODES = { tag: runTag, 'install-hook': runInstallHook, 'uninstall-hook': runUninstallHook, 'setup-remote': runSetupRemote, text: runText, self: runSelf, branch: runBranch };
 

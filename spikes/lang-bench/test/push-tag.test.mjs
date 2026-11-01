@@ -134,3 +134,12 @@ test('A_remote_that_cannot_be_asked_is_exit_3_never_a_pass', async t => {
   assert.equal(result.exit, EXIT.ENVIRONMENT);
   assert.match(result.error, /ls-remote/);
 });
+
+test('A_tag_check_without_repo_says_what_to_give_and_exits_4', () => {
+  const CLI = fileURLToPath(new URL('../push-check.mjs', import.meta.url));
+  const publicFile = fileURLToPath(new URL('./fixtures/public-unrelated.md', import.meta.url));
+  const aid = fileURLToPath(new URL('./fixtures/own-secret-dummy.txt', import.meta.url));
+  const r = spawnSync(process.execPath, [CLI, '--tag', 'v1', '--aid', aid, '--public', publicFile, '--secret-file', aid], { encoding: 'utf8' });
+  assert.equal(r.status, 4, r.stdout + r.stderr);
+  assert.match(r.stdout, /--tag needs --repo <path of the task repository>/);
+});
