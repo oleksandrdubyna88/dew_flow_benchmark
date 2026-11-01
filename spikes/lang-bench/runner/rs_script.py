@@ -33,7 +33,7 @@ def _acceptable(tok, kind, accept):
     return accept(tok.value)
 
 
-def _take(cur, kind, what, accept=_always):
+def take_token(cur, kind, what, accept=_always):
     tok = cur.take()
     if not _acceptable(tok, kind, accept):
         return cur.fail(f"{what} is expected")
@@ -41,19 +41,19 @@ def _take(cur, kind, what, accept=_always):
 
 
 def take_dur(cur):
-    return _take(cur, "dur", "a duration of at most 600s")
+    return take_token(cur, "dur", "a duration of at most 600s")
 
 
 def take_int(cur):
-    return _take(cur, "int", "an integer")
+    return take_token(cur, "int", "an integer")
 
 
 def take_positive(cur):
-    return _take(cur, "int", "a positive integer", lambda n: n >= 1)
+    return take_token(cur, "int", "a positive integer", lambda n: n >= 1)
 
 
 def take_path(cur):
-    return _take(cur, "path", "a JSON path ($.member[index])")
+    return take_token(cur, "path", "a JSON path ($.member[index])")
 
 
 _OFFSETS = {"int": lambda value: (value,), "list": lambda value: value}
@@ -66,23 +66,23 @@ def take_offsets(cur):
 
 
 def take_name(cur):
-    return _take(cur, "word", "a name [a-z][a-z0-9_]* that is not a keyword", lambda w: NAME.match(w) and w not in KEYWORDS)
+    return take_token(cur, "word", "a name [a-z][a-z0-9_]* that is not a keyword", lambda w: NAME.match(w) and w not in KEYWORDS)
 
 
 def take_conn(cur):
-    return _take(cur, "word", "a connection name", lambda w: NAME.match(w) and (w not in KEYWORDS or w in BUILT_IN_CONNECTIONS))
+    return take_token(cur, "word", "a connection name", lambda w: NAME.match(w) and (w not in KEYWORDS or w in BUILT_IN_CONNECTIONS))
 
 
 def take_env_name(cur):
-    return _take(cur, "word", "an environment variable name [A-Z_][A-Z0-9_]*", ENV_NAME.match)
+    return take_token(cur, "word", "an environment variable name [A-Z_][A-Z0-9_]*", ENV_NAME.match)
 
 
 def take_method(cur):
-    return _take(cur, "word", "an HTTP method in capital letters", METHOD.match)
+    return take_token(cur, "word", "an HTTP method in capital letters", METHOD.match)
 
 
 def take_choice(choices):
-    return lambda cur: _take(cur, "word", "one of " + ", ".join(choices), lambda w: w in choices)
+    return lambda cur: take_token(cur, "word", "one of " + ", ".join(choices), lambda w: w in choices)
 
 
 def _refuse_within(cur):
@@ -360,7 +360,7 @@ def _h_together(cur, parser):
 
 
 def _h_repeat(cur, parser):
-    count = _take(cur, "int", f"a repeat count of 1 to {MAX_REPEAT}", lambda n: 1 <= n <= MAX_REPEAT)
+    count = take_token(cur, "int", f"a repeat count of 1 to {MAX_REPEAT}", lambda n: 1 <= n <= MAX_REPEAT)
     name = None if count is None else take_name(cur)
     if name is None:
         return None
@@ -434,6 +434,7 @@ class _Parser:
         return self.stack[-1]
 
     def statement(self, lineno, text):
+        mark = len(self.problems)
         cur = Cursor(text, self.file, lineno, self.problems)
         word = cur.take()
         if word is None or word.text not in _CONTINUATION:
@@ -441,6 +442,7 @@ class _Parser:
         handler = self._handler(word, cur)
         if handler is not None:
             self._run(handler, cur)
+        self.stopped = len(self.problems) > mark
 
     def _handler(self, word, cur):
         if word is None or word.kind != "word":

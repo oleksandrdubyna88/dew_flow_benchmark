@@ -1,0 +1,264 @@
+"""The expected transcript (.out) parser, its validation, and its one-to-one correspondence with the script (FORMAT v2 section 5, V1, V6)."""
+import os
+import unittest
+
+import runner_path  # noqa: F401
+import rs_lex as lex
+import rs_pair as rp
+import rs_script as rs
+import rs_transcript as rt
+
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "runner", "format")
+
+
+def parse(text, file="t.out"):
+    return rt.parse_transcript(text.encode("utf-8"), file)
+
+
+def fixture(name):
+    with open(os.path.join(FIXTURES, name), "rb") as f:
+        return f.read()
+
+
+def ok(text):
+    transcript, problems = parse(text)
+    assert not problems, problems
+    return transcript
+
+
+def kinds(transcript):
+    return [(e.kind, e.conn) for e in rt.expand(transcript)]
+
+
+class ExampleTests(unittest.TestCase):
+    def test_The_daemon_example_transcript_parses_and_expands_to_its_entries(self):
+        transcript, problems = rt.parse_transcript(fixture("x2.out"), "x2.out")
+        self.assertEqual(problems, [])
+        entries = rt.expand(transcript)
+        self.assertEqual(len(entries), 73, "ready, 2 + 2 + 1 + 2 entries of the first four steps, 64 slow-reader replies, the exit")
+        self.assertEqual([e.kind for e in entries[:4]], ["ready", "quiet", "recv", "recv"])
+        self.assertEqual(entries[-1].kind, "exit")
+
+    def test_The_web_example_transcript_parses_replies_with_headers_and_json_bodies_and_an_unordered_array(self):
+        transcript, problems = rt.parse_transcript(fixture("x3.out"), "x3.out")
+        self.assertEqual(problems, [])
+        replies = [e for e in rt.expand(transcript) if e.kind == "reply"]
+        self.assertEqual([(r.conn, r.status) for r in replies], [("a", 201), ("b", 201), ("a", 200), ("b", 201), ("a", 200)])
+        self.assertEqual(len(replies[0].headers), 1)
+        self.assertEqual(replies[0].body[0], "json")
+
+    def test_The_examples_correspond_one_to_one_with_their_scripts(self):
+        for name in ("x2", "x3"):
+            scenario, p1 = rs.parse_script(fixture(name + ".in"), name + ".in")
+            transcript, p2 = rt.parse_transcript(fixture(name + ".out"), name + ".out")
+            self.assertEqual(p1 + p2 + rp.validate_pair(scenario, transcript), [], name)
+
+    def test_The_parsed_transcript_is_frozen(self):
+        transcript, _ = rt.parse_transcript(fixture("x3.out"), "x3.out")
+        with self.assertRaises(Exception):
+            transcript.file = "x"
+
+
+class HeadTests(unittest.TestCase):
+    def test_Transcript_1_is_a_format_error_naming_the_file_and_line(self):
+        transcript, problems = parse("transcript 1\nready\n", "old.out")
+        self.assertIsNone(transcript)
+        self.assertEqual([(p.file, p.line) for p in problems], [("old.out", 1)])
+        self.assertIn("transcript 2", problems[0].message)
+
+    def test_The_first_statement_must_be_the_transcript_version(self):
+        self.assertEqual(len(parse("ready\n")[1]), 1)
+
+    def test_An_empty_transcript_of_the_right_version_is_valid_and_has_no_entries(self):
+        self.assertEqual(rt.expand(ok("transcript 2\n")), [])
+
+    def test_Blank_lines_comments_and_indentation_mean_nothing(self):
+        self.assertEqual(kinds(ok("transcript 2\n\n# note\n   ready\n    quiet c1\n")), [("ready", ""), ("quiet", "c1")])
+
+
+class EntryTests(unittest.TestCase):
+    def test_Every_entry_kind_of_the_format_parses(self):
+        text = 'transcript 2\nready\nrecv c1 "a"\nreply a 200\n  header "x" "y"\n  body empty\nquiet c1\nclosed c1\nexit 0\n'
+        self.assertEqual([k for k, _ in kinds(ok(text))], ["ready", "recv", "reply", "quiet", "closed", "exit"])
+
+    def test_A_reply_takes_exactly_one_body_line_of_the_three_forms(self):
+        for body, form in (('body "x"', "str"), ("body empty", "empty"), ('body json {"a":1}', "json")):
+            self.assertEqual(rt.expand(ok(f"transcript 2\nreply a 200\n{body}\n"))[0].body[0], form)
+        self.assertEqual(len(parse("transcript 2\nreply a 200\n")[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nreply a 200\nbody empty\nbody "x"\n')[1]), 1)
+
+    def test_A_header_or_body_line_outside_a_reply_is_a_problem(self):
+        self.assertEqual(len(parse('transcript 2\nheader "a" "b"\n')[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nquiet c1\nbody empty\n')[1]), 1)
+
+    def test_A_status_must_be_a_three_digit_code(self):
+        self.assertEqual(len(parse("transcript 2\nreply a 99\nbody empty\n")[1]), 1)
+        self.assertEqual(len(parse("transcript 2\nreply a 600\nbody empty\n")[1]), 1)
+
+    def test_An_entry_that_is_only_ever_actual_is_not_a_keyword_of_an_expected_transcript(self):
+        for word in ("not-ready", "refused c1", "timeout c1 \"\"", "noise c1 \"\"", "early-exit 1", "exit-timeout", "capture-failed x"):
+            self.assertEqual(len(parse(f"transcript 2\n{word}\n")[1]), 1, word)
+
+    def test_Exit_takes_a_status_number_and_nothing_else(self):
+        self.assertEqual(len(parse("transcript 2\nexit\n")[1]), 1)
+        self.assertEqual(len(parse("transcript 2\nexit 0 0\n")[1]), 1)
+
+    def test_A_star_connection_is_only_allowed_inside_an_unordered_group(self):
+        self.assertEqual(len(parse('transcript 2\nrecv * "a"\n')[1]), 1)
+        self.assertEqual(parse('transcript 2\nunordered\nrecv * "a"\nrecv c1 "b"\nend\n')[1], [])
+
+
+class GroupTests(unittest.TestCase):
+    def test_An_unordered_group_holds_two_or_more_entries_and_does_not_nest(self):
+        self.assertEqual(len(parse('transcript 2\nunordered\nrecv c1 "a"\nend\n')[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nunordered\nrecv c1 "a"\nunordered\nrecv c1 "b"\nrecv c1 "c"\nend\nend\n')[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nunordered\nrecv c1 "a"\nrecv c1 "b"\n')[1]), 1)
+
+    def test_More_than_64_entries_in_an_unordered_group_is_a_format_error(self):
+        lines = "".join(f'recv c1 "{i}"\n' for i in range(65))
+        self.assertEqual(len(parse("transcript 2\nunordered\n" + lines + "end\n")[1]), 1)
+        lines = "".join(f'recv c1 "{i}"\n' for i in range(64))
+        self.assertEqual(parse("transcript 2\nunordered\n" + lines + "end\n")[1], [])
+
+    def test_A_repeat_stands_for_its_body_written_count_times(self):
+        transcript = ok('transcript 2\nrepeat 3 i\nrecv c1 "a"\nquiet c1\nend\nexit 0\n')
+        self.assertEqual(kinds(transcript), [("recv", "c1"), ("quiet", "c1")] * 3 + [("exit", "")])
+
+    def test_A_repeat_variable_is_bound_in_each_expanded_entry(self):
+        entries = rt.expand(ok('transcript 2\nrepeat 3 i\nrecv c1 "${i}"\nend\n'))
+        self.assertEqual([e.loop for e in entries], [(("i", 0),), (("i", 1),), (("i", 2),)])
+
+    def test_A_repeat_count_is_one_to_one_hundred_thousand_and_an_end_without_a_group_is_a_problem(self):
+        self.assertEqual(len(parse('transcript 2\nrepeat 0 i\nquiet c1\nend\n')[1]), 1)
+        self.assertEqual(len(parse("transcript 2\nend\n")[1]), 1)
+
+    def test_The_expanded_entry_count_is_known_without_expanding(self):
+        transcript = ok('transcript 2\nrepeat 1000 i\nrepeat 1000 j\nquiet c1\nend\nend\n')
+        self.assertEqual(rt.entry_count(transcript), 1_000_000)
+
+
+class ChecksAndFieldsTests(unittest.TestCase):
+    def test_A_check_is_parsed_and_produces_no_entry(self):
+        text = 'transcript 2\nrecv c1 "${:uint=a}"\nrecv c1 "${:uint=b}"\ncheck distinct a b\ncheck equal a 3\ncheck equal a b\n'
+        transcript = ok(text)
+        self.assertEqual(len(rt.expand(transcript)), 2)
+        checks = rt.checks_of(transcript)
+        self.assertEqual([(c.op, c.names, c.other) for c in checks], [("distinct", ("a", "b"), None), ("equal", ("a",), "3"), ("equal", ("a",), "b")])
+
+    def test_A_check_distinct_may_name_a_prefix_glob(self):
+        checks = rt.checks_of(ok('transcript 2\nrepeat 3 i\nrecv c1 "${:uint=r${i}}"\nend\ncheck distinct r*\n'))
+        self.assertEqual(checks[0].names, ("r*",))
+
+    def test_A_malformed_check_is_a_problem(self):
+        for text in ("check", "check distinct", "check equal a", "check same a b", "check equal a b c", "check distinct A"):
+            self.assertEqual(len(parse("transcript 2\n" + text + "\n")[1]), 1, text)
+
+    def test_A_bound_name_is_bound_once_and_a_static_name_may_not_bind_inside_a_repeat(self):
+        self.assertEqual(len(parse('transcript 2\nrecv c1 "${:uint=a}"\nrecv c1 "${:uint=a}"\n')[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nrepeat 2 i\nrecv c1 "${:uint=a}"\nend\n')[1]), 1)
+        self.assertEqual(parse('transcript 2\nrepeat 2 i\nrecv c1 "${:uint=a${i}}"\nend\n')[1], [])
+
+    def test_A_variable_used_before_a_bind_or_never_bound_is_a_problem_when_the_pair_is_validated(self):
+        scenario, _ = rs.parse_script(fixture("x3.in"), "x3.in")
+        transcript = ok('transcript 2\nready\nrecv c1 "${nobody}"\n')
+        problems = rp.validate_pair(scenario, transcript)
+        self.assertTrue(any("nobody" in p.message for p in problems))
+
+    def test_A_bound_name_that_a_script_variable_already_uses_is_a_problem(self):
+        scenario, _ = rs.parse_script(fixture("x3.in"), "x3.in")
+        transcript = ok('transcript 2\nready\nreply a 201\nbody json {"id":"${:uuid=order}"}\n')
+        self.assertTrue(any("order" in p.message for p in rp.validate_pair(scenario, transcript)))
+
+    def test_A_check_over_a_name_nothing_binds_is_a_problem_when_the_pair_is_validated(self):
+        scenario, _ = rs.parse_script(fixture("x2.in"), "x2.in")
+        transcript = ok('transcript 2\nready\ncheck distinct ghost\n')
+        self.assertTrue(any("ghost" in p.message for p in rp.validate_pair(scenario, transcript)))
+
+
+class JsonBodyTests(unittest.TestCase):
+    def test_The_expected_JSON_must_be_JSON_without_a_repeated_member_name_or_NaN(self):
+        for body in ("{nope}", '{"a":1,"a":2}', "NaN", ""):
+            self.assertEqual(len(parse(f"transcript 2\nreply a 200\nbody json {body}\n")[1]), 1, body)
+
+    def test_The_member_name_dollar_unordered_must_stand_alone_with_an_array(self):
+        self.assertEqual(parse('transcript 2\nreply a 200\nbody json {"x":{"$unordered":[1,2]}}\n')[1], [])
+        for body in ('{"$unordered":1}', '{"$unordered":[1],"b":2}', '{"$unordered":[1],"$unordered":[2]}'):
+            self.assertEqual(len(parse(f"transcript 2\nreply a 200\nbody json {body}\n")[1]), 1, body)
+
+    def test_A_malformed_variable_or_field_inside_an_expected_JSON_string_is_a_problem(self):
+        self.assertEqual(len(parse('transcript 2\nreply a 200\nbody json {"a":"${Bad}"}\n')[1]), 1)
+        self.assertEqual(len(parse('transcript 2\nreply a 200\nbody json {"a":"${:float}"}\n')[1]), 1)
+        self.assertEqual(parse('transcript 2\nreply a 200\nbody json {"a":"x${y}${:int}$5"}\n')[1], [])
+
+    def test_The_string_templates_of_an_expected_JSON_string_are_exposed_for_the_matcher(self):
+        self.assertEqual(lex.template_parts("a${v}${:hex}$5"), [lex.Lit(b"a"), lex.Var("v"), lex.Field("hex"), lex.Lit(b"$5")])
+        self.assertIsNone(lex.template_parts("${"))
+        self.assertEqual(lex.template_parts("\ud800"), [lex.Lit("\ud800".encode("utf-8", "surrogatepass"))])
+
+
+class CorrespondenceTests(unittest.TestCase):
+    def pair(self, script_body, transcript_body):
+        head = "scenario 2\ndefault within 2s\nstart ready port within 1s\nconnect c1 tcp\n"
+        scenario, problems = rs.parse_script((head + script_body + "wait-exit\n").encode(), "t.in")
+        assert not problems, problems
+        transcript, problems = parse("transcript 2\nready\n" + transcript_body + "exit 0\n")
+        assert not problems, problems
+        return rp.validate_pair(scenario, transcript)
+
+    def test_A_transcript_with_fewer_entries_than_the_script_produces_is_a_problem_naming_both_counts(self):
+        problems = self.pair("recv c1 bytes 1\nrecv c1 bytes 1\n", 'recv c1 "a"\n')
+        self.assertEqual(len(problems), 1)
+        self.assertIn("4", problems[0].message)
+        self.assertIn("3", problems[0].message)
+
+    def test_An_entry_of_another_kind_or_connection_than_the_script_produces_is_a_problem_at_the_transcript_line(self):
+        problems = self.pair("recv c1 bytes 1\n", "quiet c1\n")
+        self.assertEqual([p.line for p in problems], [3])
+        problems = self.pair("recv c1 bytes 1\n", 'recv c2 "a"\n')
+        self.assertEqual(len(problems), 1)
+
+    def test_An_unordered_group_corresponds_to_the_same_entries_in_any_order(self):
+        problems = self.pair("connect c2 tcp\nrecv c1 bytes 1\nrecv c2 bytes 1\n", 'unordered\nrecv c2 "b"\nrecv c1 "a"\nend\n')
+        self.assertEqual(problems, [])
+        problems = self.pair("connect c2 tcp\nrecv c1 bytes 1\nrecv c2 bytes 1\n", 'unordered\nrecv c2 "b"\nrecv c2 "a"\nend\n')
+        self.assertEqual(len(problems), 1)
+
+    def test_A_star_connection_in_an_unordered_group_matches_any_connection(self):
+        problems = self.pair("connect c2 tcp\nrecv c1 bytes 1\nrecv c2 bytes 1\n", 'unordered\nrecv * "b"\nrecv * "a"\nend\n')
+        self.assertEqual(problems, [])
+
+    def test_A_star_taken_first_must_give_way_so_that_every_entry_of_the_group_is_assigned(self):
+        problems = self.pair("connect c2 tcp\nrecv c1 bytes 1\nrecv c2 bytes 1\n", 'unordered\nrecv * "b"\nrecv c1 "a"\nend\n')
+        self.assertEqual(problems, [], "a greedy assignment gives the star the first connection and strands the second entry")
+
+    def test_A_repeat_in_the_transcript_corresponds_to_a_repeat_in_the_script(self):
+        problems = self.pair("repeat 3 i\nrecv c1 bytes 1\nend\n", 'repeat 3 i\nrecv c1 "a"\nend\n')
+        self.assertEqual(problems, [])
+        problems = self.pair("repeat 3 i\nrecv c1 bytes 1\nend\n", 'repeat 2 i\nrecv c1 "a"\nend\n')
+        self.assertEqual(len(problems), 1)
+
+
+class CanonicalTests(unittest.TestCase):
+    def test_Strings_are_written_canonically_printable_ASCII_as_is_and_the_rest_escaped(self):
+        self.assertEqual(rt.canonical(b'ab "q" \\ \r\n\t\0 \xff\x01'), '"ab \\"q\\" \\\\ \\r\\n\\t\\0 \\xff\\x01"')
+
+    def test_A_dollar_is_escaped_only_where_a_brace_follows_it(self):
+        self.assertEqual(rt.canonical(b"$5 ${x} $"), '"$5 \\${x} $"')
+
+    def test_A_non_ASCII_byte_sequence_is_written_as_hex_escapes_even_when_it_is_valid_UTF_8(self):
+        self.assertEqual(rt.canonical("é".encode("utf-8")), '"\\xc3\\xa9"')
+
+    def test_The_canonical_text_of_any_bytes_lexes_back_to_the_same_bytes(self):
+        data = bytes(range(256)) + b"${a}$"
+        cur = lex.Cursor(rt.canonical(data), "t", 1, [])
+        self.assertEqual(b"".join(p.data for p in cur.take().value.parts), data)
+
+    def test_A_long_string_is_shortened_to_its_first_60_and_last_40_bytes_with_the_count_between(self):
+        shown = rt.abbreviate(b"x" * 300)
+        self.assertEqual(shown.count("x"), 100)
+        self.assertIn("200", shown)
+        self.assertEqual(rt.abbreviate(b"x" * 120), rt.canonical(b"x" * 120))
+
+
+if __name__ == "__main__":
+    unittest.main()

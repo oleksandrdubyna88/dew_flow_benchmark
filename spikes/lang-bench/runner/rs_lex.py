@@ -290,6 +290,31 @@ def _matching_brace(content, open_index):
     return None
 
 
+def template_parts(text):
+    """The parts (Lit, Var, Field) of an expected JSON string's characters (no backslash escapes here: JSON's own were decoded
+    already), or None when a `${` is malformed. Text is encoded as UTF-8 with surrogates passed through."""
+    parts, buf, i = [], bytearray(), 0
+    while i < len(text):
+        i = _template_step(text, i, buf, parts)
+        if i is None:
+            return None
+    _flush(buf, parts)
+    return parts
+
+
+def _template_step(text, i, buf, parts):
+    if not text.startswith("${", i):
+        buf.extend(text[i].encode("utf-8", "surrogatepass"))
+        return i + 1
+    close = _matching_brace(text, i + 1)
+    part = None if close is None else _variable_part(text[i + 2:close], True)
+    if part is None:
+        return None
+    _flush(buf, parts)
+    parts.append(part)
+    return close + 1
+
+
 def parse_name_template(text):
     """A bound name that may carry `${var}`: a tuple of Lit and Var parts, or None."""
     if not NAME.match(VARIABLE_IN_NAME.sub("x", text)):
