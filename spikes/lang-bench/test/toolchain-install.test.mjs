@@ -3,7 +3,7 @@
 // only when it is the recorded one, and a half-written directory is never registered in the store.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -303,6 +303,26 @@ test('A_staging_folder_left_by_an_interrupted_install_is_unsealed_removed_and_na
     for (const dir of [live, unmarked]) unsealTree(dir);
     unsealStore(r.storeRoot);
   }
+});
+
+test('A_symlink_named_like_a_stale_staging_folder_is_left_alone_and_its_target_is_untouched', async t => {
+  if (!ownedApi) return t.skip('the conventions mount is absent: no owner records to read');
+  const r = rig(t);
+  mkdirSync(r.storeRoot, { recursive: true });
+  const target = writeTree(ownedFolder(t, 'linktarget'), { 'precious/file.txt': 'keep me\n' });
+  sealTree(target);
+  const link = path.join(r.storeRoot, `${ownedApi.ownedPrefix('stage')}node-link01`);
+  symlinkSync(target, link);
+  writeFileSync(`${link}.owner`, `${ownedApi.formatOwner({ ...ownedApi.thisOwner(), pid: deadPid(), start: 1 })}\n`);
+  const notes = [];
+  const done = await installToolchain({ name: 'node', stacks: r.stacks, storeRoot: r.storeRoot, io: r.io, newFolder: r.newFolder, owned: ownedApi, log: line => notes.push(line) });
+  try {
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.deepEqual(done.value.swept, []);
+    assert.equal(lstatSync(link).isSymbolicLink(), true, 'the link is still there');
+    assert.equal(readFileSync(path.join(target, 'precious', 'file.txt'), 'utf8'), 'keep me\n', 'its target is untouched');
+    assert.equal(writablePaths(target).length, 0, 'and still sealed: it was never unsealed');
+  } finally { unsealTree(target); unsealStore(r.storeRoot); }
 });
 
 test('The_first_install_into_a_store_root_that_does_not_exist_yet_has_nothing_to_collect', async t => {
