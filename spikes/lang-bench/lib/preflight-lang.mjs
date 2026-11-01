@@ -147,7 +147,7 @@ async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBind
  */
 export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true, extraRoBinds = [] }) {
   const dirs = storeDirs(stacks, storeRoot);
-  const shallow = verifyStore({ stacks, storeRoot });
+  const shallow = verifyStore({ stacks, storeRoot, deep: true }); // every tree hash, not only the versions the tools print: a binary replaced in place still answers --version
   if (!shallow.ok) return refused(shallow.problems);
   const pathDirs = boxPath ?? defaultBoxPath(dirs);
   const environment = await environmentProblems();

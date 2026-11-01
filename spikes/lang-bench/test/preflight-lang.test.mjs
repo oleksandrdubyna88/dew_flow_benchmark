@@ -10,7 +10,8 @@ import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
 import { boxArgv, judgeDotnetHits, judgeProbes, preflightLang, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
-import { ownedFolder } from './toolchain-fixtures.mjs';
+import { sealTree, treeRecord, unsealTree } from '../lib/toolchain-store.mjs';
+import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
 const stacks = loadStacksLang(JSON.parse(readFileSync(fileURLToPath(new URL('../inputs/stacks-lang.json', import.meta.url)), 'utf8'))).value;
 const good = () => ({
@@ -272,4 +273,33 @@ test('An_apphost_in_a_box_without_the_hiding_resolves_the_distributions_dotnet_r
   const guarded = await runApphostProbe({ stacks, dirs, boxPath: [dirs.dotnetSdk], operatorHome: os.homedir(), protect: true });
   assert.deepEqual(guarded.problems, []);
   assert.equal(guarded.root, dirs.dotnetSdk);
+});
+
+/** A store of three tiny script "toolchains" that print the pinned versions, sealed, with their tree hashes recorded in a copy of the pins. */
+function scriptStore(t) {
+  const root = ownedFolder(t, 'scriptstore');
+  const d = stacks.directories;
+  const exe = (dir, rel, body) => { writeTree(dir, { [rel]: `#!/bin/sh\n${body}\n` }); chmodSync(path.join(dir, rel), 0o755); };
+  exe(path.join(root, d.dotnetSdk), 'dotnet', `case "$1" in --list-sdks) echo "${stacks.pins.dotnetSdk} [/x/sdk]";; --list-runtimes) echo "Microsoft.NETCore.App ${stacks.pins.dotnetRuntime} [/x/shared]";; esac`);
+  mkdirSync(path.join(root, d.dotnetSdk, 'sdk', stacks.pins.dotnetSdk), { recursive: true });
+  exe(path.join(root, d.node), 'bin/node', `echo v${stacks.pins.node}`);
+  exe(path.join(root, d.typescript), 'node_modules/.bin/tsc', `echo "Version ${stacks.pins.typescript}"`);
+  const recorded = { ...stacks, treeSha256: Object.fromEntries(Object.entries(d).map(([name, dir]) => [name, treeRecord(path.join(root, dir))])) };
+  for (const dir of Object.values(d)) sealTree(path.join(root, dir));
+  return { root, recorded, dirs: Object.fromEntries(Object.entries(d).map(([name, dir]) => [name, path.join(root, dir)])) };
+}
+
+test('A_binary_replaced_in_place_that_still_prints_the_pinned_version_is_refused', async t => {
+  if (!gate(t)) return;
+  const store = scriptStore(t);
+  const before = await preflightLang({ stacks: store.recorded, storeRoot: store.root, withApphost: false });
+  assert.equal(before.ok, true, JSON.stringify(before));
+  const node = path.join(store.dirs.node, 'bin', 'node');
+  unsealTree(store.dirs.node);
+  writeFileSync(node, `#!/bin/sh\n# swapped\necho v${stacks.pins.node}\n`);
+  chmodSync(node, 0o755);
+  sealTree(store.dirs.node);
+  const after = await preflightLang({ stacks: store.recorded, storeRoot: store.root, withApphost: false });
+  assert.equal(after.ok, false, 'the replaced node still answers --version with the pin');
+  assert.match(after.problems.join('\n'), /node-v26\.13\.0-linux-x64.*tree hash/s);
 });
