@@ -8,7 +8,17 @@ export const KNOWN_TASKS = Object.freeze(['01', '02', '05', '06', '09']);
 const BASES = new Set(['adapted', 'own-words', 'idea-only']);
 const PLACEHOLDER = /<[^<>\n]+>/;
 const HTTPS = /^https:\/\/[^\s<>]+$/;
-const KNOWN_SPEC = new RegExp(`^todo/tasks/(?:${KNOWN_TASKS.join('|')})-[^/]*\\.md$`);
+const TASKS = KNOWN_TASKS.join('|');
+const SPEC_PATH = new RegExp(`^todo/tasks/(${TASKS})-[^/]*\\.md$`);
+const WORKSPACE_PATH = new RegExp(`^(?:tasks|csharp|node)/(${TASKS})-[^/]+/`);
+
+/** `{ path, task, spec }` when `path` is a known task's text (its spec, or anything under its task folder in tasks/, csharp/ or node/); else null. */
+export function knownTaskOf(path) {
+  const spec = SPEC_PATH.exec(path);
+  const workspace = spec === null ? WORKSPACE_PATH.exec(path) : null;
+  const match = spec ?? workspace;
+  return match === null ? null : { path, task: match[1], spec: spec !== null };
+}
 
 const isText = v => typeof v === 'string' && v.trim() !== '' && !PLACEHOLDER.test(v);
 const squash = s => s.replace(/\s+/g, ' ').trim();
@@ -31,36 +41,45 @@ function problemsOfLicences(e) {
   return out;
 }
 
-function problemsOfBasis(e) {
-  if (!BASES.has(e.basis)) return [`basis (one of ${[...BASES].join(', ')})`];
-  const out = [];
-  if (e.copiedText !== (e.basis === 'adapted' ? 'adapted' : 'none')) out.push(`copiedText (must be ${e.basis === 'adapted' ? 'adapted' : 'none'} for basis ${e.basis})`);
-  if (e.basis === 'adapted' && e.fileLicence === null && e.upstreamNotice === null) out.push('fileLicence or upstreamNotice (an adaptation carries its source\'s licence)');
-  if (e.basis === 'own-words' && !isText(e.nameRule)) out.push('nameRule');
-  if (e.basis === 'idea-only' && e.licenceFound !== false) out.push('licenceFound (false for an idea-only task)');
-  return out;
-}
+const COPIED = { adapted: 'adapted', 'own-words': 'none', 'idea-only': 'none' };
+
+/** The failed rules of an entry's basis, as `[ok, message]` pairs read in order (a table, not a chain of ifs). */
+const basisRules = e => [
+  [e.copiedText === COPIED[e.basis], `copiedText (must be ${COPIED[e.basis]} for basis ${e.basis})`],
+  [e.basis !== 'adapted' || e.fileLicence !== null || e.upstreamNotice !== null, 'fileLicence or upstreamNotice (an adaptation carries its source\'s licence)'],
+  [e.basis !== 'own-words' || isText(e.nameRule), 'nameRule'],
+  [e.basis !== 'idea-only' || e.licenceFound === false, 'licenceFound (false for an idea-only task)'],
+];
+
+const problemsOfBasis = e => (BASES.has(e.basis) ? basisRules(e).filter(([good]) => !good).map(([, message]) => message) : [`basis (one of ${[...BASES].join(', ')})`]);
 
 const problemsOf = e => [...problemsOfSources(e), ...problemsOfLicences(e), ...problemsOfBasis(e)];
 
-/** ok(credits) when the text is a complete, placeholder-free record of all five known tasks; otherwise a fail naming the entry and field. */
-export function parseCredits(text) {
-  let file;
-  try { file = JSON.parse(text); } catch { return fail('the credit terms file is not JSON'); }
-  if (file?.schema !== 1 || file.decided?.by !== 'owner' || !isText(file.decided?.on) || !isText(file.repositoryLicence) || !Array.isArray(file.known)) {
-    return fail('the credit terms file lacks schema 1, `decided` by the owner, `repositoryLicence` or `known`');
-  }
-  for (const task of KNOWN_TASKS) {
-    const e = file.known.find(k => k?.task === task);
-    if (e === undefined) return fail(`the credit terms hold no entry for task ${task}`);
-    const problems = problemsOf(e);
-    if (problems.length > 0) return fail(`task ${task}: invalid ${problems.join(', ')}`);
-  }
-  return ok(Object.freeze(file));
+const HEADER_REASON = 'the credit terms file lacks schema 1, `decided` by the owner, `repositoryLicence` or `known`';
+const headerOk = f => f?.schema === 1 && f.decided?.by === 'owner' && isText(f.decided?.on) && isText(f.repositoryLicence) && Array.isArray(f.known);
+
+/** The reason the entry of `task` is unusable, or null. */
+function entryReason(file, task) {
+  const e = file.known.find(k => k?.task === task);
+  if (e === undefined) return `the credit terms hold no entry for task ${task}`;
+  const problems = problemsOf(e);
+  return problems.length === 0 ? null : `task ${task}: invalid ${problems.join(', ')}`;
 }
 
-/** True when any of `paths` is a known task's spec (by the `todo/tasks/NN-*.md` shape, whatever the terms file says). */
-export const carriesKnownText = paths => paths.some(p => KNOWN_SPEC.test(p));
+/** ok(credits) when the text is a complete, placeholder-free record of all five known tasks; otherwise a fail naming the entry and field. */
+export function parseCredits(text) {
+  const file = parseJson(text);
+  if (!headerOk(file)) return fail(file === null ? 'the credit terms file is not JSON' : HEADER_REASON);
+  const reason = KNOWN_TASKS.map(task => entryReason(file, task)).find(r => r !== null);
+  return reason === undefined ? ok(Object.freeze(file)) : fail(reason);
+}
+
+function parseJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+/** True when any of `paths` is a known task's text (see knownTaskOf), whatever the terms file says. */
+export const carriesKnownText = paths => paths.some(p => knownTaskOf(p) !== null);
 
 export const knownSpecPaths = credits => credits.known.map(e => e.spec);
 
@@ -79,21 +98,28 @@ function pieceFindings(entry, section, ccFiles) {
   ];
 }
 
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const finding = (path, what) => ({ path, line: null, what });
+
+/** Findings for the README's attribution section against the tasks in play: what is missing, once each. */
+function readmeFindings({ credits, tasks, readmeText }) {
+  if (readmeText === null) return [finding('README.md', 'the README is missing: the credit terms cannot be checked')];
+  const section = attributionText(readmeText.replace(HTML_COMMENT, ''));
+  const ccFiles = credits.known.filter(e => e.fileLicence).map(e => e.spec);
+  const missing = credits.known.filter(e => tasks.has(e.task)).flatMap(e => pieceFindings(e, section, ccFiles));
+  return [...new Set(missing)].map(what => finding('README.md', what));
+}
+
 /**
- * Findings `{ path, line, what }` for a branch whose new `paths` may carry a known-task text. `credits` is parseCredits' answer;
- * `readmeText` is the README at the branch tip, or null when there is none. A branch with no known-task text needs nothing.
+ * Findings `{ path, line, what }` for the known-task texts among `paths` (every path ADDED anywhere in the range, so a text removed
+ * again still counts: it was published). `credits` is parseCredits' answer; `readmeText` is the README at the branch tip, or null when
+ * there is none; credits inside HTML comments do not count. A branch with no known-task text needs nothing.
  */
 export function checkCreditTerms({ credits, paths, readmeText }) {
-  const carriedPaths = paths.filter(p => KNOWN_SPEC.test(p));
-  if (carriedPaths.length === 0) return [];
-  if (!credits.ok) return carriedPaths.map(p => ({ path: p, line: null, what: `known-task text without its credit terms (${credits.reason})` }));
-  const recorded = new Set(knownSpecPaths(credits.value));
-  const unrecorded = carriedPaths.filter(p => !recorded.has(p)).map(p => ({ path: p, line: null, what: 'known-task text without its credit terms (no entry for this path)' }));
-  const carried = credits.value.known.filter(e => carriedPaths.includes(e.spec));
-  if (carried.length === 0) return unrecorded;
-  if (readmeText === null) return [...unrecorded, { path: 'README.md', line: null, what: 'the README is missing: the credit terms cannot be checked' }];
-  const ccFiles = credits.value.known.filter(e => e.fileLicence).map(e => e.spec);
-  const section = attributionText(readmeText);
-  const missing = [...new Set(carried.flatMap(e => pieceFindings(e, section, ccFiles)))];
-  return [...unrecorded, ...missing.map(what => ({ path: 'README.md', line: null, what }))];
+  const carried = paths.map(knownTaskOf).filter(c => c !== null);
+  if (carried.length === 0) return [];
+  if (!credits.ok) return carried.map(c => finding(c.path, `known-task text without its credit terms (${credits.reason})`));
+  const recorded = new Set(credits.value.known.map(e => e.spec));
+  const unrecorded = carried.filter(c => c.spec && !recorded.has(c.path)).map(c => finding(c.path, 'known-task text without its credit terms (no entry for this path)'));
+  return [...unrecorded, ...readmeFindings({ credits: credits.value, tasks: new Set(carried.map(c => c.task)), readmeText })];
 }

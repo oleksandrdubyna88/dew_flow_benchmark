@@ -97,3 +97,25 @@ test('Task_09s_recorded_credit_is_a_substring_of_the_sentence_the_readme_actuall
   assert.deepEqual(check(['todo/tasks/09-switched-routes.md'], readme), []);
   assert.equal(check(['todo/tasks/09-switched-routes.md'], readme.replace('based on IOI 2018 Werewolf', 'inspired by an olympiad')).length, 1, 'and its absence is still refused');
 });
+
+test('A_statement_copy_under_a_workspace_folder_or_tasks_needs_the_same_terms_as_the_spec', () => {
+  const noReadme = readmeWith({ without: [entry('05').credit] });
+  for (const p of ['tasks/05-key-value-server/STATEMENT.md', 'csharp/05-key-value-server/STATEMENT.md', 'node/05-key-value-server/notes/STATEMENT.md']) {
+    assert.deepEqual(check([p], noReadme).map(f => [f.path, f.what]), [['README.md', 'credit line of task 05 is not in the attribution section']], p);
+    assert.deepEqual(check([p], readmeWith()), [], p);
+  }
+  assert.deepEqual(check(['tasks/03-wrapping-arithmetic/STATEMENT.md', 'csharp/04-rule-api/Program.cs'], null), [], 'a task with no known source needs nothing');
+  assert.match(check(['tasks/09-x/STATEMENT.md'], null)[0].what, /README is missing/);
+});
+
+test('A_credit_inside_an_html_comment_does_not_count', () => {
+  const hidden = readmeWith({ without: [entry('02').credit] }).replace(/\n$/, `\n\n<!-- ${entry('02').credit}\n-->\n`);
+  assert.deepEqual(check([entry('02').spec], hidden).map(f => f.what), ['credit line of task 02 is not in the attribution section']);
+  const visibleToo = `${readmeWith()}\n<!-- a note -->\n`;
+  assert.deepEqual(check([entry('02').spec], visibleToo), []);
+});
+
+test('A_known_spec_at_another_name_is_unrecorded_but_a_workspace_path_is_never_unrecorded', () => {
+  assert.match(check(['todo/tasks/01-other-name.md'], readmeWith())[0].what, /no entry for this path/);
+  assert.deepEqual(check(['csharp/01-descent/x.cs'], readmeWith()), []);
+});

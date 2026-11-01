@@ -81,8 +81,10 @@ async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
   const seen = new Set();
   const pathsDone = new Set();
   const tipCommit = new Map();
+  const anyCommit = new Map();
   for (const { commit, path, oid, mode } of changes.value.files) {
     const atTip = tip.value.get(path)?.oid === oid;
+    if (!anyCommit.has(path)) anyCommit.set(path, commit);
     if (atTip && !tipCommit.has(path)) tipCommit.set(path, commit);
     if (mode === SUBMODULE_MODE || seen.has(`${path}\0${oid}`)) continue;
     seen.add(`${path}\0${oid}`);
@@ -91,20 +93,20 @@ async function scanRange(repo, branch, commits, inputs, names, { refuseNul }) {
     if (!pathsDone.has(path)) { pathsDone.add(path); merge(byName, scanPath(path, inputs), commit, { atTip }); }
     if (nul && refuseNul) merge(byName, { 'tree-shape': [{ path, line: null, what: NUL_REASON }] }, commit, { atTip });
   }
-  return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()], tip: tip.value });
+  return ok({ byName, firstCommit: tipCommit, anyCommit, paths: [...tipCommit.keys()], tip: tip.value });
 }
 
 /** Branch-level findings: the README's structure, the credit terms and the stack folders, with the commit that brought the path. */
-async function tipFindings({ repo, branch, inputs, paths, firstCommit, tip }) {
+async function tipFindings({ repo, branch, inputs, paths, addedPaths, firstCommit, anyCommit, tip }) {
   const readme = await readFileAt(repo, branch, 'README.md');
   const modules = await readFileAt(repo, branch, '.gitmodules');
   if (!readme.ok || !modules.ok) return readme.ok ? modules : readme;
   const text = readme.value;
-  const structure = text !== null && (carriesKnownText(paths) || /^## Attribution\s*$/m.test(text)) ? attributionSection(text) : ok(null);
+  const structure = text !== null && (carriesKnownText(addedPaths) || /^## Attribution\s*$/m.test(text)) ? attributionSection(text) : ok(null);
   const withCommit = f => ({ commit: firstCommit.get(f.path), ...f });
   return ok({
     attribution: structure.ok ? [] : [{ path: 'README.md', line: null, what: structure.reason }],
-    credits: checkCreditTerms({ credits: inputs.credits, paths, readmeText: text }).map(withCommit),
+    credits: checkCreditTerms({ credits: inputs.credits, paths: addedPaths, readmeText: text }).map(f => ({ commit: anyCommit.get(f.path) ?? firstCommit.get(f.path), ...f })),
     stack: findStackFolderFiles(new Map(paths.map(p => [p, tip.get(p)])), { templateFiles: inputs.templateFiles }).map(withCommit),
     shape: [...findSubmoduleProblems({ tip, gitmodulesText: modules.value }), ...findSymlinks(new Map(paths.map(p => [p, tip.get(p)])))].map(withCommit),
   });
@@ -121,7 +123,7 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   if (!tipSha.ok) return errorResult(label, tipSha);
   const scanned = await scanRange(repo, branch, range.value, inputs, NAMES, { refuseNul: true });
   if (!scanned.ok) return errorResult(label, scanned);
-  const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit, tip: scanned.value.tip });
+  const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, addedPaths: [...scanned.value.anyCommit.keys()], firstCommit: scanned.value.firstCommit, anyCommit: scanned.value.anyCommit, tip: scanned.value.tip });
   if (!tip.ok) return errorResult(label, tip);
   const byName = scanned.value.byName;
   byName.attribution = [...tip.value.attribution, ...byName.attribution];

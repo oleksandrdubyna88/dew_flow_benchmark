@@ -265,3 +265,17 @@ test('The_report_names_the_tip_it_checked_and_the_push_that_publishes_exactly_th
   assert.match(formatReport(self), new RegExp(`^tip +${sha}$`, 'm'));
   assert.equal(formatReport(checkText({ text: 'x\n', label: 'b.md', inputs })).includes('refs/heads'), false, 'a body has no tip');
 });
+
+test('A_known_task_spec_added_in_an_old_commit_and_removed_later_still_needs_its_terms', async t => {
+  const { repo } = branchWith(t, { 'todo/tasks/01-descent-to-one.md': '# Task 01\n' });
+  commit(repo, 'refactor: remove it again', { 'todo/tasks/01-descent-to-one.md': null, 'README.md': '# T\n\n## Attribution\n\nnothing\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.ok(checkOf(result, 'known-task-credits').findings.some(f => f.what.startsWith('credit line of task 01')), formatReport(result));
+});
+
+test('A_statement_copy_under_a_workspace_folder_is_a_known_task_text_for_the_credit_check', async t => {
+  const { repo } = branchWith(t, { 'tasks/01-descent-to-one/STATEMENT.md': 'statement\n', 'README.md': '# T\n\n## Attribution\n\nnothing\n' });
+  const result = await run(repo);
+  assert.ok(checkOf(result, 'known-task-credits').findings.some(f => f.what.startsWith('credit line of task 01')), formatReport(result));
+});
