@@ -6,10 +6,11 @@ import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:
 import os from 'node:os';
 import path from 'node:path';
 import { bwrapFacts } from '../../minigit-bench/lib/host-checks.mjs';
-import { devProc, hiddenPaths, isolation, roBind, roRoot, setenvAll, tmpfs } from '../../minigit-bench/lib/bwrap.mjs';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
+import { runApphostProbe } from './apphost-probe.mjs';
+import { boxArgv, defaultBoxPath, runInBox, storeDirs } from './preflight-box.mjs';
 import { verifyStore } from './toolchain-verify.mjs';
 
 const PROBE_MS = 60_000;
@@ -103,23 +104,12 @@ export function dotnetCandidates({ boxPath, pinnedDotnet }) {
   };
 }
 
-/** The directories of the store, by name. */
-const storeDirs = (stacks, storeRoot) => Object.fromEntries(Object.entries(stacks.directories).map(([name, dirName]) => [name, path.join(storeRoot, dirName)]));
+export { boxArgv, defaultBoxPath };
 
-/** The box's PATH: the pinned directories alone. The system tools the probes need are named by absolute path in the probe argv. */
-export const defaultBoxPath = dirs => [dirs.dotnetSdk, path.join(dirs.node, 'bin'), path.join(dirs.typescript, 'node_modules', '.bin')];
-
-/** The bwrap argv prefix (ending in `--`) of the preflight's box: root read-only, home and the scratch paths hidden, the pinned directories bound back read-only, no network. */
-export function boxArgv({ bwrap, dirs, boxPath, operatorHome, exists = existsSync }) {
-  const env = { PATH: boxPath.join(':'), HOME: '/tmp', TMPDIR: '/tmp', LANG: 'C.UTF-8', DOTNET_CLI_HOME: '/tmp', DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_CLI_USE_MSBUILD_SERVER: '0' };
-  return [bwrap, ...roRoot(), ...devProc(), ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs), ...Object.values(dirs).flatMap(roBind), ...isolation(), ...setenvAll(env), '--'];
-}
-
-async function probeInBox({ prefix, argv, boxPath }) {
-  const exe = argv[0].includes('/') ? argv[0] : findOnPath(argv[0], boxPath.join(':'));
-  if (exe === null) return null;
-  const r = await runBounded(prefix[0], [...prefix.slice(1), exe, ...argv.slice(1)], { timeoutMs: PROBE_MS, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' } });
-  return r.ok && r.value.code === 0 && !r.value.timedOut ? r.value.stdout : null;
+/** One probe's stdout from inside the box (the exe is looked up on the BOX's PATH), or `null` when it did not run, failed or timed out. */
+async function probeInBox({ prefix, argv }) {
+  const r = await runInBox(prefix, argv);
+  return r !== null && r.code === 0 ? r.stdout : null;
 }
 
 async function hostBwrapProblems() {
@@ -141,15 +131,16 @@ async function environmentProblems({ dirs, pathDirs }) {
 
 async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome }) {
   const prefix = boxArgv({ bwrap: findOnPath('bwrap'), dirs, boxPath: pathDirs, operatorHome });
-  const probes = Object.fromEntries(await Promise.all(Object.entries(stacks.probes).map(async ([name, argv]) => [name, await probeInBox({ prefix, argv, boxPath: pathDirs })])));
+  const probes = Object.fromEntries(await Promise.all(Object.entries(stacks.probes).map(async ([name, argv]) => [name, await probeInBox({ prefix, argv })])));
   return judgeProbes({ probes, stacks });
 }
 
 /**
- * `preflightLang({ stacks, storeRoot, boxPath?, operatorHome? })` -> `ok({ facts })` or a fail whose `problems` lists everything wrong (all of it, not the first).
+ * `preflightLang({ stacks, storeRoot, boxPath?, operatorHome?, withApphost? })` -> `ok({ facts })` or a fail whose `problems` lists everything wrong (all of it, not the first).
  * `boxPath` is the PATH the box under test will have (default: the pinned directories alone); a PATH that also reaches another `dotnet` is refused.
+ * `withApphost: false` skips the apphost probe (a few seconds); only a test of something else says so.
  */
-export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir() }) {
+export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome = os.homedir(), withApphost = true }) {
   const dirs = storeDirs(stacks, storeRoot);
   const shallow = verifyStore({ stacks, storeRoot });
   if (!shallow.ok) return refused(shallow.problems);
@@ -157,6 +148,7 @@ export async function preflightLang({ stacks, storeRoot, boxPath, operatorHome =
   const environment = await environmentProblems({ dirs, pathDirs });
   if (environment.fatal) return refused(environment.problems);
   const verdict = await probeAndJudge({ stacks, dirs, pathDirs, operatorHome });
-  const all = [...environment.problems, ...verdict.problems];
-  return all.length === 0 ? ok({ facts: verdict.facts }) : refused(all);
+  const apphost = withApphost ? await runApphostProbe({ stacks, dirs, boxPath: pathDirs, operatorHome }) : { problems: [], root: null };
+  const all = [...environment.problems, ...verdict.problems, ...apphost.problems];
+  return all.length === 0 ? ok({ facts: { ...verdict.facts, apphostDotnetRoot: apphost.root } }) : refused(all);
 }

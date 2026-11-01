@@ -46,7 +46,7 @@ never moved.
 `--deep` every tree hash equal to the record. Exit 1 names the problem; exit 2 is usage or a store inside a git worktree.
 
 **Preflight.** `lib/preflight-lang.mjs`, `preflightLang({ stacks, storeRoot, boxPath? })`. The probes run inside a bwrap box built from v1's primitives (root read-only, home /mnt
-/run /tmp hidden, the three directories bound back read-only, no network, pid namespace, cleared environment); S8b's `box.mjs` replaces it once it exists. It reads back
+/run /tmp hidden, the distribution's dotnet hidden and `DOTNET_ROOT` set, the three directories bound back read-only, no network, pid namespace, cleared environment); S8b's `box.mjs` replaces it once it exists. It reads back
 `node --version`, `dotnet --list-sdks`, `dotnet --list-runtimes`, `tsc --version`, the sha256 of `/usr/bin/python3`'s real file, and `locale -a`, and refuses, naming the pin and
 the value seen: another Node patch, a second SDK or the wrong one, another runtime, a TypeScript outside 6.0.x or another 6.0 patch, a changed Python binary, and a
 missing `de_DE.utf8` (with `sudo locale-gen de_DE.UTF-8`). It also refuses a box PATH that reaches a second `dotnet` (the default box PATH is the pinned directories alone).
@@ -59,8 +59,13 @@ judgement, `A_PATH_that_still_finds_the_apt_SDK_is_refused`, `A_TypeScript_outsi
 store skips with its reason; `BENCH_REQUIRE_SANDBOX=1` turns the skip into a failure.
 
 **Notes for later stories.**
-- The distribution's SDK (`/usr/bin/dotnet`, 10.0.114) is still on this host. A box whose PATH includes `/usr/bin` reaches it, and the preflight refuses that box; the execution layer's
-  box and the agent box must hide it or the operator must remove the apt packages before the series.
+- **Contract for S8b and E3 (the apphost root).** A program launched through its own apphost executable does not use PATH: it takes its dotnet root from `DOTNET_ROOT`, then
+  `/etc/dotnet/install_location`, then the default install locations. With the distribution's SDK (`/usr/lib/dotnet`, 10.0.114) on the host that root was `/usr/lib/dotnet`
+  (verified with `COREHOST_TRACE=1`: `Using dotnet root path [/usr/lib/dotnet]`), whatever the PATH said. Every box that runs a pinned-toolchain program (the execution layer's, the agent's,
+  the scoring box) must therefore **hide `/usr/lib/dotnet`, `/usr/share/dotnet` and `/etc/dotnet` (an empty tmpfs over each that exists) AND set `DOTNET_ROOT` to the pinned SDK directory**;
+  either alone leaves a road to the distribution's runtime. The preflight's box does both (`lib/preflight-box.mjs`, `DISTRIBUTION_DOTNET_PATHS`), and an **apphost probe** (`lib/apphost-probe.mjs`)
+  builds a tiny console app with the pinned SDK inside the box (offline, about 3 s: the SDK bundles the targeting and apphost packs), runs its apphost with `COREHOST_TRACE=1` and refuses
+  any dotnet root other than the pinned directory. A test shows the open road: the same probe in a box without the hiding resolves `/usr/lib/dotnet`.
 - `dotnet-install.sh` does not verify what it downloads; the check is ours (the archive's sha512 against the pin, which the release metadata confirms). The script's sha256 is pinned
   too, so a newer script makes the installer refuse until the pin is moved deliberately.
 - Node's `SHASUMS256.txt` is read over HTTPS from nodejs.org; its GPG signature is not checked (no keyring is pinned).

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
+import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
 import { boxArgv, dotnetCandidates, judgeProbes, preflightLang } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
@@ -116,6 +117,27 @@ test('The_preflight_box_has_no_network_a_hidden_home_and_only_the_pinned_directo
   assert.equal(argv.at(-1), '--');
 });
 
+test('A_dotnet_root_other_than_the_pinned_one_in_an_apphost_trace_is_refused', () => {
+  const pinned = '/store/dotnet-sdk-10.0.403';
+  assert.deepEqual(apphostRootProblems(`Using environment variable DOTNET_ROOT=[${pinned}] as runtime location.\nUsing dotnet root path [${pinned}]\n`, pinned), []);
+  const apt = apphostRootProblems('Using dotnet root path [/usr/lib/dotnet]\n', pinned);
+  assert.equal(apt.length, 1);
+  assert.match(apt[0], /\/usr\/lib\/dotnet.*\/store\/dotnet-sdk-10\.0\.403/s);
+  assert.match(apphostRootProblems('nothing useful\n', pinned)[0], /no dotnet root/);
+  assert.match(apphostRootProblems(null, pinned)[0], /did not run/);
+});
+
+test('The_box_hides_the_distributions_dotnet_and_sets_DOTNET_ROOT_to_the_pinned_directory', () => {
+  const dirs = { dotnetSdk: '/home/op/store/sdk', node: '/home/op/store/node', typescript: '/home/op/store/ts' };
+  const argv = boxArgv({ bwrap: '/usr/bin/bwrap', dirs, boxPath: ['/home/op/store/sdk'], operatorHome: '/home/op', exists: () => true });
+  const at = (...tokens) => argv.findIndex((_, i) => tokens.every((tok, k) => argv[i + k] === tok));
+  const pinnedBind = at('--ro-bind', dirs.dotnetSdk, dirs.dotnetSdk);
+  for (const hidden of ['/usr/lib/dotnet', '/etc/dotnet']) assert.ok(at('--tmpfs', hidden) !== -1 && at('--tmpfs', hidden) < pinnedBind, `${hidden} is hidden`);
+  assert.notEqual(at('--setenv', 'DOTNET_ROOT', dirs.dotnetSdk), -1, 'an apphost-launched program finds the pinned runtime, not /etc/dotnet/install_location');
+  const absent = boxArgv({ bwrap: '/usr/bin/bwrap', dirs, boxPath: [], operatorHome: '/home/op', exists: p => p !== '/etc/dotnet' });
+  assert.ok(!absent.includes('/etc/dotnet'), 'a directory the host lacks is not mounted over: bwrap cannot create it on a read-only root');
+});
+
 // ---- inside a real box, on the real store -----------------------------------------------------------------------------------------------
 
 const storeRoot = path.join(os.homedir(), ...stacks.storeRoot);
@@ -140,6 +162,7 @@ test('The_preflight_passes_in_a_box_that_binds_the_pinned_toolchains_and_reads_e
   assert.deepEqual(result.value.facts.dotnetSdks, [stacks.pins.dotnetSdk]);
   assert.equal(result.value.facts.typescript, stacks.pins.typescript);
   assert.equal(result.value.facts.pythonSha256, stacks.python.sha256);
+  assert.equal(result.value.facts.apphostDotnetRoot, path.join(storeRoot, stacks.directories.dotnetSdk), 'a program launched through its apphost finds the pinned runtime');
 });
 
 test('The_preflight_in_a_real_box_refuses_a_pin_the_toolchain_does_not_meet_naming_the_value_seen', async t => {
@@ -180,4 +203,16 @@ test('A_host_without_bwrap_is_refused_naming_it_and_no_probe_is_attempted', asyn
   } finally {
     process.env.PATH = before;
   }
+});
+
+test('An_apphost_in_a_box_without_the_hiding_resolves_the_distributions_dotnet_root_and_that_is_the_point', async t => {
+  if (!gate(t)) return;
+  if (!existsSync('/etc/dotnet/install_location') && !existsSync('/usr/lib/dotnet/dotnet')) return lacks(t, 'the host has no distribution dotnet for an apphost to find');
+  const dirs = Object.fromEntries(Object.entries(stacks.directories).map(([name, dirName]) => [name, path.join(storeRoot, dirName)]));
+  const bare = await runApphostProbe({ stacks, dirs, boxPath: [dirs.dotnetSdk], operatorHome: os.homedir(), protect: false });
+  assert.notEqual(bare.root, dirs.dotnetSdk, `without DOTNET_ROOT and the hiding, the apphost used ${bare.root}`);
+  assert.ok(bare.problems.length >= 1, 'and the probe says so');
+  const guarded = await runApphostProbe({ stacks, dirs, boxPath: [dirs.dotnetSdk], operatorHome: os.homedir(), protect: true });
+  assert.deepEqual(guarded.problems, []);
+  assert.equal(guarded.root, dirs.dotnetSdk);
 });
