@@ -159,3 +159,35 @@ test('In_task_mode_only_a_window_of_at_most_two_tokens_that_the_public_texts_hol
   assert.equal(task('the plan lives in sprocket_repo notes/alpha/beta/gamma/delta/epsilon.md and the spec\n') > 0, true, 'a window spanning more than two tokens is checked');
   assert.equal(task('a-made-up-six-word-joined-passage-here\n'), 0, 'not an aid shingle at all');
 });
+
+const SENTENCE = 'the violet engine whistles beneath seven copper bridges at dawn';
+const unicodeNeedles = () => aidNeedles({ aids: [{ name: 'a.md', text: `Notes.\n${SENTENCE}.\n` }] }).value;
+
+test('Invisible_characters_and_html_entities_do_not_hide_an_aid_sentence_on_the_checked_side', () => {
+  const needles = unicodeNeedles();
+  const forms = {
+    'soft hyphens inside words': SENTENCE.replace(/whistles|copper/g, w => `${w.slice(0, 3)}­${w.slice(3)}`),
+    'zero-width space inside a word': SENTENCE.replace('violet', 'vio​let'),
+    'zero-width non-joiner and joiner and word joiner': SENTENCE.replace('engine', 'en‌gi‍ne').replace('seven', 'se⁠ven'),
+    'a byte order mark inside a word': SENTENCE.replace('bridges', 'bri﻿dges'),
+    'zero-width spaces INSTEAD of spaces': SENTENCE.replaceAll(' ', '​'),
+    'a named entity inside a word': SENTENCE.replace('violet', 'vio&shy;let'),
+    'a numeric entity inside a word': SENTENCE.replace('engine', 'en&#173;gine').replace('copper', 'cop&#x200B;per'),
+    'non-breaking spaces by entity': SENTENCE.replaceAll(' ', '&nbsp;'),
+    'numeric non-breaking spaces': SENTENCE.replaceAll(' ', '&#160;'),
+  };
+  for (const [name, text] of Object.entries(forms)) assert.ok(findAidHits('p', `lead in\n${text}\n`, needles).length > 0, name);
+  assert.deepEqual(findAidHits('p', `lead in\n${forms['soft hyphens inside words']}\n`, needles).map(h => h.line), [2], 'the line number is the original one');
+});
+
+test('The_aid_side_is_normalised_the_same_way_so_an_aid_with_invisible_characters_still_matches_plain_text', () => {
+  const aid = { name: 'b.md', text: `Notes.\n${SENTENCE.replace('violet', 'vio­let').replace('copper', 'cop&shy;per')}.\n` };
+  const needles = aidNeedles({ aids: [aid] }).value;
+  assert.ok(findAidHits('p', `${SENTENCE}\n`, needles).length > 0);
+});
+
+test('A_text_with_none_of_them_reads_the_same_as_before_and_an_entity_that_is_not_one_is_left_alone', () => {
+  const needles = unicodeNeedles();
+  assert.equal(findAidHits('p', `${SENTENCE}\n`, needles).length, 1);
+  assert.equal(findAidHits('p', 'fish &amp; chips &unknown; &#99999999999; &#xZZ; stay as they are\n', needles).length, 0);
+});

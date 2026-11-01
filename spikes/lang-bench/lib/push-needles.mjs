@@ -6,12 +6,15 @@
 //    characters, plus exact substrings for names that are not words. These are public (they are in the plan), so a finding names the needle.
 import { parseTokens, SHINGLE_WORDS } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { lineIndex, wordsWithLines } from './push-text.mjs';
+import { lineIndex, readings, wordsWithLines } from './push-text.mjs';
 
-const shinglesOf = text => {
-  const words = wordsWithLines(text).map(w => w.word);
-  return new Set(Array.from({ length: Math.max(0, words.length - SHINGLE_WORDS + 1) }, (_, i) => words.slice(i, i + SHINGLE_WORDS).join(' ')));
+const shinglesOfReading = (text, invisible) => {
+  const words = wordsWithLines(text, invisible).map(w => w.word);
+  return Array.from({ length: Math.max(0, words.length - SHINGLE_WORDS + 1) }, (_, i) => words.slice(i, i + SHINGLE_WORDS).join(' '));
 };
+
+/** The six-word shingles of `text` under every reading of its invisible characters and entities (see push-text.mjs). */
+const shinglesOf = text => new Set(readings(text).flatMap(invisible => shinglesOfReading(text, invisible)));
 
 /**
  * ok({ shingles, allShingles, publicShingles, literals }) or a fail naming the aid that holds no six words - or none that is not already public.
@@ -41,20 +44,24 @@ export const TASK_EXEMPT_TOKENS = 2;
 /** Task rule: a public window is exempt only when it spans at most TASK_EXEMPT_TOKENS tokens of the checked text. */
 const exemptInTask = (window, key, publicShingles) => publicShingles.has(key) && new Set(window.map(w => w.token)).size <= TASK_EXEMPT_TOKENS;
 
-function shingleHits(path, text, needles, mode) {
-  const words = wordsWithLines(text);
+function shingleHitsOfReading(path, text, needles, mode, invisible) {
+  const words = wordsWithLines(text, invisible);
   const task = mode === 'task';
   const lookup = task ? needles.allShingles : needles.shingles;
-  const seen = new Set();
   const hits = [];
   for (let i = 0; i + SHINGLE_WORDS <= words.length; i += 1) {
     const window = words.slice(i, i + SHINGLE_WORDS);
     const key = window.map(w => w.word).join(' ');
     const aid = task && exemptInTask(window, key, needles.publicShingles) ? undefined : lookup.get(key);
-    const dedupe = aid === undefined ? null : `${words[i].line}\0${aid}`;
-    if (dedupe !== null && !seen.has(dedupe)) { seen.add(dedupe); hits.push({ path, line: words[i].line, what: `shingle of ${aid}`, tokens: new Set(window.map(w => w.token)).size }); }
+    if (aid !== undefined) hits.push({ path, line: words[i].line, what: `shingle of ${aid}`, tokens: new Set(window.map(w => w.token)).size });
   }
   return hits;
+}
+
+/** One finding per (line, aid), over every reading of the text. */
+function shingleHits(path, text, needles, mode) {
+  const all = readings(text).flatMap(invisible => shingleHitsOfReading(path, text, needles, mode, invisible));
+  return all.filter((h, i) => all.findIndex(o => o.line === h.line && o.what === h.what) === i);
 }
 
 function literalHits(path, text, literals) {
