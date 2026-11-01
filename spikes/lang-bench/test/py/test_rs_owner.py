@@ -111,6 +111,48 @@ class MembershipTests(unittest.TestCase):
         self.assertNotIn("oomKill", result.lifecycle["memory"])
 
 
+def foreign_cgroup(test, holder_seconds=40):
+    """A real, empty cgroup2 node with the memory controller (its parent is a delegated scope held alive by a sleeper): a cgroup the program
+    of a case does NOT run in."""
+    owner = Scope(test)
+    holder = subprocess.Popen(["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={owner.unit}", "-p", "Delegate=yes", "--", "sleep", str(holder_seconds)])
+    test.addCleanup(holder.wait)
+    test.addCleanup(owner.stop)  # runs first: the sleeper goes with its scope instead of being waited for
+    test.assertTrue(wait_until(lambda: os.path.isdir(owner.cgroup)))
+    test.assertTrue(wait_until(lambda: any(cg.comm_of(pid) == "sleep" for pid in cg.procs(owner.cgroup) or [])), "the sleeper has replaced systemd-run in the scope")
+    hold = os.path.join(owner.cgroup, "hold")
+    os.mkdir(hold)  # the scope itself may hold no process once it has controllers for its children: the sleeper moves down
+    with open(owner.cgroup + "/cgroup.procs") as f:
+        for pid in f.read().split():
+            with open(hold + "/cgroup.procs", "w") as out:
+                out.write(pid)
+    with open(owner.cgroup + "/cgroup.subtree_control", "w") as f:
+        f.write("+memory")
+    other = os.path.join(owner.cgroup, "other")
+    os.mkdir(other)
+    return other
+
+
+class PlainForeignCgroupTests(unittest.TestCase):
+    """F1: on the plain path (no box, no child-pid) a cgroup the program does not run in must not give `memory {known: true, peakBytes: 0}`."""
+
+    def test_A_cgroup_the_launcher_does_not_run_in_gives_unknown_memory_and_not_a_zero_peak(self):
+        require_scope(self)
+        other = foreign_cgroup(self)
+        ws = Workspace(self, "python3 -c 'x = bytearray(100 * 1024 * 1024)'\ncat answer.bin\n", FILES)
+        result = ws.run(case(), cgroup=other, real=True)
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(result.lifecycle["memory"]["known"], False, f"absent is not zero: {result.lifecycle['memory']}")
+        self.assertNotIn("peakBytes", result.lifecycle["memory"])
+        self.assertIn("  memory: not certified", result.lines)
+
+    def test_On_the_plain_path_a_cgroup_the_launcher_is_seen_in_keeps_its_memory(self):
+        ws = Workspace(self, "cat answer.bin\n", FILES)
+        cgroup = fake_cgroup(ws, final={"memory.peak": "4096", "memory.events": "oom_kill 0\n"})
+        result = ws.run(case(), cgroup=cgroup)  # Workspace.run lets the fake folder pass for the launcher's own cgroup
+        self.assertEqual((result.lifecycle["memory"]["known"], result.lifecycle["memory"]["peakBytes"]), (True, 4096))
+
+
 class WrongCgroupTests(unittest.TestCase):
     """N2: a cgroup that exists, is empty and is NOT the box's own (the reviewer's wrong_cg scenario, on real cgroups)."""
 
@@ -119,6 +161,7 @@ class WrongCgroupTests(unittest.TestCase):
         scope, owner = Scope(self), Scope(self)
         holder = subprocess.Popen(["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={owner.unit}", "-p", "Delegate=yes", "--", "sleep", "40"])
         self.addCleanup(holder.wait)
+        self.addCleanup(owner.stop)
         self.assertTrue(wait_until(lambda: os.path.isdir(owner.cgroup)), "the delegated scope that owns the wrong cgroup")
         wrong = os.path.join(owner.cgroup, "wrong")
         os.mkdir(wrong)  # a real, empty cgroup2 node: it passes every check of the directory itself

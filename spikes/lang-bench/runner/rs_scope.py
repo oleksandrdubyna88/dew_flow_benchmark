@@ -108,8 +108,12 @@ class ScopeLifecycle:
         raise failure
 
     def _seen(self, launched):
-        """A counter counts only for a cgroup the box was seen in; without a box (the plain path) the directory is taken as it is."""
-        return not self.box or self.confirmed or launched.tracker.seen
+        """A counter counts only for a cgroup the case was seen in. With a box: the box was confirmed in it, or some process was listed in it.
+        On the plain path the LAUNCHER must have been seen in it (listed in `cgroup.procs`, or `/proc/<pid>/cgroup` names it): a cgroup the
+        program does not run in has counters of 0 that mean nothing, and absent is not zero."""
+        if self.box:
+            return self.confirmed or launched.tracker.seen
+        return launched.tracker.saw_launcher or cg.member_of(launched.proc.pid, self.directory) is True
 
     def settle(self, launched, end):
         exited = end == "exited"

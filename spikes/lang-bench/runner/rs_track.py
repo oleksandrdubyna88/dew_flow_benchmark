@@ -41,7 +41,7 @@ class Tracker:
         self.found = NOT_YET if box else LAUNCHER
         self.pidfd, self.comm, self.many = None, None, 0
         self.reads, self.extra_max, self.previous, self.reader = 0, 0, frozenset(), None
-        self.seen, self.orphan = False, False
+        self.seen, self.orphan, self.saw_launcher = False, False, False
 
     def _listed(self):
         return cg.procs(self.directory) if self.directory else None
@@ -97,13 +97,18 @@ class Tracker:
         self.extra_max = max(self.extra_max, len(extras & self.previous))
         self.previous = extras
 
+    def _note_listing(self, pids):
+        """What a look shows about the cgroup itself: that something was listed in it, and that the launcher was (the plain path's proof)."""
+        self.seen = self.seen or bool(pids)
+        self.saw_launcher = self.saw_launcher or self.proc.pid in pids
+
     def look(self):
         """One read of `cgroup.procs`: choose the program while it is not known, and count what else is there."""
         pids = self._listed()
         if pids is None:
             return
         self.reads += 1
-        self.seen = self.seen or bool(pids)
+        self._note_listing(pids)
         others = self._others(pids)
         if self.seeking():
             self._choose(others)
