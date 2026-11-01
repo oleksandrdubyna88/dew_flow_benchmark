@@ -160,6 +160,14 @@ and no branch check reads a tag): an annotated tag's message gets the task-repos
 (annotated or lightweight) must already be on a remote ref, so it was checked when its branch was pushed - otherwise `tag-target` refuses it, naming the commit. Then the tag is pushed with
 `git push --no-verify` on the team lead's word.
 
+**Residuals the reviewers accepted (named so nobody mistakes them for coverage).**
+- `--dest <other>` trusts the other branch's history: the base is that branch's remote ref, so what it holds is not scanned again. A wrong or omitted `--dest` therefore changes what is
+  "new"; the hook passes the pushed remote ref itself, and by hand `--dest` must name the branch really being updated.
+- `--self` freshness: the bench's own check compares against the bench's `origin/main` as fetched; it does not run the task repository's freshness check against `ls-remote`, does not
+  run the placement rules and does not refuse binaries. A stale local `origin/main` makes it read more or less than the push adds; fetch before running it.
+- The own-value scan finds a real secret's literal text and its base64 forms (full, and the three alignments). It does not find a base64 of anything that is not one of the two real secret
+  files, a JSON-escaped spelling (`\/`, `\u00xx`), or a partial token (a prefix or a few characters of it): those are covered only by the secret SHAPES, which need the whole token.
+
 **What reads what.** History is published, so the leak and secret scans read every commit and every message. A run base carries the tip tree and
 never the history, so every other rule reads the files as they stand at the tip (credited to the commit that brought the blob). Needles match by
 D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
