@@ -15,7 +15,7 @@ class Problem(NamedTuple):
     message: str
 
     def text(self):
-        return f"{self.file}:{self.line}: {self.message}"
+        return f"{self.file}:{self.line}: {self.message}" if self.line else f"{self.file}: {self.message}"
 
 
 @dataclass(frozen=True)
