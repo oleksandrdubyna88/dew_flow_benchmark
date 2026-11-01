@@ -125,9 +125,19 @@ def _window(data, byte):
     return ("..." if start else "") + canonical(data[start:end]) + ("..." if end < len(data) else "")
 
 
-def output_difference_lines(out_name, expected, kept, byte):
-    """The bytes of the expected and the actual output around the first difference, and its position."""
-    shown = _window(kept, byte) if byte <= len(kept) else "(not kept)"
+def _kept_window(window, byte):
+    """The window of actual bytes kept past the cap, positioned at the difference, or a note when none was kept."""
+    if window is None:
+        return "(not kept)"
+    start, data = window
+    shown = _window(data, byte - start)
+    return shown if start == 0 or shown.startswith("...") else "..." + shown
+
+
+def output_difference_lines(out_name, expected, kept, byte, window=None):
+    """The bytes of the expected and the actual output around the first difference, and its position. `window` is (offset, bytes) of the
+    actual output around it, kept whatever the cap, for a difference past what `kept` holds."""
+    shown = _window(kept, byte) if byte <= len(kept) else _kept_window(window, byte)
     return [f"  {'expect':<{LABEL_WIDTH}}{out_name}   {_window(expected, byte)}",
             f"  {'actual':<{LABEL_WIDTH}}{'':<{len(out_name)}}   {shown}",
             f"  first difference at byte {byte}"]

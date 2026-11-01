@@ -35,12 +35,14 @@ class Comparer:
     def __init__(self, expected, cap):
         self.expected, self.cap = expected, cap
         self.offset, self.total, self.mismatch, self.kept = 0, 0, None, bytearray()
+        self.tail, self.window = b"", None
 
     def feed(self, chunk):
-        self.total += len(chunk)
-        self.kept += chunk[: max(0, self.cap - len(self.kept))]
         if self.mismatch is None:
             self._compare(chunk)
+        self.total += len(chunk)
+        self.tail = (self.tail + chunk)[-rp.WINDOW:]
+        self.kept += chunk[: max(0, self.cap - len(self.kept))]
 
     def _compare(self, chunk):
         window = self.expected[self.offset:self.offset + len(chunk)]
@@ -49,6 +51,18 @@ class Comparer:
             self.offset += same
         else:
             self.mismatch = self.offset + same
+            self.window = self._around(chunk, same)
+
+    def _around(self, chunk, at):
+        """(offset, bytes) of the actual output around the first difference, kept whatever the cap: what the tail and this chunk hold."""
+        joined = self.tail + chunk
+        index = len(self.tail) + at
+        start = max(0, index - rp.WINDOW)
+        return self.total - len(self.tail) + start, joined[start:index + rp.WINDOW]
+
+    def actual_window(self):
+        """The small window kept for the report: around the first difference, or the last bytes written when the output ended early."""
+        return self.window if self.window is not None else (self.total - len(self.tail), self.tail)
 
     @property
     def truncated(self):
@@ -225,7 +239,7 @@ def _judge(case, config, out, comparer):
 
 
 def _difference(case, comparer, byte):
-    lines = rp.output_difference_lines(f"{case.id}.out", case.expected, bytes(comparer.kept), byte)
+    lines = rp.output_difference_lines(f"{case.id}.out", case.expected, bytes(comparer.kept), byte, comparer.actual_window())
     return {"byte": byte}, lines
 
 

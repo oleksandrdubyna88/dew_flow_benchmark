@@ -95,7 +95,27 @@ class StreamingTests(unittest.TestCase):
         printed = b"a" * 3000 + b"b" + b"a" * 1095
         result = Workspace(self, REPLAY, {"answer.bin": printed}).run(case(expected=expected), capture_cap=1024)
         self.assertEqual(result.first_mismatch, {"byte": 3000})
-        self.assertIn("(not kept)", "\n".join(result.lines))
+        actual_line = [l for l in result.lines if l.lstrip().startswith("actual")][0]
+        self.assertNotIn("(not kept)", actual_line, "a small window of the actual bytes around the difference is kept past the cap")
+        self.assertIn("a" * 20 + "b" + "a" * 20, actual_line)
+        self.assertLess(len(actual_line), 200)
+
+    def test_A_difference_far_past_the_cap_in_a_later_chunk_shows_the_bytes_before_it_too(self):
+        expected = b"a" * 200_000
+        printed = b"a" * 100_000 + b"b" + b"a" * 99_999
+        result = Workspace(self, REPLAY, {"answer.bin": printed}).run(case(expected=expected), capture_cap=1024)
+        self.assertEqual(result.first_mismatch, {"byte": 100_000})
+        actual_line = [l for l in result.lines if l.lstrip().startswith("actual")][0]
+        self.assertIn("a" * 20 + "b", actual_line)
+
+    def test_An_output_that_ends_early_past_the_cap_shows_the_last_bytes_it_wrote(self):
+        expected = b"a" * 4096
+        printed = b"a" * 3000
+        result = Workspace(self, REPLAY, {"answer.bin": printed}).run(case(expected=expected), capture_cap=1024)
+        self.assertEqual((result.reason, result.first_mismatch), ("output ends early", {"byte": 3000}))
+        actual_line = [l for l in result.lines if l.lstrip().startswith("actual")][0]
+        self.assertNotIn("(not kept)", actual_line)
+        self.assertIn("a" * 30, actual_line)
 
     def test_A_program_that_prints_a_wrong_byte_and_never_stops_is_cut_off_at_once(self):
         started = time.monotonic()

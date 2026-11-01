@@ -298,6 +298,28 @@ class ConfigurationTests(unittest.TestCase):
         for text in ("s03\n", "s03 bytes\n", "s03 R1\n", "s03 bytes X1\n", "s03 bytes R1 R1x\n"):
             self.assertTrue(self.manifest(text)[1], text)
 
+    def test_A_normalised_olympiad_case_is_exit_4_never_a_silent_byte_comparison(self):
+        for comparison in ("normalised", "normalised+json", "json+normalised", "normalised+relational"):
+            box = Box(self)
+            box.write(box.samples, "cases.txt", f"s03 {comparison} R1\n")
+            code, out, err = box.cli()
+            self.assertEqual(code, 4, comparison)
+            self.assertIn("not supported for olympiad", err)
+            self.assertIn("s03", err)
+            self.assertEqual(out, "", "nothing was run")
+
+    def test_A_normalised_olympiad_case_is_refused_in_parse_only_too_and_a_bytes_case_is_not(self):
+        box = Box(self)
+        box.write(box.samples, "cases.txt", "s03 normalised R1\n")
+        self.assertEqual(box.cli("--parse-only")[0], 4)
+        box.write(box.samples, "cases.txt", "s03 bytes R1\n")
+        self.assertEqual(box.cli("--parse-only")[0], 0)
+        self.assertEqual(box.cli()[0], 0)
+
+    def test_A_normalised_case_of_a_daemon_or_web_task_is_not_refused_by_this_rule(self):
+        pairs = {"x2.in": read_file(os.path.join(FORMAT, "x2.in")), "x2.out": read_file(os.path.join(FORMAT, "x2.out")), "cases.txt": b"x2 normalised R1\n"}
+        self.assertEqual(Box(self, kind=DAEMON, pairs=pairs).cli("--parse-only")[0], 0)
+
     def test_A_malformed_cases_line_a_repeated_id_or_an_id_with_no_pair_is_exit_4(self):
         for text in ("s03\n", "s03 bytes R1\ns03 bytes R2\n", "s03 bytes X1\n", "s77 bytes R1\n", "s03 R1\n"):
             box = Box(self)

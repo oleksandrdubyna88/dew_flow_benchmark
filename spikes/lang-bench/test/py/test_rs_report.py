@@ -67,6 +67,14 @@ class RenderTests(unittest.TestCase):
         self.assertLess(max(len(line) for line in lines), 200)
         self.assertIn("(not kept)", rp.output_difference_lines("s01.out", expected, actual[:200], 500)[1], "a capture cut before the difference says so")
 
+    def test_A_window_of_actual_bytes_kept_past_the_cap_is_shown_where_the_capture_ends_before_the_difference(self):
+        expected = b"x" * 500 + b"A" + b"y" * 500
+        window = (470, b"x" * 30 + b"B" + b"y" * 30)
+        lines = rp.output_difference_lines("s01.out", expected, b"x" * 100, 500, window)
+        self.assertNotIn("(not kept)", lines[1])
+        self.assertIn("x" * 30 + "B" + "y" * 29, lines[1])
+        self.assertIn('..."x', lines[1], "it starts mid-output and says so")
+
     def test_A_time_verdict_says_which_limit_it_was_judged_against(self):
         self.assertEqual(rp.time_text(1020, 1000, "floor"), "time limit: 1.020 s over 1.000 s (against the floor)")
         self.assertEqual(rp.time_text(2500, 2000, "registered"), "time limit: 2.500 s over 2.000 s (the registered limit)")

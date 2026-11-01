@@ -160,6 +160,18 @@ def _launch_prefix(args):
     return _prefix_of(args.launch_prefix) if args.launch_prefix else None
 
 
+def _names_normalised(pair):
+    return "normalised" in (pair.comparison or "").split("+")
+
+
+def _unsupported(kind, pairs):
+    """An olympiad case whose manifest line says `normalised` would be compared byte for byte: the normalisations are not built, so it is refused."""
+    if kind != "olympiad":
+        return []
+    return [Problem("cases.txt", 0, f"{p.id}: the comparison {p.comparison!r} is not supported for olympiad (only bytes is built)")
+            for p in pairs if _names_normalised(p)]
+
+
 def make_plan(args):
     """A Plan, or a Failure naming what is wrong with the command line, the statement, the pairs or the limits."""
     problems = _argument_problems(args)
@@ -168,7 +180,7 @@ def make_plan(args):
     kind, failure = _kind_of(args)
     pairs, pair_problems = _pairs_of(args)
     limits, limit_problems = _limits_of(args)
-    found = _texts(pair_problems + limit_problems)
+    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs))
     if failure:
         return failure
     return Failure(EXIT_CONFIG, found) if found else Plan(kind, args, pairs, limits, _launch_prefix(args))
