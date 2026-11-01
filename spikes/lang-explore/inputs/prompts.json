@@ -1,0 +1,17 @@
+{
+  "source": "todo/PLAN_lang_comparison_v2.md section 4.5, Bare; stack sentences with SDK and TypeScript patch as this pilot runs them (todo/PLAN_lang_explore_task1.md D-X7)",
+  "template": "Implement the program described in STATEMENT.md in this directory, in {STACK}. {STACK_SENTENCE}\nSTATEMENT.md, samples/, runner/, build.sh, run.sh, PACKAGES.md and the toolchain pin files of the stack are frozen inputs:\ndo not change them. The program is built by `bash build.sh` and started by `bash run.sh` exactly as STATEMENT.md says;\n`python3 -I runner/run_samples.py samples/` runs the visible samples the way the hidden tests will. Hidden tests will run\nit under registered time and memory limits, never below the floors STATEMENT.md guarantees. Only the packages listed in\nPACKAGES.md are available;\nthere is no network. Work autonomously; nobody answers questions. End with a summary of what you built and the checks\nyou ran.",
+  "templateSha256": "1a91cec84c580e1b636bf206308549afb472952ce59fcae8a38415be4047a4ed",
+  "prompts": {
+    "csharp": {
+      "stackSentence": "Use C# 14 on .NET 10 (SDK 10.0.114 is installed; the project files in this folder are pinned).",
+      "text": "Implement the program described in STATEMENT.md in this directory, in C#. Use C# 14 on .NET 10 (SDK 10.0.114 is installed; the project files in this folder are pinned).\nSTATEMENT.md, samples/, runner/, build.sh, run.sh, PACKAGES.md and the toolchain pin files of the stack are frozen inputs:\ndo not change them. The program is built by `bash build.sh` and started by `bash run.sh` exactly as STATEMENT.md says;\n`python3 -I runner/run_samples.py samples/` runs the visible samples the way the hidden tests will. Hidden tests will run\nit under registered time and memory limits, never below the floors STATEMENT.md guarantees. Only the packages listed in\nPACKAGES.md are available;\nthere is no network. Work autonomously; nobody answers questions. End with a summary of what you built and the checks\nyou ran.",
+      "sha256": "3994a554aa0b1911b691f29f1e02f854a2f1607427c6164b56b989a72ae85943"
+    },
+    "node": {
+      "stackSentence": "Use TypeScript 6.0.3 with `strict`, run by Node 26 with native type stripping (no build step), with `tsc --noEmit` as the type check.",
+      "text": "Implement the program described in STATEMENT.md in this directory, in TypeScript. Use TypeScript 6.0.3 with `strict`, run by Node 26 with native type stripping (no build step), with `tsc --noEmit` as the type check.\nSTATEMENT.md, samples/, runner/, build.sh, run.sh, PACKAGES.md and the toolchain pin files of the stack are frozen inputs:\ndo not change them. The program is built by `bash build.sh` and started by `bash run.sh` exactly as STATEMENT.md says;\n`python3 -I runner/run_samples.py samples/` runs the visible samples the way the hidden tests will. Hidden tests will run\nit under registered time and memory limits, never below the floors STATEMENT.md guarantees. Only the packages listed in\nPACKAGES.md are available;\nthere is no network. Work autonomously; nobody answers questions. End with a summary of what you built and the checks\nyou ran.",
+      "sha256": "3c232919dc4a53f9b81708f32261ac385dc4bd1f28415e195e0afaf462e21aab"
+    }
+  }
+}

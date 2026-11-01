@@ -25,11 +25,23 @@ export const setenvAll = env => ['--clearenv', ...Object.keys(env).sort().flatMa
 export const hiddenPaths = ({ operatorHome, exists = existsSync }) =>
   Object.freeze([operatorHome, '/mnt', '/run', '/tmp', '/var/tmp'].filter(p => p === operatorHome || exists(p)));
 
+const LOCALE_NAME = /^[A-Za-z]{2,3}(_[A-Za-z]{2,3})?(\.[A-Za-z0-9-]{1,16})?(@[a-z]{1,16})?$/;
+
+/**
+ * The locale seam (the exploratory pilot, W2 and W3): `{}` when none is given (every default stays as it was), else `{ LANG, LC_ALL }` set to that locale. The value goes into an
+ * environment, so a string that is not a locale name (language, optional `_TERRITORY`, optional `.charset`) is refused, naming the shape.
+ */
+export function localeEnv(locale) {
+  if (locale === undefined) return {};
+  if (typeof locale !== 'string' || !LOCALE_NAME.test(locale)) throw new Error(`locale ${typeof locale === 'string' ? `'${locale.slice(0, 40)}'` : typeof locale} is not a locale name: language, optional _TERRITORY, optional .charset (for example de_DE.UTF-8)`);
+  return { LANG: locale, LC_ALL: locale };
+}
+
 /**
  * The scoring environment: a fixed allow-list, never the operator's. `nugetCache` / `npmCache` are the per-scoring copies of the
- * seeded offline caches; with none given each cache lives inside `home`.
+ * seeded offline caches; with none given each cache lives inside `home`. `locale` (seam W3) replaces `LANG` and adds `LC_ALL`; with none the environment is what it always was.
  */
-export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache }) {
+export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache, locale }) {
   return Object.freeze({
     PATH: [...toolchainDirs.flatMap(d => [`${d}/bin`, d]), '/usr/bin', '/bin'].join(':'),
     HOME: home,
@@ -44,6 +56,7 @@ export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache }
     NUGET_PACKAGES: nugetCache ?? path.join(home, '.nuget', 'packages'),
     npm_config_cache: npmCache ?? path.join(home, '.npm'),
     npm_config_offline: 'true',
+    ...localeEnv(locale),
   });
 }
 
@@ -55,7 +68,7 @@ export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache }
  * held-out step; `roFiles` read-only OVER the writable copy (the harness test script the tree must not rewrite). No network, own pid
  * namespace, an environment of the allow-list only. A directory the host lacks is not mounted over (bwrap cannot create it on a ro root).
  */
-export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, operatorHome = os.homedir(), exists = existsSync }) {
+export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, operatorHome = os.homedir(), exists = existsSync, locale }) {
   const hidden = hiddenPaths({ operatorHome, exists });
   return Object.freeze([
     'bwrap',
@@ -66,7 +79,7 @@ export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [],
     ...[copyDir, casesDir, home, tmp, nugetCache, npmCache].filter(Boolean).flatMap(bind),
     ...roFiles.flatMap(roBind),
     ...isolation(),
-    ...setenvAll(scoreEnv({ home, tmp, toolchainDirs, nugetCache, npmCache })),
+    ...setenvAll(scoreEnv({ home, tmp, toolchainDirs, nugetCache, npmCache, locale })),
     ...(cwd ? chdir(cwd) : []),
     '--',
   ]);
