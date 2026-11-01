@@ -7,7 +7,7 @@ a wake-up of the pump (every millisecond until the program shows, then every 20 
 Without a launch status there is no box: the launcher execs the program and is the program.
 
 `fork` is judged over the whole case from what is NOT bwrap, not the launcher, not the wrapper and not the program: the most such processes
-seen in two successive looks (a tool that is gone a moment later is no fork) and what the leftover read finds after the program's exit.
+seen in looks at least 100 ms apart (a tool that is gone a moment later, or was only slow to be scheduled, is no fork) and what the leftover read finds after the program's exit.
 It is reported as observed and never decides which pid is the program.
 """
 import time
@@ -17,8 +17,14 @@ import rs_exec as ex
 
 FOUND = "cgroup.procs: the process whose parent is a bwrap process"
 LAUNCHER = "the launcher's own pid (no launch status: the launcher execs the program)"
+PERSIST_NS = 100 * ex.NS_PER_MS  # an extra process counts for `fork` only when it has been in the cgroup this long
 ORPHAN = "an orphan was taken for the program: it was still alive when the program ended, so it was a leftover"
 NOT_YET = "no process with a bwrap parent was seen in cgroup.procs"
+
+
+def _stayed(since, now):
+    """How many of the extras have been in the cgroup for PERSIST_NS or more."""
+    return sum(1 for first in since.values() if now - first >= PERSIST_NS)
 
 
 def _length(found):
@@ -34,7 +40,7 @@ class Tracker:
         self.pid = None if box else proc.pid
         self.found = NOT_YET if box else LAUNCHER
         self.pidfd, self.comm, self.many = None, None, 0
-        self.reads, self.extra_max, self.previous, self.reader = 0, 0, frozenset(), None
+        self.reads, self.extra_max, self.since, self.reader = 0, 0, {}, None
         self.seen, self.orphan, self.saw_launcher = False, False, False
 
     def _listed(self):
@@ -87,9 +93,13 @@ class Tracker:
             self._adopt(owned[0])
 
     def _count(self, others):
-        extras = frozenset(pid for pid in others if pid != self.pid) if self.pid is not None else frozenset()
-        self.extra_max = max(self.extra_max, len(extras & self.previous))
-        self.previous = extras
+        now = ex.now_ns()
+        self.since = {pid: self.since.get(pid, now) for pid in self._extras(others)}  # a pid that left is forgotten: back, it starts young
+        self.extra_max = max(self.extra_max, _stayed(self.since, now))
+
+    def _extras(self, others):
+        """The processes besides the program (none while the program is not known)."""
+        return [] if self.pid is None else [pid for pid in others if pid != self.pid]
 
     def _note_listing(self, pids):
         """What a look shows about the cgroup itself: that something was listed in it, and that the launcher was (the plain path's proof)."""

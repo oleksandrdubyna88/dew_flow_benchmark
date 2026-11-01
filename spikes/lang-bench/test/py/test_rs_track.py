@@ -193,18 +193,45 @@ class OrphanTests(unittest.TestCase):
 
 
 class ForkTests(unittest.TestCase):
-    def test_Extras_count_only_when_they_persist_across_two_looks_and_never_before_the_program_is_known(self):
-        family, launcher = Family(self, 1), launcher_of(self)
-        extra = launcher_of(self)
-        family.list(family.children()[0])
+    def looks_at(self, tracker, family, times_ms):
+        """Look at the listed times of a clock that is ours: the extra process is in the cgroup from the first look on."""
+        clock = [0]
+        with mock.patch.object(ex, "now_ns", lambda: clock[0] * ex.NS_PER_MS):
+            for at in times_ms:
+                clock[0] = at
+                tracker.look()
+
+    def test_F2_an_extra_counts_only_when_it_is_seen_in_looks_at_least_100_ms_apart(self):
+        family, launcher, extra = Family(self, 1), launcher_of(self), launcher_of(self)
         tracker = family.tracker(launcher)
-        tracker.look()
+        family.list(family.children()[0])
+        self.looks_at(tracker, family, [0])
         family.list(family.children()[0], extra.pid)
-        tracker.look()
-        self.assertEqual(tracker.extra_max, 0, "seen once: a tool that is gone a moment later")
-        tracker.look()
-        self.assertEqual(tracker.extra_max, 1, "seen twice: it stays")
+        self.looks_at(tracker, family, [1, 2, 20, 40, 99])
+        self.assertEqual(tracker.extra_max, 0, "seen in looks 98 ms apart: a tool that was only slow to be scheduled")
+        self.looks_at(tracker, family, [101])
+        self.assertEqual(tracker.extra_max, 1, "seen 100 ms apart: it stays")
         self.assertEqual(tracker.fork([]), {"known": True, "found": True, "count": 2})
+
+    def test_F2_an_extra_that_left_and_came_back_starts_its_age_again(self):
+        family, launcher, extra = Family(self, 1), launcher_of(self), launcher_of(self)
+        tracker = family.tracker(launcher)
+        family.list(family.children()[0])
+        self.looks_at(tracker, family, [0])
+        family.list(family.children()[0], extra.pid)
+        self.looks_at(tracker, family, [10])
+        family.list(family.children()[0])
+        self.looks_at(tracker, family, [60])
+        family.list(family.children()[0], extra.pid)
+        self.looks_at(tracker, family, [120])
+        self.assertEqual(tracker.extra_max, 0, "it was gone at 60 ms: its age is 0 again at 120 ms")
+
+    def test_Extras_are_never_counted_before_the_program_is_known(self):
+        family, launcher, extra = Family(self, 1), launcher_of(self), launcher_of(self)
+        tracker = family.tracker(launcher)
+        family.list(extra.pid)  # no child of bwrap listed: the program is not known
+        self.looks_at(tracker, family, [0, 500])
+        self.assertEqual((tracker.pid, tracker.extra_max), (None, 0))
 
     def test_The_leftover_read_counts_whatever_it_finds(self):
         family, launcher = Family(self, 1), launcher_of(self)

@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -130,6 +131,16 @@ class ForkTests(unittest.TestCase):
         self.assertEqual(result.lifecycle["fork"], {"known": True, "found": True, "count": 2})
         self.assertEqual(result.lifecycle["signalled"]["comm"], "bash", "the pid is still bash's: fork never blocks the pid choice")
         self.assertIn("  fork: 2 processes in the program's cgroup where one was expected", result.lines)
+
+    def test_F2_the_short_tools_are_not_fork_in_20_of_20_rounds_under_a_cpu_load_that_is_bounded_inside_the_test(self):
+        burners = [subprocess.Popen([sys.executable, "-I", "-c", "import time\nend = time.monotonic() + 60\nwhile time.monotonic() < end: pass"]) for _ in range(os.cpu_count() or 4)]
+        self.addCleanup(lambda: [(b.kill(), b.wait()) for b in burners])
+        forks = []
+        for round_ in range(20):
+            result, _, _ = run_in_scope(self, "true\n( true )\ntrue | true\nexec sleep 0.4\n", expected=b"", limit_ms=20_000)
+            self.assertEqual(result.status, "PASS", round_)
+            forks.append(result.lifecycle["fork"])
+        self.assertEqual([f.get("found") for f in forks], [False] * 20, f"fork under load: {[f for f in forks if f.get('found') is not False][:3]}")
 
     def test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs(self):
         # the program lives long enough to be found for sure; the short tools are gone in a millisecond. Twenty times: it must never flake.
