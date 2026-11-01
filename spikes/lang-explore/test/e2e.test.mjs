@@ -108,7 +108,6 @@ test('A_pair_runs_through_the_pilots_loop_is_recorded_and_noted_and_the_barrier_
   }
   const pair = JSON.parse(readFileSync(path.join(dir, 'pairs', 'p1.json'), 'utf8'));
   assert.equal(pair.cells.csharp.missing, false);
-  assert.ok(existsSync(path.join(dir, 'pairs', 'p1-cpu.ndjson')) || true, 'the phase sampler wrote (or had nothing) for the pair');
   assert.match(statusLines({ dir, ...series }).join('\n'), /pair 1: finished/);
   const note = noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration }, pins: world.explore, rehearsal: false, subject });
   assert.match(note, /Exploratory, not evidence/);

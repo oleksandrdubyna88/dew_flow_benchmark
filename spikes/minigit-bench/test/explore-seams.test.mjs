@@ -124,7 +124,7 @@ test('W2_the_locale_of_the_plan_reaches_the_environment_the_box_is_spawned_with'
 
 // ---- W3: the scoring box's locale -----------------------------------------------------------------------------------------------------
 
-const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/home', tmp: '/w/tmp', toolchainDirs: ['/t/a'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: '/home/op', exists: () => true };
+const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: '/opt/operator-home', exists: () => true };
 
 /** The `--setenv` pairs of a bwrap argv as an object. */
 const setenvOf = argv => Object.fromEntries(argv.flatMap((a, i) => (a === '--setenv' ? [[argv[i + 1], argv[i + 2]]] : [])));

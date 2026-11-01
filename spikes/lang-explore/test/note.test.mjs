@@ -11,14 +11,14 @@ import { MIB, c, recordOf, resultOf } from './support.mjs';
 import { scoreShape } from '../lib/score.mjs';
 
 const PINS = JSON.parse(readFileSync(path.join(INPUTS, 'explore.json'), 'utf8'));
-const SECRET_SEQUENCE = '27 82 41 124 62 31 94 47 142 71 214';
-const SECRET_ID = 'h777';
+const SECRET_SEQUENCE = 'ZEBRA-9 QUAIL-8 MANGO-7 PLUM-6 FIG-5 KIWI-4';
+const SECRET_ID = 'k777';
 
 /** A session record whose held-out cases carry things the note must never print. */
 function sessionRecord({ stack, usd, cls = 'completed', failing = [], label = 'paired' }) {
   const result = resultOf(failing);
   result.cases = result.cases.map(x => (x.set === 'heldout' ? { ...x, id: `${SECRET_ID}-${x.id}`, stderrTail: SECRET_SEQUENCE, detail: `expected ${SECRET_SEQUENCE}` } : x));
-  const score = scoreShape({ result, traps: result.cases.filter(x => x.id.endsWith('h003') || x.id.endsWith('h005')).map(x => x.id) });
+  const score = scoreShape({ result, traps: result.cases.filter(x => x.id.endsWith('k003') || x.id.endsWith('k005')).map(x => x.id) });
   const base = recordOf({ score, label });
   const record = { ...base, class: cls, ids: { ...base.ids, stack }, cost: { ...base.cost, headlineUsd: { known: true, value: { usd } }, stopRuleUsd: { known: true, value: usd }, cliTotalUsd: { known: true, value: usd }, brokerUsd: { known: true, value: usd } } };
   return { ...record, explore: exploreSection({ score, audit: [] }) };
@@ -61,7 +61,7 @@ test('Every_prediction_row_of_the_plan_is_stated_against_an_observation_computed
   assert.match(rows[4][2], /accepted in 6 of 6 scored session\(s\); trap hits C# 0 session\(s\) with a hit, TypeScript 0 session\(s\) with a hit/);
   assert.match(rows[5][2], /^0 void\(s\); T1-T5 pass in 6 of 6; the partition sums to the wall in \d of 6; the most expensive session cost \$0\.3300$/);
   const failing = sixSessions();
-  const record = sessionRecord({ stack: 'node', usd: 0.9, failing: ['h003'] });
+  const record = sessionRecord({ stack: 'node', usd: 0.9, failing: ['k003'] });
   failing[1] = { entry: entryOf(1, 'node', 1, record), record };
   const second = predictionRows(failing.map(sessionCells), inputFor(failing).pairs);
   assert.match(second[4][2], /accepted in 5 of 6 scored session\(s\); trap hits C# 0 session\(s\) with a hit, TypeScript 1 session\(s\) with a hit/, 'one failing trap case is one trap hit, as a count');
@@ -88,8 +88,8 @@ test('A_void_a_kill_and_a_flag_are_listed_and_a_rerun_is_labelled_ran_unpaired',
 
 test('The_note_holds_no_case_id_no_requirement_id_no_input_no_expected_value_and_no_trap_name', () => {
   const text = renderNote(inputFor(sixSessions()));
-  for (const needle of [SECRET_ID, SECRET_SEQUENCE, '27 82 41', 'h003', 'h005', 'M-0']) assert.ok(!text.includes(needle), `the note must not contain ${needle}`);
-  assert.doesNotMatch(text, /\bh\d{3}\b/, 'no case id');
+  for (const needle of [SECRET_ID, SECRET_SEQUENCE, 'ZEBRA-9 QUAIL', 'k003', 'k005', 'M-0']) assert.ok(!text.includes(needle), `the note must not contain ${needle}`);
+  assert.doesNotMatch(text, /\b[hk]\d{3}\b/, 'no case id');
   assert.doesNotMatch(text, /\bs0\d\b/, 'no sample id');
   assert.doesNotMatch(text, /\bR\d{1,2}\b/, 'no requirement id');
   assert.doesNotMatch(text, /\bn\s*=\s*\d{3,}/, 'no input value');
@@ -124,7 +124,7 @@ test('The_note_names_the_subject_by_sha_the_harness_by_path_and_identity_the_pin
 
 test('CPC_is_stated_per_stack_with_no_correct_solution_and_its_spend_when_none_was_accepted', () => {
   const sessions = sixSessions().filter(s => s.entry.stack === 'csharp');
-  const failed = sessionRecord({ stack: 'node', usd: 0.5, failing: ['h001'] });
+  const failed = sessionRecord({ stack: 'node', usd: 0.5, failing: ['k001'] });
   const all = [...sessions, { entry: entryOf(1, 'node', 1, failed), record: failed }];
   const text = renderNote(inputFor(all));
   assert.match(text, /- C#: 3 accepted of 3 session\(s\), spend \$0\.6600, cost per correct solution \$0\.2200/);

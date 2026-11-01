@@ -21,15 +21,15 @@ export const observeAgentEnv = () => {
   return { base: call({}), withExtra: call({ GH_TOKEN: 'x' }) };
 };
 
-const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/home', tmp: '/w/tmp', toolchainDirs: ['/t/a', '/t/b'], nugetCache: '/w/nuget', npmCache: '/w/npm', roFiles: ['/w/copy/test.sh'], cwd: '/w/copy', operatorHome: '/home/op' };
+const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a', '/t/b'], nugetCache: '/w/nuget', npmCache: '/w/npm', roFiles: ['/w/copy/test.sh'], cwd: '/w/copy', operatorHome: '/opt/operator-home' };
 
 /** scoreEnv and scoreBoxArgv for fixed inputs, with the home present and absent from the host. */
 export const observeScoring = () => ({
-  envMinimal: scoreEnv({ home: '/w/home', tmp: '/w/tmp' }),
+  envMinimal: scoreEnv({ home: '/w/hm', tmp: '/w/tmp' }),
   envFull: scoreEnv(SCORE_OPTS),
   argvAllPresent: [...scoreBoxArgv({ ...SCORE_OPTS, exists: () => true })],
   argvNonePresent: [...scoreBoxArgv({ ...SCORE_OPTS, exists: () => false })],
-  argvMinimal: [...scoreBoxArgv({ copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp', operatorHome: '/home/op', exists: () => true })],
+  argvMinimal: [...scoreBoxArgv({ copyDir: '/w/copy', home: '/w/hm', tmp: '/w/tmp', operatorHome: '/opt/operator-home', exists: () => true })],
 });
 
 /** A session record with only the leaves cellOf reads. */

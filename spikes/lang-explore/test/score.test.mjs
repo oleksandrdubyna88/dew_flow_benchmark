@@ -40,10 +40,10 @@ test('The_two_boxes_carry_the_locale_the_extra_keys_and_tsc_on_PATH_and_neither_
 });
 
 const case_ = (set, id, verdict, extra = {}) => ({ set, id, verdict, wallMs: 5, peakBytes: 1000, events: {}, exit: 0, ...extra });
-const RESULT = { build: { ok: true }, limits: { timeMs: 2000 }, cases: [case_('visible', 's01', 'pass'), case_('visible', 's02', 'pass'), case_('heldout', 'h001', 'pass'), case_('heldout', 'h002', 'wrong answer'), case_('heldout', 'h003', 'time limit')] };
+const RESULT = { build: { ok: true }, limits: { timeMs: 2000 }, cases: [case_('visible', 's01', 'pass'), case_('visible', 's02', 'pass'), case_('heldout', 'k001', 'pass'), case_('heldout', 'k002', 'wrong answer'), case_('heldout', 'k003', 'time limit')] };
 
 test('The_judges_json_becomes_v1s_score_shape_with_the_explore_section', () => {
-  const s = scoreShape({ result: RESULT, traps: ['h003', 'h001'] });
+  const s = scoreShape({ result: RESULT, traps: ['k003', 'k001'] });
   assert.deepEqual(s.build, { ok: true });
   assert.equal(hundredPercent(s.visible[0]), true, 'v1\'s own 100 % test reads the visible step');
   assert.deepEqual(s.heldout.totals, { total: 3, passed: 1, failed: 2, blocked: 0, percent: 33.3 });

@@ -91,9 +91,9 @@ test('Quiet_prints_each_verdict_and_exits_3_when_the_machine_never_is_and_0_when
 test('The_leak_needles_are_the_held_out_output_lines_of_8_or_more_characters_and_v1s_leak_check_finds_them', async () => {
   const casesDir = tmpDir('leak-cases');
   writeFileSync(path.join(casesDir, 'a.out'), '1\n');
-  writeFileSync(path.join(casesDir, 'b.out'), '27 82 41 124 62 31 94\n');
-  writeFileSync(path.join(casesDir, 'c.out'), '27 82 41 124 62 31 94\n');
-  assert.equal(leakNeedles({ casesDir }), '27 82 41 124 62 31 94', 'a short line is no needle, a repeated one is one');
+  writeFileSync(path.join(casesDir, 'b.out'), 'xyzzy 11 22 33 44 55 66\n');
+  writeFileSync(path.join(casesDir, 'c.out'), 'xyzzy 11 22 33 44 55 66\n');
+  assert.equal(leakNeedles({ casesDir }), 'xyzzy 11 22 33 44 55 66', 'a short line is no needle, a repeated one is one');
   const repo = tmpDir('leak-repo');
   const git = (...args) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@invalid', ...args], { encoding: 'utf8' });
   git('init', '-q');
@@ -102,13 +102,13 @@ test('The_leak_needles_are_the_held_out_output_lines_of_8_or_more_characters_and
   git('commit', '-q', '-m', 'clean');
   const clean = await leakcheck({ repoRoot: repo, tokensText: leakNeedles({ casesDir }), range: null });
   assert.equal(clean.ok, true, clean.reason);
-  writeFileSync(path.join(repo, 'note.md'), 'a result: 27 82 41 124 62 31 94 and more\n');
+  writeFileSync(path.join(repo, 'note.md'), 'a result: xyzzy 11 22 33 44 55 66 and more\n');
   git('add', '.');
   git('commit', '-q', '-m', 'leak');
   const dirty = await leakcheck({ repoRoot: repo, tokensText: leakNeedles({ casesDir }), range: null });
   assert.equal(dirty.ok, false);
   assert.match(dirty.reason, /held-out text found in .*note\.md/);
-  assert.ok(!dirty.reason.includes('27 82 41'), 'a hit names the file, never the needle');
+  assert.ok(!dirty.reason.includes('xyzzy 11 22'), 'a hit names the file, never the needle');
 });
 
 test('The_command_line_refuses_an_unknown_command_and_an_unknown_flag_with_the_usage_exit', async () => {
@@ -124,4 +124,19 @@ test('The_command_line_refuses_an_unknown_command_and_an_unknown_flag_with_the_u
   }
   assert.match(written.join(''), /the commands are prepare, calibrate, rehearse, init, quiet, run, status, readback, note, prune, leakcheck/);
   assert.match(written.join(''), /usage error/);
+});
+
+test('A_pair_is_refused_before_anything_is_launched_when_there_is_no_calibration_or_a_barrier_is_not_met', async () => {
+  const { runPair } = await import('../lib/run.mjs');
+  const home = tmpDir('norun-home');
+  mkdirSync(exploreRoot(home), { recursive: true });
+  const made = createSeries({ home, explore: EXPLORE, calibration: CALIBRATION });
+  const never = () => { throw new Error('the world must not be loaded for a refused pair'); };
+  const base = { home, say: () => {}, abort: { reason: null, exit: 130 }, worldFn: never, tokenFn: never };
+  const noCal = await runPair({ seriesDir: made.value.dir, pair: 1, io: base });
+  assert.equal(noCal.exit, 4);
+  assert.match(noCal.message, /explore\.mjs calibrate/, 'no limits, no paid session');
+  const early = await runPair({ seriesDir: made.value.dir, pair: 2, io: base });
+  assert.match(early.message, /pair 1 is not finished/);
+  assert.deepEqual(Object.keys(loadSeries(made.value.dir).value.map.sessions), [], 'nothing was planned');
 });

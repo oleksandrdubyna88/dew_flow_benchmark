@@ -42,7 +42,7 @@ test('The_session_record_has_every_v1_metric_beside_the_explore_section_and_ever
 });
 
 test('The_explore_section_counts_what_the_judge_found_and_says_why_for_a_session_that_was_not_scored', () => {
-  const e = exploreSection({ score: scoreOf(['h003']), audit: [] });
+  const e = exploreSection({ score: scoreOf(['k003']), audit: [] });
   assert.deepEqual(e.passRate.value, { visible: 100, heldout: 80, visibleCases: 3, heldoutCases: 5 });
   assert.deepEqual(e.verdicts.value, { visible: { pass: 3 }, heldout: { pass: 4, 'wrong answer': 1 } });
   assert.deepEqual(e.trapHits.value, { hits: 1, trapCases: 2 });

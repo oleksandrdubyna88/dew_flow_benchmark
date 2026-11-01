@@ -15,12 +15,12 @@ export const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2
 export const MIB = 1024 * 1024;
 
 export const c = (set, id, verdict, over = {}) => ({ set, id, verdict, wallMs: 100, peakBytes: 50 * MIB, events: { oom_kill: 0 }, exit: 0, ...over });
-/** A pilot score: 3 visible and 5 held-out cases, h003 and h005 the traps. */
+/** A pilot score: 3 visible and 5 held-out cases, k003 and k005 the traps. */
 export const resultOf = (failing = []) => ({
   build: { ok: true, wallMs: 4321 }, limits: { timeMs: 2000, memoryBytes: 512 * MIB },
-  cases: [...['s01', 's02', 's03'].map(id => c('visible', id, failing.includes(id) ? 'wrong answer' : 'pass')), ...['h001', 'h002', 'h003', 'h004', 'h005'].map(id => c('heldout', id, failing.includes(id) ? 'wrong answer' : 'pass'))],
+  cases: [...['s01', 's02', 's03'].map(id => c('visible', id, failing.includes(id) ? 'wrong answer' : 'pass')), ...['k001', 'k002', 'k003', 'k004', 'k005'].map(id => c('heldout', id, failing.includes(id) ? 'wrong answer' : 'pass'))],
 });
-export const scoreOf = (failing = []) => scoreShape({ result: resultOf(failing), traps: ['h003', 'h005'] });
+export const scoreOf = (failing = []) => scoreShape({ result: resultOf(failing), traps: ['k003', 'k005'] });
 
 /** A v1 session record over the smoke fixture with the pilot's score (the same call `writeSessionRecord` makes). */
 export function recordOf({ score = scoreOf(), label = 'paired', over = {} } = {}) {
