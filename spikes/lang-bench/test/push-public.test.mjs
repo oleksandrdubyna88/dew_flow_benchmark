@@ -37,3 +37,22 @@ test('A_public_text_that_cannot_be_read_from_the_published_ref_fails_closed', as
   assert.equal(missingRef.ok, false);
   assert.equal(missingRef.kind, 'env');
 });
+
+test('Every_markdown_file_published_at_origin_main_is_a_public_text_and_one_only_in_the_working_tree_is_not', async t => {
+  const origin = makeOrigin(t);
+  const repo = makeTaskRepo(t, { origin, files: { 'plans/one.md': 'published one\n', 'plans/two.md': 'published two\n', 'research/doc.md': 'a published research note\n', 'src/code.mjs': 'not markdown\n' } });
+  git(repo, 'push', '-q', 'origin', 'main:main', '--force');
+  git(repo, 'fetch', '-q', 'origin');
+  writeFileSync(path.join(repo, 'research/unpublished.md'), 'an unpublished note\n');
+  commit(repo, 'docs: a note on a branch only', {});
+  const texts = await readPublicPlans({ repo, ref: 'origin/main', paths: PATHS });
+  assert.equal(texts.ok, true, texts.reason);
+  assert.deepEqual(texts.value.sort(), ['a published research note\n', 'published one\n', 'published two\n']);
+});
+
+test('A_listing_of_origin_main_that_fails_is_a_fail_closed_too', async t => {
+  const repo = benchRepo(t);
+  const texts = await readPublicPlans({ repo, ref: 'origin/nowhere', paths: [] });
+  assert.equal(texts.ok, false);
+  assert.equal(texts.kind, 'env');
+});

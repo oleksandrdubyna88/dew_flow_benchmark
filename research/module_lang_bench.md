@@ -80,8 +80,8 @@ never the history, so every other rule reads the files as they stand at the tip 
 D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
 (`inputs/needles-lang.json`, the public list); a multi-word needle is matched over the whole text with any whitespace between its words. Shingles
 tokenise like v1's `normalise` and drop nothing. A six-word run that the parent plan or the stories document already holds is public and is not an
-aid hit; those two texts are read with `git show origin/main:<path>` of the bench repository, never from the working tree (`--public <file>` names
-other public texts in tests); an aid left with no run of its own is exit 3, because it would check nothing.
+aid hit; those two texts, and every other `.md` file at that ref, are read with `git show origin/main:<path>` of the bench repository, never from
+the working tree (`--public <file>` names the public texts instead, in tests); an aid left with no run of its own is exit 3, because it would check nothing.
 
 **The credit terms** (`inputs/credits-lang.json`, the owner's of 2026-11-01): CSES problem pages and licence page read on that date, RealWorld's
 notice copied verbatim from its `LICENSE` as it stood then (two copyright lines), the protocol page, the olympiad's statistics page for task 09. The
