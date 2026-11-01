@@ -9,7 +9,7 @@
   "storeRoot": ["rsd", "lang-v2", "toolchains"],
   "directories": { "dotnetSdk": "dotnet-sdk-10.0.403", "node": "node-v26.13.0-linux-x64", "typescript": "typescript-6.0.3" },
   "artifacts": {
-    "dotnetInstallScript": { "url": "https://dot.net/v1/dotnet-install.sh", "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e" },
+    "dotnetInstallScript": { "url": "https://raw.githubusercontent.com/dotnet/install-scripts/5147e32300a8e908f5d737c8cff63a76b4b63531/src/dotnet-install.sh", "sha256": "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e" },
     "dotnetSdk": {
       "metadataUrl": "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/10.0/releases.json",
       "rid": "linux-x64",

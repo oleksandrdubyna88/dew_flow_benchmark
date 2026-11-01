@@ -6,6 +6,7 @@ const PIN_KEYS = Object.freeze(['dotnetSdk', 'dotnetRuntime', 'node', 'typescrip
 const PROBE_KEYS = Object.freeze(['node', 'dotnetSdks', 'dotnetRuntimes', 'tsc', 'pythonSha256', 'locales']);
 const DIRECTORY_KEYS = Object.freeze(['dotnetSdk', 'node', 'typescript']);
 const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
+const INSTALL_SCRIPT_URL = /^https:\/\/raw\.githubusercontent\.com\/dotnet\/install-scripts\/[0-9a-f]{40}\/src\/dotnet-install\.sh$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 /** The directory name each pin installs into, derived from the pin: the one place that spells these names. */
@@ -34,6 +35,7 @@ function artifactProblems(json) {
   const a = json.artifacts ?? {};
   return [
     ...(SHA256_HEX.test(a.dotnetInstallScript?.sha256 ?? '') ? [] : ['artifacts.dotnetInstallScript.sha256 must be 64 hex characters']),
+    ...(INSTALL_SCRIPT_URL.test(a.dotnetInstallScript?.url ?? '') ? [] : ['artifacts.dotnetInstallScript.url must be pinned at a commit (https://raw.githubusercontent.com/dotnet/install-scripts/<40-hex commit>/src/dotnet-install.sh): a moving URL changes under the recorded sha256']),
     ...(/^[0-9a-f]{128}$/.test(a.dotnetSdk?.sha512 ?? '') ? [] : ['artifacts.dotnetSdk.sha512 must be 128 hex characters']),
     ...(SHA256_HEX.test(a.node?.sha256 ?? '') ? [] : ['artifacts.node.sha256 must be 64 hex characters']),
     ...(/^sha512-[A-Za-z0-9+/]{86}==$/.test(a.typescript?.integrity ?? '') ? [] : ['artifacts.typescript.integrity must be an npm sha512 integrity string']),

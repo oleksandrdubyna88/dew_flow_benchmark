@@ -22,6 +22,8 @@ test('A_file_that_is_not_the_published_bytes_is_refused_naming_both_digests', as
   const bad = await checkDigest({ file, algorithm: 'sha256', encoding: 'hex', expected: digest('sha256', 'hex'), label: 'the Node tarball' });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /the Node tarball/);
+  assert.match(bad.reason, /the recorded sha256 is /, 'the pin is our own record, whoever published the artefact');
+  assert.doesNotMatch(bad.reason, /publisher/);
   assert.ok(bad.reason.includes(digest('sha256', 'hex')) && bad.reason.includes(createHash('sha256').update(Buffer.concat([BYTES, Buffer.from('x')])).digest('hex')), bad.reason);
 });
 

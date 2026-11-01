@@ -104,3 +104,14 @@ test('A_recorded_tree_hash_must_be_64_hex_and_belong_to_a_toolchain_directory', 
   assert.equal(stray.ok, false);
   assert.match(stray.reason, /treeSha256\.python/);
 });
+
+test('The_install_script_is_pinned_at_a_commit_and_a_moving_URL_is_refused', () => {
+  const loaded = loadStacksLang(stacksJson());
+  assert.equal(loaded.ok, true, JSON.stringify(loaded));
+  assert.match(loaded.value.artifacts.dotnetInstallScript.url, /^https:\/\/raw\.githubusercontent\.com\/dotnet\/install-scripts\/[0-9a-f]{40}\/src\/dotnet-install\.sh$/);
+  const moving = stacksJson();
+  moving.artifacts.dotnetInstallScript.url = 'https://dot.net/v1/dotnet-install.sh';
+  const refused = loadStacksLang(moving);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /dotnetInstallScript\.url.*commit/s);
+});

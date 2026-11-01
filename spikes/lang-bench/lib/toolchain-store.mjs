@@ -28,7 +28,7 @@ export async function checkDigest({ file, algorithm, encoding, expected, label }
   } catch (e) {
     return fail(`${label}: ${file} cannot be read (${e.code ?? e.message}), so its ${algorithm} cannot be checked`);
   }
-  return actual === expected ? ok(actual) : fail(`${label}: the ${algorithm} of ${file} is ${actual}, the publisher lists ${expected}`);
+  return actual === expected ? ok(actual) : fail(`${label}: the ${algorithm} of ${file} is ${actual}, the recorded ${algorithm} is ${expected}`);
 }
 
 function entriesBelow(root, rel = '') {
