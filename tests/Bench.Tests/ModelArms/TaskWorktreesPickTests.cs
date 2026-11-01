@@ -196,6 +196,7 @@ public sealed partial class TaskWorktreesTests
         File.ReadAllText(kit.Paths.Picked("t1")).Should().Be(record);
     }
 
+    /// <summary>Since E6.S4 (b, ledger 3.3) a patch-id no longer skips a pick: the pins now keep the RECORDED patch-id honest (the completion line's <c>patchId</c> is read by whoever audits the record), and the plumbing runs no textconv. The skip they once guarded is gone.</summary>
     [Fact]
     public async Task The_patch_id_input_carries_the_diff_pins_so_an_arm_written_textconv_cannot_make_commits_equal()
     {
@@ -223,17 +224,17 @@ public sealed partial class TaskWorktreesTests
         }
 
         Sentinel.Ran(kit.Temp).Should().BeTrue("the plant is live: the porcelain diff ran the textconv");
-        ids[0].Should().NotBeEmpty().And.Be(ids[1], "the attack: a textconv printing a constant makes two different commits' porcelain patch-ids EQUAL — the arm's commit would 'already carry' the task's");
+        ids[0].Should().NotBeEmpty().And.Be(ids[1], "the attack: a textconv printing a constant makes two different commits' porcelain patch-ids EQUAL — the id the completion line RECORDS would be a lie, and (before E6.S4) the arm's commit would 'already carry' the task's");
         File.Delete(Sentinel.Marker(kit.Temp));
         kit.ForgetCalls();
 
         var stopped = await sut.PickBackAsync("t1", Ct);
 
-        stopped.Should().NotBeNull("the two commits differ under the plumbing: the task's is picked, and it honestly conflicts with the arm's (add/add) instead of being skipped in silence");
+        stopped.Should().NotBeNull("the task's commit is picked and honestly conflicts with the arm's (add/add)");
         stopped!.Why.Should().Contain("t1: its commits conflict");
         Sentinel.Ran(kit.Temp).Should().BeFalse("the plumbing under the diff pins ran no textconv");
         kit.Calls().Should().Contain(call => call.StartsWith("-c diff.external= diff-tree --stdin -p --no-ext-diff --no-textconv --submodule=short", StringComparison.Ordinal));
-        kit.RecordLines("t1").Should().ContainSingle("only the intent: the task's commit was NOT carried by patch-id");
+        kit.RecordLines("t1").Should().ContainSingle("only the intent: the task's commit conflicted, so no completion is recorded");
         (await kit.CountAsync(kit.Clone, start)).Should().Be(1);
     }
 

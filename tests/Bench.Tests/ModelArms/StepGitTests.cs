@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>Model arms E2.S4 — the git the step launches (D17 d, E2 §8 item 25): the real path it was handed, a <c>GIT_*</c>-free environment and the arm's clone as the working directory; and the derived outputs it
+/// <summary>Model arms E2.S4 — the git the step launches (D17 d, E2 §8 item 25): the real path it was handed, a <c>GIT_*</c>-free environment — the harness's git AND, since E6.S4 (ledger 3.2), the arm's own claude session — and the arm's clone as the working directory; and the derived outputs it
 /// writes (E2 §8 item 52). Real git, real folders.
 /// <para>
 /// What this does NOT prove: that a git other than the host's answers the same; that an environment variable git reads without a <c>GIT_</c> prefix (<c>HOME</c>'s global config) cannot redirect it — <c>HOME</c> passes as judged, D17.
@@ -33,7 +33,7 @@ public sealed class StepGitTests
         File.Exists(bench.Paths.Before("2-hreview")).Should().BeTrue("the snapshot is written before the first attempt");
         File.ReadAllText(bench.Paths.Before("2-hreview")).Trim().Should().Be(cloneHead, "the clone's HEAD, never the other repository's");
         File.ReadAllText(bench.Paths.Diff("2-hreview")).Should().BeEmpty();
-        bench.Fake.Calls().Single().EnvironmentNames.Should().Contain("GIT_DIR", "the arm's claude gets its environment untouched (D19): the harness's git does not");
+        bench.Fake.Calls().Single().EnvironmentNames.Should().NotContain(["GIT_DIR", "GIT_WORK_TREE"], "since ledger 3.2 the arm's claude is stripped of inherited GIT_* like the harness's git (D19, E6.S4)");
     }
 
     [Fact]

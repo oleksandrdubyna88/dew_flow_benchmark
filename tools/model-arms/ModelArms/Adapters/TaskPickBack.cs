@@ -79,7 +79,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
         }
 
         c.Probe.Reached(TaskPoint.Read, id);
-        var plan = PickBackOrder.Decide([.. lists.Task.Select(sha => lists.ById[sha])], entries, [.. lists.Branch.Select(sha => lists.ById[sha])]);
+        var plan = PickBackOrder.Decide([.. lists.Task.Select(sha => lists.ById[sha])], entries, lists.Branch);
         foreach (var unbelieved in plan.NotBelieved)
         {
             c.Log.Line($"{record} line {entries.IndexOf(unbelieved) + 1}: {unbelieved.PickedSha} is not on the arm branch — not believed");
@@ -97,7 +97,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
             return Stopped(TaskContext.Failed(id, sources is Outcome<IReadOnlyList<string>>.Fail failedSources ? failedSources.Reason : ((Outcome<IReadOnlyList<string>>.Fail)onBranch).Reason));
         }
 
-        var ids = await c.Clone.PatchIdsAsync([.. task.Value.Concat(branch.Value).Distinct(StringComparer.Ordinal)], ct);
+        var ids = await c.Clone.PatchIdsAsync(task.Value, ct);
         return ids is Outcome<IReadOnlyList<PickSource>>.Ok ok
             ? new Taken<Lists>.Got(new Lists(task.Value, branch.Value, ok.Value.ToDictionary(source => source.Sha, StringComparer.Ordinal)))
             : Stopped(TaskContext.Failed(id, ((Outcome<IReadOnlyList<PickSource>>.Fail)ids).Reason));
@@ -107,12 +107,12 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
 
     private async Task<Halt?> RunPlanAsync(string id, PickPlan plan, List<PickEntry> entries, CancellationToken ct)
     {
-        int byRecord = 0, byPatch = 0, made = 0;
+        int byRecord = 0, made = 0;
         foreach (var step in plan.Steps)
         {
-            if (step is PickStep.Carried carried)
+            if (step is PickStep.Carried)
             {
-                _ = carried.By == "the record" ? byRecord++ : byPatch++;
+                byRecord++;
             }
             else if (await PickOneAsync(id, (PickStep.Pick)step, entries, ct) is { } halt)
             {
@@ -126,7 +126,7 @@ internal sealed class TaskPickBack(TaskContext c, TaskReader reader)
 
         c.Files.WriteOnce(c.Paths.Picked(id), PickRecord.Write(entries));
         c.Probe.Reached(TaskPoint.Marked, id);
-        c.Log.Line($"{id}: {made} commit(s) carried over ({byRecord} already carried by the record, {byPatch} by patch-id)");
+        c.Log.Line($"{id}: {made} commit(s) carried over ({byRecord} already carried by the record)");
         return null;
     }
 

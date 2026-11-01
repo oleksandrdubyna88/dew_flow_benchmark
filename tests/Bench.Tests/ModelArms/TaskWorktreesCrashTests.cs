@@ -35,28 +35,52 @@ public sealed partial class TaskWorktreesTests
         (await kit.CountAsync(kit.Clone, start)).Should().Be(3, "not 5");
         var second = await kit.HeadAsync(kit.Clone) is var head ? (await kit.GitAsync(kit.Clone, "rev-parse", "HEAD~1")).Trim() : string.Empty;
         kit.LogLines.Should().Contain($"pick-t1.json: {shas[1]} was picked as {second} before the crash — recorded");
-        kit.LogLines.Should().Contain("t1: 1 commit(s) carried over (2 already carried by the record, 0 by patch-id)");
+        kit.LogLines.Should().Contain("t1: 1 commit(s) carried over (2 already carried by the record)");
         File.ReadAllLines(kit.Paths.PickRecord("t1")).Should().HaveCount(6);
         File.ReadAllText(kit.Paths.Picked("t1")).Should().Be(File.ReadAllText(kit.Paths.PickRecord("t1")));
         head.Should().NotBeEmpty();
     }
 
+    /// <summary>E6.S4 (b), ledger 3.3 (D22): the patch-id skip is gone, so a change the arm branch already holds lands as ONE empty commit with the task's author and message — never as nothing — and the record, not a patch-id, is what a re-entry trusts.</summary>
     [Fact]
-    public async Task A_commit_already_in_the_arm_history_by_patch_id_is_skipped_without_a_record()
+    public async Task A_commit_whose_change_the_arm_branch_already_holds_is_picked_as_one_empty_commit_and_a_repeat_entry_adds_nothing()
     {
         using var kit = await KitAsync();
         var recording = kit.Recording();
         var shas = await DoneWithCommitsAsync(kit, kit.Sut(recording), "c1.txt");
         await kit.GitAsync(kit.Clone, "cherry-pick", shas[0]);
+        var start = kit.BeforeOf("t1");
+        var held = await kit.CountAsync(kit.Clone, start);
         kit.ForgetCalls();
 
         (await kit.Sut(recording).PickBackAsync("t1", Ct)).Should().BeNull();
 
-        Picks(kit).Should().Be(0);
-        kit.LogLines.Should().Contain("t1: 0 commit(s) carried over (0 already carried by the record, 1 by patch-id)");
-        kit.RecordLines("t1").Should().BeEmpty();
-        File.Exists(kit.Paths.Picked("t1")).Should().BeTrue();
-        new FileInfo(kit.Paths.Picked("t1")).Length.Should().Be(0);
+        Picks(kit).Should().Be(1, "a matching patch-id no longer skips: the source has no line, so it is picked");
+        (await kit.CountAsync(kit.Clone, start)).Should().Be(held + 1, "ONE commit gained");
+        (await kit.GitAsync(kit.Clone, "show", "--stat", "--format=", "HEAD")).Trim().Should().BeEmpty("git keeps the redundant pick empty");
+        var facts = await kit.GitAsync(kit.Clone, "show", "-s", "--format=%an|%ae|%s|%cn|%ce", "HEAD");
+        var source = await kit.GitAsync(kit.Clone, "show", "-s", "--format=%an|%ae|%s", shas[0]);
+        facts.Trim().Should().StartWith(source.Trim() + "|", "the task's author and message");
+        facts.Trim().Should().EndWith($"|{ArmGit.CommitterName}|{ArmGit.CommitterEmail}", "the pinned committer");
+        var head = await kit.HeadAsync(kit.Clone);
+        kit.RecordLines("t1").Should().HaveCount(2, "c1's intent and its completion");
+        PickRecord.Parse(File.ReadAllText(kit.Paths.PickRecord("t1"))).Should().BeOfType<PickRecordRead.Lines>().Subject.Valid.OfType<PickEntry.Picked>().Should().ContainSingle(line => line.Source == shas[0] && line.PickedSha == head);
+        File.ReadAllText(kit.Paths.Picked("t1")).Should().Be(File.ReadAllText(kit.Paths.PickRecord("t1")));
+        kit.LogLines.Should().Contain("t1: 1 commit(s) carried over (0 already carried by the record)");
+        var record = File.ReadAllText(kit.Paths.PickRecord("t1"));
+        kit.ForgetCalls();
+
+        (await kit.Sut(recording).PickBackAsync("t1", Ct)).Should().BeNull();
+
+        kit.Calls().Should().BeEmpty("the marker answers before any question");
+        File.Delete(kit.Paths.Picked("t1"));
+        kit.ForgetCalls();
+
+        (await kit.Sut(recording).PickBackAsync("t1", Ct)).Should().BeNull();
+
+        Picks(kit).Should().Be(0, "c1 is carried by its believed completion: a crash before the marker picks nothing twice");
+        (await kit.HeadAsync(kit.Clone)).Should().Be(head, "the branch is unchanged");
+        File.ReadAllText(kit.Paths.PickRecord("t1")).Should().Be(record);
     }
 
     [Fact]

@@ -4,8 +4,8 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>E4.S2, D22 (pure): the pick record's two kinds of line and the skip decided from them. The record is read strictly; a torn tail is reported and dropped, a bad line before the last is refused; a completion is believed only when its commit is on the arm branch; the patch-id skip
-/// is narrowed to a source with no line at all.
+/// <summary>E4.S2, D22 (pure): the pick record's two kinds of line and the skip decided from them. The record is read strictly; a torn tail is reported and dropped, a bad line before the last is refused; a completion is believed only when its commit is on the arm branch; the record
+/// ALONE carries a source — the patch-id skip is gone (E6.S4 b, ledger 3.3), so every other source is picked.
 /// <para>
 /// What this does NOT prove: that the commits exist (the adapter asks git, <c>TaskWorktreesTests</c>); that a patch-id is what git computes.
 /// </para></summary>
@@ -148,18 +148,19 @@ public sealed class PickBackTests
     {
         var record = new PickEntry[] { new PickEntry.Picked(Sha('a'), Sha('1'), "p1"), new PickEntry.Picked(Sha('b'), Sha('2'), "p2") };
 
-        var plan = PickBackOrder.Decide([S('a', "p1"), S('b', "p2"), S('c', "p3")], record, [S('1', "p1")]);
+        var plan = PickBackOrder.Decide([S('a', "p1"), S('b', "p2"), S('c', "p3")], record, [Sha('1')]);
 
         plan.Steps.Should().Equal(new PickStep.Carried(Sha('a'), Sha('1'), "the record"), new PickStep.Pick(Sha('b'), "p2"), new PickStep.Pick(Sha('c'), "p3"));
         plan.NotBelieved.Should().Equal(new PickEntry.Picked(Sha('b'), Sha('2'), "p2"));
     }
 
     [Fact]
-    public void A_source_with_no_line_at_all_and_a_matching_patch_id_is_carried_by_patch_id()
+    public void A_source_with_no_line_at_all_is_picked_whatever_its_patch_id()
     {
-        var plan = PickBackOrder.Decide([S('a', "same"), S('b', "other")], [], [S('9', "same")]);
+        var plan = PickBackOrder.Decide([S('a', "same"), S('b', "other")], [], [Sha('9')]);
 
-        plan.Steps.Should().Equal(new PickStep.Carried(Sha('a'), Sha('9'), "patch-id of " + Sha('9')), new PickStep.Pick(Sha('b'), "other"));
+        plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"), new PickStep.Pick(Sha('b'), "other"));
+        plan.NotBelieved.Should().BeEmpty();
     }
 
     [Fact]
@@ -167,18 +168,18 @@ public sealed class PickBackTests
     {
         var record = new PickEntry[] { new PickEntry.Picked(Sha('a'), Sha('1'), "same") };
 
-        var plan = PickBackOrder.Decide([S('a', "same")], record, [S('9', "same")]);
+        var plan = PickBackOrder.Decide([S('a', "same")], record, [Sha('9')]);
 
         plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"));
         plan.NotBelieved.Should().HaveCount(1);
     }
 
     [Fact]
-    public void A_source_with_an_intent_only_is_picked_and_an_empty_patch_id_never_matches()
+    public void A_source_with_an_intent_only_is_picked_whatever_the_branch_holds()
     {
         var record = new PickEntry[] { new PickEntry.Intent(Sha('a'), Sha('0')) };
 
-        var plan = PickBackOrder.Decide([S('a', "same"), S('b')], record, [S('9', "same"), S('8')]);
+        var plan = PickBackOrder.Decide([S('a', "same"), S('b')], record, [Sha('9'), Sha('8')]);
 
         plan.Steps.Should().Equal(new PickStep.Pick(Sha('a'), "same"), new PickStep.Pick(Sha('b'), string.Empty));
     }

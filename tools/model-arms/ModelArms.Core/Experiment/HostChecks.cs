@@ -80,13 +80,13 @@ public sealed record HostFacts(
     public required IReadOnlyDictionary<string, Outcome<string>> Templates { get; init; }
 }
 
-/// <summary>The environment git is launched under: the verb's map minus every <c>GIT_*</c> name (ordinal, ignoring case). A parent's <c>GIT_DIR</c>,
-/// <c>GIT_WORK_TREE</c>, <c>GIT_CEILING_DIRECTORIES</c>, <c>GIT_CONFIG_*</c>, <c>GIT_EXEC_PATH</c> or <c>GIT_SSH*</c> would redirect the question or name a program.
+/// <summary>The environment git is launched under: the verb's map minus every name <see cref="ArmChildEnvironment.IsAgentSocketOrGit"/> accepts — every <c>GIT_*</c> (ordinal, ignoring case) and the ssh agent's socket <c>SSH_AUTH_SOCK</c>, the one rule the arm's session and the target's tools ask too (E6.S4 a). A parent's <c>GIT_DIR</c>,
+/// <c>GIT_WORK_TREE</c>, <c>GIT_CEILING_DIRECTORIES</c>, <c>GIT_CONFIG_*</c>, <c>GIT_EXEC_PATH</c> or <c>GIT_SSH*</c> would redirect the question or name a program; the socket is a capability, and no local question needs it.
 /// <c>HOME</c> and <c>PATH</c> pass: the operator's own global config is theirs, and PATH was judged.</summary>
 public static class GitEnvironment
 {
     public static IReadOnlyDictionary<string, string> Of(IReadOnlyDictionary<string, string> environment) =>
-        environment.Where(variable => !variable.Key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase))
+        environment.Where(variable => !ArmChildEnvironment.IsAgentSocketOrGit(variable.Key))
             .ToDictionary(variable => variable.Key, variable => variable.Value, StringComparer.Ordinal);
 }
 

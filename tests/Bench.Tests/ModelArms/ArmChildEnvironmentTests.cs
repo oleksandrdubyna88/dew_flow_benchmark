@@ -86,6 +86,90 @@ public sealed class ArmChildEnvironmentTests
         child.Keys.Should().NotContain("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "a scout flag, not a secret");
     }
 
+    /// <summary>E6.S4 (a), the owner's decision of 2026-11-01 (ledger 3.2, D19): the ssh agent's socket is a capability and every <c>GIT_*</c> is steering — neither is a secret NAME, so neither is the secret rule's, and neither sits under its <c>CLAUDE_*</c> exception.
+    /// The rows are the bench's own spellings and the ones <c>TargetEnvironmentTests</c> plants, in three cases of the socket and two of <c>GIT_DIR</c>.</summary>
+    public static TheoryData<string> AgentSocketAndGitNames() =>
+    [
+        "SSH_AUTH_SOCK", "ssh_auth_sock", "Ssh_Auth_Sock", "GIT_DIR", "Git_Dir", "git_work_tree", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
+        "GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_CEILING_DIRECTORIES", "GIT_CONFIG_GLOBAL", "GIT_EXEC_PATH",
+    ];
+
+    [Theory]
+    [MemberData(nameof(AgentSocketAndGitNames))]
+    public void The_ssh_agent_and_every_inherited_git_variable_never_reach_the_arms_session(string name)
+    {
+        var child = Of(("HOME", "/home/op"), ("KEEP_ME", "yes"), (name, "/run/user/1000/value"));
+
+        child.Should().NotContainKey(name, $"{name} is the agent's socket or a GIT_* name, whatever its case: a capability and steering, stripped from the one process that runs arbitrary commands by design (ledger 3.2)");
+        child.Keys.Should().Equal(["HOME", "KEEP_ME", ArmChildEnvironment.TmpDir], "nothing else moves");
+    }
+
+    [Fact]
+    public void A_GIT_name_is_stripped_whatever_follows_and_claudes_own_names_holding_GIT_are_kept()
+    {
+        (string Name, string Value)[] kept =
+        [
+            ("CLAUDE_GIT_X", "a"), ("ANTHROPIC_GIT_DIR", "b"), ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-value"), ("ANTHROPIC_API_KEY", "key-value"),
+        ];
+
+        var child = Of([("HOME", "/home/op"), ("GIT_CLAUDE_X", "x"), ("GIT_ANTHROPIC_DIR", "y"), .. kept]);
+
+        child.Should().NotContainKey("GIT_CLAUDE_X", "git reads every GIT_* as its own whatever follows, and no login travels in one: the exception is the SECRET rule's alone");
+        child.Should().NotContainKey("GIT_ANTHROPIC_DIR", "the same");
+        foreach (var (name, value) in kept)
+        {
+            child.Should().Contain(new KeyValuePair<string, string>(name, value), $"{name} is not a GIT_ name (git never reads it) and claude's own names pass");
+        }
+    }
+
+    /// <summary>The positive the file needs beside its negatives: the rule is a prefix and a whole name, never a search. GREEN before E6.S4 by design; its red is break-it B3.</summary>
+    [Theory]
+    [InlineData("GITHUB_ACTIONS")]
+    [InlineData("GITLAB_CI")]
+    [InlineData("MY_GIT_DIR")]
+    [InlineData("DIGIT")]
+    [InlineData("LEGIT_MODE")]
+    [InlineData("SSH_AUTH_SOCKET")]
+    [InlineData("SSH_AGENT_PID")]
+    [InlineData("EMAIL")]
+    [InlineData("PAGER")]
+    [InlineData("XDG_CONFIG_HOME")]
+    public void A_name_that_only_contains_GIT_or_resembles_the_socket_is_kept(string name)
+    {
+        var child = Of(("HOME", "/home/op"), (name, "kept-value"));
+
+        child.Should().Contain(new KeyValuePair<string, string>(name, "kept-value"), $"{name} is neither the socket's whole name nor a GIT_ prefix");
+    }
+
+    /// <summary>The drift guard (<c>common.security</c> — enumerate the sites mechanically, leave the scan behind): the socket's name and the prefix are spelled in ONE file of Core, so a fourth spelling is red here while every behaviour test stays green.
+    /// The companion proves the scan still finds the sanctioned site.</summary>
+    [Fact]
+    public void The_agent_socket_and_the_git_prefix_are_spelled_in_one_file_of_Core()
+    {
+        const string Sanctioned = "Experiment/ArmChildEnvironment.cs";
+        var core = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms.Core");
+        var sites = Directory.EnumerateFiles(core, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !Path.GetRelativePath(core, path).Split(Path.DirectorySeparatorChar).Any(part => part is "obj" or "bin"))
+            .SelectMany(path => SpellingSites(path, core))
+            .ToList();
+
+        sites.Where(site => !site.StartsWith(Sanctioned + ":", StringComparison.Ordinal)).Should().BeEmpty($"sites outside {Sanctioned}: the two literals live there alone, and every other file asks ArmChildEnvironment.IsAgentSocketOrGit");
+        sites.Count(site => site.StartsWith(Sanctioned + ":", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(2, "the scan still finds the sanctioned site — the socket's name and the prefix — or it matches nothing and passes forever");
+    }
+
+    private static IEnumerable<string> SpellingSites(string path, string core)
+    {
+        var relative = Path.GetRelativePath(core, path).Replace('\\', '/');
+        var lines = File.ReadAllLines(path);
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (lines[index].Contains("\"SSH_AUTH_SOCK\"", StringComparison.Ordinal) || lines[index].Contains("\"GIT_\"", StringComparison.Ordinal))
+            {
+                yield return $"{relative}:{index + 1}";
+            }
+        }
+    }
+
     [Fact]
     public void Tmpdir_is_the_arms_own_whatever_the_parent_holds()
     {

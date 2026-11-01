@@ -10,7 +10,7 @@ public abstract record PickStep
     {
     }
 
-    /// <summary>Already on the arm branch; <paramref name="By"/> says how it is known (<c>the record</c> or <c>patch-id of &lt;sha&gt;</c>).</summary>
+    /// <summary>Already on the arm branch; <paramref name="By"/> says how it is known — the record's believed completion (<c>the record</c>) is the only way.</summary>
     public sealed record Carried(string Source, string Picked, string By) : PickStep;
 
     public sealed record Pick(string Source, string PatchId) : PickStep;
@@ -19,34 +19,24 @@ public abstract record PickStep
 /// <summary>The steps, in the task's order, and the completions of the record that were not believed.</summary>
 public sealed record PickPlan(IReadOnlyList<PickStep> Steps, IReadOnlyList<PickEntry.Picked> NotBelieved);
 
-/// <summary>D22's skip, decided once before the first pick (E4.S2 spec item 8). A completion line is BELIEVED when its <c>picked</c> commit is one the arm branch holds since the task's <c>.before</c>; a source with a believed completion is carried by the record. The patch-id skip is NARROWED
-/// to a source with no line at all: with the intent recorded, every commit this pipeline picked is explained by the record, so the only commit a patch-id can still match is one that reached the branch by another hand (a sibling task's identical change, the model's own commit) — the residual,
-/// said in the module doc. Two identical commits inside one task are both picked: the second becomes an empty commit.</summary>
+/// <summary>D22's skip, decided once before the first pick (E4.S2 spec item 8, as changed by E6.S4 b — ledger 3.3). A completion line is BELIEVED when its <c>picked</c> commit is one the arm branch holds since the task's <c>.before</c>; a source with a believed completion is carried by the record, and the record ALONE carries: every other source is picked, whatever its patch-id.
+/// The patch-id skip is gone — it carried a source with no line at all whose change the branch already held, a sibling task's identical change or the model's own commit, WITHOUT a commit of its own; now such a change lands as one empty commit with the task's author and message, which git keeps (<c>--keep-redundant-commits</c>). Two identical commits inside one task are both picked: the second becomes an empty commit too.</summary>
 public static class PickBackOrder
 {
-    public static PickPlan Decide(IReadOnlyList<PickSource> sources, IReadOnlyList<PickEntry> record, IReadOnlyList<PickSource> onBranch)
+    /// <param name="sources">The task's commits in order, each with its patch-id (which the completion line records, never matches on).</param>
+    /// <param name="record">The pick record's valid lines.</param>
+    /// <param name="onBranch">The shas of <c>rev-list &lt;before&gt;..HEAD</c> — the commits the arm branch holds since the task's <c>.before</c>.</param>
+    public static PickPlan Decide(IReadOnlyList<PickSource> sources, IReadOnlyList<PickEntry> record, IReadOnlyCollection<string> onBranch)
     {
-        var onBranchShas = onBranch.Select(commit => commit.Sha).ToHashSet(StringComparer.Ordinal);
+        var onBranchShas = onBranch.ToHashSet(StringComparer.Ordinal);
         var completions = record.OfType<PickEntry.Picked>().ToList();
         var notBelieved = completions.Where(line => !onBranchShas.Contains(line.PickedSha)).ToList();
-        var steps = sources.Select(source => StepFor(source, record, completions, onBranch, onBranchShas)).ToList();
+        var steps = sources.Select(source => StepFor(source, completions, onBranchShas)).ToList();
         return new PickPlan(steps, notBelieved);
     }
 
-    private static PickStep StepFor(PickSource source, IReadOnlyList<PickEntry> record, List<PickEntry.Picked> completions, IReadOnlyList<PickSource> onBranch, HashSet<string> onBranchShas)
-    {
-        var believed = completions.FirstOrDefault(line => line.Source == source.Sha && onBranchShas.Contains(line.PickedSha));
-        if (believed is not null)
-        {
-            return new PickStep.Carried(source.Sha, believed.PickedSha, "the record");
-        }
-
-        var hasLine = record.Any(entry => entry is PickEntry.Intent intent ? intent.Source == source.Sha : ((PickEntry.Picked)entry).Source == source.Sha);
-        if (!hasLine && source.PatchId.Length > 0 && onBranch.FirstOrDefault(commit => commit.PatchId == source.PatchId) is { } same)
-        {
-            return new PickStep.Carried(source.Sha, same.Sha, $"patch-id of {same.Sha}");
-        }
-
-        return new PickStep.Pick(source.Sha, source.PatchId);
-    }
+    private static PickStep StepFor(PickSource source, List<PickEntry.Picked> completions, HashSet<string> onBranchShas) =>
+        completions.FirstOrDefault(line => line.Source == source.Sha && onBranchShas.Contains(line.PickedSha)) is { } believed
+            ? new PickStep.Carried(source.Sha, believed.PickedSha, "the record")
+            : new PickStep.Pick(source.Sha, source.PatchId);
 }
