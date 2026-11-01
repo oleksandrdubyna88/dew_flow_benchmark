@@ -14,6 +14,7 @@
     <!-- The tests stand inside the gate's race window and inside the dispatch through two seams that production code must not be able to build: a
          GateSeams that reads other facts than the host's would skip the trust check. They are internal; only the test assembly sees them. -->
     <InternalsVisibleTo Include="Bench.Tests" />
+    <InternalsVisibleTo Include="lock-crasher" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +28,8 @@
          story edits this file to add a template or an example. -->
     <Content Include="..\briefs\*.template.md" Link="briefs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\examples\*.json" Link="examples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The Windows keep-awake scripts (E5.S2, D12): byte for byte the harness's three, run by pwsh.exe from WSL. -->
+    <Content Include="windows\*.ps1" Link="windows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

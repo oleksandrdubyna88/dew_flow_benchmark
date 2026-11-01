@@ -54,6 +54,9 @@ public static class ExecutableRule
     /// Every sentence that echoes input the operator typed goes through this.</summary>
     public static string Printable(string text) => string.Concat(text.Select(Escaped));
 
+    /// <summary>A path as a sentence shows it: <see cref="Printable"/> (a NUL, an ESC or a newline in a PATH entry's folder name cannot forge a terminal line) of at most 200 characters (<see cref="Cut"/>).</summary>
+    public static string Shown(string path) => Printable(Cut(path, 200));
+
     /// <summary>At most <paramref name="limit"/> characters of <paramref name="text"/>, never cut inside a surrogate pair. The ONE cut of a model's or a file's text before it is printed: a caller that must not show a token scrubs FIRST (<c>ArmMap.Scrub</c> replaces only a whole token, so
     /// a cut inside one leaves a part of it) and cuts the scrubbed text.</summary>
     public static string Cut(string text, int limit) => text.Length <= limit ? text : text[..(char.IsHighSurrogate(text[limit - 1]) ? limit - 1 : limit)];

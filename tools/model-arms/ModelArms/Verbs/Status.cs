@@ -20,7 +20,7 @@ internal sealed record StatusReads(Func<string, int, BoundedRead> Read, Func<str
 /// <see cref="RootPaths"/> or <see cref="ArmPaths"/> spells, through <see cref="StatusReads"/>, and every line goes out through <see cref="ArmMap.Scrub"/>, so no token is ever printed. Exit 0 once printed; 4 when the arm map is refused — by the road (a link, a FIFO, too big) or as a map. A root
 /// with no map yet is every arm of every run <c>not made</c>: before <c>make</c> that is the answer, not an error.
 /// <para>
-/// What it does not do: take or report the gate lock (<c>gate-lock status</c> says it), print a cost (E3 touches none), or list the task pipeline's steps (a <c>tasks</c> entry is one line until E4.S3).
+/// What it does not do: take or report the gate lock (<c>gate-lock status</c> says it), print a cost (E3 touches none), or list a folder: a <c>tasks</c> entry is the split's line, the split fix's when it left anything, and one line per task of <c>work/batches.json</c> (E4.S3) — each file asked for by name.
 /// </para></summary>
 public static class StatusVerb
 {

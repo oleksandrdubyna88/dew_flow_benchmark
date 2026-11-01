@@ -3,6 +3,7 @@ using Bench.Cli;
 using Bench.Tests.Probes.Driver;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
 using Xunit;
 using static Bench.Tests.ModelArms.RunArmKit;
@@ -140,18 +141,60 @@ public sealed class RunArmSchemeTests
     }
 
     [Fact]
-    public async Task An_srs_arm_is_refused_until_the_task_pipeline_exists()
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task An_srs_arm_runs_its_split_its_batches_and_the_steps_after_them()
     {
-        using var root = new ExperimentRoot();
+        using var kit = await SrsKit.CreateAsync();
+        kit.Plan(kit.Five());
+        kit.Replay("result-success.jsonl");
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(0, run.Error + run.Output);
+        foreach (var stem in new[] { "1-split", "2-t1-code", "2-t5-code", "3-hreview", "4-review", "5-fix", "6-gate" })
+        {
+            File.Exists(kit.Paths.Done(stem)).Should().BeTrue($"{stem} is done");
+        }
+
+        File.Exists(kit.Paths.BatchDone(0)).Should().BeTrue();
+        File.Exists(kit.Paths.BatchDone(1)).Should().BeTrue();
+        kit.Root.ArmDones(SrsKit.Arm).Should().ContainSingle("the arm ran its whole scheme once");
+        var hreview = kit.Fake.Calls().Single(call => BriefOf(call) == "hr-review-fix");
+        hreview.Prompt.Should().Contain(kit.Paths.NotesFile(new OutputBinding("CODE_NOTES", "notes/code.md")), "the block's own binding (CODE_NOTES) reaches the step after it (D25)");
+        (run.Output + run.Error).Should().Contain("3-hreview: SPLIT_NOTES (notes/split.md) was not written by step split", "the split's binding is visible to the steps after the block: the shipped hreview template does not use it, so the runner's own missing-output line is the evidence");
+    }
+
+    [Fact]
+    public async Task An_srs_arm_resolves_node_and_the_build_and_prints_them_before_the_first_launch()
+    {
+        using var root = await new ExperimentRoot().WithTargetAsync();
         using var fake = new FakeCli();
         await root.MakeArmAsync("SRS1", fake);
         Replay(fake, "result-success.jsonl");
 
         var run = await RunAsync(root, "SRS1");
 
-        run.Code.Should().Be(4, run.Output);
-        run.Error.Should().Contain("E4.S3");
-        fake.Calls().Should().BeEmpty();
+        var bin = Path.Combine(root.Temp, "bin");
+        run.Output.Should().Contain("resolved executables:").And.Contain($"  node → {Path.Combine(bin, "node")}").And.Contain($"  dotnet → {Path.Combine(bin, "dotnet")}", "the REAL paths of the two programs the warm build starts (D17 c, d)");
+        run.Output.IndexOf("  node → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[SRS1] 1-split", StringComparison.Ordinal), "they are said before the first launch");
+        run.Output.IndexOf("  dotnet → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[SRS1] 1-split", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_srs_arm_without_its_build_on_PATH_is_refused_with_exit_3_before_any_launch()
+    {
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("SRS1", fake);
+        Replay(fake, "result-success.jsonl");
+        File.Delete(Path.Combine(root.Temp, "bin", "dotnet"));
+
+        var run = await RunAsync(root, "SRS1");
+
+        run.Code.Should().Be(3, run.Error + run.Output);
+        run.Error.Should().Contain("dotnet");
+        fake.Calls().Should().BeEmpty("nothing is launched before every program the arm needs is found");
+        File.Exists(root.PathsOf("SRS1").Timing).Should().BeFalse();
     }
 
     [Fact]
@@ -169,6 +212,36 @@ public sealed class RunArmSchemeTests
         var git = new FileInfo(Path.Combine(root.Temp, "bin", "git")).ResolveLinkTarget(returnFinalTarget: true)!.FullName;
         run.Output.Should().Contain("resolved executables:").And.Contain($"  claude → {claude}").And.Contain($"  git → {git}", "the REAL path of each, the one the harness launches (D17 c)");
         run.Output.IndexOf("claude → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[C1] 1-code", StringComparison.Ordinal), "the executables are said before the first step starts");
+    }
+
+    /// <summary>The floor at the VERB's admission, not only at <c>validate</c> (D23, E4.S0): <c>run-arm</c> without a prior <c>validate</c> (none ever ran on this root — the arm is made by hand) reads the resolved git's version before it counts <c>scenarios.json</c>, takes the gate lock or starts a step. The shim answers <c>--version</c> and logs every other call:
+    /// an absent marker is "no repository operation ran". <c>Run_arm_prints_the_resolved_claude_and_git_before_the_first_launch</c> stays unedited and green for the admitted rows.</summary>
+    [Theory]
+    [InlineData("2.44.0", 3)]
+    [InlineData("2.44.1", 0)]
+    [InlineData("not a version", 3)]
+    public async Task A_git_below_the_floor_is_refused_at_validate_and_at_run_arm_admission(string printed, int exit)
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        var git = root.ReplaceGit(Sentinel.LogsAllButVersion(root.MarkerFile("git"), printed));
+
+        var run = await RunAsync(root, "C1");
+
+        run.Code.Should().Be(exit, run.Error + run.Output);
+        if (exit == 0)
+        {
+            fake.Calls().Select(call => BriefOf(call)).Should().Equal("1-code", "2-review", "3-fix", "gate");
+            return;
+        }
+
+        fake.Calls().Should().BeEmpty("no step started");
+        File.Exists(root.MarkerFile("git")).Should().BeFalse("no repository operation ran: the shim logs every git but --version");
+        File.Exists(root.PathsOf("C1").Timing).Should().BeFalse("nothing was timed: the arm never started");
+        run.Error.Should().Contain(printed == "not a version" ? "not a version this harness can read" : GitFloor.Sentence);
+        run.Error.Should().Contain(printed).And.Contain($"git at {git}: ", "the refusal names the git it is about, by its real path");
     }
 
     [Fact]

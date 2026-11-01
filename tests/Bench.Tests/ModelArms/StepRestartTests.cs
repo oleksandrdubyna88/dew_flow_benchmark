@@ -1,6 +1,8 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ModelArms.Adapters;
+using ModelArms.Core.Briefs;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
 using Xunit;
 
@@ -165,6 +167,46 @@ public sealed class StepRestartTests
         (await clean.Runner().RunAsync(clean.Context("C", 1), Ct)).IsDone();
         File.ReadAllText(review).Should().Be("""{"verdict":"ready","findings":[]}""").And.Be(File.ReadAllText(clean.NotesFile("notes/review.json")), "the bytes a clean run writes");
         DoneMarkers.Read(File.ReadAllText(bench.Paths.Done("2-review"))).Ok().Recovered.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_task_coder_whose_head_and_diff_are_missing_writes_them_on_the_next_entry_from_its_folder()
+    {
+        using var bench = new StepBench();
+        bench.Replays("result-success.jsonl");
+        var folder = await bench.NewRepositoryAsync("task-folder");
+        var before = await bench.HeadAsync(folder);
+        await bench.CommitFileAsync("t1.txt", "the task's work\n", "the coder's commit", folder);
+        Directory.CreateDirectory(bench.Paths.Out);
+        File.WriteAllText(bench.Paths.TaskBefore("t1"), before + "\n");
+        var context = bench.Context("SRS", 0) with
+        {
+            Placed = new SchemeEntry.Step("2-t1-code", bench.Experiment.Tasks.TaskCode),
+            WorkingDirectory = folder,
+            Task = new TaskFacts("t1", Path.Combine(bench.Paths.Work, "t1.md"), "`t1.txt`", before),
+        };
+
+        var killed = bench.Runner(new ProbeAt(StepPoint.Classified, () => throw new IOException("killed")));
+        await FluentActions.Awaiting(() => killed.RunAsync(context, Ct)).Should().ThrowAsync<IOException>().WithMessage("killed");
+        File.Exists(bench.Paths.CoderHead("t1")).Should().BeFalse("the runner died before it derived the coder's head and diff");
+        File.Exists(bench.Paths.Done("2-t1-code")).Should().BeFalse();
+
+        var outcome = await bench.Runner().RunAsync(context, Ct);
+
+        var done = outcome.IsDone();
+        (done.Skipped, done.Recovered).Should().Be((false, true));
+        bench.Fake.Calls().Should().HaveCount(1, "the finished stream is recovered, never resumed — no launch on the next entry");
+        var head = await bench.HeadAsync(folder);
+        head.Should().NotBe(before, "the folder's HEAD is the coder's commit, not the base");
+        File.ReadAllText(bench.Paths.CoderHead("t1")).Should().Be(head + "\n", "the HEAD of the task's own folder, not of the arm's clone");
+        File.ReadAllText(bench.Paths.CoderDiff("t1")).Should().Be(await GitOutAsync(folder, "diff", before, "HEAD")).And.Contain("+the task's work");
+        File.Exists(bench.Paths.Done("2-t1-code")).Should().BeTrue();
+    }
+
+    private static async Task<string> GitOutAsync(string folder, params string[] arguments)
+    {
+        var attempt = await Bench.Infrastructure.Process.ProcessRunner.RunAsync(ExperimentRoot.RealGit, arguments, folder, TimeSpan.FromSeconds(30), Ct);
+        return attempt.Should().BeOfType<Bench.Infrastructure.Process.ProcessAttempt.Completed>().Subject.Result.StandardOutput;
     }
 
     [Fact]

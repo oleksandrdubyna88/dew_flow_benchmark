@@ -1,3 +1,5 @@
+using ModelArms.Core.Tasks;
+
 namespace ModelArms.Core.Experiment;
 
 /// <summary>The rules a scheme answers for, each over <see cref="SchemePositions"/> so the reader, the rehearsal and the runner agree on what a position may see: a name or a tasks
@@ -7,6 +9,7 @@ internal static class SchemeChecks
     public static IReadOnlyList<string> Problems(Scheme scheme, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, IReadOnlySet<string> noteable) =>
     [
         .. Placement(scheme),
+        .. PipelineStems(scheme),
         .. scheme.Entries.SelectMany((entry, index) => TaskCodeAlone(scheme, entry, index, steps)),
         .. SchemePositions.Steps(scheme, tasks).SelectMany(placed => Position(scheme, placed, steps, tasks, noteable)),
         .. PathsWrittenTwice(scheme, steps, tasks),
@@ -29,6 +32,12 @@ internal static class SchemeChecks
             .Select(group => $"schemes.{ExecutableRule.Printable(scheme.Name)} — '{group.Key}' is placed twice"),
         .. scheme.Entries.OfType<SchemeEntry.Tasks>().Skip(1).Take(1).Select(_ => $"schemes.{ExecutableRule.Printable(scheme.Name)} — tasks is placed twice"),
     ];
+
+    /// <summary>The pipeline's own step names (<see cref="TaskStems"/>) are not configuration: an entry named like one would write the pipeline's timing lines and files under the scheme's step.</summary>
+    private static IEnumerable<string> PipelineStems(Scheme scheme) =>
+        scheme.Entries.SelectMany((entry, index) => entry is SchemeEntry.Step step && TaskStems.IsPipelineStem(step.Name)
+            ? [$"schemes.{ExecutableRule.Printable(scheme.Name)}[{index}] — {step.Name} is the task pipeline's own step name"]
+            : (IEnumerable<string>)[]);
 
     /// <summary>The task coder is launched per task in its worktree by the pipeline: placed as a plain entry it would run once in the arm's clone, as a session that is not one.</summary>
     private static IEnumerable<string> TaskCodeAlone(Scheme scheme, SchemeEntry entry, int index, IReadOnlyDictionary<StepId, StepSpec> steps) =>

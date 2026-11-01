@@ -19,6 +19,9 @@ public sealed class ArmFiles(ArmPaths paths)
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private const UnixFileMode PrivateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
+    /// <summary>One lock for every timing line of the process (E4.S3, §8 item 6): the tasks of a batch are parallel <c>Task</c>s, each with its own <see cref="ArmFiles"/>, and the runtime's append-mode writes of eight threads were MEASURED to cut and join lines (<c>ArmFilesTests</c> without the lock: 892–938 of 1600 lines survived whole).</summary>
+    private static readonly Lock TimingLock = new();
+
     /// <summary>Creates the folders the arm writes under: <c>out</c>, <c>notes</c>, <c>work</c> and the CLI's <c>tmp</c>.</summary>
     public void Prepare()
     {
@@ -88,7 +91,10 @@ public sealed class ArmFiles(ArmPaths paths)
     }
 
     /// <summary>Stages beside the target, flushes to disk and renames over it.</summary>
-    public void Replace(string path, string text) => Commit(path, Utf8.GetBytes(text), createMode: null, betweenStagingAndRename: null);
+    public void Replace(string path, string text) => ReplaceFile(path, text);
+
+    /// <summary><see cref="Replace"/> without an instance (E5.S1): the pid file of a runner, written BY NAME — staged beside, flushed, renamed over — and never through <see cref="WriteFileOnce"/>, whose failure path lists the folder (<c>pids/</c> is at mode 300 while the isolation stands).</summary>
+    public static void ReplaceFile(string path, string text) => Commit(path, Utf8.GetBytes(text), createMode: null, betweenStagingAndRename: null);
 
     /// <summary><see cref="Replace"/> for a file that carries a secret (<c>mcp-coai.json</c> with the vault key, the copied coai settings, the arm map — C15, E2 §8 item 14): the staged file is CREATED at mode <c>0600</c> (<see cref="FileStreamOptions.UnixCreateMode"/>), so no moment exists in which it is readable by other users with the secret already in it — a
     /// create-then-chmod has that moment, and the test looks at the seam between the staged write and the rename. The rename swaps a wider file that was there for this private one: never widened, never kept. A failed write or rename removes the staged file (it holds the secret) and its exception carries the runtime's words and the paths, never the bytes. The mode is a REQUEST to the kernel that a umask can only narrow; whether a file system honours modes is its own affair (<c>ArmFilesTests</c> observes it on the host's).</summary>
@@ -160,9 +166,18 @@ public sealed class ArmFiles(ArmPaths paths)
     /// <summary>One line and a newline, flushed to disk.</summary>
     public void AppendTiming(TimingLine line)
     {
-        Directory.CreateDirectory(paths.Out);
-        using var stream = new FileStream(paths.Timing, FileMode.Append, FileAccess.Write, FileShare.Read);
-        stream.Write(Utf8.GetBytes(TimingLines.Write(line) + "\n"));
+        lock (TimingLock)
+        {
+            AppendLine(paths.Timing, TimingLines.Write(line));
+        }
+    }
+
+    /// <summary><paramref name="line"/> and a newline appended to <paramref name="path"/> (created when absent) by a fresh <c>FileMode.Append</c> stream, flushed to disk before it closes: a crash leaves the file whole to its last flushed line. No lock of its own — the timing file's is <see cref="AppendTiming"/>'s; the pick record has ONE writer, the pick in task order.</summary>
+    public void AppendLine(string path, string line)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+        stream.Write(Utf8.GetBytes(line + "\n"));
         stream.Flush(flushToDisk: true);
     }
 

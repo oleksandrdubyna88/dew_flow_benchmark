@@ -58,6 +58,10 @@ flowchart TB
         rt["OpenAiCompatibleRuntime"]
         tr["LiveTrace · FixtureTrace"]
     end
+    subgraph arms["tools/model-arms — the part-6 launcher; nothing references it"]
+        armsexe["model-arms (console) — fourteen verbs; the only project that touches<br/>files · processes · clock · environment (module_model_arms.md)"]
+        armscore["ModelArms.Core — every decision, pure:<br/>the experiment file · paths · launch options · step ends · isolation · chain plan"]
+    end
     contracts["Bench.Contracts — wire shapes, depends on nothing"]
     hosting["Bench.Hosting — CommandLine · ExitCodes · ShutdownSignal<br/>(namespace Bench.Cli, shared by the CLI hosts)"]
     delivered["Bench.Delivered — the delivered-work instrument<br/>cleaned LOC · path fates · the policy trail<br/>a SIBLING LEAF: sees nothing, seen only by app"]
@@ -79,6 +83,11 @@ flowchart TB
     app --> contracts
     api --> contracts
     hook --> contracts
+    armsexe --> armscore
+    armsexe --> infra
+    armsexe --> hosting
+    armscore --> app
+    armscore --> dom
 ```
 
 `Bench.Hosting` is a project of its own rather than a folder of the CLI because more than one host needs the flag parser, the
@@ -119,6 +128,7 @@ each.
 | Scouts | [module_scouts.md](module_scouts.md) | whether a Sonnet team of ⌈1.5·N⌉ read-only scouts finds the files an Opus team of N finds, without more wrong claims — and how fast, at what price | six `scout_*` tables; the artefact root's `scouts/`; the history-free trees under the trees root |
 | minigit bench | [module_minigit_bench.md](module_minigit_bench.md) | not a series yet: the instruments a two-stack minigit comparison will be scored with — a sandboxed scorer, a sealed and calibrated held-out suite, cost counters with cross-checks T1–T4, and an exclusive time partition (Node, in `spikes/minigit-bench/`, outside the C# product) | none — Node files; `score/score.json` per session, the sealed `heldout/suite.enc` |
 | language comparison v2 bench | [module_lang_bench.md](module_lang_bench.md) | not a series yet: the tools the v2 comparison of a C# and a Node stack is built and published with — the pre-push check of the public task repository (`push-check.mjs`), the run base's tree cut and its needle scan (`lib/run-base-tree.mjs`), `workspace-diff` (Node, in `spikes/lang-bench/`, outside the C# product; the runner, the execution layer and the rest are written by other stories, one `##` section each) | none — Node files; the credit terms and the needle list in `spikes/lang-bench/inputs/` |
+| Model arms | [module_model_arms.md](module_model_arms.md) | not a measurement of this benchmark — the launcher of the owner's part-6 and part-7 experiment ported from bash: headless Claude Code "arms" of steps on one frozen plan in a target repository (schemes C, CR, SRS, CHH), fourteen verbs from `init` to `chain`, resume and usage-limit waits, the gate step through one lock, file-mode isolation, keep-awake, the objective checks. A console of its own (`tools/model-arms/ModelArms`) over a pure `ModelArms.Core`; Core sees `Bench.Domain` and `Bench.Application`, the console also `Bench.Infrastructure` and `Bench.Hosting`; **nothing under `src/` or `hosts/` references it**, and `ModelArmsArchitectureTests` says so. The analysis half is a later plan | none in the benchmark's store — an experiment root outside every checkout (`experiment.json`, `r/<token>/` per arm, `pids/`, `chain/`) |
 | Tests | [module_tests.md](module_tests.md) | not a measurement — the scenario harness (`tests/Bench.Tests/Cli`, real store, real git, `tests/FakeCli` for the paid CLIs) and the flow catalogue derived from the CLI's verbs and the API's routes; a second harness, the Node suite of the minigit stack bench's agent sandbox (`spikes/minigit-bench/test`, run by `spikes/minigit-bench/run-tests.mjs`, catalogued by `module-tests-catalog.test.mjs`) | none |
 
 ## The measurement contract

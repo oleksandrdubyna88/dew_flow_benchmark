@@ -9,11 +9,12 @@ namespace ModelArms.Adapters;
 /// LAST result of the step's final stream and from nothing else; a diff from the <c>.before</c> of the step <c>diffFrom</c> names to HEAD, through the step's <see cref="ArmGit"/>. An output whose input is missing is a FAILURE with the step's id and the
 /// reason — never a silent skip and never a file: the runner turns it into the resumable stop (exit 5), and the step has no <c>.done</c>.
 /// <para>
-/// The task coder's head and diff are the task pipeline's (E4.S3): asked for here they are refused.
+/// The task coder's head and diff (E4.S3, D21) are written the same way, from ANY done step of the coder — finished or ended on its deadline (D8) — through the step's <see cref="ArmGit"/>, which the pipeline asked in the task's own folder (its worktree, or the clone for a batch of one): the head is that folder's HEAD, the diff is
+/// <c>out/task-&lt;id&gt;.before</c> to HEAD under <see cref="ArmGit.DiffAsync"/>'s pins. A coder context with no task is a caller's bug and is refused with the step's id, never written.
 /// </para></summary>
 public static class DerivedOutputs
 {
-    private const string Pipeline = "task outputs are written by the task pipeline (E4.S3)";
+    private const string NoTask = "the coder's context names no task";
 
     /// <summary>What is on disk, as <see cref="StepOutputs.Reconcile"/> wants it.</summary>
     public static OutputFacts FactsOf(StepContext context, ArmFiles files) =>
@@ -45,7 +46,9 @@ public static class DerivedOutputs
         {
             DerivedOutput.Verdict => Task.FromResult(WriteVerdict(context, files)),
             DerivedOutput.StepDiff => WriteDiffAsync(context, files, git, ct),
-            _ => Task.FromResult(Outcome<string>.Failure(Pipeline)),
+            DerivedOutput.CoderHead => WriteCoderHeadAsync(context, files, git, ct),
+            DerivedOutput.CoderDiff => WriteCoderDiffAsync(context, files, git, ct),
+            _ => throw new InvalidOperationException($"no writer for {output}"),
         };
 
     private static Outcome<string> WriteVerdict(StepContext context, ArmFiles files) =>
@@ -66,6 +69,36 @@ public static class DerivedOutputs
             reason => Outcome<string>.Failure($"{context.Step.Name}: git could not make the diff from {context.Spec.DiffFrom}'s snapshot ({reason})"));
     }
 
+    private static async Task<Outcome<string>> WriteCoderHeadAsync(StepContext context, ArmFiles files, ArmGit git, CancellationToken ct)
+    {
+        if (context.Task.Id.Length == 0)
+        {
+            return Outcome<string>.Failure($"{context.Step.Name}: {NoTask}");
+        }
+
+        return (await git.HeadAsync(ct)).Match(
+            head => Put(files, context.Paths.CoderHead(context.Task.Id), head + "\n"),
+            reason => Outcome<string>.Failure($"{context.Step.Name}: git could not read HEAD of {context.WorkingDirectory} ({reason})"));
+    }
+
+    private static async Task<Outcome<string>> WriteCoderDiffAsync(StepContext context, ArmFiles files, ArmGit git, CancellationToken ct)
+    {
+        if (context.Task.Id.Length == 0)
+        {
+            return Outcome<string>.Failure($"{context.Step.Name}: {NoTask}");
+        }
+
+        var before = files.ReadText(context.Paths.TaskBefore(context.Task.Id));
+        if (before is Outcome<string>.Fail unread)
+        {
+            return Outcome<string>.Failure($"{context.Step.Name}: {unread.Reason}");
+        }
+
+        return (await git.DiffAsync(((Outcome<string>.Ok)before).Value.Trim(), ct)).Match(
+            diff => Put(files, context.Paths.CoderDiff(context.Task.Id), diff),
+            reason => Outcome<string>.Failure($"{context.Step.Name}: git could not make the diff from the task's .before ({reason})"));
+    }
+
     private static Outcome<string> Put(ArmFiles files, string path, string text)
     {
         files.WriteOnce(path, text);
@@ -80,6 +113,8 @@ public static class DerivedOutputs
         {
             DerivedOutput.Verdict => files.Exists(VerdictFile(context)),
             DerivedOutput.StepDiff => files.Exists(context.Paths.Diff(context.Step.Name)),
+            DerivedOutput.CoderHead => context.Task.Id.Length > 0 && files.Exists(context.Paths.CoderHead(context.Task.Id)),
+            DerivedOutput.CoderDiff => context.Task.Id.Length > 0 && files.Exists(context.Paths.CoderDiff(context.Task.Id)),
             _ => false,
         };
 

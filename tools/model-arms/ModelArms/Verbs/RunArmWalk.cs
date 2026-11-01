@@ -9,7 +9,7 @@ using ModelArms.Core.Steps;
 namespace ModelArms.Verbs;
 
 /// <summary>The walk of one arm: one <see cref="StepRunner"/> and one <see cref="GateStep"/> built over the SAME clock, the SAME log writer and the SAME <see cref="ArmMap"/> (E2 §8 item 58 — the gate stamps its own <c>gate-wait</c> and <c>stopped</c>
-/// lines and scrubs its own log through them), the scheme's entries in order, each through the runner or, for a gate step, through the gate; the first step that stops ends the walk and nothing after it launches. The arm's <c>arm-done</c> line is
+/// lines and scrubs its own log through them), the scheme's entries in order, each through the runner or, for a gate step, through the gate, and a <c>tasks</c> entry through the <see cref="TaskPipeline"/> (E4.S3). The tasks of a batch run at once in this process, so the verb's output is wrapped in <see cref="TextWriter.Synchronized(TextWriter)"/> before any of them is built: a log line is one write. the first step that stops ends the walk and nothing after it launches. The arm's <c>arm-done</c> line is
 /// written once, <b>unless this arm already has one after the timing's last start or gate-wait line</b>: a re-run of a finished arm adds nothing (the shell appended one per run). Every wait is the one the seams hold, bounded and cancellable by the operator's stop.</summary>
 internal sealed class RunArmWalk
 {
@@ -21,6 +21,7 @@ internal sealed class RunArmWalk
     private readonly StepLog _log;
     private readonly BriefTemplateFiles _templates;
     private readonly BriefLeakGuard _guard;
+    private readonly TaskPipeline _pipeline;
 
     public RunArmWalk(ArmPlan plan, RunArmSeams seams, IGateLock gateLock)
     {
@@ -28,13 +29,15 @@ internal sealed class RunArmWalk
         var environment = input.Verb.Environment;
         _plan = plan;
         _clock = seams.Clock;
+        var output = TextWriter.Synchronized(input.Verb.Output);
         _files = new ArmFiles(plan.Paths);
-        _log = new StepLog(input.Verb.Output, plan.Map, seams.Clock, plan.Arm, _files);
+        _log = new StepLog(output, plan.Map, seams.Clock, plan.Arm, _files);
         _templates = new BriefTemplateFiles(input.Verb.Module.ShippedBriefs, input.Root.Briefs);
         _guard = new BriefLeakGuard(plan.Map, plan.Arm, [.. input.Experiment.Schemes.Select(scheme => scheme.Name)], input.Root.Root);
         _runner = new StepRunner(
-            new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), new ClaudeSessionTranscripts(SessionTranscripts.ClaudeHome(environment)), seams.Clock, seams.Wait, input.Verb.Output, plan.Map, StepProbe.None);
-        _gate = new GateStep(_runner, gateLock, seams.Clock, seams.Wait, input.Verb.Output, plan.Map, Ceiling(plan));
+            new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), new ClaudeSessionTranscripts(SessionTranscripts.ClaudeHome(environment)), seams.Clock, seams.Wait, output, plan.Map, StepProbe.None);
+        _gate = new GateStep(_runner, gateLock, seams.Clock, seams.Wait, output, plan.Map, Ceiling(plan));
+        _pipeline = new TaskPipeline(plan, ContextAt, _runner, _log, _files);
     }
 
     /// <summary>The gate lock's ceiling for this arm (E2 §8 items 59 and 61): each holder's wall, kill grace and limit waits under the lock, for the other arms of the arm's own round; see <see cref="GateLockCeiling"/>.</summary>
@@ -63,8 +66,7 @@ internal sealed class RunArmWalk
     {
         for (var position = 0; position < _plan.Scheme.Entries.Count; position++)
         {
-            var context = ContextAt(position);
-            var outcome = context.Spec.Kind == StepKind.Gate ? await _gate.RunAsync(context, stopping) : await _runner.RunAsync(context, stopping);
+            var outcome = await EntryAsync(position, stopping);
             if (outcome is StepOutcome.Stopped stopped)
             {
                 return stopped;
@@ -72,6 +74,17 @@ internal sealed class RunArmWalk
         }
 
         return null;
+    }
+
+    private async Task<StepOutcome?> EntryAsync(int position, CancellationToken stopping)
+    {
+        if (_plan.Scheme.Entries[position] is SchemeEntry.Tasks)
+        {
+            return await _pipeline.RunAsync(position, stopping);
+        }
+
+        var context = ContextAt(position);
+        return context.Spec.Kind == StepKind.Gate ? await _gate.RunAsync(context, stopping) : await _runner.RunAsync(context, stopping);
     }
 
     /// <summary>The arm ran its whole scheme: one <c>arm-done</c> line, unless this arm already has one AFTER the last <c>start</c> or <c>gate-wait</c> line — nothing has run since it. A <c>stopped</c> line after an <c>arm-done</c> (a stop while a rerun

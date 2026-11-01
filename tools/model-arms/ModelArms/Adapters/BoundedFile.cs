@@ -61,7 +61,7 @@ internal static class BoundedFile
     }
 
     /// <summary>True for a symbolic link, a dangling one included: the file's own attributes say so (<c>ReparsePoint</c>) without reading what it names. A path that names nothing reads as <c>-1</c>, which is no link; a folder the user may not search makes the runtime throw, which <see cref="Judged"/> turns into a refusal.</summary>
-    private static bool IsLink(string path)
+    internal static bool IsLink(string path)
     {
         var attributes = new FileInfo(path).Attributes;
         return attributes != (FileAttributes)(-1) && attributes.HasFlag(FileAttributes.ReparsePoint);

@@ -130,6 +130,18 @@ public sealed class FileGateLock : IGateLock
             _ => Opened(path, FileMode.Open, note),
         };
 
+    /// <summary>The SHARED take (E5.S1, the one widening of this class, question 8): the same path judgement and honoured-lock check as <see cref="Take"/>, opened <see cref="FileAccess.Read"/> with <see cref="FileShare.Read"/>, which the runtime turns into <c>flock(LOCK_SH)</c> on Linux (measured, S1-6: <c>/proc/locks</c> says
+    /// <c>FLOCK ADVISORY READ</c>). Any number of shared holders coexist; an exclusive <see cref="Take"/> beside them is <see cref="GateLockAnswer.Busy"/>, and a shared take beside an exclusive holder is <c>Busy</c> too. Read access matters: the runtime skips <c>LOCK_SH</c> for a WRITE handle on a network file system, never for a read handle.
+    /// No holder note (several holders; the note is the exclusive holder's). A missing file is created first (empty, closed at once) because <see cref="FileMode.CreateNew"/> cannot be combined with read access. On Windows the share mode is the file system's own check — the same answer, documented, NOT observed.</summary>
+    public GateLockAnswer TakeShared(string path) =>
+        GateLockPath.Of(path, _road) switch
+        {
+            GateLockPath.Refused refused => new GateLockAnswer.Refused(refused.Reason),
+            GateLockPath.Unread unread => new GateLockAnswer.Unread(unread.Reason),
+            GateLockPath.Missing => OpenedShared(path, created: true),
+            _ => OpenedShared(path, created: false),
+        };
+
     /// <summary>The held lock — the open stream, with the holder's note written — or <c>null</c> when another holder has it. A path the lock may not use throws <see cref="GateLockRefusedException"/>: the port has no other way to say it, and a caller
     /// that wants the answer as a value uses <see cref="Take"/>.</summary>
     public IDisposable? TryAcquire(string path) =>
@@ -153,12 +165,16 @@ public sealed class FileGateLock : IGateLock
         };
 
     /// <summary><see cref="AcquireAsync"/> with the answer as a value: <c>Held</c>, or the <c>Refused</c> or <c>Unread</c> that ended the wait (never <c>Busy</c>: that is what it waits out).</summary>
-    public async Task<GateLockAnswer> AcquireAnswerAsync(string path, CancellationToken cancellationToken)
+    public Task<GateLockAnswer> AcquireAnswerAsync(string path, CancellationToken cancellationToken) =>
+        AcquireAnswerAsync(path, cancellationToken, () => Take(path, create: true, note: true));
+
+    /// <summary>The same wait over any take (the shared one included): <c>Busy</c> and <c>Absent</c> are waited out one poll at a time, anything else ends the wait.</summary>
+    public async Task<GateLockAnswer> AcquireAnswerAsync(string path, CancellationToken cancellationToken, Func<GateLockAnswer> take)
     {
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var answer = Take(path, create: true, note: true);
+            var answer = take();
             if (answer is not (GateLockAnswer.Busy or GateLockAnswer.Absent))
             {
                 return answer;
@@ -177,7 +193,31 @@ public sealed class FileGateLock : IGateLock
     private GateLockAnswer Opened(string path, FileMode mode, bool note)
     {
         AfterJudged?.Invoke(path);
-        return Open(path, mode) is { } stream ? VerifiedOrHeld(stream, path, note) : NotTaken(path, mode);
+        return Open(path, mode, FileAccess.ReadWrite, FileShare.None) is { } stream ? VerifiedOrHeld(stream, path, note) : NotTaken(path, mode);
+    }
+
+    private GateLockAnswer OpenedShared(string path, bool created)
+    {
+        AfterJudged?.Invoke(path);
+        if (created)
+        {
+            Created(path);
+        }
+
+        return Open(path, FileMode.Open, FileAccess.Read, FileShare.Read) is { } stream ? VerifiedOrHeld(stream, path, note: false) : NotTaken(path, FileMode.Open);
+    }
+
+    /// <summary>The empty file a shared take needs, made exclusively (a file that appeared first is the one used; a link planted there is judged on the open's verification).</summary>
+    private static void Created(string path)
+    {
+        try
+        {
+            new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite).Dispose();
+        }
+        catch (IOException) when (Path.Exists(path))
+        {
+            // somebody else made it first: that file is judged and opened next
+        }
     }
 
     /// <summary>No stream: an existing file that is gone is <c>Absent</c>; anything else — another holder, a create that lost the race — is <c>Busy</c> and is judged again on the next try.</summary>
@@ -198,11 +238,11 @@ public sealed class FileGateLock : IGateLock
     }
 
     /// <summary><c>null</c> when the lock is held by someone else (a sharing conflict is the lock's answer), and for a create that lost the race to a file that appeared first: that file is judged again on the next try, a planted link refused then.</summary>
-    private FileStream? Open(string path, FileMode mode)
+    private FileStream? Open(string path, FileMode mode, FileAccess access, FileShare share)
     {
         try
         {
-            return new FileStream(path, mode, FileAccess.ReadWrite, FileShare.None);
+            return new FileStream(path, mode, access, share);
         }
         catch (IOException ex) when (IsConflict(ex, _conflicts) || (mode == FileMode.CreateNew && Path.Exists(path)))
         {
