@@ -8,9 +8,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { installToolchain } from '../lib/toolchain-install.mjs';
-import { curlArgv, dotnetInstallArgv, npmInstallArgv } from '../lib/toolchain-io.mjs';
+import { curlArgv, dotnetInstallArgv, npmInstallArgv, realIo } from '../lib/toolchain-io.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
-import { sealTree, unsealTree, writablePaths } from '../lib/toolchain-store.mjs';
+import os from 'node:os';
+import { sealTree, treeRecord, unsealTree, writablePaths } from '../lib/toolchain-store.mjs';
 import { spawnSync } from 'node:child_process';
 import { makeTarXz, ownedApi, ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
@@ -297,4 +298,28 @@ test('The_first_install_into_a_store_root_that_does_not_exist_yet_has_nothing_to
     assert.equal(done.ok, true, JSON.stringify(done));
     assert.deepEqual(done.value.swept, []);
   } finally { unsealStore(root); }
+});
+
+test('Two_npm_installs_of_the_same_package_into_differently_named_folders_have_the_same_tree_hash', async t => {
+  const nodeDir = path.join(os.homedir(), ...real.storeRoot, real.directories.node);
+  if (!existsSync(path.join(nodeDir, 'bin', 'node'))) {
+    if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and the pinned Node is not installed at ${nodeDir}`);
+    return t.skip(`the pinned Node is not installed at ${nodeDir}`);
+  }
+  // npm names the project after its folder in the lock file unless the folder already holds a manifest; the folder here is a random staging name.
+  const source = writeTree(ownedFolder(t, 'npmsrc'), { 'package/package.json': JSON.stringify({ name: 'typescript', version: '6.0.3', bin: { tsc: 'bin/tsc' } }), 'package/bin/tsc': '#!/usr/bin/env node\n' });
+  const tarball = path.join(ownedFolder(t, 'npmtgz'), 'typescript-6.0.3.tgz');
+  const packed = spawnSync('tar', ['-czf', tarball, '-C', source, 'package'], { encoding: 'utf8' });
+  assert.equal(packed.status, 0, packed.stderr);
+  const parent = ownedFolder(t, 'npminst');
+  const hashes = [];
+  for (const name of ['stage-aaaaaa', 'stage-zzzzzz']) {
+    const prefix = path.join(parent, name);
+    mkdirSync(prefix);
+    const work = ownedFolder(t, 'npmwork');
+    const ran = await realIo.runNpmInstall({ nodeDir, prefix, spec: tarball, workDir: work });
+    assert.equal(ran.ok, true, JSON.stringify(ran));
+    hashes.push(treeRecord(prefix));
+  }
+  assert.equal(hashes[0], hashes[1], 'the tree hash must not depend on the staging folder\'s random name');
 });

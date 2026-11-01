@@ -1,10 +1,12 @@
 // E1.S5: the installer's only contact with the outside — the official hosts through curl, the official install script, and npm run by the
 // pinned Node. Every command is exe + argv with a ceiling (`common.security`); the argv builders are pure so a test reads them without a network.
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 
 export const NPM_REGISTRY = 'https://registry.npmjs.org/';
+/** The manifest the TypeScript install starts from; npm adds the dependency. */
+export const NPM_PROJECT_MANIFEST = `${JSON.stringify({ name: 'lang-v2-toolchain', version: '0.0.0', private: true }, null, 2)}\n`;
 const TEXT_MAX_BYTES = 64 * 1024 * 1024; // npm's full packument of typescript is ~16 MB
 const FETCH_MS = 120_000;
 const DOWNLOAD_MS = 900_000;
@@ -50,6 +52,9 @@ export const realIo = Object.freeze({
     return runChecked('/bin/bash', dotnetInstallArgv({ scriptPath, version, installDir, zipPath }), { env, cwd: workDir, timeoutMs: INSTALL_MS }, 'dotnet-install.sh');
   },
   runNpmInstall({ nodeDir, prefix, spec, workDir }) {
+    // npm names the project after its folder (a random staging name) in package-lock.json and node_modules/.package-lock.json unless a manifest is already there:
+    // a fixed one keeps the installed tree, and so its recorded tree hash, the same whatever the staging folder was called.
+    if (!existsSync(`${prefix}/package.json`)) writeFileSync(`${prefix}/package.json`, NPM_PROJECT_MANIFEST);
     for (const name of ['user.npmrc', 'global.npmrc']) writeFileSync(`${workDir}/${name}`, '');
     const { exe, argv, env } = npmInstallArgv({ nodeDir, prefix, spec, cacheDir: `${workDir}/npm-cache`, home: workDir });
     return runChecked(exe, argv, { env, cwd: workDir, timeoutMs: INSTALL_MS }, 'npm install');
