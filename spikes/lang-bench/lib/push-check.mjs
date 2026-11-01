@@ -4,10 +4,10 @@
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { EXIT } from './push-exit.mjs';
-import { branchTip, changesOf, newCommits, newObjects, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
+import { branchTip, changesOf, newCommits, basePairs, newObjects, readBlobs, readFileAt, tipTree, verifyNotMoved } from './push-range.mjs';
 import { TASK_REPO_URL, verifyFresh, verifyOrigin } from './push-remote.mjs';
 import { sequence } from './push-sequence.mjs';
-import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
+import { attributionFindings, COMMIT_MESSAGE, entryFindings, flatten, keptFindings, messageFindings, placementEntries, scanEntries, scanText, SUBMODULE } from './push-scan.mjs';
 import { findSubmoduleProblems, findSymlinks } from './push-shape.mjs';
 import { findStackFolderFiles } from './push-visible.mjs';
 
@@ -46,7 +46,7 @@ async function rangeAndTip(repo, branch, rev, dest) {
 }
 
 /** ok({ commits, tip, found, files, tipTree }): the range, the tip it ends at, and the tagged findings of every message and blob in it. */
-async function scanBranch({ repo, branch, rev, dest, inputs, refuseNul, progress }) {
+async function scanBranch({ repo, branch, rev, dest, inputs, refuseNul, progress, placementScan = true }) {
   const head = await rangeAndTip(repo, branch, rev, dest);
   if (head.ok) progress(`scanning ${head.value.commits.length} commits`);
   const changes = head.ok ? await changesOf(repo, head.value.commits) : head;
@@ -55,14 +55,20 @@ async function scanBranch({ repo, branch, rev, dest, inputs, refuseNul, progress
   const fresh = await newObjects(repo, head.value.tip, dest ?? branch);
   if (!fresh.ok) return fresh;
   const readable = files.filter(f => f.mode !== SUBMODULE && fresh.value.has(f.oid));
-  progress(`reading ${new Set(readable.map(f => f.oid)).size} blobs`);
-  const blobs = await readBlobs(repo, readable.map(f => f.oid), { ...inputs.limits, where: whereOf(readable) });
   const tree = await tipTree(repo, branch, head.value.tip);
-  const bad = firstFailure(blobs, tree);
-  if (bad) return bad;
-  const entries = scanEntries(files, tree.value);
-  progress(`scanning ${entries.length} files and ${messages.length} messages`);
-  const found = keptFindings([...messageFindings(messages, inputs), ...entries.flatMap(e => entryFindings(e, blobs.value.get(e.oid), inputs, { refuseNul }))]);
+  const pairs = placementScan ? await basePairs(repo, dest ?? branch) : ok(new Set());
+  const treeBad = firstFailure(tree, pairs);
+  if (treeBad) return treeBad;
+  const entries = scanEntries(files, tree.value).map(e => ({ ...e, fresh: fresh.value.has(e.oid) }));
+  const covered = new Set(entries.filter(e => e.fresh).map(e => `${e.path}\0${e.oid}`));
+  const placement = placementScan ? placementEntries(tree.value, pairs.value, files, covered) : [];
+  const wanted = [...readable, ...placement];
+  progress(`reading ${new Set(wanted.map(f => f.oid)).size} blobs`);
+  const blobs = await readBlobs(repo, wanted.map(f => f.oid), { ...inputs.limits, where: whereOf(wanted) });
+  if (!blobs.ok) return blobs;
+  progress(`scanning ${entries.length + placement.length} files and ${messages.length} messages`);
+  const bytesOf = e => (e.fresh || e.placementOnly ? blobs.value.get(e.oid) : undefined);
+  const found = keptFindings([...messageFindings(messages, inputs), ...[...entries, ...placement].flatMap(e => entryFindings(e, bytesOf(e), inputs, { refuseNul }))]);
   return ok({ commits: head.value.commits.length, tip: head.value.tip, found, files, tree: tree.value });
 }
 
@@ -120,7 +126,7 @@ export async function checkBranch({ repo, branch, inputs, tip, dest, expectedOri
 /** The bench's own branch (consult C6b, D2): only the leak and the secret scans, over the new commits. */
 export async function checkSelf({ repo, branch, inputs, progress = NO_PROGRESS }) {
   const label = `${repo} ${branch} (bench branch)`;
-  const scan = await scanBranch({ repo, branch, inputs, refuseNul: false, progress });
+  const scan = await scanBranch({ repo, branch, inputs, refuseNul: false, progress, placementScan: false });
   if (!scan.ok) return errorResult(label, scan);
   return verdict(groupChecks(SELF_NAMES, scan.value.found), label, { commits: scan.value.commits, tip: scan.value.tip, branch, tokens: tokenLine(inputs) });
 }

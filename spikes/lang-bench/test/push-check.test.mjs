@@ -1,7 +1,7 @@
 // The pre-push check over a branch, a text body and the bench's own branch: the named lines, the exit codes, and the promise that no
 // report line carries the text it matched. Everything runs over fixture repositories with a bare `origin` and a synthetic aid.
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { checkBranch as checkBranchAgainst, checkSelf, checkText, EXIT, formatReport } from '../lib/push-check.mjs';
@@ -530,4 +530,35 @@ test('The_published_base_is_the_remote_ref_of_the_branch_being_updated_when_ther
   assert.equal(updating.exit, EXIT.PASS, 'updating origin/other: its own file is not new to it');
   const asNewBranch = await checkBranch({ repo, branch: 'topic', inputs });
   assert.equal(asNewBranch.exit, EXIT.REFUSED, 'pushed as a new branch the destination is origin/main, which does not hold that file');
+});
+
+const PUBLISHED_README = '# T\n\nIntro.\n\n## Attribution\n\nBased on CSES (https://example.org/w). See dew_flow_benchmark.\n';
+
+test('A_published_blob_copied_to_a_new_agent_visible_path_is_checked_for_placement_by_its_path_and_blob_pair', async t => {
+  const repo = publishedThenBranch(t, { 'README.md': PUBLISHED_README, 'research/notes.md': 'Design per E1.S2 and D41.\n' });
+  const sha = commit(repo, 'docs: copy the readme into a task folder', { 'tasks/03-x/NOTES.md': PUBLISHED_README });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED, formatReport(result));
+  assert.ok(checkOf(result, 'run-base-text').findings.some(f => f.path === 'tasks/03-x/NOTES.md' && f.what === 'needle CSES'), formatReport(result));
+  assert.ok(checkOf(result, 'run-base-text').findings.some(f => f.path === 'tasks/03-x/NOTES.md' && f.what === 'link'));
+  assert.ok(checkOf(result, 'family-names').findings.some(f => f.path === 'tasks/03-x/NOTES.md' && f.commit === sha));
+  assert.equal(checkOf(result, 'leakcheck').findings.length + checkOf(result, 'secrets').findings.length, 0, 'the bytes are public: leak and secret scans do not run on them again');
+});
+
+test('A_published_note_moved_into_the_agent_visible_todo_tasks_folder_is_refused_for_its_plan_ids', async t => {
+  const repo = publishedThenBranch(t, { 'README.md': PUBLISHED_README, 'research/notes.md': 'Design per E1.S2 and D41.\n' });
+  mkdirSync(path.join(repo, 'todo/tasks'), { recursive: true }); // git mv needs the folder to exist
+  git(repo, 'mv', 'research/notes.md', 'todo/tasks/notes.md');
+  const sha = commit(repo, 'docs: move the note', {});
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED, formatReport(result));
+  assert.deepEqual(checkOf(result, 'run-base-text').findings.filter(f => f.path === 'todo/tasks/notes.md').map(f => [f.line, f.what]), [[1, 'plan story id'], [1, 'decision id']]);
+  assert.ok(sha);
+});
+
+test('A_published_file_left_at_its_published_path_is_not_checked_again_and_a_new_path_for_clean_bytes_passes', async t => {
+  const repo = publishedThenBranch(t, { 'README.md': PUBLISHED_README, 'research/notes.md': 'Design per E1.S2 and D41.\n', 'LICENSE2': 'MIT\n' });
+  commit(repo, 'docs: copy the licence and add a file', { 'research/license-copy.txt': 'MIT\n', 'tasks/01/s01.in': '5\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.PASS, formatReport(result));
 });

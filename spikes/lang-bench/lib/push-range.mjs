@@ -154,3 +154,19 @@ export async function tipTree(repo, branch, rev) {
   }
   return ok(tree);
 }
+
+/**
+ * ok(Set("path\0blob id")): the (path, blob) pairs the destination already holds, from ONE `git ls-tree -r <published base>`; empty when there is no
+ * base. A published blob at a path the base does not hold under that blob is new PLACEMENT (a README copied into a task folder, a note moved into
+ * an agent-visible one), whatever its bytes: this set is what tells the two apart.
+ */
+export async function basePairs(repo, dest) {
+  const base = await publishedBase(repo, dest);
+  if (!base.ok || base.value === null) return base.ok ? ok(new Set()) : base;
+  const listing = await runGit(repo, ['ls-tree', '-r', '-z', base.value], { maxBytes: 64 * 1024 * 1024 });
+  if (!listing.ok) return listing;
+  return ok(new Set(listing.value.stdout.split('\0').filter(Boolean).map(record => {
+    const tab = record.indexOf('\t');
+    return `${record.slice(tab + 1)}\0${record.slice(0, tab).split(' ')[2]}`;
+  })));
+}

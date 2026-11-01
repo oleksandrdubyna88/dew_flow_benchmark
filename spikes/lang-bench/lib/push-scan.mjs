@@ -50,6 +50,20 @@ export function scanEntries(files, tip) {
 }
 
 /** Tagged findings of one entry's decoded blob (none when `bytes` is undefined: the blob is already published), its path (once) and, where asked, its NUL byte. */
+/** The checks that read where a thing STANDS (its path and its text): the only ones run for a published blob at a new path. */
+export const PLACEMENT_CHECKS = Object.freeze(new Set(['run-base-text', 'family-names', 'attribution']));
+
+/**
+ * Entries for the tip tree's (path, blob) pairs that the published base does not hold and that no fresh range entry already covers: a published
+ * blob at a NEW path. Only their placement is checked (the bytes are public, so leak, secret and NUL rules do not run again).
+ */
+export function placementEntries(tree, baseKeys, files, covered) {
+  const firstCommit = new Map([...files].reverse().map(f => [f.path, f.commit]));
+  return [...tree]
+    .filter(([path, { oid, mode }]) => mode !== SUBMODULE && !baseKeys.has(`${path}\0${oid}`) && !covered.has(`${path}\0${oid}`))
+    .map(([path, { oid, mode }]) => ({ commit: firstCommit.get(path), path, oid, mode, atTip: true, firstOfPath: false, placementOnly: true }));
+}
+
 export function entryFindings(entry, bytes, inputs, { refuseNul }) {
   const { commit, path } = entry;
   const { text, nul } = bytes === undefined ? { text: null, nul: false } : decodeBlob(bytes);
@@ -59,7 +73,7 @@ export function entryFindings(entry, bytes, inputs, { refuseNul }) {
     ...(text === null ? [] : flatten(scanText(path, text, inputs), commit)),
     ...(entry.firstOfPath ? flatten(scanPath(path, inputs), commit) : []),
     ...refusal,
-  ].map(f => ({ atTip: entry.atTip, ...f }));
+  ].map(f => ({ atTip: entry.atTip, ...f })).filter(f => !entry.placementOnly || PLACEMENT_CHECKS.has(f.check));
 }
 
 /** Tagged findings of the commit messages (never at the tip: only the history checks keep them). */
