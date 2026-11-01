@@ -21,7 +21,7 @@ export function scanText(file, text, inputs, { body = false } = {}) {
   const readme = file === 'README.md';
   const visible = findVisibleRules(file, readme ? outsideAttribution(text) : text, { known: inputs.known, assumeVisible: body, links: !body });
   return {
-    leakcheck: findAidHits(file, text, inputs.aids),
+    leakcheck: findAidHits(file, text, inputs.aids, { mode: inputs.aidMode }),
     secrets: [...findSecrets(file, text), ...findOwnSecrets(file, text, inputs.ownSecrets ?? [])],
     [readme ? 'attribution' : 'run-base-text']: visible.filter(f => f.group !== GROUP_FAMILY),
     'family-names': visible.filter(f => f.group === GROUP_FAMILY),

@@ -109,7 +109,7 @@ export async function checkBranch({ repo, branch, inputs, tip, expectedOrigin = 
   const label = `${repo} ${branch}`;
   progress('verifying origin and the remote-tracking refs');
   const origin = await verifyRemote({ repo, branch, tip, expectedOrigin });
-  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs, refuseNul: true, progress }) : origin;
+  const scan = origin.ok ? await scanBranch({ repo, branch, rev: tip, inputs: { ...inputs, aidMode: 'task' }, refuseNul: true, progress }) : origin;
   if (scan.ok) progress('checking the tip tree: README, credit terms, stack folders, tree shape');
   const tree = scan.ok ? await tipFindings({ repo, branch, inputs, scan: scan.value }) : scan;
   if (!tree.ok) return errorResult(label, tree);
@@ -131,7 +131,7 @@ export async function checkSelf({ repo, branch, inputs, progress = NO_PROGRESS }
  */
 export function checkText({ text, label, inputs, self = false }) {
   const names = self ? SELF_NAMES : ['leakcheck', 'secrets', 'run-base-text', 'family-names'];
-  const found = flatten(scanText(label, text, inputs, { body: true }), undefined);
+  const found = flatten(scanText(label, text, { ...inputs, aidMode: self ? 'self' : 'task' }, { body: true }), undefined);
   return verdict(groupChecks(names, found), self ? `${label} (bench body)` : label, { tokens: tokenLine(inputs) });
 }
 

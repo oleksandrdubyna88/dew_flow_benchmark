@@ -108,14 +108,14 @@ test('A_public_text_named_with_public_exempts_the_shingles_it_holds', t => {
   const folder = ownedFolder(t, 'two');
   const aid = path.join(folder, 'two-aid.md');
   writeFileSync(aid, `${AID_TEXT}Another private sentence about gadgets and their wobbling springs today.\n`);
-  assert.equal(cli(['--repo', repo, '--branch', 'topic', '--aid', aid]).status, 1, 'without the exemption the line is a hit');
+  assert.equal(cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', aid]).status, 1, 'without the exemption the line is a hit');
   const publicFile = path.join(folder, 'plan.md');
   writeFileSync(publicFile, 'Public plan: a widget that frobnicates every sprocket twice before lunch will stall.\n');
-  const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--public', publicFile]);
+  const r = cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', aid, '--public', publicFile]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const wholly = path.join(folder, 'aid-only-public.md');
   writeFileSync(wholly, readFileSync(publicFile, 'utf8'));
-  const refused = cli(['--repo', repo, '--branch', 'topic', '--aid', wholly, '--public', publicFile]);
+  const refused = cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', wholly, '--public', publicFile]);
   assert.equal(refused.status, 3, 'an aid that is wholly public would check nothing');
   assert.match(refused.stdout, /would check nothing/);
 });
@@ -135,14 +135,14 @@ test('The_default_public_texts_are_the_published_plans_and_a_plan_edited_in_the_
   writeFileSync(aid, `${AID_TEXT}Another private sentence about gadgets and their wobbling springs today.\n`);
   const bench = benchWithPlans(t, 'nothing relevant\n');
   writeFileSync(path.join(bench, 'todo/PLAN_lang_comparison_v2.md'), 'a widget that frobnicates every sprocket twice before lunch will stall\n');
-  const refused = cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]);
+  const refused = cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]);
   assert.equal(refused.status, 1, 'the working-tree edit exempts nothing\n' + refused.stdout);
   git(bench, 'checkout', '-q', '--', '.');
   writeFileSync(path.join(bench, 'todo/PLAN_lang_comparison_v2.md'), 'a widget that frobnicates every sprocket twice before lunch will stall\n');
   commit(bench, 'docs: publish it', {});
   git(bench, 'push', '-q', 'origin', 'main:main');
   git(bench, 'fetch', '-q', 'origin');
-  assert.equal(cli(['--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]).status, 0, 'a published text exempts what it holds');
+  assert.equal(cli(['--self', '--repo', repo, '--branch', 'topic', '--aid', aid, '--bench-repo', bench]).status, 0, 'a published text exempts what it holds');
 });
 
 test('A_check_whose_published_plans_cannot_be_read_does_not_run', t => {

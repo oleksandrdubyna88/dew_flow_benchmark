@@ -103,11 +103,11 @@ test('A_multi_word_needle_wrapped_over_lines_is_found_and_reported_where_it_star
 });
 
 test('A_one_token_window_is_exempt_only_when_the_token_is_verbatim_in_the_public_texts_a_made_up_joined_passage_is_a_hit', () => {
-  const aid = { name: 'a.md', text: 'Notes.\nsee todo/PLAN_lang_comparison_v2.md and a-made-up-six-word-joined-passage-here for details.\n' };
-  const publicText = 'The plan is todo/PLAN_lang_comparison_v2.md in the repository.\n';
+  const aid = { name: 'a.md', text: 'Notes.\nsee notes/alpha/beta/gamma/delta/epsilon.md and a-made-up-six-word-joined-passage-here for details.\n' };
+  const publicText = 'The plan is notes/alpha/beta/gamma/delta/epsilon.md in the repository.\n';
   const needles = aidNeedles({ aids: [aid], publicTexts: [publicText] }).value;
-  assert.deepEqual(findAidHits('p', 'check todo/PLAN_lang_comparison_v2.md today\n', needles), [], 'a path the public texts hold verbatim is not a hit');
-  assert.deepEqual(findAidHits('todo/PLAN_lang_comparison_v2.md', 'todo/PLAN_lang_comparison_v2.md', needles), [], 'nor as a path scanned as text');
+  assert.deepEqual(findAidHits('p', 'check notes/alpha/beta/gamma/delta/epsilon.md today\n', needles), [], 'a path the public texts hold verbatim is not a hit');
+  assert.deepEqual(findAidHits('notes/alpha/beta/gamma/delta/epsilon.md', 'notes/alpha/beta/gamma/delta/epsilon.md', needles), [], 'nor as a path scanned as text');
   const joined = findAidHits('p', 'copied a-made-up-six-word-joined-passage-here from the aid\n', needles);
   assert.deepEqual(joined.map(h => [h.line, h.what, h.tokens]), [[1, 'shingle of a.md', 1]], 'six words joined by hyphens are ONE token and still a hit: joining is not an exemption');
   const slashed = findAidHits('p', 'a/made/up/six/word/passage/here\n', aidNeedles({ aids: [{ name: 'b.md', text: 'Notes.\na/made/up/six/word/passage/here\n' }], publicTexts: [publicText] }).value);
@@ -138,4 +138,24 @@ test('A_shingle_finding_says_how_many_tokens_its_window_spans_and_never_which_wo
   const [joined] = findAidHits('p', 'the violet engine whistles beneath-seven-copper bridges at dawn\n', needles);
   assert.equal(joined.tokens, 5, 'the first window is five tokens: the, violet, engine, whistles and one joined token');
   assert.equal(JSON.stringify(hit).includes('violet'), false);
+});
+
+test('An_aid_sentence_that_also_stands_in_a_public_plan_is_a_hit_in_task_mode_and_not_in_self_mode', () => {
+  const sentence = 'the violet engine whistles beneath seven copper bridges at dawn';
+  const needles = aidNeedles({ aids: [{ name: 'a.md', text: `Notes.\n${sentence}.\n` }], publicTexts: [`A published plan says: ${sentence}.\n`] }).value;
+  const text = `we copied ${sentence} verbatim\n`;
+  assert.deepEqual(findAidHits('p', text, needles, { mode: 'self' }), [], 'the bench keeps the full public-text exemption');
+  assert.deepEqual(findAidHits('p', text, needles, { mode: 'task' }).map(h => h.what), ['shingle of a.md'], 'the task repository does not: a plan sentence is not a README sentence');
+  assert.deepEqual(findAidHits('p', text, needles).map(h => h.what), [], 'the default is the bench rule');
+});
+
+test('In_task_mode_only_a_window_of_at_most_two_tokens_that_the_public_texts_hold_verbatim_is_exempt', () => {
+  const aid = { name: 'a.md', text: 'Notes.\nthe plan lives in sprocket_repo notes/alpha/beta/gamma/delta/epsilon.md and the spec in notes/tasks/gamma-delta-routes.md here.\n' };
+  const pub = 'The plan: sprocket_repo notes/alpha/beta/gamma/delta/epsilon.md (published) and the spec notes/tasks/gamma-delta-routes.md here.\n';
+  const needles = aidNeedles({ aids: [aid], publicTexts: [pub] }).value;
+  const task = text => findAidHits('p', text, needles, { mode: 'task' }).length;
+  assert.equal(task('Spec: notes/tasks/gamma-delta-routes.md\n'), 0, 'one token, public verbatim');
+  assert.equal(task('The plan: sprocket_repo notes/alpha/beta/gamma/delta/epsilon.md\n'), 0, 'two tokens, public verbatim: the README bench pointer');
+  assert.equal(task('the plan lives in sprocket_repo notes/alpha/beta/gamma/delta/epsilon.md and the spec\n') > 0, true, 'a window spanning more than two tokens is checked');
+  assert.equal(task('a-made-up-six-word-joined-passage-here\n'), 0, 'not an aid shingle at all');
 });

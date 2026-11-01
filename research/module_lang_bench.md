@@ -148,8 +148,9 @@ D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters a
 (`inputs/needles-lang.json`, the public list); a multi-word needle is matched over the whole text with any whitespace between its words. Shingles
 tokenise like v1's `normalise` and drop nothing, and **no window is exempt for lying inside one whitespace token**: a passage joined with `/` or `-`
 is one token and still a hit (the risk consult's D52(3) closed the earlier "one-token" exemption, which was a bypass). A path or URL is not a hit only
-because the approved public texts hold its words. A finding says how many tokens its window spans (`[window spans N tokens]`), never which words. A six-word run that the parent plan or the stories document already holds is public and is not an
-aid hit; the **approved public texts** are an explicit, reviewed set (D52(3)): the two plan files and the files named by
+because the approved public texts hold its words. A finding says how many tokens its window spans (`[window spans N tokens]`), never which words. In the bench's own branch check (`--self`, and a bench body) a six-word run that the approved public texts already hold is not an aid hit. **In the task
+repository (a branch, and a task PR body: `--text` without `--self`) only a window that spans at most two whitespace tokens and that the public texts hold
+verbatim is exempt** (a path, a URL, the README's bench pointer): an aid sentence that also stands in a public plan is a hit there (re-review N2). The **approved public texts** are an explicit, reviewed set (D52(3)): the two plan files and the files named by
 `spikes/lang-bench/inputs/public-texts.json` (schema 1, a `texts` list; absent at the ref means no extras), read at `origin/main` of the bench
 repository with one `git cat-file --batch` per stage, never from the working tree and never "every markdown file" (a private paragraph spread over
 two unlisted public files stays a hit); an unreadable text, an invalid list or a missing listed file is exit 3 (`--public <file>` names the public texts

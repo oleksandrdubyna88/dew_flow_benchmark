@@ -14,31 +14,45 @@ const shinglesOf = text => {
 };
 
 /**
- * ok({ shingles: Map(shingle -> aid name), literals: [lower-case token] }) or a fail naming the aid that holds no six words - or none
- * that is not already public. `publicTexts` (the parent plan and the stories document) are public by definition, so a shingle they hold
- * (a path, a title the aid quotes) can leak nothing and is dropped; an aid reduced to nothing would check nothing and is refused.
+ * ok({ shingles, allShingles, publicShingles, literals }) or a fail naming the aid that holds no six words - or none that is not already public.
+ * `shingles` (Map shingle -> aid name) leaves out what the approved public texts already hold: the BENCH rule (`mode: 'self'`), under which
+ * a published run cannot leak anything. `allShingles` keeps every aid run and `publicShingles` is what the public texts hold: the TASK
+ * repository rule (`mode: 'task'`) exempts a public run only in the narrow case of `exemptInTask`. An aid with no run of its own would check
+ * nothing and is refused.
  */
 export function aidNeedles({ aids, tokensText = '', publicTexts = [] }) {
   const publicShingles = new Set(publicTexts.flatMap(text => [...shinglesOf(text)]));
   const shingles = new Map();
+  const allShingles = new Map();
   for (const aid of aids) {
-    const own = [...shinglesOf(aid.text)].filter(s => !publicShingles.has(s));
+    const all = [...shinglesOf(aid.text)];
+    const own = all.filter(s => !publicShingles.has(s));
     if (own.length === 0) return fail(`aid ${aid.name} holds no ${SHINGLE_WORDS}-word run that is not already public: it would check nothing`);
     for (const s of own) if (!shingles.has(s)) shingles.set(s, aid.name);
+    for (const s of all) if (!allShingles.has(s)) allShingles.set(s, aid.name);
   }
   const tokens = tokensText.trim() === '' ? ok([]) : parseTokens(tokensText);
-  return tokens.ok ? ok({ shingles, literals: tokens.value.map(t => t.toLowerCase()) }) : tokens;
+  return tokens.ok ? ok({ shingles, allShingles, publicShingles, literals: tokens.value.map(t => t.toLowerCase()) }) : tokens;
 }
 
-function shingleHits(path, text, shingles) {
+/** The most whitespace tokens a window may span and still be exempt in the task repository: a path, a URL, a repository name beside a path. */
+export const TASK_EXEMPT_TOKENS = 2;
+
+/** Task rule: a public window is exempt only when it spans at most TASK_EXEMPT_TOKENS tokens of the checked text. */
+const exemptInTask = (window, key, publicShingles) => publicShingles.has(key) && new Set(window.map(w => w.token)).size <= TASK_EXEMPT_TOKENS;
+
+function shingleHits(path, text, needles, mode) {
   const words = wordsWithLines(text);
+  const task = mode === 'task';
+  const lookup = task ? needles.allShingles : needles.shingles;
   const seen = new Set();
   const hits = [];
   for (let i = 0; i + SHINGLE_WORDS <= words.length; i += 1) {
     const window = words.slice(i, i + SHINGLE_WORDS);
-    const aid = shingles.get(window.map(w => w.word).join(' '));
-    const key = aid === undefined ? null : `${words[i].line}\0${aid}`;
-    if (key !== null && !seen.has(key)) { seen.add(key); hits.push({ path, line: words[i].line, what: `shingle of ${aid}`, tokens: new Set(window.map(w => w.token)).size }); }
+    const key = window.map(w => w.word).join(' ');
+    const aid = task && exemptInTask(window, key, needles.publicShingles) ? undefined : lookup.get(key);
+    const dedupe = aid === undefined ? null : `${words[i].line}\0${aid}`;
+    if (dedupe !== null && !seen.has(dedupe)) { seen.add(dedupe); hits.push({ path, line: words[i].line, what: `shingle of ${aid}`, tokens: new Set(window.map(w => w.token)).size }); }
   }
   return hits;
 }
@@ -50,9 +64,12 @@ function literalHits(path, text, literals) {
   });
 }
 
-/** Every aid shingle and literal token found in `text`, ordered by line. */
-export function findAidHits(path, text, { shingles, literals }) {
-  return [...shingleHits(path, text, shingles), ...literalHits(path, text, literals)].sort((a, b) => a.line - b.line);
+/**
+ * Every aid shingle and literal token found in `text`, ordered by line. `mode` is 'self' (the bench's own branch: every published run is
+ * exempt, the default) or 'task' (the task repository and its PR bodies: only a public window of at most two tokens is).
+ */
+export function findAidHits(path, text, needles, { mode = 'self' } = {}) {
+  return [...shingleHits(path, text, needles, mode), ...literalHits(path, text, needles.literals)].sort((a, b) => a.line - b.line);
 }
 
 const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { checkBranch as checkBranchAgainst, checkSelf, checkText, EXIT, formatReport } from '../lib/push-check.mjs';
 import { TASK_REPO_URL } from '../lib/push-remote.mjs';
 import { commit, git, makeOrigin, makeTaskRepo } from './support/push-fixtures.mjs';
+import { aidNeedles } from '../lib/push-needles.mjs';
 import { loadInputsForTest, realCredits } from './support/push-inputs.mjs';
 
 const AID_TEXT = 'Header.\nA widget that frobnicates every sprocket twice before lunch will stall.\nFooter.\n';
@@ -448,4 +449,17 @@ test('A_blob_already_published_is_not_read_or_counted_toward_the_size_ceiling', 
   commit(repo, 'feat: a clean file', { 'tasks/01/s01.in': '5\n' });
   const result = await run(repo, { limits: { maxTotalBytes: 40 } });
   assert.equal(result.exit, EXIT.PASS, formatReport(result));
+});
+
+test('The_task_repository_and_a_task_PR_body_do_not_exempt_a_plan_sentence_and_the_bench_does', async t => {
+  const sentence = 'the violet engine whistles beneath seven copper bridges at dawn';
+  const needles = aidNeedles({ aids: [{ name: 'synthetic-aid.md', text: `Notes.\n${sentence}.\n` }], publicTexts: [`A published plan says ${sentence}.\n`] }).value;
+  const withPublic = { ...inputs, aids: needles };
+  const { repo } = branchWith(t, { 'notes/x.md': `we copied ${sentence} here\n` });
+  const taskBranch = await checkBranch({ repo, branch: 'topic', inputs: withPublic });
+  assert.equal(taskBranch.exit, EXIT.REFUSED, 'a task branch carrying a plan sentence is refused');
+  assert.equal((await checkSelf({ repo, branch: 'topic', inputs: withPublic })).exit, EXIT.PASS, 'the bench keeps the exemption');
+  const body = `PR body: ${sentence}\n`;
+  assert.equal(checkText({ text: body, label: 'b.md', inputs: withPublic }).exit, EXIT.REFUSED, 'a task PR body is checked like the task repository');
+  assert.equal(checkText({ text: body, label: 'b.md', inputs: withPublic, self: true }).exit, EXIT.PASS, 'a bench PR body is not');
 });
