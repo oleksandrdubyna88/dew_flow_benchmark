@@ -121,6 +121,13 @@ sessions, so its rule stays the manual `push-check.mjs --self --branch <b>` run 
 refuses a repository that holds `spikes/lang-bench/push-check.mjs` or whose origin is not the task repository. The team lead installs it in
 `/home/jinx/git/dew_flow_ai_language_comparison` after review.
 
+**What the hook cannot do (N5), and where to install it from.** The hook is **client-side only**: it runs on this machine for a person or agent who pushes with
+git here; it does not stop `git push --no-verify`, a push from another clone or machine, or a write made through the GitHub API or web UI. That is inherent in a
+git hook, so the rest of the defence stays what it is (the PAT without Workflows, rulesets, the review of every PR, the check on PR bodies). **Install it from
+the MAIN bench checkout (`/home/jinx/git/dew_flow_benchmark`), once this story is merged and that checkout is updated, not from a worktree:** the hook bakes the absolute
+path of the `push-check.mjs` it was installed from, and a worktree is removed when its branch is done, which would leave a hook that refuses every push (it fails closed:
+"bench checkout not found").
+
 **The named checks** (one line each): `leakcheck` (six-word shingles of the two private aids, read from `~/rsd/lang-v2/test-design/` at run time,
 and the literal tokens of `leak-tokens.txt` in that folder when it is present, or of `--tokens`), `secrets` (named shapes: fine-grained token,
 `gh[pousr]_`, Anthropic key, any `BEGIN … PRIVATE KEY`, AWS key id; and the values of the two real secret files `~/.config/lang-v2/github-pat` and
