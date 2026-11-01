@@ -1,7 +1,10 @@
 """Every wait is `os.pidfd_open` + `select` with the exact remaining time, and the wall rule decides on one clock (E1.S8a part ii-a; B6, P3, the
 pilot's F1). The margins here are wide on purpose: the machine may be loaded by other runs."""
 import ast
+import contextlib
 import os
+import selectors
+import subprocess
 import time
 import unittest
 from unittest import mock
@@ -16,6 +19,7 @@ from box_support import ANSWER, Workspace, box_prefix, case, fake_box, fake_cgro
 REPLAY = "cat answer.bin\n"
 FILES = {"answer.bin": ANSWER}
 LIMIT_MS = 310
+LATE_MS = 200
 PAST_THE_LIMIT_MS = 20
 STUB = f"sleep 0.{LIMIT_MS + PAST_THE_LIMIT_MS:03d}\ncat answer.bin\n"
 NS = ex.NS_PER_MS
@@ -33,24 +37,58 @@ def polling_accepts(limit_ms, exit_ms, tick_ms=50):
         at += tick_ms
 
 
+def polling_run(self, deadline_ns):
+    """The refuted wait: Popen.wait(timeout=...) polling; whatever returns before TimeoutExpired is taken as in time (it can say no more:
+    it cannot tell when the exit happened, only that its wait returned)."""
+    try:
+        self.proc.wait(timeout=max(0, deadline_ns - ex.now_ns()) / 1e9)
+    except subprocess.TimeoutExpired:
+        return "timeout"
+    self.exit_ns = min(ex.now_ns(), deadline_ns)
+    return self.drain()
+
+
+@contextlib.contextmanager
+def late_wakeups(late_s):
+    """Every sleep and every select of the process wakes `late_s` late and looks at the world only then: a scheduler that is behind."""
+    real_sleep, real_select = time.sleep, selectors.EpollSelector.select
+
+    def sleep(seconds):
+        real_sleep(seconds + late_s)
+
+    def select(selector, timeout=None):
+        real_sleep(late_s)
+        return real_select(selector, timeout)
+
+    with mock.patch.object(time, "sleep", sleep), mock.patch.object(selectors.EpollSelector, "select", select):
+        yield
+
+
 def outcome(end, wall_ns):
     return ro.Outcome(end, wall_ns, 0, False, rp.NOT_CERTIFIED, None, {})
 
 
 class WaitTests(unittest.TestCase):
     def test_A_polling_wait_would_accept_an_exit_fifty_ms_past_the_limit_and_that_is_the_point(self):
-        self.assertTrue(polling_accepts(LIMIT_MS, LIMIT_MS + PAST_THE_LIMIT_MS + 5), "the refuted wait calls a 335 ms exit in time against 310 ms")
-        result = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
-        self.assertEqual((result.status, result.reason[:10]), ("FAIL", "time limit"), "the stub needs 20 ms more than the limit: no pass")
-        original = rs_pump.Pump.step
+        # Lateness is injected where BOTH mechanisms wake up: every sleep and every select returns LATE_MS after it should, and the process
+        # has been examined only then. The refuted wait (Popen.wait(timeout) polling, "it returned" taken as "in time") is run beside the real
+        # pump on the same stub; this test is red under that wait and red without the wall rule.
+        self.assertTrue(polling_accepts(LIMIT_MS, LIMIT_MS + PAST_THE_LIMIT_MS + 5), "the model of the refuted wait")
+        timed_waits, real_wait = [], subprocess.Popen.wait
 
-        def late(pump, timeout_s):
-            time.sleep((LIMIT_MS + 100) / 1000)  # the runner wakes a whole tick late: the stub is found already exited
-            return original(pump, timeout_s)
+        def counting_wait(proc, *args, **kwargs):
+            timed_waits.extend([(args, kwargs)] if args or kwargs else [])
+            return real_wait(proc, *args, **kwargs)
 
-        with mock.patch.object(rs_pump.Pump, "step", late):
-            result = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
-        self.assertEqual((result.status, result.reason[:10]), ("FAIL", "time limit"), "exited by itself, exact output, wall over the limit")
+        with late_wakeups(LATE_MS / 1000):
+            with mock.patch.object(rs_pump.Pump, "run", polling_run):
+                refuted = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
+            timed_waits.clear()
+            with mock.patch.object(subprocess.Popen, "wait", counting_wait):
+                result = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
+        self.assertEqual((refuted.status, refuted.reason), ("PASS", ""), "the refuted wait calls the late exit in time: that is the point")
+        self.assertEqual(timed_waits, [], "the real wait is a pidfd and a select: it never calls Popen.wait with a timeout")
+        self.assertEqual((result.status, result.reason[:10]), ("FAIL", "time limit"), "pidfd + select with the wall rule: exited by itself, exact output, wall over the limit")
         self.assertGreater(result.wall_ms, LIMIT_MS)
 
     def test_The_wait_ends_at_the_limit_and_not_when_the_program_chooses(self):
