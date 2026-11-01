@@ -2,6 +2,7 @@
 // exactly SDK 10.0.403 (runtime 10.0.14), Node 26.13.0, TypeScript at the pinned 6.0 patch, the pinned Python binary, the German locale generated.
 // `judgeProbes` is pure (probe outputs in, problems out, each naming the pin and the value seen); `preflightLang` runs the probes INSIDE a bwrap box
 // that binds the pinned directories read-only, built from v1's primitives (`spikes/minigit-bench/lib/bwrap.mjs`) until the execution layer's box exists.
+import { existsSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { bwrapFacts } from '../../minigit-bench/lib/host-checks.mjs';
@@ -73,9 +74,9 @@ function factsFrom(probes, stacks) {
   };
 }
 
-/** The probes' outputs (`{ node, dotnetSdks, dotnetRuntimes, tsc, pythonSha256, locales }`, stdout text or `null` for a probe that did not run) against the pins. */
-export function judgeProbes({ probes, stacks }) {
-  const problems = Object.entries(CHECKS).map(([name, check]) => (probes[name] === null || probes[name] === undefined ? didNotRun(stacks, name) : check(probes[name], stacks))).filter(Boolean);
+/** The probes' outputs (`{ node, dotnetSdks, dotnetRuntimes, tsc, pythonSha256, locales }`, stdout text or `null` for a probe that did not run) against the pins. `skip` names probes that were refused before they ran (their refusal is already a problem). */
+export function judgeProbes({ probes, stacks, skip = [] }) {
+  const problems = Object.entries(CHECKS).filter(([name]) => !skip.includes(name)).map(([name, check]) => (probes[name] === null || probes[name] === undefined ? didNotRun(stacks, name) : check(probes[name], stacks))).filter(Boolean);
   return { ok: problems.length === 0, problems, facts: factsFrom(probes, stacks) };
 }
 
@@ -113,6 +114,45 @@ export async function scanDotnetInBox({ prefix, pinnedDotnet, boxPath = [] }) {
   return { problems: judgeDotnetHits({ hits, pinnedReal: reals[0], pinnedDotnet, boxPath }), hits };
 }
 
+/** The tool each probe runs, and where the pinned one is: `{ node, tsc, dotnet }` -> the file inside the store. */
+const TOOL_OF = Object.freeze({ node: 'node', tsc: 'tsc', dotnetSdks: 'dotnet', dotnetRuntimes: 'dotnet' });
+const pinnedExecutables = dirs => ({ node: path.join(dirs.node, 'bin', 'node'), tsc: path.join(dirs.typescript, 'node_modules', 'typescript', 'bin', 'tsc'), dotnet: path.join(dirs.dotnetSdk, 'dotnet') });
+
+/**
+ * One probe executable against the pinned file: `hit` is what `which` found first on the box's PATH, `real` its in-box `readlink -f`, `pinnedReal` the pinned file's.
+ * A different real file (a fake `node` that prints the pinned version, earlier on the PATH) is a problem, and the probe is never run. `null` when it is the pinned one.
+ */
+export function judgeProbeExecutable({ name, hit, real, pinnedReal, pinnedPath }) {
+  if (hit === null || hit === undefined) return `no ${name} on the box's PATH; the pinned one is ${pinnedPath}`;
+  return real === pinnedReal ? null : `the ${name} the box's PATH reaches first is ${SHOWN(hit, real)}, not the pinned ${pinnedPath}: it was not run, and its answers cannot be trusted`;
+}
+
+/**
+ * Resolve every executable the probes run INSIDE the box (`which <name>`, then `readlink -f` of the hit and of the pinned file, both in the box) before any of them runs:
+ * `{ problems, refused }` where `refused` lists the probe names that must not run (TypeScript's `tsc` is a Node script, so a refused `node` refuses it too).
+ */
+export async function resolveProbeExecutables({ prefix, dirs, python }) {
+  const pinned = pinnedExecutables(dirs);
+  const problems = [];
+  const bad = new Set();
+  for (const [tool, pinnedPath] of Object.entries(pinned)) {
+    const which = await runInBox(prefix, ['/usr/bin/which', tool]);
+    const hit = outputLines(which?.stdout)[0] ?? null;
+    const resolved = await runInBox(prefix, ['/usr/bin/readlink', '-f', pinnedPath, ...(hit === null ? [] : [hit])]);
+    const [pinnedReal, real = null] = outputLines(resolved?.stdout);
+    const problem = pinnedReal === undefined ? `\`readlink -f ${pinnedPath}\` did not run inside the box, so the ${tool} cannot be identified` : judgeProbeExecutable({ name: tool, hit, real, pinnedReal, pinnedPath });
+    if (problem !== null) { problems.push(problem); bad.add(tool); }
+  }
+  const py = await runInBox(prefix, ['/usr/bin/readlink', '-f', python.path]);
+  const pythonReal = outputLines(py?.stdout)[0] ?? null;
+  const hostReal = existsSync(python.path) ? realpathSync(python.path) : null;
+  const pyProblem = pythonReal === null ? `\`readlink -f ${python.path}\` did not run inside the box, so the python3 cannot be identified` : judgeProbeExecutable({ name: 'python3', hit: python.path, real: pythonReal, pinnedReal: hostReal, pinnedPath: python.path });
+  if (pyProblem !== null) problems.push(pyProblem);
+  if (bad.has('node')) bad.add('tsc');
+  const refused = Object.entries(TOOL_OF).filter(([, tool]) => bad.has(tool)).map(([name]) => name);
+  return { problems, refused, pinned, pythonReal };
+}
+
 export { boxArgv, defaultBoxPath };
 
 /** One probe's stdout from inside the box (the exe is looked up on the BOX's PATH), or `null` when it did not run, failed or timed out. */
@@ -142,10 +182,13 @@ async function environmentProblems(hostPath) {
 
 async function probeAndJudge({ stacks, dirs, pathDirs, operatorHome, extraRoBinds, hostPath }) {
   const prefix = boxArgv({ bwrap: findOnPath('bwrap', hostPath), dirs, boxPath: pathDirs, operatorHome, extraRoBinds });
-  const probes = Object.fromEntries(await Promise.all(Object.keys(stacks.probes).map(async name => [name, await probeInBox({ prefix, argv: probeArgvFor(name, stacks) })])));
-  const scan = await scanDotnetInBox({ prefix, pinnedDotnet: path.join(dirs.dotnetSdk, 'dotnet'), boxPath: pathDirs });
-  const verdict = judgeProbes({ probes, stacks });
-  return { ...verdict, problems: [...scan.problems, ...verdict.problems] };
+  const executables = await resolveProbeExecutables({ prefix, dirs, python: stacks.python });
+  const probeNames = Object.keys(stacks.probes).filter(name => !executables.refused.includes(name));
+  const argvOf = name => [...(TOOL_OF[name] ? [executables.pinned[TOOL_OF[name]], ...probeArgvFor(name, stacks).slice(1)] : probeArgvFor(name, stacks))];
+  const probes = Object.fromEntries(await Promise.all(probeNames.map(async name => [name, await probeInBox({ prefix, argv: argvOf(name) })])));
+  const scan = await scanDotnetInBox({ prefix, pinnedDotnet: executables.pinned.dotnet, boxPath: pathDirs });
+  const verdict = judgeProbes({ probes, stacks, skip: executables.refused });
+  return { ...verdict, facts: { ...verdict.facts, pythonReal: executables.pythonReal }, problems: [...executables.problems, ...scan.problems, ...verdict.problems] };
 }
 
 /**

@@ -1,14 +1,14 @@
 // E1.S5: the preflight — what must be true of the box before a gate, a reference or a session runs on it. The judgement is pure (probe outputs in,
 // problems out, each naming the pin and the value seen); the probes themselves run inside a bwrap box that binds the pinned directories.
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
 import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
-import { boxArgv, judgeDotnetHits, judgeProbes, preflightLang, probeArgvFor, scanDotnetInBox } from '../lib/preflight-lang.mjs';
+import { boxArgv, judgeDotnetHits, judgeProbeExecutable, judgeProbes, preflightLang, probeArgvFor, resolveProbeExecutables, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { sealTree, treeRecord, unsealTree } from '../lib/toolchain-store.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
@@ -111,6 +111,29 @@ test('A_box_PATH_with_no_dotnet_at_all_is_refused_and_so_is_one_without_the_pinn
   assert.match(none[0], /no dotnet/);
   const other = judgeDotnetHits({ hits: [hit('/opt/dotnet', '/opt/real/dotnet')], pinnedReal: PINNED, pinnedDotnet: PINNED, boxPath: ['/opt'] });
   assert.ok(other.some(p => /pinned dotnet .* is not on the box's PATH/.test(p)), other.join('\n'));
+});
+
+test('A_probe_executable_whose_real_file_is_not_the_pinned_one_is_refused_naming_both_before_it_runs', () => {
+  assert.equal(judgeProbeExecutable({ name: 'node', hit: '/store/node/bin/node', real: '/store/node/bin/node', pinnedReal: '/store/node/bin/node', pinnedPath: '/store/node/bin/node' }), null);
+  const fake = judgeProbeExecutable({ name: 'node', hit: '/fake/node', real: '/fake/node', pinnedReal: '/store/node/bin/node', pinnedPath: '/store/node/bin/node' });
+  assert.match(fake, /node.*\/fake\/node.*\/store\/node\/bin\/node/s);
+  assert.match(judgeProbeExecutable({ name: 'tsc', hit: null, real: null, pinnedReal: '/p', pinnedPath: '/p' }), /no tsc on the box's PATH/);
+  assert.equal(judgeProbeExecutable({ name: 'tsc', hit: '/store/ts/node_modules/.bin/tsc', real: '/store/ts/node_modules/typescript/bin/tsc', pinnedReal: '/store/ts/node_modules/typescript/bin/tsc', pinnedPath: '/p' }), null, 'a link to the pinned file is the pinned file');
+});
+
+test('The_Python_the_box_resolves_must_be_the_one_the_host_resolves_for_the_pinned_path', async t => {
+  if (!gate(t)) return;
+  const fixture = ownedFolder(t, 'fakepy');
+  const fakeRoot = path.join(fixture, 'python3');
+  writeFileSync(fakeRoot, '#!/bin/sh\n');
+  chmodSync(fakeRoot, 0o755);
+  const overlay = { host: fakeRoot, box: stacks.python.path }; // a caller's bind that puts another file at the pinned Python path
+  const result = await preflightLang({ stacks, storeRoot, withApphost: false, extraRoBinds: [overlay] });
+  assert.equal(result.ok, false);
+  assert.ok(result.problems.length >= 1, 'another file at the pinned Python path is refused (by its checksum, or by where it resolves)');
+  const plain = await preflightLang({ stacks, storeRoot, withApphost: false });
+  assert.equal(plain.ok, true, JSON.stringify(plain));
+  assert.equal(plain.value.facts.pythonReal, realpathSync(stacks.python.path));
 });
 
 test('The_preflight_box_has_no_network_a_hidden_home_and_only_the_pinned_directories_bound_back_read_only', () => {
@@ -227,6 +250,23 @@ test('The_preflight_refuses_a_box_whose_PATH_reaches_a_second_dotnet_in_the_box'
   assert.match(result.problems.join('\n'), new RegExp(`second dotnet.*${path.join(fixture, 'dotnet')}`, 's'));
 });
 
+test('A_fake_node_earlier_on_the_box_PATH_is_refused_and_never_trusted', async t => {
+  if (!gate(t)) return;
+  const fixture = ownedFolder(t, 'fakenode');
+  writeFileSync(path.join(fixture, 'node'), `#!/bin/sh\necho v${stacks.pins.node}\n`);
+  chmodSync(path.join(fixture, 'node'), 0o755);
+  const box = realBox(fixture);
+  const defaults = [box.dirs.dotnetSdk, path.join(box.dirs.node, 'bin'), path.join(box.dirs.typescript, 'node_modules', '.bin')];
+  const refused = await preflightLang({ stacks, storeRoot, boxPath: [fixture, ...defaults], withApphost: false, extraRoBinds: [{ host: fixture, box: fixture }] });
+  assert.equal(refused.ok, false, 'the fake prints the pinned version and must still not pass');
+  assert.match(refused.problems.join('\n'), new RegExp(`node.*${path.join(fixture, 'node')}.*${path.join(box.dirs.node, 'bin', 'node')}`, 's'));
+  const resolved = await resolveProbeExecutables({ prefix: box.prefix([fixture, ...defaults]), dirs: box.dirs, python: stacks.python });
+  assert.deepEqual(resolved.refused.sort(), ['node', 'tsc'], 'tsc is a Node script (env node), so a refused node refuses it too: it must not run under the fake');
+  assert.equal(resolved.pinned.node, path.join(box.dirs.node, 'bin', 'node'), 'and the probe runs the pinned file by its absolute path');
+  const behind = await preflightLang({ stacks, storeRoot, boxPath: [...defaults, fixture], withApphost: false, extraRoBinds: [{ host: fixture, box: fixture }] });
+  assert.equal(behind.ok, true, `a fake BEHIND the pinned node is never reached: ${JSON.stringify(behind)}`);
+});
+
 test('A_symlinked_directory_on_the_PATH_leading_to_the_pinned_dotnet_is_one_dotnet_and_one_leading_elsewhere_is_two', async t => {
   if (!gate(t)) return;
   const fixture = ownedFolder(t, 'linkdirs');
@@ -296,7 +336,9 @@ function scriptStore(t) {
   exe(path.join(root, d.dotnetSdk), 'dotnet', `case "$1" in --list-sdks) echo "${stacks.pins.dotnetSdk} [/x/sdk]";; --list-runtimes) echo "Microsoft.NETCore.App ${stacks.pins.dotnetRuntime} [/x/shared]";; esac`);
   mkdirSync(path.join(root, d.dotnetSdk, 'sdk', stacks.pins.dotnetSdk), { recursive: true });
   exe(path.join(root, d.node), 'bin/node', `echo v${stacks.pins.node}`);
-  exe(path.join(root, d.typescript), 'node_modules/.bin/tsc', `echo "Version ${stacks.pins.typescript}"`);
+  exe(path.join(root, d.typescript), 'node_modules/typescript/bin/tsc', `echo "Version ${stacks.pins.typescript}"`);
+  mkdirSync(path.join(root, d.typescript, 'node_modules', '.bin'), { recursive: true });
+  symlinkSync('../typescript/bin/tsc', path.join(root, d.typescript, 'node_modules', '.bin', 'tsc'));
   const recorded = { ...stacks, treeSha256: Object.fromEntries(Object.entries(d).map(([name, dir]) => [name, treeRecord(path.join(root, dir))])) };
   for (const dir of Object.values(d)) sealTree(path.join(root, dir));
   return { root, recorded, dirs: Object.fromEntries(Object.entries(d).map(([name, dir]) => [name, path.join(root, dir)])) };
