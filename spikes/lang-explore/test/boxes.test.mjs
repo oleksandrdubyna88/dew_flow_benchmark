@@ -1,5 +1,5 @@
 // Inside the boxes (plan T-X4 and D38): the locale reaches both boxes for both stacks (`LANG` / `LC_ALL` `de_DE.UTF-8`, .NET `CurrentCulture` `de-DE`, Node's `Intl` locale `de...`), and the process
-// `run.sh` starts is `dotnet` or `node`, not `bash`. The workspaces are the pilot's templates with a four-line program; the spec text is not needed, so no task repository is read.
+// `run.sh` starts is `dotnet` or `node`, not `bash`. The workspaces are the pilot's templates with a four-line program; the spec text is a stand-in with one readable sample (the workspace refuses a spec whose samples table it cannot read), so no task repository is read.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -15,7 +15,7 @@ import { loadExplore } from '../lib/inputs.mjs';
 import { fillWorkspace, workspaceFiles } from '../lib/workspace.mjs';
 
 const EXPLORE = loadExplore().value;
-const NO_SPEC = { spec: '# Task 01 — x\n', format: '# F\n\n## 3. Visible samples\n\nx\n\n## 6. Worked examples\n' };
+const NO_SPEC = { spec: '# Task 01 — x\n\n## 6. Visible samples\n\n| Id | Standard input | Expected standard output |\n|---|---|---|\n| `s01` | `1⏎` | `1⏎` |\n', format: '# F\n\n## 3. Visible samples\n\nx\n\n## 6. Worked examples\n' };
 const CS_PROGRAM = 'using System.Globalization;\nConsole.Out.Write($"{CultureInfo.CurrentCulture.Name}|{Environment.GetEnvironmentVariable("LANG")}|{Environment.GetEnvironmentVariable("LC_ALL")}\\n");\n';
 const NODE_PROGRAM = "process.stdout.write(`${new Intl.DateTimeFormat().resolvedOptions().locale}|${process.env.LANG}|${process.env.LC_ALL}\\n`);\n";
 const SOURCES = { csharp: ['src/Program.cs', CS_PROGRAM], node: ['src/main.ts', NODE_PROGRAM] };

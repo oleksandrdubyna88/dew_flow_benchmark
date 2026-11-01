@@ -8,11 +8,13 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { hostLacks, tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
+import { resolveTask } from '../lib/tasks.mjs';
 import { JUDGE_SOURCE, candidateRepos, fillWorkspace, fillerFor, frozenChanges, grammarOf, loadSources, samplesOf, stackSentence, statementOf, workspaceFiles } from '../lib/workspace.mjs';
 import { pristineCopy } from '../lib/score.mjs';
 import { REPO } from '../lib/paths.mjs';
 
 const EXPLORE = loadExplore().value;
+const TASK = resolveTask(EXPLORE, '01').value;
 const TYPES_NODE = JSON.parse(readFileSync(path.join(path.dirname(JUDGE_SOURCE), '..', 'inputs', 'cache-snapshots.json'), 'utf8')).node.resolved.TYPES_NODE;
 const ALWAYS = ['PACKAGES.md', 'STATEMENT.md', 'build.sh', 'run.sh', 'runner/GRAMMAR.md', 'runner/run_samples.py', 'samples/s01.in', 'samples/s01.out', 'samples/s02.in', 'samples/s02.out', 'samples/s03.in', 'samples/s03.out'];
 const PINS = { csharp: ['global.json', 'nuget.config', 'src/App.csproj'], node: ['.npmrc', 'package.json', 'tsconfig.json'] };
@@ -20,7 +22,7 @@ const PINS = { csharp: ['global.json', 'nuget.config', 'src/App.csproj'], node: 
 let sourcesOnce;
 /** The spec and FORMAT texts at their pins, or null when this host lacks the task repository. */
 async function sources(t) {
-  sourcesOnce ??= loadSources({ explore: EXPLORE, candidates: candidateRepos({ repoName: EXPLORE.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark') }) });
+  sourcesOnce ??= loadSources({ task: TASK, candidates: candidateRepos({ repoName: EXPLORE.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark') }) });
   const r = await sourcesOnce;
   return r.ok ? r.value : (hostLacks(t, r.reason) && null);
 }
@@ -108,20 +110,23 @@ test('A_sources_failure_names_the_pin_that_does_not_hold', async () => {
   const git = (...args) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@invalid', ...args], { encoding: 'utf8' });
   git('init', '-q');
   mkdirSync(path.join(repo, 'todo', 'tasks'), { recursive: true });
-  writeFileSync(path.join(repo, 'todo', 'tasks', 'spec.md'), 'spec\n');
+  const SPEC = 'spec\n\n## 6. Visible samples\n\n| Id | Standard input | Expected standard output |\n|---|---|---|\n| `s01` | `1⏎` | `1⏎` |\n';
+  writeFileSync(path.join(repo, 'todo', 'tasks', 'spec.md'), SPEC);
   writeFileSync(path.join(repo, 'todo', 'tasks', 'FORMAT.md'), 'format\n');
   git('add', '.');
   git('commit', '-q', '-m', 'x');
   const sha = git('rev-parse', 'HEAD').trim();
   const pin = (file, text) => ({ sha, path: `todo/tasks/${file}`, sha256: require_sha(text) });
-  const explore = { specs: { spec01: pin('spec.md', 'spec\n'), format: pin('FORMAT.md', 'format\n') } };
-  const good = await loadSources({ explore, candidates: [repo] });
+  const task = { id: '77', spec: pin('spec.md', SPEC), format: pin('FORMAT.md', 'format\n') };
+  const good = await loadSources({ task, candidates: [repo] });
   assert.equal(good.ok, true, good.reason);
-  assert.deepEqual([good.value.spec, good.value.format], ['spec\n', 'format\n']);
-  const wrong = await loadSources({ explore: { specs: { ...explore.specs, format: { ...explore.specs.format, sha256: '0'.repeat(64) } } }, candidates: [repo] });
+  assert.deepEqual([good.value.spec, good.value.format], [SPEC, 'format\n']);
+  const wrong = await loadSources({ task: { ...task, format: { ...task.format, sha256: '0'.repeat(64) } }, candidates: [repo] });
   assert.equal(wrong.ok, false);
   assert.match(wrong.reason, /FORMAT\.md at .* hashes to/);
-  const none = await loadSources({ explore, candidates: [path.join(repo, 'nowhere')] });
+  const wrongSpec = await loadSources({ task: { ...task, spec: { ...task.spec, sha256: '1'.repeat(64) } }, candidates: [repo] });
+  assert.match(wrongSpec.reason, /the spec of task 77 at .* hashes to/, 'the spec pin of a task is checked like spec01\'s was');
+  const none = await loadSources({ task, candidates: [path.join(repo, 'nowhere')] });
   assert.equal(none.ok, false);
   assert.match(none.reason, /not found at its pins/);
 });

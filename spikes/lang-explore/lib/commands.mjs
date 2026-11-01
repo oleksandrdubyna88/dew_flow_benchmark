@@ -2,21 +2,22 @@
 // 3 a resumable halt | 4 usage, configuration or a refusal | 5 failed. `io.say` prints a line; `io.home` is the operator's home; nothing here reads the token except `run` (through `io.tokenFn`).
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { dayOf, systemClock } from './clock.mjs';
 import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
-import { leakcheck, normalise } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
-import { loadHeldout } from './heldout.mjs';
+import { decidedPublicText, leakShingles, leakcheckCommand } from './leak.mjs';
 import { loadExplore } from './inputs.mjs';
+import { pinsOfTask, seriesTaskProblem, taskFromValues } from './tasks.mjs';
 import { loadPrompts } from './plan.mjs';
 import { readbackOf } from './readback.mjs';
-import { exploreRoot, REPO, underHome } from './paths.mjs';
+import { exploreRoot, REPO } from './paths.mjs';
 import { noteFor, rehearse } from './rehearse.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadCalibration } from './limits.mjs';
 import { readToken, runPair } from './run.mjs';
-import { createSeries, latestSeries, loadSeries, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
+import { createSeries, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 
@@ -29,47 +30,84 @@ export async function subjectOf() {
   return { branch: branch ?? 'unknown', sha: sha ?? 'unknown', harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: v1.ok ? v1.value.slice(0, 12) : 'unknown', pilotIdentity: pilot ?? 'unknown' };
 }
 
-/** The series directory a command works on: `--series`, else the newest. */
-export function seriesDirOf(values, home) {
-  const dir = values.series ? path.resolve(values.series) : latestSeries(home);
-  return dir ? { ok: true, value: dir } : { ok: false, reason: `there is no series under ${exploreRoot(home)}: run \`explore.mjs init\` first` };
+/** The series directory a command works on: `--series` (which must be one of the explore root's own), else the newest series of `task`. */
+export function seriesDirOf(values, home, task) {
+  if (values.series) return seriesGiven(path.resolve(values.series), home);
+  const dir = latestSeries(home, task.id);
+  return dir ? seriesGiven(dir, home) : fail(`there is no series of task ${task.id} under ${exploreRoot(home)}: run \`explore.mjs init --task ${task.id}\` first`);
 }
+
+const seriesGiven = (dir, home) => { const outside = seriesRootProblem(home, dir); return outside ? fail(outside) : ok(dir); };
 
 const refused = (io, reason) => { io.say(reason); return EXIT.config; };
 const firstBad = (...results) => results.find(r => !r.ok);
 
-/** What the series' inputs record besides the limits: the subject, the interpreter, the CLI and the task pins. */
-async function initExtra(explore) {
-  return { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, prompts: loadPrompts() };
+/** What the series' inputs record besides the limits: the subject, the interpreter, the CLI and the pins of the series' task (its spec, FORMAT and private notes; the pins file's own `specs` block is task 1's). */
+async function initExtra(explore, task) {
+  return { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, taskPins: pinsOfTask(task), prompts: loadPrompts() };
 }
 
-/** `init`: create a series (the mask draw is made and recorded here). Needs `prepare` and `calibrate` done. */
+/** A series is made for a task of the olympiad plan only: task 1's series (`x-20261101-13cc`) is closed and records, notes and analysis rest on it. */
+const closedProblem = ({ explore, task }) => (explore.olympiad.planTasks.includes(task.id) ? null : `task ${task.id} is not a task of the olympiad plan (${explore.olympiad.planTasks.join(', ')}): its series is closed and no second one is made`);
+
+/** What `init` needs: the task, the pins and the task's calibration. -> `ok({ explore, task, calibration })` | `fail`. */
+function initNeeds(values, io) {
+  const given = taskFromValues(values, io.exploreFn);
+  const open = given.ok ? openForInit(given.value) : given;
+  if (!open.ok) return open;
+  const calibration = loadCalibration(io.home, given.value.task, () => ok(given.value.explore));
+  return calibration.ok ? ok({ ...given.value, calibration: calibration.value }) : calibration;
+}
+
+const openForInit = pins => { const closed = closedProblem(pins); return closed ? fail(closed) : ok(pins); };
+
+/** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
 export async function cmdInit(values, io) {
-  const explore = loadExplore();
-  const calibration = loadCalibration(io.home);
-  const bad = firstBad(explore, calibration);
-  if (bad) return refused(io, bad.reason);
-  const made = createSeries({ home: io.home, explore: explore.value, calibration: calibration.value, inputsExtra: await initExtra(explore.value) });
+  const need = initNeeds(values, io);
+  if (!need.ok) return refused(io, need.reason);
+  const { explore, task, calibration } = need.value;
+  const made = createSeries({ home: io.home, explore, calibration, task: task.id, inputsExtra: await initExtra(explore, task) });
   if (!made.ok) return refused(io, made.reason);
   io.say(`series ${made.value.state.seriesId} created at ${made.value.dir}`);
   io.say(`the mask draw (recorded): C# starts on ${made.value.state.draw.csharpHigh ? 'CPUs 8-13' : 'CPUs 0-5'} in pair 1; the stacks swap every pair`);
+  io.say(`task ${task.id} (${task.title}): run its pairs with \`run --task ${task.id} --series ${made.value.dir} --pair <k>\``);
   return EXIT.done;
 }
 
-/** Why `run`'s arguments cannot start a paid pair, or null: `--series` is a directory this command did not guess, `--pair` a positive integer. */
-function runArguments(values) {
-  if (!values.series) return 'run needs --series <dir>: a paid pair is never started on a series this command guessed (`explore.mjs init` prints the directory)';
-  if (!/^[1-9]\d*$/.test(String(values.pair ?? ''))) return `run needs --pair <k>, a positive whole number (got ${values.pair === undefined ? 'nothing' : `'${values.pair}'`})`;
-  return null;
+/** The series a command works on, opened and checked to be a series of `task`: `ok({ dir, state, map })` | `fail`. */
+function openSeriesOf(values, io, task) {
+  const dir = seriesDirOf(values, io.home, task);
+  const series = dir.ok ? loadSeries(dir.value) : dir;
+  const wrong = series.ok ? seriesTaskProblem({ state: series.value.state, task }) : null;
+  return wrong ? fail(wrong) : series;
 }
 
-/** `run --pair k [--rerun <stack>] [--accept-noisy <reason>]`: ONE pair. SPENDS MONEY. */
+/** Each way `run`'s arguments can be wrong, as `[wrong(values), sentence(values)]`. */
+const RUN_CHECKS = Object.freeze([
+  [v => !v.series, () => 'run needs --series <dir>: a paid pair is never started on a series this command guessed (`explore.mjs init` prints the directory)'],
+  [v => !/^[1-9]\d*$/.test(String(v.pair ?? '')), v => `run needs --pair <k>, a positive whole number (got ${v.pair === undefined ? 'nothing' : `'${v.pair}'`})`],
+  [v => v['allow-over'] !== undefined && v['allow-over'].trim() === '', () => 'run: --allow-over needs the owner\'s words and the date, e.g. --allow-over "the owner, 2026-11-02: go on"'],
+]);
+
+/** Why `run`'s arguments cannot start a paid pair, or null: `--series` is a directory this command did not guess, `--pair` a positive integer, `--allow-over` the owner's words when given. */
+const runArguments = values => RUN_CHECKS.find(([wrong]) => wrong(values))?.[1](values) ?? null;
+
+/** What `run` needs before it plans anything: the task, valid arguments and the task's series. -> `ok({ explore, task, series })` | `fail`. */
+function runSetup(values, io) {
+  const given = taskFromValues(values, io.exploreFn);
+  const asked = given.ok ? runArguments(values) : given.reason;
+  if (asked) return fail(asked);
+  const series = openSeriesOf(values, io, given.value.task);
+  return series.ok ? ok({ ...given.value, series: series.value }) : series;
+}
+
+/** `run --task NN --pair k [--rerun <stack>] [--accept-noisy <reason>] [--allow-over <text>]`: ONE pair. SPENDS MONEY. */
 export async function cmdRun(values, io) {
-  const asked = runArguments(values);
-  if (asked) return refused(io, asked);
-  const dir = seriesDirOf(values, io.home);
-  if (!dir.ok) return refused(io, dir.reason);
-  const r = await runPair({ seriesDir: dir.value, pair: Number(values.pair), rerun: values.rerun ?? null, io: { ...io, worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)), acceptNoisy: values['accept-noisy'] ?? null } });
+  const setup = runSetup(values, io);
+  if (!setup.ok) return refused(io, setup.reason);
+  const { explore, task, series } = setup.value;
+  const run = { ...io, worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)), acceptNoisy: values['accept-noisy'] ?? null, allowOver: values['allow-over'] ?? null };
+  const r = await runPair({ seriesDir: series.dir, pair: Number(values.pair), rerun: values.rerun ?? null, explore, task, io: run });
   io.say(r.message);
   (r.problems ?? []).forEach(p => io.say(`record problem: ${p}`));
   if (r.pairFile) io.say(`pair record: ${r.pairFile}`);
@@ -84,9 +122,11 @@ function sayRehearsal(io, r) {
   if (r.seriesDir) io.say(`rehearsal series: ${r.seriesDir} (note: rehearsal-note.md)`);
 }
 
-/** `rehearse`: the $0 end-to-end run with the stub CLI. */
+/** `rehearse --task NN`: the $0 end-to-end run with the stub CLI, over that task's material. */
 export async function cmdRehearse(values, io) {
-  const r = await rehearse({ io: { ...io, worldFn: io.worldFn ?? loadWorld, subject: await subjectOf() } });
+  const given = taskFromValues(values, io.exploreFn);
+  if (!given.ok) return refused(io, given.reason);
+  const r = await rehearse({ task: given.value.task, io: { ...io, worldFn: io.worldFn ?? loadWorld, subject: io.subject ?? await subjectOf() } });
   sayRehearsal(io, r);
   return r.exit;
 }
@@ -97,51 +137,46 @@ const pairLine = (map, p) => `pair ${p}: ${pairComplete(map, p) ? 'finished' : [
 
 /** The lines of `status`: the series, the pairs, every session. */
 export function statusLines({ dir, map, state }) {
-  const head = `series ${state.seriesId}${map.stopped ? `, STOPPED: ${map.stopped.rule}` : ''}; spend $${spentOf(dir).toFixed(4)}; draw: C# ${state.draw.csharpHigh ? '8-13' : '0-5'} in pair 1`;
+  const head = `series ${state.seriesId}${state.task ? ` (task ${state.task})` : ''}${map.stopped ? `, STOPPED: ${map.stopped.rule}` : ''}; spend $${spentOf(dir).toFixed(4)}; draw: C# ${state.draw.csharpHigh ? '8-13' : '0-5'} in pair 1`;
   return [head, ...Array.from({ length: state.pairs }, (_, i) => pairLine(map, i + 1)), ...Object.values(map.sessions).map(sessionLine)];
 }
 
-/** `status`: the sessions, the pairs and the spend of a series. */
+/** `status --task NN`: the sessions, the pairs and the spend of a series of that task. */
 export function cmdStatus(values, io) {
-  const dir = seriesDirOf(values, io.home);
-  if (!dir.ok) return refused(io, dir.reason);
-  const series = loadSeries(dir.value);
+  const given = taskFromValues(values, io.exploreFn);
+  if (!given.ok) return refused(io, given.reason);
+  const series = openSeriesOf(values, io, given.value.task);
   if (!series.ok) return refused(io, series.reason);
-  statusLines({ dir: dir.value, ...series.value }).forEach(l => io.say(l));
+  statusLines(series.value).forEach(l => io.say(l));
   return EXIT.done;
 }
 
-/** Where the note goes: `--out`, else `research/lang-v2/EXPLORE_task1_<the date of the SERIES' creation>.md` (never the date the command happens to run on). */
-export const notePathOf = (values, state) => values.out ?? path.join(REPO, 'research', 'lang-v2', `EXPLORE_task1_${state.createdAt.slice(0, 10)}.md`);
-
-/** The series a command works on, opened: `ok({ dir, state, map })` | `fail`. */
-function openSeriesOf(values, io) {
-  const dir = seriesDirOf(values, io.home);
-  return dir.ok ? loadSeries(dir.value) : dir;
-}
+/** Where the note goes: `--out`, else `research/lang-v2/EXPLORE_task<label>_<the date of the SERIES' creation>.md` (never the date the command happens to run on; task 1's label is `1`, as its recorded note is named). */
+export const notePathOf = (values, state, task) => values.out ?? path.join(REPO, 'research', 'lang-v2', `EXPLORE_task${task.noteLabel}_${state.createdAt.slice(0, 10)}.md`);
 
 const overwriteProblem = (out, force) => (existsSync(out) && !force ? `${out} exists: the note is not overwritten without --force` : null);
 
-/** What a note needs: the series, the world, the series' inputs and where to write; or the refusal. */
-async function noteInputs(values, io) {
-  const series = openSeriesOf(values, io);
+/** What a note needs: the series (of the task), the world, the series' inputs and where to write; or the refusal. */
+async function noteInputs(values, io, task) {
+  const series = openSeriesOf(values, io, task);
   if (!series.ok) return series;
-  const world = await (io.worldFn ?? loadWorld)({ home: io.home, work: path.join(series.value.dir, 'private') });
+  const world = await (io.worldFn ?? loadWorld)({ home: io.home, work: path.join(series.value.dir, 'private'), task });
   const inputs = seriesInputs(series.value.dir);
   const bad = firstBad(world, inputs);
   if (bad) return bad;
-  const out = notePathOf(values, series.value.state);
+  const out = notePathOf(values, series.value.state, task);
   const clash = overwriteProblem(out, values.force);
   return clash ? fail(clash) : ok({ dir: series.value.dir, series: series.value, world: world.value, inputs: inputs.value, out });
 }
 
-/** `note [--out file] [--force]`: the public note, generated from the series' records, under the limits the series was created with. An existing file is never overwritten without `--force`. */
+/** `note --task NN [--out file] [--force]`: the public note of that task's series, generated from its records, under the limits the series was created with. An existing file is never overwritten without `--force`. `io.subject` and `io.date` are for tests. */
 export async function cmdNote(values, io) {
-  const need = await noteInputs(values, io);
+  const given = taskFromValues(values, io.exploreFn);
+  const need = given.ok ? await noteInputs(values, io, given.value.task) : given;
   if (!need.ok) return refused(io, need.reason);
   const { dir, series, world, inputs, out } = need.value;
   mkdirSync(path.dirname(out), { recursive: true });
-  writeFileSync(out, noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration: { limits: inputs.limits } }, pins: world.explore, rehearsal: false, subject: await subjectOf() }));
+  writeFileSync(out, noteFor({ series: series.state, seriesDir: dir, map: series.map, world: { ...world, calibration: { limits: inputs.limits } }, pins: world.explore, task: given.value.task, rehearsal: false, subject: io.subject ?? await subjectOf(), date: io.date ?? dayOf(io.now ?? systemClock) }));
   io.say(`note written: ${out}`);
   return EXIT.done;
 }
@@ -156,13 +191,20 @@ const readAll = (dir, map, prompts) => plannedSessions(dir, map).map(s => readSe
 const allPass = read => read.length > 0 && read.every(x => x.rb.ok);
 const readSession = (dir, s, prompts) => ({ s, rb: readbackOf({ sessionDir: path.join(dir, 's', s.rid), registered: prompts[s.stack] }) });
 
-/** `readback [--series dir]`: what each session was really launched with, against the prompts frozen in its series and the registered environment (read back for every session, so one cell per stack is covered). */
+/** The series of the command's task with the prompts frozen in it. -> `ok({ series, prompts })` | `fail`. */
+function seriesAndPrompts(values, io) {
+  const given = taskFromValues(values, io.exploreFn);
+  const series = given.ok ? openSeriesOf(values, io, given.value.task) : given;
+  const prompts = series.ok ? seriesPrompts(series.value.dir) : series;
+  return prompts.ok ? ok({ series: series.value, prompts: prompts.value.prompts }) : prompts;
+}
+
+/** `readback --task NN [--series dir]`: what each session was really launched with, against the prompts frozen in its series and the registered environment (read back for every session, so one cell per stack is covered). */
 export function cmdReadback(values, io) {
-  const series = openSeriesOf(values, io);
-  if (!series.ok) return refused(io, series.reason);
-  const prompts = seriesPrompts(series.value.dir);
-  if (!prompts.ok) return refused(io, prompts.reason);
-  const read = readAll(series.value.dir, series.value.map, prompts.value.prompts);
+  const need = seriesAndPrompts(values, io);
+  if (!need.ok) return refused(io, need.reason);
+  const { series, prompts } = need.value;
+  const read = readAll(series.dir, series.map, prompts);
   read.forEach(({ s, rb }) => readbackLines(s, rb).forEach(l => io.say(l)));
   return allPass(read) ? EXIT.done : EXIT.failed;
 }
@@ -177,11 +219,13 @@ function pruneSession(root, rid) {
 const sessionIds = root => (existsSync(root) ? readdirSync(root) : []);
 const prunedLine = removed => `pruned ${removed.length} director${removed.length === 1 ? 'y' : 'ies'}: ${removed.join(', ') || 'nothing to remove'}`;
 
-/** `prune`: remove the cache copies and scoring copies of every session (reproducible); the records, streams and transcripts stay. */
+/** `prune --task NN`: remove the cache copies and scoring copies of every session of that task's series (reproducible); the records, streams, transcripts, ledger, calibration and the held-out folder stay. */
 export function cmdPrune(values, io) {
-  const dir = seriesDirOf(values, io.home);
-  if (!dir.ok) return refused(io, dir.reason);
-  const root = path.join(dir.value, 's');
+  const given = taskFromValues(values, io.exploreFn);
+  if (!given.ok) return refused(io, given.reason);
+  const series = openSeriesOf(values, io, given.value.task);
+  if (!series.ok) return refused(io, series.reason);
+  const root = path.join(series.value.dir, 's');
   io.say(prunedLine(sessionIds(root).flatMap(rid => pruneSession(root, rid))));
   return EXIT.done;
 }
@@ -202,48 +246,13 @@ export async function cmdQuiet(values, io) {
   return r.ok ? EXIT.done : EXIT.halt;
 }
 
-const BOILERPLATE = /^(?:using|import|from|export)\b|^[{}();,]*$/;
-const sourceLines = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).flatMap(e => readFileSync(path.join(e.parentPath, e.name), 'utf8').split('\n'));
-
-/** The literals the leak check looks for: every held-out expected output line, and every line of the references and mutants of at least 30 characters (generic shorter lines are in every program) that is not an import or bare punctuation. */
-export function leakNeedles(heldout) {
-  const outputs = readdirSync(heldout.casesDir).filter(f => f.endsWith('.out')).flatMap(f => readFileSync(path.join(heldout.casesDir, f), 'utf8').split('\n'));
-  const sources = ['refs', 'mutants'].map(d => path.join(heldout.dir ?? path.dirname(heldout.casesDir), d)).filter(existsSync).flatMap(sourceLines).map(l => l.trim()).filter(l => !BOILERPLATE.test(l) && l.length >= 30);
-  return [...new Set([...outputs.filter(l => l.length >= 8), ...sources])].join('\n');
-}
-
-/**
- * v1's shingles of the private test notes: every window of six consecutive words (normalised), one per line, except the windows that already occur in `publicText` (the plans and the pins file, whose
- * wording the team lead made public: the notes were written beside them and share phrases such as the spec's path).
- */
-export function leakShingles(notesText, publicText = '') {
-  const words = normalise(notesText).split(' ').filter(Boolean);
-  const windows = new Set(Array.from({ length: Math.max(0, words.length - 5) }, (_, i) => words.slice(i, i + 6).join(' ')));
-  const open = normalise(publicText);
-  return [...windows].filter(w => !open.includes(w)).join('\n');
-}
-
-/** The normalised text of the files whose wording is public by decision: the plans (`todo/PLAN_*.md`, and `research/PLAN_*.md` once promoted) and this spike's pins. */
-export function decidedPublicText(repo = REPO) {
-  const plansIn = dir => (existsSync(path.join(repo, dir)) ? readdirSync(path.join(repo, dir)).filter(f => /^PLAN_.*\.md$/.test(f)).map(f => path.join(repo, dir, f)) : []);
-  const plans = [...plansIn('todo'), ...plansIn('research')];
-  return [...plans, path.join(repo, 'spikes', 'lang-explore', 'inputs', 'explore.json')].filter(existsSync).map(f => readFileSync(f, 'utf8')).join('\n');
-}
-
-const leakLine = r => (r.ok ? `leakcheck clean: ${r.scanned} files and ${r.history.join(' + ') || 'no history'} scanned for the pilot's held-out outputs, reference lines and test-note shingles` : `leakcheck FAILED: ${r.reason}`);
-
-const notesOf = (explore, home) => { const f = underHome(explore.privateNotes.relativePath.split('/'), home); return existsSync(f) ? readFileSync(f, 'utf8') : ''; };
-
-/** `leakcheck [--range A..B]`: v1's leak check over the repository and the branch range, with the pilot's held-out expected outputs, the reference and mutant lines, and the private notes' shingles as the needles. */
+/** `leakcheck [--task NN] [--range A..B]`: see `leakcheckCommand`. */
 export async function cmdLeakcheck(values, io) {
-  const heldout = loadHeldout(io.home);
-  const explore = loadExplore();
-  const bad = firstBad(heldout, explore);
-  if (bad) return refused(io, bad.reason);
-  const shinglesText = leakShingles(notesOf(explore.value, io.home), decidedPublicText());
-  const r = await leakcheck({ repoRoot: REPO, tokensText: leakNeedles(heldout.value), shinglesText, ...(values.range ? { range: values.range } : {}) });
-  io.say(leakLine(r));
-  return r.ok ? EXIT.done : EXIT.failed;
+  const explore = (io.exploreFn ?? loadExplore)();
+  if (!explore.ok) return refused(io, explore.reason);
+  const r = await leakcheckCommand({ values, io, explore: explore.value, say: io.say });
+  if (r.message) io.say(r.message);
+  return r.exit;
 }
 
-export { EXIT };
+export { EXIT, decidedPublicText, leakShingles };

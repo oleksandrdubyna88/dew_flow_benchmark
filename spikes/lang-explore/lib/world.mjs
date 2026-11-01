@@ -36,16 +36,17 @@ export function pythonProblem(explore) {
 }
 
 /**
- * `ok(world)`: `explore`, `home`, `paths` (the pinned binaries), `snapshots`, `sources`, `filesFor(stack)` (the frozen workspace files), and `scoreFn({ stack, source, files, limits, sets, caches?, work? })` -> `ok(score)` | `fail`.
- * `fail` names the first thing missing (the pins, `prepare`, the task repository, the python pin).
+ * `ok(world)` for ONE task (`task` is its pins entry, see tasks.mjs): `explore`, `task`, `home`, `paths` (the pinned binaries), `snapshots`, `sources`, `filesFor(stack)` (the frozen workspace files), and
+ * `scoreFn({ stack, source, files, limits, sets, caches?, work? })` -> `ok(score)` | `fail`. `fail` names the first thing missing (the pins, `prepare`, the task repository, the python pin).
+ * `exploreFn` and `candidates` are for tests (a toy task over a toy repository); a real run passes neither.
  */
-export async function loadWorld({ home = os.homedir(), work }) {
-  const explore = loadExplore();
+export async function loadWorld({ home = os.homedir(), work, task, exploreFn = loadExplore, candidates }) {
+  const explore = exploreFn();
   if (!explore.ok) return explore;
   const snapshots = hostThings({ explore: explore.value, home });
   if (!snapshots.ok) return snapshots;
-  const sources = await sourcesFor({ explore: explore.value, home });
-  return sources.ok ? ok(worldOf({ explore: explore.value, home, snapshots: snapshots.value, sources: sources.value, work })) : sources;
+  const sources = await sourcesFor({ explore: explore.value, task, home, candidates });
+  return sources.ok ? ok(worldOf({ explore: explore.value, task, home, snapshots: snapshots.value, sources: sources.value, work })) : sources;
 }
 
 /** The snapshots, and the python pin: what `prepare` and the host must hold before anything is scored. */
@@ -54,10 +55,10 @@ function hostThings({ explore, home }) {
   return bad ? fail(bad) : snapshotsOf({ explore, home });
 }
 
-/** The spec and FORMAT texts at their pins from the task repository this host has. */
-const sourcesFor = ({ explore, home }) => loadSources({ explore, candidates: candidateRepos({ repoName: explore.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark'), home }) });
+/** The task's spec and FORMAT texts at their pins from the task repository this host has (`candidates` replaces the search, for tests). */
+const sourcesFor = ({ explore, task, home, candidates }) => loadSources({ task, candidates: candidates ?? candidateRepos({ repoName: explore.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark'), home }) });
 
-function worldOf({ explore, home, snapshots, sources, work }) {
+function worldOf({ explore, task, home, snapshots, sources, work }) {
   const paths = pinnedPaths(explore, home);
   const filesFor = stack => workspaceFiles({ explore, stack, sources, typesNode: snapshots.typesNode });
   const defaultCaches = stack => ({ nuget: path.join(snapshots.csharp.dir, 'nuget'), npm: path.join(snapshots.node.dir, 'npm'), stack });
@@ -65,5 +66,5 @@ function worldOf({ explore, home, snapshots, sources, work }) {
     explore, stack: args.stack, source: args.source, files: args.files ?? filesFor(args.stack), sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work,
     toolchains: { dirs: [paths.nodeDir, paths.tsDir], tsDir: paths.tsDir }, caches: args.caches ?? defaultCaches(args.stack), python: explore.python3.path, operatorHome: home, say: args.say,
   });
-  return { explore, home, paths, snapshots, sources, filesFor, scoreFn, work };
+  return { explore, task, home, paths, snapshots, sources, filesFor, scoreFn, work };
 }

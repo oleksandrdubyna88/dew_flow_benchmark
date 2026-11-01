@@ -1,8 +1,9 @@
-// The public note (plan section 5 and D-X10, T-X9): `research/lang-v2/EXPLORE_task1_<run date>.md`, GENERATED from the records and nothing else, so no number is typed. It states every result against the prediction
+// The public note (plan section 5 and D-X10, T-X9; olympiad plan D-O8): `research/lang-v2/EXPLORE_task<label>_<series date>.md` with the task in its title, GENERATED from the records and nothing else, so no number is typed. It states every result against the prediction
 // recorded before the run, names every difference from v2's harness, and carries the banner. It gives counts and rates only: no case id, no requirement breakdown, no input or expected value, no trap name, no
 // agent code or transcript (the private detail stays in `~/rsd/lang-v2/explore/<series>/private/`). Pure: records in, text out.
 
-export const BANNER = '> **Exploratory, not evidence.** Three pairs of the easiest task on a harness that differs from v2\'s. This note licenses sentences about THIS run only; it settles nothing about C# against TypeScript (`common.measurement` rule 3).';
+import { bannerOf, extraDifferencesOf, notSettledOf, predictedOf } from './note-tasks.mjs';
+
 const DASH = '—';
 
 const leaf = (record, dotted) => {
@@ -107,8 +108,39 @@ function cpcLines(cpc) {
 const range = (xs, f) => (xs.length === 0 ? DASH : `${f(Math.min(...xs))} to ${f(Math.max(...xs))}, median ${f(median(xs))}`);
 const count = (xs, test) => xs.filter(test).length;
 
-/** The six rows of the plan's section 5, each `[measure, predicted, observed]`, the observed text computed from the sessions. */
-export function predictionRows(cells, pairs) {
+/** The rows of the plan's prediction table, each `[measure, predicted, observed]`, the observed text computed from the sessions: task 1's six rows, or the olympiad plan's six for another task. */
+export function predictionRows(cells, pairs, task) {
+  const predicted = predictedOf(task);
+  return predicted === null ? taskOneRows(cells, pairs) : olympiadRows(cells, pairs, predicted);
+}
+
+/** The olympiad plan's section 4 rows: cost, wall, accepted per stack, trap hits per stack, `active - model_api`, harness. */
+function olympiadRows(cells, pairs, predicted) {
+  const data = cells.filter(c => c.data);
+  const costs = data.map(c => c.stop).filter(x => typeof x === 'number');
+  const walls = data.map(c => c.wall).filter(x => typeof x === 'number');
+  return [
+    ['cost per session', predicted.cost, range(costs, v => `$${v.toFixed(2)}`)],
+    ['wall per session', predicted.wall, range(walls, v => `${(v / 60000).toFixed(1)} min`)],
+    ['accepted (of the sessions per stack)', predicted.accepted, perStack(cells, acceptedOf)],
+    ['trap hits (per session; detail private)', predicted.trap, perStack(cells, trapHitsOf)],
+    ['active - model_api', predicted.activeModel, activeModelText(pairs)],
+    ['harness', '0 voids; T1-T5 hold; the partition sums to the wall; every session far under the $50 cap', harnessText(cells)],
+  ];
+}
+
+const stackCells = (cells, stack) => cells.filter(c => c.stack === cap(stack));
+const acceptedOf = cs => `${count(cs.filter(c => c.accepted !== null), c => c.accepted)} of ${cs.filter(c => c.accepted !== null).length}`;
+const trapHitsOf = cs => { const hits = cs.filter(c => c.trap).map(c => c.trap.hits); return hits.length === 0 ? DASH : `${Math.min(...hits)} to ${Math.max(...hits)}`; };
+const perStack = (cells, f) => ['csharp', 'node'].map(s => `${cap(s)} ${f(stackCells(cells, s))}`).join(', ');
+
+function activeModelText(pairs) {
+  const both = pairs.map(p => p.cells).filter(c => c.csharp.activeMinusModelApiMs.known && c.node.activeMinusModelApiMs.known);
+  return both.length === 0 ? DASH : `C# > TS in ${count(both, c => c.csharp.activeMinusModelApiMs.value > c.node.activeMinusModelApiMs.value)} of ${both.length} pair(s)`;
+}
+
+/** Task 1's six rows of its plan's section 5. */
+function taskOneRows(cells, pairs) {
   const data = cells.filter(c => c.data);
   const costs = data.map(c => c.stop).filter(x => typeof x === 'number');
   const walls = data.map(c => c.wall).filter(x => typeof x === 'number');
@@ -150,17 +182,16 @@ export const DIFFERENCES = Object.freeze([
   'v1\'s contamination rules run as they are (the rules that name minigit are idle; the path rules are active).',
 ]);
 
-const NOT_SETTLED = 'What it does not settle: anything about C# against TypeScript. Three pairs of the easiest task, on a harness that differs from v2\'s, license sentences about this run only.';
-
 /** The pins and the subject, by sha, harness path and date (`common.measurement` rule 6). */
 function pinLines({ input }) {
   const e = input.pins;
+  const { task } = input;
   return [
     `- Date: ${input.date}; series \`${input.seriesId}\`${input.rehearsal ? ' (a REHEARSAL: stub CLI, fake token, $0)' : ''}.`,
     `- Subject: branch \`${input.subject.branch}\` at \`${input.subject.sha}\`; harness \`${input.subject.harnessPath}\` (imports \`spikes/minigit-bench\`), identity \`${input.subject.harnessIdentity}\`, pilot tree \`${input.subject.pilotIdentity}\`.`,
     `- Agent: CLI ${e.cli.version} (sha256 \`${e.cli.sha256.slice(0, 12)}\`), model \`${e.cli.model}\`, effort \`${e.cli.effort}\`; caps $${e.caps.capUsd} per session, ${e.caps.wallMs / 60000} min wall, ${e.caps.stallMs / 60000} min stall.`,
     `- Stacks: .NET SDK ${e.dotnet.sdk}, Node ${e.node.version}, TypeScript ${e.typescript.version}; locale \`${e.locale}\`; python3 ${e.python3.version} (sha256 \`${e.python3.sha256.slice(0, 12)}\`).`,
-    `- Task: spec 01 at \`${e.specs.spec01.sha}\` (sha256 \`${e.specs.spec01.sha256.slice(0, 12)}\`), FORMAT v2 at \`${e.specs.format.sha}\` (sha256 \`${e.specs.format.sha256.slice(0, 12)}\`).`,
+    `- Task: spec ${task.id} at \`${task.spec.sha}\` (sha256 \`${task.spec.sha256.slice(0, 12)}\`), FORMAT ${task.format.label} at \`${task.format.sha}\` (sha256 \`${task.format.sha256.slice(0, 12)}\`).`,
     `- Limits: time limit ${input.limits.timeMs} ms, memory limit ${input.limits.memoryBytes} bytes (calibrated on this host before pair 1).`,
   ];
 }
@@ -174,15 +205,15 @@ function floorLine(sessions) {
 }
 
 /**
- * The note. `input` = `{ date, seriesId, rehearsal, subject, pins, limits, sessions: [{ entry, record }], pairs: [pairRecord], cpc: { csharp, node } }`.
+ * The note. `input` = `{ date, task, seriesId, rehearsal, subject, pins, limits, sessions: [{ entry, record }], pairs: [pairRecord], cpc: { csharp, node } }`; `task` is the task's pins entry.
  * -> the Markdown text.
  */
 export function renderNote(input) {
   const cells = input.sessions.map(sessionCells);
   return [
-    `# Exploratory pilot: task 1 on the v1 bare harness, ${input.sessions.length} session(s) (${input.date})`, '', BANNER, '',
+    `# Exploratory pilot: task ${input.task.noteLabel} on the v1 bare harness, ${input.sessions.length} session(s) (${input.date})`, '', bannerOf(input.task), '',
     '## What was run', '', ...pinLines({ input }), '',
-    '## Prediction against observation (recorded before the run)', '', ...table(['measure', 'predicted', 'observed'], predictionRows(cells, input.pairs)), '',
+    '## Prediction against observation (recorded before the run)', '', ...table(['measure', 'predicted', 'observed'], predictionRows(cells, input.pairs, input.task)), '',
     '## Cost: the views and their cross-checks', '', ...costTable(cells), '',
     '## Time: wall, model_api, active - model_api, and the build/test time of the agent\'s own calls', '', ...timeTable(cells), '',
     '## The time partition, every category', '', ...partitionTable(cells), '',
@@ -190,8 +221,8 @@ export function renderNote(input) {
     '## Pairs', '', ...pairTable(input.pairs), '',
     '## Cost per correct solution', '', ...cpcLines(input.cpc), '',
     '## Voids, contamination and timeouts', '', ...incidentLines(cells), '',
-    '## Differences from v2\'s harness', '', ...DIFFERENCES.map(d => `- ${d}`), '',
-    '## What this does not settle', '', NOT_SETTLED, '',
+    '## Differences from v2\'s harness', '', ...[...DIFFERENCES, ...extraDifferencesOf(input.task)].map(d => `- ${d}`), '',
+    '## What this does not settle', '', notSettledOf(input.task), '',
   ].join('\n');
 }
 

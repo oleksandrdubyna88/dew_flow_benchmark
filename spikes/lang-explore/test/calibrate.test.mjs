@@ -50,7 +50,7 @@ function world(script) {
   for (const d of ['refs/csharp', 'refs/node', 'mutants/M-1', 'mutants/M-2']) mkdirSync(path.join(base, d), { recursive: true });
   const heldout = { casesDir: '/cases', refDir: s => path.join(base, 'refs', s), mutantDir: id => path.join(base, 'mutants', id), manifest: { mutants: { 'M-1': { stack: 'node', expectedFail: ['k002'] }, 'M-2': { stack: 'csharp', expectedFail: [] } } } };
   const scoreFn = async args => { calls.push({ stack: args.stack, limits: args.limits }); return script(args, calls.length); };
-  return { calls, ctx: { explore: EXPLORE, heldout, files: () => ({}), scoreFn, work: tmpDir('cal'), say: () => {} } };
+  return { calls, ctx: { explore: EXPLORE, task: { id: '01', draft: false }, heldout, files: () => ({}), scoreFn, oracleFn: () => { throw new Error('task 1 has no oracle step'); }, now: () => new Date(0), work: tmpDir('cal'), say: () => {} } };
 }
 
 const GOOD = args => ({ ok: true, value: scoreOf(args.sets[0].dir === '/cases' ? ['k001', 'k002'].map(id => caseOf(id, { wallMs: args.stack === 'node' ? 900 : 200 })) : ['c1', 'c2', 'c3'].map(id => caseOf(id, { wallMs: 60, peakBytes: 5 * MIB }))) });
@@ -88,5 +88,6 @@ test('A_mutant_that_does_not_fail_its_predicted_cases_stops_calibration_naming_i
   const w = world((args, n) => (n <= 3 ? GOOD(n === 3 ? { ...args, sets: [{ dir: '/control' }] } : args) : { ok: true, value: scoreOf([caseOf('k001'), caseOf('k002')]) }));
   const r = await runCalibration(w.ctx);
   assert.equal(r.ok, false);
-  assert.match(r.reason, /M-1 expected \[k002\] actual \[\]/);
+  assert.match(r.reason, /mutant M-1 does not fail exactly its predicted cases \(predicted 1 failing case\(s\), 0 failed; 1 predicted did not fail, 0 unpredicted did\)/);
+  assert.doesNotMatch(r.reason, /k002/, 'the sentence names no case');
 });

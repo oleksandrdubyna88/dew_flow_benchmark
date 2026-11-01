@@ -8,7 +8,7 @@ import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { installedIntegrity } from './prepare.mjs';
 import { pinnedPaths } from './inputs.mjs';
-import { underHome } from './paths.mjs';
+import { taskPaths } from './tasks.mjs';
 import { pythonProblem } from './world.mjs';
 
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -23,14 +23,14 @@ function fileProblem(what, file, want) {
 const treeProblem = (what, dir, want) => (treeHash(dir) === want ? null : `the ${what} snapshot ${dir} no longer hashes to its registered ${want.slice(0, 12)}`);
 
 /**
- * -> the sentences of every pin that does not hold. `snapshots` is `world.snapshots` (the registered dirs and records); `explore` the pins. Reads files; the snapshot hashing walks both trees (about a second).
+ * -> the sentences of every pin that does not hold. `snapshots` is `world.snapshots` (the registered dirs and records); `explore` the pins; `task` the task whose private notes are checked. Reads files; the snapshot hashing walks both trees (about a second).
  */
-export function pinProblems({ explore, home = os.homedir(), snapshots }) {
+export function pinProblems({ explore, task, home = os.homedir(), snapshots }) {
   const paths = pinnedPaths(explore, home);
   return [
     fileProblem('the pinned CLI copy', paths.claudeBinary, explore.cli.sha256),
     pythonProblem(explore),
-    fileProblem('the private test notes', underHome(explore.privateNotes.relativePath.split('/'), home), explore.privateNotes.sha256),
+    fileProblem(`the private test notes of task ${task.id}`, taskPaths(task, home).notesFile, task.privateNotes.sha256),
     installedIntegrity(paths.tsDir) === explore.typescript.integrity ? null : `the installed TypeScript's integrity is not the recorded one (${explore.typescript.integrity?.slice(0, 20)}...)`,
     treeProblem('node', snapshots.node.dir, snapshots.node.record.treeSha256),
     treeProblem('csharp', snapshots.csharp.dir, explore.csharpSnapshot.treeSha256),
