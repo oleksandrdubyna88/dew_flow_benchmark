@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 import runner_path  # noqa: F401
+import rs_samples as sm
 import run_samples as rs
 
 ENTRY = os.path.join(runner_path.RUNNER_DIR, "run_samples.py")
@@ -260,16 +261,45 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(code, 4, flag)
             self.assertIn("not supported", err)
 
-    def test_A_cases_file_attaches_its_requirement_ids_to_each_case_in_the_JSON_result(self):
+    def test_A_cases_file_attaches_its_comparison_and_requirement_ids_to_each_case_in_the_JSON_result(self):
         box = Box(self)
-        box.write(box.samples, "cases.txt", "# manifest\ns03 R1 R4\n")
+        box.write(box.samples, "cases.txt", "# manifest\ns03 bytes R1 R4\n")
         out_json = os.path.join(box.out, "r.json")
         self.assertEqual(box.cli("--json", out_json)[0], 0)
         record = read_json(out_json)
-        self.assertEqual(record["cases"][0]["rIds"], ["R1", "R4"])
+        self.assertEqual((record["cases"][0]["rIds"], record["cases"][0]["comparison"]), (["R1", "R4"], "bytes"))
+
+    def test_A_case_with_no_manifest_line_has_no_comparison_in_the_record(self):
+        box = Box(self)
+        out_json = os.path.join(box.out, "r.json")
+        box.cli("--json", out_json)
+        self.assertIsNone(read_json(out_json)["cases"][0]["comparison"])
+
+    def manifest(self, text, ids=("s03",)):
+        with tempfile.TemporaryDirectory() as folder:
+            with open(os.path.join(folder, "cases.txt"), "w", encoding="utf-8") as f:
+                f.write(text)
+            return sm.cases_manifest(folder, set(ids))
+
+    def test_Every_comparison_form_of_the_format_is_accepted_and_kept(self):
+        forms = ["bytes", "normalised", "json", "relational", "json+relational", "normalised+json", "normalised+relational", "normalised+json+relational", "relational+json"]
+        for form in forms:
+            manifest, problems = self.manifest(f"s03 {form} R1 R2\n")
+            self.assertEqual(problems, [], form)
+            self.assertEqual(manifest, {"s03": (form, ("R1", "R2"))}, form)
+
+    def test_A_comparison_that_is_not_one_of_the_forms_is_refused_naming_it(self):
+        for form in ("R1", "byte", "bytes+json", "json+bytes", "json+json", "json+", "+json", "json++relational", "JSON", "exact"):
+            manifest, problems = self.manifest(f"s03 {form} R1\n")
+            self.assertEqual([p.line for p in problems], [1], form)
+            self.assertIn("comparison", problems[0].message, form)
+
+    def test_A_line_without_a_comparison_or_without_an_R_id_is_refused(self):
+        for text in ("s03\n", "s03 bytes\n", "s03 R1\n", "s03 bytes X1\n", "s03 bytes R1 R1x\n"):
+            self.assertTrue(self.manifest(text)[1], text)
 
     def test_A_malformed_cases_line_a_repeated_id_or_an_id_with_no_pair_is_exit_4(self):
-        for text in ("s03\n", "s03 R1\ns03 R2\n", "s03 X1\n", "s77 R1\n"):
+        for text in ("s03\n", "s03 bytes R1\ns03 bytes R2\n", "s03 bytes X1\n", "s77 bytes R1\n", "s03 R1\n"):
             box = Box(self)
             box.write(box.samples, "cases.txt", text)
             self.assertEqual(box.cli()[0], 4, text)

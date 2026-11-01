@@ -31,6 +31,7 @@ class CaseResult:
     first_mismatch: Optional[dict] = None
     lifecycle: Optional[dict] = None
     wall_ms: int = 0
+    comparison: Optional[str] = None
 
 
 def render_case(result):
@@ -159,7 +160,7 @@ def plain_lifecycle(leftover, stderr=None, memory=None):
 
 def case_record(result):
     return {
-        "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "entries": result.entries,
+        "id": result.id, "status": result.status, "reason": result.reason, "rIds": list(result.r_ids), "comparison": result.comparison, "entries": result.entries,
         "firstMismatch": result.first_mismatch, "lifecycle": result.lifecycle, "wallMs": result.wall_ms,
     }
 

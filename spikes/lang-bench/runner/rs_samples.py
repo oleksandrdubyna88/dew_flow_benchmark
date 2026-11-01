@@ -15,6 +15,8 @@ KIND_PHRASES = {
 }
 SAMPLE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 R_ID = re.compile(r"R[0-9]+\Z")
+COMPARISONS = ("bytes", "normalised", "json", "relational")
+COMBINABLE = COMPARISONS[1:]
 LIMIT_KEYS = ("timeS", "readyS", "graceS")
 FLOOR_S = 1
 MAX_S = 600
@@ -27,6 +29,7 @@ class Pair(NamedTuple):
     in_name: str
     out_name: str
     r_ids: tuple = ()
+    comparison: Optional[str] = None
 
 
 class Limits(NamedTuple):
@@ -103,7 +106,7 @@ def _pair(samples_dir, ident, in_name, out_name):
 
 
 def cases_manifest(samples_dir, ids):
-    """({id: r_ids}, problems) from `cases.txt` beside the pairs; no file is no attachments."""
+    """({id: (comparison, r_ids)}, problems) from `cases.txt` beside the pairs (FORMAT 3.1: `<id> <comparison> <R-id>...`); no file is none."""
     path = os.path.join(samples_dir, "cases.txt")
     if not os.path.isfile(path):
         return {}, []
@@ -118,17 +121,28 @@ def cases_manifest(samples_dir, ids):
 
 
 def _manifest_line(number, line, ids, manifest):
-    fields = line.split()
-    if not fields or line.lstrip().startswith("#"):
+    words = line.split()
+    if not words or line.lstrip().startswith("#"):
         return []
-    ident, rids = fields[0], tuple(fields[1:])
-    bad = _manifest_problem(ident, rids, ids, manifest)
-    manifest.setdefault(ident, rids)
+    ident, comparison, rids = words[0], "".join(words[1:2]), tuple(words[2:])
+    bad = _manifest_problem(ident, comparison, rids, ids, manifest)
+    manifest.setdefault(ident, (comparison, rids))
     return [Problem("cases.txt", number, bad)] if bad else []
 
 
-def _manifest_problem(ident, rids, ids, manifest):
+def _joined_ok(parts):
+    return len(set(parts)) == len(parts) and set(parts) <= set(COMBINABLE)
+
+
+def comparison_ok(text):
+    """`bytes`, `normalised`, `json`, `relational`, or several of the last three joined by `+`, each at most once."""
+    parts = text.split("+")
+    return text in COMPARISONS if len(parts) == 1 else _joined_ok(parts)
+
+
+def _manifest_problem(ident, comparison, rids, ids, manifest):
     checks = (
+        (not comparison_ok(comparison), f"{ident}: the comparison {comparison!r} is none of bytes, normalised, json, relational or a + join of the last three"),
         (not rids, f"{ident} names no requirement id"),
         (not all(R_ID.match(r) for r in rids), f"{ident} lists something that is not an R-id (R<number>)"),
         (ident in manifest, f"{ident} appears twice"),

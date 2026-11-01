@@ -140,11 +140,16 @@ def _empty_selection(args, chosen):
     return [Problem(sm.shown(args.samples_dir), 0, f"no sample matches {args.only!r}" if args.only else "no sample pairs")]
 
 
+def _with_manifest(pair, manifest):
+    comparison, rids = manifest.get(pair.id, (None, ()))
+    return pair._replace(r_ids=rids, comparison=comparison)
+
+
 def _pairs_of(args):
     pairs, problems = sm.discover(args.samples_dir)
     manifest, more = sm.cases_manifest(args.samples_dir, {p.id for p in pairs})
     chosen = _chosen(pairs, args.only)
-    return [p._replace(r_ids=manifest.get(p.id, ())) for p in chosen], problems + more + _empty_selection(args, chosen)
+    return [_with_manifest(p, manifest) for p in chosen], problems + more + _empty_selection(args, chosen)
 
 
 def _limits_of(args):
@@ -194,13 +199,13 @@ def _limit_and_basis(plan):
 def _build_failed(plan, done):
     note = "the build timed out" if done.timed_out else f"bash build.sh exited {done.status}"
     tail = tuple("  " + line for line in done.tail.splitlines()[-10:])
-    return [rp.CaseResult(p.id, "FAIL", "build failed", 0, p.r_ids, (f"  {note}",) + tail) for p in plan.pairs]
+    return [rp.CaseResult(p.id, "FAIL", "build failed", 0, p.r_ids, (f"  {note}",) + tail, comparison=p.comparison) for p in plan.pairs]
 
 
 def _run_cases(plan, scratch):
     limit, basis = _limit_and_basis(plan)
     config = ex.Config(os.path.abspath(plan.args.workspace), scratch, plan.prefix, limit, basis)
-    return [ro.run_case(ro.Case(p.id, sm.read_bytes(p.in_path), sm.read_bytes(p.out_path), p.r_ids), config) for p in plan.pairs]
+    return [ro.run_case(ro.Case(p.id, sm.read_bytes(p.in_path), sm.read_bytes(p.out_path), p.r_ids, p.comparison), config) for p in plan.pairs]
 
 
 def _execute(plan, scratch):

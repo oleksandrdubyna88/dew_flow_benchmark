@@ -19,6 +19,7 @@ class Case(NamedTuple):
     stdin: bytes
     expected: bytes
     r_ids: tuple = ()
+    comparison: object = None
 
 
 def _common_prefix(a, b):
@@ -243,6 +244,6 @@ def run_case(case, config):
     failed = _judge(case, config, out, comparer)
     tail = (rp.memory_line(memory),)
     if failed is None:
-        return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, lifecycle, out.wall_ms)
+        return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, lifecycle, out.wall_ms, case.comparison)
     reason, mismatch, lines = failed
-    return CaseResult(case.id, "FAIL", reason, 0, case.r_ids, tuple(lines) + tail, mismatch, lifecycle, out.wall_ms)
+    return CaseResult(case.id, "FAIL", reason, 0, case.r_ids, tuple(lines) + tail, mismatch, lifecycle, out.wall_ms, case.comparison)
