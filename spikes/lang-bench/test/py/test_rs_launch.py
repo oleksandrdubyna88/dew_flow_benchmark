@@ -176,7 +176,9 @@ class InterruptWindowTests(unittest.TestCase):
         return ws.config(prefix=["sh", "-c", 'exec "$@"', "sh"], **overrides)
 
     def start(self, ws):
-        return rl.start(self.config(ws), "s03", ex.PlainLifecycle(), os.path.join(ws.scratch, "s.err"), ws.dir)
+        launched = rl.start(self.config(ws), "s03", ex.PlainLifecycle(), os.path.join(ws.scratch, "s.err"), ws.dir)
+        self.addCleanup(lambda: [stream.close() for stream in (launched.proc.stdin, launched.proc.stdout) if stream and not stream.closed])
+        return launched
 
     def test_A_launcher_is_registered_from_the_moment_it_exists_and_abandon_active_stops_it(self):
         seconds = "71.%d" % (os.getpid() % 1000 + 1000)
@@ -204,6 +206,8 @@ class InterruptWindowTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 self.start(ws)
         self.assertEqual(len(rl.ACTIVE), 1, "still registered")
+        proc = rl.ACTIVE[0][0]
+        self.addCleanup(lambda: [stream.close() for stream in (proc.stdin, proc.stdout) if stream and not stream.closed])
         self.assertTrue(wait_until(lambda: sleepers(seconds)))
         rl.abandon_active()
         self.assertTrue(wait_until(lambda: sleepers(seconds) == []))

@@ -60,6 +60,7 @@ class Launched:
         ex.close_fd(self.launcher_fd)
         ex.close_fd(self.pipe_fd)
         self.launcher_fd = self.pipe_fd = None
+        _close_streams(self.proc)
 
 
 class EmptyRun(NamedTuple):
@@ -218,14 +219,18 @@ def _begun(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path)
     return Launched(proc, launcher_fd, clock, launch_ms, reader, pipe_fd, tracker)
 
 
+def _close_streams(proc):
+    for stream in (proc.stdin, proc.stdout):
+        if stream is not None and not stream.closed:
+            stream.close()
+
+
 def _release(proc, launcher_fd, pipe_fd):
     """Close everything the runner holds for a launcher that will not become a case: its descriptors and the ends of its pipes."""
     _forget(proc)
     ex.close_fd(launcher_fd)
     ex.close_fd(pipe_fd)
-    for stream in (proc.stdin, proc.stdout):
-        if stream is not None:
-            stream.close()
+    _close_streams(proc)
 
 
 def _begin_or_abandon(proc, launcher_fd, pipe_fd, spawned, case_id, lifecycle, stderr_path):

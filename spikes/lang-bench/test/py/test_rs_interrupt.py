@@ -60,7 +60,8 @@ class RealScopeTests(unittest.TestCase):
         self.assertNotEqual(case["lifecycle"]["signalled"]["pid"], case["lifecycle"]["signalled"]["launcher"])
         self.assertIsInstance(record["emptyProgram"]["pid"], int, "the control waited on the program's own pid too")
         self.assertEqual((case["lifecycle"]["kill"], case["lifecycle"]["leftover"]), ("cgroup.kill", {"known": True, "found": False}))
-        self.assertEqual(case["lifecycle"]["memory"]["known"], True)
+        memory = case["lifecycle"]["memory"]
+        self.assertTrue(memory["known"] or "why" in memory, "a scope the system removed with its last process cannot be read: unknown with its reason, never zero")
 
     def test_A_SIGTERM_to_the_runner_while_a_program_runs_in_its_scope_is_exit_5_and_the_scope_is_empty(self):
         scope = Scope(self)

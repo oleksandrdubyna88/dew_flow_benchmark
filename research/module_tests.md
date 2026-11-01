@@ -281,7 +281,7 @@ V11 and V12) adds the rows marked ii-a. Part ii-b (networking, the daemon and we
 | Running a daemon or web scenario (processes, sockets, signals, readiness, V3, V5, V7, `overflow`) | not covered | part ii-b |
 
 **What this part does not prove.** Memory is never judged without a cgroup (every case says `not certified`); with one, `memory.peak` and `memory.events` are what the
-kernel reports for the directory named, not that the layer's limit is the right one (that is E1.S8b's probe). The scope path is proven on a plain delegated user scope behind
+kernel reports for the directory named, not that the layer's limit is the right one (that is E1.S8b's probe). A plain transient scope is removed by the system when its last process exits, so a clean case's `memory.peak` can be gone before it is read (the record then says unknown with its reason; E1.S8b's scope holder keeps it). The scope path is proven on a plain delegated user scope behind
 bwrap, not on E1.S8b's layer (its `prog/` leaf, `scope-entry.sh`, `nsenter` and a private network namespace do not exist yet), and the wrapper exclusion is proven only through a file the test writes. The
 status lines are proven from bwrap 0.11's real output and from shell launchers; `exit-code` for a program killed by a signal is whatever bwrap writes. The runner does not
 signal the program in this part (an olympiad program is only waited for and killed), so B1's pid choice is proven for the wait and the record, not for a `TERM`. An interrupt is proven by SIGTERM and SIGHUP on the plain path, by SIGTERM on a real scope, and for the spawn window by the registry (a signal landing on the exact

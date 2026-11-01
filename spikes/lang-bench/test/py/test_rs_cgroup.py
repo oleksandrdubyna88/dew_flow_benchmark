@@ -90,7 +90,7 @@ def copy_of_bash(test, name="bwrap"):
 
 def run_copy(test, path):
     """A process running the very file `path`, stopped when the test ends."""
-    proc = subprocess.Popen([path, "-c", "sleep 30"])
+    proc = subprocess.Popen([path, "-c", "sleep 30; true"])  # not a lone command: bash would exec sleep and stop being the copy
     test.addCleanup(lambda: (proc.kill(), proc.wait()))
     deadline = time.monotonic() + 10
     while cg._file_id(f"/proc/{proc.pid}/exe") != cg._file_id(path) and time.monotonic() < deadline:
