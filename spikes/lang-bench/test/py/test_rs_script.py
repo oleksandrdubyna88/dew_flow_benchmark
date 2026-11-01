@@ -381,6 +381,32 @@ class EndTests(unittest.TestCase):
         self.assertTrue(self.script('signal TERM\nwait-exit within 5s\nrepeat 2 i\nsend c1 "x"\nend\n')[1])
 
 
+class ExpansionTests(unittest.TestCase):
+    """The steps of a script, repeats expanded, are bounded as a whole: each repeat may be within the ceiling and the sum still not."""
+
+    def repeats(self, count, each=100_000):
+        return "".join(f"repeat {each} i{n}\nsleep 1ms\nend\n" for n in range(count))
+
+    def test_Repeats_that_are_each_within_the_ceiling_but_together_beyond_it_are_refused_at_the_one_that_crosses_it(self):
+        _, problems = body(*self.repeats(11).splitlines())
+        self.assertEqual(len(problems), 1, problems)
+        self.assertEqual(problems[0].line, 6 + 9 * 3, "the tenth repeat is where the running total (the two connects count too) passes 1,000,000")
+        self.assertIn("1000000", problems[0].message)
+
+    def test_The_ceiling_is_a_sum_so_nine_such_repeats_and_the_few_steps_around_them_are_still_allowed(self):
+        self.assertEqual(body(*self.repeats(9).splitlines())[1], [])
+
+    def test_Nested_repeats_and_together_groups_count_each_time_they_run(self):
+        _, problems = body("repeat 1000 i", "repeat 1001 j", "sleep 1ms", "end", "end")
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(body("repeat 999 i", "repeat 1000 j", "sleep 1ms", "end", "end")[1], [])
+
+    def test_Nothing_is_produced_for_a_script_beyond_the_ceiling_because_there_is_no_scenario(self):
+        scenario, problems = body(*self.repeats(11).splitlines())
+        self.assertIsNone(scenario)
+        self.assertTrue(problems)
+
+
 class ProducedEntryTests(unittest.TestCase):
     def test_The_entries_a_script_produces_follow_its_steps_with_repeats_expanded(self):
         scenario, _ = rs.parse_script(fixture("x3.in"), "x3.in")

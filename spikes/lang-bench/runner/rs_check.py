@@ -33,8 +33,18 @@ def static_length(expr):
 
 # ---- validation of a parsed scenario: names, connections, offsets, the last statement -------------------------------------------
 
+def _size_problems(scenario):
+    """The steps of the whole script, repeats expanded, stay within the ceiling: a problem at the node where the running total passes it."""
+    total = 0
+    for node in scenario.body:
+        total += expanded_steps(node)
+        if total > MAX_EXPANDED_STEPS:
+            return [Problem(scenario.file, node.line, f"the script expands to more than {MAX_EXPANDED_STEPS} steps in all (repeats counted each time they run)")]
+    return []
+
+
 def check_scenario(scenario):
-    return _Checker(scenario).run()
+    return _size_problems(scenario) + _Checker(scenario).run()
 
 
 class _Checker:
