@@ -1,7 +1,7 @@
 // push-check.mjs as a command: argument handling, the loading of the private aids from outside git at run time, and the exit codes.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,9 @@ function aidFile(t) {
 }
 const UNRELATED_PUBLIC = fileURLToPath(new URL('./fixtures/public-unrelated.md', import.meta.url));
 /** Tests that do not exercise the published-plans default name an unrelated public text, so they never read the real bench repository. */
+const DUMMY_SECRET = fileURLToPath(new URL('./fixtures/own-secret-dummy.txt', import.meta.url));
+/** Tests never read the real secret files: unless they name one, a dummy fixture stands in for the defaults. */
+const withSecrets = args => (args.includes('--secret-file') || args.includes('--setup-remote') ? args : [...args, '--secret-file', DUMMY_SECRET]);
 const withPublic = args => (args.includes('--public') || args.includes('--bench-repo') || args.includes('--setup-remote') ? args : [...args, '--public', UNRELATED_PUBLIC]);
 // The fixtures' origin is a local bare repository: a branch check is told to expect it (the real default is the task repository's URL).
 function withOrigin(args) {
@@ -25,7 +28,7 @@ function withOrigin(args) {
   const url = spawnSync('git', ['-C', repo, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
   return url === '' ? args : [...args, '--origin-url', url];
 }
-const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...withOrigin(withPublic(args))], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
+const cli = (args, { home } = {}) => spawnSync(process.execPath, [CLI, ...withOrigin(withPublic(withSecrets(args)))], { encoding: 'utf8', env: { ...process.env, ...(home ? { HOME: home } : {}) }, timeout: 120_000 });
 
 function topicBranch(t, files) {
   const repo = makeTaskRepo(t, { origin: makeOrigin(t) });
@@ -159,4 +162,28 @@ test('Text_with_self_checks_a_bench_body_by_the_leak_and_secret_scans_only', t =
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /bench body/);
   assert.equal(/family-names/.test(r.stdout), false);
+});
+
+test('The_value_of_a_real_secret_file_named_by_path_is_found_by_commit_path_and_line_and_never_printed', t => {
+  const folder = ownedFolder(t, 'own');
+  const secretFile = path.join(folder, 'my-token-file');
+  const value = `fixture-token-value-${'Zq9'.repeat(8)}`;
+  writeFileSync(secretFile, `${value}\n`);
+  const { repo, sha } = topicBranch(t, { 'docs/notes.md': `a\nb ${value} c\n` });
+  const r = cli(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t), '--secret-file', secretFile]);
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, new RegExp(`^  ${sha.slice(0, 10)} docs/notes\\.md:2 own secret value \\(my-token-file\\)`, 'm'));
+  assert.equal((r.stdout + r.stderr).includes(value.slice(0, 14)), false);
+  const missing = cli(['--repo', repo, '--branch', 'topic', '--aid', aidFile(t), '--secret-file', path.join(folder, 'absent')]);
+  assert.equal(missing.status, 3, 'a named secret file that cannot be read stops the check');
+});
+
+test('The_default_secret_files_are_looked_for_under_the_home_config_and_used_when_present', t => {
+  const home = ownedFolder(t, 'home2');
+  mkdirSync(path.join(home, '.config', 'lang-v2'), { recursive: true });
+  writeFileSync(path.join(home, '.config', 'lang-v2', 'github-pat'), `fixture-default-secret-${'Qx7'.repeat(8)}\n`);
+  const { repo } = topicBranch(t, { 'docs/notes.md': `x fixture-default-secret-${'Qx7'.repeat(8)} y\n` });
+  const defaults = spawnSync(process.execPath, [CLI, '--repo', repo, '--branch', 'topic', '--aid', aidFile(t), '--public', UNRELATED_PUBLIC, '--origin-url', git(repo, 'remote', 'get-url', 'origin')], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+  assert.equal(defaults.status, 1, defaults.stdout + defaults.stderr);
+  assert.match(defaults.stdout, /docs\/notes\.md:1 own secret value \(github-pat\)/);
 });

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { parseCredits } from './push-credits.mjs';
 import { aidNeedles, parseKnownNeedles } from './push-needles.mjs';
+import { parseOwnSecrets } from './push-secrets.mjs';
 import { readPublicPlans } from './push-public.mjs';
 
 const spikePath = relative => fileURLToPath(new URL(`../${relative}`, import.meta.url));
@@ -17,6 +18,8 @@ const DEFAULT_CREDITS = spikePath('inputs/credits-lang.json');
 const DEFAULT_NEEDLES = spikePath('inputs/needles-lang.json');
 const DEFAULT_TEMPLATE_FILES = spikePath('templates/stack-files.json');
 const BENCH_REPO = spikePath('');
+// The two real secret files of this series (the fine-grained PAT, the deploy key). Read at run time, by path, when no --secret-file is named.
+export const DEFAULT_SECRET_FILES = () => ['github-pat', 'deploy_key_lang_v2'].map(name => path.join(os.homedir(), '.config', 'lang-v2', name));
 
 function readText(file, kind) {
   try {
@@ -79,5 +82,15 @@ export async function loadInputs(options) {
   if (!templateFiles.ok) return templateFiles;
   const creditsText = readText(options.credits ?? DEFAULT_CREDITS, 'config');
   const credits = creditsText.ok ? parseCredits(creditsText.value) : fail(creditsText.reason);
-  return ok({ aids: aids.value, known: known.value, credits, templateFiles: templateFiles.value });
+  const ownSecrets = loadOwnSecrets(options.secretFiles ?? []);
+  if (!ownSecrets.ok) return ownSecrets;
+  return ok({ aids: aids.value, known: known.value, credits, templateFiles: templateFiles.value, ownSecrets: ownSecrets.value });
+}
+
+/** ok([{ label, value }]): the values of the named secret files, or of the default two that exist; a NAMED file that cannot be read is an `env` fail. */
+export function loadOwnSecrets(named) {
+  const files = named.length > 0 ? named : DEFAULT_SECRET_FILES().filter(f => existsSync(f));
+  const texts = files.map(f => ({ label: path.basename(f), read: readText(f, 'env') }));
+  const unreadable = texts.find(t => !t.read.ok);
+  return unreadable ? fail(`secret file ${unreadable.read.reason}: the check does not run without it`, { kind: 'env' }) : parseOwnSecrets(texts.map(t => ({ label: t.label, text: t.read.value })));
 }

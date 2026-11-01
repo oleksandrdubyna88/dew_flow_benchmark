@@ -9,7 +9,7 @@ import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
 import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
-import { findSecrets } from './push-secrets.mjs';
+import { findOwnSecrets, findSecrets } from './push-secrets.mjs';
 import { findSubmoduleProblems } from './push-shape.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
@@ -28,7 +28,7 @@ function scanText(file, text, inputs, { body = false } = {}) {
   const visible = findVisibleRules(file, readme ? outsideAttribution(text) : text, { known: inputs.known, assumeVisible: body, links: !body });
   return {
     leakcheck: findAidHits(file, text, inputs.aids),
-    secrets: findSecrets(file, text),
+    secrets: [...findSecrets(file, text), ...findOwnSecrets(file, text, inputs.ownSecrets ?? [])],
     attribution: readme ? visible.filter(f => f.group !== GROUP_FAMILY) : [],
     'run-base-text': readme ? [] : visible.filter(f => f.group !== GROUP_FAMILY),
     'family-names': visible.filter(f => f.group === GROUP_FAMILY),
