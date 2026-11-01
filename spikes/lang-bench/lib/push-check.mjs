@@ -63,14 +63,14 @@ async function tipFindings({ repo, branch, inputs, scan }) {
   if (failure) return failure;
   const anyCommit = firstCommitMap(scan.files, () => true);
   const atTip = firstCommitMap(scan.files, f => scan.tree.get(f.path)?.oid === f.oid);
-  const tipEntries = new Map([...atTip.keys()].map(p => [p, scan.tree.get(p)]));
-  const added = [...anyCommit.keys()];
+  // the whole tip tree is what a run base carries: a known-task text, a symlink or a stack file pushed earlier counts as much as this range's
+  const known = [...new Set([...anyCommit.keys(), ...scan.tree.keys()])];
   const withCommit = (commits, f) => ({ commit: commits.get(f.path), ...f });
   return ok({
-    attribution: attributionFindings(readme.value, added, carriesKnownText),
-    'known-task-credits': checkCreditTerms({ credits: inputs.credits, paths: added, readmeText: readme.value }).map(f => withCommit(anyCommit, f)),
-    'stack-folders': findStackFolderFiles(tipEntries, { templateFiles: inputs.templateFiles }).map(f => withCommit(atTip, f)),
-    'tree-shape': [...findSubmoduleProblems({ tip: scan.tree, gitmodulesText: modules.value }), ...findSymlinks(tipEntries)].map(f => withCommit(atTip, f)),
+    attribution: attributionFindings(readme.value, known, carriesKnownText),
+    'known-task-credits': checkCreditTerms({ credits: inputs.credits, paths: known, readmeText: readme.value }).map(f => withCommit(anyCommit, f)),
+    'stack-folders': findStackFolderFiles(scan.tree, { templateFiles: inputs.templateFiles }).map(f => withCommit(atTip, f)),
+    'tree-shape': [...findSubmoduleProblems({ tip: scan.tree, gitmodulesText: modules.value }), ...findSymlinks(scan.tree)].map(f => withCommit(atTip, f)),
   });
 }
 

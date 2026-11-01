@@ -328,3 +328,45 @@ test('A_remote_branch_that_was_never_fetched_is_refused_too_because_the_freshnes
   git(repo, 'fetch', '-q', 'origin');
   assert.equal((await run(repo)).exit, EXIT.PASS, 'after the fetch the two sides agree');
 });
+
+/** A task repository whose ORIGIN already holds `published` (as if pushed earlier), and a branch `topic` off it. */
+function publishedThenBranch(t, published) {
+  const bare = makeOrigin(t);
+  const seed = path.join(path.dirname(bare), 'seed2');
+  git(path.dirname(bare), 'clone', '-q', bare, seed);
+  commit(seed, 'feat: published earlier', published);
+  git(seed, 'push', '-q', 'origin', 'HEAD:main');
+  const repo = makeTaskRepo(t, { origin: bare });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'origin/main');
+  return repo;
+}
+
+const FULL_ATTRIBUTION = () => `# T\n\nIntro.\n\n## Attribution\n\n${credits.value.known.map(e => e.credit).join('\n\n')}\n\n${[credits.value.known[0], credits.value.known[1]].map(e => e.spec).join(' and ')} are licensed CC BY-NC-SA 4.0, an exception to the MIT licence.\n\n${credits.value.known.find(e => e.upstreamNotice).upstreamNotice.text}\n`;
+
+test('A_known_task_path_anywhere_in_the_tip_tree_keeps_the_readme_bound_to_its_credit_terms_even_when_the_range_touches_none', async t => {
+  const repo = publishedThenBranch(t, { 'README.md': FULL_ATTRIBUTION(), 'todo/tasks/01-descent-to-one.md': '# Task 01\n' });
+  commit(repo, 'docs: an unrelated file', { 'research/n.md': 'notes\n' });
+  assert.equal((await run(repo)).exit, EXIT.PASS, 'the README still carries every term');
+  commit(repo, 'docs: the readme loses its attribution', { 'README.md': '# T\n\nIntro only.\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.ok(checkOf(result, 'attribution').findings.length + checkOf(result, 'known-task-credits').findings.length > 0, formatReport(result));
+  assert.ok(checkOf(result, 'known-task-credits').findings.some(f => f.what.startsWith('credit line of task 01')), formatReport(result));
+});
+
+test('A_symlink_or_a_stack_file_that_was_pushed_earlier_is_still_found_in_the_whole_tip_tree', async t => {
+  const { symlinkSync } = await import('node:fs');
+  const bare = makeOrigin(t);
+  const seed = path.join(path.dirname(bare), 'seed3');
+  git(path.dirname(bare), 'clone', '-q', bare, seed);
+  symlinkSync('/etc/hostname', path.join(seed, 'link'));
+  commit(seed, 'feat: published earlier, a link and a stack file', { 'csharp/01/Program.cs': 'class P {}\n' });
+  git(seed, 'push', '-q', 'origin', 'HEAD:main');
+  const repo = makeTaskRepo(t, { origin: bare });
+  git(repo, 'checkout', '-q', '-b', 'topic', 'origin/main');
+  commit(repo, 'docs: an unrelated file', { 'research/n.md': 'notes\n' });
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'stack-folders').findings.map(f => f.path), ['csharp/01/Program.cs'], 'a file of the tip that no commit of the range touched');
+  assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => f.path), ['link']);
+});
