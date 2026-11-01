@@ -1,6 +1,6 @@
 # PLAN — E5 stories: isolation, keep-awake, the detached arms and the chain of the model-arms module
 
-> Status: **BUILT 2026-11-01 on `feat/model-arms-e5` (E5.S1–E5.S4, each through an Opus review and the coai code gate; ModelArms suite 1787, 0 failed); pull requests not opened (the repository's three-open cap — the owner's); Windows, macOS and FreeBSD unobserved.** Stories written 2026-10-31. Epic E5 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D10–D13,
+> Status: **BUILT 2026-11-01 (E5.S1–E5.S4, each through an Opus review and the coai code gate) and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered integrated with E4 and E6 instead of its own pull requests (the repository's three-open cap — the owner's); Windows, macOS and FreeBSD unobserved.** Stories written 2026-10-31. Epic E5 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D10–D13,
 > D16, D17 (c)/(d), D26, D27; §4.7, §4.8, §4.11; §6 step 5; §7's E5 tests; §9; §10), written at `f0d6868` on `feat/model-arms-e5`
 > (E1–E3 on `main`, E4 not built) by the judge role (Opus), as the epic starts — `common.plan-change-control` § *What counts as a
 > change*: writing them is not a change. The parent's epoch 3 holds ONE entry (3.1); a second accepted change stops the plan, so every
