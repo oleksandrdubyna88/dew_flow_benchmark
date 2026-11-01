@@ -1,0 +1,40 @@
+scenario 2
+# Illustrative only: a toy store over an invented framed protocol (four digits
+# of payload length, '|', the payload). No task of this repository.
+default within 2s
+start ready port within 10s
+connect c1 tcp
+
+# 1. One frame in two writes: no reply may come before it is complete.
+send c1 "0014|put fruit ki"
+expect c1 quiet for 200ms
+send c1 "wi"
+recv c1 bytes 7
+
+# 2. Two requests in one write; the replies come back in order.
+send c1 "0010|take fruit" "0002|hi"
+recv c1 bytes 9
+recv c1 bytes 7
+
+# 3. split cuts the joined bytes: of these 15, offset 12 falls inside the
+#    second string.
+send c1 "0010|" "take fruit" split 2,12 pause 50ms
+recv c1 bytes 9
+
+# 4. A slow reader: 'lazy' asks for a 9000-byte text 64 times in one write and
+#    reads nothing; meanwhile c1 is still served. Then 'lazy' reads its 64
+#    replies of 9005 bytes each, 4096 bytes at a time.
+send c1 "9008|put big " "z"*9000
+recv c1 bytes 7
+connect lazy tcp rcvbuf 4096
+send lazy "0008|take big"*64
+sleep 200ms
+send c1 "0002|hi"
+recv c1 bytes 7 within 500ms
+repeat 64 i
+  recv lazy bytes 9005 chunk 4096 pause 2ms within 5s
+end
+
+# 5. The stop.
+signal TERM
+wait-exit within 5s

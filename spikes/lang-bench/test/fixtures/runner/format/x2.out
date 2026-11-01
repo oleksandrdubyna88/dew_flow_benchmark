@@ -1,0 +1,18 @@
+transcript 2
+ready
+# 1.
+quiet c1
+recv c1 "0002|ok"
+# 2.
+recv c1 "0004|kiwi"
+recv c1 "0002|ok"
+# 3.
+recv c1 "0004|kiwi"
+# 4.
+recv c1 "0002|ok"
+recv c1 "0002|ok"
+repeat 64 i
+  recv lazy "9000|" "z"*9000
+end
+# 5.
+exit 0
