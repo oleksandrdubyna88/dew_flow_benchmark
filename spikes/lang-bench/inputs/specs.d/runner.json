@@ -47,7 +47,7 @@
       },
       {
         "path": "rs_olympiad.py",
-        "sha256": "5fd94e4841790cec2a43ecb6e6330d43412a81a7ebf4c50aa78b772b6c51336d"
+        "sha256": "f885f6249b2d38a3417287a678d906a166b2701fb1041ebaa9f6a8c062c61e84"
       },
       {
         "path": "rs_pair.py",
@@ -55,7 +55,7 @@
       },
       {
         "path": "rs_report.py",
-        "sha256": "ea2d8bb6f03c02e72e58de7eb367288aa8656ebabcf08877fc6519f1f986a9bc"
+        "sha256": "bf2b91b7a295b901de02854860b7ad019f0d6f5b2863751962fe676ea0fc699e"
       },
       {
         "path": "rs_samples.py",
@@ -74,7 +74,7 @@
         "sha256": "41310ae49d3882b8caaa0c81371b8f0a73aa4dfeff9fee8574c6f63c93ca0042"
       }
     ],
-    "manifestSha256": "b9d2abcb421bac7ca1fa049c7f55e3b729475a54734519bb34b301cbdbc5ca77",
+    "manifestSha256": "9412bc6e89eabc216389d11da5d30bc05c58120acf09b781a64d05d6eb7ae9ac",
     "version": "0.1.0"
   }
 }

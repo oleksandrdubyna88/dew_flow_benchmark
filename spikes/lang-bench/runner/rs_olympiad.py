@@ -242,7 +242,7 @@ def run_case(case, config):
     memory = config.lifecycle.memory(case.id)
     lifecycle = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), memory)
     failed = _judge(case, config, out, comparer)
-    tail = (rp.memory_line(memory),)
+    tail = (rp.memory_line(memory),) + rp.leftover_lines(out.leftover)
     if failed is None:
         return CaseResult(case.id, "PASS", "", 1, case.r_ids, tail, None, lifecycle, out.wall_ms, case.comparison)
     reason, mismatch, lines = failed

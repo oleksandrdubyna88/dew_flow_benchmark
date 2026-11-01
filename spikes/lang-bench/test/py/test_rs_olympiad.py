@@ -185,6 +185,25 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(result.status, "PASS", "the verdict is about the output and the status")
         self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": True})
 
+    def test_A_leftover_is_reported_as_a_note_line_and_the_PASS_stays(self):
+        marker = "63.%d" % (os.getpid() % 1000 + 1000)
+        result = Workspace(self, f"sleep {marker} &\ncat answer.bin\n", {"answer.bin": ANSWER}).run(case(), limit_ms=20_000)
+        self.assertEqual(result.status, "PASS")
+        notes = [l for l in result.lines if l.lstrip().startswith("leftover:")]
+        self.assertEqual(len(notes), 1, result.lines)
+        self.assertIn("still running after the exit", notes[0])
+        self.assertIn("leftover: ", "\n".join(rp.render_case(result)))
+
+    def test_A_clean_exit_prints_no_leftover_line(self):
+        result = Workspace(self, REPLAY, {"answer.bin": ANSWER}).run(case())
+        self.assertEqual([l for l in result.lines if "leftover" in l], [])
+
+    def test_A_failing_case_with_a_leftover_reports_both(self):
+        marker = "64.%d" % (os.getpid() % 1000 + 1000)
+        result = Workspace(self, f"sleep {marker} &\nexit 3\n").run(case())
+        self.assertEqual(result.status, "FAIL")
+        self.assertTrue(any(l.lstrip().startswith("leftover:") for l in result.lines))
+
     def test_A_leftover_child_does_not_survive_the_case(self):
         marker = "61.%d" % (os.getpid() % 1000 + 1000)
         Workspace(self, f"sleep {marker} &\ncat answer.bin\n", {"answer.bin": ANSWER}).run(case(), limit_ms=20_000)

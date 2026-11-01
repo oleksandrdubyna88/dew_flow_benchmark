@@ -147,6 +147,11 @@ def time_text(wall_ms, limit_ms, basis):
 NOT_CERTIFIED = {"known": False, "why": "not certified"}
 
 
+def leftover_lines(leftover):
+    """The note line of a program that left a process running after its exit (killed by the runner); part ii makes it the lifecycle finding."""
+    return ("  leftover: process still running after the exit (killed)",) if leftover else ()
+
+
 def memory_line(memory):
     return f"  memory: peak {memory['peakBytes']} bytes" if memory.get("known") and "peakBytes" in memory else "  memory: not certified"
 
