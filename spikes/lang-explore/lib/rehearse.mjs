@@ -127,7 +127,7 @@ async function runStubPair({ io, world, calibration, heldout, series, planned, s
   const planOver = { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 };
   const ctx = await runContext({ world, calibration, series: series.state, seriesDir: series.dir, kind: 'rehearsal', pair: 1, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, claudeBinary: stubClaude(stubDir), fill: referenceFill({ world, heldout }), planOver, abort: io.abort, home: io.home });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
-  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home }), machine: null, preflightHome: fake, stub: true });
+  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say }), machine: null, preflightHome: fake, stub: true });
   const result = await runLoop({ ctx: ctx.value, deps, map: planned.map, signal: io.signal, say });
   if (result.exit !== 0) return { exit: result.exit, message: `the stub pair did not finish: ${result.message}` };
   return finishRehearsal({ io, world, series, map: result.map });
