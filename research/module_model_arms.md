@@ -1,6 +1,6 @@
 # Module — Model arms: the launcher of the part-6 experiment, in C#
 
-> Status: **built and piloted, 2026-11-01 — the run half of parts 6 and 7 as a C# module (epics E1–E6); M1 and M2 ran against the fake CLI, and M3, the attended pilot of every verb, ran on 2026-11-01 (its log is below); what is still the owner's is M2's key check, the real-git pilot of E4.S0/E4.S2 and the owner's own `experiment.json` read by `status` — see *Not proven, gathered*.**
+> Status: **built and piloted, 2026-11-01 — the run half of parts 6 and 7 as a C# module (epics E1–E6); M1 and M2 ran against the fake CLI, and M3, the attended pilot of every verb, ran on 2026-11-01 (its log is below); M2's key check ran (a placeholder key: delivery observed) and the real-git pilot of E4.S0/E4.S2 ran on git 2.39.4 and 2.45.0; still the owner's: M3 step 14, a REAL key's vendor keys loaded (the owner's key and the `creds` CLI) and the owner's own `experiment.json` read by `status` — see *Not proven, gathered*.**
 > Plan: [PLAN_model_arms.md](../todo/PLAN_model_arms.md) (the design) with its stories documents `PLAN_model_arms_E1.md` … `_E6.md` in `todo/` (they promote together once the owner's open Definition-of-Done lines close). The analysis half of the experiment is not here: it is the plan [PLAN_model_arms_analysis.md](../todo/PLAN_model_arms_analysis.md).
 
 ## Purpose
@@ -3292,7 +3292,7 @@ A killed run leaves what it had written and nothing running (the runners hold lo
 Each section above keeps its own *Not proven*; this is the module's whole as of the E6.S3 build, grouped.
 
 - **A real claude.** Every step ran against the fake CLI, which replays recorded shapes (M1–M3). That `--resume` after a limit or a cut behaves as the shell observed, that the model writes a `tasks.json` the checker accepts or a `gate.json` the gate step reads, a real multi-hour task's diff and cherry-pick, a real gate round through `coai-mcp`: unobserved. The first real step is the owner's.
-- **M2's key check — OPEN, the owner's.** Whether the key `make` writes into `mcp-coai.json` reaches the real `coai-mcp` (two `providers` answers side by side), or the settings-file road is the delivery (*M2's key check*). Until it runs, `McpConfig`'s `env` member is a request, unverified.
+- **M2's key check — RAN 2026-11-01; the real-vault half OPEN, the owner's.** The delivery is observed: a key `make` wrote into `mcp-coai.json` reached the real `coai-mcp` (a placeholder key; the two vault fields side by side under *M2's key check*), so `McpConfig`'s `env` member is a delivery, not a request. Not observed: a REAL key loaded from the vault (`N vendor key(s) loaded`), which needs the owner's key and the `creds` CLI, neither on this machine.
 - **The delegation re-run (M3 step 14) — not run.** The A–D calls with the real `claude` and haiku (E2 §8 item 43) were not made in M3 (*What did not run*); the analysis plan's first line carries it.
 - **The owner's own `experiment.json` — OPEN, the owner's.** Written once into a root outside every checkout and read by `status` without a refusal; the worked example validates, the owner's file has not been seen.
 - **The real-git pilot ran** (2026-11-01): E4.S0's and E4.S2's git classes all green on git 2.39.4 and 2.45.0 built from source (E4.S0's section holds the table); the optional 2.44.0 control was not run.

@@ -1,21 +1,26 @@
 # PLAN — E6 stories: the compatibility contract and the record of the model-arms module
 
-> Status: **BUILT 2026-11-01 on `feat/model-arms-e6` except the promotion (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); the promotion waits for M2's key check, the owner's.** Stories written 2026-10-31. Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
+> Status: **E6.S1–E6.S3 BUILT 2026-11-01 except the promotion, delivered with E4 and E5 in PR #132 (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); E6.S4 — the parent's entries 3.2 and 3.3 — added by the parent's re-review for epoch 4 (2026-11-01), NOT built: it waits for epoch 4's approval and lands before #132 merges; the promotion waits for the owner's open lines (§11).** Stories written 2026-10-31; E6.S4 written 2026-11-01 by the judge (part (b)'s spec; part (a)'s is Fable's, to be written). Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
 > §4.3, §4.12; §5; §6 step 6; §7's E6 tests; §9; §10; `## Epics` E6; plan-gate round 1's F2), written at `cc02d09` on
 > `feat/model-arms-e6` (E1–E3 on `main`; E4.S0 built; E4.S1–E4.S3 and E5.S1–E5.S4 being built on their own branches against
 > [PLAN_model_arms_E4.md](PLAN_model_arms_E4.md) and [PLAN_model_arms_E5.md](PLAN_model_arms_E5.md)) by the judge role (Opus), as the
 > epic starts — `common.plan-change-control` § *What counts as a change*: writing them is not a change. The parent's epoch 3 holds ONE
 > entry (3.1); a second accepted change stops the plan, so every claim of the parent found wrong or incomplete is LISTED in §8 and not
 > edited here: items 3, 18 and 20 are wording (a stale sentence, a callers list, a status-line reading — `common.plan-change-control`
-> § *What counts*: not a change), writable into the parent now; items 6, 11, 19 and 21 wait for the parent's next change or the owner.
+> § *What counts*: not a change), writable into the parent now; items 6, 11, 19 and 21 wait for the parent's next change or the owner. (Since: epoch 3 holds three entries and is stopped; the
+> parent's re-review for epoch 4 took items 3, 6, 11, 18, 20 and 21 into its baseline; item 19 stays the owner's.)
 > **No cornerstone** (the parent's ledger is `3 of 3`, spent)
-> and **no security judgement** (E6 adds no adapter and no launch to the module). **No code story starts before E4 (both pull requests)
-> and E5 (both pull requests) are on `main`** and `main` is merged into this branch (never a force-push). One pull request.
+> and **no security judgement in E6.S1–E6.S3** (they add no adapter and no launch to the module); **E6.S4's part (a) IS one** — the
+> environment of the arm's own claude session, D19 (ledger 3.2) — so its scenarios and brief are Fable's (§5, §8 item 1). **No code story starts before E4 (both pull requests)
+> and E5 (both pull requests) are on `main`** and `main` is merged into this branch (never a force-push). One pull request. (Delivered
+> otherwise: E4 and E5 were integrated into this branch and the three epics went to review as ONE pull request, #132 — the parent's §6
+> step 0 records the deviation and the remaining path.)
 >
 > Scope: the consumer check whole — every checked-in reader of the harness run over a fake arm of each scheme the module itself wrote,
 > the one rename mapped, the shell's layout compared with the module's in both directions (E6.S1); the flow catalogue derived from the
 > module's dispatch (E6.S2); the module documented as it is, M3's attended pilot, the analysis plan written, the promotion prepared and
-> — once the parent's two open Definition-of-Done lines (the owner's) are closed — carried out (E6.S3). Tests under `tests/Bench.Tests/ModelArms/` and `tests/Bench.Tests/Cli/`,
+> — once the parent's two open Definition-of-Done lines (the owner's) are closed — carried out (E6.S3); the parent's entries 3.2 and 3.3 built — the arm's session without `SSH_AUTH_SOCK` and inherited `GIT_*`, the
+> pick-back without its patch-id skip (E6.S4, added by the parent's re-review for epoch 4). Tests under `tests/Bench.Tests/ModelArms/` and `tests/Bench.Tests/Cli/`,
 > fixtures under `tests/Bench.Tests/Fixtures/model-arms/consumers/`, `research/module_model_arms.md`, `research/module_tests.md`,
 > `research/architecture.md`, `README.md`, `todo/PLAN_model_arms_analysis.md` (new).
 
@@ -41,6 +46,14 @@ Then the record: the module doc still opens *"E1.S2 built … every other sectio
 map and the README's layout do not name the module; M3 — the attended pilot of the whole thing — has not run; the analysis plan the
 parent defers to does not exist; and the plan is promoted only with its deviations, while one line of its Definition of Done (M2's key
 check) is the owner's.
+
+**Added by the parent's re-review for epoch 4 (2026-11-01).** The owner decided two questions this document had listed as open (§8
+item 26 (a), (b)) — the parent's entries 3.2 and 3.3. The arm's own claude session, the one that runs arbitrary commands by design,
+still inherits the operator's ssh agent (`SSH_AUTH_SOCK`) and every ambient `GIT_*`, which the target's tools and the harness's own git
+already strip (`ArmChildEnvironment.cs`'s *Residuals*). And the pick-back still carries, WITHOUT a commit of its own, a source with no
+record line whose patch-id matches a commit some other hand put on the arm branch (`PickBackOrder.cs:44-48`) — a sibling task's
+identical change, the model's own commit — where the intent/completion record already makes every pick idempotent. Both are built here,
+as E6.S4, on #132's branch after epoch 4 is approved and before #132 merges.
 
 ## 2. What exists — verified at `cc02d09`, 2026-10-31
 
@@ -433,6 +446,94 @@ and of this document say exactly that.
 
 **Out of bounds.** Running the analysis; the owner's checks themselves (M2's key check, the real-git pilot); a real experiment.
 
+### E6.S4 — The owner's two decisions of 2026-11-01: the arm's session without the ssh agent and ambient git (ledger 3.2), the pick-back without its patch-id skip (ledger 3.3)
+
+- **Coder:** sonnet · **Spec:** part (a) **Fable (to be written)** — a security judgement: the environment of the session the model
+  under test runs in is the boundary D19 draws (D26); part (b) Opus (this section) · **Review:** Opus, naming D26 (a)–(f) for part (a).
+  **`model:`** fable (part (a)'s scenarios and brief), opus (part (b)'s spec, the review), sonnet (code and tests). **Depends on:** the
+  parent's epoch 4 approved (`common.plan-change-control`: no new code during the stop); E6.S1–E6.S3 on #132's branch. **Parallel:** (a)
+  and (b) touch disjoint files and may be built in two worktrees, landing one at a time. **Size:** ≈ 250 lines (≈ 30 code, 150 tests, 70
+  docs). **Last** of E6's code; #132 merges after it and its code gate.
+- **Owns:** ledger 3.2 (D19), ledger 3.3 (D22); §8 item 26 (a) and (b); E4 §5 E4.S0 item 4 and E4 §8 item 22 (superseded).
+
+**Goal.** The arm's own claude session receives neither `SSH_AUTH_SOCK` nor any inherited `GIT_*`, as the target's tools and `ArmGit`
+already do not, and keeps claude's own login (`CLAUDE_*` / `ANTHROPIC_*`); the pick-back carries a source only when a completion line
+of its record is believed on the arm branch, and picks every other source — a change the branch already holds lands as one empty
+commit with the task's author and message, never as nothing.
+
+**Part (a) — `ArmChildEnvironment` strips `SSH_AUTH_SOCK` and every inherited `GIT_*`.** `spec: Fable (to be written)`. Fixed by the
+entry and by this document: the two rules are `TargetEnvironment`'s (`TargetEnvironment.cs:18`, `:27` — the socket by name, `GIT_` as a
+prefix, both whatever the case); the `CLAUDE_*` / `ANTHROPIC_*` exception is unchanged (no name of either rule carries those prefixes);
+`TMPDIR` and the scout flags are unchanged; `TargetEnvironmentTests` is not edited. The floor of tests the spec keeps, each red at
+`16e7fd20`: `ArmChildEnvironmentTests.The_ssh_agent_and_every_inherited_git_variable_never_reach_the_arms_session` — `[Theory]`, rows
+at least `SSH_AUTH_SOCK`, `ssh_auth_sock`, `GIT_DIR`, `Git_Dir`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, `GIT_SSH_COMMAND` (red:
+`Expected … not to contain key "SSH_AUTH_SOCK"`); `Claudes_own_names_pass_even_when_secret_shaped` and
+`Home_path_locale_and_claudes_own_variables_pass_through_untouched` unedited and green; and the wiring — the fake's logged
+`EnvironmentNames` of a real step launch (`StepRunner` → `StepLaunch` → `ArmChildEnvironment.Of` → the replacing overload, E4 §5 E4.S0
+item 3's pattern) holds neither name. **Questions the spec must settle:**
+
+1. **One place for the two rules** — the lesson of ledger 2.2 (two lists drift): move `TargetEnvironment`'s `IsGit` and `AgentSocket`
+   beside `SecretShaped` in Core and ask them from both environments, or ask `TargetEnvironment`'s from `ArmChildEnvironment`; either
+   way `TargetEnvironmentTests` runs unedited.
+2. **What stays a residual, and is said** (parent §9, the class doc's *Residuals*, the module doc): agent variables outside the two
+   rules (`SSH_AGENT_PID`, `GPG_AGENT_INFO`, `GNUPGHOME`, `SSH_ASKPASS`, …) and the files under `HOME` (`~/.ssh`, `~/.gnupg`,
+   `~/.gitconfig`). Widening past the entry's two names is a new ledger entry, never this story's.
+3. **The gate step.** The arm's claude starts `coai-mcp` (and through it the `creds` CLI) under this environment: whether either needs
+   `SSH_AUTH_SOCK` or a `GIT_*` (read `dew_flow_connect_other_ais` · `src_mcp`), what a gate round loses if so, and whether M2's key-check
+   road is unchanged.
+4. **Where the changed condition is said:** runs after E6.S4 differ from part 6's measured conditions (the entry's words). The module
+   doc's E4.S0 section and *Not proven, gathered* (no longer *the owner's open question*), the analysis plan's carried list; a marker in
+   the arm's own files is a layout change D5 governs — the default is none.
+5. **The case rule.** Linux names are case-sensitive and git reads only upper-case `GIT_*`; stripping `git_dir` follows
+   `TargetEnvironment` and this class's "whatever the case" — confirm, or rule otherwise with the reason.
+6. **D26 (a)–(f)** for the changed class and the threat text: the class doc, parent §9, the module doc.
+
+**Part (b) — the pick-back without its patch-id skip** (spec: Opus, here).
+
+*Files.* `tools/model-arms/ModelArms.Core/Tasks/PickBackOrder.cs` (the patch-id clause `:44-48` removed; the class doc rewritten);
+`tools/model-arms/ModelArms/Adapters/TaskPickBack.cs` (`:82` the call; `:94-100` the patch-ids asked for the task's range only; `:129`
+the log line); `tests/Bench.Tests/ModelArms/PickBackTests.cs` (`:158` edited); `TaskWorktreesCrashTests.cs` (`:38`'s log line edited,
+`:45` replaced); `TaskWorktreesPickTests.cs` (`:200-236`, test 11: its doc and its message — the pins now keep the RECORDED patch-id
+honest, the skip they guarded is gone); `research/module_model_arms.md` (the E4.S2 section's pick paragraph and its table row for test
+14, `:2496`; its *Not proven*; *Not proven, gathered*).
+
+*Contract.* `PickBackOrder.Decide(IReadOnlyList<PickSource> sources, IReadOnlyList<PickEntry> record, IReadOnlyCollection<string>
+onBranch)` — `onBranch` the shas of `rev-list <before>..HEAD`, no patch-ids; a source with a completion whose `PickedSha` is in
+`onBranch` → `Carried(source, picked, "the record")`; every other source → `Pick(source, patchId)`; `NotBelieved` unchanged. The adapter
+asks `PatchIdsAsync` for the task's range only (one `diff-tree` and one `patch-id` launch, the pins unchanged), so the completion line's
+`patchId` is written as before and the record's shape does not change (a record written before E6.S4 reads the same). The log line
+becomes `<id>: <n> commit(s) carried over (<k> already carried by the record)`.
+
+*Scenarios.*
+
+| Test | Given / When / Then | Red (at `16e7fd20`) |
+|---|---|---|
+| `PickBackTests.A_source_with_no_line_at_all_is_picked_whatever_its_patch_id` (`:158`, edited: the name and the expectation) | sources `a` (patch `same`), `b` (`other`); no record; the branch holds `9` with patch `same` → `Steps` = `Pick(a, "same")`, `Pick(b, "other")`; `NotBelieved` empty | `Expected plan.Steps to be equal to {Pick …}, but {Carried(a, 9, "patch-id of 9"), …} differs at index 0` |
+| `TaskWorktreesTests.A_commit_whose_change_the_arm_branch_already_holds_is_picked_as_one_empty_commit_and_a_repeat_entry_adds_nothing` (`TaskWorktreesCrashTests.cs`, replaces `:45`'s `A_commit_already_in_the_arm_history_by_patch_id_is_skipped_without_a_record`) | t1's c1 applied to the arm branch beforehand by the host's cherry-pick (no record — test 14's setup) → `PickBackAsync(t1)` null: ONE `cherry-pick` in the calls; the branch gained ONE commit, EMPTY (`show --stat --format= HEAD` empty), its author and message c1's, its committer the pin's; the record is c1's intent and completion (two lines, the completion's `picked` = HEAD); the marker equals the record; the log `t1: 1 commit(s) carried over (0 already carried by the record)`. Then `PickBackAsync(t1)` again → null, no question asked (the marker); and with the marker deleted (a crash before it) → null, NO `cherry-pick`, the branch and the record unchanged (c1 carried by its believed completion) | `Expected 1 cherry-pick, but found 0` |
+| `A_crash_after_a_pick_and_before_the_marker_skips_the_carried_commits_on_reentry` (unchanged scenario; `:38` edited) | the log line is `t1: 1 commit(s) carried over (2 already carried by the record)` | the old line, `… 0 by patch-id)` |
+
+*Break-its.* The patch-id clause restored → both new rows red; a completion believed without the branch check →
+`A_source_with_an_unbelieved_completion_and_a_matching_patch_id_is_picked_not_skipped` red (kept as it is); `--keep-redundant-commits`
+dropped from `CherryPickAsync` → the new real-git row red (git refuses the redundant pick).
+
+*Brief.* Remove, never weaken: a completion is still believed only on the branch, an open intent is still settled by the commit's facts
+(E4 §8 item 28), the record's shape and the marker's place are unchanged. `PickBackOrder`'s class doc says the record alone carries;
+the module doc's residual *a sibling task's identical change carried "by patch-id" without a commit of its own* becomes *a change the
+branch already holds lands as one empty commit with the task's author and message*.
+
+**Commands.** `--filter-class "*ArmChildEnvironmentTests"`, `"*TargetEnvironmentTests"`, `"*PickBackTests"`, `"*TaskWorktreesTests"`,
+`"*RunArmSchemeTests"`, `"*RunArmSrsTests"`; `--filter-namespace "Bench.Tests.ModelArms"`; the whole suite once;
+`node .agents/conventions/tools/plan-lifecycle.mjs`. No git argv changes, so the real-git pilot is not repeated (the patch-id launch is
+asked with fewer shas).
+
+**Done when.** Each named test red at `16e7fd20` on an assertion, then green; the break-its observed; the parent's §9, D19 and D22, the
+class docs and the module doc no longer call either question open, and say that runs after E6.S4 differ from part 6's conditions; E4
+§5 E4.S0 item 4, E4 §8 item 22 and this document's §8 item 26 (a) and (b) say superseded (written by the re-review); #132's coai code
+gate passed with E6.S4 in it; then #132 merges.
+
+**Out of bounds.** Any other name in the arm's environment (a new entry); the record's shape; `CoaiEnvironment.IsSecretName`;
+`TargetEnvironment`'s rules (asked, not changed); the promotion.
+
 ## 6. Order and parallel groups
 
 ```mermaid
@@ -441,16 +542,20 @@ flowchart LR
     M --> S2[E6.S2 the catalogue]
     S1 --> S3[E6.S3 docs, M3, analysis plan, promotion]
     S2 --> S3
-    S3 --> O[the parent's two open DoD lines closed by the owner] --> P[the move]
+    S3 --> S4[E6.S4 ledger 3.2 and 3.3, after epoch 4 is approved]
+    S4 --> G[the code gate of PR 132, then its merge]
+    G --> O[the parent's open DoD lines closed by the owner] --> P[the move]
 ```
 
 | Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
 |---|---|---|
 | A | **E6.S1**, **E6.S2** | `research/module_tests.md` (S1: two not-proven lines; S2: the section intro and its rows' check) |
 | B | **E6.S3** | the module doc (S1's heading kept), `research/module_tests.md` (the not-proven paragraph), the READMEs |
-| C | the move, after the owner | the parent, the six stories documents, both READMEs, inbound referrers |
+| C | **E6.S4** (re-review for epoch 4), parts (a) and (b) one at a time | `research/module_model_arms.md` (each part its own sections) |
+| D | the move, after the owner | the parent, the six stories documents, both READMEs, inbound referrers |
 
-One pull request for E6 (the parent's §6 step 0); its coders work in worktrees from this branch and land one at a time.
+One pull request for E6 (the parent's §6 step 0) — delivered as #132 with E4 and E5 in it (the parent's §6 records the deviation); its
+coders work in worktrees from this branch and land one at a time.
 
 ## 7. Test plan (maps to the parent's §7, E6)
 
@@ -462,6 +567,10 @@ Every class and method of the parent's E6 block is here under its exact name. NE
   (parent §7, `:963`, the same name), `The_model_arms_dispatch_and_its_command_line_table_name_the_same_verbs` (new here, item 15); edited:
   `The_scans_still_find_known_flows_in_each_source` (the parent's name).
 - **E6.S3 — 1 (+ 1 explicit scaffold):** `PublishedRecordTests` 1; `M3PilotScaffold` (explicit, not in the suite's count).
+- **E6.S4 — 2 new, 2 edited (+ Fable's part (a) rows):** `ArmChildEnvironmentTests.The_ssh_agent_and_every_inherited_git_variable_never_reach_the_arms_session`
+  (new `[Theory]`, part (a)'s floor) and its wiring test (Fable's spec names it); `TaskWorktreesTests.A_commit_whose_change_the_arm_branch_already_holds_is_picked_as_one_empty_commit_and_a_repeat_entry_adds_nothing`
+  (new, replacing `A_commit_already_in_the_arm_history_by_patch_id_is_skipped_without_a_record`); edited: `PickBackTests.cs:158`
+  (renamed `A_source_with_no_line_at_all_is_picked_whatever_its_patch_id`, `Carried` → `Pick`) and `TaskWorktreesCrashTests.cs:38` (the log line).
 
 The red of every test is an assertion against today's code or a stub with the final signature; the break-its are per story.
 
@@ -477,7 +586,8 @@ entry 3.1; a second accepted change stops the plan). **Items 3, 18 and 20 are wo
 status line — which `common.plan-change-control` § *What counts* names not a change: writable into the parent now, no ledger entry.
 Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its next change or the owner.
 
-1. **No cornerstone, no security judgement.** The ledger is `3 of 3` (parent `## Epics`). E6 adds no adapter and no launch to the module:
+1. **No cornerstone, no security judgement** — true of E6.S1–E6.S3; E6.S4, added by the parent's re-review for epoch 4, carries ONE
+   security judgement (part (a), the arm's session environment — Fable's spec), still no cornerstone. The ledger is `3 of 3` (parent `## Epics`). E6 adds no adapter and no launch to the module:
    D26 (a)–(f) has nothing new to be checked against; the readers' own launches (`metrics.mjs:38`'s `execSync('ls …')`, `t-survival.mjs:15`'s
    `git` by name) are the pinned readers' behaviour under the helper's environment, not the module's (D26 governs `tools/model-arms`).
 2. **This branch's base.** `cc02d09` is the E5 stories branch; the code of E6 starts only after E4 (both pull requests) and E5 (both) are
@@ -605,13 +715,13 @@ Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its
     (none there today, §2) that turns a copied key file red at the commit that adds it.
 26. **The owner's questions, accumulated on 2026-10-31 — OPEN, listed, not promotion conditions.** They go into the deviations as open
     and wait for the owner's answer; the promotion waits only for the parent's own Definition-of-Done lines (§11, item 19), never for these:
-    (a) `SSH_AUTH_SOCK` and every inherited `GIT_*` reach the arm's own claude session by D19's design — strip them (which changes part 6's
+    (a) *(decided — the parent's ledger 3.2, 2026-11-01: stripped; built by E6.S4; kept as history)* `SSH_AUTH_SOCK` and every inherited `GIT_*` reach the arm's own claude session by D19's design — strip them (which changes part 6's
     conditions) or keep them (parent §9; E4 §5 E4.S0 item 4); until then the arms start from a shell without an ssh agent;
-    (b) the removal of the narrowed patch-id skip, which the pick record makes unnecessary and whose residual carries a sibling's identical
+    (b) *(decided — the parent's ledger 3.3, 2026-11-01: removed; built by E6.S4; kept as history)* the removal of the narrowed patch-id skip, which the pick record makes unnecessary and whose residual carries a sibling's identical
     change without its own commit — a D22 change, proposed as a ledger candidate (E4 §8 item 22; the module doc's E4.S2 *Not proven*);
-    (c) the real-git pilot of E4.S0 and E4.S2 on git 2.39.4 and 2.45.0 built from source — not run, because building external code was
+    (c) *(done — ran 2026-11-01 on the owner's go-ahead: every E4.S0 and E4.S2 git class green on 2.39.4 and 2.45.0; kept as history)* the real-git pilot of E4.S0 and E4.S2 on git 2.39.4 and 2.45.0 built from source — not run, because building external code was
     not authorised (the module doc's E4.S0 and E4.S2 sections); a red there means D23's table is wrong;
-    (d) `run-all` and `chain` on macOS and FreeBSD, which have no `setsid(1)` and are refused with the manual road (exit 3) — against the
+    (d) *(decided 2026-11-01 without a change — the refusal stays: the spawn road is measured for Linux x86-64 glibc alone (`DetachedRoads`), an unmeasured launcher on an unseen host is worse than an honest refusal; 2.1's "do not forbid" was about kernel-fact readers; the consultants agreed; kept as history)* `run-all` and `chain` on macOS and FreeBSD, which have no `setsid(1)` and are refused with the manual road (exit 3) — against the
     owner's 2.1 ruling "do not forbid" (E5 §8 item 30).
 
 ## 9. Growth
@@ -636,6 +746,9 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 4. **E6.S2 — a catalogue reading one of two sources of the verb list.**
 5. **E6.S3 — a promotion while the owner's line is open; an M3 that chmods the operator's `~/.claude`; a published record carrying
    `mcp-coai.json`.**
+6. **E6.S4 — part (a): a rule that strips claude's own login with the agent** (the `CLAUDE_*` / `ANTHROPIC_*` rows must stay green), a
+   second list beside `TargetEnvironment`'s that drifts from it, a gate step that needed what was stripped; **part (b): a removal that
+   also loosens the belief rule** (a completion believed off the branch), or a redundant pick that git refuses instead of keeping empty.
 
 ## 11. Definition of Done — epic E6
 
@@ -650,6 +763,9 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 - [ ] M3 ran all fifteen steps — every verb, the four schemes, one run locked and unlocked (by hand and by the chain), two limited attempts
       resumed, one interrupted arm resumed by `run-all`, one blocked gate continued, the A–D re-run with its CLI version — logged in
       `research/module_model_arms.md`, its scratch removed.
+- [ ] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 is approved and before #132 merges: part (a) to Fable's spec, its
+      theory red at `16e7fd20` then green, the `CLAUDE_*` / `ANTHROPIC_*` rows green; part (b) — the two named tests red then green, the
+      log line edited; the docs say runs after it differ from part 6's conditions; #132's code gate passed with it.
 - [ ] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
       `todo/README.md` row.
 - [ ] The parent's deviations written (every epic; items 3 and 4 here); §8's wording items 3, 18 and 20 written into the parent (not a
