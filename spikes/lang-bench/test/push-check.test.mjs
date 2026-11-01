@@ -279,3 +279,23 @@ test('A_statement_copy_under_a_workspace_folder_is_a_known_task_text_for_the_cre
   const result = await run(repo);
   assert.ok(checkOf(result, 'known-task-credits').findings.some(f => f.what.startsWith('credit line of task 01')), formatReport(result));
 });
+
+test('A_remote_tracking_ref_that_the_remote_no_longer_has_or_has_moved_is_refused_because_it_would_hide_commits', async t => {
+  const { repo } = branchWith(t, { 'research/a.md': 'x\n' });
+  assert.equal((await run(repo)).exit, EXIT.PASS, 'fresh tracking refs pass');
+  git(repo, 'update-ref', 'refs/remotes/origin/old', git(repo, 'rev-parse', 'topic'));
+  const stale = await run(repo);
+  assert.equal(stale.exit, EXIT.CONFIG);
+  assert.match(stale.error, /refs\/remotes\/origin\/old/);
+  assert.match(stale.error, /--setup-remote/);
+  git(repo, 'update-ref', '-d', 'refs/remotes/origin/old');
+  assert.equal((await run(repo)).exit, EXIT.PASS);
+  const bare = originOf(repo);
+  const other = path.join(path.dirname(repo), 'other');
+  git(path.dirname(repo), 'clone', '-q', bare, other);
+  commit(other, 'feat: the remote moved', { 'z.txt': 'z\n' });
+  git(other, 'push', '-q', 'origin', 'HEAD:main');
+  const moved = await run(repo);
+  assert.equal(moved.exit, EXIT.CONFIG, 'a tracking ref behind the remote is stale too');
+  assert.match(moved.error, /refs\/remotes\/origin\/main/);
+});

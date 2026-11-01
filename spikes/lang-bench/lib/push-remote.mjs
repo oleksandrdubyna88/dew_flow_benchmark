@@ -21,6 +21,31 @@ export async function verifyOrigin(repo, expected = TASK_REPO_URL) {
   return notExpected === undefined ? ok(expected) : fail(`origin's ${notExpected[0]} is ${notExpected[1]}, not the task repository ${expected}: the range is measured against origin, so a wrong origin hides commits`, { kind: 'config' });
 }
 
+/** The `refs/remotes/origin/*` refs (HEAD excluded) as a Map(refname -> sha); a git failure is a value. */
+async function trackingRefs(repo) {
+  const refs = await runGit(repo, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes/origin']);
+  return refs.ok ? ok(new Map(refs.value.stdout.split('\n').filter(l => l !== '' && !l.startsWith('refs/remotes/origin/HEAD ')).map(l => l.split(' ')))) : refs;
+}
+
+/** The remote's branches as Map(refname -> sha), spelled like the tracking refs. */
+async function remoteHeads(repo, config) {
+  const heads = await runGit(repo, ['ls-remote', '--heads', 'origin'], { timeoutMs: FETCH_TIMEOUT_MS, config });
+  const entries = (heads.ok ? heads.value.stdout.split('\n') : []).filter(Boolean).map(l => l.split('\t')).map(([sha, ref]) => [ref.replace('refs/heads/', 'refs/remotes/origin/'), sha]);
+  return heads.ok ? ok(new Map(entries)) : heads;
+}
+
+/**
+ * ok(null) when every local `refs/remotes/origin/*` ref is what the remote has now. The push range is `--not --remotes=origin`: a ref
+ * the remote no longer has, or one that is behind it, makes the range smaller or larger than the push, so it is refused (exit 4) until
+ * `--setup-remote` (fetch --prune) has run. A failing ls-remote is an `env` fail, never a pass.
+ */
+export async function verifyFresh(repo, config = FETCH_CONFIG) {
+  const [local, remote] = [await trackingRefs(repo), await remoteHeads(repo, config)];
+  if (!local.ok || !remote.ok) return local.ok ? remote : local;
+  const stale = [...local.value].filter(([ref, sha]) => remote.value.get(ref) !== sha).map(([ref]) => ref);
+  return stale.length === 0 ? ok(null) : fail(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} not what the remote has: run --setup-remote (fetch --prune) first, the push range is measured against these`, { kind: 'config' });
+}
+
 const done = (exit, lines) => ({ exit, lines });
 
 /** The remote step: returns the line it printed and whether git still agrees; a git failure is a value. */

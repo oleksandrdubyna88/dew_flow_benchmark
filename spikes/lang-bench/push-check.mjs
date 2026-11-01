@@ -6,6 +6,8 @@
 //   node spikes/lang-bench/push-check.mjs --self --branch <b> [--repo <dir>]  the bench's own branch (leak and secret scans only)
 //   node spikes/lang-bench/push-check.mjs --setup-remote --repo <task repo> [--url <u>]
 //
+//   a branch check refuses (exit 4) when a refs/remotes/origin/* ref is not what the remote has now (ls-remote): run --setup-remote first.
+//
 //   options: --aid <file> (repeatable) | --aids-dir <dir>   the private aids, read at run time (default ~/rsd/lang-v2/test-design/)
 //            --public <file> (repeatable)  texts that are public already; their six-word runs are not aid hits. Default: the two plans as
 //                            published at origin/main of the bench repository (--bench-repo <dir>), never the working tree; unreadable = exit 3
