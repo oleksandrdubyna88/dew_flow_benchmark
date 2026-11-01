@@ -13,8 +13,9 @@ import { findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 export const COMMIT_MESSAGE = '(commit message)';
 export const SUBMODULE = '160000';
 export const NUL_REASON = 'file holds a NUL byte (binary or UTF-16): the text scans cannot be trusted on it';
-/** The checks that read every commit; the others read the tip. */
-export const HISTORY_CHECKS = Object.freeze(new Set(['leakcheck', 'secrets']));
+/** The checks that read every commit; the others read the tip. The set is private (Object.freeze does not stop `.add()` on a Set): ask `isHistoryCheck`. */
+const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
+export const isHistoryCheck = name => HISTORY_CHECKS.has(name);
 
 /** The findings of one text, by check name. `file` decides which placement rules apply; `body` is a PR or review body (links allowed). */
 export function scanText(file, text, inputs, { body = false } = {}) {
@@ -51,7 +52,8 @@ export function scanEntries(files, tip) {
 
 /** Tagged findings of one entry's decoded blob (none when `bytes` is undefined: the blob is already published), its path (once) and, where asked, its NUL byte. */
 /** The checks that read where a thing STANDS (its path and its text): the only ones run for a published blob at a new path. */
-export const PLACEMENT_CHECKS = Object.freeze(new Set(['run-base-text', 'family-names', 'attribution']));
+const PLACEMENT_CHECKS = new Set(['run-base-text', 'family-names', 'attribution']);
+export const isPlacementCheck = name => PLACEMENT_CHECKS.has(name);
 
 /**
  * Entries for the tip tree's (path, blob) pairs that the published base does not hold and that no fresh range entry already covers: a published
@@ -73,7 +75,7 @@ export function entryFindings(entry, bytes, inputs, { refuseNul }) {
     ...(text === null ? [] : flatten(scanText(path, text, inputs), commit)),
     ...(entry.firstOfPath ? flatten(scanPath(path, inputs), commit) : []),
     ...refusal,
-  ].map(f => ({ atTip: entry.atTip, ...f })).filter(f => !entry.placementOnly || PLACEMENT_CHECKS.has(f.check));
+  ].map(f => ({ atTip: entry.atTip, ...f })).filter(f => !entry.placementOnly || isPlacementCheck(f.check));
 }
 
 /** Tagged findings of the commit messages (never at the tip: only the history checks keep them). */
@@ -82,7 +84,7 @@ export const messageFindings = (messages, inputs) => messages.flatMap(({ commit,
 const isMessageFamily = f => f.check === 'family-names' && f.path === COMMIT_MESSAGE;
 
 /** Only what the check reads: a history check keeps everything, a family name in a commit message too (public history), any other keeps what is at the tip. */
-export const keptFindings = findings => findings.filter(f => f.atTip !== false || HISTORY_CHECKS.has(f.check) || isMessageFamily(f) || f.always === true);
+export const keptFindings = findings => findings.filter(f => f.atTip !== false || isHistoryCheck(f.check) || isMessageFamily(f) || f.always === true);
 
 /** Is there a README structure to check? It is when a known-task text is in play or the README already has the heading. */
 const attributionNeeded = (text, addedPaths, carriesKnownText) => text !== null && (carriesKnownText(addedPaths) || /^## Attribution\s*$/m.test(text));
