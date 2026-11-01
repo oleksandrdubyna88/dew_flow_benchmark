@@ -6,6 +6,7 @@ names, so a program that copies bash to `./bwrap` hides nothing. The program is 
 execs it: D38) and the launcher pid is never a candidate (rs_track.py). `cgroup.kill` is the kill: behind `--new-session` the program is in a
 group of its own and `os.killpg` of the launcher's group would miss it. Nothing here signals one pid.
 """
+import errno
 import os
 import shutil
 import signal
@@ -144,26 +145,55 @@ def kill_pids(directory):
             pass
 
 
-def empty(directory):
-    """True when nothing is alive in the cgroup: its directory is gone (the system removes an emptied scope), or every listed pid is a zombie.
-    A file that cannot be read or understood is not empty."""
+def _read_errno(directory):
+    """The errno with which `cgroup.procs` fails to read, or None when it reads."""
+    try:
+        with open(os.path.join(directory, "cgroup.procs"), "rb") as f:
+            f.read(1)
+    except OSError as e:
+        return e.errno
+    return None
+
+
+def _gone(directory, was_readable):
+    """True when the cgroup is gone or on its way: its directory is missing, the kernel took it offline (ENODEV on every read), or it had
+    been readable and its files are gone while the directory lingers (a dying cgroup keeps the directory long after its last process)."""
     if not os.path.isdir(directory):
+        return True
+    failed = _read_errno(directory)
+    return failed == errno.ENODEV or (was_readable and failed == errno.ENOENT)
+
+
+def empty(directory, was_readable=False):
+    """True when nothing is alive in the cgroup: it is gone (above) or every listed pid is a zombie. A file that cannot be read or
+    understood, in a cgroup that never was readable, is not empty."""
+    if _gone(directory, was_readable):
         return True
     listed = procs(directory)
     return listed is not None and all(is_zombie(pid) for pid in listed)
 
 
+def _why_unreadable(directory):
+    """How `cgroup.procs` fails to read, by errno name, or that its content is no list of pids."""
+    try:
+        with open(os.path.join(directory, "cgroup.procs"), "rb") as f:
+            f.read(1)
+    except OSError as e:
+        return errno.errorcode.get(e.errno, str(e.errno))
+    return "content that is no list of pids"
+
+
 def _left(directory):
     left = procs(directory)
-    return "cgroup.procs cannot be read" if left is None else f"{len(left)} still in {directory}"
+    return f"cgroup.procs cannot be read ({_why_unreadable(directory)})" if left is None else f"{len(left)} still in {directory}"
 
 
-def wait_empty(directory, ceiling_ms=ex.GONE_CEILING_MS):
+def wait_empty(directory, ceiling_ms=ex.GONE_CEILING_MS, was_readable=False):
     """Wait, backing off from 1 ms to 50 ms, until the cgroup is empty; CleanupFailed when it is not at the ceiling, whether pids are left
-    or `cgroup.procs` cannot be understood."""
+    or `cgroup.procs` cannot be understood. `was_readable`: the caller read `cgroup.procs` before, so its files vanishing is the cgroup dying."""
     deadline, delay = ex.now_ms() + ceiling_ms, ex.POLL_FIRST_S
-    while not empty(directory) and ex.now_ms() < deadline:
+    while not empty(directory, was_readable) and ex.now_ms() < deadline:
         time.sleep(delay)
         delay = min(delay * 2, ex.POLL_LAST_S)
-    if not empty(directory):
+    if not empty(directory, was_readable):
         raise ex.CleanupFailed(f"a process of the case could not be killed: {_left(directory)} after {ceiling_ms} ms")

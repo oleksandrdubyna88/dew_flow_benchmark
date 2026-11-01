@@ -1,5 +1,6 @@
 """What the runner reads from the cgroup the layer names (E1.S8a part ii-a; B1, B4): memory.peak, memory.events, cgroup.procs, wrapper.pid,
 and the kill by `cgroup.kill`. Fake files stand in for the cgroup here; the real scope is in test_rs_scope.py."""
+import errno
 import os
 import shutil
 import subprocess
@@ -7,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import runner_path  # noqa: F401
 import rs_cgroup as cg
@@ -79,6 +81,21 @@ class UnreadableProcsTests(unittest.TestCase):
             with self.assertRaises(ex.CleanupFailed) as raised:
                 cg.wait_empty(Folder(self, {"cgroup.procs": text}).dir, 30)
             self.assertIn("cannot be read", str(raised.exception) if text == "abc\n" else "cannot be read")
+
+    def test_A_cgroup_the_kernel_has_taken_offline_reads_as_ENODEV_and_is_empty_while_a_missing_file_is_not(self):
+        folder = Folder(self, {"cgroup.procs": "12\n"}).dir
+        with mock.patch.object(cg, "open", side_effect=OSError(errno.ENODEV, "No such device"), create=True):
+            cg.wait_empty(folder, 30)  # a dying cgroup keeps its directory a moment and fails every read with ENODEV
+        with self.assertRaises(ex.CleanupFailed):
+            cg.wait_empty(Folder(self).dir, 30)  # an existing directory with no cgroup.procs file is only unreadable
+
+    def test_A_cgroup_that_was_readable_and_whose_files_are_gone_while_the_directory_lingers_is_empty_and_one_never_readable_is_not(self):
+        lingering = Folder(self).dir  # the kernel removes a dying cgroup's files first and its directory much later
+        cg.wait_empty(lingering, 30, was_readable=True)
+        with self.assertRaises(ex.CleanupFailed):
+            cg.wait_empty(lingering, 30)
+        with self.assertRaises(ex.CleanupFailed):
+            cg.wait_empty(lingering, 30, was_readable=False)
 
     def test_A_directory_that_is_gone_or_lists_only_zombies_is_empty(self):
         cg.wait_empty(os.path.join(Folder(self).dir, "gone"), 30)

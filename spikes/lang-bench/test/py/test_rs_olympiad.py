@@ -223,6 +223,7 @@ class PlainSettleTests(unittest.TestCase):
 class LauncherFdTests(unittest.TestCase):
     def test_The_launchers_pidfd_is_unregistered_once_launcher_gone_has_handled_it(self):
         proc = subprocess.Popen(["true"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(proc.wait)
         self.addCleanup(lambda: [s.close() for s in (proc.stdin, proc.stdout) if s and not s.closed])
         fd = ex.pidfd_of(proc)
         self.addCleanup(ex.close_fd, fd)

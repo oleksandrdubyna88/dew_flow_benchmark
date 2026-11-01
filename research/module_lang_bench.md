@@ -42,19 +42,19 @@ id (letters, digits, `_`, `-`; the id `empty-program` is reserved for the contro
 descriptor number the prefix gives bwrap as `--json-status-fd FD`: the runner makes one pipe per case and puts its write end at `FD` in the launcher (so the layer does not
 pass an open descriptor; it names a number, 3 or more and not open in the runner, and needs `--launch-prefix`). bwrap writes `{"child-pid": P}` and later `{"exit-code": C}`.
 **The status rules (P2):** before `child-pid`, a line that is not one JSON object, a record that is neither `child-pid` nor `exit-code`, a doubled `child-pid` or
-`exit-code`, no `child-pid` before the launcher exits (or within 60 s), or a cgroup that does not exist at `child-pid`, is `LaunchFailed`: exit 3 `launch failed` with the
-bounded tail (2 KiB) of the prefix's standard error, never a case verdict. After `child-pid` everything is the case (an immediate exit is an ordinary end; junk lines are
+`exit-code`, no `child-pid` before the launcher exits (or within 60 s), or an incomplete status line longer than 64 KiB, or a cgroup that does not exist at `child-pid`, is `LaunchFailed`: exit 3 `launch failed` with the
+bounded tail (2 KiB) of the prefix's standard error, never a case verdict. After `child-pid` everything is the case (an immediate exit is an ordinary end; junk lines, over-long ones included, are
 ignored). `child-pid` is the launch-success signal and **the start of the case clock**, not the pid authority; `exit-code` is the program's status (without one the
 launcher's own is used). *bwrap writes `child-pid` right after it clones the sandbox, BEFORE the box's mounts are made, so a few milliseconds of box set-up are inside the case
 clock (the numbers measured for the plan stay as they are); the plan fixes the start at `child-pid` and it is not moved.* **`--cgroup-of TEMPLATE`** (B1, B4; `{case}` filled
 in) names the program's cgroup2 directory. With a launch prefix it needs `--launch-status` (exit 4). The runner owns what it measures and kills: before the spawn the
 directory must not exist or must hold no process (else exit 3: it never measures or kills a cgroup this case does not own). It reads `cgroup.procs`, `memory.peak` and
 `memory.events` after the program's end and BEFORE any kill, then ALWAYS writes `1` to `cgroup.kill` (a leftover found or not) and waits until `cgroup.procs` is empty (2 s
-ceiling, else exit 5); where the cgroup is missing or the write fails the launcher's process group is killed as well. **The rule for the program's pid (B1, P4):** a bwrap
+ceiling, else exit 5). **The order of the kill:** the launcher is never reaped before the kill and its fallback are done (it is awaited on its pidfd, which does not reap; a group signal always goes to an unreaped leader, whose pid is still reserved). Where `cgroup.kill` cannot be written, the fallback kills the launcher's process group, then SIGKILLs each host pid `cgroup.procs` still lists and checks the cgroup is empty, else CleanupFailed. *Empty* means: its directory is gone, or the kernel took it offline (ENODEV), or it had been readable before the kill and its files are gone while the directory lingers (a dying cgroup), or every listed pid is a zombie. In a box (with `--launch-status`) a cgroup directory that vanishes after `child-pid` is exit 3, never a case status (the launcher's group is killed first). A `cgroup.procs` with a line that is no pid is unreadable, and unreadable is never empty. On the plain path (no cgroup) the stragglers are looked for in the launcher's group before the launcher is reaped (a zombie leader does not count), and the group is signalled before the reap. **The rule for the program's pid (B1, P4):** a bwrap
 process is known by IDENTITY (`/proc/<pid>/exe` is the file, by device and inode, of the bwrap binary the prefix names; a copy of bash named bwrap is not one, and `comm` is
 never used); the program is the process of `cgroup.procs` whose PARENT is a bwrap process (`bash run.sh` execs it: D38), the launcher pid is never a candidate, a short tool
 bash starts has bash for a parent. Host pids only; a pid seen inside the box is never used; the pidfd is checked against the cgroup and the bwrap parent after it is taken
-(a recycled pid is neither). The look is part of the pump's loop (every millisecond until the program shows, then every 20 ms), so the program's stdin and stdout flow from
+(a recycled pid is neither). The look is part of the pump's loop (backing off from 1 ms to 20 ms while the program is not found, then every 20 ms; the end still comes from the pidfd or the record, so a late discovery costs no wall time), so the program's stdin and stdout flow from
 `child-pid` on. Two candidates with a bwrap parent are `fork` and no pid is chosen. **`fork`** is judged over the whole case from the processes that are not bwrap, not the
 launcher, not the wrapper and not the program: the most seen in two successive looks, and what a leftover read (repeated 20 ms later, so a process caught exiting is not one)
 finds after the exit; it is `known: false` when no pid was settled, and it never decides the pid. **`--wrapper-pid-file TEMPLATE`** (with `--cgroup-of`; `{case}` filled in) is
@@ -75,7 +75,7 @@ read from the status pipe; the launcher's own exit is never program time (withou
 when the launcher goes, but its wall is unknown (`wallMs: { known: false }`) and the verdict comes from the output and the deadline kill only. Every wait is `os.pidfd_open` +
 `select` with the exact remaining time; `Popen.wait(timeout=…)` is not used (a scan test says so). The wall rule, in nanoseconds: a wall over the limit is `time limit` even when
 the program exited by itself, exactly the limit passes, one millisecond over does not. Once per run, before the cases, an empty program (`bash -c :`) is timed through the same
-prefix, clock and pump (`emptyProgramMs`, and `emptyProgram: { ms, launchMs, pid, found, comm }` says which pid it waited on); its `{case}` is `empty-program`, so a layer whose
+prefix, clock and pump (`emptyProgramMs`, and `emptyProgram: { ms, launchMs, pid, found, comm }` says which pid it waited on), in the view of `empty-program` when `--case-view` is set; progress lines on standard error announce it and tell its time; its `{case}` is `empty-program`, so a layer whose
 prefix binds a per-case view or cgroup must provide one by that name. **V11:** the program's environment is a copy of the runner's own, plus (for the daemon and web kinds,
 part ii-b) `PORT` and the scenario's `env` lines; nothing else is added or removed (the layer sets it; the runner does not sanitise it).
 
@@ -84,7 +84,7 @@ registered the moment it exists, so every launcher still alive is stopped (`cgro
 whatever instruction the signal lands on; the pump is made inside the `try`.
 
 **Exit codes.** `0` every case passed (or `--parse-only` found no problem) · `1` a case failed, a failing build counts · `3` the environment (no workspace, no `bash`, a
-host that lacks a prerequisite, a case view that is missing, a cgroup that is not this case's, **a launch that failed**) · `4` configuration: usage, a malformed sample (file and
+host that lacks a prerequisite, a case view that is missing, a cgroup that is not this case's or that vanished after `child-pid`, **a launch that failed**) · `4` configuration: usage, a malformed sample (file and
 line), a version 1 file, a script/transcript mismatch, a bad limits file or `cases.txt`, the layer options that contradict each other · `5` the runner itself failed (a traceback,
 a daemon/web run before part ii-b, a process of the case that could not be killed, a launcher that could not be stopped, a stop by a signal).
 

@@ -247,6 +247,16 @@ class SettleOrderTests(unittest.TestCase):
     """C0, C3/C9, C13: the launcher is never reaped before the kill and its fallback are done, a cgroup that vanishes mid-case is exit 3, and a kill
     that cannot be written falls back to the pids the cgroup lists."""
 
+    def test_The_kill_reads_the_scope_first_so_that_a_dying_scope_afterwards_is_empty_and_not_unreadable(self):
+        ws = Workspace(self, "")
+        directory = fake_cgroup(ws)
+        proc = subprocess.Popen(["true"])
+        proc.wait()
+        calls = []
+        with mock.patch.object(cg, "wait_empty", lambda directory, ceiling=0, was_readable=False: calls.append(was_readable)):
+            rs_scope.ScopeLifecycle(directory).kill(proc)
+        self.assertEqual(calls, [True], "it had read cgroup.procs before the kill: ENOENT after it is the end of the cgroup")
+
     def test_Waiting_for_the_launcher_never_reaps_it_even_at_the_ceiling(self):
         proc = subprocess.Popen(["true"])
         self.addCleanup(proc.wait)

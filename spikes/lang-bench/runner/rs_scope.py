@@ -61,14 +61,15 @@ class ScopeLifecycle:
     def kill(self, proc):
         """`1` into `cgroup.kill`, the launcher reaped, and then no pid left in the cgroup or CleanupFailed. A cgroup that is missing, or one
         whose kill cannot be written, gets the launcher's process group killed as well."""
+        was_readable = cg.procs(self.directory) is not None
         try:
             cg.kill(self.directory)
         except ex.CleanupFailed as failure:
-            return self._fallback(proc, failure)
+            return self._fallback(proc, failure, was_readable)
         _reap_launcher(proc)
-        cg.wait_empty(self.directory)
+        cg.wait_empty(self.directory, was_readable=was_readable)
 
-    def _fallback(self, proc, failure):
+    def _fallback(self, proc, failure, was_readable=False):
         """The cgroup kill could not be written. The launcher's group first, while the leader is not yet reaped; then, if the directory
         exists, every pid it lists, and a check that it is empty (CleanupFailed when it is not). In a box a directory that is gone is
         CgroupLost: a scope that vanished after child-pid is not a case status."""
@@ -76,7 +77,7 @@ class ScopeLifecycle:
             ex.kill_group(proc)
         if self.present():
             cg.kill_pids(self.directory)
-            return cg.wait_empty(self.directory)
+            return cg.wait_empty(self.directory, was_readable=was_readable)
         if self.box:
             raise CgroupLost(f"the cgroup {self.directory} is gone after child-pid ({failure}): its processes were stopped through the launcher's group")
 
