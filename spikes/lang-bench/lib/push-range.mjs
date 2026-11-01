@@ -5,7 +5,8 @@
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { BLOB_MAX_BYTES, runGit } from './push-git.mjs';
 
-const SUBMODULE_MODE = '160000';
+export const SUBMODULE_MODE = '160000';
+export const SYMLINK_MODE = '120000';
 
 /** ok([sha]) oldest first, or a `config` fail when the branch does not exist. */
 export async function newCommits(repo, branch) {
@@ -16,13 +17,13 @@ export async function newCommits(repo, branch) {
   return list.ok ? ok(list.value.stdout.split('\n').filter(Boolean)) : list;
 }
 
-/** Records of `git diff-tree --raw -z`: added or changed files only (no deletion, no submodule pointer). */
+/** Records of `git diff-tree --raw -z`: added or changed entries only (no deletion). A submodule pointer has mode 160000 and no blob to read. */
 function parseRaw(raw, commit) {
   const parts = raw.split('\0').filter(Boolean);
   const files = [];
   for (let i = 0; i + 1 < parts.length; i += 2) {
     const [, newMode, , oid, status] = parts[i].slice(1).split(' ');
-    if (status !== 'D' && newMode !== SUBMODULE_MODE) files.push({ commit, path: parts[i + 1], oid });
+    if (status !== 'D') files.push({ commit, path: parts[i + 1], oid, mode: newMode });
   }
   return files;
 }
@@ -37,7 +38,7 @@ async function changesOfCommit(repo, commit) {
   return diff.ok ? ok({ message: { commit, text: message }, files: parseRaw(diff.value.stdout, commit) }) : diff;
 }
 
-/** ok({ messages: [{ commit, text }], files: [{ commit, path, oid }] }). A merge is compared with its first parent only. */
+/** ok({ messages: [{ commit, text }], files: [{ commit, path, oid, mode }] }). A merge is compared with its first parent only. */
 export async function changesOf(repo, commits) {
   const messages = [];
   const files = [];
@@ -72,15 +73,15 @@ export async function readFileAt(repo, branch, path) {
   return blob.ok ? ok(blob.value.stdout) : blob;
 }
 
-/** ok(Map(path -> blob id)) of the files in the tree at the tip of `branch` (no gitlinks): what a run base would carry. */
+/** ok(Map(path -> { oid, mode })) of every entry in the tree at the tip of `branch` (submodule pointers and symlinks included): what a run base would carry. */
 export async function tipTree(repo, branch) {
   const listing = await runGit(repo, ['ls-tree', '-r', '-z', `refs/heads/${branch}`], { maxBytes: 64 * 1024 * 1024 });
   if (!listing.ok) return listing;
   const tree = new Map();
   for (const record of listing.value.stdout.split('\0').filter(Boolean)) {
-    const [meta, file] = [record.slice(0, record.indexOf('\t')), record.slice(record.indexOf('\t') + 1)];
-    const [mode, , oid] = meta.split(' ');
-    if (mode !== SUBMODULE_MODE) tree.set(file, oid);
+    const tab = record.indexOf('\t');
+    const [mode, , oid] = record.slice(0, tab).split(' ');
+    tree.set(record.slice(tab + 1), { oid, mode });
   }
   return ok(tree);
 }

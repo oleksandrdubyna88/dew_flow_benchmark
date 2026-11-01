@@ -6,14 +6,15 @@ import { attributionSection, outsideAttribution } from './attribution.mjs';
 import { checkCreditTerms, carriesKnownText } from './push-credits.mjs';
 import { findAidHits } from './push-needles.mjs';
 import { EXIT } from './push-exit.mjs';
-import { changesOf, newCommits, readBlobs, readFileAt, tipTree } from './push-range.mjs';
+import { changesOf, newCommits, readBlobs, readFileAt, SUBMODULE_MODE, tipTree } from './push-range.mjs';
 import { TASK_REPO_URL, verifyOrigin } from './push-remote.mjs';
 import { findSecrets } from './push-secrets.mjs';
+import { findSubmoduleProblems } from './push-shape.mjs';
 import { findStackFolderFiles, findVisibleRules, GROUP_FAMILY } from './push-visible.mjs';
 
 export { EXIT };
 export const COMMIT_MESSAGE = '(commit message)';
-const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders']);
+const NAMES = Object.freeze(['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
 const SELF_NAMES = Object.freeze(['leakcheck', 'secrets']);
 // History is published, so these read every commit; the others read the tip tree, which is what a run base carries.
 const HISTORY_CHECKS = new Set(['leakcheck', 'secrets']);
@@ -57,27 +58,28 @@ const toChecks = (names, byName) => names.map(name => ({ name, findings: byName[
 async function scanRange(repo, branch, commits, inputs, names) {
   const changes = await changesOf(repo, commits);
   if (!changes.ok) return changes;
-  const blobs = await readBlobs(repo, changes.value.files.map(f => f.oid));
+  const blobs = await readBlobs(repo, changes.value.files.filter(f => f.mode !== SUBMODULE_MODE).map(f => f.oid));
   const tip = await tipTree(repo, branch);
   if (!blobs.ok || !tip.ok) return blobs.ok ? tip : blobs;
   const byName = emptyChecks(names);
   for (const { commit, text } of changes.value.messages) merge(byName, scanText(COMMIT_MESSAGE, text, inputs), commit, { atTip: false });
   const seen = new Set();
   const tipCommit = new Map();
-  for (const { commit, path, oid } of changes.value.files) {
-    const atTip = tip.value.get(path) === oid;
+  for (const { commit, path, oid, mode } of changes.value.files) {
+    const atTip = tip.value.get(path)?.oid === oid;
     if (atTip && !tipCommit.has(path)) tipCommit.set(path, commit);
-    if (seen.has(`${path}\0${oid}`)) continue;
+    if (mode === SUBMODULE_MODE || seen.has(`${path}\0${oid}`)) continue;
     seen.add(`${path}\0${oid}`);
     merge(byName, scanText(path, blobs.value.get(oid), inputs), commit, { atTip });
   }
-  return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()] });
+  return ok({ byName, firstCommit: tipCommit, paths: [...tipCommit.keys()], tip: tip.value });
 }
 
 /** Branch-level findings: the README's structure, the credit terms and the stack folders, with the commit that brought the path. */
-async function tipFindings({ repo, branch, inputs, paths, firstCommit }) {
+async function tipFindings({ repo, branch, inputs, paths, firstCommit, tip }) {
   const readme = await readFileAt(repo, branch, 'README.md');
-  if (!readme.ok) return readme;
+  const modules = await readFileAt(repo, branch, '.gitmodules');
+  if (!readme.ok || !modules.ok) return readme.ok ? modules : readme;
   const text = readme.value;
   const structure = text !== null && (carriesKnownText(paths) || /^## Attribution\s*$/m.test(text)) ? attributionSection(text) : ok(null);
   const withCommit = f => ({ commit: firstCommit.get(f.path), ...f });
@@ -85,6 +87,7 @@ async function tipFindings({ repo, branch, inputs, paths, firstCommit }) {
     attribution: structure.ok ? [] : [{ path: 'README.md', line: null, what: structure.reason }],
     credits: checkCreditTerms({ credits: inputs.credits, paths, readmeText: text }).map(withCommit),
     stack: findStackFolderFiles(paths, { templateFiles: inputs.templateFiles }).map(withCommit),
+    shape: findSubmoduleProblems({ tip, gitmodulesText: modules.value }).map(withCommit),
   });
 }
 
@@ -97,12 +100,13 @@ export async function checkBranch({ repo, branch, inputs, expectedOrigin = TASK_
   if (!range.ok) return errorResult(label, range);
   const scanned = await scanRange(repo, branch, range.value, inputs, NAMES);
   if (!scanned.ok) return errorResult(label, scanned);
-  const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit });
+  const tip = await tipFindings({ repo, branch, inputs, paths: scanned.value.paths, firstCommit: scanned.value.firstCommit, tip: scanned.value.tip });
   if (!tip.ok) return errorResult(label, tip);
   const byName = scanned.value.byName;
   byName.attribution = [...tip.value.attribution, ...byName.attribution];
   byName['known-task-credits'] = tip.value.credits;
   byName['stack-folders'] = tip.value.stack;
+  byName['tree-shape'] = tip.value.shape;
   return verdict(toChecks(NAMES, byName), label, { commits: range.value.length });
 }
 

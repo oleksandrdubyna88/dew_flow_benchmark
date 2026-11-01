@@ -32,7 +32,7 @@ test('A_clean_branch_passes_every_named_check_with_exit_0', async t => {
   const { repo } = branchWith(t, { 'tasks/01/s01.in': '5\n', 'research/architecture.md': 'notes\n' });
   const result = await run(repo);
   assert.equal(result.exit, EXIT.PASS);
-  assert.deepEqual(result.checks.map(c => c.name), ['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders']);
+  assert.deepEqual(result.checks.map(c => c.name), ['leakcheck', 'secrets', 'attribution', 'agent-visible-paths', 'family-names', 'known-task-credits', 'stack-folders', 'tree-shape']);
   assert.ok(result.checks.every(c => c.findings.length === 0));
   assert.match(lines(result).join('\n'), /^leakcheck +PASS/m);
   assert.match(lines(result).at(-2), /^result +PASS \(exit 0\)/);
@@ -179,4 +179,26 @@ test('A_branch_check_refuses_when_origin_is_not_the_task_repository_because_the_
   assert.match(pushElsewhere.error, /push URL/);
   const noOrigin = makeTaskRepo(t, {});
   assert.equal((await checkBranchAgainst({ repo: noOrigin, branch: 'main', inputs })).exit, EXIT.CONFIG);
+});
+
+test('A_submodule_other_than_the_conventions_mount_or_a_foreign_gitmodules_url_is_refused_by_the_tree_shape_check', async t => {
+  const { repo } = branchWith(t, { '.gitmodules': '[submodule "x"]\n\tpath = csharp/01-x/sol\n\turl = https://github.com/someone/solutions.git\n' });
+  git(repo, 'update-index', '--add', '--cacheinfo', '160000,1111111111111111111111111111111111111111,csharp/01-x/sol');
+  git(repo, 'commit', '-q', '-m', 'chore: pin a submodule');
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.REFUSED);
+  assert.deepEqual(checkOf(result, 'tree-shape').findings.map(f => [f.path, f.line, f.what]), [
+    ['csharp/01-x/sol', null, 'submodule outside the conventions mount'],
+    ['.gitmodules', 2, 'submodule path other than the conventions mount'],
+    ['.gitmodules', 3, 'submodule URL other than the conventions repository'],
+  ]);
+});
+
+test('The_conventions_mount_as_the_gitmodules_say_passes_the_tree_shape_check', async t => {
+  const url = 'https://github.com/oleksandrdubyna88/dew_flow_conventions.git';
+  const { repo } = branchWith(t, { '.gitmodules': `[submodule "c"]\n\tpath = .agents/conventions\n\turl = ${url}\n` });
+  git(repo, 'update-index', '--add', '--cacheinfo', '160000,1111111111111111111111111111111111111111,.agents/conventions');
+  git(repo, 'commit', '-q', '-m', 'chore: pin the conventions');
+  const result = await run(repo);
+  assert.equal(result.exit, EXIT.PASS, formatReport(result));
 });

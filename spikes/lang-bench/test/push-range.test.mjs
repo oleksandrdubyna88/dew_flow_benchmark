@@ -52,12 +52,13 @@ test('A_merge_commit_reports_what_it_brings_relative_to_its_first_parent', async
   assert.deepEqual(files.filter(f => f.commit === merge).map(f => f.path), ['LICENSE']);
 });
 
-test('A_submodule_pointer_is_not_a_file_to_read', async t => {
+test('A_submodule_pointer_is_reported_with_its_mode_so_that_it_is_never_read_as_a_file', async t => {
   const repo = makeTaskRepo(t, {});
   git(repo, 'update-index', '--add', '--cacheinfo', '160000,1111111111111111111111111111111111111111,sub');
   git(repo, 'commit', '-q', '-m', 'chore: pin a submodule');
   const { files } = (await changesOf(repo, (await newCommits(repo, 'main')).value)).value;
-  assert.equal(files.some(f => f.path === 'sub'), false);
+  assert.deepEqual(files.filter(f => f.path === 'sub').map(f => f.mode), ['160000']);
+  assert.deepEqual(files.filter(f => f.path === 'README.md').map(f => f.mode), ['100644']);
 });
 
 test('Blobs_are_read_once_by_id_and_a_file_at_a_branch_tip_is_read_by_path', async t => {
@@ -71,12 +72,13 @@ test('Blobs_are_read_once_by_id_and_a_file_at_a_branch_tip_is_read_by_path', asy
   assert.equal((await readFileAt(repo, 'main', 'NOPE.md')).value, null, 'absent is null, not an empty text');
 });
 
-test('The_tip_tree_lists_the_files_at_the_branch_tip_without_gitlinks', async t => {
+test('The_tip_tree_lists_every_entry_at_the_branch_tip_with_its_mode_gitlinks_included', async t => {
   const repo = makeTaskRepo(t, { files: { 'a.txt': 'a\n', 'dir/b.txt': 'b\n' } });
   commit(repo, 'chore: drop a file', { 'a.txt': null });
   git(repo, 'update-index', '--add', '--cacheinfo', '160000,1111111111111111111111111111111111111111,sub');
   git(repo, 'commit', '-q', '-m', 'chore: pin a submodule');
   const tree = (await tipTree(repo, 'main')).value;
-  assert.deepEqual([...tree.keys()], ['dir/b.txt']);
-  assert.equal(tree.get('dir/b.txt'), git(repo, 'rev-parse', 'main:dir/b.txt'));
+  assert.deepEqual([...tree.keys()].sort(), ['dir/b.txt', 'sub']);
+  assert.deepEqual(tree.get('dir/b.txt'), { oid: git(repo, 'rev-parse', 'main:dir/b.txt'), mode: '100644' });
+  assert.equal(tree.get('sub').mode, '160000');
 });
