@@ -1,6 +1,6 @@
 # PLAN — model arms: the experiment harness that launches the test runs, in C#, as a module of this repository
 
-> Status: **in progress — epoch 3 is stopped for re-review (2026-11-01: entries 3.2 and 3.3, the owner's decisions on D19's arm
+> Status: **in progress — epoch 3 was stopped for re-review and re-reviewed the same day; **epoch 4 is open at zero entries** (approved 2026-11-01 by the coai document gate, interim path, over an extract of the revised sections: proceed, 4 of 4 reviewers, three wording findings accepted; not narrowed) — E6.S4 is the one story left before #132 merges (2026-11-01: entries 3.2 and 3.3, the owner's decisions on D19's arm
 > session and D22's pick-back; `## Plan changes`), and the re-review for epoch 4 is IN PROGRESS: the whole plan is revised in this
 > baseline (its record, `### Re-review for epoch 4`, says what changed; the done work is not sorted yet); no new code of the plan is
 > written and no pull request of it merges until epoch 4 is approved.** Built: E1 (`431e759`, #116), E2 (`5a8b4ce`, #119) and E3
@@ -179,7 +179,7 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
   (§7); `run-all`'s queue refusal compares with the smallest queue of every arm alive at once (§4.7); E5 lands as two pull requests
   (§6); §4.11's rows for every file E4 and E5 add; the Vertex and Bedrock logins a decided residual (D19, §9).)
 
-> Epoch 3 · approved 2026-10-31 · by reviewers · state: stopped
+> Epoch 3 · approved 2026-10-31 · by reviewers · state: closed
 
 - 3.1 · 2026-10-31 · reviewer · contract — a task interrupted mid-session resumes its claude session (D7, `StepRecovery`) but D14 recreated its worktree and deleted `tmp/<id>`, losing the task's uncommitted edits and its unpicked commits while the resumed session believes they exist: a task whose step resumes keeps its worktree and branch when they validate (registered at `wt/<id>`, on `tmp/<id>`, HEAD descending from its `.before`), an inconsistent one is refused (exit 4, the recovery named), and only a task whose session never started is recreated (D14, §4.6's state table; E4.S2)
   (The first change of epoch 3 — recorded, no stop. Found by the ordered coai risk consultation for story 4.2 (codex gpt-6-astra, 2026-10-31), against Fable's E4.S2 spec item 11, which had built D14 as written and recorded the keep-the-worktree proposal for the owner.)
@@ -220,6 +220,10 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
 | The per-story branches feat/model-arms-e4, -e4s0, -e4s1, -e4s2, -e5, -e5s2, -e5s3, -e5s4, -e6s1, -e6s3 | pushed, unmerged | fits | kept as history; each 0 commits ahead of feat/model-arms-e6; deleted after #132 merges |
 
   (Sorted by an Opus judge, 2026-11-01. Nothing is cut. E4.S0 never had its own pull request as §6 planned: it ships inside #132, a deviation recorded in §6.)
+
+  (The re-review was approved on the interim path of common.plan-change-control: this branch's plan round had passed, so the plan went to the coai document gate — as a verbatim extract of the revised sections, the whole file being over the gate's 256 KB limit. Verdict proceed, 4 of 4 reviewers; three findings accepted: E6.S3's row no longer claims the promotion, §6 step 6 says E6.S1–S3 and M3 are done, E6.S4's shared rule names its project and namespace.)
+
+> Epoch 4 · approved 2026-11-01 · by reviewers · state: open
 
 ## 1. The goal, before any solution
 
@@ -970,9 +974,10 @@ the SRS worktrees for no reason; the new order puts a usable vertical slice firs
    `TasksPlanTests` use its `NodePath` alone — E6 §8 item 18), to all seven checked-in readers (D28); never a second harness); the catalogue test widened to the module's dispatch (F2); `research/module_model_arms.md`
    finished, `research/module_tests.md`'s rows, `README.md`'s layout table, `research/architecture.md`'s module map; **M3 = the attended
    pilot of the whole thing with the fake CLI — every verb, all four schemes, one run locked and unlocked, one limited attempt resumed,
-   one interrupted arm resumed, one blocked gate continued** — then the promotion of this plan with its deviations, and
-   `todo/PLAN_model_arms_analysis.md` written with its status line. `POST_DEPLOY.md` unchanged (nothing deploys; the module is run by hand).
-   **E6.S4, last** (re-review for epoch 4): entries 3.2 and 3.3 — the arm's session strips `SSH_AUTH_SOCK` and every inherited `GIT_*`
+   one interrupted arm resumed, one blocked gate continued** (E6.S1–E6.S3 and M3 are DONE on #132's branch, 2026-11-01), and
+   `todo/PLAN_model_arms_analysis.md` written with its status line; the promotion of this plan with its deviations is NOT part of #132 — it waits for
+   the owner's open lines (*State after E6*). `POST_DEPLOY.md` unchanged (nothing deploys; the module is run by hand).
+   **E6.S4 — the one story still to build** (re-review for epoch 4), then #132's code gate and merge: entries 3.2 and 3.3 — the arm's session strips `SSH_AUTH_SOCK` and every inherited `GIT_*`
    (D19); the pick-back's patch-id skip removed (D22) — on #132's branch, after epoch 4 is approved and before #132 merges.
 
 ## 7. Test plan — red first, exact names
@@ -1322,5 +1327,5 @@ merges; every DoD line of §10 ticked.
 |---|---|---|---|---|
 | E6.S1 | `ConsumerCompatibilityTests`: the seven checked-in readers over a fake arm of each scheme; the rename map; the layout compared both ways — by EXTENDING the built `PinnedConsumer` (it ran `metrics.mjs` alone, through `MetricsAsync` from `RunArmSchemeTests` and `StepRestartTests`; `MakeVerbTests`, `ShellObjectiveReader`, `TargetBench` and `TasksPlanTests` use its `NodePath`) to `metrics6.mjs`, `t-survival.mjs`, `compare.mjs`, `make-tables.mjs`, `coai-findings.mjs` and `coai-cost.mjs`, each sha256-pinned the same way; never a second harness | D28, D5 | `ConsumerCompatibilityTests.cs`, `PinnedConsumer.cs` (extended), `PinnedReaders.cs`, `ConsumerArms.cs`, `ConsumerReaders.cs`, `ShellLayout.cs`, three fixtures | the seven readers run green over the four schemes, each reporting a value the arm produced |
 | E6.S2 | The catalogue test reads the module's dispatch (F2) — `ModelArmsVerbs()` over `tools/model-arms/ModelArms/Program.cs`, the row regex's `model-arms ` prefix, every verb's row | §7 E6 | `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs` (~80 changed lines), `research/module_tests.md` | `Every_model_arms_verb_is_derived_from_its_dispatch_and_has_its_row` red against a verb without a row, then green |
-| E6.S3 | Docs, M3's attended pilot, the promotion | §6 step 6, §10 | `research/module_model_arms.md` (the first-run workflow of §4.12 included), `research/architecture.md` (module map), `README.md`, `todo/PLAN_model_arms_analysis.md` (status line), this plan's promotion | the DoD |
-| E6.S4 | **Last, on #132's branch after epoch 4 is approved and before #132 merges** (the re-review for epoch 4): (a) `ArmChildEnvironment` strips `SSH_AUTH_SOCK` and every inherited `GIT_*`, whatever the case, keeping its `CLAUDE_*` / `ANTHROPIC_*` exception — spec by Fable (security judgement, written 2026-11-01); (b) `PickBackOrder` carries a source only by a believed completion — the patch-id skip removed, the completion's `patchId` kept as a record — spec by Opus | D19 (ledger 3.2), D22 (ledger 3.3) | `Core/Experiment/ArmChildEnvironment.cs` (the shared rule `IsAgentSocketOrGit` lives here, asked by `Core/Launch/TargetEnvironment.cs` and `GitEnvironment`), `ArmChildEnvironmentTests.cs`, `StepRunnerTests.cs` and `StepGitTests.cs` (the wiring); `Core/Tasks/PickBackOrder.cs`, `ModelArms/Adapters/TaskPickBack.cs`, `PickBackTests.cs`, `TaskWorktreesCrashTests.cs`, `TaskWorktreesPickTests.cs` (test 11's doc); `research/module_model_arms.md` | §7's E6.S4 tests red at `16e7fd20`, then green; #132's code gate passed with it |
+| E6.S3 | Docs, M3's attended pilot; the promotion PREPARED (it is done only after the owner's open lines — *State after E6*; not part of #132) | §6 step 6, §10 | `research/module_model_arms.md` (the first-run workflow of §4.12 included), `research/architecture.md` (module map), `README.md`, `todo/PLAN_model_arms_analysis.md` (status line), this plan's promotion | the DoD |
+| E6.S4 | **Last, on #132's branch after epoch 4 is approved and before #132 merges** (the re-review for epoch 4): (a) `ArmChildEnvironment` strips `SSH_AUTH_SOCK` and every inherited `GIT_*`, whatever the case, keeping its `CLAUDE_*` / `ANTHROPIC_*` exception — spec by Fable (security judgement, written 2026-11-01); (b) `PickBackOrder` carries a source only by a believed completion — the patch-id skip removed, the completion's `patchId` kept as a record — spec by Opus | D19 (ledger 3.2), D22 (ledger 3.3) | `Core/Experiment/ArmChildEnvironment.cs` (the shared rule `IsAgentSocketOrGit` lives here — project ModelArms.Core, namespace `ModelArms.Core.Experiment` — asked by `ModelArms.Core.Launch.TargetEnvironment` and `ModelArms.Core.Experiment.GitEnvironment` (`HostChecks.cs:86`), all in the one Core project, so no layer is crossed), `ArmChildEnvironmentTests.cs`, `StepRunnerTests.cs` and `StepGitTests.cs` (the wiring); `Core/Tasks/PickBackOrder.cs`, `ModelArms/Adapters/TaskPickBack.cs`, `PickBackTests.cs`, `TaskWorktreesCrashTests.cs`, `TaskWorktreesPickTests.cs` (test 11's doc); `research/module_model_arms.md` | §7's E6.S4 tests red at `16e7fd20`, then green; #132's code gate passed with it |
