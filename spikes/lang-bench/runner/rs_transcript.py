@@ -107,6 +107,8 @@ class Actual:
     body: bytes = b""
     name: str = ""
     at: Optional[datetime] = None
+    step_line: int = 0
+    step_text: str = ""
 
 
 _WITH_DATA = lambda a: f"{a.kind} {a.conn} {abbreviate(a.data)}"
