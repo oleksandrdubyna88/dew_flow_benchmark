@@ -18,21 +18,20 @@ public sealed class PublishedRecordTests
         var record = Path.Combine(Cli.Repository.Root, "research", "local-model-coding", "data");
         var entries = Scan(record, out var files);
 
-        files.Should().Contain(path => path.EndsWith("data/part6/arms/C1/objective.json", StringComparison.Ordinal), "the scan must still see a known file of the record, or an empty scan would pass");
+        files.Should().Contain("part6/arms/C1/objective.json", "the scan must still see a known file of the record, or an empty scan would pass");
         var named = files.Where(path => ForbiddenFiles.Contains(path[(path.LastIndexOf('/') + 1)..], StringComparer.Ordinal)).ToList();
         named.Should().BeEmpty("a file named {0} holds (or may hold) the owner's key and is never published", string.Join(" or ", ForbiddenFiles));
         entries.Where(path => path.Split('/').Contains(ForbiddenFolder, StringComparer.Ordinal)).Should().BeEmpty("a folder named coai-data holds a copy of the panel's settings and nothing under such a folder is ever published");
     }
 
-    /// <summary>One traversal under <paramref name="root"/>: every entry, files and folders, as a '/'-separated path RELATIVE to <paramref name="root"/>'s parent so a segment of the root itself never matches; the files also come out alone.</summary>
+    /// <summary>One traversal under <paramref name="root"/>: every entry, files and folders, as a '/'-separated path RELATIVE to <paramref name="root"/> itself, so a segment of the root's own path never matches; the files also come out alone.</summary>
     private static List<string> Scan(string root, out List<string> files)
     {
-        var parent = Path.GetDirectoryName(root)!;
-        var all = new List<string>();
+        List<string> all = [];
         files = [];
         foreach (var entry in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
         {
-            var relative = Path.GetRelativePath(parent, entry).Replace('\\', '/');
+            var relative = Path.GetRelativePath(root, entry).Replace('\\', '/');
             all.Add(relative);
             if (File.Exists(entry))
             {

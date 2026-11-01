@@ -84,13 +84,7 @@ public sealed class M3PilotScaffold
         {
             // Nothing is half-made and left: what this run created is removed by the manifest's own names, best effort per path, the manifest last.
             // The ORIGINAL exception is rethrown as it was; what the cleanup could not remove is said on the output and carried in its Data.
-            var left = new List<string>();
-            foreach (var name in names)
-            {
-                Remove(paths[name], left);
-            }
-
-            Remove(manifest, left);
+            List<string> left = [.. names.SelectMany(name => ScaffoldCleanup.Remove(paths[name])), .. ScaffoldCleanup.Remove(manifest)];
             if (left.Count > 0)
             {
                 var text = "cleanup left (remove by hand): " + string.Join(", ", left);
@@ -99,59 +93,6 @@ public sealed class M3PilotScaffold
             }
 
             throw;
-        }
-    }
-
-    /// <summary>Removes one path the scaffold named: a folder with owner access restored first, each deletion's failure caught and recorded in <paramref name="left"/>.</summary>
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private static void Remove(string path, List<string> left)
-    {
-        try
-        {
-            if (Directory.Exists(path) && new DirectoryInfo(path).LinkTarget is null)
-            {
-                Open(path, left);
-                Directory.Delete(path, recursive: true);
-            }
-            else if (File.Exists(path) || new FileInfo(path).LinkTarget is not null)
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
-        {
-            left.Add(path);
-        }
-    }
-
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private static void Open(string folder, List<string> left)
-    {
-        const UnixFileMode Owner = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-        try
-        {
-            File.SetUnixFileMode(folder, File.GetUnixFileMode(folder) | Owner);
-            foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
-            {
-                var info = new FileInfo(entry);
-                if (info.LinkTarget is not null)
-                {
-                    continue;
-                }
-
-                if (Directory.Exists(entry))
-                {
-                    Open(entry, left);
-                }
-                else
-                {
-                    File.SetUnixFileMode(entry, File.GetUnixFileMode(entry) | UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                }
-            }
-        }
-        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
-        {
-            left.Add(folder);
         }
     }
 
