@@ -11,15 +11,24 @@ const STATEMENT = 'STATEMENT.md';
 
 const isPin = (name, pins) => pins.some(pin => (pin.startsWith('*') ? name.endsWith(pin.slice(1)) : name === pin));
 
-/** Map(relative path -> { abs, link }) of every file under `dir`, links included but not followed; a missing folder is empty. */
+const readProblem = (rel, error) => ({ path: rel, what: `cannot be read (${error.code ?? error.message})` });
+
+/**
+ * `{ files: Map(relative path -> { abs, link }), problems }` for everything under `dir`, links included but not followed. ONLY a missing folder
+ * (ENOENT) is empty; any other read error (EACCES, ENOTDIR, ...) is a problem, so an unreadable tree can never read as a clean diff.
+ */
 function filesUnder(dir, base = dir) {
   let entries;
-  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return new Map(); }
-  return new Map(entries.flatMap(entry => {
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch (error) {
+    return { files: new Map(), problems: error.code === 'ENOENT' ? [] : [readProblem(path.relative(base, dir).split(path.sep).join('/') || '.', error)] };
+  }
+  const parts = entries.map(entry => {
     const abs = path.join(dir, entry.name);
     const link = lstatSync(abs).isSymbolicLink();
-    return entry.isDirectory() && !link ? [...filesUnder(abs, base)] : [[path.relative(base, abs).split(path.sep).join('/'), { abs, link }]];
-  }));
+    if (entry.isDirectory() && !link) return filesUnder(abs, base);
+    return { files: new Map([[path.relative(base, abs).split(path.sep).join('/'), { abs, link }]]), problems: [] };
+  });
+  return { files: new Map(parts.flatMap(p => [...p.files])), problems: parts.flatMap(p => p.problems) };
 }
 
 const withoutPins = (files, pins) => new Map([...files].filter(([rel]) => !isPin(path.posix.basename(rel), pins)));
@@ -35,7 +44,9 @@ function firstStatementDifference(a, b) {
 }
 
 function sameBytes(rel, a, b) {
-  const [x, y] = [readFileSync(a.abs), readFileSync(b.abs)];
+  let x;
+  let y;
+  try { [x, y] = [readFileSync(a.abs), readFileSync(b.abs)]; } catch (error) { return readProblem(rel, error).what; }
   if (rel !== STATEMENT) return x.equals(y) ? null : 'bytes differ';
   const line = firstStatementDifference(x.toString('utf8'), y.toString('utf8'));
   return line === 0 ? null : `differs outside a marked sentence, line ${line}`;
@@ -59,23 +70,32 @@ function pathFinding(rel, cs, nd) {
 
 /** `{ ok, findings }` for one task: the `csharp` folder against the `node` folder. */
 export function diffTaskPair({ csharp, node }) {
-  const [cs, nd] = [filesUnder(csharp), filesUnder(node)];
+  const [csAll, ndAll] = [filesUnder(csharp), filesUnder(node)];
+  const [cs, nd] = [csAll.files, ndAll.files];
   const [csFiles, ndFiles] = [withoutPins(cs, CSHARP_PINS), withoutPins(nd, NODE_PINS)];
   const names = [...new Set([...csFiles.keys(), ...ndFiles.keys()])].sort();
-  const findings = [...linkFindings(cs), ...linkFindings(nd), ...names.map(rel => pathFinding(rel, csFiles.get(rel), ndFiles.get(rel))).filter(f => f !== null)];
+  const findings = [...csAll.problems, ...ndAll.problems, ...linkFindings(cs), ...linkFindings(nd), ...names.map(rel => pathFinding(rel, csFiles.get(rel), ndFiles.get(rel))).filter(f => f !== null)];
   const seen = new Set();
   const unique = findings.filter(f => (seen.has(f.path) ? false : seen.add(f.path) && true)).sort((a, b) => a.path.localeCompare(b.path, 'en'));
   return { ok: unique.length === 0, findings: unique };
 }
 
-const taskFolders = dir => { try { return readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name); } catch { return []; } };
+/** `{ names, problem }`: the task folders under `dir`; only a missing `dir` (ENOENT) is empty, any other error is the problem. */
+function taskFolders(dir) {
+  try { return { names: readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name), problem: null }; } catch (error) {
+    return { names: [], problem: error.code === 'ENOENT' ? null : readProblem(path.basename(dir), error) };
+  }
+}
 
 /** `{ ok, findings }` for every task folder of `<root>/csharp` and `<root>/node`: a folder on one side only is a finding, paths are task-prefixed. */
 export function diffAllTasks({ root }) {
-  const [cs, nd] = [taskFolders(path.join(root, 'csharp')), taskFolders(path.join(root, 'node'))];
-  const findings = [...new Set([...cs, ...nd])].sort().flatMap(task => {
+  const [csDir, ndDir] = [taskFolders(path.join(root, 'csharp')), taskFolders(path.join(root, 'node'))];
+  const [cs, nd] = [csDir.names, ndDir.names];
+  const problems = [csDir.problem, ndDir.problem].filter(p => p !== null);
+  const found = [...new Set([...cs, ...nd])].sort().flatMap(task => {
     if (!cs.includes(task) || !nd.includes(task)) return [{ path: `${cs.includes(task) ? 'csharp' : 'node'}/${task}`, what: `task folder only in ${cs.includes(task) ? 'csharp' : 'node'}` }];
     return diffTaskPair({ csharp: path.join(root, 'csharp', task), node: path.join(root, 'node', task) }).findings.map(f => ({ ...f, path: `${task}/${f.path}` }));
   });
+  const findings = [...problems, ...found];
   return { ok: findings.length === 0, findings };
 }

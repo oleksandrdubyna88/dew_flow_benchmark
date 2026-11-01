@@ -1,7 +1,7 @@
 // workspace-diff: per task, `csharp/<t>/` and `node/<t>/` differ only in each stack's pin files and in the marked sentences of STATEMENT.md.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { diffAllTasks, diffTaskPair, NODE_PINS, CSHARP_PINS } from '../lib/workspace-diff.mjs';
@@ -94,4 +94,35 @@ test('The_command_prints_each_difference_and_exits_1_and_0_when_the_pairs_agree'
   assert.equal(r.status, 1);
   assert.match(r.stdout, /^01-x\/extra\.txt: only in node$/m);
   assert.equal(run([]).status, 4);
+});
+
+/** Runs `body` with `file` made unreadable and puts its mode back before the folder's own cleanup runs, whatever happens. */
+function withMode(file, mode, restore, body) {
+  chmodSync(file, mode);
+  try { return body(); } finally { chmodSync(file, restore); }
+}
+
+test('Only_a_missing_folder_is_empty_any_other_read_error_is_an_explicit_failure_never_a_clean_diff', t => {
+  const { root, cs, nd } = pair(t);
+  write(nd, 'secret/inner.txt', 'x');
+  write(cs, 'secret/inner.txt', 'x');
+  const unreadable = withMode(path.join(nd, 'secret'), 0o000, 0o755, () => diffTaskPair({ csharp: cs, node: nd }));
+  assert.equal(unreadable.ok, false);
+  assert.ok(unreadable.findings.some(f => f.path === 'secret' && /^cannot be read \(EACCES\)/.test(f.what)), JSON.stringify(unreadable.findings));
+  assert.equal(diffTaskPair({ csharp: cs, node: nd }).ok, true, 'readable again: clean');
+  // a missing folder is the one empty case
+  assert.deepEqual(diffTaskPair({ csharp: path.join(root, 'csharp', 'no-such'), node: path.join(root, 'node', 'no-such') }), { ok: true, findings: [] });
+  // a file where a folder should be is not "empty"
+  const blocked = diffTaskPair({ csharp: path.join(cs, 'STATEMENT.md'), node: nd });
+  assert.equal(blocked.ok, false);
+  assert.ok(blocked.findings.some(f => /ENOTDIR/.test(f.what)), JSON.stringify(blocked.findings));
+});
+
+test('An_unreadable_task_root_or_file_is_a_finding_and_not_a_throw_or_a_pass', t => {
+  const { root, cs, nd } = pair(t);
+  const file = withMode(path.join(nd, 'samples', 's01.in'), 0o000, 0o644, () => diffTaskPair({ csharp: cs, node: nd }));
+  assert.ok(file.findings.some(f => f.path === 'samples/s01.in' && /cannot be read/.test(f.what)), JSON.stringify(file.findings));
+  const all = withMode(path.join(root, 'node'), 0o000, 0o755, () => diffAllTasks({ root }));
+  assert.equal(all.ok, false);
+  assert.ok(all.findings.some(f => f.path === 'node' && /EACCES/.test(f.what)), JSON.stringify(all.findings));
 });
