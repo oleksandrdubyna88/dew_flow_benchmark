@@ -212,10 +212,10 @@ public sealed class DetachedLauncherTests
         run.Code.Should().Be(0, run.Error + run.Output);
         var pid = await kit.RunnerPidAsync("C1", Fast);
         (await IsolationKit.UntilAsync(() => kit.Fake.Calls().Count > 0, Fast)).Should().BeTrue("the runner started its first step");
-        var held = Directory.EnumerateFileSystemEntries($"/proc/{pid}/fd").Select(entry => RealPathOf(entry)).ToList();
+        var held = HeldBy(pid);
         held.Should().NotContain(leaked, "run-all's descriptor 3 (open without close-on-exec) is closed in the child: every descriptor from 3 up");
         var fake = kit.Fake.Calls()[0].Pid;
-        Directory.EnumerateFileSystemEntries($"/proc/{fake}/fd").Select(entry => RealPathOf(entry)).Should().NotContain(leaked, "nor does the CLI the runner starts hold it");
+        HeldBy(fake).Should().NotContain(leaked, "nor does the CLI the runner starts hold it");
     }
 
     [Fact]
@@ -280,6 +280,27 @@ public sealed class DetachedLauncherTests
     }
 
     private static Dictionary<string, string> ChildEnvironment() => new() { ["PATH"] = "/usr/bin:/bin" };
+
+    /// <summary>What a live process holds open: each <c>/proc/&lt;pid&gt;/fd</c> entry's real target. An entry the process closed between the listing
+    /// and the read is skipped — the process is running, and a descriptor it closes in that window is not one it holds (seen once under the full suite's load).</summary>
+    private static List<string> HeldBy(int pid) =>
+        [.. Directory.EnumerateFileSystemEntries($"/proc/{pid}/fd").Select(TargetOrNone).Where(target => target.Length > 0)];
+
+    private static string TargetOrNone(string entry)
+    {
+        try
+        {
+            return RealPathOf(entry);
+        }
+        catch (FileNotFoundException)
+        {
+            return string.Empty;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return string.Empty;
+        }
+    }
 
     private static string RealPathOf(string path) => (File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName) ?? Path.GetFullPath(path);
 
