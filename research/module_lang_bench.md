@@ -149,6 +149,12 @@ both ways (a ref the remote lacks or has elsewhere, and a remote branch never fe
 check are read by one `git cat-file --batch` under an aggregate ceiling (256 MiB, one blob 16 MiB; exit 3 beyond it). The command prints progress
 (`push-check: scanning N commits`, `reading N blobs`, ...) on stderr; stdout is the report.
 
+**What is new, in one rule.** The published base is the remote ref of the branch being updated (`--dest`, which the hook passes from the pushed remote ref), otherwise
+`origin/main`, never "any remote ref". The commits of a check are `git rev-list <tip> --not <base>` (their messages in one `git log --no-walk --stdin`), and the blobs it
+scans and counts are exactly `git rev-list --objects <tip> --not <base>`: every parent of every merge is covered, and only what the destination already holds is skipped (a merge
+of `origin/main` into an older branch is not charged for main's content; a blob that only another branch holds is scanned when a new branch adds it). The batch readers work in chunks
+of at most 500 objects with the 16 MiB and 256 MiB ceilings kept across the chunks. `workspace-diff` treats only `ENOENT` as an empty folder: any other read error is a finding.
+
 **What reads what.** History is published, so the leak and secret scans read every commit and every message. A run base carries the tip tree and
 never the history, so every other rule reads the files as they stand at the tip (credited to the commit that brought the blob). Needles match by
 D18's rule (change 4.1): case-sensitive, on word boundaries with ASCII letters and digits as the word characters, plus exact substrings
