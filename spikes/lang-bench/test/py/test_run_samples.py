@@ -378,6 +378,25 @@ class SampleSizeTests(unittest.TestCase):
             sm.MAX_SAMPLE_BYTES = saved
         self.assertIsInstance(plan, rs.Plan)
 
+    def test_A_sample_that_cannot_be_measured_is_cannot_read_and_not_a_size_of_zero(self):
+        gone = sm.Pair("s09", "/nonexistent/s09.in", "/nonexistent/s09.out", "s09.in", "s09.out")
+        problems = sm.sample_size_problems([gone])
+        self.assertEqual(len(problems), 2, "one for each of the two files")
+        self.assertTrue(all("cannot read" in p.message for p in problems))
+        self.assertIn("s09.in", problems[0].message)
+        self.assertIn("s09.out", problems[1].message)
+
+    def test_A_sample_that_vanishes_between_listing_and_sizing_is_exit_4(self):
+        box = Box(self)
+        saved = sm.sample_size_problems
+        sm.sample_size_problems = lambda pairs: (os.remove(pairs[0].out_path), saved(pairs))[1]
+        try:
+            code, err = self.run_in_process(box, 1 << 30)
+        finally:
+            sm.sample_size_problems = saved
+        self.assertEqual(code, 4)
+        self.assertIn("cannot read", err)
+
     def test_A_pair_that_cannot_be_read_is_a_configuration_problem_and_not_a_crash(self):
         box = Box(self)
         os.chmod(os.path.join(box.samples, "s03.out"), 0)

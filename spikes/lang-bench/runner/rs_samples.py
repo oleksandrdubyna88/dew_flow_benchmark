@@ -37,18 +37,24 @@ class Pair(NamedTuple):
 MAX_SAMPLE_BYTES = 1 << 30
 
 
-def _size_of(path):
-    try:
-        return os.path.getsize(path)
-    except OSError:
-        return 0
+def _sizes(pairs):
+    """([sizes in bytes], [problems]): a sample that cannot be measured is 'cannot read', never a size of zero."""
+    sizes, problems = [], []
+    for pair in pairs:
+        for path, name in ((pair.in_path, pair.in_name), (pair.out_path, pair.out_name)):
+            try:
+                sizes.append(os.path.getsize(path))
+            except OSError as e:
+                problems.append(Problem("samples", 0, f"cannot read {shown(name)}: {type(e).__name__}"))
+    return sizes, problems
 
 
 def sample_size_problems(pairs):
     """A problem when the `.in` and `.out` files of `pairs` together are more than the ceiling: they are all held in memory for the run."""
-    total = sum(_size_of(p.in_path) + _size_of(p.out_path) for p in pairs)
-    if total <= MAX_SAMPLE_BYTES:
-        return []
+    sizes, problems = _sizes(pairs)
+    total = sum(sizes)
+    if problems or total <= MAX_SAMPLE_BYTES:
+        return problems
     return [Problem("samples", 0, f"the samples are too large to hold in memory: {total} bytes of .in and .out files, the ceiling is {MAX_SAMPLE_BYTES}")]
 
 

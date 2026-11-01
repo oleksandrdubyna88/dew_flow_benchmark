@@ -59,7 +59,7 @@
       },
       {
         "path": "rs_samples.py",
-        "sha256": "4f394f8ebe2a40daa972d17981db925b4d569b96c1d71b24f4fd8c835ff7e25e"
+        "sha256": "21b997c3fab5e9965351b0078c91292c9dfee375d3bc38184f5ac58e9adf4bdf"
       },
       {
         "path": "rs_script.py",
@@ -74,7 +74,7 @@
         "sha256": "8362aea55e30f93eb113baebe4d97dcebafbbf617506240592a0dcdb17193539"
       }
     ],
-    "manifestSha256": "d7ff72c563809c839930706af7ab15b8a66574051d2dde985cf87ef215361914",
+    "manifestSha256": "44626c914eedd68fe8cc7f9c4743cba64ca979d665d2795999d777bf7e09be7b",
     "version": "0.1.0"
   }
 }
