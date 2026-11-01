@@ -167,3 +167,17 @@ test('The_preflight_refuses_a_store_that_is_not_there_without_starting_a_box', a
   assert.equal(result.ok, false);
   assert.match(result.problems.join('\n'), /not in the store/);
 });
+
+test('A_host_without_bwrap_is_refused_naming_it_and_no_probe_is_attempted', async t => {
+  if (!installed()) return lacks(t, `the pinned toolchains are not installed under ${storeRoot}`);
+  const before = process.env.PATH;
+  process.env.PATH = path.join(ownedFolder(t, 'nopath'), 'nothing-here');
+  try {
+    const result = await preflightLang({ stacks, storeRoot });
+    assert.equal(result.ok, false);
+    assert.match(result.problems.join('\n'), /bwrap is not installed/);
+    assert.doesNotMatch(result.problems.join('\n'), /did not run/, 'there was no box to probe in');
+  } finally {
+    process.env.PATH = before;
+  }
+});
