@@ -20,6 +20,17 @@ internal static class ModuleSpellings
     private const string Marker = "<root>";
     private const string Token = "<token>";
     private const int Sentinel = 7;
+    private const string Number = @"\d+";
+
+    private static readonly Dictionary<string, string> Named = new(StringComparer.Ordinal)
+    {
+        ["n"] = Number,
+        ["i"] = Number,
+        ["step"] = @"(?:<step>|\d[0-9A-Za-z]*-[^/]+)",
+        ["id"] = @"(?:<id>|t\d+)",
+        ["arm"] = @"(?:<arm>|[A-Z]+\d+)",
+        ["token"] = "(?:<token>|[0-9a-f]{16})",
+    };
 
     public static IReadOnlyList<string> All { get; } = Build();
 
@@ -28,16 +39,7 @@ internal static class ModuleSpellings
     public static Regex PatternOf(string spelling) =>
         new("^" + Regex.Replace(Regex.Escape(spelling), "<(?<name>[a-z]+)>", each => Shape(each.Groups["name"].Value)) + "$", RegexOptions.CultureInvariant);
 
-    private static string Shape(string placeholder) =>
-        placeholder switch
-        {
-            "n" or "i" => @"\d+",
-            "step" => @"(?:<step>|\d[0-9A-Za-z]*-[^/]+)",
-            "id" => @"(?:<id>|t\d+)",
-            "arm" => @"(?:<arm>|[A-Z]+\d+)",
-            "token" => "(?:<token>|[0-9a-f]{16})",
-            _ => "[^/]+",
-        };
+    private static string Shape(string placeholder) => Named.TryGetValue(placeholder, out var shape) ? shape : "[^/]+";
 
     private static List<string> Build()
     {

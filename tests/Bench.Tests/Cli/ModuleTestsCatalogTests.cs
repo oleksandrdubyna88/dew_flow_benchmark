@@ -32,7 +32,7 @@ public sealed partial class ModuleTestsCatalogTests
     {
         var classes = typeof(ModuleTestsCatalogTests).Assembly.GetTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
 
-        Rows().Where(r => r.Status == "covered").Should().OnlyContain(r => r.Tests.All(classes.Contains), "an entry marked covered names its test, or it is not covered");
+        Rows().Where(r => r.Status == "covered").Should().OnlyContain(r => r.Tests.Count > 0 && r.Tests.All(classes.Contains), "an entry marked covered names at least one test, and every one exists, or it is not covered");
         Rows().Should().OnlyContain(r => r.Status == "covered" || r.Status == "not covered");
         Rows().Where(r => r.Flow.StartsWith("bench scouts ", StringComparison.Ordinal)).Should().OnlyContain(r => r.Status == "covered", "every scouts flow shipped with its scenario");
     }
@@ -56,14 +56,14 @@ public sealed partial class ModuleTestsCatalogTests
         var rows = Rows().Where(r => r.Flow.StartsWith(ModelArmsPrefix, StringComparison.Ordinal)).ToList();
         var classes = typeof(ModuleTestsCatalogTests).Assembly.GetTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
 
-        verbs.Should().HaveCount(14, "the dispatch holds fourteen arms; an empty or short derivation passes forever");
+        verbs.Should().NotBeEmpty("an empty derivation passes forever").And.Contain(["model-arms run-arm", "model-arms chain", "model-arms init"], "the canary verbs: a derivation that lost the dispatch's arms is not the dispatch");
         verbs.Should().OnlyHaveUniqueItems();
         var flows = rows.Select(r => r.Flow).ToList();
 
         flows.Should().Contain(verbs, "every model-arms verb has its row");
         flows.Should().OnlyHaveUniqueItems("a verb has exactly one row");
         flows.Except(verbs).Should().BeEmpty("a row for a verb the dispatch lacks is a claim the catalogue cannot point at");
-        rows.Where(r => r.Status == "covered").Should().OnlyContain(r => r.Tests.All(classes.Contains), "a covered row names only classes of this assembly");
+        rows.Where(r => r.Status == "covered").Should().OnlyContain(r => r.Tests.Count > 0 && r.Tests.All(classes.Contains), "a covered row names at least one class, and only classes of this assembly");
     }
 
     [Fact]

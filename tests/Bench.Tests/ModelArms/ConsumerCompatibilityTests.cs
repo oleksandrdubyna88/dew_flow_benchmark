@@ -16,7 +16,7 @@ namespace Bench.Tests.ModelArms;
 /// unit prices of <c>metrics.mjs</c> (three priced attempts per model are needed), or <c>compare.mjs</c> over a CR, CHH or SRS arm (its list holds none).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixture<ConsumerArms>
+public sealed partial class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixture<ConsumerArms>
 {
     private const string Gate = "4-gate";
 
@@ -107,6 +107,10 @@ public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixtur
                     var wall = attempts[start.Attempt - 1]!["wallSeconds"];
                     wall.Should().NotBeNull($"{arm} {step} a{start.Attempt}: the reader found the attempt's wall in its end line");
                     wall!.GetValue<long>().Should().Be(EndOf(arms, arm, step, start.Attempt).WallSeconds.Value, $"{arm} {step} a{start.Attempt}: the runner's own end line");
+                    File.Exists(arms.PathsOf(arm).Stream(step, start.Attempt)).Should().BeTrue($"{arm} {step} a{start.Attempt}: the module wrote a stream for the start line");
+                    var results = Results(arms.PathsOf(arm).Stream(step, start.Attempt));
+                    attempts[start.Attempt - 1]!["complete"]!.GetValue<bool>().Should().Be(results.Count > 0, $"{arm} {step} a{start.Attempt}: complete iff the stream holds a result");
+                    attempts[start.Attempt - 1]!["terminal"]!.GetValue<string>().Should().Be(results.Count > 0 ? results[^1]["terminal_reason"]!.GetValue<string>() : "interrupted", $"{arm} {step} a{start.Attempt}: the stream's own terminal reason");
                 }
             }
 
@@ -141,7 +145,15 @@ public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixtur
         {
             ArmRanItsScheme(arm, scheme);
             var steps = report[arm]!["steps"]!.AsObject();
-            report[arm]!["attempts"]!.GetValue<int>().Should().Be(Directory.EnumerateFiles(arms.PathsOf(arm).Out, "*.jsonl").Count(file => file.Contains(".a", StringComparison.Ordinal)), $"{arm}: one attempt per .a<N>.jsonl of its out folder");
+            steps.Select(each => each.Key).Should().BeEquivalentTo(StepsOf(arms, arm), $"{arm}: one step per step the arm started");
+            var streams = Directory.EnumerateFiles(arms.PathsOf(arm).Out).Select(Path.GetFileName).Where(name => AttemptStream().IsMatch(name!)).ToList();
+            report[arm]!["attempts"]!.GetValue<int>().Should().Be(streams.Count, $"{arm}: one attempt per .a<N>.jsonl file NAME of its out folder");
+            foreach (var step in StepsOf(arms, arm))
+            {
+                steps[step]!["attempts"]!.GetValue<int>().Should().Be(streams.Count(name => name!.StartsWith(step + ".a", StringComparison.Ordinal)), $"{arm} {step}: its attempt streams by name");
+                streams.Count(name => name!.StartsWith(step + ".a", StringComparison.Ordinal)).Should().Be(Starts(arms, arm, step).Count, $"{arm} {step}: the module wrote a stream for every start line");
+            }
+
             foreach (var step in steps)
             {
                 step.Value!["wall_s"]!.GetValue<long>().Should().Be(arms.Root.TimingOf(arm).OfType<TimingLine.End>().Where(end => end.Step == step.Key).Sum(end => end.WallSeconds.Value), $"{arm} {step.Key}: the sum of its end lines' wall_s");
@@ -173,6 +185,9 @@ public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixtur
         steps.Where(step => step.EndsWith("-code", StringComparison.Ordinal)).Should().HaveCount(TaskCount(), "SRS1 ran one coder step per task");
     }
 
+    [System.Text.RegularExpressions.GeneratedRegex(@"\.a\d+\.jsonl$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex AttemptStream();
+
     private int TaskCount() => ConsumerReaders.TaskIds(arms).Count;
 
     private void TSurvivalReportsTheTasks(StagedRun staged)
@@ -198,7 +213,7 @@ public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixtur
         row["steps"]![Gate].Should().NotBeNull($"compare lists C's {Gate}");
         row["steps"]![Gate]!["cost"]!.GetValue<double>().Should().Be(CostOf(arms, "C1", Gate, 1) + CostOf(arms, "C1", Gate, 2), "compare sums every attempt of the gate step (:34-35)");
         row["cost"].Should().BeNull("the arm's other attempts carry no cost, so metrics.mjs's total is NaN, written as null");
-        row["objective"]!.GetValue<string>().Should().NotBe("n/a", "objective.json was linked and read");
+        row["objective"]!.GetValue<string>().Should().Be("FAIL", "objective.json was linked and read, and compare.mjs:27 wants generatorCheck, a key part 1-5's file carried and part 6's never did: the consumer's defect, pinned");
         row["scenarios"]!.GetValue<int>().Should().Be(ObjectiveOf(arms, "C1")["scenariosPresentCount"]!.GetValue<int>());
         row["judge"].Should().BeNull("no judge scores were given");
         row["survival"].Should().BeNull("survival.json is the Q arms'");
@@ -221,6 +236,9 @@ public sealed class ConsumerCompatibilityTests(ConsumerArms arms) : IClassFixtur
         foreach (var (arm, _) in ConsumerArms.Arms)
         {
             var listed = PinnedConsumer.Listed(arm);
+            ObjectiveOf(arms, arm)["build"]!.GetValue<bool>().Should().BeTrue($"{arm}: the build passed, so FAIL below is the missing key and not the build");
+            ObjectiveOf(arms, arm).AsObject().ContainsKey("generatorCheck").Should().BeFalse($"{arm}: the module must not write generatorCheck - part 6's objective-checks.sh:55 never did (E3 §8 item 3)");
+            objective.Split('\n').Single(line => line.StartsWith($"| {PinnedConsumer.Listed(arm)} |", StringComparison.Ordinal)).Split('|')[7].Trim().Should().Be("FAIL", $"{arm}: make-tables §3's Generator check cell reads the absent key");
             var shortstat = ObjectiveOf(arms, arm)["diff"]!["shortstat"]!.GetValue<string>();
             RowOf(objective, listed).Should().EndWith($"| {shortstat} |", $"{listed}: §3's last cell is objective.json's diff.shortstat");
             var verdict = ReviewOf(arms, arm);

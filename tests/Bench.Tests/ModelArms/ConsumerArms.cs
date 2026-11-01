@@ -113,7 +113,6 @@ public sealed class ConsumerArms : IAsyncLifetime
         UseModels(scheme);
         var run = await RunSchemeAsync(arm, scheme);
         run.Code.Should().Be(0, $"{arm} must finish for the readers to have a whole arm: " + run.Error + run.Output);
-        File.Delete(Path.Combine(Root.Root, "pids", $"{arm}.pid")); // the in-process runner wrote its own pid, which is this test host: checks reads a live pid as a live runner
         var checks = await ChecksKit.RunAsync(Root, arm);
         checks.Code.Should().Be(0, $"checks {arm} writes the objective.json the readers read: " + string.Join('\n', checks.Lines));
         Root.ArmDones(arm).Should().ContainSingle($"{arm} ends with arm-done");
