@@ -1,6 +1,15 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **plan only, nothing implemented yet; epoch 4 open since 2026-10-31 with 1 change (4.1, the known-task needle
+> Status: **STOPPED 2026-11-01 by change 4.2, stopped for re-review (the owner's staged order: group A, the four olympiad tasks in the bare arm;
+> then B, the bare arm for all ten; then C, the process arm) — the second change of epoch 4; no v2 code until its whole
+> re-review closes (`common.plan-change-control`).** Before the stop: E1.S5 (toolchains) merged (#135); E1.S1's bench
+> side and E1.S8a part i built and in review; the task repository's history joined to GitHub (task repository PR #1).
+> Operator answers of 2026-11-01, recorded as status (not changes): the credit terms of the known tasks (the rest of Q1 —
+> CC BY-NC-SA 4.0 for specs 01 and 02 by a per-file exception, 09 in own words credited "based on IOI 2018 Werewolf",
+> 06 with RealWorld's MIT notice, 05 in own words never taking the product's name; `inputs/credits-lang.json`); the
+> fine-grained PAT and the deploy key exist (E1.S7; the key authenticates over `ssh.github.com:443`).
+>
+> Status before the stop: **plan only, nothing implemented yet; epoch 4 open since 2026-10-31 with 1 change (4.1, the known-task needle
 > contract: case-sensitive word-boundary matching, the task-9 spec path renamed; found by the spec drafts 06 and 09 — the
 > one change this epoch allows, no stop; all ten specs are drafted), approved by the owner —
 > narrowed: the process arm's GitHub capability (D42, the run-bound broker with an isolated bare repository per run), as
@@ -143,7 +152,7 @@ Narrowed: yes — the measured treatment of the process arm got smaller: by D42 
 |---|---|---|---|
 | the E1 stories document `todo/PLAN_lang_comparison_v2_E1.md`, `51a80ba` (planning, not on main) | `dew_flow_benchmark` branch `feat/lang-v2-e1`, pushed, unmerged | fits | kept; rewritten for E1.S8b, E3.S7a, OP-2 to OP-11 as text and the D41 rule (no trap content) before its own gate (judged by the team lead, Opus, 2026-10-31) |
 
-> Epoch 4 · approved 2026-10-31 · by owner · state: open
+> Epoch 4 · approved 2026-10-31 · by owner · state: stopped
 
 - 4.1 · 2026-10-31 · agent · contract — the known-task needle contract (D18, D33, D39) was underdetermined; found by the spec drafts 06 and 09
   (One cause, two symptoms. (a) D33 named the spec path `todo/tasks/09-werewolf.md`, but "Werewolf" is a D18 needle and
@@ -155,6 +164,15 @@ Narrowed: yes — the measured treatment of the process arm got smaller: by D42 
   substrings for product names that are not words (for example `redis.io`); base64 and JWT payloads in sample transcripts
   are excluded from the scan only where FORMAT marks them as a normalised field, otherwise scanned; the task-5 needles
   stand in D18; T-L37 tests the rule. The one change epoch 4 allows; no stop.)
+- 4.2 · 2026-11-01 · owner · build-order — the series is built and run in groups, each group to evidence before the next: (A) the four olympiad tasks in the bare arm, (B) the bare arm for all ten tasks, (C) the process arm
+  (One cause: the owner's choice of 2026-11-01, "A, then B, then C, group by group", after the team lead's estimate that
+  the plan as written needs 1–2 weeks before its first paid round while group A needs 2–3 days: the olympiad tasks need no
+  daemon or web runner (E1.S8a part ii, the drivers of E3.S2) and no process arm (E3.S7, E3.S7a), so the stdin/stdout path
+  can reach a pre-registered paid round first. Nothing is dropped: every epic, task, arm, metric and test stays; the order
+  of building and running changes, and each group gets its own pre-registration, A/A where the arm needs it, pilot and
+  analysis. The whole-plan revision decides what that means for §14's steps, the epics' order, the pre-registration (D16,
+  E4), the rounds and their seeding (D9), the cross-group comparability of results run on different days (model and CLI
+  drift), and the budget frame. This second change stopped the plan.)
 
 ## 1. The question, before any solution
 
