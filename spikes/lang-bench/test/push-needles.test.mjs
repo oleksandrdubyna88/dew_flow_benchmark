@@ -79,10 +79,15 @@ test('A_needle_file_with_a_short_or_empty_entry_is_refused', () => {
   assert.equal(parseKnownNeedles({ schema: 2, words: ['CSES'], substrings: [] }).ok, false);
 });
 
-test('A_path_or_identifier_is_not_part_of_a_shingle_but_the_prose_around_it_still_is', () => {
-  const aid = { name: 'a.md', text: 'Notes.\ncopied word for word from notes/alpha/beta/gamma/delta/epsilon.md and the sprocket table of the month please.\n' };
-  const needles = aidNeedles({ aids: [aid] }).value;
-  assert.deepEqual(findAidHits('p', 'The plan: sprocket `notes/alpha/beta/gamma/delta/epsilon.md`.\n', needles), [], 'a pointer that shares only path words with the aid is not a hit');
-  const copy = 'x\ncopied word for word from notes/alpha/beta/gamma/delta/epsilon.md and the sprocket table of the month please.\n';
-  assert.equal(findAidHits('p', copy, needles).length, 1, 'a verbatim copy still matches, its identifiers dropped on both sides');
+test('A_leaked_passage_with_markup_or_a_slash_every_five_words_is_still_caught_because_no_token_is_dropped', () => {
+  const passage = 'The quick violet engine whistles beneath seven copper bridges while the lantern keeper counts every falling marble slowly.';
+  const needles = aidNeedles({ aids: [{ name: 'a.md', text: `Notes.\n${passage}\n` }] }).value;
+  const words = passage.split(' ');
+  const wrapped = (decorate) => `${words.map((w, i) => (i % 5 === 2 ? decorate(w) : w)).join(' ')}\n`;
+  assert.equal(findAidHits('p', wrapped(w => `_${w}_`), needles).length > 0, true, 'an _emphasised_ word every five words');
+  assert.equal(findAidHits('p', wrapped(w => `${w}/`), needles).length > 0, true, 'a word joined by a slash every five words');
+  assert.equal(findAidHits('p', wrapped(w => `${w}\\`), needles).length > 0, true, 'a backslash');
+  // the refuted approach: dropping every token that holds `_`, `/` or `\\` leaves windows too short to hold six words
+  const droppedTokens = wrapped(w => `${w}/`).split(/\s+/).filter(t => !/[/\\_]/.test(t)).join(' ');
+  assert.equal(findAidHits('p', droppedTokens, needles).length, 0, 'the refuted reading sees nothing');
 });

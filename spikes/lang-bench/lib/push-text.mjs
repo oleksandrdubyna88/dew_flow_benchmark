@@ -16,17 +16,11 @@ export function lineIndex(text) {
   };
 }
 
-const IDENTIFIER_LIKE = /[/\\_]/;
-
 /**
- * The words of `text` as v1's leak check reads them (lower-cased runs of a-z0-9), each with the line it starts on - except that a
- * whitespace-delimited token holding `/`, `\` or `_` (a path, a snake_case name) is left out. The same reading is applied to an aid and
- * to the text checked, so a verbatim copy still matches; what it removes is the shingle made of nothing but a path both texts name.
+ * The words of `text` as v1's `normalise` reads them (lower-cased runs of a-z0-9, every other character a separator), each with the
+ * line it starts on. No token is dropped: a leaked passage cannot hide behind markup, a slash or an underscore every few words.
  */
 export function wordsWithLines(text) {
   const lineOf = lineIndex(text);
-  const lower = text.toLowerCase();
-  return [...lower.matchAll(/\S+/g)]
-    .filter(token => !IDENTIFIER_LIKE.test(token[0]))
-    .flatMap(token => [...token[0].matchAll(/[a-z0-9]+/g)].map(w => ({ word: w[0], line: lineOf(token.index + w.index) })));
+  return [...text.toLowerCase().matchAll(/[a-z0-9]+/g)].map(m => ({ word: m[0], line: lineOf(m.index) }));
 }
