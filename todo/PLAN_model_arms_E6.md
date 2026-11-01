@@ -1,6 +1,6 @@
 # PLAN — E6 stories: the compatibility contract and the record of the model-arms module
 
-> Status: **stories written 2026-10-31, nothing implemented yet.** Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
+> Status: **BUILT 2026-11-01 on `feat/model-arms-e6` except the promotion (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); the promotion waits for M2's key check, the owner's.** Stories written 2026-10-31. Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
 > §4.3, §4.12; §5; §6 step 6; §7's E6 tests; §9; §10; `## Epics` E6; plan-gate round 1's F2), written at `cc02d09` on
 > `feat/model-arms-e6` (E1–E3 on `main`; E4.S0 built; E4.S1–E4.S3 and E5.S1–E5.S4 being built on their own branches against
 > [PLAN_model_arms_E4.md](PLAN_model_arms_E4.md) and [PLAN_model_arms_E5.md](PLAN_model_arms_E5.md)) by the judge role (Opus), as the

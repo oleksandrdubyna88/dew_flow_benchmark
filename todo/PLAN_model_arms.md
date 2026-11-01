@@ -18,6 +18,21 @@
 > and [research/module_probes.md](../research/module_probes.md) (the pieces this composes), [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) §3
 > (the ways a run lies about itself — the reason an error result is never "done").
 
+## State after E6 (2026-11-01) — what is left, all of it the owner's
+
+Progress, not a plan change. E4, E5 and E6 are built, each story through an Opus review and the coai code gate (epoch 3 holds ONE entry,
+3.1). The branches, none merged: `feat/model-arms-e4s0` (E4.S0 alone, the first pull request), `feat/model-arms-e4` (E4.S1–S3 on top),
+`feat/model-arms-e5` (E5.S1–S4), `feat/model-arms-e6` (E4 and E5 integrated, E6 on top; ModelArms suite 2041, 0 failed); the epoch-3
+re-review is PR #126 (green, not merged). What is open:
+- **M2's key check** (the real `claude`, `coai-mcp`, the vault key) — it holds the promotion; and **M3 step 14** (the real-claude delegation re-run).
+- **The real-git pilot** of E4.S0 on git 2.39.4 and 2.45.0 (building old gits was not authorised this session; the floor is from git's source).
+- **Owner decisions recorded, not taken:** `SSH_AUTH_SOCK` and inherited `GIT_*` reaching the arm's own session (§9); removing the
+  patch-id skip of the pick-back (D22); `make`'s own clone/checkout/submodule update still run a GLOBAL git filter (LFS by design —
+  the model under test shares HOME, so it could plant one); E6's `generatorCheck` finding (compare.mjs and make-tables.mjs read it,
+  part 6's objective.json never had it, so every part-6 arm reads FAIL there — a consumer defect for the analysis plan); E2 §8 item 62
+  measured (a resumed gate step: metrics6 2.00, metrics/compare 3.25).
+- **M3's findings** (the module doc's M3 log): refusal order before `prep-base`; the `.continue` marker not observed live.
+
 ## State after E3 (2026-10-31) — where E4, E5 and E6 start
 
 Written for the session that builds E4–E6. Progress, not a plan change (`common.plan-change-control` § *What counts as a change*).
@@ -1206,7 +1221,7 @@ use sequential arms). **Done when.** E5's tests of §7 green; the POSIX adapter'
 | E5.S3 | `SetsidLauncher` / `WindowsLauncher` (no pid read back from the launch), `run-all` over E5.S1's `RunnerLiveness` (an arm whose lock is held is left alone; the probe released at once, never after a start), pid files written by the RUNNER (E5.S1): `pids/<arm>.pid` is the decimal pid and one `\n`, replaced whole — the format `status` and `checks` already read through `RunnerPid.Parse` (E3 §8 item 32), both readers unchanged; the queue refusal over the MINIMUM queue of every arm alive at once (§4.7); the runner's stdin the null device, its log by the OS's redirection (E3 §8 items 18, 39); never automatically repeats an exit 5; the gate lock under `run-all` verified with two arms and the queue refusal (§4.7 — the ceiling is built per arm by `run-arm`, E2 §8 item 61; the wedged holder a recorded residual) | D13, D26 (b), E2 §8 items 56, 59, 61 | `ModelArms/Adapters/*Launcher.cs`, `ModelArms/Verbs/RunAll.cs`, `DetachedLauncherTests.cs`, `RunAllVerbTests.cs` | `DetachedLauncherTests`, `RunAllVerbTests`; `StatusVerbTests` and `ChecksVerbTests` pid tests unedited and green |
 | E5.S4 | `ChainPlan` and `chain <run>` with the per-run markers; `chain` joins the positional table; `AwaitExit` (bounded by `limits.killGraceSeconds`, then exit 5) and `StopOtherRunAlive` before `Unlock`; every marked stage reconciled with the snapshot before it is skipped (`RefuseMarker`, exit 4 with the recovery) | §4.7, D27, D20 | `Core/Chain/*`, `ModelArms/Verbs/Chain.cs`, `Core/Isolation/LockSnapshot.cs` (`LockState.Applied` gains `Digest`; `IsolationLine` and `status` unchanged in what they print), `Core/Experiment/ModelArmsCommandLine.cs` (`chain <run>`), `Core/Experiment/ArmPaths.cs` (the chain's markers through E3.S4's `RootPaths.RunMarker(run, RunStage)`, written by the chain alone; the root-level `RootPaths.Locked`, `Unlocked`, `ArmsDone` and their `ArmPathsTests` rows REMOVED), `Core/Experiment/RootRequirements.cs` (`chain <run>`), `ChainPlanTests.cs`, `ChainVerbTests.cs` | `Unlock` only from the plan's stage and every failure path leaving the isolation applied with the recovery printed (§4.7); the held-after-done and the other-run-alive cases exit 5 without `Unlock`; a `locked` marker over an unlocked or another run's snapshot refused; two runs on one root; no root-level chain marker left |
 
-### E6 — The compatibility contract and the record (M)
+### E6 — The compatibility contract and the record (M) — BUILT on `feat/model-arms-e6` (2026-11-01) except the promotion, not yet merged
 
 **Goal.** A C# arm of every scheme leaves the files the pinned consumers read — proven by running them (D28); every verb has its
 catalogue row; the module is documented as it is; the plan is promoted. **Scope.** D5's compatibility, D28, F2, the docs of §6 step 6,
