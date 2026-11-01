@@ -22,6 +22,15 @@ def statement(kind_phrase):
     return f"# Task 03 — Toy\n\n| | |\n|---|---|\n| Kind | {kind_phrase} |\n| Gate verdict | not yet gated |\n"
 
 
+def read_file(path, mode="rb"):
+    with open(path, mode) as f:
+        return f.read()
+
+
+def read_json(path):
+    return json.loads(read_file(path, "r"))
+
+
 class Box:
     """A workspace and a samples directory in a temporary folder."""
 
@@ -112,8 +121,7 @@ class OlympiadTests(unittest.TestCase):
 
 class ParseOnlyTests(unittest.TestCase):
     def daemon_box(self, test, script=None):
-        with open(os.path.join(FORMAT, "x2.in"), "rb") as f1, open(os.path.join(FORMAT, "x2.out"), "rb") as f2:
-            pairs = {"x2.in": script if script is not None else f1.read(), "x2.out": f2.read()}
+        pairs = {"x2.in": script if script is not None else read_file(os.path.join(FORMAT, "x2.in")), "x2.out": read_file(os.path.join(FORMAT, "x2.out"))}
         return Box(test, kind=DAEMON, run_sh="touch started\n", pairs=pairs)
 
     def test_Parse_only_parses_and_validates_every_pair_and_starts_nothing(self):
@@ -125,7 +133,7 @@ class ParseOnlyTests(unittest.TestCase):
 
     def test_The_format_examples_of_both_kinds_parse(self):
         for kind, name in ((DAEMON, "x2"), (WEB, "x3")):
-            pairs = {f"{name}.in": open(os.path.join(FORMAT, f"{name}.in"), "rb").read(), f"{name}.out": open(os.path.join(FORMAT, f"{name}.out"), "rb").read()}
+            pairs = {f"{name}.in": read_file(os.path.join(FORMAT, f"{name}.in")), f"{name}.out": read_file(os.path.join(FORMAT, f"{name}.out"))}
             self.assertEqual(Box(self, kind=kind, pairs=pairs).cli("--parse-only")[0], 0, name)
 
     def test_Scenario_1_is_exit_4_naming_the_file_and_line_and_nothing_is_started(self):
@@ -205,7 +213,7 @@ class ConfigurationTests(unittest.TestCase):
         box.write(box.samples, "cases.txt", "# manifest\ns03 R1 R4\n")
         out_json = os.path.join(box.out, "r.json")
         self.assertEqual(box.cli("--json", out_json)[0], 0)
-        record = json.load(open(out_json))
+        record = read_json(out_json)
         self.assertEqual(record["cases"][0]["rIds"], ["R1", "R4"])
 
     def test_A_malformed_cases_line_a_repeated_id_or_an_id_with_no_pair_is_exit_4(self):
@@ -220,7 +228,7 @@ class ResultTests(unittest.TestCase):
         box = Box(self)
         out_json = os.path.join(box.out, "r.json")
         box.cli("--json", out_json)
-        record = json.load(open(out_json))
+        record = read_json(out_json)
         self.assertEqual((record["format"], record["grammar"], record["kind"]), (1, 2, "olympiad"))
         self.assertEqual(sorted(record), ["build", "cases", "format", "grammar", "kind", "python", "runner"])
         case = record["cases"][0]
@@ -232,7 +240,7 @@ class ResultTests(unittest.TestCase):
         box = Box(self)
         out_json = os.path.join(box.out, "r.json")
         box.cli("--no-build", "--json", out_json)
-        self.assertEqual(json.load(open(out_json))["build"], {"ran": False})
+        self.assertEqual(read_json(out_json)["build"], {"ran": False})
 
 
 class EncodingTests(unittest.TestCase):

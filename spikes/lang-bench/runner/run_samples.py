@@ -217,18 +217,27 @@ def _report(plan, build, results):
             json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results]), f, indent=2, ensure_ascii=False)
 
 
+def _scratch_run(plan):
+    scratch = tempfile.mkdtemp(prefix="runner-")
+    try:
+        return _execute(plan, scratch)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _exit_code(results):
+    return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
+
+
 def _run_olympiad(plan):
     if not os.path.isdir(plan.args.workspace):
         return Failure(EXIT_ENVIRONMENT, [f"workspace {sm.shown(plan.args.workspace)} is not a directory"])
-    scratch = tempfile.mkdtemp(prefix="runner-")
     try:
-        build, results = _execute(plan, scratch)
+        build, results = _scratch_run(plan)
     except OSError as e:
         return Failure(EXIT_ENVIRONMENT, [f"cannot start a program: {type(e).__name__}: {e}"])
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
     _report(plan, build, results)
-    return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
+    return _exit_code(results)
 
 
 def _finish(outcome):
