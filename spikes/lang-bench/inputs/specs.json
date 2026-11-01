@@ -3,7 +3,7 @@
     "files": [
       {
         "path": "rs_assign.py",
-        "sha256": "867896253911148a3c373d69768ac6ec4a674904232504e76dd1bc29f16d8ab2"
+        "sha256": "61903c0943f3f376a188fa31fab3f24c68266a18cd80dccb6632d5174e89d9f9"
       },
       {
         "path": "rs_check.py",
@@ -74,7 +74,7 @@
         "sha256": "8362aea55e30f93eb113baebe4d97dcebafbbf617506240592a0dcdb17193539"
       }
     ],
-    "manifestSha256": "a2418c923be6e5ced26e86190bdc50edc4fc5ad642f631353ac8172a869f5237",
+    "manifestSha256": "d7ff72c563809c839930706af7ab15b8a66574051d2dde985cf87ef215361914",
     "version": "0.1.0"
   }
 }

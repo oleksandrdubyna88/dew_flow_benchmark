@@ -29,7 +29,9 @@ class Workspace:
                 f.write(data if isinstance(data, bytes) else data.encode())
 
     def run(self, case, **overrides):
-        return ro.run_case(case, ex.Config(workspace=self.dir, scratch=self.scratch, **overrides))
+        """Runs one case. The limit is generous unless a test names it: the machine these tests run on is often loaded, and a wall time is
+        not what most of them are about (the default of Config is the floor, asserted on its own below)."""
+        return ro.run_case(case, ex.Config(workspace=self.dir, scratch=self.scratch, **{"limit_ms": 20_000, **overrides}))
 
 
 REPLAY = "cat answer.bin\n"
@@ -213,8 +215,9 @@ class TimeTests(unittest.TestCase):
         self.assertFalse(result.lifecycle["leftover"]["known"], "a group the runner killed is not a leftover finding")
 
     def test_Without_a_limits_file_the_limit_is_the_floor_and_the_verdict_says_so(self):
-        result = Workspace(self, "sleep 2\n").run(case(expected=b""))
+        result = Workspace(self, "sleep 2\n").run(case(expected=b""), limit_ms=ex.FLOOR_MS)
         self.assertTrue(result.reason.endswith("(against the floor)"), result.reason)
+        self.assertEqual((ex.Config("w", "s").limit_ms, ex.Config("w", "s").basis), (ex.FLOOR_MS, "floor"))
 
     def test_A_program_that_exits_by_itself_a_little_after_the_limit_is_a_time_limit_not_a_pass(self):
         result = Workspace(self, "sleep 0.12; cat answer.bin\n", {"answer.bin": ANSWER}).run(case(), limit_ms=100)

@@ -59,7 +59,12 @@ class Box:
         with open(os.path.join(folder, name), "wb") as f:
             f.write(data if isinstance(data, bytes) else data.encode("utf-8"))
 
-    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B")):
+    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B"), generous=True):
+        """Runs the CLI. A generous time limit is given unless the test names one (or passes generous=False to meet the floor): the machine is
+        often loaded and a wall time is not what most of these tests are about."""
+        if generous and "--limits" not in args:
+            self.write(self.root, "generous-limits.json", '{"timeS": 60}')
+            args = (*args, "--limits", os.path.join(self.root, "generous-limits.json"))
         argv = [sys.executable, *python_flags, entry, *args] + ([self.samples] if samples else [])
         full_env = {"PATH": os.environ["PATH"], "TMPDIR": tempfile.gettempdir(), **(env or {})}
         done = subprocess.run(argv, capture_output=True, cwd=self.ws, env=full_env, timeout=120)
@@ -426,7 +431,7 @@ class OlympiadTests(unittest.TestCase):
 
     def test_Without_a_limits_file_the_time_limit_is_the_floor_and_every_time_verdict_says_so(self):
         box = Box(self, run_sh="sleep 1.3\n")
-        code, out, _ = box.cli()
+        code, out, _ = box.cli(generous=False)
         self.assertEqual(code, 1)
         self.assertIn("against the floor", out)
 
