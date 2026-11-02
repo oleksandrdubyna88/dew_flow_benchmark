@@ -24,7 +24,9 @@ function setup(t, what, extra = {}) {
 const inBox = (box, script) => sh(box[0], [...box.slice(1), 'bash', '-c', script]);
 
 test('The_box_argv_has_no_broad_bind_and_no_net_namespace_flag_and_no_die_with_parent', t => {
-  const { argv } = setup(t, 'argv');
+  const { view, argv: buildArgv } = setup(t, 'argv');
+  assert.ok(buildArgv.includes('--die-with-parent'), 'B1: a BUILD box (no scope) dies with its parent, so a build never outlives the probe that started it');
+  const argv = boxArgv({ view, dirs: toolchains, env: env(), prog: '/sys/fs/cgroup/prog', tree: view }); // the program's box: ended by its cgroup, never by its parent
   assert.deepEqual(unsafeBinds(argv, { home: HOME }), []);
   assert.deepEqual(argv.slice(1, 3), ['--tmpfs', '/'], 'the base is a tmpfs root');
   for (const flag of ['--unshare-net', '--die-with-parent']) assert.ok(!argv.includes(flag), `${flag} must not be in the box argv`);
