@@ -357,7 +357,7 @@ staged series and kept for their history.
 - **W-A2:** **S8b whole** (needs ii-a and S5) ∥ **S9** (sections classed), gated after **CP1** ∥ S4 ∥ **S7's tag ruleset and
   `main` protection** (after S1's first pushes and operator step O3's go). **CP2** after S8b, with T-L43's asserted record;
   the team lead decides OP-K on it before E2-A calibrates (§9). *(2026-11-02: OP-K is closed by parent D55; CP2 runs after the fix
-  forward of parent D59 on the re-pinned identities, and reads T-L43's revised record, T-L50 and T-L52 with the consult's items.)*
+  forward of parent D59 on the re-pinned identities, and reads T-L43's revised record and T-L50 with the consult's items; T-L52 is group B's (part ii-b) and T-L49 is E2.S3's — neither gates CP2 (judge J1).)*
 - **W-A3:** S8 ∥ S3 phase A (after CP2).
 - **W-A4, per task, 01 first, then 02, 03 and 09:** S6 → S2 draft and conformance → S2a → **the D40 gate on S8b's layer,
   behind the gate lock** (§3) → S2's document gate, consultant and bias review → gated. **CP3** after task 01 has run this
@@ -730,7 +730,7 @@ on S8b's branch before its merge and re-pins the runner (A's manifest); part ii-
 - **The record.** `memory` carries `peakBytes`, `maxBytes`, `oomKill`, `runtimeAbort`, `abortBelowEvidence`, `childAbortLine`; the
   JSON result's schema test names all six; E3's record renderer lists the two flags as columns (T-L26's companion fails when one is
   removed).
-- **Part ii-b inherits the rule (T-L52).** The daemon and web lifecycles read the same `rs_abort.py` and the same `prog/` evidence
+- **Part ii-b inherits the rule (T-L52, group B).** The daemon and web lifecycles read the same `rs_abort.py` and the same `prog/` evidence
   after readiness; a daemon stub that aborts with .NET's line above half of L is `memory limit`, a web stub with V8's line the same;
   `rs_abort.py` and its evidence function are in T-L38's byte-identical module set, so a change ii-b needed there would be an
   instrument amendment for A (parent D50, §6.1).
@@ -1052,7 +1052,7 @@ carries, and its grammar sections handed to the agent as `runner/GRAMMAR.md`.
 
 | Repository | Path | Change |
 |---|---|---|
-| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap; **F-MEMORY, revised for parent D55 and D56 (2026-11-02):** the sentence names both causes as "the program's memory reaches the bound" — a process of the program's control group killed by the system at the bound, or the program's own runtime stopping it for lack of memory — and tells the author, in stack-neutral words, that the test machine caps each runtime's own heap at 90 % of the memory bound by that runtime's own setting, so a program may hold about that much managed data and the rest is the runtime's; no stack, flag name or threshold is named in FORMAT; the class line of the section stays `common` |
+| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap; **F-MEMORY, revised for parent D55 and D56 (2026-11-02):** the sentence names both causes as "the program's memory reaches the bound" — a process of the program's control group killed by the system at the bound, or the program's own runtime stopping it for lack of memory — and tells the author, in stack-neutral words, that the test machine caps each runtime's own heap at 90 % of the memory bound by that runtime's own setting, — and nothing more: no figure for what a program may hold (the registered bound and the 2 × rule already say it; judge J3: an object graph peaks at 91 % of L under A at 90 %, typed arrays are outside V8's heap, and D57 takes half the floor as a reference's maximum), no stack, runtime, flag name or threshold is named in FORMAT — the text is agent-visible; the class line of the section stays `common`; the scenario and test below guard it |
 | task | `runner/GRAMMAR.md` | generated: v2's sections 3–5 verbatim under a two-line header naming the format version and FORMAT's sha256 |
 | bench | `spikes/lang-bench/inputs/FORMAT-MAINTENANCE.md` | new — v1's §7–§9 for the maintainers, with the plan ids they need |
 | bench | `spikes/lang-bench/tools/grammar-extract.mjs`, `test/grammar-extract.test.mjs` | new |
@@ -1060,7 +1060,7 @@ carries, and its grammar sections handed to the agent as `runner/GRAMMAR.md`.
 
 **Scenarios.** *Given* v2's three examples as files, *then* the runner gives each example's stated verdict against its toy and
 each stated failure against its broken toy. *Given* v2, *then* no plan id matches (`E<n>.S<n>`, `D<n>`, `T-L<n>`, `G-<n>`);
-FORMAT's own `F-…` ids stay. *Given* the daemon example, *then* no D18 needle hits — **failure case:** a planted product name
+FORMAT's own `F-…` ids stay. *Given* v2 (2026-11-02, parent D56), *then* no stack, runtime, flag or threshold word matches — `.NET`, `C#`, `Node`, `V8`, `TypeScript`, `DOTNET_`, `NODE_OPTIONS`, `max-old-space`, `GCHeapHardLimit`, `50 %` — **failure case:** a planted `GCHeapHardLimit` in F-MEMORY fails the check. *Given* the daemon example, *then* no D18 needle hits — **failure case:** a planted product name
 fails the check. *Given* a one-line edit to v2's §4, *then* the stored `GRAMMAR.md` no longer matches and S3's check fails.
 *Given* a `revise` verdict that changes a grammar row, *then* the runner changes in the same branch before the next round.
 
@@ -1072,7 +1072,8 @@ their own gates (S2). Plus (2026-11-01): CP1 recorded before the gate round; aft
 alone and every open spec branch is merged up to it and re-conformed (§3, consult A).
 
 **Test plan (red, green, red).** `GRAMMAR_md_is_the_verbatim_sections_of_FORMAT`; `FORMAT_carries_no_plan_identifier` — red on
-v1 (its §7), green on v2, red with one id planted.
+v1 (its §7), green on v2, red with one id planted; `FORMAT_names_no_stack_flag_or_threshold` (2026-11-02, parent D56) — green on v2,
+red with `GCHeapHardLimit` planted in F-MEMORY, red with `50 %` planted.
 
 **Docs.** `FORMAT.md`; the task repository's `todo/README.md`; `research/module_lang_bench.md`.
 
@@ -1778,12 +1779,13 @@ immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted th
       recorded; B8's probe line recorded for D15's decision.
 - [ ] *(Added 2026-11-01 — per group, the parent's D44–D53.)* **Group A:** 01, 02, 03 and 09 gated and frozen under
       `spec-frozen-A-<yyyymmdd>`, their hashes, R-ids, T and G in `inputs/specs.json` under group A; E1.S8a parts i and
-      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it *(revised 2026-11-02: T-L43 asserts parent D55's settings and the object-graph regression and records the mixed workload; the fix forward of parent D59 — both stacks' keys at 90 %, the abort rule's boundary and flags — and both re-pins before CP2; T-L50 and T-L52 green; the new probe record committed; the records of 2026-11-02 unchanged)*;
+      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it *(revised 2026-11-02: T-L43 asserts parent D55's settings and the object-graph regression and records the mixed workload; the fix forward of parent D59 — both stacks' keys at 90 %, the abort rule's boundary and flags — and both re-pins before CP2; T-L50 green and `rs_abort.py` named in T-L38's module set; the new probe record committed; the records of 2026-11-02 unchanged; T-L52 is group B's — judge J1)*;
       FORMAT v2's sections classed; both stacks' full package sets hashed; the tag ruleset and `main`'s protection read back
       before A's tag; CP1–CP4 recorded; the fixes forward on E1.S1 (exact exemptions, T-L47) and E1.S8a (test (1b), T-L44)
       merged with their branches.
 - [ ] **Group B:** part ii-b pinned as the second runner manifest with T-L38 green; the six gated and frozen under
-      `spec-frozen-B-<yyyymmdd>`; A's four re-gated on B's identities, their old records kept; T-L39 green; CP3-B and CP4-B
+      `spec-frozen-B-<yyyymmdd>`; A's four re-gated on B's identities, their old records kept; T-L39 green; T-L52 green (the abort
+      rule inherited unchanged by the daemon and web lifecycles, parent D59; judge J1); CP3-B and CP4-B
       recorded.
 - [ ] **Group C:** E1.S7 whole, the required checks added to `main`'s protection and read back, the bound run base
       (T-L46), OP-J answered before the first run base.
