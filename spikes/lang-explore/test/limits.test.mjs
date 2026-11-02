@@ -8,12 +8,15 @@ import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { calibrationFor, limitsProblems, loadCalibration, seriesLimits, validLimits } from '../lib/limits.mjs';
-import { calibrationFile, exploreRoot } from '../lib/paths.mjs';
+import { exploreRoot } from '../lib/paths.mjs';
+import { resolveTask, taskPaths } from '../lib/tasks.mjs';
 import { createSeries } from '../lib/series.mjs';
 import { runPair } from '../lib/run.mjs';
 
 const EXPLORE = loadExplore().value;
 const REG = EXPLORE.limits;
+const TASK = resolveTask(EXPLORE, '01').value;
+const calibrationFile = home => taskPaths(TASK, home).calibrationFile;
 const GOOD = { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 };
 
 function homeWith(limits) {
@@ -43,38 +46,38 @@ test('Limits_are_positive_finite_numbers_within_the_registered_floors_and_ceilin
 });
 
 test('A_calibration_file_with_a_bad_shape_is_refused_by_the_loader', () => {
-  assert.equal(loadCalibration(homeWith(GOOD)).ok, true);
-  const bad = loadCalibration(homeWith({ ...GOOD, timeMs: -5 }));
+  assert.equal(loadCalibration(homeWith(GOOD), TASK).ok, true);
+  const bad = loadCalibration(homeWith({ ...GOOD, timeMs: -5 }), TASK);
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /not a usable calibration: timeMs must be positive finite/);
-  assert.equal(loadCalibration(tmpDir('no-calibration')).ok, false);
+  assert.equal(loadCalibration(tmpDir('no-calibration'), TASK).ok, false);
   const home = tmpDir('garbled');
   mkdirSync(exploreRoot(home), { recursive: true });
   writeFileSync(calibrationFile(home), '{ not json');
-  assert.match(loadCalibration(home).reason, /unreadable/);
+  assert.match(loadCalibration(home, TASK).reason, /unreadable/);
 });
 
 test('F7_a_series_is_scored_under_the_limits_it_was_created_with_and_a_changed_calibration_file_is_refused', async () => {
   const home = homeWith(GOOD);
-  const made = createSeries({ home, explore: EXPLORE, calibration: { limits: GOOD } });
+  const made = createSeries({ home, explore: EXPLORE, calibration: { limits: GOOD }, task: '01' });
   assert.deepEqual(seriesLimits(made.value.dir).value, GOOD);
-  assert.deepEqual(calibrationFor({ home, seriesDir: made.value.dir }).value.limits, GOOD);
+  assert.deepEqual(calibrationFor({ home, seriesDir: made.value.dir, task: TASK }).value.limits, GOOD);
   writeFileSync(calibrationFile(home), JSON.stringify({ limits: { ...GOOD, timeMs: 5000 } })); // someone calibrated again
-  const moved = calibrationFor({ home, seriesDir: made.value.dir });
+  const moved = calibrationFor({ home, seriesDir: made.value.dir, task: TASK });
   assert.equal(moved.ok, false);
-  assert.match(moved.reason, /calibration\.json \(TL 5000 ms, ML 536870912 B\) differs from the limits this series was created with \(TL 2000 ms, ML 536870912 B\)/);
+  assert.match(moved.reason, /the calibration file \(TL 5000 ms, ML 536870912 B\) differs from the limits this series was created with \(TL 2000 ms, ML 536870912 B\)/);
   const never = () => { throw new Error('nothing after the limits is read for a refused pair'); };
-  const refused = await runPair({ seriesDir: made.value.dir, pair: 1, io: { home, say: () => {}, abort: {}, worldFn: never, tokenFn: never } });
+  const refused = await runPair({ seriesDir: made.value.dir, pair: 1, explore: EXPLORE, task: TASK, io: { home, say: () => {}, abort: {}, worldFn: never, tokenFn: never } });
   assert.equal(refused.exit, 4);
   assert.match(refused.message, /differs from the limits this series was created with/);
   writeFileSync(path.join(made.value.dir, 'inputs.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(made.value.dir, 'inputs.json'), 'utf8')), limits: { ...GOOD, timeMs: 1 } }));
   writeFileSync(calibrationFile(home), JSON.stringify({ limits: GOOD }));
-  assert.match(calibrationFor({ home, seriesDir: made.value.dir }).reason, /inputs\.json are not usable/, 'a series whose own limits are not usable is refused too');
+  assert.match(calibrationFor({ home, seriesDir: made.value.dir, task: TASK }).reason, /inputs\.json are not usable/, 'a series whose own limits are not usable is refused too');
 });
 
 test('A_malformed_explore_json_is_a_failure_naming_it_and_never_a_TypeError', () => {
   const home = homeWith(GOOD);
-  const made = createSeries({ home, explore: EXPLORE, calibration: { limits: GOOD } });
+  const made = createSeries({ home, explore: EXPLORE, calibration: { limits: GOOD }, task: '01' });
   const broken = tmpDir('bad-explore');
   const garbled = path.join(broken, 'explore.json');
   writeFileSync(garbled, '{ not json');
@@ -83,12 +86,12 @@ test('A_malformed_explore_json_is_a_failure_naming_it_and_never_a_TypeError', ()
   writeFileSync(missingLimits, JSON.stringify(rest));
   for (const file of [garbled, missingLimits, path.join(broken, 'absent.json')]) {
     const exploreFn = () => loadExplore(file);
-    assert.doesNotThrow(() => calibrationFor({ home, seriesDir: made.value.dir, exploreFn }), file);
-    const got = calibrationFor({ home, seriesDir: made.value.dir, exploreFn });
+    assert.doesNotThrow(() => calibrationFor({ home, seriesDir: made.value.dir, task: TASK, exploreFn }), file);
+    const got = calibrationFor({ home, seriesDir: made.value.dir, task: TASK, exploreFn });
     assert.equal(got.ok, false, file);
     assert.ok(got.reason.includes(file) || /explore\.json/.test(got.reason), got.reason);
-    assert.doesNotThrow(() => loadCalibration(home, exploreFn));
-    assert.equal(loadCalibration(home, exploreFn).ok, false);
+    assert.doesNotThrow(() => loadCalibration(home, TASK, exploreFn));
+    assert.equal(loadCalibration(home, TASK, exploreFn).ok, false);
   }
 });
 
@@ -98,8 +101,8 @@ test('The_live_calibration_and_the_series_own_limits_go_through_the_one_validato
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /^the thing is not usable: timeMs 1 is under the registered floor of 2000$/);
   const home = homeWith({ ...GOOD, timeMs: 1 });
-  assert.match(loadCalibration(home).reason, /is not a usable calibration: timeMs 1 is under the registered floor/);
-  const made = createSeries({ home: homeWith(GOOD), explore: EXPLORE, calibration: { limits: GOOD } });
+  assert.match(loadCalibration(home, TASK).reason, /is not a usable calibration: timeMs 1 is under the registered floor/);
+  const made = createSeries({ home: homeWith(GOOD), explore: EXPLORE, calibration: { limits: GOOD }, task: '01' });
   writeFileSync(path.join(made.value.dir, 'inputs.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(made.value.dir, 'inputs.json'), 'utf8')), limits: { ...GOOD, timeMs: 1 } }));
-  assert.match(calibrationFor({ home: homeWith(GOOD), seriesDir: made.value.dir }).reason, /the limits in .*inputs\.json are not usable: timeMs 1 is under/);
+  assert.match(calibrationFor({ home: homeWith(GOOD), seriesDir: made.value.dir, task: TASK }).reason, /the limits in .*inputs\.json are not usable: timeMs 1 is under/);
 });

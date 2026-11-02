@@ -5,12 +5,17 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { INPUTS } from '../lib/paths.mjs';
-import { BANNER, DIFFERENCES, predictionRows, renderNote, sessionCells } from '../lib/note.mjs';
+import { DIFFERENCES, predictionRows, renderNote, sessionCells } from '../lib/note.mjs';
+import { bannerOf } from '../lib/note-tasks.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
+import { resolveTask } from '../lib/tasks.mjs';
 import { cpcBoth, exploreSection, pairRecordOf } from '../lib/records.mjs';
 import { MIB, c, recordOf, resultOf } from './support.mjs';
 import { scoreShape } from '../lib/score.mjs';
 
 const PINS = JSON.parse(readFileSync(path.join(INPUTS, 'explore.json'), 'utf8'));
+const TASK = resolveTask(loadExplore().value, '01').value;
+const BANNER = bannerOf(TASK);
 const SECRET_SEQUENCE = 'ZEBRA-9 QUAIL-8 MANGO-7 PLUM-6 FIG-5 KIWI-4';
 const SECRET_ID = 'k777';
 
@@ -30,7 +35,7 @@ function inputFor(sessions) {
   const pairs = [...new Set(sessions.map(s => s.entry.pair))].map(pair => pairRecordOf({ pair, entries: sessions.filter(s => s.entry.pair === pair).map(s => s.entry), recordOf: rid => sessions.find(s => s.entry.rid === rid)?.record ?? null }));
   const cpc = Object.fromEntries(['csharp', 'node'].map(stack => [stack, cpcBoth(sessions.filter(s => s.entry.stack === stack).map(s => ({ record: s.record, accepted: s.record.explore.accepted?.value === true })))]));
   return {
-    date: '2026-11-01', seriesId: 'x-20261101-ab12', rehearsal: false, subject: { branch: 'feat/lang-explore-task1', sha: 'a'.repeat(40), harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: 'b'.repeat(12), pilotIdentity: 'c'.repeat(40) },
+    date: '2026-11-01', task: TASK, seriesId: 'x-20261101-ab12', rehearsal: false, subject: { branch: 'feat/lang-explore-task1', sha: 'a'.repeat(40), harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: 'b'.repeat(12), pilotIdentity: 'c'.repeat(40) },
     pins: PINS, limits: { timeMs: 2000, memoryBytes: 512 * MIB }, sessions, pairs, cpc,
   };
 }
@@ -54,7 +59,7 @@ test('The_note_opens_with_the_banner_and_has_every_section_in_order', () => {
 
 test('Every_prediction_row_of_the_plan_is_stated_against_an_observation_computed_from_the_sessions', () => {
   const cells = sixSessions().map(sessionCells);
-  const rows = predictionRows(cells, inputFor(sixSessions()).pairs);
+  const rows = predictionRows(cells, inputFor(sixSessions()).pairs, TASK);
   assert.deepEqual(rows.map(r => r[0]), ['cost per session', 'wall per session', 'active - model_api', 'visible pass rate', 'held-out', 'harness']);
   assert.match(rows[0][2], /\$0\.21 to \$0\.33, median \$0\.31/);
   assert.equal(rows[3][2], '6 of 6 session(s) at 100%');
@@ -63,14 +68,14 @@ test('Every_prediction_row_of_the_plan_is_stated_against_an_observation_computed
   const failing = sixSessions();
   const record = sessionRecord({ stack: 'node', usd: 0.9, failing: ['k003'] });
   failing[1] = { entry: entryOf(1, 'node', 1, record), record };
-  const second = predictionRows(failing.map(sessionCells), inputFor(failing).pairs);
+  const second = predictionRows(failing.map(sessionCells), inputFor(failing).pairs, TASK);
   assert.match(second[4][2], /accepted in 5 of 6 scored session\(s\); trap hits C# 0 session\(s\) with a hit, TypeScript 1 session\(s\) with a hit/, 'one failing trap case is one trap hit, as a count');
   assert.match(second[0][2], /\$0\.21 to \$0\.90/);
   assert.match(renderNote(inputFor(failing)), /\| 1 \| TypeScript \| 100% \| 80% \| no \| 1 of 2 trap cases \|/, 'the quality table says it: the held-out rate, not accepted, one trap hit');
   const visibleFails = sixSessions();
   const slipped = sessionRecord({ stack: 'csharp', usd: 0.2, failing: ['s02'] });
   visibleFails[0] = { entry: entryOf(1, 'csharp', 1, slipped), record: slipped };
-  assert.equal(predictionRows(visibleFails.map(sessionCells), [])[3][2], '5 of 6 session(s) at 100%', 'the visible row is computed: one session slipped');
+  assert.equal(predictionRows(visibleFails.map(sessionCells), [], TASK)[3][2], '5 of 6 session(s) at 100%', 'the visible row is computed: one session slipped');
 });
 
 test('A_void_a_kill_and_a_flag_are_listed_and_a_rerun_is_labelled_ran_unpaired', () => {
@@ -82,7 +87,7 @@ test('A_void_a_kill_and_a_flag_are_listed_and_a_rerun_is_labelled_ran_unpaired',
   const text = renderNote(inputFor(sessions));
   assert.match(text, /pair 2 C# attempt 1: void: upstream; flags: upstream 429 2/);
   assert.match(text, /\| 2 \| C# \| completed \(ran unpaired\)/);
-  assert.match(predictionRows(sessions.map(sessionCells), [])[5][2], /^1 void\(s\)/);
+  assert.match(predictionRows(sessions.map(sessionCells), [], TASK)[5][2], /^1 void\(s\)/);
   assert.match(renderNote(inputFor(sixSessions())), /No void, no kill, no timeout and no flagged session\./);
 });
 
@@ -148,7 +153,7 @@ test('A_session_without_a_record_json_does_not_crash_the_note_and_is_listed_as_a
     aaa111: { rid: 'aaa111', pair: 1, stack: 'csharp', attempt: 1, label: 'paired', status: 'launching', mask: '0-5' },
     bbb222: { rid: 'bbb222', pair: 1, stack: 'node', attempt: 1, label: 'paired', status: 'planned', mask: '8-13' },
   } };
-  const text = noteFor({ series: { seriesId: 'x-test' }, seriesDir: dir, map, world: { calibration: { limits: { timeMs: 2000, memoryBytes: 536870912 } } }, pins: PINS, rehearsal: false, subject: { branch: 'b', sha: 'a'.repeat(40), harnessPath: 'p', harnessIdentity: 'i', pilotIdentity: 'j' } });
+  const text = noteFor({ series: { seriesId: 'x-test' }, seriesDir: dir, map, world: { calibration: { limits: { timeMs: 2000, memoryBytes: 536870912 } } }, pins: PINS, task: TASK, rehearsal: false, date: '2026-11-01', subject: { branch: 'b', sha: 'a'.repeat(40), harnessPath: 'p', harnessIdentity: 'i', pilotIdentity: 'j' } });
   assert.match(text, /pair 1 C# attempt 1: launching; flags: no record\.json/);
   assert.match(text, /pair 1 TypeScript attempt 1: planned; flags: no record\.json/);
   assert.ok(text.includes('Exploratory, not evidence'));

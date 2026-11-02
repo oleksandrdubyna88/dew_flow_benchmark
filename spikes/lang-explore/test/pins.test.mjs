@@ -10,6 +10,7 @@ import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore, pinnedPaths } from '../lib/inputs.mjs';
 import { underHome } from '../lib/paths.mjs';
+import { resolveTask } from '../lib/tasks.mjs';
 import { pinProblems, pinsOk } from '../lib/pins.mjs';
 
 const sha = text => createHash('sha256').update(text).digest('hex');
@@ -24,8 +25,11 @@ function laidOut() {
   const put = (parts, text) => { const f = underHome(parts, home); mkdirSync(path.dirname(f), { recursive: true }); writeFileSync(f, text); return f; };
   put(explore.cli.pathParts, 'the cli');
   explore.cli.sha256 = sha('the cli');
-  put(explore.privateNotes.relativePath.split('/'), 'the notes');
-  explore.privateNotes.sha256 = sha('the notes');
+  for (const id of ['01', '02']) {
+    put(explore.tasks[id].privateNotes.relativePath.split('/'), `the notes of ${id}`);
+    explore.tasks[id].privateNotes.sha256 = sha(`the notes of ${id}`);
+  }
+  explore.privateNotes.sha256 = explore.tasks['01'].privateNotes.sha256;
   const paths = pinnedPaths(explore, home);
   mkdirSync(paths.tsDir, { recursive: true });
   writeFileSync(path.join(paths.tsDir, 'package-lock.json'), JSON.stringify({ packages: { 'node_modules/typescript': { integrity: INTEGRITY } } }));
@@ -34,34 +38,39 @@ function laidOut() {
   for (const [dir, rel] of [[node, 'npm/x'], [csharp, 'nuget/y']]) { mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); writeFileSync(path.join(dir, rel), rel); }
   explore.csharpSnapshot.treeSha256 = treeHash(csharp);
   const snapshots = { node: { dir: node, record: { treeSha256: treeHash(node) } }, csharp: { dir: csharp, record: {} } };
-  return { home, explore, snapshots, paths };
+  const task = id => resolveTask(explore, id).value;
+  return { home, explore, snapshots, paths, task };
 }
 
 test('When_every_pin_holds_there_is_no_problem', () => {
-  const { home, explore, snapshots } = laidOut();
-  assert.deepEqual(pinProblems({ explore, home, snapshots }), []);
-  assert.equal(pinsOk({ explore, home, snapshots }).ok, true);
+  const { home, explore, snapshots, task } = laidOut();
+  for (const id of ['01', '02']) assert.deepEqual(pinProblems({ explore, task: task(id), home, snapshots }), [], id);
+  assert.equal(pinsOk({ explore, task: task('01'), home, snapshots }).ok, true);
 });
 
 test('Each_pin_that_moved_is_named_and_the_refusal_says_a_pin_moves_by_a_dated_amendment', () => {
   const l = laidOut();
+  let taskId = '01';
   const check = (name, mutate, pattern) => {
     const world = laidOut();
     mutate(world);
-    const problems = pinProblems({ explore: world.explore, home: world.home, snapshots: world.snapshots });
+    const problems = pinProblems({ explore: world.explore, task: world.task(taskId), home: world.home, snapshots: world.snapshots });
     assert.equal(problems.length, 1, `${name}: ${problems.join(' | ')}`);
     assert.match(problems[0], pattern, name);
   };
   check('the CLI copy', w => writeFileSync(w.paths.claudeBinary, 'another cli'), /the pinned CLI copy .* hashes to/);
   check('the CLI copy is gone', w => { w.explore.cli.pathParts = ['nowhere']; }, /the pinned CLI copy .* is missing/);
   check('python3', w => { w.explore.python3.sha256 = '0'.repeat(64); }, /not the pinned python3/);
-  check('the private notes', w => writeFileSync(underHome(w.explore.privateNotes.relativePath.split('/'), w.home), 'edited after the pilot was planned'), /the private test notes .* hashes to/);
+  check('the private notes', w => writeFileSync(underHome(w.explore.privateNotes.relativePath.split('/'), w.home), 'edited after the pilot was planned'), /the private test notes of task 01 .* hashes to/);
+  taskId = '02';
+  check('the private notes of another task', w => writeFileSync(underHome(w.explore.tasks['02'].privateNotes.relativePath.split('/'), w.home), 'edited'), /the private test notes of task 02 .* hashes to/);
+  taskId = '01';
   check('the TypeScript integrity', w => writeFileSync(path.join(w.paths.tsDir, 'package-lock.json'), JSON.stringify({ packages: { 'node_modules/typescript': { integrity: `sha512-${'Z'.repeat(86)}==` } } })), /installed TypeScript's integrity/);
   check('the node snapshot', w => writeFileSync(path.join(w.snapshots.node.dir, 'npm/x'), 'changed'), /the node snapshot .* no longer hashes/);
   check('the csharp snapshot', w => writeFileSync(path.join(w.snapshots.csharp.dir, 'nuget/y'), 'changed'), /the csharp snapshot .* no longer hashes/);
   const bad = laidOut();
   writeFileSync(bad.paths.claudeBinary, 'x');
-  const refusal = pinsOk({ explore: bad.explore, home: bad.home, snapshots: bad.snapshots });
+  const refusal = pinsOk({ explore: bad.explore, task: bad.task('01'), home: bad.home, snapshots: bad.snapshots });
   assert.equal(refusal.ok, false);
   assert.match(refusal.reason, /1 pin\(s\) do not hold: .*dated amendment before pair 1, never between pairs/);
   assert.ok(l.home);

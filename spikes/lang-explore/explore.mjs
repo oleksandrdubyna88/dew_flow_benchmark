@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// The exploratory pilot's command line (plan todo/PLAN_lang_explore_task1.md): task 1 on the v1 bare harness, three C# and TypeScript pairs. Exploratory, not evidence.
+// The exploratory pilot's command line (plans research/PLAN_lang_explore_task1.md and research/PLAN_lang_explore_olympiad.md): olympiad tasks (01, 02, 03, 09) on the v1 bare harness, three C# and TypeScript pairs each. Exploratory, not evidence.
+// `--task NN` names the task on every command that works on one (a missing or unknown task is exit 4); a series records its task and a command given another task refuses.
 //
 //   node spikes/lang-explore/explore.mjs prepare                       the ONLY step that uses the network: TypeScript 6.0.3, the Node cache snapshot, the C# snapshot re-hashed, the spin calibration
-//   node spikes/lang-explore/explore.mjs calibrate                     FREE: both references through the judge at the 30 s ceiling, the limits (TL, ML), every mutant against its predicted cases
-//   node spikes/lang-explore/explore.mjs rehearse                      FREE: one pair end to end with v1's stub CLI and stub upstream, a fake token; exit 0 when every criterion holds
-//   node spikes/lang-explore/explore.mjs init                          creates a series (the mask draw is made and recorded)
+//   node spikes/lang-explore/explore.mjs calibrate --task NN           FREE: the oracle (brute.py, handcheck.md), both references through the judge at the 30 s ceiling, the limits (TL, ML), every mutant against its predicted cases
+//   node spikes/lang-explore/explore.mjs rehearse --task NN            FREE: one pair end to end with v1's stub CLI and stub upstream, a fake token; exit 0 when every criterion holds
+//   node spikes/lang-explore/explore.mjs init --task NN                creates a series of the task (the mask draw is made and recorded)
 //   node spikes/lang-explore/explore.mjs quiet [--accept-noisy <why>]  the machine-quiet check alone
-//   node spikes/lang-explore/explore.mjs run --pair k --series <dir> [--rerun csharp|node] [--accept-noisy <why>]     SPENDS MONEY: one pair
-//   node spikes/lang-explore/explore.mjs readback [--series <dir>]     what each session was launched with, against the registered prompt and environment
-//   node spikes/lang-explore/explore.mjs status [--series <dir>]       node spikes/lang-explore/explore.mjs note [--out <file>] [--force]     node spikes/lang-explore/explore.mjs prune [--series <dir>]
-//   node spikes/lang-explore/explore.mjs leakcheck [--range A..B]      v1's leak check with the pilot's held-out outputs as the needles
+//   node spikes/lang-explore/explore.mjs run --task NN --pair k --series <dir> [--rerun csharp|node] [--accept-noisy <why>] [--allow-over <the owner's words and date>]     SPENDS MONEY: one pair
+//   node spikes/lang-explore/explore.mjs readback --task NN [--series <dir>]   what each session was launched with, against the registered prompt and environment
+//   node spikes/lang-explore/explore.mjs status --task NN [--series <dir>]     node spikes/lang-explore/explore.mjs note --task NN [--out <file>] [--force]     node spikes/lang-explore/explore.mjs prune --task NN [--series <dir>]
+//   node spikes/lang-explore/explore.mjs leakcheck [--task NN] [--range A..B]  v1's leak check with the held-out outputs, reference lines and notes' shingles of EVERY task (or of the one named) as the needles
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
 // `run` and `rehearse` re-execute themselves under `taskset -c 6,7` (an env marker stops a loop), so the broker, the receiver, the proxy and the sampler sit on the harness core, as v1's runner does.
@@ -21,9 +22,10 @@ import { fileURLToPath } from 'node:url';
 import { calibrateCommand } from './lib/calibrate.mjs';
 import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { prepare } from './lib/prepare.mjs';
+import { taskFromValues } from './lib/tasks.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, force: { type: 'boolean' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, force: { type: 'boolean' } };
 const REEXEC = new Set(['run', 'rehearse']);
 
 async function cmdPrepare(values, io) {
@@ -34,8 +36,10 @@ async function cmdPrepare(values, io) {
 }
 
 async function cmdCalibrate(values, io) {
-  const r = await calibrateCommand({ say: io.say, worldFn: loadWorld });
-  if (r.ok) { io.say(`calibrated: TL ${r.value.calibration.limits.timeMs} ms, ML ${r.value.calibration.limits.memoryBytes} bytes; written to ${r.value.file}`); return EXIT.done; }
+  const given = taskFromValues(values, io.exploreFn);
+  if (!given.ok) { io.say(given.reason); return EXIT.config; }
+  const r = await calibrateCommand({ home: io.home, say: io.say, worldFn: io.worldFn ?? loadWorld, task: given.value.task });
+  if (r.ok) { io.say(`calibrated task ${given.value.task.id}: TL ${r.value.calibration.limits.timeMs} ms, ML ${r.value.calibration.limits.memoryBytes} bytes; written to ${r.value.file}`); return EXIT.done; }
   io.say(`calibration stopped: ${r.reason}`);
   return EXIT.failed;
 }

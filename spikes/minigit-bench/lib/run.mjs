@@ -21,6 +21,7 @@ function collector(max) {
       size += Math.min(chunk.length, room);
     },
     text: () => Buffer.concat(chunks).toString('utf8'),
+    bytes: () => Buffer.concat(chunks),
     truncated: () => truncated,
   };
 }
@@ -31,8 +32,10 @@ const killGroup = child => killTree(child.pid, { log: line => process.stderr.wri
 /**
  * Run `exe args` and resolve with { code, signal, stdout, stderr, timedOut, truncated, ms }. A launch failure is
  * { ok: false, reason }. `timeoutMs` is required: nothing here runs unbounded.
+ * `input` (a string or Buffer) is written to the child's stdin, which is then closed. `bytes: true` returns `stdoutBytes`, the child's stdout
+ * untouched, joined once and never decoded (`stdout` is then ''): a blob or an archive is not always text, and a large one must not be held twice.
  */
-export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES } = {}) {
+export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES, input, bytes = false } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(fail('runBounded needs a positive timeoutMs'));
   return new Promise(resolve => {
     const started = Date.now();
@@ -40,14 +43,18 @@ export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTE
     const err = collector(maxBytes);
     let timedOut = false;
     let settled = false;
-    const child = spawn(exe, args, { cwd, env, shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(exe, args, { cwd, env, shell: false, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
+    if (input !== undefined) {
+      child.stdin.on('error', () => {}); // a child that exits before reading its input is the child's answer, not ours
+      child.stdin.end(input);
+    }
     const finish = (code, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve(ok({ code, signal, stdout: out.text(), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started }));
+      resolve(ok({ code, signal, ...(bytes ? { stdout: '', stdoutBytes: out.bytes() } : { stdout: out.text() }), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started }));
     };
     const timer = setTimeout(() => {
       timedOut = true;

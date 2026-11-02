@@ -99,7 +99,7 @@ test('A_pair_number_outside_the_pilot_and_a_stopped_session_are_refused', () => 
 test('A_series_directory_is_created_private_with_its_inputs_and_loads_back', () => {
   const home = tmpDir('home');
   const calibration = { limits: { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 } };
-  const made = createSeries({ home, explore: EXPLORE, calibration, draw: DRAW, date: new Date('2026-11-01T10:00:00Z'), rand: () => 'ab12', inputsExtra: { note: 'x' } });
+  const made = createSeries({ home, explore: EXPLORE, calibration, task: '01', draw: DRAW, date: new Date('2026-11-01T10:00:00Z'), rand: () => 'ab12', inputsExtra: { note: 'x' } });
   assert.equal(made.ok, true, made.reason);
   assert.equal(path.basename(made.value.dir), 'x-20261101-ab12');
   assert.equal(seriesIdOf({ date: new Date('2026-11-01T10:00:00Z'), rand: 'ab12' }), 'x-20261101-ab12');
@@ -110,7 +110,7 @@ test('A_series_directory_is_created_private_with_its_inputs_and_loads_back', () 
   assert.equal(loaded.ok, true, loaded.reason);
   assert.deepEqual(loaded.value.state.draw, DRAW);
   assert.deepEqual(Object.keys(loaded.value.map.sessions), []);
-  assert.equal(createSeries({ home, explore: EXPLORE, calibration, draw: DRAW, date: new Date('2026-11-01T10:00:00Z'), rand: () => 'ab12' }).ok, false, 'a series id is never reused');
+  assert.equal(createSeries({ home, explore: EXPLORE, calibration, task: '01', draw: DRAW, date: new Date('2026-11-01T10:00:00Z'), rand: () => 'ab12' }).ok, false, 'a series id is never reused');
   assert.equal(loadSeries(tmpDir('nothing')).ok, false);
 });
 
@@ -158,7 +158,7 @@ test('F2_a_pair_that_is_finished_is_still_refused_and_a_rerun_waits_for_the_open
 test('F3_a_rehearsal_series_is_named_r_and_latest_series_never_returns_it_and_sorts_by_creation_time', () => {
   const home = tmpDir('latest');
   const calibration = { limits: { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 } };
-  const make = (date, rand, prefix) => createSeries({ home, explore: EXPLORE, calibration, date: new Date(date), rand: () => rand, ...(prefix ? { prefix } : {}) });
+  const make = (date, rand, prefix) => createSeries({ home, explore: EXPLORE, calibration, task: '01', date: new Date(date), rand: () => rand, ...(prefix ? { prefix } : {}) });
   assert.equal(seriesIdOf({ date: new Date('2026-11-01T10:00:00Z'), rand: 'ab12', prefix: 'r' }), 'r-20261101-ab12');
   const first = make('2026-11-01T08:00:00Z', 'ffff');
   const second = make('2026-11-01T09:00:00Z', '0001');
