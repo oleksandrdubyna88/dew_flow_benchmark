@@ -1,0 +1,777 @@
+{
+  "date": "2026-11-02",
+  "probedOn": "2026-11-02T22:09:31.273Z",
+  "host": {
+    "hostname": "jinx",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "cgroup2": true,
+    "systemd": "systemd 259 (259.5-0ubuntu3.4)",
+    "bwrap": "bubblewrap 0.11.1",
+    "node": "v26.12.1"
+  },
+  "layerIdentity": "730f8fee518e5ff3b7a0dc426ee89620cc603f6972f645238ab7fa3d3be08b5c",
+  "runner": {
+    "version": "0.2.4",
+    "manifestSha256": "df118665ee6894f7d22e0b292e0fec99d2b3eb930c06e933b93f06d38c833d68"
+  },
+  "lines": [
+    {
+      "id": "netns",
+      "ok": true,
+      "ns": {
+        "host": "net:[4026531833]",
+        "driver": "net:[4026532225]",
+        "program": "net:[4026532225]"
+      }
+    },
+    {
+      "id": "program-in-prog",
+      "ok": true,
+      "cgroups": {
+        "program": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-zuvjaP-net.scope/prog",
+        "driver": "0::/non-systemd"
+      }
+    },
+    {
+      "id": "ping-over-loopback",
+      "ok": true,
+      "port": 48195
+    },
+    {
+      "id": "bind-list",
+      "ok": true,
+      "binds": [
+        {
+          "mode": "--ro-bind",
+          "source": "/usr"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/passwd"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/group"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/nsswitch.conf"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/localtime"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/dotnet-sdk-10.0.403"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/node-v26.13.0-linux-x64"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/typescript-6.0.3"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-zuvjaP-{case}.scope/prog"
+        }
+      ],
+      "problems": []
+    },
+    {
+      "id": "home-sentinel",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "mnt-c",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "cmd-exe",
+      "ok": true,
+      "exit": "127"
+    },
+    {
+      "id": "user-bus",
+      "ok": true,
+      "exit": "1"
+    },
+    {
+      "id": "bash-c-true-stderr",
+      "ok": true,
+      "bytes": "0"
+    },
+    {
+      "id": "culture-env",
+      "ok": true,
+      "LANG": "de_DE.UTF-8",
+      "LC_ALL": "de_DE.UTF-8"
+    },
+    {
+      "id": "locale-a",
+      "ok": true
+    },
+    {
+      "id": "invariant-switch",
+      "ok": true,
+      "seen": "none"
+    },
+    {
+      "id": "cgroup-view-own",
+      "ok": true,
+      "self": "0::/",
+      "dirs": "",
+      "sys": "fs"
+    },
+    {
+      "id": "env-keys",
+      "ok": true,
+      "envKeys": [
+        "DOTNET_CLI_HOME",
+        "DOTNET_CLI_TELEMETRY_OPTOUT",
+        "DOTNET_NOLOGO",
+        "DOTNET_ROOT",
+        "DOTNET_gcServer",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "PATH",
+        "TMPDIR",
+        "TZ"
+      ]
+    },
+    {
+      "id": "empty-program-launch",
+      "ok": true,
+      "launchMs": 44,
+      "emptyProgramMs": 8,
+      "memoryCertified": true
+    },
+    {
+      "id": "delegated-scope",
+      "ok": true,
+      "memoryMax": 268435456,
+      "swapMax": 0,
+      "peakBytes": 46493696,
+      "workloadExit": 0
+    },
+    {
+      "id": "dotnet-culture",
+      "ok": true,
+      "seen": "de-DE"
+    },
+    {
+      "id": "node-culture",
+      "ok": true,
+      "seen": "de-DE"
+    }
+  ],
+  "memoryView": {
+    "policy": {
+      "policy": "cgroup-view-own+gchl-90+node-old-space-90",
+      "decided": "2026-11-02",
+      "by": "team lead (Opus), D55 (the epoch-6 re-review; ask_consultants bf619f55, 2 of 2 for A)",
+      "evidence": [
+        "inputs/exec-probe-2026-11-02.json",
+        "inputs/opk-experiment-2026-11-02.json"
+      ]
+    },
+    "observations": {
+      "limits": [
+        {
+          "memoryMaxBytes": 268435456,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "workloads": {
+            "csharp": {
+              "medium-buffers": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 247037952
+              },
+              "medium-objects": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 132878336
+              },
+              "objects-70": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 244744192
+              },
+              "mixed": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 249008128
+              }
+            },
+            "node": {
+              "medium-buffers": {
+                "status": "FAIL",
+                "reason": "memory limit",
+                "oomKill": 1,
+                "runtimeAbort": null,
+                "peakBytes": 268435456
+              },
+              "medium-objects": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 130781184
+              },
+              "objects-70": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 215670784
+              },
+              "mixed": {
+                "status": "FAIL",
+                "reason": "memory limit",
+                "oomKill": 1,
+                "runtimeAbort": null,
+                "peakBytes": 268435456
+              }
+            }
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 208146432,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "runtimeAbort": null,
+              "peakBytes": 268435456,
+              "eventsKept": true
+            }
+          },
+          "overLimitObjects": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 232394752,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "v8",
+              "peakBytes": 266772480,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 241591910,
+            "heapHardLimit": "",
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          },
+          "hostMemoryMax": 268435456,
+          "node": {
+            "constrainedBytes": 268435456,
+            "heapSizeLimitBytes": 247463936,
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          }
+        },
+        {
+          "memoryMaxBytes": 536870912,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "workloads": {
+            "csharp": {
+              "medium-buffers": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 486682624
+              },
+              "medium-objects": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 245194752
+              },
+              "objects-70": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 476000256
+              },
+              "mixed": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 474730496
+              }
+            },
+            "node": {
+              "medium-buffers": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 396562432
+              },
+              "medium-objects": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 248795136
+              },
+              "objects-70": {
+                "status": "PASS",
+                "reason": "",
+                "oomKill": 0,
+                "runtimeAbort": null,
+                "peakBytes": 417775616
+              },
+              "mixed": {
+                "status": "FAIL",
+                "reason": "memory limit",
+                "oomKill": 1,
+                "runtimeAbort": null,
+                "peakBytes": 536870912
+              }
+            }
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 477102080,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "runtimeAbort": null,
+              "peakBytes": 536870912,
+              "eventsKept": true
+            }
+          },
+          "overLimitObjects": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 452943872,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "v8",
+              "peakBytes": 518033408,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 483183820,
+            "heapHardLimit": "",
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          },
+          "hostMemoryMax": 536870912,
+          "node": {
+            "constrainedBytes": 536870912,
+            "heapSizeLimitBytes": 494927872,
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          }
+        }
+      ]
+    },
+    "verdict": {
+      "ok": true,
+      "halt": null,
+      "problems": []
+    },
+    "v8Heap": [
+      {
+        "memoryMaxBytes": 268435456,
+        "v8HeapSizeLimitBytes": 247463936,
+        "ratio": 0.922,
+        "asserted": true
+      },
+      {
+        "memoryMaxBytes": 536870912,
+        "v8HeapSizeLimitBytes": 494927872,
+        "ratio": 0.922,
+        "asserted": true
+      }
+    ],
+    "workloads": [
+      {
+        "stack": "csharp",
+        "mode": "churn",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": null,
+        "oomKill": null,
+        "runtimeAbort": null,
+        "peakBytes": null,
+        "ratio": null,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "medium-buffers",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 247037952,
+        "ratio": 0.92,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "medium-objects",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 132878336,
+        "ratio": 0.495,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "objects-70",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 244744192,
+        "ratio": 0.912,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "mixed",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 249008128,
+        "ratio": 0.928,
+        "asserted": false
+      },
+      {
+        "stack": "node",
+        "mode": "churn",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": null,
+        "oomKill": null,
+        "runtimeAbort": null,
+        "peakBytes": null,
+        "ratio": null,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "medium-buffers",
+        "memoryMaxBytes": 268435456,
+        "status": "FAIL",
+        "reason": "memory limit",
+        "oomKill": 1,
+        "runtimeAbort": null,
+        "peakBytes": 268435456,
+        "ratio": 1,
+        "asserted": false
+      },
+      {
+        "stack": "node",
+        "mode": "medium-objects",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 130781184,
+        "ratio": 0.487,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "objects-70",
+        "memoryMaxBytes": 268435456,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 215670784,
+        "ratio": 0.803,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "mixed",
+        "memoryMaxBytes": 268435456,
+        "status": "FAIL",
+        "reason": "memory limit",
+        "oomKill": 1,
+        "runtimeAbort": null,
+        "peakBytes": 268435456,
+        "ratio": 1,
+        "asserted": false
+      },
+      {
+        "stack": "csharp",
+        "mode": "churn",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": null,
+        "oomKill": null,
+        "runtimeAbort": null,
+        "peakBytes": null,
+        "ratio": null,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "medium-buffers",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 486682624,
+        "ratio": 0.907,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "medium-objects",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 245194752,
+        "ratio": 0.457,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "objects-70",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 476000256,
+        "ratio": 0.887,
+        "asserted": true
+      },
+      {
+        "stack": "csharp",
+        "mode": "mixed",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 474730496,
+        "ratio": 0.884,
+        "asserted": false
+      },
+      {
+        "stack": "node",
+        "mode": "churn",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": null,
+        "oomKill": null,
+        "runtimeAbort": null,
+        "peakBytes": null,
+        "ratio": null,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "medium-buffers",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 396562432,
+        "ratio": 0.739,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "medium-objects",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 248795136,
+        "ratio": 0.463,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "objects-70",
+        "memoryMaxBytes": 536870912,
+        "status": "PASS",
+        "reason": "",
+        "oomKill": 0,
+        "runtimeAbort": null,
+        "peakBytes": 417775616,
+        "ratio": 0.778,
+        "asserted": true
+      },
+      {
+        "stack": "node",
+        "mode": "mixed",
+        "memoryMaxBytes": 536870912,
+        "status": "FAIL",
+        "reason": "memory limit",
+        "oomKill": 1,
+        "runtimeAbort": null,
+        "peakBytes": 536870912,
+        "ratio": 1,
+        "asserted": false
+      }
+    ],
+    "overLimit": [
+      {
+        "stack": "csharp",
+        "fixture": "overlimit",
+        "memoryMaxBytes": 268435456,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "dotnet",
+        "peakBytes": 208146432,
+        "ratio": 0.775,
+        "finding": false
+      },
+      {
+        "stack": "node",
+        "fixture": "overlimit",
+        "memoryMaxBytes": 268435456,
+        "reason": "memory limit",
+        "oomKill": 1,
+        "runtimeAbort": null,
+        "peakBytes": 268435456,
+        "ratio": 1,
+        "finding": false
+      },
+      {
+        "stack": "csharp",
+        "fixture": "overlimit-objects",
+        "memoryMaxBytes": 268435456,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "dotnet",
+        "peakBytes": 232394752,
+        "ratio": 0.866,
+        "finding": false
+      },
+      {
+        "stack": "node",
+        "fixture": "overlimit-objects",
+        "memoryMaxBytes": 268435456,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "v8",
+        "peakBytes": 266772480,
+        "ratio": 0.994,
+        "finding": false
+      },
+      {
+        "stack": "csharp",
+        "fixture": "overlimit",
+        "memoryMaxBytes": 536870912,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "dotnet",
+        "peakBytes": 477102080,
+        "ratio": 0.889,
+        "finding": false
+      },
+      {
+        "stack": "node",
+        "fixture": "overlimit",
+        "memoryMaxBytes": 536870912,
+        "reason": "memory limit",
+        "oomKill": 1,
+        "runtimeAbort": null,
+        "peakBytes": 536870912,
+        "ratio": 1,
+        "finding": false
+      },
+      {
+        "stack": "csharp",
+        "fixture": "overlimit-objects",
+        "memoryMaxBytes": 536870912,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "dotnet",
+        "peakBytes": 452943872,
+        "ratio": 0.844,
+        "finding": false
+      },
+      {
+        "stack": "node",
+        "fixture": "overlimit-objects",
+        "memoryMaxBytes": 536870912,
+        "reason": "memory limit",
+        "oomKill": 0,
+        "runtimeAbort": "v8",
+        "peakBytes": 518033408,
+        "ratio": 0.965,
+        "finding": false
+      }
+    ],
+    "findings": []
+  },
+  "exit": {
+    "code": 0,
+    "halt": null
+  }
+}
