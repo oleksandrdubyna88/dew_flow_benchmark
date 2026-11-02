@@ -62,7 +62,7 @@ finds after the exit; it is `known: false` when no pid was settled, and it never
 the file in which the layer's wrapper writes its pid; without the flag nothing is excluded as a wrapper (E1.S8b's delegated scope has none; its fallback `scope-wrap.sh`
 must pass the flag). `oom_kill` above 0 in `memory.events` is the verdict `memory limit` whatever the exit status and is read from `memory.events` alone, even when
 `memory.peak` cannot be read; it is judged before `time limit`. **A runtime's own out-of-memory abort is `memory limit` too** (change 5.1, runner 0.2.1, `rs_abort.py`): .NET exit status 134 AND a stderr
-line exactly `Out of memory.`, V8 exit status 134 AND a stderr line holding `JavaScript heap out of memory`; `memory` then carries `runtimeAbort: "dotnet" | "v8" | null` beside `oomKill`. The verdict table
+line exactly `Out of memory.`, V8 exit status 134 AND a stderr line holding `JavaScript heap out of memory`; `memory` then carries `runtimeAbort: "dotnet" | "v8" | null` beside `oomKill`. **Only WITH evidence (fix batch 1, O7):** `memory.peak` at least half of `memory.max` (both are in the record as `peakBytes` and `maxBytes`), so a faked line at a low peak stays a runtime failure; .NET's unhandled `System.OutOfMemoryException` (also wrapped in an `AggregateException`: exit 134, an `Unhandled exception.` line, the exception text anywhere in the tail) counts like the `Out of memory.` line. A V8 abort at its own heap limit (about 268 MiB, whatever the cgroup) is judged memory limit only when the peak reaches half of `memory.max`: Node `objects-70` at 512 MiB aborts at a peak of about 280 MiB, 54 % of the limit (`opk-experiment-2026-11-02.json`, followUp3). The verdict table
 of `memory limit`: kernel `oom_kill` ≥ 1 → memory limit; `runtimeAbort` set → memory limit; exit 134 alone, or either message without exit 134, or `abort()` with another message → a runtime failure
 (`exit status 134`, `exit status 1`). It is read from the end of the stderr file (64 KiB), because V8 prints its stack trace after the message. **`--case-view TEMPLATE`** (B7; `{case}` filled in) names the case's fresh writable view of the built tree,
 which the layer made before the case starts (a missing view is exit 3): the program starts in it, a scenario's `.scenario/` fixtures are written into it first (every fixture
@@ -151,7 +151,7 @@ The tests are in [module_tests.md](module_tests.md), section "The language-compa
 that holds only the program, in a loopback-only network namespace it shares with the driver. Plan: `todo/PLAN_lang_comparison_v2_E1.md` lines 715–972; parent D43, D51.
 
 **The shape as built.** One run is one runner process and one holder. `runCases` (run.mjs): the startup sweep, then the run folder (owned `…-lrun-<id>`, its claim the run marker), the netns holder
-(`netns.mjs`: `unshare -rn`, `lo` up, then `exec -a <owned name> sleep <bound>`), the case views (`case-view.mjs`), the launch check and the memory certification (`certify.mjs`), the driver
+(`netns.mjs`: `unshare -rn`, `lo` up, then `exec -a <owned name> sleep <bound>`), the case placeholders (`case-view.mjs`), the launch check and the memory certification (`certify.mjs`), the driver
 `nsenter -t <holder> -U -n --preserve-credentials python3 -I run_samples.py … --no-build --cgroup-of <scope>/prog --case-view <run>/views/{case}` outside every scope, and one cleanup
 (`cleanup.mjs`) whatever happened. The launch prefix (`prefix.mjs`) is `systemd-run --user --scope --quiet --unit=<owned>-{case} -p Delegate=yes -p OOMPolicy=continue -p MemorySwapMax=0 scope-entry.sh
 <out>/{case} <memory.max> <holder seconds> bwrap --json-status-fd 7 <box> --`. `scope-entry.sh` (POSIX sh, 21 lines) makes `holder/` and `prog/`, parks a bounded `sleep` (the scope holder) in
@@ -169,8 +169,17 @@ are the user's, so `holder/` and `prog/` can be made without `Delegate=yes`; the
 
 **Additions to the spec.** `--cap-drop ALL` (inside the holder's user namespace the program is uid 0 with every capability and could take `lo` down); `scope-entry.sh` takes a third argument, the holder's
 bound, and the holder closes descriptors 3–9 and redirects 0–2 (else the runner's pipes stay open until it ends); `--quiet` on systemd-run (its line would head every case's recorded stderr);
-`/usr/lib/dotnet` hidden (E1.S5); `--no-build`: the layer takes the BUILT tree and makes one view per case before the runner starts, because the runner takes one `--case-view` template.
-**Disk budget:** `cases × treeBytes(built tree)` at the peak, nothing for the control and the certification launch (empty folders); on a RAM-backed `/tmp` that is RAM.
+`/usr/lib/dotnet` hidden (E1.S5); `--no-build`: the layer takes the BUILT tree. **The workspace is a copy-on-write overlay, never a copy (fix batch 1, K1/K2):** the box mounts `--overlay-src <built tree> --overlay-src <placeholder> --tmp-overlay <placeholder>`, so each
+launch gets a fresh writable layer over the read-only built tree on a tmpfs inside the box, discarded at exit; the built tree is hashed before and after a run that writes and never changes; no case sees another's files (B7, test 11).
+The runner still takes one `--case-view` template: it names a per-case EMPTY placeholder folder on the host (`<run>/views/{case}`), the overlay is mounted at that path, and the placeholder is the overlay's second source, so a
+scenario's `.scenario/` fixtures the runner writes into it show in the workspace. **Disk budget:** a few empty folders; the `/tmp` of this host is a tmpfs and no copy lands there. **The cost is memory, by design:** the overlay's
+upper layer is a tmpfs in the box, so a program's file writes are CHARGED TO ITS CGROUP (a test: 64 MiB written in the workspace raised `memory.peak` by about 64 MiB), exactly as writes to `/tmp` always were: a program's file writes
+count against its memory limit. **Hardening (the Opus review, fix batch 1):** `--unshare-user --disable-userns` (a nested `unshare` fails with ENOSPC, so no writable cgroup2 can be mounted to hide a child in `prog/`; the runner
+also reads `prog/` recursively for leftovers), `pids.max` = 512 in `prog/` (a fork bomb stops at the bound; D15's spirit: fixed, recorded, the same for every program), and the scope holder closes EVERY inherited descriptor above 2
+(a bash does it: dash can close only 0–9). **Holder bounds:** the scope holder lives T + G of the runner's limits (series defaults T = 10 s, G = 5 s) plus one margin (60 s); a `caseWallMs` shorter than T + G is refused; the netns
+holder lives the run ceiling plus the same margin. **The runs parent:** the startup sweep reads the run folder's parent at every run's start, so callers pass a STABLE parent (`stableRunsParent()`: `~/.cache/dew_flow_bench/lang-bench-runs`,
+private); the layer refuses a relative, missing, foreign or other-writable one (the shared temp root). **Known, accepted leak:** `/proc/self/mountinfo` in the box shows host paths (the user name in the toolchain and cache bind
+sources): paths only, nothing readable.
 
 **Cleanup and the sweep.** `cleanup(run)` never throws and is idempotent: the driver if it still runs; per scope the live evidence, `prog/cgroup.kill`, `holder/cgroup.kill`, `systemctl --user stop` only
 for a scope that does not end; the holder (SIGTERM, SIGKILL after 2 s, by pid + start time + owned name); the views; the run folder; a resource it cannot remove stays named in `left` and the folder
@@ -200,8 +209,8 @@ oom_kill at 256 MiB under every policy (no view, the view, the view and a hard l
 (live data at 80 %) ends in a kernel kill in both stacks. The experiment scripts (`opk-experiment*.mjs`) are the record of a measurement made BEFORE the view became the layer's box (the "today" policy
 there is what the box was): they are not re-runnable as written.
 
-**The identity and its invalidation rule.** `identity.mjs` hashes every file of `lib/exec-layer/` (`scope-entry.sh` included); `pin-exec-layer.mjs` writes it to `inputs/specs.d/exec-layer.json`
-(`treeSha256`, and `probedOn` and `host` after a passing probe) and `specs-record.mjs` assembles `inputs/specs.json`. A change to ANY file of the tree changes the identity and re-dates every gate and
+**The identity and its invalidation rule.** `identity.mjs` hashes every file of `lib/exec-layer/` (`scope-entry.sh` included) AND every module outside it that the layer imports, found by walking the static imports (v1's `bwrap.mjs` builds the box's argv, `run.mjs` launches every child, `find-on-path.mjs`, `result.mjs`, `preflight-box.mjs`; a test finds an unlisted import); `runCases` puts the live `treeSha256` in its result and a DATA run refuses (exit 3, `layer-identity-mismatch`) when it differs from the pinned identity; `pin-exec-layer.mjs` writes it to `inputs/specs.d/exec-layer.json`
+(`treeSha256`, and `probedOn` and `host` after a passing probe) and `specs-record.mjs` assembles `inputs/specs.json`. A change to ANY file of the tree or of a module it imports changes the identity and re-dates every gate and
 limit that ran on the layer (parent §6.1: E1's D40 gate, E2's validation and calibration, E3's scoring). The probe's files are outside the tree, so a probe change does not.
 
 **Never** run `dotnet build` (or any SDK command) outside the box with `DOTNET_ROOT` on the sealed SDK: it writes a `metadata` folder into the SDK's root and breaks the toolchain store's seal and tree
