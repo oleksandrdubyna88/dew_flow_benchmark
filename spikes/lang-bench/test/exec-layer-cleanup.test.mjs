@@ -13,7 +13,7 @@ import { cleanup, sweepStale } from '../lib/exec-layer/cleanup.mjs';
 import { listScopes } from '../lib/exec-layer/scope.mjs';
 import { unitPrefixOf } from '../lib/exec-layer/names.mjs';
 import { openRun, runCases } from '../lib/exec-layer/run.mjs';
-import { scanProcesses } from '../lib/exec-layer/proc.mjs';
+import { sameProcess, scanProcesses, statOf } from '../lib/exec-layer/proc.mjs';
 import { needs } from './support/exec-layer-host.mjs';
 import { waitFor } from './support/exec-chain.mjs';
 import { layerOptions } from './support/exec-tree.mjs';
@@ -121,4 +121,42 @@ test('The_sweep_retires_nothing_it_does_not_own_a_live_run_a_young_run_another_o
   const young = await sweepStale({ owned, parent: options.parent, minAgeMs: 3_600_000 });
   assert.deepEqual(young.retired, []);
   await cleanup(live.value);
+});
+
+// ---- O9: the driver is ended as a whole process group, and the scopes are listed AGAIN after the holder step ----
+
+/** A stand-in driver: a file named `run_samples.py` naming the run folder (what the cleanup looks for), which starts children of its own — in its process group — until it is ended. */
+function fakeDriver(t, run, body) {
+  const dir = owned.ownedDir(t, 'fakedriver');
+  const script = path.join(dir, 'run_samples.py');
+  writeFileSync(script, `import subprocess, sys, time\n${body}\n`);
+  const child = spawn('python3', ['-I', script, run.dir], { detached: true, stdio: 'ignore', env: { PATH: '/usr/sbin:/usr/bin:/bin', XDG_RUNTIME_DIR: `/run/user/${process.getuid()}` } });
+  t.after(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } });
+  return child;
+}
+
+test('Cleanup_ends_the_driver_as_a_whole_process_group_and_not_only_its_pid', async t => {
+  if (!needs(t)) return;
+  const opened = await openRun(layerOptions(t));
+  const run = opened.value;
+  const driver = fakeDriver(t, run, "subprocess.Popen(['sleep', '300'])\ntime.sleep(300)");
+  assert.ok(await waitFor(() => scanProcesses(argv => argv[0] === 'sleep' && argv[1] === '300').some(id => statOf(id.pid)?.ppid === driver.pid) || null), 'the driver started its child');
+  const kids = scanProcesses(argv => argv[0] === 'sleep' && argv[1] === '300').filter(id => statOf(id.pid)?.ppid === driver.pid);
+  const report = await cleanup(run);
+  assert.equal(report.clean, true, JSON.stringify(report.left));
+  assert.ok(await waitFor(() => kids.every(id => !sameProcess(id)) || null, 5000), 'the driver\'s child, in its process group, is gone too');
+});
+
+test('A_driver_killed_while_a_systemd_run_child_is_registering_leaves_no_scope', async t => {
+  if (!needs(t)) return;
+  const opened = await openRun(layerOptions(t));
+  const run = opened.value;
+  // children that register their scope a moment AFTER the cleanup has looked: the pid-only kill of the old cleanup leaves them running
+  const body = `for i in range(8):\n    subprocess.Popen(['bash', '-c', 'sleep 1.2; exec systemd-run --user --scope --quiet --unit=${run.unitPrefix}-race%d sleep 30' % i])\ntime.sleep(300)`;
+  const driver = fakeDriver(t, run, body);
+  assert.ok(await waitFor(() => scanProcesses(argv => argv[0] === 'bash' && argv.some(arg => arg.includes('-race0'))).length > 0 || null), 'the children are about to register');
+  const report = await cleanup(run);
+  assert.equal(report.clean, true, JSON.stringify(report.left));
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  assert.deepEqual(await listScopes(run.unitPrefix), [], `no scope of the run is left (the driver ${driver.pid} was ended while its children were registering)`);
 });

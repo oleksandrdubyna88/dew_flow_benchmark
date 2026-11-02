@@ -1,5 +1,5 @@
 // E1.S8b: ONE cleanup, called on every path (normal, timeout, exception), that never throws and leaves nothing of the case, in the delegated order (plan, "Cleanup"):
-//   (1) the driver, if it still runs (the runner's own SIGTERM step kills its launchers); (2) per scope, with the scope still present, the evidence is read live (`prog/`'s
+//   (1) the driver, if it still runs, as a whole process group (the runner's own SIGTERM step kills its launchers); (2) per scope (and again after the holder: the final confirmation), with the scope still present, the evidence is read live (`prog/`'s
 //   `memory.peak`, `memory.events`, `cgroup.procs`) and then `prog/cgroup.kill`, then `holder/cgroup.kill` so the scope ends with the scope holder, `systemctl --user stop` only for a
 //   scope that does not end; (3) the netns holder (SIGTERM, SIGKILL after 2 s); (4) the case views; (5) the run folder and its claim; then a confirmation that no process, scope, holder or
 //   view is left. A resource it cannot remove stays named and reported in `left`, and the run folder stays claimed so the next sweep can judge it.
@@ -9,7 +9,7 @@ import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { removeViews } from './case-view.mjs';
 import { holderNameOf, runIdOf, unitPrefixOf } from './names.mjs';
-import { endProcess, scanProcesses, sleep } from './proc.mjs';
+import { endProcess, endProcessGroup, scanProcesses, sleep } from './proc.mjs';
 import { holderCgroup, killCgroup, listScopes, progCgroup, readProg, scopeCgroup, stopUnit } from './scope.mjs';
 
 const SCOPE_END_MS = 3000;
@@ -28,10 +28,10 @@ async function guarded(kind, step) {
   }
 }
 
-async function endMatching(kind, match, graceMs) {
+async function endMatching(kind, match, graceMs, end = endProcess) {
   const result = { removed: [], left: [] };
   for (const identity of scanProcesses(match)) {
-    const how = await endProcess(identity, { graceMs });
+    const how = await end(identity, { graceMs });
     const reported = entry(kind, identity.argv0, { pid: identity.pid, how });
     if (how === 'stuck') result.left.push({ ...reported, reason: 'still there after SIGKILL' });
     else result.removed.push(reported);
@@ -81,9 +81,10 @@ async function dropRun(run) {
 export async function cleanup(run, { graceMs = 2000 } = {}) {
   const evidence = {};
   const steps = [
-    ['driver', () => endMatching('driver', isDriverOf(run.dir), graceMs)],
+    ['driver', () => endMatching('driver', isDriverOf(run.dir), graceMs, endProcessGroup)],
     ['scope', () => endScopes(run, evidence)],
     ['holder', () => endMatching('holder', argv => argv[0] === run.holderName, graceMs)],
+    ['scope', () => endScopes(run, {})], // the final confirmation: listed AGAIN after the holder step, so a scope registered while the driver was being ended is ended too
     ['view', async () => dropViews(run)],
     ['run', () => dropRun(run)],
   ];
