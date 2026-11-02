@@ -45,13 +45,22 @@ def procs(directory):
     return None if text is None else _pids_of(text)
 
 
+VANISHED = (errno.ENOENT, errno.ENODEV)
+
+
+def _listing(directory):
+    """The names in a cgroup folder; a cgroup that vanished (or is dying) since its procs were read has none; any other failure is raised."""
+    try:
+        return sorted(os.listdir(directory))
+    except OSError as error:
+        if error.errno in VANISHED:
+            return []
+        raise  # the cgroup is unreadable, which is never taken for empty (procs_tree answers None)
+
+
 def _children_of(directory):
     """The descendant cgroups one level down: the folders that hold a `cgroup.procs`."""
-    try:
-        listed = sorted(os.listdir(directory))
-    except OSError:  # the cgroup vanished since its own procs were read: it has no descendants (a race the kernel makes real)
-        return []
-    return [os.path.join(directory, name) for name in listed if os.path.exists(os.path.join(directory, name, "cgroup.procs"))]
+    return [os.path.join(directory, name) for name in _listing(directory) if os.path.exists(os.path.join(directory, name, "cgroup.procs"))]
 
 
 def _below(directory):
@@ -61,7 +70,12 @@ def _below(directory):
 def procs_tree(directory):
     """Every pid in `cgroup.procs` of the cgroup AND of every descendant cgroup (a program's `prog/hide` too); None when the cgroup cannot be read."""
     own = procs(directory)
-    return None if own is None else own + _below(directory)
+    if own is None:
+        return None
+    try:
+        return own + _below(directory)
+    except OSError:
+        return None
 
 
 def comm_of(pid):

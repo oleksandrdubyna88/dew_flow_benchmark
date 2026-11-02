@@ -132,4 +132,7 @@ test('rs_abort_is_byte_identical_across_the_manifests', () => {
   const missing = manifestOf({ 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'net\n' });
   assert.deepEqual(olympiadDifferences(a.runner, missing.runner), ['rs_abort.py is missing from the second manifest']);
   assert.deepEqual(olympiadDifferences(pinned, pinned), [], 'the committed pin against itself');
+  const extra = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_new.py': 'new olympiad module\n' });
+  assert.deepEqual(olympiadDifferences(a.runner, extra.runner), ['rs_new.py is only in the second manifest'], 'an olympiad module only the second manifest has is a difference too (the check is symmetric)');
+  assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'rs_net.py alone in the second manifest is still no difference');
 });

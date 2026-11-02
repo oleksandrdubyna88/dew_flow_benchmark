@@ -169,8 +169,17 @@ class DescendantTests(unittest.TestCase):
 
     def test_A_cgroup_that_vanishes_between_the_read_of_its_procs_and_the_listing_of_its_children_is_what_was_read_and_never_a_crash(self):
         folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
-        with mock.patch.object(cg.os, "listdir", side_effect=FileNotFoundError(folder)):
+        with mock.patch.object(cg.os, "listdir", side_effect=FileNotFoundError(2, "vanished", folder)):
             self.assertEqual(cg.procs_tree(folder), [1, 2], "the descendants of a vanished cgroup are none; its own pids were read")
+
+    def test_A_cgroup_that_cannot_be_listed_is_unreadable_and_never_empty_but_a_dying_one_is_empty(self):
+        import errno
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        for error in (PermissionError(errno.EACCES, "denied"), OSError(errno.EIO, "io")):
+            with mock.patch.object(cg.os, "listdir", side_effect=error):
+                self.assertIsNone(cg.procs_tree(folder), f"{type(error).__name__}: unreadable is never taken for an empty cgroup")
+        with mock.patch.object(cg.os, "listdir", side_effect=OSError(errno.ENODEV, "gone")):
+            self.assertEqual(cg.procs_tree(folder), [1, 2], "a dying cgroup (ENODEV) has no descendants")
 
 
 class OrphanTests(unittest.TestCase):

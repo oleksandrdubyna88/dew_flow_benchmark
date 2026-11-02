@@ -57,15 +57,15 @@ def abort_facts(returncode, stderr_path, memory):
     - exit 134 and a runtime's line WITH evidence (`memory.peak` at least half of `memory.max`): `runtimeAbort` is the runtime ("dotnet" or "v8");
     - exit 134 and the line WITHOUT evidence (the peak below the threshold, or not read): a runtime error, `abortBelowEvidence` is true (never
       silent);
-    - the line with exit 0, or with an exit status other than 1 and 134: a CHILD's abort the program went on from (or failed on), `childAbortLine`
-      is true; the case is judged on its output and status. The line with exit 1 is a plain runtime error: no flag. A kernel `oom_kill` is
-      `memory limit` by its own cause, so no flag explains it.
+    - the line with exit 0, or with ANY exit status other than 134 (exit 1 included, the commonest case): a CHILD's abort the program went on from (or
+      failed on), `childAbortLine` is true; the case is judged on its output and status, and a non-zero one carries no `abortBelowEvidence`. A kernel
+      `oom_kill` is `memory limit` by its own cause, so no flag explains it.
     """
     kind = _line_kind(stderr_path)
     if kind is None:
         return NO_ABORT
     killed = bool(memory.get("oomKill"))
-    return _own(kind, memory, killed) if returncode == ABORT_STATUS else _facts(None, False, returncode != 1 and not killed)
+    return _own(kind, memory, killed) if returncode == ABORT_STATUS else _facts(None, False, not killed)
 
 
 def _own(kind, memory, killed):

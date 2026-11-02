@@ -71,11 +71,14 @@ export const GROUP_B_ONLY = Object.freeze(['rs_net.py']);
 /** The olympiad modules among `paths`: all of them but the group-B-only ones. `rs_abort.py` and its evidence function are in the set (D56). */
 export const OLYMPIAD_MODULES = paths => paths.filter(name => !GROUP_B_ONLY.includes(name));
 
-/** The differences of the olympiad modules of manifest `a` against manifest `b` (each `{ files: [{ path, sha256 }] }`): one text per module that differs or is missing from `b`. */
+/** The differences of the olympiad modules of manifest `a` against manifest `b` (each `{ files: [{ path, sha256 }] }`): one text per module that differs, is missing from `b` or is only in `b`. */
 export function olympiadDifferences(a, b) {
   const second = new Map(b.files.map(f => [f.path, f.sha256]));
-  return a.files.filter(f => OLYMPIAD_MODULES([f.path]).length === 1).flatMap(f => {
+  const first = new Set(a.files.map(f => f.path));
+  const inA = a.files.filter(f => OLYMPIAD_MODULES([f.path]).length === 1).flatMap(f => {
     if (!second.has(f.path)) return [`${f.path} is missing from the second manifest`];
     return second.get(f.path) === f.sha256 ? [] : [`${f.path} differs`];
   });
+  const onlyInB = OLYMPIAD_MODULES([...second.keys()]).filter(name => !first.has(name)).map(name => `${name} is only in the second manifest`);
+  return [...inA, ...onlyInB];
 }

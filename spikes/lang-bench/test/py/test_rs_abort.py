@@ -142,12 +142,13 @@ class EvidenceBoundaryTests(unittest.TestCase):
         self.assertTrue(rs_abort.has_evidence({"known": True, "peakBytes": 128 * MIB, "maxBytes": 256 * MIB}), ">=, not >")
         self.assertFalse(rs_abort.has_evidence({"known": True, "peakBytes": 128 * MIB - 1, "maxBytes": 256 * MIB}))
 
-    def test_The_line_with_exit_1_or_exit_134_with_another_message_is_a_runtime_error_without_the_flag(self):
-        for stub, reason in (('echo "Out of memory." >&2; exit 1\n', "exit status 1"), (f'echo "{V8_LINE}" >&2; exit 1\n', "exit status 1"), ('echo "abort() called" >&2; exit 134\n', "exit status 134")):
+    def test_The_line_with_exit_1_or_exit_134_with_another_message_is_a_runtime_error_without_the_abort_below_evidence_flag(self):
+        # D56 / T-L50 (change 6.1): "without the flag" is `abort-below-evidence`. The line with exit 1 is a child's abort line under a non-zero exit other than 134: `child-abort-line` is raised.
+        for stub, reason, child in (('echo "Out of memory." >&2; exit 1\n', "exit status 1", True), (f'echo "{V8_LINE}" >&2; exit 1\n', "exit status 1", True), ('echo "abort() called" >&2; exit 134\n', "exit status 134", False)):
             result = at_peak(self, stub, 200 * MIB)
             self.assertEqual((result.status, result.reason), ("FAIL", reason), stub)
             memory = result.lifecycle["memory"]
-            self.assertEqual((memory["abortBelowEvidence"], memory["childAbortLine"], memory["runtimeAbort"]), (False, False, None), stub)
+            self.assertEqual((memory["abortBelowEvidence"], memory["childAbortLine"], memory["runtimeAbort"]), (False, child, None), stub)
 
     def test_An_oom_kill_is_memory_limit_at_any_peak_and_no_flag_explains_it(self):
         for stub in (DOTNET_STUB, V8_STUB, 'exit 0\n', 'echo "Out of memory." >&2; exit 0\n'):
@@ -190,7 +191,8 @@ class ChildAbortTests(unittest.TestCase):
         self.assertEqual(facts(134, "Out of memory.\n", HIGH), {"runtimeAbort": "dotnet", "abortBelowEvidence": False, "childAbortLine": False})
         self.assertEqual(facts(134, "Out of memory.\n", LOW), {"runtimeAbort": None, "abortBelowEvidence": True, "childAbortLine": False})
         self.assertEqual(facts(0, "Out of memory.\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": True})
-        self.assertEqual(facts(1, "Out of memory.\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
+        for code in (1, 2, 3, 137, -9):
+            self.assertEqual(facts(code, "Out of memory.\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": True}, f"every exit other than 134 and 0-without-line: {code}")
         self.assertEqual(facts(0, "all good\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
         self.assertEqual(facts(134, "Out of memory.\n", {"known": False}), {"runtimeAbort": None, "abortBelowEvidence": True, "childAbortLine": False}, "an unread peak is no evidence: flagged, not hidden")
         self.assertEqual(facts(0, "Out of memory.\n", {"known": True, "peakBytes": 1, "maxBytes": 256, "oomKill": 2}), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})

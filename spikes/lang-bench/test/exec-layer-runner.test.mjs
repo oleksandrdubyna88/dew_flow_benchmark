@@ -181,7 +181,7 @@ test('A_stub_that_prints_dotnets_line_and_exits_134_is_memory_limit_above_half_o
   assert.equal(below.lifecycle.memory.maxBytes, 256 * MIB, 'L is the whole MiB the layer set');
 });
 
-test('The_V8_line_through_the_real_layer_follows_the_same_evidence_rule_and_the_line_with_exit_1_carries_no_flag', async t => {
+test('The_V8_line_through_the_real_layer_follows_the_same_evidence_rule_and_the_line_with_exit_1_carries_child_abort_line_and_not_abort_below_evidence', async t => {
   if (!needs(t)) return;
   const v8 = 'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory';
   const above = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(100, v8), memoryMaxBytes: 128 * MIB })), 's01');
@@ -189,7 +189,7 @@ test('The_V8_line_through_the_real_layer_follows_the_same_evidence_rule_and_the_
   const below = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(4, v8), memoryMaxBytes: 256 * MIB })), 's01');
   assert.deepEqual([below.reason, below.lifecycle.memory.abortBelowEvidence], ['exit status 134', true]);
   const exitOne = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(100, 'Out of memory.').replace('sys.exit(134)', 'sys.exit(1)'), memoryMaxBytes: 128 * MIB })), 's01');
-  assert.deepEqual([exitOne.reason, exitOne.lifecycle.memory.abortBelowEvidence, exitOne.lifecycle.memory.childAbortLine, exitOne.lifecycle.memory.runtimeAbort], ['exit status 1', false, false, null]);
+  assert.deepEqual([exitOne.reason, exitOne.lifecycle.memory.abortBelowEvidence, exitOne.lifecycle.memory.childAbortLine, exitOne.lifecycle.memory.runtimeAbort], ['exit status 1', false, true, null]);
 });
 
 test('A_child_that_prints_the_abort_line_under_a_parent_that_exits_0_is_judged_on_its_output_and_flagged_through_the_real_layer', async t => {
