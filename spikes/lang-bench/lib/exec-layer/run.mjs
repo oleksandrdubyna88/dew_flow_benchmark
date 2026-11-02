@@ -6,7 +6,8 @@
 // One run = one runner process = one holder: the runner is the driver and the program of every case joins the namespace the driver is already in. One scope per case and one for the
 // control `empty-program` (the unit name holds `{case}`); the view of every case is made before the runner starts (disk budget: see case-view.mjs). A data run (`data: true`) halts with
 // `memory-not-certifiable`, exit 3, when `prog/memory.peak` cannot be read; any other run proceeds with `memoryCertified: false`. Nothing here changes the runner.
-import { readFileSync, readlinkSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { findOnPath } from '../../../minigit-bench/lib/find-on-path.mjs';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
@@ -21,6 +22,27 @@ import { HOLD_MARGIN_S, launchPrefix, programArgv, requiredWallSeconds, runnerAr
 import { progTemplate } from './scope.mjs';
 
 export { launchPrefix, programArgv, runnerArgv };
+
+/**
+ * The ONE stable parent of run folders for callers that have none of their own: `$XDG_CACHE_HOME` or `~/.cache`, `dew_flow_bench/lang-bench-runs`, private to the caller. The startup sweep reads the
+ * parent at the next run's start, so a caller MUST pass the same parent every run (a fresh temp folder per process is never swept: its killed run leaks until the host restarts).
+ */
+export function stableRunsParent() {
+  const folder = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'dew_flow_bench', 'lang-bench-runs');
+  mkdirSync(folder, { recursive: true, mode: 0o700 });
+  return folder;
+}
+
+/** `ok(parent)` when the sweep can read it at the next run (absolute, an existing directory, the caller's, not writable by others), else `fail` naming the stable-parent rule. */
+export function checkParent(parent) {
+  const rule = 'the sweep reads the run folder\'s parent at every run\'s start: pass a stable one (stableRunsParent())';
+  if (!path.isAbsolute(parent)) return fail(`the runs parent ${parent} is not absolute; ${rule}`);
+  const stat = statSync(parent, { throwIfNoEntry: false });
+  if (stat === undefined) return fail(`the runs parent ${parent} does not exist; ${rule}`);
+  if (!stat.isDirectory()) return fail(`the runs parent ${parent} is not a directory; ${rule}`);
+  if (stat.uid !== process.getuid()) return fail(`the runs parent ${parent} is not the caller's; ${rule}`);
+  return (stat.mode & 0o022) === 0 ? ok(parent) : fail(`the runs parent ${parent} is writable by others (a shared temp root); ${rule}`);
+}
 
 const LIMIT_KEYS = Object.freeze(['timeS', 'readyS', 'graceS']);
 
@@ -81,6 +103,8 @@ async function openSteps(run) {
  * `options`: `{ owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes, caseWallMs, runCeilingMs, stack?, limitsFile?, extraEnv?, extraRo? }`; `stack` (`'csharp'` or `'node'`) selects the per-stack keys of the box environment.
  */
 export async function openRun(options) {
+  const parent = checkParent(options.parent);
+  if (!parent.ok) return parent;
   let run = null;
   let opened;
   try {

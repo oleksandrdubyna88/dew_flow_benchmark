@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { cleanup } from '../exec-layer/cleanup.mjs';
-import { openRun, programArgv, runCases } from '../exec-layer/run.mjs';
+import { openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, userEnv } from '../exec-layer/scope.mjs';
 import { programTree, STACKS } from './programs.mjs';
 
@@ -31,7 +31,7 @@ export async function runMode({ owned, scope, dirs, csharpBuild, stack, mode, me
   const limitsFile = path.join(limitsDir, 'limits.json');
   writeFileSync(limitsFile, JSON.stringify(LIMITS_FILE));
   const result = await runCases({
-    owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode: `${mode} ${memoryMaxBytes / MIB}`, csharpBuild }), samplesDir: samples(owned, scope, 'OK\n'), caseIds: ['p1'],
+    owned, parent: stableRunsParent(), tree: programTree({ owned, scope, stack, mode: `${mode} ${memoryMaxBytes / MIB}`, csharpBuild }), samplesDir: samples(owned, scope, 'OK\n'), caseIds: ['p1'],
     dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, limitsFile, minSweepAgeMs: 0, stack,
   });
   const entry = result.record?.cases?.[0];
@@ -48,7 +48,7 @@ const numberFile = file => {
 
 /** What `report` mode printed (parsed) and the host's `prog/memory.max` of its scope: `{ value, hostMemoryMax }`, or `{ value: null, problem }`. Cleans up after itself. */
 export async function believed({ owned, scope, dirs, csharpBuild, stack, memoryMaxBytes, mode = 'report' }) {
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode, csharpBuild }), caseIds: [PROBE_CASE], dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, stack });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree: programTree({ owned, scope, stack, mode, csharpBuild }), caseIds: [PROBE_CASE], dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, stack });
   if (!opened.ok) return { value: null, problem: opened.reason };
   const run = opened.value;
   try {

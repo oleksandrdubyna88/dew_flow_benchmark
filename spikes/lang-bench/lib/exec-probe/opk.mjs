@@ -7,7 +7,7 @@ import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { cleanup } from '../exec-layer/cleanup.mjs';
 import { driverEnv } from '../exec-layer/env.mjs';
-import { launchPrefix, openRun, programArgv, runnerArgv } from '../exec-layer/run.mjs';
+import { launchPrefix, openRun, programArgv, runnerArgv, stableRunsParent } from '../exec-layer/run.mjs';
 import { progTemplate, userEnv } from '../exec-layer/scope.mjs';
 import { probeTree, programTree } from './programs.mjs';
 
@@ -74,7 +74,7 @@ const tailOf = entry => entry?.lifecycle?.stderr?.tail ?? '';
 export async function runOnce({ owned, scope, dirs, csharpBuild, stack, mode, limitMiB, policy }) {
   const given = samples(owned, scope);
   const tree = programTree({ owned, scope, stack, mode: `${mode} ${limitMiB}`, csharpBuild });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB) });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB) });
   if (!opened.ok) return { mode, stack, limitMiB, policy, result: 'not run', ended: opened.reason, peakBytes: null, stderrTail: '' };
   const run = opened.value;
   try {
@@ -143,7 +143,7 @@ const factsOf = text => Object.fromEntries(text.split('\n').filter(line => line.
 export async function verifyCgroupView({ owned, scope, dirs, csharpBuild, limitMiB, policy = 'cgroup-view-own', dotnetFraction = DOTNET_FRACTION }) {
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
   writeFileSync(path.join(tree, 'cgview.sh'), CGVIEW);
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, 'csharp', limitMiB) });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, 'csharp', limitMiB) });
   if (!opened.ok) return { ok: false, problems: [opened.reason] };
   const run = opened.value;
   try {
@@ -174,7 +174,7 @@ export function judgeView({ facts, dotnet, node, limitBytes, dotnetFraction = DO
  */
 export async function dotnetBelieves({ owned, scope, dirs, csharpBuild, limitMiB, policy, extraEnv }) {
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['dn'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['dn'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv });
   if (!opened.ok) return null;
   try {
     const ran = await launchIn(opened.value, policy, 'dn', ['dotnet', 'bin/mem.dll', 'report']);

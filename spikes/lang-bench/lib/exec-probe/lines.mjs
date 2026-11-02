@@ -8,7 +8,7 @@ import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { unsafeBinds } from '../exec-layer/box.mjs';
 import { cleanup } from '../exec-layer/cleanup.mjs';
 import { nsenterArgv } from '../exec-layer/netns.mjs';
-import { launchPrefix, openRun, programArgv, runCases } from '../exec-layer/run.mjs';
+import { launchPrefix, openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, readProg, userEnv } from '../exec-layer/scope.mjs';
 import { buildCsharp, probeTree } from './programs.mjs';
 import { judgeFacts, parseFacts } from './facts.mjs';
@@ -37,7 +37,7 @@ export async function openProbeRun({ owned, scope, dirs, sentinelHome, csharpBui
   const sentinel = path.join(folder, 'secret.txt');
   writeFileSync(sentinel, 'HOME-SENTINEL');
   const tree = probeTree({ owned, scope, sentinel, csharpBuild });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'proberuns'), tree, caseIds: [...CASES], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: [...CASES], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
   return opened.ok ? { run: opened.value, sentinel } : { problem: opened.reason };
 }
 
@@ -128,7 +128,7 @@ const numberOf = file => {
 export async function runDelegatedScopeLine({ owned, scope, dirs, csharpBuild, deps = {} }) {
   const readPeak = deps.readPeak ?? (dir => readProg(dir).peakBytes);
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild: csharpBuild ?? await csharpOf({ owned, scope, dirs }) });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'proberuns'), tree, caseIds: ['work'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['work'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
   if (!opened.ok) return { id: 'delegated-scope', ok: false, problem: opened.reason };
   try {
     const ran = await launch(opened.value, 'work', ['python3', 'work.py']);
@@ -163,7 +163,7 @@ export async function cultureLines(run) {
 
 /** The pilot's F1 control: an empty program timed by the runner through the same prefix (`record.emptyProgram`), and whether the memory read certified. */
 export async function launchTimeLine({ owned, scope, dirs, tree, samplesDir }) {
-  const result = await runCases({ owned, parent: owned.ownedDir(scope, 'proberuns'), tree, samplesDir, caseIds: ['p1'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS, minSweepAgeMs: 0 });
+  const result = await runCases({ owned, parent: stableRunsParent(), tree, samplesDir, caseIds: ['p1'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS, minSweepAgeMs: 0 });
   const empty = result.record?.emptyProgram ?? {};
   return { id: 'empty-program-launch', ok: result.exitCode === 0 && Number.isFinite(empty.launchMs), launchMs: empty.launchMs ?? null, emptyProgramMs: empty.ms ?? null, memoryCertified: result.memoryCertified };
 }
