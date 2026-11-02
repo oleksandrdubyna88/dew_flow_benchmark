@@ -1,17 +1,18 @@
 // E1.S8b brief B: `exec-probe.mjs` — the host probe, run THROUGH the layer (the real prefix, the delegated scope, the v2 box). It records every line of the plan's probe list, then exits 3
 // naming the first line that failed; the memory view is asserted by policy (OP-K, undecided while `memory-policy.json` says null: exit 3 `memory-policy-undecided`, never 0).
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { before, test } from 'node:test';
 import { cleanupScope } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { allowFor, caseKeysIn } from '../lib/exec-layer/env.mjs';
+import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { recordProblems } from '../lib/exec-probe/facts.mjs';
 import { buildBoxEnv } from '../lib/exec-probe/programs.mjs';
 import { runDelegatedScopeLine } from '../lib/exec-probe/lines.mjs';
 import { readPolicy } from '../lib/exec-probe/memory.mjs';
-import { finish, verdictFor } from '../lib/exec-probe/probe.mjs';
+import { finish, shouldStampProbedOn, verdictFor } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
 import { owned } from './support/owned.mjs';
 
@@ -64,7 +65,10 @@ test('The_record_names_the_date_the_host_the_layer_identity_and_the_believed_lim
   const { record } = await probed;
   assert.match(record.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(record.host.hostname && record.host.kernel && record.host.cgroup2 === true);
-  assert.equal(record.layerIdentity, JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'exec-layer.json'), 'utf8')).execLayer.treeSha256);
+  assert.equal(record.layerIdentity, computeIdentity(LAYER_DIR).value.execLayer.treeSha256, 'the identity is COMPUTED from the tree that ran, not read from the pin');
+  assert.equal(record.layerIdentity, JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'exec-layer.json'), 'utf8')).execLayer.treeSha256, 'and it is the pin');
+  const runner = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
+  assert.deepEqual(record.runner, { version: runner.version, manifestSha256: runner.manifestSha256 }, 'the record names the runner it ran');
   assert.deepEqual(record.memoryView.observations.limits.map(at => at.memoryMaxBytes), [256 * 1024 * 1024, 512 * 1024 * 1024]);
   for (const at of record.memoryView.observations.limits) {
     assert.equal(at.hostMemoryMax, at.memoryMaxBytes, 'the host\'s prog/memory.max is the limit asked for');
@@ -150,4 +154,34 @@ test('The_build_box_of_the_probe_carries_neither_per_case_heap_key', () => {
   assert.equal('DOTNET_GCHeapHardLimit' in env, false);
   assert.equal(env.NODE_OPTIONS, '', 'the base NODE_OPTIONS, empty');
   assert.equal(env.NUGET_PACKAGES, '/tmp/pk', 'the build\'s own extras are there');
+});
+
+const FOUND_OK = [{ id: 'netns', ok: true }];
+const OBSERVED = { limits: [] };
+const finishedWith = (policy, runner = { version: '9.9.9', manifestSha256: 'ab' }) => finish({ found: FOUND_OK, memoryView: { policy, observations: OBSERVED }, now: new Date('2026-11-02T00:00:00Z'), identity: 'f'.repeat(64), runner });
+
+test('The_record_names_the_runner_and_v8_heap_is_asserted_exactly_when_the_pinned_policy_asserts_it_and_probedOn_is_stamped_only_on_exit_0', () => {
+  const decided = { policy: 'cgroup-view-own+gchl-90+node-old-space-90', decided: '2026-11-02', by: 'x' };
+  const withNode = { limits: [{ memoryMaxBytes: 256 * 1024 * 1024, node: { heapSizeLimitBytes: 247463936 } }] };
+  const rec = policy => finish({ found: FOUND_OK, memoryView: { policy, observations: withNode }, now: new Date('2026-11-02T00:00:00Z'), identity: 'f'.repeat(64), runner: { version: '9.9.9', manifestSha256: 'ab' } });
+  assert.deepEqual(rec(decided).runner, { version: '9.9.9', manifestSha256: 'ab' });
+  assert.equal(rec(decided).memoryView.v8Heap[0].asserted, true, 'the pinned policy asserts the V8 range');
+  assert.equal(rec({ policy: null, decided: null, by: null }).memoryView.v8Heap[0].asserted, false, 'an undecided policy asserts nothing');
+  assert.equal(rec({ policy: 'runtime-view-accepted', decided: '2026-11-02', by: 'x' }).memoryView.v8Heap[0].asserted, false, 'a policy that does not assert it');
+  assert.equal(shouldStampProbedOn({ exit: { code: 0, halt: null }, lines: FOUND_OK }), true);
+  assert.equal(shouldStampProbedOn({ exit: { code: 3, halt: 'memory-view-mismatch' }, lines: FOUND_OK }), false, 'every line passed but the memory verdict failed: not stamped');
+  assert.equal(shouldStampProbedOn({ exit: { code: 0, halt: null }, lines: [{ id: 'x', ok: false }] }), false);
+  assert.ok(finishedWith({ policy: null }).runner);
+});
+
+test('A_probe_whose_layer_tree_is_not_the_pinned_identity_exits_3_layer_identity_mismatch_before_probing_and_writes_no_record', t => {
+  const dir = owned.ownedDir(t, 'staleprobe');
+  const stale = path.join(dir, 'exec-layer.json');
+  writeFileSync(stale, JSON.stringify({ execLayer: { treeSha256: '0'.repeat(64), files: [] } }));
+  const out = path.join(dir, 'record.json');
+  const ran = spawnSync(process.execPath, [PROBE, '--out', out, '--pinned-identity', stale, '--no-specs'], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(ran.status, 3, ran.stderr);
+  assert.match(ran.stderr, /layer-identity-mismatch/);
+  assert.equal(existsSync(out), false, 'no record, and no placeholder left');
+  assert.equal(ran.stdout, '');
 });

@@ -2,45 +2,76 @@
 // The host probe of the execution layer (E1.S8b), run THROUGH the layer: the real prefix, the delegated scope, the v2 box. It records every line of the plan's probe list and the memory view
 // at 256 and 512 MiB, then exits 3 naming the first failed line (or `memory-policy-undecided` / `memory-view-mismatch` / `memory-not-certifiable`).
 //
-//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--no-specs]
+//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--no-specs]
 //
 // The record goes to inputs/exec-probe-<YYYY-MM-DD>[-<n>].json (the date, the host, the layer identity, allow-listed environment keys only); the first of a day has no suffix, a second run is `-2`, a
-// third `-3`. A record is NEVER overwritten (T-L53, parent D59): a --out path that exists is refused with exit 3 before anything is probed, and the file is created exclusively. Unless --no-specs, a probe on which every line
-// passed also writes `probedOn` and `host` into the layer's identity file (inputs/specs.d/exec-layer.json) and re-assembles inputs/specs.json.
-// Exit 0 every line passed and a decided memory policy holds; 3 a line failed, the memory policy is undecided or not met, memory.peak cannot be read, or the record's path exists; 2 usage or the host
-// cannot start it.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+// third `-3`. A record is NEVER overwritten (T-L53, parent D59), and its path is RESERVED before the probe starts (an empty placeholder, created exclusively): a --out path that exists or is held by another
+// probe is refused with exit 3 before anything is probed, and a probe that fails or is stopped removes its empty placeholder. The record's `layerIdentity` is COMPUTED from the tree that ran; a tree that is not
+// the pinned identity (`--pinned-identity` names another pin file) is exit 3 `layer-identity-mismatch`, before probing. The record names the runner's version and manifest. Text that reaches the terminal carries
+// no control character.
+// A probe that exited 0 also writes `probedOn` and `host` into the layer's identity file (inputs/specs.d/exec-layer.json) and re-assembles inputs/specs.json (not with --no-specs).
+import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { computeIdentity, LAYER_DIR } from './lib/exec-layer/identity.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
+import { computePin, verifyPin } from './lib/runner-pin.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { assemble, canonicalJson } from './lib/specs-record.mjs';
-
-import { runProbe, writeRecord } from './lib/exec-probe/probe.mjs';
-import { nextRecordPath, RecordExists } from './lib/exec-probe/record-path.mjs';
+import { printable } from './lib/exec-probe/printable.mjs';
+import { runProbe, shouldStampProbedOn, writeRecord } from './lib/exec-probe/probe.mjs';
+import { RecordExists, releaseRecord, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
 const option = name => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
-const usage3 = reason => { process.stderr.write(`exec-probe: ${reason}\n`); process.exit(3); };
-const usage = reason => { process.stderr.write(`exec-probe: ${reason}\n`); process.exit(2); };
+const say = (stream, text) => stream.write(`${printable(text)}\n`);
+const stop = (code, reason) => { say(process.stderr, `exec-probe: ${reason}`); process.exit(code); };
+let held = null;
+const release = () => { if (held !== null) releaseRecord(held); };
+const refuse = (code, reason) => { release(); stop(code, reason); };
 
 async function ownedHelper() {
   const url = new URL('../../.agents/conventions/tools/lib/owned.mjs', import.meta.url);
   try {
     return await import(url.href);
   } catch (error) {
-    return usage(`the conventions mount's owned-name helper is needed and cannot be loaded (${error.code ?? error.message}): ${fileURLToPath(url)}`);
+    return refuse(2, `the conventions mount's owned-name helper is needed and cannot be loaded (${error.code ?? error.message}): ${fileURLToPath(url)}`);
   }
 }
 
-function identityOf() {
+/** The path of the record, RESERVED before anything is probed (P1, T-L53): a path that exists or is held by another probe is exit 3. */
+function reservation() {
+  const inputsDir = path.join(spike, 'inputs');
   try {
-    return JSON.parse(readFileSync(path.join(spike, 'inputs', 'specs.d', 'exec-layer.json'), 'utf8')).execLayer.treeSha256;
+    return option('--out') === undefined ? reserveNextRecord({ inputsDir, date: new Date().toISOString().slice(0, 10) }) : reserveRecord(option('--out'));
+  } catch (error) {
+    if (error instanceof RecordExists) return stop(3, error.message);
+    throw error;
+  }
+}
+
+function pinnedIdentity() {
+  try {
+    return JSON.parse(readFileSync(option('--pinned-identity') ?? path.join(spike, 'inputs', 'specs.d', 'exec-layer.json'), 'utf8')).execLayer.treeSha256;
   } catch {
     return null;
   }
+}
+
+/** The layer identity COMPUTED from the tree that runs (Q6), exit 3 when it is not the pinned one; and the runner's version and manifest, exit 3 when the runner is not its pin. */
+function identities() {
+  const live = computeIdentity(LAYER_DIR);
+  if (!live.ok) return refuse(2, live.reason);
+  const treeSha256 = live.value.execLayer.treeSha256;
+  if (treeSha256 !== pinnedIdentity()) return refuse(3, `layer-identity-mismatch: the layer's tree ${treeSha256} is not the pinned identity: pin it (pin-exec-layer.mjs) before a probe, so the record names a pinned layer`);
+  const runnerDir = path.join(spike, 'runner');
+  const pin = computePin(runnerDir);
+  const committed = JSON.parse(readFileSync(path.join(spike, 'inputs', 'specs.d', 'runner.json'), 'utf8'));
+  const verdict = pin.ok ? verifyPin(runnerDir, committed) : pin;
+  if (!verdict.ok) return refuse(3, `runner-pin-mismatch: ${verdict.reason}`);
+  return { identity: treeSha256, runner: { version: pin.value.runner.version, manifestSha256: pin.value.runner.manifestSha256 } };
 }
 
 function emptyProgramTree(owned, scope) {
@@ -60,37 +91,35 @@ function recordProbedOn(record) {
   if (built.ok) writeFileSync(path.join(spike, 'inputs', 'specs.json'), built.text);
 }
 
-if (option('--out') !== undefined && existsSync(option('--out'))) {
-  process.stderr.write(`exec-probe: ${option('--out')} already exists: a probe record is never overwritten (T-L53); name a new file or take the default, which numbers a second run of the day\n`);
-  process.exit(3);
+function report(record, out) {
+  for (const line of record.lines) say(process.stdout, `${line.ok ? 'ok  ' : 'FAIL'} ${line.id}`);
+  for (const problem of record.memoryView.verdict.problems) say(process.stdout, `memory: ${problem}`);
+  say(process.stdout, `exec-probe: record written to ${out}`);
+  if (record.exit.halt !== null) say(process.stderr, `exec-probe: ${record.exit.halt}`);
 }
 
+held = reservation();
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { release(); process.exit(128 + (signal === 'SIGINT' ? 2 : 15)); });
+const { identity, runner } = identities();
 const stacks = loadStacksLang(JSON.parse(readFileSync(path.join(spike, 'inputs', 'stacks-lang.json'), 'utf8')));
-if (!stacks.ok) usage(stacks.reason);
+if (!stacks.ok) refuse(2, stacks.reason);
 const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
 const helper = await ownedHelper();
 const owned = helper.ownedFor({ token: 'bench' });
 const scope = owned.cleanupScope();
 let code = 2;
 try {
-  const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity: identityOf(), progress: text => process.stderr.write(`exec-probe: ${text}\n`) });
-  if (!result.ok) usage(result.reason);
+  const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity, runner, progress: text => say(process.stderr, `exec-probe: ${text}`) });
+  if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
-  const out = option('--out') ?? nextRecordPath({ inputsDir: path.join(spike, 'inputs'), date: record.date });
-  mkdirSync(path.dirname(out), { recursive: true });
-  try {
-    writeRecord(out, record);
-  } catch (error) {
-    if (!(error instanceof RecordExists)) throw error;
-    usage3(error.message);
-  }
-  for (const line of record.lines) process.stdout.write(`${line.ok ? 'ok  ' : 'FAIL'} ${line.id}\n`);
-  for (const problem of record.memoryView.verdict.problems) process.stdout.write(`memory: ${problem}\n`);
-  process.stdout.write(`exec-probe: record written to ${out}\n`);
-  if (record.exit.halt !== null) process.stderr.write(`exec-probe: ${record.exit.halt}\n`);
-  if (!args.includes('--no-specs') && record.lines.every(line => line.ok)) recordProbedOn(record);
+  const out = held.file;
+  writeRecord(out, record, held);
+  held = null; // written: the file is the record now, never released
+  report(record, out);
+  if (!args.includes('--no-specs') && shouldStampProbedOn(record)) recordProbedOn(record);
   code = record.exit.code;
 } finally {
+  release();
   await scope.close();
 }
 process.exit(code);

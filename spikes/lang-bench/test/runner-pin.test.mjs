@@ -5,7 +5,7 @@ import { mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { computePin, GROUP_B_ONLY, manifestText, OLYMPIAD_MODULES, olympiadDifferences, verifyPin } from '../lib/runner-pin.mjs';
+import { computePin, GROUP_B_ONLY, ledgerProblem, manifestText, OLYMPIAD_MODULES, olympiadDifferences, verifyPin, withLedgerEntry } from '../lib/runner-pin.mjs';
 import { owned } from './support/owned.mjs';
 
 const spikeDir = fileURLToPath(new URL('..', import.meta.url));
@@ -135,4 +135,22 @@ test('rs_abort_is_byte_identical_across_the_manifests', () => {
   const extra = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_new.py': 'new olympiad module\n' });
   assert.deepEqual(olympiadDifferences(a.runner, extra.runner), ['rs_new.py is only in the second manifest'], 'an olympiad module only the second manifest has is a difference too (the check is symmetric)');
   assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'rs_net.py alone in the second manifest is still no difference');
+});
+
+// Q6: each runner manifest change gets a new runner version. `inputs/runner-versions.json` keeps `{ version: manifestSha256 }` for every version pinned since 0.2.3; pinning a manifest that differs from the
+// one recorded for the same version is refused (the same version number must never name two manifests: 0.2.2 did, once).
+test('A_runner_version_never_names_two_manifests_the_ledger_refuses_the_second', () => {
+  const pin = (version, manifestSha256) => ({ version, manifestSha256 });
+  assert.deepEqual(ledgerProblem({ versions: {} }, pin('1.0.0', 'aa')), null, 'a new version is fine');
+  assert.deepEqual(ledgerProblem({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'aa')), null, 'the same manifest again is fine');
+  assert.match(ledgerProblem({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'bb')), /1\.0\.0.*aa.*bb.*bump RUNNER_VERSION/s, 'the same version with another manifest is refused, naming both');
+  assert.deepEqual(withLedgerEntry({ versions: { '1.0.0': 'aa' } }, pin('1.0.1', 'bb')), { versions: { '1.0.0': 'aa', '1.0.1': 'bb' } }, 'an entry is added, never replaced');
+  assert.throws(() => withLedgerEntry({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'bb')), /bump RUNNER_VERSION/);
+});
+
+test('The_committed_runner_pin_is_the_manifest_the_version_ledger_records_for_its_version', () => {
+  const ledger = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'runner-versions.json'), 'utf8'));
+  const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
+  assert.equal(ledger.versions[pinned.version], pinned.manifestSha256, `${pinned.version} in the ledger is the pinned manifest`);
+  assert.equal(ledgerProblem(ledger, pinned), null);
 });

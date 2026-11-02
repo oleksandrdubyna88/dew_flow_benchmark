@@ -82,3 +82,21 @@ export function olympiadDifferences(a, b) {
   const onlyInB = OLYMPIAD_MODULES([...second.keys()]).filter(name => !first.has(name)).map(name => `${name} is only in the second manifest`);
   return [...inA, ...onlyInB];
 }
+
+/**
+ * The version ledger (Q6): `inputs/runner-versions.json` is `{ versions: { <version>: <manifestSha256> } }`, one entry per runner version pinned. A version names ONE manifest: pinning another manifest
+ * under the same version is refused, so each runner manifest change gets a new `RUNNER_VERSION` (a record that names the version alone could otherwise name two different runners).
+ * Returns null when the pin fits the ledger, else the problem as text.
+ */
+export function ledgerProblem(ledger, pin) {
+  const recorded = ledger.versions?.[pin.version];
+  if (recorded === undefined || recorded === pin.manifestSha256) return null;
+  return `RUNNER_VERSION ${pin.version} is already pinned to manifest ${recorded}, and this runner's manifest is ${pin.manifestSha256}: bump RUNNER_VERSION in ${VERSION_FILE} (each runner manifest change gets a new version)`;
+}
+
+/** The ledger with `pin`'s entry added (never replaced); throws the `ledgerProblem` text when the version is taken by another manifest. */
+export function withLedgerEntry(ledger, pin) {
+  const problem = ledgerProblem(ledger, pin);
+  if (problem !== null) throw new Error(problem);
+  return { versions: { ...ledger.versions, [pin.version]: pin.manifestSha256 } };
+}

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fail } from '../../../minigit-bench/lib/result.mjs';
 import { observeAt } from './observe.mjs';
-import { assertMemoryView, exitCodeOf, overLimitRows, probeVerdict, readPolicy, workloadRows } from './memory.mjs';
+import { assertMemoryView, exitCodeOf, overLimitRows, POLICY_DECIDED, probeVerdict, readPolicy, workloadRows } from './memory.mjs';
 import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
@@ -65,7 +65,7 @@ async function lines({ owned, scope, dirs, csharpBuild, tree, samplesDir, home, 
 /**
  * Run the probe: `{ record, exitCode, halt }`. `deps.policyFile` is the policy file's path; `deps.prepare` builds the empty-program tree (`{ tree, samplesDir }`).
  */
-export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = new Date(), identity, home = os.homedir(), progress = () => {} }) {
+export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = new Date(), identity, runner = null, home = os.homedir(), progress = () => {} }) {
   const policy = readPolicy(policyPath);
   if (!policy.ok) return fail(policy.reason);
   const built = await buildCsharp({ owned, scope, dirs });
@@ -73,13 +73,17 @@ export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = 
   const { tree, samplesDir } = prepare();
   const found = await lines({ owned, scope, dirs, csharpBuild: built.value, tree, samplesDir, home, progress });
   const memoryView = { policy: policy.value, observations: await observations({ owned, scope, dirs, csharpBuild: built.value, progress }) };
-  return { ok: true, value: finish({ found, memoryView, now, identity }) };
+  return { ok: true, value: finish({ found, memoryView, now, identity, runner }) };
 }
 
-/** V8's `heap_size_limit` against `prog/memory.max` at each limit — RECORDED, not asserted: the check waits for the team lead's decision on Node (fix batch 1, O4). */
-function v8HeapRecord(observations) {
-  return observations.limits.filter(at => at.node).map(at => ({ memoryMaxBytes: at.memoryMaxBytes, v8HeapSizeLimitBytes: at.node.heapSizeLimitBytes, ratio: Number((at.node.heapSizeLimitBytes / at.memoryMaxBytes).toFixed(3)), asserted: false }));
+/** V8's `heap_size_limit` against `prog/memory.max` at each limit. `asserted` is true exactly when the policy in force asserts it: the pinned policy's rule (`ninetyRule`) holds the range [0.9·L, L). */
+function v8HeapRecord(observations, policy) {
+  const asserted = policy?.policy === POLICY_DECIDED;
+  return observations.limits.filter(at => at.node).map(at => ({ memoryMaxBytes: at.memoryMaxBytes, v8HeapSizeLimitBytes: at.node.heapSizeLimitBytes, ratio: Number((at.node.heapSizeLimitBytes / at.memoryMaxBytes).toFixed(3)), asserted }));
 }
+
+/** `probedOn` and `host` are stamped into the layer's identity file only by a probe that exited 0: every line passed AND the memory verdict held. */
+export const shouldStampProbedOn = record => record.exit.code === 0 && record.lines.every(line => line.ok);
 
 /** The peak/L of every over-limit fixture per stack and limit (J2) and the workloads' results: RECORDED; `findings` lists the over-limit rows within 10 points of 50 % — a finding for the team lead, never tuned around. */
 function ratiosOf(observations) {
@@ -94,23 +98,24 @@ function verdictOf(memoryView) {
 }
 
 /** The record and the exit of a probe's lines and memory view: the first failed line, else the memory verdict; a record that holds a host key is itself a failure. */
-export function finish({ found, memoryView, now, identity }) {
+export function finish({ found, memoryView, now, identity, runner = null }) {
   const failedLine = found.find(line => !line.ok);
   const verdict = verdictOf(memoryView);
   const halt = failedLine === undefined ? verdict.halt : failedLine.halt ?? failedLine.id;
-  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations), ...ratiosOf(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
+  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, runner, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations, memoryView.policy), ...ratiosOf(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
   const problems = recordProblems(record);
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };
 }
 
-/** Write the record (a folder made as needed), EXCLUSIVELY: a path that exists is `RecordExists` and keeps every byte (T-L53). */
-export function writeRecord(file, record) {
+/**
+ * Write the record (a folder made as needed). Without `held` (a reservation, `reserveRecord`) the file is created EXCLUSIVELY: a path that exists is `RecordExists` and keeps every byte (T-L53). With the
+ * reservation the holder fills its own empty placeholder.
+ */
+export function writeRecord(file, record, held = null) {
   mkdirSync(path.dirname(file), { recursive: true });
   try {
-    writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`, { flag: 'wx' });
+    writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`, { flag: held === null ? 'wx' : 'w' });
   } catch (error) {
     throw error.code === 'EEXIST' ? new RecordExists(file) : error;
   }
 }
-
-export { exitCodeOf };
