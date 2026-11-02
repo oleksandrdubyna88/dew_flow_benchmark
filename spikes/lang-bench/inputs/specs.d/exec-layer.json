@@ -54,6 +54,15 @@
         "sha256": "b08a3e673d6e8421b48897eb3c526059769036cf7ec98f986f5bf92a0b51d65f"
       }
     ],
+    "host": {
+      "bwrap": "bubblewrap 0.11.1",
+      "cgroup2": true,
+      "hostname": "jinx",
+      "kernel": "6.18.54.1-microsoft-standard-WSL2",
+      "node": "v26.12.1",
+      "systemd": "systemd 259 (259.5-0ubuntu3.4)"
+    },
+    "probedOn": "2026-11-02T13:08:00.354Z",
     "treeSha256": "79b85a37451e90736a7f54e25eecd0bba3bfc67b117f89f11086b01d9b9b319f"
   }
 }

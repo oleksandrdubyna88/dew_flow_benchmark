@@ -1,0 +1,247 @@
+{
+  "date": "2026-11-02",
+  "probedOn": "2026-11-02T13:08:00.354Z",
+  "host": {
+    "hostname": "jinx",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "cgroup2": true,
+    "systemd": "systemd 259 (259.5-0ubuntu3.4)",
+    "bwrap": "bubblewrap 0.11.1",
+    "node": "v26.12.1"
+  },
+  "layerIdentity": "79b85a37451e90736a7f54e25eecd0bba3bfc67b117f89f11086b01d9b9b319f",
+  "lines": [
+    {
+      "id": "netns",
+      "ok": true,
+      "ns": {
+        "host": "net:[4026531833]",
+        "driver": "net:[4026532290]",
+        "program": "net:[4026532290]"
+      }
+    },
+    {
+      "id": "program-in-prog",
+      "ok": true,
+      "cgroups": {
+        "program": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-IvteZe-net.scope/prog",
+        "driver": "0::/non-systemd"
+      }
+    },
+    {
+      "id": "ping-over-loopback",
+      "ok": true,
+      "port": 41379
+    },
+    {
+      "id": "bind-list",
+      "ok": true,
+      "binds": [
+        {
+          "mode": "--ro-bind",
+          "source": "/usr"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/passwd"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/group"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/nsswitch.conf"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/localtime"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/dotnet-sdk-10.0.403"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/node-v26.13.0-linux-x64"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/typescript-6.0.3"
+        },
+        {
+          "mode": "--bind",
+          "source": "/tmp/testsToDelete-u1000-bench-proberuns-x5e9zx/testsToDelete-u1000-bench-lrun-IvteZe/views/{case}"
+        }
+      ],
+      "problems": []
+    },
+    {
+      "id": "home-sentinel",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "mnt-c",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "cmd-exe",
+      "ok": true,
+      "exit": "127"
+    },
+    {
+      "id": "user-bus",
+      "ok": true,
+      "exit": "1"
+    },
+    {
+      "id": "bash-c-true-stderr",
+      "ok": true,
+      "bytes": "0"
+    },
+    {
+      "id": "culture-env",
+      "ok": true,
+      "LANG": "de_DE.UTF-8",
+      "LC_ALL": "de_DE.UTF-8"
+    },
+    {
+      "id": "locale-a",
+      "ok": true
+    },
+    {
+      "id": "invariant-switch",
+      "ok": true,
+      "seen": "none"
+    },
+    {
+      "id": "env-keys",
+      "ok": true,
+      "envKeys": [
+        "DOTNET_CLI_HOME",
+        "DOTNET_CLI_TELEMETRY_OPTOUT",
+        "DOTNET_NOLOGO",
+        "DOTNET_ROOT",
+        "DOTNET_gcServer",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "PATH",
+        "TMPDIR",
+        "TZ"
+      ]
+    },
+    {
+      "id": "empty-program-launch",
+      "ok": true,
+      "launchMs": 37,
+      "emptyProgramMs": 7,
+      "memoryCertified": true
+    },
+    {
+      "id": "delegated-scope",
+      "ok": true,
+      "memoryMax": 268435456,
+      "swapMax": 0,
+      "peakBytes": 46219264,
+      "workloadExit": 0
+    },
+    {
+      "id": "dotnet-culture",
+      "ok": true,
+      "seen": "de-DE"
+    },
+    {
+      "id": "node-culture",
+      "ok": true,
+      "seen": "de-DE"
+    }
+  ],
+  "memoryView": {
+    "policy": {
+      "policy": null,
+      "decided": null,
+      "by": null
+    },
+    "observations": {
+      "limits": [
+        {
+          "memoryMaxBytes": 268435456,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "peakBytes": 268435456,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "peakBytes": 268435456,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 46288662528,
+            "heapHardLimit": "",
+            "cgroupVisible": false
+          },
+          "hostMemoryMax": 268435456,
+          "node": {
+            "constrainedBytes": 0,
+            "heapSizeLimitBytes": 4395630592,
+            "cgroupVisible": false
+          }
+        },
+        {
+          "memoryMaxBytes": 536870912,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "peakBytes": 536870912,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "peakBytes": 536870912,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 46288662528,
+            "heapHardLimit": "",
+            "cgroupVisible": false
+          },
+          "hostMemoryMax": 536870912,
+          "node": {
+            "constrainedBytes": 0,
+            "heapSizeLimitBytes": 4395630592,
+            "cgroupVisible": false
+          }
+        }
+      ]
+    },
+    "verdict": {
+      "ok": false,
+      "halt": "memory-policy-undecided",
+      "problems": []
+    }
+  },
+  "exit": {
+    "code": 3,
+    "halt": "memory-policy-undecided"
+  }
+}
