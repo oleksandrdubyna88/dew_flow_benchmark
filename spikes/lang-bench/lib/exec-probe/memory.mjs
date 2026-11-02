@@ -11,14 +11,15 @@ export const POLICY_NAMES = Object.freeze(['runtime-view-accepted', 'dotnet-gc-h
 const PERCENT = /^dotnet-gc-hard-limit-percent:([1-9][0-9]?|100)$/;
 const mib = bytes => `${Math.round(bytes / MIB)} MiB`;
 
+const isKnown = policy => policy === 'runtime-view-accepted' || policy === 'cgroup-view-readonly' || PERCENT.test(policy ?? '');
+const isDecided = ({ decided, by }) => typeof decided === 'string' && typeof by === 'string' && decided !== '' && by !== '';
+
 /** `ok({ policy, decided, by })` or `fail(reason)` naming the legal values. A decided policy says when and by whom. */
 export function validatePolicy(file) {
-  const { policy, decided, by } = file ?? {};
-  const legal = `the policy is null (undecided) or one of ${POLICY_NAMES.join(', ')} (n from 1 to 100)`;
-  if (policy === null) return ok({ policy: null, decided: decided ?? null, by: by ?? null });
-  const known = policy === 'runtime-view-accepted' || policy === 'cgroup-view-readonly' || PERCENT.test(policy ?? '');
-  if (!known) return fail(`${JSON.stringify(policy)} is not a memory policy: ${legal}`);
-  return typeof decided === 'string' && typeof by === 'string' && decided !== '' && by !== '' ? ok({ policy, decided, by }) : fail('a decided memory policy needs `decided` (a date) and `by`');
+  const entry = file ?? {};
+  if (entry.policy === null) return ok({ policy: null, decided: entry.decided ?? null, by: entry.by ?? null });
+  if (!isKnown(entry.policy)) return fail(`${JSON.stringify(entry.policy)} is not a memory policy: the policy is null (undecided) or one of ${POLICY_NAMES.join(', ')} (n from 1 to 100)`);
+  return isDecided(entry) ? ok({ policy: entry.policy, decided: entry.decided, by: entry.by }) : fail('a decided memory policy needs `decided` (a date) and `by`');
 }
 
 /** `ok(policy file)` read from `file`, or `fail`: a file that is absent or malformed is a failure, never "undecided". */
@@ -32,17 +33,16 @@ export function readPolicy(file) {
 
 const hardLimit = seen => Number(seen.heapHardLimit);
 
-function behaviour(at) {
+function behaviourOf(stack, at) {
   const where = mib(at.memoryMaxBytes);
-  const out = [];
-  for (const stack of ['csharp', 'node']) {
-    if (at.churn[stack] !== 'PASS') out.push(`${stack} at ${where}: the allocation-churn program with bounded live data did not pass (${at.churn[stack]}): it meets the kernel's OOM kill under the runtime's own view`);
-    const over = at.overLimit[stack];
-    if (over.reason !== 'memory limit' || !(over.oomKill >= 1)) out.push(`${stack} at ${where}: the over-limit program ended "${over.reason}" with oom_kill ${over.oomKill}, not memory limit`);
-    else if (!over.eventsKept || !(over.peakBytes > 0)) out.push(`${stack} at ${where}: the over-limit program's memory.peak and memory.events were not kept`);
-  }
+  const over = at.overLimit[stack];
+  const out = at.churn[stack] === 'PASS' ? [] : [`${stack} at ${where}: the allocation-churn program with bounded live data did not pass (${at.churn[stack]}): it meets the kernel's OOM kill under the runtime's own view`];
+  if (over.reason !== 'memory limit' || !(over.oomKill >= 1)) out.push(`${stack} at ${where}: the over-limit program ended "${over.reason}" with oom_kill ${over.oomKill}, not memory limit`);
+  else if (!over.eventsKept || !(over.peakBytes > 0)) out.push(`${stack} at ${where}: the over-limit program's memory.peak and memory.events were not kept`);
   return out;
 }
+
+const behaviour = at => ['csharp', 'node'].flatMap(stack => behaviourOf(stack, at));
 
 function percentRule(at) {
   const limit = hardLimit(at.csharp);

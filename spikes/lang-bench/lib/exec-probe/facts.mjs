@@ -35,35 +35,35 @@ export function parseFacts(text) {
   return facts;
 }
 
-const line = (id, passed, extra = {}) => ({ id, ok: passed, ...extra });
 const said = value => value !== undefined;
+const sameList = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+const envKeysOf = facts => (said(facts.env) ? facts.env.split(',').filter(Boolean) : null);
+const failsWith = code => said(code) && code !== '0';
+
+/** The probe's facts lines: `[id, judge(facts) -> { ok, ...detail }]`. A fact the box did not print makes its line fail. */
+const RULES = Object.freeze([
+  ['home-sentinel', f => ({ ok: f.sentinel === 'absent', seen: f.sentinel ?? null })],
+  ['mnt-c', f => ({ ok: f['mnt-c'] === 'absent', seen: f['mnt-c'] ?? null })],
+  ['cmd-exe', f => ({ ok: failsWith(f['cmd-exe']), exit: f['cmd-exe'] ?? null })],
+  ['user-bus', f => ({ ok: failsWith(f['user-bus']), exit: f['user-bus'] ?? null })],
+  ['bash-c-true-stderr', f => ({ ok: f['stderr-bytes'] === '0', bytes: f['stderr-bytes'] ?? null })],
+  ['culture-env', f => ({ ok: f.lang === 'de_DE.UTF-8' && f['lc-all'] === 'de_DE.UTF-8', LANG: f.lang ?? null, LC_ALL: f['lc-all'] ?? null })],
+  ['locale-a', f => ({ ok: f['locale-de'] === 'yes' })],
+  ['invariant-switch', f => ({ ok: f.invariant === 'none', seen: f.invariant ?? null })],
+  ['env-keys', f => ({ ok: envKeysOf(f) !== null && sameList(envKeysOf(f), ALLOW_LIST), envKeys: [...(envKeysOf(f) ?? [])].sort() })],
+]);
 
 /** Every line the box can answer, judged: `[{ id, ok, ... }]` in the plan's order. */
-export function judgeFacts(facts) {
-  const envKeys = said(facts.env) ? facts.env.split(',').filter(Boolean).sort() : null;
-  const sameKeys = envKeys !== null && JSON.stringify(envKeys) === JSON.stringify([...ALLOW_LIST].sort());
-  return [
-    line('home-sentinel', facts.sentinel === 'absent', { seen: facts.sentinel ?? null }),
-    line('mnt-c', facts['mnt-c'] === 'absent', { seen: facts['mnt-c'] ?? null }),
-    line('cmd-exe', said(facts['cmd-exe']) && facts['cmd-exe'] !== '0', { exit: facts['cmd-exe'] ?? null }),
-    line('user-bus', said(facts['user-bus']) && facts['user-bus'] !== '0', { exit: facts['user-bus'] ?? null }),
-    line('bash-c-true-stderr', facts['stderr-bytes'] === '0', { bytes: facts['stderr-bytes'] ?? null }),
-    line('culture-env', facts.lang === 'de_DE.UTF-8' && facts['lc-all'] === 'de_DE.UTF-8', { LANG: facts.lang ?? null, LC_ALL: facts['lc-all'] ?? null }),
-    line('locale-a', facts['locale-de'] === 'yes'),
-    line('invariant-switch', facts.invariant === 'none', { seen: facts.invariant ?? null }),
-    line('env-keys', sameKeys, { envKeys: envKeys ?? [] }),
-  ];
-}
+export const judgeFacts = facts => RULES.map(([id, judge]) => ({ id, ...judge(facts) }));
 
-function keysIn(value, found = []) {
-  if (Array.isArray(value)) value.forEach(item => keysIn(item, found));
-  else if (value !== null && typeof value === 'object') {
-    for (const [key, inner] of Object.entries(value)) {
-      if (key === 'envKeys' && Array.isArray(inner)) found.push(...unlistedKeys(Object.fromEntries(inner.map(name => [name, 1]))));
-      else keysIn(inner, found);
-    }
-  }
-  return found;
+const isEnvKeys = (key, value) => key === 'envKeys' && Array.isArray(value);
+const unlisted = names => unlistedKeys(Object.fromEntries(names.map(name => [name, 1])));
+const isContainer = value => value !== null && typeof value === 'object';
+
+function keysIn(value) {
+  if (!isContainer(value)) return [];
+  const entries = Array.isArray(value) ? value.map(item => [null, item]) : Object.entries(value);
+  return entries.flatMap(([key, inner]) => (isEnvKeys(key, inner) ? unlisted(inner) : keysIn(inner)));
 }
 
 /** What is wrong with a probe record's environment keys: every `envKeys` list, at any depth, may hold allow-listed keys only (consult C6c, D2). */

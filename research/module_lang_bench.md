@@ -144,7 +144,53 @@ The tests are in [module_tests.md](module_tests.md), section "The language-compa
 
 ## The execution layer (E1.S8b)
 
-not built yet
+`spikes/lang-bench/lib/exec-layer/` starts a program's `run.sh` for the runner (S8a part ii-a) in a bwrap box with D15's environment and `de_DE.UTF-8`, inside a delegated systemd user scope
+that holds only the program, in a loopback-only network namespace it shares with the driver. Plan: `todo/PLAN_lang_comparison_v2_E1.md` lines 715–972; parent D43, D51.
+
+**The shape as built.** One run is one runner process and one holder. `runCases` (run.mjs): the startup sweep, then the run folder (owned `…-lrun-<id>`, its claim the run marker), the netns holder
+(`netns.mjs`: `unshare -rn`, `lo` up, then `exec -a <owned name> sleep <bound>`), the case views (`case-view.mjs`), the launch check and the memory certification (`certify.mjs`), the driver
+`nsenter -t <holder> -U -n --preserve-credentials python3 -I run_samples.py … --no-build --cgroup-of <scope>/prog --case-view <run>/views/{case}` outside every scope, and one cleanup
+(`cleanup.mjs`) whatever happened. The launch prefix (`prefix.mjs`) is `systemd-run --user --scope --quiet --unit=<owned>-{case} -p Delegate=yes -p OOMPolicy=continue -p MemorySwapMax=0 scope-entry.sh
+<out>/{case} <memory.max> <holder seconds> bwrap --json-status-fd 7 <box> --`. `scope-entry.sh` (POSIX sh, 21 lines) makes `holder/` and `prog/`, parks a bounded `sleep` (the scope holder) in
+`holder/`, moves itself into `prog/`, enables `+memory`, writes `memory.max` and `memory.swap.max` = 0 in `prog/`, writes the scope's path and the holder's pid to `<out>`, and execs. The scope holder
+keeps the scope alive, so `prog/memory.peak`, `memory.events` and `cgroup.procs` are read after the program's exit; the kill is `prog/cgroup.kill`. A fresh scope serves each case, the
+`empty-program` control and the `certify` launch. `box.mjs` is v1's primitives (`tmpfs`, `roBind`, `bind`, `devProc`, `setenvAll`): `--tmpfs /` base, `/usr` with its links, four `/etc` files, the
+pinned toolchain trees by full path, `/dev`, `/proc`, a fresh `/tmp`, the case view writable; no home, no `/mnt`, no `/run`, no `/var/tmp`, no `/sys/fs/cgroup`, no `--unshare-net`, no `--die-with-parent`.
+`env.mjs` is the one allow-list; `--clearenv` then exactly those keys.
+
+**Where the spec met the merged runner (brief A; the runner is unchanged).** (1) The runner is the driver and already sits in the holder's namespaces, so the prefix it gets has no `nsenter`: a second
+`nsenter -U` fails with EINVAL; a launch from outside (the certification launch, the tests) takes the same prefix with `nsenter` put in (`programArgv`). (2) bwrap writes `child-pid` before it makes
+its mounts, so a missing bind reaches the runner as `exit status 1`, a program verdict; the layer launches an empty program through the prefix before any case and reports `launch failed`, exit 3.
+(3) On systemd 259 a `Delegate=yes` scope already has `OOMPolicy=continue`; a plain scope has `stop` and fails with oom-kill. The prefix keeps the property as a pin. (4) The user manager's cgroups
+are the user's, so `holder/` and `prog/` can be made without `Delegate=yes`; the property is for systemd, which then leaves the subtree alone.
+
+**Additions to the spec.** `--cap-drop ALL` (inside the holder's user namespace the program is uid 0 with every capability and could take `lo` down); `scope-entry.sh` takes a third argument, the holder's
+bound, and the holder closes descriptors 3–9 and redirects 0–2 (else the runner's pipes stay open until it ends); `--quiet` on systemd-run (its line would head every case's recorded stderr);
+`/usr/lib/dotnet` hidden (E1.S5); `--no-build`: the layer takes the BUILT tree and makes one view per case before the runner starts, because the runner takes one `--case-view` template.
+**Disk budget:** `cases × treeBytes(built tree)` at the peak, nothing for the control and the certification launch (empty folders); on a RAM-backed `/tmp` that is RAM.
+
+**Cleanup and the sweep.** `cleanup(run)` never throws and is idempotent: the driver if it still runs; per scope the live evidence, `prog/cgroup.kill`, `holder/cgroup.kill`, `systemctl --user stop` only
+for a scope that does not end; the holder (SIGTERM, SIGKILL after 2 s, by pid + start time + owned name); the views; the run folder; a resource it cannot remove stays named in `left` and the folder
+stays claimed. `sweepStale` at every run's start retires this user's `lrun` folders whose claim says `gone` and that are older than 10 minutes (`minSweepAgeMs`): their scopes, holder, orphaned driver,
+views and folder, by owned name and run marker, never by age alone, never a live, foreign or unmarked one.
+
+**Certification.** A data run (`data: true`) halts `memory-not-certifiable`, exit 3, when `prog/memory.peak` cannot be read after the certification launch; any other run goes on with `memoryCertified: false`.
+
+**The probe** (`exec-probe.mjs`, `lib/exec-probe/`) runs through this layer and records, then exits 3 naming the first failed line: shared netns not the host's, the program in `prog/` and the driver not,
+ping over 127.0.0.1, the bind list, the `$HOME` sentinel, `/mnt/c`, `cmd.exe`, the user bus, the empty program's launch time (the pilot's F1 control), `bash -c true` silent, allow-listed keys only, line (f)
+(`prog/` and `memory.max`/`memory.swap.max` = 0, a workload, `memory.peak` read above zero after its exit), T-L32 (the culture env, `locale -a`, .NET `de-DE`, Node `de…`, no invariant switch). Record:
+`inputs/exec-probe-<date>.json`. **T-L43:** at `MemoryMax` 256 and 512 MiB it records whether a cgroup is visible in the box, .NET's `TotalAvailableMemoryBytes`, Node's `constrainedMemory()` and V8's
+heap limit, against `prog/memory.max`, and runs the churn (bounded live data, 4 GiB allocated) and over-limit programs of both stacks through the runner. `inputs/specs.d/memory-policy.json`
+(`{ policy, decided, by }`) holds OP-K's decision, `null` until the team lead decides on the record: `null` is exit 3 `memory-policy-undecided`, a policy not met is exit 3 `memory-view-mismatch`, and the
+probe never exits 0 while printing a mismatch. Policies: `runtime-view-accepted` (behaviour only), `dotnet-gc-hard-limit-percent:<n>` (a GC hard limit inside `prog/memory.max`), `cgroup-view-readonly`
+(every believed limit equals `prog/memory.max`; the box does not mount a cgroup view today).
+
+**The identity and its invalidation rule.** `identity.mjs` hashes every file of `lib/exec-layer/` (`scope-entry.sh` included); `pin-exec-layer.mjs` writes it to `inputs/specs.d/exec-layer.json`
+(`treeSha256`, and `probedOn` and `host` after a passing probe) and `specs-record.mjs` assembles `inputs/specs.json`. A change to ANY file of the tree changes the identity and re-dates every gate and
+limit that ran on the layer (parent §6.1: E1's D40 gate, E2's validation and calibration, E3's scoring). The probe's files are outside the tree, so a probe change does not.
+
+**Never** run `dotnet build` (or any SDK command) outside the box with `DOTNET_ROOT` on the sealed SDK: it writes a `metadata` folder into the SDK's root and breaks the toolchain store's seal and tree
+hash (2026-11-02). The tests and the probe build their C# programs inside the box, where the SDK is read-only.
 
 ## FORMAT v2 (E1.S9)
 

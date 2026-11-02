@@ -61,12 +61,17 @@ export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = 
   return { ok: true, value: finish({ found, memoryView, now, identity }) };
 }
 
-/** The record and the exit of a probe's lines and memory view: the first failed line, else the memory verdict. */
+function verdictOf(memoryView) {
+  const unobserved = memoryView.observations.limits.filter(at => at.problem);
+  if (unobserved.length > 0) return { ok: false, halt: 'memory-view-unobserved', problems: unobserved.map(at => at.problem) };
+  return assertMemoryView({ policy: memoryView.policy.policy, observations: memoryView.observations });
+}
+
+/** The record and the exit of a probe's lines and memory view: the first failed line, else the memory verdict; a record that holds a host key is itself a failure. */
 export function finish({ found, memoryView, now, identity }) {
   const failedLine = found.find(line => !line.ok);
-  const verdict = memoryView.observations.limits.some(at => at.problem) ? { ok: false, halt: 'memory-view-unobserved', problems: memoryView.observations.limits.filter(at => at.problem).map(at => at.problem) } : assertMemoryView({ policy: memoryView.policy.policy, observations: memoryView.observations });
-  const lineHalt = failedLine === undefined ? null : failedLine.halt ?? failedLine.id;
-  const halt = lineHalt ?? verdict.halt;
+  const verdict = verdictOf(memoryView);
+  const halt = failedLine === undefined ? verdict.halt : failedLine.halt ?? failedLine.id;
   const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict }, exit: { code: halt === null ? 0 : 3, halt } };
   const problems = recordProblems(record);
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };

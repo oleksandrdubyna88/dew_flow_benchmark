@@ -296,6 +296,31 @@ instruction between the Popen and its name is not provoked: the deferred mask an
 less than two looks and is gone before the leftover read is never seen. The three pilot specs' samples do not exist yet (E1.S6), so the runner has only run
 FORMAT's own examples and toys; a behaviour beyond the scenarios written here is not proven.
 
+## The execution layer scenarios (E1.S8b, `spikes/lang-bench/`)
+
+The layer (`lib/exec-layer/`), its probe and its memory policy are proven on the real host, under `BENCH_REQUIRE_SANDBOX=1` with nothing skipped: real bwrap, real user scopes, a real holder, the real
+runner. Each test that names a mechanism builds the wrong one beside the right one, so the defect has a shape. Design: [module_lang_bench.md](module_lang_bench.md).
+
+| Flow | Status | Test files |
+|---|---|---|
+| The box environment is the allow-list and nothing else, from inside the real box (a planted host key never arrives; no `--clearenv` leaks it); the culture reaches Node | covered | `test/exec-layer-env.test.mjs` |
+| The box hides the host: no home, no `/mnt`, no `/run`, no user bus, no `cmd.exe`; `bash -c true` is silent; `de_DE.utf8` is listed; the bind scan finds a broad bind | covered | `test/exec-layer-isolation.test.mjs` |
+| The shared network namespace (the driver reaches the program's port; `--unshare-net` would refuse it), the holder's `lo`-only namespace and bound, the capability drop, T-L33 for a Python, a Node and a C# stub, the exec half of T-L31 | covered | `test/exec-layer-netns.test.mjs` |
+| The delegated scope: only the launch chain in `prog/`, the holder's descriptors, `memory.peak` after a 10 ms exit, the driver outside the scope, an OOM-killed child, the `OOMPolicy` facts of systemd 259 | covered | `test/exec-layer-scope.test.mjs` |
+| A fresh view per case (no case sees another's file), removal that names what it cannot remove, the disk budget | covered | `test/exec-layer-view.test.mjs` |
+| The kill domain (a forked child ends with the scope, the driver survives) and the pid rule (the host pid from `prog/cgroup.procs`, never the in-box pid or `child-pid`) | covered | `test/exec-layer-exec.test.mjs` |
+| Through the real runner: PASS with memory read from `prog/`, one scope per case, the prefix without `nsenter`, `memory limit` whatever the exit status, a lingering child as `leftover`, `launch failed` for a missing bind, the certification (`memory-not-certifiable`) | covered | `test/exec-layer-runner.test.mjs` |
+| One cleanup on the normal, timeout and exception paths; a resource it cannot remove is named; a run killed with SIGKILL is retired by the next run's sweep (scope, holder, view, orphaned driver); the sweep leaves live, young, foreign and unmarked alone | covered | `test/exec-layer-cleanup.test.mjs` |
+| The layer's identity (every file, `scope-entry.sh` included; a link refused; a stale identity names the file) and the writer file for the memory policy | covered | `test/exec-layer-identity.test.mjs`, `test/specs-record.test.mjs` |
+| The probe's facts and record keys (each bad fact fails its own line; a planted host key is found), the memory view asserted by policy, T-L43's churn and over-limit programs at 256 and 512 MiB, line (f), the probe as a command | covered | `test/exec-probe-lines.test.mjs`, `test/exec-probe-memory.test.mjs`, `test/exec-layer-memory.test.mjs`, `test/exec-probe.test.mjs` |
+| T-L31 through the runner (`signal TERM` by the runner's own step) | not covered | E1.S8a part ii-b; `T_L31_through_the_runner_is_not_applicable_…` goes red when the runner stops refusing the daemon kind |
+
+**What these do not prove.** The probe proves this host (WSL2, systemd 259, bwrap 0.11.1, kernel 6.18): a host without unprivileged user namespaces, with another `DefaultOOMPolicy` or without a
+delegated user manager is exit 3, not a pass. T-L43's two toy programs show that bounded live data completes and that growing live data is `memory limit` in both stacks; they do not prove that a
+task's real allocation pattern would, and the policy that decides OP-K is the team lead's. The sweep's 10-minute floor is proven by a parameter, not by waiting. `--cap-drop ALL` is proven for the
+capability set and `lo`, not as a complete sandbox. The C# programs are built with no package; a task that needs the cache snapshots (E1.S4) is not covered by these builds. Timing-sensitive tests (the
+holder's bound, the scope's end) have margins of seconds and were run under the full suite's load.
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under

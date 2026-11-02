@@ -84,25 +84,36 @@ async function readyPort(file) {
   return null;
 }
 
+const detached = argv => spawn(argv[0], argv.slice(1), { stdio: 'ignore', detached: true, env: userEnv() });
+const stop = child => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } };
+const procText = (pid, name) => (pid === null ? '' : text(`/proc/${pid}/${name}`) ?? '');
+const nsOf = pid => (pid === null ? null : readlinkSync(`/proc/${pid}/ns/net`));
+
+async function ping(run, port) {
+  if (port === null) return '';
+  const join = nsenterArgv(run.holder, run.tools.nsenter);
+  const ran = await runBounded(join[0], [...join.slice(1), 'python3', '-I', '-c', CLIENT, String(port)], { timeoutMs: 20_000, env: userEnv() });
+  return ran.ok ? ran.value.stdout.trim() : '';
+}
+
 /** `netns`, `program-in-prog` and `ping-over-loopback`: the driver and the program share a namespace that is not the host's; the program is in `prog/` and the driver is not; ping works. */
 export async function networkLines(run) {
-  const server = spawn(programArgv(run, 'net', ['python3', 'server.py'])[0], programArgv(run, 'net', ['python3', 'server.py']).slice(1), { stdio: 'ignore', detached: true, env: userEnv() });
+  const server = detached(programArgv(run, 'net', ['python3', 'server.py']));
   const unit = `${run.unitPrefix}-net`;
   const driver = await spawnDriver(run);
   try {
     const pid = await programPid(progCgroup(unit));
     const port = await readyPort(path.join(viewDir(run.dir, 'net'), 'ready.port'));
-    const join = nsenterArgv(run.holder, run.tools.nsenter);
-    const pinged = port === null ? { stdout: '' } : await runBounded(join[0], [...join.slice(1), 'python3', '-I', '-c', CLIENT, String(port)], { timeoutMs: 20_000, env: userEnv() });
-    const ns = { host: readlinkSync('/proc/self/ns/net'), driver: readlinkSync(`/proc/${driver.pid}/ns/net`), program: pid === null ? null : readlinkSync(`/proc/${pid}/ns/net`) };
-    const cgroups = { program: pid === null ? '' : text(`/proc/${pid}/cgroup`) ?? '', driver: text(`/proc/${driver.pid}/cgroup`) ?? '' };
+    const reply = await ping(run, port);
+    const ns = { host: readlinkSync('/proc/self/ns/net'), driver: nsOf(driver.pid), program: nsOf(pid) };
+    const cgroups = { program: procText(pid, 'cgroup').trim(), driver: procText(driver.pid, 'cgroup').trim() };
     return [
-      { id: 'netns', ok: ns.driver === ns.program && ns.program !== null && ns.program !== ns.host, ns },
-      { id: 'program-in-prog', ok: cgroups.program.trim().endsWith(`${unit}.scope/prog`) && !cgroups.driver.includes(run.unitPrefix), cgroups: { program: cgroups.program.trim(), driver: cgroups.driver.trim() } },
-      { id: 'ping-over-loopback', ok: (pinged.value?.stdout ?? pinged.stdout).trim() === 'PING', port },
+      { id: 'netns', ok: ns.program !== null && ns.driver === ns.program && ns.program !== ns.host, ns },
+      { id: 'program-in-prog', ok: cgroups.program.endsWith(`${unit}.scope/prog`) && !cgroups.driver.includes(run.unitPrefix), cgroups },
+      { id: 'ping-over-loopback', ok: reply === 'PING', port },
     ];
   } finally {
-    for (const child of [server, driver]) { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } }
+    [server, driver].forEach(stop);
   }
 }
 
@@ -117,19 +128,22 @@ const numberOf = file => {
  */
 export async function runDelegatedScopeLine({ owned, scope, dirs, csharpBuild, deps = {} }) {
   const readPeak = deps.readPeak ?? (dir => readProg(dir).peakBytes);
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'proberuns'), tree: probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild: csharpBuild ?? await csharpOf({ owned, scope, dirs }) }), caseIds: ['work'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
+  const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild: csharpBuild ?? await csharpOf({ owned, scope, dirs }) });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'proberuns'), tree, caseIds: ['work'], dirs, memoryMaxBytes: LIMIT_BYTES, caseWallMs: WALL_MS, runCeilingMs: 5 * WALL_MS });
   if (!opened.ok) return { id: 'delegated-scope', ok: false, problem: opened.reason };
-  const run = opened.value;
   try {
-    const ran = await launch(run, 'work', ['python3', 'work.py']);
-    const prog = progCgroup(`${run.unitPrefix}-work`);
-    const seen = { memoryMax: numberOf(path.join(prog, 'memory.max')), swapMax: numberOf(path.join(prog, 'memory.swap.max')), peakBytes: readPeak(prog), workloadExit: ran.code };
-    const certifiable = seen.peakBytes !== null && seen.peakBytes > 0;
-    const good = certifiable && seen.memoryMax === LIMIT_BYTES && seen.swapMax === 0 && ran.code === 0;
-    return { id: 'delegated-scope', ok: good, ...seen, ...(seen.peakBytes === null ? { halt: 'memory-not-certifiable' } : {}) };
+    const ran = await launch(opened.value, 'work', ['python3', 'work.py']);
+    const prog = progCgroup(`${opened.value.unitPrefix}-work`);
+    return judgeScope({ memoryMax: numberOf(path.join(prog, 'memory.max')), swapMax: numberOf(path.join(prog, 'memory.swap.max')), peakBytes: readPeak(prog), workloadExit: ran.code });
   } finally {
-    await cleanup(run);
+    await cleanup(opened.value);
   }
+}
+
+/** Line (f) judged: `memory.max` is the limit, `memory.swap.max` is 0, the workload exited 0 and `memory.peak` was read above zero; an unreadable peak is `memory-not-certifiable`. */
+function judgeScope(seen) {
+  const good = seen.peakBytes > 0 && seen.memoryMax === LIMIT_BYTES && seen.swapMax === 0 && seen.workloadExit === 0;
+  return { id: 'delegated-scope', ok: good, ...seen, ...(seen.peakBytes === null ? { halt: 'memory-not-certifiable' } : {}) };
 }
 
 async function csharpOf({ owned, scope, dirs }) {
