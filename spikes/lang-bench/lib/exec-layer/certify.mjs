@@ -5,6 +5,7 @@
 // `memory bound not certified`.
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { CERTIFY_CASE } from './case-view.mjs';
+import { trackChild } from './cleanup.mjs';
 import { programArgv } from './prefix.mjs';
 import { progCgroup, readProg, userEnv } from './scope.mjs';
 
@@ -22,7 +23,7 @@ function launchProblem(ran) {
 /** `{ launched, certified, peakBytes? , reason? }`. `read` and `launch` are seams for the tests; the defaults are the real cgroup read and `runBounded`. */
 export async function certifyMemory(run, { read = readProg, launch = runBounded } = {}) {
   const argv = programArgv(run, CERTIFY_CASE, ['bash', '-c', ':']);
-  const problem = launchProblem(await launch(argv[0], argv.slice(1), { timeoutMs: CERTIFY_MS, env: userEnv() }));
+  const problem = launchProblem(await launch(argv[0], argv.slice(1), { timeoutMs: CERTIFY_MS, env: userEnv(), onChild: trackChild }));
   if (problem !== null) return { launched: false, certified: false, reason: `the empty program did not run through the prefix: ${problem}` };
   const peak = read(progCgroup(`${run.unitPrefix}-${CERTIFY_CASE}`)).peakBytes;
   return peak === null

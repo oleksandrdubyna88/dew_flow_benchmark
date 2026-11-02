@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
-import { cleanup } from '../exec-layer/cleanup.mjs';
+import { cleanup, trackChild } from '../exec-layer/cleanup.mjs';
 import { openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, userEnv } from '../exec-layer/scope.mjs';
 import { programTree, STACKS } from './programs.mjs';
@@ -53,7 +53,7 @@ export async function believed({ owned, scope, dirs, csharpBuild, stack, memoryM
   const run = opened.value;
   try {
     const argv = programArgv(run, PROBE_CASE);
-    const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: WALL_MS, env: userEnv() });
+    const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: WALL_MS, env: userEnv(), onChild: trackChild });
     const hostMemoryMax = numberFile(path.join(progCgroup(`${run.unitPrefix}-${PROBE_CASE}`), 'memory.max'));
     if (!ran.ok || ran.value.code !== 0) return { value: null, problem: `the ${stack} ${mode} program did not run: ${ran.ok ? ran.value.stderr : ran.reason}` };
     return { value: mode === 'report' ? JSON.parse(ran.value.stdout) : ran.value.stdout.trim(), hostMemoryMax };

@@ -15,23 +15,24 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanupLiveRuns } from './lib/exec-layer/cleanup.mjs';
+import { cleanupLiveRuns, describeLiveRuns } from './lib/exec-layer/cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './lib/exec-layer/identity.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { computePin, verifyPin } from './lib/runner-pin.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { assemble, canonicalJson } from './lib/specs-record.mjs';
 import { printable } from './lib/exec-probe/printable.mjs';
-import { runProbe, shouldStampProbedOn, writeRecord } from './lib/exec-probe/probe.mjs';
-import { RecordExists, releaseRecord, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
+import { runProbe, stampThenWrite, writeRecord } from './lib/exec-probe/probe.mjs';
+import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
+import { stopCleanly } from './lib/exec-probe/stop.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
 const option = name => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const say = (stream, text) => stream.write(`${printable(text)}\n`);
 const stop = (code, reason) => { say(process.stderr, `exec-probe: ${reason}`); process.exit(code); };
-let held = null;
-const release = () => { if (held !== null) releaseRecord(held); };
+let reservationHolder = makeReservation(null);
+const release = () => reservationHolder.release();
 const refuse = (code, reason) => { release(); stop(code, reason); };
 
 async function ownedHelper() {
@@ -101,26 +102,21 @@ function report(record, out) {
 }
 
 let scope = null;
-const bounded = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms).unref())]);
 
-/** The cleanup of everything the probe started (V5): the placeholder, every open run (scopes, holder, views), the owned folders — each bounded, so a stuck step cannot hold the exit forever. */
-async function cleanEverything() {
-  release();
-  await bounded(cleanupLiveRuns(), 20_000);
-  if (scope !== null) await bounded(scope.close(), 5_000);
-}
+/** The cleanup of everything the probe started (V5, B1): every tracked child, every open run (scopes, holder, views); the caller bounds it. */
+const cleanLive = () => cleanupLiveRuns();
 
 let stopping = false;
 for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
-    cleanEverything().finally(() => process.exit(code));
+    stopCleanly({ code, bound: 20_000, say: text => say(process.stderr, text), exit: process.exit, release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close() });
   });
 }
-process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder
+process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
 
-held = reservation();
+reservationHolder = makeReservation(reservation());
 let code = 2;
 try {
   const { identity, runner } = identities();
@@ -134,17 +130,16 @@ try {
   if (stopping) await new Promise(() => {}); // a stopped probe writes nothing: the signal's own cleanup ends the process with 130 or 143
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
-  const out = held.file;
-  writeRecord(out, record, held);
-  held = null; // written: the file is the record now, never released
-  report(record, out);
-  if (!args.includes('--no-specs') && shouldStampProbedOn(record)) recordProbedOn(record);
-  code = record.exit.code;
+  const out = reservationHolder.file;
+  const written = reservationHolder.take(); // written: the file is the record now, never released
+  const final = stampThenWrite({ record, noSpecs: args.includes('--no-specs'), stamp: () => recordProbedOn(record), write: finalRecord => { writeRecord(out, finalRecord, written); report(finalRecord, out); } });
+  code = final.code;
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143
   say(process.stderr, `exec-probe: failed: ${error.message}`);
   code = 2;
 } finally {
-  await cleanEverything();
+  release();
+  if (scope !== null) await scope.close();
 }
 process.exit(code);

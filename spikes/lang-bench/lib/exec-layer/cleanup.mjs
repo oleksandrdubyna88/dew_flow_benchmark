@@ -9,6 +9,7 @@ import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { removeViews } from './case-view.mjs';
 import { holderNameOf, runIdOf, unitPrefixOf } from './names.mjs';
+import { killTree } from '../../../policy-ab-quick/lib/proc.mjs';
 import { assertRunning, markStopped } from './stopping.mjs';
 import { endProcess, endProcessGroup, scanProcesses, sleep } from './proc.mjs';
 import { holderCgroup, killCgroup, listScopes, progCgroup, readProg, scopeCgroup, stopUnit } from './scope.mjs';
@@ -89,9 +90,30 @@ export function registerRun(run) {
 /** How many runs this process has opened and not cleaned up. */
 export const liveRunCount = () => liveRuns.size;
 
+/** The open runs, as `{ id, unitPrefix, dir }` (what a stop names when its cleanup is incomplete). */
+export const describeLiveRuns = () => [...liveRuns].map(run => ({ id: run.id, unitPrefix: run.unitPrefix, dir: run.dir }));
+
+const children = new Set();
+
+/** `runBounded`'s `onChild`: remember a child the process started (B1) so a stop ends its whole process group, whatever the run registry knows. */
+export function trackChild(child) {
+  children.add(child);
+  child.once('close', () => children.delete(child));
+}
+
+/** End the process tree of every tracked child that is still running (B1): a `dotnet build` inside the build box, a runner driver, a systemd-run. */
+export function endTrackedChildren() {
+  for (const child of [...children]) {
+    if (child.exitCode === null && child.signalCode === null) killTree(child.pid);
+  }
+  children.clear();
+}
+
 /** End every run this process opened and has not cleaned up yet (a SIGTERM mid-probe): the driver, the scopes, the holder, the views and the run folder of each. Never throws. */
 export async function cleanupLiveRuns(options) {
-  markStopped(); // the probe's flow goes on while it cleans: nothing it starts after this point is a run, a scope or a holder
+  markStopped();
+  endTrackedChildren(); // stop the work first (B1): a build or a driver still running would start scopes while the passes below look
+  // the probe's flow goes on while it cleans: nothing it starts after this point is a run, a scope or a holder
   const runs = [...liveRuns];
   const end = () => Promise.all(runs.map(run => cleanup(run, options).catch(() => null)));
   await end();

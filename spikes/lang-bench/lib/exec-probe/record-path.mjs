@@ -63,3 +63,26 @@ export function releaseRecord(held) {
     // already gone: nothing is held
   }
 }
+
+/**
+ * N5: the one holder of a reservation. `release()` removes an empty placeholder ONCE and forgets it, so a second call (the exit handler after a signal handler) can never unlink another probe's new
+ * placeholder at the same path; `take()` hands the reservation to the writer: a written record is never released.
+ */
+export function makeReservation(held) {
+  let current = held;
+  return {
+    get file() { return current?.file; },
+    held: () => current,
+    release() {
+      if (current === null) return;
+      const mine = current;
+      current = null;
+      releaseRecord(mine);
+    },
+    take() {
+      const mine = current;
+      current = null;
+      return mine;
+    },
+  };
+}

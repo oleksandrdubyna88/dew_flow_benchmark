@@ -15,7 +15,7 @@ import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { makeViews } from './case-view.mjs';
 import { certifyMemory, HALT } from './certify.mjs';
-import { cleanup, registerRun, sweepStale } from './cleanup.mjs';
+import { cleanup, registerRun, sweepStale, trackChild } from './cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './identity.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
 import { assertRunning } from './stopping.mjs';
@@ -159,7 +159,7 @@ function runnerResult(ran, run, certification) {
 
 async function drive(run, certification) {
   const argv = runnerArgv(run, { cgroupOf: progTemplate(run.unitPrefix), jsonOut: path.join(run.dir, RECORD) });
-  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: run.options.runCeilingMs, env: driverEnv({ dirs: run.options.dirs, tmp: run.dir }) });
+  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: run.options.runCeilingMs, env: driverEnv({ dirs: run.options.dirs, tmp: run.dir }), onChild: trackChild });
   return runnerResult(ran, run, certification);
 }
 

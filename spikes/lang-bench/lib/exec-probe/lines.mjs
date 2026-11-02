@@ -6,7 +6,7 @@ import { readFileSync, readlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { unsafeBinds } from '../exec-layer/box.mjs';
-import { cleanup } from '../exec-layer/cleanup.mjs';
+import { cleanup, trackChild } from '../exec-layer/cleanup.mjs';
 import { nsenterArgv } from '../exec-layer/netns.mjs';
 import { launchPrefix, openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, readProg, userEnv } from '../exec-layer/scope.mjs';
@@ -24,7 +24,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 /** Launch `program` of `caseId` through the prefix from outside the namespaces and wait for its exit: `{ code, stdout, stderr }` (code null when it could not run). */
 async function launch(run, caseId, program) {
   const argv = programArgv(run, caseId, program);
-  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: WALL_MS, env: userEnv() });
+  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: WALL_MS, env: userEnv(), onChild: trackChild });
   return ran.ok ? ran.value : { code: null, stdout: '', stderr: ran.reason };
 }
 
@@ -91,7 +91,7 @@ const nsOf = pid => (pid === null ? null : readlinkSync(`/proc/${pid}/ns/net`));
 async function ping(run, port) {
   if (port === null) return '';
   const join = nsenterArgv(run.holder, run.tools.nsenter);
-  const ran = await runBounded(join[0], [...join.slice(1), 'python3', '-I', '-c', CLIENT, String(port)], { timeoutMs: 20_000, env: userEnv() });
+  const ran = await runBounded(join[0], [...join.slice(1), 'python3', '-I', '-c', CLIENT, String(port)], { timeoutMs: 20_000, env: userEnv(), onChild: trackChild });
   return ran.ok ? ran.value.stdout.trim() : '';
 }
 

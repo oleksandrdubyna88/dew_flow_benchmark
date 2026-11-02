@@ -32,16 +32,17 @@ const hiddenRuntimes = exists => DISTRIBUTION_DOTNET_PATHS.filter(p => p.startsW
 /**
  * The argv (ending in `--`) of the program's box. `view` is the case's writable copy (`{case}` may stand in it; the runner fills it) and the working directory; `dirs` is the pinned
  * toolchain directories `{ dotnetSdk, node, typescript }`; `env` is the allow-listed environment; `statusFd` is `--json-status-fd`, the same number as the runner's `--launch-status`.
+ * `dieWithParent` (B1) defaults to true for a box outside any scope (`prog: null`, a build): bwrap ends with the process that started it, so a build can never outlive the probe. A program's box has none: the runner ends it by its cgroup.
  * The distribution's dotnet under `/usr` is hidden, because an apphost reads `DOTNET_ROOT` and the box must have exactly one runtime (E1.S5's finding).
  */
-export function boxArgv({ view, dirs, env, statusFd, extraRo = [], exists = existsSync, bwrap = 'bwrap', prog, tree }) {
+export function boxArgv({ view, dirs, env, statusFd, extraRo = [], exists = existsSync, bwrap = 'bwrap', prog, tree, dieWithParent = prog === null }) {
   if (prog === undefined) throw new Error('boxArgv needs `prog`, the program\'s own cgroup (a path, `{case}` allowed): the own-cgroup view is the layer\'s box; null only for a box outside any scope');
   return [
     bwrap, ...(statusFd == null ? [] : ['--json-status-fd', String(statusFd)]),
     ...tmpfs('/'), ...roBind('/usr'), ...USR_LINKS.filter(name => exists(`/${name}`)).flatMap(link), ...hiddenRuntimes(exists).flatMap(tmpfs),
     ...[...ETC_FILES, ...Object.values(dirs), ...extraRo].flatMap(roBind),
     ...devProc(), ...tmpfs('/tmp'), ...cgroupView(prog), ...workspace(view, tree), ...chdir(view),
-    '--unshare-user', '--disable-userns', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', ...setenvAll(env), '--',
+    ...(dieWithParent ? ['--die-with-parent'] : []), '--unshare-user', '--disable-userns', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', ...setenvAll(env), '--',
   ];
 }
 
