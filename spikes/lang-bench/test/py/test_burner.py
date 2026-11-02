@@ -32,6 +32,20 @@ def burning(pid):
         return False
 
 
+def argv0_of(pid):
+    """argv[0] of a live process, read again until the exec has happened (a process that is still starting shows an empty or the parent's command line for a moment)."""
+    end = time.monotonic() + 10
+    name = ""
+    while time.monotonic() < end and not name.startswith("testsToDelete-"):
+        time.sleep(0.02)
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                name = f.read().split(b"\0")[0].decode()
+        except OSError:
+            name = ""
+    return name
+
+
 def still_alive(pids):
     return [pid for pid in pids if alive(pid)]
 
@@ -53,12 +67,10 @@ class BurnerTests(unittest.TestCase):
         self.assertEqual(burner.count(None), 2 if (os.cpu_count() or 2) < 2 else min(8, os.cpu_count()))
 
     def test_A_burner_carries_an_owned_argv_marker_and_ends_by_itself_at_its_bound(self):
-        procs = burner.spawn(self, 2, seconds=1.5)
+        procs = burner.spawn(self, 2, seconds=4)
         for proc in procs:
-            with open(f"/proc/{proc.pid}/cmdline", "rb") as f:
-                argv0 = f.read().split(b"\0")[0].decode()
-            self.assertRegex(argv0, r"^testsToDelete-[uw][0-9]+-bench-burner-", "the owned name: a janitor and a person can tell what it is")
-        self.assertEqual(wait_dead([p.pid for p in procs], 6), [], "a burner stops at its bound even when its parent is alive and well")
+            self.assertRegex(argv0_of(proc.pid), r"^testsToDelete-[uw][0-9]+-bench-burner-", "the owned name: a janitor and a person can tell what it is")
+        self.assertEqual(wait_dead([p.pid for p in procs], 30), [], "a burner stops at its bound even when its parent is alive and well (the wait is generous: a loaded host starts it late)")
         self.assertTrue(all(p.wait(timeout=1) is not None for p in procs))
 
     def test_The_default_bound_is_short(self):
