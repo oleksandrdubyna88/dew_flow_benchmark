@@ -170,6 +170,9 @@ async function body(run, options) {
   return { halt: null, ...(await drive(run, certification)) };
 }
 
+const DATA_STACKS = Object.freeze(['csharp', 'node']);
+export const HALT_STACK = 'stack-not-named';
+
 /** A run that stopped before anything started: exit 3 naming the halt, no record, nothing to clean. */
 const refusal = (stderr, halt) => ({ exitCode: EXIT_ENVIRONMENT, stdout: '', stderr, record: null, halt, memoryCertified: false, sweep: { retired: [], kept: [] }, cleanup: { evidence: {}, removed: [], left: [], clean: true } });
 
@@ -185,6 +188,7 @@ export async function runCases(options) {
   }
   const policy = options.data ? policyVerdict(options.policyFile) : { matches: true };
   if (!policy.matches) return { ...refusal(`${HALT_POLICY}: the memory policy is ${policy.found === null ? 'missing, undecided or unreadable' : `"${policy.found}"`}, the pinned one is "${MEMORY_POLICY}" (D55): a data run refuses another`, HALT_POLICY), treeSha256: identity.treeSha256 };
+  if (options.data && !DATA_STACKS.includes(options.stack)) return { ...refusal(`${HALT_STACK}: a data run names its stack, 'csharp' or 'node' (got ${JSON.stringify(options.stack)}): the heap keys of D55 are the stack's, and a run without them is a run under no policy`, HALT_STACK), treeSha256: identity.treeSha256 };
   const result = await runCasesChecked(options);
   return { ...result, treeSha256: identity.treeSha256 };
 }

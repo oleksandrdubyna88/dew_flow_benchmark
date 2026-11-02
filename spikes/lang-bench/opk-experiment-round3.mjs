@@ -13,6 +13,9 @@ import { storeDirs } from './lib/preflight-box.mjs';
 import { toolchainsOf } from './lib/exec-probe/toolchains.mjs';
 import { dotnetBelieves, extraEnvFor, POLICY_3C, runOnce, summarise } from './lib/exec-probe/opk.mjs';
 import { buildCsharp } from './lib/exec-probe/programs.mjs';
+import { refuseHistorical } from './lib/exec-probe/historical.mjs';
+
+refuseHistorical(import.meta.url);
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);

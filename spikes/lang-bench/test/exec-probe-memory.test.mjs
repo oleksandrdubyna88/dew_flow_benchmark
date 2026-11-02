@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assertMemoryView, exitCodeOf, isRatioFinding, overLimitRows, peakRatio, POLICY_DECIDED, POLICY_NAMES, POLICY_SUPERSEDED, readPolicy, validatePolicy, workloadAsserted, workloadRows } from '../lib/exec-probe/memory.mjs';
+import { assertMemoryView, exitCodeOf, probeVerdict, isRatioFinding, overLimitRows, peakRatio, POLICY_DECIDED, POLICY_NAMES, POLICY_SUPERSEDED, readPolicy, validatePolicy, workloadAsserted, workloadRows } from '../lib/exec-probe/memory.mjs';
 import { owned } from './support/owned.mjs';
 import { spikeDir } from './support/exec-layer-host.mjs';
 
@@ -233,4 +233,18 @@ test('Both_over_limit_fixtures_are_asserted_memory_limit_with_their_evidence_in_
   assert.match(wrong.problems.join('\n'), /csharp at 256 MiB: the overlimit-objects program ended "runtime error"/);
   assert.match(judged(256, { overLimitObjects: { csharp: abort } }).problems.join('\n'), /node at 256 MiB: the overlimit-objects fixture was not run/);
   assert.match(judged(256, { overLimitObjects: { csharp: { ...abort, eventsKept: false }, node: abort } }).problems.join('\n'), /memory\.peak and memory\.events were not kept/);
+});
+
+test('The_probe_refuses_any_policy_but_the_pinned_one_exit_3_memory_view_mismatch_and_only_old_records_are_judged_by_the_others', () => {
+  const observations = { limits: [viewed(256), viewed(512)] };
+  assert.deepEqual(probeVerdict({ policy: POLICY_DECIDED, observations }), { ok: true, halt: null, problems: [] });
+  for (const policy of ['runtime-view-accepted', 'cgroup-view-readonly', 'dotnet-gc-hard-limit-percent:75', POLICY_SUPERSEDED, 'whatever']) {
+    const verdict = probeVerdict({ policy, observations });
+    assert.equal(verdict.ok, false, policy);
+    assert.equal(verdict.halt, 'memory-view-mismatch', policy);
+    assert.equal(exitCodeOf(verdict), 3);
+    assert.match(verdict.problems.join('\n'), /cgroup-view-own\+gchl-90\+node-old-space-90/, 'the pinned policy is named');
+  }
+  assert.equal(probeVerdict({ policy: null, observations }).halt, 'memory-policy-undecided', 'undecided keeps its own halt');
+  assert.equal(assertMemoryView({ policy: 'runtime-view-accepted', observations }).ok, true, 'an old record can still be judged by its own policy');
 });

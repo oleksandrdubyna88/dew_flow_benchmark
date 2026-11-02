@@ -170,3 +170,21 @@ test('A_data_run_refuses_a_memory_policy_other_than_the_pinned_one_exit_3_memory
   const committed = await runCases({ ...layerOptions(t, { data: true }) });
   assert.equal(committed.exitCode, 0, `the committed policy file is the pinned one: ${committed.stderr}`);
 });
+
+test('A_data_run_names_csharp_or_node_and_a_misspelled_or_missing_stack_is_refused_before_anything_starts', async t => {
+  for (const stack of [undefined, 'dotnet', 'typescript', '', null]) {
+    const refused = await runCases({ ...layerOptions(t, { data: true }), stack });
+    assert.equal(refused.exitCode, 3, String(stack));
+    assert.equal(refused.halt, 'stack-not-named', String(stack));
+    assert.match(refused.stderr, /stack-not-named.*csharp.*node/s);
+    assert.equal(refused.record, null, 'no case was started');
+  }
+  const notData = await runCases({ ...layerOptions(t, { data: false }), stack: 'dotnet' });
+  assert.notEqual(notData.exitCode, 0, 'a non-data run with a misspelled stack does not run either: the box environment throws');
+  assert.notEqual(notData.halt, 'stack-not-named');
+  if (!needs(t)) return;
+  for (const stack of ['csharp', 'node']) {
+    const accepted = await runCases({ ...layerOptions(t, { data: true }), stack });
+    assert.equal(accepted.exitCode, 0, `${stack}: ${accepted.stderr}`);
+  }
+});

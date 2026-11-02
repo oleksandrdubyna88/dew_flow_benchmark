@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fail } from '../../../minigit-bench/lib/result.mjs';
 import { observeAt } from './observe.mjs';
-import { assertMemoryView, exitCodeOf, overLimitRows, readPolicy, workloadRows } from './memory.mjs';
+import { assertMemoryView, exitCodeOf, overLimitRows, probeVerdict, readPolicy, workloadRows } from './memory.mjs';
 import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
@@ -90,7 +90,7 @@ function ratiosOf(observations) {
 function verdictOf(memoryView) {
   const unobserved = memoryView.observations.limits.filter(at => at.problem);
   if (unobserved.length > 0) return { ok: false, halt: 'memory-view-unobserved', problems: unobserved.map(at => at.problem) };
-  return assertMemoryView({ policy: memoryView.policy.policy, observations: memoryView.observations });
+  return probeVerdict({ policy: memoryView.policy.policy, observations: memoryView.observations });
 }
 
 /** The record and the exit of a probe's lines and memory view: the first failed line, else the memory verdict; a record that holds a host key is itself a failure. */

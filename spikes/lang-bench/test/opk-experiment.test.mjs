@@ -1,7 +1,12 @@
 // E1.S8b OP-K experiment: the pure parts. How a run ended is read from what the runner recorded (never guessed), and the read-only cgroup view of the program's OWN cgroup is a prefix
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { spikeDir } from './support/exec-layer-host.mjs';
 import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_1C, POLICY_A, POLICY_C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, dotnetHardLimitFor, layerStackFor, setEnvValue, setNodeOptions, summarise, viewFor, withoutCgroupView } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
@@ -113,4 +118,25 @@ test('A_replaced_environment_value_in_the_prefix_changes_only_that_value_and_a_m
   const prefix = ['bwrap', '--setenv', 'DOTNET_GCHeapHardLimit', '0x10000000', '--setenv', 'TZ', 'UTC', '--'];
   assert.deepEqual(setEnvValue(prefix, 'DOTNET_GCHeapHardLimit', '0xE666666'), ['bwrap', '--setenv', 'DOTNET_GCHeapHardLimit', '0xE666666', '--setenv', 'TZ', 'UTC', '--']);
   assert.throws(() => setEnvValue(['bwrap', '--'], 'DOTNET_GCHeapHardLimit', '0x1'), /DOTNET_GCHeapHardLimit/);
+});
+
+// Q4: the experiment scripts are a record of measurements made before the view became the box and before D55; run as written they would measure a box that no longer exists and could append to the
+// evidence file. They refuse at start (exit 2), whatever the arguments, and change no byte of any record.
+const SCRIPTS = ['opk-experiment.mjs', 'opk-experiment-more.mjs', 'opk-experiment-round3.mjs', 'opk-experiment-node.mjs', 'opk-experiment-1c.mjs', 'opk-experiment-ac.mjs'];
+
+test('An_OP_K_experiment_script_refuses_to_run_exit_2_historical_and_cannot_change_the_evidence_records', () => {
+  const inputs = path.join(spikeDir, 'inputs');
+  const files = readdirSync(inputs).filter(name => /^(opk-experiment|exec-probe)-.*\.json$/.test(name));
+  const hashOf = () => files.map(name => createHash('sha256').update(readFileSync(path.join(inputs, name))).digest('hex'));
+  const before = hashOf();
+  assert.ok(files.includes('opk-experiment-2026-11-02.json'));
+  for (const script of SCRIPTS) {
+    for (const extra of [[], ['--runs', '1'], ['--record', path.join(inputs, 'opk-experiment-2026-11-02.json')], ['--out', path.join(inputs, 'opk-experiment-2026-11-02.json')]]) {
+      const ran = spawnSync(process.execPath, [path.join(spikeDir, script), ...extra], { encoding: 'utf8', timeout: 20_000 });
+      assert.equal(ran.status, 2, `${script} ${extra.join(' ')}: ${ran.stderr}`);
+      assert.match(ran.stderr, /historical, not re-runnable as written/, script);
+      assert.equal(ran.stdout, '', 'nothing was run');
+    }
+  }
+  assert.deepEqual(hashOf(), before, 'not one byte of a record changed');
 });

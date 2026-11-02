@@ -169,5 +169,14 @@ export function assertMemoryView({ policy, observations }) {
   return { ok: problems.length === 0, halt: problems.length === 0 ? null : 'memory-view-mismatch', problems };
 }
 
+/**
+ * The PROBE's verdict (Q2): it asserts the pinned policy only. A policy other than `POLICY_DECIDED` is exit 3 `memory-view-mismatch` naming the pinned one — the layer would refuse to run a data run under
+ * it, so a probe that passed under it would certify a box nobody pinned. `assertMemoryView` still judges an OLD record by its own policy (`verdictFor`).
+ */
+export function probeVerdict({ policy, observations }) {
+  if (policy === null || policy === POLICY_DECIDED) return assertMemoryView({ policy, observations });
+  return { ok: false, halt: 'memory-view-mismatch', problems: [`the memory policy is "${policy}", not the pinned "${POLICY_DECIDED}" (D55): the probe asserts the pinned policy only`] };
+}
+
 /** The probe's exit code for a verdict: 0 only when it is ok. */
 export const exitCodeOf = verdict => (verdict.ok ? 0 : 3);

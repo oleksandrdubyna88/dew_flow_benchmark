@@ -1,14 +1,14 @@
 // E1.S8b: the box's environment is ONE allow-list (D15's base, the culture of D35, the base time zone, the documented per-stack keys). The unit half is here; the half
 // that reads the environment from INSIDE the real box is in this file's last test, which needs the whole layer.
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { agentEnv, sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
 import { ALLOW_LIST, allowFor, assertNoCaseKeys, BASE_ENV, boxEnv, caseKeysIn, driverEnv, heapKeys, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { chain, needs, SPAWN_ENV, start } from './support/exec-chain.mjs';
 import { toolchains } from './support/exec-layer-host.mjs';
+import { owned } from './support/owned.mjs';
 
 const dirs = { dotnetSdk: '/t/dotnet-sdk-10.0.403', node: '/t/node-v26.13.0-linux-x64', typescript: '/t/typescript-6.0.3' };
 
@@ -66,6 +66,7 @@ test('Both_stacks_heap_keys_are_ninety_percent_of_the_limit_and_that_is_the_poin
   assert.deepEqual(STACK_KEYS, { csharp: ['DOTNET_GCHeapHardLimit'] });
   assert.throws(() => boxEnv({ dirs, extra: { DOTNET_GCHeapHardLimit: '0x1' } }), /DOTNET_GCHeapHardLimit/, 'an extra cannot set it');
   assert.throws(() => boxEnv({ dirs, extra: { NODE_OPTIONS: '--max-old-space-size=1' } }), /NODE_OPTIONS/, 'an extra cannot set the flag');
+  for (const key of ['COMPlus_GCHeapHardLimit', 'DOTNET_GCHeapHardLimitPercent', 'dotnet_gcheaphardlimit']) assert.throws(() => boxEnv({ dirs, extra: { [key]: '0x1' } }), new RegExp(key, 'i'), `an extra cannot size the .NET heap by ${key}`);
 });
 
 test('The_limit_of_a_scoring_box_is_a_whole_MiB_and_a_missing_one_throws_for_both_stacks', () => {
@@ -79,15 +80,21 @@ test('The_limit_of_a_scoring_box_is_a_whole_MiB_and_a_missing_one_throws_for_bot
   assert.deepEqual(heapKeys(undefined, 256 * MIB), {}, 'no stack named: no key');
 });
 
-test('A_per_case_heap_key_in_the_agent_box_or_the_build_box_environment_fails_the_guard', () => {
-  // T-L14: the two keys are the scoring box's alone. A test plants one in v1's agent box environment (an `extra` may add a key) and the guard names it.
-  const root = mkdtempSync(path.join(tmpdir(), 'envg-'));
-  const layout = sessionLayout(root, 'g1').value;
-  try {
-    guardAgentBox(layout);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+test('A_misspelled_or_unknown_stack_throws_and_never_silently_drops_the_heap_keys', () => {
+  const MIB = 1024 * 1024;
+  for (const stack of ['dotnet', 'typescript', 'C#', 'Node', '', null, 'csharp ']) {
+    assert.throws(() => heapKeys(stack, 256 * MIB), /stack/, `heapKeys(${JSON.stringify(stack)})`);
+    assert.throws(() => boxEnv({ dirs, stack, memoryMaxBytes: 256 * MIB }), /stack/, `boxEnv(${JSON.stringify(stack)})`);
   }
+  assert.deepEqual(heapKeys(undefined, 256 * MIB), {}, 'no stack named is still a box with no heap keys (the build, the driver)');
+  assert.deepEqual(Object.keys(heapKeys('csharp', 256 * MIB)), ['DOTNET_GCHeapHardLimit']);
+  assert.deepEqual(Object.keys(heapKeys('node', 256 * MIB)), ['NODE_OPTIONS']);
+});
+
+test('A_per_case_heap_key_in_the_agent_box_or_the_build_box_environment_fails_the_guard', t => {
+  // T-L14: the two keys are the scoring box's alone. A test plants one in v1's agent box environment (an `extra` may add a key) and the guard names it.
+  const root = owned.ownedDir(t, 'envg');
+  guardAgentBox(sessionLayout(root, 'g1').value);
 });
 
 function guardAgentBox(layout) {
@@ -99,6 +106,10 @@ function guardAgentBox(layout) {
   assert.throws(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--max-old-space-size=230' }), 'the agent box'), /NODE_OPTIONS/);
   assert.throws(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--trace-warnings --max-old-space-size=230' }), 'the agent box'), /NODE_OPTIONS/);
   assert.doesNotThrow(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--trace-warnings' }), 'the agent box'), 'another flag is not a case key');
+  for (const key of ['COMPlus_GCHeapHardLimit', 'DOTNET_GCHeapHardLimitPercent', 'COMPlus_GCHeapHardLimitPercent', 'complus_gcheaphardlimit', 'dotnet_gcheaphardlimit']) {
+    assert.deepEqual(caseKeysIn({ [key]: '0x10' }), [key], `${key} is a heap limit of the runtime, spelled another way`);
+  }
+  assert.deepEqual(caseKeysIn({ DOTNET_gcServer: '0', DOTNET_GCgen0size: '0x1000' }), [], 'other GC settings are not case keys');
   assert.throws(() => assertNoCaseKeys({ dotnet_gchardlimit: 1, DOTNET_GCHEAPHARDLIMIT: '0x1' }, 'a build box'), /a build box/, 'the guard is case-insensitive: a spelling in another case is refused as well');
 }
 

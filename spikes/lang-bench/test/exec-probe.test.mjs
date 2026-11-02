@@ -11,7 +11,7 @@ import { recordProblems } from '../lib/exec-probe/facts.mjs';
 import { buildBoxEnv } from '../lib/exec-probe/programs.mjs';
 import { runDelegatedScopeLine } from '../lib/exec-probe/lines.mjs';
 import { readPolicy } from '../lib/exec-probe/memory.mjs';
-import { verdictFor } from '../lib/exec-probe/probe.mjs';
+import { finish, verdictFor } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
 import { owned } from './support/owned.mjs';
 
@@ -118,8 +118,12 @@ test('The_decided_policy_holds_on_the_record_and_the_others_are_judged_against_t
   const decide = policy => verdictFor(record, { policy, decided: '2026-11-02', by: 'team lead' });
   assert.deepEqual(decide('cgroup-view-own+gchl-90+node-old-space-90'), { ok: true, halt: null, problems: [] }, 'D55: .NET believes floor(0.9 L), Node believes L with a V8 heap in [0.9 L, L), in their own cgroup view');
   assert.equal(decide('cgroup-view-own+gchl-limit').ok, false, 'the 100 % policy of the first decision no longer holds: .NET believes 90 %');
-  assert.equal(decide('runtime-view-accepted').ok, true);
+  assert.equal(decide('runtime-view-accepted').ok, true, 'verdictFor judges an OLD record by its own policy');
   assert.equal(decide('dotnet-gc-hard-limit-percent:75').ok, false, 'no GC hard limit shows in AppContext: the percent form is not what is set');
+  for (const other of ['runtime-view-accepted', 'cgroup-view-readonly', 'cgroup-view-own+gchl-limit']) {
+    const finished = finish({ found: record.lines, memoryView: { policy: { policy: other, decided: '2026-11-02', by: 'x' }, observations: record.memoryView.observations }, now: new Date('2026-11-02T00:00:00Z'), identity: record.layerIdentity });
+    assert.deepEqual([finished.exit.code, finished.exit.halt], [3, 'memory-view-mismatch'], `the probe itself refuses ${other}: it asserts the pinned policy only`);
+  }
   assert.equal(verdictFor(record, { policy: null, decided: null, by: null }).halt, 'memory-policy-undecided');
   const committed = readPolicy(path.join(spikeDir, 'inputs', 'specs.d', 'memory-policy.json'));
   assert.equal(verdictFor(record, committed.value).ok, true, 'the committed policy holds: the probe exits 0');

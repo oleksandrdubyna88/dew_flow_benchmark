@@ -38,6 +38,6 @@ export function layerOptions(t, { runSh = '#!/bin/bash\nexec cat\n', files = {},
   return {
     pinnedIdentityFile: livePin(t),
     owned, parent: owned.ownedDir(t, 'runs'), tree: builtTree(t, runSh, files), samplesDir: samplesDir(t, ids), caseIds: ids, dirs: toolchains,
-    memoryMaxBytes: 256 * MIB, caseWallMs: 20_000, runCeilingMs: 120_000, minSweepAgeMs: 0, ...overrides,
+    memoryMaxBytes: 256 * MIB, caseWallMs: 20_000, runCeilingMs: 120_000, minSweepAgeMs: 0, stack: overrides.data ? 'node' : undefined, ...overrides, // a data run names its stack (D55); a test of that refusal passes `stack: undefined`
   };
 }

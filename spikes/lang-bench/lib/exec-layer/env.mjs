@@ -57,12 +57,12 @@ const heapBytes = memoryMaxBytes => Number((BigInt(memoryMaxBytes) * HEAP_SHARE_
  */
 export function heapKeys(stack, memoryMaxBytes) {
   if (stack === undefined) return {};
+  if (stack !== 'csharp' && stack !== 'node') throw new Error(`heapKeys: the stack must be 'csharp' or 'node' (or undefined for a box of no stack), got ${JSON.stringify(stack)}: an unknown stack would silently get no heap keys`);
   if (!Number.isSafeInteger(memoryMaxBytes) || memoryMaxBytes <= 0 || memoryMaxBytes % MIB !== 0) {
     throw new Error(`heapKeys: the ${stack} stack needs memoryMaxBytes, the case's limit, as a positive whole number of MiB (got ${String(memoryMaxBytes)}): the heap keys are not a guess`);
   }
   if (stack === 'csharp') return { DOTNET_GCHeapHardLimit: `0x${heapBytes(memoryMaxBytes).toString(16)}` };
-  if (stack === 'node') return { NODE_OPTIONS: `--max-old-space-size=${Math.floor(heapBytes(memoryMaxBytes) / MIB)}` };
-  return {};
+  return { NODE_OPTIONS: `--max-old-space-size=${Math.floor(heapBytes(memoryMaxBytes) / MIB)}` };
 }
 
 const lower = key => key.toLowerCase();
@@ -78,7 +78,7 @@ function refusedKeys(extra) {
  * case or spelling is refused naming the base key (a program reads `lc_all` as it reads `LC_ALL`).
  */
 export function boxEnv({ dirs, extra = {}, stack, memoryMaxBytes }) {
-  const refused = refusedKeys(extra);
+  const refused = [...new Set([...refusedKeys(extra), ...Object.keys(extra).filter(key => HEAP_LIMIT_KEY.test(key))])];
   if (refused.length > 0) throw new Error(`boxEnv: ${refused.join(', ')} ${refused.length === 1 ? 'is' : 'are'} in the base environment (D15) and not an extra's to replace; only TZ may be replaced`);
   return Object.freeze({ ...BASE_ENV, DOTNET_ROOT: dirs.dotnetSdk, PATH: boxPath(dirs), ...heapKeys(stack, memoryMaxBytes), ...extra });
 }
@@ -94,13 +94,14 @@ export function driverEnv({ dirs, tmp, runtimeDir = `/run/user/${process.getuid(
   return Object.freeze({ ...boxEnv({ dirs }), HOME: tmp, TMPDIR: tmp, DOTNET_CLI_HOME: tmp, XDG_RUNTIME_DIR: runtimeDir });
 }
 
-/** The per-case keys of D55: the scoring box's alone (T-L14). `NODE_OPTIONS` is a case key only when it carries the old-space flag; the base's empty `NODE_OPTIONS` is not. */
+/** The per-case keys of D55: the scoring box's alone (T-L14). The .NET key is matched with its `COMPlus_` spelling and its percent form, in any case: all of them size the GC's heap. `NODE_OPTIONS` is a case key only when it carries the old-space flag; the base's empty `NODE_OPTIONS` is not. */
 export const CASE_KEYS = Object.freeze(['DOTNET_GCHeapHardLimit', 'NODE_OPTIONS']);
+const HEAP_LIMIT_KEY = /^(dotnet|complus)_gcheaphardlimit(percent)?$/i;
 const OLD_SPACE_FLAG = /(^|\s)--max[-_]old[-_]space[-_]size\b/;
 
 /** The case keys an environment holds, compared without regard to case. Empty for the agent box and the build box. */
 export function caseKeysIn(env) {
-  return Object.keys(env).filter(key => (lower(key) === lower('DOTNET_GCHeapHardLimit') && env[key] !== undefined) || (lower(key) === 'node_options' && OLD_SPACE_FLAG.test(String(env[key]))));
+  return Object.keys(env).filter(key => (HEAP_LIMIT_KEY.test(key) && env[key] !== undefined) || (lower(key) === 'node_options' && OLD_SPACE_FLAG.test(String(env[key]))));
 }
 
 /** Throws naming the keys when `env` — the agent box's or the build box's — holds a per-case heap key (T-L14). */

@@ -17,6 +17,9 @@ import { toolchainsOf } from './lib/exec-probe/toolchains.mjs';
 import { hostFacts } from './lib/exec-probe/probe.mjs';
 import { POLICIES, runOnce, summarise, verifyCgroupView } from './lib/exec-probe/opk.mjs';
 import { buildCsharp, STACKS } from './lib/exec-probe/programs.mjs';
+import { refuseHistorical } from './lib/exec-probe/historical.mjs';
+
+refuseHistorical(import.meta.url);
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
