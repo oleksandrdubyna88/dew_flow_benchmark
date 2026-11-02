@@ -3,6 +3,7 @@
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { owned } from './owned.mjs';
+import { computeIdentity, LAYER_DIR } from '../../lib/exec-layer/identity.mjs';
 import { toolchains } from './exec-layer-host.mjs';
 import { writeTree } from '../toolchain-fixtures.mjs';
 
@@ -26,8 +27,16 @@ export function samplesDir(t, ids, { input = 'hello\n', output = 'hello\n' } = {
 }
 
 /** The options of one run through the layer. `parent` is a folder of the test's own, so a sweep sees only this test's runs; `minSweepAgeMs: 0` lets it retire a run killed a moment ago. */
+/** A pinned-identity file holding the layer's LIVE hash: tests of other behaviour do not depend on the committed pin (the identity's own tests do). */
+function livePin(t) {
+  const file = path.join(owned.ownedDir(t, 'livepin'), 'exec-layer.json');
+  writeFileSync(file, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  return file;
+}
+
 export function layerOptions(t, { runSh = '#!/bin/bash\nexec cat\n', files = {}, ids = ['s01'], ...overrides } = {}) {
   return {
+    pinnedIdentityFile: livePin(t),
     owned, parent: owned.ownedDir(t, 'runs'), tree: builtTree(t, runSh, files), samplesDir: samplesDir(t, ids), caseIds: ids, dirs: toolchains,
     memoryMaxBytes: 256 * MIB, caseWallMs: 20_000, runCeilingMs: 120_000, minSweepAgeMs: 0, ...overrides,
   };

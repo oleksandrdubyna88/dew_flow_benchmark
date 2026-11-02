@@ -9,12 +9,14 @@
 import { mkdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { findOnPath } from '../../../minigit-bench/lib/find-on-path.mjs';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { makeViews } from './case-view.mjs';
 import { certifyMemory, HALT } from './certify.mjs';
 import { cleanup, sweepStale } from './cleanup.mjs';
+import { computeIdentity, LAYER_DIR } from './identity.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
 import { holderNameOf, RUN_WHAT, runIdOf, tooLongForUnit, unitPrefixOf } from './names.mjs';
 import { startHolder } from './netns.mjs';
@@ -42,6 +44,20 @@ export function checkParent(parent) {
   if (!stat.isDirectory()) return fail(`the runs parent ${parent} is not a directory; ${rule}`);
   if (stat.uid !== process.getuid()) return fail(`the runs parent ${parent} is not the caller's; ${rule}`);
   return (stat.mode & 0o022) === 0 ? ok(parent) : fail(`the runs parent ${parent} is writable by others (a shared temp root); ${rule}`);
+}
+
+const PINNED_IDENTITY = fileURLToPath(new URL('../../inputs/specs.d/exec-layer.json', import.meta.url));
+export const IDENTITY_HALT = 'layer-identity-mismatch';
+
+/** `{ treeSha256, matches }`: the live hash of the layer and whether it is the pinned identity (false when the file is missing or unreadable: no identity to check against). */
+function identityVerdict(pinnedFile) {
+  const live = computeIdentity(LAYER_DIR);
+  const treeSha256 = live.ok ? live.value.execLayer.treeSha256 : null;
+  try {
+    return { treeSha256, matches: treeSha256 !== null && JSON.parse(readFileSync(pinnedFile, 'utf8')).execLayer.treeSha256 === treeSha256 };
+  } catch {
+    return { treeSha256, matches: false };
+  }
 }
 
 const LIMIT_KEYS = Object.freeze(['timeS', 'readyS', 'graceS']);
@@ -154,11 +170,20 @@ async function body(run, options) {
 }
 
 /**
- * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `options` are those of `openRun` plus `data` (a data run: certification refuses),
+ * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `options` are those of `openRun` plus `data` (a data run: certification refuses, and so does a layer that is not the pinned identity, halt `layer-identity-mismatch`, `pinnedIdentityFile` to name another), 
  * `minSweepAgeMs` (the startup sweep's age floor, default 10 minutes), `observe(run)` (called once the run is open and before anything starts) and `deps` (the seams of `certifyMemory`). `exitCode` is the runner's (0 passed, 1 a case failed, 3 environment, 4 configuration,
  * 5 the runner or the layer failed); `halt` is `'memory-not-certifiable'` for a data run that stopped before any case; `record` is the runner's `--json` or null. Never throws.
  */
 export async function runCases(options) {
+  const identity = identityVerdict(options.pinnedIdentityFile ?? PINNED_IDENTITY);
+  if (options.data && !identity.matches) {
+    return { exitCode: EXIT_ENVIRONMENT, stdout: '', stderr: `${IDENTITY_HALT}: the layer's tree ${identity.treeSha256} is not the pinned identity (${options.pinnedIdentityFile ?? PINNED_IDENTITY})`, record: null, halt: IDENTITY_HALT, memoryCertified: false, treeSha256: identity.treeSha256, sweep: { retired: [], kept: [] }, cleanup: { evidence: {}, removed: [], left: [], clean: true } };
+  }
+  const result = await runCasesChecked(options);
+  return { ...result, treeSha256: identity.treeSha256 };
+}
+
+async function runCasesChecked(options) {
   const sweep = await sweepStale({ owned: options.owned, parent: options.parent, minAgeMs: options.minSweepAgeMs });
   const opened = await openRun(options);
   if (!opened.ok) return { exitCode: EXIT_ENVIRONMENT, stdout: '', stderr: opened.reason, record: null, halt: null, memoryCertified: false, sweep, cleanup: { evidence: {}, removed: [], left: [], clean: true } };

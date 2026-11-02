@@ -2,56 +2,80 @@
   "execLayer": {
     "files": [
       {
-        "path": "box.mjs",
-        "sha256": "52ffcd9369a3b0ec791ebb009268f0073c0758ed968351b845e4f9d205f0641a"
+        "path": "lang-bench/lib/exec-layer/box.mjs",
+        "sha256": "0ae75ac13e3ec8b1e30897246a599b5ca638c4f0ec25436f9e6e4cff5ad0e501"
       },
       {
-        "path": "case-view.mjs",
-        "sha256": "4397dd4fb38ea6fa4e56a53dc8c8f4f9930c73ac2ee1b8fa65584eb175f94ffc"
+        "path": "lang-bench/lib/exec-layer/case-view.mjs",
+        "sha256": "d39dd9dc37165432aac9c00bf39c06e869b0b7811c40991dc8f1edb64e5bb8d4"
       },
       {
-        "path": "certify.mjs",
+        "path": "lang-bench/lib/exec-layer/certify.mjs",
         "sha256": "d40b96ebaa31977eca5d27c1ab2b7b18e567183e7ba8194c8580c4d66702f414"
       },
       {
-        "path": "cleanup.mjs",
-        "sha256": "2cc80ee116afb3867600f551e5cba336d142e35922e87916d8ef012cfc741460"
+        "path": "lang-bench/lib/exec-layer/cleanup.mjs",
+        "sha256": "30193aab4dad63c2d546c7c4cbcc49c1983e1a928235bf3b924e9e787392b306"
       },
       {
-        "path": "env.mjs",
+        "path": "lang-bench/lib/exec-layer/env.mjs",
         "sha256": "8cb969befd1d57ea9a851c0a10647f6aa98e49501809ff7ba8c04995ebc265ba"
       },
       {
-        "path": "identity.mjs",
-        "sha256": "e3d2aae5e57416a7025064f8620b29b89a2039eb80a6be19eb3a6b03d1637c3b"
+        "path": "lang-bench/lib/exec-layer/identity.mjs",
+        "sha256": "d88893358d64fd2ab079d992e3a3bff464cf9235f9ad40994f7e85b89c3dbd08"
       },
       {
-        "path": "names.mjs",
+        "path": "lang-bench/lib/exec-layer/names.mjs",
         "sha256": "02754145f895299176a33e2c73251962bae96395ff96bab4f1bd09c014deb5d9"
       },
       {
-        "path": "netns.mjs",
+        "path": "lang-bench/lib/exec-layer/netns.mjs",
         "sha256": "b088579ab19b668b14bbf0c672914d818f15b60719ff17b905d633ee2762c56f"
       },
       {
-        "path": "prefix.mjs",
-        "sha256": "2d5d9c0856a7374b068f9f3d510853744bc8ca076b353130969607cf6d48f087"
+        "path": "lang-bench/lib/exec-layer/prefix.mjs",
+        "sha256": "20d40086d7b65beea2e9c3af8a9e84ab532c015575cd9dfd614783decb52609a"
       },
       {
-        "path": "proc.mjs",
-        "sha256": "17021b54198885c7e9ac9053bdfa968df3af46ef372a3c4cf72359a8db2d25ad"
+        "path": "lang-bench/lib/exec-layer/proc.mjs",
+        "sha256": "d94ca5d1e3233ffb883fc81fa25ee96732de3ea0598e0d0bdd93f99814e5d40f"
       },
       {
-        "path": "run.mjs",
-        "sha256": "0fc527c4e44affc7e6a5256f1cb720731105b0937010b01c9afcfc29bfd31078"
+        "path": "lang-bench/lib/exec-layer/run.mjs",
+        "sha256": "f2e1596992960bfb09fa574ead626dfda2ec17690a97159d72db3f1aaa6cc526"
       },
       {
-        "path": "scope-entry.sh",
-        "sha256": "87de097afec43aebbf7f18edece37926d0118a4dca60865282253de8a11fb902"
+        "path": "lang-bench/lib/exec-layer/scope-entry.sh",
+        "sha256": "c8e50e6131f40e3f982c828b6f270c6df3cd748feb2bec801093a42b529e2eb7"
       },
       {
-        "path": "scope.mjs",
+        "path": "lang-bench/lib/exec-layer/scope.mjs",
         "sha256": "b08a3e673d6e8421b48897eb3c526059769036cf7ec98f986f5bf92a0b51d65f"
+      },
+      {
+        "path": "lang-bench/lib/preflight-box.mjs",
+        "sha256": "a781db1ada6fbd590ae147556ac447834954444def6ae3773705be51d430cb13"
+      },
+      {
+        "path": "minigit-bench/lib/bwrap.mjs",
+        "sha256": "c970b2c6c1841e911040a46039106708e1a0be3f92ea6da7f70cbc5291ea2988"
+      },
+      {
+        "path": "minigit-bench/lib/find-on-path.mjs",
+        "sha256": "e69fda21ac6cac2d86c80ae43c6a3fb0a8b9ff9fabc0ad40823b36d3fdcb9f5f"
+      },
+      {
+        "path": "minigit-bench/lib/result.mjs",
+        "sha256": "697b28b7b5230db6801336c1637111cc7c0835552097756e1c8d5468b96ef013"
+      },
+      {
+        "path": "minigit-bench/lib/run.mjs",
+        "sha256": "ee9bc1ee18836f2ad524e8520b5d63e49d367d4bb11816b77cf40fb0b503920f"
+      },
+      {
+        "path": "policy-ab-quick/lib/proc.mjs",
+        "sha256": "b8299fdd2242cc5af8757f88c1a5ea9a624579c82bb9c9e4a5de7c30e29dcb45"
       }
     ],
     "host": {
@@ -63,6 +87,6 @@
       "systemd": "systemd 259 (259.5-0ubuntu3.4)"
     },
     "probedOn": "2026-11-02T13:38:22.286Z",
-    "treeSha256": "c3607cb65329588ab28a8993417936d4d8c88a4d82306424b8620fef8f1dea98"
+    "treeSha256": "2697325850ae7ce8c3c0488a1e6db7a1bd02502e907b2e378ef3b07e6d9779f9"
   }
 }
