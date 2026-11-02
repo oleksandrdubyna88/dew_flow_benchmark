@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { commOf, chain, MIB, needs, pidsIn, programPid, sh, start, text, waitFor, withoutView } from './support/exec-chain.mjs';
-import { readProg, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
+import { killCgroup, readProg, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
 
 const num = file => Number(text(file).trim());
 const SLEEPER = { 'run.sh': '#!/bin/bash\nexec sleep 300\n' };
@@ -43,8 +43,8 @@ test('A_delegated_scope_holds_only_the_launch_chain_in_prog', async t => {
 test('The_scope_holder_keeps_no_descriptor_of_the_launcher', async t => {
   if (!needs(t)) return;
   const c = await chain(t, { files: QUICK });
-  // as the runner starts a launcher: pipes for its stdin and stdout, and the status pipe at descriptor 7
-  start(t, c.launch(), { stdio: ['pipe', 'pipe', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe'] });
+  // as the runner starts a launcher: pipes for its stdin and stdout, the status pipe at descriptor 7, and pipes at 12 and 20 (the holder closes EVERY inherited descriptor above 2, not 3-9 by number)
+  start(t, c.launch(), { stdio: ['pipe', 'pipe', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe'] });
   const holderPid = await waitFor(() => { try { return Number(text(path.join(c.out, 'holder.pid')).trim()); } catch { return null; } });
   const target = fd => { try { return [fd, readlinkSync(`/proc/${holderPid}/fd/${fd}`)]; } catch { return null; } }; // a descriptor closed since the listing is no descriptor
   // what keeps a runner's pipe open is a pipe or a socket of the launcher (the stdio pipes, the status pipe), or stdio that is not /dev/null; sleep's own start-up (libselinux reads
@@ -111,4 +111,17 @@ test('OOMPolicy_continue_is_in_the_prefix_although_a_delegated_scope_defaults_to
   start(t, plain.launch());
   assert.ok(await waitFor(async () => (await unitState(plain.unit)) === 'active' || null));
   assert.equal((await sh('systemctl', ['--user', 'show', `${plain.unit}.scope`, '-p', 'OOMPolicy'], { env: userEnv() })).stdout.trim(), 'OOMPolicy=stop', 'a plain scope has the host default: stop');
+});
+
+test('A_fork_bomb_in_the_box_stops_at_the_pids_bound_and_nothing_survives', async t => {
+  if (!needs(t)) return;
+  const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nbomb() { bomb | bomb & }\nbomb\nsleep 30\n' } });
+  start(t, c.launch());
+  assert.ok(await waitFor(() => (existsSync(path.join(c.prog, 'pids.events')) && /max [1-9]/.test(text(path.join(c.prog, 'pids.events')))) || null, 30_000), 'forks were refused at the bound');
+  assert.equal(num(path.join(c.prog, 'pids.max')), 512, 'the bound is written in prog/');
+  assert.ok(num(path.join(c.prog, 'pids.peak')) <= 512, 'the number of processes never passed it');
+  killCgroup(c.prog);
+  assert.ok(await waitFor(() => (readProg(c.prog).procs ?? []).length === 0 || null, 15_000), 'nothing survives the kill of prog/');
+  assert.equal(num(path.join(c.prog, 'pids.current')), 0);
+  assert.equal(pidsIn(c.holderDir).length, 1, 'the scope holder outside prog/ is untouched');
 });
