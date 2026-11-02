@@ -1,0 +1,10 @@
+OK: no new disk event (newest 4566)
+OK: no new disk event (newest 4566)
+chunk int4-coarse-mid (bs 24 32 64 128): rc=0, 1244 s, json: E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json
+Traceback (most recent call last):
+ImportError: sys.meta_path is None, Python is likely shutting down
+Traceback (most recent call last):
+ImportError: sys.meta_path is None, Python is likely shutting down
+Traceback (most recent call last):
+ImportError: sys.meta_path is None, Python is likely shutting down
+OK: no new disk event (newest 4566)

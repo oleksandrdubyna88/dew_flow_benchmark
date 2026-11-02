@@ -1,0 +1,15 @@
+2026-11-01 22:48:56 NIGHT9 START, deadline 2026-11-02 07:15:00, coai-exp processes 0
+2026-11-01 22:48:58 settled: no test container, available RAM 33207 MB
+2026-11-01 22:48:58 quiet gate off (operator), load 1.90
+2026-11-02 00:18:23 speed_night9.log env PREFIXTEST=0 MODEL_DIR=/root/.cache/huggingface/local/Qwen3.8-27B-AWQ SERVED=qwen3.8-27b MAXSEQS=16 MAXLEN=16384 PREFILL_LENS=8192 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed27 q27old q27new rc=143
+failed tries: 1
+2026-11-02 00:18:25 settled: no test container, available RAM 30028 MB
+2026-11-02 00:18:25 quiet gate off (operator), load 15.58
+2026-11-02 00:24:04 speed_night9.log env PREFIXTEST=0 MODEL_DIR=/root/.cache/huggingface/local/Qwen3.8-27B-AWQ SERVED=qwen3.8-27b MAXSEQS=16 MAXLEN=16384 PREFILL_LENS=8192 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed27 q27old q27new rc=143
+failed tries: 2
+2026-11-02 00:24:04 STOP: 2 failed tries
+2026-11-02 00:24:04 NIGHT9 DONE (failed tries 2)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+4b38ae63433947c9438e9d2230832dff24ef7c7e074a83bec7cf7ed23966793d
+restore: started at 2026-11-02T00:24:06+01:00

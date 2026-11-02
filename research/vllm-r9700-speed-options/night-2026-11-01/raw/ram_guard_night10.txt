@@ -1,0 +1,10 @@
+00:47:27 available RAM 67396 MB
+00:53:09 available RAM 17432 MB
+00:58:56 available RAM 15164 MB
+01:04:40 available RAM 13261 MB
+01:10:23 available RAM 11891 MB
+01:16:07 available RAM 10646 MB
+01:21:51 available RAM 11986 MB
+01:27:36 available RAM 10806 MB
+01:33:21 available RAM 10810 MB
+01:39:06 available RAM 10937 MB

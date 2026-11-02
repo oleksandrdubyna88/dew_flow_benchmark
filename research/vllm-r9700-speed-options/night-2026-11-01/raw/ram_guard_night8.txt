@@ -1,0 +1,55 @@
+18:07:54 available RAM 53238 MB
+18:13:48 available RAM 4393 MB
+18:19:30 available RAM 4856 MB
+18:25:12 available RAM 6010 MB
+18:30:55 available RAM 7048 MB
+18:36:36 available RAM 5256 MB
+18:42:18 available RAM 6099 MB
+18:48:02 available RAM 3899 MB
+18:53:48 available RAM 4611 MB
+18:59:30 available RAM 4157 MB
+19:05:15 available RAM 4396 MB
+19:10:56 available RAM 4476 MB
+19:16:39 available RAM 5642 MB
+19:22:19 available RAM 33973 MB
+19:28:01 available RAM 5474 MB
+19:33:43 available RAM 5201 MB
+19:39:31 available RAM 4842 MB
+19:45:14 available RAM 30739 MB
+19:50:58 available RAM 4308 MB
+19:56:40 available RAM 3970 MB
+20:02:24 available RAM 28390 MB
+20:04:24 RAM GUARD: available 956 MB < 2048 MB, stopping tests
+20:04:42 available RAM 30148 MB
+20:09:53 RAM GUARD: available 1093 MB < 2048 MB, stopping tests
+20:10:15 available RAM 29411 MB
+20:16:03 available RAM 8008 MB
+20:16:22 RAM GUARD: available 16 MB < 2048 MB, stopping tests
+20:16:52 RAM GUARD: available 15 MB < 2048 MB, stopping tests
+20:17:08 available RAM 3588 MB
+20:22:55 available RAM 27034 MB
+20:28:39 available RAM 11455 MB
+20:34:24 available RAM 11006 MB
+20:40:07 available RAM 11241 MB
+20:45:49 available RAM 36438 MB
+20:51:32 available RAM 10882 MB
+20:57:15 available RAM 10471 MB
+21:02:56 available RAM 37041 MB
+21:08:42 available RAM 10348 MB
+21:14:24 available RAM 9376 MB
+21:20:07 available RAM 35321 MB
+21:25:48 available RAM 9009 MB
+21:31:34 available RAM 7532 MB
+21:37:19 available RAM 38651 MB
+21:43:00 available RAM 9015 MB
+21:48:46 available RAM 7978 MB
+21:54:31 available RAM 8016 MB
+22:00:17 available RAM 34613 MB
+22:06:01 available RAM 7917 MB
+22:11:46 available RAM 7364 MB
+22:17:29 available RAM 33889 MB
+22:23:13 available RAM 8634 MB
+22:28:56 available RAM 7506 MB
+22:32:11 available RAM 36498 MB
+22:36:29 RAM GUARD: available 195 MB < 2048 MB, stopping tests
+22:36:57 RAM GUARD: available 575 MB < 2048 MB, stopping tests

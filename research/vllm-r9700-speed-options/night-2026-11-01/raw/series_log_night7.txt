@@ -1,0 +1,39 @@
+OK: no new disk event (newest 4566)
+=== 2026-11-01 14:31:49 ra3 round 1 (WSL load 3.37 2.58 2.74): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3
+0c1a552a90b1275d4eb308ee6d2b53a72811b12153858f218cf48d3e736becb1
+READY (waited 330 s here)
+(APIServer pid=1) WARNING 11-01 13:33:15 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=201) INFO 11-01 13:33:58 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=201) INFO 11-01 13:37:13 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=201) INFO 11-01 13:37:15 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+(EngineCore pid=201) INFO 11-01 13:37:21 [kv_cache_utils.py:2032] GPU KV cache size: 228,901 tokens, Maximum concurrency for 131,072 tokens per request: 1.75x
+(EngineCore pid=201) WARNING 11-01 13:37:13 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=201) WARNING 11-01 13:37:16 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+(EngineCore pid=201) WARNING 11-01 13:37:29 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+restore: skipped once (planned restart)
+OK: no new disk event (newest 4566)
+NOT QUIET: ra3 round 1 (load 4.44, coai-exp 0)
+restore: skipped once (planned restart)
+OK: no new disk event (newest 4566)
+=== 2026-11-01 17:19:49 ra3 round 1 (WSL load 3.83 2.71 2.45): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3
+0d6e6e1e42df822f0eac1314168c969a8bb7d4aa25706e327ce3321539ce229e
+READY (waited 340 s here)
+(APIServer pid=1) WARNING 11-01 16:21:06 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=195) INFO 11-01 16:21:50 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=195) INFO 11-01 16:25:21 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=195) INFO 11-01 16:25:23 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+(EngineCore pid=195) INFO 11-01 16:25:28 [kv_cache_utils.py:2032] GPU KV cache size: 229,850 tokens, Maximum concurrency for 131,072 tokens per request: 1.75x
+(EngineCore pid=195) WARNING 11-01 16:25:22 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python
+(EngineCore pid=195) WARNING 11-01 16:25:24 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+(EngineCore pid=195) WARNING 11-01 16:25:34 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+ra3-1 c=1 r=1 Output token throughput (tok/s):         115.56    
+ra3-1 c=1 r=1 Mean TTFT (ms):                          216.27    
+ra3-1 c=1 r=1 Mean TPOT (ms):                          8.25      
+ra3-1 c=1 r=2 Output token throughput (tok/s):         129.09    
+ra3-1 c=1 r=2 Mean TTFT (ms):                          195.34    
+ra3-1 c=1 r=2 Mean TPOT (ms):                          7.38      
+ra3-1 c=1 r=3 Output token throughput (tok/s):         0.00      
+ra3-1 c=1 r=3 Mean TTFT (ms):                          0.00      
+ra3-1 c=1 r=3 Mean TPOT (ms):                          0.00      
+OCI runtime exec failed: exec failed: cannot exec in a stopped container: unknown
+restore: skipped once (planned restart)

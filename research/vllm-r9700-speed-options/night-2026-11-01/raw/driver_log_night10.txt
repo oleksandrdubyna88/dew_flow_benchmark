@@ -1,0 +1,10 @@
+2026-11-02 00:47:18 NIGHT10 START, deadline 2026-11-02 07:15:00, coai-exp processes 0
+2026-11-02 00:47:24 settled: no test container, available RAM 66094 MB
+2026-11-02 00:47:24 quiet gate off (operator), load 14.59
+2026-11-02 01:41:14 speed_night10.log env PREFIXTEST=0 MODEL_DIR=/root/.cache/huggingface/local/Qwen3.8-27B-AWQ SERVED=qwen3.8-27b MAXSEQS=16 MAXLEN=16384 PREFILL_LENS=8192 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed27 q27old q27new rc=0
+2026-11-02 01:41:14 SERIES speed27 DONE
+2026-11-02 01:41:14 NIGHT10 DONE (failed tries 0)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+410cf4e5983b0a1b0d5b5a1b07e199edce9e254ca95b3ecf7622e68977e02802
+restore: started at 2026-11-02T01:41:16+01:00

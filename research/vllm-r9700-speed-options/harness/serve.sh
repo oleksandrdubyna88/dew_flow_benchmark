@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # serve.sh <name> <variant A|B|C|none> <log> [-e VAR=val ...] -- [extra vllm serve args]
 # Starts a detached test server (--rm), waits until /v1/models answers (max 20 min), saves its log.
+# MODEL_DIR, SERVED, MAXSEQS (2026-11-01) select another model; the defaults are the 35B production model.
 set -u
 name="$1" variant="$2" log="$3"; shift 3
 envs=(); while [ $# -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift || true
@@ -15,7 +16,7 @@ if [ "$variant" != none ]; then
 fi
 "$W" run -d --rm --name "$name" --gpus all --shm-size 16g -e HIP_VISIBLE_DEVICES=0 -e TRITON_CACHE_DIR=/root/.cache/vllm/triton \
   -e PYTHONPYCACHEPREFIX=/tmp/pyc-fresh -e PYTHONDONTWRITEBYTECODE=1 "${envs[@]}" "${mounts[@]}" "$IMG" \
-  vllm serve /root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ --served-model-name qwen3.6-35b-a3b \
-  --host 0.0.0.0 --port 8000 --max-model-len ${MAXLEN:-8192} --gpu-memory-utilization 0.85 --max-num-seqs 4 \
+  vllm serve "${MODEL_DIR:-/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ}" --served-model-name "${SERVED:-qwen3.6-35b-a3b}" \
+  --host 0.0.0.0 --port 8000 --max-model-len ${MAXLEN:-8192} --gpu-memory-utilization 0.85 --max-num-seqs "${MAXSEQS:-4}" \
   --limit-mm-per-prompt.image 0 --limit-mm-per-prompt.video 0 "$@" 2>&1 | tr -d '\r' | tail -2
 exec "$(dirname "$0")/wait_ready.sh" "$name" "$log"

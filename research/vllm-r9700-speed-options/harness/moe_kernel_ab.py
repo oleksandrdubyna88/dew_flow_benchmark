@@ -1,4 +1,5 @@
 """moe_kernel_ab.py <outdir>: median kernel time per batch size and arm from moe_kernel_ab.sh logs, and the decision."""
+import os
 import pathlib
 import re
 import statistics
@@ -20,7 +21,14 @@ for bs in sorted(times["default"]):
     gain[bs] = (t - d) / d * 100
     print(f"{bs:>2}  {d:10.2f}  {t:8.2f}  {gain[bs]:+6.1f} %   n={len(times['default'][bs])}/{len(times['tuned'].get(bs, []))}")
 for arm in configs:
-    for bs in (1, 4):
+    for bs in sorted(configs[arm]):
         print(f"{arm} bs {bs} config: {configs[arm].get(bs)}")
-ok = all(gain.get(bs, 0) < -3 for bs in (1, 4))
-print(f"B1 KERNEL: {'faster' if ok else 'not faster'}")
+if os.environ.get("AB_RULE", "b1") == "b2":
+    # Phase B2 rule (written before the run, 2026-11-01): keep the file when the median change over the new keys
+    # 24, 32, 64, 128 is below -3 % and no tested batch size is slower by more than 3 %.
+    new = statistics.median(gain[bs] for bs in (24, 32, 64, 128))
+    ok = new < -3 and all(g <= 3 for g in gain.values())
+    print(f"B2 KERNEL: {'faster' if ok else 'not faster'} (median change at 24/32/64/128: {new:+.1f} %)")
+else:
+    ok = all(gain.get(bs, 0) < -3 for bs in (1, 4))
+    print(f"B1 KERNEL: {'faster' if ok else 'not faster'}")

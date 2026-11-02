@@ -1,0 +1,23 @@
+--- rocm_attn.orig.py	2026-11-01 11:45:22.674535714 +0100
++++ rocm_attn.patched.py	2026-11-01 22:35:24.031986178 +0100
+@@ -38,6 +38,7 @@
+ from vllm.v1.kv_cache_interface import AttentionSpec, KVCacheLayout
+ 
+ logger = init_logger(__name__)
++print("speed-options: ROCM_ATTN fused-draft opt-in patch active", flush=True)
+ 
+ 
+ @dataclass
+@@ -75,6 +76,12 @@
+ 
+ class RocmAttentionMetadataBuilder(AttentionMetadataBuilder[RocmAttentionMetadata]):
+     _cudagraph_support: ClassVar[AttentionCGSupport] = AttentionCGSupport.ALWAYS
++    # LOCAL CHANGE (vllm_pr_work, 2026-11-01, test of the opt-in that vLLM PR #63096 gives
++    # ROCM_AITER_UNIFIED_ATTN): step-dependent fields reference persistent input buffers directly.
++    supports_draft_decode_metadata_update = True
++
++    def update_draft_decode_metadata(self, _metadata: RocmAttentionMetadata) -> None:
++        pass
+ 
+     def __init__(
+         self,
