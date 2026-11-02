@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { agentEnv, sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
-import { ALLOW_LIST, allowFor, assertNoCaseKeys, BASE_ENV, boxEnv, caseKeysIn, driverEnv, heapKeys, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
+import { ALLOW_LIST, allowFor, assertNoCaseKeys, BASE_ENV, boxEnv, CASE_KEYS, caseKeysIn, driverEnv, heapKeys, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { chain, needs, SPAWN_ENV, start } from './support/exec-chain.mjs';
 import { toolchains } from './support/exec-layer-host.mjs';
 import { owned } from './support/owned.mjs';
@@ -163,4 +163,17 @@ test('The_box_environment_of_each_stack_carries_ninety_percent_of_the_limit_at_2
     assert.equal('DOTNET_GCHeapHardLimit' in node, false, `Node at ${mib} MiB`);
     assert.equal(node.NODE_OPTIONS, `--max-old-space-size=${oldSpace}`, `Node at ${mib} MiB`);
   }
+});
+
+// V4 (fix batch 3): one source of truth — `CASE_KEYS` lists every key the guard matches.
+test('CASE_KEYS_lists_every_key_the_guard_matches_and_the_guard_matches_every_listed_key', () => {
+  assert.deepEqual([...CASE_KEYS].sort(), ['COMPlus_GCHeapHardLimit', 'COMPlus_GCHeapHardLimitPercent', 'DOTNET_GCHeapHardLimit', 'DOTNET_GCHeapHardLimitPercent', 'NODE_OPTIONS']);
+  for (const key of CASE_KEYS) {
+    const value = key === 'NODE_OPTIONS' ? '--max-old-space-size=1' : '0x10';
+    assert.deepEqual(caseKeysIn({ [key]: value }), [key], `${key} is caught`);
+    assert.deepEqual(caseKeysIn({ [key.toLowerCase()]: value }), [key.toLowerCase()], `${key} in lower case is caught`);
+    assert.throws(() => boxEnv({ dirs, extra: { [key]: value } }), new RegExp(key, 'i'), `${key} is refused as a box extra`);
+  }
+  for (const key of ['DOTNET_gcServer', 'DOTNET_GCgen0size', 'COMPlus_gcServer', 'NODE_ENV']) assert.deepEqual(caseKeysIn({ [key]: '1' }), [], `${key} is no case key`);
+  assert.deepEqual(caseKeysIn({ NODE_OPTIONS: '--trace-warnings' }), [], 'NODE_OPTIONS without the old-space flag is not a case key');
 });

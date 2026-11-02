@@ -78,7 +78,7 @@ function refusedKeys(extra) {
  * case or spelling is refused naming the base key (a program reads `lc_all` as it reads `LC_ALL`).
  */
 export function boxEnv({ dirs, extra = {}, stack, memoryMaxBytes }) {
-  const refused = [...new Set([...refusedKeys(extra), ...Object.keys(extra).filter(key => HEAP_LIMIT_KEY.test(key))])];
+  const refused = [...new Set([...refusedKeys(extra), ...Object.keys(extra).filter(isHeapLimitKey)])];
   if (refused.length > 0) throw new Error(`boxEnv: ${refused.join(', ')} ${refused.length === 1 ? 'is' : 'are'} in the base environment (D15) and not an extra's to replace; only TZ may be replaced`);
   return Object.freeze({ ...BASE_ENV, DOTNET_ROOT: dirs.dotnetSdk, PATH: boxPath(dirs), ...heapKeys(stack, memoryMaxBytes), ...extra });
 }
@@ -95,13 +95,15 @@ export function driverEnv({ dirs, tmp, runtimeDir = `/run/user/${process.getuid(
 }
 
 /** The per-case keys of D55: the scoring box's alone (T-L14). The .NET key is matched with its `COMPlus_` spelling and its percent form, in any case: all of them size the GC's heap. `NODE_OPTIONS` is a case key only when it carries the old-space flag; the base's empty `NODE_OPTIONS` is not. */
-export const CASE_KEYS = Object.freeze(['DOTNET_GCHeapHardLimit', 'NODE_OPTIONS']);
-const HEAP_LIMIT_KEY = /^(dotnet|complus)_gcheaphardlimit(percent)?$/i;
+export const CASE_KEYS = Object.freeze(['DOTNET_GCHeapHardLimit', 'COMPlus_GCHeapHardLimit', 'DOTNET_GCHeapHardLimitPercent', 'COMPlus_GCHeapHardLimitPercent', 'NODE_OPTIONS']);
+const HEAP_LIMIT_KEYS = new Set(CASE_KEYS.filter(key => key !== 'NODE_OPTIONS').map(key => key.toLowerCase()));
+/** The one place a heap-limit key is recognised: the list above, compared without regard to case (`NODE_OPTIONS` is a case key only with the old-space flag, below). */
+const isHeapLimitKey = key => HEAP_LIMIT_KEYS.has(key.toLowerCase());
 const OLD_SPACE_FLAG = /(^|\s)--max[-_]old[-_]space[-_]size\b/;
 
 /** The case keys an environment holds, compared without regard to case. Empty for the agent box and the build box. */
 export function caseKeysIn(env) {
-  return Object.keys(env).filter(key => (HEAP_LIMIT_KEY.test(key) && env[key] !== undefined) || (lower(key) === 'node_options' && OLD_SPACE_FLAG.test(String(env[key]))));
+  return Object.keys(env).filter(key => (isHeapLimitKey(key) && env[key] !== undefined) || (lower(key) === 'node_options' && OLD_SPACE_FLAG.test(String(env[key]))));
 }
 
 /** Throws naming the keys when `env` — the agent box's or the build box's — holds a per-case heap key (T-L14). */

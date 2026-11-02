@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNextRecord, reserveRecord } from '../lib/exec-probe/record-path.mjs';
+import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNextRecord, reserveRecord, RESERVE_ATTEMPTS } from '../lib/exec-probe/record-path.mjs';
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { printable } from '../lib/exec-probe/printable.mjs';
 import { writeRecord } from '../lib/exec-probe/probe.mjs';
@@ -117,8 +117,10 @@ test('Two_probes_started_together_never_both_probe_toward_one_path_the_second_is
 // P2: a control character from a path or a program must not reach the terminal raw.
 test('Progress_and_refusal_text_carries_no_control_character_ESC_and_CR_included', t => {
   assert.equal(printable('ok'), 'ok');
-  assert.equal(printable('a\u001b[31mred\rb\u009bX\u0000Y\u007fZ\u2028'), 'a[31mredbXYZ');
-  assert.equal(printable('tab\there\nline'), 'tabhereline', 'tab and newline too: a line is one line');
+  assert.equal(printable('a\u001b[31mred\rb\u009bX\u0000Y\u007fZ\u2028'), 'a[31mred\\rbXYZ');
+  assert.equal(printable('tab\there\nline'), 'tab\\there\\nline', 'V6: \\t, \\n and \\r become visible escapes: no raw CR can overwrite a line and no fake line can be forged');
+  assert.equal(printable('a\r\nb\rc'), 'a\\r\\nb\\rc');
+  assert.doesNotMatch(printable('x\r\ny\tz\u001b[2K'), /[\u0000-\u001f]/, 'nothing raw is left');
   assert.equal(printable('héllo ✓ 日本'), 'héllo ✓ 日本', 'printable text is kept');
   const dir = owned.ownedDir(t, 'escpath');
   const evil = path.join(dir, 'rec\u001b[2J\rFAKE.json');
@@ -127,4 +129,95 @@ test('Progress_and_refusal_text_carries_no_control_character_ESC_and_CR_included
   assert.equal(ran.status, 3);
   assert.doesNotMatch(ran.stderr, /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/, 'no control character in the refusal');
   assert.match(ran.stderr, /FAKE\.json/, 'the visible text of the path is kept');
+});
+
+// V2 (fix batch 3): a reservation makes its folder; a path that cannot be created is a clear error, never an uncaught ENOENT.
+test('A_reservation_creates_its_missing_folder_and_a_path_that_cannot_be_made_is_a_clear_error', t => {
+  const dir = owned.ownedDir(t, 'reservedir');
+  const deep = path.join(dir, 'a', 'b', 'exec-probe-2026-11-08.json');
+  const held = reserveRecord(deep);
+  assert.equal(statSync(deep).size, 0, 'the folders were made and the placeholder holds the path');
+  releaseRecord(held);
+  const next = reserveNextRecord({ inputsDir: path.join(dir, 'inputs-not-yet'), date: '2026-11-08' });
+  assert.equal(path.basename(next.file), 'exec-probe-2026-11-08.json', 'reserveNextRecord makes sure inputsDir exists');
+  const blocker = path.join(dir, 'file');
+  writeFileSync(blocker, 'x');
+  assert.throws(() => reserveRecord(path.join(blocker, 'sub', 'r.json')), error => error.exitCode === 4 && error.message.includes(path.join(blocker, 'sub', 'r.json')), 'a path that cannot be created names the path and carries exit 4');
+});
+
+test('A_probe_pointed_at_a_missing_folder_reserves_it_and_a_path_that_cannot_be_made_is_exit_4_with_the_path', t => {
+  const dir = owned.ownedDir(t, 'clidir');
+  const stale = path.join(dir, 'exec-layer.json');
+  writeFileSync(stale, JSON.stringify({ execLayer: { treeSha256: '0'.repeat(64), files: [] } }));
+  const missing = path.join(dir, 'not', 'yet', 'r.json');
+  const ran = spawnSync(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', missing, '--pinned-identity', stale, '--no-specs'], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(ran.status, 3, `the reservation worked, then the stale pin refused: ${ran.stderr}`);
+  assert.match(ran.stderr, /layer-identity-mismatch/);
+  assert.equal(existsSync(missing), false, 'and the empty placeholder was released');
+  const blocker = path.join(dir, 'file');
+  writeFileSync(blocker, 'x');
+  const blocked = spawnSync(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', path.join(blocker, 'r.json'), '--no-specs'], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(blocked.status, 4, blocked.stderr);
+  assert.match(blocked.stderr, /file\/r\.json/);
+  assert.doesNotMatch(blocked.stderr, /at .*\.mjs:\d+|ENOENT: no such file/, 'a clear message, no stack');
+});
+
+// V3: reserveNextRecord keeps its own index and a bound.
+test('reserveNextRecord_keeps_its_own_increasing_index_and_ends_with_an_error_not_a_hang', { timeout: 10_000 }, () => {
+  const tried = [];
+  const always = file => { tried.push(path.basename(file)); throw new RecordExists(file); };
+  assert.throws(() => reserveNextRecord({ inputsDir: '/i', date: '2026-11-09', reserve: always }), new RegExp(`${RESERVE_ATTEMPTS} .*exec-probe-2026-11-09`), 'a clear error naming the attempts and the date');
+  assert.equal(tried.length, RESERVE_ATTEMPTS, 'bounded');
+  assert.deepEqual(tried.slice(0, 3), ['exec-probe-2026-11-09.json', 'exec-probe-2026-11-09-2.json', 'exec-probe-2026-11-09-3.json'], 'the index rises on every refusal');
+  assert.equal(new Set(tried).size, tried.length, 'never the same name twice: no re-ask from 1');
+  assert.ok(RESERVE_ATTEMPTS <= 1000);
+  let calls = 0;
+  const thirdFree = file => { calls += 1; if (calls < 3) throw new RecordExists(file); return { file }; };
+  assert.equal(path.basename(reserveNextRecord({ inputsDir: '/i', date: '2026-11-09', reserve: thirdFree }).file), 'exec-probe-2026-11-09-3.json');
+});
+
+// V1: every later failure releases an unwritten placeholder.
+test('A_malformed_runner_pin_or_a_failing_start_leaves_no_empty_record_file', t => {
+  const dir = owned.ownedDir(t, 'v1');
+  const pin = path.join(dir, 'exec-layer.json');
+  writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  const bad = path.join(dir, 'runner.json');
+  writeFileSync(bad, '{ not json');
+  for (const [name, extra] of [['a malformed runner pin', ['--runner-pin', bad]], ['a missing runner pin', ['--runner-pin', path.join(dir, 'absent.json')]]]) {
+    const out = path.join(dir, `${name.replace(/ /g, '-')}.json`);
+    const ran = spawnSync(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, ...extra, '--no-specs'], { encoding: 'utf8', timeout: 30_000 });
+    assert.notEqual(ran.status, 0, name);
+    assert.ok([2, 3].includes(ran.status), `${name}: a clean exit status, ${ran.status}: ${ran.stderr}`);
+    assert.doesNotMatch(ran.stderr, /at .*\.mjs:\d+/, `${name}: no stack`);
+    assert.equal(existsSync(out), false, `${name}: no empty record is left`);
+  }
+});
+
+// V5: a probe sent SIGTERM mid-run cleans up what it started before it exits.
+test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_holder_or_view_behind', async t => {
+  if (!needs(t)) return;
+  const dir = owned.ownedDir(t, 'v5');
+  const out = path.join(dir, 'record.json');
+  const pin = path.join(dir, 'exec-layer.json');
+  writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  const mine = () => {
+    const units = spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => /^testsToDelete-.*-bench-/.test(name));
+    const procs = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => /^testsToDelete-.*-bench-/.test(name));
+    return new Set([...units, ...procs]);
+  };
+  const before = mine();
+  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  t.after(() => child.kill('SIGKILL'));
+  let stderr = '';
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  const deadline = Date.now() + 120_000;
+  while (!/bind list: start/.test(stderr) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.match(stderr, /network: start/, 'the probe is mid-run: its probe run (holder, scope, views) is open');
+  const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  child.kill('SIGTERM');
+  const ended = await closed;
+  assert.equal(ended.code, 143, `exit 143 after the cleanup (${JSON.stringify(ended)}): ${stderr.slice(-300)}`);
+  assert.equal(existsSync(out), false, 'the placeholder is released');
+  const left = [...mine()].filter(name => !before.has(name));
+  assert.deepEqual(left, [], 'no scope, holder or helper process of this probe is left');
 });

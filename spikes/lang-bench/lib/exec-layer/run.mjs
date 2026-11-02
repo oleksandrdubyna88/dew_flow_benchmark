@@ -15,7 +15,7 @@ import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { makeViews } from './case-view.mjs';
 import { certifyMemory, HALT } from './certify.mjs';
-import { cleanup, sweepStale } from './cleanup.mjs';
+import { cleanup, registerRun, sweepStale } from './cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './identity.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
 import { HALT_POLICY, MEMORY_POLICY, policyVerdict } from './policy.mjs';
@@ -126,6 +126,7 @@ export async function openRun(options) {
   let opened;
   try {
     run = newRun(options, findTools());
+    registerRun(run);
     opened = await openSteps(run);
   } catch (error) {
     opened = fail(`the run could not be opened: ${error.message}`);

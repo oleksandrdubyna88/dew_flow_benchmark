@@ -2,18 +2,20 @@
 // The host probe of the execution layer (E1.S8b), run THROUGH the layer: the real prefix, the delegated scope, the v2 box. It records every line of the plan's probe list and the memory view
 // at 256 and 512 MiB, then exits 3 naming the first failed line (or `memory-policy-undecided` / `memory-view-mismatch` / `memory-not-certifiable`).
 //
-//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--no-specs]
+//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--runner-pin <file>] [--no-specs]
 //
 // The record goes to inputs/exec-probe-<YYYY-MM-DD>[-<n>].json (the date, the host, the layer identity, allow-listed environment keys only); the first of a day has no suffix, a second run is `-2`, a
 // third `-3`. A record is NEVER overwritten (T-L53, parent D59), and its path is RESERVED before the probe starts (an empty placeholder, created exclusively): a --out path that exists or is held by another
 // probe is refused with exit 3 before anything is probed, and a probe that fails or is stopped removes its empty placeholder. The record's `layerIdentity` is COMPUTED from the tree that ran; a tree that is not
 // the pinned identity (`--pinned-identity` names another pin file) is exit 3 `layer-identity-mismatch`, before probing. The record names the runner's version and manifest. Text that reaches the terminal carries
-// no control character.
+// no control character (`\n`, `\r` and `\t` are shown as escapes). Every failure after the reservation, a SIGINT and a SIGTERM release an unwritten placeholder; a signal also ends every run the probe opened
+// (the scopes, the holder, the views) before it exits 130 or 143. Exit 4: the record path cannot be created.
 // A probe that exited 0 also writes `probedOn` and `host` into the layer's identity file (inputs/specs.d/exec-layer.json) and re-assembles inputs/specs.json (not with --no-specs).
 import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cleanupLiveRuns } from './lib/exec-layer/cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './lib/exec-layer/identity.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { computePin, verifyPin } from './lib/runner-pin.mjs';
@@ -48,7 +50,7 @@ function reservation() {
     return option('--out') === undefined ? reserveNextRecord({ inputsDir, date: new Date().toISOString().slice(0, 10) }) : reserveRecord(option('--out'));
   } catch (error) {
     if (error instanceof RecordExists) return stop(3, error.message);
-    throw error;
+    return stop(error.exitCode ?? 2, error.message);
   }
 }
 
@@ -68,7 +70,7 @@ function identities() {
   if (treeSha256 !== pinnedIdentity()) return refuse(3, `layer-identity-mismatch: the layer's tree ${treeSha256} is not the pinned identity: pin it (pin-exec-layer.mjs) before a probe, so the record names a pinned layer`);
   const runnerDir = path.join(spike, 'runner');
   const pin = computePin(runnerDir);
-  const committed = JSON.parse(readFileSync(path.join(spike, 'inputs', 'specs.d', 'runner.json'), 'utf8'));
+  const committed = JSON.parse(readFileSync(option('--runner-pin') ?? path.join(spike, 'inputs', 'specs.d', 'runner.json'), 'utf8'));
   const verdict = pin.ok ? verifyPin(runnerDir, committed) : pin;
   if (!verdict.ok) return refuse(3, `runner-pin-mismatch: ${verdict.reason}`);
   return { identity: treeSha256, runner: { version: pin.value.runner.version, manifestSha256: pin.value.runner.manifestSha256 } };
@@ -98,17 +100,36 @@ function report(record, out) {
   if (record.exit.halt !== null) say(process.stderr, `exec-probe: ${record.exit.halt}`);
 }
 
+let scope = null;
+const bounded = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms).unref())]);
+
+/** The cleanup of everything the probe started (V5): the placeholder, every open run (scopes, holder, views), the owned folders — each bounded, so a stuck step cannot hold the exit forever. */
+async function cleanEverything() {
+  release();
+  await bounded(cleanupLiveRuns(), 20_000);
+  if (scope !== null) await bounded(scope.close(), 5_000);
+}
+
+let stopping = false;
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  process.on(signal, () => {
+    if (stopping) return;
+    stopping = true;
+    cleanEverything().finally(() => process.exit(code));
+  });
+}
+process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder
+
 held = reservation();
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { release(); process.exit(128 + (signal === 'SIGINT' ? 2 : 15)); });
-const { identity, runner } = identities();
-const stacks = loadStacksLang(JSON.parse(readFileSync(path.join(spike, 'inputs', 'stacks-lang.json'), 'utf8')));
-if (!stacks.ok) refuse(2, stacks.reason);
-const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
-const helper = await ownedHelper();
-const owned = helper.ownedFor({ token: 'bench' });
-const scope = owned.cleanupScope();
 let code = 2;
 try {
+  const { identity, runner } = identities();
+  const stacks = loadStacksLang(JSON.parse(readFileSync(path.join(spike, 'inputs', 'stacks-lang.json'), 'utf8')));
+  if (!stacks.ok) refuse(2, stacks.reason);
+  const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
+  const helper = await ownedHelper();
+  const owned = helper.ownedFor({ token: 'bench' });
+  scope = owned.cleanupScope();
   const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity, runner, progress: text => say(process.stderr, `exec-probe: ${text}`) });
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
@@ -118,8 +139,10 @@ try {
   report(record, out);
   if (!args.includes('--no-specs') && shouldStampProbedOn(record)) recordProbedOn(record);
   code = record.exit.code;
+} catch (error) {
+  say(process.stderr, `exec-probe: failed: ${error.message}`);
+  code = 2;
 } finally {
-  release();
-  await scope.close();
+  await cleanEverything();
 }
 process.exit(code);

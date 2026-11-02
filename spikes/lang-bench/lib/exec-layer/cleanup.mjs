@@ -74,11 +74,24 @@ async function dropRun(run) {
   return existsSync(run.dir) ? { removed: [], left: [entry('run', path.basename(run.dir), { reason: 'the run folder could not be removed; it stays claimed for the next sweep' })] } : { removed: [entry('run', path.basename(run.dir))], left: [] };
 }
 
+const liveRuns = new Set();
+
+/** Remember an open run so a stopping process can end every run it started (V5): `cleanup` forgets it. */
+export function registerRun(run) {
+  liveRuns.add(run);
+}
+
+/** End every run this process opened and has not cleaned up yet (a SIGTERM mid-probe): the driver, the scopes, the holder, the views and the run folder of each. Never throws. */
+export async function cleanupLiveRuns(options) {
+  return Promise.all([...liveRuns].map(run => cleanup(run, options).catch(() => null)));
+}
+
 /**
  * End everything of `run` (`{ owned, dir, id, unitPrefix, holderName, scope }`): `{ evidence, removed, left, clean }`. `clean` is true when nothing is left. Idempotent: a second call finds nothing.
  * `evidence` is, per scope unit, what `prog/` said live before the kill.
  */
 export async function cleanup(run, { graceMs = 2000 } = {}) {
+  liveRuns.delete(run);
   const evidence = {};
   const steps = [
     ['driver', () => endMatching('driver', isDriverOf(run.dir), graceMs, endProcessGroup)],
