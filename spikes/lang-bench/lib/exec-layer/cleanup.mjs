@@ -75,15 +75,28 @@ async function dropRun(run) {
 }
 
 const liveRuns = new Set();
+let stopped = false; // set once `cleanupLiveRuns` starts: the probe's flow goes on while it cleans, and a run it opened after the snapshot would never be ended
+const LATE_PASSES = 3;
+const LATE_PASS_GAP_MS = 300;
 
 /** Remember an open run so a stopping process can end every run it started (V5): `cleanup` forgets it. */
 export function registerRun(run) {
+  if (stopped) throw new Error('this process is stopping: no new run is opened');
   liveRuns.add(run);
 }
 
 /** End every run this process opened and has not cleaned up yet (a SIGTERM mid-probe): the driver, the scopes, the holder, the views and the run folder of each. Never throws. */
 export async function cleanupLiveRuns(options) {
-  return Promise.all([...liveRuns].map(run => cleanup(run, options).catch(() => null)));
+  stopped = true;
+  const runs = [...liveRuns];
+  const end = () => Promise.all(runs.map(run => cleanup(run, options).catch(() => null)));
+  await end();
+  await Promise.all(runs.map(run => run.opening ?? null)); // a run still being opened may have started its holder after the first pass: wait for it, then end it too
+  for (let pass = 0; pass < LATE_PASSES; pass += 1) {
+    await sleep(LATE_PASS_GAP_MS); // work already under way (a launch check, a scope being started) can still create a unit after the first pass: the later passes end it, by the run's own names
+    await end();
+  }
+  return end();
 }
 
 /**

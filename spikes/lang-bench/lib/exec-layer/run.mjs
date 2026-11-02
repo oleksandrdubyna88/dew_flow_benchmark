@@ -127,7 +127,9 @@ export async function openRun(options) {
   try {
     run = newRun(options, findTools());
     registerRun(run);
-    opened = await openSteps(run);
+    const opening = openSteps(run);
+    run.opening = opening.catch(() => null); // `cleanupLiveRuns` waits for it (V5)
+    opened = await opening;
   } catch (error) {
     opened = fail(`the run could not be opened: ${error.message}`);
   }

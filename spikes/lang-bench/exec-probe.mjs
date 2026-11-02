@@ -2,7 +2,7 @@
 // The host probe of the execution layer (E1.S8b), run THROUGH the layer: the real prefix, the delegated scope, the v2 box. It records every line of the plan's probe list and the memory view
 // at 256 and 512 MiB, then exits 3 naming the first failed line (or `memory-policy-undecided` / `memory-view-mismatch` / `memory-not-certifiable`).
 //
-//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--runner-pin <file>] [--no-specs]
+//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--runner-pin <file>] [--owned-token <t>] [--no-specs]
 //
 // The record goes to inputs/exec-probe-<YYYY-MM-DD>[-<n>].json (the date, the host, the layer identity, allow-listed environment keys only); the first of a day has no suffix, a second run is `-2`, a
 // third `-3`. A record is NEVER overwritten (T-L53, parent D59), and its path is RESERVED before the probe starts (an empty placeholder, created exclusively): a --out path that exists or is held by another
@@ -128,9 +128,10 @@ try {
   if (!stacks.ok) refuse(2, stacks.reason);
   const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
   const helper = await ownedHelper();
-  const owned = helper.ownedFor({ token: 'bench' });
+  const owned = helper.ownedFor({ token: option('--owned-token') ?? 'bench' });
   scope = owned.cleanupScope();
   const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity, runner, progress: text => say(process.stderr, `exec-probe: ${text}`) });
+  if (stopping) await new Promise(() => {}); // a stopped probe writes nothing: the signal's own cleanup ends the process with 130 or 143
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
   const out = held.file;

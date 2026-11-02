@@ -200,19 +200,21 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
   const out = path.join(dir, 'record.json');
   const pin = path.join(dir, 'exec-layer.json');
   writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  const TOKEN = 'benchsig'; // this probe's own owned token: other test files run beside this one and own `bench` units; only this probe's names are looked at
   const mine = () => {
-    const units = spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => /^testsToDelete-.*-bench-/.test(name));
-    const procs = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => /^testsToDelete-.*-bench-/.test(name));
+    const units = spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => new RegExp(`^testsToDelete-.*-${TOKEN}-`).test(name));
+    const procs = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => new RegExp(`^testsToDelete-.*-${TOKEN}-`).test(name));
     return new Set([...units, ...procs]);
   };
   const before = mine();
-  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--owned-token', TOKEN, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   t.after(() => child.kill('SIGKILL'));
   let stderr = '';
   child.stderr.on('data', chunk => { stderr += chunk; });
   const deadline = Date.now() + 120_000;
   while (!/bind list: start/.test(stderr) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
   assert.match(stderr, /network: start/, 'the probe is mid-run: its probe run (holder, scope, views) is open');
+  assert.ok([...mine()].some(name => !before.has(name)), 'the probe\'s own units exist mid-run (the check below is not vacuous)');
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   child.kill('SIGTERM');
   const ended = await closed;
