@@ -722,7 +722,7 @@ on S8b's branch before its merge and re-pins the runner (A's manifest); part ii-
 - **`abort-below-evidence`.** An abort with the line, exit 134 and a peak below the threshold is `runtime error` and carries
   `lifecycle.memory.abortBelowEvidence: true` with the line, the status and the peak; the report counts it per stack; the case goes
   to the blind adjudication like every failing case. A line with exit 1, or exit 134 with another message, is `runtime error`
-  without the flag (as today).
+  without the `abort-below-evidence` flag (as today); a child's abort line under any non-zero exit other than 134 still carries `child-abort-line` (D56).
 - **`child-abort-line`.** When the program exits 0 and a runtime's abort line stands in the stderr file (a child runtime aborted
   and the parent went on), the case is judged on its output — pass or fail — and carries `lifecycle.memory.childAbortLine: true`;
   it is never `memory limit` by the abort rule, because the status and the line the rule reads are the program's; a kernel kill
