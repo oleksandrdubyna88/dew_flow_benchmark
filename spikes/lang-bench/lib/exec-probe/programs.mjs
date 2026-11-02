@@ -9,6 +9,7 @@ import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { boxArgv } from '../exec-layer/box.mjs';
 import { boxEnv } from '../exec-layer/env.mjs';
+import { factsScript } from './facts.mjs';
 
 const PROGRAMS = fileURLToPath(new URL('./programs/', import.meta.url));
 const BUILD_MS = 180_000;
@@ -34,5 +35,18 @@ export function programTree({ owned, scope, stack, mode, csharpBuild }) {
   else cpSync(path.join(PROGRAMS, 'node', 'mem.mjs'), path.join(tree, 'mem.mjs'));
   writeFileSync(path.join(tree, 'run.sh'), `#!/bin/bash\n${COMMAND[stack](mode)}\n`);
   chmodSync(path.join(tree, 'run.sh'), 0o755);
+  return tree;
+}
+
+/**
+ * The probe's own tree: the facts script (with the `$HOME` sentinel path), the loopback server, the workload of line (f) and both stacks' programs. One tree, one view per probe case;
+ * the case's program is whatever argv the probe launches.
+ */
+export function probeTree({ owned, scope, sentinel, csharpBuild }) {
+  const tree = owned.ownedDir(scope, 'probetree');
+  cpSync(path.join(PROGRAMS, 'python'), tree, { recursive: true });
+  cpSync(path.join(PROGRAMS, 'node', 'mem.mjs'), path.join(tree, 'mem.mjs'));
+  cpSync(path.join(csharpBuild, 'bin'), path.join(tree, 'bin'), { recursive: true });
+  writeFileSync(path.join(tree, 'facts.sh'), factsScript(sentinel));
   return tree;
 }
