@@ -122,7 +122,7 @@
       },
       {
         "path": "rs_cgroup.py",
-        "sha256": "29b3f508215a6e59e0c133f6953107017f7f51b07867c36b2d9d09022ba3baa5"
+        "sha256": "0083ef3bee22ded8cf6aae3155451f8a992ae129d0d31a682e4e5c3e627ddb06"
       },
       {
         "path": "rs_check.py",
@@ -186,7 +186,7 @@
       },
       {
         "path": "rs_report.py",
-        "sha256": "0735f7d3ed486429f3a6ac36e1a255a14993cccd9c70955d4fc29c89d89bc4af"
+        "sha256": "c8fac4b86e4afc7f783eab8a6f60b697079903a178501df47e8895e053e584e9"
       },
       {
         "path": "rs_samples.py",
@@ -225,7 +225,7 @@
         "sha256": "f6e2d47d7c40acd58b43b1251f1855b18f80a687d96fcce19269f5bb8438d845"
       }
     ],
-    "manifestSha256": "7b0781c17fdba4884b01486501d20a17bdd4e9c7087fa66a6bb67159d081b8a0",
-    "version": "0.2.3"
+    "manifestSha256": "df118665ee6894f7d22e0b292e0fec99d2b3eb930c06e933b93f06d38c833d68",
+    "version": "0.2.4"
   }
 }

@@ -63,8 +63,16 @@ def _children_of(directory):
     return [os.path.join(directory, name) for name in _listing(directory) if os.path.exists(os.path.join(directory, name, "cgroup.procs"))]
 
 
+def _below_one(sub):
+    """The pids of one descendant: [] when it vanished since it was listed, OSError when it is there and cannot be read (unreadable is never empty)."""
+    found = procs_tree(sub)
+    if found is None and _file_id(os.path.join(sub, "cgroup.procs")) is not None:
+        raise OSError(f"{sub}: cgroup.procs cannot be read")
+    return found or []
+
+
 def _below(directory):
-    return [pid for sub in _children_of(directory) for pid in procs_tree(sub) or []]
+    return [pid for sub in _children_of(directory) for pid in _below_one(sub)]
 
 
 def procs_tree(directory):

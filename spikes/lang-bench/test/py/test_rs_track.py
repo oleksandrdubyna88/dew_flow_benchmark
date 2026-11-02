@@ -181,6 +181,21 @@ class DescendantTests(unittest.TestCase):
         with mock.patch.object(cg.os, "listdir", side_effect=OSError(errno.ENODEV, "gone")):
             self.assertEqual(cg.procs_tree(folder), [1, 2], "a dying cgroup (ENODEV) has no descendants")
 
+    def test_An_unreadable_child_cgroup_makes_the_whole_tree_unreadable_and_a_vanished_child_stays_empty(self):
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        sub = os.path.join(folder, "a")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "cgroup.procs"), "w") as f:
+            f.write("3\n")
+        self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2, 3])
+        real = cg._text
+        unreadable = lambda path: None if path == os.path.join(sub, "cgroup.procs") else real(path)  # noqa: E731
+        with mock.patch.object(cg, "_text", unreadable):
+            self.assertIsNone(cg.procs_tree(folder), "a child whose cgroup.procs is there but cannot be read: the tree is unreadable, never taken for empty")
+        os.remove(os.path.join(sub, "cgroup.procs"))
+        os.rmdir(sub)
+        self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2], "a child that vanished is empty")
+
 
 class OrphanTests(unittest.TestCase):
     """A real-scope flake: the program (bash) was gone before the first look and its orphan `sleep`, now a child of bwrap's init, was adopted as

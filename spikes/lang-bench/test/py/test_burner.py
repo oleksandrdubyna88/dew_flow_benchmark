@@ -32,11 +32,17 @@ def burning(pid):
         return False
 
 
+def still_alive(pids):
+    return [pid for pid in pids if alive(pid)]
+
+
 def wait_dead(pids, seconds):
     end = time.monotonic() + seconds
-    while time.monotonic() < end and any(alive(pid) for pid in pids):
+    left = still_alive(pids)
+    while left and time.monotonic() < end:
         time.sleep(0.05)
-    return [pid for pid in pids if alive(pid)]
+        left = still_alive(left)
+    return left
 
 
 class BurnerTests(unittest.TestCase):
