@@ -7,7 +7,7 @@ switch (mode)
 {
     case "report":
         var info = GC.GetGCMemoryInfo();
-        Console.WriteLine($"{{\"totalAvailableBytes\":{info.TotalAvailableMemoryBytes},\"heapHardLimit\":\"{AppContext.GetData("GCHeapHardLimit")}\",\"cgroupVisible\":{(Directory.Exists("/sys/fs/cgroup") ? "true" : "false")}}}");
+        Console.WriteLine($"{{\"totalAvailableBytes\":{info.TotalAvailableMemoryBytes},\"heapHardLimit\":\"{AppContext.GetData("GCHeapHardLimit")}\",\"cgroupVisible\":{(Directory.Exists("/sys/fs/cgroup") ? "true" : "false")},\"cgroupSelf\":\"{File.ReadAllText("/proc/self/cgroup").Trim()}\",\"cgroupChildren\":{(Directory.Exists("/sys/fs/cgroup") ? Directory.GetDirectories("/sys/fs/cgroup").Length : -1)}}}");
         break;
     case "culture":
         Console.WriteLine(CultureInfo.CurrentCulture.Name);

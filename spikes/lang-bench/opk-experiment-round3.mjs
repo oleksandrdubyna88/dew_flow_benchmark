@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HISTORICAL (brief C, 2026-11-02): a record of measurements made BEFORE the own-cgroup view became the layer's box (the "today" policy was the box then); not re-runnable as written.
 // The OP-K experiment, round 3 (E1.S8b; the team lead's, 2026-11-02), appended to the same record under `followUp2`. Experiment only: the box module and the policy file are not touched.
 //   (3c) = view (3) plus DOTNET_GCHeapHardLimit=<the case's limit in bytes, hexadecimal> in the .NET environment only.
 //   .NET under (3c): medium-buffers, medium-objects, near-limit (live 80 % of the limit + 1 GiB short-lived) and over-limit, at 256 and 512 MiB, with TotalAvailableMemoryBytes.

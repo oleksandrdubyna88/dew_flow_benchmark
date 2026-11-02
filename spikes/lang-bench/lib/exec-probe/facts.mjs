@@ -1,6 +1,6 @@
 // E1.S8b brief B: the facts the probe reads from INSIDE the box (the real prefix, the delegated scope, the v2 box). One script prints `name<TAB>value` lines; each probe line of the
 // plan is judged on its own from them, so the probe can exit 3 naming the first line that failed. A fact the box did not print is a failed line, never a pass.
-import { ALLOW_LIST, unlistedKeys } from '../exec-layer/env.mjs';
+import { allowFor, unlistedKeys } from '../exec-layer/env.mjs';
 
 const BASH_OWN = 'PWD|OLDPWD|SHLVL|_';
 
@@ -20,6 +20,10 @@ export function factsScript(sentinel) {
     "if locale -a | grep -qx 'de_DE.utf8'; then p locale-de yes; else p locale-de no; fi",
     'p invariant "$(env | grep -i INVARIANT | cut -d= -f1 | head -1 | grep . || echo none)"',
     'if [ -d /sys/fs/cgroup ]; then p cgroup-visible yes; else p cgroup-visible no; fi',
+    'p cg-self "$(head -1 /proc/self/cgroup)"',
+    "p cg-dirs \"$(find /sys/fs/cgroup -mindepth 1 -maxdepth 1 -type d 2>/dev/null | paste -sd,)\"",
+    'p cg-write "$( (echo 1 > /sys/fs/cgroup/memory.max) 2>&1 | head -1 )"',
+    'p cg-sys "$(ls -A /sys | paste -sd,)"',
     `p env "$(env -0 | tr '\\0' '\\n' | cut -d= -f1 | grep -vxE '${BASH_OWN}' | sort | paste -sd,)"`,
     '',
   ].join('\n');
@@ -37,6 +41,8 @@ export function parseFacts(text) {
 
 const said = value => value !== undefined;
 const sameList = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+/** OP-K (decided 2026-11-02): the box shows the program's OWN cgroup, read-only, and nothing else of the host's cgroups or `/sys`. */
+const ownView = f => f['cgroup-visible'] === 'yes' && f['cg-self'] === '0::/' && f['cg-dirs'] === '' && /Read-only file system/.test(f['cg-write'] ?? '') && f['cg-sys'] === 'fs';
 const envKeysOf = facts => (said(facts.env) ? facts.env.split(',').filter(Boolean) : null);
 const failsWith = code => said(code) && code !== '0';
 
@@ -50,7 +56,8 @@ const RULES = Object.freeze([
   ['culture-env', f => ({ ok: f.lang === 'de_DE.UTF-8' && f['lc-all'] === 'de_DE.UTF-8', LANG: f.lang ?? null, LC_ALL: f['lc-all'] ?? null })],
   ['locale-a', f => ({ ok: f['locale-de'] === 'yes' })],
   ['invariant-switch', f => ({ ok: f.invariant === 'none', seen: f.invariant ?? null })],
-  ['env-keys', f => ({ ok: envKeysOf(f) !== null && sameList(envKeysOf(f), ALLOW_LIST), envKeys: [...(envKeysOf(f) ?? [])].sort() })],
+  ['cgroup-view-own', f => ({ ok: ownView(f), self: f['cg-self'] ?? null, dirs: f['cg-dirs'] ?? null, sys: f['cg-sys'] ?? null })],
+  ['env-keys', f => ({ ok: envKeysOf(f) !== null && sameList(envKeysOf(f), allowFor(undefined)), envKeys: [...(envKeysOf(f) ?? [])].sort() })],
 ]);
 
 /** Every line the box can answer, judged: `[{ id, ok, ... }]` in the plan's order. */

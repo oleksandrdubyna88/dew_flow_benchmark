@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const MIB = 1024 * 1024;
 const modes = {
   report() {
-    console.log(JSON.stringify({ constrainedBytes: process.constrainedMemory(), heapSizeLimitBytes: v8.getHeapStatistics().heap_size_limit, cgroupVisible: fs.existsSync('/sys/fs/cgroup') }));
+    console.log(JSON.stringify({ constrainedBytes: process.constrainedMemory(), heapSizeLimitBytes: v8.getHeapStatistics().heap_size_limit, cgroupVisible: fs.existsSync('/sys/fs/cgroup'), cgroupSelf: fs.readFileSync('/proc/self/cgroup', 'utf8').trim(), cgroupChildren: fs.existsSync('/sys/fs/cgroup') ? fs.readdirSync('/sys/fs/cgroup', { withFileTypes: true }).filter(e => e.isDirectory()).length : -1 }));
   },
   culture() {
     console.log(Intl.DateTimeFormat().resolvedOptions().locale);

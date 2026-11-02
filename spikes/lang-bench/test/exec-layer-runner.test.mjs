@@ -138,6 +138,25 @@ test('A_data_run_on_a_host_that_reads_memory_peak_is_certified_and_proceeds', as
   assert.equal(result.halt, null);
 });
 
+test('A_V8_heap_limit_abort_through_the_real_layer_is_memory_limit_with_the_runtime_abort_recorded', async t => {
+  if (!needs(t)) return;
+  // the HARNESS never sets --max-old-space-size; this fixture's own run.sh does, to make V8 abort on its heap limit and print its real message
+  const result = await runCases(layerOptions(t, { runSh: '#!/bin/bash\nexec node --max-old-space-size=16 heap.js\n', files: { 'heap.js': 'const kept = []; for (;;) kept.push({ a: kept.length, b: [1, 2, 3] });\n' }, stack: 'node' }));
+  const entry = caseOf(result, 's01');
+  assert.equal(entry.reason, 'memory limit', `${JSON.stringify(entry.lifecycle.stderr.tail).slice(0, 300)}`);
+  assert.equal(entry.lifecycle.memory.runtimeAbort, 'v8');
+  assert.equal(entry.lifecycle.memory.oomKill, 0, 'no kernel kill: V8 aborted by itself at its 16 MiB heap');
+  assert.match(entry.lifecycle.stderr.tail, /JavaScript heap out of memory/);
+});
+
+test('An_abort_with_another_message_through_the_real_layer_stays_a_runtime_failure', async t => {
+  if (!needs(t)) return;
+  const result = await runCases(layerOptions(t, { runSh: '#!/bin/bash\necho "abort() called" >&2\nkill -ABRT $$\n' }));
+  const entry = caseOf(result, 's01');
+  assert.equal(entry.reason, 'exit status 134', 'exit 134 alone is not an out-of-memory abort');
+  assert.equal(entry.lifecycle.memory.runtimeAbort, null);
+});
+
 test('T_L31_through_the_runner_is_not_applicable_until_the_runner_runs_a_signal_TERM_step', () => {
   const source = readFileSync(path.join(runnerDir, 'run_samples.py'), 'utf8');
   assert.match(source, /running a \{plan\.kind\} sample is part ii of this story and is not built in this runner/, 'the runner still refuses the daemon and web kinds: with them goes `signal TERM`, and T-L31 through the runner (9) is NOT APPLICABLE until E1.S8a part ii-b — when ii-b lands this test goes red and (9) must be written');

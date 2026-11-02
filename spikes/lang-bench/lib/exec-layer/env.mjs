@@ -23,13 +23,29 @@ export const BASE_ENV = Object.freeze({
 /** The per-stack keys, computed from the pinned toolchain directories. */
 const PER_STACK_KEYS = Object.freeze(['DOTNET_ROOT', 'PATH']);
 
-/** Every key the box environment holds: the one literal list the scan compares against. */
-export const ALLOW_LIST = Object.freeze([...Object.keys(BASE_ENV), ...PER_STACK_KEYS]);
+/**
+ * The keys of one stack only (OP-K, parent D15, decided 2026-11-02): `DOTNET_GCHeapHardLimit` is the case's memory limit in bytes, hexadecimal, for .NET — the percent form cannot express 100 % —
+ * so a .NET program may use all of the limit it sees in its own cgroup view. Node gets nothing: its `constrainedMemory()` reads the view and V8's heap limit is its own.
+ */
+export const STACK_KEYS = Object.freeze({ csharp: Object.freeze(['DOTNET_GCHeapHardLimit']) });
+const STACK_ONLY = Object.values(STACK_KEYS).flat();
+
+/** Every key the box environment can hold: the one literal list the scan compares against. */
+export const ALLOW_LIST = Object.freeze([...Object.keys(BASE_ENV), ...PER_STACK_KEYS, ...STACK_ONLY]);
+
+/** The keys a box of `stack` holds (`undefined`: a box for no stack in particular, such as the probe's facts): the allow-list without the other stacks' keys. */
+export const allowFor = stack => ALLOW_LIST.filter(key => !STACK_ONLY.includes(key) || (STACK_KEYS[stack] ?? []).includes(key));
 
 const SYSTEM_PATH = Object.freeze(['/usr/bin', '/bin']);
 
 /** The box's PATH: the pinned directories, then the system tools. `dirs` is `{ dotnetSdk, node, typescript }` (full paths). */
 export const boxPath = dirs => [dirs.dotnetSdk, `${dirs.node}/bin`, `${dirs.typescript}/node_modules/.bin`, ...SYSTEM_PATH].join(':');
+
+function stackEnv(stack, memoryMaxBytes) {
+  if (stack !== 'csharp') return {};
+  if (!Number.isSafeInteger(memoryMaxBytes) || memoryMaxBytes <= 0) throw new Error('boxEnv: the .NET stack needs memoryMaxBytes, the case\'s limit: DOTNET_GCHeapHardLimit is not a guess');
+  return { DOTNET_GCHeapHardLimit: `0x${memoryMaxBytes.toString(16)}` };
+}
 
 const lower = key => key.toLowerCase();
 const REPLACEABLE = 'TZ';
@@ -43,10 +59,10 @@ function refusedKeys(extra) {
  * The box environment: the base, the per-stack keys, then `extra` (`PORT`, a scenario's `env` lines). An extra may add a key and may replace `TZ`; a base key in any other
  * case or spelling is refused naming the base key (a program reads `lc_all` as it reads `LC_ALL`).
  */
-export function boxEnv({ dirs, extra = {} }) {
+export function boxEnv({ dirs, extra = {}, stack, memoryMaxBytes }) {
   const refused = refusedKeys(extra);
   if (refused.length > 0) throw new Error(`boxEnv: ${refused.join(', ')} ${refused.length === 1 ? 'is' : 'are'} in the base environment (D15) and not an extra's to replace; only TZ may be replaced`);
-  return Object.freeze({ ...BASE_ENV, DOTNET_ROOT: dirs.dotnetSdk, PATH: boxPath(dirs), ...extra });
+  return Object.freeze({ ...BASE_ENV, DOTNET_ROOT: dirs.dotnetSdk, PATH: boxPath(dirs), ...stackEnv(stack, memoryMaxBytes), ...extra });
 }
 
 /** The keys of `env` that are not on the allow-list (the scan the box's environment and the probe record are checked with). */

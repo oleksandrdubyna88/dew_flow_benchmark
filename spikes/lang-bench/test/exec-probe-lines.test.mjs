@@ -2,12 +2,14 @@
 // the probe can exit 3 NAMING the first line that failed. A judge that never fails would let a leaking box through (the refuted shape), so every line has a bad input that is found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ALLOW_LIST } from '../lib/exec-layer/env.mjs';
+import { allowFor } from '../lib/exec-layer/env.mjs';
+
+const ALLOW_LIST = allowFor(undefined);
 import { judgeFacts, parseFacts, recordProblems } from '../lib/exec-probe/facts.mjs';
 
 const GOOD = [
   'ns\tnet:[4026532285]', 'cgroup\t0::/user.slice/user-1000.slice/user@1000.service/app.slice/x.scope/prog', 'sentinel\tabsent', 'mnt-c\tabsent', 'cmd-exe\t127', 'user-bus\t1',
-  'stderr-bytes\t0', 'lang\tde_DE.UTF-8', 'lc-all\tde_DE.UTF-8', 'locale-de\tyes', 'invariant\tnone', 'cgroup-visible\tno', `env\t${ALLOW_LIST.join(',')}`,
+  'stderr-bytes\t0', 'lang\tde_DE.UTF-8', 'lc-all\tde_DE.UTF-8', 'locale-de\tyes', 'invariant\tnone', 'cgroup-visible\tyes', 'cg-self\t0::/', 'cg-dirs\t', 'cg-write\tbash: /sys/fs/cgroup/memory.max: Read-only file system', 'cg-sys\tfs', `env\t${ALLOW_LIST.join(',')}`,
 ].join('\n');
 const without = (name, replacement) => GOOD.split('\n').map(line => (line.startsWith(`${name}\t`) ? replacement : line)).join('\n');
 const failed = text => judgeFacts(parseFacts(text)).filter(line => !line.ok).map(line => line.id);
@@ -16,7 +18,7 @@ test('Facts_the_box_prints_are_parsed_by_name_and_a_good_box_fails_no_line', () 
   assert.equal(parseFacts(GOOD).ns, 'net:[4026532285]');
   assert.deepEqual(failed(GOOD), []);
   const ids = judgeFacts(parseFacts(GOOD)).map(line => line.id);
-  for (const id of ['home-sentinel', 'mnt-c', 'cmd-exe', 'user-bus', 'bash-c-true-stderr', 'culture-env', 'locale-a', 'invariant-switch', 'env-keys']) assert.ok(ids.includes(id), `${id} is a line`);
+  for (const id of ['home-sentinel', 'mnt-c', 'cmd-exe', 'user-bus', 'bash-c-true-stderr', 'culture-env', 'locale-a', 'invariant-switch', 'cgroup-view-own', 'env-keys']) assert.ok(ids.includes(id), `${id} is a line`);
 });
 
 test('Each_bad_fact_fails_exactly_its_own_line_and_the_first_failed_line_names_the_probe_halt', () => {
@@ -29,6 +31,11 @@ test('Each_bad_fact_fails_exactly_its_own_line_and_the_first_failed_line_names_t
   assert.deepEqual(failed(without('lc-all', 'lc-all\t')), ['culture-env']);
   assert.deepEqual(failed(without('locale-de', 'locale-de\tno')), ['locale-a']);
   assert.deepEqual(failed(without('invariant', 'invariant\tDOTNET_SYSTEM_GLOBALIZATION_INVARIANT')), ['invariant-switch']);
+  assert.deepEqual(failed(without('cg-self', 'cg-self\t0::/user.slice/x.scope/prog')), ['cgroup-view-own'], 'the program sees the host\'s cgroup path');
+  assert.deepEqual(failed(without('cg-dirs', 'cg-dirs\t/sys/fs/cgroup/holder')), ['cgroup-view-own'], 'a sibling cgroup is visible');
+  assert.deepEqual(failed(without('cg-write', 'cg-write\t')), ['cgroup-view-own'], 'the view is writable');
+  assert.deepEqual(failed(without('cg-sys', 'cg-sys\tfs,kernel')), ['cgroup-view-own'], 'a path of /sys beyond fs');
+  assert.deepEqual(failed(without('cgroup-visible', 'cgroup-visible\tno')), ['cgroup-view-own'], 'no view at all');
   assert.deepEqual(failed(without('env', `env\t${ALLOW_LIST.join(',')},WSL_INTEROP`)), ['env-keys']);
 });
 

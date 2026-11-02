@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { commOf, chain, MIB, needs, pidsIn, programPid, sh, start, text, waitFor } from './support/exec-chain.mjs';
+import { commOf, chain, MIB, needs, pidsIn, programPid, sh, start, text, waitFor, withoutView } from './support/exec-chain.mjs';
 import { readProg, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
 
 const num = file => Number(text(file).trim());
@@ -64,7 +64,7 @@ test('Memory_peak_is_read_after_a_program_that_exits_in_10_ms', async t => {
   assert.equal(read.events.oom_kill, 0);
   assert.ok(await waitFor(() => readProg(c.prog).procs?.length === 0 || null, 5000), 'nothing is left in prog/ (the box\'s own processes may still be going out when the launcher has exited)');
   assert.equal(pidsIn(c.holderDir).length, 1, 'the scope holder is what keeps the scope');
-  const plain = await chain(t, { files: QUICK, caseId: 'c2', tweak: plainScope(256 * MIB) });
+  const plain = await chain(t, { files: QUICK, caseId: 'c2', tweak: plainScope(256 * MIB), boxTweak: withoutView });
   assert.equal((await start(t, plain.launch()).exited).code, 0);
   assert.ok(await waitFor(() => !existsSync(plain.scope) || null, 3000), 'a program in the scope\'s own cgroup and no scope holder: the cgroup is gone at the read');
   assert.equal(readProg(plain.scope).peakBytes, null, 'memory.peak cannot be read: not certified');
@@ -95,7 +95,7 @@ test('An_oom_killed_child_is_memory_limit_whatever_the_exit_status', async t => 
   const read = readProg(c.prog);
   assert.ok(read.events.oom_kill >= 1, `oom_kill >= 1 is read back from prog/memory.events: ${JSON.stringify(read.events)}`);
   assert.ok(read.peakBytes > 0);
-  const wrong = await chain(t, { files, memoryMax: 64 * MIB, caseId: 'c2', tweak: plainScope(64 * MIB) });
+  const wrong = await chain(t, { files, memoryMax: 64 * MIB, caseId: 'c2', tweak: plainScope(64 * MIB), boxTweak: withoutView });
   await start(t, wrong.launch()).exited;
   assert.ok(await waitFor(() => !existsSync(wrong.scope) || null, 5000), 'a plain scope stops whole on the OOM kill (this host\'s DefaultOOMPolicy is stop): its cgroup is gone and memory.events cannot be read');
   assert.equal(await unitState(wrong.unit), 'failed', 'systemd says oom-kill: the case would be a launch defect, not memory limit');
@@ -107,7 +107,7 @@ test('OOMPolicy_continue_is_in_the_prefix_although_a_delegated_scope_defaults_to
   start(t, c.launch());
   assert.ok(await waitFor(() => programPid(c.prog, /^sleep$/)));
   assert.equal((await sh('systemctl', ['--user', 'show', `${c.unit}.scope`, '-p', 'OOMPolicy'], { env: userEnv() })).stdout.trim(), 'OOMPolicy=continue', 'measured on systemd 259: Delegate=yes alone gives continue — the property in the prefix is a pin, not the cause');
-  const plain = await chain(t, { files: SLEEPER, caseId: 'c2', tweak: plainScope(256 * MIB) });
+  const plain = await chain(t, { files: SLEEPER, caseId: 'c2', tweak: plainScope(256 * MIB), boxTweak: withoutView });
   start(t, plain.launch());
   assert.ok(await waitFor(async () => (await unitState(plain.unit)) === 'active' || null));
   assert.equal((await sh('systemctl', ['--user', 'show', `${plain.unit}.scope`, '-p', 'OOMPolicy'], { env: userEnv() })).stdout.trim(), 'OOMPolicy=stop', 'a plain scope has the host default: stop');

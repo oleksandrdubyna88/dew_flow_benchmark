@@ -43,7 +43,7 @@ function newRun(options, tools) {
   const scope = owned.cleanupScope();
   const dir = owned.ownedDir(scope, RUN_WHAT, { parent: options.parent });
   const id = runIdOf(owned, dir);
-  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env: boxEnv({ dirs: options.dirs, extra: options.extraEnv }), holder: null, holderNet: null };
+  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env: boxEnv({ dirs: options.dirs, extra: options.extraEnv, stack: options.stack, memoryMaxBytes: options.memoryMaxBytes }), holder: null, holderNet: null };
 }
 
 async function openSteps(run) {
@@ -59,7 +59,7 @@ async function openSteps(run) {
 
 /**
  * `ok(run)`: the run folder (owned, claimed), the netns holder and the case views, or `fail(reason)` after the same cleanup that ends a run has removed whatever was made.
- * `options`: `{ owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes, caseWallMs, runCeilingMs, limitsFile?, extraEnv?, extraRo? }`.
+ * `options`: `{ owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes, caseWallMs, runCeilingMs, stack?, limitsFile?, extraEnv?, extraRo? }`; `stack` (`'csharp'` or `'node'`) selects the per-stack keys of the box environment.
  */
 export async function openRun(options) {
   let run = null;

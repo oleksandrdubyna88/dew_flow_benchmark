@@ -18,7 +18,7 @@ const env = () => boxEnv({ dirs: toolchains });
 /** A view folder with `run.sh` and the box's argv for it (ending in `--`). */
 function setup(t, what, extra = {}) {
   const view = owned.ownedDir(t, what);
-  return { view, argv: boxArgv({ view, dirs: toolchains, env: env(), ...extra }) };
+  return { view, argv: boxArgv({ view, dirs: toolchains, env: env(), prog: null, ...extra }) };
 }
 
 const inBox = (box, script) => sh(box[0], [...box.slice(1), 'bash', '-c', script]);

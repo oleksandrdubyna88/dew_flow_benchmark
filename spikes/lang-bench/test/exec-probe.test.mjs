@@ -6,9 +6,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { before, test } from 'node:test';
 import { cleanupScope } from '../../../.agents/conventions/tools/lib/owned.mjs';
-import { ALLOW_LIST } from '../lib/exec-layer/env.mjs';
+import { allowFor } from '../lib/exec-layer/env.mjs';
 import { recordProblems } from '../lib/exec-probe/facts.mjs';
 import { runDelegatedScopeLine } from '../lib/exec-probe/lines.mjs';
+import { readPolicy } from '../lib/exec-probe/memory.mjs';
 import { verdictFor } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
 import { owned } from './support/owned.mjs';
@@ -41,7 +42,7 @@ test('The_probe_records_every_line_of_the_plan_and_exits_3_memory_policy_undecid
   assert.match(stderr, /memory-policy-undecided/);
   assert.equal(record.exit.halt, 'memory-policy-undecided');
   const ids = record.lines.map(line => line.id);
-  for (const id of ['netns', 'program-in-prog', 'ping-over-loopback', 'bind-list', 'home-sentinel', 'mnt-c', 'cmd-exe', 'user-bus', 'empty-program-launch', 'bash-c-true-stderr', 'env-keys', 'delegated-scope', 'culture-env', 'locale-a', 'dotnet-culture', 'node-culture', 'invariant-switch']) assert.ok(ids.includes(id), `the record has the line ${id}`);
+  for (const id of ['netns', 'program-in-prog', 'ping-over-loopback', 'bind-list', 'cgroup-view-own', 'home-sentinel', 'mnt-c', 'cmd-exe', 'user-bus', 'empty-program-launch', 'bash-c-true-stderr', 'env-keys', 'delegated-scope', 'culture-env', 'locale-a', 'dotnet-culture', 'node-culture', 'invariant-switch']) assert.ok(ids.includes(id), `the record has the line ${id}`);
   assert.deepEqual(record.lines.filter(line => !line.ok).map(line => line.id), [], 'every line other than the memory policy passed on this host');
 });
 
@@ -65,21 +66,20 @@ test('The_probe_record_holds_only_allow_listed_keys_even_with_a_host_key_planted
   const { record } = await probed;
   assert.deepEqual(recordProblems(record), []);
   const keys = record.lines.find(line => line.id === 'env-keys').envKeys;
-  assert.deepEqual([...keys].sort(), [...ALLOW_LIST].sort());
+  assert.deepEqual([...keys].sort(), [...allowFor(undefined)].sort());
   assert.ok(!JSON.stringify(record).includes('WSL_INTEROP') && !JSON.stringify(record).includes('SECRET_TOKEN'));
 });
 
-test('A_policy_is_asserted_against_the_record_a_decided_one_that_holds_is_exit_0_and_one_that_does_not_is_exit_3', async t => {
+test('The_decided_policy_holds_on_the_record_and_the_others_are_judged_against_the_same_observations', async t => {
   if (!needs(t)) return;
   const { record } = await probed;
   const decide = policy => verdictFor(record, { policy, decided: '2026-11-02', by: 'team lead' });
-  assert.equal(decide('runtime-view-accepted').ok, true, 'both stacks behave: the churn passes and the over-limit program is memory limit');
-  const exposed = decide('cgroup-view-readonly');
-  assert.equal(exposed.ok, false);
-  assert.equal(exposed.halt, 'memory-view-mismatch');
-  assert.match(exposed.problems.join('\n'), /no cgroup is visible in the box/);
-  assert.equal(decide('dotnet-gc-hard-limit-percent:75').ok, false, 'no hard limit is set in the box');
+  assert.deepEqual(decide('cgroup-view-own+gchl-limit'), { ok: true, halt: null, problems: [] }, 'both stacks believe prog/memory.max in their own cgroup view');
+  assert.equal(decide('runtime-view-accepted').ok, true);
+  assert.equal(decide('dotnet-gc-hard-limit-percent:75').ok, false, 'no GC hard limit shows in AppContext: the percent form is not what is set');
   assert.equal(verdictFor(record, { policy: null, decided: null, by: null }).halt, 'memory-policy-undecided');
+  const committed = readPolicy(path.join(spikeDir, 'inputs', 'specs.d', 'memory-policy.json'));
+  assert.equal(verdictFor(record, committed.value).ok, true, 'the committed policy holds: the probe exits 0');
 });
 
 test('A_host_where_memory_peak_cannot_be_read_is_exit_3_memory_not_certifiable', async t => {

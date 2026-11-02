@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HISTORICAL (brief C, 2026-11-02): a record of measurements made BEFORE the own-cgroup view became the layer's box (the "today" policy was the box then); not re-runnable as written.
 // The OP-K experiment's follow-up (E1.S8b; the team lead's, 2026-11-02), appended to the same record (inputs/opk-experiment-<date>.json, key `followUp`). Experiment only: the box module and the
 // policy file are not touched.
 //   A. the over-limit fixture (3 GiB of growing live data) under (3), both stacks, 256 and 512 MiB: how does each run END, and what does the runner's verdict say?

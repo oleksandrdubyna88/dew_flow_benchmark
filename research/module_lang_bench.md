@@ -61,7 +61,10 @@ launcher, not the wrapper and not the program: the most seen in two successive l
 finds after the exit; it is `known: false` when no pid was settled, and it never decides the pid. **`--wrapper-pid-file TEMPLATE`** (with `--cgroup-of`; `{case}` filled in) is
 the file in which the layer's wrapper writes its pid; without the flag nothing is excluded as a wrapper (E1.S8b's delegated scope has none; its fallback `scope-wrap.sh`
 must pass the flag). `oom_kill` above 0 in `memory.events` is the verdict `memory limit` whatever the exit status and is read from `memory.events` alone, even when
-`memory.peak` cannot be read; it is judged before `time limit`. **`--case-view TEMPLATE`** (B7; `{case}` filled in) names the case's fresh writable view of the built tree,
+`memory.peak` cannot be read; it is judged before `time limit`. **A runtime's own out-of-memory abort is `memory limit` too** (change 5.1, runner 0.2.1, `rs_abort.py`): .NET exit status 134 AND a stderr
+line exactly `Out of memory.`, V8 exit status 134 AND a stderr line holding `JavaScript heap out of memory`; `memory` then carries `runtimeAbort: "dotnet" | "v8" | null` beside `oomKill`. The verdict table
+of `memory limit`: kernel `oom_kill` ≥ 1 → memory limit; `runtimeAbort` set → memory limit; exit 134 alone, or either message without exit 134, or `abort()` with another message → a runtime failure
+(`exit status 134`, `exit status 1`). It is read from the end of the stderr file (64 KiB), because V8 prints its stack trace after the message. **`--case-view TEMPLATE`** (B7; `{case}` filled in) names the case's fresh writable view of the built tree,
 which the layer made before the case starts (a missing view is exit 3): the program starts in it, a scenario's `.scenario/` fixtures are written into it first (every fixture
 path is relative, free of `..`, and made one component at a time with `O_NOFOLLOW`, so a link on the way refuses it; a `.scenario` already there is refused), and the samples
 directory may not lie in a view nor a view in the samples (exit 4). **With more than one case, a `--cgroup-of`, `--case-view` or `--wrapper-pid-file` template without `{case}` is
@@ -121,7 +124,7 @@ a daemon/web run before part ii-b, a process of the case that could not be kille
 
 **Result format.** `--json OUT` writes `{ format: 1, runner, grammar: 2, kind, build, launch: { failed, stderr }, emptyProgramMs, emptyProgram, cases: [{ id, status, reason,
 rIds, entries, firstMismatch, lifecycle: { stop, signalled: { signal, pid, found, comm, launcher }, fork, leftover, leftoverEvidence, kill, memory, stderr, capture }, wallMs,
-launchMs }], python }` (runner version 0.2.0); what was not measured is `{ known: false, why }`, never zero. `wallMs` is the program's wall from the case clock (or unknown),
+launchMs }], python }` (runner version 0.2.1); what was not measured is `{ known: false, why }`, never zero. `wallMs` is the program's wall from the case clock (or unknown),
 `launchMs` the time from the spawn to `child-pid`, `emptyProgramMs` the empty program's time (milliseconds, or `{ known: false }`). `lifecycle.signalled` names the pid the
 runner knows as the program's, how it found it, its name as last seen alive and the launcher's pid (`signal` is null: an olympiad program is never signalled);
 `lifecycle.fork` is `{ known, found, count }`; `lifecycle.kill` and `leftoverEvidence` say which road ran (`killpg` and the process group on the plain path, `cgroup.kill` and
@@ -155,8 +158,8 @@ that holds only the program, in a loopback-only network namespace it shares with
 `holder/`, moves itself into `prog/`, enables `+memory`, writes `memory.max` and `memory.swap.max` = 0 in `prog/`, writes the scope's path and the holder's pid to `<out>`, and execs. The scope holder
 keeps the scope alive, so `prog/memory.peak`, `memory.events` and `cgroup.procs` are read after the program's exit; the kill is `prog/cgroup.kill`. A fresh scope serves each case, the
 `empty-program` control and the `certify` launch. `box.mjs` is v1's primitives (`tmpfs`, `roBind`, `bind`, `devProc`, `setenvAll`): `--tmpfs /` base, `/usr` with its links, four `/etc` files, the
-pinned toolchain trees by full path, `/dev`, `/proc`, a fresh `/tmp`, the case view writable; no home, no `/mnt`, no `/run`, no `/var/tmp`, no `/sys/fs/cgroup`, no `--unshare-net`, no `--die-with-parent`.
-`env.mjs` is the one allow-list; `--clearenv` then exactly those keys.
+pinned toolchain trees by full path, `/dev`, `/proc`, a fresh `/tmp`, the case view writable, and the OWN-CGROUP VIEW (`--unshare-cgroup`, `prog/` read-only at `/sys/fs/cgroup`; OP-K below); no home, no `/mnt`, no `/run`, no `/var/tmp`, no other cgroup or `/sys` path, no `--unshare-net`, no `--die-with-parent`.
+`env.mjs` is the one allow-list; `--clearenv` then exactly those keys; `DOTNET_GCHeapHardLimit` is a key of the .NET stack only (the case's limit in bytes, hexadecimal; `stack` is an option of `openRun`/`runCases`).
 
 **Where the spec met the merged runner (brief A; the runner is unchanged).** (1) The runner is the driver and already sits in the holder's namespaces, so the prefix it gets has no `nsenter`: a second
 `nsenter -U` fails with EINVAL; a launch from outside (the certification launch, the tests) takes the same prefix with `nsenter` put in (`programArgv`). (2) bwrap writes `child-pid` before it makes
@@ -181,9 +184,21 @@ ping over 127.0.0.1, the bind list, the `$HOME` sentinel, `/mnt/c`, `cmd.exe`, t
 (`prog/` and `memory.max`/`memory.swap.max` = 0, a workload, `memory.peak` read above zero after its exit), T-L32 (the culture env, `locale -a`, .NET `de-DE`, Node `de…`, no invariant switch). Record:
 `inputs/exec-probe-<date>.json`. **T-L43:** at `MemoryMax` 256 and 512 MiB it records whether a cgroup is visible in the box, .NET's `TotalAvailableMemoryBytes`, Node's `constrainedMemory()` and V8's
 heap limit, against `prog/memory.max`, and runs the churn (bounded live data, 4 GiB allocated) and over-limit programs of both stacks through the runner. `inputs/specs.d/memory-policy.json`
-(`{ policy, decided, by }`) holds OP-K's decision, `null` until the team lead decides on the record: `null` is exit 3 `memory-policy-undecided`, a policy not met is exit 3 `memory-view-mismatch`, and the
-probe never exits 0 while printing a mismatch. Policies: `runtime-view-accepted` (behaviour only), `dotnet-gc-hard-limit-percent:<n>` (a GC hard limit inside `prog/memory.max`), `cgroup-view-readonly`
-(every believed limit equals `prog/memory.max`; the box does not mount a cgroup view today).
+(`{ policy, decided, by, evidence }`) holds OP-K's decision: `null` would be exit 3 `memory-policy-undecided`, a policy not met is exit 3 `memory-view-mismatch`, and the probe never exits 0 while
+printing a mismatch. Policies: `runtime-view-accepted` (behaviour only), `dotnet-gc-hard-limit-percent:<n>`, `cgroup-view-readonly`, and the DECIDED one, `cgroup-view-own+gchl-limit`: .NET's
+`TotalAvailableMemoryBytes` and Node's `constrainedMemory()` both equal `prog/memory.max`, the cgroup visible in the box is only the program's own (`/proc/self/cgroup` is `0::/`, no child cgroup),
+and the churn and over-limit behaviour holds (an over-limit .NET program is `memory limit` through the runner's abort rule).
+
+**OP-K (decided 2026-11-02 by the team lead, parent D15; evidence `inputs/exec-probe-2026-11-02.json` and `inputs/opk-experiment-2026-11-02.json`).** Each program sees its own cgroup read-only, .NET gets
+`DOTNET_GCHeapHardLimit` = the case's limit, and a runtime's own out-of-memory abort is `memory limit`. The data (toys, realistic live data, 3 runs per cell, all within 1 MiB): with NO view .NET sized its GC
+to the host (`TotalAvailableMemoryBytes` 46.3 GB, Node's `constrainedMemory()` 0) and got a false `memory limit` on live byte arrays at 45 % of the limit at 256 and 512 MiB; with the view alone .NET caps
+itself at 75 % of the limit and a genuinely over-limit program ends in its own abort (`Out of memory.`, exit 134) before the kernel acts, judged "exit status 134" without the runner rule; the percent form
+`DOTNET_GCHeapHardLimitPercent=0x64` is IGNORED by .NET (still 75 %; 0x63 gives 99 %), so only the byte form `DOTNET_GCHeapHardLimit` can express 100 % (3c: `TotalAvailableMemoryBytes` = the limit; byte arrays
+at 45 % and object graphs at 40 % pass; an over-limit program aborts at about 198 of 256 MiB and 455 of 512 MiB). **A property of the Node runtime, recorded and not tuned around:** Node's typed arrays
+(`Uint8Array`, `Buffer`) live outside V8's heap, so V8's heap limit and its heap-driven GC do not see them: live typed arrays at 45 % of the limit plus 2 GiB of short-lived ones end in the KERNEL's
+oom_kill at 256 MiB under every policy (no view, the view, the view and a hard limit), and pass at 512 MiB. No test pins that cell either way; the T-L43 tests skip it with this note. Anything near the limit
+(live data at 80 %) ends in a kernel kill in both stacks. The experiment scripts (`opk-experiment*.mjs`) are the record of a measurement made BEFORE the view became the layer's box (the "today" policy
+there is what the box was): they are not re-runnable as written.
 
 **The identity and its invalidation rule.** `identity.mjs` hashes every file of `lib/exec-layer/` (`scope-entry.sh` included); `pin-exec-layer.mjs` writes it to `inputs/specs.d/exec-layer.json`
 (`treeSha256`, and `probedOn` and `host` after a passing probe) and `specs-record.mjs` assembles `inputs/specs.json`. A change to ANY file of the tree changes the identity and re-dates every gate and

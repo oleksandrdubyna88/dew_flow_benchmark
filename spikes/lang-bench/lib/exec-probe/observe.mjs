@@ -9,6 +9,7 @@ import { openRun, programArgv, runCases } from '../exec-layer/run.mjs';
 import { progCgroup, userEnv } from '../exec-layer/scope.mjs';
 import { programTree, STACKS } from './programs.mjs';
 
+const MIB = 1024 * 1024;
 const WALL_MS = 70_000;
 const CEILING_MS = 200_000;
 const PROBE_CASE = 'm';
@@ -23,15 +24,15 @@ function samples(owned, scope, output) {
 
 /**
  * Run the toy program of `stack` in `mode` as one olympiad case through the layer and the runner at `memoryMaxBytes`: `{ status, reason, memory, exitCode, stdout }` of the case as the
- * runner judged it. The program prints `OK` in `churn` and `overlimit` and nothing else is expected.
+ * runner judged it. The program prints `OK` in `churn`, `medium-*`, `near-limit` and `overlimit` and nothing else is expected; every mode is given the limit in MiB as its argument.
  */
 export async function runMode({ owned, scope, dirs, csharpBuild, stack, mode, memoryMaxBytes }) {
   const limitsDir = owned.ownedDir(scope, 'plimits');
   const limitsFile = path.join(limitsDir, 'limits.json');
   writeFileSync(limitsFile, JSON.stringify(LIMITS_FILE));
   const result = await runCases({
-    owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode, csharpBuild }), samplesDir: samples(owned, scope, 'OK\n'), caseIds: ['p1'],
-    dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, limitsFile, minSweepAgeMs: 0,
+    owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode: `${mode} ${memoryMaxBytes / MIB}`, csharpBuild }), samplesDir: samples(owned, scope, 'OK\n'), caseIds: ['p1'],
+    dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, limitsFile, minSweepAgeMs: 0, stack,
   });
   const entry = result.record?.cases?.[0];
   return { status: entry?.status ?? 'NOT RUN', reason: entry?.reason ?? result.stderr.trim(), memory: entry?.lifecycle?.memory ?? { known: false }, exitCode: result.exitCode, stdout: result.stdout };
@@ -47,7 +48,7 @@ const numberFile = file => {
 
 /** What `report` mode printed (parsed) and the host's `prog/memory.max` of its scope: `{ value, hostMemoryMax }`, or `{ value: null, problem }`. Cleans up after itself. */
 export async function believed({ owned, scope, dirs, csharpBuild, stack, memoryMaxBytes, mode = 'report' }) {
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode, csharpBuild }), caseIds: [PROBE_CASE], dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'pruns'), tree: programTree({ owned, scope, stack, mode, csharpBuild }), caseIds: [PROBE_CASE], dirs, memoryMaxBytes, caseWallMs: WALL_MS, runCeilingMs: CEILING_MS, stack });
   if (!opened.ok) return { value: null, problem: opened.reason };
   const run = opened.value;
   try {
@@ -61,7 +62,7 @@ export async function believed({ owned, scope, dirs, csharpBuild, stack, memoryM
   }
 }
 
-const overOf = ran => ({ reason: ran.reason, oomKill: ran.memory.oomKill ?? null, peakBytes: ran.memory.peakBytes ?? null, eventsKept: ran.memory.known === true && ran.memory.events !== undefined });
+const overOf = ran => ({ reason: ran.reason, oomKill: ran.memory.oomKill ?? null, runtimeAbort: ran.memory.runtimeAbort ?? null, peakBytes: ran.memory.peakBytes ?? null, eventsKept: ran.memory.known === true && ran.memory.events !== undefined });
 
 /** The observation of one limit: `{ memoryMaxBytes, hostMemoryMax, csharp, node, churn, overLimit }` (`assertMemoryView`'s shape), or `{ problem }` when a program did not run. */
 export async function observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes }) {

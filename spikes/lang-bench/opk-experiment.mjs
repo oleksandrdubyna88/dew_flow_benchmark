@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HISTORICAL (brief C, 2026-11-02): a record of measurements made BEFORE the own-cgroup view became the layer's box (the "today" policy was the box then); not re-runnable as written.
 // The OP-K experiment (E1.S8b; the team lead's, 2026-11-02). Both stacks' toy programs run with REALISTIC live data — typed arrays at 45 % of the limit, an ordinary object graph at 40 % — plus 2 GiB
 // of short-lived allocations, at MemoryMax 256 and 512 MiB, 3 runs each, through the real layer and the runner, under (1) today's box (no cgroup visible) and (3) the same box with a read-only view of the
 // program's OWN cgroup (`--unshare-cgroup` and a read-only bind of `prog/` at /sys/fs/cgroup). Before the (3) runs it verifies what the runtimes believe and that no sibling or host path is visible;

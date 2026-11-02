@@ -1,5 +1,9 @@
 {
-  "policy": null,
-  "decided": null,
-  "by": null
+  "policy": "cgroup-view-own+gchl-limit",
+  "decided": "2026-11-02",
+  "by": "team lead (Opus), D15 OP-K",
+  "evidence": [
+    "inputs/exec-probe-2026-11-02.json",
+    "inputs/opk-experiment-2026-11-02.json"
+  ]
 }

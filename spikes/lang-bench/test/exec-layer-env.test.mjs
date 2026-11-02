@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { ALLOW_LIST, BASE_ENV, boxEnv, unlistedKeys } from '../lib/exec-layer/env.mjs';
+import { ALLOW_LIST, allowFor, BASE_ENV, boxEnv, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { chain, needs, SPAWN_ENV, start } from './support/exec-chain.mjs';
 import { toolchains } from './support/exec-layer-host.mjs';
 
@@ -27,7 +27,7 @@ test('The_box_environment_is_built_from_the_allow_list_and_never_from_the_host',
   try {
     const env = boxEnv({ dirs });
     assert.deepEqual(unlistedKeys(env), []);
-    assert.deepEqual(Object.keys(env).sort(), [...ALLOW_LIST].sort(), 'every listed key is set, none more');
+    assert.deepEqual(Object.keys(env).sort(), [...allowFor(undefined)].sort(), 'every listed key of a stack-less box is set, none more');
     assert.equal(env.TESTSTODELETE_PLANTED_HOST_KEY, undefined);
   } finally {
     delete process.env.TESTSTODELETE_PLANTED_HOST_KEY;
@@ -39,6 +39,18 @@ test('The_box_PATH_names_the_pinned_toolchains_and_no_mnt_entry', () => {
   assert.deepEqual(entries, [dirs.dotnetSdk, `${dirs.node}/bin`, `${dirs.typescript}/node_modules/.bin`, '/usr/bin', '/bin']);
   assert.equal(boxEnv({ dirs }).DOTNET_ROOT, dirs.dotnetSdk);
   assert.ok(!entries.some(entry => entry.startsWith('/mnt')));
+});
+
+test('DOTNET_GCHeapHardLimit_is_the_cases_limit_in_hexadecimal_bytes_for_the_dotnet_stack_only', () => {
+  const MIB = 1024 * 1024;
+  assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 256 * MIB }).DOTNET_GCHeapHardLimit, '0x10000000');
+  assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 512 * MIB }).DOTNET_GCHeapHardLimit, '0x20000000');
+  assert.equal('DOTNET_GCHeapHardLimit' in boxEnv({ dirs, stack: 'node', memoryMaxBytes: 256 * MIB }), false, 'Node gets nothing');
+  assert.equal('DOTNET_GCHeapHardLimit' in boxEnv({ dirs }), false, 'a box with no stack named gets nothing');
+  assert.deepEqual(Object.keys(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 256 * MIB })).sort(), [...ALLOW_LIST].sort(), 'the key is on the allow-list');
+  assert.deepEqual(STACK_KEYS, { csharp: ['DOTNET_GCHeapHardLimit'] });
+  assert.throws(() => boxEnv({ dirs, stack: 'csharp' }), /memoryMaxBytes/, 'the limit is not a guess');
+  assert.throws(() => boxEnv({ dirs, extra: { DOTNET_GCHeapHardLimit: '0x1' } }), /DOTNET_GCHeapHardLimit/, 'an extra cannot set it');
 });
 
 test('No_invariant_globalization_switch_is_in_the_allow_list', () => {
@@ -57,8 +69,8 @@ test('An_extra_key_may_add_a_key_and_may_replace_TZ_only', () => {
 const BASH_OWN_KEYS = ['PWD', 'OLDPWD', 'SHLVL', '_']; // set by bash itself before `exec env`: not the box's
 const PLANTED_HOST = { WSL_INTEROP: '/run/WSL/1_interop', WSL_DISTRO_NAME: 'Ubuntu', SECRET_TOKEN: 'planted', HOME: '/home/someone', LD_PRELOAD: '/nonexistent.so', TESTSTODELETE_PLANTED_HOST_KEY: '1' };
 
-async function envOfBox(t, boxTweak) {
-  const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nexec env -0 > env.txt\n' }, boxTweak });
+async function envOfBox(t, boxTweak, options = {}) {
+  const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nexec env -0 > env.txt\n' }, boxTweak, ...options });
   await start(t, c.launch(), { env: { ...SPAWN_ENV, ...PLANTED_HOST } }).exited;
   return Object.fromEntries(readFileSync(path.join(c.view, 'env.txt'), 'utf8').split('\0').filter(Boolean).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
 }
@@ -78,4 +90,15 @@ test('The_box_runs_Node_in_the_declared_culture_and_without_an_invariant_switch'
   const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nexec node -e \'console.log(Intl.DateTimeFormat().resolvedOptions().locale)\' > locale.txt\n' } });
   assert.equal((await start(t, c.launch()).exited).code, 0);
   assert.match(readFileSync(path.join(c.view, 'locale.txt'), 'utf8').trim(), /^de/, 'a Node probe\'s locale starts with de');
+});
+
+test('The_box_environment_of_the_dotnet_stack_carries_the_exact_hard_limit_at_256_and_512_MiB_and_Node_does_not', async t => {
+  if (!needs(t)) return;
+  const MIB = 1024 * 1024;
+  for (const [mib, hex] of [[256, '0x10000000'], [512, '0x20000000']]) {
+    const dotnet = await envOfBox(t, argv => argv, { stack: 'csharp', memoryMax: mib * MIB, caseId: `d${mib}` });
+    assert.equal(dotnet.DOTNET_GCHeapHardLimit, hex, `.NET at ${mib} MiB`);
+    const node = await envOfBox(t, argv => argv, { stack: 'node', memoryMax: mib * MIB, caseId: `n${mib}` });
+    assert.equal('DOTNET_GCHeapHardLimit' in node, false, `Node at ${mib} MiB`);
+  }
 });

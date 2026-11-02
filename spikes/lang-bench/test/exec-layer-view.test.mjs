@@ -57,7 +57,7 @@ test('Two_cases_never_share_a_writable_view', async t => {
   if (!needs(t)) return;
   const { tree, runDir } = fixture(t);
   assert.ok(makeViews({ tree, runDir, caseIds: ['c1', 'c2'] }).ok);
-  const run = async view => (await sh('bwrap', [...boxArgv({ view, dirs: toolchains, env: boxEnv({ dirs: toolchains }) }).slice(1), 'bash', 'run.sh'])).stdout.trim();
+  const run = async view => (await sh('bwrap', [...boxArgv({ view, dirs: toolchains, env: boxEnv({ dirs: toolchains }), prog: null }).slice(1), 'bash', 'run.sh'])).stdout.trim();
   assert.equal(await run(viewDir(runDir, 'c1')), 'FRESH');
   assert.equal(await run(viewDir(runDir, 'c2')), 'FRESH', 'the second case does not see the first one\'s file');
   assert.equal(existsSync(path.join(tree, 'marker')), false, 'and the built tree never receives a case\'s file');

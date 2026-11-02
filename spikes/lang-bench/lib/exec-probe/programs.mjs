@@ -23,7 +23,7 @@ export async function buildCsharp({ owned, scope, dirs }) {
   const folder = owned.ownedDir(scope, 'probebuild');
   cpSync(path.join(PROGRAMS, 'csharp'), folder, { recursive: true });
   const extra = { NUGET_PACKAGES: '/tmp/pk', DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' };
-  const box = boxArgv({ view: folder, dirs, env: boxEnv({ dirs, extra }), bwrap: findOnPath('bwrap') ?? 'bwrap' });
+  const box = boxArgv({ view: folder, dirs, env: boxEnv({ dirs, extra }), bwrap: findOnPath('bwrap') ?? 'bwrap', prog: null });
   const built = await runBounded(box[0], [...box.slice(1), ...BUILD_ARGS], { timeoutMs: BUILD_MS, env: { PATH: '/usr/bin:/bin' } });
   return built.ok && built.value.code === 0 ? ok(folder) : fail(`the C# probe program did not build in the box: ${built.ok ? built.value.stdout + built.value.stderr : built.reason}`);
 }

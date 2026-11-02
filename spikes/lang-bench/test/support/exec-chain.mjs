@@ -40,7 +40,7 @@ export const commOf = pid => { try { return text(`/proc/${pid}/comm`).trim(); } 
  * One case's launch chain. `files` is `{ name: text }` written into the view; `holdSeconds` bounds the scope holder; `memoryMax` is `memory.max` of `prog/`; `tweak(prefix)` lets a test
  * build the WRONG mechanism from the right one (a prefix without `OOMPolicy=continue`, without the delegated entry).
  */
-export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB, holdSeconds = 60, caseId = 'c1', tweak = prefix => prefix, boxTweak = argv => argv, extraBox = {} } = {}) {
+export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB, holdSeconds = 60, caseId = 'c1', tweak = prefix => prefix, boxTweak = argv => argv, extraBox = {}, stack } = {}) {
   const holder = await startHolder({ name: path.basename(owned.ownedDir(t, 'lhold')), boundSeconds: 300 });
   if (!holder.ok) throw new Error(holder.reason);
   t.after(() => stopHolder(holder.value));
@@ -57,7 +57,7 @@ export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB,
   const launch = (program = ['bash', 'run.sh']) => [
     ...tweak(scopePrefix({ unit, outDir: out, memoryMaxBytes: memoryMax, holdSeconds })),
     ...nsenterArgv(holder.value),
-    ...boxTweak(boxArgv({ view: viewDir, dirs: toolchains, env: boxEnv({ dirs: toolchains }), ...extraBox })), ...program,
+    ...boxTweak(boxArgv({ view: viewDir, dirs: toolchains, env: boxEnv({ dirs: toolchains, stack, memoryMaxBytes: memoryMax }), prog: parts.prog, ...extraBox })), ...program,
   ];
   return { ...parts, launch, start: (program, options = {}) => start(t, launch(program), options) };
 }
@@ -74,3 +74,9 @@ export function start(t, argv, { stdio = 'ignore', env = SPAWN_ENV } = {}) {
 export const programPid = (prog, comm) => (pidsIn(prog) ?? []).find(pid => comm.test(commOf(pid) ?? '')) ?? null;
 
 export { needs, sh, existsSync };
+
+/** The refuted shape: the box without the own-cgroup view (what it was before OP-K was decided), and the box of a plain scope, which has no `prog/` to bind. */
+export function withoutView(argv) {
+  const ro = argv.findIndex((arg, i) => arg === '--ro-bind' && argv[i + 2] === '/sys/fs/cgroup');
+  return argv.filter((arg, i) => arg !== '--unshare-cgroup' && !(i >= ro && i < ro + 3));
+}
