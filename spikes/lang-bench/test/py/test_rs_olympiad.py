@@ -5,11 +5,15 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import runner_path  # noqa: F401
 import rs_exec as ex
+import rs_launch as rl
+import rs_pump
 import rs_olympiad as ro
 import rs_report as rp
+from rs_track import Tracker
 
 ANSWER = b"7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1\n"
 
@@ -186,16 +190,63 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(left, 0, "SIGKILL is delivered at once but the children are gone a moment later: kill must wait for them")
 
 
+class PlainSettleTests(unittest.TestCase):
+    """C4: a group signal is never sent to a leader that was already reaped (its pid may be someone else's by now)."""
+
+    def test_A_straggler_of_the_plain_path_is_group_killed_before_the_leader_is_reaped(self):
+        marker = "54.%d" % (os.getpid() % 1000 + 1000)
+        seen, started = [], []
+        real, real_popen = ex.signal_group, subprocess.Popen
+
+        def popen(*args, **kwargs):
+            proc = real_popen(*args, **kwargs)
+            started.append(proc)
+            return proc
+
+        def recording(pid, sig):
+            seen.extend(p.returncode for p in started if p.pid == pid)
+            return real(pid, sig)
+
+        with mock.patch.object(ex, "signal_group", recording), mock.patch.object(subprocess, "Popen", popen):
+            result = Workspace(self, f"sleep {marker} &\ncat answer.bin\n", {"answer.bin": ANSWER}).run(case())
+        self.assertEqual(result.lifecycle["leftover"], {"known": True, "found": True})
+        self.assertTrue(seen and all(code is None for code in seen), f"the group signal found returncodes {seen}")
+        self.assertEqual(ProcessTests.alive(self, marker), [], "and the straggler is gone")
+
+    def test_A_clean_case_gets_no_group_signal_at_all(self):
+        seen = []
+        with mock.patch.object(ex, "signal_group", lambda pid, sig: seen.append(pid)):
+            result = Workspace(self, "cat answer.bin\n", {"answer.bin": ANSWER}).run(case())
+        self.assertEqual((result.status, result.lifecycle["leftover"], seen), ("PASS", {"known": True, "found": False}, []))
+
+
+class LauncherFdTests(unittest.TestCase):
+    def test_The_launchers_pidfd_is_unregistered_once_launcher_gone_has_handled_it(self):
+        proc = subprocess.Popen(["true"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(proc.wait)
+        self.addCleanup(lambda: [s.close() for s in (proc.stdin, proc.stdout) if s and not s.closed])
+        fd = ex.pidfd_of(proc)
+        self.addCleanup(ex.close_fd, fd)
+        launched = rl.Launched(proc, fd, ex.now_ns(), None, None, None, Tracker(proc, ex.PlainLifecycle(), box=False))
+        pump = rs_pump.Pump(launched, b"", ro.Comparer(b"", 1024), os.devnull)
+        self.addCleanup(pump.close)
+        self.assertIn(fd, pump.sel.get_map())
+        pump.launcher_gone()
+        self.assertNotIn(fd, pump.sel.get_map(), "it would fire again at every later wake-up")
+        pump.launcher_gone()  # handled twice is harmless
+
+
 class PumpTests(unittest.TestCase):
     def pump(self, argv, data, expected):
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         self.addCleanup(lambda: [s.close() for s in (proc.stdin, proc.stdout) if s and not s.closed])
         proc.wait()
-        return proc, ro._Pump(proc, None, data, ro.Comparer(expected, 1024), os.devnull)
+        launched = rl.Launched(proc, None, ex.now_ns(), None, None, None, Tracker(proc, ex.PlainLifecycle(), box=False))
+        return proc, rs_pump.Pump(launched, data, ro.Comparer(expected, 1024), os.devnull)
 
     def test_Output_already_in_the_pipe_when_the_exit_is_seen_is_read_before_the_verdict(self):
         proc, pump = self.pump(["printf", "%0100d", "7"], b"", b"0" * 99 + b"7")
-        self.assertEqual(pump.exited(), "exited")
+        self.assertEqual(pump.program_exited(), "exited")
         self.assertTrue(pump.comparer.exact, "without the drain the 100 bytes are never read")
 
     def test_Input_written_to_a_program_that_has_already_gone_is_dropped_quietly_not_raised(self):
@@ -303,17 +354,17 @@ class ProcessTests(unittest.TestCase):
             self.build_pgid = proc.pid
             return fd
 
-        saved = (ex.pidfd_of, ex.wait_exit)
+        saved = (ex.pidfd_of, ex._exited)
         ex.pidfd_of = recording
         if wait is not None:
-            ex.wait_exit = wait
+            ex._exited = wait
         try:
             ex.build(ws.dir, ws.scratch, ceiling_ms=ceiling_ms)
             return opened, None
         except BaseException as e:  # noqa: B902  (the point: even a BaseException)
             return opened, e
         finally:
-            ex.pidfd_of, ex.wait_exit = saved
+            ex.pidfd_of, ex._exited = saved
 
     def is_closed(self, fd):
         try:
