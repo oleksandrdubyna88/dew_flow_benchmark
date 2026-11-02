@@ -27,9 +27,13 @@ async function holderFor(t, boundSeconds = 120) {
 
 const nsOf = pid => readlinkSync(`/proc/${pid}/ns/net`);
 
-/** Start a program in the box inside the holder's namespaces, as the layer does; it ends with the test. */
+/**
+ * Start a program in the box inside the holder's namespaces, as the layer does; it ends with the test. This test has no scope to kill, so it adds `--die-with-parent` to its OWN copy of
+ * the argv (the layer's box never has it: the scope is the kill domain) and a killed bwrap then takes the box with it.
+ */
 function startInBox(t, holder, argv, program) {
-  const [exe, ...args] = [...nsenterArgv(holder), ...argv, ...program];
+  const withDie = [...argv.slice(0, argv.indexOf('--unshare-pid')), '--die-with-parent', ...argv.slice(argv.indexOf('--unshare-pid'))];
+  const [exe, ...args] = [...nsenterArgv(holder), ...withDie, ...program];
   const child = spawn(exe, args, { stdio: 'ignore', detached: true, env: { PATH: '/usr/sbin:/usr/bin:/bin' } });
   t.after(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ } });
   return child;
