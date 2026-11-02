@@ -1,6 +1,6 @@
 # PLAN — language comparison v2: C# / .NET 10 against TypeScript / Node 26 coding agents on ten harder tasks, bare and under the family's process
 
-> Status: **Epoch 5 open since 2026-11-01 with 1 change (5.1, 2026-11-02: a runtime's own out-of-memory abort is `memory limit`), approved by the owner — narrowed (D10's arm alternation, the T16 control, is lost; §17 Q-H approved); the bare anchor round in C added (§17 Q-G, D54). Work may start on group A (§14 A1).** *Superseded status of the stop:* STOPPED 2026-11-01 by change 4.2 (the owner's staged order: group A, the four olympiad tasks in the bare arm;
+> Status: **Epoch 5 stopped for re-review on 2026-11-02, after its second change (5.2: Node gets `--max-old-space-size` = 90 % of the limit and .NET's hard limit becomes 90 % too, against D15's "no `--max-old-space-size` flag"); no new code on any epic until the re-review closes (`common.plan-change-control`).** *Before the stop:* Epoch 5 open since 2026-11-01 with 1 change (5.1, 2026-11-02: a runtime's own out-of-memory abort is `memory limit`), approved by the owner — narrowed (D10's arm alternation, the T16 control, is lost; §17 Q-H approved); the bare anchor round in C added (§17 Q-G, D54). Work may start on group A (§14 A1).** *Superseded status of the stop:* STOPPED 2026-11-01 by change 4.2 (the owner's staged order: group A, the four olympiad tasks in the bare arm;
 > then B, the bare arm for all ten; then C, the process arm) — the second change of epoch 4; no v2 code until its whole
 > re-review closes (`common.plan-change-control`).** **The whole-plan revision (step 4) is written, 2026-11-01**, from
 > the Fable consult of change 4.2 (its § 7 as the backbone) and four coai consults (cadence `f25ad04b`; risks `b3a3e5d6`,
@@ -210,9 +210,11 @@ Narrowed: yes — D10's arm alternation, the control of T16, is lost: under D44 
   the owner's approval of the narrowing (§17 Q-H, answered "approve") and the owner's answer to §17 Q-G ("yes": the bare
   anchor round is part of group C, D54). Epoch 5 opens below at 0 changes.)
 
-> Epoch 5 · approved 2026-11-01 · by owner · state: open
+> Epoch 5 · approved 2026-11-01 · by owner · state: stopped
 - 5.1 · 2026-11-02 · agent · contract — under the memory view decided for OP-K (D15), a genuinely over-limit .NET program ends in the runtime's own abort ("Out of memory.", exit 134) before the kernel kills it, so `memory limit` (read from `oom_kill` alone) would call it a runtime error; found by E1.S8b's OP-K experiment (`spikes/lang-bench/inputs/opk-experiment-2026-11-02.json`)
   The rule: a run that ends in a runtime's own out-of-memory abort is `memory limit`, the same as a kernel `oom_kill`: .NET's native "Out of memory." abort and V8's "JavaScript heap out of memory" abort, both exit 134, recognised by their exact stderr line; the record names which. It is the same rule for both stacks. It changes the runner (E1.S8a), fixed forward on E1.S8b's branch before group A runs, with its tests and a re-pin. The first change of epoch 5: no stop.
+- 5.2 · 2026-11-02 · agent · contract — under OP-K's own-cgroup view V8 caps Node's JS heap at about half of a 512 MiB limit while .NET may use all of it, so an object graph at 70 % of the limit is a false `memory limit` for Node only; found by E1.S8b's OP-K experiment (`followUp3`–`followUp5` of `spikes/lang-bench/inputs/opk-experiment-2026-11-02.json`)
+  The fix the measurements support (policy A at 90 %, after `ask_consultants` `bf619f55`, 2 of 2 for A): each program sees its own cgroup read-only; .NET gets `DOTNET_GCHeapHardLimit` = 90 % of the limit (100 % failed a mixed workload at 256 MiB) and Node gets `NODE_OPTIONS=--max-old-space-size=<90 % of the limit in MiB>`, which D15 forbids today. Node's typed arrays outside V8's heap fail a mixed workload under every setting: a runtime property, recorded, not tuned. The second change of epoch 5: stopped for re-review.
 
 ## 1. The question, before any solution
 
