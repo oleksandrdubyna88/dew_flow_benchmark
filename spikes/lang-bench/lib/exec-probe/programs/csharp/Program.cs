@@ -42,6 +42,25 @@ switch (mode)
         Console.WriteLine("OK");
         break;
     }
+    case "near-limit": // live byte arrays = 80% of the limit (args[1], MiB), kept to the end, plus 1 GiB of short-lived byte arrays
+    {
+        var nearTarget = long.Parse(args[1]) * Mib * 80 / 100;
+        var nearData = new List<byte[]>();
+        for (long held = 0; held < nearTarget; held += Mib)
+        {
+            var block = new byte[Mib];
+            Array.Fill(block, (byte)1);
+            nearData.Add(block);
+        }
+        for (var i = 0; i < 4096; i++)
+        {
+            var block = new byte[256 * 1024];
+            Array.Fill(block, (byte)i);
+        }
+        GC.KeepAlive(nearData);
+        Console.WriteLine("OK");
+        break;
+    }
     case "medium-objects": // live ordinary objects (records with numbers and a short array) = 40% of the limit by the heap after a full GC, heldData to the end, plus 2 GiB of short-lived small objects
     {
         var target = long.Parse(args[1]) * Mib * 40 / 100;

@@ -2,7 +2,7 @@
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cgroupViewPrefix, classify, extraEnvFor, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
+import { cgroupViewPrefix, classify, extraEnvFor, POLICY_3C, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
 
@@ -53,4 +53,11 @@ test('A_dotnet_native_out_of_memory_abort_is_told_from_a_managed_exception_and_f
   assert.deepEqual(abort, { result: 'runtime error', ended: '.NET runtime abort "Out of memory." (exit status 134), not a kernel oom_kill' });
   assert.match(classify({ status: 'FAIL', reason: 'exit status 134', memory: { oomKill: 0 }, stderrTail: 'Unhandled exception. System.OutOfMemoryException' }).ended, /OutOfMemoryException/);
   assert.equal(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 1 }, stderrTail: 'Out of memory.' }).result, 'memory limit');
+});
+
+test('The_3c_variant_sets_the_hard_limit_to_the_cases_limit_in_hexadecimal_bytes_for_dotnet_only_on_top_of_the_view', () => {
+  assert.deepEqual(extraEnvFor(POLICY_3C, 'csharp', 256), { DOTNET_GCHeapHardLimit: '0x10000000' });
+  assert.deepEqual(extraEnvFor(POLICY_3C, 'csharp', 512), { DOTNET_GCHeapHardLimit: '0x20000000' });
+  assert.deepEqual(extraEnvFor(POLICY_3C, 'node', 256), {}, '.NET only');
+  assert.equal(viewFor(POLICY_3C), true);
 });

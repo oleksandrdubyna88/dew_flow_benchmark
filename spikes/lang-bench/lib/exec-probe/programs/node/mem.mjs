@@ -22,6 +22,12 @@ const modes = {
     for (let i = 0; i < 8192; i += 1) new Uint8Array(256 * 1024).fill(i);
     console.log(kept.length > 0 ? 'OK' : 'EMPTY');
   },
+  'near-limit'(limitMiB) { // live typed arrays = 80% of the limit, kept to the end, plus 1 GiB of short-lived typed arrays
+    const kept = [];
+    for (let held = 0; held < (limitMiB * MIB * 80) / 100; held += MIB) kept.push(new Uint8Array(MIB).fill(1));
+    for (let i = 0; i < 4096; i += 1) new Uint8Array(256 * 1024).fill(i);
+    console.log(kept.length > 0 ? 'OK' : 'EMPTY');
+  },
   'medium-objects'(limitMiB) { // live ordinary objects = 40% of the limit by the heap after a full GC, kept to the end, plus 2 GiB of short-lived small objects
     v8.setFlagsFromString('--expose-gc');
     const gc = vm.runInNewContext('gc');

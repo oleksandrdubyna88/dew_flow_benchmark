@@ -1624,5 +1624,708 @@
         "n": 3
       }
     ]
+  },
+  "followUp2": {
+    "note": "(3c) = view (3) + DOTNET_GCHeapHardLimit=<limit bytes, hex>, .NET only; near-limit = live 80 % + 1 GiB short-lived. Box module and policy file unchanged.",
+    "believed3c": {
+      "256": {
+        "totalAvailableBytes": 268435456,
+        "heapHardLimit": "",
+        "cgroupVisible": true
+      },
+      "512": {
+        "totalAvailableBytes": 536870912,
+        "heapHardLimit": "",
+        "cgroupVisible": true
+      }
+    },
+    "table": [
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          511,
+          510,
+          510
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          125,
+          126,
+          125
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          234,
+          233,
+          233
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "runtime error",
+          "runtime error",
+          "runtime error"
+        ],
+        "ended": [
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill"
+        ],
+        "peakMiB": [
+          198,
+          198,
+          197
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "results": [
+          "runtime error",
+          "runtime error",
+          "runtime error"
+        ],
+        "ended": [
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+          ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill"
+        ],
+        "peakMiB": [
+          455,
+          455,
+          454
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "today",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "today",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      }
+    ],
+    "runs": [
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 268423168,
+        "stderrTail": "",
+        "wallMs": 828,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 268169216,
+        "stderrTail": "",
+        "wallMs": 731,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 692,
+        "n": 3
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 535539712,
+        "stderrTail": "",
+        "wallMs": 978,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 535277568,
+        "stderrTail": "",
+        "wallMs": 947,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 535277568,
+        "stderrTail": "",
+        "wallMs": 902,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 131575808,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1275,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 131817472,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1369,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 131567616,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1298,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 245071872,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 3671,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 244019200,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 3733,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 244301824,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 3826,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 243,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 229,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 229,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 553,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 423,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 364,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 207093760,
+        "stderrTail": "Out of memory.",
+        "wallMs": 176,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 207097856,
+        "stderrTail": "Out of memory.",
+        "wallMs": 190,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 206815232,
+        "stderrTail": "Out of memory.",
+        "wallMs": 185,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 476831744,
+        "stderrTail": "Out of memory.",
+        "wallMs": 369,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 476831744,
+        "stderrTail": "Out of memory.",
+        "wallMs": 392,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own+gchardlimit-case-limit",
+        "result": "runtime error",
+        "ended": ".NET runtime abort \"Out of memory.\" (exit status 134), not a kernel oom_kill",
+        "peakBytes": 476569600,
+        "stderrTail": "Out of memory.",
+        "wallMs": 331,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 198,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 172,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 233,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 450,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 652,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "cgroup-view-own",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 461,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 230,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 224,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 228,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 462,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 395,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "today",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 395,
+        "n": 3
+      }
+    ]
   }
 }

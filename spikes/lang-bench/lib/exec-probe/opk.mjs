@@ -18,9 +18,14 @@ export const POLICIES = Object.freeze(['today', 'cgroup-view-own']);
 /** (3b): view (3) plus a hard limit of 100 % (hexadecimal, as .NET reads it) in the .NET environment only. */
 export const POLICY_3B = 'cgroup-view-own+gchl100';
 const EXTRA_ENV = Object.freeze({ [POLICY_3B]: Object.freeze({ csharp: Object.freeze({ DOTNET_GCHeapHardLimitPercent: '0x64' }) }) });
+/** (3c): view (3) plus `DOTNET_GCHeapHardLimit=<the case's limit in bytes, hexadecimal>` in the .NET environment only. */
+export const POLICY_3C = 'cgroup-view-own+gchardlimit-case-limit';
 
-/** The extra environment keys a policy gives a stack's program (through the per-stack allow-list; the box module is not changed). */
-export const extraEnvFor = (policy, stack) => EXTRA_ENV[policy]?.[stack] ?? {};
+/** The extra environment keys a policy gives a stack's program for a case at `limitMiB` (through the per-stack allow-list; the box module is not changed). */
+export function extraEnvFor(policy, stack, limitMiB) {
+  if (policy === POLICY_3C && stack === 'csharp') return { DOTNET_GCHeapHardLimit: `0x${(limitMiB * MIB).toString(16)}` };
+  return EXTRA_ENV[policy]?.[stack] ?? {};
+}
 /** Whether a policy puts the read-only view of the program's own cgroup in the box. */
 export const viewFor = policy => policy !== 'today';
 
@@ -69,7 +74,7 @@ const tailOf = entry => entry?.lifecycle?.stderr?.tail ?? '';
 export async function runOnce({ owned, scope, dirs, csharpBuild, stack, mode, limitMiB, policy }) {
   const given = samples(owned, scope);
   const tree = programTree({ owned, scope, stack, mode: `${mode} ${limitMiB}`, csharpBuild });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack) });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB) });
   if (!opened.ok) return { mode, stack, limitMiB, policy, result: 'not run', ended: opened.reason, peakBytes: null, stderrTail: '' };
   const run = opened.value;
   try {
@@ -138,7 +143,7 @@ const factsOf = text => Object.fromEntries(text.split('\n').filter(line => line.
 export async function verifyCgroupView({ owned, scope, dirs, csharpBuild, limitMiB, policy = 'cgroup-view-own', dotnetFraction = DOTNET_FRACTION }) {
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
   writeFileSync(path.join(tree, 'cgview.sh'), CGVIEW);
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, 'csharp') });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, 'csharp', limitMiB) });
   if (!opened.ok) return { ok: false, problems: [opened.reason] };
   const run = opened.value;
   try {
