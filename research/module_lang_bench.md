@@ -89,7 +89,12 @@ after re-checking that the pid is still listed. An existing cgroup is free only 
 nothing. A `--cgroup-of` that never existed on the plain path is exit 3 (after the launcher's group was killed); one that was there and went is still a cleanup failure (exit 5). An extra
 process counts for `fork` only when it has been in the cgroup for 100 ms (looks at least 100 ms apart), or is still alive at the program's end (the leftover read). The end of the
 program (for the orphan rule) is judged by its pidfd, not by `/proc`. Waiting for a group to go is a scan of `/proc` paced from 1 ms to 20 ms. The stop handler blocks every stopping
-signal at once before it sets them to ignore. Limit (F8, very low probability, not fixed): the box is judged by `/proc/<child-pid>/cgroup` at one instant; a box that moves itself into
+signal at once before it sets them to ignore, and unblocks them again once they are ignored (no blocked mask outlives the handler: a child of the teardown would inherit it). The fallback kill
+works in batches of at most 64 pids: a pidfd is opened for each pid of the batch, `cgroup.procs` is read ONCE, the pidfds whose pid is still listed are signalled, and all are closed; a pidfd that
+cannot be opened for lack of descriptors (EMFILE, ENFILE) ends the batch, what is open is signalled and closed, and the pids not tried go on in the next batch. A mountinfo line that is malformed
+(too few fields, no ` - ` part) is skipped. A `--cgroup-of` that holds a controllers file but lies under no cgroup2 mount is reported as exactly that ("is not under a cgroup2 mount"). Limit
+(G-round, fail closed): a cgroup2 mounted as a SUBTREE (its mountinfo root is not `/`) is no cgroup2 root for the runner and a `--cgroup-of` under it is refused; the mount layout is S8b's.
+Limit (F8, very low probability, not fixed): the box is judged by `/proc/<child-pid>/cgroup` at one instant; a box that moves itself into
 another cgroup later is not followed.
 
 *Host prerequisites (P1).* At the start of a run the host must be Linux 5.14 or newer and have a working `os.pidfd_open`, and cgroup v2 at `/sys/fs/cgroup` when `--cgroup-of`
