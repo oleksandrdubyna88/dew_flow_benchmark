@@ -4,10 +4,12 @@
 //
 //   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--no-specs]
 //
-// The record goes to inputs/exec-probe-<YYYY-MM-DD>.json (the date, the host, the layer identity, allow-listed environment keys only). Unless --no-specs, a probe on which every line
+// The record goes to inputs/exec-probe-<YYYY-MM-DD>[-<n>].json (the date, the host, the layer identity, allow-listed environment keys only); the first of a day has no suffix, a second run is `-2`, a
+// third `-3`. A record is NEVER overwritten (T-L53, parent D59): a --out path that exists is refused with exit 3 before anything is probed, and the file is created exclusively. Unless --no-specs, a probe on which every line
 // passed also writes `probedOn` and `host` into the layer's identity file (inputs/specs.d/exec-layer.json) and re-assembles inputs/specs.json.
-// Exit 0 every line passed and a decided memory policy holds; 3 a line failed, the memory policy is undecided or not met, or memory.peak cannot be read; 2 usage or the host cannot start it.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+// Exit 0 every line passed and a decided memory policy holds; 3 a line failed, the memory policy is undecided or not met, memory.peak cannot be read, or the record's path exists; 2 usage or the host
+// cannot start it.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,11 +18,12 @@ import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { assemble, canonicalJson } from './lib/specs-record.mjs';
 
 import { runProbe, writeRecord } from './lib/exec-probe/probe.mjs';
-
+import { nextRecordPath, RecordExists } from './lib/exec-probe/record-path.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
 const option = name => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+const usage3 = reason => { process.stderr.write(`exec-probe: ${reason}\n`); process.exit(3); };
 const usage = reason => { process.stderr.write(`exec-probe: ${reason}\n`); process.exit(2); };
 
 async function ownedHelper() {
@@ -57,6 +60,11 @@ function recordProbedOn(record) {
   if (built.ok) writeFileSync(path.join(spike, 'inputs', 'specs.json'), built.text);
 }
 
+if (option('--out') !== undefined && existsSync(option('--out'))) {
+  process.stderr.write(`exec-probe: ${option('--out')} already exists: a probe record is never overwritten (T-L53); name a new file or take the default, which numbers a second run of the day\n`);
+  process.exit(3);
+}
+
 const stacks = loadStacksLang(JSON.parse(readFileSync(path.join(spike, 'inputs', 'stacks-lang.json'), 'utf8')));
 if (!stacks.ok) usage(stacks.reason);
 const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
@@ -68,9 +76,14 @@ try {
   const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity: identityOf(), progress: text => process.stderr.write(`exec-probe: ${text}\n`) });
   if (!result.ok) usage(result.reason);
   const { value: record } = result;
-  const out = option('--out') ?? path.join(spike, 'inputs', `exec-probe-${record.date}.json`);
+  const out = option('--out') ?? nextRecordPath({ inputsDir: path.join(spike, 'inputs'), date: record.date });
   mkdirSync(path.dirname(out), { recursive: true });
-  writeRecord(out, record);
+  try {
+    writeRecord(out, record);
+  } catch (error) {
+    if (!(error instanceof RecordExists)) throw error;
+    usage3(error.message);
+  }
   for (const line of record.lines) process.stdout.write(`${line.ok ? 'ok  ' : 'FAIL'} ${line.id}\n`);
   for (const problem of record.memoryView.verdict.problems) process.stdout.write(`memory: ${problem}\n`);
   process.stdout.write(`exec-probe: record written to ${out}\n`);

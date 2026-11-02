@@ -11,6 +11,7 @@ import { assertMemoryView, exitCodeOf, overLimitRows, readPolicy, workloadRows }
 import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
+import { RecordExists } from './record-path.mjs';
 
 const MIB = 1024 * 1024;
 export const LIMITS_MIB = Object.freeze([256, 512]);
@@ -102,10 +103,14 @@ export function finish({ found, memoryView, now, identity }) {
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };
 }
 
-/** Write the record (a folder made as needed). */
+/** Write the record (a folder made as needed), EXCLUSIVELY: a path that exists is `RecordExists` and keeps every byte (T-L53). */
 export function writeRecord(file, record) {
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+  try {
+    writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`, { flag: 'wx' });
+  } catch (error) {
+    throw error.code === 'EEXIST' ? new RecordExists(file) : error;
+  }
 }
 
 export { exitCodeOf };
