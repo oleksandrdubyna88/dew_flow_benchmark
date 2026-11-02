@@ -6,7 +6,7 @@
 // One run = one runner process = one holder: the runner is the driver and the program of every case joins the namespace the driver is already in. One scope per case and one for the
 // control `empty-program` (the unit name holds `{case}`); the view of every case is made before the runner starts (disk budget: see case-view.mjs). A data run (`data: true`) halts with
 // `memory-not-certifiable`, exit 3, when `prog/memory.peak` cannot be read; any other run proceeds with `memoryCertified: false`. Nothing here changes the runner.
-import { readFileSync, readlinkSync } from 'node:fs';
+import { readFileSync, readlinkSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { findOnPath } from '../../../minigit-bench/lib/find-on-path.mjs';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
@@ -48,12 +48,13 @@ function newRun(options, tools) {
 
 async function openSteps(run) {
   const { options } = run;
+  if (!statSync(options.tree, { throwIfNoEntry: false })?.isDirectory()) return fail(`the built tree ${options.tree} is not a directory: the box mounts it read-only as the workspace`);
   const long = tooLongForUnit(run.unitPrefix, options.caseIds);
   if (long.length > 0) return fail(`the unit name of case ${long.join(', ')} would pass 63 characters; use shorter case ids`);
   const holder = await startHolder({ name: run.holderName, boundSeconds: options.runCeilingMs / 1000 + HOLDER_MARGIN_S });
   if (!holder.ok) return fail(`the network-namespace holder did not start: ${holder.reason}`);
   Object.assign(run, { holder: holder.value, holderNet: readlinkSync(`/proc/${holder.value.pid}/ns/net`) });
-  const views = makeViews({ tree: options.tree, runDir: run.dir, caseIds: options.caseIds });
+  const views = makeViews({ runDir: run.dir, caseIds: options.caseIds });
   return views.ok ? ok(run) : views;
 }
 

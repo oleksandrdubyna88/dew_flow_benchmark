@@ -8,6 +8,7 @@ listener.listen(4)
 with open("ready.port.tmp", "w") as f:
     f.write(str(listener.getsockname()[1]))
 os.rename("ready.port.tmp", "ready.port")
+print(listener.getsockname()[1], flush=True)
 while True:
     connection, _ = listener.accept()
     with connection:

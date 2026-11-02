@@ -21,7 +21,7 @@ export const holdSeconds = run => Math.ceil(run.options.caseWallMs / 1000) + HOL
 export function launchPrefix(run, { statusFd = STATUS_FD, outside = false } = {}) {
   const scope = scopePrefix({ unit: `${run.unitPrefix}-{case}`, outDir: path.join(run.dir, 'out', '{case}'), memoryMaxBytes: run.options.memoryMaxBytes, holdSeconds: holdSeconds(run), systemdRun: run.tools.systemdRun });
   const join = outside ? nsenterArgv(run.holder, run.tools.nsenter) : [];
-  return [...scope, ...join, ...boxArgv({ view: viewTemplate(run.dir), dirs: run.options.dirs, env: run.env, statusFd, extraRo: run.options.extraRo, bwrap: run.tools.bwrap, prog: progTemplate(run.unitPrefix) })];
+  return [...scope, ...join, ...boxArgv({ view: viewTemplate(run.dir), dirs: run.options.dirs, env: run.env, statusFd, extraRo: run.options.extraRo, bwrap: run.tools.bwrap, prog: progTemplate(run.unitPrefix), tree: run.options.tree })];
 }
 
 /** The whole argv of a program launched from OUTSIDE the namespaces, `{case}` filled in; no status descriptor unless `statusFd` is given. */

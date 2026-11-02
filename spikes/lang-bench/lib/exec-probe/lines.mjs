@@ -7,7 +7,6 @@ import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { unsafeBinds } from '../exec-layer/box.mjs';
 import { cleanup } from '../exec-layer/cleanup.mjs';
-import { viewDir } from '../exec-layer/case-view.mjs';
 import { nsenterArgv } from '../exec-layer/netns.mjs';
 import { launchPrefix, openRun, programArgv, runCases } from '../exec-layer/run.mjs';
 import { progCgroup, readProg, userEnv } from '../exec-layer/scope.mjs';
@@ -75,16 +74,16 @@ async function programPid(unitProg) {
   return null;
 }
 
-async function readyPort(file) {
-  for (let waited = 0; waited < 15_000; waited += 25) {
-    const port = text(file);
-    if (port !== null) return Number(port);
-    await pause(25);
-  }
-  return null;
+/** The port the server printed on its first line of standard output (the box's workspace is an overlay: a file it writes does not land on the host), or null within 15 s. */
+function readyPort(child) {
+  return new Promise(resolve => {
+    let said = '';
+    child.stdout.on('data', chunk => { said += chunk; if (said.includes('\n')) resolve(Number(said.split('\n')[0])); });
+    setTimeout(() => resolve(null), 15_000).unref();
+  });
 }
 
-const detached = argv => spawn(argv[0], argv.slice(1), { stdio: 'ignore', detached: true, env: userEnv() });
+const detached = (argv, stdio = 'ignore') => spawn(argv[0], argv.slice(1), { stdio, detached: true, env: userEnv() });
 const stop = child => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } };
 const procText = (pid, name) => (pid === null ? '' : text(`/proc/${pid}/${name}`) ?? '');
 const nsOf = pid => (pid === null ? null : readlinkSync(`/proc/${pid}/ns/net`));
@@ -98,12 +97,12 @@ async function ping(run, port) {
 
 /** `netns`, `program-in-prog` and `ping-over-loopback`: the driver and the program share a namespace that is not the host's; the program is in `prog/` and the driver is not; ping works. */
 export async function networkLines(run) {
-  const server = detached(programArgv(run, 'net', ['python3', 'server.py']));
+  const server = detached(programArgv(run, 'net', ['python3', 'server.py']), ['ignore', 'pipe', 'ignore']);
   const unit = `${run.unitPrefix}-net`;
   const driver = await spawnDriver(run);
   try {
     const pid = await programPid(progCgroup(unit));
-    const port = await readyPort(path.join(viewDir(run.dir, 'net'), 'ready.port'));
+    const port = await readyPort(server);
     const reply = await ping(run, port);
     const ns = { host: readlinkSync('/proc/self/ns/net'), driver: nsOf(driver.pid), program: nsOf(pid) };
     const cgroups = { program: procText(pid, 'cgroup').trim(), driver: procText(driver.pid, 'cgroup').trim() };

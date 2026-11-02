@@ -55,7 +55,7 @@ test('Cleanup_on_the_exception_path_removes_what_a_run_that_could_not_open_had_m
   const options = layerOptions(t);
   const result = await runCases({ ...options, tree: path.join(options.tree, 'no-such-tree') });
   assert.equal(result.exitCode, 3);
-  assert.match(result.stderr, /case view/);
+  assert.match(result.stderr, /built tree .* is not a directory/);
   assert.deepEqual(readdirSync(options.parent), [], 'the run folder, its claim and the holder of a run that never started are gone');
 });
 
