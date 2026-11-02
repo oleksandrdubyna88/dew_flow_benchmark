@@ -18,7 +18,7 @@ export const PROGRAM_COMM = Object.freeze({ python: /^python3/, node: /^node/, c
 async function buildCsharp(view) {
   const extra = { NUGET_PACKAGES: '/tmp/pk', DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' };
   const box = boxArgv({ view, dirs: toolchains, env: boxEnv({ dirs: toolchains, extra }) });
-  const built = await sh(box[0], [...box.slice(1), 'dotnet', 'build', 'server.csproj', '-c', 'Release', '-o', 'bin', '--nologo', '-v', 'q'], { timeoutMs: 180_000 });
+  const built = await sh(box[0], [...box.slice(1), 'dotnet', 'build', 'server.csproj', '-c', 'Release', '-o', 'bin', '-m:4', '--nologo', '-v', 'q'], { timeoutMs: 180_000 });
   if (built.code !== 0) throw new Error(`the C# stub did not build offline: ${built.stdout}${built.stderr}`);
 }
 

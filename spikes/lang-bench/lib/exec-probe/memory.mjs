@@ -1,0 +1,80 @@
+// E1.S8b brief B: the memory view, ASSERTED (T-L43; coai risk 19ae7208; parent D51). The box mounts no `/sys/fs/cgroup`, and .NET finds its memory limit through the cgroup mount, so the
+// two stacks may believe different limits under one `MemoryMax`. The probe records what each runtime believes at 256 and 512 MiB and checks it against the host's `prog/memory.max`
+// by the policy D15 records. OP-K — which policy — is the team lead's to decide on that record: `inputs/specs.d/memory-policy.json` is `{ policy, decided, by }`, `policy` null while
+// undecided. A probe that only printed a mismatch and exited 0 would let the stacks meet different bounds, so: undecided is exit 3 `memory-policy-undecided`, a mismatch is exit 3
+// `memory-view-mismatch`, and exit 0 only when a policy holds. The judgement is pure: observations in, `{ ok, halt, problems }` out.
+import { readFileSync } from 'node:fs';
+import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
+
+const MIB = 1024 * 1024;
+export const POLICY_NAMES = Object.freeze(['runtime-view-accepted', 'dotnet-gc-hard-limit-percent:<n>', 'cgroup-view-readonly']);
+const PERCENT = /^dotnet-gc-hard-limit-percent:([1-9][0-9]?|100)$/;
+const mib = bytes => `${Math.round(bytes / MIB)} MiB`;
+
+/** `ok({ policy, decided, by })` or `fail(reason)` naming the legal values. A decided policy says when and by whom. */
+export function validatePolicy(file) {
+  const { policy, decided, by } = file ?? {};
+  const legal = `the policy is null (undecided) or one of ${POLICY_NAMES.join(', ')} (n from 1 to 100)`;
+  if (policy === null) return ok({ policy: null, decided: decided ?? null, by: by ?? null });
+  const known = policy === 'runtime-view-accepted' || policy === 'cgroup-view-readonly' || PERCENT.test(policy ?? '');
+  if (!known) return fail(`${JSON.stringify(policy)} is not a memory policy: ${legal}`);
+  return typeof decided === 'string' && typeof by === 'string' && decided !== '' && by !== '' ? ok({ policy, decided, by }) : fail('a decided memory policy needs `decided` (a date) and `by`');
+}
+
+/** `ok(policy file)` read from `file`, or `fail`: a file that is absent or malformed is a failure, never "undecided". */
+export function readPolicy(file) {
+  try {
+    return validatePolicy(JSON.parse(readFileSync(file, 'utf8')));
+  } catch (error) {
+    return fail(`${file} cannot be read as the memory policy (${error.code ?? error.message})`);
+  }
+}
+
+const hardLimit = seen => Number(seen.heapHardLimit);
+
+function behaviour(at) {
+  const where = mib(at.memoryMaxBytes);
+  const out = [];
+  for (const stack of ['csharp', 'node']) {
+    if (at.churn[stack] !== 'PASS') out.push(`${stack} at ${where}: the allocation-churn program with bounded live data did not pass (${at.churn[stack]}): it meets the kernel's OOM kill under the runtime's own view`);
+    const over = at.overLimit[stack];
+    if (over.reason !== 'memory limit' || !(over.oomKill >= 1)) out.push(`${stack} at ${where}: the over-limit program ended "${over.reason}" with oom_kill ${over.oomKill}, not memory limit`);
+    else if (!over.eventsKept || !(over.peakBytes > 0)) out.push(`${stack} at ${where}: the over-limit program's memory.peak and memory.events were not kept`);
+  }
+  return out;
+}
+
+function percentRule(at) {
+  const limit = hardLimit(at.csharp);
+  return limit > 0 && limit <= at.memoryMaxBytes ? [] : [`csharp at ${mib(at.memoryMaxBytes)}: no GC hard limit inside prog/memory.max (heapHardLimit "${at.csharp.heapHardLimit}")`];
+}
+
+function cgroupRule(at) {
+  const where = mib(at.memoryMaxBytes);
+  const out = [];
+  if (!at.csharp.cgroupVisible || !at.node.cgroupVisible) out.push(`no cgroup is visible in the box at ${where}`);
+  if (at.csharp.totalAvailableBytes !== at.memoryMaxBytes) out.push(`csharp at ${where}: TotalAvailableMemoryBytes is ${mib(at.csharp.totalAvailableBytes)}, not prog/memory.max`);
+  if (at.node.constrainedBytes !== at.memoryMaxBytes) out.push(`node at ${where}: constrainedMemory is ${mib(at.node.constrainedBytes)}, not prog/memory.max`);
+  return out;
+}
+
+const RULES = Object.freeze({ 'cgroup-view-readonly': cgroupRule });
+const ruleFor = policy => (PERCENT.test(policy) ? percentRule : RULES[policy] ?? (() => []));
+
+function problemsAt(policy, at) {
+  const asked = at.hostMemoryMax === at.memoryMaxBytes ? [] : [`prog/memory.max is ${at.hostMemoryMax} at ${mib(at.memoryMaxBytes)}: the scope does not carry the limit asked for`];
+  return [...asked, ...ruleFor(policy)(at), ...behaviour(at)];
+}
+
+/**
+ * `{ ok, halt, problems }`: `halt` is `'memory-policy-undecided'` for a null policy (never ok), `'memory-view-mismatch'` when the policy is not met at some limit, else null.
+ * `observations.limits[]`: `{ memoryMaxBytes, hostMemoryMax, csharp, node, churn, overLimit }` as the probe records them.
+ */
+export function assertMemoryView({ policy, observations }) {
+  if (policy === null) return { ok: false, halt: 'memory-policy-undecided', problems: [] };
+  const problems = observations.limits.flatMap(at => problemsAt(policy, at));
+  return { ok: problems.length === 0, halt: problems.length === 0 ? null : 'memory-view-mismatch', problems };
+}
+
+/** The probe's exit code for a verdict: 0 only when it is ok. */
+export const exitCodeOf = verdict => (verdict.ok ? 0 : 3);

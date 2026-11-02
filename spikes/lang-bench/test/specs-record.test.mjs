@@ -51,8 +51,14 @@ test('A_file_in_specs_d_that_is_no_writers_is_refused_and_a_writer_not_yet_writt
   assert.equal(assemble(inputsFolder(t, { 'runner.json': { runner: {} } })).ok, true);
 });
 
-test('The_writer_files_are_the_four_the_plan_names', () => {
-  assert.deepEqual([...WRITER_FILES].sort(), ['exec-layer.json', 'format.json', 'runner.json', 'spec-states.json']);
+test('The_writer_files_are_the_four_the_plan_names_and_the_memory_policy', () => {
+  assert.deepEqual([...WRITER_FILES].sort(), ['exec-layer.json', 'format.json', 'memory-policy.json', 'runner.json', 'spec-states.json']);
+});
+
+test('The_memory_policy_file_keeps_its_own_shape_and_is_assembled_under_one_key', t => {
+  const inputs = inputsFolder(t, { 'memory-policy.json': { policy: null, decided: null, by: null }, 'runner.json': { runner: {} } });
+  const { text } = assemble(inputs);
+  assert.deepEqual(JSON.parse(text), { memoryPolicy: { by: null, decided: null, policy: null }, runner: {} }, 'the file is { policy, decided, by }; the record holds it under memoryPolicy, not as three top-level keys');
 });
 
 test('Canonical_JSON_sorts_keys_at_every_depth_and_keeps_array_order', () => {
