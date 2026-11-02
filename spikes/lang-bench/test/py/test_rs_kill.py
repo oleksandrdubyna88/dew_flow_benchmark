@@ -136,6 +136,17 @@ class StopSignalTests(unittest.TestCase):
         self.assertTrue(masks and set(rl.STOPPING_SIGNALS) <= masks[0], f"the first signal.signal call saw the mask {masks[:1]}")
         self.assertEqual(len(masks), len(rl.STOPPING_SIGNALS))
 
+    def test_G3_no_stopping_signal_is_left_blocked_once_the_handler_has_run_and_so_no_child_inherits_one(self):
+        before = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+        self.addCleanup(signal.pthread_sigmask, signal.SIG_SETMASK, before)
+        saved = {sig: signal.getsignal(sig) for sig in rl.STOPPING_SIGNALS}
+        self.addCleanup(lambda: [signal.signal(sig, handler) for sig, handler in saved.items()])
+        with self.assertRaises(rs_stop.Interrupted):
+            rs_stop._on_signal(signal.SIGTERM, None)
+        blocked = set(signal.pthread_sigmask(signal.SIG_BLOCK, [])) & set(rl.STOPPING_SIGNALS)
+        self.assertEqual(blocked, set(), "the mask outlives the handler, and a child of the teardown would inherit it")
+        self.assertTrue(all(signal.getsignal(sig) == signal.SIG_IGN for sig in rl.STOPPING_SIGNALS), "and they are still ignored")
+
     def test_Two_stopping_signals_sent_back_to_back_run_the_teardown_once(self):
         note = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "teardowns")
         script = (
