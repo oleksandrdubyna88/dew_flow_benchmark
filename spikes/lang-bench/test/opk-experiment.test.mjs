@@ -2,7 +2,7 @@
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_1C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, setNodeOptions, summarise, viewFor, withoutCgroupView } from '../lib/exec-probe/opk.mjs';
+import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_1C, POLICY_A, POLICY_C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, dotnetHardLimitFor, layerStackFor, setEnvValue, setNodeOptions, summarise, viewFor, withoutCgroupView } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
 
@@ -88,4 +88,29 @@ test('The_1c_variant_takes_the_cgroup_view_out_of_the_layers_prefix_and_changes_
   assert.equal(viewFor(POLICY_1C), false, 'no view is ADDED');
   assert.deepEqual(extraEnvFor(POLICY_1C, 'csharp', 256), {}, 'the hard limit comes from the layer\'s own .NET environment (stack)');
   assert.equal(nodeOptionsFor(POLICY_1C, 'node', 256), null, 'Node gets no flag');
+});
+
+test('Policy_A_is_the_view_plus_the_dotnet_hard_limit_plus_the_node_heap_flag_at_a_percentage_of_the_limit', () => {
+  assert.equal(nodeOptionsFor(POLICY_A, 'node', 256), '--max-old-space-size=256');
+  assert.equal(nodeOptionsFor('A@90', 'node', 256), '--max-old-space-size=230', 'floor of 90 % of 256 MiB');
+  assert.equal(nodeOptionsFor('A@85', 'node', 512), '--max-old-space-size=435');
+  assert.equal(nodeOptionsFor('A@90', 'csharp', 256), null, 'the Node flag is for Node only');
+  assert.equal(dotnetHardLimitFor(POLICY_A, 'csharp', 256), null, 'at 100 % the layer\'s own .NET environment is already the limit');
+  assert.equal(dotnetHardLimitFor('A@90', 'csharp', 256), `0x${Math.floor(256 * 1024 * 1024 * 90 / 100).toString(16)}`, 'the limit in BYTES at that percentage, hexadecimal');
+  assert.equal(dotnetHardLimitFor('A@85', 'node', 256), null);
+  assert.equal(viewFor('A@90'), false, 'the layer\'s own box already has the view');
+});
+
+test('Policy_C_is_the_view_and_nothing_else_not_even_the_layers_dotnet_hard_limit', () => {
+  assert.equal(layerStackFor(POLICY_C, 'csharp'), undefined, 'the box environment is built as for no stack: no DOTNET_GCHeapHardLimit');
+  assert.equal(layerStackFor(POLICY_A, 'csharp'), 'csharp');
+  assert.equal(nodeOptionsFor(POLICY_C, 'node', 256), null);
+  assert.equal(dotnetHardLimitFor(POLICY_C, 'csharp', 256), null);
+  assert.equal(viewFor(POLICY_C), false);
+});
+
+test('A_replaced_environment_value_in_the_prefix_changes_only_that_value_and_a_missing_key_throws', () => {
+  const prefix = ['bwrap', '--setenv', 'DOTNET_GCHeapHardLimit', '0x10000000', '--setenv', 'TZ', 'UTC', '--'];
+  assert.deepEqual(setEnvValue(prefix, 'DOTNET_GCHeapHardLimit', '0xE666666'), ['bwrap', '--setenv', 'DOTNET_GCHeapHardLimit', '0xE666666', '--setenv', 'TZ', 'UTC', '--']);
+  assert.throws(() => setEnvValue(['bwrap', '--'], 'DOTNET_GCHeapHardLimit', '0x1'), /DOTNET_GCHeapHardLimit/);
 });

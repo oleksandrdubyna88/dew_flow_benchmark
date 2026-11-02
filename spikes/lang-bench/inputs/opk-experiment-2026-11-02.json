@@ -3905,5 +3905,1995 @@
         "n": 3
       }
     ]
+  },
+  "followUp5": {
+    "note": "A = view + .NET hard limit = limit + NODE_OPTIONS --max-old-space-size=<limit MiB>; C = view only; mixed = objects 45 % + typed arrays 35 % + 1 GiB short-lived of both kinds; A@90 / A@85 at that percentage of the limit. Measurement only.",
+    "mixedFailsUnderA": true,
+    "settings": {
+      "A": {
+        "believes": {
+          "256": {
+            "dotnet": {
+              "totalAvailableBytes": 268435456,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 268435456,
+              "heapSizeLimitBytes": 274726912,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          },
+          "512": {
+            "dotnet": {
+              "totalAvailableBytes": 536870912,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 536870912,
+              "heapSizeLimitBytes": 549453824,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          }
+        },
+        "table": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              256,
+              256,
+              256
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              505,
+              505,
+              505
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              254,
+              253,
+              254
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              508,
+              507,
+              508
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              256,
+              256,
+              256
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              512,
+              512,
+              512
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              206,
+              207,
+              205
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              399,
+              399,
+              399
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 1178,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 1317,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 1176,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 529158144,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4433,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 529088512,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4428,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 529895424,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4270,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 266063872,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2326,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 265805824,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2342,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 266371072,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2348,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 532848640,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8357,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 532099072,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8470,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 533106688,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8468,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 961,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 964,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 963,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2942,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 3529,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 3691,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215638016,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2164,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 216739840,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2066,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 214650880,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2263,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418324480,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 6916,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 417914880,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 7426,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418848768,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 7377,
+            "n": 3
+          }
+        ]
+      },
+      "C": {
+        "believes": {
+          "256": {
+            "dotnet": {
+              "totalAvailableBytes": 201326592,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 268435456,
+              "heapSizeLimitBytes": 274726912,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          },
+          "512": {
+            "dotnet": {
+              "totalAvailableBytes": 402653184,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 536870912,
+              "heapSizeLimitBytes": 281018368,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          }
+        },
+        "table": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)"
+            ],
+            "peakMiB": [
+              199,
+              199,
+              199
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+              ".NET runtime abort (exit 134, runtimeAbort dotnet)"
+            ],
+            "peakMiB": [
+              374,
+              375,
+              375
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              200,
+              200,
+              200
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              390,
+              390,
+              390
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              256,
+              256,
+              256
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              512,
+              512,
+              512
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              206,
+              206,
+              206
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "V8 heap-limit abort (exit 134, runtimeAbort v8)",
+              "V8 heap-limit abort (exit 134, runtimeAbort v8)",
+              "V8 heap-limit abort (exit 134, runtimeAbort v8)"
+            ],
+            "peakMiB": [
+              278,
+              279,
+              279
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 208818176,
+            "stderrTail": "Out of memory.",
+            "wallMs": 1458,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 208650240,
+            "stderrTail": "Out of memory.",
+            "wallMs": 1446,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 209010688,
+            "stderrTail": "Out of memory.",
+            "wallMs": 1400,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 392634368,
+            "stderrTail": "Out of memory.",
+            "wallMs": 4643,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 393412608,
+            "stderrTail": "Out of memory.",
+            "wallMs": 4940,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+            "peakBytes": 392925184,
+            "stderrTail": "Out of memory.",
+            "wallMs": 4879,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 210206720,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 3899,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 209711104,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 3844,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 210124800,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 3688,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 408702976,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 12038,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 408518656,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 11796,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 408780800,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 11582,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 1175,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 1173,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 1149,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 3763,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 3618,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 3792,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215699456,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2122,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 216018944,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2406,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "C",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215633920,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2140,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "V8 heap-limit abort (exit 134, runtimeAbort v8)",
+            "peakBytes": 291344384,
+            "stderrTail": "<--- Last few GCs --->\n\n[2:0x24cde000]     3015 ms: Mark-Compact 250.3 (252.6) -> 250.3 (252.8) MB, pooled: 0.0 MB, 54.87 / 0.00 ms (average mu = 0.030, current mu = 0.030) testing; GC in old space requested\n[2:0x24cde000]     3077 ms: Incremental Mark-Compact (reduce) 251.6 (254.1) -> 251.6 (253.8) MB, pooled: 0.0 MB, 47.97 / 0.00 ms (+ 0.4 ms in 21 steps since start of marking, biggest step 0.2 ms, walltime since start of marking 51 ms) (average mu = 0.131,\nFATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\n----- Native stack trace -----\n\n 1: 0x841e50  [node]\n 2: 0x8420bd node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]\n 3: 0xcd505b  [node]\n 4: 0xf44995  [node]\n 5: 0xf42b9c  [node]\n 6: 0xe8542f  [node]\n 7: 0x13ce45e  [node]\n 8: 0x1ae3a76  [node]",
+            "wallMs": 3135,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "V8 heap-limit abort (exit 134, runtimeAbort v8)",
+            "peakBytes": 292515840,
+            "stderrTail": "<--- Last few GCs --->\n\n[2:0x3e8c8000]     3052 ms: Mark-Compact 250.3 (252.8) -> 250.3 (253.1) MB, pooled: 0.0 MB, 53.41 / 0.00 ms (average mu = 0.031, current mu = 0.029) testing; GC in old space requested\n[2:0x3e8c8000]     3111 ms: Incremental Mark-Compact (reduce) 251.8 (254.6) -> 251.8 (254.3) MB, pooled: 0.0 MB, 45.09 / 0.00 ms (+ 0.5 ms in 24 steps since start of marking, biggest step 0.3 ms, walltime since start of marking 48 ms) (average mu = 0.137,\nFATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\n----- Native stack trace -----\n\n 1: 0x841e50  [node]\n 2: 0x8420bd node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]\n 3: 0xcd505b  [node]\n 4: 0xf44995  [node]\n 5: 0xf42b9c  [node]\n 6: 0xe8542f  [node]\n 7: 0x13ce45e  [node]\n 8: 0x1ae3a76  [node]",
+            "wallMs": 3172,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "C",
+            "result": "memory limit",
+            "ended": "V8 heap-limit abort (exit 134, runtimeAbort v8)",
+            "peakBytes": 292974592,
+            "stderrTail": "<--- Last few GCs --->\n\n[2:0x39cc6000]     3024 ms: Mark-Compact 250.3 (253.1) -> 250.3 (253.1) MB, pooled: 0.0 MB, 56.52 / 0.00 ms (average mu = 0.038, current mu = 0.039) testing; GC in old space requested\n[2:0x39cc6000]     3091 ms: Incremental Mark-Compact (reduce) 252.1 (254.8) -> 252.1 (254.6) MB, pooled: 0.0 MB, 50.90 / 0.00 ms (+ 0.5 ms in 29 steps since start of marking, biggest step 0.2 ms, walltime since start of marking 54 ms) (average mu = 0.139,\nFATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\n----- Native stack trace -----\n\n 1: 0x841e50  [node]\n 2: 0x8420bd node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]\n 3: 0xcd505b  [node]\n 4: 0xf44995  [node]\n 5: 0xf42b9c  [node]\n 6: 0xe8542f  [node]\n 7: 0x13ce45e  [node]\n 8: 0x1ae3a76  [node]",
+            "wallMs": 3147,
+            "n": 3
+          }
+        ]
+      },
+      "A@90": {
+        "believes": {
+          "256": {
+            "dotnet": {
+              "totalAvailableBytes": 241591910,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 268435456,
+              "heapSizeLimitBytes": 247463936,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          },
+          "512": {
+            "dotnet": {
+              "totalAvailableBytes": 483183820,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 536870912,
+              "heapSizeLimitBytes": 494927872,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          }
+        },
+        "table": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              238,
+              237,
+              238
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              453,
+              453,
+              453
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              233,
+              233,
+              233
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              454,
+              454,
+              454
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              256,
+              256,
+              256
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              512,
+              512,
+              512
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              205,
+              205,
+              205
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              399,
+              398,
+              399
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 249536512,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 2994,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 248766464,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 2814,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 249520128,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 2751,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 474927104,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4837,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 474550272,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4913,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 475271168,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 4816,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 244719616,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2317,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 244482048,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2329,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 244592640,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2323,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 476516352,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8210,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 476016640,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8079,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 476520448,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 8102,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 914,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 908,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 900,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2726,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2656,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2625,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 214786048,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1627,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215236608,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1625,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 214970368,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1577,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418119680,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5280,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 417783808,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5088,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@90",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418050048,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5279,
+            "n": 3
+          }
+        ]
+      },
+      "A@85": {
+        "believes": {
+          "256": {
+            "dotnet": {
+              "totalAvailableBytes": 228170137,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 268435456,
+              "heapSizeLimitBytes": 233832448,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          },
+          "512": {
+            "dotnet": {
+              "totalAvailableBytes": 456340275,
+              "heapHardLimit": "",
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            },
+            "node": {
+              "constrainedBytes": 536870912,
+              "heapSizeLimitBytes": 468713472,
+              "cgroupVisible": true,
+              "cgroupSelf": "0::/",
+              "cgroupChildren": 0
+            }
+          }
+        },
+        "table": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              226,
+              225,
+              225
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              427,
+              427,
+              428
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              225,
+              224,
+              225
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              427,
+              425,
+              426
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              256,
+              256,
+              256
+            ]
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "results": [
+              "memory limit",
+              "memory limit",
+              "memory limit"
+            ],
+            "ended": [
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)",
+              "kernel oom_kill (1)"
+            ],
+            "peakMiB": [
+              512,
+              512,
+              512
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              206,
+              205,
+              205
+            ]
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "results": [
+              "PASS",
+              "PASS",
+              "PASS"
+            ],
+            "ended": [
+              "exit 0",
+              "exit 0",
+              "exit 0"
+            ],
+            "peakMiB": [
+              399,
+              399,
+              398
+            ]
+          }
+        ],
+        "runs": [
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 236593152,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 37633,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 235839488,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 37708,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 236240896,
+            "stderrTail": "live-heap-after-full-gc-MiB=206",
+            "wallMs": 38489,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 448040960,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 7760,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 448217088,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 7809,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 448458752,
+            "stderrTail": "live-heap-after-full-gc-MiB=411",
+            "wallMs": 7763,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 235855872,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2459,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 235327488,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2453,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 236175360,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 2479,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 447430656,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 7927,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 446140416,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 7987,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "csharp",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 446398464,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 7959,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 908,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 898,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 268435456,
+            "stderrTail": "live-heap-after-full-gc-MiB=117",
+            "wallMs": 865,
+            "n": 3
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2719,
+            "n": 1
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2690,
+            "n": 2
+          },
+          {
+            "mode": "mixed",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "memory limit",
+            "ended": "kernel oom_kill (1)",
+            "peakBytes": 536870912,
+            "stderrTail": "live-heap-after-full-gc-MiB=232",
+            "wallMs": 2745,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215535616,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1636,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 214687744,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1569,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 256,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 215097344,
+            "stderrTail": "live-heap-after-full-gc-MiB=180",
+            "wallMs": 1542,
+            "n": 3
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418091008,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5230,
+            "n": 1
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 418246656,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5259,
+            "n": 2
+          },
+          {
+            "mode": "objects-70",
+            "stack": "node",
+            "limitMiB": 512,
+            "policy": "A@85",
+            "result": "PASS",
+            "ended": "exit 0",
+            "peakBytes": 417628160,
+            "stderrTail": "live-heap-after-full-gc-MiB=359",
+            "wallMs": 5327,
+            "n": 3
+          }
+        ]
+      }
+    }
   }
 }

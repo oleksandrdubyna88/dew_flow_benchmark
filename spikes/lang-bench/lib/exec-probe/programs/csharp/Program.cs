@@ -75,6 +75,33 @@ switch (mode)
         Console.WriteLine("OK");
         break;
     }
+    case "mixed": // an object graph at 45% of the limit plus byte arrays at 35% (both kept to the end), plus 1 GiB of short-lived allocations of both kinds
+    {
+        var mixLimit = long.Parse(args[1]) * Mib;
+        var mixObjects = new List<Rec>();
+        while (GC.GetTotalMemory(true) < mixLimit * 45 / 100)
+            for (var i = 0; i < 20000; i++) mixObjects.Add(new Rec { A = i, B = i, C = i });
+        var mixBytes = new List<byte[]>();
+        for (long held = 0; held < mixLimit * 35 / 100; held += Mib)
+        {
+            var block = new byte[Mib];
+            Array.Fill(block, (byte)1);
+            mixBytes.Add(block);
+        }
+        Console.Error.WriteLine($"live-heap-after-full-gc-MiB={GC.GetTotalMemory(true) / Mib}");
+        Rec? mixSink = null;
+        for (long i = 0; i < 5_500_000; i++) mixSink = new Rec { A = i };
+        for (var i = 0; i < 2048; i++)
+        {
+            var block = new byte[256 * 1024];
+            Array.Fill(block, (byte)i);
+        }
+        GC.KeepAlive(mixObjects);
+        GC.KeepAlive(mixBytes);
+        GC.KeepAlive(mixSink);
+        Console.WriteLine("OK");
+        break;
+    }
     case "medium-objects": // live ordinary objects (records with numbers and a short array) = 40% of the limit by the heap after a full GC, heldData to the end, plus 2 GiB of short-lived small objects
     {
         var target = long.Parse(args[1]) * Mib * 40 / 100;

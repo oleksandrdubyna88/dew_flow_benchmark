@@ -35,8 +35,38 @@ export function withoutCgroupView(prefix) {
   return prefix.filter((arg, i) => arg !== '--unshare-cgroup' && !(i >= bind && i < bind + 3));
 }
 
-/** `NODE_OPTIONS` a policy gives a stack's program, or null. */
-export const nodeOptionsFor = (policy, stack, limitMiB) => (policy === POLICY_NODE_FLAG && stack === 'node' ? `--max-old-space-size=${limitMiB}` : null);
+/**
+ * The consultants' two settings (measurement only; the default box and the policy file are unchanged). A = the own-cgroup view (the layer's box) + .NET `DOTNET_GCHeapHardLimit` = the limit + Node
+ * `NODE_OPTIONS=--max-old-space-size=<limit in MiB>`; `A@90` and `A@85` set BOTH at that percentage of the limit (.NET in bytes, Node in MiB). C = the view and NOTHING else: each runtime's own container defaults.
+ */
+export const POLICY_A = 'A';
+export const POLICY_C = 'C';
+const A_PERCENT = /^A(?:@(\d{1,3}))?$/;
+const percentOf = policy => { const found = A_PERCENT.exec(policy); return found === null ? null : Number(found[1] ?? 100); };
+
+/** `NODE_OPTIONS` a policy gives a stack's program, or null: the decided+flag variant, or A at a percentage of the limit. */
+export function nodeOptionsFor(policy, stack, limitMiB) {
+  if (stack !== 'node') return null;
+  if (policy === POLICY_NODE_FLAG) return `--max-old-space-size=${limitMiB}`;
+  const percent = percentOf(policy);
+  return percent === null ? null : `--max-old-space-size=${Math.floor((limitMiB * percent) / 100)}`;
+}
+
+/** The `DOTNET_GCHeapHardLimit` (hexadecimal bytes) A@<pct> sets for .NET when it is not 100 %, or null (at 100 % the layer's own .NET environment already holds the limit). */
+export function dotnetHardLimitFor(policy, stack, limitMiB) {
+  const percent = percentOf(policy);
+  return stack === 'csharp' && percent !== null && percent !== 100 ? `0x${Math.floor((limitMiB * 1024 * 1024 * percent) / 100).toString(16)}` : null;
+}
+
+/** The `stack` option the layer is opened with: C is built as for no stack, so the box environment holds no `DOTNET_GCHeapHardLimit`. */
+export const layerStackFor = (policy, stack) => (policy === POLICY_C ? undefined : stack);
+
+/** The prefix with the value of `--setenv <key>` replaced; throws when the prefix has none. */
+export function setEnvValue(prefix, key, value) {
+  const at = prefix.findIndex((arg, i) => arg === '--setenv' && prefix[i + 1] === key);
+  if (at < 0) throw new Error(`the prefix has no --setenv ${key} to replace`);
+  return [...prefix.slice(0, at + 2), value, ...prefix.slice(at + 3)];
+}
 
 /** The prefix with the value of `--setenv NODE_OPTIONS` replaced (the harness never sets it: this is an experiment env); throws when the prefix has none. */
 export function setNodeOptions(prefix, value) {
@@ -51,7 +81,7 @@ export function extraEnvFor(policy, stack, limitMiB) {
   return EXTRA_ENV[policy]?.[stack] ?? {};
 }
 /** Whether a policy puts the read-only view of the program's own cgroup in the box. */
-export const viewFor = policy => ![ 'today', POLICY_DECIDED_RUN, POLICY_NODE_FLAG, POLICY_1C ].includes(policy);
+export const viewFor = policy => !['today', POLICY_DECIDED_RUN, POLICY_NODE_FLAG, POLICY_1C, POLICY_C].includes(policy) && percentOf(policy) === null;
 
 const DOTNET_FRACTION = 0.75;
 const ABORTED = Object.freeze({ v8: 'V8 heap-limit abort (exit 134, runtimeAbort v8)', dotnet: '.NET runtime abort (exit 134, runtimeAbort dotnet)' });
@@ -80,8 +110,11 @@ export function cgroupViewPrefix(prefix, prog) {
 }
 
 function tweakFor(policy, run, stack) {
-  const flags = nodeOptionsFor(policy, stack, run.options.memoryMaxBytes / MIB);
+  const limitMiB = run.options.memoryMaxBytes / MIB;
+  const flags = nodeOptionsFor(policy, stack, limitMiB);
+  const hard = dotnetHardLimitFor(policy, stack, limitMiB);
   if (flags !== null) return prefix => setNodeOptions(prefix, flags);
+  if (hard !== null) return prefix => setEnvValue(prefix, 'DOTNET_GCHeapHardLimit', hard);
   if (policy === POLICY_1C) return withoutCgroupView;
   return viewFor(policy) ? prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)) : prefix => prefix;
 }
@@ -104,7 +137,7 @@ const tailOf = entry => entry?.lifecycle?.stderr?.tail ?? '';
 export async function runOnce({ owned, scope, dirs, csharpBuild, stack, mode, limitMiB, policy }) {
   const given = samples(owned, scope);
   const tree = programTree({ owned, scope, stack, mode: `${mode} ${limitMiB}`, csharpBuild });
-  const opened = await openRun({ owned, parent: stableRunsParent(), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB), stack });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB), stack: layerStackFor(policy, stack) });
   if (!opened.ok) return { mode, stack, limitMiB, policy, result: 'not run', ended: opened.reason, peakBytes: null, stderrTail: '' };
   const run = opened.value;
   try {
@@ -217,7 +250,7 @@ export async function dotnetBelieves({ owned, scope, dirs, csharpBuild, limitMiB
 /** What `stack`'s `report` mode prints under `policy` at `limitMiB` (.NET's `totalAvailableBytes`; Node's `constrainedBytes` and `heapSizeLimitBytes`), or null. */
 export async function believesUnder({ owned, scope, dirs, csharpBuild, limitMiB, policy, stack }) {
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
-  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['rp'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, stack, limitMiB), stack });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['rp'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, stack, limitMiB), stack: layerStackFor(policy, stack) });
   if (!opened.ok) return null;
   try {
     const program = stack === 'csharp' ? ['dotnet', 'bin/mem.dll', 'report'] : ['node', 'mem.mjs', 'report'];

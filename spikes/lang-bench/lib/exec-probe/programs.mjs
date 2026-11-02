@@ -14,7 +14,7 @@ import { factsScript } from './facts.mjs';
 const PROGRAMS = fileURLToPath(new URL('./programs/', import.meta.url));
 const BUILD_MS = 180_000;
 export const STACKS = Object.freeze(['csharp', 'node']);
-export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit', 'medium-buffers', 'medium-objects', 'near-limit', 'objects-70']);
+export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit', 'medium-buffers', 'medium-objects', 'near-limit', 'objects-70', 'mixed']);
 const COMMAND = Object.freeze({ csharp: mode => `exec dotnet bin/mem.dll ${mode}`, node: mode => `exec node mem.mjs ${mode}` });
 const BUILD_ARGS = Object.freeze(['dotnet', 'build', 'mem.csproj', '-c', 'Release', '-o', 'bin', '-m:4', '--nologo', '-v', 'q']);
 

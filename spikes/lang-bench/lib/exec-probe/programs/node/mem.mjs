@@ -39,6 +39,20 @@ const modes = {
     for (let i = 0; i < 11_000_000; i += 1) sink = { a: i, b: 1, c: 2, arr: [i, 1, 2, 3] };
     console.log(kept.length > 0 && sink !== null ? 'OK' : 'EMPTY');
   },
+  mixed(limitMiB) { // an object graph at 45% of the limit plus typed arrays at 35% (both kept to the end), plus 1 GiB of short-lived allocations of both kinds
+    v8.setFlagsFromString('--expose-gc');
+    const gc = vm.runInNewContext('gc');
+    const objects = [];
+    const heap = () => { gc(); return process.memoryUsage().heapUsed; };
+    while (heap() < (limitMiB * MIB * 45) / 100) for (let i = 0; i < 20000; i += 1) objects.push({ a: i, b: i * 2, c: i * 3, arr: [i, 1, 2, 3] });
+    const bytes = [];
+    for (let held = 0; held < (limitMiB * MIB * 35) / 100; held += MIB) bytes.push(new Uint8Array(MIB).fill(1));
+    console.error(`live-heap-after-full-gc-MiB=${Math.round(heap() / MIB)}`);
+    let sink = null;
+    for (let i = 0; i < 5_500_000; i += 1) sink = { a: i, b: 1, c: 2, arr: [i, 1, 2, 3] };
+    for (let i = 0; i < 2048; i += 1) new Uint8Array(256 * 1024).fill(i);
+    console.log(objects.length > 0 && bytes.length > 0 && sink !== null ? 'OK' : 'EMPTY');
+  },
   'medium-objects'(limitMiB) { // live ordinary objects = 40% of the limit by the heap after a full GC, kept to the end, plus 2 GiB of short-lived small objects
     v8.setFlagsFromString('--expose-gc');
     const gc = vm.runInNewContext('gc');
