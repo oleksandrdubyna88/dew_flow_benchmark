@@ -14,7 +14,7 @@ import { factsScript } from './facts.mjs';
 const PROGRAMS = fileURLToPath(new URL('./programs/', import.meta.url));
 const BUILD_MS = 180_000;
 export const STACKS = Object.freeze(['csharp', 'node']);
-export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit']);
+export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit', 'medium-buffers', 'medium-objects']);
 const COMMAND = Object.freeze({ csharp: mode => `exec dotnet bin/mem.dll ${mode}`, node: mode => `exec node mem.mjs ${mode}` });
 const BUILD_ARGS = Object.freeze(['dotnet', 'build', 'mem.csproj', '-c', 'Release', '-o', 'bin', '-m:4', '--nologo', '-v', 'q']);
 
@@ -28,7 +28,7 @@ export async function buildCsharp({ owned, scope, dirs }) {
   return built.ok && built.value.code === 0 ? ok(folder) : fail(`the C# probe program did not build in the box: ${built.ok ? built.value.stdout + built.value.stderr : built.reason}`);
 }
 
-/** An owned tree holding the program of `stack` and a `run.sh` that ends with `exec` and runs it in `mode`. `csharpBuild` is what `buildCsharp` returned. */
+/** An owned tree holding the program of `stack` and a `run.sh` that ends with `exec` and runs it in `mode` (`mode` may carry its arguments: `medium-buffers 256`). `csharpBuild` is what `buildCsharp` returned. */
 export function programTree({ owned, scope, stack, mode, csharpBuild }) {
   const tree = owned.ownedDir(scope, `probe${stack}`);
   if (stack === 'csharp') cpSync(path.join(csharpBuild, 'bin'), path.join(tree, 'bin'), { recursive: true });

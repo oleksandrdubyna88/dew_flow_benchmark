@@ -1,0 +1,979 @@
+{
+  "date": "2026-11-02",
+  "host": {
+    "hostname": "jinx",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "cgroup2": true,
+    "systemd": "systemd 259 (259.5-0ubuntu3.4)",
+    "bwrap": "bubblewrap 0.11.1",
+    "node": "v26.12.1"
+  },
+  "layerIdentity": "79b85a37451e90736a7f54e25eecd0bba3bfc67b117f89f11086b01d9b9b319f",
+  "note": "toys only; realistic live data; 3 policies of the OP-K discussion reduced to (1) today's box and (3) a read-only cgroup view of the program's own cgroup; the box module and the policy file were not changed",
+  "verification": {
+    "256": {
+      "ok": true,
+      "problems": [],
+      "facts": {
+        "proc-self-cgroup": "0::/",
+        "sys": "fs",
+        "sys-fs": "cgroup",
+        "cgroup-dirs": "",
+        "memory-max": "268435456",
+        "writable": "cgview.sh: line 8: /sys/fs/cgroup/memory.max: Read-only file system",
+        "parent-visible": "cgroup",
+        "mountinfo": "1"
+      },
+      "dotnet": {
+        "totalAvailableBytes": 201326592,
+        "heapHardLimit": "",
+        "cgroupVisible": true
+      },
+      "node": {
+        "constrainedBytes": 268435456,
+        "heapSizeLimitBytes": 274726912,
+        "cgroupVisible": true
+      }
+    },
+    "512": {
+      "ok": true,
+      "problems": [],
+      "facts": {
+        "proc-self-cgroup": "0::/",
+        "sys": "fs",
+        "sys-fs": "cgroup",
+        "cgroup-dirs": "",
+        "memory-max": "536870912",
+        "writable": "cgview.sh: line 8: /sys/fs/cgroup/memory.max: Read-only file system",
+        "parent-visible": "cgroup",
+        "mountinfo": "1"
+      },
+      "dotnet": {
+        "totalAvailableBytes": 402653184,
+        "heapHardLimit": "",
+        "cgroupVisible": true
+      },
+      "node": {
+        "constrainedBytes": 536870912,
+        "heapSizeLimitBytes": 281018368,
+        "cgroupVisible": true
+      }
+    }
+  },
+  "table": [
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "results": [
+        "memory limit",
+        "memory limit",
+        "memory limit"
+      ],
+      "ended": [
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)"
+      ],
+      "peakMiB": [
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "results": [
+        "memory limit",
+        "memory limit",
+        "memory limit"
+      ],
+      "ended": [
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)"
+      ],
+      "peakMiB": [
+        512,
+        512,
+        512
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "results": [
+        "memory limit",
+        "memory limit",
+        "memory limit"
+      ],
+      "ended": [
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)"
+      ],
+      "peakMiB": [
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        377,
+        378,
+        374
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        126,
+        126,
+        126
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        234,
+        234,
+        234
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        188,
+        189,
+        188
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        297,
+        296,
+        297
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        197,
+        197,
+        197
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        388,
+        388,
+        388
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "results": [
+        "memory limit",
+        "memory limit",
+        "memory limit"
+      ],
+      "ended": [
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)",
+        "kernel oom_kill (1)"
+      ],
+      "peakMiB": [
+        256,
+        256,
+        256
+      ]
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        376,
+        376,
+        375
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        126,
+        126,
+        126
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        233,
+        234,
+        234
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        125,
+        124,
+        125
+      ]
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "results": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "ended": [
+        "exit 0",
+        "exit 0",
+        "exit 0"
+      ],
+      "peakMiB": [
+        238,
+        237,
+        237
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 174,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 171,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 167,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 536870912,
+      "stderrTail": "",
+      "wallMs": 422,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 536870912,
+      "stderrTail": "",
+      "wallMs": 324,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 536870912,
+      "stderrTail": "",
+      "wallMs": 373,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 225,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 291,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 230,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 395206656,
+      "stderrTail": "",
+      "wallMs": 419,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 396820480,
+      "stderrTail": "",
+      "wallMs": 473,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 392212480,
+      "stderrTail": "",
+      "wallMs": 370,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 132362240,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 980,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 131833856,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 980,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 132366336,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 973,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 245317632,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2772,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 245071872,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2776,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 245063680,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2757,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 197627904,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 787,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 198127616,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 808,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 197406720,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 870,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 311107584,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 2127,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 310439936,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 2037,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "today",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 311181312,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 2001,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 206516224,
+      "stderrTail": "",
+      "wallMs": 440,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 206405632,
+      "stderrTail": "",
+      "wallMs": 430,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 206422016,
+      "stderrTail": "",
+      "wallMs": 424,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 406511616,
+      "stderrTail": "",
+      "wallMs": 583,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 406405120,
+      "stderrTail": "",
+      "wallMs": 572,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 407019520,
+      "stderrTail": "",
+      "wallMs": 570,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 246,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 183,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "memory limit",
+      "ended": "kernel oom_kill (1)",
+      "peakBytes": 268435456,
+      "stderrTail": "",
+      "wallMs": 209,
+      "n": 3
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 394342400,
+      "stderrTail": "",
+      "wallMs": 340,
+      "n": 1
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 393863168,
+      "stderrTail": "",
+      "wallMs": 514,
+      "n": 2
+    },
+    {
+      "mode": "medium-buffers",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 393068544,
+      "stderrTail": "",
+      "wallMs": 449,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 132087808,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 981,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 132173824,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 994,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 132362240,
+      "stderrTail": "live-heap-after-full-gc-MiB=105",
+      "wallMs": 986,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 244805632,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2795,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 245137408,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2802,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "csharp",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 245325824,
+      "stderrTail": "live-heap-after-full-gc-MiB=208",
+      "wallMs": 2786,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 130719744,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 762,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 130351104,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 738,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 256,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 130818048,
+      "stderrTail": "live-heap-after-full-gc-MiB=104",
+      "wallMs": 748,
+      "n": 3
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 249344000,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 1925,
+      "n": 1
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 248516608,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 1923,
+      "n": 2
+    },
+    {
+      "mode": "medium-objects",
+      "stack": "node",
+      "limitMiB": 512,
+      "policy": "cgroup-view-own",
+      "result": "PASS",
+      "ended": "exit 0",
+      "peakBytes": 249008128,
+      "stderrTail": "live-heap-after-full-gc-MiB=206",
+      "wallMs": 1944,
+      "n": 3
+    }
+  ]
+}
