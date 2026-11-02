@@ -796,6 +796,14 @@ Median of 9 values (3 rounds × 3 runs); in brackets the spread (max − min of 
   load (00:18, 1,424 MB; 00:23, 1,550 MB; WSL load 15.6 from a test run of another job). night10 (`harness/night10.sh`,
   the same gates) ran the last 3 arm-rounds from 00:47 to 01:41 with no stop. `raw/bench_speed27.txt` keeps the two
   stopped `q27new-2` blocks (lines 82–93); the table in § 14.5 uses the last complete block of each arm-round.
+- **Windows crash after the series (2026-11-02 01:45:56).** night10 restored production at 01:41:16. During
+  that model load, Windows stopped with a blue screen: BugCheck 0x7E (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED,
+  0xc0000005). Windows names the AMD display driver `amdkmdag.sys` as possibly related (System log events 1001
+  and 1019; dump `110226-25328-01.dmp`). Windows Update then restarted the PC at 01:47 (event 1074, planned).
+  Production was down until the operator agreed to a restart at 08:29. The restart loaded without a stop (free
+  RAM fell to 5.2 GB, not below the guard's 2 GB), and a test request answered 391. One crash does not prove a
+  cause. It came at the end of a night of 14 model loads with free RAM near 0 at several of them. There is an
+  earlier dump of 2026-10-25 that was not examined. The dump was not analysed.
 
 ### 14.5 Series `speed27` — the new start-script defaults on Qwen3.8-27B-AWQ, 3 rounds
 
