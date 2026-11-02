@@ -154,7 +154,27 @@ function ninetyRule(at) {
 const RULES = Object.freeze({ 'cgroup-view-readonly': cgroupRule, [POLICY_SUPERSEDED]: ownRule, [POLICY_DECIDED]: ninetyRule });
 const ruleFor = policy => (PERCENT.test(policy) ? percentRule : RULES[policy] ?? (() => []));
 
+const NEEDED = Object.freeze({ csharp: ['totalAvailableBytes', 'cgroupVisible'], node: ['constrainedBytes', 'heapSizeLimitBytes', 'cgroupVisible'] });
+const held = (object, key) => object !== undefined && object !== null && object[key] !== undefined && object[key] !== null;
+
+/**
+ * What an observation at one limit lacks, as NAMED problems (V7, fail closed): a missing or partial observation is never a thrown error and never a pass. A stack's belief, its churn result, its workloads and
+ * both over-limit fixtures must all be there; the rules run only on a whole observation.
+ */
+function notObserved(at) {
+  const where = mib(at.memoryMaxBytes);
+  return STACKS.flatMap(stack => {
+    const view = NEEDED[stack].every(key => held(at[stack], key)) ? [] : [`memory view not observed for ${stack} at ${where}`];
+    const churn = held(at.churn, stack) ? [] : [`churn not observed for ${stack} at ${where}`];
+    const fixtures = OVER_FIXTURES.filter(([, key]) => !held(at[key], stack)).map(([fixture]) => `${fixture} not observed for ${stack} at ${where}`);
+    const modes = held(at.workloads, stack) ? ASSERTED_MODES.filter(mode => !held(at.workloads[stack], mode)).map(mode => `${mode} not observed for ${stack} at ${where}`) : [`workloads not observed for ${stack} at ${where}`];
+    return [...view, ...churn, ...fixtures, ...modes];
+  });
+}
+
 function problemsAt(policy, at) {
+  const missing = notObserved(at);
+  if (missing.length > 0) return missing;
   const asked = at.hostMemoryMax === at.memoryMaxBytes ? [] : [`prog/memory.max is ${at.hostMemoryMax} at ${mib(at.memoryMaxBytes)}: the scope does not carry the limit asked for`];
   return [...asked, ...ruleFor(policy)(at), ...behaviour(at)];
 }

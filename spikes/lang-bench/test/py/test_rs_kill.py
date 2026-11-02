@@ -193,16 +193,41 @@ class GroupScanTests(unittest.TestCase):
 class PacedScanTests(unittest.TestCase):
     """E6: waiting for a group to go scans /proc at a backed-off pace (1 ms up to 20 ms), never on every poll."""
 
-    def test_The_wait_for_a_live_group_scans_proc_a_few_times_and_not_every_millisecond(self):
+    def _scan_wait_once(self):
+        # The clock and the sleep are injected, so a loaded host cannot change the count: the scans are counted against a clock that only `sleep` advances.
         proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(lambda: (proc.kill(), proc.wait()))
-        scans = []
+        clock, sleeps, scans = [0.0], [], []
         real = os.listdir
-        with mock.patch.object(ex, "GONE_CEILING_MS", 300), mock.patch.object(ex.os, "listdir", lambda path="." : (scans.append(path), real(path))[1]):
+
+        def fake_sleep(seconds):
+            sleeps.append(seconds)
+            clock[0] += seconds * 1000
+
+        def counting_listdir(path="."):
+            scans.append(path)
+            return real(path)
+
+        with mock.patch.object(ex, "GONE_CEILING_MS", 300), mock.patch.object(ex, "now_ms", lambda: clock[0]), mock.patch.object(ex.time, "sleep", fake_sleep), \
+                mock.patch.object(ex.os, "listdir", counting_listdir):
             ex._wait_group_gone(proc)
         proc_scans = [p for p in scans if p == "/proc"]
-        self.assertGreaterEqual(len(proc_scans), 5, "the group is alive: every poll looks at /proc")
-        self.assertLessEqual(len(proc_scans), 25, f"{len(proc_scans)} scans in 300 ms: a poll every millisecond would make 300")
+        self.assertEqual(sleeps[:6], [ex.POLL_FIRST_S * 2 ** n for n in range(5)] + [ex.SCAN_LAST_S], "the pace doubles from 1 ms and tops out at 20 ms")
+        self.assertTrue(all(delay <= ex.SCAN_LAST_S for delay in sleeps), "never slower than the ceiling, never faster than the floor")
+        self.assertTrue(all(delay >= ex.POLL_FIRST_S for delay in sleeps))
+        self.assertEqual(len(proc_scans), len(sleeps) + 1, "the group is alive: every poll scans /proc once, and the last look ends the wait")
+        self.assertGreaterEqual(len(proc_scans), 5)
+        self.assertLessEqual(len(proc_scans), 25, f"{len(proc_scans)} scans in 300 ms of the injected clock: a poll every millisecond would make 300")
+
+    def test_The_wait_for_a_live_group_scans_proc_a_few_times_and_not_every_millisecond(self):
+        self._scan_wait_once()
+
+    def test_The_scan_count_is_the_same_twenty_times_in_twenty_under_a_cpu_burner_load(self):
+        # V8: the old test counted scans in 300 ms of wall time and failed once on a loaded host. Under one busy process per CPU the injected-clock count is still exact, 20 rounds of 20.
+        burners = [subprocess.Popen([sys.executable, "-I", "-c", "while True: pass"]) for _ in range(max(2, os.cpu_count() or 2))]
+        self.addCleanup(lambda: [(b.kill(), b.wait()) for b in burners])
+        for _ in range(20):
+            self._scan_wait_once()
 
     def test_A_group_whose_only_member_is_a_zombie_is_gone_for_the_wait(self):
         proc = subprocess.Popen(["true"], start_new_session=True)

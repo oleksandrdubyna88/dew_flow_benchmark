@@ -231,7 +231,7 @@ test('Both_over_limit_fixtures_are_asserted_memory_limit_with_their_evidence_in_
   const wrong = judged(256, { overLimitObjects: { csharp: { ...abort, reason: 'runtime error', runtimeAbort: null }, node: abort } });
   assert.equal(wrong.ok, false);
   assert.match(wrong.problems.join('\n'), /csharp at 256 MiB: the overlimit-objects program ended "runtime error"/);
-  assert.match(judged(256, { overLimitObjects: { csharp: abort } }).problems.join('\n'), /node at 256 MiB: the overlimit-objects fixture was not run/);
+  assert.match(judged(256, { overLimitObjects: { csharp: abort } }).problems.join('\n'), /overlimit-objects not observed for node at 256 MiB/);
   assert.match(judged(256, { overLimitObjects: { csharp: { ...abort, eventsKept: false }, node: abort } }).problems.join('\n'), /memory\.peak and memory\.events were not kept/);
 });
 
@@ -247,4 +247,34 @@ test('The_probe_refuses_any_policy_but_the_pinned_one_exit_3_memory_view_mismatc
   }
   assert.equal(probeVerdict({ policy: null, observations }).halt, 'memory-policy-undecided', 'undecided keeps its own halt');
   assert.equal(assertMemoryView({ policy: 'runtime-view-accepted', observations }).ok, true, 'an old record can still be judged by its own policy');
+});
+
+// V7 (fix batch 3): a missing or partial observation is a NAMED PROBLEM (fail closed), never a thrown TypeError.
+test('A_missing_or_partial_observation_is_a_named_problem_in_the_verdict_and_never_a_thrown_error', () => {
+  const whole = viewed(256);
+  const without = (...keys) => Object.fromEntries(Object.entries(whole).filter(([key]) => !keys.includes(key)));
+  const cases = [
+    [without('csharp'), /memory view not observed for csharp at 256 MiB/],
+    [without('node'), /memory view not observed for node at 256 MiB/],
+    [{ ...whole, csharp: { cgroupVisible: true } }, /memory view not observed for csharp at 256 MiB/],
+    [{ ...whole, node: { constrainedBytes: 256 * MIB } }, /memory view not observed for node at 256 MiB/],
+    [without('churn'), /churn not observed for csharp at 256 MiB/],
+    [{ ...whole, churn: { csharp: 'PASS' } }, /churn not observed for node at 256 MiB/],
+    [without('overLimit'), /overlimit not observed for csharp at 256 MiB/],
+    [without('overLimitObjects'), /overlimit-objects not observed for csharp at 256 MiB/],
+    [without('workloads'), /workloads not observed for csharp at 256 MiB/],
+    [{ ...whole, workloads: { csharp: {}, node: whole.workloads.node } }, /medium-buffers not observed for csharp at 256 MiB/],
+    [{ memoryMaxBytes: 256 * MIB }, /memory view not observed for csharp at 256 MiB/],
+  ];
+  for (const policy of [POLICY_DECIDED, POLICY_SUPERSEDED, 'cgroup-view-readonly', 'runtime-view-accepted', 'dotnet-gc-hard-limit-percent:75']) {
+    for (const [at, expected] of cases) {
+      let verdict;
+      assert.doesNotThrow(() => { verdict = assertMemoryView({ policy, observations: { limits: [at] } }); }, `${policy}: ${expected}`);
+      assert.equal(verdict.ok, false, `${policy}: fail closed`);
+      assert.equal(verdict.halt, 'memory-view-mismatch');
+      assert.match(verdict.problems.join('\n'), expected, policy);
+    }
+  }
+  assert.deepEqual(assertMemoryView({ policy: POLICY_DECIDED, observations: { limits: [viewed(256), viewed(512)] } }), { ok: true, halt: null, problems: [] }, 'a whole observation is unchanged');
+  assert.doesNotThrow(() => probeVerdict({ policy: POLICY_DECIDED, observations: { limits: [{}] } }), 'not even an empty observation');
 });
