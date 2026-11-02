@@ -16,6 +16,14 @@ import { fileURLToPath } from 'node:url';
 
 await import('./lib/lower-priority.mjs');
 
+// The start-of-run sweep (common.test-leftovers §4): what a killed earlier run left in the temp root is retired before this run starts (the conventions' two keys: this token's name and owner, and a claim that is gone).
+{
+  const { owned } = await import('./test/support/owned.mjs');
+  const { sweepOwnedLeftovers } = await import('./test/support/sweep.mjs');
+  const swept = sweepOwnedLeftovers({ owned });
+  if (swept.removed.length > 0 || swept.errors.length > 0) process.stderr.write(`run-tests: sweep: retired ${swept.removed.length} leftover folder(s) of killed runs${swept.errors.length > 0 ? `; ${swept.errors.length} could not be judged` : ''}\n`);
+}
+
 const CAP = 8;
 const DEFAULT_GLOB = 'test/**/*.test.mjs';
 const NO_MATCH_EXIT = 2;
