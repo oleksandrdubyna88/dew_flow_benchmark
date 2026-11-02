@@ -64,3 +64,18 @@ export function verifyPin(dir, record) {
   const same = record.runner.manifestSha256 === now.value.runner.manifestSha256 && record.runner.version === now.value.runner.version;
   return same ? { ok: true } : fail('the pin\'s version or manifest hash differs from the runner folder');
 }
+
+/** The modules only group B's manifest has (parent D50): everything else of the runner is the olympiad path, and is frozen across manifests (T-L38). */
+export const GROUP_B_ONLY = Object.freeze(['rs_net.py']);
+
+/** The olympiad modules among `paths`: all of them but the group-B-only ones. `rs_abort.py` and its evidence function are in the set (D56). */
+export const OLYMPIAD_MODULES = paths => paths.filter(name => !GROUP_B_ONLY.includes(name));
+
+/** The differences of the olympiad modules of manifest `a` against manifest `b` (each `{ files: [{ path, sha256 }] }`): one text per module that differs or is missing from `b`. */
+export function olympiadDifferences(a, b) {
+  const second = new Map(b.files.map(f => [f.path, f.sha256]));
+  return a.files.filter(f => OLYMPIAD_MODULES([f.path]).length === 1).flatMap(f => {
+    if (!second.has(f.path)) return [`${f.path} is missing from the second manifest`];
+    return second.get(f.path) === f.sha256 ? [] : [`${f.path} differs`];
+  });
+}

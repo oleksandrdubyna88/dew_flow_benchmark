@@ -680,7 +680,7 @@ class ResultTests(unittest.TestCase):
         self.assertEqual(sorted(record), ["build", "cases", "emptyProgram", "emptyProgramMs", "format", "grammar", "kind", "launch", "python", "runner"])
         case = record["cases"][0]
         self.assertEqual((case["id"], case["status"], case["entries"]), ("s03", "PASS", 1))
-        self.assertEqual(case["lifecycle"]["memory"], {"known": False, "why": "not certified", "runtimeAbort": None})
+        self.assertEqual(case["lifecycle"]["memory"], {"known": False, "why": "not certified", "peakBytes": None, "maxBytes": None, "oomKill": None, "runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
         self.assertEqual(record["build"]["ran"], True)
 
     def test_Without_a_build_the_record_says_it_did_not_run(self):

@@ -9,6 +9,7 @@ import runner_path  # noqa: F401
 import rs_abort
 import rs_exec as ex
 import rs_olympiad as ro
+import box_support as bs
 
 V8_LINE = "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory"
 WRAPPED = ("Unhandled exception. System.AggregateException: One or more errors occurred. (Exception of type 'System.OutOfMemoryException' was thrown.)\n"
@@ -95,6 +96,116 @@ class AbortRuleTests(unittest.TestCase):
         long = "x\n" * 100_000 + "Out of memory.\n"
         self.assertEqual(rs_abort.runtime_abort(134, stderr_file(self, long), HIGH), "dotnet")
         self.assertIsNone(rs_abort.runtime_abort(134, os.path.join(tempfile.gettempdir(), "testsToDelete-no-such-stderr"), HIGH))
+
+
+MIB = 1024 * 1024
+CLEAN = "oom 0\noom_kill 0\n"
+KILLED = "oom 1\noom_kill 1\n"
+SIX = ["abortBelowEvidence", "childAbortLine", "maxBytes", "oomKill", "peakBytes", "runtimeAbort"]
+
+
+def at_peak(test, stub, peak, limit=256 * MIB, events=CLEAN, expected=b""):
+    """One case through the runner whose cgroup (a fake node) holds `memory.peak` = `peak` and `memory.max` = `limit` after the program ran `stub`."""
+    ws = bs.Workspace(test, stub)
+    return ws.run(box_case(expected), cgroup=bs.fake_cgroup(ws, final={"memory.peak": str(peak), "memory.max": str(limit), "memory.events": events}))
+
+
+def box_case(expected=b""):
+    return ro.Case("s01", b"", expected, (), None, None)
+
+
+DOTNET_STUB = 'echo "Out of memory." >&2; exit 134\n'
+V8_STUB = f'echo "{V8_LINE}" >&2; exit 134\n'
+
+
+class EvidenceBoundaryTests(unittest.TestCase):
+    """T-L50 (D56): L is a whole number of MiB, so L/2 is whole and `peak * 2 >= max` is exact at the byte."""
+
+    def test_An_abort_one_byte_below_half_the_limit_is_a_runtime_error_with_the_flag_and_that_is_the_point(self):
+        for limit in (256 * MIB, 512 * MIB):
+            for stub, kind in ((DOTNET_STUB, "dotnet"), (V8_STUB, "v8")):
+                at_half = at_peak(self, stub, limit // 2, limit)
+                self.assertEqual((at_half.status, at_half.reason), ("FAIL", "memory limit"), f"{kind} at L/2 of {limit}: evidence")
+                self.assertEqual(at_half.lifecycle["memory"]["runtimeAbort"], kind)
+                self.assertFalse(at_half.lifecycle["memory"]["abortBelowEvidence"])
+                below = at_peak(self, stub, limit // 2 - 1, limit)
+                self.assertEqual((below.status, below.reason), ("FAIL", "exit status 134"), f"{kind} one byte below L/2 of {limit}: no evidence, a runtime error")
+                memory = below.lifecycle["memory"]
+                self.assertTrue(memory["abortBelowEvidence"], "flagged")
+                self.assertIsNone(memory["runtimeAbort"])
+                self.assertEqual((memory["peakBytes"], memory["maxBytes"]), (limit // 2 - 1, limit), "the peak and the limit are kept")
+                flagged = [line for line in below.lines if line.startswith("  abort-below-evidence:")]
+                self.assertEqual(len(flagged), 1, "the flag is also a line of the report")
+                self.assertIn(f"peak {limit // 2 - 1} of {limit} bytes", flagged[0])
+
+    def test_The_threshold_is_at_least_half_and_not_more_than_half(self):
+        self.assertTrue(rs_abort.has_evidence({"known": True, "peakBytes": 128 * MIB, "maxBytes": 256 * MIB}), ">=, not >")
+        self.assertFalse(rs_abort.has_evidence({"known": True, "peakBytes": 128 * MIB - 1, "maxBytes": 256 * MIB}))
+
+    def test_The_line_with_exit_1_or_exit_134_with_another_message_is_a_runtime_error_without_the_flag(self):
+        for stub, reason in (('echo "Out of memory." >&2; exit 1\n', "exit status 1"), (f'echo "{V8_LINE}" >&2; exit 1\n', "exit status 1"), ('echo "abort() called" >&2; exit 134\n', "exit status 134")):
+            result = at_peak(self, stub, 200 * MIB)
+            self.assertEqual((result.status, result.reason), ("FAIL", reason), stub)
+            memory = result.lifecycle["memory"]
+            self.assertEqual((memory["abortBelowEvidence"], memory["childAbortLine"], memory["runtimeAbort"]), (False, False, None), stub)
+
+    def test_An_oom_kill_is_memory_limit_at_any_peak_and_no_flag_explains_it(self):
+        for stub in (DOTNET_STUB, V8_STUB, 'exit 0\n', 'echo "Out of memory." >&2; exit 0\n'):
+            result = at_peak(self, stub, 1, events=KILLED)
+            self.assertEqual((result.status, result.reason), ("FAIL", "memory limit"), stub)
+            memory = result.lifecycle["memory"]
+            self.assertEqual((memory["abortBelowEvidence"], memory["childAbortLine"]), (False, False), "the kernel's kill is the cause: nothing is left to flag")
+
+
+class ChildAbortTests(unittest.TestCase):
+    """D56: a runtime's abort line in the stderr of a program that did not abort itself."""
+
+    def test_A_child_abort_line_under_an_exit_0_parent_is_judged_on_its_output(self):
+        stub = 'echo "Out of memory." >&2; printf "hi"; exit 0\n'
+        passed = at_peak(self, stub, 200 * MIB, expected=b"hi")
+        self.assertEqual((passed.status, passed.reason), ("PASS", ""), "the output is right: a pass, never memory limit by the abort rule")
+        self.assertTrue(passed.lifecycle["memory"]["childAbortLine"], "flagged for adjudication")
+        self.assertTrue(any(line.startswith("  child-abort-line:") for line in passed.lines), "and a line of the report")
+        self.assertIsNone(passed.lifecycle["memory"]["runtimeAbort"])
+        failed = at_peak(self, stub, 200 * MIB, expected=b"hello")
+        self.assertEqual((failed.status, failed.reason), ("FAIL", "output differs"), "judged on its output, fail as well")
+        self.assertTrue(failed.lifecycle["memory"]["childAbortLine"])
+        v8 = at_peak(self, f'echo "{V8_LINE}" >&2; printf "hi"; exit 0\n', 200 * MIB, expected=b"hi")
+        self.assertEqual((v8.status, v8.lifecycle["memory"]["childAbortLine"]), ("PASS", True))
+
+    def test_A_non_zero_parent_exit_with_a_childs_abort_line_is_a_runtime_error_flagged_child_abort_line(self):
+        for code in (2, 3, 7):
+            result = at_peak(self, f'echo "Out of memory." >&2; exit {code}\n', 200 * MIB)
+            self.assertEqual((result.status, result.reason), ("FAIL", f"exit status {code}"), code)
+            self.assertTrue(result.lifecycle["memory"]["childAbortLine"], code)
+            self.assertIsNone(result.lifecycle["memory"]["runtimeAbort"])
+
+    def test_A_clean_exit_with_no_line_carries_neither_flag(self):
+        result = at_peak(self, 'printf "hi"\n', 200 * MIB, expected=b"hi")
+        memory = result.lifecycle["memory"]
+        self.assertEqual((result.status, memory["abortBelowEvidence"], memory["childAbortLine"]), ("PASS", False, False))
+
+    def test_The_flags_are_computed_by_one_pure_function(self):
+        facts = lambda code, text, memory: rs_abort.abort_facts(code, stderr_file(self, text), memory)  # noqa: E731
+        self.assertEqual(facts(134, "Out of memory.\n", HIGH), {"runtimeAbort": "dotnet", "abortBelowEvidence": False, "childAbortLine": False})
+        self.assertEqual(facts(134, "Out of memory.\n", LOW), {"runtimeAbort": None, "abortBelowEvidence": True, "childAbortLine": False})
+        self.assertEqual(facts(0, "Out of memory.\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": True})
+        self.assertEqual(facts(1, "Out of memory.\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
+        self.assertEqual(facts(0, "all good\n", HIGH), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
+        self.assertEqual(facts(134, "Out of memory.\n", {"known": False}), {"runtimeAbort": None, "abortBelowEvidence": True, "childAbortLine": False}, "an unread peak is no evidence: flagged, not hidden")
+        self.assertEqual(facts(0, "Out of memory.\n", {"known": True, "peakBytes": 1, "maxBytes": 256, "oomKill": 2}), {"runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False})
+
+
+class MemoryRecordTests(unittest.TestCase):
+    def test_The_memory_record_names_all_six_fields(self):
+        ran = at_peak(self, DOTNET_STUB, 200 * MIB)
+        self.assertEqual(sorted(k for k in ran.lifecycle["memory"] if k in SIX), SIX)
+        self.assertEqual({k: ran.lifecycle["memory"][k] for k in SIX}, {"peakBytes": 200 * MIB, "maxBytes": 256 * MIB, "oomKill": 0, "runtimeAbort": "dotnet", "abortBelowEvidence": False, "childAbortLine": False})
+        plain = Workspace(self, "exit 0\n").run()
+        memory = plain.lifecycle["memory"]
+        self.assertEqual(sorted(k for k in memory if k in SIX), SIX, "the plain path has all six too")
+        self.assertEqual((memory["peakBytes"], memory["maxBytes"], memory["oomKill"]), (None, None, None), "what was not read is unknown (null), never zero")
+        self.assertEqual((memory["runtimeAbort"], memory["abortBelowEvidence"], memory["childAbortLine"]), (None, False, False))
 
 
 if __name__ == "__main__":

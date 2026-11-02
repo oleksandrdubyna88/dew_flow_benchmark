@@ -38,9 +38,42 @@ def _kind(lines, text):
     return "v8" if any(V8_TEXT in line for line in lines) else None
 
 
-def runtime_abort(returncode, stderr_path, memory):
-    """`"dotnet"`, `"v8"` or None: which runtime's own out-of-memory abort the program ended in (None without the exit status, the message or the evidence)."""
-    if returncode != ABORT_STATUS or not has_evidence(memory):
-        return None
+def _line_kind(stderr_path):
+    """`"dotnet"`, `"v8"` or None: whose out-of-memory line stands at the end of the stderr file, whatever the exit status."""
     text = ex.read_tail(stderr_path, SCAN_BYTES)
     return _kind([line.rstrip("\r") for line in text.split("\n")], text)
+
+
+def _facts(abort, below, child):
+    return {"runtimeAbort": abort, "abortBelowEvidence": below, "childAbortLine": child}
+
+
+NO_ABORT = _facts(None, False, False)
+
+
+def abort_facts(returncode, stderr_path, memory):
+    """What the stderr line and the exit status say about a memory abort (parent D56): `{runtimeAbort, abortBelowEvidence, childAbortLine}`.
+
+    - exit 134 and a runtime's line WITH evidence (`memory.peak` at least half of `memory.max`): `runtimeAbort` is the runtime ("dotnet" or "v8");
+    - exit 134 and the line WITHOUT evidence (the peak below the threshold, or not read): a runtime error, `abortBelowEvidence` is true (never
+      silent);
+    - the line with exit 0, or with an exit status other than 1 and 134: a CHILD's abort the program went on from (or failed on), `childAbortLine`
+      is true; the case is judged on its output and status. The line with exit 1 is a plain runtime error: no flag. A kernel `oom_kill` is
+      `memory limit` by its own cause, so no flag explains it.
+    """
+    kind = _line_kind(stderr_path)
+    if kind is None:
+        return NO_ABORT
+    killed = bool(memory.get("oomKill"))
+    return _own(kind, memory, killed) if returncode == ABORT_STATUS else _facts(None, False, returncode != 1 and not killed)
+
+
+def _own(kind, memory, killed):
+    """The facts of an exit 134 with a runtime's line: the abort when the evidence is there, else the flag (unless the kernel's kill explains it)."""
+    evidence = has_evidence(memory)
+    return _facts(kind if evidence else None, not evidence and not killed, False)
+
+
+def runtime_abort(returncode, stderr_path, memory):
+    """`"dotnet"`, `"v8"` or None: which runtime's own out-of-memory abort the program ended in (None without the exit status, the message or the evidence)."""
+    return abort_facts(returncode, stderr_path, memory)["runtimeAbort"]

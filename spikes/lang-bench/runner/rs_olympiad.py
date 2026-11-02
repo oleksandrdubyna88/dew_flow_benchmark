@@ -197,11 +197,13 @@ def run_case(case, config):
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
-    out = out._replace(memory={**out.memory, "runtimeAbort": rs_abort.runtime_abort(out.returncode, stderr_path, out.memory)})
+    facts = rs_abort.abort_facts(out.returncode, stderr_path, out.memory)
+    out = out._replace(memory=rp.memory_record({**out.memory, **facts}))
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
     record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, out.launched.tracker)
     failed = _judge(case, config, out, comparer)
-    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
+    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.abort_lines(out.memory)
+    tail += rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
     verdict = ("PASS", "", 1, None, []) if failed is None else ("FAIL", failed[0], 0, failed[1], failed[2])
     lines = tuple(verdict[4]) + tail
     return CaseResult(case.id, verdict[0], verdict[1], verdict[2], case.r_ids, lines, verdict[3], record, _wall_ms(out), case.comparison,

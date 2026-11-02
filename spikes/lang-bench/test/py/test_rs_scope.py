@@ -195,7 +195,8 @@ class FakeCgroupTests(unittest.TestCase):
         ws = Workspace(self, REPLAY, FILES)
         result = ws.run(case(), cgroup=fake_cgroup(ws, final={"memory.peak": "1048576", "memory.events": CLEAN_EVENTS}))
         self.assertEqual(result.status, "PASS")
-        self.assertEqual(result.lifecycle["memory"], {"known": True, "peakBytes": 1048576, "events": {"oom": 0, "oom_kill": 0}, "oomKill": 0, "runtimeAbort": None})
+        self.assertEqual(result.lifecycle["memory"], {"known": True, "peakBytes": 1048576, "events": {"oom": 0, "oom_kill": 0}, "oomKill": 0, "runtimeAbort": None, "maxBytes": None,
+                                                           "abortBelowEvidence": False, "childAbortLine": False})
         self.assertIn("  memory: peak 1048576 bytes", result.lines)
 
     def test_The_cgroup_template_is_filled_with_the_case_id(self):
