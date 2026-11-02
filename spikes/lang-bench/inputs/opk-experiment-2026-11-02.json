@@ -2724,5 +2724,1186 @@
         "n": 3
       }
     ]
+  },
+  "followUp4": {
+    "note": "(1c): no cgroup view + DOTNET_GCHeapHardLimit = the limit for .NET + the runner with rule 5.1 and its evidence check; Node no flag. Measurement only.",
+    "believes": {
+      "256": {
+        "dotnet": {
+          "totalAvailableBytes": 268435456,
+          "heapHardLimit": "",
+          "cgroupVisible": false,
+          "cgroupSelf": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-bNFIep-rp.scope/prog",
+          "cgroupChildren": -1
+        },
+        "node": {
+          "constrainedBytes": 0,
+          "heapSizeLimitBytes": 4395630592,
+          "cgroupVisible": false,
+          "cgroupSelf": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-1uSQx8-rp.scope/prog",
+          "cgroupChildren": -1
+        }
+      },
+      "512": {
+        "dotnet": {
+          "totalAvailableBytes": 536870912,
+          "heapHardLimit": "",
+          "cgroupVisible": false,
+          "cgroupSelf": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-lJ1N2U-rp.scope/prog",
+          "cgroupChildren": -1
+        },
+        "node": {
+          "constrainedBytes": 0,
+          "heapSizeLimitBytes": 4395630592,
+          "cgroupVisible": false,
+          "cgroupSelf": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-EMCzka-rp.scope/prog",
+          "cgroupChildren": -1
+        }
+      }
+    },
+    "table": [
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          127,
+          126,
+          126
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          234,
+          234,
+          233
+        ]
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          252,
+          253,
+          253
+        ]
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          508,
+          508,
+          508
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)"
+        ],
+        "peakMiB": [
+          198,
+          199,
+          199
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+          ".NET runtime abort (exit 134, runtimeAbort dotnet)"
+        ],
+        "peakMiB": [
+          455,
+          455,
+          455
+        ]
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          376,
+          380,
+          376
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          190,
+          189,
+          189
+        ]
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          296,
+          295,
+          296
+        ]
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "PASS",
+          "PASS",
+          "PASS"
+        ],
+        "ended": [
+          "exit 0",
+          "exit 0",
+          "exit 0"
+        ],
+        "peakMiB": [
+          458,
+          457,
+          457
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          256,
+          256,
+          256
+        ]
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "results": [
+          "memory limit",
+          "memory limit",
+          "memory limit"
+        ],
+        "ended": [
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)",
+          "kernel oom_kill (1)"
+        ],
+        "peakMiB": [
+          512,
+          512,
+          512
+        ]
+      }
+    ],
+    "runs": [
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 194,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 184,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 174,
+        "n": 3
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 318,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 336,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 501,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 132890624,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1007,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 132349952,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1034,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 132374528,
+        "stderrTail": "live-heap-after-full-gc-MiB=105",
+        "wallMs": 1035,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 245325824,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 2855,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 245080064,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 2818,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 244465664,
+        "stderrTail": "live-heap-after-full-gc-MiB=208",
+        "wallMs": 2842,
+        "n": 3
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 264220672,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 2317,
+        "n": 1
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 265510912,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 2433,
+        "n": 2
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 265285632,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 2359,
+        "n": 3
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 532856832,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 8350,
+        "n": 1
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 532357120,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 8544,
+        "n": 2
+      },
+      {
+        "mode": "objects-70",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 532611072,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 8477,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 183,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 171,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 170,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 310,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 316,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 314,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 207355904,
+        "stderrTail": "Out of memory.",
+        "wallMs": 144,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 208146432,
+        "stderrTail": "Out of memory.",
+        "wallMs": 144,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 208396288,
+        "stderrTail": "Out of memory.",
+        "wallMs": 125,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 477102080,
+        "stderrTail": "Out of memory.",
+        "wallMs": 270,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 476835840,
+        "stderrTail": "Out of memory.",
+        "wallMs": 273,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "csharp",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": ".NET runtime abort (exit 134, runtimeAbort dotnet)",
+        "peakBytes": 476844032,
+        "stderrTail": "Out of memory.",
+        "wallMs": 287,
+        "n": 3
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 229,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 195,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 211,
+        "n": 3
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 394088448,
+        "stderrTail": "",
+        "wallMs": 412,
+        "n": 1
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 398397440,
+        "stderrTail": "",
+        "wallMs": 376,
+        "n": 2
+      },
+      {
+        "mode": "medium-buffers",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 394518528,
+        "stderrTail": "",
+        "wallMs": 406,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 199163904,
+        "stderrTail": "live-heap-after-full-gc-MiB=104",
+        "wallMs": 847,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 198180864,
+        "stderrTail": "live-heap-after-full-gc-MiB=104",
+        "wallMs": 890,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 198373376,
+        "stderrTail": "live-heap-after-full-gc-MiB=104",
+        "wallMs": 874,
+        "n": 3
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 310329344,
+        "stderrTail": "live-heap-after-full-gc-MiB=206",
+        "wallMs": 2041,
+        "n": 1
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 309497856,
+        "stderrTail": "live-heap-after-full-gc-MiB=206",
+        "wallMs": 2078,
+        "n": 2
+      },
+      {
+        "mode": "medium-objects",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 310820864,
+        "stderrTail": "live-heap-after-full-gc-MiB=206",
+        "wallMs": 2120,
+        "n": 3
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 1504,
+        "n": 1
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 1540,
+        "n": 2
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "live-heap-after-full-gc-MiB=180",
+        "wallMs": 1615,
+        "n": 3
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 479776768,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 5365,
+        "n": 1
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 479051776,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 5140,
+        "n": 2
+      },
+      {
+        "mode": "objects-70",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "PASS",
+        "ended": "exit 0",
+        "peakBytes": 479657984,
+        "stderrTail": "live-heap-after-full-gc-MiB=359",
+        "wallMs": 5403,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 171,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 169,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 172,
+        "n": 3
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 319,
+        "n": 1
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 299,
+        "n": 2
+      },
+      {
+        "mode": "near-limit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 290,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 160,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 153,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 256,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 268435456,
+        "stderrTail": "",
+        "wallMs": 163,
+        "n": 3
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 296,
+        "n": 1
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 285,
+        "n": 2
+      },
+      {
+        "mode": "overlimit",
+        "stack": "node",
+        "limitMiB": 512,
+        "policy": "no-view+dotnet-hardlimit",
+        "result": "memory limit",
+        "ended": "kernel oom_kill (1)",
+        "peakBytes": 536870912,
+        "stderrTail": "",
+        "wallMs": 409,
+        "n": 3
+      }
+    ]
   }
 }

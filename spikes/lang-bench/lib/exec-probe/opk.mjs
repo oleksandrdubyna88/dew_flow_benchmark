@@ -25,6 +25,16 @@ export const POLICY_3C = 'cgroup-view-own+gchardlimit-case-limit';
 export const POLICY_DECIDED_RUN = 'decided';
 export const POLICY_NODE_FLAG = 'decided+node-max-old-space';
 
+/** (1c), measurement only: NO cgroup view in the box (the layer's prefix without `--unshare-cgroup` and the bind of `prog/` at /sys/fs/cgroup), plus .NET's hard limit from the layer's own .NET environment, Node with no flag. */
+export const POLICY_1C = 'no-view+dotnet-hardlimit';
+
+/** The layer's prefix without its own-cgroup view; throws when it has none. */
+export function withoutCgroupView(prefix) {
+  const bind = prefix.findIndex((arg, i) => arg === '--ro-bind' && prefix[i + 2] === '/sys/fs/cgroup');
+  if (bind < 0) throw new Error('the prefix has no cgroup view to take out');
+  return prefix.filter((arg, i) => arg !== '--unshare-cgroup' && !(i >= bind && i < bind + 3));
+}
+
 /** `NODE_OPTIONS` a policy gives a stack's program, or null. */
 export const nodeOptionsFor = (policy, stack, limitMiB) => (policy === POLICY_NODE_FLAG && stack === 'node' ? `--max-old-space-size=${limitMiB}` : null);
 
@@ -41,7 +51,7 @@ export function extraEnvFor(policy, stack, limitMiB) {
   return EXTRA_ENV[policy]?.[stack] ?? {};
 }
 /** Whether a policy puts the read-only view of the program's own cgroup in the box. */
-export const viewFor = policy => policy !== 'today' && policy !== POLICY_DECIDED_RUN && policy !== POLICY_NODE_FLAG;
+export const viewFor = policy => ![ 'today', POLICY_DECIDED_RUN, POLICY_NODE_FLAG, POLICY_1C ].includes(policy);
 
 const DOTNET_FRACTION = 0.75;
 const ABORTED = Object.freeze({ v8: 'V8 heap-limit abort (exit 134, runtimeAbort v8)', dotnet: '.NET runtime abort (exit 134, runtimeAbort dotnet)' });
@@ -72,6 +82,7 @@ export function cgroupViewPrefix(prefix, prog) {
 function tweakFor(policy, run, stack) {
   const flags = nodeOptionsFor(policy, stack, run.options.memoryMaxBytes / MIB);
   if (flags !== null) return prefix => setNodeOptions(prefix, flags);
+  if (policy === POLICY_1C) return withoutCgroupView;
   return viewFor(policy) ? prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)) : prefix => prefix;
 }
 

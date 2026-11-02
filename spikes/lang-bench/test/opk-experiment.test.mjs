@@ -2,7 +2,7 @@
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, setNodeOptions, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
+import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_1C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, setNodeOptions, summarise, viewFor, withoutCgroupView } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
 
@@ -78,4 +78,14 @@ test('A_run_the_runner_judged_memory_limit_through_a_runtime_abort_is_not_labell
   assert.deepEqual(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 0, runtimeAbort: 'v8' }, stderrTail: '' }), { result: 'memory limit', ended: 'V8 heap-limit abort (exit 134, runtimeAbort v8)' });
   assert.deepEqual(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 0, runtimeAbort: 'dotnet' }, stderrTail: '' }), { result: 'memory limit', ended: '.NET runtime abort (exit 134, runtimeAbort dotnet)' });
   assert.equal(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 1, runtimeAbort: null }, stderrTail: '' }).ended, 'kernel oom_kill (1)');
+});
+
+test('The_1c_variant_takes_the_cgroup_view_out_of_the_layers_prefix_and_changes_nothing_else', () => {
+  const real = ['bwrap', '--tmpfs', '/', '--ro-bind', '/usr', '/usr', '--ro-bind', '/sys/fs/cgroup/x/prog', '/sys/fs/cgroup', '--unshare-cgroup', '--unshare-user', '--disable-userns', '--unshare-pid', '--clearenv', '--', 'x'];
+  const bare = withoutCgroupView(real);
+  assert.deepEqual(bare, ['bwrap', '--tmpfs', '/', '--ro-bind', '/usr', '/usr', '--unshare-user', '--disable-userns', '--unshare-pid', '--clearenv', '--', 'x'], 'the view\'s bind and --unshare-cgroup go; every other element stays, in order');
+  assert.throws(() => withoutCgroupView(['bwrap', '--']), /no cgroup view/);
+  assert.equal(viewFor(POLICY_1C), false, 'no view is ADDED');
+  assert.deepEqual(extraEnvFor(POLICY_1C, 'csharp', 256), {}, 'the hard limit comes from the layer\'s own .NET environment (stack)');
+  assert.equal(nodeOptionsFor(POLICY_1C, 'node', 256), null, 'Node gets no flag');
 });
