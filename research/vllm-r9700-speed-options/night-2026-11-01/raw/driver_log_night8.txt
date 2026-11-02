@@ -1,0 +1,28 @@
+2026-11-01 18:07:50 NIGHT8 START, deadline 2026-11-02 07:15:00, coai-exp processes 0
+2026-11-01 18:07:50 quiet gate off (operator), load 6.36
+2026-11-01 20:04:40 speed_night8.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedRA ra3 ra3opt ta3 ta3mb rc=143
+failed tries: 1
+2026-11-01 20:04:40 quiet gate off (operator), load 2.09
+2026-11-01 20:10:12 speed_night8.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedRA ra3 ra3opt ta3 ta3mb rc=143
+failed tries: 2
+2026-11-01 20:10:12 quiet gate off (operator), load 3.34
+2026-11-01 20:16:45 speed_night8.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedRA ra3 ra3opt ta3 ta3mb rc=143
+failed tries: 3
+2026-11-01 20:16:45 quiet gate off (operator), load 3.98
+2026-11-01 20:17:05 speed_night8.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedRA ra3 ra3opt ta3 ta3mb rc=143
+failed tries: 4
+2026-11-01 20:17:05 quiet gate off (operator), load 3.82
+2026-11-01 22:32:09 speed_night8.log env PREFIXTEST=0 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedRA ra3 ra3opt ta3 ta3mb rc=0
+2026-11-01 22:32:09 SERIES speedRA DONE
+2026-11-01 22:32:09 quiet gate off (operator), load 0.91
+2026-11-01 22:36:52 speed_night8.log env PREFIXTEST=0 MODEL_DIR=/root/.cache/huggingface/local/Qwen3.8-27B-AWQ SERVED=qwen3.8-27b MAXSEQS=16 MAXLEN=16384 PREFILL_LENS=8192 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed27 q27old q27new rc=143
+failed tries: 5
+2026-11-01 22:36:52 quiet gate off (operator), load 1.79
+2026-11-01 22:37:11 speed_night8.log env PREFIXTEST=0 MODEL_DIR=/root/.cache/huggingface/local/Qwen3.8-27B-AWQ SERVED=qwen3.8-27b MAXSEQS=16 MAXLEN=16384 PREFILL_LENS=8192 /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed_A.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speed27 q27old q27new rc=143
+failed tries: 6
+2026-11-01 22:37:11 STOP: 6 failed tries
+2026-11-01 22:37:11 NIGHT8 DONE (failed tries 6)
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+09dd6ba00063d57b20abcf19aba4d557bce00bca096eeb4b8b28fdd26f3da681
+restore: started at 2026-11-01T22:37:22+01:00

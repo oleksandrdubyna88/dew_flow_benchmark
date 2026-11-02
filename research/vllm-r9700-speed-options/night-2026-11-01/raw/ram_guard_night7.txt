@@ -1,0 +1,7 @@
+14:31:18 available RAM 21968 MB
+14:37:09 available RAM 22931 MB
+14:38:51 RAM GUARD: available 43 MB < 2048 MB, stopping tests
+16:49:22 available RAM 59327 MB
+17:19:37 available RAM 58906 MB
+17:25:25 available RAM 30120 MB
+17:28:00 RAM GUARD: available 1948 MB < 2048 MB, stopping tests

@@ -10,6 +10,11 @@
 > c=1, +14.1 % at c=4, GSM8K equal), and the production server now starts with it. The tuned BF16 draft MoE file
 > (option 3) is 3–15 % faster as a kernel but gives no end-to-end gain. The prefix-cache hypothesis of § 6.1 is
 > rejected. The option 7 tile patch is 1.4 % faster per token at c=4, inside the spread: not shipped (§ 13.5).
+> **Update 2026-11-01/02 (§ 14):** phase B2 (option 4) fails: the coarse search picked the current tile at every
+> key (+0.0 %). The start script now defaults to MTP 3 + TRITON_ATTN. The ROCM_ATTN fused-draft opt-in is correct
+> but gives no speed (all medians within the spread). `mtp3 + tattn + mnbt8k` cuts 8k/32k time to first token by
+> 18.5 % / 13.1 % with equal decode, for 18–27 % less KV cache: the operator's choice. On Qwen3.8-27B-AWQ the new
+> defaults give +13.5 % / +17.6 % decode but +8.9 % 8k time to first token.
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -41,6 +46,16 @@ server flags.
 | 1a + 6 | The combination `mtp3 + tattn` (`fcombo`) | **passes** the ship test; **in production since 2026-11-01** | +12.2 % at c=1, +14.1 % at c=4; TPOT −13 % / −17 %; prefill within spread; GSM8K 169 vs 171 of 200 |
 | 3 | Tuned BF16 MoE file for the MTP draft layer (`fb1`) | **fails** (no end-to-end gain) | kernel −9.4 % (bs 1) to −2.5 % (bs 16); end-to-end +1.6 % / +1.5 %, inside the spread; TPOT equal |
 | 7 | Hybrid linear kernel, tile patch for wide-N shapes at M 6–16 (`o7`, on top of `fcombo`) | **fails** (gain inside the spread) | c=1 +0.1 %, c=4 −0.7 % tok/s; c=4 TPOT −1.4 % (spread 3.9 %); 20 prompts identical; GSM8K equal |
+
+
+**Update 2026-11-01/02 (§ 14; the rows above keep their earlier state):**
+
+| # | Option | Verdict | Main number (median of 9 values, same series) |
+|---|---|---|---|
+| 4 | int4 MoE keys 24, 32, 64, 128, coarse search (phase B2) | **fails** (the search kept the current tile) | kernel −0.3 % to +0.6 % at batch 8–128 (§ 14.1) |
+| 1a + 6, ROCM_ATTN | Fused multi-step draft opt-in for ROCM_ATTN (`ra3opt` vs `ra3`) | **correct, no gain**; not shipped | TPOT +0.1 % / +0.2 %; 20 prompts identical; GSM8K 171 vs 169 (§ 14.3) |
+| 1a + 6 + 2 | `mtp3 + tattn + mnbt8k` (`ta3mb` vs production `ta3`) | **trade-off**; the operator's choice, not in production | 8k / 32k median TTFT −18.5 % / −13.1 %; TPOT equal; KV cache −18 % to −27 % (§ 14.3) |
+| 1a + 6 on 27B | The new start-script defaults on Qwen3.8-27B-AWQ (`q27new` vs `q27old`) | **decode passes, prefill worse**; defaults kept | +13.5 % / +17.6 % tok/s; TPOT −16 % / −19 %; 8k median TTFT +8.9 % (§ 14.5) |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -675,3 +690,140 @@ of every `o7` start shows the patch's line `speed-options option 7: wide-N tile 
 (`restore_args`, read by `restore_server.sh`). `start-vllm.ps1` itself is unchanged. Restarted 2026-11-01 07:07, ready
 07:11; its log shows `Using TRITON_ATTN backend (selected via --attention-backend)` and
 `num_speculative_tokens: 3`; a test request (17 × 23) answered 391.
+
+## 14. Runs of 2026-11-01 (operator: "phase B2 … начинай", "Option C", "The GPU series: no progress запускай")
+
+Data in [vllm-r9700-speed-options/night-2026-11-01/](vllm-r9700-speed-options/night-2026-11-01/); drivers
+`harness/b2.sh`, `harness/night7.sh`, `harness/night8.sh`; series script `harness/speed_A.sh`.
+
+### 14.1 Phase B2 (option 4) — coarse search, no gain
+
+- The full search was ~11 h for key 24 alone (2,100 configs at ~19.5 s each), so the operator chose a coarse
+  search. The full search started 09:51 and was stopped at 11:35 (~1 h 43 min, key 24 not finished).
+- Coarse chunk `int4-coarse-mid` (keys 24, 32, 64, 128): rc 0, 1,244 s. Merged with the earlier keys into
+  `phaseB2/merged_b2_E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json` (`harness/merge_b2.py`).
+- Kernel A/B (`moe_kernel_ab.sh`, current production file vs the merged B2 file, 3 runs each, A B A B A B):
+
+| batch | 8 | 16 | 20 | 24 | 32 | 48 | 64 | 96 | 128 |
+|---|---|---|---|---|---|---|---|---|---|
+| current (µs) | 275.84 | 442.56 | 502.56 | 563.24 | 671.37 | 819.88 | 910.24 | 1005.15 | 1044.79 |
+| B2 file (µs) | 276.83 | 442.15 | 502.75 | 566.89 | 671.81 | 819.60 | 910.39 | 1002.58 | 1043.21 |
+| change | +0.4 % | −0.1 % | +0.0 % | +0.6 % | +0.1 % | −0.0 % | +0.0 % | −0.3 % | −0.2 % |
+
+- **Fails:** the coarse search picked the same tile as the current file at every key (BLOCK 16/16/64, GROUP 1,
+  1 warp, 2 stages, `waves_per_eu` 4; full list in `phaseB2/b2_kernel_ab.log`). There is nothing to test end
+  to end. Option 4 is closed: with a coarse grid, the int4 MoE file is already at its best tile for keys 24–128.
+  A full search could still find a tile outside the coarse grid; it was not run (~11 h per key).
+
+### 14.2 Production start script — new defaults
+
+With the operator's decision of 2026-11-01, `start-vllm.ps1` (backup `start-vllm.ps1.bak-2026-11-01`) now
+defaults to `-MtpTokens 3` and a new `-AttentionBackend TRITON_ATTN` parameter (adds `--attention-backend`). The
+old behaviour is `-MtpTokens 2 -AttentionBackend ""`. `restore_args` is no longer needed and was renamed
+`restore_args.before-new-defaults-2026-11-01`. **This supersedes the sentence "`start-vllm.ps1` itself is
+unchanged" of § 13.6**, which was true at 07:07 and is kept as written. Verified on the next start: `Using
+TRITON_ATTN backend (selected via --attention-backend)` and `num_speculative_tokens: 3`. The defaults were not
+measured on the other local model (Qwen3.8-27B-AWQ); that is § 14.5.
+
+### 14.3 Series `speedRA` — the ROCM_ATTN fused-draft opt-in and `ta3mb`, 3 rounds
+
+Arms (all MTP 3, production shape, tuned int4 MoE file, `max-model-len` 131072):
+
+- `ra3` — the default backend, ROCM_ATTN. Its log says `Fused multi-step draft decode is not supported by
+  attention backend(s) ROCM_ATTN`.
+- `ra3opt` — `ra3` with `rocm_attn.py` mounted over the image file: `supports_draft_decode_metadata_update =
+  True` and a no-op `update_draft_decode_metadata` (`rocm_attn_optin/optin.diff`). vLLM PR #63096 gives the same
+  opt-in to ROCM_AITER_UNIFIED_ATTN. Every `ra3opt` log shows the patch line and no "not supported" line.
+- `ta3` — production (`--attention-backend TRITON_ATTN`, the `fcombo` of § 13.2).
+- `ta3mb` — `ta3` with `--max-num-batched-tokens 8192`: the open combination `mtp3 + tattn + mnbt8k` of § 9 item 9.
+
+2026-11-01 18:08–22:32. The quiet gate was off by the operator's decision (WSL load up to 6 at arm starts; the
+desktop was in use). Predictions, written before the run (header of `harness/night7.sh`): `ra3opt` prompts
+token-identical to `ra3` (**held**); `ra3opt` faster than `ra3` by a part of the `ta3` gain (**did not hold**);
+`ta3mb` TTFT 8k/32k lower than `ta3`, decode within ~4 % (**held**, decode equal).
+
+Median of 9 values (3 rounds × 3 runs); in brackets the spread (max − min of the 9 values):
+
+| | `ra3` | `ra3opt` | `ta3` | `ta3mb` |
+|---|---|---|---|---|
+| c=1 tok/s | 80.77 (60.17) | 80.40 (41.11) | 81.93 (46.41) | 84.72 (42.81) |
+| c=4 tok/s | 185.56 (156.03) | 182.23 (101.16) | 198.24 (148.86) | 197.52 (8.63) |
+| c=1 mean TPOT | 8.16 ms (0.92) | 8.17 ms (0.89) | 7.69 ms (0.44) | 7.70 ms (0.40) |
+| c=4 mean TPOT | 12.92 ms (1.36) | 12.94 ms (0.88) | 11.33 ms (0.85) | 11.46 ms (1.06) |
+| prefill 8k median TTFT | 1.99 s (0.06) | 1.98 s (0.05) | 2.00 s (0.09) | **1.63 s** (0.03) |
+| prefill 32k median TTFT | 16.26 s (1.16) | 16.38 s (0.26) | 15.61 s (0.22) | **13.57 s** (1.28) |
+| GSM8K-200 | 169 (84.5 %) | 171 (85.5 %) | 169 (84.5 %) | 169 (84.5 %) |
+| 20 greedy prompts | — | 20 identical to `ra3` | 20 identical to `fcombo` (2026-10-31) | 20 identical to `ta3` |
+| KV cache (tokens) | — | — | 232,700 (1.78 × 131k) | 189,959 / 189,959 / 170,013 (1.45 × / 1.30 ×) |
+
+- **The tok/s spreads are wide because of the stall of § 6.1 / § 13.3.** One measured request per bench run takes
+  ~6 s, so c=1 mean TTFT is ~2.2 s in most runs and ~0.2 s in the rest (without the stall: `ra3` 4 of 9 runs at
+  c=1, the other arms 0–2 of 9). The stall is in every arm, so it is not caused by an arm. TPOT is the decode
+  measure here, as in § 13.2.
+- **`ra3opt`: correct, but no gain.** The 20 prompts are identical to `ra3`, and GSM8K is within 2 × stderr (171 vs
+  169). Every median is within `ra3`'s spread (TPOT +0.1 % / +0.2 %, 32k TTFT +0.7 %). On gfx1201 the fused
+  multi-step draft path does not make ROCM_ATTN faster. Not shipped.
+- **ROCM_ATTN stays slower than TRITON_ATTN** with or without the opt-in: `ta3` TPOT is −5.8 % at c=1 and −12.3 %
+  at c=4 (outside `ra3`'s c=4 spread of 1.36 ms). The 20 prompts of `ta3` vs `ra3`: 12 of 20 identical (a
+  different kernel, as in § 3.4). This repeats the result of § 13.2 on another day.
+- **`ta3mb`: shorter prefill, equal decode, less KV cache — a trade-off, the operator's choice.** Median TTFT is
+  −18.5 % at 8k and −13.1 % at 32k, outside `ta3`'s spread (0.09 s / 0.22 s). Decode is equal: TPOT +0.1 % /
+  +1.1 %, inside the spread. In phase A, `mnbt8k` alone cost 1–4 % decode (§ 2); with MTP 3 and TRITON_ATTN it
+  costs none. The cost is the KV cache: −18 % to −27 %, so 1.30–1.45 requests of 131k tokens instead of 1.78.
+  GSM8K and prompts are equal. It is not in production; the start script was not changed.
+
+### 14.4 Incidents
+
+- **Quiet gate (night7, 12:03–18:07).** The series waited for a quiet PC most of the day. It started twice, at 14:31
+  and 17:19. The RAM guard stopped both: 14:38 (43 MB available, during the model load) and 17:28 (1,948 MB,
+  during the first c=1 bench of `ra3-1`). After the 17:28 stop, the restore was skipped as a planned restart,
+  so the production server was down from 17:28 to 18:07. Lines 1–9 of `raw/bench_speedRA.txt` are that stopped
+  block (its third run shows 0.00). They are kept, and the table above starts at line 10.
+- **night8 (18:07–) without the quiet gate**, by the operator's decision. The RAM guard stopped 4 tries, all at
+  `ra3opt` round 2: 20:04, 20:09, 20:16 and 20:16 (available RAM 956, 1,093, 16 and 15 MB; the container VM's
+  working set was 27.6 GB). The retry at 20:16:58 failed at once with `ERROR_ALREADY_EXISTS`: the stopped
+  container was not yet removed. A retry should wait until the old container is gone. That is a note for the
+  toolkit's retry rule (`dew_flow_amd_r9700_tuning_ai`, E1). 4 of the night's 6 tries were used.
+- **`speed27` stopped (night8, 22:32–22:37).** The RAM guard stopped the first 27B load at 22:36:29 (195 MB
+  available). The retry started 23 s later, before the RAM was back, and was stopped at 22:36:57 (575 MB). That
+  used the night's last 2 tries; production was restored at 22:37. Its own load also went down to 106 MB
+  available (22:39). At that time Windows held 14.6 GB in compressed memory.
+- **`speed27` retry (night9, from ~22:50):** `harness/night9.sh` is `night8.sh` for `speed27` only. Before each
+  try it waits until no test container is listed and available RAM is ≥ 24 GB (20 min ceiling). It allows 2
+  failed tries. Result in § 14.5. night9 finished 3 of 6 arm-rounds; the guard stopped `q27new-2` twice at its
+  load (00:18, 1,424 MB; 00:23, 1,550 MB; WSL load 15.6 from a test run of another job). night10 (`harness/night10.sh`,
+  the same gates) ran the last 3 arm-rounds from 00:47 to 01:41 with no stop. `raw/bench_speed27.txt` keeps the two
+  stopped `q27new-2` blocks (lines 82–93); the table in § 14.5 uses the last complete block of each arm-round.
+
+### 14.5 Series `speed27` — the new start-script defaults on Qwen3.8-27B-AWQ, 3 rounds
+
+Arms: `q27old` = the defaults before 2026-11-01 (MTP 2, default backend: ROCM_ATTN, "falling back to rebuilding
+attention metadata"); `q27new` = the new defaults (MTP 3, TRITON_ATTN; every log shows both). `--max-model-len 16384`,
+`--max-num-seqs 16`, prefill 8k only (the model's KV cache does not fit 32k at this length). Prediction (header of
+`harness/night7.sh`): unknown, not measured on this model.
+
+Median of 9 values; in brackets the spread (max − min of the 9 values):
+
+| | `q27old` | `q27new` | change |
+|---|---|---|---|
+| c=1 tok/s | 37.55 (1.91) | 42.62 (4.81) | **+13.5 %** |
+| c=4 tok/s | 80.16 (4.54) | 94.28 (14.68) | **+17.6 %** |
+| c=1 mean TPOT | 21.28 ms (1.03) | 17.81 ms (1.39) | **−16.3 %** |
+| c=4 mean TPOT | 36.46 ms (0.90) | 29.54 ms (4.59) | **−19.0 %** |
+| prefill 8k median TTFT | 7.25 s (0.19) | 7.89 s (0.08) | **+8.9 %** (worse) |
+| prefill 8k mean TTFT | 11.42 s (1.13) | 12.09 s (0.69) | +5.9 % (inside) |
+| accepted tokens per draft (3 rounds) | 1.85 of 2 | 2.64 of 3 | — |
+| GSM8K-200 | 153 (76.5 %) | 155 (77.5 %) | within 2 × stderr |
+| 20 greedy prompts | — | 14 identical to `q27old` | different kernel |
+| KV cache (tokens) | 66,528 (log of round 1 not kept) | 41,870 (round 1) / 60,984 / 60,984 | −8 % |
+
+- **Decode passes clearly:** both tok/s medians and both TPOT medians are better by more than `q27old`'s spread.
+- **Prefill is slower:** the 8k median time to first token is +8.9 %, outside the spread (0.19 s). So the rule of
+  § 13.2 ("prefill within the spread") does not hold on this model. The cost is ~0.6 s on an 8k prompt; the gain
+  is ~3.5 ms per output token at c=1, so the new defaults are faster for any answer longer than ~180 tokens.
+- The 6 prompt divergences are expected from a different attention kernel (as in § 14.3, `ta3` vs `ra3`); GSM8K is
+  the quality gate and is equal.
+- `q27new-1` had a smaller KV cache (41,870 tokens) than rounds 2 and 3 (60,984): less free GPU memory at that start
+  (the desktop was in use). Its speed values are inside the arm's range.
+- **Not changed:** the start script keeps the new defaults for both models. Whether the 27B model should start with
+  the old ones (`-MtpTokens 2 -AttentionBackend ""`) for prefill-heavy work is the operator's choice.

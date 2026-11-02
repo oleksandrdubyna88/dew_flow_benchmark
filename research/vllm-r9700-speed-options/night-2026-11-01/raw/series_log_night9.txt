@@ -1,0 +1,143 @@
+OK: no new disk event (newest 4566)
+=== 2026-11-01 22:49:09 q27old round 1 (WSL load 2.06 2.14 2.11): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+e302c16a3c7e49d269e088b7935021d285f204683d9992bd002666f3bd02291f
+READY (waited 290 s here)
+(APIServer pid=1) WARNING 11-01 21:49:58 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 21:50:23 [compressed_tensors_wNa16.py:137] Using RDNAHybridW4A16LinearKernel for CompressedTensorsWNA16
+(EngineCore pid=177) INFO 11-01 21:53:31 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+(EngineCore pid=177) INFO 11-01 21:53:47 [kv_cache_utils.py:2032] GPU KV cache size: 66,528 tokens, Maximum concurrency for 16,384 tokens per request: 4.06x
+(EngineCore pid=177) WARNING 11-01 21:53:32 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+(EngineCore pid=177) WARNING 11-01 21:54:04 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+q27old-1 c=1 r=1 Output token throughput (tok/s):         38.10     
+q27old-1 c=1 r=1 Mean TTFT (ms):                          2881.45   
+q27old-1 c=1 r=1 Mean TPOT (ms):                          20.66     
+q27old-1 c=1 r=2 Output token throughput (tok/s):         37.55     
+q27old-1 c=1 r=2 Mean TTFT (ms):                          2799.39   
+q27old-1 c=1 r=2 Mean TPOT (ms):                          21.20     
+q27old-1 c=1 r=3 Output token throughput (tok/s):         37.12     
+q27old-1 c=1 r=3 Mean TTFT (ms):                          2751.69   
+q27old-1 c=1 r=3 Mean TPOT (ms):                          21.61     
+q27old-1 c=4 r=1 Output token throughput (tok/s):         77.77     
+q27old-1 c=4 r=1 Mean TTFT (ms):                          7314.83   
+q27old-1 c=4 r=1 Mean TPOT (ms):                          36.40     
+q27old-1 c=4 r=2 Output token throughput (tok/s):         82.31     
+q27old-1 c=4 r=2 Mean TTFT (ms):                          5832.67   
+q27old-1 c=4 r=2 Mean TPOT (ms):                          36.82     
+q27old-1 c=4 r=3 Output token throughput (tok/s):         80.16     
+q27old-1 c=4 r=3 Mean TTFT (ms):                          6212.65   
+q27old-1 c=4 r=3 Mean TPOT (ms):                          36.35     
+q27old-1 prefill8192 r=1 Output token throughput (tok/s):         8.36      
+q27old-1 prefill8192 r=1 Mean TTFT (ms):                          11267.56  
+q27old-1 prefill8192 r=1 Median TTFT (ms):                        7255.91   
+q27old-1 prefill8192 r=2 Output token throughput (tok/s):         8.06      
+q27old-1 prefill8192 r=2 Mean TTFT (ms):                          11365.61  
+q27old-1 prefill8192 r=2 Median TTFT (ms):                        7214.04   
+q27old-1 prefill8192 r=3 Output token throughput (tok/s):         8.09      
+q27old-1 prefill8192 r=3 Mean TTFT (ms):                          11385.80  
+q27old-1 prefill8192 r=3 Median TTFT (ms):                        7208.96   
+wrote /work/speed/prompts_q27old.json
+gsm8k n=200 correct=153 accuracy=0.7650 stderr=0.0300
+OK: no new disk event (newest 4566)
+=== 2026-11-01 23:21:30 q27new round 1 (WSL load 0.65 0.68 1.36): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+d0936dd4be38fce76deb899dce6ecfb567afc7b0521d4613ca88fbe6a8421029
+READY (waited 290 s here)
+(APIServer pid=1) WARNING 11-01 22:22:12 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 22:22:37 [compressed_tensors_wNa16.py:137] Using RDNAHybridW4A16LinearKernel for CompressedTensorsWNA16
+(EngineCore pid=177) INFO 11-01 22:25:51 [kv_cache_utils.py:2032] GPU KV cache size: 41,870 tokens, Maximum concurrency for 16,384 tokens per request: 2.56x
+(EngineCore pid=177) WARNING 11-01 22:26:15 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+q27new-1 c=1 r=1 Output token throughput (tok/s):         43.94     
+q27new-1 c=1 r=1 Mean TTFT (ms):                          2549.26   
+q27new-1 c=1 r=1 Mean TPOT (ms):                          17.81     
+q27new-1 c=1 r=2 Output token throughput (tok/s):         44.31     
+q27new-1 c=1 r=2 Mean TTFT (ms):                          2801.13   
+q27new-1 c=1 r=2 Mean TPOT (ms):                          17.13     
+q27new-1 c=1 r=3 Output token throughput (tok/s):         41.94     
+q27new-1 c=1 r=3 Mean TTFT (ms):                          2762.93   
+q27new-1 c=1 r=3 Mean TPOT (ms):                          18.48     
+q27new-1 c=4 r=1 Output token throughput (tok/s):         101.55    
+q27new-1 c=4 r=1 Mean TTFT (ms):                          5759.26   
+q27new-1 c=4 r=1 Mean TPOT (ms):                          27.29     
+q27new-1 c=4 r=2 Output token throughput (tok/s):         94.28     
+q27new-1 c=4 r=2 Mean TTFT (ms):                          5590.51   
+q27new-1 c=4 r=2 Mean TPOT (ms):                          29.54     
+q27new-1 c=4 r=3 Output token throughput (tok/s):         94.59     
+q27new-1 c=4 r=3 Mean TTFT (ms):                          5446.37   
+q27new-1 c=4 r=3 Mean TPOT (ms):                          29.70     
+q27new-1 prefill8192 r=1 Output token throughput (tok/s):         8.32      
+q27new-1 prefill8192 r=1 Mean TTFT (ms):                          12326.08  
+q27new-1 prefill8192 r=1 Median TTFT (ms):                        7915.19   
+q27new-1 prefill8192 r=2 Output token throughput (tok/s):         8.42      
+q27new-1 prefill8192 r=2 Mean TTFT (ms):                          11800.25  
+q27new-1 prefill8192 r=2 Median TTFT (ms):                        7892.81   
+q27new-1 prefill8192 r=3 Output token throughput (tok/s):         8.20      
+q27new-1 prefill8192 r=3 Mean TTFT (ms):                          12069.61  
+q27new-1 prefill8192 r=3 Median TTFT (ms):                        7948.79   
+wrote /work/speed/prompts_q27new.json
+gsm8k n=200 correct=155 accuracy=0.7750 stderr=0.0295
+OK: no new disk event (newest 4566)
+=== 2026-11-01 23:50:39 q27old round 2 (WSL load 8.64 5.24 3.42): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 2
+aabb5baed0138fc4a6c8470802b85b80a61fbcc2a03991a69af8547be87a2adb
+READY (waited 190 s here)
+(APIServer pid=1) WARNING 11-01 22:51:30 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 22:51:59 [compressed_tensors_wNa16.py:137] Using RDNAHybridW4A16LinearKernel for CompressedTensorsWNA16
+(EngineCore pid=177) INFO 11-01 22:53:07 [speculator.py:120] Fused multi-step draft decode is not supported by attention backend(s) ROCM_ATTN; falling back to rebuilding attention metadata between draft steps.
+(EngineCore pid=177) INFO 11-01 22:53:26 [kv_cache_utils.py:2032] GPU KV cache size: 66,528 tokens, Maximum concurrency for 16,384 tokens per request: 4.06x
+(EngineCore pid=177) WARNING 11-01 22:53:08 [chunked_prefill_paged_decode.py:433] Cannot use ROCm custom paged attention kernel, falling back to Triton implementation.
+(EngineCore pid=177) WARNING 11-01 22:53:47 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+q27old-2 c=1 r=1 Output token throughput (tok/s):         37.45     
+q27old-2 c=1 r=1 Mean TTFT (ms):                          3020.87   
+q27old-2 c=1 r=1 Mean TPOT (ms):                          20.84     
+q27old-2 c=1 r=2 Output token throughput (tok/s):         37.67     
+q27old-2 c=1 r=2 Mean TTFT (ms):                          2719.68   
+q27old-2 c=1 r=2 Mean TPOT (ms):                          21.28     
+q27old-2 c=1 r=3 Output token throughput (tok/s):         36.19     
+q27old-2 c=1 r=3 Mean TTFT (ms):                          3061.13   
+q27old-2 c=1 r=3 Mean TPOT (ms):                          21.69     
+q27old-2 c=4 r=1 Output token throughput (tok/s):         80.49     
+q27old-2 c=4 r=1 Mean TTFT (ms):                          6243.48   
+q27old-2 c=4 r=1 Mean TPOT (ms):                          36.46     
+q27old-2 c=4 r=2 Output token throughput (tok/s):         79.66     
+q27old-2 c=4 r=2 Mean TTFT (ms):                          6909.45   
+q27old-2 c=4 r=2 Mean TPOT (ms):                          36.41     
+q27old-2 c=4 r=3 Output token throughput (tok/s):         79.51     
+q27old-2 c=4 r=3 Mean TTFT (ms):                          6331.74   
+q27old-2 c=4 r=3 Mean TPOT (ms):                          36.66     
+q27old-2 prefill8192 r=1 Output token throughput (tok/s):         8.33      
+q27old-2 prefill8192 r=1 Mean TTFT (ms):                          11284.61  
+q27old-2 prefill8192 r=1 Median TTFT (ms):                        7235.96   
+q27old-2 prefill8192 r=2 Output token throughput (tok/s):         7.55      
+q27old-2 prefill8192 r=2 Mean TTFT (ms):                          12397.50  
+q27old-2 prefill8192 r=2 Median TTFT (ms):                        7252.33   
+q27old-2 prefill8192 r=3 Output token throughput (tok/s):         7.98      
+q27old-2 prefill8192 r=3 Mean TTFT (ms):                          11572.19  
+q27old-2 prefill8192 r=3 Median TTFT (ms):                        7298.59   
+OK: no new disk event (newest 4566)
+=== 2026-11-02 00:10:07 q27new round 2 (WSL load 9.55 9.90 8.05): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+521673140c397fe1f4c447889c88b938b3d9dae0db1c0490979ca40a72c3e12e
+READY (waited 180 s here)
+(APIServer pid=1) WARNING 11-01 23:10:57 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=177) INFO 11-01 23:11:26 [compressed_tensors_wNa16.py:137] Using RDNAHybridW4A16LinearKernel for CompressedTensorsWNA16
+(EngineCore pid=177) INFO 11-01 23:12:43 [kv_cache_utils.py:2032] GPU KV cache size: 60,984 tokens, Maximum concurrency for 16,384 tokens per request: 3.72x
+(EngineCore pid=177) WARNING 11-01 23:13:05 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+q27new-2 c=1 r=1 Output token throughput (tok/s):         43.03     
+q27new-2 c=1 r=1 Mean TTFT (ms):                          2762.80   
+q27new-2 c=1 r=1 Mean TPOT (ms):                          17.88     
+q27new-2 c=1 r=2 Output token throughput (tok/s):         42.79     
+q27new-2 c=1 r=2 Mean TTFT (ms):                          3184.00   
+q27new-2 c=1 r=2 Mean TPOT (ms):                          17.19     
+q27new-2 c=1 r=3 Output token throughput (tok/s):         34.43     
+q27new-2 c=1 r=3 Mean TTFT (ms):                          4049.05   
+q27new-2 c=1 r=3 Mean TPOT (ms):                          19.20     
+restore: skipped once (planned restart)
+OK: no new disk event (newest 4566)
+=== 2026-11-02 00:18:36 q27new round 2 (WSL load 15.58 12.35 9.62): --generation-config /genconfig --speculative-config.method mtp --speculative-config.num_speculative_tokens 3 --attention-backend TRITON_ATTN
+20623d006e93bd55f59b5d7912d55a7fd450f5c609dc25e32119dcabbb7db40e
+READY (waited 210 s here)
+(APIServer pid=1) WARNING 11-01 23:19:36 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate t
+(EngineCore pid=184) INFO 11-01 23:20:05 [compressed_tensors_wNa16.py:137] Using RDNAHybridW4A16LinearKernel for CompressedTensorsWNA16
+(EngineCore pid=184) INFO 11-01 23:21:34 [kv_cache_utils.py:2032] GPU KV cache size: 60,984 tokens, Maximum concurrency for 16,384 tokens per request: 3.72x
+(EngineCore pid=184) WARNING 11-01 23:22:04 [vllm.py:1924] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodat
+q27new-2 c=1 r=1 Output token throughput (tok/s):         40.17     
+q27new-2 c=1 r=1 Mean TTFT (ms):                          3422.37   
+q27new-2 c=1 r=1 Mean TPOT (ms):                          18.01     
+restore: skipped once (planned restart)
