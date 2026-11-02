@@ -8,6 +8,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNextRecord, reserveRecord, RESERVE_ATTEMPTS } from '../lib/exec-probe/record-path.mjs';
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
+import { stableRunsParent } from '../lib/exec-layer/run.mjs';
+import { tmpdir } from 'node:os';
 import { printable } from '../lib/exec-probe/printable.mjs';
 import { writeRecord } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir } from './support/exec-layer-host.mjs';
@@ -208,6 +210,8 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
     return new Set([...units, ...procs]);
   };
   const before = mine();
+  const folders = () => [stableRunsParent(), tmpdir()].flatMap(parent => { try { return readdirSync(parent).filter(name => name.includes(`-${TOKEN}-`)).map(name => path.join(parent, name)); } catch { return []; } });
+  const foldersBefore = new Set(folders());
   const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--owned-token', TOKEN, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   t.after(() => child.kill('SIGKILL'));
   let stderr = '';
@@ -223,4 +227,5 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
   assert.equal(existsSync(out), false, 'the placeholder is released');
   const left = [...mine()].filter(name => !before.has(name));
   assert.deepEqual(left, [], 'no scope, holder or helper process of this probe is left');
+  assert.deepEqual(folders().filter(folder => !foldersBefore.has(folder)), [], 'B2: no run folder, view or owned folder of this probe is left in the runs parent or the temp root (a late scope must not bring a run folder back)');
 });
