@@ -7,8 +7,10 @@
 **Purpose.** `runner/` is the one Python standard-library program the agent, CI, the pre-freeze gate and E2's held-out scoring share (D37). It
 reads a folder of `<id>.in` / `<id>.out` pairs, builds with `bash build.sh`, runs `bash run.sh` per case and reports `PASS` / `FAIL` with the
 first mismatch under FORMAT v2's rules (grammar 2). It knows nothing of boxes, scopes or namespaces: the execution layer hands it a launch prefix.
-**Built so far: part i** (olympiad runs, parsing and validation of daemon and web samples, the matcher, the report, the pin). **Part ii** (process
-control by host pid, sockets, the daemon and web runs, signals, the cgroup path) is not built; a daemon or web run ends with exit 5 and says so.
+**Built so far: part i** (olympiad runs, parsing and validation of daemon and web samples, the matcher, the report, the pin) and **part ii-a** (what the
+olympiad path needs from the execution layer: the launch prefix and status, the case clock, the pidfd waits, the cgroup read and kill, the case view, the
+program's environment). **Part ii-b** (sockets, the daemon and web runs, readiness, `signal TERM` to the program's host pid, V3, V5, V7, `overflow <conn>`)
+is not built; a daemon or web run ends with exit 5 and says so.
 
 **Files** (`spikes/lang-bench/`):
 
@@ -19,36 +21,124 @@ control by host pid, sockets, the daemon and web runs, signals, the cgroup path)
 | `runner/rs_model.py`, `rs_script.py`, `rs_check.py` | the `.in` parser into frozen dataclasses, its validation, the entries a script produces |
 | `runner/rs_transcript.py`, `rs_pair.py`, `rs_assign.py` | the `.out` parser, script/transcript correspondence, one-to-one assignment |
 | `runner/rs_json.py`, `rs_fields.py`, `rs_jmatch.py`, `rs_match.py` | exact-decimal JSON, fields and the backtracking matcher, JSON bodies with `$unordered`, entries and V6 checks |
-| `runner/rs_exec.py`, `rs_olympiad.py` | the build, the launch argv, the pidfd wait, the lifecycle seam; the streaming olympiad case |
+| `runner/rs_exec.py`, `rs_olympiad.py` | the build, the launch argv, the program's environment (V11), the pidfd wait, the plain lifecycle; the streaming olympiad case |
+| `runner/rs_launch.py`, `rs_status.py` | starting a case through the prefix, the `child-pid` wait and `LaunchFailed`, the empty program; bwrap's JSON status lines and the per-case pipe |
+| `runner/rs_scope.py`, `rs_cgroup.py` | the lifecycle through `--cgroup-of`: ownership, memory, the always-written `cgroup.kill`; bwrap by identity, `cgroup.procs`, `memory.peak` and `memory.events` |
+| `runner/rs_track.py`, `rs_pump.py` | which process is the program and what else the case leaves (`fork`); the pump: stdin, stdout, the look, the end on the pidfd or the `exit-code` record |
+| `runner/rs_stop.py` | the runner stopped by SIGTERM, SIGINT or SIGHUP: the handler, and the stop of every launcher still registered |
+| `runner/rs_view.py`, `rs_layer.py` | the case view and its `.scenario` fixtures; the layer's options as the command line takes them, `RunInfo` |
 | `runner/rs_samples.py`, `rs_report.py` | pairs, `cases.txt`, limits; report lines and the JSON result |
 | `pin-runner.mjs`, `lib/runner-pin.mjs` | the pin: writes `inputs/specs.d/runner.json` (`runner: { version, files, manifestSha256 }`), `--check` |
 | `specs-record.mjs`, `lib/specs-record.mjs` | assembles `inputs/specs.json` from the writers' files in `inputs/specs.d/`; `--check`; never edit `specs.json` by hand |
 
 **CLI.** `python3 -I runner/run_samples.py [--workspace DIR] [--kind olympiad|daemon|web] [--no-build] [--limits FILE] [--launch-prefix JSON]
-[--json OUT] [--only ID] [--parse-only] SAMPLES_DIR`. The kind is read from the `Kind` row of the workspace's `STATEMENT.md` unless `--kind` is given.
+[--launch-status FD] [--cgroup-of TEMPLATE] [--case-view TEMPLATE] [--json OUT] [--only ID] [--parse-only] SAMPLES_DIR`. The kind is read from the `Kind` row of the workspace's `STATEMENT.md` unless `--kind` is given.
 `--limits` is a JSON object with `timeS`, `readyS`, `graceS` (exact seconds, from 1 to 600; unknown keys refused); without it the olympiad limit is the
 floor (1 s) and every time verdict says `against the floor`. `--launch-prefix` is a JSON argv put before `bash run.sh`, `{case}` replaced.
-`--parse-only` parses and validates every pair and starts nothing. A `cases.txt` beside the pairs attaches its R-ids to each case. Part ii's
-`--cgroup-of`, `--launch-status` and `--case-view` are **refused with exit 4** until they exist, never ignored. Without a cgroup every case says
+`--parse-only` parses and validates every pair and starts nothing. A `cases.txt` beside the pairs attaches its R-ids to each case. Without a cgroup every case says
 `memory: not certified`.
 
-**Exit codes.** `0` every case passed (or `--parse-only` found no problem) · `1` a case failed, a failing build counts · `3` the environment (no
-workspace, no `bash`) · `4` configuration: usage, a malformed sample (file and line), a version 1 file, a script/transcript mismatch, a bad limits
-file or `cases.txt` · `5` the runner itself failed (a traceback, or a daemon/web run before part ii).
+*The execution layer's options (part ii-a).* **`--launch-prefix`** is passed as ONE JSON array of strings (the plan's form); `{case}` in any element is the case
+id (letters, digits, `_`, `-`; the id `empty-program` is reserved for the control below and a sample that takes it is exit 4). **`--launch-status FD`** (B5) is the
+descriptor number the prefix gives bwrap as `--json-status-fd FD`: the runner makes one pipe per case and puts its write end at `FD` in the launcher (so the layer does not
+pass an open descriptor; it names a number, 3 or more and not open in the runner, and needs `--launch-prefix`). bwrap writes `{"child-pid": P}` and later `{"exit-code": C}`.
+**The status rules (P2):** before `child-pid`, a line that is not one JSON object, a record that is neither `child-pid` nor `exit-code`, a doubled `child-pid` or
+`exit-code`, no `child-pid` before the launcher exits (or within 60 s), or an incomplete status line longer than 64 KiB, or a cgroup that does not exist at `child-pid`, is `LaunchFailed`: exit 3 `launch failed` with the
+bounded tail (2 KiB) of the prefix's standard error, never a case verdict. After `child-pid` everything is the case (an immediate exit is an ordinary end; junk lines, over-long ones included, are
+ignored). `child-pid` is the launch-success signal and **the start of the case clock**, not the pid authority; `exit-code` is the program's status (without one the
+launcher's own is used). *bwrap writes `child-pid` right after it clones the sandbox, BEFORE the box's mounts are made, so a few milliseconds of box set-up are inside the case
+clock (the numbers measured for the plan stay as they are); the plan fixes the start at `child-pid` and it is not moved.* **`--cgroup-of TEMPLATE`** (B1, B4; `{case}` filled
+in) names the program's cgroup2 directory. With a launch prefix it needs `--launch-status` (exit 4). The runner owns what it measures and kills: before the spawn the
+directory must not exist or must hold no process (else exit 3: it never measures or kills a cgroup this case does not own). It reads `cgroup.procs`, `memory.peak` and
+`memory.events` after the program's end and BEFORE any kill, then ALWAYS writes `1` to `cgroup.kill` (a leftover found or not) and waits until `cgroup.procs` is empty (2 s
+ceiling, else exit 5). **The order of the kill:** the launcher is never reaped before the kill and its fallback are done (it is awaited on its pidfd, which does not reap; a group signal always goes to an unreaped leader, whose pid is still reserved). Where `cgroup.kill` cannot be written, the fallback kills the launcher's process group, then SIGKILLs each host pid `cgroup.procs` still lists and checks the cgroup is empty, else CleanupFailed. *Empty* means: its directory is gone, or the kernel took it offline (ENODEV), or it had been readable before the kill and its files are gone while the directory lingers (a dying cgroup), or every listed pid is a zombie. In a box (with `--launch-status`) a cgroup directory that vanishes after `child-pid` is exit 3, never a case status (the launcher's group is killed first). A `cgroup.procs` with a line that is no pid is unreadable, and unreadable is never empty. On the plain path (no cgroup) the stragglers are looked for in the launcher's group before the launcher is reaped (a zombie leader does not count), and the group is signalled before the reap. **The rule for the program's pid (B1, P4):** a bwrap
+process is known by IDENTITY (`/proc/<pid>/exe` is the file, by device and inode, of the bwrap binary the prefix names; a copy of bash named bwrap is not one, and `comm` is
+never used); the program is the process of `cgroup.procs` whose PARENT is a bwrap process (`bash run.sh` execs it: D38), the launcher pid is never a candidate, a short tool
+bash starts has bash for a parent. Host pids only; a pid seen inside the box is never used; the pidfd is checked against the cgroup and the bwrap parent after it is taken
+(a recycled pid is neither). The look is part of the pump's loop (backing off from 1 ms to 20 ms while the program is not found, then every 20 ms; the end still comes from the pidfd or the record, so a late discovery costs no wall time), so the program's stdin and stdout flow from
+`child-pid` on. Two candidates with a bwrap parent are `fork` and no pid is chosen. **`fork`** is judged over the whole case from the processes that are not bwrap, not the
+launcher, not the wrapper and not the program: the most seen in two successive looks, and what a leftover read (repeated 20 ms later, so a process caught exiting is not one)
+finds after the exit; it is `known: false` when no pid was settled, and it never decides the pid. **`--wrapper-pid-file TEMPLATE`** (with `--cgroup-of`; `{case}` filled in) is
+the file in which the layer's wrapper writes its pid; without the flag nothing is excluded as a wrapper (E1.S8b's delegated scope has none; its fallback `scope-wrap.sh`
+must pass the flag). `oom_kill` above 0 in `memory.events` is the verdict `memory limit` whatever the exit status and is read from `memory.events` alone, even when
+`memory.peak` cannot be read; it is judged before `time limit`. **`--case-view TEMPLATE`** (B7; `{case}` filled in) names the case's fresh writable view of the built tree,
+which the layer made before the case starts (a missing view is exit 3): the program starts in it, a scenario's `.scenario/` fixtures are written into it first (every fixture
+path is relative, free of `..`, and made one component at a time with `O_NOFOLLOW`, so a link on the way refuses it; a `.scenario` already there is refused), and the samples
+directory may not lie in a view nor a view in the samples (exit 4). **With more than one case, a `--cgroup-of`, `--case-view` or `--wrapper-pid-file` template without `{case}` is
+exit 4.** Nothing is read back from a view, and the runner never assumes the filesystem persists from one case to the next.
 
-**Result format.** `--json OUT` writes `{ format: 1, runner, grammar: 2, kind, build, cases: [{ id, status, reason, rIds, entries, firstMismatch,
-lifecycle: { stop, leftover, leftoverEvidence, memory, stderr }, wallMs }], python }`; what was not measured is `{ known: false, why }`, never zero.
+*What a cgroup must be (round 4).* The directory named by `--cgroup-of` must be a cgroup2 node (`cgroup.controllers` is there) or the spawn is refused (exit 3). Its counters are
+not reset between cases, so an existing cgroup whose `memory.peak` or `oom_kill` is above zero before the spawn is refused too (exit 3); the runner does not judge an *increase*:
+a stale counter would be a verdict the program never earned. After `child-pid` the box must BELONG to the cgroup: `/proc/<child-pid>/cgroup` names it or a descendant of it, else the
+box is stopped through a pidfd of `child-pid` (and the launcher's group), nothing is written to the wrong cgroup, and the launch has failed (exit 3). A box that is already gone at
+that look cannot be confirmed: that is no failure, but its memory is then unknown (`known: false`; the counters of a cgroup the box was never seen in are not this case's, and no
+`memory limit` is judged from them). `cgroup.kill` is opened and never created. For emptiness the runner trusts `populated 0` of `cgroup.events` when it is there; a pid of 0, or a
+pid whose stat cannot be read, counts as alive (only a stat that says zombie is dead). The wait for emptiness decides on the FIRST look that finds the cgroup empty: a cgroup the
+kernel is taking down answers differently from one read to the next, and a second look to confirm the first once made the real-scope tests fail 5 times in 20. A process taken for the program
+that is still alive when the program has ended was an orphan (the program was gone before the first look and its child became a child of bwrap's init): it is a leftover and its pid is
+not reported as the program's. The look into the cgroup is paced by TIME (1 ms backing off to 20 ms while the program is not found, then every 20 ms), never by I/O: a look costs about
+200 µs and a program printing 64 MiB used to pay it on every read (79 ms became 190 ms). `wallMs`, `launchMs` and `emptyProgramMs` are rounded UP, all three, so the F1 subtraction
+mixes no two roundings. An `exit-code` record that arrives in the same read as `child-pid` is the end of the case at the instant it was read, never the launcher's teardown.
+
+*Round 5.* The directory named by `--cgroup-of` must lie under a cgroup2 MOUNT (found in `/proc/self/mountinfo`, the nearest mount above the resolved path must be cgroup2) as well
+as hold `cgroup.controllers`; a controllers file in a plain folder is refused (exit 3) and nothing is written to it. The box must be IN the named cgroup, not in a descendant of it
+(`/proc/<child-pid>/cgroup` equals the directory's path from the mount root, both resolved), and a launch failure for a box in the wrong cgroup names the expected cgroup and the one the
+box was seen in. The pidfd of `child-pid` is opened FIRST and the box is judged and, if need be, stopped through it; the fallback kill signals each listed pid through a pidfd opened for it
+after re-checking that the pid is still listed. An existing cgroup is free only when `populated` of `cgroup.events` says 0 (else its listing is read). On the plain path (no box, no
+`child-pid`) the LAUNCHER must have been seen in the cgroup (listed, or `/proc/<pid>/cgroup` names it) or memory is unknown: a cgroup the program does not run in has counters of 0 that mean
+nothing. A `--cgroup-of` that never existed on the plain path is exit 3 (after the launcher's group was killed); one that was there and went is still a cleanup failure (exit 5). An extra
+process counts for `fork` only when it has been in the cgroup for 100 ms (looks at least 100 ms apart), or is still alive at the program's end (the leftover read). The end of the
+program (for the orphan rule) is judged by its pidfd, not by `/proc`. Waiting for a group to go is a scan of `/proc` paced from 1 ms to 20 ms. The stop handler blocks every stopping
+signal at once before it sets them to ignore, and unblocks them again once they are ignored (no blocked mask outlives the handler: a child of the teardown would inherit it). The fallback kill
+works in batches of at most 64 pids: a pidfd is opened for each pid of the batch, `cgroup.procs` is read ONCE, the pidfds whose pid is still listed are signalled, and all are closed; a pidfd that
+cannot be opened for lack of descriptors (EMFILE, ENFILE) ends the batch, what is open is signalled and closed, and the pids not tried go on in the next batch. A mountinfo line that is malformed
+(too few fields, no ` - ` part) is skipped. A `--cgroup-of` that holds a controllers file but lies under no cgroup2 mount is reported as exactly that ("is not under a cgroup2 mount"). Limit
+(G-round, fail closed): a cgroup2 mounted as a SUBTREE (its mountinfo root is not `/`) is no cgroup2 root for the runner and a `--cgroup-of` under it is refused; the mount layout is S8b's.
+Limit (F8, very low probability, not fixed): the box is judged by `/proc/<child-pid>/cgroup` at one instant; a box that moves itself into
+another cgroup later is not followed.
+
+*Host prerequisites (P1).* At the start of a run the host must be Linux 5.14 or newer and have a working `os.pidfd_open`, and cgroup v2 at `/sys/fs/cgroup` when `--cgroup-of`
+is given; each missing one is named in an exit 3, never a crash.
+
+*The clock and the waits (B6, P3).* One clock, `time.monotonic_ns`. The case clock starts at the instant `child-pid` is read (at the spawn without `--launch-status`). The end of a
+case is the instant of the FIRST of: the program's own pidfd turning readable (a grandchild behind a box, so `Popen.wait` could not do it), bwrap's `exit-code` record being
+read from the status pipe; the launcher's own exit is never program time (without a box the launcher is the program). With neither a pid nor a record the case still ends
+when the launcher goes, but its wall is unknown (`wallMs: { known: false }`) and the verdict comes from the output and the deadline kill only. Every wait is `os.pidfd_open` +
+`select` with the exact remaining time; `Popen.wait(timeout=…)` is not used (a scan test says so). The wall rule, in nanoseconds: a wall over the limit is `time limit` even when
+the program exited by itself, exactly the limit passes, one millisecond over does not. Once per run, before the cases, an empty program (`bash -c :`) is timed through the same
+prefix, clock and pump (`emptyProgramMs`, and `emptyProgram: { ms, launchMs, pid, found, comm }` says which pid it waited on), in the view of `empty-program` when `--case-view` is set; progress lines on standard error announce it and tell its time; its `{case}` is `empty-program`, so a layer whose
+prefix binds a per-case view or cgroup must provide one by that name. **V11:** the program's environment is a copy of the runner's own, plus (for the daemon and web kinds,
+part ii-b) `PORT` and the scenario's `env` lines; nothing else is added or removed (the layer sets it; the runner does not sanitise it).
+
+*Being stopped.* SIGTERM, SIGINT and SIGHUP stop the runner with exit 5 and no verdict. The stopping signals are held off while a launcher is spawned and the launcher is
+registered the moment it exists, so every launcher still alive is stopped (`cgroup.kill`, or the group on the plain path, and never a group whose leader was already reaped)
+whatever instruction the signal lands on; the pump is made inside the `try`.
+
+**Exit codes.** `0` every case passed (or `--parse-only` found no problem) · `1` a case failed, a failing build counts · `3` the environment (no workspace, no `bash`, a
+host that lacks a prerequisite, a case view that is missing, a cgroup that is not this case's or that vanished after `child-pid`, **a launch that failed**) · `4` configuration: usage, a malformed sample (file and
+line), a version 1 file, a script/transcript mismatch, a bad limits file or `cases.txt`, the layer options that contradict each other · `5` the runner itself failed (a traceback,
+a daemon/web run before part ii-b, a process of the case that could not be killed, a launcher that could not be stopped, a stop by a signal).
+
+**Result format.** `--json OUT` writes `{ format: 1, runner, grammar: 2, kind, build, launch: { failed, stderr }, emptyProgramMs, emptyProgram, cases: [{ id, status, reason,
+rIds, entries, firstMismatch, lifecycle: { stop, signalled: { signal, pid, found, comm, launcher }, fork, leftover, leftoverEvidence, kill, memory, stderr, capture }, wallMs,
+launchMs }], python }` (runner version 0.2.0); what was not measured is `{ known: false, why }`, never zero. `wallMs` is the program's wall from the case clock (or unknown),
+`launchMs` the time from the spawn to `child-pid`, `emptyProgramMs` the empty program's time (milliseconds, or `{ known: false }`). `lifecycle.signalled` names the pid the
+runner knows as the program's, how it found it, its name as last seen alive and the launcher's pid (`signal` is null: an olympiad program is never signalled);
+`lifecycle.fork` is `{ known, found, count }`; `lifecycle.kill` and `leftoverEvidence` say which road ran (`killpg` and the process group on the plain path, `cgroup.kill` and
+`cgroup.procs` on the scope path); `memory` is `{ known: true, peakBytes, events, oomKill }` from the cgroup, or `known: false` with whichever part was read. A failed launch writes
+the file with `launch.failed` true, the cases that had finished, and exits 3.
 
 **Bounds.** An olympiad case's stdout is compared as a stream and stops at the first difference; at most 16 MiB of it is kept for the report, and a
-truncated capture is never what decides a `PASS`; stderr goes to a file (killed past 256 MiB); a case is cut off at its limit and the group is
-killed; a wall time over the limit is `time limit` even when the program exited by itself; the build has a 600 s ceiling; a transcript's
+truncated capture is never what decides a `PASS`; stderr goes to a file (never a pipe; its record says `truncated` past 16 MiB; the case is killed past 256 MiB); a case is cut off at its limit and the group (the plain path) or
+the cgroup (`cgroup.kill`) is killed; one test is at most 600 s (`--limits` refuses more) and a launch at most 60 s; a wall time over the limit is `time limit` even when the program exited by itself; the build has a 600 s ceiling; a transcript's
 `unordered` group holds 2 to 64 entries; a regex or field match is cut off after 500,000 steps; a string expression expands to at most 200 parts.
 
 **Encoding (B10).** `python3 -I` ignores `PYTHONIOENCODING` and `PYTHONUTF8`, so the entry reconfigures stdout and stderr to UTF-8 with
 `backslashreplace`; every file is read as bytes; a file name that is not UTF-8 is printed as `\xHH`; an invalid-UTF-8 JSON body is the verdict `bad-utf8`.
 
-**Seams for part ii.** `rs_exec.PlainLifecycle` (`memory`, `kill`, `leftover`) is what a scope-based lifecycle replaces through `Config.lifecycle`; the
-pidfd wait is `rs_exec.wait_exit`; `run_samples._after_parsing` is where daemon and web dispatch; `rs_transcript.Actual` and `rs_match.compare` take the
+**Seams for part ii-b.** A lifecycle has `memory`, `kill`, `present`, `check_free` and `settle`: `rs_exec.PlainLifecycle` for the plain path, `rs_scope.ScopeLifecycle` for
+`--cgroup-of`, chosen per case by `rs_scope.lifecycle_for`; the tracker (`rs_track.Tracker`) holds the program's pid; `rs_launch.start` is the one way a program is started and `Launched.tracker.pid` is the pid `signal TERM`
+will use; the pidfd wait is `rs_exec.wait_exit`; `run_samples._after_parsing` is where daemon and web dispatch; `rs_transcript.Actual` and `rs_match.compare` take the
 observations part ii records; `Actual.step_line` and `step_text` feed the report's `step` line; `rs_script.Step` carries what each step needs.
 The tests are in [module_tests.md](module_tests.md), section "The language-comparison runner scenarios".
 

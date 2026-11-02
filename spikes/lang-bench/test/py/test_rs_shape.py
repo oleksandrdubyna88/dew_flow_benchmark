@@ -7,11 +7,56 @@ import unittest
 import shape_scan as scan
 
 # Modules whose arithmetic is wall time, not a comparison of sample content: the only ones allowed a float or a true division.
-TIME_MODULES = {"rs_exec.py", "rs_olympiad.py", "rs_report.py", "run_samples.py"}
+TIME_MODULES = {"rs_exec.py", "rs_launch.py", "rs_olympiad.py", "rs_pump.py", "rs_report.py", "run_samples.py"}
 
 
 def sources():
     return [(os.path.basename(p), scan.parse(p), p) for p in scan.runner_files()]
+
+
+STALE_WORDING = ("sandbox ready", "box is up", "sandbox is ready", "running sandbox", "sandbox reported", "reported its sandbox", "zero the peak")
+
+
+class WordingTests(unittest.TestCase):
+    """`child-pid` is written right after bwrap clones the sandbox, BEFORE its mounts: it is the start of the case clock and the proof that
+    the launcher started, never that the box is ready or up. And `cgroup.kill` does not reset `memory.peak`."""
+
+    def test_No_runner_text_says_child_pid_means_a_box_that_is_ready_or_up(self):
+        found = []
+        for name, _, path in sources():
+            with open(path, encoding="utf-8") as f:
+                text = f.read().lower()
+            found += [f"{name}: {phrase}" for phrase in STALE_WORDING if phrase in text]
+        self.assertEqual(found, [])
+
+    def test_The_wording_scan_still_finds_a_known_phrase(self):
+        self.assertIn("box is up", "only child-pid says the box is up".lower())
+        self.assertTrue(any(phrase in "the line marks the sandbox ready" for phrase in STALE_WORDING))
+
+
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def test_files():
+    return sorted(os.path.join(TEST_DIR, n) for n in os.listdir(TEST_DIR) if n.endswith(".py"))
+
+
+class TestShapeTests(unittest.TestCase):
+    """The tests themselves are held to the size rules (N12): no test file over 800 lines, the entry under 400, and every helper (a function
+    that is not a test) short and simple."""
+
+    def test_No_test_file_is_over_800_lines_and_the_entry_is_under_400(self):
+        too_long = [(os.path.basename(p), scan.line_count(p)) for p in test_files() if scan.line_count(p) > 800]
+        self.assertEqual(too_long, [])
+        self.assertLess(scan.line_count(os.path.join(scan.RUNNER_DIR, "run_samples.py")), 400)
+
+    def test_Every_test_helper_is_short_and_simple(self):
+        bad = [
+            f"{os.path.basename(p)}:{fn.name} {scan.function_length(fn)} lines, complexity {scan.complexity(fn)}"
+            for p in test_files() if os.path.basename(p) != "shape_scan.py" for fn in scan.functions(scan.parse(p))  # the scanner itself is tested by its companions
+            if not fn.name.startswith("test_") and (scan.function_length(fn) >= scan.MAX_FUNCTION_LINES or scan.complexity(fn) > scan.MAX_COMPLEXITY)
+        ]
+        self.assertEqual(bad, [])
 
 
 class ShapeTests(unittest.TestCase):
@@ -35,6 +80,13 @@ class ShapeTests(unittest.TestCase):
     def test_The_shape_scan_still_finds_a_known_complex_function(self):
         tree = ast.parse("def f(a, b):\n    if a and b or a:\n        for x in a:\n            while b:\n                pass\n")
         self.assertEqual(scan.complexity(scan.functions(tree)[0]), 6)
+
+    def test_F9_no_runner_line_is_longer_than_160_characters(self):
+        long_lines = []
+        for name, _, path in sources():
+            with open(path, encoding="utf-8") as f:
+                long_lines += [f"{name}:{number} ({len(line.rstrip())})" for number, line in enumerate(f, 1) if len(line.rstrip()) > 160]
+        self.assertEqual(long_lines, [])
 
     def test_Every_runner_file_is_within_the_size_ceiling(self):
         bad = [(name, scan.line_count(p)) for name, _, p in sources()]

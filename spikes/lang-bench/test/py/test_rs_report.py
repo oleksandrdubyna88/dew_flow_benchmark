@@ -84,7 +84,7 @@ class JsonTests(unittest.TestCase):
     def test_A_case_record_carries_the_fields_of_the_result_format_and_unknown_is_never_zero(self):
         result = rp.CaseResult("s01", "PASS", entries=1, r_ids=("R1", "R2"), wall_ms=12, lifecycle=rp.plain_lifecycle(False))
         record = rp.case_record(result)
-        self.assertEqual(sorted(record), ["comparison", "entries", "firstMismatch", "id", "lifecycle", "rIds", "reason", "status", "wallMs"])
+        self.assertEqual(sorted(record), ["comparison", "entries", "firstMismatch", "id", "launchMs", "lifecycle", "rIds", "reason", "status", "wallMs"])
         self.assertEqual(record["lifecycle"]["memory"], {"known": False, "why": "not certified"})
         self.assertEqual((record["rIds"], record["wallMs"], record["firstMismatch"]), (["R1", "R2"], 12, None))
 

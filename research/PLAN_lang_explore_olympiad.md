@@ -1,6 +1,6 @@
 # PLAN — exploratory pilot, part 2: three more olympiad specs of the language comparison (02, 03, 09), on the v1 bare harness
 
-> Status: **IMPLEMENTED, 2026-11-01.** Run 2026-11-01: tasks 02, 03 and 09, three pairs each, 18 of 18 sessions accepted, $5.58; every part-2 verdict hand-checked (966 of 966); notes and the analysis [EXPLORE_olympiad_2026-11-01_analysis.md](lang-v2/EXPLORE_olympiad_2026-11-01_analysis.md) committed through the coai document gate. Open: `prune`, after this branch merges. Deviations: § Deviations at the end. One unit, no epics. Owner-authorised on 2026-11-01 ("prepare
+> Status: **IMPLEMENTED, 2026-11-01.** Run 2026-11-01: tasks 02, 03 and 09, three pairs each, 18 of 18 sessions accepted, $5.58; every part-2 verdict hand-checked (966 of 966); notes and the analysis [EXPLORE_olympiad_2026-11-01_analysis.md](lang-v2/EXPLORE_olympiad_2026-11-01_analysis.md) committed through the coai document gate. Merged as #145; `prune` run 2026-11-02. Deviations: § Deviations at the end. One unit, no epics. Owner-authorised on 2026-11-01 ("prepare
 > tasks 02, 03 and 09 and run exploratory C#/TS pairs on them tonight": yes). **Exploratory, not evidence**, exactly like its
 > parent [PLAN_lang_explore_task1.md](PLAN_lang_explore_task1.md) (implemented and run 2026-11-01, series
 > `x-20261101-13cc`): it is not part of `todo/PLAN_lang_comparison_v2.md`'s pre-registered series and replaces none of its
@@ -114,7 +114,7 @@ references).
 
 - [x] The harness change with its tests; the pilot suite green under `BENCH_REQUIRE_SANDBOX=1` (302 of 303; the one skip is the leak scan's perf test, run only with `LEAK_PERF=1` — a deviation, see below), and v1's suite green (1232 of 1232, 2026-11-01). Merged with this branch's PR.
 - [x] Per task: private material complete with `brute.py` and `handcheck.md` agreeing; calibration clean; rehearsal PASS; three pairs run (a void re-run once; a twice-void cell recorded void), or fewer when the $60 pause point stopped the plan and the owner declined; every session record holds every v1 metric and the explore fields.
-- [x] Three generated notes and one analysis committed; `leakcheck` clean. - [ ] Then `prune` run (records and `heldout-NN/` kept).
+- [x] Three generated notes and one analysis committed; `leakcheck` clean. - [x] Then `prune` run (2026-11-02, after #145 merged: 24 directories per task removed — the seeded caches and the scoring copies; ~570 MB freed) (records and `heldout-NN/` kept).
 - [x] This plan promoted to `research/` with its deviations (2026-11-01).
 
 END OF PLAN
