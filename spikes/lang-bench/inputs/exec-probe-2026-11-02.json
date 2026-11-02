@@ -1,6 +1,6 @@
 {
   "date": "2026-11-02",
-  "probedOn": "2026-11-02T13:38:22.286Z",
+  "probedOn": "2026-11-02T14:24:38.425Z",
   "host": {
     "hostname": "jinx",
     "kernel": "6.18.54.1-microsoft-standard-WSL2",
@@ -9,7 +9,7 @@
     "bwrap": "bubblewrap 0.11.1",
     "node": "v26.12.1"
   },
-  "layerIdentity": "c3607cb65329588ab28a8993417936d4d8c88a4d82306424b8620fef8f1dea98",
+  "layerIdentity": "2697325850ae7ce8c3c0488a1e6db7a1bd02502e907b2e378ef3b07e6d9779f9",
   "lines": [
     {
       "id": "netns",
@@ -24,14 +24,14 @@
       "id": "program-in-prog",
       "ok": true,
       "cgroups": {
-        "program": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-Jfbccz-net.scope/prog",
+        "program": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-OWurVJ-net.scope/prog",
         "driver": "0::/non-systemd"
       }
     },
     {
       "id": "ping-over-loopback",
       "ok": true,
-      "port": 49217
+      "port": 60095
     },
     {
       "id": "bind-list",
@@ -71,11 +71,7 @@
         },
         {
           "mode": "--ro-bind",
-          "source": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-Jfbccz-{case}.scope/prog"
-        },
-        {
-          "mode": "--bind",
-          "source": "/tmp/testsToDelete-u1000-bench-proberuns-3grWaX/testsToDelete-u1000-bench-lrun-Jfbccz/views/{case}"
+          "source": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-OWurVJ-{case}.scope/prog"
         }
       ],
       "problems": []
@@ -148,8 +144,8 @@
     {
       "id": "empty-program-launch",
       "ok": true,
-      "launchMs": 45,
-      "emptyProgramMs": 7,
+      "launchMs": 42,
+      "emptyProgramMs": 11,
       "memoryCertified": true
     },
     {
@@ -157,7 +153,7 @@
       "ok": true,
       "memoryMax": 268435456,
       "swapMax": 0,
-      "peakBytes": 46501888,
+      "peakBytes": 46227456,
       "workloadExit": 0
     },
     {
@@ -194,7 +190,7 @@
               "reason": "memory limit",
               "oomKill": 0,
               "runtimeAbort": "dotnet",
-              "peakBytes": 207347712,
+              "peakBytes": 208388096,
               "eventsKept": true
             },
             "node": {
@@ -232,7 +228,7 @@
               "reason": "memory limit",
               "oomKill": 0,
               "runtimeAbort": "dotnet",
-              "peakBytes": 477097984,
+              "peakBytes": 476979200,
               "eventsKept": true
             },
             "node": {
@@ -265,7 +261,21 @@
       "ok": true,
       "halt": null,
       "problems": []
-    }
+    },
+    "v8Heap": [
+      {
+        "memoryMaxBytes": 268435456,
+        "v8HeapSizeLimitBytes": 274726912,
+        "ratio": 1.023,
+        "asserted": false
+      },
+      {
+        "memoryMaxBytes": 536870912,
+        "v8HeapSizeLimitBytes": 281018368,
+        "ratio": 0.523,
+        "asserted": false
+      }
+    ]
   },
   "exit": {
     "code": 0,
