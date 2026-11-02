@@ -25,23 +25,37 @@ export function hostFacts() {
   return { hostname: os.hostname(), kernel: os.release(), cgroup2: spawnSync('test', ['-e', '/sys/fs/cgroup/cgroup.controllers']).status === 0, systemd: first('systemctl', ['--version']), bwrap: first('bwrap', ['--version']), node: process.version };
 }
 
-async function observations({ owned, scope, dirs, csharpBuild }) {
+async function observations({ owned, scope, dirs, csharpBuild, progress }) {
   const limits = [];
-  for (const limit of LIMITS_MIB) limits.push(await observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes: limit * MIB }));
+  for (const limit of LIMITS_MIB) {
+    progress(`memory view at ${limit} MiB: start`);
+    limits.push(await observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes: limit * MIB }));
+    progress(`memory view at ${limit} MiB: done`);
+  }
   return { limits };
 }
 
+/** Announce a group of probe lines, run it, and report each line it produced: `name: start`, then `<id>: ok|FAIL` per line (K3: a long probe is not silent). */
+async function step(progress, name, run) {
+  progress(`${name}: start`);
+  const produced = [await run()].flat(2);
+  for (const line of produced) progress(`${line.id}: ${line.ok ? 'ok' : 'FAIL'}`);
+  return produced;
+}
+
 /** The lines of the probe, in the plan's order, as `{ id, ok, ... }`. */
-async function lines({ owned, scope, dirs, csharpBuild, tree, samplesDir, home }) {
+async function lines({ owned, scope, dirs, csharpBuild, tree, samplesDir, home, progress }) {
   const opened = await openProbeRun({ owned, scope, dirs, sentinelHome: home, csharpBuild });
   if (opened.problem) return [{ id: 'launch', ok: false, problem: opened.problem }];
   const { run } = opened;
   try {
-    const net = await networkLines(run);
-    const box = await boxFactLines(run);
-    const culture = await cultureLines(run);
-    const launched = await launchTimeLine({ owned, scope, dirs, tree, samplesDir });
-    return [...net, bindLine(run, home), ...box.lines, launched, await runDelegatedScopeLine({ owned, scope, dirs, csharpBuild }), ...culture];
+    const net = await step(progress, 'network', () => networkLines(run));
+    const bind = await step(progress, 'bind list', () => bindLine(run, home));
+    const box = await step(progress, 'box facts', async () => (await boxFactLines(run)).lines);
+    const launched = await step(progress, 'empty-program launch', () => launchTimeLine({ owned, scope, dirs, tree, samplesDir }));
+    const scoped = await step(progress, 'delegated scope', () => runDelegatedScopeLine({ owned, scope, dirs, csharpBuild }));
+    const culture = await step(progress, 'culture', () => cultureLines(run));
+    return [...net, ...bind, ...box, ...launched, ...scoped, ...culture];
   } finally {
     await closeProbeRun(run);
   }
@@ -50,14 +64,14 @@ async function lines({ owned, scope, dirs, csharpBuild, tree, samplesDir, home }
 /**
  * Run the probe: `{ record, exitCode, halt }`. `deps.policyFile` is the policy file's path; `deps.prepare` builds the empty-program tree (`{ tree, samplesDir }`).
  */
-export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = new Date(), identity, home = os.homedir() }) {
+export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = new Date(), identity, home = os.homedir(), progress = () => {} }) {
   const policy = readPolicy(policyPath);
   if (!policy.ok) return fail(policy.reason);
   const built = await buildCsharp({ owned, scope, dirs });
   if (!built.ok) return fail(built.reason);
   const { tree, samplesDir } = prepare();
-  const found = await lines({ owned, scope, dirs, csharpBuild: built.value, tree, samplesDir, home });
-  const memoryView = { policy: policy.value, observations: await observations({ owned, scope, dirs, csharpBuild: built.value }) };
+  const found = await lines({ owned, scope, dirs, csharpBuild: built.value, tree, samplesDir, home, progress });
+  const memoryView = { policy: policy.value, observations: await observations({ owned, scope, dirs, csharpBuild: built.value, progress }) };
   return { ok: true, value: finish({ found, memoryView, now, identity }) };
 }
 

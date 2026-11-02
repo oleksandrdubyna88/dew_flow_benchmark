@@ -65,7 +65,7 @@ const owned = helper.ownedFor({ token: 'bench' });
 const scope = owned.cleanupScope();
 let code = 2;
 try {
-  const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity: identityOf() });
+  const result = await runProbe({ owned, scope, dirs, policyPath: option('--policy') ?? path.join(spike, 'inputs', 'specs.d', 'memory-policy.json'), prepare: () => emptyProgramTree(owned, scope), identity: identityOf(), progress: text => process.stderr.write(`exec-probe: ${text}\n`) });
   if (!result.ok) usage(result.reason);
   const { value: record } = result;
   const out = option('--out') ?? path.join(spike, 'inputs', `exec-probe-${record.date}.json`);

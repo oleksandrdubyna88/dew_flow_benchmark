@@ -46,6 +46,18 @@ test('The_probe_records_every_line_of_the_plan_and_exits_3_memory_policy_undecid
   assert.deepEqual(record.lines.filter(line => !line.ok).map(line => line.id), [], 'every line other than the memory policy passed on this host');
 });
 
+test('A_long_probe_is_not_silent_one_line_on_stderr_as_each_probe_line_and_each_memory_limit_starts_and_ends', async t => {
+  if (!needs(t)) return;
+  const { stderr, record } = await probed;
+  for (const line of record.lines) assert.match(stderr, new RegExp(`exec-probe: ${line.id}: (ok|FAIL)`), `${line.id} has its result line`);
+  for (const group of ['network', 'bind list', 'box facts', 'culture', 'empty-program launch', 'delegated scope']) assert.match(stderr, new RegExp(`exec-probe: ${group}: start`), `${group} announces its start`);
+  for (const limit of [256, 512]) {
+    assert.match(stderr, new RegExp(`exec-probe: memory view at ${limit} MiB: start`));
+    assert.match(stderr, new RegExp(`exec-probe: memory view at ${limit} MiB: done`));
+  }
+  assert.ok(stderr.indexOf('network: start') < stderr.indexOf('netns: ok'), 'a start comes before its result');
+});
+
 test('The_record_names_the_date_the_host_the_layer_identity_and_the_believed_limits_at_both_limits', async t => {
   if (!needs(t)) return;
   const { record } = await probed;
