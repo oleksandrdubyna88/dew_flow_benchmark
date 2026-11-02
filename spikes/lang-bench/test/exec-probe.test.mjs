@@ -73,6 +73,17 @@ test('The_record_names_the_date_the_host_the_layer_identity_and_the_believed_lim
   }
 });
 
+test('The_record_carries_V8s_heap_size_limit_against_prog_memory_max_for_the_decision_that_has_not_been_made', async t => {
+  if (!needs(t)) return;
+  const { record } = await probed;
+  assert.equal(record.memoryView.v8Heap.length, 2);
+  for (const entry of record.memoryView.v8Heap) {
+    assert.equal(typeof entry.v8HeapSizeLimitBytes, 'number');
+    assert.equal(entry.ratio, Number((entry.v8HeapSizeLimitBytes / entry.memoryMaxBytes).toFixed(3)), 'the ratio is recorded');
+    assert.equal(entry.asserted, false, 'recorded now; the check waits for the team lead\'s decision');
+  }
+});
+
 test('The_probe_record_holds_only_allow_listed_keys_even_with_a_host_key_planted_in_the_probes_own_environment', async t => {
   if (!needs(t)) return;
   const { record } = await probed;

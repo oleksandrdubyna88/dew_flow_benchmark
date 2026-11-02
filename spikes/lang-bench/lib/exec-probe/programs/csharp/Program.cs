@@ -61,6 +61,20 @@ switch (mode)
         Console.WriteLine("OK");
         break;
     }
+    case "objects-70": // live ordinary objects = 70% of the limit by the heap after a full GC, kept to the end, plus 1 GiB of short-lived small objects
+    {
+        var objTarget = long.Parse(args[1]) * Mib * 70 / 100;
+        var objData = new List<Rec>();
+        while (GC.GetTotalMemory(true) < objTarget)
+            for (var i = 0; i < 20000; i++) objData.Add(new Rec { A = i, B = i, C = i });
+        Console.Error.WriteLine($"live-heap-after-full-gc-MiB={GC.GetTotalMemory(true) / Mib}");
+        Rec? objSink = null;
+        for (long i = 0; i < 11_000_000; i++) objSink = new Rec { A = i };
+        GC.KeepAlive(objData);
+        GC.KeepAlive(objSink);
+        Console.WriteLine("OK");
+        break;
+    }
     case "medium-objects": // live ordinary objects (records with numbers and a short array) = 40% of the limit by the heap after a full GC, heldData to the end, plus 2 GiB of short-lived small objects
     {
         var target = long.Parse(args[1]) * Mib * 40 / 100;

@@ -21,15 +21,30 @@ const EXTRA_ENV = Object.freeze({ [POLICY_3B]: Object.freeze({ csharp: Object.fr
 /** (3c): view (3) plus `DOTNET_GCHeapHardLimit=<the case's limit in bytes, hexadecimal>` in the .NET environment only. */
 export const POLICY_3C = 'cgroup-view-own+gchardlimit-case-limit';
 
+/** Fix batch 1, O4 (measurement only): the layer's OWN box as decided (the view and .NET's hard limit are in it), and the same with `NODE_OPTIONS=--max-old-space-size=<limit MiB>` for Node only. */
+export const POLICY_DECIDED_RUN = 'decided';
+export const POLICY_NODE_FLAG = 'decided+node-max-old-space';
+
+/** `NODE_OPTIONS` a policy gives a stack's program, or null. */
+export const nodeOptionsFor = (policy, stack, limitMiB) => (policy === POLICY_NODE_FLAG && stack === 'node' ? `--max-old-space-size=${limitMiB}` : null);
+
+/** The prefix with the value of `--setenv NODE_OPTIONS` replaced (the harness never sets it: this is an experiment env); throws when the prefix has none. */
+export function setNodeOptions(prefix, value) {
+  const at = prefix.findIndex((arg, i) => arg === '--setenv' && prefix[i + 1] === 'NODE_OPTIONS');
+  if (at < 0) throw new Error('the prefix has no --setenv NODE_OPTIONS to replace');
+  return [...prefix.slice(0, at + 2), value, ...prefix.slice(at + 3)];
+}
+
 /** The extra environment keys a policy gives a stack's program for a case at `limitMiB` (through the per-stack allow-list; the box module is not changed). */
 export function extraEnvFor(policy, stack, limitMiB) {
   if (policy === POLICY_3C && stack === 'csharp') return { DOTNET_GCHeapHardLimit: `0x${(limitMiB * MIB).toString(16)}` };
   return EXTRA_ENV[policy]?.[stack] ?? {};
 }
 /** Whether a policy puts the read-only view of the program's own cgroup in the box. */
-export const viewFor = policy => policy !== 'today';
+export const viewFor = policy => policy !== 'today' && policy !== POLICY_DECIDED_RUN && policy !== POLICY_NODE_FLAG;
 
 const DOTNET_FRACTION = 0.75;
+const ABORTED = Object.freeze({ v8: 'V8 heap-limit abort (exit 134, runtimeAbort v8)', dotnet: '.NET runtime abort (exit 134, runtimeAbort dotnet)' });
 const OOM_NET = /OutOfMemoryException/;
 const OOM_NATIVE = /^Out of memory\.$/m;
 const OOM_V8 = /JavaScript heap out of memory|Reached heap limit/;
@@ -37,7 +52,7 @@ const OOM_V8 = /JavaScript heap out of memory|Reached heap limit/;
 /** How a run ended, from what the runner recorded: `{ result, ended }`. A kernel `oom_kill` wins over whatever the dying runtime printed. */
 export function classify({ status, reason, memory, stderrTail }) {
   if (status === 'PASS') return { result: 'PASS', ended: 'exit 0' };
-  if (reason === 'memory limit') return { result: 'memory limit', ended: `kernel oom_kill (${memory.oomKill})` };
+  if (reason === 'memory limit') return { result: 'memory limit', ended: ABORTED[memory.runtimeAbort] ?? `kernel oom_kill (${memory.oomKill})` };
   if (OOM_NET.test(stderrTail)) return { result: 'runtime error', ended: `.NET OutOfMemoryException (${reason})` };
   if (OOM_NATIVE.test(stderrTail)) return { result: 'runtime error', ended: `.NET runtime abort "Out of memory." (${reason}), not a kernel oom_kill` };
   if (OOM_V8.test(stderrTail)) return { result: 'runtime error', ended: `V8 heap-limit abort (${reason})` };
@@ -54,7 +69,11 @@ export function cgroupViewPrefix(prefix, prog) {
   return [...prefix.slice(0, at), '--unshare-cgroup', '--ro-bind', prog, '/sys/fs/cgroup', ...prefix.slice(at)];
 }
 
-const tweakFor = (policy, run) => (viewFor(policy) ? prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)) : prefix => prefix);
+function tweakFor(policy, run, stack) {
+  const flags = nodeOptionsFor(policy, stack, run.options.memoryMaxBytes / MIB);
+  if (flags !== null) return prefix => setNodeOptions(prefix, flags);
+  return viewFor(policy) ? prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)) : prefix => prefix;
+}
 
 function samples(owned, scope) {
   const dir = owned.ownedDir(scope, 'opksamples');
@@ -74,13 +93,13 @@ const tailOf = entry => entry?.lifecycle?.stderr?.tail ?? '';
 export async function runOnce({ owned, scope, dirs, csharpBuild, stack, mode, limitMiB, policy }) {
   const given = samples(owned, scope);
   const tree = programTree({ owned, scope, stack, mode: `${mode} ${limitMiB}`, csharpBuild });
-  const opened = await openRun({ owned, parent: stableRunsParent(), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB) });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack, limitMiB), stack });
   if (!opened.ok) return { mode, stack, limitMiB, policy, result: 'not run', ended: opened.reason, peakBytes: null, stderrTail: '' };
   const run = opened.value;
   try {
     const argv = runnerArgv(run, { cgroupOf: progTemplate(run.unitPrefix), jsonOut: path.join(run.dir, 'record.json') });
     const at = argv.indexOf('--launch-prefix') + 1;
-    argv[at] = JSON.stringify(tweakFor(policy, run)(JSON.parse(argv[at])));
+    argv[at] = JSON.stringify(tweakFor(policy, run, stack)(JSON.parse(argv[at])));
     const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: 2 * WALL_MS, env: driverEnv({ dirs, tmp: run.dir }) });
     return describe({ mode, stack, limitMiB, policy }, ran, run);
   } finally {
@@ -127,8 +146,8 @@ const CGVIEW = [
   '',
 ].join('\n');
 
-async function launchIn(run, policy, caseId, program) {
-  const prefix = tweakFor(policy, run)(launchPrefix(run, { outside: true }));
+async function launchIn(run, policy, caseId, program, stack) {
+  const prefix = tweakFor(policy, run, stack)(launchPrefix(run, { outside: true }));
   const argv = [...prefix.map(arg => arg.replaceAll('{case}', caseId)), ...program];
   const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: WALL_MS, env: userEnv() });
   return ran.ok ? ran.value : { code: null, stdout: '', stderr: ran.reason };
@@ -179,6 +198,19 @@ export async function dotnetBelieves({ owned, scope, dirs, csharpBuild, limitMiB
   try {
     const ran = await launchIn(opened.value, policy, 'dn', ['dotnet', 'bin/mem.dll', 'report']);
     return JSON.parse(ran.stdout || 'null');
+  } finally {
+    await cleanup(opened.value);
+  }
+}
+
+/** What `stack`'s `report` mode prints under `policy` at `limitMiB` (.NET's `totalAvailableBytes`; Node's `constrainedBytes` and `heapSizeLimitBytes`), or null. */
+export async function believesUnder({ owned, scope, dirs, csharpBuild, limitMiB, policy, stack }) {
+  const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
+  const opened = await openRun({ owned, parent: stableRunsParent(), tree, caseIds: ['rp'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, stack, limitMiB), stack });
+  if (!opened.ok) return null;
+  try {
+    const program = stack === 'csharp' ? ['dotnet', 'bin/mem.dll', 'report'] : ['node', 'mem.mjs', 'report'];
+    return JSON.parse((await launchIn(opened.value, policy, 'rp', program, stack)).stdout || 'null');
   } finally {
     await cleanup(opened.value);
   }

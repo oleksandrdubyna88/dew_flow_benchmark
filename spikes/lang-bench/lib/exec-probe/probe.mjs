@@ -75,6 +75,11 @@ export async function runProbe({ owned, scope, dirs, policyPath, prepare, now = 
   return { ok: true, value: finish({ found, memoryView, now, identity }) };
 }
 
+/** V8's `heap_size_limit` against `prog/memory.max` at each limit — RECORDED, not asserted: the check waits for the team lead's decision on Node (fix batch 1, O4). */
+function v8HeapRecord(observations) {
+  return observations.limits.filter(at => at.node).map(at => ({ memoryMaxBytes: at.memoryMaxBytes, v8HeapSizeLimitBytes: at.node.heapSizeLimitBytes, ratio: Number((at.node.heapSizeLimitBytes / at.memoryMaxBytes).toFixed(3)), asserted: false }));
+}
+
 function verdictOf(memoryView) {
   const unobserved = memoryView.observations.limits.filter(at => at.problem);
   if (unobserved.length > 0) return { ok: false, halt: 'memory-view-unobserved', problems: unobserved.map(at => at.problem) };
@@ -86,7 +91,7 @@ export function finish({ found, memoryView, now, identity }) {
   const failedLine = found.find(line => !line.ok);
   const verdict = verdictOf(memoryView);
   const halt = failedLine === undefined ? verdict.halt : failedLine.halt ?? failedLine.id;
-  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict }, exit: { code: halt === null ? 0 : 3, halt } };
+  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
   const problems = recordProblems(record);
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };
 }

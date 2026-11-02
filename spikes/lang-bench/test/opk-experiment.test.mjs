@@ -2,7 +2,7 @@
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cgroupViewPrefix, classify, extraEnvFor, POLICY_3C, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
+import { cgroupViewPrefix, classify, extraEnvFor, nodeOptionsFor, POLICY_3C, POLICY_DECIDED_RUN, POLICY_NODE_FLAG, setNodeOptions, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
 
@@ -60,4 +60,22 @@ test('The_3c_variant_sets_the_hard_limit_to_the_cases_limit_in_hexadecimal_bytes
   assert.deepEqual(extraEnvFor(POLICY_3C, 'csharp', 512), { DOTNET_GCHeapHardLimit: '0x20000000' });
   assert.deepEqual(extraEnvFor(POLICY_3C, 'node', 256), {}, '.NET only');
   assert.equal(viewFor(POLICY_3C), true);
+});
+
+test('The_node_flag_variant_sets_NODE_OPTIONS_in_the_prefix_for_node_only_and_the_decided_policy_changes_nothing', () => {
+  const prefix = ['bwrap', '--clearenv', '--setenv', 'LANG', 'x', '--setenv', 'NODE_OPTIONS', '', '--setenv', 'TZ', 'UTC', '--'];
+  assert.deepEqual(setNodeOptions(prefix, '--max-old-space-size=256'), ['bwrap', '--clearenv', '--setenv', 'LANG', 'x', '--setenv', 'NODE_OPTIONS', '--max-old-space-size=256', '--setenv', 'TZ', 'UTC', '--']);
+  assert.throws(() => setNodeOptions(['bwrap', '--'], 'x'), /NODE_OPTIONS/);
+  assert.equal(viewFor(POLICY_DECIDED_RUN), false, 'the layer\'s own box already has the view: nothing is added');
+  assert.equal(viewFor(POLICY_NODE_FLAG), false);
+  assert.deepEqual(extraEnvFor(POLICY_DECIDED_RUN, 'csharp', 256), {});
+  assert.equal(nodeOptionsFor(POLICY_NODE_FLAG, 'node', 512), '--max-old-space-size=512');
+  assert.equal(nodeOptionsFor(POLICY_NODE_FLAG, 'csharp', 512), null, 'Node only');
+  assert.equal(nodeOptionsFor(POLICY_DECIDED_RUN, 'node', 512), null);
+});
+
+test('A_run_the_runner_judged_memory_limit_through_a_runtime_abort_is_not_labelled_a_kernel_kill', () => {
+  assert.deepEqual(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 0, runtimeAbort: 'v8' }, stderrTail: '' }), { result: 'memory limit', ended: 'V8 heap-limit abort (exit 134, runtimeAbort v8)' });
+  assert.deepEqual(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 0, runtimeAbort: 'dotnet' }, stderrTail: '' }), { result: 'memory limit', ended: '.NET runtime abort (exit 134, runtimeAbort dotnet)' });
+  assert.equal(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 1, runtimeAbort: null }, stderrTail: '' }).ended, 'kernel oom_kill (1)');
 });
