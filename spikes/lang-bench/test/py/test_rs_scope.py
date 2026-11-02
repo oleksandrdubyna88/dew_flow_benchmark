@@ -87,7 +87,7 @@ class KillTests(unittest.TestCase):
         self.assertTrue(wait_until(lambda: scope.pids() == []), f"nothing of the case may be left in its scope: {scope.pids()}")
 
     def test_The_program_pid_is_the_child_of_bwrap_and_not_the_launcher_and_its_comm_is_the_programs(self):
-        for run_sh, expected_comms in ((REPLAY + "sleep 0.3\n", ("bash",)), ("exec sleep 60\n", ("bash", "sleep"))):  # bash until the exec is seen
+        for run_sh, expected_comms in ((REPLAY + "sleep 0.3\n", ("bash",)), ("exec sleep 60\n", ("sleep",))):  # the tracker refreshes the name at every look, so a program alive for 60 s is seen after its exec
             result, scope, _ = run_in_scope(self, run_sh, limit_ms=1500, expected=ANSWER if run_sh.startswith("cat") else b"")
             signalled = result.lifecycle["signalled"]
             self.assertEqual(signalled["found"], "cgroup.procs: the process whose parent is a bwrap process", run_sh)
@@ -154,7 +154,7 @@ class ForkTests(unittest.TestCase):
             signalled = result.lifecycle["signalled"]
             self.assertIsNotNone(signalled["pid"], f"round {round_}: the pid IS the program's, found whatever the short tools did")
             self.assertNotEqual(signalled["pid"], signalled["launcher"])
-            self.assertIn(signalled["comm"], ("bash", "sleep"), "bash before the exec, the program after")
+            self.assertEqual(signalled["comm"], "sleep", "the name is refreshed at every look; a 0.4 s program is seen after its exec")
             self.assertEqual(result.lifecycle["fork"], {"known": True, "found": False, "count": 1}, f"round {round_}")
 
     def test_A_program_that_exits_at_once_is_judged_by_its_output_and_is_not_fork_and_its_wall_is_close_to_the_empty_programs(self):
@@ -330,7 +330,9 @@ class SettleOrderTests(unittest.TestCase):
         code, out, err = box.cli("--launch-prefix", json.dumps(prefix), "--launch-status", str(STATUS_FD), "--cgroup-of", cgroups,
                                 fake_cgroup2=True)
         self.assertEqual(code, 3, err)
-        self.assertIn("is gone after child-pid", err, "exit 3 for the right reason: not 'not a cgroup2 node'")
+        # the removal can land before or after the runner's presence check at child-pid: both say the cgroup is gone after child-pid
+        self.assertRegex(err, r"(is gone|does not exist) after child-pid", "exit 3 for the right reason: not 'not a cgroup2 node'")
+        self.assertNotIn("not a cgroup2 node", err)
         self.assertNotIn("PASS", out)
 
     def test_A_kill_that_cannot_be_written_falls_back_to_the_pids_the_cgroup_lists_and_checks_it_is_empty(self):
