@@ -103,6 +103,7 @@ test('The_program_holds_no_capabilities_and_cannot_take_lo_down_and_that_is_the_
   const wrongHolder = await holderFor(t);
   const kept = boxArgv({ view, dirs: toolchains, env: boxEnv({ dirs: toolchains }), prog: null });
   kept.splice(kept.indexOf('--cap-drop'), 2);
+  for (const flag of ['--unshare-user', '--disable-userns']) kept.splice(kept.indexOf(flag), 1); // with them a nested user namespace already takes the capability to change the holder's lo away
   const loud = await sh(nsenterArgv(wrongHolder)[0], [...nsenterArgv(wrongHolder).slice(1), ...kept, ...probe]);
   assert.doesNotMatch(loud.stdout, /CapEff:\s+0000000000000000/, 'without the drop the program holds every capability of the holder\'s user namespace');
   assert.match(loud.stdout, /lo-down-exit=0/, 'and it takes lo down for the driver as well');
@@ -142,4 +143,25 @@ test('A_run_sh_without_exec_leaves_a_bash_above_the_program_and_that_is_the_poin
   assert.ok(await readyPort(view));
   const program = await waitFor(() => programPid(c.prog, PROGRAM_COMM.python));
   assert.equal(commOf(statOf(program).ppid), 'bash', 'without exec the program\'s parent is bash, and a signal to the launcher would never reach the program (T-L31)');
+});
+
+test('A_program_cannot_make_a_nested_user_namespace_and_so_cannot_mount_a_writable_cgroup_to_hide_a_child_in_prog', async t => {
+  if (!needs(t)) return;
+  const probe = 'id -u; unshare -U true 2>&1; echo "nested-userns-exit=$?"; unshare -Urm mount -t cgroup2 none /mnt 2>&1; echo "mount-exit=$?"; mkdir /sys/fs/cgroup/hide 2>&1; echo "mkdir-exit=$?"';
+  const c = await chain(t, { files: { 'run.sh': `#!/bin/bash\n${probe}\n` } });
+  const child = start(t, c.launch(), { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  child.stdout.on('data', chunk => { out += chunk; });
+  child.stderr.on('data', chunk => { out += chunk; });
+  await child.exited;
+  assert.match(out, /^0$/m, 'the program is still uid 0 in the box');
+  assert.match(out, /nested-userns-exit=[1-9]/, `a nested unshare -U fails (ENOSPC, --disable-userns): ${out}`);
+  assert.match(out, /mount-exit=[1-9]/, 'and so no writable cgroup2 can be mounted');
+  assert.match(out, /mkdir-exit=[1-9]/, 'no child cgroup can be made in the read-only view');
+  const wrong = await chain(t, { files: { 'run.sh': `#!/bin/bash\n${probe}\n` }, caseId: 'c2', boxTweak: argv => argv.filter(arg => arg !== '--unshare-user' && arg !== '--disable-userns') });
+  const loud = start(t, wrong.launch(), { stdio: ['ignore', 'pipe', 'pipe'] });
+  let seen = '';
+  loud.stdout.on('data', chunk => { seen += chunk; });
+  await loud.exited;
+  assert.match(seen, /nested-userns-exit=0/, 'without the flags the nested namespace is made: the refuted shape');
 });

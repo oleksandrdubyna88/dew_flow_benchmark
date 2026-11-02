@@ -45,6 +45,22 @@ def procs(directory):
     return None if text is None else _pids_of(text)
 
 
+def _children_of(directory):
+    """The descendant cgroups one level down: the folders that hold a `cgroup.procs`."""
+    names = (name for name in sorted(os.listdir(directory)) if os.path.exists(os.path.join(directory, name, "cgroup.procs")))
+    return [os.path.join(directory, name) for name in names]
+
+
+def _below(directory):
+    return [pid for sub in _children_of(directory) for pid in procs_tree(sub) or []]
+
+
+def procs_tree(directory):
+    """Every pid in `cgroup.procs` of the cgroup AND of every descendant cgroup (a program's `prog/hide` too); None when the cgroup cannot be read."""
+    own = procs(directory)
+    return None if own is None else own + _below(directory)
+
+
 def comm_of(pid):
     """`/proc/<pid>/comm` without its line feed, or None when the process is gone. Evidence for the record only: never used to tell bwrap."""
     text = _text(f"/proc/{pid}/comm")

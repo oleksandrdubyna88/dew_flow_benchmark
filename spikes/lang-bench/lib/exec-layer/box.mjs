@@ -5,6 +5,7 @@
 //   `/etc/localtime`; the pinned toolchain trees by their FULL paths (nothing else of the home exists in the box); `extraRo` for a stack's `/etc/ssl` or `/etc/ca-certificates`
 //   when the probe says its runtime reads them. Then `--dev /dev`, `--proc /proc` (bwrap's own mount for its pid namespace), a fresh `--tmpfs /tmp` and the case's view, writable.
 // No `$HOME`, no `/mnt`, no `/run` (no user bus, no agent, no `/run/WSL`), no `/var/tmp`, no `/sys/fs/cgroup`. `--unshare-pid --new-session` stay; there is NO `--die-with-parent`:
+// `--unshare-user --disable-userns` (the Opus review, O1): a program that could make a nested user namespace could mount a WRITABLE cgroup2 and hide a child in `prog/`; nested `unshare` fails with ENOSPC, uid stays 0.
 // the scope is the kill domain and a lingering child must survive until `cgroup.procs` is read (consult B4).
 // THE WORKSPACE: with `tree` (the BUILT tree, a run) the box mounts `--overlay-src <tree> --overlay-src <view> --tmp-overlay <view>`: each launch gets a fresh writable layer over the read-only built tree, on a
 // tmpfs inside the box, discarded at exit (no copy of the tree per case; `view` is the case's empty placeholder, a second source so a scenario's fixtures written into it show). The writes are charged to
@@ -40,7 +41,7 @@ export function boxArgv({ view, dirs, env, statusFd, extraRo = [], exists = exis
     ...tmpfs('/'), ...roBind('/usr'), ...USR_LINKS.filter(name => exists(`/${name}`)).flatMap(link), ...hiddenRuntimes(exists).flatMap(tmpfs),
     ...[...ETC_FILES, ...Object.values(dirs), ...extraRo].flatMap(roBind),
     ...devProc(), ...tmpfs('/tmp'), ...cgroupView(prog), ...workspace(view, tree), ...chdir(view),
-    '--unshare-pid', '--new-session', '--cap-drop', 'ALL', ...setenvAll(env), '--',
+    '--unshare-user', '--disable-userns', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', ...setenvAll(env), '--',
   ];
 }
 
