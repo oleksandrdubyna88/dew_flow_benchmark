@@ -11,11 +11,19 @@ import { nsenterArgv } from './netns.mjs';
 import { progTemplate, scopePrefix } from './scope.mjs';
 
 export const STATUS_FD = 7;
-const HOLD_MARGIN_S = 60;
+/** The one margin of the layer: the scope holder's bound is T + G + this, the netns holder's is the run ceiling + this. */
+export const HOLD_MARGIN_S = 60;
+const DEFAULT_T_S = 10;
+const DEFAULT_G_S = 5;
 export const RUNNER = fileURLToPath(new URL('../../runner/run_samples.py', import.meta.url));
 
-/** The scope holder's bound: the case wall plus a margin, so a crashed layer's holder still ends. */
-export const holdSeconds = run => Math.ceil(run.options.caseWallMs / 1000) + HOLD_MARGIN_S;
+/** The runner's wall for a case — the time limit T plus the stop grace G, in seconds — from the limits file (the series defaults T = 10 s and G = 5 s where a key is absent). */
+export function requiredWallSeconds(limits) {
+  return (limits.timeS ?? DEFAULT_T_S) + (limits.graceS ?? DEFAULT_G_S);
+}
+
+/** The scope holder's bound: T + G of the runner's limits plus the margin, so a crashed layer's holder still ends but never before the runner's own end of a case. */
+export const holdSeconds = run => Math.ceil(requiredWallSeconds(run.limits)) + HOLD_MARGIN_S;
 
 /** `--launch-prefix`: everything before `bash run.sh`, `{case}` left for the runner. `outside` puts the `nsenter` in (a launch from outside the namespaces). */
 export function launchPrefix(run, { statusFd = STATUS_FD, outside = false } = {}) {

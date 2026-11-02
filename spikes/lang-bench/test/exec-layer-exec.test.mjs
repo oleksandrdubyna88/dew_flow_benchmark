@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { commOf, chain, needs, pidsIn, programPid, sh, start, text, waitFor } from './support/exec-chain.mjs';
+import { commOf, chain, needs, pidsIn, programPid, readJsonLine, sh, start, text, waitFor } from './support/exec-chain.mjs';
 import { sameProcess, identityOf, statOf } from '../lib/exec-layer/proc.mjs';
 import { killCgroup, listScopes, readProg, stopUnit } from '../lib/exec-layer/scope.mjs';
 
@@ -47,7 +47,7 @@ test('A_pid_seen_inside_the_box_would_signal_the_wrong_process_and_that_is_the_p
   const run = '#!/bin/bash\ntrap \'echo TERM > got-term; exit 0\' TERM\necho $$ > inbox.pid\nwhile :; do sleep 0.05; done\n';
   const c = await chain(t, { files: { 'run.sh': run }, extraBox: { statusFd: 7 } });
   const launcher = start(t, c.launch(), { stdio: ['ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe'] });
-  const status = await new Promise(resolve => { launcher.stdio[7].once('data', chunk => resolve(JSON.parse(chunk.toString().split('\n')[0]))); });
+  const status = await readJsonLine(launcher.stdio[7]);
   const childPid = status['child-pid'];
   assert.ok(await waitFor(() => existsSync(path.join(c.view, 'inbox.pid')) || null), 'the program wrote the pid it sees');
   const inBox = Number(readFileSync(path.join(c.view, 'inbox.pid'), 'utf8').trim());

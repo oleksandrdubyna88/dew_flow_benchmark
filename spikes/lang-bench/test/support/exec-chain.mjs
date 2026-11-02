@@ -80,3 +80,19 @@ export function withoutView(argv) {
   const ro = argv.findIndex((arg, i) => arg === '--ro-bind' && argv[i + 2] === '/sys/fs/cgroup');
   return argv.filter((arg, i) => arg !== '--unshare-cgroup' && !(i >= ro && i < ro + 3));
 }
+
+/** The first complete line of `stream` parsed as JSON: collected until its newline whatever the chunking; rejects when the stream ends first (a fragment is never parsed). */
+export function readJsonLine(stream) {
+  return new Promise((resolve, reject) => {
+    let said = '';
+    const onData = chunk => {
+      said += chunk;
+      if (said.includes('\n')) {
+        stream.off('data', onData);
+        resolve(JSON.parse(said.slice(0, said.indexOf('\n'))));
+      }
+    };
+    stream.on('data', onData);
+    stream.once('end', () => reject(new Error(`the stream ended with no complete line: ${JSON.stringify(said)}`)));
+  });
+}

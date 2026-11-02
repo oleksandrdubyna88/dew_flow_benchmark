@@ -17,13 +17,26 @@ import { cleanup, sweepStale } from './cleanup.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
 import { holderNameOf, RUN_WHAT, runIdOf, tooLongForUnit, unitPrefixOf } from './names.mjs';
 import { startHolder } from './netns.mjs';
-import { launchPrefix, programArgv, runnerArgv, holdSeconds } from './prefix.mjs';
+import { HOLD_MARGIN_S, launchPrefix, programArgv, requiredWallSeconds, runnerArgv } from './prefix.mjs';
 import { progTemplate } from './scope.mjs';
 
 export { launchPrefix, programArgv, runnerArgv };
 
+const LIMIT_KEYS = Object.freeze(['timeS', 'readyS', 'graceS']);
+
+/** `ok(limits)` read from the runner's limits file (`{}` when none is given), or `fail` naming a key the runner would refuse. Only whole or decimal numbers of seconds. */
+function readLimits(file) {
+  if (file === undefined) return ok({});
+  try {
+    const limits = JSON.parse(readFileSync(file, 'utf8'));
+    const bad = LIMIT_KEYS.filter(key => key in limits && !(typeof limits[key] === 'number' && limits[key] > 0));
+    return bad.length === 0 ? ok(limits) : fail(`the limits file ${file}: ${bad.join(', ')} must be a number of seconds`);
+  } catch (error) {
+    return fail(`the limits file ${file} cannot be read (${error.code ?? error.message})`);
+  }
+}
+
 const SBIN_PATH = '/usr/sbin:/usr/bin:/bin:/sbin';
-const HOLDER_MARGIN_S = 60;
 const EXIT_ENVIRONMENT = 3;
 const EXIT_RUNNER = 5;
 const RECORD = 'record.json';
@@ -43,15 +56,20 @@ function newRun(options, tools) {
   const scope = owned.cleanupScope();
   const dir = owned.ownedDir(scope, RUN_WHAT, { parent: options.parent });
   const id = runIdOf(owned, dir);
-  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env: boxEnv({ dirs: options.dirs, extra: options.extraEnv, stack: options.stack, memoryMaxBytes: options.memoryMaxBytes }), holder: null, holderNet: null };
+  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env: boxEnv({ dirs: options.dirs, extra: options.extraEnv, stack: options.stack, memoryMaxBytes: options.memoryMaxBytes }), holder: null, holderNet: null, limits: {} };
 }
 
 async function openSteps(run) {
   const { options } = run;
   if (!statSync(options.tree, { throwIfNoEntry: false })?.isDirectory()) return fail(`the built tree ${options.tree} is not a directory: the box mounts it read-only as the workspace`);
+  const limits = readLimits(options.limitsFile);
+  if (!limits.ok) return limits;
+  const required = requiredWallSeconds(limits.value);
+  if (options.caseWallMs !== undefined && options.caseWallMs / 1000 < required) return fail(`caseWallMs ${options.caseWallMs} is shorter than the time limit ${limits.value.timeS ?? 10} s plus the stop grace ${limits.value.graceS ?? 5} s the runner gives a case`);
+  run.limits = limits.value;
   const long = tooLongForUnit(run.unitPrefix, options.caseIds);
   if (long.length > 0) return fail(`the unit name of case ${long.join(', ')} would pass 63 characters; use shorter case ids`);
-  const holder = await startHolder({ name: run.holderName, boundSeconds: options.runCeilingMs / 1000 + HOLDER_MARGIN_S });
+  const holder = await startHolder({ name: run.holderName, boundSeconds: options.runCeilingMs / 1000 + HOLD_MARGIN_S });
   if (!holder.ok) return fail(`the network-namespace holder did not start: ${holder.reason}`);
   Object.assign(run, { holder: holder.value, holderNet: readlinkSync(`/proc/${holder.value.pid}/ns/net`) });
   const views = makeViews({ runDir: run.dir, caseIds: options.caseIds });
