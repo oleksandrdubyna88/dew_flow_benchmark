@@ -70,6 +70,9 @@
     - (c) revise v2's per-task difficulty and budget predictions with these observations.
 
     The team lead carries the proposal into the v2 plan as a change for the owner. Until the owner decides, the mix stays as approved.
+  - **Decided by the owner, 2026-11-02:**
+    - **(a): yes.** v2 already does it. D29 shows the known and the original tasks separately, and discloses that the five public tasks may be familiar to the model. The task table marks each task K or O. T1 records that the known tasks have public solutions. T-L17 tests the separation in the rendered record. So no plan change was needed; this analysis had missed D29 when it proposed (a) and (b).
+    - **(c): no.** The owner's words: the predicted costs do not matter; what matters is how much it actually costs. v2's primary metric is already the measured cost per correct solution, so no prediction is revised. F6, which only corrects a prediction, is dropped for the same reason.
 - **F2. The runner must record evidence for the full output, not only a capped copy.**
   - The kept output is capped at 64 KiB for the report, while the verdict is streamed over the full output. So a later reader cannot re-check a verdict on a large case from the records.
   - v2's runner (E1.S8a) should record the sha256 and byte length of each case's full output beside the verdict. Then the hand-check and any later correction can verify it without re-running untrusted code.
@@ -87,7 +90,7 @@
   - The quiet gate refused task 03's first pair twice, each time after 30 minutes. The first time, a coder's test suites kept all 14 CPUs busy. The second time, a leak check of mine that never finished kept one CPU at 100%.
   - Nothing was spent either time, and the gate was right both times.
   - For v2's rounds: development work and paid runs need separate windows, and the run scheduler should list the foreign processes it waits on. Owner: v2 epic E3 (the runs and their quiet gate).
-- **Who carries these.** The team lead takes F1–F6 into the v2 plans: F2 into E1.S8a's runner (part ii-b or a fix forward), F3 into E1.S1, F4 into E2's calibration, F5 into E3, and F1 and F6 as proposed plan changes for the owner.
+- **Who carries these.** The team lead takes F2–F5 into the v2 plans: F2 into E1.S8a's runner (part ii-b or a fix forward), F3 into E1.S1, F4 into E2's calibration, F5 into E3. F1 is settled by D29 and F6 is dropped (the owner's decision of 2026-11-02, under F1).
 - **F6. The build cost did not show.** The predicted C# overhead outside model calls (F1 of task 1's analysis) did not appear in 8 of the 9 part-2 pairs. These sessions build a few times at most. Their self-testing dominates the time outside the model, and that varies more by task and pair than by stack.
 
 ## 5. Part 2 against the prediction (plan § 4, recorded before the run)
