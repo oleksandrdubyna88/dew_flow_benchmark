@@ -34,7 +34,7 @@ the netns holder included, with its memory view asserted; E1.S7 waits for group 
 protection; each group freezes under its own tag; the Definition of Done is per group. Done before this re-cut: E1.S5 merged
 (#135); E1.S1's bench side and E1.S8a part i built and in their code review (local branches). The parent is **stopped for
 re-review** until its plan round and the owner's approval; nothing here starts before epoch 5 opens. Still twelve stories,
-still one cornerstone (E1.S2); this document keeps no ledger.
+still one cornerstone (E1.S2); this document keeps no ledger. **Revised 2026-11-02 for the parent's epoch-6 re-review** (changes 5.1 and 5.2, both found by E1.S8b's OP-K experiment on `feat/lang-v2-e1-s8b`; parent D55–D59, consult `ee6c5a9a`): E1.S8b is fixed forward to the memory policy A at 90 % for both stacks and re-pinned; E1.S8a's abort rule (runner 0.2.1) gets its evidence boundary and the flags `abort-below-evidence` and `child-abort-line` on S8b's branch and is re-pinned; part ii-b inherits the rule unchanged; E1.S9 closes the F-MEMORY gap (both causes, the heap settings named stack-neutrally); the historical probe and experiment records keep their identities and every later probe is a new dated file; E2's floor probe and calibration sequence are the parent's D57 and D58, not this epic's. Done on the branch before the stop: E1.S8b whole with its probe, the OP-K experiment, fix batch 1 and the re-pins at 100 %; E1.S8a part ii-a merged (#147). The parent is **stopped** until its epoch-6 re-review closes; the fix forward starts when epoch 6 opens. Still twelve stories, still one cornerstone; no ledger here.
 
 ## 1. The epic, restated (parent § *Epics*, E1)
 
@@ -51,7 +51,7 @@ the Node stack table; `leakcheck` clean.
 
 **Done when, per group (parent D44, D45, D51; 2026-11-01).** **A** — the done-when above for 01, 02, 03 and 09:
 `workspace-diff` on those four pairs, their specs gated and frozen under `spec-frozen-A-<yyyymmdd>`, the layer whole with its
-memory view asserted (T-L43), E1.S8a parts i and ii-a pinned, both stacks' full package sets hashed, the tag ruleset and
+memory view asserted (T-L43 — revised 2026-11-02: parent D55's settings and the object-graph regression asserted, the mixed workload recorded; the fix forward and re-pin of parent D59 before CP2), E1.S8a parts i and ii-a pinned (re-pinned after the abort rule's boundary and flags, parent D56), both stacks' full package sets hashed, the tag ruleset and
 `main`'s protection read back. **B** — the six others gated and frozen under `spec-frozen-B-<yyyymmdd>`, part ii-b pinned as
 the second runner manifest (T-L38), A's four re-gated on B's identities (parent D50), A's blobs equal across the two tags
 (T-L39). **C** — E1.S7 whole (templates, CI, the remaining rulesets, run bases bound to the frozen commit, parent D52).
@@ -342,8 +342,8 @@ staged series and kept for their history.
 |---|---|---|---|
 | E1.S1 | merged (#142, `6321cd24`, 2026-11-01), the fix forward of D52 included (exact exemptions, T-L47): 821 of 821 `spikes/lang-bench` tests pass on `main`; the pre-push hook installed in the task repository from the main bench checkout, and its branch check of the task repository's `main` passes | `workspace-diff` and the push check over B's pairs | — |
 | E1.S5 | merged (#135) | — | — |
-| E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a merged** (#147, `4f2cf79d`, 2026-11-02): coai plan round and five code rounds passed; the third Opus review SAFE TO MERGE; 1078 of 1078 `spikes/lang-bench` tests on `main`, plain and with `BENCH_REQUIRE_SANDBOX=1`; its contracts for E1.S8b are in `research/module_lang_bench.md` | **part ii-b** — the second runner manifest (D50, T-L38) | — |
-| E1.S8b | **whole**, the netns holder included; CP2; the memory view asserted (T-L43) | — (the same identity) | — |
+| E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a merged** (#147, `4f2cf79d`, 2026-11-02): coai plan round and five code rounds passed; the third Opus review SAFE TO MERGE; 1078 of 1078 `spikes/lang-bench` tests on `main`, plain and with `BENCH_REQUIRE_SANDBOX=1`; its contracts for E1.S8b are in `research/module_lang_bench.md`; **fixed forward 2026-11-02 on S8b's branch** (parent D56, D59): the abort rule's evidence boundary at the byte, the flags `abort-below-evidence` and `child-abort-line`, the two flag columns in the result; re-pinned as A's manifest | **part ii-b** — the second runner manifest (D50, T-L38); the abort rule inherited unchanged (parent D59, T-L52) | — |
+| E1.S8b | **whole**, the netns holder included; CP2; the memory view asserted (T-L43). **Built on `feat/lang-v2-e1-s8b` (pushed; the layer, the delegated scope, the overlay view, fix batch 1, the probe and the OP-K experiment); fixed forward 2026-11-02 to the policy at 90 % for both stacks (parent D55), re-pinned, the probe re-run and recorded as a new dated file (parent D59); CP2 after it** | — (the same identity) | — |
 | E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) | — |
 | E1.S4 | the full sets of both stacks, web packages included | — | — |
 | E1.S3 | phase A; phase B for the four | phase B for the six | — |
@@ -356,7 +356,8 @@ staged series and kept for their history.
   **S8a part ii-a**.
 - **W-A2:** **S8b whole** (needs ii-a and S5) ∥ **S9** (sections classed), gated after **CP1** ∥ S4 ∥ **S7's tag ruleset and
   `main` protection** (after S1's first pushes and operator step O3's go). **CP2** after S8b, with T-L43's asserted record;
-  the team lead decides OP-K on it before E2-A calibrates (§9).
+  the team lead decides OP-K on it before E2-A calibrates (§9). *(2026-11-02: OP-K is closed by parent D55; CP2 runs after the fix
+  forward of parent D59 on the re-pinned identities, and reads T-L43's revised record, T-L50 and T-L52 with the consult's items.)*
 - **W-A3:** S8 ∥ S3 phase A (after CP2).
 - **W-A4, per task, 01 first, then 02, 03 and 09:** S6 → S2 draft and conformance → S2a → **the D40 gate on S8b's layer,
   behind the gate lock** (§3) → S2's document gate, consultant and bias review → gated. **CP3** after task 01 has run this
@@ -710,6 +711,35 @@ twelve; its size needs two coders and two reviews.
 - **The JSON result** gains `launchMs`, `launch: { failed, stderr }`, `emptyProgramMs` per run and `lifecycle.signalled` (`pid`
   and how it was found).
 
+**Fix forward, 2026-11-02 (parent D56, D59) — the abort rule's evidence boundary and its flags.** Runner 0.2.1 (`rs_abort.py`,
+change 5.1, on `feat/lang-v2-e1-s8b`) judges a runtime's own out-of-memory abort `memory limit` — .NET exit 134 with the exact
+line `Out of memory.` (or `Unhandled exception.` with `System.OutOfMemoryException` in the tail), V8 exit 134 with a line holding
+`JavaScript heap out of memory` — only with the evidence `memory.peak` ≥ 50 % of `memory.max` (fix batch 1, O7). The parent makes
+the threshold a pre-registered heuristic with a tested boundary and defines the two cases the rule did not name. This part lands
+on S8b's branch before its merge and re-pins the runner (A's manifest); part ii-b inherits every line of it.
+- **The boundary at the byte (T-L50).** `has_evidence` is true at `peakBytes · 2 ≥ maxBytes` and false one byte below; the test
+  drives both through the runner and the real prefix with a stub that prints the line and exits 134 at a chosen peak.
+- **`abort-below-evidence`.** An abort with the line, exit 134 and a peak below the threshold is `runtime error` and carries
+  `lifecycle.memory.abortBelowEvidence: true` with the line, the status and the peak; the report counts it per stack; the case goes
+  to the blind adjudication like every failing case. A line with exit 1, or exit 134 with another message, is `runtime error`
+  without the flag (as today).
+- **`child-abort-line`.** When the program exits 0 and a runtime's abort line stands in the stderr file (a child runtime aborted
+  and the parent went on), the case is judged on its output — pass or fail — and carries `lifecycle.memory.childAbortLine: true`;
+  it is never `memory limit` by the abort rule, because the status and the line the rule reads are the program's; a kernel kill
+  of that child (`oom_kill ≥ 1`) is `memory limit` as before (T-L30's companion).
+- **The record.** `memory` carries `peakBytes`, `maxBytes`, `oomKill`, `runtimeAbort`, `abortBelowEvidence`, `childAbortLine`; the
+  JSON result's schema test names all six; E3's record renderer lists the two flags as columns (T-L26's companion fails when one is
+  removed).
+- **Part ii-b inherits the rule (T-L52).** The daemon and web lifecycles read the same `rs_abort.py` and the same `prog/` evidence
+  after readiness; a daemon stub that aborts with .NET's line above half of L is `memory limit`, a web stub with V8's line the same;
+  `rs_abort.py` and its evidence function are in T-L38's byte-identical module set, so a change ii-b needed there would be an
+  instrument amendment for A (parent D50, §6.1).
+- *Tests (red, green, red):* `An_abort_one_byte_below_half_the_limit_is_a_runtime_error_with_the_flag_and_that_is_the_point` (red
+  with `>` in place of `≥`, green, red with the evidence check removed); `A_child_abort_line_under_an_exit_0_parent_is_judged_on_its_output`;
+  `The_memory_record_names_all_six_fields`; `rs_abort_is_byte_identical_across_the_manifests` (T-L38's set).
+- **Docs.** `research/module_lang_bench.md`'s abort paragraph gains the boundary, the two flags and the child case;
+  `research/module_tests.md` lists the flows.
+
 ---
 
 ## E1.S8b — the execution layer
@@ -970,6 +1000,43 @@ and exits 0 on a mismatch, green when it asserts the recorded policy, red again)
 the final prefix at both limits, under `BENCH_REQUIRE_SANDBOX=1`; the asserted record in `inputs/exec-probe-<date>.json`; OP-K's
 decision a dated D15 line before E2-A's first calibration.
 
+**What the probe and the experiment found (2026-11-02; the cause of changes 5.1 and 5.2).** Through the final prefix at 256 and
+512 MiB, on toys with realistic live data, three runs per cell (`inputs/opk-experiment-2026-11-02.json`, layer `79b85a37…`, the
+pre-view box; `inputs/exec-probe-2026-11-02.json`, layer `2697…`): with no cgroup view .NET sized its GC to the host (46 GB) and was
+oom-killed on live byte arrays at 45 % of the limit; with the view alone .NET capped itself at 75 % and a genuinely over-limit
+program ended in its own `Out of memory.` abort (exit 134) before the kernel acted — judged `exit status 134` without a rule
+(change 5.1); the percent form `DOTNET_GCHeapHardLimitPercent=0x64` is ignored by .NET, so only the byte form expresses the value;
+with the view and a .NET hard limit equal to the limit, V8 still sized its heap to about 268 MiB whatever the cgroup, so Node's
+object graph at 70 % of a 512 MiB limit aborted at 54 % — a false `memory limit` for Node only (change 5.2); with both runtimes at
+100 % of the limit .NET's mixed workload (objects 45 % + byte arrays 35 % + churn) was oom-killed at 256 MiB, and at 90 % and 85 %
+it passed; Node's mixed workload fails under every setting, because typed arrays live outside V8's heap (parent T21). The
+decision is the parent's D55: **policy A at 90 %**.
+
+**Fix forward, 2026-11-02 (parent D55, D59) — the policy at 90 % for both stacks, the probe's assertions, the re-pin.** Built when
+epoch 6 opens, on this branch before its merge:
+- **`env.mjs`.** `STACK_KEYS` derives both stacks' per-case keys from `memoryMaxBytes`: `DOTNET_GCHeapHardLimit` =
+  `0x` + ⌊0.9·L⌋ in hexadecimal for `csharp`; `NODE_OPTIONS=--max-old-space-size=<⌊0.9·L / 1,048,576⌋>` for `node` (the base's empty
+  `NODE_OPTIONS` is replaced for the node stack in the scoring box only; the agent box keeps the base). A missing or non-positive
+  `memoryMaxBytes` throws for both stacks, as it does for .NET today. The derivation is one pure function with its own test
+  (`Both_stacks_heap_keys_are_ninety_percent_of_the_limit_and_that_is_the_point`: red at 100 %, green at 90 %, red with Node's
+  key missing).
+- **The policy file.** `inputs/specs.d/memory-policy.json` names `cgroup-view-own+gchl-90+node-old-space-90` with `decided`,
+  `by` and `evidence` (the two records above); `memory.mjs` knows the name and asserts, per limit, `/proc/self/cgroup` = `0::/`,
+  .NET's `TotalAvailableMemoryBytes` = ⌊0.9·L⌋, Node's `constrainedMemory()` = L and V8's `heap_size_limit` in [0.9·L, L); the
+  layer's data-run refusal (`exit 3`, a policy other than the pinned one) reads the same file.
+- **The probe (T-L43, revised).** The churn and over-limit fixtures stay; the **object-graph regression** (live ordinary objects at
+  70 % of L plus 1 GiB churn) is asserted `pass` in both stacks at both limits; the **mixed workload** (objects 45 % + typed arrays
+  35 % + churn) is run and **recorded, never asserted** — its Node result is the property parent T21 names. The probe writes a **new
+  dated file** `inputs/exec-probe-<date>[-<n>].json` (a second probe on one day takes `-2`); it never overwrites, and the two records
+  of 2026-11-02 stay as they are, with their layer identities.
+- **The re-pin.** `pin-exec-layer.mjs` writes the new identity after the probe passes; `pin-runner.mjs` after E1.S8a's fix forward
+  above; `specs-record.mjs` assembles both. No gate, calibration or CP2 ran on the old identities (parent D59), so nothing is
+  re-dated; CP2 is recorded on the new ones.
+- **Docs.** `research/module_lang_bench.md`'s OP-K paragraph is brought from 100 % to D55 in the fix forward's own commit (the
+  document describes the code as it is, so it moves with the code, not with this plan); `todo/README.md`'s rows with it.
+- *Acceptance, revised:* T-L43 green as revised, T-L14's agent-box half (no per-case key in the agent box), the pure-function test
+  of the keys, the policy-name test; the new probe record committed; both pins updated in `inputs/specs.json`; CP2 recorded after.
+
 ---
 
 ## E1.S9 — `FORMAT.md` v2, checked against the runner, gated before any spec gate
@@ -985,7 +1052,7 @@ carries, and its grammar sections handed to the agent as `runner/GRAMMAR.md`.
 
 | Repository | Path | Change |
 |---|---|---|
-| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap |
+| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap; **F-MEMORY, revised for parent D55 and D56 (2026-11-02):** the sentence names both causes as "the program's memory reaches the bound" — a process of the program's control group killed by the system at the bound, or the program's own runtime stopping it for lack of memory — and tells the author, in stack-neutral words, that the test machine caps each runtime's own heap at 90 % of the memory bound by that runtime's own setting, so a program may hold about that much managed data and the rest is the runtime's; no stack, flag name or threshold is named in FORMAT; the class line of the section stays `common` |
 | task | `runner/GRAMMAR.md` | generated: v2's sections 3–5 verbatim under a two-line header naming the format version and FORMAT's sha256 |
 | bench | `spikes/lang-bench/inputs/FORMAT-MAINTENANCE.md` | new — v1's §7–§9 for the maintainers, with the plan ids they need |
 | bench | `spikes/lang-bench/tools/grammar-extract.mjs`, `test/grammar-extract.test.mjs` | new |
@@ -1629,7 +1696,7 @@ own and is removed by it, then swept by owner and age under `common.test-leftove
 | `~/.config/lang-v2/known_hosts_github` (operator step O2) | bytes | kept while the deploy key is | — |
 | **Added 2026-11-01 (the staged series).** Gate records of A's four re-run on B's identities (E1.S2a, parent D50) | ≈ 8 more lines (4 tasks × 2 references), KB | **kept in git**, append only; A's records stay beside them | as the gate records above |
 | `inputs/push-exemptions.json` (E1.S1, parent D52) | one entry per approved passage; KB | kept in git; an entry is removed only by a reviewed change | — |
-| The memory-view probe records at 256 and 512 MiB (E1.S8b, T-L43) | KB per probe day | kept in git with `inputs/exec-probe-<date>.json` | — |
+| The memory-view probe records at 256 and 512 MiB (E1.S8b, T-L43) and the OP-K experiment record | KB per probe run | kept in git as `inputs/exec-probe-<date>[-<n>].json` and `inputs/opk-experiment-<date>.json`, one file per run, never overwritten (parent D59) | — |
 
 ## 9. Open points
 
@@ -1650,7 +1717,7 @@ this revision is a change; what would need one is §12. OP-H … OP-K below cite
 | OP-H | §4 operator step O1 against `common.pull-requests` rule 1 ("merged by rebase … or by squash … Merge commits are off"), which the task repository mounts through its conventions pin and the process agent reads | The team lead accepted merge commits only for the task repository (consult C7a, D7). The shared rule says the opposite for the family's repositories. Options for the team lead before O1's write: (a) merge commits only, with the deviation named in the task repository's README and a note to the conventions owner — the process agent's rules then disagree with the repository's setting; (b) allow merge commits beside rebase and squash (the join and the freeze need merge commits; C7a's sha comparison already guards the tag); (c) a `local.*` rule in the task repository that narrows rule 1 for it — it would enter every run base and change what the process agent is told. | not a change to the parent (no parent decision names the merge method). **Decided by the team lead, 2026-11-01: (b) narrowed to the join PR only** — merge commits are allowed for the one join merge (O1a) and switched off again right after it (O1b); every other PR, the freeze commit and every amendment is squash-merged as rule 1 says, so the process agent's rules and the repository's setting agree; C7a's sha comparison guards the tag |
 | OP-I | parent D42 (`:253`: the broker "creates and updates the run's PR and reads its checks and comments") | Consult D4, **adjusted by the team lead:** the public repository lets the PAT read conversation comments without the Issues permission (verified 2026-11-01). `Issues: write` is needed only if the broker must **post** conversation comments; E3.S7a decides that when it designs the broker's allowed operations. No change to the PAT now. | not a change (E3.S7a's open point) |
 | OP-J | §4's credit terms; D39 (`:251`: the run base is "the frozen tag's tree minus the README's attribution section and minus any credit file") | Specs 01 and 02 are CC BY-NC-SA 4.0 by the README's per-file exception. Every run base is pushed to this public repository as `run/<rid>/main` without the attribution section (D39), so those branches carry the two files without their notice; the repository's `main` README carries it. Whether that satisfies the licence's attribution term for the run branches is the owner's to confirm before the first run base is cut (E1.S7 part *GitHub*); if not, the cut keeps one neutral licence line that names no source (D19's rule) — which the team lead would then weigh against D39. | not a change yet; the owner's question |
-| OP-K | parent D15 (`:242`) | Consult B8: .NET may size its GC hard limit to about 75 % of a detected container limit, so the two stacks could meet one `MemoryMax` with different effective bounds and verdict labels. E1.S8b's probe records what each runtime believes its limit is; **whether to set `DOTNET_GCHeapHardLimitPercent` is D15's decision, made by the team lead on that record before E2 calibrates.** | not a change here; a D15 decision for the team lead. *(2026-11-01, parent D51:) the probe now asserts the memory view through the final prefix at 256 and 512 MiB (E1.S8b, T-L43); the team lead decides OP-K on that asserted record before E2-A calibrates, as a dated D15 line* |
+| OP-K | parent D15 (`:242`) | Consult B8: .NET may size its GC hard limit to about 75 % of a detected container limit, so the two stacks could meet one `MemoryMax` with different effective bounds and verdict labels. E1.S8b's probe records what each runtime believes its limit is; **whether to set `DOTNET_GCHeapHardLimitPercent` is D15's decision, made by the team lead on that record before E2 calibrates.** | not a change here; a D15 decision for the team lead. *(2026-11-01, parent D51:) the probe now asserts the memory view through the final prefix at 256 and 512 MiB (E1.S8b, T-L43); the team lead decides OP-K on that asserted record before E2-A calibrates, as a dated D15 line* *(2026-11-02:) decided at 100 % on the asserted record, then re-decided by change 5.2 — **closed by parent D55, policy A at 90 % for both stacks**, after the experiment found .NET's mixed workload killed at 100 % and Node's object graph falsely over the limit without a heap flag; the two changes stopped epoch 5 and the epoch-6 re-review is the baseline* |
 | OP-L | E1.S7, *Deferred to group C* (2026-11-01) | Group A gets `main`'s protection without the per-stack required checks, because CI is E1.S7's and is built in group C; the checks join `template-frozen` then, by a ruleset update read back. Until then a spec PR merges on review alone — as every task-repository PR has so far. | not a change (the order of the parent's D44; a reading) |
 
 **Read together:** none of these is a change; OP-A was resolved as (c). Epoch 4 stays at 0 changes. *(2026-11-01: epoch 4 holds
@@ -1711,7 +1778,7 @@ immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted th
       recorded; B8's probe line recorded for D15's decision.
 - [ ] *(Added 2026-11-01 — per group, the parent's D44–D53.)* **Group A:** 01, 02, 03 and 09 gated and frozen under
       `spec-frozen-A-<yyyymmdd>`, their hashes, R-ids, T and G in `inputs/specs.json` under group A; E1.S8a parts i and
-      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it;
+      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it *(revised 2026-11-02: T-L43 asserts parent D55's settings and the object-graph regression and records the mixed workload; the fix forward of parent D59 — both stacks' keys at 90 %, the abort rule's boundary and flags — and both re-pins before CP2; T-L50 and T-L52 green; the new probe record committed; the records of 2026-11-02 unchanged)*;
       FORMAT v2's sections classed; both stacks' full package sets hashed; the tag ruleset and `main`'s protection read back
       before A's tag; CP1–CP4 recorded; the fixes forward on E1.S1 (exact exemptions, T-L47) and E1.S8a (test (1b), T-L44)
       merged with their branches.
