@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 import runner_path  # noqa: F401
+import burner
 import rs_exec as ex
 import rs_launch as rl
 import rs_olympiad as ro
@@ -225,8 +226,7 @@ class PacedScanTests(unittest.TestCase):
 
     def test_The_scan_count_is_the_same_twenty_times_in_twenty_under_a_cpu_burner_load(self):
         # V8: the old test counted scans in 300 ms of wall time and failed once on a loaded host. Under one busy process per CPU the injected-clock count is still exact, 20 rounds of 20.
-        burners = [subprocess.Popen([sys.executable, "-I", "-c", "while True: pass"]) for _ in range(max(2, os.cpu_count() or 2))]
-        self.addCleanup(lambda: [(b.kill(), b.wait()) for b in burners])
+        burner.spawn(self, burner.count(None))
         for _ in range(20):
             self._scan_wait_once()
 
