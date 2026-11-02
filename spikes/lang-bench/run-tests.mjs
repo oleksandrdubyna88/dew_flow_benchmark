@@ -16,12 +16,14 @@ import { fileURLToPath } from 'node:url';
 
 await import('./lib/lower-priority.mjs');
 
-// The start-of-run sweep (common.test-leftovers §4): what a killed earlier run left in the temp root is retired before this run starts (the conventions' two keys: this token's name and owner, and a claim that is gone).
-{
-  const { owned } = await import('./test/support/owned.mjs');
-  const { sweepOwnedLeftovers } = await import('./test/support/sweep.mjs');
-  const swept = sweepOwnedLeftovers({ owned });
-  if (swept.removed.length > 0 || swept.errors.length > 0) process.stderr.write(`run-tests: sweep: retired ${swept.removed.length} leftover folder(s) of killed runs${swept.errors.length > 0 ? `; ${swept.errors.length} could not be judged` : ''}\n`);
+// The start-of-run sweep (common.test-leftovers §4): the conventions' OWN `sweepLeftovers` (release cc24f9e, F22), bound to this repository's token — the `bench` row of the rule's `## Tokens` table. What a killed
+// earlier run left in the temp root is retired before this run starts, on the rule's two keys; nothing of its rules is copied here. A sweep that throws is one stderr line and never changes the suite's exit code.
+try {
+  const { sweepLeftovers } = await import('../../.agents/conventions/tools/lib/leftovers-sweep.mjs');
+  const swept = sweepLeftovers({ repo: fileURLToPath(new URL('../..', import.meta.url)), token: 'bench' });
+  if (swept.removed.length + swept.preserved.length + swept.errors.length > 0) process.stderr.write(`run-tests: leftovers — removed ${swept.removed.length}, preserved ${swept.preserved.length}${swept.errors.length > 0 ? `, ${swept.errors.length} error(s): ${swept.errors.slice(0, 3).join('; ')}` : ''}\n`);
+} catch (error) {
+  process.stderr.write(`run-tests: leftovers sweep failed (${error?.message ?? error})\n`);
 }
 
 const CAP = 8;
