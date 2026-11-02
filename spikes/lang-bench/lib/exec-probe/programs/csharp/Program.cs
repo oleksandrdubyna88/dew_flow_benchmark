@@ -1,4 +1,4 @@
-// The execution probe's .NET program (E1.S8b): a toy, never a task of the series. One argument, the mode: report, culture, churn, overlimit.
+// The execution probe's .NET program (E1.S8b): a toy, never a task of the series. One argument, the mode (see MODES in programs.mjs).
 using System.Globalization;
 
 const int Mib = 1024 * 1024;
@@ -113,6 +113,14 @@ switch (mode)
         for (long i = 0; i < 22_000_000; i++) sink = new Rec { A = i };
         GC.KeepAlive(heldData);
         GC.KeepAlive(sink);
+        Console.WriteLine("OK");
+        break;
+    }
+    case "overlimit-objects": // live ordinary objects that only grow, to about 4 GiB: no limit of 256 or 512 MiB can hold them
+    {
+        var grown = new List<Rec>();
+        for (long i = 0; i < 40_000_000; i++) grown.Add(new Rec { A = i });
+        GC.KeepAlive(grown);
         Console.WriteLine("OK");
         break;
     }

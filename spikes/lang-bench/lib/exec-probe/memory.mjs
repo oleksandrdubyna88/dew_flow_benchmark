@@ -5,15 +5,18 @@
 // `memory-view-mismatch`, and exit 0 only when a policy holds. The judgement is pure: observations in, `{ ok, halt, problems }` out.
 import { readFileSync } from 'node:fs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
+import { MEMORY_POLICY } from '../exec-layer/policy.mjs';
 
 const MIB = 1024 * 1024;
-/** The decision of OP-K (parent D15, 2026-11-02): each program sees its OWN cgroup read-only, and .NET gets `DOTNET_GCHeapHardLimit` = the case's limit, so both stacks believe `prog/memory.max`. */
-export const POLICY_DECIDED = 'cgroup-view-own+gchl-limit';
-export const POLICY_NAMES = Object.freeze(['runtime-view-accepted', 'dotnet-gc-hard-limit-percent:<n>', 'cgroup-view-readonly', POLICY_DECIDED]);
+/** The decision of D55 (2026-11-02): each program sees its OWN cgroup read-only, .NET gets `DOTNET_GCHeapHardLimit` = ⌊0.9·L⌋ and Node `--max-old-space-size` = ⌊0.9·L / 1 MiB⌋. The layer pins it (`exec-layer/policy.mjs`). */
+export const POLICY_DECIDED = MEMORY_POLICY;
+/** OP-K's first decision (2026-11-02, 100 %), superseded by D55: still a legal name, so its evidence record (`exec-probe-2026-11-02.json`) stays readable and judgeable; nothing pins it. */
+export const POLICY_SUPERSEDED = 'cgroup-view-own+gchl-limit';
+export const POLICY_NAMES = Object.freeze(['runtime-view-accepted', 'dotnet-gc-hard-limit-percent:<n>', 'cgroup-view-readonly', POLICY_SUPERSEDED, POLICY_DECIDED]);
 const PERCENT = /^dotnet-gc-hard-limit-percent:([1-9][0-9]?|100)$/;
 const mib = bytes => `${Math.round(bytes / MIB)} MiB`;
 
-const isKnown = policy => ['runtime-view-accepted', 'cgroup-view-readonly', POLICY_DECIDED].includes(policy) || PERCENT.test(policy ?? '');
+const isKnown = policy => ['runtime-view-accepted', 'cgroup-view-readonly', POLICY_SUPERSEDED, POLICY_DECIDED].includes(policy) || PERCENT.test(policy ?? '');
 const isDecided = ({ decided, by }) => typeof decided === 'string' && typeof by === 'string' && decided !== '' && by !== '';
 
 /** `ok({ policy, decided, by })` or `fail(reason)` naming the legal values. A decided policy says when and by whom. */
@@ -36,16 +39,66 @@ export function readPolicy(file) {
 
 const hardLimit = seen => Number(seen.heapHardLimit);
 
-function behaviourOf(stack, at) {
-  const where = mib(at.memoryMaxBytes);
-  const over = at.overLimit[stack];
-  const out = at.churn[stack] === 'PASS' ? [] : [`${stack} at ${where}: the allocation-churn program with bounded live data did not pass (${at.churn[stack]}): it meets the kernel's OOM kill under the runtime's own view`];
-  if (over.reason !== 'memory limit' || !(over.oomKill >= 1 || over.runtimeAbort)) out.push(`${stack} at ${where}: the over-limit program ended "${over.reason}" with oom_kill ${over.oomKill}, not memory limit (a kernel oom_kill or a runtime's own abort, change 5.1)`);
-  else if (!over.eventsKept || !(over.peakBytes > 0)) out.push(`${stack} at ${where}: the over-limit program's memory.peak and memory.events were not kept`);
-  return out;
+/** The workloads T-L43 asserts under D55 (every one a PASS), and the one it only records (T21: the mixed workload fails in Node under every setting). */
+const ASSERTED_MODES = Object.freeze(['medium-buffers', 'medium-objects', 'objects-70']);
+export const RECORDED_MODES = Object.freeze(['mixed']);
+const STACKS = Object.freeze(['csharp', 'node']);
+
+/**
+ * Whether T-L43 asserts that `mode` passes in `stack` at `limitMiB`. Node `medium-buffers` at 256 MiB is run and recorded, not asserted: typed arrays live outside V8's heap, so the heap flag does not
+ * see them and the kernel's kill does (T21; `followUp5`). The `mixed` workload is never asserted. `churn` is asserted everywhere.
+ */
+export const workloadAsserted = (stack, mode, limitMiB) => mode === 'churn' || (ASSERTED_MODES.includes(mode) && !(stack === 'node' && mode === 'medium-buffers' && limitMiB === 256));
+
+/** `peak / L` to three places, or null for an unknown peak (never zero). */
+export const peakRatio = (peakBytes, memoryMaxBytes) => (Number.isFinite(peakBytes) && peakBytes >= 0 ? Number((peakBytes / memoryMaxBytes).toFixed(3)) : null);
+
+/** J2: a peak within 10 points of half the limit — |peak/L − 0.5| ≤ 0.1, by integers: 5·|2·peak − L| ≤ L — is a finding to report before CP2, never tuned around. */
+export const isRatioFinding = (peakBytes, memoryMaxBytes) => Number.isFinite(peakBytes) && 5 * Math.abs(2 * peakBytes - memoryMaxBytes) <= memoryMaxBytes;
+
+const OVER_FIXTURES = Object.freeze([['overlimit', 'overLimit'], ['overlimit-objects', 'overLimitObjects']]);
+
+/** One row per over-limit fixture, stack and limit: the status the runner gave, the cause, `peakBytes`, `peak/L` and whether the ratio is a J2 finding. Recorded for every fixture. */
+export function overLimitRows(observations) {
+  return observations.limits.filter(at => !at.problem).flatMap(at => OVER_FIXTURES.flatMap(([fixture, key]) => STACKS.filter(stack => at[key]?.[stack]).map(stack => {
+    const seen = at[key][stack];
+    return { stack, fixture, memoryMaxBytes: at.memoryMaxBytes, reason: seen.reason, oomKill: seen.oomKill ?? null, runtimeAbort: seen.runtimeAbort ?? null, peakBytes: seen.peakBytes ?? null, ratio: peakRatio(seen.peakBytes, at.memoryMaxBytes), finding: isRatioFinding(seen.peakBytes, at.memoryMaxBytes) };
+  })));
 }
 
-const behaviour = at => ['csharp', 'node'].flatMap(stack => behaviourOf(stack, at));
+/** One row per workload (the churn program included), stack and limit: the status, the cause, the peak and `peak/L`; `asserted` is false for the two cells that are only recorded. */
+export function workloadRows(observations) {
+  return observations.limits.filter(at => !at.problem).flatMap(at => STACKS.flatMap(stack => ['churn', ...ASSERTED_MODES, ...RECORDED_MODES].map(mode => {
+    const seen = mode === 'churn' ? { status: at.churn?.[stack] } : at.workloads?.[stack]?.[mode] ?? { status: 'NOT RUN' };
+    const limitMiB = at.memoryMaxBytes / MIB;
+    return { stack, mode, memoryMaxBytes: at.memoryMaxBytes, status: seen.status, reason: seen.reason ?? null, oomKill: seen.oomKill ?? null, runtimeAbort: seen.runtimeAbort ?? null, peakBytes: seen.peakBytes ?? null, ratio: peakRatio(seen.peakBytes, at.memoryMaxBytes), asserted: workloadAsserted(stack, mode, limitMiB) };
+  })));
+}
+
+function workloadProblems(stack, at) {
+  const where = mib(at.memoryMaxBytes);
+  return ASSERTED_MODES.filter(mode => workloadAsserted(stack, mode, at.memoryMaxBytes / MIB)).flatMap(mode => {
+    const seen = at.workloads?.[stack]?.[mode];
+    if (seen === undefined) return [`${stack} at ${where}: the ${mode} workload was not run`];
+    return seen.status === 'PASS' ? [] : [`${stack} at ${where}: the ${mode} workload did not pass (${seen.status}${seen.reason ? `, ${seen.reason}` : ''}): T-L43 asserts it under D55`];
+  });
+}
+
+function overProblems(stack, at, [fixture, key]) {
+  const where = mib(at.memoryMaxBytes);
+  const over = at[key]?.[stack];
+  if (over === undefined) return [`${stack} at ${where}: the ${fixture} fixture was not run`];
+  if (over.reason !== 'memory limit' || !(over.oomKill >= 1 || over.runtimeAbort)) return [`${stack} at ${where}: the ${fixture} program ended "${over.reason}" with oom_kill ${over.oomKill}, not memory limit (a kernel oom_kill or a runtime's own abort, change 5.1)`];
+  return over.eventsKept && over.peakBytes > 0 ? [] : [`${stack} at ${where}: the ${fixture} program's memory.peak and memory.events were not kept`];
+}
+
+function behaviourOf(stack, at) {
+  const where = mib(at.memoryMaxBytes);
+  const churn = at.churn[stack] === 'PASS' ? [] : [`${stack} at ${where}: the allocation-churn program with bounded live data did not pass (${at.churn[stack]}): it meets the kernel's OOM kill under the runtime's own view`];
+  return [...churn, ...OVER_FIXTURES.flatMap(fixture => overProblems(stack, at, fixture)), ...workloadProblems(stack, at)];
+}
+
+const behaviour = at => STACKS.flatMap(stack => behaviourOf(stack, at));
 
 function percentRule(at) {
   const limit = hardLimit(at.csharp);
@@ -63,7 +116,7 @@ function cgroupRule(at) {
 
 const ownOnly = seen => seen.cgroupSelf === '0::/' && seen.cgroupChildren === 0;
 
-/** The decided policy: both runtimes believe `prog/memory.max` itself (.NET's hard limit is the limit), in a cgroup view that is only the program's own. */
+/** The first decision (100 %, superseded): both runtimes believe `prog/memory.max` itself, in a cgroup view that is only the program's own. */
 function ownRule(at) {
   const where = mib(at.memoryMaxBytes);
   const out = cgroupRule(at);
@@ -71,7 +124,34 @@ function ownRule(at) {
   return out;
 }
 
-const RULES = Object.freeze({ 'cgroup-view-readonly': cgroupRule, [POLICY_DECIDED]: ownRule });
+/** ⌊0.9·L⌋ by integer arithmetic. */
+export const ninetyOf = limit => Number((BigInt(limit) * 9n) / 10n);
+
+function dotnetNinety(at) {
+  const want = ninetyOf(at.memoryMaxBytes);
+  return at.csharp.totalAvailableBytes === want ? [] : [`csharp at ${mib(at.memoryMaxBytes)}: TotalAvailableMemoryBytes is ${mib(at.csharp.totalAvailableBytes)}, not 90 % of prog/memory.max (${want} bytes)`];
+}
+
+function nodeNinety(at) {
+  const [low, high] = [ninetyOf(at.memoryMaxBytes), at.memoryMaxBytes];
+  const heap = at.node.heapSizeLimitBytes;
+  const out = at.node.constrainedBytes === at.memoryMaxBytes ? [] : [`node at ${mib(at.memoryMaxBytes)}: constrainedMemory is ${mib(at.node.constrainedBytes)}, not prog/memory.max`];
+  return heap >= low && heap < high ? out : [...out, `node at ${mib(at.memoryMaxBytes)}: V8 heap_size_limit is ${heap} bytes, not in [${low}, ${high}) (the old-space flag is 90 % of prog/memory.max)`];
+}
+
+/**
+ * The decided policy (D55): the cgroup is visible and only the program's own; .NET's `TotalAvailableMemoryBytes` = ⌊0.9·L⌋ (the hard limit is 90 %); Node's `constrainedMemory()` = L and V8's
+ * `heap_size_limit` in [⌊0.9·L⌋, L) — the old-space flag is 90 % and V8 adds its young space, but the limit leaves room under the cgroup.
+ */
+function ninetyRule(at) {
+  const where = mib(at.memoryMaxBytes);
+  const out = [];
+  if (!at.csharp.cgroupVisible || !at.node.cgroupVisible) out.push(`no cgroup is visible in the box at ${where}`);
+  if (!ownOnly(at.csharp) || !ownOnly(at.node)) out.push(`the cgroup visible in the box at ${where} is not only its own (/proc/self/cgroup must be 0::/ and no child cgroup may show)`);
+  return [...out, ...dotnetNinety(at), ...nodeNinety(at)];
+}
+
+const RULES = Object.freeze({ 'cgroup-view-readonly': cgroupRule, [POLICY_SUPERSEDED]: ownRule, [POLICY_DECIDED]: ninetyRule });
 const ruleFor = policy => (PERCENT.test(policy) ? percentRule : RULES[policy] ?? (() => []));
 
 function problemsAt(policy, at) {

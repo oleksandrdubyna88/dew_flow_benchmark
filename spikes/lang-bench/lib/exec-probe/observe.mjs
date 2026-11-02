@@ -63,17 +63,28 @@ export async function believed({ owned, scope, dirs, csharpBuild, stack, memoryM
 }
 
 const overOf = ran => ({ reason: ran.reason, oomKill: ran.memory.oomKill ?? null, runtimeAbort: ran.memory.runtimeAbort ?? null, peakBytes: ran.memory.peakBytes ?? null, eventsKept: ran.memory.known === true && ran.memory.events !== undefined });
+const workloadOf = ran => ({ status: ran.status, reason: ran.reason, oomKill: ran.memory.oomKill ?? null, runtimeAbort: ran.memory.runtimeAbort ?? null, peakBytes: ran.memory.peakBytes ?? null });
 
-/** The observation of one limit: `{ memoryMaxBytes, hostMemoryMax, csharp, node, churn, overLimit }` (`assertMemoryView`'s shape), or `{ problem }` when a program did not run. */
-export async function observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes }) {
+/** The workloads of T-L43 under D55 besides the churn program: the three asserted ones and the mixed one, which is run and recorded only (T21). */
+export const WORKLOAD_MODES = Object.freeze(['medium-buffers', 'medium-objects', 'objects-70', 'mixed']);
+
+/**
+ * The observation of one limit: `{ memoryMaxBytes, hostMemoryMax, csharp, node, churn, workloads, overLimit, overLimitObjects }` (`assertMemoryView`'s shape), or `{ problem }` when a program did not
+ * run. `workloads[stack][mode]` and both over-limit fixtures keep the runner's status, cause and `memory.peak`, so the record can give peak/L for each (J2).
+ */
+export async function observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes, progress = () => {} }) {
   const common = { owned, scope, dirs, csharpBuild, memoryMaxBytes };
-  const at = { memoryMaxBytes, churn: {}, overLimit: {} };
+  const at = { memoryMaxBytes, churn: {}, workloads: {}, overLimit: {}, overLimitObjects: {} };
   for (const stack of STACKS) {
     const seen = await believed({ ...common, stack });
     if (seen.value === null) return { problem: seen.problem };
     Object.assign(at, { [stack]: seen.value, hostMemoryMax: seen.hostMemoryMax });
     at.churn[stack] = (await runMode({ ...common, stack, mode: 'churn' })).status;
+    at.workloads[stack] = {};
+    for (const mode of WORKLOAD_MODES) at.workloads[stack][mode] = workloadOf(await runMode({ ...common, stack, mode }));
     at.overLimit[stack] = overOf(await runMode({ ...common, stack, mode: 'overlimit' }));
+    at.overLimitObjects[stack] = overOf(await runMode({ ...common, stack, mode: 'overlimit-objects' }));
+    progress(`${stack} at ${memoryMaxBytes / MIB} MiB: done`);
   }
   return at;
 }

@@ -6,8 +6,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { before, test } from 'node:test';
 import { cleanupScope } from '../../../.agents/conventions/tools/lib/owned.mjs';
-import { allowFor } from '../lib/exec-layer/env.mjs';
+import { allowFor, caseKeysIn } from '../lib/exec-layer/env.mjs';
 import { recordProblems } from '../lib/exec-probe/facts.mjs';
+import { buildBoxEnv } from '../lib/exec-probe/programs.mjs';
 import { runDelegatedScopeLine } from '../lib/exec-probe/lines.mjs';
 import { readPolicy } from '../lib/exec-probe/memory.mjs';
 import { verdictFor } from '../lib/exec-probe/probe.mjs';
@@ -81,7 +82,25 @@ test('The_record_carries_V8s_heap_size_limit_against_prog_memory_max_for_the_dec
     assert.equal(typeof entry.v8HeapSizeLimitBytes, 'number');
     assert.equal(entry.ratio, Number((entry.v8HeapSizeLimitBytes / entry.memoryMaxBytes).toFixed(3)), 'the ratio is recorded');
     assert.equal(entry.asserted, false, 'recorded now; the check waits for the team lead\'s decision');
+    assert.ok(entry.ratio >= 0.9 && entry.ratio < 1, `V8's heap limit is in [0.9 L, L) under D55 (${entry.ratio})`);
   }
+});
+
+test('The_record_carries_the_workloads_the_peak_over_L_of_every_over_limit_fixture_and_the_findings_T_L43_J2', async t => {
+  if (!needs(t)) return;
+  const { record } = await probed;
+  const view = record.memoryView;
+  const L = [256 * 1024 * 1024, 512 * 1024 * 1024];
+  assert.equal(view.workloads.length, 2 * 2 * 5, 'five workloads (churn, medium-buffers, medium-objects, objects-70, mixed) per stack and limit');
+  for (const stack of ['csharp', 'node']) for (const limit of L) for (const mode of ['churn', 'medium-buffers', 'medium-objects', 'objects-70', 'mixed']) assert.ok(view.workloads.some(row => row.stack === stack && row.mode === mode && row.memoryMaxBytes === limit), `${stack} ${mode} at ${limit}`);
+  const recorded = view.workloads.filter(row => !row.asserted).map(row => `${row.stack} ${row.mode} ${row.memoryMaxBytes / 1024 / 1024}`).sort();
+  assert.deepEqual(recorded, ['csharp mixed 256', 'csharp mixed 512', 'node medium-buffers 256', 'node mixed 256', 'node mixed 512'], 'the recorded-only cells are named: T21');
+  assert.equal(view.overLimit.length, 2 * 2 * 2, 'two over-limit fixtures per stack and limit');
+  for (const row of view.overLimit) {
+    assert.equal(row.ratio, Number((row.peakBytes / row.memoryMaxBytes).toFixed(3)), 'peak/L is recorded');
+    assert.equal(row.finding, Math.abs(row.ratio - 0.5) <= 0.1 + 1e-9, `${row.stack} ${row.fixture}: the finding flag follows the 10-point band`);
+  }
+  assert.deepEqual(view.findings, view.overLimit.filter(row => row.finding), 'findings are the rows in the band');
 });
 
 test('The_probe_record_holds_only_allow_listed_keys_even_with_a_host_key_planted_in_the_probes_own_environment', async t => {
@@ -97,7 +116,8 @@ test('The_decided_policy_holds_on_the_record_and_the_others_are_judged_against_t
   if (!needs(t)) return;
   const { record } = await probed;
   const decide = policy => verdictFor(record, { policy, decided: '2026-11-02', by: 'team lead' });
-  assert.deepEqual(decide('cgroup-view-own+gchl-limit'), { ok: true, halt: null, problems: [] }, 'both stacks believe prog/memory.max in their own cgroup view');
+  assert.deepEqual(decide('cgroup-view-own+gchl-90+node-old-space-90'), { ok: true, halt: null, problems: [] }, 'D55: .NET believes floor(0.9 L), Node believes L with a V8 heap in [0.9 L, L), in their own cgroup view');
+  assert.equal(decide('cgroup-view-own+gchl-limit').ok, false, 'the 100 % policy of the first decision no longer holds: .NET believes 90 %');
   assert.equal(decide('runtime-view-accepted').ok, true);
   assert.equal(decide('dotnet-gc-hard-limit-percent:75').ok, false, 'no GC hard limit shows in AppContext: the percent form is not what is set');
   assert.equal(verdictFor(record, { policy: null, decided: null, by: null }).halt, 'memory-policy-undecided');
@@ -117,4 +137,13 @@ test('A_host_where_memory_peak_cannot_be_read_is_exit_3_memory_not_certifiable',
   assert.equal(real.memoryMax, 256 * 1024 * 1024);
   assert.equal(real.swapMax, 0);
   assert.ok(real.peakBytes > 0, 'memory.peak is read after the workload\'s exit and is above zero');
+});
+
+test('The_build_box_of_the_probe_carries_neither_per_case_heap_key', () => {
+  // T-L14 / §4.3: a GC hard limit sized for a case would break `dotnet build`; the build step's environment carries neither key, and the check is made where the box is made.
+  const env = buildBoxEnv({ dirs: toolchains });
+  assert.deepEqual(caseKeysIn(env), []);
+  assert.equal('DOTNET_GCHeapHardLimit' in env, false);
+  assert.equal(env.NODE_OPTIONS, '', 'the base NODE_OPTIONS, empty');
+  assert.equal(env.NUGET_PACKAGES, '/tmp/pk', 'the build\'s own extras are there');
 });

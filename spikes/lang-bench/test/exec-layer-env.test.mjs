@@ -1,10 +1,12 @@
 // E1.S8b: the box's environment is ONE allow-list (D15's base, the culture of D35, the base time zone, the documented per-stack keys). The unit half is here; the half
 // that reads the environment from INSIDE the real box is in this file's last test, which needs the whole layer.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { ALLOW_LIST, allowFor, BASE_ENV, boxEnv, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
+import { agentEnv, sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
+import { ALLOW_LIST, allowFor, assertNoCaseKeys, BASE_ENV, boxEnv, caseKeysIn, driverEnv, heapKeys, STACK_KEYS, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { chain, needs, SPAWN_ENV, start } from './support/exec-chain.mjs';
 import { toolchains } from './support/exec-layer-host.mjs';
 
@@ -41,17 +43,64 @@ test('The_box_PATH_names_the_pinned_toolchains_and_no_mnt_entry', () => {
   assert.ok(!entries.some(entry => entry.startsWith('/mnt')));
 });
 
-test('DOTNET_GCHeapHardLimit_is_the_cases_limit_in_hexadecimal_bytes_for_the_dotnet_stack_only', () => {
+test('Both_stacks_heap_keys_are_ninety_percent_of_the_limit_and_that_is_the_point', () => {
+  // D55: the runtime's own memory needs room under the cgroup, so the GC's budget is 90 % of L, not L. A test at 100 % is red; so is a Node box with no key.
   const MIB = 1024 * 1024;
-  assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 256 * MIB }).DOTNET_GCHeapHardLimit, '0x10000000');
-  assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 512 * MIB }).DOTNET_GCHeapHardLimit, '0x20000000');
-  assert.equal('DOTNET_GCHeapHardLimit' in boxEnv({ dirs, stack: 'node', memoryMaxBytes: 256 * MIB }), false, 'Node gets nothing');
-  assert.equal('DOTNET_GCHeapHardLimit' in boxEnv({ dirs }), false, 'a box with no stack named gets nothing');
+  for (const [mib, hex, oldSpace] of [[256, '0xe666666', 230], [512, '0x1ccccccc', 460], [100, '0x5a00000', 90]]) {
+    const L = mib * MIB;
+    assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: L }).DOTNET_GCHeapHardLimit, hex, `.NET at ${mib} MiB: floor(0.9 L) bytes in hexadecimal`);
+    assert.equal(parseInt(hex, 16), Math.floor(0.9 * L), `${hex} is floor(0.9 L)`);
+    assert.equal(boxEnv({ dirs, stack: 'node', memoryMaxBytes: L }).NODE_OPTIONS, `--max-old-space-size=${oldSpace}`, `Node at ${mib} MiB: floor(0.9 L / 1 MiB)`);
+    assert.equal(oldSpace, Math.floor((0.9 * L) / MIB));
+    assert.deepEqual(heapKeys('csharp', L), { DOTNET_GCHeapHardLimit: hex });
+    assert.deepEqual(heapKeys('node', L), { NODE_OPTIONS: `--max-old-space-size=${oldSpace}` });
+  }
+  assert.equal('DOTNET_GCHeapHardLimit' in boxEnv({ dirs, stack: 'node', memoryMaxBytes: 256 * MIB }), false, 'Node has no .NET key');
+  assert.equal(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 256 * MIB }).NODE_OPTIONS, '', 'a .NET box keeps the empty base NODE_OPTIONS');
+  for (const bare of [boxEnv({ dirs }), driverEnv({ dirs, tmp: '/t/x' })]) {
+    assert.equal('DOTNET_GCHeapHardLimit' in bare, false, 'a box for no stack (the build box, the driver) gets no hard limit');
+    assert.equal(bare.NODE_OPTIONS, '', 'a box for no stack (the build box, the driver) gets no old-space flag');
+    assert.deepEqual(caseKeysIn(bare), []);
+  }
   assert.deepEqual(Object.keys(boxEnv({ dirs, stack: 'csharp', memoryMaxBytes: 256 * MIB })).sort(), [...ALLOW_LIST].sort(), 'the key is on the allow-list');
   assert.deepEqual(STACK_KEYS, { csharp: ['DOTNET_GCHeapHardLimit'] });
-  assert.throws(() => boxEnv({ dirs, stack: 'csharp' }), /memoryMaxBytes/, 'the limit is not a guess');
   assert.throws(() => boxEnv({ dirs, extra: { DOTNET_GCHeapHardLimit: '0x1' } }), /DOTNET_GCHeapHardLimit/, 'an extra cannot set it');
+  assert.throws(() => boxEnv({ dirs, extra: { NODE_OPTIONS: '--max-old-space-size=1' } }), /NODE_OPTIONS/, 'an extra cannot set the flag');
 });
+
+test('The_limit_of_a_scoring_box_is_a_whole_MiB_and_a_missing_one_throws_for_both_stacks', () => {
+  const MIB = 1024 * 1024;
+  for (const stack of ['csharp', 'node']) {
+    for (const bad of [undefined, null, 0, -MIB, NaN, 1.5 * MIB, 256 * MIB + 1, '256']) {
+      assert.throws(() => boxEnv({ dirs, stack, memoryMaxBytes: bad }), /memoryMaxBytes/, `${stack}: ${String(bad)}`);
+      assert.throws(() => heapKeys(stack, bad), /memoryMaxBytes/);
+    }
+  }
+  assert.deepEqual(heapKeys(undefined, 256 * MIB), {}, 'no stack named: no key');
+});
+
+test('A_per_case_heap_key_in_the_agent_box_or_the_build_box_environment_fails_the_guard', () => {
+  // T-L14: the two keys are the scoring box's alone. A test plants one in v1's agent box environment (an `extra` may add a key) and the guard names it.
+  const root = mkdtempSync(path.join(tmpdir(), 'envg-'));
+  const layout = sessionLayout(root, 'g1').value;
+  try {
+    guardAgentBox(layout);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function guardAgentBox(layout) {
+  const agent = extra => agentEnv({ layout, dummyToken: 'x', cellId: 'c', nodeDir: '/t/node', extra });
+  assert.deepEqual(caseKeysIn(agent({})), [], 'the agent box as it is carries neither key');
+  assert.doesNotThrow(() => assertNoCaseKeys(agent({}), 'the agent box'));
+  assert.deepEqual(caseKeysIn(agent({ DOTNET_GCHeapHardLimit: '0xe666666' })), ['DOTNET_GCHeapHardLimit']);
+  assert.throws(() => assertNoCaseKeys(agent({ DOTNET_GCHeapHardLimit: '0xe666666' }), 'the agent box'), /the agent box.*DOTNET_GCHeapHardLimit/);
+  assert.throws(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--max-old-space-size=230' }), 'the agent box'), /NODE_OPTIONS/);
+  assert.throws(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--trace-warnings --max-old-space-size=230' }), 'the agent box'), /NODE_OPTIONS/);
+  assert.doesNotThrow(() => assertNoCaseKeys(agent({ NODE_OPTIONS: '--trace-warnings' }), 'the agent box'), 'another flag is not a case key');
+  assert.throws(() => assertNoCaseKeys({ dotnet_gchardlimit: 1, DOTNET_GCHEAPHARDLIMIT: '0x1' }, 'a build box'), /a build box/, 'the guard is case-insensitive: a spelling in another case is refused as well');
+}
 
 test('No_invariant_globalization_switch_is_in_the_allow_list', () => {
   assert.deepEqual(ALLOW_LIST.filter(key => /INVARIANT/i.test(key)), []);
@@ -92,13 +141,15 @@ test('The_box_runs_Node_in_the_declared_culture_and_without_an_invariant_switch'
   assert.match(readFileSync(path.join(c.view, 'locale.txt'), 'utf8').trim(), /^de/, 'a Node probe\'s locale starts with de');
 });
 
-test('The_box_environment_of_the_dotnet_stack_carries_the_exact_hard_limit_at_256_and_512_MiB_and_Node_does_not', async t => {
+test('The_box_environment_of_each_stack_carries_ninety_percent_of_the_limit_at_256_and_512_MiB', async t => {
   if (!needs(t)) return;
   const MIB = 1024 * 1024;
-  for (const [mib, hex] of [[256, '0x10000000'], [512, '0x20000000']]) {
+  for (const [mib, hex, oldSpace] of [[256, '0xe666666', 230], [512, '0x1ccccccc', 460]]) {
     const dotnet = await envOfBox(t, argv => argv, { stack: 'csharp', memoryMax: mib * MIB, caseId: `d${mib}` });
     assert.equal(dotnet.DOTNET_GCHeapHardLimit, hex, `.NET at ${mib} MiB`);
+    assert.equal(dotnet.NODE_OPTIONS, '', `.NET keeps the empty NODE_OPTIONS at ${mib} MiB`);
     const node = await envOfBox(t, argv => argv, { stack: 'node', memoryMax: mib * MIB, caseId: `n${mib}` });
     assert.equal('DOTNET_GCHeapHardLimit' in node, false, `Node at ${mib} MiB`);
+    assert.equal(node.NODE_OPTIONS, `--max-old-space-size=${oldSpace}`, `Node at ${mib} MiB`);
   }
 });

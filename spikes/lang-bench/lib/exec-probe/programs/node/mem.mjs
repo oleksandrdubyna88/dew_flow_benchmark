@@ -1,4 +1,4 @@
-// The execution probe's Node program (E1.S8b): a toy, never a task of the series. One argument, the mode: report, culture, churn, overlimit.
+// The execution probe's Node program (E1.S8b): a toy, never a task of the series. One argument, the mode (see MODES in programs.mjs).
 import fs from 'node:fs';
 import v8 from 'node:v8';
 import vm from 'node:vm';
@@ -63,6 +63,11 @@ const modes = {
     let sink = null;
     for (let i = 0; i < 22_000_000; i += 1) sink = { a: i, b: 1, c: 2, arr: [i, 1, 2, 3] };
     console.log(kept.length > 0 && sink !== null ? 'OK' : 'EMPTY');
+  },
+  'overlimit-objects'() { // live ordinary objects that only grow, to about 4 GiB
+    const kept = [];
+    for (let i = 0; i < 40_000_000; i += 1) kept.push({ a: i, b: i * 2, c: i * 3, arr: [i, 1, 2, 3] });
+    console.log(kept.length > 0 ? 'OK' : 'EMPTY');
   },
   overlimit() { // live data that only grows, to 3 GiB
     const kept = [];

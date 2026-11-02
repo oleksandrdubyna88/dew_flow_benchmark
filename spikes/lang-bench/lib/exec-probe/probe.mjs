@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fail } from '../../../minigit-bench/lib/result.mjs';
 import { observeAt } from './observe.mjs';
-import { assertMemoryView, exitCodeOf, readPolicy } from './memory.mjs';
+import { assertMemoryView, exitCodeOf, overLimitRows, readPolicy, workloadRows } from './memory.mjs';
 import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
@@ -29,7 +29,7 @@ async function observations({ owned, scope, dirs, csharpBuild, progress }) {
   const limits = [];
   for (const limit of LIMITS_MIB) {
     progress(`memory view at ${limit} MiB: start`);
-    limits.push(await observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes: limit * MIB }));
+    limits.push(await observeAt({ owned, scope, dirs, csharpBuild, memoryMaxBytes: limit * MIB, progress }));
     progress(`memory view at ${limit} MiB: done`);
   }
   return { limits };
@@ -80,6 +80,12 @@ function v8HeapRecord(observations) {
   return observations.limits.filter(at => at.node).map(at => ({ memoryMaxBytes: at.memoryMaxBytes, v8HeapSizeLimitBytes: at.node.heapSizeLimitBytes, ratio: Number((at.node.heapSizeLimitBytes / at.memoryMaxBytes).toFixed(3)), asserted: false }));
 }
 
+/** The peak/L of every over-limit fixture per stack and limit (J2) and the workloads' results: RECORDED; `findings` lists the over-limit rows within 10 points of 50 % — a finding for the team lead, never tuned around. */
+function ratiosOf(observations) {
+  const overLimit = overLimitRows(observations);
+  return { workloads: workloadRows(observations), overLimit, findings: overLimit.filter(row => row.finding) };
+}
+
 function verdictOf(memoryView) {
   const unobserved = memoryView.observations.limits.filter(at => at.problem);
   if (unobserved.length > 0) return { ok: false, halt: 'memory-view-unobserved', problems: unobserved.map(at => at.problem) };
@@ -91,7 +97,7 @@ export function finish({ found, memoryView, now, identity }) {
   const failedLine = found.find(line => !line.ok);
   const verdict = verdictOf(memoryView);
   const halt = failedLine === undefined ? verdict.halt : failedLine.halt ?? failedLine.id;
-  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
+  const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations), ...ratiosOf(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
   const problems = recordProblems(record);
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };
 }

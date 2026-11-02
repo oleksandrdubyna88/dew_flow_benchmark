@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { computeIdentity, LAYER_DIR, SPIKES_ROOT, verifyIdentity } from '../lib/exec-layer/identity.mjs';
+import { MEMORY_POLICY, POLICY_FILE } from '../lib/exec-layer/policy.mjs';
 import { runCases } from '../lib/exec-layer/run.mjs';
 import { needs } from './support/exec-layer-host.mjs';
 import { layerOptions } from './support/exec-tree.mjs';
@@ -127,4 +128,45 @@ test('A_data_run_refuses_a_layer_that_is_not_the_pinned_identity_and_every_resul
   assert.equal(notData.treeSha256, live);
   const missing = await runCases({ ...layerOptions(t, { data: true }), pinnedIdentityFile: path.join(folder, 'absent.json') });
   assert.equal(missing.halt, 'layer-identity-mismatch', 'no pinned identity is no identity to check against: a data run refuses');
+});
+
+const POLICY_PATH = 'lang-bench/inputs/specs.d/memory-policy.json';
+
+test('The_memory_policy_file_is_part_of_the_layer_identity_and_a_byte_of_it_changes_the_hash', t => {
+  const real = computeIdentity(LAYER_DIR).value.execLayer;
+  assert.ok(real.files.some(file => file.path === POLICY_PATH), `${POLICY_PATH} is in the identity (parent §6.1: the policy is one identity of the series)`);
+  assert.equal(path.relative(SPIKES_ROOT, POLICY_FILE).split(path.sep).join('/'), POLICY_PATH);
+  const root = syntheticLayer(t);
+  const policy = path.join(root, POLICY_PATH);
+  writeTree(root, { [POLICY_PATH]: `${JSON.stringify({ policy: MEMORY_POLICY })}\n` });
+  const dir = path.join(root, 'lang-bench', 'lib', 'exec-layer');
+  const base = computeIdentity(dir, { root, policyFile: policy });
+  assert.ok(base.value.execLayer.files.some(file => file.path === POLICY_PATH), 'the synthetic identity lists it too');
+  writeFileSync(policy, `${JSON.stringify({ policy: MEMORY_POLICY })} \n`);
+  const edited = computeIdentity(dir, { root, policyFile: policy });
+  assert.notEqual(edited.value.execLayer.treeSha256, base.value.execLayer.treeSha256, 'one byte of the policy file changes the layer identity');
+  assert.match(verifyIdentity(dir, base.value, { root, policyFile: policy }).reason, new RegExp(`${POLICY_PATH.replace(/\./g, '\\.')} changed`));
+  assert.equal(computeIdentity(dir, { root }).value.execLayer.files.some(file => file.path === POLICY_PATH), false, 'a layer folder that is not the real one lists no policy unless it is given');
+});
+
+test('A_data_run_refuses_a_memory_policy_other_than_the_pinned_one_exit_3_memory_view_mismatch', async t => {
+  const folder = owned.ownedDir(t, 'policies');
+  const file = (name, content) => { const target = path.join(folder, name); writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content)); return target; };
+  const decided = policy => ({ policy, decided: '2026-11-02', by: 'team lead', evidence: [] });
+  const others = [file('old.json', decided('cgroup-view-own+gchl-limit')), file('ro.json', decided('cgroup-view-readonly')), file('undecided.json', { policy: null, decided: null, by: null }),
+    file('bad.json', '{ not json'), path.join(folder, 'absent.json')];
+  for (const policyFile of others) {
+    const refused = await runCases({ ...layerOptions(t, { data: true }), policyFile });
+    assert.equal(refused.exitCode, 3, policyFile);
+    assert.equal(refused.halt, 'memory-view-mismatch', policyFile);
+    assert.match(refused.stderr, /memory-view-mismatch.*cgroup-view-own\+gchl-90\+node-old-space-90/s, 'the message names the pinned policy');
+    assert.equal(refused.record, null, 'no case was started');
+  }
+  const notData = await runCases({ ...layerOptions(t, { data: false }), policyFile: others[0] });
+  assert.notEqual(notData.halt, 'memory-view-mismatch', 'a non-data run does not read the policy');
+  if (!needs(t)) return;
+  const accepted = await runCases({ ...layerOptions(t, { data: true }), policyFile: file('right.json', decided(MEMORY_POLICY)) });
+  assert.equal(accepted.exitCode, 0, accepted.stderr);
+  const committed = await runCases({ ...layerOptions(t, { data: true }) });
+  assert.equal(committed.exitCode, 0, `the committed policy file is the pinned one: ${committed.stderr}`);
 });

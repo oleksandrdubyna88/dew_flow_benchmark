@@ -8,22 +8,30 @@ import { findOnPath } from '../../../minigit-bench/lib/find-on-path.mjs';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { boxArgv } from '../exec-layer/box.mjs';
-import { boxEnv } from '../exec-layer/env.mjs';
+import { assertNoCaseKeys, boxEnv } from '../exec-layer/env.mjs';
 import { factsScript } from './facts.mjs';
 
 const PROGRAMS = fileURLToPath(new URL('./programs/', import.meta.url));
 const BUILD_MS = 180_000;
 export const STACKS = Object.freeze(['csharp', 'node']);
-export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit', 'medium-buffers', 'medium-objects', 'near-limit', 'objects-70', 'mixed']);
+export const MODES = Object.freeze(['report', 'culture', 'churn', 'overlimit', 'medium-buffers', 'medium-objects', 'near-limit', 'objects-70', 'mixed', 'overlimit-objects']);
 const COMMAND = Object.freeze({ csharp: mode => `exec dotnet bin/mem.dll ${mode}`, node: mode => `exec node mem.mjs ${mode}` });
 const BUILD_ARGS = Object.freeze(['dotnet', 'build', 'mem.csproj', '-c', 'Release', '-o', 'bin', '-m:4', '--nologo', '-v', 'q']);
+
+const BUILD_EXTRA = Object.freeze({ NUGET_PACKAGES: '/tmp/pk', DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' });
+
+/** The build box's environment: the base for no stack in particular, the build's own extras, and never one of D55's per-case heap keys (T-L14, §4.3) — asserted where it is made. */
+export function buildBoxEnv({ dirs }) {
+  const env = boxEnv({ dirs, extra: BUILD_EXTRA });
+  assertNoCaseKeys(env, 'the build box');
+  return env;
+}
 
 /** `ok(folder)` holding the built C# program (`bin/mem.dll`), made in an owned folder of `scope`, or `fail(reason)`. */
 export async function buildCsharp({ owned, scope, dirs }) {
   const folder = owned.ownedDir(scope, 'probebuild');
   cpSync(path.join(PROGRAMS, 'csharp'), folder, { recursive: true });
-  const extra = { NUGET_PACKAGES: '/tmp/pk', DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' };
-  const box = boxArgv({ view: folder, dirs, env: boxEnv({ dirs, extra }), bwrap: findOnPath('bwrap') ?? 'bwrap', prog: null });
+  const box = boxArgv({ view: folder, dirs, env: buildBoxEnv({ dirs }), bwrap: findOnPath('bwrap') ?? 'bwrap', prog: null });
   const built = await runBounded(box[0], [...box.slice(1), ...BUILD_ARGS], { timeoutMs: BUILD_MS, env: { PATH: '/usr/bin:/bin' } });
   return built.ok && built.value.code === 0 ? ok(folder) : fail(`the C# probe program did not build in the box: ${built.ok ? built.value.stdout + built.value.stderr : built.reason}`);
 }

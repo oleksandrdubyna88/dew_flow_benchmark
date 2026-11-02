@@ -18,6 +18,7 @@ import { certifyMemory, HALT } from './certify.mjs';
 import { cleanup, sweepStale } from './cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './identity.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
+import { HALT_POLICY, MEMORY_POLICY, policyVerdict } from './policy.mjs';
 import { holderNameOf, RUN_WHAT, runIdOf, tooLongForUnit, unitPrefixOf } from './names.mjs';
 import { startHolder } from './netns.mjs';
 import { HOLD_MARGIN_S, launchPrefix, programArgv, requiredWallSeconds, runnerArgv } from './prefix.mjs';
@@ -169,16 +170,21 @@ async function body(run, options) {
   return { halt: null, ...(await drive(run, certification)) };
 }
 
+/** A run that stopped before anything started: exit 3 naming the halt, no record, nothing to clean. */
+const refusal = (stderr, halt) => ({ exitCode: EXIT_ENVIRONMENT, stdout: '', stderr, record: null, halt, memoryCertified: false, sweep: { retired: [], kept: [] }, cleanup: { evidence: {}, removed: [], left: [], clean: true } });
+
 /**
- * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `options` are those of `openRun` plus `data` (a data run: certification refuses, and so does a layer that is not the pinned identity, halt `layer-identity-mismatch`, `pinnedIdentityFile` to name another), 
+ * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `options` are those of `openRun` plus `data` (a data run: certification refuses, and so does a layer that is not the pinned identity, halt `layer-identity-mismatch`, `pinnedIdentityFile` to name another; and a memory policy other than the pinned one, halt `memory-view-mismatch`, `policyFile` to name another file), 
  * `minSweepAgeMs` (the startup sweep's age floor, default 10 minutes), `observe(run)` (called once the run is open and before anything starts) and `deps` (the seams of `certifyMemory`). `exitCode` is the runner's (0 passed, 1 a case failed, 3 environment, 4 configuration,
  * 5 the runner or the layer failed); `halt` is `'memory-not-certifiable'` for a data run that stopped before any case; `record` is the runner's `--json` or null. Never throws.
  */
 export async function runCases(options) {
   const identity = identityVerdict(options.pinnedIdentityFile ?? PINNED_IDENTITY);
   if (options.data && !identity.matches) {
-    return { exitCode: EXIT_ENVIRONMENT, stdout: '', stderr: `${IDENTITY_HALT}: the layer's tree ${identity.treeSha256} is not the pinned identity (${options.pinnedIdentityFile ?? PINNED_IDENTITY})`, record: null, halt: IDENTITY_HALT, memoryCertified: false, treeSha256: identity.treeSha256, sweep: { retired: [], kept: [] }, cleanup: { evidence: {}, removed: [], left: [], clean: true } };
+    return { ...refusal(`${IDENTITY_HALT}: the layer's tree ${identity.treeSha256} is not the pinned identity (${options.pinnedIdentityFile ?? PINNED_IDENTITY})`, IDENTITY_HALT), treeSha256: identity.treeSha256 };
   }
+  const policy = options.data ? policyVerdict(options.policyFile) : { matches: true };
+  if (!policy.matches) return { ...refusal(`${HALT_POLICY}: the memory policy is ${policy.found === null ? 'missing, undecided or unreadable' : `"${policy.found}"`}, the pinned one is "${MEMORY_POLICY}" (D55): a data run refuses another`, HALT_POLICY), treeSha256: identity.treeSha256 };
   const result = await runCasesChecked(options);
   return { ...result, treeSha256: identity.treeSha256 };
 }

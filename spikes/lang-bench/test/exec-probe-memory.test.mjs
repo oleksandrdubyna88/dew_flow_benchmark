@@ -4,18 +4,22 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assertMemoryView, exitCodeOf, POLICY_DECIDED, POLICY_NAMES, readPolicy, validatePolicy } from '../lib/exec-probe/memory.mjs';
+import { assertMemoryView, exitCodeOf, isRatioFinding, overLimitRows, peakRatio, POLICY_DECIDED, POLICY_NAMES, POLICY_SUPERSEDED, readPolicy, validatePolicy, workloadAsserted, workloadRows } from '../lib/exec-probe/memory.mjs';
 import { owned } from './support/owned.mjs';
 import { spikeDir } from './support/exec-layer-host.mjs';
 
 const MIB = 1024 * 1024;
+const WORKLOADS = ['medium-buffers', 'medium-objects', 'objects-70', 'mixed'];
+const workload = (status, limit, peak = 0.7) => ({ status, reason: status === 'PASS' ? '' : 'memory limit', oomKill: status === 'PASS' ? 0 : 1, runtimeAbort: null, peakBytes: Math.floor(peak * limit * MIB) });
 /** What the probe saw at one limit on this host BEFORE OP-K was decided (2026-11-02): .NET sized to the host, Node unconstrained, no cgroup in the box; both stacks behave. */
 const seen = (limit, over = {}) => ({
   memoryMaxBytes: limit * MIB, hostMemoryMax: limit * MIB,
   csharp: { totalAvailableBytes: 46_288_662_528, heapHardLimit: '', cgroupVisible: false, cgroupSelf: '', cgroupChildren: null },
   node: { constrainedBytes: 0, heapSizeLimitBytes: 4_395_630_592, cgroupVisible: false, cgroupSelf: '', cgroupChildren: null },
   churn: { csharp: 'PASS', node: 'PASS' },
+  workloads: { csharp: Object.fromEntries(WORKLOADS.map(mode => [mode, workload('PASS', limit)])), node: Object.fromEntries(WORKLOADS.map(mode => [mode, workload('PASS', limit)])) },
   overLimit: { csharp: { reason: 'memory limit', oomKill: 1, peakBytes: limit * MIB, eventsKept: true }, node: { reason: 'memory limit', oomKill: 1, peakBytes: limit * MIB, eventsKept: true } },
+  overLimitObjects: { csharp: { reason: 'memory limit', oomKill: 1, peakBytes: limit * MIB, eventsKept: true }, node: { reason: 'memory limit', oomKill: 1, peakBytes: limit * MIB, eventsKept: true } },
   ...over,
 });
 const both = over => ({ limits: [seen(256, over), seen(512, over)] });
@@ -75,8 +79,9 @@ test('A_memory_max_that_is_not_the_one_asked_for_is_a_mismatch_under_every_polic
 });
 
 test('A_policy_is_one_of_the_three_names_or_null_and_an_unknown_one_names_the_legal_values', () => {
-  assert.deepEqual([...POLICY_NAMES], ['runtime-view-accepted', 'dotnet-gc-hard-limit-percent:<n>', 'cgroup-view-readonly', 'cgroup-view-own+gchl-limit']);
-  for (const policy of [null, 'runtime-view-accepted', 'cgroup-view-readonly', 'cgroup-view-own+gchl-limit', 'dotnet-gc-hard-limit-percent:75']) assert.equal(validatePolicy({ policy, decided: '2026-11-02', by: 'team lead' }).ok, true, String(policy));
+  assert.deepEqual([...POLICY_NAMES], ['runtime-view-accepted', 'dotnet-gc-hard-limit-percent:<n>', 'cgroup-view-readonly', 'cgroup-view-own+gchl-limit', 'cgroup-view-own+gchl-90+node-old-space-90']);
+  assert.equal(POLICY_SUPERSEDED, 'cgroup-view-own+gchl-limit', 'the 100 % name of the first decision is kept: its evidence records name it');
+  for (const policy of [null, 'runtime-view-accepted', 'cgroup-view-readonly', 'cgroup-view-own+gchl-limit', 'cgroup-view-own+gchl-90+node-old-space-90', 'dotnet-gc-hard-limit-percent:75']) assert.equal(validatePolicy({ policy, decided: '2026-11-02', by: 'team lead' }).ok, true, String(policy));
   for (const policy of ['dotnet-gc-hard-limit-percent:0', 'dotnet-gc-hard-limit-percent:101', 'dotnet-gc-hard-limit-percent:', 'whatever', '']) {
     const verdict = validatePolicy({ policy, decided: '2026-11-02', by: 'x' });
     assert.equal(verdict.ok, false, JSON.stringify(policy));
@@ -85,13 +90,13 @@ test('A_policy_is_one_of_the_three_names_or_null_and_an_unknown_one_names_the_le
   assert.equal(validatePolicy({ policy: 'cgroup-view-readonly' }).ok, false, 'a decided policy says when and by whom');
 });
 
-test('The_committed_policy_file_is_the_decision_of_OP_K_with_its_evidence', () => {
+test('The_committed_policy_file_is_the_decision_of_D55_with_its_evidence', () => {
   const read = readPolicy(path.join(spikeDir, 'inputs', 'specs.d', 'memory-policy.json'));
   assert.ok(read.ok, read.reason);
   assert.equal(read.value.policy, POLICY_DECIDED);
-  assert.equal(read.value.policy, 'cgroup-view-own+gchl-limit');
+  assert.equal(read.value.policy, 'cgroup-view-own+gchl-90+node-old-space-90');
   assert.equal(read.value.decided, '2026-11-02');
-  assert.match(read.value.by, /team lead.*D15 OP-K/);
+  assert.match(read.value.by, /team lead.*D55/);
   assert.deepEqual(read.value.evidence, ['inputs/exec-probe-2026-11-02.json', 'inputs/opk-experiment-2026-11-02.json']);
   for (const file of read.value.evidence) assert.ok(readFileSync(path.join(spikeDir, file), 'utf8').length > 0, `${file} exists`);
 });
@@ -106,30 +111,60 @@ test('A_policy_file_that_is_missing_or_malformed_is_a_failure_and_not_undecided'
   assert.ok(readFileSync(path.join(dir, 'ok.json'), 'utf8').includes('null'));
 });
 
-/** What the probe sees under the decided policy: each program in its own cgroup view, .NET's hard limit equal to the limit. */
+/** D55: the share of L the runtimes may use, ⌊0.9·L⌋. */
+const ninety = limit => Math.floor(0.9 * limit * MIB);
+/** What the probe sees under the decided policy (D55): each program in its own cgroup view, .NET's hard limit 90 % of L (so `TotalAvailableMemoryBytes` is ⌊0.9·L⌋), Node's `constrainedMemory()` L and V8's heap 90 % of L plus the young space. */
 const viewed = (limit, over = {}) => seen(limit, {
-  csharp: { totalAvailableBytes: limit * MIB, heapHardLimit: '', cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 },
-  node: { constrainedBytes: limit * MIB, heapSizeLimitBytes: 262 * MIB, cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 },
+  csharp: { totalAvailableBytes: ninety(limit), heapHardLimit: '', cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 },
+  node: { constrainedBytes: limit * MIB, heapSizeLimitBytes: ninety(limit) + 5 * MIB, cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 },
   ...over,
 });
 const decided = observations => assertMemoryView({ policy: POLICY_DECIDED, observations });
+const cs = (total, over = {}) => ({ totalAvailableBytes: total, heapHardLimit: '', cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0, ...over });
+const nd = (constrained, heap, over = {}) => ({ constrainedBytes: constrained, heapSizeLimitBytes: heap, cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0, ...over });
 
-test('The_decided_policy_holds_when_each_stack_believes_prog_memory_max_in_its_own_cgroup_view', () => {
+test('The_decided_policy_holds_when_dotnet_believes_ninety_percent_and_node_the_limit_in_their_own_cgroup_view', () => {
   assert.deepEqual(decided({ limits: [viewed(256), viewed(512)] }), { ok: true, halt: null, problems: [] });
+  assert.equal(viewed(256).csharp.totalAvailableBytes, 241_591_910);
+  assert.equal(viewed(512).csharp.totalAvailableBytes, 483_183_820);
 });
 
-test('The_decided_policy_names_a_dotnet_that_believes_less_or_more_than_prog_memory_max', () => {
-  const capped = decided({ limits: [viewed(256, { csharp: { totalAvailableBytes: 192 * MIB, heapHardLimit: '', cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 } })] });
+test('The_decided_policy_names_a_dotnet_that_believes_the_limit_or_the_old_seventy_five_percent_and_not_ninety', () => {
+  const full = decided({ limits: [viewed(256, { csharp: cs(256 * MIB) })] });
+  assert.equal(full.ok, false, 'at 100 % the runtime has no room for its own memory (D55)');
+  assert.match(full.problems.join('\n'), /csharp at 256 MiB: TotalAvailableMemoryBytes is 256 MiB, not 90 % of prog\/memory\.max \(241591910 bytes\)/);
+  const capped = decided({ limits: [viewed(256, { csharp: cs(192 * MIB) })] });
   assert.equal(capped.ok, false, '.NET under the view alone caps itself at 75 %');
   assert.match(capped.problems.join('\n'), /csharp at 256 MiB: TotalAvailableMemoryBytes is 192 MiB/);
   assert.equal(decided({ limits: [seen(256)] }).ok, false, 'today\'s box (no view) is a mismatch: .NET believes the host\'s memory');
+  assert.equal(decided({ limits: [viewed(256, { csharp: cs(241_591_911) })] }).ok, false, 'one byte over floor(0.9 L) is a mismatch: the check is exact');
+  assert.equal(decided({ limits: [viewed(256, { csharp: cs(241_591_909) })] }).ok, false, 'and so is one byte under');
 });
 
 test('The_decided_policy_names_a_node_that_believes_another_limit_and_a_cgroup_that_is_not_only_its_own', () => {
-  const node = decided({ limits: [viewed(512, { node: { constrainedBytes: 0, heapSizeLimitBytes: 1, cgroupVisible: true, cgroupSelf: '0::/', cgroupChildren: 0 } })] });
+  const node = decided({ limits: [viewed(512, { node: nd(0, 1) })] });
   assert.match(node.problems.join('\n'), /node at 512 MiB: constrainedMemory is 0 MiB/);
-  const sibling = decided({ limits: [viewed(256, { csharp: { totalAvailableBytes: 256 * MIB, heapHardLimit: '', cgroupVisible: true, cgroupSelf: '0::/user.slice/x/prog', cgroupChildren: 2 } })] });
+  assert.equal(decided({ limits: [viewed(512, { node: nd(ninety(512), ninety(512) + MIB) })] }).ok, false, 'Node\'s constrainedMemory is L, not 90 % of it: the flag is the heap\'s, the view is the limit');
+  const sibling = decided({ limits: [viewed(256, { csharp: cs(ninety(256), { cgroupSelf: '0::/user.slice/x/prog', cgroupChildren: 2 }) })] });
   assert.match(sibling.problems.join('\n'), /not only its own/);
+});
+
+test('The_decided_policy_asserts_that_V8_heap_size_limit_is_in_ninety_percent_of_L_up_to_L_exclusive', () => {
+  const at = (limit, heap) => decided({ limits: [viewed(limit, { node: nd(limit * MIB, heap) })] });
+  assert.equal(at(256, ninety(256)).ok, true, 'exactly 90 % of L is in');
+  assert.equal(at(256, 256 * MIB - 1).ok, true, 'one byte under L is in');
+  const low = at(256, ninety(256) - 1);
+  assert.equal(low.ok, false, 'one byte under 90 % is out');
+  assert.match(low.problems.join('\n'), /node at 256 MiB: V8 heap_size_limit is 241591909 bytes, not in \[241591910, 268435456\)/);
+  assert.equal(at(256, 256 * MIB).ok, false, 'L itself is out: the heap must leave room');
+  const stale = at(512, 281_000_000);
+  assert.equal(stale.ok, false, 'the view alone sized V8 to about 268 MiB whatever the cgroup (followUp3): 281 MB at 512 MiB is below 90 % of 512 MiB');
+});
+
+test('The_superseded_100_percent_policy_is_still_judged_by_its_own_rule_so_its_evidence_record_stays_readable', () => {
+  const hundred = (limit, over = {}) => viewed(limit, { csharp: cs(limit * MIB), node: nd(limit * MIB, 262 * MIB), ...over });
+  assert.deepEqual(assertMemoryView({ policy: POLICY_SUPERSEDED, observations: { limits: [hundred(256), hundred(512)] } }), { ok: true, halt: null, problems: [] });
+  assert.equal(assertMemoryView({ policy: POLICY_SUPERSEDED, observations: { limits: [viewed(256)] } }).ok, false);
 });
 
 test('Under_the_decided_policy_the_behaviour_is_still_asserted_the_dotnet_abort_is_memory_limit', () => {
@@ -137,4 +172,65 @@ test('Under_the_decided_policy_the_behaviour_is_still_asserted_the_dotnet_abort_
   assert.equal(abortAsError.ok, false, 'without the runner rule (change 5.1) .NET\'s abort is "exit status 134" and the policy is not met');
   const abortRule = decided({ limits: [viewed(256, { overLimit: { csharp: { reason: 'memory limit', oomKill: 0, runtimeAbort: 'dotnet', peakBytes: 197 * MIB, eventsKept: true }, node: { reason: 'memory limit', oomKill: 1, runtimeAbort: null, peakBytes: 256 * MIB, eventsKept: true } } })] });
   assert.equal(abortRule.ok, true, 'a runtime\'s own abort is memory limit with the evidence kept');
+});
+
+const withWorkload = (stack, mode, status, limit = 256) => ({ workloads: { ...seen(limit).workloads, [stack]: { ...seen(limit).workloads[stack], [mode]: workload(status, limit) } } });
+const judged = (limit, over) => decided({ limits: [viewed(limit, over)] });
+
+test('T_L43_asserts_the_object_graph_regression_and_the_medium_workloads_in_both_stacks_at_both_limits', () => {
+  for (const mode of ['medium-buffers', 'medium-objects', 'objects-70']) {
+    for (const stack of ['csharp', 'node']) {
+      const verdict = judged(512, withWorkload(stack, mode, 'FAIL', 512));
+      assert.equal(verdict.ok, false, `${stack} ${mode} at 512 MiB must pass`);
+      assert.match(verdict.problems.join('\n'), new RegExp(`${stack} at 512 MiB: the ${mode} workload did not pass`));
+    }
+  }
+  assert.equal(judged(256, withWorkload('csharp', 'medium-buffers', 'FAIL')).ok, false, '.NET medium-buffers at 256 MiB is asserted');
+  assert.equal(judged(256, withWorkload('node', 'objects-70', 'FAIL')).ok, false, 'objects-70 in Node at 256 MiB is asserted: the object-graph regression');
+  assert.equal(judged(256, { workloads: { csharp: {}, node: seen(256).workloads.node } }).ok, false, 'a workload that was not run cannot pass silently');
+});
+
+test('Node_medium_buffers_at_256_MiB_and_the_mixed_workload_are_recorded_and_never_asserted_T21', () => {
+  assert.equal(judged(256, withWorkload('node', 'medium-buffers', 'FAIL', 256)).ok, true, 'Node typed arrays live outside the V8 heap: a runtime property (T21)');
+  assert.equal(judged(512, withWorkload('node', 'medium-buffers', 'FAIL', 512)).ok, false, 'but at 512 MiB it is asserted');
+  for (const stack of ['csharp', 'node']) for (const limit of [256, 512]) assert.equal(judged(limit, withWorkload(stack, 'mixed', 'FAIL', limit)).ok, true, `mixed in ${stack} at ${limit} MiB is recorded, not asserted`);
+  assert.equal(workloadAsserted('node', 'medium-buffers', 256), false);
+  assert.equal(workloadAsserted('node', 'medium-buffers', 512), true);
+  assert.equal(workloadAsserted('csharp', 'mixed', 256), false);
+  assert.equal(workloadAsserted('csharp', 'objects-70', 256), true);
+  const rows = workloadRows({ limits: [viewed(256, withWorkload('node', 'mixed', 'FAIL')), viewed(512)] });
+  const failed = rows.find(row => row.stack === 'node' && row.mode === 'mixed' && row.memoryMaxBytes === 256 * MIB);
+  assert.deepEqual([failed.status, failed.asserted], ['FAIL', false], 'the failed mixed workload is in the rows, flagged not asserted');
+  assert.equal(rows.length, 2 * 2 * 4 + 2 * 2, 'four workloads and the churn, per stack and limit');
+});
+
+test('The_peak_over_L_of_an_over_limit_fixture_is_recorded_and_a_ratio_within_10_points_of_half_is_a_finding_J2', () => {
+  const L = 256 * MIB;
+  assert.equal(peakRatio(L, L), 1);
+  assert.equal(peakRatio(Math.floor(0.904 * L), L), 0.904);
+  assert.equal(peakRatio(null, L), null, 'an unknown peak is not zero');
+  assert.equal(isRatioFinding(Math.ceil(0.4 * L), L), true, '40 % is within 10 points of 50 %');
+  assert.equal(isRatioFinding(Math.floor(0.6 * L), L), true, '60 % too');
+  assert.equal(isRatioFinding(Math.ceil(0.4 * L) - 1, L), false, 'a byte under 40 %');
+  assert.equal(isRatioFinding(Math.floor(0.6 * L) + 1, L), false, 'a byte over 60 %');
+  assert.deepEqual([isRatioFinding(400, 1000), isRatioFinding(600, 1000), isRatioFinding(399, 1000), isRatioFinding(601, 1000)], [true, true, false, false], 'exactly 40 % and 60 % are in: the band is closed');
+  assert.equal(isRatioFinding(L / 2, L), true);
+  assert.equal(isRatioFinding(null, L), false);
+  const overLimit = { csharp: { reason: 'memory limit', oomKill: 0, runtimeAbort: 'dotnet', peakBytes: Math.floor(0.52 * L), eventsKept: true }, node: { reason: 'memory limit', oomKill: 1, runtimeAbort: null, peakBytes: L, eventsKept: true } };
+  const rows = overLimitRows({ limits: [viewed(256, { overLimit, overLimitObjects: overLimit })] });
+  assert.deepEqual(rows.map(row => [row.stack, row.fixture, row.memoryMaxBytes, row.ratio, row.finding]), [
+    ['csharp', 'overlimit', L, 0.52, true], ['node', 'overlimit', L, 1, false], ['csharp', 'overlimit-objects', L, 0.52, true], ['node', 'overlimit-objects', L, 1, false],
+  ]);
+  assert.equal(rows[0].reason, 'memory limit');
+  assert.equal(rows[0].runtimeAbort, 'dotnet');
+});
+
+test('Both_over_limit_fixtures_are_asserted_memory_limit_with_their_evidence_in_both_stacks', () => {
+  const abort = { reason: 'memory limit', oomKill: 0, runtimeAbort: 'v8', peakBytes: 250 * MIB, eventsKept: true };
+  assert.equal(judged(256, { overLimitObjects: { csharp: abort, node: abort } }).ok, true, 'a runtime abort with its evidence is memory limit');
+  const wrong = judged(256, { overLimitObjects: { csharp: { ...abort, reason: 'runtime error', runtimeAbort: null }, node: abort } });
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.problems.join('\n'), /csharp at 256 MiB: the overlimit-objects program ended "runtime error"/);
+  assert.match(judged(256, { overLimitObjects: { csharp: abort } }).problems.join('\n'), /node at 256 MiB: the overlimit-objects fixture was not run/);
+  assert.match(judged(256, { overLimitObjects: { csharp: { ...abort, eventsKept: false }, node: abort } }).problems.join('\n'), /memory\.peak and memory\.events were not kept/);
 });

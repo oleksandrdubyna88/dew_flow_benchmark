@@ -2,12 +2,13 @@
 // outside it that the layer imports, found by WALKING the static relative imports (fix batch 1, K0/O3): v1's `bwrap.mjs` builds the box's argv, `run.mjs` launches every child, `find-on-path.mjs`, `result.mjs`,
 // `preflight-box.mjs` and what they import. Entries are sorted paths relative to the spikes folder; the `execLayer` key of `inputs/specs.d/exec-layer.json` holds them with `treeSha256`, the hash of what
 // `sha256sum` would print for them (`<sha>  <path>`, one line each, in path order); `specs-record.mjs` assembles `inputs/specs.json`. A link or any other kind of entry inside the layer is refused: a hash
-// that did not cover what runs would be no identity. A test file or a fixture is not part of the layer.
+// that did not cover what runs would be no identity. The memory policy file (`inputs/specs.d/memory-policy.json`, D55) is part of it: the series' one memory policy is an identity of the series (parent §6.1). A test file or a fixture is not part of the layer.
 import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
+import { POLICY_FILE } from './policy.mjs';
 
 export const LAYER_DIR = fileURLToPath(new URL('.', import.meta.url)).replace(/\/$/, '');
 /** The folder the identity's paths are relative to: `spikes/`. */
@@ -41,14 +42,14 @@ function reachable(starts) {
   return [...seen];
 }
 
-/** `ok({ execLayer: { treeSha256, files: [{ path, sha256 }] } })` for the layer folder and what it imports, or `fail(reason)` naming an entry that is not a regular file. */
-export function computeIdentity(dir, { root = SPIKES_ROOT } = {}) {
+/** `ok({ execLayer: { treeSha256, files: [{ path, sha256 }] } })` for the layer folder, what it imports and the memory policy file (D55: the policy is part of the identity; the real layer folder lists it, another folder only when `policyFile` is given), or `fail(reason)` naming an entry that is not a regular file. */
+export function computeIdentity(dir, { root = SPIKES_ROOT, policyFile = dir === LAYER_DIR ? POLICY_FILE : null } = {}) {
   const entries = walk(dir);
   const bad = entries.find(entry => !entry.regular);
   if (bad) return fail(`${bad.relative} is not a regular file (a link or another kind of entry): the hash would not cover what runs`);
   const own = entries.map(entry => path.join(dir, entry.relative));
   const inside = file => file.startsWith(`${dir}${path.sep}`);
-  const listed = [...new Set([...own, ...reachable(own.filter(file => SOURCE.test(file))).filter(file => !inside(file))])];
+  const listed = [...new Set([...own, ...reachable(own.filter(file => SOURCE.test(file))).filter(file => !inside(file)), ...(policyFile === null ? [] : [policyFile])])];
   const files = listed.map(file => ({ path: path.relative(root, file).split(path.sep).join('/'), sha256: sha256(readFileSync(file)) })).sort((a, b) => (a.path < b.path ? -1 : 1));
   const manifest = files.map(file => `${file.sha256}  ${file.path}\n`).join('');
   return ok({ execLayer: { treeSha256: sha256(manifest), files } });
