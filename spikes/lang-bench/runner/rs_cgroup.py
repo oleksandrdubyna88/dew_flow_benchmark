@@ -139,28 +139,67 @@ def kill(directory):
         raise ex.CleanupFailed(f"cgroup.kill of {directory} could not be written: {type(e).__name__}: {e}") from e
 
 
-def _still_listed(directory, pid):
-    return pid in (procs(directory) or [])
+PIDFD_BATCH = 64  # the most pidfds held open at once by `kill_pids`
 
 
-def _signal_through_pidfd(directory, pid):
-    """Pin `pid` with a pidfd, check that it is STILL listed in the cgroup, and only then signal it, through that pidfd: a pid that left the
-    cgroup between the listing and the signal (and may be someone else's now) is never signalled. A pid the runner may not signal is left to
-    the emptiness check that follows."""
-    fd = ex.pidfd_open(pid)
+def _pidfd_open(pid):
+    """A pidfd for `pid`, or None when the process is gone (or the kernel has none). Running out of descriptors (EMFILE, ENFILE) is raised."""
     try:
-        if fd is not None and _still_listed(directory, pid):
-            signal.pidfd_send_signal(fd, signal.SIGKILL)
+        return os.pidfd_open(pid)
+    except OSError as e:
+        if e.errno in (errno.EMFILE, errno.ENFILE):
+            raise
+        return None
+    except AttributeError:
+        return None
+
+
+def _pin(pids):
+    """({pid: pidfd} for the pids that could be pinned, in order, the pids not tried): the pinning stops at the first pid for which the
+    process has no descriptor left."""
+    held = {}
+    for index, pid in enumerate(pids):
+        try:
+            fd = _pidfd_open(pid)
+        except OSError:
+            return held, pids[index:]
+        if fd is not None:
+            held[pid] = fd
+    return held, []
+
+
+def _send_kill(fd):
+    """SIGKILL through the pidfd. A process the runner may not signal is left to the emptiness check that follows."""
+    try:
+        signal.pidfd_send_signal(fd, signal.SIGKILL)
     except (ProcessLookupError, PermissionError):
         pass
+
+
+def _still_listed(directory, held):
+    """The pids of `held` that `cgroup.procs` lists NOW (one read): a pid that left the cgroup in between may be someone else's by now."""
+    listed = procs(directory) or []
+    return [pid for pid in held if pid in listed]
+
+
+def _kill_held(directory, held):
+    """Signal, through its pidfd, each pid of the batch that is still listed (the listing is read ONCE), and close every pidfd."""
+    try:
+        for pid in _still_listed(directory, held):
+            _send_kill(held[pid])
     finally:
-        ex.close_fd(fd)
+        for fd in held.values():
+            ex.close_fd(fd)
 
 
 def kill_pids(directory):
-    """SIGKILL to each host pid `cgroup.procs` lists, each through a pidfd: the fallback when `cgroup.kill` cannot be written."""
-    for pid in procs(directory) or []:
-        _signal_through_pidfd(directory, pid)
+    """SIGKILL to each host pid `cgroup.procs` lists, each through a pidfd, in batches of at most `PIDFD_BATCH`: the fallback when `cgroup.kill`
+    cannot be written. A batch that runs out of descriptors signals what it holds and closes it, and what it did not try goes on in the next."""
+    pending = procs(directory) or []
+    while pending:
+        held, untried = _pin(pending[:PIDFD_BATCH])
+        _kill_held(directory, held)
+        pending = untried + pending[PIDFD_BATCH:] if held else pending[PIDFD_BATCH:]
 
 
 def _mountinfo():
@@ -173,13 +212,14 @@ def _unescape(path):
 
 
 def _mounts():
-    """(mount point, file system type) of every mount in /proc/self/mountinfo."""
+    """(mount point, file system type, root inside that file system) of every well-formed line of /proc/self/mountinfo: a line with too few
+    fields, or no ' - ' part, is skipped."""
     found = []
     for line in _mountinfo().splitlines():
         head, _, tail = line.partition(" - ")
         fields, kind = head.split(), tail.split()
         if len(fields) > 4 and kind:
-            found.append((_unescape(fields[4]), kind[0]))
+            found.append((_unescape(fields[4]), kind[0], _unescape(fields[3])))
     return found
 
 
@@ -188,15 +228,16 @@ def _under(path, mount):
 
 
 def _nearest_mount(real):
-    above = [(mount, kind) for mount, kind in _mounts() if _under(real, mount)]
+    above = [entry for entry in _mounts() if _under(real, entry[0])]
     return max(above, key=lambda entry: len(entry[0]), default=None)
 
 
 def cgroup2_root(directory):
     """The mount point of the cgroup2 hierarchy `directory` (resolved, links followed) lies under, or None: the nearest mount above it decides,
-    and one that is not cgroup2 (a v1 hierarchy, a tmpfs, a plain folder under /) is no root."""
+    and one that is not cgroup2 (a v1 hierarchy, a tmpfs, a plain folder under /) is no root. A cgroup2 mounted as a SUBTREE (its mountinfo
+    root is not '/') is no root either: the paths of `/proc/<pid>/cgroup` are not relative to its mount point. It fails closed."""
     nearest = _nearest_mount(os.path.realpath(directory))
-    return nearest[0] if nearest and nearest[1] == "cgroup2" else None
+    return nearest[0] if nearest and nearest[1] == "cgroup2" and nearest[2] == "/" else None
 
 
 def is_cgroup2(directory):

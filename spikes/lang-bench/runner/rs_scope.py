@@ -72,8 +72,14 @@ class ScopeLifecycle:
         if not self.existed:
             return
         if not cg.is_cgroup2(self.directory):
-            raise CgroupInvalid(f"{self.directory} is not a cgroup2 node (no cgroup.controllers): nothing read from it or written to it means anything")
+            raise CgroupInvalid(f"{self._not_cgroup2()}: nothing read from it or written to it means anything")
         self._refuse_if_used()
+
+    def _not_cgroup2(self):
+        """What is wrong with a directory that is no cgroup2 node: no controllers file, or a controllers file outside any cgroup2 mount."""
+        if os.path.exists(os.path.join(self.directory, "cgroup.controllers")):
+            return f"{self.directory} is not under a cgroup2 mount"
+        return f"{self.directory} is not a cgroup2 node (no cgroup.controllers)"
 
     def _refuse_if_used(self):
         held, stale = self._holds_a_process(), cg.stale_counters(self.directory)
@@ -97,7 +103,7 @@ class ScopeLifecycle:
         already gone is not a mismatch (it only leaves the cgroup unconfirmed, so its memory stays unknown). The box must be IN the named
         cgroup, not in a descendant of it."""
         if not cg.is_cgroup2(self.directory):
-            return f"{self.directory} is not a cgroup2 node"
+            return self._not_cgroup2()
         self.box_fd = ex.pidfd_open(child_pid)
         inside = self._inside(child_pid)
         self.confirmed = inside is True

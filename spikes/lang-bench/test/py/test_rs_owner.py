@@ -53,6 +53,45 @@ class CgroupKindTests(unittest.TestCase):
             self.assertIsNone(cg.cgroup2_root("/tmp/elsewhere"))
             self.assertEqual(cg.cgroup2_root("/mnt/with space/a"), "/mnt/with space")
 
+    def test_G4_a_malformed_mountinfo_line_is_skipped_and_never_an_index_error(self):
+        info = ("\n"
+                "garbage\n"
+                "36 35 0:30 / /sys/fs/cgroup rw\n"  # no ' - ' part
+                "36 35 - cgroup2 cgroup2 rw\n"  # too few fields before it
+                "36 35 0:30 / /sys/fs/cgroup rw - \n"  # nothing after it
+                " - \n"
+                "36 35 0:30 / /sys/fs/cgroup rw -cgroup2\n"
+                "41 35 0:32 / /mnt/ok rw - cgroup2 cgroup2 rw\n")
+        with mock.patch.object(cg, "_mountinfo", return_value=info):
+            self.assertEqual(cg._mounts(), [("/mnt/ok", "cgroup2", "/")], "only the well-formed line is a mount")
+            self.assertIsNone(cg.cgroup2_root("/sys/fs/cgroup/x"))
+
+    def test_G9_a_cgroup2_that_is_mounted_as_a_subtree_is_no_root_and_the_runner_fails_closed(self):
+        subtree = "36 35 0:30 /user.slice/box /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n"
+        with mock.patch.object(cg, "_mountinfo", return_value=subtree):
+            self.assertIsNone(cg.cgroup2_root("/sys/fs/cgroup/x"), "the paths of /proc/<pid>/cgroup would not be relative to this mount point")
+
+    def test_G9_a_directory_under_no_cgroup2_mount_is_reported_as_exactly_that_before_and_after_the_spawn(self):
+        outside = Folder(self, {"cgroup.controllers": "memory\n", "cgroup.procs": ""}).dir
+        with self.assertRaises(rs_scope.CgroupInvalid) as raised:
+            rs_scope.ScopeLifecycle(outside).check_free()
+        self.assertIn("is not under a cgroup2 mount", str(raised.exception))
+        self.assertNotIn("no cgroup.controllers", str(raised.exception), "the controllers file is there: that is not what is wrong")
+        box = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (box.kill(), box.wait()))
+        reason = rs_scope.ScopeLifecycle(outside, box=True).mismatch(box.pid)
+        self.assertIn("is not under a cgroup2 mount", reason)
+        self.assertNotIn("it is in", reason, "not a mismatch with an empty root")
+        bare = Folder(self, {"cgroup.procs": ""}).dir
+        self.assertIn("no cgroup.controllers", self.refusal(bare), "and a directory with no controllers file keeps saying so")
+
+    def refusal(self, directory):
+        try:
+            rs_scope.ScopeLifecycle(directory).check_free()
+        except rs_scope.CgroupInvalid as refused:
+            return str(refused)
+        return ""
+
     def test_E3_a_path_with_dots_or_a_link_is_resolved_before_it_is_compared(self):
         with mock.patch.object(cg, "_proc_cgroup", return_value="0::/a/b\n"), mock.patch.object(cg, "_mountinfo", return_value="1 0 0:1 / /sys/fs/cgroup rw - cgroup2 c rw\n"):
             self.assertTrue(cg.in_cgroup(1, "/sys/fs/cgroup/a/x/../b"))

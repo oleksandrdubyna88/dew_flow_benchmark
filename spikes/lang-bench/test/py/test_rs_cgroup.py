@@ -97,6 +97,90 @@ class KillPidsTests(unittest.TestCase):
         self.assertIsNone(proc.poll())
 
 
+class FakeKernel:
+    """pidfds that are real descriptors (of /dev/null) for pids that need not exist, and a listing and a signal that are recorded."""
+
+    def __init__(self, pids, before_open=None):
+        self.pids, self.before_open = list(pids), before_open
+        self.reads, self.signalled, self.most, self.open_now, self.pid_of = 0, [], 0, set(), {}
+
+    def opening(self, pid):
+        if self.before_open:
+            self.before_open(pid)
+        fd = os.open(os.devnull, os.O_RDONLY)
+        self.open_now.add(fd)
+        self.pid_of[fd] = pid
+        self.most = max(self.most, sum(map(self.is_open, self.open_now)))
+        return fd
+
+    def listing(self, directory):
+        self.reads += 1
+        return list(self.pids)
+
+    def signalling(self, fd, sig):
+        self.signalled.append(self.pid_of[fd])
+
+    def is_open(self, fd):
+        return os.path.exists(f"/proc/self/fd/{fd}") and os.readlink(f"/proc/self/fd/{fd}") == os.devnull
+
+    def close_what_is_left(self):
+        """How many of the pidfds were never closed by the code under test; they are closed here."""
+        left = [fd for fd in self.open_now if self.is_open(fd)]
+        for fd in left:
+            os.close(fd)
+        return len(left)
+
+
+class KillPidsBatchTests(unittest.TestCase):
+    """G7, G5: the listing is read once per batch of at most 64 pids (not once per pid), and a pidfd that cannot be opened for lack of
+    descriptors ends the batch: what is open is signalled and closed, and the rest goes on in the next batch."""
+
+    def run_kill(self, pids, open_pidfd=None):
+        """(cgroup.procs reads, the pids signalled in order, the most pidfds open at once, the pidfds still open) of one `kill_pids`."""
+        kernel = FakeKernel(pids, open_pidfd)
+        with mock.patch.object(os, "pidfd_open", kernel.opening), mock.patch.object(cg, "procs", kernel.listing), \
+                mock.patch.object(signal, "pidfd_send_signal", kernel.signalling):
+            cg.kill_pids("/not/read")
+        return kernel.reads, kernel.signalled, kernel.most, kernel.close_what_is_left()
+
+    def test_The_listing_is_read_once_per_batch_of_64_and_never_once_per_pid(self):
+        pids = list(range(5000, 5130))  # 130 pids: batches of 64, 64 and 2
+        reads, signalled, most, left = self.run_kill(pids)
+        self.assertEqual(reads, 4, "one read to start and one per batch")
+        self.assertEqual(signalled, pids)
+        self.assertLessEqual(most, 64)
+        self.assertEqual(left, 0)
+
+    def test_A_pidfd_that_cannot_be_opened_for_lack_of_descriptors_ends_the_batch_and_nothing_stays_open(self):
+        calls = []
+
+        def short_of_descriptors(pid):
+            calls.append(pid)
+            if len(calls) == 4:  # the fourth open fails once, as EMFILE does
+                raise OSError(errno.EMFILE, "Too many open files")
+
+        pids = [6001, 6002, 6003, 6004, 6005, 6006]
+        reads, signalled, most, left = self.run_kill(pids, short_of_descriptors)
+        self.assertEqual(signalled, pids, "what was open went first, the rest followed in the next batch: nobody was skipped")
+        self.assertEqual(most, 3, "the three that were open were signalled and closed before the next open")
+        self.assertEqual(reads, 3)
+        self.assertEqual(left, 0, "no descriptor stays open")
+
+    def test_A_pid_that_is_gone_is_skipped_and_ENFILE_ends_the_batch_like_EMFILE(self):
+        seen = []
+
+        def refusing(pid):
+            seen.append(pid)
+            if pid == 7002 and seen.count(7002) == 1:
+                raise OSError(errno.ENFILE, "File table overflow")
+
+        reads, signalled, _, left = self.run_kill([7001, 7002], refusing)
+        self.assertEqual(signalled, [7001, 7002])
+        self.assertEqual(left, 0)
+        with mock.patch.object(os, "pidfd_open", side_effect=ProcessLookupError), mock.patch.object(cg, "procs", lambda directory: [1, 2]):
+            cg.kill_pids("/not/read")  # a pid that has gone has no pidfd: nothing to signal, nothing raised
+
+
 def time_until(predicate, seconds=5):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline and not predicate():
