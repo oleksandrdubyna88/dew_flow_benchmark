@@ -162,3 +162,41 @@ test('T_L31_through_the_runner_is_not_applicable_until_the_runner_runs_a_signal_
   const source = readFileSync(path.join(runnerDir, 'run_samples.py'), 'utf8');
   assert.match(source, /running a \{plan\.kind\} sample is part ii of this story and is not built in this runner/, 'the runner still refuses the daemon and web kinds: with them goes `signal TERM`, and T-L31 through the runner (9) is NOT APPLICABLE until E1.S8a part ii-b — when ii-b lands this test goes red and (9) must be written');
 });
+
+// T-L50, through the real prefix (coarse: the box's own processes put some bytes in `memory.peak`, so the byte boundary is tested in test_rs_abort.py with a fake cgroup node; here a stub holds
+// memory well above and well below half of L and prints the line, and the verdict follows the evidence).
+const ABORT_AT = (holdMiB, line) => `#!/bin/bash\nexec python3 -I -c 'import sys\nx = bytearray(${holdMiB} * 1024 * 1024)\nx[::4096] = b"x" * len(x[::4096])\nsys.stderr.write("${line}\\n")\nsys.exit(134)'\n`;
+
+test('A_stub_that_prints_dotnets_line_and_exits_134_is_memory_limit_above_half_of_L_and_a_flagged_runtime_error_below_it_through_the_real_layer', async t => {
+  if (!needs(t)) return;
+  const above = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(100, 'Out of memory.'), memoryMaxBytes: 128 * MIB })), 's01');
+  assert.equal(above.reason, 'memory limit', JSON.stringify(above.lifecycle.memory));
+  assert.equal(above.lifecycle.memory.runtimeAbort, 'dotnet');
+  assert.equal(above.lifecycle.memory.abortBelowEvidence, false);
+  const below = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(4, 'Out of memory.'), memoryMaxBytes: 256 * MIB })), 's01');
+  assert.equal(below.reason, 'exit status 134', `below half of L the line is no evidence: ${JSON.stringify(below.lifecycle.memory)}`);
+  assert.equal(below.lifecycle.memory.runtimeAbort, null);
+  assert.equal(below.lifecycle.memory.abortBelowEvidence, true);
+  assert.ok(below.lifecycle.memory.peakBytes * 2 < below.lifecycle.memory.maxBytes);
+  assert.equal(below.lifecycle.memory.maxBytes, 256 * MIB, 'L is the whole MiB the layer set');
+});
+
+test('The_V8_line_through_the_real_layer_follows_the_same_evidence_rule_and_the_line_with_exit_1_carries_no_flag', async t => {
+  if (!needs(t)) return;
+  const v8 = 'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory';
+  const above = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(100, v8), memoryMaxBytes: 128 * MIB })), 's01');
+  assert.deepEqual([above.reason, above.lifecycle.memory.runtimeAbort], ['memory limit', 'v8']);
+  const below = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(4, v8), memoryMaxBytes: 256 * MIB })), 's01');
+  assert.deepEqual([below.reason, below.lifecycle.memory.abortBelowEvidence], ['exit status 134', true]);
+  const exitOne = caseOf(await runCases(layerOptions(t, { runSh: ABORT_AT(100, 'Out of memory.').replace('sys.exit(134)', 'sys.exit(1)'), memoryMaxBytes: 128 * MIB })), 's01');
+  assert.deepEqual([exitOne.reason, exitOne.lifecycle.memory.abortBelowEvidence, exitOne.lifecycle.memory.childAbortLine, exitOne.lifecycle.memory.runtimeAbort], ['exit status 1', false, false, null]);
+});
+
+test('A_child_that_prints_the_abort_line_under_a_parent_that_exits_0_is_judged_on_its_output_and_flagged_through_the_real_layer', async t => {
+  if (!needs(t)) return;
+  const runSh = '#!/bin/bash\n(echo "Out of memory." >&2; exit 134)\ncat\nexit 0\n';
+  const entry = caseOf(await runCases(layerOptions(t, { runSh })), 's01');
+  assert.equal(entry.status, 'PASS', `the parent's output is right: ${entry.reason}`);
+  assert.equal(entry.lifecycle.memory.childAbortLine, true);
+  assert.equal(entry.lifecycle.memory.runtimeAbort, null);
+});
