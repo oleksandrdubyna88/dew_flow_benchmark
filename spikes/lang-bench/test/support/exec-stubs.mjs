@@ -2,6 +2,7 @@
 // A stub's view is a fresh owned folder holding a copy of the stub; the C# stub is built offline from its project (no package: the SDK's own packs are enough).
 import { cpSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { boxArgv } from '../../lib/exec-layer/box.mjs';
 import { boxEnv } from '../../lib/exec-layer/env.mjs';
 import { fixturesDir, sh, toolchains } from './exec-layer-host.mjs';
 import { owned } from './owned.mjs';
@@ -10,10 +11,14 @@ export const STACKS = Object.freeze(['python', 'node', 'csharp']);
 /** What `comm` says the program is, per stack: the stub's `exec` makes the program the runtime itself, with no bash above it. */
 export const PROGRAM_COMM = Object.freeze({ python: /^python3/, node: /^node/, csharp: /^dotnet/ });
 
-async function buildCsharp(t, view) {
-  const home = owned.ownedDir(t, 'dotnethome');
-  const env = { ...boxEnv({ dirs: toolchains }), HOME: home, DOTNET_CLI_HOME: home, NUGET_PACKAGES: path.join(home, 'pk'), DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' };
-  const built = await sh('dotnet', ['build', 'server.csproj', '-c', 'Release', '-o', 'bin', '--nologo', '-v', 'q'], { cwd: view, env, timeoutMs: 180_000 });
+/**
+ * Build the C# stub INSIDE the box: the pinned SDK is bound read-only there. Run unboxed, `dotnet build` with `DOTNET_ROOT` on the sealed SDK made a `metadata` folder in the SDK's own
+ * root (2026-11-02), which breaks the toolchain store's seal and its recorded tree hash. The box's `/tmp` takes the NuGet and CLI folders; the view takes `bin/` and `obj/`.
+ */
+async function buildCsharp(view) {
+  const extra = { NUGET_PACKAGES: '/tmp/pk', DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' };
+  const box = boxArgv({ view, dirs: toolchains, env: boxEnv({ dirs: toolchains, extra }) });
+  const built = await sh(box[0], [...box.slice(1), 'dotnet', 'build', 'server.csproj', '-c', 'Release', '-o', 'bin', '--nologo', '-v', 'q'], { timeoutMs: 180_000 });
   if (built.code !== 0) throw new Error(`the C# stub did not build offline: ${built.stdout}${built.stderr}`);
 }
 
@@ -21,7 +26,7 @@ async function buildCsharp(t, view) {
 export async function stubView(t, stack) {
   const view = owned.ownedDir(t, `stub${stack}`);
   cpSync(path.join(fixturesDir, 'exec-stubs', stack), view, { recursive: true });
-  if (stack === 'csharp') await buildCsharp(t, view);
+  if (stack === 'csharp') await buildCsharp(view);
   return view;
 }
 

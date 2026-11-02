@@ -79,14 +79,12 @@ export function cmdlineOf(pid) {
   }
 }
 
+function matched(pid, match) {
+  const argv = pid === process.pid ? null : cmdlineOf(pid);
+  return argv !== null && argv.length > 0 && match(argv) ? identityOf(pid) : null;
+}
+
 /** The identities of every other process whose command line `match(argv)` accepts (a look at `/proc`, never a signal). */
 export function scanProcesses(match) {
-  const found = [];
-  for (const entry of readdirSync('/proc')) {
-    const pid = Number(entry);
-    const argv = Number.isInteger(pid) && pid !== process.pid ? cmdlineOf(pid) : null;
-    const identity = argv !== null && argv.length > 0 && match(argv) ? identityOf(pid) : null;
-    if (identity !== null) found.push(identity);
-  }
-  return found;
+  return readdirSync('/proc').map(Number).filter(Number.isInteger).map(pid => matched(pid, match)).filter(identity => identity !== null);
 }

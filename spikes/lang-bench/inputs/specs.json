@@ -1,4 +1,61 @@
 {
+  "execLayer": {
+    "files": [
+      {
+        "path": "box.mjs",
+        "sha256": "81961f7a21e4c2b60a00ce9cb19fef51af6550ac14288d3dff27b2d4bd34d280"
+      },
+      {
+        "path": "case-view.mjs",
+        "sha256": "4397dd4fb38ea6fa4e56a53dc8c8f4f9930c73ac2ee1b8fa65584eb175f94ffc"
+      },
+      {
+        "path": "certify.mjs",
+        "sha256": "d40b96ebaa31977eca5d27c1ab2b7b18e567183e7ba8194c8580c4d66702f414"
+      },
+      {
+        "path": "cleanup.mjs",
+        "sha256": "2cc80ee116afb3867600f551e5cba336d142e35922e87916d8ef012cfc741460"
+      },
+      {
+        "path": "env.mjs",
+        "sha256": "3666abc9613423a6443bb201ad16fc25fe69cb7a2ed11d2a6d94c87b6221104b"
+      },
+      {
+        "path": "identity.mjs",
+        "sha256": "e3d2aae5e57416a7025064f8620b29b89a2039eb80a6be19eb3a6b03d1637c3b"
+      },
+      {
+        "path": "names.mjs",
+        "sha256": "02754145f895299176a33e2c73251962bae96395ff96bab4f1bd09c014deb5d9"
+      },
+      {
+        "path": "netns.mjs",
+        "sha256": "b088579ab19b668b14bbf0c672914d818f15b60719ff17b905d633ee2762c56f"
+      },
+      {
+        "path": "prefix.mjs",
+        "sha256": "fce388cefaacc1300ea4fca4309792c09c1e6f3490e47856d29409bf610716bf"
+      },
+      {
+        "path": "proc.mjs",
+        "sha256": "17021b54198885c7e9ac9053bdfa968df3af46ef372a3c4cf72359a8db2d25ad"
+      },
+      {
+        "path": "run.mjs",
+        "sha256": "f3d8f2a5e3f13c12c623b5b5f4404dc6a1ac537466c98e4b8d900f3f0fe68442"
+      },
+      {
+        "path": "scope-entry.sh",
+        "sha256": "87de097afec43aebbf7f18edece37926d0118a4dca60865282253de8a11fb902"
+      },
+      {
+        "path": "scope.mjs",
+        "sha256": "b08a3e673d6e8421b48897eb3c526059769036cf7ec98f986f5bf92a0b51d65f"
+      }
+    ],
+    "treeSha256": "79b85a37451e90736a7f54e25eecd0bba3bfc67b117f89f11086b01d9b9b319f"
+  },
   "runner": {
     "files": [
       {

@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { launchPrefix, runCases } from '../lib/exec-layer/run.mjs';
+import { cleanup } from '../lib/exec-layer/cleanup.mjs';
+import { launchPrefix, openRun, runCases, runnerArgv } from '../lib/exec-layer/run.mjs';
+import { progTemplate } from '../lib/exec-layer/scope.mjs';
 import { needs, runnerDir, toolchains } from './support/exec-layer-host.mjs';
 import { layerOptions, MIB } from './support/exec-tree.mjs';
 
@@ -43,6 +45,22 @@ test('The_runner_gets_a_prefix_that_is_already_inside_the_namespaces_and_names_p
   assert.equal(path.basename(prefix.find(arg => path.basename(arg) === 'bwrap')), 'bwrap');
   assert.ok(prefix.includes('--json-status-fd') && prefix[prefix.indexOf('--json-status-fd') + 1] === '7');
   assert.ok(!prefix.includes('--die-with-parent') && !prefix.includes('--unshare-net'));
+});
+
+test('The_drivers_command_is_nsenter_then_python_and_a_scope_appears_only_inside_the_prefix_it_hands_over', async t => {
+  if (!needs(t)) return;
+  const opened = await openRun(layerOptions(t));
+  assert.ok(opened.ok, opened.reason);
+  t.after(() => cleanup(opened.value));
+  const argv = runnerArgv(opened.value, { cgroupOf: progTemplate(opened.value.unitPrefix), jsonOut: '/x/record.json' });
+  assert.equal(path.basename(argv[0]), 'nsenter');
+  assert.deepEqual(argv.slice(1, 6), ['-t', String(opened.value.holder.pid), '-U', '-n', '--preserve-credentials']);
+  assert.equal(path.basename(argv[6]), 'python3');
+  assert.equal(argv[7], '-I', 'python isolated: no user site, no PYTHON* variable');
+  const outsideThePrefix = argv.filter((arg, i) => argv[i - 1] !== '--launch-prefix');
+  assert.deepEqual(outsideThePrefix.filter(arg => ['systemd-run', 'scope-entry.sh'].includes(path.basename(arg))), [], 'the driver itself is not started through a scope: the only scope in its command is inside the prefix it hands to the runner');
+  assert.ok(argv.some(arg => arg.startsWith('[') && arg.includes('systemd-run')), 'and that prefix does hold the scope (the check above is not looking at nothing)');
+  assert.equal(argv[argv.indexOf('--cgroup-of') + 1].endsWith('{case}.scope/prog'), true, '--cgroup-of names prog/ of the case\'s scope');
 });
 
 test('A_program_in_the_run_is_in_the_holders_namespace_and_its_stderr_holds_only_its_own_line', async t => {

@@ -11,13 +11,19 @@ import { progCgroup, readProg, userEnv } from './scope.mjs';
 const CERTIFY_MS = 60_000;
 export const HALT = 'memory-not-certifiable';
 
+const failedWith = ({ code, timedOut, stderr }) => stderr.trim() || (timedOut ? 'it did not end within its ceiling' : `exit ${code}`);
+
+/** Why the empty program did not run to a clean exit through the prefix, or null when it did. */
+function launchProblem(ran) {
+  if (!ran.ok) return ran.reason;
+  return ran.value.code === 0 && !ran.value.timedOut ? null : failedWith(ran.value);
+}
+
 /** `{ launched, certified, peakBytes? , reason? }`. `read` and `launch` are seams for the tests; the defaults are the real cgroup read and `runBounded`. */
 export async function certifyMemory(run, { read = readProg, launch = runBounded } = {}) {
   const argv = programArgv(run, CERTIFY_CASE, ['bash', '-c', ':']);
-  const ran = await launch(argv[0], argv.slice(1), { timeoutMs: CERTIFY_MS, env: userEnv() });
-  if (!(ran.ok && ran.value.code === 0 && !ran.value.timedOut)) {
-    return { launched: false, certified: false, reason: `the empty program did not run through the prefix: ${ran.ok ? ran.value.stderr.trim() || `exit ${ran.value.code}` : ran.reason}` };
-  }
+  const problem = launchProblem(await launch(argv[0], argv.slice(1), { timeoutMs: CERTIFY_MS, env: userEnv() }));
+  if (problem !== null) return { launched: false, certified: false, reason: `the empty program did not run through the prefix: ${problem}` };
   const peak = read(progCgroup(`${run.unitPrefix}-${CERTIFY_CASE}`)).peakBytes;
   return peak === null
     ? { launched: true, certified: false, reason: 'prog/memory.peak cannot be read after the exit of an empty program' }

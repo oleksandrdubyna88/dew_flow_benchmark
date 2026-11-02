@@ -32,7 +32,9 @@ async function endMatching(kind, match, graceMs) {
   const result = { removed: [], left: [] };
   for (const identity of scanProcesses(match)) {
     const how = await endProcess(identity, { graceMs });
-    (how === 'stuck' ? result.left : result.removed).push(entry(kind, identity.argv0, { pid: identity.pid, how, ...(how === 'stuck' ? { reason: 'still there after SIGKILL' } : {}) }));
+    const reported = entry(kind, identity.argv0, { pid: identity.pid, how });
+    if (how === 'stuck') result.left.push({ ...reported, reason: 'still there after SIGKILL' });
+    else result.removed.push(reported);
   }
   return result;
 }
@@ -107,6 +109,20 @@ function whyKept(owned, dir, { minAgeMs, now }) {
   return now - lstatSync(dir).mtimeMs < minAgeMs ? `younger than ${Math.round(minAgeMs / 60_000)} minutes` : null;
 }
 
+/** This user's `lrun` folders of the `bench` token directly in `parent` (never a claim file), or [] when `parent` cannot be read. */
+function runFolders(owned, parent) {
+  try {
+    return readdirSync(parent).filter(name => name.startsWith(owned.ownedPrefix('lrun')) && !name.endsWith('.owner'));
+  } catch {
+    return [];
+  }
+}
+
+/** Why a run folder is NOT retired (a string), or null when it is: not a directory, not `gone`, or younger than `minAgeMs`. */
+function whyNot(owned, dir, limits) {
+  return lstatSync(dir).isDirectory() ? whyKept(owned, dir, limits) : 'not a directory';
+}
+
 /**
  * The startup sweep: retire the runs of an earlier layer process that was killed. Considers only this user's `lrun` folders of the `bench` token directly in `parent`; a run is retired when its
  * claim says `gone` (the pid is not a process any more) and it is older than `minAgeMs` (default 10 minutes; age selects, never authorises). Retires its scopes, holder, driver, views and
@@ -114,19 +130,25 @@ function whyKept(owned, dir, { minAgeMs, now }) {
  */
 export async function sweepStale({ owned, parent, minAgeMs = TEN_MINUTES_MS, now = Date.now() }) {
   const report = { retired: [], kept: [] };
-  let names = [];
-  try {
-    names = readdirSync(parent).filter(name => name.startsWith(owned.ownedPrefix('lrun')) && !name.endsWith('.owner'));
-  } catch {
-    return report;
-  }
-  for (const name of names) {
+  for (const name of runFolders(owned, parent)) {
     const dir = path.join(parent, name);
-    const why = lstatSync(dir).isDirectory() ? whyKept(owned, dir, { minAgeMs, now }) : 'not a directory';
-    if (why !== null) { report.kept.push({ name, reason: why }); continue; }
+    const why = await guardedWhy(() => whyNot(owned, dir, { minAgeMs, now }));
+    if (why !== null) {
+      report.kept.push({ name, reason: why });
+      continue;
+    }
     const done = await cleanup(runFromFolder(owned, dir));
     report.retired.push(...done.removed);
     report.kept.push(...done.left.map(item => ({ name, reason: `${item.kind} ${item.name}: ${item.reason}` })));
   }
   return report;
+}
+
+/** `why`, or a reason naming the exception: one folder that cannot be judged never ends the sweep. */
+async function guardedWhy(judge) {
+  try {
+    return judge();
+  } catch (error) {
+    return `could not be judged: ${error.code ?? error.message}`;
+  }
 }

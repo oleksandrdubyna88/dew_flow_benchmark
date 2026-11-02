@@ -46,7 +46,12 @@ test('The_scope_holder_keeps_no_descriptor_of_the_launcher', async t => {
   // as the runner starts a launcher: pipes for its stdin and stdout, and the status pipe at descriptor 7
   start(t, c.launch(), { stdio: ['pipe', 'pipe', 'ignore', 'ignore', 'ignore', 'ignore', 'ignore', 'pipe'] });
   const holderPid = await waitFor(() => { try { return Number(text(path.join(c.out, 'holder.pid')).trim()); } catch { return null; } });
-  const fds = readdirSync(`/proc/${holderPid}/fd`).map(fd => [fd, readlinkSync(`/proc/${holderPid}/fd/${fd}`)]).filter(([fd, target]) => Number(fd) > 2 || (Number(fd) <= 2 && target !== '/dev/null'));
+  const target = fd => { try { return [fd, readlinkSync(`/proc/${holderPid}/fd/${fd}`)]; } catch { return null; } }; // a descriptor closed since the listing is no descriptor
+  // what keeps a runner's pipe open is a pipe or a socket of the launcher (the stdio pipes, the status pipe), or stdio that is not /dev/null; sleep's own start-up (libselinux reads
+  // /proc/self/mounts through fd 3 for a moment) is neither
+  const foreign = () => readdirSync(`/proc/${holderPid}/fd`).map(target).filter(entry => entry !== null && (/^(pipe|socket):/.test(entry[1]) || (Number(entry[0]) <= 2 && entry[1] !== '/dev/null')));
+  await waitFor(() => (commOf(holderPid) === 'sleep' && foreign().length === 0) || null, 3000);
+  const fds = foreign();
   assert.deepEqual(fds, [], 'a descriptor of the launcher in the scope holder would keep the runner\'s pipes open until the holder ends');
 });
 
@@ -57,7 +62,7 @@ test('Memory_peak_is_read_after_a_program_that_exits_in_10_ms', async t => {
   const read = readProg(c.prog);
   assert.ok(read.peakBytes > 0, `memory.peak is read after the exit: ${JSON.stringify(read)}`);
   assert.equal(read.events.oom_kill, 0);
-  assert.deepEqual(read.procs, [], 'nothing is left in prog/');
+  assert.ok(await waitFor(() => readProg(c.prog).procs?.length === 0 || null, 5000), 'nothing is left in prog/ (the box\'s own processes may still be going out when the launcher has exited)');
   assert.equal(pidsIn(c.holderDir).length, 1, 'the scope holder is what keeps the scope');
   const plain = await chain(t, { files: QUICK, caseId: 'c2', tweak: plainScope(256 * MIB) });
   assert.equal((await start(t, plain.launch()).exited).code, 0);
@@ -71,12 +76,14 @@ test('A_scope_around_the_driver_would_charge_its_memory_to_the_program_and_that_
   start(t, right.launch());
   assert.ok(await waitFor(() => programPid(right.prog, /^sleep$/)));
   const driver = start(t, [...right.driver, 'python3', '-I', '-c', `${allocator(80)}print("done", flush=True)\nimport time\ntime.sleep(30)`], { stdio: ['ignore', 'pipe', 'ignore'] });
-  assert.ok(await waitFor(() => new Promise(resolve => { driver.stdout.once('data', () => resolve(true)); setTimeout(() => resolve(false), 100); })), 'the driver holds its 80 MiB');
+  let said = '';
+  driver.stdout.on('data', chunk => { said += chunk; });
+  assert.ok(await waitFor(() => said.includes('done') || null), 'the driver holds its 80 MiB');
   assert.ok(num(path.join(right.prog, 'memory.peak')) < 40 * MIB, 'a driver outside the scope is not charged to the program');
   assert.ok(!text(`/proc/${driver.pid}/cgroup`).includes(right.scope), 'the driver\'s cgroup is not the program\'s scope');
   const wrong = await chain(t, { files: { 'alloc.py': `${allocator(80)}import time\ntime.sleep(30)\n`, 'run.sh': '#!/bin/bash\nexec python3 alloc.py\n' }, caseId: 'c2' });
   start(t, wrong.launch());
-  assert.ok(await waitFor(() => (existsSync(wrong.prog) && num(path.join(wrong.prog, 'memory.peak')) >= 80 * MIB) || null), 'a driver launched INSIDE the scope is charged to the program: prog/memory.peak holds its 80 MiB');
+  assert.ok(await waitFor(() => (readProg(wrong.prog).peakBytes >= 80 * MIB) || null), 'a driver launched INSIDE the scope is charged to the program: prog/memory.peak holds its 80 MiB');
 });
 
 test('An_oom_killed_child_is_memory_limit_whatever_the_exit_status', async t => {

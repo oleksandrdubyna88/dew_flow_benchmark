@@ -39,17 +39,21 @@ function copyView(tree, dest) {
   makeWritable(dest);
 }
 
+function populate(tree, runDir, caseIds) {
+  mkdirSync(viewsRoot(runDir), { recursive: true });
+  for (const id of caseIds) copyView(tree, viewDir(runDir, id));
+  for (const id of EMPTY_VIEWS) mkdirSync(viewDir(runDir, id));
+}
+
 /**
- * `ok({ dirs })` after one copy of `tree` per case id plus the empty control view, or `fail(reason)`. A case id must be letters, digits, `_` and `-` (it reaches a path) and not the
- * control's. A copy that fails leaves what was made for `removeViews`; it is never half-trusted.
+ * `ok({ dirs })` after one copy of `tree` per case id plus the empty views (the control's and the certification's), or `fail(reason)`. A case id must be letters, digits, `_` and `-` (it reaches
+ * a path) and not a reserved one. A copy that fails leaves what was made for `removeViews`; it is never half-trusted.
  */
 export function makeViews({ tree, runDir, caseIds }) {
   const bad = caseIds.filter(id => !CASE_ID.test(id) || EMPTY_VIEWS.includes(id));
   if (bad.length > 0) return fail(`case id ${bad.map(id => JSON.stringify(id)).join(', ')} is not letters, digits, '_' and '-' (or is one of the reserved ${EMPTY_VIEWS.join(', ')})`);
   try {
-    mkdirSync(viewsRoot(runDir), { recursive: true });
-    for (const id of caseIds) copyView(tree, viewDir(runDir, id));
-    for (const id of EMPTY_VIEWS) mkdirSync(viewDir(runDir, id));
+    populate(tree, runDir, caseIds);
   } catch (error) {
     return fail(`a case view could not be made: ${error.code ?? error.message}`);
   }

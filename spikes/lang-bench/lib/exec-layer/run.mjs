@@ -26,14 +26,16 @@ const SBIN_PATH = '/usr/sbin:/usr/bin:/bin:/sbin';
 const HOLDER_MARGIN_S = 60;
 const EXIT_ENVIRONMENT = 3;
 const EXIT_RUNNER = 5;
+const RECORD = 'record.json';
 
 const TOOLS = Object.freeze({ systemdRun: 'systemd-run', nsenter: 'nsenter', bwrap: 'bwrap', python: 'python3' });
 
-/** The absolute path of each host tool the prefix names, or `fail` naming the ones missing (absolute paths: the launch does not depend on a PATH). */
+/** The absolute path of each host tool the prefix names (absolute: the launch does not depend on a PATH); throws naming the ones missing. */
 function findTools() {
   const found = Object.fromEntries(Object.entries(TOOLS).map(([key, name]) => [key, findOnPath(name, SBIN_PATH)]));
   const missing = Object.entries(found).filter(([, p]) => p === null).map(([key]) => TOOLS[key]);
-  return missing.length > 0 ? fail(`${missing.join(', ')} not found: the layer needs systemd-run, nsenter, bwrap and python3`) : ok(found);
+  if (missing.length > 0) throw new Error(`${missing.join(', ')} not found: the layer needs systemd-run, nsenter, bwrap and python3`);
+  return found;
 }
 
 function newRun(options, tools) {
@@ -60,16 +62,15 @@ async function openSteps(run) {
  * `options`: `{ owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes, caseWallMs, runCeilingMs, limitsFile?, extraEnv?, extraRo? }`.
  */
 export async function openRun(options) {
-  const tools = findTools();
-  if (!tools.ok) return tools;
-  const run = newRun(options, tools.value);
+  let run = null;
   let opened;
   try {
+    run = newRun(options, findTools());
     opened = await openSteps(run);
   } catch (error) {
     opened = fail(`the run could not be opened: ${error.message}`);
   }
-  if (!opened.ok) await cleanup(run);
+  if (!opened.ok && run !== null) await cleanup(run);
   return opened;
 }
 
@@ -81,14 +82,20 @@ const readJson = file => {
   }
 };
 
-async function drive(run, certification) {
-  const jsonOut = path.join(run.dir, 'record.json');
-  const argv = runnerArgv(run, { cgroupOf: progTemplate(run.unitPrefix), jsonOut });
-  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: run.options.runCeilingMs, env: driverEnv({ dirs: run.options.dirs, tmp: run.dir }) });
+function runnerResult(ran, run, certification) {
   if (!ran.ok) return { exitCode: EXIT_RUNNER, stdout: '', stderr: ran.reason, record: null };
   const { stdout, stderr, code, timedOut } = ran.value;
-  const ceiling = timedOut ? `\nthe layer's ceiling of ${run.options.runCeilingMs} ms ended the run: the driver was stopped and nothing was judged` : '';
-  return { exitCode: timedOut ? EXIT_RUNNER : code ?? EXIT_RUNNER, stdout, stderr: `${stderr}${ceiling}`, record: readJson(jsonOut), memoryCertified: certification.certified };
+  const ceiling = `\nthe layer's ceiling of ${run.options.runCeilingMs} ms ended the run: the driver was stopped and nothing was judged`;
+  return {
+    exitCode: timedOut ? EXIT_RUNNER : code ?? EXIT_RUNNER, stdout, stderr: timedOut ? `${stderr}${ceiling}` : stderr,
+    record: readJson(path.join(run.dir, RECORD)), memoryCertified: certification.certified,
+  };
+}
+
+async function drive(run, certification) {
+  const argv = runnerArgv(run, { cgroupOf: progTemplate(run.unitPrefix), jsonOut: path.join(run.dir, RECORD) });
+  const ran = await runBounded(argv[0], argv.slice(1), { timeoutMs: run.options.runCeilingMs, env: driverEnv({ dirs: run.options.dirs, tmp: run.dir }) });
+  return runnerResult(ran, run, certification);
 }
 
 async function body(run, options) {
@@ -104,7 +111,8 @@ async function body(run, options) {
 }
 
 /**
- * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `exitCode` is the runner's (0 passed, 1 a case failed, 3 environment, 4 configuration,
+ * One run through the layer: `{ exitCode, stdout, stderr, record, halt, memoryCertified, sweep, cleanup }`. `options` are those of `openRun` plus `data` (a data run: certification refuses),
+ * `minSweepAgeMs` (the startup sweep's age floor, default 10 minutes), `observe(run)` (called once the run is open and before anything starts) and `deps` (the seams of `certifyMemory`). `exitCode` is the runner's (0 passed, 1 a case failed, 3 environment, 4 configuration,
  * 5 the runner or the layer failed); `halt` is `'memory-not-certifiable'` for a data run that stopped before any case; `record` is the runner's `--json` or null. Never throws.
  */
 export async function runCases(options) {

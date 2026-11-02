@@ -30,14 +30,21 @@ function waitReady(child, name, ms) {
   });
 }
 
+function holderProblem(name, ip) {
+  if (!NAME.test(name)) return `the holder name ${JSON.stringify(name)} is not letters, digits, '_' and '-'`;
+  return ip === null ? 'ip (iproute2) was not found: the holder cannot set lo up' : null;
+}
+
+const spawnHolder = (ip, name, boundSeconds) => spawn('unshare', ['-rn', 'bash', '-c', SCRIPT, 'bash', ip, name, String(Math.ceil(boundSeconds))], { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: SBIN_PATH } });
+
 /**
  * Start the holder: `{ ok, value: { pid, startTicks, argv0 } }` once `lo` is up and the process carries `name`, or `{ ok: false, reason }` (a host without unprivileged user namespaces
  * says so here). `name` is an owned name; `boundSeconds` bounds the sleep.
  */
 export async function startHolder({ name, boundSeconds, ip = findOnPath('ip', SBIN_PATH) }) {
-  if (!NAME.test(name)) return fail(`the holder name ${JSON.stringify(name)} is not letters, digits, '_' and '-'`);
-  if (ip === null) return fail('ip (iproute2) was not found: the holder cannot set lo up');
-  const child = spawn('unshare', ['-rn', 'bash', '-c', SCRIPT, 'bash', ip, name, String(Math.ceil(boundSeconds))], { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: SBIN_PATH } });
+  const problem = holderProblem(name, ip);
+  if (problem !== null) return fail(problem);
+  const child = spawnHolder(ip, name, boundSeconds);
   child.on('error', () => {});
   const state = await waitReady(child, name, READY_MS);
   child.stderr.destroy();
