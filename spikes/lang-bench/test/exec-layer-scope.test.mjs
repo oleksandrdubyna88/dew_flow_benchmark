@@ -7,7 +7,11 @@ import { existsSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { commOf, chain, MIB, needs, pidsIn, programPid, sh, start, text, waitFor, withoutView } from './support/exec-chain.mjs';
-import { killCgroup, readProg, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
+import { cleanup } from '../lib/exec-layer/cleanup.mjs';
+import { scanProcesses } from '../lib/exec-layer/proc.mjs';
+import { openRun, runnerArgv } from '../lib/exec-layer/run.mjs';
+import { killCgroup, progCgroup, progTemplate, readProg, scopePrefix, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
+import { layerOptions } from './support/exec-tree.mjs';
 
 const num = file => Number(text(file).trim());
 const SLEEPER = { 'run.sh': '#!/bin/bash\nexec sleep 300\n' };
@@ -72,18 +76,24 @@ test('Memory_peak_is_read_after_a_program_that_exits_in_10_ms', async t => {
 
 test('A_scope_around_the_driver_would_charge_its_memory_to_the_program_and_that_is_the_point', async t => {
   if (!needs(t)) return;
-  const right = await chain(t, { files: SLEEPER });
-  start(t, right.launch());
-  assert.ok(await waitFor(() => programPid(right.prog, /^sleep$/)));
-  const driver = start(t, [...right.driver, 'python3', '-I', '-c', `${allocator(80)}print("done", flush=True)\nimport time\ntime.sleep(30)`], { stdio: ['ignore', 'pipe', 'ignore'] });
-  let said = '';
-  driver.stdout.on('data', chunk => { said += chunk; });
-  assert.ok(await waitFor(() => said.includes('done') || null), 'the driver holds its 80 MiB');
-  assert.ok(num(path.join(right.prog, 'memory.peak')) < 40 * MIB, 'a driver outside the scope is not charged to the program');
-  assert.ok(!text(`/proc/${driver.pid}/cgroup`).includes(right.scope), 'the driver\'s cgroup is not the program\'s scope');
-  const wrong = await chain(t, { files: { 'alloc.py': `${allocator(80)}import time\ntime.sleep(30)\n`, 'run.sh': '#!/bin/bash\nexec python3 alloc.py\n' }, caseId: 'c2' });
-  start(t, wrong.launch());
-  assert.ok(await waitFor(() => (readProg(wrong.prog).peakBytes >= 80 * MIB) || null), 'a driver launched INSIDE the scope is charged to the program: prog/memory.peak holds its 80 MiB');
+  const opened = await openRun(layerOptions(t, { runSh: '#!/bin/bash\nexec sleep 4\n' }));
+  assert.ok(opened.ok, opened.reason);
+  const run = opened.value;
+  t.after(() => cleanup(run));
+  const json = { cgroupOf: progTemplate(run.unitPrefix), jsonOut: path.join(run.dir, 'right.json') };
+  const right = start(t, runnerArgv(run, json), { stdio: 'ignore' });
+  const rightDriver = await waitFor(() => scanProcesses(args => args.some(arg => arg.endsWith('run_samples.py')) && args.includes(json.jsonOut)).find(id => commOf(id.pid) === 'python3') ?? null, 15_000);
+  assert.ok(rightDriver, 'the REAL driver (the runner under nsenter) runs');
+  assert.ok(!text(`/proc/${rightDriver.pid}/cgroup`).includes(run.unitPrefix), 'outside every scope of the run: the program\'s limit is not charged with the driver');
+  await right.exited;
+  const wrongJson = { cgroupOf: json.cgroupOf, jsonOut: path.join(run.dir, 'wrong.json') };
+  const wrongArgv = [...scopePrefix({ unit: `${run.unitPrefix}-drv`, outDir: path.join(run.dir, 'out', 'drv'), memoryMaxBytes: 256 * MIB, holdSeconds: 60 }), ...runnerArgv(run, wrongJson)];
+  start(t, wrongArgv, { stdio: 'ignore' });
+  const wrongDriver = await waitFor(() => scanProcesses(args => args.some(arg => arg.endsWith('run_samples.py')) && args.includes(wrongJson.jsonOut)).find(id => commOf(id.pid) === 'python3') ?? null, 15_000);
+  assert.ok(wrongDriver, 'the real driver, launched inside a scope prefix, runs');
+  const cgroup = text(`/proc/${wrongDriver.pid}/cgroup`).trim();
+  assert.ok(cgroup.endsWith(`${run.unitPrefix}-drv.scope/prog`), `the refuted shape puts the real driver in a scope's prog/, under that scope's memory.max: ${cgroup}`);
+  assert.equal(num(path.join(progCgroup(`${run.unitPrefix}-drv`), 'memory.max')), 256 * MIB, 'whatever the driver allocates is charged against that limit');
 });
 
 test('An_oom_killed_child_is_memory_limit_whatever_the_exit_status', async t => {
