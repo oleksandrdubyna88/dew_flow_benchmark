@@ -23,6 +23,15 @@ def alive(pid):
         return False
 
 
+def burning(pid):
+    """True once the process has used some CPU time: it is past its start-up checks and is really in its loop."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return int(f.read().rsplit(")", 1)[1].split()[11]) > 0
+    except OSError:
+        return False
+
+
 def wait_dead(pids, seconds):
     end = time.monotonic() + seconds
     while time.monotonic() < end and any(alive(pid) for pid in pids):
@@ -68,7 +77,10 @@ class BurnerTests(unittest.TestCase):
         pids = [int(p) for p in parent.stdout.readline().split()]
         parent.stdout.close()
         self.assertEqual(len(pids), 3)
-        self.assertTrue(all(alive(pid) for pid in pids), "they run while the parent lives")
+        end = time.monotonic() + 10
+        while time.monotonic() < end and not all(burning(pid) for pid in pids):
+            time.sleep(0.05)
+        self.assertTrue(all(alive(pid) and burning(pid) for pid in pids), "they run, and burn, while the parent lives (past the start-up check that could end them early)")
         os.kill(parent.pid, signal.SIGKILL)
         parent.wait()
         left = wait_dead(pids, 2)
