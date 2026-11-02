@@ -55,7 +55,7 @@ server flags.
 | 4 | int4 MoE keys 24, 32, 64, 128, coarse search (phase B2) | **fails** (the search kept the current tile) | kernel −0.3 % to +0.6 % at batch 8–128 (§ 14.1) |
 | 1a + 6, ROCM_ATTN | Fused multi-step draft opt-in for ROCM_ATTN (`ra3opt` vs `ra3`) | **correct, no gain**; not shipped | TPOT +0.1 % / +0.2 %; 20 prompts identical; GSM8K 171 vs 169 (§ 14.3) |
 | 1a + 6 + 2 | `mtp3 + tattn + mnbt8k` (`ta3mb` vs production `ta3`) | **trade-off**; the operator's choice, not in production | 8k / 32k median TTFT −18.5 % / −13.1 %; TPOT equal; KV cache −18 % to −27 % (§ 14.3) |
-| 1a + 6 on 27B | The new start-script defaults on Qwen3.8-27B-AWQ (`q27new` vs `q27old`) | **decode passes, prefill worse**; defaults kept | +13.5 % / +17.6 % tok/s; TPOT −16 % / −19 %; 8k median TTFT +8.9 % (§ 14.5) |
+| 1a + 6 on 27B | The new start-script defaults on Qwen3.8-27B-AWQ (`q27new` vs `q27old`) | **decode passes, prefill fails the rule**; the global defaults stay until the operator decides | +13.5 % / +17.6 % tok/s; TPOT −16 % / −19 %; 8k median TTFT +8.9 % (§ 14.5) |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -691,7 +691,7 @@ of every `o7` start shows the patch's line `speed-options option 7: wide-N tile 
 07:11; its log shows `Using TRITON_ATTN backend (selected via --attention-backend)` and
 `num_speculative_tokens: 3`; a test request (17 × 23) answered 391.
 
-## 14. Runs of 2026-11-01 (operator: "phase B2 … начинай", "Option C", "The GPU series: no progress запускай")
+## 14. Runs of 2026-11-01/02 (operator: "phase B2 … начинай", "Option C", "The GPU series: no progress запускай")
 
 Data in [vllm-r9700-speed-options/night-2026-11-01/](vllm-r9700-speed-options/night-2026-11-01/); drivers
 `harness/b2.sh`, `harness/night7.sh`, `harness/night8.sh`; series script `harness/speed_A.sh`.
@@ -712,8 +712,8 @@ Data in [vllm-r9700-speed-options/night-2026-11-01/](vllm-r9700-speed-options/ni
 
 - **Fails:** the coarse search picked the same tile as the current file at every key (BLOCK 16/16/64, GROUP 1,
   1 warp, 2 stages, `waves_per_eu` 4; full list in `phaseB2/b2_kernel_ab.log`). There is nothing to test end
-  to end. Option 4 is closed: with a coarse grid, the int4 MoE file is already at its best tile for keys 24–128.
-  A full search could still find a tile outside the coarse grid; it was not run (~11 h per key).
+  to end. This closes only the coarse grid: within it, no tile beats the current one at keys 24–128. A full
+  search (~11 h per key) could still find a better tile outside the coarse grid; it was not run and stays untested.
 
 ### 14.2 Production start script — new defaults
 
@@ -754,7 +754,7 @@ Median of 9 values (3 rounds × 3 runs); in brackets the spread (max − min of 
 | prefill 32k median TTFT | 16.26 s (1.16) | 16.38 s (0.26) | 15.61 s (0.22) | **13.57 s** (1.28) |
 | GSM8K-200 | 169 (84.5 %) | 171 (85.5 %) | 169 (84.5 %) | 169 (84.5 %) |
 | 20 greedy prompts | — | 20 identical to `ra3` | 20 identical to `fcombo` (2026-10-31) | 20 identical to `ta3` |
-| KV cache (tokens) | — | — | 232,700 (1.78 × 131k) | 189,959 / 189,959 / 170,013 (1.45 × / 1.30 ×) |
+| KV cache (tokens) | 229,850 / 230,800 / 229,850 | 229,850 / 227,951 / 229,850 | 232,700 (1.78 × 131k) | 189,959 / 189,959 / 170,013 (1.45 × / 1.30 ×) |
 
 - **The tok/s spreads are wide because of the stall of § 6.1 / § 13.3.** One measured request per bench run takes
   ~6 s, so c=1 mean TTFT is ~2.2 s in most runs and ~0.2 s in the rest (without the stall: `ra3` 4 of 9 runs at
@@ -770,7 +770,9 @@ Median of 9 values (3 rounds × 3 runs); in brackets the spread (max − min of 
   −18.5 % at 8k and −13.1 % at 32k, outside `ta3`'s spread (0.09 s / 0.22 s). Decode is equal: TPOT +0.1 % /
   +1.1 %, inside the spread. In phase A, `mnbt8k` alone cost 1–4 % decode (§ 2); with MTP 3 and TRITON_ATTN it
   costs none. The cost is the KV cache: −18 % to −27 %, so 1.30–1.45 requests of 131k tokens instead of 1.78.
-  GSM8K and prompts are equal. It is not in production; the start script was not changed.
+  GSM8K and prompts are equal. It is not in production; the start script was not changed. The backend itself
+  does not change the KV cache much (ROCM_ATTN 227,951–230,800 tokens, TRITON_ATTN 232,700), so the reduction
+  comes from `--max-num-batched-tokens 8192`.
 
 ### 14.4 Incidents
 
@@ -815,7 +817,7 @@ Median of 9 values; in brackets the spread (max − min of the 9 values):
 | accepted tokens per draft (3 rounds) | 1.85 of 2 | 2.64 of 3 | — |
 | GSM8K-200 | 153 (76.5 %) | 155 (77.5 %) | within 2 × stderr |
 | 20 greedy prompts | — | 14 identical to `q27old` | different kernel |
-| KV cache (tokens) | 66,528 (log of round 1 not kept) | 41,870 (round 1) / 60,984 / 60,984 | −8 % |
+| KV cache (tokens) | 66,528 (rounds 2 and 3; the saved round-1 log has no KV line) | 41,870 (round 1) / 60,984 / 60,984 | −8 % (rounds 2 and 3) |
 
 - **Decode passes clearly:** both tok/s medians and both TPOT medians are better by more than `q27old`'s spread.
 - **Prefill is slower:** the 8k median time to first token is +8.9 %, outside the spread (0.19 s). So the rule of
@@ -825,5 +827,11 @@ Median of 9 values; in brackets the spread (max − min of the 9 values):
   the quality gate and is equal.
 - `q27new-1` had a smaller KV cache (41,870 tokens) than rounds 2 and 3 (60,984): less free GPU memory at that start
   (the desktop was in use). Its speed values are inside the arm's range.
-- **Not changed:** the start script keeps the new defaults for both models. Whether the 27B model should start with
-  the old ones (`-MtpTokens 2 -AttentionBackend ""`) for prefill-heavy work is the operator's choice.
+- **On this model the new defaults do not pass the ship test as written:** decode passes, but prefill is outside
+  the spread. They are in force anyway, because `start-vllm.ps1` has ONE set of defaults for every model it
+  starts, and the operator changed them on 2026-11-01 (§ 14.2) before this model was measured. That decision
+  supersedes § 9 item 3 ("do not change the defaults in `start-vllm.ps1`: they are for Qwen3.8-27B"), which is
+  kept as written.
+- **The operator's choice:** keep the new defaults for both models (decode +13.5 % / +17.6 %, prefill +8.9 %), or
+  start the 27B model with the old behaviour, `start-vllm.ps1 -MtpTokens 2 -AttentionBackend ""` (or make the
+  defaults depend on the model). Nothing was changed after this result.
