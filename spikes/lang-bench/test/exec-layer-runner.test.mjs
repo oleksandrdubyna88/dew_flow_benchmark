@@ -140,12 +140,13 @@ test('A_data_run_on_a_host_that_reads_memory_peak_is_certified_and_proceeds', as
 
 test('A_V8_heap_limit_abort_through_the_real_layer_is_memory_limit_with_the_runtime_abort_recorded', async t => {
   if (!needs(t)) return;
-  // the HARNESS never sets --max-old-space-size; this fixture's own run.sh does, to make V8 abort on its heap limit and print its real message
-  const result = await runCases(layerOptions(t, { runSh: '#!/bin/bash\nexec node --max-old-space-size=16 heap.js\n', files: { 'heap.js': 'const kept = []; for (;;) kept.push({ a: kept.length, b: [1, 2, 3] });\n' }, stack: 'node' }));
+  // the HARNESS never sets --max-old-space-size; this fixture's own run.sh does (64 MiB under a 128 MiB limit, so the peak is evidence), to make V8 abort on its heap limit and print its real message
+  const result = await runCases(layerOptions(t, { runSh: '#!/bin/bash\nexec node --max-old-space-size=64 heap.js\n', files: { 'heap.js': 'const kept = []; for (;;) kept.push({ a: kept.length, b: [1, 2, 3] });\n' }, stack: 'node', memoryMaxBytes: 128 * MIB }));
   const entry = caseOf(result, 's01');
   assert.equal(entry.reason, 'memory limit', `${JSON.stringify(entry.lifecycle.stderr.tail).slice(0, 300)}`);
   assert.equal(entry.lifecycle.memory.runtimeAbort, 'v8');
-  assert.equal(entry.lifecycle.memory.oomKill, 0, 'no kernel kill: V8 aborted by itself at its 16 MiB heap');
+  assert.ok(entry.lifecycle.memory.peakBytes * 2 >= entry.lifecycle.memory.maxBytes, `the evidence is in the record: peak ${entry.lifecycle.memory.peakBytes} of ${entry.lifecycle.memory.maxBytes}`);
+  assert.equal(entry.lifecycle.memory.oomKill, 0, 'no kernel kill: V8 aborted by itself at its 64 MiB heap');
   assert.match(entry.lifecycle.stderr.tail, /JavaScript heap out of memory/);
 });
 

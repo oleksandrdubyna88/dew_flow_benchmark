@@ -197,7 +197,7 @@ def run_case(case, config):
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
-    out = out._replace(memory={**out.memory, "runtimeAbort": rs_abort.runtime_abort(out.returncode, stderr_path)})
+    out = out._replace(memory={**out.memory, "runtimeAbort": rs_abort.runtime_abort(out.returncode, stderr_path, out.memory)})
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
     record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, out.launched.tracker)
     failed = _judge(case, config, out, comparer)

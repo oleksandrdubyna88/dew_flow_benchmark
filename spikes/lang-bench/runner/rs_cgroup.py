@@ -139,7 +139,8 @@ def memory(directory):
     on its own, so an `oom_kill` is judged from `memory.events` even when `memory.peak` cannot be read."""
     peak = _whole_number(_text(os.path.join(directory, "memory.peak")))
     events = _events_of(directory)
-    read = _kept(peakBytes=peak, events=events, oomKill=None if events is None else events.get("oom_kill", 0))
+    read = _kept(peakBytes=peak, maxBytes=_whole_number(_text(os.path.join(directory, "memory.max"))), events=events,
+                 oomKill=None if events is None else events.get("oom_kill", 0))
     known = peak is not None and events is not None
     return {"known": True, **read} if known else {"known": False, "why": "memory.peak or memory.events could not be read from the cgroup", **read}
 
