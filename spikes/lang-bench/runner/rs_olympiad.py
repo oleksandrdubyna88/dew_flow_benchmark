@@ -8,6 +8,7 @@ import signal
 import sys
 from typing import NamedTuple, Optional
 
+import rs_abort
 import rs_exec as ex
 import rs_launch as rl
 import rs_pump
@@ -144,9 +145,12 @@ def _over_time(case, config, out, comparer):
 
 
 def _out_of_memory(case, config, out, comparer):
-    """The kernel killed a process of the program's cgroup for memory: a failure whatever the exit status (a parent that exits 0 over an
-    OOM-killed child is never a pass)."""
-    return ("memory limit", None, [f"  memory.events: oom_kill {out.memory['oomKill']}"]) if out.memory.get("oomKill") else None
+    """The kernel killed a process of the program's cgroup for memory, or the program's runtime aborted on its own out of memory (rs_abort): a failure
+    whatever the exit status (a parent that exits 0 over an OOM-killed child is never a pass)."""
+    if out.memory.get("oomKill"):
+        return "memory limit", None, [f"  memory.events: oom_kill {out.memory['oomKill']}"]
+    abort = out.memory.get("runtimeAbort")
+    return ("memory limit", None, [f"  the {abort} runtime's own out-of-memory abort (exit status 134)"]) if abort else None
 
 
 def _mismatched(case, config, out, comparer):
@@ -193,6 +197,7 @@ def run_case(case, config):
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
+    out = out._replace(memory={**out.memory, "runtimeAbort": rs_abort.runtime_abort(out.returncode, stderr_path)})
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
     record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, out.launched.tracker)
     failed = _judge(case, config, out, comparer)

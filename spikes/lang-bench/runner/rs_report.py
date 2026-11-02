@@ -15,7 +15,7 @@ import rs_fields
 import rs_lex as lex
 from rs_transcript import abbreviate, canonical, render_actual
 
-RUNNER_VERSION = "0.2.0"
+RUNNER_VERSION = "0.2.1"
 GRAMMAR = 2
 RESULT_FORMAT = 1
 DASH = "—"
