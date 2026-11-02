@@ -12,6 +12,7 @@ import { needs, sh, toolchains } from './exec-layer-host.mjs';
 import { owned } from './owned.mjs';
 
 export const MIB = 1024 * 1024;
+export { SPAWN_ENV };
 const SPAWN_ENV = { PATH: '/usr/sbin:/usr/bin:/bin', XDG_RUNTIME_DIR: `/run/user/${process.getuid()}` };
 
 export const waitFor = async (condition, ms = 15_000) => {
@@ -39,7 +40,7 @@ export const commOf = pid => { try { return text(`/proc/${pid}/comm`).trim(); } 
  * One case's launch chain. `files` is `{ name: text }` written into the view; `holdSeconds` bounds the scope holder; `memoryMax` is `memory.max` of `prog/`; `tweak(prefix)` lets a test
  * build the WRONG mechanism from the right one (a prefix without `OOMPolicy=continue`, without the delegated entry).
  */
-export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB, holdSeconds = 60, caseId = 'c1', tweak = prefix => prefix, extraBox = {} } = {}) {
+export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB, holdSeconds = 60, caseId = 'c1', tweak = prefix => prefix, boxTweak = argv => argv, extraBox = {} } = {}) {
   const holder = await startHolder({ name: path.basename(owned.ownedDir(t, 'lhold')), boundSeconds: 300 });
   if (!holder.ok) throw new Error(holder.reason);
   t.after(() => stopHolder(holder.value));
@@ -56,14 +57,14 @@ export async function chain(t, { files = {}, view = null, memoryMax = 256 * MIB,
   const launch = (program = ['bash', 'run.sh']) => [
     ...tweak(scopePrefix({ unit, outDir: out, memoryMaxBytes: memoryMax, holdSeconds })),
     ...nsenterArgv(holder.value),
-    ...boxArgv({ view: viewDir, dirs: toolchains, env: boxEnv({ dirs: toolchains }), ...extraBox }), ...program,
+    ...boxTweak(boxArgv({ view: viewDir, dirs: toolchains, env: boxEnv({ dirs: toolchains }), ...extraBox })), ...program,
   ];
   return { ...parts, launch, start: (program, options = {}) => start(t, launch(program), options) };
 }
 
 /** Start the launch argv as the runner does (its own session, no stdin), and wait for the scope's `prog/` to hold a process. The child ends with the test. */
-export function start(t, argv, { stdio = 'ignore' } = {}) {
-  const child = spawn(argv[0], argv.slice(1), { stdio, detached: true, env: SPAWN_ENV });
+export function start(t, argv, { stdio = 'ignore', env = SPAWN_ENV } = {}) {
+  const child = spawn(argv[0], argv.slice(1), { stdio, detached: true, env });
   child.exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
   t.after(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } });
   return child;

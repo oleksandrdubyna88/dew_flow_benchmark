@@ -4,7 +4,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import path from 'node:path';
 import { test } from 'node:test';
 import { boxArgv } from '../lib/exec-layer/box.mjs';
-import { EMPTY_CASE, makeViews, removeViews, treeBytes, viewDir, viewTemplate } from '../lib/exec-layer/case-view.mjs';
+import { CERTIFY_CASE, EMPTY_CASE, makeViews, removeViews, treeBytes, viewDir, viewTemplate } from '../lib/exec-layer/case-view.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { owned } from './support/owned.mjs';
 import { needs, sh, toolchains } from './support/exec-layer-host.mjs';
@@ -22,8 +22,8 @@ test('Every_case_and_nothing_else_gets_a_view_of_its_own_and_the_control_gets_an
   const { tree, runDir } = fixture(t);
   const made = makeViews({ tree, runDir, caseIds: ['s01', 's02'] });
   assert.ok(made.ok, made.reason);
-  assert.deepEqual(readdirSync(path.join(runDir, 'views')).sort(), [EMPTY_CASE, 's01', 's02']);
-  assert.deepEqual(readdirSync(viewDir(runDir, EMPTY_CASE)), [], 'the empty-program control starts in an empty folder: its launch is timed, nothing is read from it');
+  assert.deepEqual(readdirSync(path.join(runDir, 'views')).sort(), [CERTIFY_CASE, EMPTY_CASE, 's01', 's02']);
+  for (const id of [EMPTY_CASE, CERTIFY_CASE]) assert.deepEqual(readdirSync(viewDir(runDir, id)), [], `${id} starts in an empty folder: its launch is timed or its memory read, nothing is read from the folder`);
   assert.equal(viewTemplate(runDir).replace('{case}', 's01'), viewDir(runDir, 's01'));
   assert.equal(readFileSync(path.join(viewDir(runDir, 's02'), 'bin', 'deep', 'data.txt'), 'utf8'), '12345');
   assert.equal(readlinkSync(path.join(viewDir(runDir, 's01'), 'current')), 'bin/app.dll', 'a link is copied as a link, never followed');
@@ -33,7 +33,7 @@ test('Every_case_and_nothing_else_gets_a_view_of_its_own_and_the_control_gets_an
 
 test('A_case_id_that_is_not_letters_digits_underscore_and_hyphen_or_is_the_control_is_refused', t => {
   const { tree, runDir } = fixture(t);
-  for (const id of ['../x', 'a b', 'a/b', '', EMPTY_CASE]) assert.equal(makeViews({ tree, runDir, caseIds: [id] }).ok, false, JSON.stringify(id));
+  for (const id of ['../x', 'a b', 'a/b', '', EMPTY_CASE, CERTIFY_CASE]) assert.equal(makeViews({ tree, runDir, caseIds: [id] }).ok, false, JSON.stringify(id));
   assert.equal(existsSync(path.join(runDir, 'views')), false, 'nothing was made');
 });
 
@@ -48,7 +48,7 @@ test('Removing_the_views_removes_every_one_even_a_read_only_one_and_names_what_i
   chmodSync(path.join(viewDir(runDir, 's01'), 'bin'), 0o555);
   const report = removeViews(runDir);
   assert.deepEqual(report.left, []);
-  assert.deepEqual(report.removed.sort(), [EMPTY_CASE, 's01']);
+  assert.deepEqual(report.removed.sort(), [CERTIFY_CASE, EMPTY_CASE, 's01']);
   assert.equal(existsSync(path.join(runDir, 'views')), false);
   assert.deepEqual(removeViews(runDir), { removed: [], left: [] }, 'a second call finds nothing and does not throw');
 });

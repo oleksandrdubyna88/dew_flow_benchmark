@@ -1,6 +1,6 @@
 // E1.S8b: the delegated scope (D43, the plan's "The shape, delegated scope"). One scope per case, and one for the run's `empty-program` control, named by an owned unit name:
-//   systemd-run --user --scope --unit=<unit> -p Delegate=yes -p OOMPolicy=continue -p MemorySwapMax=0 <scope-entry.sh> <out-dir> <memory.max> <holder seconds> <chain…>
-// `Delegate=yes` lets the unprivileged `scope-entry.sh` make the leaves `holder/` and `prog/` (the program's cgroup holds the launch chain and nothing else; the scope holder, a bounded
+//   systemd-run --user --scope --quiet --unit=<unit> -p Delegate=yes -p OOMPolicy=continue -p MemorySwapMax=0 <scope-entry.sh> <out-dir> <memory.max> <holder seconds> <chain…>
+// `--quiet` (not in the spec's text): without it systemd-run's "Running as unit" line would be the first line of every case's recorded stderr, which is the program's. `Delegate=yes` lets the unprivileged `scope-entry.sh` make the leaves `holder/` and `prog/` (the program's cgroup holds the launch chain and nothing else; the scope holder, a bounded
 // sleep, is the only process outside it and keeps the scope alive after the program's exit so `prog/memory.peak`, `memory.events` and `cgroup.procs` can be read). `OOMPolicy=continue`:
 // this host's DefaultOOMPolicy is `stop`, which would remove the whole scope on an OOM kill. The cgroup path is known BEFORE the spawn from the unit name: the user manager's
 // `app.slice`. `--cgroup-of` names `prog/`; the runner accepts a directory that does not exist yet and `scope-entry.sh` creates it.
@@ -29,7 +29,7 @@ export const userEnv = () => ({ PATH: '/usr/sbin:/usr/bin:/bin', XDG_RUNTIME_DIR
  * the case wall plus a margin, so a crashed layer's holder still ends.
  */
 export function scopePrefix({ unit, outDir, memoryMaxBytes, holdSeconds, systemdRun = 'systemd-run', entry = ENTRY }) {
-  return [systemdRun, '--user', '--scope', `--unit=${unit}`, '-p', 'Delegate=yes', '-p', 'OOMPolicy=continue', '-p', 'MemorySwapMax=0', entry, outDir, String(memoryMaxBytes), String(Math.ceil(holdSeconds))];
+  return [systemdRun, '--user', '--scope', '--quiet', `--unit=${unit}`, '-p', 'Delegate=yes', '-p', 'OOMPolicy=continue', '-p', 'MemorySwapMax=0', entry, outDir, String(memoryMaxBytes), String(Math.ceil(holdSeconds))];
 }
 
 const text = file => {

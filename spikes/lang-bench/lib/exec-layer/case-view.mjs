@@ -3,8 +3,8 @@
 // step 5) or, for a run that was killed, by the next run's startup sweep together with its run folder.
 //
 // DISK BUDGET: the views are all made before the runner starts, because the runner takes ONE template for the whole run and needs a case's view when that case starts. A run
-// therefore holds `cases x treeBytes(built tree)` of views at its peak, and nothing for the `empty-program` control, which starts in an empty folder (its launch is timed; nothing is
-// read from it). A 20 MiB built tree and 300 samples hold 6 GiB: put the run folder (`parent`) on a disk that has it, not on a RAM-backed `/tmp`. bwrap 0.11's
+// therefore holds `cases x treeBytes(built tree)` of views at its peak, and nothing for the `empty-program` control and the `certify` launch, which start in empty folders (their launch is
+// timed or their memory read; nothing is read from the folder). A 20 MiB built tree and 300 samples hold 6 GiB: put the run folder (`parent`) on a disk that has it, not on a RAM-backed `/tmp`. bwrap 0.11's
 // `--overlay-src <built> --tmp-overlay` would make a view free of copying; it is an optimisation CP2 may take once T-L34 passes with it.
 import { cpSync, lstatSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
@@ -13,6 +13,9 @@ import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 
 /** The case id of the empty-program control (the runner reserves it: no sample may take it). */
 export const EMPTY_CASE = 'empty-program';
+/** The case id of the launch that certifies the memory read before a run (the layer's own: no sample may take it either). */
+export const CERTIFY_CASE = 'certify';
+const EMPTY_VIEWS = Object.freeze([EMPTY_CASE, CERTIFY_CASE]);
 const CASE_ID = /^[A-Za-z0-9_-]+$/;
 
 const viewsRoot = runDir => path.join(runDir, 'views');
@@ -41,16 +44,16 @@ function copyView(tree, dest) {
  * control's. A copy that fails leaves what was made for `removeViews`; it is never half-trusted.
  */
 export function makeViews({ tree, runDir, caseIds }) {
-  const bad = caseIds.filter(id => !CASE_ID.test(id) || id === EMPTY_CASE);
-  if (bad.length > 0) return fail(`case id ${bad.map(id => JSON.stringify(id)).join(', ')} is not letters, digits, '_' and '-' (or is the reserved ${EMPTY_CASE})`);
+  const bad = caseIds.filter(id => !CASE_ID.test(id) || EMPTY_VIEWS.includes(id));
+  if (bad.length > 0) return fail(`case id ${bad.map(id => JSON.stringify(id)).join(', ')} is not letters, digits, '_' and '-' (or is one of the reserved ${EMPTY_VIEWS.join(', ')})`);
   try {
     mkdirSync(viewsRoot(runDir), { recursive: true });
     for (const id of caseIds) copyView(tree, viewDir(runDir, id));
-    mkdirSync(viewDir(runDir, EMPTY_CASE));
+    for (const id of EMPTY_VIEWS) mkdirSync(viewDir(runDir, id));
   } catch (error) {
     return fail(`a case view could not be made: ${error.code ?? error.message}`);
   }
-  return ok({ dirs: [...caseIds, EMPTY_CASE].map(id => viewDir(runDir, id)) });
+  return ok({ dirs: [...caseIds, ...EMPTY_VIEWS].map(id => viewDir(runDir, id)) });
 }
 
 function removeOne(runDir, id) {

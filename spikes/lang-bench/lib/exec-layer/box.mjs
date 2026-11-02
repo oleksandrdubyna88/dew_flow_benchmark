@@ -26,7 +26,7 @@ const hiddenRuntimes = exists => DISTRIBUTION_DOTNET_PATHS.filter(p => p.startsW
  */
 export function boxArgv({ view, dirs, env, statusFd, extraRo = [], exists = existsSync, bwrap = 'bwrap' }) {
   return [
-    bwrap, ...(statusFd === undefined ? [] : ['--json-status-fd', String(statusFd)]),
+    bwrap, ...(statusFd == null ? [] : ['--json-status-fd', String(statusFd)]),
     ...tmpfs('/'), ...roBind('/usr'), ...USR_LINKS.filter(name => exists(`/${name}`)).flatMap(link), ...hiddenRuntimes(exists).flatMap(tmpfs),
     ...[...ETC_FILES, ...Object.values(dirs), ...extraRo].flatMap(roBind),
     ...devProc(), ...tmpfs('/tmp'), ...bind(view), ...chdir(view),

@@ -1,8 +1,12 @@
 // E1.S8b: the box's environment is ONE allow-list (D15's base, the culture of D35, the base time zone, the documented per-stack keys). The unit half is here; the half
 // that reads the environment from INSIDE the real box is in this file's last test, which needs the whole layer.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import { ALLOW_LIST, BASE_ENV, boxEnv, unlistedKeys } from '../lib/exec-layer/env.mjs';
+import { chain, needs, SPAWN_ENV, start } from './support/exec-chain.mjs';
+import { toolchains } from './support/exec-layer-host.mjs';
 
 const dirs = { dotnetSdk: '/t/dotnet-sdk-10.0.403', node: '/t/node-v26.13.0-linux-x64', typescript: '/t/typescript-6.0.3' };
 
@@ -47,4 +51,31 @@ test('An_extra_key_may_add_a_key_and_may_replace_TZ_only', () => {
   assert.throws(() => boxEnv({ dirs, extra: { LANG: 'C' } }), /LANG/);
   assert.throws(() => boxEnv({ dirs, extra: { lc_all: 'C' } }), /LC_ALL/, 'a base key in another case is the same key to a program');
   assert.throws(() => boxEnv({ dirs, extra: { tz: 'C' } }), /TZ/, 'only the exact key TZ is replaceable: tz would sit beside it');
+});
+
+// ---- from INSIDE the real box (the chain: holder, delegated scope, box) ----
+const BASH_OWN_KEYS = ['PWD', 'OLDPWD', 'SHLVL', '_']; // set by bash itself before `exec env`: not the box's
+const PLANTED_HOST = { WSL_INTEROP: '/run/WSL/1_interop', WSL_DISTRO_NAME: 'Ubuntu', SECRET_TOKEN: 'planted', HOME: '/home/someone', LD_PRELOAD: '/nonexistent.so', TESTSTODELETE_PLANTED_HOST_KEY: '1' };
+
+async function envOfBox(t, boxTweak) {
+  const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nexec env -0 > env.txt\n' }, boxTweak });
+  await start(t, c.launch(), { env: { ...SPAWN_ENV, ...PLANTED_HOST } }).exited;
+  return Object.fromEntries(readFileSync(path.join(c.view, 'env.txt'), 'utf8').split('\0').filter(Boolean).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
+}
+
+test('The_box_environment_is_the_allow_list_and_nothing_else', async t => {
+  if (!needs(t)) return;
+  const seen = await envOfBox(t, argv => argv);
+  const own = Object.fromEntries(Object.entries(seen).filter(([key]) => !BASH_OWN_KEYS.includes(key)));
+  assert.deepEqual(unlistedKeys(own), [], 'no key of the host (a planted WSL_INTEROP, HOME, SECRET_TOKEN, LD_PRELOAD) is in the box');
+  assert.deepEqual(own, { ...boxEnv({ dirs: toolchains }) }, 'exactly the allow-listed keys, with the allow-listed values (NODE_OPTIONS present and empty, LANG and LC_ALL de_DE.UTF-8, TZ UTC)');
+  const leaking = await envOfBox(t, argv => argv.filter(arg => arg !== '--clearenv'));
+  assert.ok(unlistedKeys(Object.fromEntries(Object.entries(leaking).filter(([key]) => !BASH_OWN_KEYS.includes(key)))).includes('WSL_INTEROP'), 'the refuted shape — no --clearenv — leaks the host\'s WSL interop variable into the box');
+});
+
+test('The_box_runs_Node_in_the_declared_culture_and_without_an_invariant_switch', async t => {
+  if (!needs(t)) return;
+  const c = await chain(t, { files: { 'run.sh': '#!/bin/bash\nexec node -e \'console.log(Intl.DateTimeFormat().resolvedOptions().locale)\' > locale.txt\n' } });
+  assert.equal((await start(t, c.launch()).exited).code, 0);
+  assert.match(readFileSync(path.join(c.view, 'locale.txt'), 'utf8').trim(), /^de/, 'a Node probe\'s locale starts with de');
 });

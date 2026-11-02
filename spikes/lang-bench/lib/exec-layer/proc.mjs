@@ -1,7 +1,7 @@
 // E1.S8b: a process known by IDENTITY, never by its pid alone. The layer signals only a process it started: the pid, the start time (`/proc/<pid>/stat` field 22) and the first
 // element of its command line (an owned name, set with `exec -a`) must all still match, else the pid is another process now and nothing is sent. A zombie is gone.
 // Node has no pidfd, so the look and the signal are two steps; the window is microseconds and the start time makes a reused pid fail the look.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 const GRACE_MS = 2000;
 const POLL_MS = 20;
@@ -68,4 +68,25 @@ export async function endProcess(identity, { graceMs = GRACE_MS, pollMs = POLL_M
   if (await waitGone(identity, graceMs, pollMs)) return 'terminated';
   signalIfSame(identity, 'SIGKILL');
   return (await waitGone(identity, graceMs, pollMs)) ? 'killed' : 'stuck';
+}
+
+/** The command line of a process as an array, or null when it is not readable. */
+export function cmdlineOf(pid) {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter((arg, i, all) => arg !== '' || i < all.length - 1);
+  } catch {
+    return null;
+  }
+}
+
+/** The identities of every other process whose command line `match(argv)` accepts (a look at `/proc`, never a signal). */
+export function scanProcesses(match) {
+  const found = [];
+  for (const entry of readdirSync('/proc')) {
+    const pid = Number(entry);
+    const argv = Number.isInteger(pid) && pid !== process.pid ? cmdlineOf(pid) : null;
+    const identity = argv !== null && argv.length > 0 && match(argv) ? identityOf(pid) : null;
+    if (identity !== null) found.push(identity);
+  }
+  return found;
 }

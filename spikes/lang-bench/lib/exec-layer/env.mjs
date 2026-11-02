@@ -51,3 +51,11 @@ export function boxEnv({ dirs, extra = {} }) {
 
 /** The keys of `env` that are not on the allow-list (the scan the box's environment and the probe record are checked with). */
 export const unlistedKeys = env => Object.keys(env).filter(key => !ALLOW_LIST.includes(key));
+
+/**
+ * The driver's environment (the runner, outside the box, and the launcher it starts): the same allow-listed values, a folder of the run's own for `HOME`, `TMPDIR` and `DOTNET_CLI_HOME`
+ * (whatever the runner or a build makes dies with the run folder), and `XDG_RUNTIME_DIR` — the one key that is not the program's: `systemd-run --user` finds the user manager through it.
+ */
+export function driverEnv({ dirs, tmp, runtimeDir = `/run/user/${process.getuid()}` }) {
+  return Object.freeze({ ...boxEnv({ dirs }), HOME: tmp, TMPDIR: tmp, DOTNET_CLI_HOME: tmp, XDG_RUNTIME_DIR: runtimeDir });
+}
