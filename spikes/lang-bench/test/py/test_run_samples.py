@@ -274,7 +274,9 @@ class ExpectedBytesTests(unittest.TestCase):
 
     def two_cases(self, run_sh=None, build_sh=":\n"):
         box = Box(self, pairs={"s01.in": b"", "s01.out": b"right-one\n", "s02.in": b"", "s02.out": b"right-two\n"})
-        script = run_sh or f"printf 'wrong\\n'\nprintf 'wrong\\n' > {box.samples}/s02.out\nprintf 'wrong\\n' > {box.samples}/s01.out\n"
+        # the rewrites come BEFORE the output: the runner may end the case once the output is settled, and a rewrite after it could be cut
+        # between its truncate and its write (seen as an empty s02.out under load)
+        script = run_sh or f"printf 'wrong\\n' > {box.samples}/s02.out\nprintf 'wrong\\n' > {box.samples}/s01.out\nprintf 'wrong\\n'\n"
         box.write(box.ws, "run.sh", script)
         box.write(box.ws, "build.sh", build_sh)
         return box

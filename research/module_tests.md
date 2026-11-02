@@ -337,6 +337,5 @@ node spikes/lang-bench/run-tests.mjs 'test/push-*.test.mjs' test/run-base-tree.t
 | E1.S1: the shared bounded process launcher, the chunked batch readers, placement over new (path, blob) pairs | covered | `test/push-launch.test.mjs`, `test/push-scan.test.mjs` |
 | E1.S1: credits after an unclosed HTML comment do not count (CodeQL alert 18) | covered | `test/push-credits.test.mjs` |
 
-**Last full run (2026-11-01, `main` at `6321cd24`, E1.S1 and E1.S8a part i merged):** `node spikes/lang-bench/run-tests.mjs` — 821 tests,
-821 pass, 0 fail, 0 skipped, 49 s. A fresh worktree needs `git submodule update --init .agents/conventions` first: without it every
-`runner-*` file fails at import (`.agents/conventions/tools/lib/owned.mjs` not found), and the preflight tests fail.
+**Last full run (2026-11-02, `main` at `4f2cf79d` plus the race fix of the rewriting-stub test, E1.S1 and E1.S8a parts i and ii-a merged):** `node spikes/lang-bench/run-tests.mjs` — 1078 tests, 1078 pass, 0 fail, 0 skipped, plain and twice with `BENCH_REQUIRE_SANDBOX=1` (real `systemd-run` scopes and real bwrap). A fresh worktree needs `git submodule update --init .agents/conventions` first: without it every `runner-*` file fails at import (`.agents/conventions/tools/lib/owned.mjs` not found), and the preflight tests fail.
+Earlier: 821 of 821 on 2026-11-01 at `6321cd24`.
