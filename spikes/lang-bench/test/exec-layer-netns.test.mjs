@@ -2,17 +2,18 @@
 // `nsenter -t <holder> -U -n --preserve-credentials` and so does the box's bwrap, WITHOUT `--unshare-net`.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readlinkSync } from 'node:fs';
+import { readlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { boxArgv } from '../lib/exec-layer/box.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { nsenterArgv, startHolder, stopHolder } from '../lib/exec-layer/netns.mjs';
-import { identityOf, sameProcess } from '../lib/exec-layer/proc.mjs';
+import { identityOf, sameProcess, statOf } from '../lib/exec-layer/proc.mjs';
 import { isolation } from '../../minigit-bench/lib/bwrap.mjs';
 import { owned } from './support/owned.mjs';
 import { needs, sh, toolchains } from './support/exec-layer-host.mjs';
-import { ping, readyPort, stubView } from './support/exec-stubs.mjs';
+import { chain, commOf, programPid, start, text, waitFor } from './support/exec-chain.mjs';
+import { PROGRAM_COMM, ping, readyPort, STACKS, stubView } from './support/exec-stubs.mjs';
 
 const NS = '/proc/self/ns/net';
 
@@ -105,4 +106,40 @@ test('The_program_holds_no_capabilities_and_cannot_take_lo_down_and_that_is_the_
   const loud = await sh(nsenterArgv(wrongHolder)[0], [...nsenterArgv(wrongHolder).slice(1), ...kept, ...probe]);
   assert.doesNotMatch(loud.stdout, /CapEff:\s+0000000000000000/, 'without the drop the program holds every capability of the holder\'s user namespace');
   assert.match(loud.stdout, /lo-down-exit=0/, 'and it takes lo down for the driver as well');
+});
+
+// ---- T-L33 through the real chain (holder, delegated scope, box): the same test body for a Python, a Node and a C# stub, the same facts ----
+
+for (const stack of STACKS) {
+  test(`The_driver_and_a_${stack}_stub_share_one_loopback_only_namespace_and_the_driver_reaches_the_programs_port`, async t => {
+    if (!needs(t)) return;
+    const view = await stubView(t, stack);
+    const c = await chain(t, { view });
+    start(t, c.launch());
+    const port = await readyPort(view);
+    assert.ok(port, `the ${stack} stub listens`);
+    const driver = start(t, [...c.driver, 'python3', '-I', '-c', 'import time; time.sleep(60)']);
+    assert.ok(await waitFor(() => commOf(driver.pid) === 'python3'), 'the driver has joined the namespaces and runs python');
+    const program = await waitFor(() => programPid(c.prog, PROGRAM_COMM[stack]));
+    assert.ok(program, `the program is ${PROGRAM_COMM[stack]} in prog/`);
+    assert.equal(nsOf(driver.pid), nsOf(program), 'their /proc/<pid>/ns/net are equal');
+    assert.notEqual(nsOf(program), readlinkSync(NS), 'and differ from the host\'s');
+    assert.ok(text(`/proc/${program}/cgroup`).trim().endsWith(`${c.unit}.scope/prog`), '/proc/<pid>/cgroup puts the program in its scope');
+    assert.ok(!text(`/proc/${driver.pid}/cgroup`).includes(c.unit), 'and the driver not');
+    const links = await sh(c.driver[0], [...c.driver.slice(1), '/usr/sbin/ip', '-br', 'link']);
+    assert.deepEqual(links.stdout.trim().split('\n').map(line => line.split(/\s+/)[0]), ['lo'], 'lo is the only interface');
+    assert.equal(await ping(c.driver, port), 'PING', 'the driver reaches the program\'s port on 127.0.0.1');
+    assert.equal(commOf(statOf(program).ppid), 'bwrap', 'run.sh ended with exec: no bash above the program in the scope');
+  });
+}
+
+test('A_run_sh_without_exec_leaves_a_bash_above_the_program_and_that_is_the_point', async t => {
+  if (!needs(t)) return;
+  const view = await stubView(t, 'python');
+  writeFileSync(path.join(view, 'run.sh'), '#!/bin/bash\npython3 server.py\n');
+  const c = await chain(t, { view });
+  start(t, c.launch());
+  assert.ok(await readyPort(view));
+  const program = await waitFor(() => programPid(c.prog, PROGRAM_COMM.python));
+  assert.equal(commOf(statOf(program).ppid), 'bash', 'without exec the program\'s parent is bash, and a signal to the launcher would never reach the program (T-L31)');
 });
