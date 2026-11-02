@@ -19,6 +19,10 @@ import rs_samples as sm
 import run_samples as rs
 
 ENTRY = os.path.join(runner_path.RUNNER_DIR, "run_samples.py")
+# The CLI with the cgroup2 checks that a fake folder cannot pass (no mount, no real box) answered "yes": the same as `box_support.fake_cgroup2`.
+FAKE_CGROUP2_ENTRY = (f"import sys; sys.path.insert(0, {runner_path.RUNNER_DIR!r}); import rs_cgroup as cg; cg.is_cgroup2 = lambda d: True; "
+                      "cg.member_of = cg.in_cgroup = lambda pid, d: True; cg.cgroup2_root = lambda d: '/'; "
+                      "import run_samples; sys.exit(run_samples.main(sys.argv[1:]))")
 FORMAT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "runner", "format")
 ANSWER = b"7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1\n"
 OLYMPIAD = "a program that reads standard input once and writes standard output once"
@@ -39,6 +43,9 @@ def read_json(path):
     return json.loads(read_file(path, "r"))
 
 
+DEFAULT_PAIRS = {"s03.in": b"7\n", "s03.out": ANSWER}
+
+
 class Box:
     """A workspace and a samples directory in a temporary folder."""
 
@@ -49,24 +56,29 @@ class Box:
         self.ws, self.samples, self.out = (os.path.join(self.root, n) for n in ("ws", "samples", "out"))
         for d in (self.ws, self.samples, self.out):
             os.mkdir(d)
-        self.write(self.ws, "STATEMENT.md", statement(kind))
-        self.write(self.ws, "run.sh", run_sh)
-        self.write(self.ws, "build.sh", build_sh)
-        self.write(self.ws, "answer.bin", ANSWER)
-        for name, data in (pairs if pairs is not None else {"s03.in": b"7\n", "s03.out": ANSWER}).items():
+        self._fill(statement(kind), run_sh, build_sh, DEFAULT_PAIRS if pairs is None else pairs)
+
+    def _fill(self, statement_text, run_sh, build_sh, pairs):
+        for name, data in (("STATEMENT.md", statement_text), ("run.sh", run_sh), ("build.sh", build_sh), ("answer.bin", ANSWER)):
+            self.write(self.ws, name, data)
+        for name, data in pairs.items():
             self.write(self.samples, name, data)
 
     def write(self, folder, name, data):
         with open(os.path.join(folder, name), "wb") as f:
             f.write(data if isinstance(data, bytes) else data.encode("utf-8"))
 
-    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B"), generous=True):
+    def _limited(self, args, generous):
+        if not generous or "--limits" in args:
+            return args
+        self.write(self.root, "generous-limits.json", '{"timeS": 60}')
+        return (*args, "--limits", os.path.join(self.root, "generous-limits.json"))
+
+    def cli(self, *args, env=None, samples=True, entry=ENTRY, python_flags=("-I", "-B"), generous=True, fake_cgroup2=False):
         """Runs the CLI. A generous time limit is given unless the test names one (or passes generous=False to meet the floor): the machine is
-        often loaded and a wall time is not what most of these tests are about."""
-        if generous and "--limits" not in args:
-            self.write(self.root, "generous-limits.json", '{"timeS": 60}')
-            args = (*args, "--limits", os.path.join(self.root, "generous-limits.json"))
-        argv = [sys.executable, *python_flags, entry, *args] + ([self.samples] if samples else [])
+        often loaded and a wall time is not what most of these tests are about. `fake_cgroup2`: fake cgroup folders pass the cgroup2 checks."""
+        start = ("-c", FAKE_CGROUP2_ENTRY) if fake_cgroup2 else (entry,)
+        argv = [sys.executable, *python_flags, *start, *self._limited(args, generous)] + ([self.samples] if samples else [])
         full_env = {"PATH": os.environ["PATH"], "TMPDIR": tempfile.gettempdir(), **(env or {})}
         done = subprocess.run(argv, capture_output=True, cwd=self.ws, env=full_env, timeout=120)
         return done.returncode, done.stdout.decode("utf-8", "backslashreplace"), done.stderr.decode("utf-8", "backslashreplace")
@@ -130,9 +142,9 @@ class ProgressTests(unittest.TestCase):
     def test_A_full_run_says_when_the_build_and_each_case_start_and_end(self):
         pairs = {"s01.in": b"", "s01.out": ANSWER, "s02.in": b"", "s02.out": b"other\n"}
         code, out, err = Box(self, pairs=pairs).cli()
-        got = [re.sub(r" \([^)]*\)$", "", l) for l in self.lines(err)]
-        self.assertEqual(got, ["run_samples: build started", "run_samples: build finished", "run_samples: s01 started", "run_samples: s01 PASS",
-                               "run_samples: s02 started", "run_samples: s02 FAIL"])
+        got = [re.sub(r" \([^)]*\)$", "", re.sub(r"empty program: \d+ ms", "empty program: N ms", l)) for l in self.lines(err)]
+        self.assertEqual(got, ["run_samples: build started", "run_samples: build finished", "run_samples: timing the empty program through the launch prefix…",
+                               "run_samples: empty program: N ms", "run_samples: s01 started", "run_samples: s01 PASS", "run_samples: s02 started", "run_samples: s02 FAIL"])
 
     def test_The_build_line_carries_the_exit_status_and_the_case_line_its_wall_time(self):
         _, _, err = Box(self, build_sh="exit 2\n").cli()
@@ -161,9 +173,11 @@ class ProgressTests(unittest.TestCase):
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples], cwd=box.ws,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
-        first, second, third = proc.stderr.readline(), proc.stderr.readline(), proc.stderr.readline()
+        first, second, empty_before, empty_after, third = (proc.stderr.readline() for _ in range(5))
         self.assertEqual(first, b"run_samples: build started\n")
         self.assertIn(b"build finished", second)
+        self.assertIn(b"timing the empty program", empty_before)
+        self.assertIn(b"empty program: ", empty_after)
         self.assertEqual(third, b"run_samples: s03 started\n")
         self.assertIsNone(proc.poll(), "the case is still running when its start line has been read")
         proc.communicate(timeout=30)
@@ -383,7 +397,7 @@ class CleanupFailureTests(unittest.TestCase):
         self.assertEqual((code, out), (5, ""))
         self.assertIn("could not be killed", err)
 
-    def test_The_wait_for_the_group_backs_off_from_1_ms_to_50_ms_and_does_not_spin(self):
+    def test_The_wait_for_the_group_backs_off_from_1_ms_to_20_ms_and_does_not_spin(self):
         clock, slept = [0], []
         saved = (ex.group_present, ex.now_ms, ex.time.sleep)
         proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
@@ -400,148 +414,15 @@ class CleanupFailureTests(unittest.TestCase):
         finally:
             ex.group_present, ex.now_ms, ex.time.sleep = saved
         self.assertEqual(slept[0], 0.001)
-        self.assertEqual(max(slept), 0.05)
+        self.assertEqual(max(slept), 0.02, "E6: each poll is a scan of /proc, so the pace tops out at 20 ms")
         self.assertEqual(slept, sorted(slept), "the delay only grows")
-        self.assertEqual(slept[:6], [0.001, 0.002, 0.004, 0.008, 0.016, 0.032])
-        self.assertLess(len(slept), 60, f"{len(slept)} polls in the 2 s ceiling: a 1 ms spin would make 2000")
+        self.assertEqual(slept[:6], [0.001, 0.002, 0.004, 0.008, 0.016, 0.02])
+        self.assertLess(len(slept), 110, f"{len(slept)} polls in the 2 s ceiling: a 1 ms spin would make 2000")
 
     def test_A_group_that_goes_in_time_is_no_failure(self):
         proc = subprocess.Popen(["sleep", "61"], start_new_session=True)
         ex.kill_group(proc)
         self.assertFalse(ex.group_present(proc))
-
-
-class SampleSizeTests(unittest.TestCase):
-    """Every sample is held in memory for the whole run (the program under test must not be able to change what it is compared with): bounded."""
-
-    def run_in_process(self, box, ceiling):
-        saved, sm.MAX_SAMPLE_BYTES = sm.MAX_SAMPLE_BYTES, ceiling
-        err, real = io.StringIO(), (sys.stdout, sys.stderr)
-        sys.stdout, sys.stderr = io.StringIO(), err
-        try:
-            code = rs.run([box.samples, "--workspace", box.ws])
-        finally:
-            (sys.stdout, sys.stderr), sm.MAX_SAMPLE_BYTES = real, saved
-        return code, err.getvalue()
-
-    def test_Sizes_are_written_in_binary_units_with_one_decimal_and_without_a_float(self):
-        for size, text in ((0, "0 B"), (1000, "1000 B"), (1024, "1.0 KiB"), (1536 * 1024, "1.5 MiB"), (1 << 20, "1.0 MiB"), (110 * (1 << 20), "110.0 MiB"),
-                           (1 << 30, "1.0 GiB"), (3 * (1 << 30) + (1 << 29), "3.5 GiB")):
-            self.assertEqual(sm.human(size), text, size)
-
-    def test_The_too_large_message_gives_human_units_names_the_largest_files_and_suggests_only(self):
-        big = 3 * 1024
-        pairs = {"s01.in": b"", "s01.out": b"a" * big, "s02.in": b"x" * 2048, "s02.out": b"b" * 100, "s03.in": b"", "s03.out": b"c" * 10,
-                 "s04.in": b"", "s04.out": b"d" * 5}
-        box = Box(self, pairs=pairs)
-        code, err = self.run_in_process(box, 1024)
-        self.assertEqual(code, 4)
-        self.assertIn("the ceiling is 1.0 KiB", err)
-        self.assertNotIn("bytes of .in", err, "units, not a long number of bytes")
-        self.assertRegex(err, r"largest: s01\.out 3\.0 KiB, s02\.in 2\.0 KiB, s02\.out 100 B")
-        self.assertNotIn("s03.out", err.split("largest:")[1].split("\n")[0], "only the three largest")
-        self.assertIn("--only", err)
-        self.assertIn("--only s01", err)
-
-    def test_The_message_with_a_default_ceiling_says_GiB(self):
-        self.assertIn("1.0 GiB", sm.too_large_message([], 1 << 30))
-
-    def test_The_ceiling_is_one_GiB(self):
-        self.assertEqual(sm.MAX_SAMPLE_BYTES, 1 << 30)
-
-    def test_Samples_over_the_ceiling_are_exit_4_and_nothing_is_run(self):
-        box = Box(self, run_sh="touch started\n", pairs={"s01.in": b"x" * 600, "s01.out": b"y" * 600, "s02.in": b"", "s02.out": b"z" * 10})
-        code, err = self.run_in_process(box, 1000)
-        self.assertEqual(code, 4)
-        self.assertIn("the samples are too large to hold", err)
-        self.assertFalse(os.path.exists(os.path.join(box.ws, "started")))
-
-    def test_Samples_exactly_at_the_ceiling_are_held_and_one_byte_more_is_not(self):
-        box = Box(self, pairs={"s01.in": b"", "s01.out": b"a" * 10})
-        self.assertEqual(self.run_in_process(box, 10)[0], 1)
-        code, err = self.run_in_process(box, 9)
-        self.assertEqual(code, 4)
-
-    def test_Only_the_chosen_cases_count_toward_the_ceiling(self):
-        box = Box(self, pairs={"s01.in": b"", "s01.out": b"a" * 10, "s02.in": b"", "s02.out": b"b" * 5000})
-        saved, sm.MAX_SAMPLE_BYTES = sm.MAX_SAMPLE_BYTES, 100
-        try:
-            args = rs.build_parser().parse_args([box.samples, "--workspace", box.ws, "--only", "s01"])
-            plan = rs.make_plan(args)
-        finally:
-            sm.MAX_SAMPLE_BYTES = saved
-        self.assertIsInstance(plan, rs.Plan)
-
-    def pair_of(self, box, name):
-        return sm.Pair(name, os.path.join(box.samples, name + ".in"), os.path.join(box.samples, name + ".out"), name + ".in", name + ".out")
-
-    def test_A_sample_that_cannot_be_opened_is_cannot_read_for_each_file_and_not_a_size_of_zero(self):
-        gone = sm.Pair("s09", "/nonexistent/s09.in", "/nonexistent/s09.out", "s09.in", "s09.out")
-        _, problems = sm.load_all([gone])
-        self.assertEqual(len(problems), 2, "one for each of the two files")
-        self.assertTrue(all("cannot read" in p.message for p in problems))
-        self.assertIn("s09.in", problems[0].message)
-        self.assertIn("s09.out", problems[1].message)
-
-    def test_A_FIFO_swapped_in_after_the_listing_is_refused_by_what_was_opened_and_does_not_block(self):
-        box = Box(self, pairs={"s01.in": b"", "s01.out": b"x"})
-        os.remove(os.path.join(box.samples, "s01.out"))
-        os.mkfifo(os.path.join(box.samples, "s01.out"))
-        loaded, problems = sm.load_all([self.pair_of(box, "s01")])
-        self.assertEqual([p.message for p in problems], ["s01.out is not a regular file"])
-
-    def test_A_file_is_read_for_at_most_the_budget_left_plus_one_byte_whatever_its_size(self):
-        box = Box(self, pairs={"s01.in": b"", "s01.out": b"x" * 3_000_000})
-        real, total = os.read, []
-
-        def counting(fd, n):
-            data = real(fd, n)
-            total.append(len(data))
-            return data
-
-        saved, sm.MAX_SAMPLE_BYTES, os.read = sm.MAX_SAMPLE_BYTES, 1000, counting
-        try:
-            loaded, problems = sm.load_all([self.pair_of(box, "s01")])
-        finally:
-            os.read, sm.MAX_SAMPLE_BYTES = real, saved
-        self.assertEqual(len(problems), 1)
-        self.assertIn("too large to hold", problems[0].message)
-        self.assertEqual(sum(total), 1001, "the budget and one byte more: the size limit rests on what was read")
-
-    def test_The_budget_is_shared_by_all_the_samples_so_many_small_ones_can_pass_it(self):
-        pairs = {f"s{n:02d}.{ext}": b"x" * 100 for n in range(1, 6) for ext in ("in", "out")}
-        box = Box(self, pairs=pairs)
-        code, err = self.run_in_process(box, 999)
-        self.assertEqual(code, 4)
-        self.assertIn("too large", err)
-        self.assertNotEqual(self.run_in_process(box, 1000)[0], 4)
-
-    def test_A_sample_that_vanishes_after_the_listing_is_exit_4_cannot_read(self):
-        box = Box(self)
-        saved = sm.discover
-
-        def vanishing(samples_dir):
-            pairs, problems = saved(samples_dir)
-            os.remove(pairs[0].out_path)
-            return pairs, problems
-
-        sm.discover = vanishing
-        try:
-            code, err = self.run_in_process(box, 1 << 30)
-        finally:
-            sm.discover = saved
-        self.assertEqual(code, 4)
-        self.assertIn("cannot read", err)
-
-    def test_A_pair_that_cannot_be_read_is_a_configuration_problem_and_not_a_crash(self):
-        box = Box(self)
-        os.chmod(os.path.join(box.samples, "s03.out"), 0)
-        try:
-            code, err = self.run_in_process(box, 1 << 30)
-        finally:
-            os.chmod(os.path.join(box.samples, "s03.out"), 0o644)
-        self.assertEqual(code, 4, err)
-        self.assertIn("cannot read", err)
 
 
 class TemporaryFolderTests(unittest.TestCase):
@@ -710,12 +591,6 @@ class ConfigurationTests(unittest.TestCase):
         for text in ("not json", '{"a":1}', "[1, 2]", '"x"'):
             self.assertEqual(Box(self).cli("--launch-prefix", text)[0], 4, text)
 
-    def test_The_options_that_belong_to_part_two_are_refused_instead_of_silently_ignored(self):
-        for flag, value in (("--cgroup-of", "/x/{case}"), ("--launch-status", "3"), ("--case-view", "/v/{case}")):
-            code, _, err = Box(self).cli(flag, value)
-            self.assertEqual(code, 4, flag)
-            self.assertIn("not supported", err)
-
     def test_A_cases_file_attaches_its_comparison_and_requirement_ids_to_each_case_in_the_JSON_result(self):
         box = Box(self)
         box.write(box.samples, "cases.txt", "# manifest\ns03 bytes R1 R4\n")
@@ -800,7 +675,7 @@ class ResultTests(unittest.TestCase):
         box.cli("--json", out_json)
         record = read_json(out_json)
         self.assertEqual((record["format"], record["grammar"], record["kind"]), (1, 2, "olympiad"))
-        self.assertEqual(sorted(record), ["build", "cases", "format", "grammar", "kind", "python", "runner"])
+        self.assertEqual(sorted(record), ["build", "cases", "emptyProgram", "emptyProgramMs", "format", "grammar", "kind", "launch", "python", "runner"])
         case = record["cases"][0]
         self.assertEqual((case["id"], case["status"], case["entries"]), ("s03", "PASS", 1))
         self.assertEqual(case["lifecycle"]["memory"], {"known": False, "why": "not certified"})

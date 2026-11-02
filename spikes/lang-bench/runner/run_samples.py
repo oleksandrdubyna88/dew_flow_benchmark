@@ -1,12 +1,27 @@
 """run_samples: the baseline visible-sample runner (E1.S8a; FORMAT v2 grammar 2).
 
     python3 -I run_samples.py [--workspace DIR] [--kind olympiad|daemon|web] [--no-build] [--limits FILE] [--launch-prefix JSON]
+                              [--launch-status FD] [--cgroup-of TEMPLATE] [--case-view TEMPLATE]
+                              [--wrapper-pid-file TEMPLATE]
                               [--json OUT] [--only ID] [--parse-only] SAMPLES_DIR
 
-Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash),
-4 configuration (usage, a malformed sample with its file and line, a version or limits problem), 5 the runner itself failed.
-Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every case says
-its memory is not certified. The daemon and web kinds run in part ii of the story; here they parse (--parse-only).
+Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash, a case view that
+is missing, a LAUNCH FAILED), 4 configuration (usage, a malformed sample with its file and line, a version or limits problem), 5 the
+runner itself failed. Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every
+case says its memory is not certified. The daemon and web kinds run in part ii-b of the story; here they parse (--parse-only).
+
+The execution layer's options (E1.S8b builds the layer; this runner only reads what it hands over):
+  --launch-prefix JSON   a JSON array of strings put before `bash run.sh`; `{case}` in any element is replaced by the case id.
+  --launch-status FD     the descriptor number the prefix gives bwrap as `--json-status-fd FD`. The runner makes a pipe per case and puts
+                         its write end at FD in the launcher. `{"child-pid": P}` is the start of the case clock (bwrap writes it right after
+                         it clones the sandbox, before its mounts);
+                         no `child-pid` before the launcher exits is exit 3 `launch failed` with the prefix's stderr, never a case verdict.
+  --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
+                         after the program's exit and before any kill; the kill is `cgroup.kill`. Host pids only.
+  --wrapper-pid-file T   (with --cgroup-of) the file in which the layer's wrapper writes its pid (`{case}` filled in); the wrapper is then not
+                         taken for a leftover. Without the flag nothing is excluded as a wrapper; E1.S8b's delegated scope has none.
+  --case-view TEMPLATE   the fresh writable view of the built tree the layer made for the case (`{case}` filled in): the program starts in
+                         it and a scenario's `.scenario/` fixtures are written into it first. The samples directory may not lie in it.
 """
 import atexit
 import os
@@ -24,24 +39,27 @@ if __name__ == "__main__":  # under -I the script's own directory is not on sys.
 
 import argparse
 import json
-import signal
 import traceback
 from dataclasses import dataclass
 from typing import Any, Optional
 
 import rs_exec as ex
 import rs_json
+import rs_launch as rl
+import rs_layer as layer
 import rs_olympiad as ro
 import rs_pair
 import rs_report as rp
 import rs_samples as sm
+import rs_scope
 import rs_script
+import rs_stop
 import rs_transcript
+import rs_view
 from rs_lex import Problem
 
 EXIT_OK, EXIT_FAILED, EXIT_ENVIRONMENT, EXIT_CONFIG, EXIT_RUNNER = 0, 1, 3, 4, 5
 KINDS = ("olympiad", "daemon", "web")
-PART_TWO_OPTIONS = ("cgroup_of", "launch_status", "case_view")
 
 
 class Failure:
@@ -77,7 +95,7 @@ def build_parser():
     p.add_argument("--json", dest="json_out")
     p.add_argument("--only")
     p.add_argument("--parse-only", action="store_true")
-    for name in ("--cgroup-of", "--launch-status", "--case-view"):
+    for name in ("--cgroup-of", "--launch-status", "--case-view", "--wrapper-pid-file"):
         p.add_argument(name)
     return p
 
@@ -103,13 +121,8 @@ def _prefix_of(text):
     return parsed.value if parsed.ok and _is_string_list(parsed.value) else None
 
 
-def _refused_options(args):
-    return [f"--{name.replace('_', '-')} is not supported by this build (the execution layer's options come with part ii)"
-            for name in PART_TWO_OPTIONS if getattr(args, name) is not None]
-
-
 def _argument_problems(args):
-    problems = _refused_options(args)
+    problems = layer.status_problems(args) + layer.cgroup_problems(args)
     problems += [] if os.path.isdir(args.samples_dir) else [f"{sm.shown(args.samples_dir)} is not a directory"]
     problems += [] if args.launch_prefix is None or _prefix_of(args.launch_prefix) is not None else ["--launch-prefix must be a JSON array of strings"]
     return problems
@@ -188,7 +201,7 @@ def make_plan(args):
     kind, failure = _kind_of(args)
     pairs, pair_problems = _pairs_of(args)
     limits, limit_problems = _limits_of(args)
-    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs))
+    found = _texts(pair_problems + limit_problems + _unsupported(kind, pairs) + layer.plan_problems(args, pairs))
     if failure:
         return failure
     return Failure(EXIT_CONFIG, found) if found else Plan(kind, args, pairs, limits, _launch_prefix(args))
@@ -234,10 +247,25 @@ def _run_one(pair, config):
     return result
 
 
+def _timed_empty(config, scratch):
+    """The empty-program control, announced before and told after (it can take as long as a launch)."""
+    progress("timing the empty program through the launch prefix…")
+    record = layer.empty_record(rl.time_empty(config, rs_scope.lifecycle_for, os.path.join(scratch, "empty-program.stderr")))
+    progress(f"empty program: {record['ms']} ms" if record["ms"] is not None else "empty program: unknown (its end was not seen)")
+    return record
+
+
 def _run_cases(plan, scratch):
+    """(results, RunInfo): the empty program is timed first; a launch that fails stops the run (the cases done so far are kept)."""
     limit, basis = _limit_and_basis(plan)
-    config = ex.Config(os.path.abspath(plan.args.workspace), scratch, plan.prefix, limit, basis)
-    return [_run_one(p, config) for p in plan.pairs]
+    config, results, empty = layer.config_of(plan, scratch, limit, basis), [], None
+    try:
+        empty = _timed_empty(config, scratch)
+        for pair in plan.pairs:
+            results.append(_run_one(pair, config))
+    except rl.LaunchFailed as failed:
+        return results, layer.launch_failure(failed)
+    return results, layer.RunInfo(empty)
 
 
 def _build_outcome(done):
@@ -245,23 +273,29 @@ def _build_outcome(done):
 
 
 def _execute(plan, scratch):
-    """(build record, results): the build first unless --no-build; a build that fails fails every case."""
+    """(build record, results, RunInfo): the build first unless --no-build; a build that fails fails every case."""
     if plan.args.no_build:
-        return {"ran": False}, _run_cases(plan, scratch)
+        return ({"ran": False}, *_run_cases(plan, scratch))
     progress("build started")
     done = ex.build(os.path.abspath(plan.args.workspace), scratch)
     progress(f"build finished ({_build_outcome(done)}, {done.wall_ms} ms)")
     record = {"ran": True, "status": done.status, "wallMs": done.wall_ms, "timedOut": done.timed_out}
-    return record, (_run_cases(plan, scratch) if done.status == 0 and not done.timed_out else _build_failed(plan, done))
+    if done.status == 0 and not done.timed_out:
+        return (record, *_run_cases(plan, scratch))
+    return record, _build_failed(plan, done), layer.RunInfo()
 
 
-def _report(plan, build, results):
+def _write_json(plan, build, results, info):
+    if plan.args.json_out:
+        with open(plan.args.json_out, "w", encoding="utf-8") as f:
+            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results], info.launch, info.empty), f, indent=2, ensure_ascii=False)
+
+
+def _report(plan, build, results, info):
     for result in results:
         print("\n".join(rp.render_case(result)))
     print(rp.summary_line(results))
-    if plan.args.json_out:
-        with open(plan.args.json_out, "w", encoding="utf-8") as f:
-            json.dump(rp.run_record(plan.kind, build, [rp.case_record(r) for r in results]), f, indent=2, ensure_ascii=False)
+    _write_json(plan, build, results, info)
 
 
 def _scratch_run(plan):
@@ -276,14 +310,29 @@ def _exit_code(results):
     return EXIT_OK if all(r.status == "PASS" for r in results) else EXIT_FAILED
 
 
-def _run_olympiad(plan):
+def _environment_failure(plan):
+    """The Failure (exit 3) of a host that cannot run the case or a workspace that is not there, else None."""
+    host = layer.host_problems(plan.args)
+    if host:
+        return Failure(EXIT_ENVIRONMENT, [f"the host cannot run this: {problem}" for problem in host])
     if not os.path.isdir(plan.args.workspace):
         return Failure(EXIT_ENVIRONMENT, [f"workspace {sm.shown(plan.args.workspace)} is not a directory"])
+    return None
+
+
+def _run_olympiad(plan):
+    return _environment_failure(plan) or _run_cases_and_report(plan)
+
+
+def _run_cases_and_report(plan):
     try:
-        build, results = _scratch_run(plan)
-    except OSError as e:
+        build, results, info = _scratch_run(plan)
+    except (OSError, ex.EnvironmentProblem) as e:
         return Failure(EXIT_ENVIRONMENT, [f"cannot start a program: {type(e).__name__}: {e}"])
-    _report(plan, build, results)
+    if info.launch["failed"]:
+        _write_json(plan, build, results, info)
+        return Failure(EXIT_ENVIRONMENT, layer.launch_lines(info))
+    _report(plan, build, results, info)
     return _exit_code(results)
 
 
@@ -327,37 +376,14 @@ def _after_parsing(plan):
     return _run_olympiad(plan)
 
 
-class _Interrupted(BaseException):
-    """The runner itself was stopped by a signal. A BaseException, so no handler of a case swallows it."""
-
-    def __init__(self, signum):
-        super().__init__(signum)
-        self.signum = signum
-
-
-def _on_signal(signum, frame):
-    for other in (signal.SIGTERM, signal.SIGINT):  # the cleanup that follows must not be interrupted again
-        signal.signal(other, signal.SIG_IGN)
-    raise _Interrupted(signum)
-
-
-def _install_handlers():
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, _on_signal)
-
-
-def _stopped(stopped):
-    print(f"run_samples: interrupted by {signal.Signals(stopped.signum).name}: no verdict was reached", file=sys.stderr)
-    return EXIT_RUNNER
-
-
 def main(argv=None):
     configure_streams(sys.stdout, sys.stderr)
-    _install_handlers()
+    rs_stop.install_handlers()
     try:
         return run(sys.argv[1:] if argv is None else argv)
-    except _Interrupted as stopped:
-        return _stopped(stopped)
+    except rs_stop.Interrupted as interrupted:
+        rs_stop.stopped(interrupted)
+        return EXIT_RUNNER
     except Exception:
         traceback.print_exc()
         return EXIT_RUNNER
