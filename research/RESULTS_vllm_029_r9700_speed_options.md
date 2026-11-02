@@ -802,7 +802,9 @@ Median of 9 values (3 rounds × 3 runs); in brackets the spread (max − min of 
   and 1019; dump `110226-25328-01.dmp`). Windows Update then restarted the PC at 01:47 (event 1074, planned).
   Production was down until the operator agreed to a restart at 08:29. The restart loaded without a stop (free
   RAM fell to 5.2 GB, not below the guard's 2 GB), and a test request answered 391. One crash does not prove a
-  cause. It came at the end of a night of 14 model loads with free RAM near 0 at several of them. There is an
+  cause. It came at the end of 29 model starts between 18:08 and 01:41 (26 test starts in the series logs, without
+  the 2 that failed at once with `ERROR_ALREADY_EXISTS`, and 3 production restores), with free RAM near 0 at
+  several of them. There is an
   earlier dump of 2026-10-25 that was not examined. The dump was not analysed.
 
 ### 14.5 Series `speed27` — the new start-script defaults on Qwen3.8-27B-AWQ, 3 rounds
