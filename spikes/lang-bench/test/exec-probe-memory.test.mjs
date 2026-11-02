@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assertMemoryView, exitCodeOf, probeVerdict, isRatioFinding, overLimitRows, peakRatio, POLICY_DECIDED, POLICY_NAMES, POLICY_SUPERSEDED, readPolicy, validatePolicy, workloadAsserted, workloadRows } from '../lib/exec-probe/memory.mjs';
+import { assertMemoryView, exitCodeOf, LIMITS_MIB, probeVerdict, isRatioFinding, overLimitRows, peakRatio, POLICY_DECIDED, POLICY_NAMES, POLICY_SUPERSEDED, readPolicy, validatePolicy, workloadAsserted, workloadRows } from '../lib/exec-probe/memory.mjs';
 import { owned } from './support/owned.mjs';
 import { spikeDir } from './support/exec-layer-host.mjs';
 
@@ -277,4 +277,26 @@ test('A_missing_or_partial_observation_is_a_named_problem_in_the_verdict_and_nev
   }
   assert.deepEqual(assertMemoryView({ policy: POLICY_DECIDED, observations: { limits: [viewed(256), viewed(512)] } }), { ok: true, halt: null, problems: [] }, 'a whole observation is unchanged');
   assert.doesNotThrow(() => probeVerdict({ policy: POLICY_DECIDED, observations: { limits: [{}] } }), 'not even an empty observation');
+});
+
+// N3 (fix batch 4): the observed limits are EXACTLY the probe's two; an empty or one-limit record must not pass.
+test('The_observed_limits_must_be_exactly_256_and_512_MiB_and_a_missing_limit_is_a_named_problem', () => {
+  assert.deepEqual([...LIMITS_MIB], [256, 512]);
+  const run = limits => probeVerdict({ policy: POLICY_DECIDED, observations: { limits } });
+  assert.deepEqual(assertMemoryView({ policy: POLICY_DECIDED, observations: { limits: [viewed(256)] } }), { ok: true, halt: null, problems: [] }, 'assertMemoryView alone still judges the limits it is given (old records, one limit)');
+  assert.deepEqual(assertMemoryView({ policy: POLICY_DECIDED, observations: { limits: [viewed(256)] }, limits: LIMITS_MIB }).ok, false, 'and refuses when it is told which limits to require');
+  assert.deepEqual(run([viewed(256), viewed(512)]), { ok: true, halt: null, problems: [] });
+  for (const [name, limits, expected] of [
+    ['an empty record', [], /memory view not observed at 256 MiB.*memory view not observed at 512 MiB/s],
+    ['one limit', [viewed(256)], /memory view not observed at 512 MiB/],
+    ['the other limit', [viewed(512)], /memory view not observed at 256 MiB/],
+    ['a wrong limit', [viewed(256), viewed(1024)], /memory view not observed at 512 MiB/],
+    ['a duplicate', [viewed(256), viewed(256)], /memory view not observed at 512 MiB/],
+  ]) {
+    const verdict = run(limits);
+    assert.equal(verdict.ok, false, name);
+    assert.equal(verdict.halt, 'memory-view-mismatch', name);
+    assert.match(verdict.problems.join('\n'), expected, name);
+  }
+  assert.equal(run([viewed(512), viewed(256)]).ok, true, 'the order does not matter');
 });

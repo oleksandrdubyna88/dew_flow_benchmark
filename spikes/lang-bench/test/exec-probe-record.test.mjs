@@ -122,6 +122,7 @@ test('Progress_and_refusal_text_carries_no_control_character_ESC_and_CR_included
   assert.equal(printable('a\r\nb\rc'), 'a\\r\\nb\\rc');
   assert.doesNotMatch(printable('x\r\ny\tz\u001b[2K'), /[\u0000-\u001f]/, 'nothing raw is left');
   assert.equal(printable('héllo ✓ 日本'), 'héllo ✓ 日本', 'printable text is kept');
+  for (const code of [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]) assert.equal(printable(`a${String.fromCodePoint(code)}b`), 'ab', `N8: U+${code.toString(16)} (a bidi control: it can reorder the text on screen) is stripped`);
   const dir = owned.ownedDir(t, 'escpath');
   const evil = path.join(dir, 'rec\u001b[2J\rFAKE.json');
   writeFileSync(evil, '{}\n');

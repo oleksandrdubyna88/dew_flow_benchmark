@@ -7,14 +7,14 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fail } from '../../../minigit-bench/lib/result.mjs';
 import { observeAt } from './observe.mjs';
-import { assertMemoryView, exitCodeOf, overLimitRows, POLICY_DECIDED, probeVerdict, readPolicy, workloadRows } from './memory.mjs';
+import { assertMemoryView, exitCodeOf, LIMITS_MIB, overLimitRows, POLICY_DECIDED, probeVerdict, readPolicy, workloadRows } from './memory.mjs';
 import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
 import { RecordExists } from './record-path.mjs';
 
 const MIB = 1024 * 1024;
-export const LIMITS_MIB = Object.freeze([256, 512]);
+export { LIMITS_MIB };
 
 /** The memory verdict of a record under a policy file's content: `{ ok, halt, problems }`. */
 export const verdictFor = (record, policyFile) => assertMemoryView({ policy: policyFile.policy, observations: record.memoryView.observations });

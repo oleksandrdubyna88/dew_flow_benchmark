@@ -8,6 +8,8 @@ import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { MEMORY_POLICY } from '../exec-layer/policy.mjs';
 
 const MIB = 1024 * 1024;
+/** The limits the probe observes, in MiB (T-L43): a record of the pinned policy holds exactly these two. */
+export const LIMITS_MIB = Object.freeze([256, 512]);
 /** The decision of D55 (2026-11-02): each program sees its OWN cgroup read-only, .NET gets `DOTNET_GCHeapHardLimit` = ⌊0.9·L⌋ and Node `--max-old-space-size` = ⌊0.9·L / 1 MiB⌋. The layer pins it (`exec-layer/policy.mjs`). */
 export const POLICY_DECIDED = MEMORY_POLICY;
 /** OP-K's first decision (2026-11-02, 100 %), superseded by D55: still a legal name, so its evidence record (`exec-probe-2026-11-02.json`) stays readable and judgeable; nothing pins it. */
@@ -183,10 +185,16 @@ function problemsAt(policy, at) {
  * `{ ok, halt, problems }`: `halt` is `'memory-policy-undecided'` for a null policy (never ok), `'memory-view-mismatch'` when the policy is not met at some limit, else null.
  * `observations.limits[]`: `{ memoryMaxBytes, hostMemoryMax, csharp, node, churn, overLimit }` as the probe records them.
  */
-export function assertMemoryView({ policy, observations }) {
+export function assertMemoryView({ policy, observations, limits = null }) {
   if (policy === null) return { ok: false, halt: 'memory-policy-undecided', problems: [] };
-  const problems = observations.limits.flatMap(at => problemsAt(policy, at));
+  const problems = [...notObservedLimits(observations, limits), ...observations.limits.flatMap(at => problemsAt(policy, at))];
   return { ok: problems.length === 0, halt: problems.length === 0 ? null : 'memory-view-mismatch', problems };
+}
+
+/** N3: with `limits` (in MiB) given, each of them must be observed exactly once: an empty or one-limit record names what it lacks and does not pass. */
+function notObservedLimits(observations, limits) {
+  if (limits === null) return [];
+  return limits.filter(limit => observations.limits.filter(at => at.memoryMaxBytes === limit * MIB).length !== 1).map(limit => `memory view not observed at ${limit} MiB (the record must hold exactly one observation of each of ${limits.join(' and ')} MiB)`);
 }
 
 /**
@@ -194,7 +202,7 @@ export function assertMemoryView({ policy, observations }) {
  * it, so a probe that passed under it would certify a box nobody pinned. `assertMemoryView` still judges an OLD record by its own policy (`verdictFor`).
  */
 export function probeVerdict({ policy, observations }) {
-  if (policy === null || policy === POLICY_DECIDED) return assertMemoryView({ policy, observations });
+  if (policy === null || policy === POLICY_DECIDED) return assertMemoryView({ policy, observations, limits: LIMITS_MIB });
   return { ok: false, halt: 'memory-view-mismatch', problems: [`the memory policy is "${policy}", not the pinned "${POLICY_DECIDED}" (D55): the probe asserts the pinned policy only`] };
 }
 

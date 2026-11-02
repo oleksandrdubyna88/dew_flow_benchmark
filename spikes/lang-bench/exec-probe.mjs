@@ -141,6 +141,7 @@ try {
   if (!args.includes('--no-specs') && shouldStampProbedOn(record)) recordProbedOn(record);
   code = record.exit.code;
 } catch (error) {
+  if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143
   say(process.stderr, `exec-probe: failed: ${error.message}`);
   code = 2;
 } finally {
