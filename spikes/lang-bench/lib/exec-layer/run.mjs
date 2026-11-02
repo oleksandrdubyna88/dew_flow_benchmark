@@ -18,6 +18,7 @@ import { certifyMemory, HALT } from './certify.mjs';
 import { cleanup, registerRun, sweepStale } from './cleanup.mjs';
 import { computeIdentity, LAYER_DIR } from './identity.mjs';
 import { boxEnv, driverEnv } from './env.mjs';
+import { assertRunning } from './stopping.mjs';
 import { HALT_POLICY, MEMORY_POLICY, policyVerdict } from './policy.mjs';
 import { holderNameOf, RUN_WHAT, runIdOf, tooLongForUnit, unitPrefixOf } from './names.mjs';
 import { startHolder } from './netns.mjs';
@@ -108,7 +109,8 @@ async function openSteps(run) {
   run.limits = limits.value;
   const long = tooLongForUnit(run.unitPrefix, options.caseIds);
   if (long.length > 0) return fail(`the unit name of case ${long.join(', ')} would pass 63 characters; use shorter case ids`);
-  const holder = await startHolder({ name: run.holderName, boundSeconds: options.runCeilingMs / 1000 + HOLD_MARGIN_S });
+  assertRunning('a holder');
+  const holder = await (options.startHolder ?? startHolder)({ name: run.holderName, boundSeconds: options.runCeilingMs / 1000 + HOLD_MARGIN_S });
   if (!holder.ok) return fail(`the network-namespace holder did not start: ${holder.reason}`);
   Object.assign(run, { holder: holder.value, holderNet: readlinkSync(`/proc/${holder.value.pid}/ns/net`) });
   const views = makeViews({ runDir: run.dir, caseIds: options.caseIds });

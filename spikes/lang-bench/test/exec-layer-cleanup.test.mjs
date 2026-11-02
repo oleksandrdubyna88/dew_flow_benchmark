@@ -5,7 +5,7 @@
 // nothing it does not own.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -159,4 +159,69 @@ test('A_driver_killed_while_a_systemd_run_child_is_registering_leaves_no_scope',
   assert.equal(report.clean, true, JSON.stringify(report.left));
   await new Promise(resolve => setTimeout(resolve, 3000));
   assert.deepEqual(await listScopes(run.unitPrefix), [], `no scope of the run is left (the driver ${driver.pid} was ended while its children were registering)`);
+});
+
+// W4 (fix batch 4): an `openRun` that fails unregisters its run and ends what it opened, at every open step.
+test('An_openRun_that_fails_at_any_open_step_leaves_nothing_registered_nothing_on_disk_and_nothing_in_systemd', async t => {
+  if (!needs(t)) return;
+  const { liveRunCount } = await import('../lib/exec-layer/cleanup.mjs');
+  const { startHolder } = await import('../lib/exec-layer/netns.mjs');
+  const base = layerOptions(t);
+  const steps = {
+    'the tree is not a directory': { tree: path.join(base.tree, 'no-such-tree') },
+    'the limits file is malformed': { limitsFile: path.join(base.tree, 'run.sh') },
+    'the case wall is shorter than the time limit': { caseWallMs: 1 },
+    'a unit name would be too long': { caseIds: ['s'.repeat(80)] },
+    'the holder does not start': { startHolder: async () => ({ ok: false, reason: 'forced: no holder' }) },
+    'the views cannot be made (after the holder started)': { caseIds: ['../escape'], startHolder },
+  };
+  for (const [step, override] of Object.entries(steps)) {
+    const options = { ...layerOptions(t), ...override };
+    const before = liveRunCount();
+    const opened = await openRun(options);
+    assert.equal(opened.ok, false, step);
+    assert.equal(liveRunCount(), before, `${step}: the failed run is not left in the live registry`);
+    assert.deepEqual(readdirSync(options.parent), [], `${step}: no run folder, claim or view on disk`);
+    const prefixes = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => name.startsWith(owned.ownedPrefix('lhold')));
+    assert.equal(prefixes.length, 0, `${step}: no holder process`);
+  }
+});
+
+// B2: a late scope can bring the run folder back after a cleanup pass; every pass removes it directly.
+test('Every_cleanup_pass_removes_the_run_folder_itself_even_when_a_late_scope_made_it_again', async t => {
+  if (!needs(t)) return;
+  const opened = await openRun(layerOptions(t));
+  assert.ok(opened.ok, opened.reason);
+  const run = opened.value;
+  t.after(() => cleanup(run));
+  assert.equal((await cleanup(run)).clean, true);
+  assert.equal(existsSync(run.dir), false);
+  mkdirSync(path.join(run.dir, 'out', 'late-case'), { recursive: true }); // what a scope still in flight did with `mkdir -p`
+  const second = await cleanup(run);
+  assert.equal(existsSync(run.dir), false, 'the next pass removes the run folder directly, not only through scope.close()');
+  assert.equal(second.clean, true, JSON.stringify(second.left));
+});
+
+// B2: once the process is stopping, no new launch path starts a scope, a holder or a run (a check in the launch path itself).
+test('Once_stopping_is_set_no_run_is_opened_and_no_scope_prefix_is_built', async t => {
+  const { spawnSync } = await import('node:child_process');
+  const script = `
+    import { markStopped, isStopped } from ${JSON.stringify(new URL('../lib/exec-layer/stopping.mjs', import.meta.url).href)};
+    import { launchPrefix } from ${JSON.stringify(new URL('../lib/exec-layer/prefix.mjs', import.meta.url).href)};
+    import { registerRun } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
+    const fake = { unitPrefix: 'u', dir: '/nonexistent', options: { memoryMaxBytes: 1, dirs: {} }, limits: {}, tools: {}, env: {}, holder: { pid: 1 } };
+    const results = { before: isStopped() };
+    try { launchPrefix(fake); results.beforePrefix = 'built'; } catch (error) { results.beforePrefix = error.message.slice(0, 60); }
+    markStopped();
+    results.after = isStopped();
+    for (const [name, fn] of [['prefix', () => launchPrefix(fake)], ['register', () => registerRun({})]]) {
+      try { fn(); results[name] = 'allowed'; } catch (error) { results[name] = /stopping/.test(error.message) ? 'refused' : error.message; }
+    }
+    console.log(JSON.stringify(results));
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 20_000 });
+  const results = JSON.parse(ran.stdout.trim().split('\n').pop());
+  assert.equal(results.before, false);
+  assert.equal(results.after, true);
+  assert.deepEqual([results.prefix, results.register], ['refused', 'refused'], ran.stderr);
 });

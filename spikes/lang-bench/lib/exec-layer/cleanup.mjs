@@ -9,6 +9,7 @@ import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { removeViews } from './case-view.mjs';
 import { holderNameOf, runIdOf, unitPrefixOf } from './names.mjs';
+import { assertRunning, markStopped } from './stopping.mjs';
 import { endProcess, endProcessGroup, scanProcesses, sleep } from './proc.mjs';
 import { holderCgroup, killCgroup, listScopes, progCgroup, readProg, scopeCgroup, stopUnit } from './scope.mjs';
 
@@ -71,23 +72,26 @@ function dropViews(run) {
 
 async function dropRun(run) {
   await run.scope.close();
+  if (existsSync(run.dir)) run.owned.removeQuietly(run.dir); // B2: a scope still in flight may have made the folder again after `scope.close()` (or before this pass): every pass removes it itself
   return existsSync(run.dir) ? { removed: [], left: [entry('run', path.basename(run.dir), { reason: 'the run folder could not be removed; it stays claimed for the next sweep' })] } : { removed: [entry('run', path.basename(run.dir))], left: [] };
 }
 
 const liveRuns = new Set();
-let stopped = false; // set once `cleanupLiveRuns` starts: the probe's flow goes on while it cleans, and a run it opened after the snapshot would never be ended
 const LATE_PASSES = 3;
 const LATE_PASS_GAP_MS = 300;
 
 /** Remember an open run so a stopping process can end every run it started (V5): `cleanup` forgets it. */
 export function registerRun(run) {
-  if (stopped) throw new Error('this process is stopping: no new run is opened');
+  assertRunning('a new run');
   liveRuns.add(run);
 }
 
+/** How many runs this process has opened and not cleaned up. */
+export const liveRunCount = () => liveRuns.size;
+
 /** End every run this process opened and has not cleaned up yet (a SIGTERM mid-probe): the driver, the scopes, the holder, the views and the run folder of each. Never throws. */
 export async function cleanupLiveRuns(options) {
-  stopped = true;
+  markStopped(); // the probe's flow goes on while it cleans: nothing it starts after this point is a run, a scope or a holder
   const runs = [...liveRuns];
   const end = () => Promise.all(runs.map(run => cleanup(run, options).catch(() => null)));
   await end();

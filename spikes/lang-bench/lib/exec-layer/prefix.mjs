@@ -9,6 +9,7 @@ import { boxArgv } from './box.mjs';
 import { viewTemplate } from './case-view.mjs';
 import { nsenterArgv } from './netns.mjs';
 import { progTemplate, scopePrefix } from './scope.mjs';
+import { assertRunning } from './stopping.mjs';
 
 export const STATUS_FD = 7;
 /** The one margin of the layer: the scope holder's bound is T + G + this, the netns holder's is the run ceiling + this. */
@@ -27,6 +28,7 @@ export const holdSeconds = run => Math.ceil(requiredWallSeconds(run.limits)) + H
 
 /** `--launch-prefix`: everything before `bash run.sh`, `{case}` left for the runner. `outside` puts the `nsenter` in (a launch from outside the namespaces). */
 export function launchPrefix(run, { statusFd = STATUS_FD, outside = false } = {}) {
+  assertRunning('a scope');
   const scope = scopePrefix({ unit: `${run.unitPrefix}-{case}`, outDir: path.join(run.dir, 'out', '{case}'), memoryMaxBytes: run.options.memoryMaxBytes, holdSeconds: holdSeconds(run), systemdRun: run.tools.systemdRun });
   const join = outside ? nsenterArgv(run.holder, run.tools.nsenter) : [];
   return [...scope, ...join, ...boxArgv({ view: viewTemplate(run.dir), dirs: run.options.dirs, env: run.env, statusFd, extraRo: run.options.extraRo, bwrap: run.tools.bwrap, prog: progTemplate(run.unitPrefix), tree: run.options.tree })];

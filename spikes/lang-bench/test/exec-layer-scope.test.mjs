@@ -135,3 +135,23 @@ test('A_fork_bomb_in_the_box_stops_at_the_pids_bound_and_nothing_survives', asyn
   assert.equal(num(path.join(c.prog, 'pids.current')), 0);
   assert.equal(pidsIn(c.holderDir).length, 1, 'the scope holder outside prog/ is untouched');
 });
+
+// B2 (fix batch 4): a scope still starting after its run was cleaned up must not bring the run folder back (an unclaimed folder no sweep removes).
+test('The_scope_entry_fails_when_the_run_folder_is_gone_and_never_creates_it_again', async t => {
+  if (!needs(t)) return;
+  const { spawnSync } = await import('node:child_process');
+  const { rmSync } = await import('node:fs');
+  const { owned } = await import('./support/owned.mjs');
+  const runDir = owned.ownedDir(t, 'sentry');
+  const unit = `${path.basename(runDir)}-c1`;
+  let count = 0;
+  const enter = out => spawnSync(...[scopePrefix({ unit: `${unit}-${count += 1}`, outDir: out, memoryMaxBytes: 256 * MIB, holdSeconds: 2 })].map(prefix => [prefix[0], [...prefix.slice(1), 'true']]).flat(), { env: userEnv(), encoding: 'utf8', timeout: 20_000 });
+  const first = enter(path.join(runDir, 'out', 'c1'));
+  assert.equal(first.status, 0, first.stderr);
+  assert.ok(existsSync(path.join(runDir, 'out', 'c1', 'scope-cgroup')), 'with the run folder there, the entry makes out/<case> as before');
+  rmSync(runDir, { recursive: true, force: true });
+  const late = enter(path.join(runDir, 'out', 'c2'));
+  assert.notEqual(late.status, 0, 'the run folder is gone: the entry fails');
+  assert.match(late.stderr, /run folder/, 'and says why');
+  assert.equal(existsSync(runDir), false, 'and the run folder is NOT made again: no unclaimed folder is left for a sweep that cannot remove it');
+});
