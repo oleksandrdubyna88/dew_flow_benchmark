@@ -1,0 +1,14 @@
+2026-11-01 09:51:40 B2 START
+2026-11-01 11:35:40 B2 full search stopped by the operator's choice (coarse search instead); int4-bs-24 had run ~1 h 43 min
+2026-11-01 11:36:08 B2 START
+2026-11-01 11:57:05 b2_tune.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/tune_chunk.sh int4-coarse-mid 24 32 64 128 rc=0
+chunk int4-coarse-mid (bs 24 32 64 128): rc=0, 1244 s, json: E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json
+cache before clear: 1.3G	/root/.cache/vllm/triton-moe-tune
+wrote /mnt/c/Users/strug/vllm/tmp/vllm-pr-work/work/moe/tune/merged_b2/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json: triton 3.8.0, keys [1, 2, 4, 8, 12, 16, 24, 32, 64, 128, 256, 1024, 2048]
+2026-11-01 12:02:29 b2_kernel_ab.log /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/moe_kernel_ab.sh /tmp/claude-1000/-home-jinx-git-dew-flow-conventions/c16e63b1-1692-4f27-81c0-9216b3eb25e1/scratchpad/gpu/speedB2k rc=0
+B2 KERNEL: not faster (median change at 24/32/64/128: +0.0 %)
+2026-11-01 12:02:29 B2 DONE
+restore: start-vllm.ps1 extra arguments: none
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+f2efafa419cabbfd1e214daf39c27349c42919d98e431dbe0ab8738d0ad009b0
+restore: started at 2026-11-01T12:02:30+01:00
