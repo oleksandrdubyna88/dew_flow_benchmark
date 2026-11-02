@@ -47,8 +47,11 @@ def procs(directory):
 
 def _children_of(directory):
     """The descendant cgroups one level down: the folders that hold a `cgroup.procs`."""
-    names = (name for name in sorted(os.listdir(directory)) if os.path.exists(os.path.join(directory, name, "cgroup.procs")))
-    return [os.path.join(directory, name) for name in names]
+    try:
+        listed = sorted(os.listdir(directory))
+    except OSError:  # the cgroup vanished since its own procs were read: it has no descendants (a race the kernel makes real)
+        return []
+    return [os.path.join(directory, name) for name in listed if os.path.exists(os.path.join(directory, name, "cgroup.procs"))]
 
 
 def _below(directory):

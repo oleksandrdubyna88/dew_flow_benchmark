@@ -167,6 +167,11 @@ class DescendantTests(unittest.TestCase):
         self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2, 3, 4])
         self.assertIsNone(cg.procs_tree(os.path.join(folder, "missing")), "a cgroup that cannot be read is unreadable, never empty")
 
+    def test_A_cgroup_that_vanishes_between_the_read_of_its_procs_and_the_listing_of_its_children_is_what_was_read_and_never_a_crash(self):
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        with mock.patch.object(cg.os, "listdir", side_effect=FileNotFoundError(folder)):
+            self.assertEqual(cg.procs_tree(folder), [1, 2], "the descendants of a vanished cgroup are none; its own pids were read")
+
 
 class OrphanTests(unittest.TestCase):
     """A real-scope flake: the program (bash) was gone before the first look and its orphan `sleep`, now a child of bwrap's init, was adopted as

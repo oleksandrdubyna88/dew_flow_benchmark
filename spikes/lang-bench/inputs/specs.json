@@ -122,7 +122,7 @@
       },
       {
         "path": "rs_cgroup.py",
-        "sha256": "e79753607fe202c8df3cf91fc65fadb26560767faf9355e7dd4f133048e912f9"
+        "sha256": "8b76770b20d34b55dd82193c9bc78b319994b8abd8c37a6592b0ec6a6044466e"
       },
       {
         "path": "rs_check.py",
@@ -225,7 +225,7 @@
         "sha256": "f6e2d47d7c40acd58b43b1251f1855b18f80a687d96fcce19269f5bb8438d845"
       }
     ],
-    "manifestSha256": "0189bdd9f7e6056ffae3963def0c324233807250e135aec7d1869028129b7225",
+    "manifestSha256": "ff52c762c8827a15488716eaee7b92a33bc0d05ccfb824c00686ccb5a763bde0",
     "version": "0.2.2"
   }
 }
