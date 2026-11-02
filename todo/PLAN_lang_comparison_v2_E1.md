@@ -342,7 +342,7 @@ staged series and kept for their history.
 |---|---|---|---|
 | E1.S1 | merged (#142, `6321cd24`, 2026-11-01), the fix forward of D52 included (exact exemptions, T-L47): 821 of 821 `spikes/lang-bench` tests pass on `main`; the pre-push hook installed in the task repository from the main bench checkout, and its branch check of the task repository's `main` passes | `workspace-diff` and the push check over B's pairs | — |
 | E1.S5 | merged (#135) | — | — |
-| E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a** built on `feat/lang-v2-e1-s8a-iia`, in review (coai plan round passed; the code gate's second round of fixes in progress) | **part ii-b** — the second runner manifest (D50, T-L38) | — |
+| E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a merged** (#147, `4f2cf79d`, 2026-11-02): coai plan round and five code rounds passed; the third Opus review SAFE TO MERGE; 1078 of 1078 `spikes/lang-bench` tests on `main`, plain and with `BENCH_REQUIRE_SANDBOX=1`; its contracts for E1.S8b are in `research/module_lang_bench.md` | **part ii-b** — the second runner manifest (D50, T-L38) | — |
 | E1.S8b | **whole**, the netns holder included; CP2; the memory view asserted (T-L43) | — (the same identity) | — |
 | E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) | — |
 | E1.S4 | the full sets of both stacks, web packages included | — | — |
