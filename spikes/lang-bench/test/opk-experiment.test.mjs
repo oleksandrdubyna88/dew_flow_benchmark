@@ -2,7 +2,7 @@
 // variant built from the layer's own prefix: `--unshare-cgroup` plus a read-only bind of `prog/` at /sys/fs/cgroup, and nothing else changed (the box module is not touched).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cgroupViewPrefix, classify, summarise } from '../lib/exec-probe/opk.mjs';
+import { cgroupViewPrefix, classify, extraEnvFor, summarise, viewFor } from '../lib/exec-probe/opk.mjs';
 
 const PREFIX = ['/usr/bin/systemd-run', '--user', '--scope', '--unit=u-{case}', '/x/scope-entry.sh', '/o/{case}', '1', '9', '/usr/bin/bwrap', '--json-status-fd', '7', '--tmpfs', '/', '--proc', '/proc', '--unshare-pid', '--new-session', '--cap-drop', 'ALL', '--clearenv', '--setenv', 'A', 'b', '--'];
 
@@ -36,4 +36,21 @@ test('The_table_has_one_row_per_mode_stack_limit_and_policy_with_the_three_runs_
   const rows = summarise(runs);
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0], { mode: 'medium-objects', stack: 'node', limitMiB: 256, policy: 'today', results: ['PASS', 'PASS', 'memory limit'], ended: ['exit 0', 'exit 0', 'kernel oom_kill (1)'], peakMiB: [1, 2, 3] });
+});
+
+test('The_3b_variant_adds_the_hexadecimal_hard_limit_percent_to_the_dotnet_environment_only_on_top_of_the_view', () => {
+  assert.deepEqual(extraEnvFor('cgroup-view-own+gchl100', 'csharp'), { DOTNET_GCHeapHardLimitPercent: '0x64' });
+  assert.deepEqual(extraEnvFor('cgroup-view-own+gchl100', 'node'), {}, '.NET only');
+  assert.deepEqual(extraEnvFor('cgroup-view-own', 'csharp'), {});
+  assert.deepEqual(extraEnvFor('today', 'csharp'), {});
+  const view = cgroupViewPrefix(PREFIX, '/p/{case}');
+  assert.ok(viewFor('cgroup-view-own+gchl100') && viewFor('cgroup-view-own') && !viewFor('today'), 'the view is in 3 and 3b and not in 1');
+  assert.ok(view.length > PREFIX.length);
+});
+
+test('A_dotnet_native_out_of_memory_abort_is_told_from_a_managed_exception_and_from_a_kernel_kill', () => {
+  const abort = classify({ status: 'FAIL', reason: 'exit status 134', memory: { oomKill: 0 }, stderrTail: 'Out of memory.' });
+  assert.deepEqual(abort, { result: 'runtime error', ended: '.NET runtime abort "Out of memory." (exit status 134), not a kernel oom_kill' });
+  assert.match(classify({ status: 'FAIL', reason: 'exit status 134', memory: { oomKill: 0 }, stderrTail: 'Unhandled exception. System.OutOfMemoryException' }).ended, /OutOfMemoryException/);
+  assert.equal(classify({ status: 'FAIL', reason: 'memory limit', memory: { oomKill: 1 }, stderrTail: 'Out of memory.' }).result, 'memory limit');
 });

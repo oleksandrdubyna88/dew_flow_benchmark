@@ -15,9 +15,18 @@ const MIB = 1024 * 1024;
 const WALL_MS = 120_000;
 const TIME_LIMIT = { timeS: 100 };
 export const POLICIES = Object.freeze(['today', 'cgroup-view-own']);
+/** (3b): view (3) plus a hard limit of 100 % (hexadecimal, as .NET reads it) in the .NET environment only. */
+export const POLICY_3B = 'cgroup-view-own+gchl100';
+const EXTRA_ENV = Object.freeze({ [POLICY_3B]: Object.freeze({ csharp: Object.freeze({ DOTNET_GCHeapHardLimitPercent: '0x64' }) }) });
+
+/** The extra environment keys a policy gives a stack's program (through the per-stack allow-list; the box module is not changed). */
+export const extraEnvFor = (policy, stack) => EXTRA_ENV[policy]?.[stack] ?? {};
+/** Whether a policy puts the read-only view of the program's own cgroup in the box. */
+export const viewFor = policy => policy !== 'today';
 
 const DOTNET_FRACTION = 0.75;
 const OOM_NET = /OutOfMemoryException/;
+const OOM_NATIVE = /^Out of memory\.$/m;
 const OOM_V8 = /JavaScript heap out of memory|Reached heap limit/;
 
 /** How a run ended, from what the runner recorded: `{ result, ended }`. A kernel `oom_kill` wins over whatever the dying runtime printed. */
@@ -25,6 +34,7 @@ export function classify({ status, reason, memory, stderrTail }) {
   if (status === 'PASS') return { result: 'PASS', ended: 'exit 0' };
   if (reason === 'memory limit') return { result: 'memory limit', ended: `kernel oom_kill (${memory.oomKill})` };
   if (OOM_NET.test(stderrTail)) return { result: 'runtime error', ended: `.NET OutOfMemoryException (${reason})` };
+  if (OOM_NATIVE.test(stderrTail)) return { result: 'runtime error', ended: `.NET runtime abort "Out of memory." (${reason}), not a kernel oom_kill` };
   if (OOM_V8.test(stderrTail)) return { result: 'runtime error', ended: `V8 heap-limit abort (${reason})` };
   return { result: 'runtime error', ended: reason };
 }
@@ -39,7 +49,7 @@ export function cgroupViewPrefix(prefix, prog) {
   return [...prefix.slice(0, at), '--unshare-cgroup', '--ro-bind', prog, '/sys/fs/cgroup', ...prefix.slice(at)];
 }
 
-const tweakFor = (policy, run) => (policy === 'today' ? prefix => prefix : prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)));
+const tweakFor = (policy, run) => (viewFor(policy) ? prefix => cgroupViewPrefix(prefix, progTemplate(run.unitPrefix)) : prefix => prefix);
 
 function samples(owned, scope) {
   const dir = owned.ownedDir(scope, 'opksamples');
@@ -59,7 +69,7 @@ const tailOf = entry => entry?.lifecycle?.stderr?.tail ?? '';
 export async function runOnce({ owned, scope, dirs, csharpBuild, stack, mode, limitMiB, policy }) {
   const given = samples(owned, scope);
   const tree = programTree({ owned, scope, stack, mode: `${mode} ${limitMiB}`, csharpBuild });
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, samplesDir: given.dir, caseIds: ['p1'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, limitsFile: given.limits, extraEnv: extraEnvFor(policy, stack) });
   if (!opened.ok) return { mode, stack, limitMiB, policy, result: 'not run', ended: opened.reason, peakBytes: null, stderrTail: '' };
   const run = opened.value;
   try {
@@ -125,30 +135,46 @@ const factsOf = text => Object.fromEntries(text.split('\n').filter(line => line.
  * Before the (3) runs: inside the variant box, what do the runtimes believe and what can the program see? `{ ok, problems, facts, dotnet, node }`. It must show the limit in .NET's
  * `TotalAvailableMemoryBytes` and Node's `constrainedMemory()`, a cgroup path of `0::/`, a read-only bind holding no child cgroup, and no sibling cgroup or host path.
  */
-export async function verifyCgroupView({ owned, scope, dirs, csharpBuild, limitMiB, policy = 'cgroup-view-own' }) {
+export async function verifyCgroupView({ owned, scope, dirs, csharpBuild, limitMiB, policy = 'cgroup-view-own', dotnetFraction = DOTNET_FRACTION }) {
   const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
   writeFileSync(path.join(tree, 'cgview.sh'), CGVIEW);
-  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['cg', 'dn', 'nd'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv: extraEnvFor(policy, 'csharp') });
   if (!opened.ok) return { ok: false, problems: [opened.reason] };
   const run = opened.value;
   try {
     const facts = factsOf((await launchIn(run, policy, 'cg', ['bash', 'cgview.sh'])).stdout);
     const dotnet = JSON.parse((await launchIn(run, policy, 'dn', ['dotnet', 'bin/mem.dll', 'report'])).stdout || 'null');
     const node = JSON.parse((await launchIn(run, policy, 'nd', ['node', 'mem.mjs', 'report'])).stdout || 'null');
-    return judgeView({ facts, dotnet, node, limitBytes: limitMiB * MIB });
+    return judgeView({ facts, dotnet, node, limitBytes: limitMiB * MIB, dotnetFraction });
   } finally {
     await cleanup(run);
   }
 }
 
 /** The (3) view judged: the limit picked up by both runtimes (.NET sizes its GC to 75 % of a cgroup limit, so that is what it reports), an own-cgroup-only view. */
-export function judgeView({ facts, dotnet, node, limitBytes }) {
+export function judgeView({ facts, dotnet, node, limitBytes, dotnetFraction = DOTNET_FRACTION }) {
   const problems = [];
   if (facts['proc-self-cgroup'] !== '0::/') problems.push(`/proc/self/cgroup is "${facts['proc-self-cgroup']}", not 0::/`);
   if (Number(facts['memory-max']) !== limitBytes) problems.push(`/sys/fs/cgroup/memory.max says "${facts['memory-max']}", not ${limitBytes}`);
   if (facts['cgroup-dirs'] !== '') problems.push(`child or sibling cgroup directories are visible: ${facts['cgroup-dirs']}`);
   if (facts.sys !== 'fs' || facts['sys-fs'] !== 'cgroup') problems.push(`/sys holds "${facts.sys}" and /sys/fs holds "${facts['sys-fs']}", not only fs/cgroup`);
-  if (dotnet?.totalAvailableBytes !== limitBytes * DOTNET_FRACTION) problems.push(`.NET TotalAvailableMemoryBytes is ${dotnet?.totalAvailableBytes}, not ${DOTNET_FRACTION * 100} % of the limit`);
+  if (dotnetFraction !== null && dotnet?.totalAvailableBytes !== limitBytes * dotnetFraction) problems.push(`.NET TotalAvailableMemoryBytes is ${dotnet?.totalAvailableBytes}, not ${dotnetFraction * 100} % of the limit`);
   if (node?.constrainedBytes !== limitBytes) problems.push(`Node constrainedMemory() is ${node?.constrainedBytes}, not the limit`);
   return { ok: problems.length === 0, problems, facts, dotnet, node };
+}
+
+/**
+ * What .NET believes under `policy` with `extraEnv` (the `report` mode of the C# program, run once in the variant box): `{ totalAvailableBytes, heapHardLimit, cgroupVisible }` or null. A side measurement
+ * for the (3b) record: which values of `DOTNET_GCHeapHardLimitPercent` the runtime takes.
+ */
+export async function dotnetBelieves({ owned, scope, dirs, csharpBuild, limitMiB, policy, extraEnv }) {
+  const tree = probeTree({ owned, scope, sentinel: '/nonexistent', csharpBuild });
+  const opened = await openRun({ owned, parent: owned.ownedDir(scope, 'opkruns'), tree, caseIds: ['dn'], dirs, memoryMaxBytes: limitMiB * MIB, caseWallMs: WALL_MS, runCeilingMs: 2 * WALL_MS, extraEnv });
+  if (!opened.ok) return null;
+  try {
+    const ran = await launchIn(opened.value, policy, 'dn', ['dotnet', 'bin/mem.dll', 'report']);
+    return JSON.parse(ran.stdout || 'null');
+  } finally {
+    await cleanup(opened.value);
+  }
 }
