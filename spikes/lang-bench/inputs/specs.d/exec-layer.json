@@ -94,7 +94,7 @@
       "node": "v26.12.1",
       "systemd": "systemd 259 (259.5-0ubuntu3.4)"
     },
-    "probedOn": "2026-11-02T20:06:30.090Z",
+    "probedOn": "2026-11-02T21:21:46.239Z",
     "treeSha256": "71e8b99af193c416eefc93e4dc51398180a58e74ac55abd7c9b387c94787d95c"
   }
 }
