@@ -218,3 +218,26 @@ test('A_release_that_throws_is_one_stderr_line_and_the_exit_stays_the_records_co
   assert.match(s.said.join('\n'), /the stamp lock .*could not be released .*EBUSY/);
   fs.rmSync(lock, { force: true });
 });
+
+// K2: a failed commit with a failed put-back, THEN a failed record write: the messages come from the real state.
+test('A_failed_commit_a_failed_put_back_and_a_failed_record_write_name_the_stamped_pin_and_never_say_the_pins_were_not_changed', t => {
+  const s = setup(t);
+  const before = s.pins();
+  const io = failing({ rename: (from, to) => to.endsWith('specs.json') || from.includes('.restore-'), write: file => /exec-probe-x\.json\.tmp-|\.exec-probe-record\.tmp-/.test(file) });
+  const code = s.run({ io });
+  assert.equal(code, 2);
+  assert.notEqual(s.pins().layer, before.layer, 'the layer pin really is stamped: the messages must say so');
+  const said = s.said.join('\n');
+  assert.match(said, /specs\.d\/exec-layer\.json could not be put back: it points at a probe with NO record/, 'the stamped pin is named');
+  assert.doesNotMatch(said, /the pins were not changed|both pins were put back/, 'no message that contradicts the real state');
+  assert.equal(fs.existsSync(s.file), false, 'the placeholder was released');
+});
+
+test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restores_the_pin_and_says_so', t => {
+  const s = setup(t);
+  const before = s.pins();
+  const io = failing({ rename: (_from, to) => to.endsWith('specs.json'), write: file => /\.tmp-\d+$/.test(file) && !/\.stamp-|\.restore-/.test(file) });
+  assert.equal(s.run({ io }), 2);
+  assert.deepEqual(s.pins(), before, 'the put-back in the commit worked: nothing is stamped');
+  assert.doesNotMatch(s.said.join('\n'), /NO record/);
+});

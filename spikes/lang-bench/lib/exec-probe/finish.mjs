@@ -21,21 +21,38 @@ function stampSteps({ record, stage, io }) {
   } catch (error) { // every lock error is a record that says exit 2 (K1), never a throw that loses the record
     const lock = path.join(stage.inputsDir, LOCK_NAME);
     const reason = `the stamp lock ${lock} could not be used (${error.code ?? ''} ${error.message})`.replace('( ', '(');
-    return { record: exit2(record, reason), prepared: null, committed: false, lock: null, messages: [`exec-probe: ${reason}`] };
+    return { record: exit2(record, reason), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${reason}`] };
   }
-  if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, lock: null, messages: [`exec-probe: ${got.error}`] };
+  if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${got.error}`] };
   const messages = got.retired === null ? [] : [`exec-probe: ${got.retired}`];
   let prepared;
   try {
     prepared = prepareStamp({ ...stage, record, io });
   } catch (error) {
-    return { record: exit2(record, error.message), prepared: null, committed: false, lock: got, messages };
+    return { record: exit2(record, error.message), prepared: null, committed: false, stillStamped: [], lock: got, messages };
   }
   const committed = commitStamp(prepared, io);
-  if (committed.ok) return { record, prepared, committed: true, lock: got, messages };
-  discardStamp(prepared, io);
+  if (committed.ok) return { record, prepared, committed: true, stillStamped: [], lock: got, messages };
   const note = unstampedNote(committed.stamped);
-  return { record: exit2(record, `${committed.error}${note}`), prepared: null, committed: false, lock: got, messages: [...messages, ...(note === '' ? [] : [`exec-probe: the pins are inconsistent: ${committed.stamped.join(' and ')} is stamped, the other is not (exit 2)`])] };
+  // K2: the prepared stamp and the pins that ARE stamped are kept: if the record cannot be written either, those pins are put back and the messages come from the real state
+  return { record: exit2(record, `${committed.error}${note}`), prepared, committed: false, stillStamped: committed.stamped, lock: got, messages: [...messages, ...(note === '' ? [] : [`exec-probe: the pins are inconsistent: ${committed.stamped.join(' and ')} is stamped, the other is not (exit 2)`])] };
+}
+
+const LAYER_AND_SPECS = ['specs.d/exec-layer.json', 'specs.json'];
+
+/** Discard what is still in temporary files after the end (a failed commit leaves its temporary files). */
+const tidy = (steps, io) => { if (steps.prepared !== null && !steps.committed) discardStamp(steps.prepared, io); };
+
+/** The messages of a record that could not be written, from the REAL state of the pins (K2): the pins stamped before, which of them could not be put back, and the placeholder. */
+function writeFailure({ steps, reservation, error, io }) {
+  const stampedBefore = steps.committed ? LAYER_AND_SPECS : steps.stillStamped;
+  const back = stampedBefore.length > 0 && steps.prepared !== null ? restorePins(steps.prepared, io) : { stillStamped: [] };
+  const stuck = stampedBefore.filter(pin => back.stillStamped.includes(pin));
+  reservation.release();
+  tidy(steps, io);
+  const outcome = stampedBefore.length === 0 ? 'the pins were not changed' : stuck.length === 0 ? 'both pins were put back' : `${stuck.join(' and ')} could not be put back`;
+  const lines = stuck.length > 0 ? [`exec-probe: ${stuck.join(' and ')} could not be put back: it points at a probe with NO record (exit 2)`] : [];
+  return [`exec-probe: the record could not be written (${error.message}); ${outcome}; the placeholder was released (exit 2)`, ...lines];
 }
 
 /** Release the lock (L1: LAST): `[]` or one stderr line; a release that fails never changes the exit. */
@@ -54,21 +71,18 @@ function writeLast({ steps, reservation, report, onWritten, io, write }) {
   try {
     write(file, steps.record, reservation.held(), io);
   } catch (error) {
-    const back = steps.committed ? restorePins(steps.prepared, io) : { stillStamped: [] };
-    reservation.release();
-    const lockLines = releaseLast(steps.lock);
-    const stuck = back.stillStamped.length > 0 ? [`exec-probe: ${back.stillStamped.join(' and ')} could not be put back: it points at a probe with NO record (exit 2)`] : [];
-    const outcome = !steps.committed ? 'the pins were not changed' : back.stillStamped.length === 0 ? 'both pins were put back' : 'a pin could not be put back';
-    return { code: 2, messages: [...steps.messages, `exec-probe: the record could not be written (${error.message}); ${outcome}; the placeholder was released (exit 2)`, ...stuck, ...lockLines] };
+    const lines = writeFailure({ steps, reservation, error, io });
+    return { code: 2, messages: [...steps.messages, ...lines, ...releaseLast(steps.lock)] };
   }
   onWritten?.(steps.record.exit.code);
   reservation.take(); // written: the file is the record now, never released
   report(steps.record, file);
+  tidy(steps, io);
   return { code: steps.record.exit.code, messages: [...steps.messages, ...releaseLast(steps.lock)] }; // the lock is released LAST (L1)
 }
 
 /** `{ code, messages }` — the command's exit code and the lines for stderr. `write(file, record, held, io)` is the record writer (a seam), `onWritten(code)` is called once the record is in place. */
 export function finishProbe({ record, reservation, report, noSpecs, stage, io = fs, write = writeReservedRecord, onWritten }) {
-  const steps = !noSpecs && shouldStampProbedOn(record) ? stampSteps({ record, stage, io }) : { record, prepared: null, committed: false, lock: null, messages: [] };
+  const steps = !noSpecs && shouldStampProbedOn(record) ? stampSteps({ record, stage, io }) : { record, prepared: null, committed: false, stillStamped: [], lock: null, messages: [] };
   return writeLast({ steps, reservation, report, onWritten, io, write });
 }
