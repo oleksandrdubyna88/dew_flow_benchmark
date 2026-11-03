@@ -33,7 +33,14 @@ const say = (stream, text) => stream.write(`${printable(text)}\n`);
 const stop = (code, reason) => { say(process.stderr, `exec-probe: ${reason}`); process.exit(code); };
 let reservationHolder = makeReservation(null);
 const release = () => reservationHolder.release();
-const refuse = (code, reason) => { release(); stop(code, reason); };
+/** A refusal of the probe with its exit code. Inside the probe's `try` it is thrown and turned into the exit code by the `catch`, so the `finally` runs (L4: it closes the owned folders); `refuse` never calls `process.exit`. */
+class Refusal extends Error {
+  constructor(code, reason) {
+    super(reason);
+    this.code = code;
+  }
+}
+const refuse = (code, reason) => { throw new Refusal(code, reason); };
 
 async function ownedHelper() {
   const url = new URL('../../.agents/conventions/tools/lib/owned.mjs', import.meta.url);
@@ -128,8 +135,13 @@ try {
   code = final.code;
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143
-  say(process.stderr, `exec-probe: failed: ${error.message}`);
-  code = 2;
+  if (error instanceof Refusal) {
+    say(process.stderr, `exec-probe: ${error.message}`);
+    code = error.code;
+  } else {
+    say(process.stderr, `exec-probe: failed: ${error.message}`);
+    code = 2;
+  }
 } finally {
   release();
   if (scope !== null) await scope.close();

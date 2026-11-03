@@ -2,7 +2,7 @@
 // reservation is released once), B1 (the build box dies with its parent and every child the probe starts is ended).
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { boxArgv } from '../lib/exec-layer/box.mjs';
@@ -191,4 +191,20 @@ test('A_probe_stopped_during_the_network_lines_leaves_no_driver_server_or_other_
   const end = Date.now() + 5000;
   while (left().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
   assert.deepEqual(left(), [], 'no driver, server or holder of the probe is left');
+});
+
+// L4: a refusal inside the probe's `try` runs the `finally`: the owned folders are closed.
+test('A_probe_whose_C_sharp_program_does_not_build_is_refused_with_exit_2_and_leaves_no_probebuild_folder', async t => {
+  if (!needs(t)) return;
+  const dir = owned.ownedDir(t, 'l4');
+  const pin = path.join(dir, 'exec-layer.json');
+  writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  const scoped = privateProbeEnv(t);
+  const home = path.join(scoped.root, 'home'); // no toolchain store under it: the build box cannot bind the SDK, so the build fails
+  mkdirSync(home);
+  const ran = spawnSync(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', path.join(dir, 'record.json'), '--pinned-identity', pin, '--no-specs'], { encoding: 'utf8', timeout: 120_000, env: { ...scoped.env, HOME: home } });
+  assert.equal(ran.status, 2, ran.stderr.slice(-400));
+  assert.match(ran.stderr, /did not build/);
+  assert.deepEqual(readdirSync(scoped.tmp), [], 'the refusal ran the finally: no probebuild folder, no claim, no owned folder is left in the probe\'s temp root');
+  assert.equal(existsSync(path.join(dir, 'record.json')), false, 'and no empty record');
 });
