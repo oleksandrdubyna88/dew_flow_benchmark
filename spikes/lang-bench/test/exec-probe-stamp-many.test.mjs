@@ -26,8 +26,11 @@ function setup(t) {
   return { root, inputsDir, pins, lock: path.join(inputsDir, '.stamp.lock') };
 }
 
-/** One probe process: it waits for the common start time, runs `endOfProbe`, and prints `{ code }`. A commit rename takes 500 ms, so the holder keeps the lock while the others try. */
-function probeProcess({ s, index, startAt }) {
+/**
+ * One probe process (N6: a ready handshake, no fixed start time): it prints `ready` when it is loaded, waits for `go` on its stdin, runs `endOfProbe` and prints `{ code }`. A commit rename takes 500 ms, so the
+ * holder keeps the lock while the others try. `{ ready, go(), done }`: `ready` resolves when the child says so, `go()` releases it, `done` resolves with its result.
+ */
+function probeProcess({ s, index }) {
   const dir = path.join(s.root, `p${index}`);
   fs.mkdirSync(path.join(dir, 'stage'), { recursive: true });
   const file = path.join(dir, 'exec-probe-x.json');
@@ -37,25 +40,34 @@ function probeProcess({ s, index, startAt }) {
     import { makeReservation, reserveRecord } from ${mod('record-path')};
     const reservation = makeReservation(reserveRecord(${JSON.stringify(file)}));
     const io = { ...fs, renameSync: (from, to) => { if (String(to).endsWith('exec-layer.json')) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500); return fs.renameSync(from, to); } };
-    while (Date.now() < ${startAt}) { /* the common start */ }
+    process.stdout.write('ready\\n');
+    await new Promise(resolve => process.stdin.once('data', resolve));
     const code = endOfProbe({ record: ${JSON.stringify(RECORD)}, reservation, noSpecs: false, inputsDir: ${JSON.stringify(s.inputsDir)}, stageDir: ${JSON.stringify(path.join(dir, 'stage'))}, say: () => {}, report: () => {}, io });
     process.stdout.write(JSON.stringify({ code }));
-  `], { stdio: ['ignore', 'pipe', 'inherit'] });
-  return new Promise(resolve => {
-    let out = '';
-    child.stdout.on('data', chunk => { out += chunk; });
-    child.once('close', () => resolve({ ...JSON.parse(out || '{"code":"no output"}'), record: JSON.parse(fs.readFileSync(file, 'utf8')) }));
-  });
+  `], { stdio: ['pipe', 'pipe', 'inherit'] });
+  let out = '';
+  let signalReady;
+  const ready = new Promise(resolve => { signalReady = resolve; });
+  child.stdout.on('data', chunk => { out += chunk; if (out.includes('ready\n')) signalReady(); });
+  const done = new Promise(resolve => child.once('close', () => resolve({ ...JSON.parse(out.replace('ready\n', '') || '{"code":"no output"}'), record: JSON.parse(fs.readFileSync(file, 'utf8')) })));
+  return { ready, go: () => child.stdin.end('go\n'), done };
 }
 
-const together = (s, t) => { const startAt = Date.now() + 1500; return Promise.all(Array.from({ length: N }, (_, index) => probeProcess({ s, index, startAt }))); };
+/** N probes: all are loaded and ready first, then all are released together. */
+async function together(s) {
+  const probes = Array.from({ length: N }, (_, index) => probeProcess({ s, index }));
+  await Promise.all(probes.map(probe => probe.ready));
+  probes.forEach(probe => probe.go());
+  return Promise.all(probes.map(probe => probe.done));
+}
+
 const tmpFolders = s => [s.inputsDir, path.join(s.inputsDir, 'specs.d')].filter(dir => fs.existsSync(path.join(dir, '.exec-probe-tmp')));
 
 test('N_probes_started_together_against_one_stale_lock_none_stamps_every_record_says_2_and_the_lock_is_unchanged', async t => {
   const s = setup(t);
   fs.writeFileSync(s.lock, '999999 1');
   const before = s.pins();
-  const results = await together(s, t);
+  const results = await together(s);
   assert.deepEqual(results.map(result => result.code), Array(N).fill(2), 'every probe exits 2');
   results.forEach(result => {
     assert.equal(result.record.exit.code, 2, 'every record says exit 2');
@@ -69,7 +81,7 @@ test('N_probes_started_together_against_one_stale_lock_none_stamps_every_record_
 test('N_probes_started_together_with_no_lock_exactly_one_stamps', async t => {
   const s = setup(t);
   const before = s.pins();
-  const results = await together(s, t);
+  const results = await together(s);
   assert.equal(results.filter(result => result.code === 0).length, 1, `exactly one probe stamps: ${results.map(result => result.code).join(',')}`);
   results.filter(result => result.code !== 0).forEach(result => {
     assert.equal(result.code, 2);
