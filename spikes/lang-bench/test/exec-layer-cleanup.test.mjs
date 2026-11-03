@@ -174,6 +174,7 @@ test('An_openRun_that_fails_at_any_open_step_leaves_nothing_registered_nothing_o
     'the limits file is malformed': { limitsFile: path.join(base.tree, 'run.sh') },
     'the case wall is shorter than the time limit': { caseWallMs: 1 },
     'a unit name would be too long': { caseIds: ['s'.repeat(80)] },
+    'the box environment is refused (an unknown stack), after the folder would have been made': { stack: 'dotnet' },
     'the holder does not start': { startHolder: async args => { holderNames.push(args.name); return { ok: false, reason: 'forced: no holder' }; } },
     'the views cannot be made (after the holder started)': { caseIds: ['../escape'], startHolder: recording },
   };
@@ -258,4 +259,33 @@ test('A_cleanup_that_leaves_a_unit_keeps_the_run_folder_and_its_claim_and_a_late
   assert.ok(swept.retired.length >= 1, JSON.stringify(swept));
   assert.equal(existsSync(info.dir), false, 'the next start\'s sweep retires the run folder');
   assert.equal(existsSync(`${info.dir}.owner`), false, 'and its claim');
+});
+
+// L6: once the process is stopping, nothing creates a folder or starts a build.
+test('A_stop_before_the_run_or_the_build_begins_creates_no_folder_and_starts_no_build', async t => {
+  const { spawnSync } = await import('node:child_process');
+  const root = owned.ownedDir(t, 'l6');
+  const parent = path.join(root, 'runs');
+  mkdirSync(parent);
+  mkdirSync(path.join(root, 'tmp'));
+  const options = layerOptions(t);
+  const { owned: _owned, ...plain } = options;
+  const script = `
+    import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
+    import { markStopped } from ${JSON.stringify(new URL('../lib/exec-layer/stopping.mjs', import.meta.url).href)};
+    import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
+    import { buildCsharp } from ${JSON.stringify(new URL('../lib/exec-probe/programs.mjs', import.meta.url).href)};
+    const owned = ownedFor({ token: 'bench' });
+    const scope = owned.cleanupScope();
+    markStopped();
+    const opened = await openRun({ ...${JSON.stringify(plain)}, parent: ${JSON.stringify(parent)}, owned });
+    const built = await buildCsharp({ owned, scope, dirs: ${JSON.stringify(plain.dirs)} });
+    console.log(JSON.stringify({ opened: opened.ok, built: built.ok, why: built.reason ?? '' }));
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, TMPDIR: path.join(root, 'tmp') } });
+  const result = JSON.parse(ran.stdout.trim().split('\n').pop());
+  assert.deepEqual([result.opened, result.built], [false, false], ran.stderr);
+  assert.match(result.why, /stopping/);
+  assert.deepEqual(readdirSync(parent), [], 'no run folder');
+  assert.deepEqual(readdirSync(path.join(root, 'tmp')), [], 'no probebuild folder, no claim');
 });

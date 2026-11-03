@@ -92,11 +92,13 @@ function findTools() {
 }
 
 function newRun(options, tools) {
+  assertRunning('a run folder'); // L6: nothing is created once the process is stopping
   const { owned } = options;
+  const env = boxEnv({ dirs: options.dirs, extra: options.extraEnv, stack: options.stack, memoryMaxBytes: options.memoryMaxBytes }); // L2: a refusal (an unknown stack, a bad limit) comes BEFORE any folder is made
   const scope = owned.cleanupScope();
   const dir = owned.ownedDir(scope, RUN_WHAT, { parent: options.parent });
   const id = runIdOf(owned, dir);
-  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env: boxEnv({ dirs: options.dirs, extra: options.extraEnv, stack: options.stack, memoryMaxBytes: options.memoryMaxBytes }), holder: null, holderNet: null, limits: {} };
+  return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env, holder: null, holderNet: null, limits: {} };
 }
 
 async function openSteps(run) {
