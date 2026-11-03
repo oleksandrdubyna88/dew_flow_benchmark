@@ -16,7 +16,7 @@ import { openRun, runCases } from '../lib/exec-layer/run.mjs';
 import { sameProcess, scanProcesses, statOf } from '../lib/exec-layer/proc.mjs';
 import { needs } from './support/exec-layer-host.mjs';
 import { waitFor } from './support/exec-chain.mjs';
-import { layerOptions } from './support/exec-tree.mjs';
+import { layerOptions, retireCrashedRuns } from './support/exec-tree.mjs';
 import { owned } from './support/owned.mjs';
 
 const KILL_CHILD = fileURLToPath(new URL('./fixtures/exec-layer-killed-run.mjs', import.meta.url));
@@ -235,6 +235,7 @@ test('A_cleanup_that_leaves_a_unit_keeps_the_run_folder_and_its_claim_and_a_late
   const { spawnSync } = await import('node:child_process');
   const options = layerOptions(t);
   const { owned: _owned, ...plain } = options;
+  t.after(() => retireCrashedRuns(options)); // L5: a crash or a timeout of the child never leaves its run
   const script = `
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { cleanup } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
@@ -296,6 +297,7 @@ test('The_stop_message_after_a_hung_cleanup_names_the_run_its_scope_units_and_it
   const { spawnSync } = await import('node:child_process');
   const options = layerOptions(t);
   const { owned: _owned, ...plain } = options;
+  t.after(() => retireCrashedRuns(options)); // L5: a crash or a timeout of the child never leaves its run (retired by its id)
   const script = `
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { cleanup, cleanupLiveRuns, describeLiveRuns } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
@@ -390,4 +392,28 @@ test('Two_concurrent_cleanups_of_one_run_run_the_steps_once_and_share_the_report
   assert.equal(calls, 2, 'the scope step runs twice per cleanup (the confirmation pass), and the cleanup ran ONCE: four calls would be two cleanups');
   assert.deepEqual(one, two, 'both callers get the one report');
   assert.equal(one.clean, true);
+});
+
+// K5 (Opus L5): a test whose child can crash or time out registers a PARENT hook that retires the child's runs, so the test never leaves a holder or a folder.
+test('The_parent_hook_retires_the_run_of_a_child_that_crashed_with_its_holder_still_running', async t => {
+  if (!needs(t)) return;
+  const { spawnSync } = await import('node:child_process');
+  const options = layerOptions(t);
+  const { owned: _owned, ...plain } = options;
+  t.after(() => retireCrashedRuns(options)); // registered before the child runs (a crash or a timeout never skips it)
+  const script = `
+    import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
+    import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
+    const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
+    console.log(JSON.stringify({ ok: opened.ok, holder: opened.value?.holderName, dir: opened.value?.dir }));
+    process.kill(process.pid, 'SIGKILL'); // the child crashes with its run open
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000 });
+  const info = JSON.parse(ran.stdout.trim().split('\n').pop());
+  assert.equal(info.ok, true);
+  const holders = () => scanProcesses(argv => argv[0] === info.holder);
+  assert.equal(holders().length, 1, 'the crashed child left its holder running');
+  await retireCrashedRuns(options); // what the hook does
+  assert.deepEqual(holders(), [], 'the hook retired the holder by the run\'s id');
+  assert.equal(existsSync(info.dir), false, 'and the run folder');
 });

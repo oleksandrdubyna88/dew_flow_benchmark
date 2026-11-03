@@ -41,3 +41,12 @@ export function layerOptions(t, { runSh = '#!/bin/bash\nexec cat\n', files = {},
     memoryMaxBytes: 256 * MIB, caseWallMs: 20_000, runCeilingMs: 120_000, minSweepAgeMs: 0, stack: overrides.data ? 'node' : undefined, ...overrides, // a data run names its stack (D55); a test of that refusal passes `stack: undefined`
   };
 }
+
+/**
+ * Retire what a CRASHED or timed-out child left of its runs in `options.parent` (K5, Opus L5): the child is dead, so its claims say `gone`, and the layer's own sweep ends each run by its id — holder, scopes, views
+ * and folder. A test with a child registers this as a parent hook BEFORE the child runs.
+ */
+export async function retireCrashedRuns(options) {
+  const { sweepStale } = await import('../../lib/exec-layer/cleanup.mjs');
+  return sweepStale({ owned: options.owned, parent: options.parent, minAgeMs: 0 });
+}
