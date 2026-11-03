@@ -12,6 +12,7 @@ import { scanProcesses } from '../lib/exec-layer/proc.mjs';
 import { openRun, runnerArgv } from '../lib/exec-layer/run.mjs';
 import { killCgroup, progCgroup, progTemplate, readProg, scopePrefix, unitState, userEnv } from '../lib/exec-layer/scope.mjs';
 import { layerOptions } from './support/exec-tree.mjs';
+import { stopUnitsStartingWith, unitsStartingWith } from './support/probe-scope.mjs';
 
 const num = file => Number(text(file).trim());
 const SLEEPER = { 'run.sh': '#!/bin/bash\nexec sleep 300\n' };
@@ -177,9 +178,32 @@ test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
     const results = await Promise.all(Array.from({ length: 4 }, (_, n) => enter(path.join(base, 'out', `c${n}`)))); // `out/` does not exist yet: all four race to make it
     failures.push(...results.filter(result => result.code !== 0).map(result => `round ${round}: exit ${result.code} ${result.stderr.trim().slice(0, 80)}`));
   }
-  const unitsLeft = () => spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => name.startsWith(`${path.basename(runDir)}-r`));
+  const unitsLeft = () => unitsStartingWith(`${path.basename(runDir)}-r`);
+  t.after(() => stopUnitsStartingWith(`${path.basename(runDir)}-r`)); // a failure before the end never leaves a unit
   const settle = Date.now() + 30_000; // LOW 8: the last round's scopes (a 2 s holder each) are gone before the test ends
   while (unitsLeft().length > 0 && Date.now() < settle) await new Promise(resolve => setTimeout(resolve, 200));
+  stopUnitsStartingWith(`${path.basename(runDir)}-r`); // Opus L7: any unit of the last round still there is STOPPED, not only asserted
+  const gone = Date.now() + 10_000;
+  while (unitsLeft().length > 0 && Date.now() < gone) await new Promise(resolve => setTimeout(resolve, 100));
   assert.deepEqual(unitsLeft(), [], 'no scope of this test is left when it ends');
   assert.deepEqual(failures, [], 'no entry fails because another made out/ first');
+});
+
+// K5 (Opus L7): the L7 test STOPS any unit of its last round that is still there; the helper really stops a running scope, by its explicit name.
+test('The_unit_stop_helper_stops_a_running_scope_by_its_explicit_name', async t => {
+  if (!needs(t)) return;
+  const { spawn } = await import('node:child_process');
+  const { owned } = await import('./support/owned.mjs');
+  const runDir = owned.ownedDir(t, 'l7stop');
+  const unit = `${path.basename(runDir)}-r1`;
+  t.after(() => stopUnitsStartingWith(path.basename(runDir)));
+  const child = spawn('systemd-run', ['--user', '--scope', '--quiet', `--unit=${unit}`, 'sleep', '30'], { env: userEnv(), stdio: 'ignore', detached: true });
+  child.unref();
+  const end = Date.now() + 10_000;
+  while (unitsStartingWith(path.basename(runDir)).length === 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.deepEqual(unitsStartingWith(path.basename(runDir)), [`${unit}.scope`], 'the scope is running');
+  stopUnitsStartingWith(path.basename(runDir));
+  const stopped = Date.now() + 10_000;
+  while (unitsStartingWith(path.basename(runDir)).length > 0 && Date.now() < stopped) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.deepEqual(unitsStartingWith(path.basename(runDir)), [], 'the helper stopped it');
 });

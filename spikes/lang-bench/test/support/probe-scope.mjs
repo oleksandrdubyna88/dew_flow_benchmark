@@ -59,3 +59,13 @@ export function markerFolder(t, what) {
   markerFile = path.join(owned.ownedDir(t, what), 'marker.txt');
   return { markerFile };
 }
+
+/** The names of the systemd user units whose name starts with `prefix` (running or not yet gone). */
+export const unitsStartingWith = prefix => spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => name.startsWith(prefix));
+
+/** Stop each unit that starts with `prefix`, by its EXPLICIT name (never by a glob): the names stopped. */
+export function stopUnitsStartingWith(prefix) {
+  const names = unitsStartingWith(prefix);
+  names.forEach(name => spawnSync('systemctl', ['--user', 'stop', name], { encoding: 'utf8' }));
+  return names;
+}
