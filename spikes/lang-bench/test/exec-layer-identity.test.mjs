@@ -145,7 +145,8 @@ test('The_memory_policy_file_is_part_of_the_layer_identity_and_a_byte_of_it_chan
   writeFileSync(policy, `${JSON.stringify({ policy: MEMORY_POLICY })} \n`);
   const edited = computeIdentity(dir, { root, policyFile: policy });
   assert.notEqual(edited.value.execLayer.treeSha256, base.value.execLayer.treeSha256, 'one byte of the policy file changes the layer identity');
-  assert.match(verifyIdentity(dir, base.value, { root, policyFile: policy }).reason, new RegExp(`${POLICY_PATH.replace(/\./g, '\\.')} changed`));
+  const reason = verifyIdentity(dir, base.value, { root, policyFile: policy }).reason;
+  assert.ok(reason.includes(`${POLICY_PATH} changed`), `the refusal names the changed policy file: ${reason}`);
   assert.equal(computeIdentity(dir, { root }).value.execLayer.files.some(file => file.path === POLICY_PATH), false, 'a layer folder that is not the real one lists no policy unless it is given');
 });
 
