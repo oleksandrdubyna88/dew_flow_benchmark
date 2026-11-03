@@ -28,3 +28,8 @@ export function installStopHandlers({ proc = process, exit = code => proc.exit(c
     runStop(stopArguments({ code, exit, ...rest }));
   }));
 }
+
+/** An EPIPE on stdout or stderr (the reader of a pipe closed: `| head`) is ignored and any other stream error is thrown as it was (L4): a closed pipe must not turn a record's 0 into exit 1. */
+export function guardStreams(proc = process) {
+  [proc.stdout, proc.stderr].forEach(stream => stream.on('error', error => { if (error?.code !== 'EPIPE') throw error; }));
+}

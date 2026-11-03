@@ -359,3 +359,30 @@ test('The_record_is_written_through_a_temporary_file_with_a_fixed_known_name_bes
   assert.ok(names.includes(`.exec-probe-record.tmp-${process.pid}`), `a known name, so a dead probe's leftover can be retired without listing the folder: ${names.join(', ')}`);
 });
 
+
+// L4 (fix batch 8): an EPIPE on stdout or stderr (`| head`) must not turn a record's 0 into exit 1.
+test('A_closed_stdout_and_stderr_do_not_change_the_exit_from_the_records_code_and_without_the_guard_they_do', async t => {
+  const exitOf = async guarded => {
+    const s = setup(t);
+    const wiring = JSON.stringify(new URL('../lib/exec-probe/wiring.mjs', import.meta.url).href);
+    const end = JSON.stringify(new URL('../lib/exec-probe/command-end.mjs', import.meta.url).href);
+    const child = spawn(process.execPath, ['--input-type=module', '-e', `
+      import { endOfProbe } from ${end};
+      import { guardStreams } from ${wiring};
+      import { makeReservation, reserveRecord } from ${JSON.stringify(new URL('../lib/exec-probe/record-path.mjs', import.meta.url).href)};
+      ${guarded ? 'guardStreams(process);' : ''}
+      const reservation = makeReservation(reserveRecord(${JSON.stringify(s.file + '.epipe')}));
+      await new Promise(resolve => setTimeout(resolve, 400)); // the reader of the pipes is gone by now
+      const code = endOfProbe({ record: ${JSON.stringify(record(0))}, reservation, noSpecs: true, inputsDir: ${JSON.stringify(s.inputsDir)}, stageDir: ${JSON.stringify(s.stageDir)}, say: text => process.stderr.write(text + '\\n'), report: () => { process.stdout.write('ok a\\n'); process.stdout.write('ok b\\n'); process.stderr.write('exec-probe: x\\n'); } });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      process.exit(code);
+    `], { stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.destroy();
+    child.stderr.destroy(); // `| head` closed the reading ends
+    return new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  };
+  const guarded = await exitOf(true);
+  assert.equal(guarded.code, 0, `the record says 0: the exit stays 0 although both streams are closed (${JSON.stringify(guarded)})`);
+  const unguarded = await exitOf(false);
+  assert.notEqual(unguarded.code, 0, 'without the guard the EPIPE turns the 0 into a failure: the test can fail');
+});

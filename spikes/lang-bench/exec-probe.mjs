@@ -27,7 +27,7 @@ import { emptyProgramTree } from './lib/exec-probe/empty-tree.mjs';
 import { runProbe } from './lib/exec-probe/probe.mjs';
 import { retireStartupStrays } from './lib/exec-probe/strays.mjs';
 import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
-import { endArguments, installStopHandlers, newState } from './lib/exec-probe/wiring.mjs';
+import { endArguments, guardStreams, installStopHandlers, newState } from './lib/exec-probe/wiring.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
@@ -110,6 +110,7 @@ let scope = null;
 const cleanLive = () => cleanupLiveRuns();
 
 let stopping = false;
+guardStreams(process); // L4: an EPIPE (`| head`) never turns the record's code into a failure
 const state = newState(); // `state.written`: the record's exit code once it is in place (a stop after that exits with it)
 installStopHandlers({ state, say: text => say(process.stderr, text), release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close(), onStopping: () => { stopping = true; } });
 process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
