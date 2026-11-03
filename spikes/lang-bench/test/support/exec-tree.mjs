@@ -34,12 +34,19 @@ function livePin(t) {
   return file;
 }
 
-export function layerOptions(t, { runSh = '#!/bin/bash\nexec cat\n', files = {}, ids = ['s01'], ...overrides } = {}) {
-  return {
+/**
+ * The options of one layer run. `retireCrashed: true` (M1) registers the hook that retires the runs of a crashed or timed-out child BEFORE anything else: `node:test` runs `after` hooks first-in, first-out, so
+ * the retire must come before the removal of the runs parent (registered by `ownedDir` below), or it would find an empty folder.
+ */
+export function layerOptions(t, { runSh = '#!/bin/bash\nexec cat\n', files = {}, ids = ['s01'], retireCrashed = false, ...overrides } = {}) {
+  let options = null;
+  if (retireCrashed) t.after(() => retireCrashedRuns(options));
+  options = {
     pinnedIdentityFile: livePin(t),
     owned, parent: owned.ownedDir(t, 'runs'), tree: builtTree(t, runSh, files), samplesDir: samplesDir(t, ids), caseIds: ids, dirs: toolchains,
     memoryMaxBytes: 256 * MIB, caseWallMs: 20_000, runCeilingMs: 120_000, minSweepAgeMs: 0, stack: overrides.data ? 'node' : undefined, ...overrides, // a data run names its stack (D55); a test of that refusal passes `stack: undefined`
   };
+  return options;
 }
 
 /**

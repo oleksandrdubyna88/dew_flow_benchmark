@@ -10,6 +10,7 @@ import { openRun } from '../lib/exec-layer/run.mjs';
 import { scanProcesses } from '../lib/exec-layer/proc.mjs';
 import { needs } from './support/exec-layer-host.mjs';
 import { layerOptions, retireCrashedRuns } from './support/exec-tree.mjs';
+import { unitsStartingWith } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 // W4 (fix batch 4): an `openRun` that fails unregisters its run and ends what it opened, at every open step.
@@ -84,9 +85,8 @@ test('Once_stopping_is_set_no_run_is_opened_and_no_scope_prefix_is_built', async
 test('A_cleanup_that_leaves_a_unit_keeps_the_run_folder_and_its_claim_and_a_later_sweep_retires_them', async t => {
   if (!needs(t)) return;
   const { spawnSync } = await import('node:child_process');
-  const options = layerOptions(t);
-  const { owned: _owned, ...plain } = options;
-  t.after(() => retireCrashedRuns(options)); // L5: a crash or a timeout of the child never leaves its run
+  const options = layerOptions(t, { retireCrashed: true }); // the retire hook is registered BEFORE the folder (M1)
+  const { owned: _owned, retireCrashed: _retire, ...plain } = options;
   const script = `
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { cleanup } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
@@ -146,9 +146,8 @@ test('A_stop_before_the_run_or_the_build_begins_creates_no_folder_and_starts_no_
 test('The_stop_message_after_a_hung_cleanup_names_the_run_its_scope_units_and_its_folder', async t => {
   if (!needs(t)) return;
   const { spawnSync } = await import('node:child_process');
-  const options = layerOptions(t);
-  const { owned: _owned, ...plain } = options;
-  t.after(() => retireCrashedRuns(options)); // L5: a crash or a timeout of the child never leaves its run (retired by its id)
+  const options = layerOptions(t, { retireCrashed: true }); // L5, M1: a crash or a timeout of the child never leaves its run: the hook is registered BEFORE the folder
+  const { owned: _owned, retireCrashed: _retire, ...plain } = options;
   const script = `
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { cleanup, cleanupLiveRuns, describeLiveRuns } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
@@ -249,9 +248,8 @@ test('Two_concurrent_cleanups_of_one_run_run_the_steps_once_and_share_the_report
 test('The_parent_hook_retires_the_run_of_a_child_that_crashed_with_its_holder_still_running', async t => {
   if (!needs(t)) return;
   const { spawnSync } = await import('node:child_process');
-  const options = layerOptions(t);
-  const { owned: _owned, ...plain } = options;
-  t.after(() => retireCrashedRuns(options)); // registered before the child runs (a crash or a timeout never skips it)
+  const options = layerOptions(t, { retireCrashed: true });
+  const { owned: _owned, retireCrashed: _retire, ...plain } = options;
   const script = `
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
@@ -267,4 +265,34 @@ test('The_parent_hook_retires_the_run_of_a_child_that_crashed_with_its_holder_st
   await retireCrashedRuns(options); // what the hook does
   assert.deepEqual(holders(), [], 'the hook retired the holder by the run\'s id');
   assert.equal(existsSync(info.dir), false, 'and the run folder');
+});
+
+// M1 (fix batch 8): `node:test` runs `after` hooks FIRST-IN, FIRST-OUT, so a retire hook registered after `layerOptions` (which registers the removal of the runs parent) runs on an empty folder. `retireCrashed: true`
+// registers it BEFORE the folder. ONLY the hook (not the body) retires what the crashed child left: its holder and its scope.
+test('Only_the_hook_retires_the_holder_and_the_scope_of_a_child_that_crashed_and_it_runs_before_its_folder_is_removed', async t => {
+  if (!needs(t)) return;
+  const { spawnSync } = await import('node:child_process');
+  const options = layerOptions(t, { retireCrashed: true });
+  const { owned: _owned, retireCrashed: _retire, ...plain } = options;
+  const seen = { holder: null, unitPrefix: null };
+  t.after(() => { // registered AFTER layerOptions: it runs after the retire hook and after the folders are gone
+    assert.deepEqual(scanProcesses(argv => argv[0] === seen.holder), [], 'the holder of the crashed child is gone after the hooks');
+    assert.deepEqual(unitsStartingWith(seen.unitPrefix), [], 'and so is its scope');
+  });
+  const script = `
+    import { spawn } from 'node:child_process';
+    import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
+    import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
+    import { userEnv } from ${JSON.stringify(new URL('../lib/exec-layer/scope.mjs', import.meta.url).href)};
+    const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
+    const run = opened.value;
+    spawn('systemd-run', ['--user', '--scope', '--quiet', '--unit=' + run.unitPrefix + '-x1', 'sleep', '120'], { env: userEnv(), stdio: 'ignore', detached: true }).unref();
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log(JSON.stringify({ holder: run.holderName, unitPrefix: run.unitPrefix }));
+    process.kill(process.pid, 'SIGKILL'); // the child crashes with its run open
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000 });
+  Object.assign(seen, JSON.parse(ran.stdout.trim().split('\n').pop()));
+  assert.equal(scanProcesses(argv => argv[0] === seen.holder).length, 1, 'the crashed child left its holder running');
+  assert.equal(unitsStartingWith(seen.unitPrefix).length, 1, 'and its scope');
 });
