@@ -19,7 +19,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/cleanup.mjs",
-        "sha256": "0b2a94eecd72a441ef62e5b9c703b2ffbfda31f5f46cc184ac724262b35800a8"
+        "sha256": "eb6720a62c4068bbf4909c401319d035ad3e70ff1d25b98441aaef192e678abb"
       },
       {
         "path": "lang-bench/lib/exec-layer/env.mjs",
@@ -31,7 +31,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/names.mjs",
-        "sha256": "02754145f895299176a33e2c73251962bae96395ff96bab4f1bd09c014deb5d9"
+        "sha256": "2cc54854ca8a411a67cc8e348e27c83c942629f5447f566e878586eecf5c3b82"
       },
       {
         "path": "lang-bench/lib/exec-layer/netns.mjs",
@@ -63,7 +63,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/stopping.mjs",
-        "sha256": "eef7f9e74c2b04c0af454ef6d4a8e4eb9cbf240385dcd1cf2bb7326b52a301bd"
+        "sha256": "0348e682e68666bae064be97539e8e2fb9b9896ae6c6d4015b22ef8286c5ab8d"
       },
       {
         "path": "lang-bench/lib/preflight-box.mjs",
@@ -99,6 +99,6 @@
       "systemd": "systemd 259 (259.5-0ubuntu3.4)"
     },
     "probedOn": "2026-11-03T09:36:41.882Z",
-    "treeSha256": "aa5a4471ee02818097d031f147133931cdb5a0d628ba4e7fd0949a1176c640cd"
+    "treeSha256": "3e12025277894936405e2f076c94e70d82f4af89bf73dc745e1801f6fd128958"
   }
 }
