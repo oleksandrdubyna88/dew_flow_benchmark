@@ -68,12 +68,60 @@ def outcome(end, wall_ns):
     return ro.Outcome(end, wall_ns, 0, False, rp.NOT_CERTIFIED, None, {})
 
 
+class Clock:
+    """An injected clock (ns): only `advance_ms` moves it."""
+
+    def __init__(self):
+        self.ns = 1_000_000_000
+
+    def now_ns(self):
+        return self.ns
+
+    def advance_ms(self, ms):
+        self.ns += int(ms * NS)
+
+
+class LateProc:
+    """A process whose exit is scripted at `exit_ms` after the start on the injected clock. Its `wait(timeout)` is the refuted wait on a scheduler that is behind: it wakes `LATE_MS` late, looks, finds the
+    process exited and returns without TimeoutExpired, whatever the timeout was. Nothing here depends on how fast the machine runs."""
+
+    def __init__(self, clock, exit_ms):
+        self.clock, self.exit_at_ns = clock, clock.ns + int(exit_ms * NS)
+
+    def wait(self, timeout=None):
+        self.clock.advance_ms(timeout * 1000 + LATE_MS)
+        if self.clock.ns >= self.exit_at_ns:
+            return 0
+        raise subprocess.TimeoutExpired("late", timeout)
+
+
+class FakePump:
+    """The parts of `Pump` the refuted `polling_run` touches."""
+
+    def __init__(self, proc):
+        self.proc, self.exit_ns = proc, None
+
+    def drain(self):
+        return "exited"
+
+
 class WaitTests(unittest.TestCase):
     def test_A_polling_wait_would_accept_an_exit_fifty_ms_past_the_limit_and_that_is_the_point(self):
-        # Lateness is injected where BOTH mechanisms wake up: every sleep and every select returns LATE_MS after it should, and the process
-        # has been examined only then. The refuted wait (Popen.wait(timeout) polling, "it returned" taken as "in time") is run beside the real
-        # pump on the same stub; this test is red under that wait and red without the wall rule.
+        # F1 (fix batch 5): the refuted half is deterministic — a scripted process on an injected clock, so a loaded machine cannot change it. The refuted wait (Popen.wait(timeout) polling, "it returned" taken
+        # as "in time") wakes late, finds the process exited, and clamps its end instant to the deadline: the late exit is called in time, exactly at the limit. The real-pump half is the next test.
         self.assertTrue(polling_accepts(LIMIT_MS, LIMIT_MS + PAST_THE_LIMIT_MS + 5), "the model of the refuted wait")
+        clock = Clock()
+        start = clock.ns
+        pump = FakePump(LateProc(clock, LIMIT_MS + PAST_THE_LIMIT_MS))
+        with mock.patch.object(ex, "now_ns", clock.now_ns):
+            self.assertEqual(polling_run(pump, start + LIMIT_MS * NS), "exited")
+        self.assertEqual(pump.exit_ns - start, LIMIT_MS * NS, "the end instant is clamped to the deadline: the exit 20 ms past the limit is taken as exactly at it")
+        config = ex.Config("w", "s", limit_ms=LIMIT_MS)
+        self.assertIsNone(ro._over_time(case(), config, outcome("exited", pump.exit_ns - start), None), "the refuted wait calls the late exit in time: that is the point")
+
+    def test_The_real_wait_is_a_pidfd_and_a_select_and_the_wall_rule_calls_a_late_exit_a_time_limit(self):
+        # Lateness is injected where BOTH mechanisms wake up: every sleep and every select returns LATE_MS after it should. The real pump never calls Popen.wait with a timeout, and the program that exited
+        # by itself 20 ms past the limit is FAIL `time limit` with its wall over the limit. A loaded machine only makes the wall longer: nothing here can break under load.
         timed_waits, real_wait = [], subprocess.Popen.wait
 
         def counting_wait(proc, *args, **kwargs):
@@ -81,12 +129,8 @@ class WaitTests(unittest.TestCase):
             return real_wait(proc, *args, **kwargs)
 
         with late_wakeups(LATE_MS / 1000):
-            with mock.patch.object(rs_pump.Pump, "run", polling_run):
-                refuted = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
-            timed_waits.clear()
             with mock.patch.object(subprocess.Popen, "wait", counting_wait):
                 result = Workspace(self, STUB, FILES).run(case(), limit_ms=LIMIT_MS)
-        self.assertEqual((refuted.status, refuted.reason), ("PASS", ""), "the refuted wait calls the late exit in time: that is the point")
         self.assertEqual(timed_waits, [], "the real wait is a pidfd and a select: it never calls Popen.wait with a timeout")
         self.assertEqual((result.status, result.reason[:10]), ("FAIL", "time limit"), "pidfd + select with the wall rule: exited by itself, exact output, wall over the limit")
         self.assertGreater(result.wall_ms, LIMIT_MS)
