@@ -118,7 +118,7 @@ export function writeReservedRecord(file, record, held, io = fs) {
   if (io.statSync(file).size !== 0) throw new Error(`writeReservedRecord: ${file} is not an empty placeholder: a record is never overwritten (T-L53)`);
   const tmp = tmpPath(file, 'record', ownId()); // D2: in a `.exec-probe-tmp/` folder beside the placeholder
   try {
-    writeTmp(file, tmp, `${JSON.stringify(record, null, 2)}\n`, undefined, io);
+    writeTmp(tmp, `${JSON.stringify(record, null, 2)}\n`, undefined, io);
     io.renameSync(tmp, file);
   } catch (error) {
     io.rmSync(tmp, { force: true });

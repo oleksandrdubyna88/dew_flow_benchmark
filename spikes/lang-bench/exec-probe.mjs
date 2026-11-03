@@ -2,7 +2,7 @@
 // The host probe of the execution layer (E1.S8b), run THROUGH the layer: the real prefix, the delegated scope, the v2 box. It records every line of the plan's probe list and the memory view
 // at 256 and 512 MiB, then exits 3 naming the first failed line (or `memory-policy-undecided` / `memory-view-mismatch` / `memory-not-certifiable`).
 //
-//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--policy <file>] [--pinned-identity <file>] [--runner-pin <file>] [--no-specs]
+//   node spikes/lang-bench/exec-probe.mjs [--out <file>] [--inputs-dir <folder>] [--policy <file>] [--pinned-identity <file>] [--runner-pin <file>] [--no-specs]
 //
 // The record goes to inputs/exec-probe-<YYYY-MM-DD>[-<n>].json (the date, the host, the layer identity, allow-listed environment keys only); the first of a day has no suffix, a second run is `-2`, a
 // third `-3`. A record is NEVER overwritten (T-L53, parent D59), and its path is RESERVED before the probe starts (an empty placeholder, created exclusively): a --out path that exists or is held by another
@@ -57,9 +57,9 @@ async function ownedHelper() {
 /** The folder of the pins and the default records: `inputs/`, or the one `--inputs-dir` names (the seam of the tests, so they never touch the real `inputs/`). */
 const inputsDir = option('--inputs-dir') ?? path.join(spike, 'inputs');
 
-/** D2: the strays of dead probes in the `.exec-probe-tmp/` folders beside what this probe will write (the pins, the lock, the record): never `inputs/` or a shared out folder itself is listed. */
+/** D2: the strays of dead probes in the `.exec-probe-tmp/` folders beside what this probe will write (the pins and the lock: `inputs/.exec-probe-tmp`, since N1 nothing is written in `specs.d`; the record: beside `--out`): never `inputs/` or a shared out folder itself is listed. */
 function sweepStrays() {
-  const dirs = [inputsDir, path.join(inputsDir, 'specs.d'), ...(option('--out') === undefined ? [] : [path.dirname(path.resolve(option('--out')))])];
+  const dirs = [inputsDir, ...(option('--out') === undefined ? [] : [path.dirname(path.resolve(option('--out')))])];
   const report = retireStartupStrays({ dirs });
   if (report.removed.length > 0) say(process.stderr, `exec-probe: retired ${report.removed.length} temporary file(s) of dead probes`);
   report.errors.forEach(text => say(process.stderr, `exec-probe: stray sweep: ${text}`));

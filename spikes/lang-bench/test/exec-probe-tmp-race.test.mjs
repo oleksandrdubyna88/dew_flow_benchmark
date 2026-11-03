@@ -18,7 +18,7 @@ const RECORD = { probedOn: '2026-11-03T00:00:00.000Z', host: { hostname: 'h', ke
 /** An io that removes the tmp folder it just made, on its `nth` mkdir of a tmp folder (another probe's `dropTmpFolder` between the mkdir and the open). */
 const racy = (nth = 1) => {
   let seen = 0;
-  return { ...fs, mkdirSync: (dir, ...rest) => { const made = fs.mkdirSync(dir, ...rest); if (path.basename(String(dir)) === TMP_DIR && (seen += 1) === nth) fs.rmdirSync(dir); return made; } };
+  return { ...fs, mkdirSync: (dir, ...rest) => { const made = fs.mkdirSync(dir, ...rest); if (path.basename(String(dir)) === TMP_DIR && (seen += 1) === nth) { try { fs.rmdirSync(dir); } catch { /* not empty: the other probe's rmdir fails too */ } } return made; } };
 };
 
 function pins(t) {
@@ -31,14 +31,13 @@ function pins(t) {
 
 test('The_tmp_file_writer_makes_the_folder_again_when_another_probe_removed_it_and_gives_up_after_a_bounded_number_of_tries', t => {
   const dir = owned.ownedDir(t, 'racewriter');
-  const target = path.join(dir, 'x.json');
   const file = path.join(dir, TMP_DIR, 'x.json.stamp-1-1');
-  writeTmp(target, file, 'one', { flag: 'wx' }, racy());
+  writeTmp(file, 'one', { flag: 'wx' }, racy());
   assert.equal(fs.readFileSync(file, 'utf8'), 'one');
   let tries = 0;
   const stubborn = { ...fs, mkdirSync: (d, ...rest) => { tries += 1; if (tries > 50) throw new Error('runaway: the writer never gives up'); fs.mkdirSync(d, ...rest); fs.rmdirSync(d); } };
   const other = owned.ownedDir(t, 'racestubborn');
-  assert.throws(() => writeTmp(path.join(other, 'x.json'), path.join(other, TMP_DIR, 'x.json.stamp-2-2'), 'two', {}, stubborn), /ENOENT/);
+  assert.throws(() => writeTmp(path.join(other, TMP_DIR, 'x.json.stamp-2-2'), 'two', {}, stubborn), /ENOENT/);
   assert.ok(tries > 1 && tries <= 10, `it tried again, but not for ever (${tries} tries)`);
 });
 

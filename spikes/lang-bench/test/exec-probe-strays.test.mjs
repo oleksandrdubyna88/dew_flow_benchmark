@@ -59,10 +59,15 @@ test('The_probe_command_sweeps_the_tmp_folder_beside_its_out_file_at_its_start_e
   const inputs = owned.ownedDir(t, 'straycliin'); // the seam: the sweep and the stamp use this folder, not the real inputs/
   const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout.trim();
   const stray = plant(path.join(dir, 'x.json'), 'record', `${dead}-5`);
+  const pinStray = plant(path.join(inputs, 'specs.json'), 'stamp', `${dead}-5`); // N1: in the tmp folder of inputs/: swept
+  fs.mkdirSync(path.join(inputs, 'specs.d'));
+  const notListed = plant(path.join(inputs, 'specs.d', 'exec-layer.json'), 'stamp', `${dead}-5`); // N1: specs.d is not in the sweep's list
   fs.writeFileSync(path.join(dir, 'x.json'), '{}\n'); // the out file exists: the probe refuses (exit 3) right after its start sweep
   const ran = spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'exec-probe.mjs'), '--out', path.join(dir, 'x.json'), '--inputs-dir', inputs, '--no-specs'], { encoding: 'utf8', timeout: 30_000 });
   assert.equal(ran.status, 3, ran.stderr);
-  assert.match(ran.stderr, /retired 1 temporary file\(s\) of dead probes/);
+  assert.match(ran.stderr, /retired 2 temporary file\(s\) of dead probes/);
+  assert.equal(fs.existsSync(pinStray), false, 'the dead probe\'s file in the tmp folder of inputs/ is retired');
+  assert.equal(fs.existsSync(notListed), true, 'specs.d is not swept: nothing writes a temporary file there any more');
   assert.equal(fs.existsSync(stray), false, 'the dead probe\'s file in the out folder\'s tmp folder is retired');
   assert.equal(fs.existsSync(path.join(dir, TMP_DIR)), false, 'and its emptied tmp folder');
   assert.equal(fs.readFileSync(path.join(dir, 'x.json'), 'utf8'), '{}\n', 'the existing record is untouched');
