@@ -1,6 +1,7 @@
 // The wiring of the probe COMMAND (K5, fix batch 7): the arguments `exec-probe.mjs` passes to the end of the probe and to the stop, built here so a test can run them. The one link between them is `state.written`:
 // `endArguments` sets it when the record is in place (`onWritten`), and `stopArguments` reads it (`recordedCode`), so a SIGINT or SIGTERM after the record exits with the record's code. Dropping either side
 // turns the real-signal test red.
+import { printable } from './printable.mjs';
 import { runStop } from './stop.mjs';
 
 /** The process's one cell of state: the exit code of the record once it is written (`null` before). */
@@ -20,12 +21,12 @@ const SIGNALS = Object.freeze([['SIGINT', 130], ['SIGTERM', 143]]);
 
 /**
  * The guard of stdout and stderr (L4, D3). An EPIPE (the reader of a pipe closed: `| head`) is always ignored. Any other error AFTER the record is written (`state.written` is its exit code) is ignored too: the
- * record's code stays, never an uncaught exception. BEFORE the record it is the command's failure: `fail(error)` is called (the command stops with exit 2); the listener itself never throws.
+ * record's code stays, never an uncaught exception. BEFORE the record it is the command's failure: `fail(error, stream)` is called (the command stops with exit 2); the listener itself never throws.
  */
 export function guardStreams(proc = process, { state = newState(), fail = () => proc.exit(2) } = {}) {
   [proc.stdout, proc.stderr].forEach(stream => stream.on('error', error => {
     if (error?.code === 'EPIPE' || state.written !== null) return;
-    fail(error);
+    fail(error, stream);
   }));
 }
 
@@ -41,7 +42,15 @@ export function installStopHandlers({ proc = process, exit = code => proc.exit(c
     rest.onStopping?.();
     runStop(stopArguments({ code, exit, ...rest }));
   };
-  guardStreams(proc, { state: rest.state, fail: () => stop(2) });
+  let reported = false;
+  const fail = (error, broken) => {
+    if (!reported && !stopping) { // N3: one line, best effort, to the OTHER stream (the broken one cannot take it); once, so two broken streams never ping-pong
+      reported = true;
+      try { (broken === proc.stdout ? proc.stderr : proc.stdout).write(`exec-probe: stream error: ${printable(error?.message ?? error)}\n`); } catch { /* best effort */ }
+    }
+    stop(2);
+  };
+  guardStreams(proc, { state: rest.state, fail });
   SIGNALS.forEach(([signal, code]) => proc.on(signal, () => stop(code)));
 }
 

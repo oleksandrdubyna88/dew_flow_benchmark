@@ -9,7 +9,8 @@ import { installStopHandlers, newState, startCommand } from '../lib/exec-probe/w
 
 const wiring = JSON.stringify(new URL('../lib/exec-probe/wiring.mjs', import.meta.url).href);
 const error = code => Object.assign(new Error(`${code}: boom`), { code });
-const fakeProc = () => Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), exits: [] });
+const fakeStream = writes => Object.assign(new EventEmitter(), { write: text => writes.push(text) });
+const fakeProc = (writes = []) => Object.assign(new EventEmitter(), { stdout: fakeStream(writes), stderr: fakeStream(writes), exits: [] });
 const options = (state, over = {}) => ({ state, say: () => {}, release: () => {}, describeLive: () => [], cleanLive: async () => [], closeScope: async () => {}, ...over });
 
 test('The_stop_handlers_install_the_stream_guard_on_stdout_and_stderr_and_it_is_by_phase', async () => {
@@ -44,15 +45,17 @@ function streamErrorRun(recorded) {
     ${recorded === null ? '' : `state.written = ${recorded};`}
     process.stderr.emit('error', Object.assign(new Error('EIO: boom'), { code: 'EIO' }));
     setTimeout(() => process.exit(${recorded ?? 0}), 300); // the command's own end, when nothing stopped it
-  `], { stdio: ['ignore', 'ignore', 'pipe'] });
+  `], { stdio: ['ignore', 'pipe', 'pipe'] });
   return new Promise(resolve => {
     let err = '';
+    let out = '';
     child.stderr.on('data', chunk => { err += chunk; });
-    child.once('close', code => resolve({ code, err }));
+    child.stdout.on('data', chunk => { out += chunk; });
+    child.once('close', code => resolve({ code, err, out }));
   });
 }
 
-test('A_non_EPIPE_stream_error_after_the_record_keeps_the_records_exit_code_and_without_the_guard_it_is_an_uncaught_exception', async () => {
+test('A_non_EPIPE_stream_error_after_the_record_keeps_the_records_exit_code_with_no_uncaught_exception', async () => {
   for (const recorded of [0, 3]) {
     const ended = await streamErrorRun(recorded);
     assert.equal(ended.code, recorded, `the exit is the record's code (${recorded}): ${ended.err}`);
@@ -64,6 +67,7 @@ test('A_non_EPIPE_stream_error_before_the_record_is_exit_2_after_the_cleanup_wit
   const ended = await streamErrorRun(null);
   assert.equal(ended.code, 2, ended.err);
   assert.match(ended.err, /exec-probe: stopping — cleaning up 0 open run\(s\)/, 'the stop ran');
+  assert.match(ended.out, /^exec-probe: stream error: EIO: boom$/m, 'N3: the error is named on the OTHER stream (stdout) before the stop');
   assert.doesNotMatch(ended.err, /Unhandled 'error' event|node:events/, 'no uncaught exception');
 });
 
@@ -79,4 +83,27 @@ test('The_start_sequence_installs_the_guard_the_stop_handlers_and_the_exit_relea
     releaseOnExit: proc.listeners('exit').includes(release),
   }) });
   assert.deepEqual(seen, [{ guardOnStdout: 1, guardOnStderr: 1, sigint: 1, sigterm: 1, releaseOnExit: true }], 'when the sweep runs everything is installed');
+});
+
+// N3 (coai 4, 7): a stream error before the record prints one line, best effort, to the other stream, before the stop with exit 2.
+test('A_stream_error_before_the_record_prints_one_line_to_the_other_stream_before_the_stop_and_never_loops', async () => {
+  for (const [broken, other] of [['stdout', 'stderr'], ['stderr', 'stdout']]) {
+    const events = [];
+    const proc = fakeProc();
+    proc[other].write = text => events.push(`${other}: ${text.trim()}`);
+    const stopped = new Promise(resolve => installStopHandlers({ proc, exit: code => { events.push(`exit ${code}`); resolve(); }, ...options(newState(), { say: text => events.push(`say: ${text}`) }) }));
+    proc[broken].emit('error', error('EIO'));
+    proc[broken].emit('error', error('EIO')); // a second error while stopping prints nothing more
+    await stopped;
+    assert.equal(events.filter(event => event.includes('stream error')).length, 1, `${broken}: one line only: ${events.join(' | ')}`);
+    assert.equal(events[0], `${other}: exec-probe: stream error: EIO: boom`, `${broken}: it goes to ${other}, first`);
+    assert.equal(events.at(-1), 'exit 2');
+  }
+  const proc = fakeProc();
+  proc.stderr.write = () => { throw new Error('the other stream is broken too'); };
+  const exits = [];
+  const stopped = new Promise(resolve => installStopHandlers({ proc, exit: code => { exits.push(code); resolve(); }, ...options(newState()) }));
+  assert.doesNotThrow(() => proc.stdout.emit('error', error('EIO')), 'best effort: a write that fails is ignored');
+  await stopped;
+  assert.deepEqual(exits, [2]);
 });
