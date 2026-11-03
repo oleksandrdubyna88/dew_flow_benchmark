@@ -43,3 +43,50 @@ and a CP2 addendum is recorded here before the first D40 gate (F11). (5) For gro
 **Not checked by this reading:** the suites were not re-run by the judge (1389 of 1389 is PR #153's run); the 1-in-160 fork rate; the host's live
 `DefaultOOMPolicy`; `rs_pump.py`, `rs_cgroup.py`, `cleanup.mjs`, `case-view.mjs` and `exec-probe/memory.mjs` were not read in full (the memory
 assertions were read through the record); B8, B9 and CI. **Verified by the team lead:** F1, F2, F4 and F6 at the lines named.
+
+## 2026-11-03 — CP1 (E1.S8a parts i and ii-a, `main` `4940d1ff`, runner 0.2.4; the S9 draft `docs/format-v2` `28b93ba`, Format version 2.2, not pushed): passes with conditions
+
+**Read:** FORMAT.md v2.2 in full; runner 0.2.4 (manifest `df118665ee6894f7d22e0b292e0fec99d2b3eb930c06e933b93f06d38c833d68`, every file
+hash equal to `inputs/specs.d/runner.json`) — the entry, the lexer, both parsers, the end and pair checks, the matchers, the checks, the
+olympiad path, the limits and the environment; `research/module_lang_bench.md` § The runner. The draft's three examples are byte-equal to
+`test/fixtures/runner/format/`; `--parse-only` passes them and the 24 sample pairs of the six daemon and web drafts (exit 0); no D18 needle
+hit, no plan id, none of the ten stack, flag or threshold words.
+
+**Holds:** V1, V2, V6, V8, V10 and V11 agree; V9 agrees at parse time; V12 agrees for the olympiad stream. V3, V4, V5, V7's refusal and
+V12's connection bound are FORMAT-only until part ii-b (parent D51), as planned. F-MEMORY names the two causes and the 90 % heap cap in
+stack-neutral words and nothing more; every `##` section has one class.
+
+**Findings:**
+
+- **F1** — a check that relates a binding made inside an unordered group to anything outside it is refused by the runner
+  (`runner/rs_arrival.py:68-71`); FORMAT 5.5 has no such rule.
+- **F2** — `header <str> <str>` is ambiguous when a string expression has several strings; the runner takes one string as the name
+  (`runner/rs_lex.py:388-393`).
+- **F3** — 6.3's stated failure names the body, but the runner compares status, headers, then body (`runner/rs_match.py:136-143`), so the
+  first difference is the `location` header.
+- **F4** — 5.6 says memory "stayed within the registered bound as its control group measured it" and prints `peak above`; F-MEMORY v2.2 and
+  the runner (`runner/rs_olympiad.py:147-153`) also fail a runtime's own stop below the bound, as `memory limit`.
+- **F5** — the runner stops and fails a case past 256 MiB of standard error (`runner/rs_pump.py:156-158`); F-STDERR says it is never judged.
+- **F6** — `Format version: 2.2` against E1.S9's `Format version: 2` and `format.json` `version: 2`.
+- **F7** — the layer sets `TZ=UTC` and refuses an `env` line on any other base key (`lib/exec-layer/env.mjs:17,69-82`); F-ENV and 4.2 say
+  neither.
+- **F8** — runner bounds and structure rules that FORMAT does not state: 1,000,000 expanded steps, the end trigger at the top level, no
+  capture in a repeat, no repeat in an unordered group, JSON depth 200, a 500,000-step match cut-off, 200 string parts, a real calendar time.
+- **F9** — two grammar examples (4.1, 5.6) use the framing of a real protocol that a group B task uses; 6.2 is neutral.
+- **F10–F13** — the runner accepts five actual-only words as names; checks before the last entry, a target without `/` and free sample ids;
+  no olympiad normalisation (no task of the series uses one); wording and two stale docstring references.
+- **F14** — every section is `common`, so after A's freeze the `daemon`/`web` amendment path of parent D45 applies to nothing, while 4 and
+  5 serve only daemon and web and run first in part ii-b. A class for sections that serve daemon and web alone (4 and 5) restores the path;
+  it changes D45 and the E1.S9 rule, so it is a plan change.
+
+**Conditions.** S9's gate round starts only when: (1) F1–F5 are fixed in the draft, each with a changelog line (FORMAT text only; the
+runner and its pin do not change); (2) F6 is decided; (3) F14 is decided. Before A's specs are gated: F7's F-ENV sentence. Before A's
+freeze: F8 and F9. In part ii-b or E1.S8: F10–F13.
+
+**Not checked by this reading:** the suites were not re-run; `rs_launch`, `rs_scope`, `rs_cgroup`, `rs_track`, `rs_view`, `rs_layer`,
+`rs_status`, `rs_abort` and `rs_assign` were not read in full; the parent's S9 list beyond E1.S9's Files row; the v1 sentences kept; the
+needle scan was a word-boundary scan of `inputs/needles-lang.json`, not `push-check.mjs`; the B drafts were parsed, not conformed; no daemon
+or web case can run before part ii-b. **Verified by the team lead:** F1, F2, F3 and F5 at the runner lines named. **Decided by the team
+lead, 2026-11-03:** F6 — the gated text says `Format version: 2` (the draft revisions 2.1 and 2.2 stay as changelog lines); F14 — a class of
+its own for sections 4 and 5, after `ask_consultants` `8b776383` (2 of 2 answers for it), recorded as the parent's change 6.2, which stops
+the plan for a whole re-review.
