@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { shouldStampProbedOn, writeReservedRecord } from './probe.mjs';
 import { LOCK_NAME } from './stamp-lock.mjs';
-import { acquireLock, commitStamp, discardStamp, LAYER_PIN, prepareStamp, restorePins } from './stamp.mjs';
+import { acquireLock, commitStamp, discardStamp, LAYER_PIN, prepareStamp, restorePins, SPECS_PIN } from './stamp.mjs';
 
 const exit2 = (record, stampError) => ({ ...record, exit: { code: 2, halt: 'probed-on-stamp-failed', stampError } });
 /** `<pin> probedOn=<value>` for the layer pin as it is found (what a retired probe may have stamped), or the reason it cannot be read. */
@@ -22,6 +22,31 @@ function pinsProbedOn(inputsDir, io) {
 
 const unstampedNote = stamped => (stamped.length > 0 ? `; ${stamped.join(' and ')} IS stamped and the put-back failed` : '');
 
+/** What to tell on stderr about a stale lock that was retired: always the retire; the MAY warning, with what to do, only when its holder had reached the commit (L2); `probedOn` is read only then (coai 5). */
+function retiredLines(got, inputsDir, io) {
+  if (got.retired === null) return [];
+  const warning = got.retiredCommitting
+    ? `; the pins MAY be stamped without a record (a SIGKILL between the commit and the record's rename): ${pinsProbedOn(inputsDir, io)}; check \`git diff -- spikes/lang-bench/inputs/specs.json spikes/lang-bench/inputs/specs.d/exec-layer.json\`; if the pins name a probe with no record, run the probe again (it re-stamps them) or restore them with \`git checkout -- <pins>\``
+    : '';
+  return [`exec-probe: ${got.retired}${warning}`];
+}
+
+/** Before the commit (L1): the lock must still be THIS probe's (else it was lost to another probe: nothing is committed), and it is marked `committing`. `null` when it may go on, else the reason (the prepared stamp is discarded). */
+function guardCommit({ got, prepared, io }) {
+  const reason = !got.holdsMine() ? 'the stamp lock was lost to another probe: nothing is committed' : tryMark(got);
+  if (reason !== null) discardStamp(prepared, io);
+  return reason;
+}
+
+function tryMark(got) {
+  try {
+    got.markCommitting();
+    return null;
+  } catch (error) {
+    return `the stamp lock could not be marked committing (${error.code ?? ''} ${error.message})`.replace('( ', '(');
+  }
+}
+
 /** The stamp steps: `{ record, prepared, committed, lock, messages }` — the record as it must be written, what was prepared and committed, the lock held, and lines for stderr. */
 function stampSteps({ record, stage, io }) {
   let got;
@@ -33,13 +58,15 @@ function stampSteps({ record, stage, io }) {
     return { record: exit2(record, reason), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${reason}`] };
   }
   if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${got.error}`] };
-  const messages = got.retired === null ? [] : [`exec-probe: ${got.retired}; the pins MAY be stamped without a record (a SIGKILL between the commit and the record's rename): ${pinsProbedOn(stage.inputsDir, io)}`];
+  const messages = retiredLines(got, stage.inputsDir, io);
   let prepared;
   try {
     prepared = prepareStamp({ ...stage, record, io });
   } catch (error) {
     return { record: exit2(record, error.message), prepared: null, committed: false, stillStamped: [], lock: got, messages };
   }
+  const guarded = guardCommit({ got, prepared, io });
+  if (guarded !== null) return { record: exit2(record, guarded), prepared: null, committed: false, stillStamped: [], lock: got, messages: [...messages, `exec-probe: ${guarded}`] };
   const committed = commitStamp(prepared, io);
   if (committed.ok) return { record, prepared, committed: true, stillStamped: [], lock: got, messages };
   const note = unstampedNote(committed.stamped);
@@ -47,7 +74,7 @@ function stampSteps({ record, stage, io }) {
   return { record: exit2(record, `${committed.error}${note}`), prepared, committed: false, stillStamped: committed.stamped, lock: got, messages: [...messages, ...(note === '' ? [] : [`exec-probe: the pins are inconsistent: ${committed.stamped.join(' and ')} is stamped, the other is not (exit 2)`])] };
 }
 
-const LAYER_AND_SPECS = ['specs.d/exec-layer.json', 'specs.json'];
+const LAYER_AND_SPECS = [LAYER_PIN, SPECS_PIN]; // coai 4: the names come from stamp.mjs, not a second literal
 
 /** Discard what is still in temporary files after the end (a failed commit leaves its temporary files). */
 const tidy = (steps, io) => { if (steps.prepared !== null && !steps.committed) discardStamp(steps.prepared, io); };

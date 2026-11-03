@@ -299,17 +299,56 @@ test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restore
 });
 
 test('Retiring_a_stale_lock_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn', t => {
+  // L2: the warning is printed only when the retired lock's holder had reached the commit (its lock says `committing`)
   const s = setup(t);
-  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1');
+  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1\ncommitting');
   const layerPin = path.join(s.inputsDir, 'specs.d', 'exec-layer.json');
   const pin = JSON.parse(fs.readFileSync(layerPin, 'utf8'));
   fs.writeFileSync(layerPin, JSON.stringify({ execLayer: { ...pin.execLayer, probedOn: '2026-01-01T00:00:00.000Z' } }));
-  fs.writeFileSync(path.join(s.inputsDir, 'specs.json'), fs.readFileSync(path.join(s.inputsDir, 'specs.json'), 'utf8')); // unchanged
   assert.equal(s.run(), 0);
   const said = s.said.join('\n');
   assert.match(said, /retired the stale stamp lock of pid 999999/);
   assert.match(said, /the pins MAY be stamped without a record \(a SIGKILL between the commit and the record's rename\)/);
   assert.match(said, /specs\.d\/exec-layer\.json probedOn=2026-01-01T00:00:00\.000Z/, 'it names the pin\'s probedOn as it was found');
+  assert.match(said, /check `git diff -- spikes\/lang-bench\/inputs\/specs\.json spikes\/lang-bench\/inputs\/specs\.d\/exec-layer\.json`; if the pins name a probe with no record, run the probe again \(it re-stamps them\) or restore them with `git checkout -- <pins>`/, 'coai 7: it says what to do');
+});
+
+test('A_stale_lock_that_never_reached_the_commit_is_retired_without_the_may_be_stamped_claim_and_without_reading_the_pin_for_it', t => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1');
+  const layerPin = path.join(s.inputsDir, 'specs.d', 'exec-layer.json');
+  let pinReads = 0;
+  const io = { ...fs, readFileSync: (file, ...rest) => { if (String(file) === layerPin) pinReads += 1; return fs.readFileSync(file, ...rest); } };
+  assert.equal(s.run({ io }), 0);
+  const said = s.said.join('\n');
+  assert.match(said, /retired the stale stamp lock of pid 999999/);
+  assert.doesNotMatch(said, /MAY be stamped/, 'the retired holder never reached the commit: the pins cannot be stamped by it');
+  assert.equal(pinReads, 1, 'coai 5: the pin is read once, by the prepare; probedOn is read only to print the MAY warning');
+});
+
+test('A_probe_whose_lock_was_taken_by_another_probe_before_its_commit_records_exit_2_and_commits_nothing', t => {
+  const s = setup(t);
+  const before = s.pins();
+  let swapped = false;
+  const io = { ...fs, copyFileSync: (from, to) => { if (!swapped) { swapped = true; fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999998 5'); } return fs.copyFileSync(from, to); } }; // during the prepare another probe replaces the lock
+  assert.equal(s.run({ io }), 2);
+  const written = JSON.parse(fs.readFileSync(s.file, 'utf8'));
+  assert.deepEqual([written.exit.code, written.exit.halt], [2, 'probed-on-stamp-failed']);
+  assert.match(written.exit.stampError, /the stamp lock was lost/);
+  assert.deepEqual(s.pins(), before, 'nothing was committed');
+  assert.deepEqual(fs.readdirSync(s.inputsDir).filter(name => name.includes('.stamp-')), [], 'the prepared files are discarded');
+  assert.equal(fs.readFileSync(path.join(s.inputsDir, '.stamp.lock'), 'utf8'), '999998 5', 'the other probe\'s lock is not removed');
+  fs.rmSync(path.join(s.inputsDir, '.stamp.lock'));
+});
+
+test('A_probe_marks_its_lock_committing_before_the_commit_and_the_mark_is_gone_with_the_lock', t => {
+  const s = setup(t);
+  const seen = [];
+  const io = { ...fs, renameSync: (from, to) => { if (String(to).endsWith('exec-layer.json')) seen.push(fs.readFileSync(path.join(s.inputsDir, '.stamp.lock'), 'utf8').split('\n')); return fs.renameSync(from, to); } };
+  assert.equal(s.run({ io }), 0);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0][1], 'committing', 'at the commit the lock says committing');
+  assert.equal(fs.existsSync(path.join(s.inputsDir, '.stamp.lock')), false);
 });
 
 test('The_record_is_written_through_a_temporary_file_with_a_fixed_known_name_beside_the_placeholder', t => {

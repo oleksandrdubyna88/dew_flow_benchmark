@@ -10,9 +10,10 @@ import path from 'node:path';
 import { processProbe } from '../../../../.agents/conventions/tools/lib/owned.mjs';
 
 export const LOCK_NAME = '.stamp.lock';
-const CONTENT = /^(\d+) (\d+|-)$/;
+const CONTENT = /^(\d+) (\d+|-)(\ncommitting)?$/;
+const COMMITTING = '\ncommitting';
 
-const parse = text => { const found = CONTENT.exec(String(text).trim()); return found === null ? null : { pid: Number(found[1]), start: found[2] }; };
+const parse = text => { const found = CONTENT.exec(String(text).trim()); return found === null ? null : { pid: Number(found[1]), start: found[2], committing: found[3] !== undefined }; };
 const startOf = (probe, pid) => { const found = probe(pid).start; return found === undefined ? '-' : String(found); };
 const fail = (lock, error, holder = null) => ({ ok: false, holder, path: lock, error });
 
@@ -41,17 +42,31 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
       if (read.error.code === 'ENOENT') return;
       throw read.error;
     }
-    if (read.value === mine) io.rmSync(lock, { force: true });
+    if (read.value === mine || read.value === `${mine}${COMMITTING}`) io.rmSync(lock, { force: true });
   };
   const take = () => {
     const wrote = attempt(() => io.writeFileSync(tmp, mine, { flag: 'wx' }));
     if (wrote.error !== undefined) return { error: wrote.error };
     const linked = attempt(() => io.linkSync(tmp, lock));
-    io.rmSync(tmp, { force: true });
+    attempt(() => io.rmSync(tmp, { force: true })); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the stray is retired later by its known name)
     if (linked.error === undefined) return { taken: true };
     return linked.error.code === 'EEXIST' ? { held: true } : { error: linked.error };
   };
-  const taken = retired => ({ ok: true, release, retired, retiredHolder: null });
+  const holdsMine = () => {
+    const read = attempt(() => io.readFileSync(lock, 'utf8'));
+    return read.error === undefined && (read.value === mine || read.value === `${mine}${COMMITTING}`);
+  };
+  /** Mark the lock `committing` (a second line) through the same temporary file and a rename: a reader sees the old or the new lock, never a partial one. Throws when it cannot. */
+  const markCommitting = () => {
+    io.writeFileSync(tmp, `${mine}${COMMITTING}`, { flag: 'w' });
+    try {
+      io.renameSync(tmp, lock);
+    } catch (error) {
+      io.rmSync(tmp, { force: true });
+      throw error;
+    }
+  };
+  const taken = retired => ({ ok: true, release, retired, retiredHolder: null, retiredCommitting: false, holdsMine, markCommitting });
   const first = take();
   if (first.taken) return taken(null);
   if (first.error !== undefined) return fail(lock, describe(lock, first.error));
@@ -84,9 +99,10 @@ function retire({ lock, io, take, taken, strays, pid, held, text }) {
   const read = attempt(() => io.readFileSync(moved, 'utf8'));
   if (read.error !== undefined) return fail(lock, describe(lock, read.error), held.pid);
   if (read.value !== text) { // what was moved is another probe's NEW lock: put it back and refuse as for a live holder
-    attempt(() => io.linkSync(moved, lock));
-    io.rmSync(moved, { force: true });
+    const back = attempt(() => io.linkSync(moved, lock));
     const other = parse(read.value);
+    if (back.error !== undefined) return fail(lock, `another probe's stamp lock (pid ${other?.pid ?? 'unknown'}) was moved to ${moved} and could not be linked back (${back.error.code ?? back.error.message}): the file is KEPT, check it by hand`, other?.pid ?? null);
+    io.rmSync(moved, { force: true });
     return fail(lock, `another probe holds the stamp lock (pid ${other?.pid ?? 'unknown'}) at ${lock}`, other?.pid ?? null);
   }
   const removed = strays(held.pid);
@@ -94,5 +110,5 @@ function retire({ lock, io, take, taken, strays, pid, held, text }) {
   const got = take();
   if (got.error !== undefined) return fail(lock, describe(lock, got.error));
   if (!got.taken) return fail(lock, `another probe took the stamp lock at ${lock} while it was being retired`);
-  return { ...taken(`retired the stale stamp lock of pid ${held.pid} and ${removed.length} stray file(s)`), retiredHolder: held.pid };
+  return { ...taken(`retired the stale stamp lock of pid ${held.pid} and ${removed.length} stray file(s)`), retiredHolder: held.pid, retiredCommitting: held.committing };
 }
