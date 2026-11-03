@@ -191,10 +191,12 @@ export function assertMemoryView({ policy, observations, limits = null }) {
   return { ok: problems.length === 0, halt: problems.length === 0 ? null : 'memory-view-mismatch', problems };
 }
 
-/** N3: with `limits` (in MiB) given, each of them must be observed exactly once: an empty or one-limit record names what it lacks and does not pass. */
+/** N3 and C2: with `limits` (in MiB) given, each of them must be observed exactly once and no other limit may be observed: an empty, one-limit or extra-limit record names the difference and does not pass. */
 function notObservedLimits(observations, limits) {
   if (limits === null) return [];
-  return limits.filter(limit => observations.limits.filter(at => at.memoryMaxBytes === limit * MIB).length !== 1).map(limit => `memory view not observed at ${limit} MiB (the record must hold exactly one observation of each of ${limits.join(' and ')} MiB)`);
+  const missing = limits.filter(limit => observations.limits.filter(at => at.memoryMaxBytes === limit * MIB).length !== 1).map(limit => `memory view not observed at ${limit} MiB (the record must hold exactly one observation of each of ${limits.join(' and ')} MiB)`);
+  const extra = observations.limits.filter(at => !limits.some(limit => at.memoryMaxBytes === limit * MIB)).map(at => `memory view observed at ${mib(at.memoryMaxBytes)}, which is not one of ${limits.join(' and ')} MiB: a record holds the probe's limits and no other`);
+  return [...missing, ...extra];
 }
 
 /**

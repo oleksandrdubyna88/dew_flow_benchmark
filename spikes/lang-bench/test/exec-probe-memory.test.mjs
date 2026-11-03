@@ -292,6 +292,8 @@ test('The_observed_limits_must_be_exactly_256_and_512_MiB_and_a_missing_limit_is
     ['the other limit', [viewed(512)], /memory view not observed at 256 MiB/],
     ['a wrong limit', [viewed(256), viewed(1024)], /memory view not observed at 512 MiB/],
     ['a duplicate', [viewed(256), viewed(256)], /memory view not observed at 512 MiB/],
+    ['an extra limit', [viewed(256), viewed(512), viewed(1024)], /memory view observed at 1024 MiB, which is not one of 256 and 512 MiB/],
+    ['two extra limits', [viewed(256), viewed(512), viewed(128), viewed(1024)], /at 128 MiB.*at 1024 MiB/s],
   ]) {
     const verdict = run(limits);
     assert.equal(verdict.ok, false, name);
