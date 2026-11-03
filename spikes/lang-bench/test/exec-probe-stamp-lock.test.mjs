@@ -224,3 +224,37 @@ test('A_holder_whose_lock_text_has_a_trailing_newline_still_holds_it_and_release
   mine.release();
   assert.equal(fs.existsSync(lockOf(dir)), false, 'released: the comparison is structural (coai 9)');
 });
+
+// N4 (coai 5, Opus LOW 5): when the retry after a vanished lock fails with an error, the refusal says that error, not "held by another probe".
+test('A_lock_that_vanished_and_whose_retry_fails_with_an_error_is_refused_with_that_error_not_as_held_by_another_probe', t => {
+  const dir = folder(t);
+  let links = 0;
+  let writes = 0;
+  const io = { ...fs,
+    linkSync: (from, to) => { links += 1; if (links === 1) throw Object.assign(new Error('EEXIST: held'), { code: 'EEXIST' }); return fs.linkSync(from, to); }, // the first take finds it held, and by the read it is gone
+    writeFileSync: (file, ...rest) => { writes += 1; if (writes === 2) throw Object.assign(new Error('EACCES: no'), { code: 'EACCES' }); return fs.writeFileSync(file, ...rest); } };
+  const got = acquireLock({ inputsDir: dir, io, probe: live(1), pid: 5 });
+  assert.equal(got.ok, false);
+  assert.match(got.error, /could not be used \(EACCES/);
+  assert.doesNotMatch(got.error, /just took it/);
+  assert.deepEqual(leftovers(dir), []);
+});
+
+// N5 (Opus LOW 4): the committing mark has its own temporary kind, created with `wx`, so it can never write through a hard link to the lock (the case where the link temp could not be removed after the link, L2).
+test('A_committing_mark_never_writes_through_a_hard_link_left_by_a_take_and_release_leaves_no_temporary_file', t => {
+  const dir = folder(t);
+  let failed = false;
+  const io = { ...fs, rmSync: (file, ...rest) => { if (!failed && String(file).includes('.link-')) { failed = true; throw Object.assign(new Error('EBUSY: busy'), { code: 'EBUSY' }); } return fs.rmSync(file, ...rest); } };
+  const got = acquireLock({ inputsDir: dir, io, probe: live(100), pid: 31 });
+  assert.equal(got.ok, true);
+  const linkTemp = path.join(dir, '.exec-probe-tmp', fs.readdirSync(path.join(dir, '.exec-probe-tmp'))[0]);
+  assert.equal(fs.statSync(lockOf(dir)).nlink, 2, 'the link temp could not be removed: the lock has two names');
+  got.markCommitting();
+  assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '31 100\ncommitting');
+  assert.equal(fs.statSync(lockOf(dir)).nlink, 1, 'the mark was renamed over the lock: a new file, not the one the link temp names');
+  assert.equal(fs.readFileSync(linkTemp, 'utf8'), '31 100', 'the link temp was not written through');
+  assert.equal(got.holdsMine(), true);
+  got.release();
+  assert.equal(fs.existsSync(lockOf(dir)), false);
+  assert.deepEqual(leftovers(dir), [], 'no temporary file and no tmp folder is left after release');
+});
