@@ -52,10 +52,11 @@ test('The_suite_sweep_retires_a_dead_runs_folder_and_keeps_a_young_an_unmarked_a
 test('The_suite_sweep_never_throws_on_a_missing_temp_root_and_a_live_folder_is_kept', t => {
   assert.deepEqual(sweepLeftovers({ repo: REPO, tmp: '/nonexistent-root-for-the-sweep', minAgeMs: 0, token: 'bench' }).removed, [], 'a missing temp root is no failure');
   const root = owned.ownedDir(t, 'sweeplive');
-  const folder = owned.ownedDir(t, 'inuse');
+  const folder = owned.ownedDir(t, 'inuse', { parent: root }); // L8: inside the private root, so the sweep below can never look at the shared /tmp with minAgeMs 0
   const report = { errors: [] };
+  assert.equal(path.dirname(folder), root, 'the live folder is inside the private root');
   age(folder, 3600);
-  const aged = sweepLeftovers({ repo: REPO, tmp: path.dirname(folder), minAgeMs: 0, token: 'bench' });
+  const aged = sweepLeftovers({ repo: REPO, tmp: root, minAgeMs: 0, token: 'bench' });
   assert.ok(existsSync(folder), 'the folder of a live run (this very process) is never removed, however old');
   assert.ok(aged.removed.every(dir => dir !== folder), 'and it is not among the removed');
   assert.ok(existsSync(root));

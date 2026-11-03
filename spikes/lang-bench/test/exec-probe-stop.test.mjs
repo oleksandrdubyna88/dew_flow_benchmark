@@ -78,22 +78,24 @@ test('The_build_box_dies_with_its_parent_and_a_program_box_does_not', () => {
   assert.ok(!program.includes('--die-with-parent'), 'the program box has none: the runner ends it by its cgroup (the layer\'s rule)');
 });
 
-test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', async () => {
+test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', async t => {
   const script = `
     import { runBounded } from ${JSON.stringify(new URL('../../minigit-bench/lib/run.mjs', import.meta.url).href)};
     import { cleanupLiveRuns, trackChild } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
     const marker = 'testsToDelete-u0-bench-trackedchild-' + process.pid;
-    const running = runBounded('bash', ['-c', 'exec -a ' + marker + ' sleep 300'], { timeoutMs: 100000, onChild: trackChild });
+    const running = runBounded('bash', ['-c', 'exec -a ' + marker + ' sleep 30'], { timeoutMs: 100000, onChild: trackChild });
     await new Promise(resolve => setTimeout(resolve, 500));
     const pidOf = () => { const fs = process.getBuiltinModule('node:fs'); return fs.readdirSync('/proc').filter(e => /^\\d+$/.test(e)).filter(pid => { try { return fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8').startsWith(marker); } catch { return false; } }); };
     const before = pidOf();
     await cleanupLiveRuns();
     await new Promise(resolve => setTimeout(resolve, 500));
-    console.log(JSON.stringify({ before: before.length, after: pidOf().length }));
+    console.log(JSON.stringify({ before: before.length, after: pidOf().length, marker }));
     process.exit(0);
   `;
   const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
-  assert.deepEqual(JSON.parse(ran.stdout.trim().split('\n').pop()), { before: 1, after: 0 }, ran.stderr);
+  const result = JSON.parse(ran.stdout.trim().split('\n').pop());
+  t.after(() => { for (const pid of pidsMentioning(result.marker)) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } }); // L9: a detached sleep of a failing run never outlives the test
+  assert.deepEqual({ before: result.before, after: result.after }, { before: 1, after: 0 }, ran.stderr);
 });
 
 test('A_probe_stopped_by_SIGTERM_during_the_C_sharp_build_leaves_no_build_process_behind', async t => {
