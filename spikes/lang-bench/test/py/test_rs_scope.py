@@ -136,7 +136,7 @@ class ForkTests(unittest.TestCase):
         self.assertIn("  fork: 2 processes in the program's cgroup where one was expected", result.lines)
 
     # The 100 ms rule has a documented rate (D4): a forked `true` counts for `fork` only when it has been in the cgroup for 100 ms, and under a CPU load a scheduler that does not run it for 100 ms makes that
-    # true. Two measured rates (N7): STANDALONE, under this test's own load (half the cores burning), about 1 round in 160 (p = 0.00625: more than two false forks in 20 rounds is about 3e-4, once in about 3000 runs); UNDER THE FULL SUITE's
+    # true. Two measured rates (N7): STANDALONE, with every core busy (this test burns half of them; measured in E1.S8a part ii-a, #147), about 1 round in 160 (p = 0.00625: more than two false forks in 20 rounds is about 3e-4, once in about 3000 runs); UNDER THE FULL SUITE's
     # load about 0.014 per round, so a false red of THIS test is about 2.8e-3 (once in about 360 suite runs). A broken rule counts the short tools in (nearly) every round, so this test catches a removed 100 ms
     # rule in most runs but not in all: the guard that reliably catches it, with no load, is test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs.
     ROUNDS = 20
