@@ -9,7 +9,7 @@ import { boxArgv } from '../lib/exec-layer/box.mjs';
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { shouldStampProbedOn, stampThenWrite } from '../lib/exec-probe/probe.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
-import { INCOMPLETE_EXIT, stopCleanly } from '../lib/exec-probe/stop.mjs';
+import { INCOMPLETE_EXIT, runStop, stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
 import { idsOf, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
@@ -138,4 +138,50 @@ test('A_probe_stopped_by_SIGTERM_during_the_C_sharp_build_leaves_no_build_proces
   const left = () => [...ids].flatMap(id => pidsMentioning(`-probebuild-${id}`));
   while (left().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
   assert.deepEqual(left(), [], 'no `dotnet build` of the probe is left, whichever way the stop came: the build box died with its parent and the child was ended');
+});
+
+// C1 / C3 / C4 (fix batch 5)
+const common = (said, exits) => ({ code: 143, bound: 1000, say: text => said.push(text), exit: code => exits.push(code), release: () => {}, describeLive: () => [], cleanLive: async () => [{ clean: true, left: [] }] });
+
+test('A_scope_close_that_never_ends_or_rejects_is_an_incomplete_cleanup_exit_75_and_never_nothing_is_left', async () => {
+  const hung = { said: [], exits: [] };
+  await stopCleanly({ ...common(hung.said, hung.exits), closeBound: 50, closeScope: never });
+  assert.deepEqual(hung.exits, [INCOMPLETE_EXIT], 'a close that hit its bound is not clean');
+  assert.match(hung.said.join('\n'), /owned folders .*did not finish within 50 ms/);
+  assert.doesNotMatch(hung.said.join('\n'), /nothing is left/, 'the clean line is printed only for a clean close');
+  const rejected = { said: [], exits: [] };
+  await stopCleanly({ ...common(rejected.said, rejected.exits), closeScope: async () => { throw new Error('EBUSY'); } });
+  assert.deepEqual(rejected.exits, [INCOMPLETE_EXIT]);
+  assert.match(rejected.said.join('\n'), /owned folders .*EBUSY/);
+  assert.doesNotMatch(rejected.said.join('\n'), /nothing is left/);
+});
+
+test('The_timeout_path_names_only_the_runs_still_open_after_the_attempt', async () => {
+  const said = [];
+  const exits = [];
+  const snapshots = [[{ id: 'one', unitPrefix: 'p-lsc-one', dir: '/r/one' }, { id: 'two', unitPrefix: 'p-lsc-two', dir: '/r/two' }], [{ id: 'two', unitPrefix: 'p-lsc-two', dir: '/r/two' }]];
+  await stopCleanly({ ...common(said, exits), bound: 40, describeLive: () => snapshots.shift() ?? snapshots.at(-1) ?? [{ id: 'two', unitPrefix: 'p-lsc-two', dir: '/r/two' }], cleanLive: never });
+  const text = said.join('\n');
+  assert.match(text, /stopping — cleaning up 2 open run\(s\)/, 'the first line counts the runs open at the start');
+  assert.match(text, /run two/, 'the run still open is named');
+  assert.doesNotMatch(text.split('cleanup incomplete')[1] ?? '', /run one/, 'the run that ended during the attempt is not');
+});
+
+test('A_stuck_cleanup_with_no_handle_left_still_reaches_exit_75_because_the_timer_is_not_unreffed', () => {
+  const script = `
+    import { stopCleanly } from ${JSON.stringify(new URL('../lib/exec-probe/stop.mjs', import.meta.url).href)};
+    await stopCleanly({ code: 143, bound: 300, say: text => process.stderr.write(text + '\\n'), exit: process.exit, release() {}, describeLive: () => [], cleanLive: () => new Promise(() => {}), closeScope: async () => {} });
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15_000 });
+  assert.equal(ran.status, INCOMPLETE_EXIT, `a process whose event loop is empty must not exit 0 on its own: ${ran.stderr}`);
+  assert.match(ran.stderr, /cleanup incomplete after 300 ms/);
+});
+
+test('A_rejection_of_the_stop_itself_ends_the_process_with_75_and_one_stderr_line', async () => {
+  const said = [];
+  const exits = [];
+  await runStop({ ...common(said, exits), describeLive: () => { throw new Error('boom'); } });
+  assert.deepEqual(exits, [INCOMPLETE_EXIT]);
+  assert.equal(said.length, 1);
+  assert.match(said[0], /^exec-probe: the stop itself failed \(boom\); exit 75: the next start's sweep retires what is left$/);
 });

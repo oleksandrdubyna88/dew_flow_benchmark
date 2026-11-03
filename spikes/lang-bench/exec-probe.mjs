@@ -24,7 +24,7 @@ import { assemble, canonicalJson } from './lib/specs-record.mjs';
 import { printable } from './lib/exec-probe/printable.mjs';
 import { runProbe, stampThenWrite, writeRecord } from './lib/exec-probe/probe.mjs';
 import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
-import { stopCleanly } from './lib/exec-probe/stop.mjs';
+import { runStop } from './lib/exec-probe/stop.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
@@ -111,7 +111,7 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
-    stopCleanly({ code, bound: 20_000, say: text => say(process.stderr, text), exit: process.exit, release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close() });
+    runStop({ code, bound: 20_000, say: text => say(process.stderr, text), exit: process.exit, release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close() });
   });
 }
 process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
