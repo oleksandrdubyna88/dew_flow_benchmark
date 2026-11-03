@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { endOfProbe } from '../lib/exec-probe/command-end.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
-import { ownId, parseTmpName, TMP_DIR, tmpPath } from '../lib/exec-probe/tmp-files.mjs';
+import { besideTmpPath, ownId, parseTmpName, pinTmpPath, TMP_DIR, tmpPath } from '../lib/exec-probe/tmp-files.mjs';
 import { retireStartupStrays } from '../lib/exec-probe/strays.mjs';
 import { checkRecord } from '../lib/specs-record.mjs';
 import { fileURLToPath } from 'node:url';
@@ -31,9 +31,10 @@ function setup(t) {
 
 test('A_temporary_file_name_carries_pid_and_start_time_and_lives_in_the_tmp_folder_beside_its_target', () => {
   assert.equal(TMP_DIR, '.exec-probe-tmp');
-  assert.equal(tmpPath('/i/specs.json', 'stamp', '12-34'), '/i/.exec-probe-tmp/specs.json.stamp-12-34');
+  assert.equal(besideTmpPath('/i/specs.json', 'stamp', '12-34'), '/i/.exec-probe-tmp/specs.json.stamp-12-34');
   assert.equal(tmpPath('/i/specs.d/exec-layer.json', 'restore', '12--', '/i'), '/i/.exec-probe-tmp/exec-layer.json.restore-12--', 'N1: a pin of specs.d has its temporary file in the tmp folder of inputs/');
-  assert.equal(tmpPath('/i/specs.d/exec-layer.json', 'restore', '12--'), '/i/specs.d/.exec-probe-tmp/exec-layer.json.restore-12--', 'with no base folder: beside the target');
+  assert.equal(besideTmpPath('/i/out/r.json', 'record', '12--'), '/i/out/.exec-probe-tmp/r.json.record-12--', 'a record\'s file is beside its target');
+  assert.throws(() => tmpPath('/i/specs.d/exec-layer.json', 'restore', '12--'), /base folder/, 'P4: tmpPath has no default that places a pin\'s temporary beside it');
   assert.deepEqual(parseTmpName('specs.json.stamp-12-34'), { pid: 12, start: '34' });
   assert.deepEqual(parseTmpName('stamp.lock.link-7--'), { pid: 7, start: '-' });
   assert.equal(parseTmpName('specs.json'), null);
@@ -64,7 +65,7 @@ test('The_startup_sweep_lists_only_the_tmp_folders_and_removes_the_files_of_dead
   const specsD = path.join(inputs, 'specs.d');
   fs.mkdirSync(specsD);
   const probe = pid => (pid === 111 ? { state: 'dead' } : pid === 222 ? { state: 'live', start: 500 } : { state: 'live', start: 900 });
-  const plant = (target, kind, id) => { const file = tmpPath(target, kind, id); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); return file; };
+  const plant = (target, kind, id) => { const file = besideTmpPath(target, kind, id); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); return file; };
   const dead = [plant(path.join(inputs, 'specs.json'), 'stamp', '111-5'), plant(path.join(inputs, 'exec-layer.json'), 'restore', '111-5'), plant(path.join(inputs, 'stamp.lock'), 'link', '111-5'), plant(path.join(inputs, '.stamp.lock'), 'mark', '111-5'), // P2: the committing mark's temporary file of a dead probe plant(path.join(out, 'exec-probe-x.json'), 'record', '111-5'),
     plant(path.join(out, 'exec-probe-y.json'), 'record', '222-400')]; // pid 222 is alive but started at 500, not 400: pid reuse
   const alive = [plant(path.join(inputs, 'specs.json'), 'stamp', '222-500'), plant(path.join(out, 'exec-probe-z.json'), 'record', '333-900')];
@@ -92,7 +93,7 @@ test('The_startup_sweep_never_throws_and_reports_a_tmp_folder_that_cannot_be_rea
 // N1 (Opus LOW 3): a probe killed in the middle of a stamp leaves its files in `inputs/.exec-probe-tmp/` and nowhere in `specs.d`, so `specs-record --check` still reads the assembly; the next start's sweep removes them.
 test('A_killed_probes_leftover_in_the_tmp_folder_of_inputs_leaves_the_record_check_ok_and_the_next_sweep_removes_it', t => {
   const s = setup(t);
-  const left = [tmpPath(path.join(s.inputsDir, 'specs.json'), 'stamp', '999999-1'), tmpPath(path.join(s.inputsDir, 'specs.d', 'exec-layer.json'), 'stamp', '999999-1', s.inputsDir)];
+  const left = [besideTmpPath(path.join(s.inputsDir, 'specs.json'), 'stamp', '999999-1'), tmpPath(path.join(s.inputsDir, 'specs.d', 'exec-layer.json'), 'stamp', '999999-1', s.inputsDir)];
   fs.mkdirSync(path.dirname(left[0]), { recursive: true });
   left.forEach(file => fs.writeFileSync(file, 'half'));
   assert.deepEqual(left.map(file => path.dirname(file)), [path.join(s.inputsDir, TMP_DIR), path.join(s.inputsDir, TMP_DIR)], 'both pins\' files are in the tmp folder of inputs/');
@@ -116,17 +117,29 @@ test('The_startup_sweep_skips_a_tmp_folder_that_is_a_symlink_or_not_owned_and_a_
   assert.deepEqual(linked.removed, []);
   assert.match(linked.errors.join('\n'), new RegExp(`${path.join(inputs, TMP_DIR).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*symbolic link`), 'the message names the link');
   const own = owned.ownedDir(t, 'sweepown');
-  const real = tmpPath(path.join(own, 'specs.json'), 'stamp', '111-5');
+  const real = besideTmpPath(path.join(own, 'specs.json'), 'stamp', '111-5');
   fs.mkdirSync(path.dirname(real));
   fs.writeFileSync(real, 'x');
   const foreign = retireStartupStrays({ dirs: [own], probe: dead, uid: process.getuid() + 1 });
   assert.equal(fs.existsSync(real), true, 'a tmp folder of another user is skipped');
   assert.match(foreign.errors.join('\n'), /not owned by this user/);
   fs.rmSync(real);
-  const link = tmpPath(path.join(own, 'specs.json'), 'restore', '111-5');
+  const link = besideTmpPath(path.join(own, 'specs.json'), 'restore', '111-5');
   fs.symlinkSync(victim, link); // a dead pid's name, but a link inside a real folder
   const inside = retireStartupStrays({ dirs: [own], probe: dead });
   assert.equal(fs.existsSync(victim), true, 'the target of a link inside the folder survives');
   assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link itself is skipped, not removed');
   assert.match(inside.errors.join('\n'), /not a regular file/);
+});
+
+// P4 (coai 0): the pins' temporaries go through ONE helper that always uses `inputs/.exec-probe-tmp/`.
+test('The_pin_temporary_helper_never_returns_a_path_under_specs_d_for_any_pin_or_kind', () => {
+  for (const pin of ['specs.d/exec-layer.json', 'specs.json']) {
+    for (const kind of ['stamp', 'restore']) {
+      const file = pinTmpPath('/i', pin, kind, '7-9');
+      assert.equal(file, `/i/.exec-probe-tmp/${path.basename(pin)}.${kind}-7-9`);
+      assert.equal(file.includes('/specs.d/'), false, `${file} is not under specs.d`);
+      assert.deepEqual(parseTmpName(path.basename(file)), { pid: 7, start: '9' });
+    }
+  }
 });

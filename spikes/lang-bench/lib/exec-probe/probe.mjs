@@ -13,7 +13,7 @@ import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
 import { RecordExists } from './record-path.mjs';
-import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
+import { besideTmpPath, dropTmpFolder, ownId, writeTmp } from './tmp-files.mjs';
 
 const MIB = 1024 * 1024;
 export { LIMITS_MIB };
@@ -116,7 +116,7 @@ export function finish({ found, memoryView, now, identity, runner = null }) {
 export function writeReservedRecord(file, record, held, io = fs) {
   if (held === null || held === undefined) throw new Error(`writeReservedRecord: ${file} is not held by a reservation: a record is only written into a placeholder the caller reserved (T-L53)`);
   if (io.statSync(file).size !== 0) throw new Error(`writeReservedRecord: ${file} is not an empty placeholder: a record is never overwritten (T-L53)`);
-  const tmp = tmpPath(file, 'record', ownId()); // D2: in a `.exec-probe-tmp/` folder beside the placeholder
+  const tmp = besideTmpPath(file, 'record', ownId()); // D2: in a `.exec-probe-tmp/` folder beside the placeholder
   try {
     writeTmp(tmp, `${JSON.stringify(record, null, 2)}\n`, undefined, io);
     io.renameSync(tmp, file);

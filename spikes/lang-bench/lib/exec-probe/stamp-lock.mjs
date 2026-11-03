@@ -10,7 +10,7 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { processProbe } from '../../../../.agents/conventions/tools/lib/owned.mjs';
-import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
+import { besideTmpPath, dropTmpFolder, ownId, writeTmp } from './tmp-files.mjs';
 
 export const LOCK_NAME = '.stamp.lock';
 const CONTENT = /^(\d+) (\d+|-)(\ncommitting)?$/;
@@ -90,8 +90,8 @@ function makeTake({ io, lock, inputsDir, tmp, mine }) {
 export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = processProbe }) {
   const lock = path.join(inputsDir, LOCK_NAME);
   const own = { pid, start: startOf(probe, pid) };
-  const tmp = tmpPath(lock, 'link', ownId(probe, pid)); // D2: in `.exec-probe-tmp/` beside the lock
-  const markTmp = tmpPath(lock, 'mark', ownId(probe, pid)); // N5: the committing mark has its own temporary kind, never the link temp
+  const tmp = besideTmpPath(lock, 'link', ownId(probe, pid)); // D2: in `.exec-probe-tmp/` beside the lock
+  const markTmp = besideTmpPath(lock, 'mark', ownId(probe, pid)); // N5: the committing mark has its own temporary kind, never the link temp
   const take = makeTake({ io, lock, inputsDir, tmp, mine: `${own.pid} ${own.start}` });
   const held = holderActions({ io, lock, inputsDir, own, tmp, markTmp });
   const first = take();

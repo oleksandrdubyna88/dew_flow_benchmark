@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { assemble, canonicalJson, WRITER_FILES } from '../specs-record.mjs';
 import { acquireLock as acquireStampLock } from './stamp-lock.mjs';
-import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
+import { dropTmpFolder, ownId, pinTmpPath, writeTmp } from './tmp-files.mjs';
 
 export const LAYER_PIN = 'specs.d/exec-layer.json';
 export const SPECS_PIN = 'specs.json';
@@ -33,7 +33,7 @@ function stage(inputsDir, stageDir, stampedLayer, io) {
  */
 export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = ownId() }) {
   const files = pinsOf(inputsDir);
-  const tmp = { layer: tmpPath(files.layer, 'stamp', tag, inputsDir), specs: tmpPath(files.specs, 'stamp', tag, inputsDir) }; // N1: both in `inputs/.exec-probe-tmp/` (same file system; specs.d holds nothing temporary)
+  const tmp = { layer: pinTmpPath(inputsDir, LAYER_PIN, 'stamp', tag), specs: pinTmpPath(inputsDir, SPECS_PIN, 'stamp', tag) }; // N1: both in `inputs/.exec-probe-tmp/` (same file system; specs.d holds nothing temporary)
   const savedLayer = io.readFileSync(files.layer, 'utf8');
   const saved = { layer: savedLayer, specs: io.readFileSync(files.specs, 'utf8') };
   const stamped = canonicalJson({ execLayer: { ...JSON.parse(savedLayer).execLayer, probedOn: record.probedOn, host: record.host } });
@@ -62,8 +62,8 @@ export function discardStamp(prepared, io = fs) {
 }
 
 /** Put `content` back at `file` through a temporary file beside it and a rename: `true` when it is back. */
-function putBack(file, content, tag, inputsDir, io) {
-  const tmp = tmpPath(file, 'restore', tag, inputsDir);
+function putBack(pin, file, content, tag, inputsDir, io) {
+  const tmp = pinTmpPath(inputsDir, pin, 'restore', tag);
   try {
     writeTmp(tmp, content, undefined, io);
     io.renameSync(tmp, file);
@@ -91,13 +91,13 @@ export function commitStamp(prepared, io = fs) {
     dropTemporary(prepared, io);
     return { ok: true, stamped: [LAYER_PIN, SPECS_PIN] };
   } catch (error) {
-    const back = putBack(prepared.files.layer, prepared.saved.layer, prepared.tag, prepared.inputsDir, io);
+    const back = putBack(LAYER_PIN, prepared.files.layer, prepared.saved.layer, prepared.tag, prepared.inputsDir, io);
     return { ok: false, error: error.message, stamped: back ? [] : [LAYER_PIN] };
   }
 }
 
 /** Put both pins back from the contents saved at prepare time: `{ stillStamped }`, the pins that could not be put back. */
 export function restorePins(prepared, io = fs) {
-  const results = [[LAYER_PIN, prepared.files.layer, prepared.saved.layer], [SPECS_PIN, prepared.files.specs, prepared.saved.specs]].map(([name, file, content]) => [name, putBack(file, content, prepared.tag, prepared.inputsDir, io)]);
+  const results = [[LAYER_PIN, prepared.files.layer, prepared.saved.layer], [SPECS_PIN, prepared.files.specs, prepared.saved.specs]].map(([name, file, content]) => [name, putBack(name, file, content, prepared.tag, prepared.inputsDir, io)]);
   return { stillStamped: results.filter(([, ok]) => !ok).map(([name]) => name) };
 }

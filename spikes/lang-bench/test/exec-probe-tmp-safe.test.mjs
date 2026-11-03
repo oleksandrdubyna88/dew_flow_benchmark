@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { endOfProbe } from '../lib/exec-probe/command-end.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
-import { ownId, TMP_DIR, tmpPath, whyUnsafeFolder, writeTmp } from '../lib/exec-probe/tmp-files.mjs';
+import { besideTmpPath, ownId, TMP_DIR, whyUnsafeFolder, writeTmp } from '../lib/exec-probe/tmp-files.mjs';
 import { owned } from './support/owned.mjs';
 
 const REAL_INPUTS = fileURLToPath(new URL('../inputs', import.meta.url));
@@ -34,7 +34,7 @@ const escaped = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 test('A_planted_symlink_at_the_records_temporary_name_is_never_written_through_and_the_probe_exits_2', t => {
   const s = setup(t);
   const target = path.join(s.victims, 'victim.json');
-  const temp = tmpPath(s.file, 'record', ownId());
+  const temp = besideTmpPath(s.file, 'record', ownId());
   fs.mkdirSync(path.dirname(temp), { recursive: true });
   fs.symlinkSync(target, temp); // dangling: a write that follows it would create the victim
   assert.equal(s.run(true), 2);

@@ -14,11 +14,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { retireStartupStrays } from '../lib/exec-probe/strays.mjs';
-import { tmpPath, TMP_DIR } from '../lib/exec-probe/tmp-files.mjs';
+import { besideTmpPath, TMP_DIR } from '../lib/exec-probe/tmp-files.mjs';
 import { owned } from './support/owned.mjs';
 
 const probe = p => (p === 111111 || p === 222222 ? { state: 'dead' } : { state: 'live', start: 5 });
-const plant = (target, kind, id) => { const file = tmpPath(target, kind, id); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); return file; };
+const plant = (target, kind, id) => { const file = besideTmpPath(target, kind, id); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); return file; };
 
 test('The_startup_sweep_retires_the_temporary_files_of_dead_probes_in_the_tmp_folders_beside_inputs_and_an_out_file_and_leaves_live_probes_and_other_files', t => {
   const inputs = owned.ownedDir(t, 'strayin');

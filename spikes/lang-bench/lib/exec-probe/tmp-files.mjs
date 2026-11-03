@@ -11,8 +11,17 @@ const NAME = /^.+\.(?:link|mark|stamp|restore|record)-(\d+)-(\d+|-)$/;
 /** `<pid>-<start>` of a probe: the start time is `processProbe`'s (`-` when it cannot be read). */
 export const ownId = (probe = processProbe, pid = process.pid) => `${pid}-${probe(pid).start ?? '-'}`;
 
-/** The path of a temporary file for `target` of kind `kind` owned by `id`, in the tmp folder of `base` (default: the folder of `target`). */
-export const tmpPath = (target, kind, id, base = path.dirname(target)) => path.join(base, TMP_DIR, `${path.basename(target)}.${kind}-${id}`);
+/** The path of a temporary file for `target` of kind `kind` owned by `id`, in the tmp folder of `base`. There is NO default base (P4): a caller says where, so a pin's temporary can never land beside the pin by omission. */
+export function tmpPath(target, kind, id, base) {
+  if (base === undefined) throw new Error('tmpPath: a base folder is required (use besideTmpPath or pinTmpPath)');
+  return path.join(base, TMP_DIR, `${path.basename(target)}.${kind}-${id}`);
+}
+
+/** The temporary file of a target that is NOT a pin (the lock, the record): in the tmp folder of the target's own folder. */
+export const besideTmpPath = (target, kind, id) => tmpPath(target, kind, id, path.dirname(target));
+
+/** The temporary file of a pin (`specs.json` or `specs.d/exec-layer.json`, named relative to `inputsDir`): ALWAYS in `inputsDir/.exec-probe-tmp/`, so `specs.d` never holds a temporary entry (N1, P4). */
+export const pinTmpPath = (inputsDir, pin, kind, id) => tmpPath(pin, kind, id, inputsDir);
 
 /** `{ pid, start }` of a temporary file's name, or null when it is not one of this design's. */
 export function parseTmpName(name) {
