@@ -304,10 +304,14 @@ test('The_stop_message_after_a_hung_cleanup_names_the_run_its_scope_units_and_it
     const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
     if (!opened.ok) { console.log(JSON.stringify({ problem: opened.reason })); process.exit(1); }
     const run = opened.value;
+    let release;
+    let calls = 0;
+    const hungOnce = () => (calls++ === 0 ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ removed: [], left: [] }));
     const said = [];
     const exits = [];
-    await stopCleanly({ code: 143, bound: 400, say: text => said.push(text), exit: code => exits.push(code), release() {}, describeLive: describeLiveRuns, cleanLive: () => cleanupLiveRuns({ scopes: () => new Promise(() => {}) }), closeScope: async () => {} });
-    const after = await cleanup(run); // the real cleanup, so the test leaves nothing
+    await stopCleanly({ code: 143, bound: 400, say: text => said.push(text), exit: code => exits.push(code), release() {}, describeLive: describeLiveRuns, cleanLive: () => cleanupLiveRuns({ scopes: hungOnce }), closeScope: async () => {} });
+    release({ removed: [], left: [] }); // the hung step is let go, and the cleanup that was in flight finishes: the run is really cleaned, so the test leaves nothing
+    const after = await cleanup(run);
     console.log(JSON.stringify({ said, exits, id: run.id, unitPrefix: run.unitPrefix, dir: run.dir, clean: after.clean }));
     process.exit(0);
   `;
@@ -371,4 +375,19 @@ test('A_stop_before_any_probe_step_makes_no_folder_for_the_run_mode_the_probe_ru
   const files = [...readdirSync(lib).map(name => path.join(lib, name)), fileURLToPath(new URL('../exec-probe.mjs', import.meta.url))].filter(file => file.endsWith('.mjs'));
   const raw = files.filter(file => /\bowned\.ownedDir\(/.test(readFileSync(file, 'utf8'))).map(file => path.basename(file));
   assert.deepEqual(raw, [], 'a raw owned.ownedDir( in the probe is a folder made without the stop guard');
+});
+
+// K4 (Opus L4): a cleanup of a run already in flight is not started twice.
+test('Two_concurrent_cleanups_of_one_run_run_the_steps_once_and_share_the_report', async t => {
+  if (!needs(t)) return;
+  const opened = await openRun(layerOptions(t));
+  assert.ok(opened.ok, opened.reason);
+  const run = opened.value;
+  t.after(() => cleanup(run));
+  let calls = 0;
+  const slow = async () => { calls += 1; await new Promise(resolve => setTimeout(resolve, 150)); return { removed: [], left: [] }; };
+  const [one, two] = await Promise.all([cleanup(run, { scopes: slow }), cleanup(run, { scopes: slow })]);
+  assert.equal(calls, 2, 'the scope step runs twice per cleanup (the confirmation pass), and the cleanup ran ONCE: four calls would be two cleanups');
+  assert.deepEqual(one, two, 'both callers get the one report');
+  assert.equal(one.clean, true);
 });

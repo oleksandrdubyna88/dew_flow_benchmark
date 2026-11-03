@@ -33,7 +33,8 @@ export async function stopCleanly({ code, recordedCode = () => null, bound, clos
   const recorded = recordedCode();
   if (recorded !== null) { // the record is already in place (S1): there is nothing to clean but the owned folders, and the exit is the record's own code
     say('exec-probe: stopping — the record is already written; closing the owned folders');
-    await settle(Promise.resolve().then(closeScope), closeBound);
+    const closed = await settle(Promise.resolve().then(closeScope), closeBound);
+    if (closed.timedOut || closed.error) say(printable(`exec-probe: the owned folders did not finish closing (${closed.timedOut ? `did not finish within ${closeBound} ms` : closed.error.message}); some may be left, ${SWEEP}; the record is written and the exit is its code`));
     return exit(recorded);
   }
   say(`exec-probe: stopping — cleaning up ${describeLive().length} open run(s)`);

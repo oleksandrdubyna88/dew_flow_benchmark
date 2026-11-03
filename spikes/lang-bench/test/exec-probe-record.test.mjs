@@ -10,7 +10,7 @@ import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNex
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { tmpdir } from 'node:os';
 import { printable } from '../lib/exec-probe/printable.mjs';
-import { writeRecord } from '../lib/exec-probe/probe.mjs';
+import { writeRecord, writeReservedRecord } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir } from './support/exec-layer-host.mjs';
 import { idsOf, leftNamed, pidsMentioning, privateProbeEnv, thingsOf } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
@@ -245,4 +245,19 @@ test('The_reservenext_check_looks_in_the_childs_own_temp_root_and_finds_a_plante
   mkdirSync(path.join(scoped.tmp, 'testsToDelete-u1000-bench-reservenext-AbCdEf'));
   assert.deepEqual(leftNamed(scoped.tmp, /reservenext/), ['testsToDelete-u1000-bench-reservenext-AbCdEf'], 'a planted folder in the child\'s temp root is found (the check is red)');
   assert.deepEqual(leftNamed(path.join(scoped.tmp, 'absent'), /reservenext/), [], 'a missing folder is nothing');
+});
+
+// K4 (Opus L2): T-L53 must not depend only on the caller — the writer itself refuses a path that is not an EMPTY placeholder held by the caller.
+test('The_reserved_record_writer_refuses_a_missing_reservation_and_a_placeholder_that_is_not_empty', t => {
+  const dir = owned.ownedDir(t, 'k4w');
+  const held = reserveRecord(path.join(dir, 'exec-probe-k4.json'));
+  assert.throws(() => writeReservedRecord(held.file, { a: 1 }, null), /reservation/, 'no reservation held: refused');
+  assert.equal(statSync(held.file).size, 0, 'and the placeholder is untouched');
+  writeFileSync(held.file, 'a record that exists');
+  assert.throws(() => writeReservedRecord(held.file, { a: 1 }, held), /not an empty placeholder/, 'a file with content is never overwritten');
+  assert.equal(readFileSync(held.file, 'utf8'), 'a record that exists', 'not one byte changed');
+  assert.deepEqual(readdirSync(dir).filter(name => name.includes('.tmp-')), [], 'no temporary file is left');
+  const fresh = reserveRecord(path.join(dir, 'exec-probe-k4b.json'));
+  writeReservedRecord(fresh.file, { a: 1 }, fresh);
+  assert.deepEqual(JSON.parse(readFileSync(fresh.file, 'utf8')), { a: 1 }, 'an empty placeholder held by the caller is filled');
 });

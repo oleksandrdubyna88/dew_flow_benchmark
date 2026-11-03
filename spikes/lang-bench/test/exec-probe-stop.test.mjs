@@ -212,3 +212,16 @@ test('A_probe_whose_C_sharp_program_does_not_build_is_refused_with_exit_2_and_le
   assert.deepEqual(readdirSync(scoped.tmp), [], 'the refusal ran the finally: no probebuild folder, no claim, no owned folder is left in the probe\'s temp root');
   assert.equal(existsSync(path.join(dir, 'record.json')), false, 'and no empty record');
 });
+
+// K4 (coai 2): a SIGTERM after the record whose folder close fails says what may be left; the exit stays the record's code.
+test('A_stop_after_the_record_whose_owned_folder_close_times_out_or_fails_says_so_and_keeps_the_records_code', async () => {
+  for (const [name, closeScope] of [['hangs', never], ['rejects', async () => { throw new Error('EBUSY'); }]]) {
+    const said = [];
+    const exits = [];
+    await stopCleanly({ code: 143, recordedCode: () => 0, closeBound: 50, bound: 1000, say: text => said.push(text), exit: code => exits.push(code), release: () => {}, describeLive: () => [], cleanLive: async () => [], closeScope });
+    assert.deepEqual(exits, [0], `${name}: the exit stays the record's code`);
+    const text = said.join('\n');
+    assert.match(text, /owned folders did not finish closing \((did not finish within 50 ms|EBUSY)\)/, `${name}: one line names what may be left`);
+    assert.equal(said.filter(line => /did not finish closing/.test(line)).length, 1);
+  }
+});

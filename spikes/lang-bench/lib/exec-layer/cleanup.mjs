@@ -138,7 +138,16 @@ export async function cleanupLiveRuns(options) {
  * End everything of `run` (`{ owned, dir, id, unitPrefix, holderName, scope }`): `{ evidence, removed, left, clean }`. `clean` is true when nothing is left. Idempotent: a second call finds nothing.
  * `evidence` is, per scope unit, what `prog/` said live before the kill. `scopes` (a seam) replaces the scope step. When any step leaves something the run folder and its claim are KEPT (M2).
  */
-export async function cleanup(run, { graceMs = 2000, scopes = endScopes } = {}) {
+const inFlight = new Map();
+
+export function cleanup(run, { graceMs = 2000, scopes = endScopes } = {}) {
+  if (inFlight.has(run)) return inFlight.get(run); // K4: a cleanup of a run already in flight is not started twice: the second caller waits for the first one's report
+  const started = cleanupOnce(run, { graceMs, scopes }).finally(() => inFlight.delete(run));
+  inFlight.set(run, started);
+  return started;
+}
+
+async function cleanupOnce(run, { graceMs, scopes }) {
   const report = await cleanupSteps(run, { graceMs, scopes });
   if (report.clean) liveRuns.delete(run); // S2: a run stays named in the registry until its cleanup has FINISHED CLEAN (a hung or leaving cleanup is what a stop's message must still be able to name)
   return report;

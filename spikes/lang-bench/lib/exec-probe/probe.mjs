@@ -113,6 +113,8 @@ export function finish({ found, memoryView, now, identity, runner = null }) {
  * stays empty and the temporary file is removed. `io` is the test seam.
  */
 export function writeReservedRecord(file, record, held, io = fs) {
+  if (held === null || held === undefined) throw new Error(`writeReservedRecord: ${file} is not held by a reservation: a record is only written into a placeholder the caller reserved (T-L53)`);
+  if (io.statSync(file).size !== 0) throw new Error(`writeReservedRecord: ${file} is not an empty placeholder: a record is never overwritten (T-L53)`);
   const tmp = path.join(path.dirname(file), `.exec-probe-record.tmp-${process.pid}`); // a fixed known name beside the placeholder: a dead probe's leftover is retired by name
   try {
     io.writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
