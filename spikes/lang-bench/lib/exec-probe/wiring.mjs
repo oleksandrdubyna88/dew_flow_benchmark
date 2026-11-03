@@ -18,18 +18,36 @@ export const stopArguments = ({ code, state, say, exit, release, describeLive, c
 
 const SIGNALS = Object.freeze([['SIGINT', 130], ['SIGTERM', 143]]);
 
-/** Install the SIGINT and SIGTERM handlers of the command on `proc` (the first signal wins; a second one is ignored while the stop runs). */
+/**
+ * The guard of stdout and stderr (L4, D3). An EPIPE (the reader of a pipe closed: `| head`) is always ignored. Any other error AFTER the record is written (`state.written` is its exit code) is ignored too: the
+ * record's code stays, never an uncaught exception. BEFORE the record it is the command's failure: `fail(error)` is called (the command stops with exit 2); the listener itself never throws.
+ */
+export function guardStreams(proc = process, { state = newState(), fail = () => proc.exit(2) } = {}) {
+  [proc.stdout, proc.stderr].forEach(stream => stream.on('error', error => {
+    if (error?.code === 'EPIPE' || state.written !== null) return;
+    fail(error);
+  }));
+}
+
+/**
+ * Install the guard of the streams FIRST (D3: it is the first thing the command does, before any write), then the SIGINT and SIGTERM handlers of the command on `proc` (the first signal wins; a second one
+ * is ignored while the stop runs). A stream error before the record is the stop with exit 2 (the cleanup, then exit 2), through the same once-only gate as a signal.
+ */
 export function installStopHandlers({ proc = process, exit = code => proc.exit(code), ...rest }) {
   let stopping = false;
-  SIGNALS.forEach(([signal, code]) => proc.on(signal, () => {
+  const stop = code => {
     if (stopping) return;
     stopping = true;
     rest.onStopping?.();
     runStop(stopArguments({ code, exit, ...rest }));
-  }));
+  };
+  guardStreams(proc, { state: rest.state, fail: () => stop(2) });
+  SIGNALS.forEach(([signal, code]) => proc.on(signal, () => stop(code)));
 }
 
-/** An EPIPE on stdout or stderr (the reader of a pipe closed: `| head`) is ignored and any other stream error is thrown as it was (L4): a closed pipe must not turn a record's 0 into exit 1. */
-export function guardStreams(proc = process) {
-  [proc.stdout, proc.stderr].forEach(stream => stream.on('error', error => { if (error?.code !== 'EPIPE') throw error; }));
+/** The start of the command, in this order: the stream guard and the stop handlers (`installStopHandlers`), the release of an unwritten placeholder on exit, and only then `sweep()` (the start sweep writes to stderr). */
+export function startCommand({ proc = process, sweep, ...stopOptions }) {
+  installStopHandlers({ proc, ...stopOptions });
+  proc.on('exit', stopOptions.release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
+  sweep();
 }
