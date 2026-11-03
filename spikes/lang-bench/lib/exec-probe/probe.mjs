@@ -1,6 +1,7 @@
 // E1.S8b brief B: the host probe — every line of the plan's probe list, run THROUGH the layer (the real prefix, the delegated scope, the v2 box), then the memory view at 256 and 512 MiB
 // asserted by policy. It records first and judges after: the record is complete even when a line fails; the exit is 3 naming the FIRST failed line (`halt`), then the memory verdict.
 // Exit 0 only when every line passed AND a decided memory policy holds.
+import * as fs from 'node:fs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -105,6 +106,21 @@ export function finish({ found, memoryView, now, identity, runner = null }) {
   const record = { date: now.toISOString().slice(0, 10), probedOn: now.toISOString(), host: hostFacts(), layerIdentity: identity, runner, lines: found, memoryView: { ...memoryView, verdict, v8Heap: v8HeapRecord(memoryView.observations, memoryView.policy), ...ratiosOf(memoryView.observations) }, exit: { code: halt === null ? 0 : 3, halt } };
   const problems = recordProblems(record);
   return problems.length === 0 ? record : { ...record, exit: { code: 3, halt: 'record-holds-host-keys' }, recordProblems: problems };
+}
+
+/**
+ * The record written ONCE with its final content (S1): to a temporary file beside the reserved placeholder and renamed over it, so a failed write (a full disk) leaves no cut-off dated record: the placeholder
+ * stays empty and the temporary file is removed. `io` is the test seam.
+ */
+export function writeReservedRecord(file, record, held, io = fs) {
+  const tmp = `${file}.tmp-${process.pid}`;
+  try {
+    io.writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
+    io.renameSync(tmp, file);
+  } catch (error) {
+    io.rmSync(tmp, { force: true });
+    throw error;
+  }
 }
 
 /**

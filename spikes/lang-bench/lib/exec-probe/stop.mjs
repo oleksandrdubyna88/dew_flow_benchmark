@@ -29,7 +29,13 @@ const SWEEP = "the next start's sweep retires them";
  * `release` (the record's placeholder), `describeLive` (the open runs), `cleanLive` (ends them and the tracked children, resolves their reports) and `closeScope` (the owned folders). Resolves after it has
  * called `exit`. Only a cleanup AND a close that both finished with nothing left print "nothing is left" and exit with the signal's code (C1).
  */
-export async function stopCleanly({ code, bound, closeBound = 5000, say, exit, release, describeLive, cleanLive, closeScope }) {
+export async function stopCleanly({ code, recordedCode = () => null, bound, closeBound = 5000, say, exit, release, describeLive, cleanLive, closeScope }) {
+  const recorded = recordedCode();
+  if (recorded !== null) { // the record is already in place (S1): there is nothing to clean but the owned folders, and the exit is the record's own code
+    say('exec-probe: stopping — the record is already written; closing the owned folders');
+    await settle(Promise.resolve().then(closeScope), closeBound);
+    return exit(recorded);
+  }
   say(`exec-probe: stopping — cleaning up ${describeLive().length} open run(s)`);
   release();
   const cleaned = await settle(cleanLive(), bound);

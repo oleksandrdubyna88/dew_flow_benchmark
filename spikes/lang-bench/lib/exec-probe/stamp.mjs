@@ -1,50 +1,131 @@
-// L3 (fix batch 5): the passing probe's stamp — `probedOn` and `host` in `inputs/specs.d/exec-layer.json` and the re-assembled `inputs/specs.json` — in TWO phases, so a failure of either file leaves both pins as they were.
-//   prepare  the new contents are made in temporary files beside their targets (the assembly is made from a staged copy of `specs.d`, never from the real one); a failure removes what was made;
-//   commit   the two temporary files are renamed into place; if the second rename fails the first is put back. Nothing else changes a pin.
-// `finishProbe` calls `prepare` BEFORE the record is written (a failure is a record that says exit 2) and `commit` only AFTER the record is written.
+// The passing probe's stamp — `probedOn` and `host` in `inputs/specs.d/exec-layer.json` and the re-assembled `inputs/specs.json` — in steps that each say exactly what they changed (S1, fix batch 6). Nothing here
+// mutates a value it is given: every step returns a new description.
+//   lock      `inputs/.stamp.lock` holds the pid of the probe that is stamping (created with `wx`): two passing probes cannot interleave their stamps; a lock whose pid is dead is stale and is retired with its stray files;
+//   prepare   the new contents are made in temporary files BESIDE their targets (a rename across file systems fails); the assembly is staged from ONLY the files `assemble` reads, never a copy of `inputs/`;
+//   commit    the two renames; if the second fails the first pin is put back; the outcome names which pins are stamped;
+//   restore   both pins put back from the contents saved at prepare time (when the record could not be written).
 import * as fs from 'node:fs';
 import path from 'node:path';
-import { assemble, canonicalJson } from '../specs-record.mjs';
+import { assemble, canonicalJson, WRITER_FILES } from '../specs-record.mjs';
 
-const LAYER = 'exec-layer.json';
+export const LAYER_PIN = 'specs.d/exec-layer.json';
+export const SPECS_PIN = 'specs.json';
+const LOCK = '.stamp.lock';
+const STRAY = pid => new RegExp(`\\.(stamp|restore)-${pid}$`);
 
-/** `{ commit(), abort() }` for the stamp of `record` in `inputsDir`; `stageDir` is an empty folder the caller owns (the staged copy of `specs.d` lives there). `io` is the test seam (default `node:fs`). Throws when it cannot prepare. */
-export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = String(process.pid) }) {
-  const specsD = path.join(inputsDir, 'specs.d');
-  const layerFile = path.join(specsD, LAYER);
-  const specsFile = path.join(inputsDir, 'specs.json');
-  const tmpLayer = `${layerFile}.stamp-${tag}`;
-  const tmpSpecs = `${specsFile}.stamp-${tag}`;
-  const made = [];
-  const abort = () => { for (const file of made.splice(0)) io.rmSync(file, { force: true }); };
+const pinsOf = inputsDir => ({ layer: path.join(inputsDir, LAYER_PIN), specs: path.join(inputsDir, SPECS_PIN) });
+const aliveByDefault = pid => {
   try {
-    const current = JSON.parse(io.readFileSync(layerFile, 'utf8'));
-    const stamped = canonicalJson({ execLayer: { ...current.execLayer, probedOn: record.probedOn, host: record.host } });
-    const staged = path.join(stageDir, 'inputs');
-    io.cpSync(inputsDir, staged, { recursive: true });
-    io.writeFileSync(path.join(staged, 'specs.d', LAYER), stamped);
-    const built = assemble(staged);
-    if (!built.ok) throw new Error(built.reason);
-    made.push(tmpLayer);
-    io.writeFileSync(tmpLayer, stamped);
-    made.push(tmpSpecs);
-    io.writeFileSync(tmpSpecs, built.text);
+    process.kill(pid, 0);
+    return true;
   } catch (error) {
-    abort();
+    return error.code === 'EPERM';
+  }
+};
+
+/** Remove the stray `*.stamp-<pid>` and `*.restore-<pid>` files a dead stamping probe left in `inputs/` and `inputs/specs.d/`; the names removed. */
+function retireStrays(inputsDir, pid, io) {
+  return [inputsDir, path.join(inputsDir, 'specs.d')].flatMap(dir => io.readdirSync(dir).filter(name => STRAY(pid).test(name)).map(name => path.join(dir, name))).map(file => {
+    io.rmSync(file, { force: true });
+    return file;
+  });
+}
+
+/**
+ * Take the stamp lock: `{ ok: true, release(), retired }` (`retired` names the stale lock and the files removed, or null) or `{ ok: false, holder }` for a live holder. A lock whose pid is dead is stale: the next probe
+ * removes it and its stray files and says so. `alive` and `io` are the test seams.
+ */
+export function acquireLock({ inputsDir, io = fs, pid = process.pid, alive = aliveByDefault }) {
+  const lock = path.join(inputsDir, LOCK);
+  const release = () => io.rmSync(lock, { force: true });
+  const take = retired => {
+    io.writeFileSync(lock, String(pid), { flag: 'wx' });
+    return { ok: true, release, retired };
+  };
+  try {
+    return take(null);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  const holder = Number.parseInt(io.readFileSync(lock, 'utf8'), 10);
+  if (Number.isInteger(holder) && alive(holder)) return { ok: false, holder };
+  const strays = Number.isInteger(holder) ? retireStrays(inputsDir, holder, io) : [];
+  io.rmSync(lock, { force: true });
+  return take(`retired the stale stamp lock of pid ${holder} and ${strays.length} stray file(s)`);
+}
+
+/** The files `assemble` reads, copied into `stageDir/specs.d` (nothing else of `inputs/`). */
+function stage(inputsDir, stageDir, stampedLayer, io) {
+  const specsD = path.join(stageDir, 'specs.d');
+  io.mkdirSync(specsD, { recursive: true });
+  WRITER_FILES.filter(name => io.existsSync(path.join(inputsDir, 'specs.d', name))).forEach(name => io.copyFileSync(path.join(inputsDir, 'specs.d', name), path.join(specsD, name)));
+  io.writeFileSync(path.join(specsD, 'exec-layer.json'), stampedLayer);
+  return assemble(stageDir);
+}
+
+/**
+ * The prepared stamp: `{ files, tmp, saved, tag }`, the new contents already in temporary files beside the pins and the old contents saved. Throws (after removing what it made) when it cannot prepare, so the
+ * caller can say it in the record.
+ */
+export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = String(process.pid) }) {
+  const files = pinsOf(inputsDir);
+  const tmp = { layer: `${files.layer}.stamp-${tag}`, specs: `${files.specs}.stamp-${tag}` };
+  const savedLayer = io.readFileSync(files.layer, 'utf8');
+  const saved = { layer: savedLayer, specs: io.readFileSync(files.specs, 'utf8') };
+  const stamped = canonicalJson({ execLayer: { ...JSON.parse(savedLayer).execLayer, probedOn: record.probedOn, host: record.host } });
+  try {
+    const built = stage(inputsDir, stageDir, stamped, io);
+    if (!built.ok) throw new Error(built.reason);
+    io.writeFileSync(tmp.layer, stamped);
+    io.writeFileSync(tmp.specs, built.text);
+  } catch (error) {
+    io.rmSync(tmp.layer, { force: true });
+    io.rmSync(tmp.specs, { force: true });
     throw error;
   }
-  const commit = () => {
-    const before = io.readFileSync(layerFile, 'utf8');
-    io.renameSync(tmpLayer, layerFile);
-    try {
-      io.renameSync(tmpSpecs, specsFile);
-    } catch (error) {
-      io.writeFileSync(tmpLayer, before); // put the first pin back: both stay as they were
-      io.renameSync(tmpLayer, layerFile);
-      abort();
-      throw error;
-    }
-    made.length = 0;
-  };
-  return { commit, abort };
+  return { files, tmp, saved, tag };
+}
+
+/** Remove the temporary files of a prepared stamp (nothing is stamped). */
+export function discardStamp(prepared, io = fs) {
+  io.rmSync(prepared.tmp.layer, { force: true });
+  io.rmSync(prepared.tmp.specs, { force: true });
+}
+
+/** Put `content` back at `file` through a temporary file beside it and a rename: `true` when it is back. */
+function putBack(file, content, tag, io) {
+  const tmp = `${file}.restore-${tag}`;
+  try {
+    io.writeFileSync(tmp, content);
+    io.renameSync(tmp, file);
+    return true;
+  } catch {
+    io.rmSync(tmp, { force: true });
+    return false;
+  }
+}
+
+/**
+ * The two renames. `{ ok: true, stamped: [both pins] }`; or `{ ok: false, error, stamped }` where `stamped` names the pins that ARE stamped now: none when the first rename failed, none when the second failed and
+ * the first pin was put back, and the first pin when the put-back failed as well — never "both stay as they were" unless that is true.
+ */
+export function commitStamp(prepared, io = fs) {
+  try {
+    io.renameSync(prepared.tmp.layer, prepared.files.layer);
+  } catch (error) {
+    return { ok: false, error: error.message, stamped: [] };
+  }
+  try {
+    io.renameSync(prepared.tmp.specs, prepared.files.specs);
+    return { ok: true, stamped: [LAYER_PIN, SPECS_PIN] };
+  } catch (error) {
+    const back = putBack(prepared.files.layer, prepared.saved.layer, prepared.tag, io);
+    return { ok: false, error: error.message, stamped: back ? [] : [LAYER_PIN] };
+  }
+}
+
+/** Put both pins back from the contents saved at prepare time: `{ stillStamped }`, the pins that could not be put back. */
+export function restorePins(prepared, io = fs) {
+  const results = [[LAYER_PIN, prepared.files.layer, prepared.saved.layer], [SPECS_PIN, prepared.files.specs, prepared.saved.specs]].map(([name, file, content]) => [name, putBack(file, content, prepared.tag, io)]);
+  return { stillStamped: results.filter(([, ok]) => !ok).map(([name]) => name) };
 }
