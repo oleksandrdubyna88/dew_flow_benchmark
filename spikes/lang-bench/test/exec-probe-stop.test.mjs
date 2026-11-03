@@ -11,6 +11,7 @@ import { shouldStampProbedOn, stampThenWrite } from '../lib/exec-probe/probe.mjs
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { INCOMPLETE_EXIT, stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
+import { idsOf, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 const lines = () => { const said = []; return { said, say: text => said.push(text) }; };
@@ -121,19 +122,20 @@ test('A_probe_stopped_by_SIGTERM_during_the_C_sharp_build_leaves_no_build_proces
   const out = path.join(dir, 'record.json');
   const pin = path.join(dir, 'exec-layer.json');
   writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
-  const TOKEN = 'benchbld';
-  const marked = () => readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).filter(pid => { try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').some(arg => arg.includes(`-${TOKEN}-probebuild-`)); } catch { return false; } });
-  assert.deepEqual(marked(), [], 'nothing of the kind before');
-  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--owned-token', TOKEN, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
-  t.after(() => { child.kill('SIGKILL'); for (const pid of marked()) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } });
+  const scoped = privateProbeEnv(t);
+  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'], env: scoped.env });
+  const builds = () => [...idsOf(scoped)].flatMap(id => pidsMentioning(`-probebuild-${id}`)); // the build box's owned marker is in its argv
+  t.after(() => { child.kill('SIGKILL'); for (const pid of builds()) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } });
   const deadline = Date.now() + 60_000;
-  while (marked().length === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
-  assert.ok(marked().length > 0, 'the build is running, with the owned marker in its argv');
+  while (builds().length === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(builds().length > 0, 'the build is running, with the owned marker in its argv');
+  const ids = idsOf(scoped);
   const closed = new Promise(resolve => child.once('close', (code) => resolve(code)));
   child.kill('SIGTERM');
   const code = await closed;
   assert.ok([143, 75].includes(code), `a clean stop (${code})`);
   const end = Date.now() + 5000;
-  while (marked().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
-  assert.deepEqual(marked(), [], 'no `dotnet build` of the probe is left, whichever way the stop came: the build box died with its parent and the child was ended');
+  const left = () => [...ids].flatMap(id => pidsMentioning(`-probebuild-${id}`));
+  while (left().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.deepEqual(left(), [], 'no `dotnet build` of the probe is left, whichever way the stop came: the build box died with its parent and the child was ended');
 });

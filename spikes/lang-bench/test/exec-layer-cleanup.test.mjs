@@ -166,26 +166,26 @@ test('An_openRun_that_fails_at_any_open_step_leaves_nothing_registered_nothing_o
   if (!needs(t)) return;
   const { liveRunCount } = await import('../lib/exec-layer/cleanup.mjs');
   const { startHolder } = await import('../lib/exec-layer/netns.mjs');
-  const { ownedFor } = await import('../../../.agents/conventions/tools/lib/owned.mjs');
-  const own = ownedFor({ token: 'benchwfour' }); // this test's own token: holders of the other test files that run beside it are not counted
-  const base = layerOptions(t, { owned: own });
+  const base = layerOptions(t);
+  const holderNames = [];
+  const recording = async args => { holderNames.push(args.name); return startHolder(args); }; // this test's own holders are known by name: the other test files' holders (same token `bench`) are not counted
   const steps = {
     'the tree is not a directory': { tree: path.join(base.tree, 'no-such-tree') },
     'the limits file is malformed': { limitsFile: path.join(base.tree, 'run.sh') },
     'the case wall is shorter than the time limit': { caseWallMs: 1 },
     'a unit name would be too long': { caseIds: ['s'.repeat(80)] },
-    'the holder does not start': { startHolder: async () => ({ ok: false, reason: 'forced: no holder' }) },
-    'the views cannot be made (after the holder started)': { caseIds: ['../escape'], startHolder },
+    'the holder does not start': { startHolder: async args => { holderNames.push(args.name); return { ok: false, reason: 'forced: no holder' }; } },
+    'the views cannot be made (after the holder started)': { caseIds: ['../escape'], startHolder: recording },
   };
   for (const [step, override] of Object.entries(steps)) {
-    const options = { ...layerOptions(t, { owned: own }), ...override };
+    const options = { ...layerOptions(t), ...override };
     const before = liveRunCount();
     const opened = await openRun(options);
     assert.equal(opened.ok, false, step);
     assert.equal(liveRunCount(), before, `${step}: the failed run is not left in the live registry`);
     assert.deepEqual(readdirSync(options.parent), [], `${step}: no run folder, claim or view on disk`);
-    const prefixes = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => name.startsWith(own.ownedPrefix('lhold')));
-    assert.equal(prefixes.length, 0, `${step}: no holder process`);
+    const running = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => holderNames.includes(name));
+    assert.deepEqual(running, [], `${step}: no holder process of this test's runs`);
   }
 });
 

@@ -8,11 +8,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNextRecord, reserveRecord, RESERVE_ATTEMPTS } from '../lib/exec-probe/record-path.mjs';
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
-import { stableRunsParent } from '../lib/exec-layer/run.mjs';
 import { tmpdir } from 'node:os';
 import { printable } from '../lib/exec-probe/printable.mjs';
 import { writeRecord } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir } from './support/exec-layer-host.mjs';
+import { idsOf, pidsMentioning, privateProbeEnv, thingsOf } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 const sha = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -97,7 +97,10 @@ test('Two_probes_started_together_never_both_probe_toward_one_path_the_second_is
   const out = path.join(dir, 'record.json');
   const pin = path.join(dir, 'exec-layer.json');
   writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } })); // the live tree: this test is about the reservation, not the pin
-  const first = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const scoped = privateProbeEnv(t);
+  const first = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'], env: scoped.env });
+  const builds = () => [...idsOf(scoped)].flatMap(id => pidsMentioning(`-probebuild-${id}`));
+  t.after(() => { for (const pid of builds()) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } });
   t.after(() => first.kill('SIGKILL'));
   const deadline = Date.now() + 15_000;
   while (!existsSync(out) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
@@ -107,9 +110,14 @@ test('Two_probes_started_together_never_both_probe_toward_one_path_the_second_is
   assert.match(second.stderr, /already exists|reserved/);
   assert.equal(second.stdout, '', 'refused before probing: not one probe line');
   assert.doesNotMatch(second.stderr, /: start$/m, 'and no progress line of a started probe');
+  const seen = new Set(idsOf(scoped));
   const closed = new Promise(resolve => first.once('close', resolve));
   first.kill('SIGTERM');
   await closed;
+  const end = Date.now() + 5000;
+  const left = () => [...seen].flatMap(id => pidsMentioning(`-probebuild-${id}`));
+  while (left().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.deepEqual(left(), [], 'G1: no process of the build box (the owned marker in its argv) is left after the first probe was stopped');
   assert.equal(existsSync(out), false, 'a probe stopped before it wrote leaves no empty record');
   const missingPolicy = spawnSync(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--policy', path.join(dir, 'absent.json'), '--no-specs'], { encoding: 'utf8', timeout: 60_000 });
   assert.equal(missingPolicy.status, 2, missingPolicy.stderr);
@@ -203,29 +211,28 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
   const out = path.join(dir, 'record.json');
   const pin = path.join(dir, 'exec-layer.json');
   writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
-  const TOKEN = 'benchsig'; // this probe's own owned token: other test files run beside this one and own `bench` units; only this probe's names are looked at
-  const mine = () => {
-    const units = spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => new RegExp(`^testsToDelete-.*-${TOKEN}-`).test(name));
-    const procs = readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).flatMap(pid => { try { return [readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]]; } catch { return []; } }).filter(name => new RegExp(`^testsToDelete-.*-${TOKEN}-`).test(name));
-    return new Set([...units, ...procs]);
-  };
-  const before = mine();
-  const folders = () => [stableRunsParent(), tmpdir()].flatMap(parent => { try { return readdirSync(parent).filter(name => name.includes(`-${TOKEN}-`)).map(name => path.join(parent, name)); } catch { return []; } });
-  const foldersBefore = new Set(folders());
-  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--owned-token', TOKEN, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const scoped = privateProbeEnv(t);
+  const reservenext = () => { try { return readdirSync(tmpdir()).filter(name => /^testsToDelete-.*-reservenext-/.test(name)); } catch { return []; } };
+  const reservenextBefore = new Set(reservenext());
+  const ids = new Set();
+  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'], env: scoped.env });
   t.after(() => child.kill('SIGKILL'));
   let stderr = '';
   child.stderr.on('data', chunk => { stderr += chunk; });
   const deadline = Date.now() + 120_000;
-  while (!/bind list: start/.test(stderr) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+  while (!/bind list: start/.test(stderr) && Date.now() < deadline) {
+    for (const id of idsOf(scoped)) ids.add(id);
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  for (const id of idsOf(scoped)) ids.add(id);
   assert.match(stderr, /network: start/, 'the probe is mid-run: its probe run (holder, scope, views) is open');
-  assert.ok([...mine()].some(name => !before.has(name)), 'the probe\'s own units exist mid-run (the check below is not vacuous)');
+  assert.ok(ids.size > 0 && thingsOf(ids).size > 0, 'the probe\'s own units exist mid-run (the check below is not vacuous)');
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   child.kill('SIGTERM');
   const ended = await closed;
   assert.equal(ended.code, 143, `exit 143 after the cleanup (${JSON.stringify(ended)}): ${stderr.slice(-300)}`);
   assert.equal(existsSync(out), false, 'the placeholder is released');
-  const left = [...mine()].filter(name => !before.has(name));
-  assert.deepEqual(left, [], 'no scope, holder or helper process of this probe is left');
-  assert.deepEqual(folders().filter(folder => !foldersBefore.has(folder)), [], 'B2: no run folder, view or owned folder of this probe is left in the runs parent or the temp root (a late scope must not bring a run folder back)');
+  assert.deepEqual([...thingsOf(ids)], [], 'no scope, holder or helper process of this probe is left');
+  assert.deepEqual([...idsOf(scoped)], [], 'B2: no run folder, view or owned folder of this probe is left in its runs parent or its temp root (a late scope must not bring a run folder back)');
+  assert.deepEqual(reservenext().filter(name => !reservenextBefore.has(name)), [], 'G2: no reservenext folder is left in /tmp');
 });

@@ -7,6 +7,8 @@ import { existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from '
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { foreignTokens } from './support/token-scan.mjs';
+import { readdirSync } from 'node:fs';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { owned } from './support/owned.mjs';
 
@@ -68,4 +70,27 @@ test('The_suite_start_calls_the_conventions_sweep_with_this_repositorys_token_an
   assert.equal(existsSync(fileURLToPath(new URL('./support/sweep.mjs', import.meta.url))), false, 'the repository\'s own copy of the rules is gone');
   assert.throws(() => sweepLeftovers({ repo: REPO, token: 'u1' }), TypeError, 'a token of the owner grammar is refused before anything is read');
   assert.throws(() => sweepLeftovers({ repo: REPO, token: 'Bad Token' }), TypeError);
+});
+
+// M1: only the registered token.
+test('No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one', () => {
+  assert.deepEqual(foreignTokens("ownedFor({ token: 'bench' })"), []);
+  assert.deepEqual(foreignTokens("ownedFor({ token: 'benchx' })"), ['benchx'], 'the companion: a planted token is found');
+  assert.deepEqual(foreignTokens("spawn(node, ['exec-probe.mjs', '--owned-token', 'benchsig'])"), ['benchsig'], 'and so is an --owned-token option');
+  const spikeDir = fileURLToPath(new URL('..', import.meta.url));
+  const files = [...readdirSync(path.join(spikeDir, 'test'), { recursive: true }).filter(name => /\.m?js$/.test(name)).map(name => path.join(spikeDir, 'test', name)),
+    ...readdirSync(spikeDir).filter(name => /\.mjs$/.test(name)).map(name => path.join(spikeDir, name))];
+  const found = files.filter(file => !/(sweep\.test|token-scan)\.mjs$/.test(file)).flatMap(file => foreignTokens(readFileSync(file, 'utf8')).map(token => `${path.relative(spikeDir, file)}: ${token}`));
+  assert.deepEqual(found, [], 'sweep.test.mjs alone binds other tokens, to show that another token\'s folders are kept');
+});
+
+test('A_folder_named_the_way_the_V5_test_names_its_run_one_hour_old_with_a_dead_claim_is_retired_by_the_suite_start_sweep', t => {
+  const root = owned.ownedDir(t, 'sweepsig');
+  const dead = leftBehind(root, 'lrun-sigAbCd');
+  assert.match(path.basename(dead), /^testsToDelete-u\d+-bench-lrun-sigAbCd-/);
+  age(dead, 3600);
+  const report = sweepLeftovers({ repo: REPO, tmp: root, token: 'bench' });
+  assert.deepEqual(report.removed.map(dir => path.basename(dir)), [path.basename(dead)]);
+  assert.equal(existsSync(dead), false);
+  assert.equal(existsSync(`${dead}.owner`), false);
 });
