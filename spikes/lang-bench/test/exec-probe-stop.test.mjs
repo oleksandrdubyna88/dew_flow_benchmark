@@ -10,7 +10,7 @@ import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { INCOMPLETE_EXIT, runStop, stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
-import { idsOf, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
+import { idsOf, markerFolder, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 const lines = () => { const said = []; return { said, say: text => said.push(text) }; };
@@ -79,8 +79,7 @@ test('The_build_box_dies_with_its_parent_and_a_program_box_does_not', () => {
 });
 
 test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', async t => {
-  const markerFile = path.join(owned.ownedDir(t, 'tracked'), 'marker.txt'); // LOW 8: the child writes its marker here FIRST, and the hook below is registered BEFORE the child's output is parsed
-  t.after(() => { try { for (const pid of pidsMentioning(readFileSync(markerFile, 'utf8').trim())) process.kill(Number(pid), 'SIGKILL'); } catch { /* nothing to kill */ } });
+  const { markerFile } = markerFolder(t, 'tracked'); // the kill hook is registered BEFORE the folder, and the child writes its marker there FIRST (LOW 8, M2)
   const script = `
     import { runBounded } from ${JSON.stringify(new URL('../../minigit-bench/lib/run.mjs', import.meta.url).href)};
     import { cleanupLiveRuns, trackChild } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
@@ -224,4 +223,17 @@ test('A_stop_after_the_record_whose_owned_folder_close_times_out_or_fails_says_s
     assert.match(text, /owned folders did not finish closing \((did not finish within 50 ms|EBUSY)\)/, `${name}: one line names what may be left`);
     assert.equal(said.filter(line => /did not finish closing/.test(line)).length, 1);
   }
+});
+
+// K5 (Opus M2): `t.after` hooks run in REGISTRATION order, so a kill hook that reads a marker file from an owned folder must be registered BEFORE the folder (whose own removal hook is registered by `ownedDir`).
+test('The_marker_kill_hook_really_kills_a_hanging_child_before_its_folder_is_removed', async t => {
+  const marker = `testsToDelete-u0-bench-hangingchild-${process.pid}-${Date.now()}`;
+  const { markerFile } = markerFolder(t, 'hang');
+  t.after(() => assert.deepEqual(pidsMentioning(marker), [], 'the hook killed the hanging child: it is gone after the hooks')); // registered AFTER the helper: runs after the kill hook
+  const child = spawn('bash', ['-c', `exec -a ${marker} sleep 30`], { stdio: 'ignore', detached: true });
+  child.unref();
+  writeFileSync(markerFile, marker);
+  const end = Date.now() + 5000;
+  while (pidsMentioning(marker).length === 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(pidsMentioning(marker).length > 0, 'the child hangs while the test body ends');
 });

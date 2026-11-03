@@ -44,3 +44,18 @@ export const pidsMentioning = text => readdirSync('/proc').filter(entry => /^\d+
 
 /** The entries of `dir` whose name matches `pattern` (a test's check that a folder kind was not left in the child's OWN temp root). */
 export const leftNamed = (dir, pattern) => { try { return readdirSync(dir).filter(name => pattern.test(name)); } catch { return []; } };
+
+/**
+ * `{ markerFile }` in a fresh owned folder of the test, with a hook that kills every process whose argv mentions the marker written there (K5, Opus M2). `node:test` runs `t.after` hooks in REGISTRATION order, so the
+ * kill hook is registered BEFORE the folder: the folder's own removal hook (registered by `ownedDir`) then runs after it, and the marker file is still there when the kill hook reads it.
+ */
+export function markerFolder(t, what) {
+  let markerFile = null;
+  t.after(() => {
+    try {
+      for (const pid of pidsMentioning(readFileSync(markerFile, 'utf8').trim())) process.kill(Number(pid), 'SIGKILL');
+    } catch { /* no marker was written, or the child is gone */ }
+  });
+  markerFile = path.join(owned.ownedDir(t, what), 'marker.txt');
+  return { markerFile };
+}
