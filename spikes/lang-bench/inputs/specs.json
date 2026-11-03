@@ -19,7 +19,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/cleanup.mjs",
-        "sha256": "bbf6548cb4313297890b2354166313aaaba5ce633d6c55858e12f193a639bfe4"
+        "sha256": "0b2a94eecd72a441ef62e5b9c703b2ffbfda31f5f46cc184ac724262b35800a8"
       },
       {
         "path": "lang-bench/lib/exec-layer/env.mjs",
@@ -51,11 +51,11 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/run.mjs",
-        "sha256": "404f99b74b9fa822d54c584b616816bd89f609cc1a8fa5dde71d4a48e9c69620"
+        "sha256": "67807455469d796354cc8c92946b818a822cd2e12a7fdf9068aa1d174d9e97fa"
       },
       {
         "path": "lang-bench/lib/exec-layer/scope-entry.sh",
-        "sha256": "3378069571f3d32523be526d9f6be01c06e6a97940197e2f51d820d6ac47c278"
+        "sha256": "b4a3ee8c4e8908b4cead314778a858fa2a9393558acdb04522764e01d661a4f3"
       },
       {
         "path": "lang-bench/lib/exec-layer/scope.mjs",
@@ -99,7 +99,7 @@
       "systemd": "systemd 259 (259.5-0ubuntu3.4)"
     },
     "probedOn": "2026-11-02T22:09:31.273Z",
-    "treeSha256": "730f8fee518e5ff3b7a0dc426ee89620cc603f6972f645238ab7fa3d3be08b5c"
+    "treeSha256": "aa5a4471ee02818097d031f147133931cdb5a0d628ba4e7fd0949a1176c640cd"
   },
   "memoryPolicy": {
     "by": "team lead (Opus), D55 (the epoch-6 re-review; ask_consultants bf619f55, 2 of 2 for A)",
