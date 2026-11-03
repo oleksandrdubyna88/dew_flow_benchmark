@@ -83,7 +83,7 @@ test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', as
   const script = `
     import { runBounded } from ${JSON.stringify(new URL('../../minigit-bench/lib/run.mjs', import.meta.url).href)};
     import { cleanupLiveRuns, trackChild } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
-    const marker = 'testsToDelete-u0-bench-trackedchild-' + process.pid;
+    const marker = 'testsToDelete-u' + process.getuid() + '-bench-trackedchild-' + process.pid;
     process.getBuiltinModule('node:fs').writeFileSync(${JSON.stringify(markerFile)}, marker);
     const running = runBounded('bash', ['-c', 'exec -a ' + marker + ' sleep 30'], { timeoutMs: 100000, onChild: trackChild });
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -227,7 +227,7 @@ test('A_stop_after_the_record_whose_owned_folder_close_times_out_or_fails_says_s
 
 // K5 (Opus M2): `t.after` hooks run in REGISTRATION order, so a kill hook that reads a marker file from an owned folder must be registered BEFORE the folder (whose own removal hook is registered by `ownedDir`).
 test('The_marker_kill_hook_really_kills_a_hanging_child_before_its_folder_is_removed', async t => {
-  const marker = `testsToDelete-u0-bench-hangingchild-${process.pid}-${Date.now()}`;
+  const marker = `testsToDelete-u${process.getuid()}-bench-hangingchild-${process.pid}-${Date.now()}`;
   const { markerFile } = markerFolder(t, 'hang');
   t.after(() => assert.deepEqual(pidsMentioning(marker), [], 'the hook killed the hanging child: it is gone after the hooks')); // registered AFTER the helper: runs after the kill hook
   const child = spawn('bash', ['-c', `exec -a ${marker} sleep 30`], { stdio: 'ignore', detached: true });

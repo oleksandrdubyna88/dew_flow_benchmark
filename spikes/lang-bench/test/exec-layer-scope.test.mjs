@@ -171,6 +171,7 @@ test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
     child.stderr.on('data', chunk => { stderr += chunk; });
     child.on('close', code => resolve({ code, stderr }));
   });
+  t.after(() => stopUnitsStartingWith(`${path.basename(runDir)}-r`)); // L5: registered BEFORE the 25 rounds, so a failure in the middle of them never leaves a unit
   const failures = [];
   for (let round = 0; round < 25; round += 1) {
     const base = path.join(runDir, `round${round}`);
@@ -179,7 +180,6 @@ test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
     failures.push(...results.filter(result => result.code !== 0).map(result => `round ${round}: exit ${result.code} ${result.stderr.trim().slice(0, 80)}`));
   }
   const unitsLeft = () => unitsStartingWith(`${path.basename(runDir)}-r`);
-  t.after(() => stopUnitsStartingWith(`${path.basename(runDir)}-r`)); // a failure before the end never leaves a unit
   const settle = Date.now() + 30_000; // LOW 8: the last round's scopes (a 2 s holder each) are gone before the test ends
   while (unitsLeft().length > 0 && Date.now() < settle) await new Promise(resolve => setTimeout(resolve, 200));
   stopUnitsStartingWith(`${path.basename(runDir)}-r`); // Opus L7: any unit of the last round still there is STOPPED, not only asserted
