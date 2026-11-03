@@ -25,6 +25,23 @@ export function ensureTmpFolder(target, io = fs) {
   io.mkdirSync(path.join(path.dirname(target), TMP_DIR), { recursive: true });
 }
 
+const TRIES = 5;
+
+/**
+ * Write `content` to the temporary file `file` in the tmp folder of `target`, making the folder first. Probes share the folder and each removes it when it is empty, so the folder can vanish between the `mkdir`
+ * and the `open` (ENOENT): the folder is then made again, at most `TRIES` times in all, and the last error is thrown. `options` are the `writeFileSync` options.
+ */
+export function writeTmp(target, file, content, options, io = fs) {
+  for (let attempt = 1; ; attempt += 1) {
+    ensureTmpFolder(target, io);
+    try {
+      return io.writeFileSync(file, content, options);
+    } catch (error) {
+      if (error.code !== 'ENOENT' || attempt >= TRIES) throw error;
+    }
+  }
+}
+
 /** Remove the tmp folder of `dir` when it is empty (a folder that still holds a file stays; any failure is ignored: it is housekeeping). */
 export function dropTmpFolder(dir, io = fs) {
   try {

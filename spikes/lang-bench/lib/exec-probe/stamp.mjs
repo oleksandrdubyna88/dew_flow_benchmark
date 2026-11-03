@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { assemble, canonicalJson, WRITER_FILES } from '../specs-record.mjs';
 import { acquireLock as acquireStampLock } from './stamp-lock.mjs';
-import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
+import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
 
 export const LAYER_PIN = 'specs.d/exec-layer.json';
 export const SPECS_PIN = 'specs.json';
@@ -40,10 +40,8 @@ export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = ownId
   try {
     const built = stage(inputsDir, stageDir, stamped, io);
     if (!built.ok) throw new Error(built.reason);
-    ensureTmpFolder(files.layer, io);
-    ensureTmpFolder(files.specs, io);
-    io.writeFileSync(tmp.layer, stamped);
-    io.writeFileSync(tmp.specs, built.text);
+    writeTmp(files.layer, tmp.layer, stamped, undefined, io);
+    writeTmp(files.specs, tmp.specs, built.text, undefined, io);
   } catch (error) {
     dropTemporary({ files, tmp }, io);
     throw error;
@@ -68,8 +66,7 @@ export function discardStamp(prepared, io = fs) {
 function putBack(file, content, tag, io) {
   const tmp = tmpPath(file, 'restore', tag);
   try {
-    ensureTmpFolder(file, io);
-    io.writeFileSync(tmp, content);
+    writeTmp(file, tmp, content, undefined, io);
     io.renameSync(tmp, file);
     return true;
   } catch {

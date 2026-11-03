@@ -13,7 +13,7 @@ import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
 import { RecordExists } from './record-path.mjs';
-import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
+import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
 
 const MIB = 1024 * 1024;
 export { LIMITS_MIB };
@@ -118,8 +118,7 @@ export function writeReservedRecord(file, record, held, io = fs) {
   if (io.statSync(file).size !== 0) throw new Error(`writeReservedRecord: ${file} is not an empty placeholder: a record is never overwritten (T-L53)`);
   const tmp = tmpPath(file, 'record', ownId()); // D2: in a `.exec-probe-tmp/` folder beside the placeholder
   try {
-    ensureTmpFolder(file, io);
-    io.writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
+    writeTmp(file, tmp, `${JSON.stringify(record, null, 2)}\n`, undefined, io);
     io.renameSync(tmp, file);
   } catch (error) {
     io.rmSync(tmp, { force: true });

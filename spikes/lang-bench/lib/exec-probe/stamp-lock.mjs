@@ -10,7 +10,7 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { processProbe } from '../../../../.agents/conventions/tools/lib/owned.mjs';
-import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
+import { dropTmpFolder, ownId, tmpPath, writeTmp } from './tmp-files.mjs';
 
 export const LOCK_NAME = '.stamp.lock';
 const CONTENT = /^(\d+) (\d+|-)(\ncommitting)?$/;
@@ -56,7 +56,7 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
     if (sameHolder(parse(read.value), own)) io.rmSync(lock, { force: true });
   };
   const take = () => {
-    const wrote = attempt(() => { ensureTmpFolder(lock, io); io.writeFileSync(tmp, mine, { flag: 'wx' }); });
+    const wrote = attempt(() => writeTmp(lock, tmp, mine, { flag: 'wx' }, io));
     if (wrote.error !== undefined) { dropTmpFolder(inputsDir, io); return { error: wrote.error }; }
     const linked = attempt(() => io.linkSync(tmp, lock));
     attempt(() => { io.rmSync(tmp, { force: true }); }); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the start sweep retires the stray by its name)
@@ -66,8 +66,7 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
   };
   /** Mark the lock `committing` (a second line) through the same temporary file and a rename over the holder's OWN lock: a reader sees the old or the new lock, never a partial one. Throws when it cannot. */
   const markCommitting = () => {
-    ensureTmpFolder(lock, io);
-    io.writeFileSync(tmp, `${mine}\n${COMMITTING}`, { flag: 'w' });
+    writeTmp(lock, tmp, `${mine}\n${COMMITTING}`, { flag: 'w' }, io);
     try {
       io.renameSync(tmp, lock);
     } catch (error) {
