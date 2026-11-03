@@ -113,6 +113,14 @@ class BurnerTests(unittest.TestCase):
         self.assertEqual(wait_dead([proc.pid], 3), [], "the parent in its argv is not its parent: it exits without burning")
 
 
+UNBOUNDED = (re.compile(r"""-c["']?\s*,?\s*["']?.*while\s+(True|1)\s*:"""), re.compile(r"sleep\s+[0-9]{4,}"))
+
+
+def unbounded_lines(text):
+    """`(line number, line)` of every line of `text` that starts a helper process with no end: a `-c` script that loops on `while True`, or a `sleep` of 1000 s or more. The ONE matcher both tests use."""
+    return [(number, line.strip()[:100]) for number, line in enumerate(text.splitlines(), 1) if any(pattern.search(line) for pattern in UNBOUNDED)]
+
+
 class NoUnboundedHelperTests(unittest.TestCase):
     """W1: no test file starts a process that has no end. A `while True` loop in a `-c` script, or a `sleep` of an hour or more, is refused here."""
 
@@ -122,10 +130,18 @@ class NoUnboundedHelperTests(unittest.TestCase):
             if not name.endswith(".py") or name in ("test_burner.py", "burner.py"):
                 continue
             with open(os.path.join(HERE, name), encoding="utf-8") as f:
-                for number, line in enumerate(f, 1):
-                    if re.search(r"""["']-c["'].*while\s+(True|1)\s*:""", line) or re.search(r"sleep\s+[0-9]{4,}", line):
-                        offenders.append(f"{name}:{number}: {line.strip()[:100]}")
+                offenders += [f"{name}:{number}: {line}" for number, line in unbounded_lines(f.read())]
         self.assertEqual(offenders, [], "an unbounded helper (use `burner.spawn`, or a bounded sleep)")
+
+    def test_The_scan_finds_a_planted_unbounded_helper_of_each_kind(self):
+        planted = "\n".join([
+            "burner = subprocess.Popen([sys.executable, '-I', '-c', 'while True: pass'])",
+            'burner = subprocess.Popen([sys.executable, "-c", "while True: pass"])',
+            'proc = subprocess.Popen(["bash", "-c", "sleep 3600"])',
+            "fine = subprocess.Popen(['sleep', '30'])",
+            "bounded = 'end = time.monotonic() + 60\\nwhile time.monotonic() < end: pass'",
+        ])
+        self.assertEqual([number for number, _ in unbounded_lines(planted)], [1, 2, 3], "the two loops and the long sleep are found; a bounded loop and a short sleep are not")
 
 
 if __name__ == "__main__":
