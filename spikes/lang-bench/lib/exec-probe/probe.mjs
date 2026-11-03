@@ -82,23 +82,6 @@ function v8HeapRecord(observations, policy) {
   return observations.limits.filter(at => at.node).map(at => ({ memoryMaxBytes: at.memoryMaxBytes, v8HeapSizeLimitBytes: at.node.heapSizeLimitBytes, ratio: Number((at.node.heapSizeLimitBytes / at.memoryMaxBytes).toFixed(3)), asserted }));
 }
 
-/**
- * W3: stamp `probedOn` BEFORE the record is written, so the file never says 0 when the command says 2. `stamp()` runs only for an exit-0 record and not with `noSpecs`; when it throws, the record is
- * written anyway with `exit: { code: 2, halt: 'probed-on-stamp-failed', stampError }`. Returns `{ code }`, the command's exit code.
- */
-export function stampThenWrite({ record, noSpecs, stamp, write }) {
-  let final = record;
-  if (!noSpecs && shouldStampProbedOn(record)) {
-    try {
-      stamp();
-    } catch (error) {
-      final = { ...record, exit: { code: 2, halt: 'probed-on-stamp-failed', stampError: error.message } };
-    }
-  }
-  write(final);
-  return { code: final.exit.code };
-}
-
 /** `probedOn` and `host` are stamped into the layer's identity file only by a probe that exited 0: every line passed AND the memory verdict held. */
 export const shouldStampProbedOn = record => record.exit.code === 0 && record.lines.every(line => line.ok);
 

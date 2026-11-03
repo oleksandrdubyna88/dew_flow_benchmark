@@ -20,9 +20,9 @@ import { computeIdentity, LAYER_DIR } from './lib/exec-layer/identity.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { computePin, verifyPin } from './lib/runner-pin.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
-import { assemble, canonicalJson } from './lib/specs-record.mjs';
 import { printable } from './lib/exec-probe/printable.mjs';
-import { runProbe, stampThenWrite, writeRecord } from './lib/exec-probe/probe.mjs';
+import { finishProbe } from './lib/exec-probe/finish.mjs';
+import { runProbe, writeRecord } from './lib/exec-probe/probe.mjs';
 import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
 import { runStop } from './lib/exec-probe/stop.mjs';
 
@@ -86,14 +86,6 @@ function emptyProgramTree(owned, scope) {
   return { tree, samplesDir };
 }
 
-function recordProbedOn(record) {
-  const file = path.join(spike, 'inputs', 'specs.d', 'exec-layer.json');
-  const current = JSON.parse(readFileSync(file, 'utf8'));
-  writeFileSync(file, canonicalJson({ execLayer: { ...current.execLayer, probedOn: record.probedOn, host: record.host } }));
-  const built = assemble(path.join(spike, 'inputs'));
-  if (built.ok) writeFileSync(path.join(spike, 'inputs', 'specs.json'), built.text);
-}
-
 function report(record, out) {
   for (const line of record.lines) say(process.stdout, `${line.ok ? 'ok  ' : 'FAIL'} ${line.id}`);
   for (const problem of record.memoryView.verdict.problems) say(process.stdout, `memory: ${problem}`);
@@ -130,9 +122,9 @@ try {
   if (stopping) await new Promise(() => {}); // a stopped probe writes nothing: the signal's own cleanup ends the process with 130 or 143
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
-  const out = reservationHolder.file;
-  const written = reservationHolder.take(); // written: the file is the record now, never released
-  const final = stampThenWrite({ record, noSpecs: args.includes('--no-specs'), stamp: () => recordProbedOn(record), write: finalRecord => { writeRecord(out, finalRecord, written); report(finalRecord, out); } });
+  const stageDir = owned.ownedDir(scope, 'stamp');
+  const final = finishProbe({ record, reservation: reservationHolder, write: writeRecord, report, noSpecs: args.includes('--no-specs'), stage: { inputsDir: path.join(spike, 'inputs'), stageDir } });
+  if (final.error) say(process.stderr, `exec-probe: ${final.error}`);
   code = final.code;
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143

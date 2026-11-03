@@ -7,7 +7,6 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { boxArgv } from '../lib/exec-layer/box.mjs';
 import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
-import { shouldStampProbedOn, stampThenWrite } from '../lib/exec-probe/probe.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { INCOMPLETE_EXIT, runStop, stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
@@ -51,25 +50,6 @@ test('A_cleanup_that_finishes_but_leaves_something_is_also_exit_75_and_names_it'
   await stopCleanly({ code: 130, bound: 1000, say, exit: code => exits.push(code), release: () => {}, describeLive: () => [{ id: 'x', unitPrefix: 'p', dir: '/r/x' }], cleanLive: async () => [{ clean: false, left: [{ kind: 'scope', name: 'testsToDelete-u1-bench-lsc-x-certify.scope', reason: 'still listed after systemctl stop' }] }], closeScope: async () => {} });
   assert.deepEqual(exits, [INCOMPLETE_EXIT]);
   assert.match(said.join('\n'), /testsToDelete-u1-bench-lsc-x-certify\.scope/);
-});
-
-// W3
-test('probedOn_is_stamped_before_the_record_is_written_and_a_failed_stamp_gives_a_record_that_says_exit_2', () => {
-  const order = [];
-  const record = { exit: { code: 0, halt: null }, lines: [{ id: 'a', ok: true }], probedOn: 'now' };
-  const good = stampThenWrite({ record, noSpecs: false, stamp: () => order.push('stamp'), write: written => { order.push('write'); order.push(written.exit.code); } });
-  assert.deepEqual(order, ['stamp', 'write', 0], 'stamp first, then write');
-  assert.equal(good.code, 0);
-  const failing = [];
-  const bad = stampThenWrite({ record, noSpecs: false, stamp: () => { throw new Error('disk full'); }, write: written => failing.push(written) });
-  assert.equal(failing.length, 1, 'the record is still written');
-  assert.deepEqual([failing[0].exit.code, failing[0].exit.halt, failing[0].exit.stampError], [2, 'probed-on-stamp-failed', 'disk full'], 'and it says 2 with the error: the file never says 0 when the command says 2');
-  assert.equal(bad.code, 2);
-  const calls = [];
-  stampThenWrite({ record: { ...record, exit: { code: 3, halt: 'memory-view-mismatch' } }, noSpecs: false, stamp: () => calls.push('stamp'), write: () => calls.push('write') });
-  stampThenWrite({ record, noSpecs: true, stamp: () => calls.push('stamp'), write: () => calls.push('write') });
-  assert.deepEqual(calls, ['write', 'write'], 'no stamp on an exit other than 0, nor with --no-specs');
-  assert.equal(shouldStampProbedOn(record), true);
 });
 
 // N5
