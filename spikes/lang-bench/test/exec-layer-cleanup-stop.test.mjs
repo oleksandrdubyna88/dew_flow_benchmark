@@ -280,19 +280,24 @@ test('Only_the_hook_retires_the_holder_and_the_scope_of_a_child_that_crashed_and
     assert.deepEqual(unitsStartingWith(seen.unitPrefix), [], 'and so is its scope');
   });
   const script = `
-    import { spawn } from 'node:child_process';
+    import { spawn, spawnSync } from 'node:child_process';
     import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
     import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
     import { userEnv } from ${JSON.stringify(new URL('../lib/exec-layer/scope.mjs', import.meta.url).href)};
     const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
     const run = opened.value;
     spawn('systemd-run', ['--user', '--scope', '--quiet', '--unit=' + run.unitPrefix + '-x1', 'sleep', '120'], { env: userEnv(), stdio: 'ignore', detached: true }).unref();
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    console.log(JSON.stringify({ holder: run.holderName, unitPrefix: run.unitPrefix }));
+    // D5 (Opus LOW 6): wait until the scope is ACTIVE (a time limit, not a fixed pause) before the child reports and crashes
+    const unit = run.unitPrefix + '-x1.scope';
+    const until = Date.now() + 20000;
+    let active = false;
+    while (!active && Date.now() < until) { active = spawnSync('systemctl', ['--user', 'is-active', '--quiet', unit]).status === 0; if (!active) await new Promise(resolve => setTimeout(resolve, 50)); }
+    console.log(JSON.stringify({ holder: run.holderName, unitPrefix: run.unitPrefix, active }));
     process.kill(process.pid, 'SIGKILL'); // the child crashes with its run open
   `;
   const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000 });
   Object.assign(seen, JSON.parse(ran.stdout.trim().split('\n').pop()));
+  assert.equal(seen.active, true, 'the child saw its scope active before it crashed');
   assert.equal(scanProcesses(argv => argv[0] === seen.holder).length, 1, 'the crashed child left its holder running');
   assert.equal(unitsStartingWith(seen.unitPrefix).length, 1, 'and its scope');
 });

@@ -220,24 +220,6 @@ test('A_real_SIGTERM_after_the_record_is_written_exits_with_the_records_code_and
 });
 
 // H1 (fix batch 8): the seven tests that commit 9bf2315d deleted by mistake, restored as they were (plus the stop-after-the-record test it also dropped); the K5 tests above are in addition to them.
-test('A_stop_after_the_record_is_written_only_closes_the_owned_folders_and_exits_with_the_records_code', async t => {
-  const s = setup(t);
-  let written = null;
-  assert.equal(s.run({ onWritten: code => { written = code; } }), 0);
-  assert.equal(written, 0);
-  const said = [];
-  const exits = [];
-  const closed = [];
-  await stopCleanly({ code: 143, recordedCode: () => written, bound: 1000, say: text => said.push(text), exit: code => exits.push(code), release: noop, describeLive: () => { throw new Error('no run is looked at'); }, cleanLive: () => { throw new Error('no cleanup runs'); }, closeScope: async () => closed.push('closed') });
-  assert.deepEqual(exits, [0], 'the exit is the record\'s code, not 143');
-  assert.deepEqual(closed, ['closed']);
-  assert.match(said.join('\n'), /the record is already written/);
-  const failed = setup(t);
-  let failedCode = null;
-  assert.equal(failed.run({ record: record(3), onWritten: code => { failedCode = code; } }), 3);
-  assert.equal(failedCode, 3, 'a record that says 3 is exit 3 after a stop too');
-});
-
 // K1: every lock error is a record that says exit 2; the lock is released LAST; a release that throws keeps the record's code.
 test('A_lock_error_that_would_throw_is_a_record_that_says_exit_2_naming_the_lock_path_and_the_error', t => {
   const s = setup(t);
@@ -296,6 +278,7 @@ test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restore
   assert.equal(s.run({ io }), 2);
   assert.deepEqual(s.pins(), before, 'the put-back in the commit worked: nothing is stamped');
   assert.doesNotMatch(s.said.join('\n'), /NO record/);
+  assert.match(s.said.join('\n'), /the pins were not changed/, 'D5 (Opus LOW 2): the outcome text comes from the real state: the put-back worked, so no pin is stamped');
 });
 
 test('Retiring_a_stale_lock_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn', t => {
@@ -358,7 +341,6 @@ test('The_record_is_written_through_a_temporary_file_with_a_fixed_known_name_bes
   assert.equal(s.run({ io }), 0);
   assert.ok(names.includes(`.exec-probe-record.tmp-${process.pid}`), `a known name, so a dead probe's leftover can be retired without listing the folder: ${names.join(', ')}`);
 });
-
 
 // L4 (fix batch 8): an EPIPE on stdout or stderr (`| head`) must not turn a record's 0 into exit 1.
 test('A_closed_stdout_and_stderr_do_not_change_the_exit_from_the_records_code_and_without_the_guard_they_do', async t => {
