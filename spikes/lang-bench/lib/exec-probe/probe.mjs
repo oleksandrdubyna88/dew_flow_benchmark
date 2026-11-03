@@ -113,7 +113,7 @@ export function finish({ found, memoryView, now, identity, runner = null }) {
  * stays empty and the temporary file is removed. `io` is the test seam.
  */
 export function writeReservedRecord(file, record, held, io = fs) {
-  const tmp = `${file}.tmp-${process.pid}`;
+  const tmp = path.join(path.dirname(file), `.exec-probe-record.tmp-${process.pid}`); // a fixed known name beside the placeholder: a dead probe's leftover is retired by name
   try {
     io.writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
     io.renameSync(tmp, file);

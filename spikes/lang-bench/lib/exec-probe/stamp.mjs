@@ -11,12 +11,18 @@ import { acquireLock as acquireStampLock } from './stamp-lock.mjs';
 
 export const LAYER_PIN = 'specs.d/exec-layer.json';
 export const SPECS_PIN = 'specs.json';
-const STRAY = pid => new RegExp(`\\.(stamp|restore)-${pid}$`);
-
 const pinsOf = inputsDir => ({ layer: path.join(inputsDir, LAYER_PIN), specs: path.join(inputsDir, SPECS_PIN) });
-/** Remove the stray `*.stamp-<pid>` and `*.restore-<pid>` files a dead stamping probe left in `inputs/` and `inputs/specs.d/`; the names removed. */
+/** The files a stamping probe of `pid` can leave behind, by their KNOWN names (never by listing `inputs/`): the pins' temporary and put-back files, the lock's link and retire files, the record's temporary file. */
+export const strayNames = (inputsDir, pid) => [
+  `${path.join(inputsDir, LAYER_PIN)}.stamp-${pid}`, `${path.join(inputsDir, LAYER_PIN)}.restore-${pid}`,
+  `${path.join(inputsDir, SPECS_PIN)}.stamp-${pid}`, `${path.join(inputsDir, SPECS_PIN)}.restore-${pid}`,
+  `${path.join(inputsDir, '.stamp.lock')}.retire-${pid}`, `${path.join(inputsDir, '.stamp.lock')}.link-${pid}`,
+  path.join(inputsDir, `.exec-probe-record.tmp-${pid}`),
+];
+
+/** Remove the strays of a dead probe `pid` by their known names; the names that existed and are removed. */
 function retireStrays(inputsDir, pid, io) {
-  return [inputsDir, path.join(inputsDir, 'specs.d')].flatMap(dir => io.readdirSync(dir).filter(name => STRAY(pid).test(name)).map(name => path.join(dir, name))).map(file => {
+  return strayNames(inputsDir, pid).filter(file => io.existsSync(file)).map(file => {
     io.rmSync(file, { force: true });
     return file;
   });

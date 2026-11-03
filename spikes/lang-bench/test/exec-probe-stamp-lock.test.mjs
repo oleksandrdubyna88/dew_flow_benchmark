@@ -131,3 +131,22 @@ test('Two_real_probes_racing_one_stale_lock_over_many_rounds_never_both_hold_it'
     assert.equal(children.filter(child => child.ok).length, 1, `round ${round}: exactly one probe holds the lock after a race over one stale lock`);
   }
 });
+
+// K3: strays are retired by their KNOWN names, never by listing `inputs/`.
+test('A_planted_set_of_strays_of_a_dead_pid_is_retired_by_known_names_and_a_live_pids_are_not_touched', t => {
+  const dir = folder(t);
+  const deadPid = 999999;
+  const known = ['specs.d/exec-layer.json.stamp-999999', 'specs.d/exec-layer.json.restore-999999', 'specs.json.stamp-999999', 'specs.json.restore-999999', '.stamp.lock.retire-999999', '.stamp.lock.link-999999', '.exec-probe-record.tmp-999999'];
+  const others = ['specs.d/exec-layer.json.stamp-888888', 'specs.json.stamp-888888', '.exec-probe-record.tmp-888888', 'exec-probe-2026-11-03.json', 'specs.json', 'specs.d/exec-layer.json'];
+  for (const name of [...known, ...others]) fs.writeFileSync(path.join(dir, name), 'x');
+  fs.writeFileSync(lockOf(dir), `${deadPid} 1`);
+  const listed = [];
+  const io = { ...fs, readdirSync: (d, ...rest) => { listed.push(String(d)); return fs.readdirSync(d, ...rest); } };
+  const got = acquireLock({ inputsDir: dir, io, probe: p => (p === deadPid ? { state: 'dead' } : { state: 'live', start: 5 }), pid: 7 });
+  assert.equal(got.ok, true, JSON.stringify(got));
+  assert.match(got.retired, /retired the stale stamp lock of pid 999999 and 7 stray file\(s\)/);
+  for (const name of known) assert.equal(fs.existsSync(path.join(dir, name)), false, `${name} (the dead pid's) is retired`);
+  for (const name of others) assert.equal(fs.existsSync(path.join(dir, name)), true, `${name} is not the dead pid's: untouched`);
+  assert.deepEqual(listed, [], 'inputs/ was never listed: the strays are found by their known names');
+  got.release();
+});

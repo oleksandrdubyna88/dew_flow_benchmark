@@ -8,9 +8,18 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { shouldStampProbedOn, writeReservedRecord } from './probe.mjs';
 import { LOCK_NAME } from './stamp-lock.mjs';
-import { acquireLock, commitStamp, discardStamp, prepareStamp, restorePins } from './stamp.mjs';
+import { acquireLock, commitStamp, discardStamp, LAYER_PIN, prepareStamp, restorePins } from './stamp.mjs';
 
 const exit2 = (record, stampError) => ({ ...record, exit: { code: 2, halt: 'probed-on-stamp-failed', stampError } });
+/** `<pin> probedOn=<value>` for the layer pin as it is found (what a retired probe may have stamped), or the reason it cannot be read. */
+function pinsProbedOn(inputsDir, io) {
+  try {
+    return `${LAYER_PIN} probedOn=${JSON.parse(io.readFileSync(path.join(inputsDir, LAYER_PIN), 'utf8')).execLayer.probedOn ?? 'none'}`;
+  } catch (error) {
+    return `${LAYER_PIN} could not be read (${error.code ?? error.message})`;
+  }
+}
+
 const unstampedNote = stamped => (stamped.length > 0 ? `; ${stamped.join(' and ')} IS stamped and the put-back failed` : '');
 
 /** The stamp steps: `{ record, prepared, committed, lock, messages }` — the record as it must be written, what was prepared and committed, the lock held, and lines for stderr. */
@@ -24,7 +33,7 @@ function stampSteps({ record, stage, io }) {
     return { record: exit2(record, reason), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${reason}`] };
   }
   if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${got.error}`] };
-  const messages = got.retired === null ? [] : [`exec-probe: ${got.retired}`];
+  const messages = got.retired === null ? [] : [`exec-probe: ${got.retired}; the pins MAY be stamped without a record (a SIGKILL between the commit and the record's rename): ${pinsProbedOn(stage.inputsDir, io)}`];
   let prepared;
   try {
     prepared = prepareStamp({ ...stage, record, io });
