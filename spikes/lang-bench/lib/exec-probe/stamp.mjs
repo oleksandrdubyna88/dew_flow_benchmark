@@ -7,22 +7,13 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { assemble, canonicalJson, WRITER_FILES } from '../specs-record.mjs';
+import { acquireLock as acquireStampLock } from './stamp-lock.mjs';
 
 export const LAYER_PIN = 'specs.d/exec-layer.json';
 export const SPECS_PIN = 'specs.json';
-const LOCK = '.stamp.lock';
 const STRAY = pid => new RegExp(`\\.(stamp|restore)-${pid}$`);
 
 const pinsOf = inputsDir => ({ layer: path.join(inputsDir, LAYER_PIN), specs: path.join(inputsDir, SPECS_PIN) });
-const aliveByDefault = pid => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === 'EPERM';
-  }
-};
-
 /** Remove the stray `*.stamp-<pid>` and `*.restore-<pid>` files a dead stamping probe left in `inputs/` and `inputs/specs.d/`; the names removed. */
 function retireStrays(inputsDir, pid, io) {
   return [inputsDir, path.join(inputsDir, 'specs.d')].flatMap(dir => io.readdirSync(dir).filter(name => STRAY(pid).test(name)).map(name => path.join(dir, name))).map(file => {
@@ -31,27 +22,9 @@ function retireStrays(inputsDir, pid, io) {
   });
 }
 
-/**
- * Take the stamp lock: `{ ok: true, release(), retired }` (`retired` names the stale lock and the files removed, or null) or `{ ok: false, holder }` for a live holder. A lock whose pid is dead is stale: the next probe
- * removes it and its stray files and says so. `alive` and `io` are the test seams.
- */
-export function acquireLock({ inputsDir, io = fs, pid = process.pid, alive = aliveByDefault }) {
-  const lock = path.join(inputsDir, LOCK);
-  const release = () => io.rmSync(lock, { force: true });
-  const take = retired => {
-    io.writeFileSync(lock, String(pid), { flag: 'wx' });
-    return { ok: true, release, retired };
-  };
-  try {
-    return take(null);
-  } catch (error) {
-    if (error.code !== 'EEXIST') throw error;
-  }
-  const holder = Number.parseInt(io.readFileSync(lock, 'utf8'), 10);
-  if (Number.isInteger(holder) && alive(holder)) return { ok: false, holder };
-  const strays = Number.isInteger(holder) ? retireStrays(inputsDir, holder, io) : [];
-  io.rmSync(lock, { force: true });
-  return take(`retired the stale stamp lock of pid ${holder} and ${strays.length} stray file(s)`);
+/** The stamp lock (see `stamp-lock.mjs`), with this module's stray retirement. */
+export function acquireLock({ inputsDir, io = fs, ...rest }) {
+  return acquireStampLock({ inputsDir, io, ...rest, strays: pid => retireStrays(inputsDir, pid, io) });
 }
 
 /** The files `assemble` reads, copied into `stageDir/specs.d` (nothing else of `inputs/`). */

@@ -12,11 +12,13 @@ import { shouldStampProbedOn } from '../lib/exec-probe/probe.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { checkRecord } from '../lib/specs-record.mjs';
+import { processProbe } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { owned } from './support/owned.mjs';
 
 const REAL_INPUTS = fileURLToPath(new URL('../inputs', import.meta.url));
 const record = (code = 0) => ({ probedOn: '2026-11-03T00:00:00.000Z', host: { hostname: 'h', kernel: 'k' }, lines: [{ id: 'a', ok: true }], exit: { code, halt: code === 0 ? null : 'memory-view-mismatch' } });
 const noop = () => {};
+const ownStart = () => processProbe(process.pid).start;
 
 /** A real copy of the pins plus one big probe record that must never be staged, a staging folder and a reservation. */
 function setup(t) {
@@ -144,7 +146,7 @@ test('A_stop_after_the_record_is_written_only_closes_the_owned_folders_and_exits
 test('A_stale_stamp_lock_with_stray_files_is_retired_and_a_live_lock_refuses_the_stamp', async t => {
   const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout.trim();
   const stale = setup(t);
-  fs.writeFileSync(path.join(stale.inputsDir, '.stamp.lock'), dead);
+  fs.writeFileSync(path.join(stale.inputsDir, '.stamp.lock'), `${dead} 1`);
   fs.writeFileSync(path.join(stale.inputsDir, `specs.json.stamp-${dead}`), 'half');
   fs.writeFileSync(path.join(stale.inputsDir, 'specs.d', `exec-layer.json.restore-${dead}`), 'half');
   assert.equal(stale.run(), 0);
@@ -153,11 +155,11 @@ test('A_stale_stamp_lock_with_stray_files_is_retired_and_a_live_lock_refuses_the
   assert.match(stale.pins().layer, /probedOn/, 'and the stamp went on');
   const live = setup(t);
   const before = live.pins();
-  fs.writeFileSync(path.join(live.inputsDir, '.stamp.lock'), String(process.pid)); // this test process is alive
+  fs.writeFileSync(path.join(live.inputsDir, '.stamp.lock'), `${process.pid} ${ownStart()}`); // this test process is alive, with the start time the lock names
   assert.equal(live.run(), 2);
   const written = JSON.parse(fs.readFileSync(live.file, 'utf8'));
   assert.equal(written.exit.code, 2);
-  assert.match(written.exit.stampError, new RegExp(`another probe holds the stamp lock \\(pid ${process.pid}\\)`));
+  assert.match(written.exit.stampError, new RegExp(`another probe holds the stamp lock \\(pid ${process.pid}\\) at .*\\.stamp\\.lock`));
   assert.deepEqual(live.pins(), before);
   assert.equal(fs.existsSync(path.join(live.inputsDir, '.stamp.lock')), true, 'a live holder\'s lock is not touched');
 });
@@ -178,4 +180,41 @@ test('The_probe_command_ends_through_endOfProbe_and_takes_no_second_path', () =>
   const source = fs.readFileSync(fileURLToPath(new URL('../exec-probe.mjs', import.meta.url)), 'utf8');
   assert.match(source, /endOfProbe\(/);
   assert.equal(source.includes('writeRecord'), false, 'the command writes no record by itself');
+});
+
+// K1: every lock error is a record that says exit 2; the lock is released LAST; a release that throws keeps the record's code.
+test('A_lock_error_that_would_throw_is_a_record_that_says_exit_2_naming_the_lock_path_and_the_error', t => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // stale: the retire reads the folder for strays, and that fails
+  const io = { ...fs, readdirSync: dir => { if (String(dir).endsWith('specs.d') || String(dir) === s.inputsDir) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.readdirSync(dir); } };
+  let code;
+  assert.doesNotThrow(() => { code = s.run({ io }); });
+  assert.equal(code, 2);
+  const written = JSON.parse(fs.readFileSync(s.file, 'utf8'));
+  assert.deepEqual([written.exit.code, written.exit.halt], [2, 'probed-on-stamp-failed']);
+  assert.match(written.exit.stampError, /\.stamp\.lock/);
+  assert.match(written.exit.stampError, /EACCES/);
+  assert.match(s.said.join('\n'), /\.stamp\.lock/, 'stderr names the lock path');
+});
+
+test('The_lock_is_released_last_after_onWritten_the_take_and_the_report', t => {
+  const s = setup(t);
+  const lock = path.join(s.inputsDir, '.stamp.lock');
+  const events = [];
+  const io = { ...fs, rmSync: (file, ...rest) => { if (String(file) === lock) events.push('lock-released'); return fs.rmSync(file, ...rest); } };
+  const code = s.run({ io, onWritten: () => events.push(`onWritten (lock held: ${fs.existsSync(lock)})`), report: () => events.push(`report (lock held: ${fs.existsSync(lock)}, reservation taken: ${s.reservation.held() === null})`) });
+  assert.equal(code, 0);
+  assert.deepEqual(events, ['onWritten (lock held: true)', 'report (lock held: true, reservation taken: true)', 'lock-released'], 'the lock is the last thing released');
+});
+
+test('A_release_that_throws_is_one_stderr_line_and_the_exit_stays_the_records_code', t => {
+  const s = setup(t);
+  const lock = path.join(s.inputsDir, '.stamp.lock');
+  const io = { ...fs, rmSync: (file, ...rest) => { if (String(file) === lock) throw Object.assign(new Error('EBUSY: busy'), { code: 'EBUSY' }); return fs.rmSync(file, ...rest); } };
+  let code;
+  assert.doesNotThrow(() => { code = s.run({ io }); });
+  assert.equal(code, 0, 'the record says 0 and the command says 0: a lock that could not be removed is not a failure of the probe');
+  assert.equal(JSON.parse(fs.readFileSync(s.file, 'utf8')).exit.code, 0);
+  assert.match(s.said.join('\n'), /the stamp lock .*could not be released .*EBUSY/);
+  fs.rmSync(lock, { force: true });
 });
