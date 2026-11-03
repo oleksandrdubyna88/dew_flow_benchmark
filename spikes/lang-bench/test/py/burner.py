@@ -11,7 +11,7 @@ SCRIPT = """
 import ctypes, os, signal, sys, time
 parent, seconds = int(sys.argv[1]), min(float(sys.argv[2]), %d)
 ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGKILL)  # PR_SET_PDEATHSIG: the kernel kills this process when its parent dies
-os.nice(10)  # a test's load is a background load: it must not starve the process under test for 100 ms (F2's rule has a documented limit under a starved scheduler) nor the rest of the host
+os.nice(10)  # the burner runs at a nice level below the process under test: it is load on the CPUs, not priority over the program (the suite's own workers run at the lowered level of `run-tests.mjs`)
 if os.getppid() != parent:  # the parent died (or never was) before the signal was set: it is not this burner's parent, so it does not burn
     sys.exit(0)
 end = time.monotonic() + seconds

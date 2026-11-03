@@ -135,17 +135,22 @@ class ForkTests(unittest.TestCase):
         self.assertEqual(result.lifecycle["signalled"]["comm"], "bash", "the pid is still bash's: fork never blocks the pid choice")
         self.assertIn("  fork: 2 processes in the program's cgroup where one was expected", result.lines)
 
-    def test_F2_the_short_tools_are_not_fork_in_20_of_20_rounds_under_a_cpu_load_that_is_bounded_inside_the_test(self):
-        # Half the cores burn for the length of the test and not longer. With EVERY core burning, a forked `true` that is not scheduled for 100 ms
-        # is a process that has really been in the cgroup that long, and about 1 round in 160 sees one: that is the documented limit of the rule.
-        # a quarter of the cores, niced: the full suite's own workers add the rest of the load (with half the cores the documented limit showed in about one full run in four)
-        burner.spawn(self, max(2, (os.cpu_count() or 4) // 4), seconds=60)
+    # The 100 ms rule has a documented rate (D4): a forked `true` counts for `fork` only when it has been in the cgroup for 100 ms, and under a CPU load a scheduler that does not run it for 100 ms makes that
+    # true. With every core burning that is about 1 round in 160 (p = 1/160 = 0.00625). The test runs ROUNDS rounds and allows FALSE_FORK_MAX false forks: the odds of MORE than two in 20 rounds at that rate are
+    # about 3e-4 (a false red once in about 3000 runs). A broken rule counts the short tools in (nearly) every round, and stays red.
+    ROUNDS = 20
+    FALSE_FORK_MAX = 2
+
+    def test_F2_the_short_tools_are_a_false_fork_in_at_most_the_documented_rate_under_a_cpu_load_that_is_bounded_inside_the_test(self):
+        # Half the cores burn for the length of the test and not longer (the burners run at their own nice level, below the program's: they are load, not priority).
+        burner.spawn(self, max(2, (os.cpu_count() or 4) // 2), seconds=60)
         forks = []
-        for round_ in range(20):
+        for round_ in range(self.ROUNDS):
             result, _, _ = run_in_scope(self, "true\n( true )\ntrue | true\nexec sleep 0.4\n", expected=b"", limit_ms=20_000)
             self.assertEqual(result.status, "PASS", round_)
             forks.append(result.lifecycle["fork"])
-        self.assertEqual([f.get("found") for f in forks], [False] * 20, f"fork under load: {[f for f in forks if f.get('found') is not False][:3]}")
+        false_forks = [f for f in forks if f.get("found") is not False]
+        self.assertLessEqual(len(false_forks), self.FALSE_FORK_MAX, f"{len(false_forks)} false forks in {self.ROUNDS} rounds (the documented rate allows {self.FALSE_FORK_MAX}): {false_forks[:3]}")
 
     def test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs(self):
         # the program lives long enough to be found for sure; the short tools are gone in a millisecond. Twenty times: it must never flake.
