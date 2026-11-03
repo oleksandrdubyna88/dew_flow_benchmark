@@ -185,3 +185,30 @@ test('A_rejection_of_the_stop_itself_ends_the_process_with_75_and_one_stderr_lin
   assert.equal(said.length, 1);
   assert.match(said[0], /^exec-probe: the stop itself failed \(boom\); exit 75: the next start's sweep retires what is left$/);
 });
+
+// L1: the network lines' own children (the driver in the holder's namespace, the server in the box) are tracked, so a stop during them leaves no process of the probe.
+test('A_probe_stopped_during_the_network_lines_leaves_no_driver_server_or_other_process_of_its_own', async t => {
+  if (!needs(t)) return;
+  const dir = owned.ownedDir(t, 'l1');
+  const out = path.join(dir, 'record.json');
+  const pin = path.join(dir, 'exec-layer.json');
+  writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
+  const scoped = privateProbeEnv(t);
+  const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'], env: scoped.env });
+  const own = () => [...idsOf(scoped)].flatMap(id => [`-probedriver-${id}`, `-probeserver-${id}`, `-lhold-${id}`].flatMap(text => pidsMentioning(text)));
+  t.after(() => { child.kill('SIGKILL'); for (const pid of own()) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } });
+  let stderr = '';
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  const deadline = Date.now() + 120_000;
+  const started = () => /network: start/.test(stderr) && own().length >= 2; // the network lines run: the holder and at least the driver (or the server) exist
+  while (!started() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  const ids = new Set(idsOf(scoped));
+  assert.ok(ids.size > 0 && own().length >= 2, 'the network lines are running: the probe\'s own processes exist');
+  const closed = new Promise(resolve => child.once('close', code => resolve(code)));
+  child.kill('SIGTERM');
+  assert.ok([143, 75].includes(await closed));
+  const left = () => [...ids].flatMap(id => [`-probedriver-${id}`, `-probeserver-${id}`, `-lhold-${id}`].flatMap(text => pidsMentioning(text)));
+  const end = Date.now() + 5000;
+  while (left().length > 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.deepEqual(left(), [], 'no driver, server or holder of the probe is left');
+});

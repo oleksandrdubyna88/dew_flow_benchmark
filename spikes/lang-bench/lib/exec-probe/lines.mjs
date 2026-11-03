@@ -58,9 +58,13 @@ export function bindLine(run, home) {
   return { id: 'bind-list', ok: problems.length === 0, binds, problems };
 }
 
+/** The owned marker of a child of this probe's run: the run's holder name with its kind swapped (`…-lhold-<id>` -> `…-probedriver-<id>`), so a test counts what a stop left by it. */
+const markerOf = (run, kind) => run.holderName.replace('-lhold-', `-${kind}-`);
+
 async function spawnDriver(run) {
-  const [exe, ...args] = [...nsenterArgv(run.holder, run.tools.nsenter), 'python3', '-I', '-c', 'import time; time.sleep(60)'];
+  const [exe, ...args] = [...nsenterArgv(run.holder, run.tools.nsenter), 'python3', '-I', '-c', 'import time; time.sleep(60)', markerOf(run, 'probedriver')];
   const child = spawn(exe, args, { stdio: 'ignore', detached: true, env: userEnv() });
+  trackChild(child); // L1: a stop ends it
   for (let waited = 0; waited < 5000 && text(`/proc/${child.pid}/comm`)?.trim() !== 'python3'; waited += 25) await pause(25);
   return child;
 }
@@ -83,7 +87,12 @@ function readyPort(child) {
   });
 }
 
-const detached = (argv, stdio = 'ignore') => spawn(argv[0], argv.slice(1), { stdio, detached: true, env: userEnv() });
+/** A detached child of the probe, tracked (L1): a stop ends its process group. */
+const detached = (argv, stdio = 'ignore') => {
+  const child = spawn(argv[0], argv.slice(1), { stdio, detached: true, env: userEnv() });
+  trackChild(child);
+  return child;
+};
 const stop = child => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } };
 const procText = (pid, name) => (pid === null ? '' : text(`/proc/${pid}/${name}`) ?? '');
 const nsOf = pid => (pid === null ? null : readlinkSync(`/proc/${pid}/ns/net`));
@@ -97,7 +106,7 @@ async function ping(run, port) {
 
 /** `netns`, `program-in-prog` and `ping-over-loopback`: the driver and the program share a namespace that is not the host's; the program is in `prog/` and the driver is not; ping works. */
 export async function networkLines(run) {
-  const server = detached(programArgv(run, 'net', ['python3', 'server.py']), ['ignore', 'pipe', 'ignore']);
+  const server = detached(programArgv(run, 'net', ['python3', 'server.py', markerOf(run, 'probeserver')]), ['ignore', 'pipe', 'ignore']);
   const unit = `${run.unitPrefix}-net`;
   const driver = await spawnDriver(run);
   try {
