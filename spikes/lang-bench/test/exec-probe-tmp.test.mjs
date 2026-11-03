@@ -65,7 +65,7 @@ test('The_startup_sweep_lists_only_the_tmp_folders_and_removes_the_files_of_dead
   fs.mkdirSync(specsD);
   const probe = pid => (pid === 111 ? { state: 'dead' } : pid === 222 ? { state: 'live', start: 500 } : { state: 'live', start: 900 });
   const plant = (target, kind, id) => { const file = tmpPath(target, kind, id); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); return file; };
-  const dead = [plant(path.join(inputs, 'specs.json'), 'stamp', '111-5'), plant(path.join(inputs, 'exec-layer.json'), 'restore', '111-5'), plant(path.join(inputs, 'stamp.lock'), 'link', '111-5'), plant(path.join(out, 'exec-probe-x.json'), 'record', '111-5'),
+  const dead = [plant(path.join(inputs, 'specs.json'), 'stamp', '111-5'), plant(path.join(inputs, 'exec-layer.json'), 'restore', '111-5'), plant(path.join(inputs, 'stamp.lock'), 'link', '111-5'), plant(path.join(inputs, '.stamp.lock'), 'mark', '111-5'), // P2: the committing mark's temporary file of a dead probe plant(path.join(out, 'exec-probe-x.json'), 'record', '111-5'),
     plant(path.join(out, 'exec-probe-y.json'), 'record', '222-400')]; // pid 222 is alive but started at 500, not 400: pid reuse
   const alive = [plant(path.join(inputs, 'specs.json'), 'stamp', '222-500'), plant(path.join(out, 'exec-probe-z.json'), 'record', '333-900')];
   const unrelated = [path.join(inputs, 'exec-probe-2026-11-03.json'), path.join(out, 'mine.json'), path.join(inputs, 'specs.json.stamp-111-5')]; // not in a tmp folder: never looked at

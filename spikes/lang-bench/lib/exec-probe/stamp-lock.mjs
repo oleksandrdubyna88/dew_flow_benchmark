@@ -34,16 +34,9 @@ const attempt = fn => { try { return { value: fn() }; } catch (error) { return {
 const describe = (lock, error) => `the stamp lock ${lock} could not be used (${error.code ?? ''} ${error.message})`.replace('( ', '(');
 const manualStep = lock => `If no probe is running, remove it: rm ${lock}`;
 
-/**
- * Take the stamp lock: `{ ok: true, release(), holdsMine(), markCommitting() }` or `{ ok: false, holder, path, error }`; a stale or unparsable lock is a refusal that also has `stale: true` and `committing` (the
- * stale lock said it). `io` and `probe` (`pid => { state, start }`) are the test seams. Nothing here ever removes or moves a lock that is not this probe's own.
- */
-export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = processProbe }) {
-  const lock = path.join(inputsDir, LOCK_NAME);
-  const own = { pid, start: startOf(probe, pid) };
+/** What the holder does to its own lock, built from `{ io, lock, inputsDir, own, tmp, markTmp }` (`own` = `{ pid, start }`; `tmp` the link temporary, `markTmp` the committing mark's). */
+function holderActions({ io, lock, inputsDir, own, tmp, markTmp }) {
   const mine = `${own.pid} ${own.start}`;
-  const tmp = tmpPath(lock, 'link', ownId(probe, pid)); // D2: in `.exec-probe-tmp/` beside the lock
-  const markTmp = tmpPath(lock, 'mark', ownId(probe, pid)); // N5: the committing mark has its own temporary kind, never the link temp
   const holdsMine = () => {
     const read = attempt(() => io.readFileSync(lock, 'utf8'));
     return read.error === undefined && sameHolder(parse(read.value), own);
@@ -61,15 +54,6 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
       dropTmpFolder(inputsDir, io);
     }
   };
-  const take = () => {
-    const wrote = attempt(() => writeTmp(tmp, mine, { flag: 'wx' }, io));
-    if (wrote.error !== undefined) { dropTmpFolder(inputsDir, io); return { error: wrote.error }; }
-    const linked = attempt(() => io.linkSync(tmp, lock));
-    attempt(() => { io.rmSync(tmp, { force: true }); }); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the start sweep retires the stray by its name)
-    dropTmpFolder(inputsDir, io);
-    if (linked.error === undefined) return { taken: true };
-    return linked.error.code === 'EEXIST' ? { held: true } : { error: linked.error };
-  };
   /** Mark the lock `committing` (a second line) through its own temporary file, created with `wx` (a file left by an earlier failed mark is removed first), and a rename over the holder's OWN lock: a reader sees the old or the new lock, never a partial one, and nothing is written through a hard link to the lock. Throws when it cannot. */
   const markCommitting = () => {
     io.rmSync(markTmp, { force: true });
@@ -83,7 +67,33 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
       dropTmpFolder(inputsDir, io);
     }
   };
-  const held = { ok: true, release, holdsMine, markCommitting };
+  return { ok: true, release, holdsMine, markCommitting };
+}
+
+/** `take()` for the lock: `{ taken: true }`, `{ held: true }` (EEXIST) or `{ error }`; the link temporary holds the complete content, so no reader ever sees an empty lock. */
+function makeTake({ io, lock, inputsDir, tmp, mine }) {
+  return () => {
+    const wrote = attempt(() => writeTmp(tmp, mine, { flag: 'wx' }, io));
+    if (wrote.error !== undefined) { dropTmpFolder(inputsDir, io); return { error: wrote.error }; }
+    const linked = attempt(() => io.linkSync(tmp, lock));
+    attempt(() => { io.rmSync(tmp, { force: true }); }); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the start sweep retires the stray by its name)
+    dropTmpFolder(inputsDir, io);
+    if (linked.error === undefined) return { taken: true };
+    return linked.error.code === 'EEXIST' ? { held: true } : { error: linked.error };
+  };
+}
+
+/**
+ * Take the stamp lock: `{ ok: true, release(), holdsMine(), markCommitting() }` or `{ ok: false, holder, path, error }`; a stale or unparsable lock is a refusal that also has `stale: true` and `committing` (the
+ * stale lock said it). `io` and `probe` (`pid => { state, start }`) are the test seams. Nothing here ever removes or moves a lock that is not this probe's own.
+ */
+export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = processProbe }) {
+  const lock = path.join(inputsDir, LOCK_NAME);
+  const own = { pid, start: startOf(probe, pid) };
+  const tmp = tmpPath(lock, 'link', ownId(probe, pid)); // D2: in `.exec-probe-tmp/` beside the lock
+  const markTmp = tmpPath(lock, 'mark', ownId(probe, pid)); // N5: the committing mark has its own temporary kind, never the link temp
+  const take = makeTake({ io, lock, inputsDir, tmp, mine: `${own.pid} ${own.start}` });
+  const held = holderActions({ io, lock, inputsDir, own, tmp, markTmp });
   const first = take();
   if (first.taken) return held;
   if (first.error !== undefined) return fail(lock, describe(lock, first.error));
