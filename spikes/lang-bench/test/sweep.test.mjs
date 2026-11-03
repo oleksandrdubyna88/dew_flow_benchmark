@@ -73,11 +73,21 @@ test('The_suite_start_calls_the_conventions_sweep_with_this_repositorys_token_an
   assert.throws(() => sweepLeftovers({ repo: REPO, token: 'Bad Token' }), TypeError);
 });
 
-// M1: only the registered token.
-test('No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one', () => {
-  assert.deepEqual(foreignTokens("ownedFor({ token: 'bench' })"), []);
-  assert.deepEqual(foreignTokens("ownedFor({ token: 'benchx' })"), ['benchx'], 'the companion: a planted token is found');
-  assert.deepEqual(foreignTokens("spawn(node, ['exec-probe.mjs', '--owned-token', 'benchsig'])"), ['benchsig'], 'and so is an --owned-token option');
+// M1 and S3: only the registered token, in EVERY form a token can be bound.
+test('No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one_in_every_form', () => {
+  for (const clean of ["ownedFor({ token: 'bench' })", 'ownedFor({ token: "bench" })', "sweepLeftovers({ repo, token: 'bench' })", "const TOKEN = 'bench'; ownedFor({ token: 'bench' })"]) assert.deepEqual(foreignTokens(clean), [], clean);
+  const planted = {
+    'a quoted literal': "ownedFor({ token: 'benchx' })",
+    'a variable': "const TOKEN = 'benchsig';\nownedFor({ token: TOKEN })",
+    'a constant alone': "const OWNED_TOKEN = 'benchbld';",
+    'a shorthand': 'const token = pick();\nownedFor({ token })',
+    'a template': 'ownedFor({ token: `bench${suffix}` })',
+    'an expression': "ownedFor({ token: process.env.T ?? 'bench' })",
+    'the --owned-token option': "spawn(node, ['exec-probe.mjs', '--owned-token', 'benchsig'])",
+    'the --owned-token option with bench': "spawn(node, ['exec-probe.mjs', '--owned-token', 'bench'])",
+  };
+  for (const [name, text] of Object.entries(planted)) assert.ok(foreignTokens(text).length > 0, `the scan finds ${name}: ${text}`);
+  assert.deepEqual(foreignTokens("const TOKEN = 'benchsig';\nownedFor({ token: TOKEN })").length, 2, 'the variable form is found twice: the constant and its use');
   const spikeDir = fileURLToPath(new URL('..', import.meta.url));
   const files = [...readdirSync(path.join(spikeDir, 'test'), { recursive: true }).filter(name => /\.m?js$/.test(name)).map(name => path.join(spikeDir, 'test', name)),
     ...readdirSync(spikeDir).filter(name => /\.mjs$/.test(name)).map(name => path.join(spikeDir, name))];
@@ -85,13 +95,32 @@ test('No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one', 
   assert.deepEqual(found, [], 'sweep.test.mjs alone binds other tokens, to show that another token\'s folders are kept');
 });
 
-test('A_folder_named_the_way_the_V5_test_names_its_run_one_hour_old_with_a_dead_claim_is_retired_by_the_suite_start_sweep', t => {
-  const root = owned.ownedDir(t, 'sweepsig');
-  const dead = leftBehind(root, 'lrun-sigAbCd');
-  assert.match(path.basename(dead), /^testsToDelete-u\d+-bench-lrun-sigAbCd-/);
-  age(dead, 3600);
+/** What a killed probe test REALLY leaves now: its `private-<id>` root (a claimed owned folder) with the probe's runs parent and temp root inside, runs and builds in them. */
+function killedProbeTestLeftovers(root) {
+  const left = leftBehind(root, 'private');
+  mkdirSync(path.join(left, 'tmp', 'testsToDelete-u1000-bench-probebuild-AbCdEf'), { recursive: true });
+  writeFileSync(path.join(left, 'tmp', 'testsToDelete-u1000-bench-probebuild-AbCdEf', 'mem.csproj'), '<Project/>');
+  mkdirSync(path.join(left, 'cache', 'dew_flow_bench', 'lang-bench-runs', 'testsToDelete-u1000-bench-lrun-GhIjKl', 'views'), { recursive: true });
+  age(left, 3600);
+  return left;
+}
+
+test('What_a_killed_probe_test_really_leaves_a_private_root_with_runs_inside_is_retired_by_the_sweep', t => {
+  const root = owned.ownedDir(t, 'sweepprivate');
+  const left = killedProbeTestLeftovers(root);
+  assert.match(path.basename(left), /^testsToDelete-u\d+-bench-private-/);
   const report = sweepLeftovers({ repo: REPO, tmp: root, token: 'bench' });
-  assert.deepEqual(report.removed.map(dir => path.basename(dir)), [path.basename(dead)]);
-  assert.equal(existsSync(dead), false);
-  assert.equal(existsSync(`${dead}.owner`), false);
+  assert.deepEqual(report.removed.map(dir => path.basename(dir)), [path.basename(left)]);
+  assert.equal(existsSync(left), false, 'the private root and everything inside it');
+  assert.equal(existsSync(`${left}.owner`), false, 'and its claim');
+});
+
+test('The_suite_start_itself_retires_a_killed_probe_tests_leftovers_and_is_red_without_the_sweep', t => {
+  const root = owned.ownedDir(t, 'sweepsuite');
+  const left = killedProbeTestLeftovers(root);
+  const spikeDir = fileURLToPath(new URL('..', import.meta.url));
+  const ran = spawnSync(process.execPath, [path.join(spikeDir, 'run-tests.mjs'), 'test/fixtures/sweep-noop.fixture.mjs'], { encoding: 'utf8', env: { ...process.env, TMPDIR: root }, timeout: 60_000 });
+  assert.equal(ran.status, 0, ran.stderr);
+  assert.match(ran.stderr, /run-tests: leftovers — removed 1/, 'the suite start reports what it retired');
+  assert.equal(existsSync(left), false, 'the leftovers are gone before the first test runs');
 });
