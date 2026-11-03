@@ -35,7 +35,7 @@ const killGroup = child => killTree(child.pid, { log: line => process.stderr.wri
  * `input` (a string or Buffer) is written to the child's stdin, which is then closed. `bytes: true` returns `stdoutBytes`, the child's stdout
  * untouched, joined once and never decoded (`stdout` is then ''): a blob or an archive is not always text, and a large one must not be held twice.
  */
-export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES, input, bytes = false } = {}) {
+export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES, input, bytes = false, onChild } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(fail('runBounded needs a positive timeoutMs'));
   return new Promise(resolve => {
     const started = Date.now();
@@ -44,6 +44,7 @@ export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTE
     let timedOut = false;
     let settled = false;
     const child = spawn(exe, args, { cwd, env, shell: false, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
+    onChild?.(child); // the caller may track the child (its process group is `child.pid`: it is detached) so a stop can end it
     if (input !== undefined) {
       child.stdin.on('error', () => {}); // a child that exits before reading its input is the child's answer, not ours
       child.stdin.end(input);

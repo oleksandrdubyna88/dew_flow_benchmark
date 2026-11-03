@@ -5,7 +5,7 @@ import { mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { computePin, manifestText, verifyPin } from '../lib/runner-pin.mjs';
+import { computePin, GROUP_B_ONLY, ledgerProblem, manifestText, OLYMPIAD_MODULES, olympiadDifferences, verifyPin, withLedgerEntry } from '../lib/runner-pin.mjs';
 import { owned } from './support/owned.mjs';
 
 const spikeDir = fileURLToPath(new URL('..', import.meta.url));
@@ -111,3 +111,46 @@ test('The_committed_runner_pin_equals_the_runner_tree_so_a_runner_edit_without_a
 function readFileTextOrEmpty(file) {
   try { return readFileSync(file, 'utf8'); } catch { return ''; }
 }
+
+// T-L38 (D50, D56): the olympiad modules of A's manifest and of every later manifest (group B's adds `rs_net.py`) are byte-identical. `rs_abort.py` and its evidence function are in the set: the daemon
+// and web lifecycles of part ii-b read the same rule and the same `prog/` evidence, so a change ii-b needs there is an instrument amendment for group A (parent D50, §6.1).
+const manifestOf = files => ({ runner: { files: Object.entries(files).map(([name, text]) => ({ path: name, sha256: sha(text) })) } });
+
+test('rs_abort_is_byte_identical_across_the_manifests', () => {
+  const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
+  const paths = pinned.files.map(f => f.path);
+  for (const name of ['rs_abort.py', 'rs_olympiad.py', 'rs_cgroup.py', 'rs_report.py', 'rs_exec.py']) assert.ok(OLYMPIAD_MODULES(paths).includes(name), `${name} is in the olympiad module set`);
+  assert.deepEqual(GROUP_B_ONLY, ['rs_net.py'], 'the set is the runner minus the group-B-only modules');
+  assert.ok(!OLYMPIAD_MODULES(['rs_net.py', ...paths]).includes('rs_net.py'));
+  const a = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n' });
+  const b = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'net\n' });
+  assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'a module only the second manifest has (rs_net) is no difference');
+  const changedNet = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'other net\n' });
+  assert.deepEqual(olympiadDifferences(b.runner, changedNet.runner), [], 'a change in rs_net alone passes');
+  const changedAbort = manifestOf({ 'rs_abort.py': 'abort \n', 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'net\n' });
+  assert.deepEqual(olympiadDifferences(a.runner, changedAbort.runner), ['rs_abort.py differs'], 'one byte in rs_abort.py fails it, naming the module');
+  const missing = manifestOf({ 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'net\n' });
+  assert.deepEqual(olympiadDifferences(a.runner, missing.runner), ['rs_abort.py is missing from the second manifest']);
+  assert.deepEqual(olympiadDifferences(pinned, pinned), [], 'the committed pin against itself');
+  const extra = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_new.py': 'new olympiad module\n' });
+  assert.deepEqual(olympiadDifferences(a.runner, extra.runner), ['rs_new.py is only in the second manifest'], 'an olympiad module only the second manifest has is a difference too (the check is symmetric)');
+  assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'rs_net.py alone in the second manifest is still no difference');
+});
+
+// Q6: each runner manifest change gets a new runner version. `inputs/runner-versions.json` keeps `{ version: manifestSha256 }` for every version pinned since 0.2.3; pinning a manifest that differs from the
+// one recorded for the same version is refused (the same version number must never name two manifests: 0.2.2 did, once).
+test('A_runner_version_never_names_two_manifests_the_ledger_refuses_the_second', () => {
+  const pin = (version, manifestSha256) => ({ version, manifestSha256 });
+  assert.deepEqual(ledgerProblem({ versions: {} }, pin('1.0.0', 'aa')), null, 'a new version is fine');
+  assert.deepEqual(ledgerProblem({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'aa')), null, 'the same manifest again is fine');
+  assert.match(ledgerProblem({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'bb')), /1\.0\.0.*aa.*bb.*bump RUNNER_VERSION/s, 'the same version with another manifest is refused, naming both');
+  assert.deepEqual(withLedgerEntry({ versions: { '1.0.0': 'aa' } }, pin('1.0.1', 'bb')), { versions: { '1.0.0': 'aa', '1.0.1': 'bb' } }, 'an entry is added, never replaced');
+  assert.throws(() => withLedgerEntry({ versions: { '1.0.0': 'aa' } }, pin('1.0.0', 'bb')), /bump RUNNER_VERSION/);
+});
+
+test('The_committed_runner_pin_is_the_manifest_the_version_ledger_records_for_its_version', () => {
+  const ledger = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'runner-versions.json'), 'utf8'));
+  const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
+  assert.equal(ledger.versions[pinned.version], pinned.manifestSha256, `${pinned.version} in the ledger is the pinned manifest`);
+  assert.equal(ledgerProblem(ledger, pinned), null);
+});

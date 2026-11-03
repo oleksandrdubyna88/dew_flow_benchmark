@@ -238,7 +238,7 @@ class MembershipTests(unittest.TestCase):
             result = ws.run(case(), prefix=box_prefix(fake_box(self)), status_fd=STATUS_FD, cgroup=cgroup, real=True)
         self.assertEqual(result.status, "PASS", "a counter of a cgroup the box was never seen in is not this case's: no memory limit")
         self.assertEqual(result.lifecycle["memory"]["known"], False)
-        self.assertNotIn("oomKill", result.lifecycle["memory"])
+        self.assertIsNone(result.lifecycle["memory"]["oomKill"], "unknown is null, never zero")
 
 
 def foreign_cgroup(test, holder_seconds=40):
@@ -273,7 +273,7 @@ class PlainForeignCgroupTests(unittest.TestCase):
         result = ws.run(case(), cgroup=other, real=True)
         self.assertEqual(result.status, "PASS")
         self.assertEqual(result.lifecycle["memory"]["known"], False, f"absent is not zero: {result.lifecycle['memory']}")
-        self.assertNotIn("peakBytes", result.lifecycle["memory"])
+        self.assertIsNone(result.lifecycle["memory"]["peakBytes"], "unknown is null, never zero")
         self.assertIn("  memory: not certified", result.lines)
 
     def test_On_the_plain_path_a_cgroup_the_launcher_is_seen_in_keeps_its_memory(self):

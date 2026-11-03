@@ -197,11 +197,16 @@ test('Shingle_findings_are_deduplicated_per_line_and_aid_in_linear_time', () => 
   const line = `${SENTENCE} and then some more words after it\n`;
   const one = findAidHits('p', `${SENTENCE} ${SENTENCE}\n`, needles);
   assert.equal(one.length, 1, 'many windows on one line are one finding');
-  const many = line.repeat(40_000);
-  const started = Date.now();
-  const hits = findAidHits('p', many, needles);
-  const elapsed = Date.now() - started;
-  assert.equal(hits.length, 40_000, 'one per line');
-  assert.deepEqual([hits[0].line, hits.at(-1).line], [1, 40_000]);
-  assert.ok(elapsed < 3_000, `deduplication must not be quadratic: ${elapsed} ms for 40000 findings`);
+  // D5: the time is measured as CPU time (`process.cpuUsage()`), not wall time, and compared between two sizes n and 4n: linear work takes about 4 times as long, quadratic about 16, so a ratio under 8
+  // separates them whatever the machine's speed or the suite's load.
+  const cpuOf = text => { findAidHits('p', text, needles); const before = process.cpuUsage(); const found = findAidHits('p', text, needles); const used = process.cpuUsage(before); return { found, ms: (used.user + used.system) / 1000 }; };
+  const n = 10_000;
+  cpuOf(line.repeat(1000)); // warm-up
+  const small = cpuOf(line.repeat(n));
+  const large = cpuOf(line.repeat(4 * n));
+  const hits = large.found;
+  assert.equal(hits.length, 4 * n, 'one per line');
+  assert.deepEqual([hits[0].line, hits.at(-1).line], [1, 4 * n]);
+  const ratio = large.ms / Math.max(small.ms, 1);
+  assert.ok(ratio < 8, `deduplication must not be quadratic: ${small.ms.toFixed(0)} ms CPU for ${n} lines, ${large.ms.toFixed(0)} ms for ${4 * n} (ratio ${ratio.toFixed(1)}; linear is about 4, quadratic about 16)`);
 });

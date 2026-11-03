@@ -45,6 +45,47 @@ def procs(directory):
     return None if text is None else _pids_of(text)
 
 
+VANISHED = (errno.ENOENT, errno.ENODEV)
+
+
+def _listing(directory):
+    """The names in a cgroup folder; a cgroup that vanished (or is dying) since its procs were read has none; any other failure is raised."""
+    try:
+        return sorted(os.listdir(directory))
+    except OSError as error:
+        if error.errno in VANISHED:
+            return []
+        raise  # the cgroup is unreadable, which is never taken for empty (procs_tree answers None)
+
+
+def _children_of(directory):
+    """The descendant cgroups one level down: the folders that hold a `cgroup.procs`."""
+    return [os.path.join(directory, name) for name in _listing(directory) if os.path.exists(os.path.join(directory, name, "cgroup.procs"))]
+
+
+def _below_one(sub):
+    """The pids of one descendant: [] when it vanished since it was listed, OSError when it is there and cannot be read (unreadable is never empty)."""
+    found = procs_tree(sub)
+    if found is None and _file_id(os.path.join(sub, "cgroup.procs")) is not None:
+        raise OSError(f"{sub}: cgroup.procs cannot be read")
+    return found or []
+
+
+def _below(directory):
+    return [pid for sub in _children_of(directory) for pid in _below_one(sub)]
+
+
+def procs_tree(directory):
+    """Every pid in `cgroup.procs` of the cgroup AND of every descendant cgroup (a program's `prog/hide` too); None when the cgroup cannot be read."""
+    own = procs(directory)
+    if own is None:
+        return None
+    try:
+        return own + _below(directory)
+    except OSError:
+        return None
+
+
 def comm_of(pid):
     """`/proc/<pid>/comm` without its line feed, or None when the process is gone. Evidence for the record only: never used to tell bwrap."""
     text = _text(f"/proc/{pid}/comm")
@@ -123,7 +164,8 @@ def memory(directory):
     on its own, so an `oom_kill` is judged from `memory.events` even when `memory.peak` cannot be read."""
     peak = _whole_number(_text(os.path.join(directory, "memory.peak")))
     events = _events_of(directory)
-    read = _kept(peakBytes=peak, events=events, oomKill=None if events is None else events.get("oom_kill", 0))
+    read = _kept(peakBytes=peak, maxBytes=_whole_number(_text(os.path.join(directory, "memory.max"))), events=events,
+                 oomKill=None if events is None else events.get("oom_kill", 0))
     known = peak is not None and events is not None
     return {"known": True, **read} if known else {"known": False, "why": "memory.peak or memory.events could not be read from the cgroup", **read}
 

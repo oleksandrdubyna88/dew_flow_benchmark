@@ -7,8 +7,10 @@ import path from 'node:path';
 const ok = value => ({ ok: true, ...value });
 const fail = reason => ({ ok: false, reason });
 
-/** The four writers' files (E1.S8a, E1.S8b, E1.S9, E1.S2): the only names allowed in specs.d/. */
-export const WRITER_FILES = Object.freeze(['runner.json', 'exec-layer.json', 'format.json', 'spec-states.json']);
+/** The writers' files (E1.S8a, E1.S8b, E1.S9, E1.S2, and the memory policy the team lead decides, OP-K): the only names allowed in specs.d/. */
+export const WRITER_FILES = Object.freeze(['runner.json', 'exec-layer.json', 'format.json', 'spec-states.json', 'memory-policy.json']);
+/** A writer file whose own shape is not a set of top-level keys is assembled under one key. */
+const WRAPPED = Object.freeze({ 'memory-policy.json': 'memoryPolicy' });
 
 function sortedCopy(value) {
   if (Array.isArray(value)) return value.map(sortedCopy);
@@ -47,7 +49,7 @@ export function assemble(inputsDir) {
   for (const name of WRITER_FILES.filter(n => existsSync(path.join(dir, n)))) {
     const read = readWriter(dir, name);
     if (!read.ok) return read;
-    parts.push({ name, value: read.value });
+    parts.push({ name, value: WRAPPED[name] === undefined ? read.value : { [WRAPPED[name]]: read.value } });
   }
   const merged = merge(parts);
   return merged.ok ? ok({ text: canonicalJson(merged.record) }) : merged;

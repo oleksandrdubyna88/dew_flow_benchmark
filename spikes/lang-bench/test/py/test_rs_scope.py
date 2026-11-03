@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 import runner_path  # noqa: F401
+import burner
 import rs_cgroup as cg
 import rs_exec as ex
 import rs_launch as rl
@@ -134,17 +135,23 @@ class ForkTests(unittest.TestCase):
         self.assertEqual(result.lifecycle["signalled"]["comm"], "bash", "the pid is still bash's: fork never blocks the pid choice")
         self.assertIn("  fork: 2 processes in the program's cgroup where one was expected", result.lines)
 
-    def test_F2_the_short_tools_are_not_fork_in_20_of_20_rounds_under_a_cpu_load_that_is_bounded_inside_the_test(self):
-        # Half the cores burn for the length of the test and not longer. With EVERY core burning, a forked `true` that is not scheduled for 100 ms
-        # is a process that has really been in the cgroup that long, and about 1 round in 160 sees one: that is the documented limit of the rule.
-        burners = [subprocess.Popen([sys.executable, "-I", "-c", "import time\nend = time.monotonic() + 60\nwhile time.monotonic() < end: pass"]) for _ in range(max(2, (os.cpu_count() or 4) // 2))]
-        self.addCleanup(lambda: [(b.kill(), b.wait()) for b in burners])
+    # The 100 ms rule has a documented rate (D4): a forked `true` counts for `fork` only when it has been in the cgroup for 100 ms, and under a CPU load a scheduler that does not run it for 100 ms makes that
+    # true. Two measured rates (N7): STANDALONE, with every core busy (this test burns half of them; measured in E1.S8a part ii-a, #147), about 1 round in 160 (p = 0.00625: more than two false forks in 20 rounds is about 3e-4, once in about 3000 runs); UNDER THE FULL SUITE's
+    # load about 0.014 per round, so a false red of THIS test is about 2.8e-3 (once in about 360 suite runs). A broken rule counts the short tools in (nearly) every round, so this test catches a removed 100 ms
+    # rule in most runs but not in all: the guard that reliably catches it, with no load, is test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs.
+    ROUNDS = 20
+    FALSE_FORK_MAX = 2
+
+    def test_F2_the_short_tools_are_a_false_fork_in_at_most_the_documented_rate_under_a_cpu_load_that_is_bounded_inside_the_test(self):
+        # Half the cores burn for the length of the test and not longer (the burners run at their own nice level, below the program's: they are load, not priority).
+        burner.spawn(self, max(2, (os.cpu_count() or 4) // 2), seconds=60)
         forks = []
-        for round_ in range(20):
+        for round_ in range(self.ROUNDS):
             result, _, _ = run_in_scope(self, "true\n( true )\ntrue | true\nexec sleep 0.4\n", expected=b"", limit_ms=20_000)
             self.assertEqual(result.status, "PASS", round_)
             forks.append(result.lifecycle["fork"])
-        self.assertEqual([f.get("found") for f in forks], [False] * 20, f"fork under load: {[f for f in forks if f.get('found') is not False][:3]}")
+        false_forks = [f for f in forks if f.get("found") is not False]
+        self.assertLessEqual(len(false_forks), self.FALSE_FORK_MAX, f"{len(false_forks)} false forks in {self.ROUNDS} rounds (the documented rate allows {self.FALSE_FORK_MAX}): {false_forks[:3]}")
 
     def test_A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs(self):
         # the program lives long enough to be found for sure; the short tools are gone in a millisecond. Twenty times: it must never flake.
@@ -195,7 +202,8 @@ class FakeCgroupTests(unittest.TestCase):
         ws = Workspace(self, REPLAY, FILES)
         result = ws.run(case(), cgroup=fake_cgroup(ws, final={"memory.peak": "1048576", "memory.events": CLEAN_EVENTS}))
         self.assertEqual(result.status, "PASS")
-        self.assertEqual(result.lifecycle["memory"], {"known": True, "peakBytes": 1048576, "events": {"oom": 0, "oom_kill": 0}, "oomKill": 0})
+        self.assertEqual(result.lifecycle["memory"], {"known": True, "peakBytes": 1048576, "events": {"oom": 0, "oom_kill": 0}, "oomKill": 0, "runtimeAbort": None, "maxBytes": None,
+                                                           "abortBelowEvidence": False, "childAbortLine": False})
         self.assertIn("  memory: peak 1048576 bytes", result.lines)
 
     def test_The_cgroup_template_is_filled_with_the_case_id(self):

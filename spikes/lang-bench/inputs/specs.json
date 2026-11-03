@@ -1,6 +1,121 @@
 {
+  "execLayer": {
+    "files": [
+      {
+        "path": "lang-bench/inputs/specs.d/memory-policy.json",
+        "sha256": "60c99687784eeff54565d5b44820aec80fcb9da3c23209307e051f861d10d5fe"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/box.mjs",
+        "sha256": "673cb2e39edaf73517f368244eac0da8330d8f16ce3e75e26bcdf1973c2f3c01"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/case-view.mjs",
+        "sha256": "d39dd9dc37165432aac9c00bf39c06e869b0b7811c40991dc8f1edb64e5bb8d4"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/certify.mjs",
+        "sha256": "8db09bbcc91cc01f959060996468c875afef1a8e7a1c6141cf194c21577c7ef3"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/cleanup.mjs",
+        "sha256": "0a968bf3773305a0b4a7525eb2b3472850b1bf92fde6fa28ead8bcb2824c2c3f"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/env.mjs",
+        "sha256": "d2a405414da382d4cb6055ef8ba7639a1ead10a7ad9b9633275fe0641943a3cb"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/identity.mjs",
+        "sha256": "5e1aa7680698767fdabb4368eb56bf6e162848b0b467445cb510122f348967ce"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/names.mjs",
+        "sha256": "2cc54854ca8a411a67cc8e348e27c83c942629f5447f566e878586eecf5c3b82"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/netns.mjs",
+        "sha256": "b088579ab19b668b14bbf0c672914d818f15b60719ff17b905d633ee2762c56f"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/policy.mjs",
+        "sha256": "4eb214f8f67fdda3cd24e7fc7722ca0bdc2e084354ea2b8dc4861f1249c21270"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/prefix.mjs",
+        "sha256": "7a343b7a804a83512ec32e7557aca0309e19194ee04754e6da1a616e933382d9"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/proc.mjs",
+        "sha256": "d94ca5d1e3233ffb883fc81fa25ee96732de3ea0598e0d0bdd93f99814e5d40f"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/run.mjs",
+        "sha256": "67807455469d796354cc8c92946b818a822cd2e12a7fdf9068aa1d174d9e97fa"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/scope-entry.sh",
+        "sha256": "b4a3ee8c4e8908b4cead314778a858fa2a9393558acdb04522764e01d661a4f3"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/scope.mjs",
+        "sha256": "b08a3e673d6e8421b48897eb3c526059769036cf7ec98f986f5bf92a0b51d65f"
+      },
+      {
+        "path": "lang-bench/lib/exec-layer/stopping.mjs",
+        "sha256": "0348e682e68666bae064be97539e8e2fb9b9896ae6c6d4015b22ef8286c5ab8d"
+      },
+      {
+        "path": "lang-bench/lib/preflight-box.mjs",
+        "sha256": "a781db1ada6fbd590ae147556ac447834954444def6ae3773705be51d430cb13"
+      },
+      {
+        "path": "minigit-bench/lib/bwrap.mjs",
+        "sha256": "c970b2c6c1841e911040a46039106708e1a0be3f92ea6da7f70cbc5291ea2988"
+      },
+      {
+        "path": "minigit-bench/lib/find-on-path.mjs",
+        "sha256": "e69fda21ac6cac2d86c80ae43c6a3fb0a8b9ff9fabc0ad40823b36d3fdcb9f5f"
+      },
+      {
+        "path": "minigit-bench/lib/result.mjs",
+        "sha256": "697b28b7b5230db6801336c1637111cc7c0835552097756e1c8d5468b96ef013"
+      },
+      {
+        "path": "minigit-bench/lib/run.mjs",
+        "sha256": "fef9f0617544a195c79f28456711d243389b47774aee416ef39f4394fa4a3f0d"
+      },
+      {
+        "path": "policy-ab-quick/lib/proc.mjs",
+        "sha256": "b8299fdd2242cc5af8757f88c1a5ea9a624579c82bb9c9e4a5de7c30e29dcb45"
+      }
+    ],
+    "host": {
+      "bwrap": "bubblewrap 0.11.1",
+      "cgroup2": true,
+      "hostname": "jinx",
+      "kernel": "6.18.54.1-microsoft-standard-WSL2",
+      "node": "v26.12.1",
+      "systemd": "systemd 259 (259.5-0ubuntu3.4)"
+    },
+    "probedOn": "2026-11-03T11:05:31.552Z",
+    "treeSha256": "2cba87c276de32401d451be1ff8585a588a9ec705f71f103511b93b97fa1c6ad"
+  },
+  "memoryPolicy": {
+    "by": "team lead (Opus), D55 (the epoch-6 re-review; ask_consultants bf619f55, 2 of 2 for A)",
+    "decided": "2026-11-02",
+    "evidence": [
+      "inputs/exec-probe-2026-11-02.json",
+      "inputs/opk-experiment-2026-11-02.json"
+    ],
+    "policy": "cgroup-view-own+gchl-90+node-old-space-90"
+  },
   "runner": {
     "files": [
+      {
+        "path": "rs_abort.py",
+        "sha256": "5095c20bc45cbaf6ac8a26ee0e9def38c50f29a245f00d06419fee3f54b2ba54"
+      },
       {
         "path": "rs_arrival.py",
         "sha256": "3a7f9640cf9a3466fa4bee2c02e712f9870c31e57934e16c917637038eeebdb8"
@@ -11,7 +126,7 @@
       },
       {
         "path": "rs_cgroup.py",
-        "sha256": "3b2ba16f2152cf89eabad839bd691618bae43047844a6d473ea4a5952747b21f"
+        "sha256": "0083ef3bee22ded8cf6aae3155451f8a992ae129d0d31a682e4e5c3e627ddb06"
       },
       {
         "path": "rs_check.py",
@@ -63,7 +178,7 @@
       },
       {
         "path": "rs_olympiad.py",
-        "sha256": "d4bcb4904655e8bfcf4d22519a99ed5e530daa2a95295e1c54d150cde76902b1"
+        "sha256": "4cbc34a772121fb8f172c3fac4c1a22c898873fd5c8fee538b77a9fccfe4b3e2"
       },
       {
         "path": "rs_pair.py",
@@ -75,7 +190,7 @@
       },
       {
         "path": "rs_report.py",
-        "sha256": "37ca787fd8a6fd7da285e4150ec5e09f05fbc76b4b2bb36bcfc3603f12b84202"
+        "sha256": "c8fac4b86e4afc7f783eab8a6f60b697079903a178501df47e8895e053e584e9"
       },
       {
         "path": "rs_samples.py",
@@ -99,7 +214,7 @@
       },
       {
         "path": "rs_track.py",
-        "sha256": "66d2bc99b4ffe387753abf8ee3cb30cf36bb1a81f3652e7880cb041629ba0e4e"
+        "sha256": "acc63f2184977e5de5b9de0d851d55face97c1a86b091fd202c684b0520d9d15"
       },
       {
         "path": "rs_transcript.py",
@@ -114,7 +229,7 @@
         "sha256": "f6e2d47d7c40acd58b43b1251f1855b18f80a687d96fcce19269f5bb8438d845"
       }
     ],
-    "manifestSha256": "46cd93c9f4c20cd2426e2fe6f220557c1493a5a975ca7610f184b902156439b6",
-    "version": "0.2.0"
+    "manifestSha256": "df118665ee6894f7d22e0b292e0fec99d2b3eb930c06e933b93f06d38c833d68",
+    "version": "0.2.4"
   }
 }

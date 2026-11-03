@@ -141,6 +141,62 @@ class ChoiceTests(unittest.TestCase):
         self.assertEqual(sorted(os.listdir("/proc/self/fd")), before, "the pidfd taken for the check is closed again")
 
 
+class DescendantTests(unittest.TestCase):
+    """A child cgroup of the program's cgroup (a hidden `prog/hide`) is read too: the leftover evidence is `cgroup.procs` of every descendant, as defence in depth (fix batch 1, O1)."""
+
+    def test_A_process_in_a_child_cgroup_of_prog_is_a_leftover_and_is_read_recursively(self):
+        family, launcher = Family(self, 1), launcher_of(self)
+        child = family.children()[0]
+        hidden = os.path.join(family.dir, "hide", "deeper")
+        os.makedirs(hidden)
+        for folder, pids in ((os.path.join(family.dir, "hide"), ""), (hidden, f"{child}\n")):  # every cgroup has its own cgroup.procs
+            with open(os.path.join(folder, "cgroup.procs"), "w") as f:
+                f.write(pids)
+        family.list()
+        tracker = family.tracker(launcher)
+        self.assertEqual(tracker.leftover(), [child], "listed only by a descendant's cgroup.procs: still found")
+
+    def test_Procs_of_the_cgroup_itself_and_of_every_descendant_are_joined(self):
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        sub = os.path.join(folder, "a", "b")
+        os.makedirs(sub)
+        with open(os.path.join(folder, "a", "cgroup.procs"), "w") as f:
+            f.write("3\n")
+        with open(os.path.join(sub, "cgroup.procs"), "w") as f:
+            f.write("4\n")
+        self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2, 3, 4])
+        self.assertIsNone(cg.procs_tree(os.path.join(folder, "missing")), "a cgroup that cannot be read is unreadable, never empty")
+
+    def test_A_cgroup_that_vanishes_between_the_read_of_its_procs_and_the_listing_of_its_children_is_what_was_read_and_never_a_crash(self):
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        with mock.patch.object(cg.os, "listdir", side_effect=FileNotFoundError(2, "vanished", folder)):
+            self.assertEqual(cg.procs_tree(folder), [1, 2], "the descendants of a vanished cgroup are none; its own pids were read")
+
+    def test_A_cgroup_that_cannot_be_listed_is_unreadable_and_never_empty_but_a_dying_one_is_empty(self):
+        import errno
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        for error in (PermissionError(errno.EACCES, "denied"), OSError(errno.EIO, "io")):
+            with mock.patch.object(cg.os, "listdir", side_effect=error):
+                self.assertIsNone(cg.procs_tree(folder), f"{type(error).__name__}: unreadable is never taken for an empty cgroup")
+        with mock.patch.object(cg.os, "listdir", side_effect=OSError(errno.ENODEV, "gone")):
+            self.assertEqual(cg.procs_tree(folder), [1, 2], "a dying cgroup (ENODEV) has no descendants")
+
+    def test_An_unreadable_child_cgroup_makes_the_whole_tree_unreadable_and_a_vanished_child_stays_empty(self):
+        folder = Folder(self, {"cgroup.procs": "1\n2\n"}).dir
+        sub = os.path.join(folder, "a")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "cgroup.procs"), "w") as f:
+            f.write("3\n")
+        self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2, 3])
+        real = cg._text
+        unreadable = lambda path: None if path == os.path.join(sub, "cgroup.procs") else real(path)  # noqa: E731
+        with mock.patch.object(cg, "_text", unreadable):
+            self.assertIsNone(cg.procs_tree(folder), "a child whose cgroup.procs is there but cannot be read: the tree is unreadable, never taken for empty")
+        os.remove(os.path.join(sub, "cgroup.procs"))
+        os.rmdir(sub)
+        self.assertEqual(sorted(cg.procs_tree(folder)), [1, 2], "a child that vanished is empty")
+
+
 class OrphanTests(unittest.TestCase):
     """A real-scope flake: the program (bash) was gone before the first look and its orphan `sleep`, now a child of bwrap's init, was adopted as
     the program, so the leftover read excluded the very leftover it was there to find."""

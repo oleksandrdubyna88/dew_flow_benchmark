@@ -1,0 +1,9 @@
+{
+  "policy": "cgroup-view-own+gchl-90+node-old-space-90",
+  "decided": "2026-11-02",
+  "by": "team lead (Opus), D55 (the epoch-6 re-review; ask_consultants bf619f55, 2 of 2 for A)",
+  "evidence": [
+    "inputs/exec-probe-2026-11-02.json",
+    "inputs/opk-experiment-2026-11-02.json"
+  ]
+}

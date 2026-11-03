@@ -1,0 +1,284 @@
+{
+  "date": "2026-11-02",
+  "probedOn": "2026-11-02T14:24:38.425Z",
+  "host": {
+    "hostname": "jinx",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "cgroup2": true,
+    "systemd": "systemd 259 (259.5-0ubuntu3.4)",
+    "bwrap": "bubblewrap 0.11.1",
+    "node": "v26.12.1"
+  },
+  "layerIdentity": "2697325850ae7ce8c3c0488a1e6db7a1bd02502e907b2e378ef3b07e6d9779f9",
+  "lines": [
+    {
+      "id": "netns",
+      "ok": true,
+      "ns": {
+        "host": "net:[4026531833]",
+        "driver": "net:[4026532290]",
+        "program": "net:[4026532290]"
+      }
+    },
+    {
+      "id": "program-in-prog",
+      "ok": true,
+      "cgroups": {
+        "program": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-OWurVJ-net.scope/prog",
+        "driver": "0::/non-systemd"
+      }
+    },
+    {
+      "id": "ping-over-loopback",
+      "ok": true,
+      "port": 60095
+    },
+    {
+      "id": "bind-list",
+      "ok": true,
+      "binds": [
+        {
+          "mode": "--ro-bind",
+          "source": "/usr"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/passwd"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/group"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/nsswitch.conf"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/etc/localtime"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/dotnet-sdk-10.0.403"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/node-v26.13.0-linux-x64"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/home/jinx/rsd/lang-v2/toolchains/typescript-6.0.3"
+        },
+        {
+          "mode": "--ro-bind",
+          "source": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/testsToDelete-u1000-bench-lsc-OWurVJ-{case}.scope/prog"
+        }
+      ],
+      "problems": []
+    },
+    {
+      "id": "home-sentinel",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "mnt-c",
+      "ok": true,
+      "seen": "absent"
+    },
+    {
+      "id": "cmd-exe",
+      "ok": true,
+      "exit": "127"
+    },
+    {
+      "id": "user-bus",
+      "ok": true,
+      "exit": "1"
+    },
+    {
+      "id": "bash-c-true-stderr",
+      "ok": true,
+      "bytes": "0"
+    },
+    {
+      "id": "culture-env",
+      "ok": true,
+      "LANG": "de_DE.UTF-8",
+      "LC_ALL": "de_DE.UTF-8"
+    },
+    {
+      "id": "locale-a",
+      "ok": true
+    },
+    {
+      "id": "invariant-switch",
+      "ok": true,
+      "seen": "none"
+    },
+    {
+      "id": "cgroup-view-own",
+      "ok": true,
+      "self": "0::/",
+      "dirs": "",
+      "sys": "fs"
+    },
+    {
+      "id": "env-keys",
+      "ok": true,
+      "envKeys": [
+        "DOTNET_CLI_HOME",
+        "DOTNET_CLI_TELEMETRY_OPTOUT",
+        "DOTNET_NOLOGO",
+        "DOTNET_ROOT",
+        "DOTNET_gcServer",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "PATH",
+        "TMPDIR",
+        "TZ"
+      ]
+    },
+    {
+      "id": "empty-program-launch",
+      "ok": true,
+      "launchMs": 42,
+      "emptyProgramMs": 11,
+      "memoryCertified": true
+    },
+    {
+      "id": "delegated-scope",
+      "ok": true,
+      "memoryMax": 268435456,
+      "swapMax": 0,
+      "peakBytes": 46227456,
+      "workloadExit": 0
+    },
+    {
+      "id": "dotnet-culture",
+      "ok": true,
+      "seen": "de-DE"
+    },
+    {
+      "id": "node-culture",
+      "ok": true,
+      "seen": "de-DE"
+    }
+  ],
+  "memoryView": {
+    "policy": {
+      "policy": "cgroup-view-own+gchl-limit",
+      "decided": "2026-11-02",
+      "by": "team lead (Opus), D15 OP-K",
+      "evidence": [
+        "inputs/exec-probe-2026-11-02.json",
+        "inputs/opk-experiment-2026-11-02.json"
+      ]
+    },
+    "observations": {
+      "limits": [
+        {
+          "memoryMaxBytes": 268435456,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 208388096,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "runtimeAbort": null,
+              "peakBytes": 268435456,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 268435456,
+            "heapHardLimit": "",
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          },
+          "hostMemoryMax": 268435456,
+          "node": {
+            "constrainedBytes": 268435456,
+            "heapSizeLimitBytes": 274726912,
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          }
+        },
+        {
+          "memoryMaxBytes": 536870912,
+          "churn": {
+            "csharp": "PASS",
+            "node": "PASS"
+          },
+          "overLimit": {
+            "csharp": {
+              "reason": "memory limit",
+              "oomKill": 0,
+              "runtimeAbort": "dotnet",
+              "peakBytes": 476979200,
+              "eventsKept": true
+            },
+            "node": {
+              "reason": "memory limit",
+              "oomKill": 1,
+              "runtimeAbort": null,
+              "peakBytes": 536870912,
+              "eventsKept": true
+            }
+          },
+          "csharp": {
+            "totalAvailableBytes": 536870912,
+            "heapHardLimit": "",
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          },
+          "hostMemoryMax": 536870912,
+          "node": {
+            "constrainedBytes": 536870912,
+            "heapSizeLimitBytes": 281018368,
+            "cgroupVisible": true,
+            "cgroupSelf": "0::/",
+            "cgroupChildren": 0
+          }
+        }
+      ]
+    },
+    "verdict": {
+      "ok": true,
+      "halt": null,
+      "problems": []
+    },
+    "v8Heap": [
+      {
+        "memoryMaxBytes": 268435456,
+        "v8HeapSizeLimitBytes": 274726912,
+        "ratio": 1.023,
+        "asserted": false
+      },
+      {
+        "memoryMaxBytes": 536870912,
+        "v8HeapSizeLimitBytes": 281018368,
+        "ratio": 0.523,
+        "asserted": false
+      }
+    ]
+  },
+  "exit": {
+    "code": 0,
+    "halt": null
+  }
+}

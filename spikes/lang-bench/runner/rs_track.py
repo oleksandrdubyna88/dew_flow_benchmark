@@ -45,7 +45,7 @@ class Tracker:
         self.seen, self.orphan, self.saw_launcher = False, False, False
 
     def _listed(self):
-        return cg.procs(self.directory) if self.directory else None
+        return cg.procs_tree(self.directory) if self.directory else None
 
     def attach(self, reader):
         """The status reader of the case: once bwrap has written `exit-code` the program is gone and nothing is taken for it any more."""

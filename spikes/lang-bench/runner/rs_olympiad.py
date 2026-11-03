@@ -8,6 +8,7 @@ import signal
 import sys
 from typing import NamedTuple, Optional
 
+import rs_abort
 import rs_exec as ex
 import rs_launch as rl
 import rs_pump
@@ -144,9 +145,12 @@ def _over_time(case, config, out, comparer):
 
 
 def _out_of_memory(case, config, out, comparer):
-    """The kernel killed a process of the program's cgroup for memory: a failure whatever the exit status (a parent that exits 0 over an
-    OOM-killed child is never a pass)."""
-    return ("memory limit", None, [f"  memory.events: oom_kill {out.memory['oomKill']}"]) if out.memory.get("oomKill") else None
+    """The kernel killed a process of the program's cgroup for memory, or the program's runtime aborted on its own out of memory (rs_abort): a failure
+    whatever the exit status (a parent that exits 0 over an OOM-killed child is never a pass)."""
+    if out.memory.get("oomKill"):
+        return "memory limit", None, [f"  memory.events: oom_kill {out.memory['oomKill']}"]
+    abort = out.memory.get("runtimeAbort")
+    return ("memory limit", None, [f"  the {abort} runtime's own out-of-memory abort (exit status 134)"]) if abort else None
 
 
 def _mismatched(case, config, out, comparer):
@@ -193,10 +197,13 @@ def run_case(case, config):
     stderr_path = os.path.join(config.scratch, f"{case.id}.stderr")
     comparer = Comparer(case.expected, config.capture_cap)
     out = _execute(case, config, comparer, stderr_path)
+    facts = rs_abort.abort_facts(out.returncode, stderr_path, out.memory)
+    out = out._replace(memory=rp.memory_record({**out.memory, **facts}))
     capture = rp.capture_record(comparer.truncated, len(comparer.kept), comparer.total)
     record = rp.plain_lifecycle(out.leftover, _stderr_record(stderr_path), out.memory, capture, out.road, out.launched.tracker)
     failed = _judge(case, config, out, comparer)
-    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
+    tail = rp.capture_lines(capture) + (rp.memory_line(out.memory),) + rp.abort_lines(out.memory)
+    tail += rp.leftover_lines(out.leftover) + rp.fork_lines(record["fork"])
     verdict = ("PASS", "", 1, None, []) if failed is None else ("FAIL", failed[0], 0, failed[1], failed[2])
     lines = tuple(verdict[4]) + tail
     return CaseResult(case.id, verdict[0], verdict[1], verdict[2], case.r_ids, lines, verdict[3], record, _wall_ms(out), case.comparison,
