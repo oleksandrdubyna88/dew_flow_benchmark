@@ -77,6 +77,14 @@ async function dropRun(run) {
   return existsSync(run.dir) ? { removed: [], left: [entry('run', path.basename(run.dir), { reason: 'the run folder could not be removed; it stays claimed for the next sweep' })] } : { removed: [entry('run', path.basename(run.dir))], left: [] };
 }
 
+/**
+ * M2: when an earlier step left something (a unit that would not end, a holder, a view), the run folder and its claim STAY: the next start's sweep finds a run only through its folder, so removing it would
+ * make "the next start's sweep retires them" false. The folder is reported as kept.
+ */
+function keepRun(run) {
+  return { removed: [], left: [entry('run', path.basename(run.dir), { reason: 'kept: something of this run is still there; the folder and its claim stay for the next start\'s sweep' })] };
+}
+
 const liveRuns = new Set();
 const LATE_PASSES = 3;
 const LATE_PASS_GAP_MS = 300;
@@ -127,21 +135,21 @@ export async function cleanupLiveRuns(options) {
 
 /**
  * End everything of `run` (`{ owned, dir, id, unitPrefix, holderName, scope }`): `{ evidence, removed, left, clean }`. `clean` is true when nothing is left. Idempotent: a second call finds nothing.
- * `evidence` is, per scope unit, what `prog/` said live before the kill.
+ * `evidence` is, per scope unit, what `prog/` said live before the kill. `scopes` (a seam) replaces the scope step. When any step leaves something the run folder and its claim are KEPT (M2).
  */
-export async function cleanup(run, { graceMs = 2000 } = {}) {
+export async function cleanup(run, { graceMs = 2000, scopes = endScopes } = {}) {
   liveRuns.delete(run);
   const evidence = {};
   const steps = [
     ['driver', () => endMatching('driver', isDriverOf(run.dir), graceMs, endProcessGroup)],
-    ['scope', () => endScopes(run, evidence)],
+    ['scope', () => scopes(run, evidence)],
     ['holder', () => endMatching('holder', argv => argv[0] === run.holderName, graceMs)],
-    ['scope', () => endScopes(run, {})], // the final confirmation: listed AGAIN after the holder step, so a scope registered while the driver was being ended is ended too
+    ['scope', () => scopes(run, {})], // the final confirmation: listed AGAIN after the holder step, so a scope registered while the driver was being ended is ended too
     ['view', async () => dropViews(run)],
     ['run', () => dropRun(run)],
   ];
   const parts = [];
-  for (const [kind, step] of steps) parts.push(await guarded(kind, step));
+  for (const [kind, step] of steps) parts.push(kind === 'run' && parts.some(part => part.left.length > 0) ? keepRun(run) : await guarded(kind, step));
   const left = parts.flatMap(part => part.left);
   return { evidence, removed: parts.flatMap(part => part.removed), left, clean: left.length === 0 };
 }

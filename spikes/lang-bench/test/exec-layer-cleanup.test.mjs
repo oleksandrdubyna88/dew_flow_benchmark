@@ -227,3 +227,35 @@ test('Once_stopping_is_set_no_run_is_opened_and_no_scope_prefix_is_built', async
   assert.equal(results.after, true);
   assert.deepEqual([results.prefix, results.register], ['refused', 'refused'], ran.stderr);
 });
+
+// M2 (fix batch 5): a cleanup that leaves something keeps the run folder and its claim, so the next start's sweep — which finds a run only through its folder — can still retire what is left.
+test('A_cleanup_that_leaves_a_unit_keeps_the_run_folder_and_its_claim_and_a_later_sweep_retires_them', async t => {
+  if (!needs(t)) return;
+  const { spawnSync } = await import('node:child_process');
+  const options = layerOptions(t);
+  const { owned: _owned, ...plain } = options;
+  const script = `
+    import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
+    import { cleanup } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
+    import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
+    const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
+    if (!opened.ok) { console.log(JSON.stringify({ problem: opened.reason })); process.exit(1); }
+    const run = opened.value;
+    const stub = async () => ({ removed: [], left: [{ kind: 'scope', name: 'testsToDelete-stub-scope', reason: 'stub: it will not end' }] });
+    const report = await cleanup(run, { scopes: stub });
+    console.log(JSON.stringify({ dir: run.dir, clean: report.clean, left: report.left.map(item => item.kind + ':' + item.name) }));
+    process.kill(process.pid, 'SIGKILL'); // the run's process is gone: its claim now says so
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000 });
+  const info = JSON.parse(ran.stdout.trim().split('\n').pop());
+  assert.equal(info.problem, undefined, info.problem);
+  assert.equal(info.clean, false);
+  assert.ok(info.left.some(entry => entry.startsWith('scope:')), 'the unit is named');
+  assert.ok(info.left.some(entry => entry.startsWith('run:')), 'and the run folder is reported as kept');
+  assert.ok(existsSync(info.dir), 'the run folder stays');
+  assert.ok(existsSync(`${info.dir}.owner`), 'and its claim');
+  const swept = await sweepStale({ owned, parent: options.parent, minAgeMs: 0 });
+  assert.ok(swept.retired.length >= 1, JSON.stringify(swept));
+  assert.equal(existsSync(info.dir), false, 'the next start\'s sweep retires the run folder');
+  assert.equal(existsSync(`${info.dir}.owner`), false, 'and its claim');
+});
