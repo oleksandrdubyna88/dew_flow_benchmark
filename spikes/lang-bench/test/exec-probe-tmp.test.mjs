@@ -16,6 +16,8 @@ import { owned } from './support/owned.mjs';
 const REAL_INPUTS = fileURLToPath(new URL('../inputs', import.meta.url));
 const record = () => ({ probedOn: '2026-11-03T00:00:00.000Z', host: { hostname: 'h' }, lines: [{ id: 'a', ok: true }], exit: { code: 0, halt: null } });
 
+const escaped = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function setup(t) {
   const root = owned.ownedDir(t, 'tmpf');
   const inputsDir = path.join(root, 'inputs');
@@ -129,7 +131,7 @@ test('The_startup_sweep_skips_a_tmp_folder_that_is_a_symlink_or_not_owned_and_a_
   const inside = retireStartupStrays({ dirs: [own], probe: dead });
   assert.equal(fs.existsSync(victim), true, 'the target of a link inside the folder survives');
   assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link itself is skipped, not removed');
-  assert.match(inside.errors.join('\n'), /not a regular file/);
+  assert.match(inside.errors.join('\n'), new RegExp(`${escaped(link)} is not a regular file: skipped`), 'P5: the message reads `<file> is not a regular file: skipped`, no colon after the path');
 });
 
 // P4 (coai 0): the pins' temporaries go through ONE helper that always uses `inputs/.exec-probe-tmp/`.

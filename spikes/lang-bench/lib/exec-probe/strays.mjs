@@ -16,7 +16,7 @@ const isDead = (owner, probe) => {
 function removeOne(folder, name, io) {
   const file = path.join(folder, name);
   try {
-    if (!io.lstatSync(file).isFile()) return { removed: [], errors: [`${file}: is not a regular file: skipped`] };
+    if (!io.lstatSync(file).isFile()) return { removed: [], errors: [`${file} is not a regular file: skipped`] };
     io.rmSync(file, { force: true });
     return { removed: [file], errors: [] };
   } catch (error) {
