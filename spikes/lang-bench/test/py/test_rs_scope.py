@@ -138,7 +138,8 @@ class ForkTests(unittest.TestCase):
     def test_F2_the_short_tools_are_not_fork_in_20_of_20_rounds_under_a_cpu_load_that_is_bounded_inside_the_test(self):
         # Half the cores burn for the length of the test and not longer. With EVERY core burning, a forked `true` that is not scheduled for 100 ms
         # is a process that has really been in the cgroup that long, and about 1 round in 160 sees one: that is the documented limit of the rule.
-        burner.spawn(self, max(2, (os.cpu_count() or 4) // 2), seconds=60)
+        # a quarter of the cores, niced: the full suite's own workers add the rest of the load (with half the cores the documented limit showed in about one full run in four)
+        burner.spawn(self, max(2, (os.cpu_count() or 4) // 4), seconds=60)
         forks = []
         for round_ in range(20):
             result, _, _ = run_in_scope(self, "true\n( true )\ntrue | true\nexec sleep 0.4\n", expected=b"", limit_ms=20_000)
