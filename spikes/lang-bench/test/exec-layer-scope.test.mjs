@@ -3,7 +3,7 @@
 // execs the launch chain. `prog/` outlasts the program while the scope holder lives, so `memory.peak`, `memory.events` and `cgroup.procs` are read after a 10 ms exit.
 // The wrong mechanisms (a plain scope, a driver inside the scope, no `OOMPolicy=continue`) are built here from the right prefix with `tweak`, so each defect has a shape.
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { commOf, chain, MIB, needs, pidsIn, programPid, sh, start, text, waitFor, withoutView } from './support/exec-chain.mjs';
@@ -154,4 +154,28 @@ test('The_scope_entry_fails_when_the_run_folder_is_gone_and_never_creates_it_aga
   assert.notEqual(late.status, 0, 'the run folder is gone: the entry fails');
   assert.match(late.stderr, /run folder/, 'and says why');
   assert.equal(existsSync(runDir), false, 'and the run folder is NOT made again: no unclaimed folder is left for a sweep that cannot remove it');
+});
+
+// L7: two scopes of one run start together and both make `<run>/out` and their own case folder: neither fails on the other's mkdir.
+test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
+  if (!needs(t)) return;
+  const { spawn } = await import('node:child_process');
+  const { owned } = await import('./support/owned.mjs');
+  const runDir = owned.ownedDir(t, 'l7');
+  let count = 0;
+  const enter = out => new Promise(resolve => {
+    const prefix = scopePrefix({ unit: `${path.basename(runDir)}-r${count += 1}`, outDir: out, memoryMaxBytes: 256 * MIB, holdSeconds: 2 });
+    const child = spawn(prefix[0], [...prefix.slice(1), 'true'], { env: userEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('close', code => resolve({ code, stderr }));
+  });
+  const failures = [];
+  for (let round = 0; round < 25; round += 1) {
+    const base = path.join(runDir, `round${round}`);
+    mkdirSync(base);
+    const results = await Promise.all(Array.from({ length: 4 }, (_, n) => enter(path.join(base, 'out', `c${n}`)))); // `out/` does not exist yet: all four race to make it
+    failures.push(...results.filter(result => result.code !== 0).map(result => `round ${round}: exit ${result.code} ${result.stderr.trim().slice(0, 80)}`));
+  }
+  assert.deepEqual(failures, [], 'no entry fails because another made out/ first');
 });

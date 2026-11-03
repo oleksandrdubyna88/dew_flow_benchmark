@@ -13,7 +13,7 @@ if [ ! -d "$out" ]; then # an <out> the caller already made is used as it is
   cases=${out%/*}
   run=${cases%/*}
   [ -d "$run" ] || { echo "scope-entry: the run folder $run is gone: not starting" >&2; exit 1; }
-  [ -d "$cases" ] || mkdir "$cases"
+  mkdir "$cases" 2>/dev/null || [ -d "$cases" ] # two scopes of one run start together: the one that loses the race finds the folder the other made (a gone run folder still fails: the folder is not there)
   mkdir "$out"
 fi
 mkdir "$cg/holder" "$cg/prog"
