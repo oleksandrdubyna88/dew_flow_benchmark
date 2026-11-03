@@ -1,6 +1,6 @@
 // The passing probe's stamp — `probedOn` and `host` in `inputs/specs.d/exec-layer.json` and the re-assembled `inputs/specs.json` — in steps that each say exactly what they changed (S1, fix batch 6). Nothing here
 // mutates a value it is given: every step returns a new description.
-//   lock      `inputs/.stamp.lock` holds the pid of the probe that is stamping (created with `wx`): two passing probes cannot interleave their stamps; a lock whose pid is dead is stale and is retired with its stray files;
+//   lock      `inputs/.stamp.lock` holds the pid of the probe that is stamping (created with `wx`): two passing probes cannot interleave their stamps; a lock whose holder is gone is stale and is NEVER removed by a probe: the refusal says the manual step (D1);
 //   prepare   the new contents are made in temporary files BESIDE their targets (a rename across file systems fails); the assembly is staged from ONLY the files `assemble` reads, never a copy of `inputs/`;
 //   commit    the two renames; if the second fails the first pin is put back; the outcome names which pins are stamped;
 //   restore   both pins put back from the contents saved at prepare time (when the record could not be written).

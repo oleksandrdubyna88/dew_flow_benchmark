@@ -11,7 +11,7 @@ import { LOCK_NAME } from './stamp-lock.mjs';
 import { acquireLock, commitStamp, discardStamp, LAYER_PIN, prepareStamp, restorePins, SPECS_PIN } from './stamp.mjs';
 
 const exit2 = (record, stampError) => ({ ...record, exit: { code: 2, halt: 'probed-on-stamp-failed', stampError } });
-/** `<pin> probedOn=<value>` for the layer pin as it is found (what a retired probe may have stamped), or the reason it cannot be read. */
+/** `<pin> probedOn=<value>` for the layer pin as it is found (what a killed probe may have stamped), or the reason it cannot be read. */
 function pinsProbedOn(inputsDir, io) {
   try {
     return `${LAYER_PIN} probedOn=${JSON.parse(io.readFileSync(path.join(inputsDir, LAYER_PIN), 'utf8')).execLayer.probedOn ?? 'none'}`;
@@ -22,13 +22,10 @@ function pinsProbedOn(inputsDir, io) {
 
 const unstampedNote = stamped => (stamped.length > 0 ? `; ${stamped.join(' and ')} IS stamped and the put-back failed` : '');
 
-/** What to tell on stderr about a stale lock that was retired: always the retire; the MAY warning, with what to do, only when its holder had reached the commit (L2); `probedOn` is read only then (coai 5). */
-function retiredLines(got, inputsDir, io) {
-  if (got.retired === null) return [];
-  const warning = got.retiredCommitting
-    ? `; the pins MAY be stamped without a record (a SIGKILL between the commit and the record's rename): ${pinsProbedOn(inputsDir, io)}; check \`git diff -- spikes/lang-bench/inputs/specs.json spikes/lang-bench/inputs/specs.d/exec-layer.json\`; if the pins name a probe with no record, run the probe again (it re-stamps them) or restore them with \`git checkout -- <pins>\``
-    : '';
-  return [`exec-probe: ${got.retired}${warning}`];
+/** The MAY warning, with what to do, for a refusal by a stale lock whose holder had reached the commit (its lock says `committing`, L2): the pins MAY be stamped without a record. `probedOn` is read only then (coai 5). */
+function staleLines(got, inputsDir, io) {
+  if (got.stale !== true || got.committing !== true) return [];
+  return [`exec-probe: the pins MAY be stamped without a record (a SIGKILL between the commit and the record's rename): ${pinsProbedOn(inputsDir, io)}; check \`git diff -- spikes/lang-bench/inputs/specs.json spikes/lang-bench/inputs/specs.d/exec-layer.json\`; if the pins name a probe with no record, run the probe again (it re-stamps them) or restore them with \`git checkout -- <pins>\``];
 }
 
 /** Before the commit (L1): the lock must still be THIS probe's (else it was lost to another probe: nothing is committed), and it is marked `committing`. `null` when it may go on, else the reason (the prepared stamp is discarded). */
@@ -57,8 +54,8 @@ function stampSteps({ record, stage, io }) {
     const reason = `the stamp lock ${lock} could not be used (${error.code ?? ''} ${error.message})`.replace('( ', '(');
     return { record: exit2(record, reason), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${reason}`] };
   }
-  if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${got.error}`] };
-  const messages = retiredLines(got, stage.inputsDir, io);
+  if (!got.ok) return { record: exit2(record, got.error), prepared: null, committed: false, stillStamped: [], lock: null, messages: [`exec-probe: ${got.error}`, ...staleLines(got, stage.inputsDir, io)] };
+  const messages = [];
   let prepared;
   try {
     prepared = prepareStamp({ ...stage, record, io });

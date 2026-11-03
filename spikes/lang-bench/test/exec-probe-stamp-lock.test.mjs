@@ -1,20 +1,26 @@
-// K1 (fix batch 7): the stamp lock made sound for two probes. The lock holds `<pid> <start time>` and is created by `link()` from a complete temporary file, so no reader ever sees it empty; a holder is live only
-// when its pid exists AND its start time is the one in the lock; a lock that cannot be parsed refuses; a stale lock is retired atomically (rename, read, compare, then take); release removes only the holder's own;
-// every lock error is a record that says exit 2.
+// K1 (fix batch 7), D1 (fix batch 9): the stamp lock for two probes. The lock holds `<pid> <start time>` and is created by `link()` from a complete temporary file, so no reader ever sees it empty; a holder is live only
+// when its pid exists AND its start time is the one in the lock; a stale lock and a lock that cannot be parsed are NEVER removed or moved by a probe: the probe refuses with the exact manual step; only the holder
+// changes its own lock (`committing`, release); every lock error is a record that says exit 2. Rewritten for D1 (old -> new):
+//   Two_probes_retiring_one_stale_lock_leave_exactly_one_holder_and_the_other_refuses -> Two_probes_meeting_one_stale_lock_both_refuse_and_the_lock_is_byte_equal
+//   Two_real_probes_racing_one_stale_lock_over_many_rounds_never_both_hold_it -> Two_real_probes_racing_one_stale_lock_over_many_rounds_both_refuse_and_the_lock_stays
+//   A_failed_link_back_in_the_retire_keeps_the_moved_file_refuses_and_names_the_file -> A_stale_lock_is_never_renamed_removed_or_linked_by_a_probe_whatever_the_io_allows
+//   A_holder_marks_the_lock_committing_atomically_before_its_commit_and_a_retire_reports_it -> A_holder_marks_the_lock_committing_atomically_before_its_commit_and_a_refusal_by_a_stale_committing_lock_says_so
+//   Three_probes_interleaving_leave_at_most_one_probe_that_may_stamp -> exec-probe-stamp-many.test.mjs: N_probes_started_together_against_one_stale_lock_none_stamps_every_record_says_2_and_the_lock_is_unchanged
+// (A_pid_that_exists_with_another_start_time... and A_lock_that_cannot_be_parsed... keep their names, their assertions are the refusal.)
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { acquireLock } from '../lib/exec-probe/stamp.mjs';
+import { parse } from '../lib/exec-probe/stamp-lock.mjs';
 import { owned } from './support/owned.mjs';
 
 const live = start => () => ({ state: 'live', start });
 const dead = () => ({ state: 'dead' });
 const folder = t => { const dir = owned.ownedDir(t, 'lock'); fs.mkdirSync(path.join(dir, 'specs.d')); return dir; };
 const lockOf = dir => path.join(dir, '.stamp.lock');
-const leftovers = dir => fs.readdirSync(dir).filter(name => name.startsWith('.stamp.lock.'));
+const leftovers = dir => fs.readdirSync(dir).filter(name => name.startsWith('.stamp.lock.') || name === '.exec-probe-tmp');
 
 test('A_lock_is_never_seen_empty_by_a_reader_racing_a_thousand_takes', async t => {
   const dir = folder(t);
@@ -40,9 +46,12 @@ test('A_pid_that_exists_with_another_start_time_is_pid_reuse_and_the_lock_is_sta
   const dir = folder(t);
   fs.writeFileSync(lockOf(dir), `${process.pid} 1`); // this very process is alive, but it did not start at second 1
   const got = acquireLock({ inputsDir: dir, probe: live(1_700_000_000), pid: process.pid + 1 });
-  assert.equal(got.ok, true, `the holder's pid was reused: ${JSON.stringify(got)}`);
-  assert.match(got.retired, /stale/);
-  got.release();
+  assert.equal(got.ok, false, 'a stale lock refuses: a probe never takes it over');
+  assert.equal(got.stale, true, `the holder's pid was reused, so the lock is stale: ${JSON.stringify(got)}`);
+  assert.equal(got.holder, process.pid);
+  assert.match(got.error, new RegExp(`a probe that was killed left the stamp lock ${lockOf(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(pid ${process.pid}, start time 1, now gone\\)\\. If no probe is running, remove it: rm ${lockOf(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), `${process.pid} 1`, 'and leaves the lock byte-equal');
+  assert.deepEqual(leftovers(dir), []);
 });
 
 test('A_live_holder_with_the_start_time_in_the_lock_refuses_and_names_its_pid_and_the_lock_path', t => {
@@ -62,26 +71,20 @@ test('A_lock_that_cannot_be_parsed_refuses_naming_its_path_and_is_never_retired'
     const got = acquireLock({ inputsDir: dir, probe: dead, pid: 7 });
     assert.equal(got.ok, false, JSON.stringify(content));
     assert.match(got.error, new RegExp(lockOf(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'it names the lock path');
-    assert.match(got.error, /remove it by hand if no probe runs/);
+    assert.match(got.error, new RegExp(`If no probe is running, remove it: rm ${lockOf(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), 'and the exact manual step');
     assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), content, 'the unparsable lock stays');
+    assert.deepEqual(leftovers(dir), []);
   }
 });
 
-test('Two_probes_retiring_one_stale_lock_leave_exactly_one_holder_and_the_other_refuses', t => {
+test('Two_probes_meeting_one_stale_lock_both_refuse_and_the_lock_is_byte_equal', t => {
   const dir = folder(t);
   fs.writeFileSync(lockOf(dir), '999999 1');
-  let second = null;
-  let hooked = false;
-  // probe B judges the lock stale, and before its rename probe A retires the same lock and takes it
-  const ioB = { ...fs, renameSync: (from, to) => { if (!hooked) { hooked = true; second = acquireLock({ inputsDir: dir, probe: p => (p === 999999 ? { state: 'dead' } : { state: 'live', start: 100 }), pid: 200 }); } return fs.renameSync(from, to); } };
   const probe = p => (p === 999999 ? { state: 'dead' } : { state: 'live', start: 100 });
-  const b = acquireLock({ inputsDir: dir, io: ioB, probe, pid: 300 });
-  assert.equal(second.ok, true, 'A holds the lock');
-  assert.equal(b.ok, false, 'B refuses: the lock it moved was A\'s new one, and it put it back');
-  assert.match(fs.readFileSync(lockOf(dir), 'utf8'), /^200 /, 'A\'s lock is back in place, byte for byte');
-  assert.deepEqual(leftovers(dir), [], 'no .retire or link file is left');
-  second.release();
-  assert.equal(fs.existsSync(lockOf(dir)), false);
+  const results = [200, 300].map(pid => acquireLock({ inputsDir: dir, probe, pid }));
+  assert.deepEqual(results.map(got => got.ok), [false, false], 'neither takes the stale lock');
+  assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '999999 1', 'it is byte-equal');
+  assert.deepEqual(leftovers(dir), [], 'no .retire or link file, no tmp folder is left');
 });
 
 test('A_release_removes_only_the_lock_that_is_still_its_own', t => {
@@ -89,7 +92,7 @@ test('A_release_removes_only_the_lock_that_is_still_its_own', t => {
   const mine = acquireLock({ inputsDir: dir, probe: live(100), pid: 11 });
   assert.equal(mine.ok, true);
   assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '11 100');
-  fs.writeFileSync(lockOf(dir), '22 200'); // another probe retired mine and took its own
+  fs.writeFileSync(lockOf(dir), '22 200'); // someone removed mine by hand and another probe took its own
   mine.release();
   assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '22 200', 'the other probe\'s lock is not removed');
 });
@@ -107,7 +110,7 @@ test('EACCES_or_ENOSPC_on_creating_the_lock_is_a_refusal_with_the_path_and_the_e
   }
 });
 
-test('Two_real_probes_racing_one_stale_lock_over_many_rounds_never_both_hold_it', async t => {
+test('Two_real_probes_racing_one_stale_lock_over_many_rounds_both_refuse_and_the_lock_stays', async t => {
   const lib = JSON.stringify(new URL('../lib/exec-probe/stamp.mjs', import.meta.url).href);
   for (let round = 0; round < 12; round += 1) {
     const dir = folder(t);
@@ -118,7 +121,8 @@ test('Two_real_probes_racing_one_stale_lock_over_many_rounds_never_both_hold_it'
       console.log(JSON.stringify({ ok: got.ok }));
       if (got.ok) await new Promise(resolve => setTimeout(resolve, 600));
     `], { stdio: ['ignore', 'pipe', 'ignore'] }); let out = ''; c.stdout.on('data', d => { out += d; }); c.on('close', () => resolve(JSON.parse(out.trim().split('\n').pop()))); })));
-    assert.equal(children.filter(child => child.ok).length, 1, `round ${round}: exactly one probe holds the lock after a race over one stale lock`);
+    assert.equal(children.filter(child => child.ok).length, 0, `round ${round}: no probe takes a stale lock`);
+    assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '999999 1', `round ${round}: the lock is byte-equal`);
   }
 });
 
@@ -138,18 +142,7 @@ test('Taking_a_lock_never_lists_inputs_and_never_touches_the_temporary_files_of_
   got.release();
 });
 
-// L1 (fix batch 8): three probes. A holder checks before its commit that the lock is still ITS content; a failed link-back in the retire keeps the moved file.
-test('Three_probes_interleaving_leave_at_most_one_probe_that_may_stamp', t => {
-  const dir = folder(t);
-  const probe = () => ({ state: 'live', start: 100 });
-  const a = acquireLock({ inputsDir: dir, probe, pid: 200 });
-  assert.equal(a.ok, true, 'A holds the lock');
-  fs.renameSync(lockOf(dir), `${lockOf(dir)}.retire-300`); // B (judging a stale lock it read BEFORE A took it) moves A's NEW lock away
-  const c = acquireLock({ inputsDir: dir, probe, pid: 400 }); // between B's rename and its link-back C finds the lock free and takes it
-  assert.equal(c.ok, true, 'C holds the lock');
-  assert.deepEqual([a.holdsMine(), c.holdsMine()], [false, true], 'A, asked before its commit, finds the lock is not its own; only C may stamp');
-});
-
+// L1 (fix batch 8): a holder checks before its commit that the lock is still ITS content.
 test('A_holder_whose_lock_was_replaced_by_another_probe_finds_it_is_not_its_own_before_the_commit', t => {
   const dir = folder(t);
   const probe = () => ({ state: 'live', start: 100 });
@@ -162,20 +155,19 @@ test('A_holder_whose_lock_was_replaced_by_another_probe_finds_it_is_not_its_own_
   assert.equal(a.holdsMine(), false, 'and that it is gone');
 });
 
-test('A_failed_link_back_in_the_retire_keeps_the_moved_file_refuses_and_names_the_file', t => {
+test('A_stale_lock_is_never_renamed_removed_or_linked_by_a_probe_whatever_the_io_allows', t => {
   const dir = folder(t);
-  fs.writeFileSync(lockOf(dir), '999999 1');
+  fs.writeFileSync(lockOf(dir), '999999 1\ncommitting');
   const probe = p => (p === 999999 ? { state: 'dead' } : { state: 'live', start: 100 });
-  let swapped = false;
-  const io = { ...fs,
-    renameSync: (from, to) => { if (!swapped && String(to).includes('.retire-')) { swapped = true; fs.writeFileSync(lockOf(dir), '200 100'); } return fs.renameSync(from, to); }, // the lock moved is another probe's NEW lock
-    linkSync: (from, to) => { if (String(from).includes('.retire-')) throw Object.assign(new Error('EEXIST: a third probe holds it now'), { code: 'EEXIST' }); return fs.linkSync(from, to); } };
+  const touched = [];
+  const watch = name => (from, ...rest) => { touched.push(`${name} ${path.basename(String(from))}`); return fs[`${name}Sync`](from, ...rest); };
+  const io = { ...fs, renameSync: watch('rename'), rmSync: (file, ...rest) => { touched.push(`rm ${path.basename(String(file))}`); return fs.rmSync(file, ...rest); }, linkSync: (from, to) => { touched.push(`link ${path.basename(String(to))}`); return fs.linkSync(from, to); } };
   const got = acquireLock({ inputsDir: dir, io, probe, pid: 300 });
   assert.equal(got.ok, false);
-  const moved = `${lockOf(dir)}.retire-300`;
-  assert.equal(fs.existsSync(moved), true, 'the moved file is KEPT, never removed');
-  assert.equal(fs.readFileSync(moved, 'utf8'), '200 100');
-  assert.match(got.error, /\.stamp\.lock\.retire-300/, 'the refusal names the file that was kept');
+  assert.deepEqual([got.stale, got.committing, got.holder], [true, true, 999999]);
+  assert.equal(touched.some(entry => /\.stamp\.lock$/.test(entry) && !entry.startsWith('link')), false, `the stale lock itself is never renamed or removed: ${touched.join(', ')}`);
+  assert.equal(touched.some(entry => entry.includes('.retire-')), false, 'no .retire- file');
+  assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '999999 1\ncommitting');
 });
 
 // L2: a `take()` whose cleanup of the temporary file throws after the link still holds the lock; the `committing` line.
@@ -190,25 +182,45 @@ test('A_take_whose_rm_of_the_temporary_file_throws_after_the_link_still_returns_
   assert.equal(fs.existsSync(lockOf(dir)), false, 'and it is released later');
 });
 
-test('A_holder_marks_the_lock_committing_atomically_before_its_commit_and_a_retire_reports_it', t => {
+test('A_holder_marks_the_lock_committing_atomically_before_its_commit_and_a_refusal_by_a_stale_committing_lock_says_so', t => {
   const dir = folder(t);
   const probe = p => (p === 31 ? { state: 'dead' } : { state: 'live', start: 100 });
   const first = acquireLock({ inputsDir: dir, probe: live(100), pid: 31 });
   assert.equal(first.ok, true);
   first.markCommitting();
   assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '31 100\ncommitting', 'the second line says the holder reached the commit');
-  assert.equal(first.holdsMine(), true, 'still its own');
+  assert.equal(first.holdsMine(), true, 'still its own, structurally: the flag does not change whose it is');
   const next = acquireLock({ inputsDir: dir, probe, pid: 32 });
-  assert.equal(next.ok, true);
-  assert.equal(next.retiredCommitting, true, 'the retired lock\'s holder had reached the commit');
-  next.release();
+  assert.equal(next.ok, false, 'the holder is gone: the lock is stale and refuses');
+  assert.deepEqual([next.stale, next.committing], [true, true], 'the refusal says that the dead holder had reached the commit');
+  assert.equal(fs.readFileSync(lockOf(dir), 'utf8'), '31 100\ncommitting', 'byte-equal');
+  fs.rmSync(lockOf(dir)); // by hand, the manual step
   const quiet = acquireLock({ inputsDir: dir, probe: live(100), pid: 41 });
   assert.equal(quiet.ok, true);
   const after = acquireLock({ inputsDir: dir, probe: p => (p === 41 ? { state: 'dead' } : { state: 'live', start: 100 }), pid: 42 });
-  assert.equal(after.retiredCommitting, false, 'a lock that never reached the commit is retired without that claim');
-  after.release();
+  assert.deepEqual([after.ok, after.stale, after.committing], [false, true, false], 'a lock that never reached the commit says so');
+  fs.rmSync(lockOf(dir));
   const gone = acquireLock({ inputsDir: dir, probe: live(100), pid: 51 });
   gone.markCommitting();
   gone.release();
   assert.equal(fs.existsSync(lockOf(dir)), false, 'a committing lock is released by its own holder');
+  assert.deepEqual(leftovers(dir), []);
+});
+
+test('The_lock_text_is_compared_through_parse_not_as_a_string', () => {
+  assert.deepEqual(parse('12 345'), { pid: 12, start: '345', committing: false });
+  assert.deepEqual(parse('12 345\ncommitting\n'), { pid: 12, start: '345', committing: true });
+  assert.deepEqual(parse('12 -'), { pid: 12, start: '-', committing: false });
+  assert.equal(parse('12 345 committing'), null);
+  assert.equal(parse('12 345\nCommitting'), null);
+});
+
+test('A_holder_whose_lock_text_has_a_trailing_newline_still_holds_it_and_releases_it', t => {
+  const dir = folder(t);
+  const mine = acquireLock({ inputsDir: dir, probe: live(100), pid: 61 });
+  assert.equal(mine.ok, true);
+  fs.writeFileSync(lockOf(dir), '61 100\n'); // the same holder and start time, written another way: structurally the same
+  assert.equal(mine.holdsMine(), true);
+  mine.release();
+  assert.equal(fs.existsSync(lockOf(dir)), false, 'released: the comparison is structural (coai 9)');
 });

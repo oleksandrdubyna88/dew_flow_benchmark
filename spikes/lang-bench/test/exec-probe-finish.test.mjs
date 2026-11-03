@@ -144,14 +144,20 @@ test('A_stop_after_the_record_is_written_only_closes_the_owned_folders_and_exits
   assert.equal(failedCode, 3, 'a record that says 3 is exit 3 after a stop too');
 });
 
-test('A_stale_stamp_lock_with_stray_files_is_retired_and_a_live_lock_refuses_the_stamp', async t => {
+// D1 (fix batch 9) — rewritten from A_stale_stamp_lock_with_stray_files_is_retired_and_a_live_lock_refuses_the_stamp: a probe never removes a stale lock; it refuses with the manual step. A live lock refuses as before.
+test('A_stale_stamp_lock_refuses_the_stamp_with_the_manual_step_and_leaves_the_lock_and_a_live_lock_refuses_too', async t => {
   const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout.trim();
   const stale = setup(t);
-  fs.writeFileSync(path.join(stale.inputsDir, '.stamp.lock'), `${dead} 1`);
-  assert.equal(stale.run(), 0);
-  assert.match(stale.said.join('\n'), new RegExp(`retired the stale stamp lock of pid ${dead} and 0 stray file\\(s\\)`)); // D2: the lock's retire no longer sweeps strays: the probe's start sweep does, by the tmp folders
-  assert.deepEqual(stale.strays(), [], 'the lock is gone');
-  assert.match(stale.pins().layer, /probedOn/, 'and the stamp went on');
+  const staleLock = path.join(stale.inputsDir, '.stamp.lock');
+  fs.writeFileSync(staleLock, `${dead} 1`);
+  const staleBefore = stale.pins();
+  assert.equal(stale.run(), 2);
+  const refused = JSON.parse(fs.readFileSync(stale.file, 'utf8'));
+  assert.deepEqual([refused.exit.code, refused.exit.halt], [2, 'probed-on-stamp-failed']);
+  assert.match(refused.exit.stampError, new RegExp(`a probe that was killed left the stamp lock .*\\.stamp\\.lock \\(pid ${dead}, start time 1, now gone\\)\\. If no probe is running, remove it: rm .*\\.stamp\\.lock`));
+  assert.match(stale.said.join('\n'), /If no probe is running, remove it: rm /, 'stderr says the manual step too');
+  assert.equal(fs.readFileSync(staleLock, 'utf8'), `${dead} 1`, 'the stale lock is byte-equal: a probe never removes it');
+  assert.deepEqual(stale.pins(), staleBefore, 'nothing was stamped');
   const live = setup(t);
   const before = live.pins();
   fs.writeFileSync(path.join(live.inputsDir, '.stamp.lock'), `${process.pid} ${ownStart()}`); // this test process is alive, with the start time the lock names
@@ -221,8 +227,8 @@ test('A_real_SIGTERM_after_the_record_is_written_exits_with_the_records_code_and
 // K1: every lock error is a record that says exit 2; the lock is released LAST; a release that throws keeps the record's code.
 test('A_lock_error_that_would_throw_is_a_record_that_says_exit_2_naming_the_lock_path_and_the_error', t => {
   const s = setup(t);
-  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // stale: the retire moves it aside, and that fails
-  const io = { ...fs, renameSync: (from, to) => { if (/\.retire-/.test(String(to))) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.renameSync(from, to); } };
+  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // held: the probe reads it to judge it, and that fails
+  const io = { ...fs, readFileSync: (file, ...rest) => { if (String(file).endsWith('.stamp.lock')) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.readFileSync(file, ...rest); } };
   let code;
   assert.doesNotThrow(() => { code = s.run({ io }); });
   assert.equal(code, 2);
@@ -279,32 +285,34 @@ test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restore
   assert.match(s.said.join('\n'), /the pins were not changed/, 'D5 (Opus LOW 2): the outcome text comes from the real state: the put-back worked, so no pin is stamped');
 });
 
-test('Retiring_a_stale_lock_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn', t => {
-  // L2: the warning is printed only when the retired lock's holder had reached the commit (its lock says `committing`)
+// D1 — rewritten from Retiring_a_stale_lock_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn and A_stale_lock_that_never_reached_the_commit_is_retired_without_the_may_be_stamped_claim_and_without_reading_the_pin_for_it:
+// the warning now goes with the REFUSAL by a stale lock whose second line says `committing`.
+test('A_stale_committing_lock_refuses_and_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn', t => {
   const s = setup(t);
   fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1\ncommitting');
   const layerPin = path.join(s.inputsDir, 'specs.d', 'exec-layer.json');
   const pin = JSON.parse(fs.readFileSync(layerPin, 'utf8'));
   fs.writeFileSync(layerPin, JSON.stringify({ execLayer: { ...pin.execLayer, probedOn: '2026-01-01T00:00:00.000Z' } }));
-  assert.equal(s.run(), 0);
+  assert.equal(s.run(), 2);
   const said = s.said.join('\n');
-  assert.match(said, /retired the stale stamp lock of pid 999999/);
+  assert.match(said, /a probe that was killed left the stamp lock .* \(pid 999999, start time 1, now gone\)\. If no probe is running, remove it: rm /);
   assert.match(said, /the pins MAY be stamped without a record \(a SIGKILL between the commit and the record's rename\)/);
   assert.match(said, /specs\.d\/exec-layer\.json probedOn=2026-01-01T00:00:00\.000Z/, 'it names the pin\'s probedOn as it was found');
   assert.match(said, /check `git diff -- spikes\/lang-bench\/inputs\/specs\.json spikes\/lang-bench\/inputs\/specs\.d\/exec-layer\.json`; if the pins name a probe with no record, run the probe again \(it re-stamps them\) or restore them with `git checkout -- <pins>`/, 'coai 7: it says what to do');
+  assert.equal(fs.readFileSync(path.join(s.inputsDir, '.stamp.lock'), 'utf8'), '999999 1\ncommitting', 'the lock is byte-equal');
 });
 
-test('A_stale_lock_that_never_reached_the_commit_is_retired_without_the_may_be_stamped_claim_and_without_reading_the_pin_for_it', t => {
+test('A_stale_lock_that_never_reached_the_commit_refuses_without_the_may_be_stamped_claim_and_without_reading_the_pin', t => {
   const s = setup(t);
   fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1');
   const layerPin = path.join(s.inputsDir, 'specs.d', 'exec-layer.json');
   let pinReads = 0;
   const io = { ...fs, readFileSync: (file, ...rest) => { if (String(file) === layerPin) pinReads += 1; return fs.readFileSync(file, ...rest); } };
-  assert.equal(s.run({ io }), 0);
+  assert.equal(s.run({ io }), 2);
   const said = s.said.join('\n');
-  assert.match(said, /retired the stale stamp lock of pid 999999/);
-  assert.doesNotMatch(said, /MAY be stamped/, 'the retired holder never reached the commit: the pins cannot be stamped by it');
-  assert.equal(pinReads, 1, 'coai 5: the pin is read once, by the prepare; probedOn is read only to print the MAY warning');
+  assert.match(said, /a probe that was killed left the stamp lock/);
+  assert.doesNotMatch(said, /MAY be stamped/, 'the dead holder never reached the commit: the pins cannot be stamped by it');
+  assert.equal(pinReads, 0, 'coai 5: probedOn is read only to print the MAY warning');
 });
 
 test('A_probe_whose_lock_was_taken_by_another_probe_before_its_commit_records_exit_2_and_commits_nothing', t => {
