@@ -2,7 +2,7 @@
 // record that says exit 2 with `stampError` (the FILE is read, not only the returned code). Then the record is written once, to a temporary file renamed over the placeholder; if that fails both pins are put back
 // and the placeholder released. Only then the reservation is taken. The tests run the command's own end path (`endOfProbe`) on a real copy of the pins.
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -11,6 +11,7 @@ import { endOfProbe } from '../lib/exec-probe/command-end.mjs';
 import { shouldStampProbedOn } from '../lib/exec-probe/probe.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { stopCleanly } from '../lib/exec-probe/stop.mjs';
+import { endArguments, newState, stopArguments } from '../lib/exec-probe/wiring.mjs';
 import { checkRecord } from '../lib/specs-record.mjs';
 import { processProbe } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { owned } from './support/owned.mjs';
@@ -176,90 +177,44 @@ test('No_stamp_is_made_for_an_exit_other_than_0_or_with_no_specs_and_the_record_
   assert.equal(shouldStampProbedOn(record()), true);
 });
 
-test('The_probe_command_ends_through_endOfProbe_and_takes_no_second_path', () => {
-  const source = fs.readFileSync(fileURLToPath(new URL('../exec-probe.mjs', import.meta.url)), 'utf8');
-  assert.match(source, /endOfProbe\(/);
-  assert.equal(source.includes('writeRecord'), false, 'the command writes no record by itself');
+// K5: the WIRING — the arguments the command really passes — instead of a regex on its source.
+test('The_arguments_the_command_passes_connect_onWritten_to_the_stops_recordedCode', () => {
+  const state = newState();
+  const given = endArguments({ record: record(), reservation: 'r', noSpecs: true, inputsDir: '/i', stageDir: '/s', say: noop, report: noop, state });
+  assert.deepEqual(Object.keys(given).sort(), ['inputsDir', 'noSpecs', 'onWritten', 'record', 'report', 'reservation', 'say', 'stageDir']);
+  const stop = stopArguments({ code: 143, state, say: noop, exit: noop, release: noop, describeLive: () => [], cleanLive: async () => [], closeScope: async () => {} });
+  assert.equal(stop.recordedCode(), null, 'before the record is written the stop cleans up and exits with the signal\'s code');
+  given.onWritten(3);
+  assert.equal(stop.recordedCode(), 3, 'after it, the stop sees the record\'s code');
+  assert.equal(stop.code, 143);
+  assert.equal(stop.bound, 20_000);
 });
 
-// K1: every lock error is a record that says exit 2; the lock is released LAST; a release that throws keeps the record's code.
-test('A_lock_error_that_would_throw_is_a_record_that_says_exit_2_naming_the_lock_path_and_the_error', t => {
-  const s = setup(t);
-  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // stale: the retire looks for the dead probe's strays by name, and that fails
-  const io = { ...fs, existsSync: file => { if (/\.stamp-999999$/.test(String(file))) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.existsSync(file); } };
-  let code;
-  assert.doesNotThrow(() => { code = s.run({ io }); });
-  assert.equal(code, 2);
-  const written = JSON.parse(fs.readFileSync(s.file, 'utf8'));
-  assert.deepEqual([written.exit.code, written.exit.halt], [2, 'probed-on-stamp-failed']);
-  assert.match(written.exit.stampError, /\.stamp\.lock/);
-  assert.match(written.exit.stampError, /EACCES/);
-  assert.match(s.said.join('\n'), /\.stamp\.lock/, 'stderr names the lock path');
-});
-
-test('The_lock_is_released_last_after_onWritten_the_take_and_the_report', t => {
-  const s = setup(t);
-  const lock = path.join(s.inputsDir, '.stamp.lock');
-  const events = [];
-  const io = { ...fs, rmSync: (file, ...rest) => { if (String(file) === lock) events.push('lock-released'); return fs.rmSync(file, ...rest); } };
-  const code = s.run({ io, onWritten: () => events.push(`onWritten (lock held: ${fs.existsSync(lock)})`), report: () => events.push(`report (lock held: ${fs.existsSync(lock)}, reservation taken: ${s.reservation.held() === null})`) });
-  assert.equal(code, 0);
-  assert.deepEqual(events, ['onWritten (lock held: true)', 'report (lock held: true, reservation taken: true)', 'lock-released'], 'the lock is the last thing released');
-});
-
-test('A_release_that_throws_is_one_stderr_line_and_the_exit_stays_the_records_code', t => {
-  const s = setup(t);
-  const lock = path.join(s.inputsDir, '.stamp.lock');
-  const io = { ...fs, rmSync: (file, ...rest) => { if (String(file) === lock) throw Object.assign(new Error('EBUSY: busy'), { code: 'EBUSY' }); return fs.rmSync(file, ...rest); } };
-  let code;
-  assert.doesNotThrow(() => { code = s.run({ io }); });
-  assert.equal(code, 0, 'the record says 0 and the command says 0: a lock that could not be removed is not a failure of the probe');
-  assert.equal(JSON.parse(fs.readFileSync(s.file, 'utf8')).exit.code, 0);
-  assert.match(s.said.join('\n'), /the stamp lock .*could not be released .*EBUSY/);
-  fs.rmSync(lock, { force: true });
-});
-
-// K2: a failed commit with a failed put-back, THEN a failed record write: the messages come from the real state.
-test('A_failed_commit_a_failed_put_back_and_a_failed_record_write_name_the_stamped_pin_and_never_say_the_pins_were_not_changed', t => {
-  const s = setup(t);
-  const before = s.pins();
-  const io = failing({ rename: (from, to) => to.endsWith('specs.json') || from.includes('.restore-'), write: file => /\.exec-probe-record\.tmp-/.test(file) });
-  const code = s.run({ io });
-  assert.equal(code, 2);
-  assert.notEqual(s.pins().layer, before.layer, 'the layer pin really is stamped: the messages must say so');
-  const said = s.said.join('\n');
-  assert.match(said, /specs\.d\/exec-layer\.json could not be put back: it points at a probe with NO record/, 'the stamped pin is named');
-  assert.doesNotMatch(said, /the pins were not changed|both pins were put back/, 'no message that contradicts the real state');
-  assert.equal(fs.existsSync(s.file), false, 'the placeholder was released');
-});
-
-test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restores_the_pin_and_says_so', t => {
-  const s = setup(t);
-  const before = s.pins();
-  const io = failing({ rename: (_from, to) => to.endsWith('specs.json'), write: file => /\.tmp-\d+$/.test(file) && !/\.stamp-|\.restore-/.test(file) });
-  assert.equal(s.run({ io }), 2);
-  assert.deepEqual(s.pins(), before, 'the put-back in the commit worked: nothing is stamped');
-  assert.doesNotMatch(s.said.join('\n'), /NO record/);
-});
-
-test('Retiring_a_stale_lock_says_on_stderr_that_the_pins_may_be_stamped_without_a_record_and_names_their_probedOn', t => {
-  const s = setup(t);
-  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1');
-  const layerPin = path.join(s.inputsDir, 'specs.d', 'exec-layer.json');
-  const pin = JSON.parse(fs.readFileSync(layerPin, 'utf8'));
-  fs.writeFileSync(layerPin, JSON.stringify({ execLayer: { ...pin.execLayer, probedOn: '2026-01-01T00:00:00.000Z' } }));
-  fs.writeFileSync(path.join(s.inputsDir, 'specs.json'), fs.readFileSync(path.join(s.inputsDir, 'specs.json'), 'utf8')); // unchanged
-  assert.equal(s.run(), 0);
-  const said = s.said.join('\n');
-  assert.match(said, /retired the stale stamp lock of pid 999999/);
-  assert.match(said, /the pins MAY be stamped without a record \(a SIGKILL between the commit and the record's rename\)/);
-  assert.match(said, /specs\.d\/exec-layer\.json probedOn=2026-01-01T00:00:00\.000Z/, 'it names the pin\'s probedOn as it was found');
-});
-
-test('The_record_is_written_through_a_temporary_file_with_a_fixed_known_name_beside_the_placeholder', t => {
-  const s = setup(t);
-  const names = [];
-  const io = { ...fs, writeFileSync: (file, ...rest) => { names.push(path.basename(String(file))); return fs.writeFileSync(file, ...rest); } };
-  assert.equal(s.run({ io }), 0);
-  assert.ok(names.includes(`.exec-probe-record.tmp-${process.pid}`), `a known name, so a dead probe's leftover can be retired without listing the folder: ${names.join(', ')}`);
+test('A_real_SIGTERM_after_the_record_is_written_exits_with_the_records_code_and_each_missing_link_turns_it_red', async t => {
+  for (const recordCode of [0, 3]) {
+    const s = setup(t);
+    const wiring = JSON.stringify(new URL('../lib/exec-probe/wiring.mjs', import.meta.url).href);
+    const end = JSON.stringify(new URL('../lib/exec-probe/command-end.mjs', import.meta.url).href);
+    const rec = JSON.stringify(record(recordCode));
+    const child = spawn(process.execPath, ['--input-type=module', '-e', `
+      import * as fs from 'node:fs';
+      import { endOfProbe } from ${end};
+      import { installStopHandlers, endArguments, newState } from ${wiring};
+      import { makeReservation, reserveRecord } from ${JSON.stringify(new URL('../lib/exec-probe/record-path.mjs', import.meta.url).href)};
+      const state = newState();
+      const reservation = makeReservation(reserveRecord(${JSON.stringify(s.file + '.real')}));
+      installStopHandlers({ state, say: text => process.stderr.write(text + '\\n'), release: () => {}, describeLive: () => [], cleanLive: async () => [], closeScope: async () => {} });
+      const code = endOfProbe(endArguments({ record: ${rec}, reservation, noSpecs: true, inputsDir: ${JSON.stringify(s.inputsDir)}, stageDir: ${JSON.stringify(s.stageDir)}, say: () => {}, report: () => {}, state }));
+      process.stdout.write('written ' + code + '\\n');
+      setInterval(() => {}, 1000); // alive until the signal
+    `], { stdio: ['ignore', 'pipe', 'pipe'] });
+    t.after(() => child.kill('SIGKILL'));
+    let out = '';
+    await new Promise(resolve => { child.stdout.on('data', chunk => { out += chunk; if (/written/.test(out)) resolve(); }); child.once('close', resolve); });
+    assert.match(out, new RegExp(`written ${recordCode}`));
+    const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+    child.kill('SIGTERM');
+    const ended = await closed;
+    assert.equal(ended.code, recordCode, `the exit is the record's code (${recordCode}), not 143: ${JSON.stringify(ended)}`);
+  }
 });

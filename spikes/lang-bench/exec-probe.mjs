@@ -26,7 +26,7 @@ import { endOfProbe } from './lib/exec-probe/command-end.mjs';
 import { emptyProgramTree } from './lib/exec-probe/empty-tree.mjs';
 import { runProbe } from './lib/exec-probe/probe.mjs';
 import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
-import { runStop } from './lib/exec-probe/stop.mjs';
+import { endArguments, installStopHandlers, newState } from './lib/exec-probe/wiring.mjs';
 
 const spike = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
@@ -99,14 +99,8 @@ let scope = null;
 const cleanLive = () => cleanupLiveRuns();
 
 let stopping = false;
-let writtenCode = null; // set once the record is in place: a stop after that only closes the owned folders and exits with the record's code
-for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
-  process.on(signal, () => {
-    if (stopping) return;
-    stopping = true;
-    runStop({ code, recordedCode: () => writtenCode, bound: 20_000, say: text => say(process.stderr, text), exit: process.exit, release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close() });
-  });
-}
+const state = newState(); // `state.written`: the record's exit code once it is in place (a stop after that exits with it)
+installStopHandlers({ state, say: text => say(process.stderr, text), release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close(), onStopping: () => { stopping = true; } });
 process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
 
 reservationHolder = makeReservation(reservation());
@@ -124,7 +118,7 @@ try {
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
   const stageDir = ownedDirRunning(owned, scope, 'stamp');
-  code = endOfProbe({ record, reservation: reservationHolder, noSpecs: args.includes('--no-specs'), inputsDir: path.join(spike, 'inputs'), stageDir, say: text => say(process.stderr, text), report, onWritten: written => { writtenCode = written; } });
+  code = endOfProbe(endArguments({ record, reservation: reservationHolder, noSpecs: args.includes('--no-specs'), inputsDir: path.join(spike, 'inputs'), stageDir, say: text => say(process.stderr, text), report, state }));
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143
   if (error instanceof Refusal) {
