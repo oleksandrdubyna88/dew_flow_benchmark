@@ -8,29 +8,14 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { assemble, canonicalJson, WRITER_FILES } from '../specs-record.mjs';
 import { acquireLock as acquireStampLock } from './stamp-lock.mjs';
+import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
 
 export const LAYER_PIN = 'specs.d/exec-layer.json';
 export const SPECS_PIN = 'specs.json';
 const pinsOf = inputsDir => ({ layer: path.join(inputsDir, LAYER_PIN), specs: path.join(inputsDir, SPECS_PIN) });
-/** The files a stamping probe of `pid` can leave behind, by their KNOWN names (never by listing `inputs/`): the pins' temporary and put-back files, the lock's link and retire files, the record's temporary file. */
-export const strayNames = (inputsDir, pid) => [
-  `${path.join(inputsDir, LAYER_PIN)}.stamp-${pid}`, `${path.join(inputsDir, LAYER_PIN)}.restore-${pid}`,
-  `${path.join(inputsDir, SPECS_PIN)}.stamp-${pid}`, `${path.join(inputsDir, SPECS_PIN)}.restore-${pid}`,
-  `${path.join(inputsDir, '.stamp.lock')}.retire-${pid}`, `${path.join(inputsDir, '.stamp.lock')}.link-${pid}`,
-  path.join(inputsDir, `.exec-probe-record.tmp-${pid}`),
-];
-
-/** Remove the strays of a dead probe `pid` by their known names; the names that existed and are removed. */
-function retireStrays(inputsDir, pid, io) {
-  return strayNames(inputsDir, pid).filter(file => io.existsSync(file)).map(file => {
-    io.rmSync(file, { force: true });
-    return file;
-  });
-}
-
-/** The stamp lock (see `stamp-lock.mjs`), with this module's stray retirement. */
+/** The stamp lock (see `stamp-lock.mjs`). */
 export function acquireLock({ inputsDir, io = fs, ...rest }) {
-  return acquireStampLock({ inputsDir, io, ...rest, strays: pid => retireStrays(inputsDir, pid, io) });
+  return acquireStampLock({ inputsDir, io, ...rest });
 }
 
 /** The files `assemble` reads, copied into `stageDir/specs.d` (nothing else of `inputs/`). */
@@ -46,41 +31,52 @@ function stage(inputsDir, stageDir, stampedLayer, io) {
  * The prepared stamp: `{ files, tmp, saved, tag }`, the new contents already in temporary files beside the pins and the old contents saved. Throws (after removing what it made) when it cannot prepare, so the
  * caller can say it in the record.
  */
-export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = String(process.pid) }) {
+export function prepareStamp({ inputsDir, record, stageDir, io = fs, tag = ownId() }) {
   const files = pinsOf(inputsDir);
-  const tmp = { layer: `${files.layer}.stamp-${tag}`, specs: `${files.specs}.stamp-${tag}` };
+  const tmp = { layer: tmpPath(files.layer, 'stamp', tag), specs: tmpPath(files.specs, 'stamp', tag) }; // D2: in a `.exec-probe-tmp/` folder beside each pin
   const savedLayer = io.readFileSync(files.layer, 'utf8');
   const saved = { layer: savedLayer, specs: io.readFileSync(files.specs, 'utf8') };
   const stamped = canonicalJson({ execLayer: { ...JSON.parse(savedLayer).execLayer, probedOn: record.probedOn, host: record.host } });
   try {
     const built = stage(inputsDir, stageDir, stamped, io);
     if (!built.ok) throw new Error(built.reason);
+    ensureTmpFolder(files.layer, io);
+    ensureTmpFolder(files.specs, io);
     io.writeFileSync(tmp.layer, stamped);
     io.writeFileSync(tmp.specs, built.text);
   } catch (error) {
-    io.rmSync(tmp.layer, { force: true });
-    io.rmSync(tmp.specs, { force: true });
+    dropTemporary({ files, tmp }, io);
     throw error;
   }
   return { files, tmp, saved, tag };
 }
 
-/** Remove the temporary files of a prepared stamp (nothing is stamped). */
-export function discardStamp(prepared, io = fs) {
+/** Remove the temporary files of a stamp and the tmp folders when they are empty. */
+function dropTemporary(prepared, io) {
   io.rmSync(prepared.tmp.layer, { force: true });
   io.rmSync(prepared.tmp.specs, { force: true });
+  dropTmpFolder(path.dirname(prepared.files.layer), io);
+  dropTmpFolder(path.dirname(prepared.files.specs), io);
+}
+
+/** Remove the temporary files of a prepared stamp (nothing is stamped). */
+export function discardStamp(prepared, io = fs) {
+  dropTemporary(prepared, io);
 }
 
 /** Put `content` back at `file` through a temporary file beside it and a rename: `true` when it is back. */
 function putBack(file, content, tag, io) {
-  const tmp = `${file}.restore-${tag}`;
+  const tmp = tmpPath(file, 'restore', tag);
   try {
+    ensureTmpFolder(file, io);
     io.writeFileSync(tmp, content);
     io.renameSync(tmp, file);
     return true;
   } catch {
     io.rmSync(tmp, { force: true });
     return false;
+  } finally {
+    dropTmpFolder(path.dirname(file), io);
   }
 }
 
@@ -96,6 +92,7 @@ export function commitStamp(prepared, io = fs) {
   }
   try {
     io.renameSync(prepared.tmp.specs, prepared.files.specs);
+    dropTemporary(prepared, io);
     return { ok: true, stamped: [LAYER_PIN, SPECS_PIN] };
   } catch (error) {
     const back = putBack(prepared.files.layer, prepared.saved.layer, prepared.tag, io);

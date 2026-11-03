@@ -34,7 +34,7 @@ function setup(t) {
   const recordsDir = path.join(root, 'records');
   const reservation = makeReservation(reserveRecord(path.join(recordsDir, 'exec-probe-x.json')));
   const pins = () => ({ layer: fs.readFileSync(path.join(inputsDir, 'specs.d', 'exec-layer.json'), 'utf8'), specs: fs.readFileSync(path.join(inputsDir, 'specs.json'), 'utf8') });
-  const strays = () => [inputsDir, path.join(inputsDir, 'specs.d'), recordsDir].flatMap(dir => fs.readdirSync(dir)).filter(name => /\.(stamp|restore|tmp)-\d+$|^\.stamp\.lock$/.test(name));
+  const strays = () => [inputsDir, path.join(inputsDir, 'specs.d'), recordsDir].flatMap(dir => fs.readdirSync(dir)).filter(name => /\.(stamp|restore|record|link)-\d+-|^\.stamp\.lock$|^\.exec-probe-tmp$/.test(name)); // a left-over tmp folder is a stray too (D2)
   const said = [];
   const run = (over = {}) => endOfProbe({ record: record(), reservation, noSpecs: false, inputsDir, stageDir, say: text => said.push(text), report: noop, ...over });
   return { inputsDir, stageDir, reservation, pins, strays, said, run, file: reservation.file };
@@ -78,7 +78,7 @@ test('A_failed_second_rename_gives_a_record_FILE_that_says_exit_2_with_the_error
 });
 
 test('A_failed_first_rename_and_a_failed_prepare_are_records_that_say_exit_2_and_leave_both_pins', t => {
-  for (const io of [failing({ rename: onTarget('exec-layer.json') }), failing({ write: file => file.endsWith('specs.json.stamp-' + process.pid) })]) {
+  for (const io of [failing({ rename: onTarget('exec-layer.json') }), failing({ write: file => /specs\.json\.stamp-\d+-/.test(file) })]) {
     const s = setup(t);
     const before = s.pins();
     assert.equal(s.run({ io }), 2);
@@ -105,7 +105,7 @@ test('A_failed_put_back_is_never_reported_as_both_stay_as_they_were_it_names_the
 });
 
 test('A_failed_record_write_or_a_failed_record_rename_puts_both_pins_back_releases_the_placeholder_and_leaves_no_temporary_file', t => {
-  for (const [name, io] of [['write', failing({ write: file => /\.exec-probe-record\.tmp-/.test(file) })], ['rename', failing({ rename: (_from, to) => to.endsWith('exec-probe-x.json') })]]) {
+  for (const [name, io] of [['write', failing({ write: file => /\.record-\d+-/.test(file) })], ['rename', failing({ rename: (_from, to) => to.endsWith('exec-probe-x.json') })]]) {
     const s = setup(t);
     const before = s.pins();
     const code = s.run({ io });
@@ -119,7 +119,7 @@ test('A_failed_record_write_or_a_failed_record_rename_puts_both_pins_back_releas
 
 test('A_failed_record_write_AND_a_failed_put_back_name_the_pins_that_point_at_a_probe_with_no_record', t => {
   const s = setup(t);
-  const io = failing({ write: file => /\.exec-probe-record\.tmp-/.test(file), rename: from => from.includes('.restore-') });
+  const io = failing({ write: file => /\.record-\d+-/.test(file), rename: from => from.includes('.restore-') });
   assert.equal(s.run({ io }), 2);
   const said = s.said.join('\n');
   assert.match(said, /specs\.d\/exec-layer\.json and specs\.json could not be put back: it points at a probe with NO record/);
@@ -148,11 +148,9 @@ test('A_stale_stamp_lock_with_stray_files_is_retired_and_a_live_lock_refuses_the
   const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout.trim();
   const stale = setup(t);
   fs.writeFileSync(path.join(stale.inputsDir, '.stamp.lock'), `${dead} 1`);
-  fs.writeFileSync(path.join(stale.inputsDir, `specs.json.stamp-${dead}`), 'half');
-  fs.writeFileSync(path.join(stale.inputsDir, 'specs.d', `exec-layer.json.restore-${dead}`), 'half');
   assert.equal(stale.run(), 0);
-  assert.match(stale.said.join('\n'), new RegExp(`retired the stale stamp lock of pid ${dead} and 2 stray file\\(s\\)`));
-  assert.deepEqual(stale.strays(), [], 'the lock and the stray files are gone');
+  assert.match(stale.said.join('\n'), new RegExp(`retired the stale stamp lock of pid ${dead} and 0 stray file\\(s\\)`)); // D2: the lock's retire no longer sweeps strays: the probe's start sweep does, by the tmp folders
+  assert.deepEqual(stale.strays(), [], 'the lock is gone');
   assert.match(stale.pins().layer, /probedOn/, 'and the stamp went on');
   const live = setup(t);
   const before = live.pins();
@@ -223,8 +221,8 @@ test('A_real_SIGTERM_after_the_record_is_written_exits_with_the_records_code_and
 // K1: every lock error is a record that says exit 2; the lock is released LAST; a release that throws keeps the record's code.
 test('A_lock_error_that_would_throw_is_a_record_that_says_exit_2_naming_the_lock_path_and_the_error', t => {
   const s = setup(t);
-  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // stale: the retire looks for the dead probe's strays by name, and that fails
-  const io = { ...fs, existsSync: file => { if (/\.stamp-999999$/.test(String(file))) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.existsSync(file); } };
+  fs.writeFileSync(path.join(s.inputsDir, '.stamp.lock'), '999999 1'); // stale: the retire moves it aside, and that fails
+  const io = { ...fs, renameSync: (from, to) => { if (/\.retire-/.test(String(to))) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.renameSync(from, to); } };
   let code;
   assert.doesNotThrow(() => { code = s.run({ io }); });
   assert.equal(code, 2);
@@ -261,7 +259,7 @@ test('A_release_that_throws_is_one_stderr_line_and_the_exit_stays_the_records_co
 test('A_failed_commit_a_failed_put_back_and_a_failed_record_write_name_the_stamped_pin_and_never_say_the_pins_were_not_changed', t => {
   const s = setup(t);
   const before = s.pins();
-  const io = failing({ rename: (from, to) => to.endsWith('specs.json') || from.includes('.restore-'), write: file => /\.exec-probe-record\.tmp-/.test(file) });
+  const io = failing({ rename: (from, to) => to.endsWith('specs.json') || from.includes('.restore-'), write: file => /\.record-\d+-/.test(file) });
   const code = s.run({ io });
   assert.equal(code, 2);
   assert.notEqual(s.pins().layer, before.layer, 'the layer pin really is stamped: the messages must say so');
@@ -274,7 +272,7 @@ test('A_failed_commit_a_failed_put_back_and_a_failed_record_write_name_the_stamp
 test('A_failed_commit_then_a_failed_record_write_with_a_working_put_back_restores_the_pin_and_says_so', t => {
   const s = setup(t);
   const before = s.pins();
-  const io = failing({ rename: (_from, to) => to.endsWith('specs.json'), write: file => /\.tmp-\d+$/.test(file) && !/\.stamp-|\.restore-/.test(file) });
+  const io = failing({ rename: (_from, to) => to.endsWith('specs.json'), write: file => /\.record-\d+-/.test(file) });
   assert.equal(s.run({ io }), 2);
   assert.deepEqual(s.pins(), before, 'the put-back in the commit worked: nothing is stamped');
   assert.doesNotMatch(s.said.join('\n'), /NO record/);
@@ -334,15 +332,19 @@ test('A_probe_marks_its_lock_committing_before_the_commit_and_the_mark_is_gone_w
   assert.equal(fs.existsSync(path.join(s.inputsDir, '.stamp.lock')), false);
 });
 
-test('The_record_is_written_through_a_temporary_file_with_a_fixed_known_name_beside_the_placeholder', t => {
+test('The_record_is_written_through_a_temporary_file_in_a_tmp_folder_beside_the_placeholder', t => {
+  // rewritten for D2 (was: ..._with_a_fixed_known_name_beside_the_placeholder): the temporary file's name carries pid and start time and it lives in `.exec-probe-tmp/`
   const s = setup(t);
   const names = [];
-  const io = { ...fs, writeFileSync: (file, ...rest) => { names.push(path.basename(String(file))); return fs.writeFileSync(file, ...rest); } };
+  const io = { ...fs, writeFileSync: (file, ...rest) => { names.push(String(file)); return fs.writeFileSync(file, ...rest); } };
   assert.equal(s.run({ io }), 0);
-  assert.ok(names.includes(`.exec-probe-record.tmp-${process.pid}`), `a known name, so a dead probe's leftover can be retired without listing the folder: ${names.join(', ')}`);
+  const temp = names.find(file => /\.record-\d+-/.test(file));
+  assert.ok(temp, `the record goes through a temporary file: ${names.join(', ')}`);
+  assert.equal(path.basename(path.dirname(temp)), '.exec-probe-tmp');
+  assert.equal(path.dirname(path.dirname(temp)), path.dirname(s.file), 'beside the placeholder, so the rename stays on one file system');
+  assert.match(path.basename(temp), new RegExp(`^exec-probe-x\\.json\\.record-${process.pid}-`));
 });
 
-// L4 (fix batch 8): an EPIPE on stdout or stderr (`| head`) must not turn a record's 0 into exit 1.
 test('A_closed_stdout_and_stderr_do_not_change_the_exit_from_the_records_code_and_without_the_guard_they_do', async t => {
   const exitOf = async guarded => {
     const s = setup(t);

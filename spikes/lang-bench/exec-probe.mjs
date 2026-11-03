@@ -54,19 +54,19 @@ async function ownedHelper() {
   }
 }
 
-/** The strays of dead probes in the folders this probe will use (L3): `inputs/` and the folder of an `--out` file; the warning for a retire file that says committing. */
+/** The folder of the pins and the default records: `inputs/`, or the one `--inputs-dir` names (the seam of the tests, so they never touch the real `inputs/`). */
+const inputsDir = option('--inputs-dir') ?? path.join(spike, 'inputs');
+
+/** D2: the strays of dead probes in the `.exec-probe-tmp/` folders beside what this probe will write (the pins, the lock, the record): never `inputs/` or a shared out folder itself is listed. */
 function sweepStrays() {
-  const inputsDir = path.join(spike, 'inputs');
-  const report = retireStartupStrays({ dirs: [inputsDir, ...(option('--out') === undefined ? [] : [path.dirname(path.resolve(option('--out')))])] });
-  if (report.removed.length > 0) say(process.stderr, `exec-probe: retired ${report.removed.length} stray file(s) of dead probes`);
-  if (report.committing.length > 0) say(process.stderr, `exec-probe: a dead probe's lock said committing: the pins MAY be stamped without a record; check \`git diff -- spikes/lang-bench/inputs/specs.json spikes/lang-bench/inputs/specs.d/exec-layer.json\`; if the pins name a probe with no record, run the probe again (it re-stamps them) or restore them with \`git checkout -- <pins>\``);
+  const dirs = [inputsDir, path.join(inputsDir, 'specs.d'), ...(option('--out') === undefined ? [] : [path.dirname(path.resolve(option('--out')))])];
+  const report = retireStartupStrays({ dirs });
+  if (report.removed.length > 0) say(process.stderr, `exec-probe: retired ${report.removed.length} temporary file(s) of dead probes`);
   report.errors.forEach(text => say(process.stderr, `exec-probe: stray sweep: ${text}`));
 }
 
 /** The path of the record, RESERVED before anything is probed (P1, T-L53): a path that exists or is held by another probe is exit 3. */
 function reservation() {
-  sweepStrays();
-  const inputsDir = path.join(spike, 'inputs');
   try {
     return option('--out') === undefined ? reserveNextRecord({ inputsDir, date: new Date().toISOString().slice(0, 10) }) : reserveRecord(option('--out'));
   } catch (error) {
@@ -115,6 +115,7 @@ const state = newState(); // `state.written`: the record's exit code once it is 
 installStopHandlers({ state, say: text => say(process.stderr, text), release, describeLive: describeLiveRuns, cleanLive, closeScope: async () => scope?.close(), onStopping: () => { stopping = true; } });
 process.on('exit', release); // a path that ends the process any other way still releases an unwritten placeholder (once: the reservation forgets it)
 
+sweepStrays(); // explicit in the start sequence, AFTER the stream guard and the stop handlers are installed (D2, D3)
 reservationHolder = makeReservation(reservation());
 let code = 2;
 try {
@@ -130,7 +131,7 @@ try {
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
   const stageDir = ownedDirRunning(owned, scope, 'stamp');
-  code = endOfProbe(endArguments({ record, reservation: reservationHolder, noSpecs: args.includes('--no-specs'), inputsDir: path.join(spike, 'inputs'), stageDir, say: text => say(process.stderr, text), report, state }));
+  code = endOfProbe(endArguments({ record, reservation: reservationHolder, noSpecs: args.includes('--no-specs'), inputsDir, stageDir, say: text => say(process.stderr, text), report, state }));
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143
   if (error instanceof Refusal) {

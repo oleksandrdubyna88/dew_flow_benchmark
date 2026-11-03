@@ -1,5 +1,5 @@
 // The stamp lock (K1, fix batch 7): two passing probes must not interleave their stamps. `inputs/.stamp.lock` holds `<pid> <start time>` — the start time is the one `owned.mjs` reads from `/proc/<pid>/stat` — and
-//   create    is `link()` of a COMPLETE temporary file (`.stamp.lock.link-<pid>`): a reader never sees an empty lock, and EEXIST means held;
+//   create    is `link()` of a COMPLETE temporary file (`.exec-probe-tmp/stamp.lock.link-<pid>-<start>`): a reader never sees an empty lock, and EEXIST means held;
 //   live      the holder's pid exists AND its start time is the one in the lock (a reused pid is stale); a holder that cannot be judged is live; a lock that cannot be parsed REFUSES, naming its path;
 //   retire    of a stale lock is atomic: rename it to `.stamp.lock.retire-<my pid>`, read it, and only when its content is the stale content that was judged remove its strays and it and take the lock; when the
 //             content differs (another probe's NEW lock was moved) it is linked back and the probe refuses as for a live holder; a vanished lock means someone else retired it: take once more, else refuse;
@@ -8,6 +8,7 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { processProbe } from '../../../../.agents/conventions/tools/lib/owned.mjs';
+import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
 
 export const LOCK_NAME = '.stamp.lock';
 const CONTENT = /^(\d+) (\d+|-)(\ncommitting)?$/;
@@ -35,7 +36,7 @@ const describe = (lock, error) => `the stamp lock ${lock} could not be used (${e
 export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = processProbe, strays = () => [] }) {
   const lock = path.join(inputsDir, LOCK_NAME);
   const mine = `${pid} ${startOf(probe, pid)}`;
-  const tmp = `${lock}.link-${pid}`;
+  const tmp = tmpPath(lock, 'link', ownId(probe, pid)); // D2: in `.exec-probe-tmp/` beside the lock
   const release = () => {
     const read = attempt(() => io.readFileSync(lock, 'utf8'));
     if (read.error !== undefined) {
@@ -45,10 +46,11 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
     if (read.value === mine || read.value === `${mine}${COMMITTING}`) io.rmSync(lock, { force: true });
   };
   const take = () => {
-    const wrote = attempt(() => io.writeFileSync(tmp, mine, { flag: 'wx' }));
-    if (wrote.error !== undefined) return { error: wrote.error };
+    const wrote = attempt(() => { ensureTmpFolder(lock, io); io.writeFileSync(tmp, mine, { flag: 'wx' }); });
+    if (wrote.error !== undefined) { dropTmpFolder(inputsDir, io); return { error: wrote.error }; }
     const linked = attempt(() => io.linkSync(tmp, lock));
-    attempt(() => io.rmSync(tmp, { force: true })); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the stray is retired later by its known name)
+    attempt(() => { io.rmSync(tmp, { force: true }); }); // L2: a temporary file that cannot be removed does not undo a link that succeeded: the lock IS held (the stray is retired later by its known name)
+    dropTmpFolder(inputsDir, io);
     if (linked.error === undefined) return { taken: true };
     return linked.error.code === 'EEXIST' ? { held: true } : { error: linked.error };
   };
@@ -58,12 +60,15 @@ export function acquireLock({ inputsDir, io = fs, pid = process.pid, probe = pro
   };
   /** Mark the lock `committing` (a second line) through the same temporary file and a rename: a reader sees the old or the new lock, never a partial one. Throws when it cannot. */
   const markCommitting = () => {
+    ensureTmpFolder(lock, io);
     io.writeFileSync(tmp, `${mine}${COMMITTING}`, { flag: 'w' });
     try {
       io.renameSync(tmp, lock);
     } catch (error) {
       io.rmSync(tmp, { force: true });
       throw error;
+    } finally {
+      dropTmpFolder(inputsDir, io);
     }
   };
   const taken = retired => ({ ok: true, release, retired, retiredHolder: null, retiredCommitting: false, holdsMine, markCommitting });

@@ -13,6 +13,7 @@ import { recordProblems } from './facts.mjs';
 import { bindLine, boxFactLines, closeProbeRun, cultureLines, launchTimeLine, networkLines, openProbeRun, runDelegatedScopeLine } from './lines.mjs';
 import { buildCsharp } from './programs.mjs';
 import { RecordExists } from './record-path.mjs';
+import { dropTmpFolder, ensureTmpFolder, ownId, tmpPath } from './tmp-files.mjs';
 
 const MIB = 1024 * 1024;
 export { LIMITS_MIB };
@@ -115,13 +116,16 @@ export function finish({ found, memoryView, now, identity, runner = null }) {
 export function writeReservedRecord(file, record, held, io = fs) {
   if (held === null || held === undefined) throw new Error(`writeReservedRecord: ${file} is not held by a reservation: a record is only written into a placeholder the caller reserved (T-L53)`);
   if (io.statSync(file).size !== 0) throw new Error(`writeReservedRecord: ${file} is not an empty placeholder: a record is never overwritten (T-L53)`);
-  const tmp = path.join(path.dirname(file), `.exec-probe-record.tmp-${process.pid}`); // a fixed known name beside the placeholder: a dead probe's leftover is retired by name
+  const tmp = tmpPath(file, 'record', ownId()); // D2: in a `.exec-probe-tmp/` folder beside the placeholder
   try {
+    ensureTmpFolder(file, io);
     io.writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
     io.renameSync(tmp, file);
   } catch (error) {
     io.rmSync(tmp, { force: true });
     throw error;
+  } finally {
+    dropTmpFolder(path.dirname(file), io);
   }
 }
 
