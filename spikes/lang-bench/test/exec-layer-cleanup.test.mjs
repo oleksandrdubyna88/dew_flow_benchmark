@@ -289,3 +289,54 @@ test('A_stop_before_the_run_or_the_build_begins_creates_no_folder_and_starts_no_
   assert.deepEqual(readdirSync(parent), [], 'no run folder');
   assert.deepEqual(readdirSync(path.join(root, 'tmp')), [], 'no probebuild folder, no claim');
 });
+
+// S2 (fix batch 6): a run stays in the registry until its cleanup has FINISHED CLEAN, so a stop whose cleanup hangs can still name it.
+test('The_stop_message_after_a_hung_cleanup_names_the_run_its_scope_units_and_its_folder', async t => {
+  if (!needs(t)) return;
+  const { spawnSync } = await import('node:child_process');
+  const options = layerOptions(t);
+  const { owned: _owned, ...plain } = options;
+  const script = `
+    import { ownedFor } from ${JSON.stringify(new URL('../../../.agents/conventions/tools/lib/owned.mjs', import.meta.url).href)};
+    import { cleanup, cleanupLiveRuns, describeLiveRuns } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
+    import { openRun } from ${JSON.stringify(new URL('../lib/exec-layer/run.mjs', import.meta.url).href)};
+    import { stopCleanly } from ${JSON.stringify(new URL('../lib/exec-probe/stop.mjs', import.meta.url).href)};
+    const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
+    if (!opened.ok) { console.log(JSON.stringify({ problem: opened.reason })); process.exit(1); }
+    const run = opened.value;
+    const said = [];
+    const exits = [];
+    await stopCleanly({ code: 143, bound: 400, say: text => said.push(text), exit: code => exits.push(code), release() {}, describeLive: describeLiveRuns, cleanLive: () => cleanupLiveRuns({ scopes: () => new Promise(() => {}) }), closeScope: async () => {} });
+    const after = await cleanup(run); // the real cleanup, so the test leaves nothing
+    console.log(JSON.stringify({ said, exits, id: run.id, unitPrefix: run.unitPrefix, dir: run.dir, clean: after.clean }));
+    process.exit(0);
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000 });
+  const info = JSON.parse(ran.stdout.trim().split('\n').pop());
+  assert.equal(info.problem, undefined, info.problem);
+  assert.deepEqual(info.exits, [75]);
+  const text = info.said.join('\n');
+  assert.match(text, /stopping — cleaning up 1 open run\(s\)/, 'the first line counts the run');
+  const incomplete = text.split('cleanup incomplete')[1] ?? '';
+  assert.ok(incomplete.includes(`run ${info.id}`), 'the 75 message names the run\'s id');
+  assert.ok(incomplete.includes(`${info.unitPrefix}-*`), 'its scope units');
+  assert.ok(incomplete.includes(info.dir), 'and its folder');
+  assert.equal(info.clean, true, 'the real cleanup afterwards left nothing');
+});
+
+// LOW 7: "kept" is reported only when the folder is still there.
+test('The_run_folder_is_reported_as_kept_only_when_it_still_exists', async t => {
+  if (!needs(t)) return;
+  const { rmSync } = await import('node:fs');
+  const opened = await openRun(layerOptions(t));
+  assert.ok(opened.ok, opened.reason);
+  const run = opened.value;
+  t.after(() => cleanup(run));
+  const stub = async () => ({ removed: [], left: [{ kind: 'scope', name: 'stub-scope', reason: 'stub' }] });
+  const kept = await cleanup(run, { scopes: stub });
+  assert.ok(kept.left.some(item => item.kind === 'run' && existsSync(run.dir)), 'folder there: reported as kept');
+  rmSync(run.dir, { recursive: true, force: true });
+  rmSync(`${run.dir}.owner`, { force: true });
+  const gone = await cleanup(run, { scopes: stub });
+  assert.deepEqual(gone.left.map(item => item.kind), ['scope', 'scope'], 'folder gone: nothing is "kept"; only the unit is named (once per scope step)');
+});
