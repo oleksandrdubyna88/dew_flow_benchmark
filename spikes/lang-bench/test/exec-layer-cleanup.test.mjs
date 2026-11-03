@@ -340,3 +340,35 @@ test('The_run_folder_is_reported_as_kept_only_when_it_still_exists', async t => 
   const gone = await cleanup(run, { scopes: stub });
   assert.deepEqual(gone.left.map(item => item.kind), ['scope', 'scope'], 'folder gone: nothing is "kept"; only the unit is named (once per scope step)');
 });
+
+// S4 (Opus LOW 4): EVERY owned folder of the probe is made through the stop guard, not only the build's and the run's.
+test('A_stop_before_any_probe_step_makes_no_folder_for_the_run_mode_the_probe_run_or_the_empty_tree_and_no_raw_ownedDir_is_left', async t => {
+  const { spawnSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const root = owned.ownedDir(t, 'low4');
+  mkdirSync(path.join(root, 'tmp'));
+  const mod = file => JSON.stringify(new URL(file, import.meta.url).href);
+  const script = `
+    import { ownedFor } from ${mod('../../../.agents/conventions/tools/lib/owned.mjs')};
+    import { markStopped } from ${mod('../lib/exec-layer/stopping.mjs')};
+    import { runMode } from ${mod('../lib/exec-probe/observe.mjs')};
+    import { openProbeRun } from ${mod('../lib/exec-probe/lines.mjs')};
+    import { emptyProgramTree } from ${mod('../lib/exec-probe/empty-tree.mjs')};
+    const owned = ownedFor({ token: 'bench' });
+    const scope = owned.cleanupScope();
+    markStopped();
+    const results = {};
+    const attempt = async (name, fn) => { try { await fn(); results[name] = 'ran'; } catch (error) { results[name] = /stopping/.test(error.message) ? 'refused' : error.message; } };
+    await attempt('runMode', () => runMode({ owned, scope, dirs: {}, csharpBuild: '/none', stack: 'node', mode: 'churn', memoryMaxBytes: 268435456 }));
+    await attempt('openProbeRun', () => openProbeRun({ owned, scope, dirs: {}, sentinelHome: ${JSON.stringify(path.join(root, 'tmp'))}, csharpBuild: '/none' }));
+    await attempt('emptyProgramTree', () => emptyProgramTree(owned, scope));
+    console.log(JSON.stringify(results));
+  `;
+  const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, TMPDIR: path.join(root, 'tmp') } });
+  assert.deepEqual(JSON.parse(ran.stdout.trim().split('\n').pop()), { runMode: 'refused', openProbeRun: 'refused', emptyProgramTree: 'refused' }, ran.stderr);
+  assert.deepEqual(readdirSync(path.join(root, 'tmp')), [], 'no folder, no claim');
+  const lib = fileURLToPath(new URL('../lib/exec-probe', import.meta.url));
+  const files = [...readdirSync(lib).map(name => path.join(lib, name)), fileURLToPath(new URL('../exec-probe.mjs', import.meta.url))].filter(file => file.endsWith('.mjs'));
+  const raw = files.filter(file => /\bowned\.ownedDir\(/.test(readFileSync(file, 'utf8'))).map(file => path.basename(file));
+  assert.deepEqual(raw, [], 'a raw owned.ownedDir( in the probe is a folder made without the stop guard');
+});

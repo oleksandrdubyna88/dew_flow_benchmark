@@ -7,6 +7,8 @@ import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { unsafeBinds } from '../exec-layer/box.mjs';
 import { cleanup, trackChild } from '../exec-layer/cleanup.mjs';
+import { ownedDirRunning } from '../exec-layer/stopping.mjs';
+import { childMarkerOf } from '../exec-layer/names.mjs';
 import { nsenterArgv } from '../exec-layer/netns.mjs';
 import { launchPrefix, openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, readProg, userEnv } from '../exec-layer/scope.mjs';
@@ -33,7 +35,7 @@ async function launch(run, caseId, program) {
  * The caller cleans up (`closeProbeRun`).
  */
 export async function openProbeRun({ owned, scope, dirs, sentinelHome, csharpBuild }) {
-  const folder = owned.ownedDir(scope, 'sentinel', { parent: sentinelHome });
+  const folder = ownedDirRunning(owned, scope, 'sentinel', { parent: sentinelHome });
   const sentinel = path.join(folder, 'secret.txt');
   writeFileSync(sentinel, 'HOME-SENTINEL');
   const tree = probeTree({ owned, scope, sentinel, csharpBuild });
@@ -58,8 +60,8 @@ export function bindLine(run, home) {
   return { id: 'bind-list', ok: problems.length === 0, binds, problems };
 }
 
-/** The owned marker of a child of this probe's run: the run's holder name with its kind swapped (`…-lhold-<id>` -> `…-probedriver-<id>`), so a test counts what a stop left by it. */
-const markerOf = (run, kind) => run.holderName.replace('-lhold-', `-${kind}-`);
+/** The owned marker of a child of this probe's run (`…-probedriver-<id>`), made by the layer's one naming helper, so a test counts what a stop left by it. */
+export const markerOf = (run, kind) => childMarkerOf(run.owned, kind, run.id);
 
 async function spawnDriver(run) {
   const [exe, ...args] = [...nsenterArgv(run.holder, run.tools.nsenter), 'python3', '-I', '-c', 'import time; time.sleep(60)', markerOf(run, 'probedriver')];

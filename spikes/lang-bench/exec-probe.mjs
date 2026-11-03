@@ -11,7 +11,7 @@
 // no control character (`\n`, `\r` and `\t` are shown as escapes). Every failure after the reservation, a SIGINT and a SIGTERM release an unwritten placeholder; a signal also ends every run the probe opened
 // (the scopes, the holder, the views) before it exits 130 or 143. Exit 4: the record path cannot be created.
 // A probe that exited 0 also writes `probedOn` and `host` into the layer's identity file (inputs/specs.d/exec-layer.json) and re-assembles inputs/specs.json (not with --no-specs).
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,9 @@ import { storeDirs } from './lib/preflight-box.mjs';
 import { computePin, verifyPin } from './lib/runner-pin.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { printable } from './lib/exec-probe/printable.mjs';
+import { ownedDirRunning } from './lib/exec-layer/stopping.mjs';
 import { endOfProbe } from './lib/exec-probe/command-end.mjs';
+import { emptyProgramTree } from './lib/exec-probe/empty-tree.mjs';
 import { runProbe } from './lib/exec-probe/probe.mjs';
 import { makeReservation, RecordExists, reserveNextRecord, reserveRecord } from './lib/exec-probe/record-path.mjs';
 import { runStop } from './lib/exec-probe/stop.mjs';
@@ -84,15 +86,6 @@ function identities() {
   return { identity: treeSha256, runner: { version: pin.value.runner.version, manifestSha256: pin.value.runner.manifestSha256 } };
 }
 
-function emptyProgramTree(owned, scope) {
-  const tree = owned.ownedDir(scope, 'emptytree');
-  const samplesDir = owned.ownedDir(scope, 'emptysamples');
-  writeFileSync(path.join(tree, 'run.sh'), '#!/bin/bash\nexec cat\n', { mode: 0o755 });
-  writeFileSync(path.join(samplesDir, 'p1.in'), 'hello\n');
-  writeFileSync(path.join(samplesDir, 'p1.out'), 'hello\n');
-  return { tree, samplesDir };
-}
-
 function report(record, out) {
   for (const line of record.lines) say(process.stdout, `${line.ok ? 'ok  ' : 'FAIL'} ${line.id}`);
   for (const problem of record.memoryView.verdict.problems) say(process.stdout, `memory: ${problem}`);
@@ -130,7 +123,7 @@ try {
   if (stopping) await new Promise(() => {}); // a stopped probe writes nothing: the signal's own cleanup ends the process with 130 or 143
   if (!result.ok) refuse(2, result.reason);
   const { value: record } = result;
-  const stageDir = owned.ownedDir(scope, 'stamp');
+  const stageDir = ownedDirRunning(owned, scope, 'stamp');
   code = endOfProbe({ record, reservation: reservationHolder, noSpecs: args.includes('--no-specs'), inputsDir: path.join(spike, 'inputs'), stageDir, say: text => say(process.stderr, text), report, onWritten: written => { writtenCode = written; } });
 } catch (error) {
   if (stopping) await new Promise(() => {}); // a refusal caused by the stop (no scope is started while stopping) is not this probe's failure: the signal's cleanup ends the process with 130 or 143

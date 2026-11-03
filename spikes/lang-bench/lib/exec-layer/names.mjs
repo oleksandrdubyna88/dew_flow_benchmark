@@ -12,7 +12,9 @@ export const MAX_NAME = 63;
 export const runIdOf = (owned, runDir) => path.basename(runDir).slice(owned.ownedPrefix(RUN_WHAT).length);
 /** The unit name without its case: `…-lsc-<id>`; the unit of a case is `<this>-<case id>`. */
 export const unitPrefixOf = (owned, id) => `${owned.ownedPrefix(SCOPE_WHAT)}${id}`;
-export const holderNameOf = (owned, id) => `${owned.ownedPrefix(HOLDER_WHAT)}${id}`;
+/** The owned name of a thing of kind `kind` that belongs to run `id`: `<owned prefix of kind><id>` (the holder, and a test's markers for the probe's children, are all made here). */
+export const childMarkerOf = (owned, kind, id) => `${owned.ownedPrefix(kind)}${id}`;
+export const holderNameOf = (owned, id) => childMarkerOf(owned, HOLDER_WHAT, id);
 
 /** The case ids whose unit name would pass 63 characters (rule §1: a name is never truncated, it is refused before anything exists). */
 export const tooLongForUnit = (unitPrefix, caseIds) => caseIds.filter(id => `${unitPrefix}-${id}`.length > MAX_NAME);

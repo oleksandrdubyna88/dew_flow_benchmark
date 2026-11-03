@@ -13,3 +13,9 @@ export const isStopped = () => stopped;
 export function assertRunning(what) {
   if (stopped) throw new Error(`this process is stopping: ${what} is not started`);
 }
+
+/** `owned.ownedDir(scope, what, options)` through the stop guard (S4): no owned folder is made once the process is stopping. */
+export function ownedDirRunning(owned, scope, what, options) {
+  assertRunning(`the folder ${what}`);
+  return owned.ownedDir(scope, what, options);
+}

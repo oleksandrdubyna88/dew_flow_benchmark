@@ -9,7 +9,7 @@ import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 import { boxArgv } from '../exec-layer/box.mjs';
 import { trackChild } from '../exec-layer/cleanup.mjs';
-import { assertRunning } from '../exec-layer/stopping.mjs';
+import { assertRunning, ownedDirRunning } from '../exec-layer/stopping.mjs';
 import { assertNoCaseKeys, boxEnv } from '../exec-layer/env.mjs';
 import { factsScript } from './facts.mjs';
 
@@ -36,7 +36,7 @@ export async function buildCsharp({ owned, scope, dirs }) {
   } catch (error) {
     return fail(error.message);
   }
-  const folder = owned.ownedDir(scope, 'probebuild');
+  const folder = ownedDirRunning(owned, scope, 'probebuild');
   cpSync(path.join(PROGRAMS, 'csharp'), folder, { recursive: true });
   const box = boxArgv({ view: folder, dirs, env: buildBoxEnv({ dirs }), bwrap: findOnPath('bwrap') ?? 'bwrap', prog: null });
   const built = await runBounded(box[0], [...box.slice(1), ...buildArgs(path.basename(folder))], { timeoutMs: BUILD_MS, env: { PATH: '/usr/bin:/bin' }, onChild: trackChild });
@@ -46,7 +46,7 @@ export async function buildCsharp({ owned, scope, dirs }) {
 /** An owned tree holding the program of `stack` and a `run.sh` that ends with `exec` and runs it in `mode` (`mode` may carry its arguments: `medium-buffers 256`). `csharpBuild` is what `buildCsharp` returned. */
 export function programTree({ owned, scope, stack, mode, csharpBuild }) {
   assertRunning('a program tree');
-  const tree = owned.ownedDir(scope, `probe${stack}`);
+  const tree = ownedDirRunning(owned, scope, `probe${stack}`);
   if (stack === 'csharp') cpSync(path.join(csharpBuild, 'bin'), path.join(tree, 'bin'), { recursive: true });
   else cpSync(path.join(PROGRAMS, 'node', 'mem.mjs'), path.join(tree, 'mem.mjs'));
   writeFileSync(path.join(tree, 'run.sh'), `#!/bin/bash\n${COMMAND[stack](mode)}\n`);
@@ -60,7 +60,7 @@ export function programTree({ owned, scope, stack, mode, csharpBuild }) {
  */
 export function probeTree({ owned, scope, sentinel, csharpBuild }) {
   assertRunning('the probe tree');
-  const tree = owned.ownedDir(scope, 'probetree');
+  const tree = ownedDirRunning(owned, scope, 'probetree');
   cpSync(path.join(PROGRAMS, 'python'), tree, { recursive: true });
   cpSync(path.join(PROGRAMS, 'node', 'mem.mjs'), path.join(tree, 'mem.mjs'));
   cpSync(path.join(csharpBuild, 'bin'), path.join(tree, 'bin'), { recursive: true });

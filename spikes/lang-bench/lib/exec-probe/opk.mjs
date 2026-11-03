@@ -2,6 +2,7 @@
 // view of the program's OWN cgroup change that? Two policies are run through the real layer and the runner, UNCHANGED: (1) today's box (no cgroup visible) and (3) the same box plus
 // `--unshare-cgroup` (so /proc/self/cgroup shows `0::/`) and a read-only bind of `prog/` at /sys/fs/cgroup. (3) is a variant of the layer's own prefix built here; the box module and the
 // policy file are not touched. Toys only, never a task of the series.
+import { ownedDirRunning } from '../exec-layer/stopping.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
@@ -120,10 +121,10 @@ function tweakFor(policy, run, stack) {
 }
 
 function samples(owned, scope) {
-  const dir = owned.ownedDir(scope, 'opksamples');
+  const dir = ownedDirRunning(owned, scope, 'opksamples');
   writeFileSync(path.join(dir, 'p1.in'), 'x\n');
   writeFileSync(path.join(dir, 'p1.out'), 'OK\n');
-  const limits = path.join(owned.ownedDir(scope, 'opklimits'), 'limits.json');
+  const limits = path.join(ownedDirRunning(owned, scope, 'opklimits'), 'limits.json');
   writeFileSync(limits, JSON.stringify(TIME_LIMIT));
   return { dir, limits };
 }

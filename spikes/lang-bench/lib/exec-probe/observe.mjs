@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
 import { cleanup, trackChild } from '../exec-layer/cleanup.mjs';
+import { ownedDirRunning } from '../exec-layer/stopping.mjs';
 import { openRun, programArgv, runCases, stableRunsParent } from '../exec-layer/run.mjs';
 import { progCgroup, userEnv } from '../exec-layer/scope.mjs';
 import { programTree, STACKS } from './programs.mjs';
@@ -16,7 +17,7 @@ const PROBE_CASE = 'm';
 const LIMITS_FILE = { timeS: 60 };
 
 function samples(owned, scope, output) {
-  const dir = owned.ownedDir(scope, 'psamples');
+  const dir = ownedDirRunning(owned, scope, 'psamples');
   writeFileSync(path.join(dir, 'p1.in'), 'x\n');
   writeFileSync(path.join(dir, 'p1.out'), output);
   return dir;
@@ -27,7 +28,7 @@ function samples(owned, scope, output) {
  * runner judged it. The program prints `OK` in `churn`, `medium-*`, `near-limit` and `overlimit` and nothing else is expected; every mode is given the limit in MiB as its argument.
  */
 export async function runMode({ owned, scope, dirs, csharpBuild, stack, mode, memoryMaxBytes }) {
-  const limitsDir = owned.ownedDir(scope, 'plimits');
+  const limitsDir = ownedDirRunning(owned, scope, 'plimits');
   const limitsFile = path.join(limitsDir, 'limits.json');
   writeFileSync(limitsFile, JSON.stringify(LIMITS_FILE));
   const result = await runCases({
