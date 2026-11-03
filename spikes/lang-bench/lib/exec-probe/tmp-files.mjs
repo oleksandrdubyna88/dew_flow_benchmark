@@ -13,7 +13,7 @@ export const ownId = (probe = processProbe, pid = process.pid) => `${pid}-${prob
 
 /** The path of a temporary file for `target` of kind `kind` owned by `id`, in the tmp folder of `base`. There is NO default base (P4): a caller says where, so a pin's temporary can never land beside the pin by omission. */
 export function tmpPath(target, kind, id, base) {
-  if (base === undefined) throw new Error('tmpPath: a base folder is required (use besideTmpPath or pinTmpPath)');
+  if (base === undefined) throw new Error(`tmpPath: a base folder is required for the ${kind} temporary of ${target} (use besideTmpPath or pinTmpPath)`);
   return path.join(base, TMP_DIR, `${path.basename(target)}.${kind}-${id}`);
 }
 
