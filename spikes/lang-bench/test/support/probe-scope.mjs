@@ -41,3 +41,6 @@ export function thingsOf(ids) {
 
 /** Every pid whose argv mentions `text` (a build's marker). */
 export const pidsMentioning = text => readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).filter(pid => { try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes(text); } catch { return false; } });
+
+/** The entries of `dir` whose name matches `pattern` (a test's check that a folder kind was not left in the child's OWN temp root). */
+export const leftNamed = (dir, pattern) => { try { return readdirSync(dir).filter(name => pattern.test(name)); } catch { return []; } };

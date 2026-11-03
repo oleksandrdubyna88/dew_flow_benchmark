@@ -79,10 +79,13 @@ test('The_build_box_dies_with_its_parent_and_a_program_box_does_not', () => {
 });
 
 test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', async t => {
+  const markerFile = path.join(owned.ownedDir(t, 'tracked'), 'marker.txt'); // LOW 8: the child writes its marker here FIRST, and the hook below is registered BEFORE the child's output is parsed
+  t.after(() => { try { for (const pid of pidsMentioning(readFileSync(markerFile, 'utf8').trim())) process.kill(Number(pid), 'SIGKILL'); } catch { /* nothing to kill */ } });
   const script = `
     import { runBounded } from ${JSON.stringify(new URL('../../minigit-bench/lib/run.mjs', import.meta.url).href)};
     import { cleanupLiveRuns, trackChild } from ${JSON.stringify(new URL('../lib/exec-layer/cleanup.mjs', import.meta.url).href)};
     const marker = 'testsToDelete-u0-bench-trackedchild-' + process.pid;
+    process.getBuiltinModule('node:fs').writeFileSync(${JSON.stringify(markerFile)}, marker);
     const running = runBounded('bash', ['-c', 'exec -a ' + marker + ' sleep 30'], { timeoutMs: 100000, onChild: trackChild });
     await new Promise(resolve => setTimeout(resolve, 500));
     const pidOf = () => { const fs = process.getBuiltinModule('node:fs'); return fs.readdirSync('/proc').filter(e => /^\\d+$/.test(e)).filter(pid => { try { return fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8').startsWith(marker); } catch { return false; } }); };
@@ -94,7 +97,6 @@ test('Every_child_the_probe_starts_is_tracked_and_ended_by_the_stop_cleanup', as
   `;
   const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
   const result = JSON.parse(ran.stdout.trim().split('\n').pop());
-  t.after(() => { for (const pid of pidsMentioning(result.marker)) { try { process.kill(Number(pid), 'SIGKILL'); } catch { /* gone */ } } }); // L9: a detached sleep of a failing run never outlives the test
   assert.deepEqual({ before: result.before, after: result.after }, { before: 1, after: 0 }, ran.stderr);
 });
 

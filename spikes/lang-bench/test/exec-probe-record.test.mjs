@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { nextRecordPath, RecordExists, recordFileName, releaseRecord, reserveNextRecord, reserveRecord, RESERVE_ATTEMPTS } from '../lib/exec-probe/record-path.mjs';
@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { printable } from '../lib/exec-probe/printable.mjs';
 import { writeRecord } from '../lib/exec-probe/probe.mjs';
 import { needs, spikeDir } from './support/exec-layer-host.mjs';
-import { idsOf, pidsMentioning, privateProbeEnv, thingsOf } from './support/probe-scope.mjs';
+import { idsOf, leftNamed, pidsMentioning, privateProbeEnv, thingsOf } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 const sha = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -110,6 +110,9 @@ test('Two_probes_started_together_never_both_probe_toward_one_path_the_second_is
   assert.match(second.stderr, /already exists|reserved/);
   assert.equal(second.stdout, '', 'refused before probing: not one probe line');
   assert.doesNotMatch(second.stderr, /: start$/m, 'and no progress line of a started probe');
+  const buildDeadline = Date.now() + 60_000;
+  while (builds().length === 0 && Date.now() < buildDeadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(builds().length > 0, 'LOW 5: a process of the build box was SEEN before the SIGTERM (a test that never saw one proves nothing)');
   const seen = new Set(idsOf(scoped));
   const closed = new Promise(resolve => first.once('close', resolve));
   first.kill('SIGTERM');
@@ -212,8 +215,6 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
   const pin = path.join(dir, 'exec-layer.json');
   writeFileSync(pin, JSON.stringify({ execLayer: { treeSha256: computeIdentity(LAYER_DIR).value.execLayer.treeSha256, files: [] } }));
   const scoped = privateProbeEnv(t);
-  const reservenext = () => { try { return readdirSync(tmpdir()).filter(name => /^testsToDelete-.*-reservenext-/.test(name)); } catch { return []; } };
-  const reservenextBefore = new Set(reservenext());
   const ids = new Set();
   const child = spawn(process.execPath, [path.join(spikeDir, 'exec-probe.mjs'), '--out', out, '--pinned-identity', pin, '--no-specs'], { stdio: ['ignore', 'pipe', 'pipe'], env: scoped.env });
   t.after(() => child.kill('SIGKILL'));
@@ -234,5 +235,14 @@ test('A_probe_sent_SIGTERM_mid_run_releases_its_placeholder_and_leaves_no_scope_
   assert.equal(existsSync(out), false, 'the placeholder is released');
   assert.deepEqual([...thingsOf(ids)], [], 'no scope, holder or helper process of this probe is left');
   assert.deepEqual([...idsOf(scoped)], [], 'B2: no run folder, view or owned folder of this probe is left in its runs parent or its temp root (a late scope must not bring a run folder back)');
-  assert.deepEqual(reservenext().filter(name => !reservenextBefore.has(name)), [], 'G2: no reservenext folder is left in /tmp');
+  assert.deepEqual(leftNamed(scoped.tmp, /reservenext/), [], 'G2: no reservenext folder is left in the child\'s OWN temp root (the one it really uses)');
+});
+
+// LOW 6: the reservenext check looks where the child really works.
+test('The_reservenext_check_looks_in_the_childs_own_temp_root_and_finds_a_planted_folder', t => {
+  const scoped = privateProbeEnv(t);
+  assert.deepEqual(leftNamed(scoped.tmp, /reservenext/), []);
+  mkdirSync(path.join(scoped.tmp, 'testsToDelete-u1000-bench-reservenext-AbCdEf'));
+  assert.deepEqual(leftNamed(scoped.tmp, /reservenext/), ['testsToDelete-u1000-bench-reservenext-AbCdEf'], 'a planted folder in the child\'s temp root is found (the check is red)');
+  assert.deepEqual(leftNamed(path.join(scoped.tmp, 'absent'), /reservenext/), [], 'a missing folder is nothing');
 });

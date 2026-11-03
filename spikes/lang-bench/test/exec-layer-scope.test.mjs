@@ -159,7 +159,7 @@ test('The_scope_entry_fails_when_the_run_folder_is_gone_and_never_creates_it_aga
 // L7: two scopes of one run start together and both make `<run>/out` and their own case folder: neither fails on the other's mkdir.
 test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
   if (!needs(t)) return;
-  const { spawn } = await import('node:child_process');
+  const { spawn, spawnSync } = await import('node:child_process');
   const { owned } = await import('./support/owned.mjs');
   const runDir = owned.ownedDir(t, 'l7');
   let count = 0;
@@ -177,5 +177,9 @@ test('Two_scope_entries_of_one_run_started_together_both_succeed', async t => {
     const results = await Promise.all(Array.from({ length: 4 }, (_, n) => enter(path.join(base, 'out', `c${n}`)))); // `out/` does not exist yet: all four race to make it
     failures.push(...results.filter(result => result.code !== 0).map(result => `round ${round}: exit ${result.code} ${result.stderr.trim().slice(0, 80)}`));
   }
+  const unitsLeft = () => spawnSync('systemctl', ['--user', 'list-units', '--all', '--plain', '--no-legend', '--full'], { encoding: 'utf8' }).stdout.split('\n').map(line => line.trim().split(/\s+/)[0]).filter(name => name.startsWith(`${path.basename(runDir)}-r`));
+  const settle = Date.now() + 30_000; // LOW 8: the last round's scopes (a 2 s holder each) are gone before the test ends
+  while (unitsLeft().length > 0 && Date.now() < settle) await new Promise(resolve => setTimeout(resolve, 200));
+  assert.deepEqual(unitsLeft(), [], 'no scope of this test is left when it ends');
   assert.deepEqual(failures, [], 'no entry fails because another made out/ first');
 });
