@@ -4,21 +4,13 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { processProbe } from '../../../../.agents/conventions/tools/lib/owned.mjs';
-import { dropTmpFolder, parseTmpName, TMP_DIR } from './tmp-files.mjs';
+import { dropTmpFolder, parseTmpName, TMP_DIR, whyUnsafeFolder } from './tmp-files.mjs';
 
 const isDead = (owner, probe) => {
   const now = probe(owner.pid);
   if (now.state === 'dead') return true;
   return now.state === 'live' && owner.start !== '-' && now.start !== undefined && String(now.start) !== owner.start;
 };
-
-/** Why `folder` must not be swept (a string), or null: it must be a real directory — never a symbolic link — owned by this user (N2: the sweep never follows a link). */
-function whyNotSwept(folder, uid, io) {
-  const info = io.lstatSync(folder);
-  if (info.isSymbolicLink()) return 'is a symbolic link: skipped';
-  if (!info.isDirectory()) return 'is not a directory: skipped';
-  return uid !== undefined && info.uid !== uid ? 'is not owned by this user: skipped' : null;
-}
 
 /** Remove one dead probe's file: only a regular file inside the (checked) folder, found by `lstat`, never a link. */
 function removeOne(folder, name, io) {
@@ -37,8 +29,8 @@ function sweepOne(dir, probe, uid, io) {
   const folder = path.join(dir, TMP_DIR);
   let names;
   try {
-    const why = whyNotSwept(folder, uid, io);
-    if (why !== null) return { removed: [], errors: [`${folder} ${why}`] };
+    const why = whyUnsafeFolder(folder, uid, io);
+    if (why !== null) return { removed: [], errors: [`${folder} ${why}: skipped`] };
     names = io.readdirSync(folder);
   } catch (error) {
     return { removed: [], errors: error.code === 'ENOENT' ? [] : [`${folder}: ${error.code ?? error.message}`] };

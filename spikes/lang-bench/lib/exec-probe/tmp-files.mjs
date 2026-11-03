@@ -22,15 +22,27 @@ export function parseTmpName(name) {
 
 const TRIES = 5;
 
+/** Why a tmp `folder` must not be used (a string), or null: it must be a real directory — never a symbolic link — owned by `uid` (P3 and N2: no temporary write and no sweep follows a link). `lstat` is the check. */
+export function whyUnsafeFolder(folder, uid, io = fs) {
+  const info = io.lstatSync(folder);
+  if (info.isSymbolicLink()) return 'is a symbolic link';
+  if (!info.isDirectory()) return 'is not a directory';
+  return uid !== undefined && info.uid !== uid ? 'is not owned by this user' : null;
+}
+
 /**
- * Write `content` to the temporary file `file`, making its folder first. Probes share the folder and each removes it when it is empty, so the folder can vanish between the `mkdir`
- * and the `open` (ENOENT): the folder is then made again, at most `TRIES` times in all, and the last error is thrown. `options` are the `writeFileSync` options.
+ * Write `content` to the new temporary file `file` (the flag is always `wx`: a name that exists, a planted symlink included, is refused and never opened), making its folder first and refusing a folder that
+ * `whyUnsafeFolder` rejects (an Error naming it). Probes share the folder and each removes it when it is empty, so the folder can vanish between the `mkdir` and the `open` (ENOENT): the folder is then made again,
+ * at most `TRIES` times in all, and the last error is thrown. `options` are the other `writeFileSync` options; `uid` is a test seam.
  */
-export function writeTmp(file, content, options, io = fs) {
+export function writeTmp(file, content, options, io = fs, uid = process.getuid?.()) {
+  const folder = path.dirname(file);
   for (let attempt = 1; ; attempt += 1) {
-    io.mkdirSync(path.dirname(file), { recursive: true });
+    io.mkdirSync(folder, { recursive: true });
     try {
-      return io.writeFileSync(file, content, options);
+      const why = whyUnsafeFolder(folder, uid, io);
+      if (why !== null) throw new Error(`${folder} ${why}`);
+      return io.writeFileSync(file, content, { ...options, flag: 'wx' });
     } catch (error) {
       if (error.code !== 'ENOENT' || attempt >= TRIES) throw error;
     }
