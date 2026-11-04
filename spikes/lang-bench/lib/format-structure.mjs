@@ -86,6 +86,27 @@ function htmlBlockStart(rest, freshBlock) {
   return type ? 'an HTML block start: CommonMark renders raw HTML here, and the reader cannot read through it' : null;
 }
 
+const ATX_START = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
+const QUOTE_MARKER = /^ {0,3}> ?/;
+
+/**
+ * The reason when the line opens a heading or a fence behind a prefix the reader does not look through: after one or more block quote markers (`> ## x`, `> ```x`) or list
+ * markers (`- ## x`, `1. ```x`), else null. A renderer shows the heading or the fence there; the reader sees a line of text.
+ */
+function hiddenStart(rest) {
+  let text = rest;
+  let prefix = null;
+  for (;;) {
+    const quote = QUOTE_MARKER.exec(text);
+    const marker = quote === null && !THEMATIC_BREAK.test(text) ? LIST_MARKER.exec(text) : null;
+    if (quote === null && (marker === null || marker[0].length === text.length)) break;
+    prefix ??= quote === null ? 'a list marker' : 'a block quote';
+    text = text.slice((quote ?? marker)[0].length);
+  }
+  return prefix !== null && (ATX_START.test(text) || FENCE.test(text.trimStart())) ? `an ATX heading or a fence opener after ${prefix} on the same line: a renderer shows it, the reader does not` : null;
+}
+
 /** The reason when the raw line is an ATX heading in a form the reader does not take (it takes `## ` and `### ` at column 0), else null. */
 function strangeHeading(text) {
   if (/^ {1,3}#{1,6}(?:[ \t]|$)/.test(text)) return 'an ATX heading with 1 to 3 leading spaces: the reader takes a heading only at column 0';
@@ -105,6 +126,7 @@ export function scanBlocks(lines) {
   const lists = [];
   let fence = null;
   let freshBlock = true;
+  let paragraphOpen = false;
   for (const line of lines) {
     const { col, rest } = indentOf(line.text);
     const blank = rest === '';
@@ -112,6 +134,7 @@ export function scanBlocks(lines) {
       const closer = FENCE.exec(rest);
       if (col - fence.base <= 3 && closer !== null && closer[1][0] === fence.char && closer[1].length >= fence.length && closer[2].trim() === '') fence = null;
       freshBlock = fence === null;
+      paragraphOpen = false;
       continue;
     }
     fence = null;
@@ -125,7 +148,8 @@ export function scanBlocks(lines) {
       freshBlock = false;
       continue;
     }
-    const reason = col <= 3 ? htmlBlockStart(rest, freshBlock) ?? strangeHeading(line.text) : null;
+    if (col <= 3 && paragraphOpen && SETEXT_UNDERLINE.test(line.text)) return { kept, fault: { no: line.no, reason: 'a setext heading underline under a paragraph line: a renderer shows a heading, the reader does not' } };
+    const reason = col <= 3 ? hiddenStart(rest) ?? htmlBlockStart(rest, freshBlock) ?? strangeHeading(line.text) : null;
     if (reason !== null) return { kept, fault: { no: line.no, reason } };
     if (!blank) {
       const content = listContentColumn(col, rest);
@@ -133,6 +157,7 @@ export function scanBlocks(lines) {
     }
     kept.push(line);
     freshBlock = blank || /^ {0,3}#{1,6}[ \t]/.test(line.text);
+    paragraphOpen = !blank && !ATX_START.test(line.text) && !THEMATIC_BREAK.test(rest) && (col <= 3 || paragraphOpen);
   }
   return { kept, fault: null };
 }
