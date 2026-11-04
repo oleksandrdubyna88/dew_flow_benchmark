@@ -88,9 +88,29 @@ function readKeywords(format) {
   return words.length < 10 ? fail('FORMAT 4.5 does not hold the closed keyword list') : ok(words);
 }
 
+/** The phrases the slots take, which the checker's slot patterns hold: each must still stand, as a code span, in the subsection of FORMAT that says it. */
+const SLOT_PHRASES = Object.freeze([
+  { number: '2.4', slot: '{which}', phrases: ['A test', 'A test that does not end at the end of its input'] },
+  { number: '2.4', slot: '{readiness}', phrases: ['it accepts a TCP connection on that port', 'it has written the line {line} to standard output'] },
+  { number: '2.5', slot: '{what}', phrases: ['readiness', 'the grace period'] },
+]);
+
+const spansOf = text => codeSpans(text.replace(/^```[^]*?^```$/gm, '')).map(span => span.replace(/\s+/g, ' '));
+const missingPhrase = (format, { number, slot, phrases }) => {
+  const spans = spansOf(textOf(format, number) ?? '');
+  const lacking = phrases.find(phrase => !spans.includes(phrase));
+  return lacking === undefined ? null : `FORMAT ${number} no longer holds the phrase \`${lacking}\` of the slot ${slot}, which the checker expects`;
+};
+
+/** ok(true) when every phrase a slot takes is still in FORMAT's prose, else a fail naming the first one that is not. */
+function readPhrases(format) {
+  const missing = SLOT_PHRASES.map(entry => missingPhrase(format, entry)).find(message => message !== null);
+  return missing === undefined ? ok(true) : fail(missing);
+}
+
 /** ok(facts) or the first fail. */
 export function readFacts(format) {
-  const parts = { namePattern: readNamePattern(format), header: readHeader(format), sections: readSections(format), defaults: readDefaults(format), keywords: readKeywords(format) };
+  const parts = { namePattern: readNamePattern(format), header: readHeader(format), sections: readSections(format), defaults: readDefaults(format), keywords: readKeywords(format), phrases: readPhrases(format) };
   const bad = Object.values(parts).find(part => !part.ok);
   return bad ?? ok(Object.fromEntries(Object.entries(parts).map(([name, part]) => [name, part.value])));
 }

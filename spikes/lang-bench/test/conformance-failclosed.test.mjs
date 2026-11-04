@@ -93,3 +93,20 @@ for (const [name, steps, message] of READER_FAULTS) {
 test('The_edit_helper_throws_when_a_needle_is_missing_so_a_fault_case_cannot_pass_by_editing_nothing', () => {
   assert.throws(() => edit('abc', 'x', 'y'));
 });
+
+// ---- C11: the phrases the slots take are read from FORMAT's prose; a phrase that is no longer there is exit 4
+const PHRASE_FAULTS = [
+  ['readiness_phrase', [['`{readiness}` is one of `it accepts a TCP connection on that port`', '`{readiness}` is one of `it accepts a connection on that port`']], /the phrase `it accepts a TCP connection on that port`/],
+  ['line_readiness_phrase', [['or `it has written the line {line} to', 'or `it has printed the line {line} to']], /the phrase `it has written the line \{line\} to standard output`/],
+  ['which_phrase', [['`A test`, or, in a task', '`The test`, or, in a task']], /the phrase `A test`/],
+  ['which_phrase_with_F_EOF', [['`A test that does not end at the end of its\ninput`', '`A test that does not end at the end of its\nstream`']], /the phrase `A test that does not end at the end of its input`/],
+  ['what_phrase', [['`{what}` is `readiness` or `the grace period`', '`{what}` is `readiness` or `the grace time`']], /the phrase `the grace period`/],
+];
+for (const [name, steps, message] of PHRASE_FAULTS) {
+  test(`A_FORMAT_that_changed_the_${name}_is_exit_4_though_the_spec_keeps_the_old_one`, async t => {
+    const result = await runWith(withFormat(t, steps));
+    assert.equal(result.exit, 4, result.lines.join('\n'));
+    assert.deepEqual(result.lines, []);
+    assert.match(result.errors.join('\n'), message);
+  });
+}
