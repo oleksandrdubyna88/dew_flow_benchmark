@@ -113,7 +113,7 @@ test('A_carriage_return_anywhere_is_a_format_error_naming_its_line', t => {
   const planted = edit(FORMAT_TEXT, 'Strings and escapes.\n', 'Strings and escapes.\r\n');
   const { result, out } = extract(t, planted);
   assert.equal(result.status, 4);
-  assert.match(result.stderr, new RegExp(`line ${lineOf(planted.replace('\r', ''), 'Strings and escapes.')}\\b`));
+  assert.match(result.stderr, new RegExp(`line ${lineOf(planted.replaceAll('\r', ''), 'Strings and escapes.')}\\b`));
   assert.match(result.stderr, /carriage return/);
   assert.equal(out, null);
 });
