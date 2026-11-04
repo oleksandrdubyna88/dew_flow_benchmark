@@ -303,7 +303,7 @@ store skips with its reason; `BENCH_REQUIRE_SANDBOX=1` turns the skip into a fai
 
 ## Package sets and snapshots (E1.S4)
 
-Built 2026-11-04 (`todo/PLAN_lang_comparison_v2_E1.md` § E1.S4; parent D5, D6, §4.6). Each stack's offered package set is ONE hashed offline snapshot with a manifest; `PACKAGES.md` is generated from the registered record; a build in a box that holds only the seeded snapshot restores exactly that set and fails, naming it, on anything else (T-L13). **This run built and tested everything but did not register:** `inputs/cache-snapshots-lang.json` does not exist yet and no snapshot is kept in `~/rsd/lang-v2/caches/`; the team lead registers after the code review (`make-snapshots.mjs` with its defaults).
+Built 2026-11-04 (`todo/PLAN_lang_comparison_v2_E1.md` § E1.S4; parent D5, D6, §4.6). Each stack's offered package set is ONE hashed offline snapshot with a manifest; `PACKAGES.md` is generated from the registered record; a build in a box that holds only the seeded snapshot restores exactly that set and fails, naming it, on anything else (T-L13). **Registered 2026-11-04** by the team lead with `make-snapshots.mjs` (its defaults) after the code review: `inputs/cache-snapshots-lang.json` holds both records and the folders are in `~/rsd/lang-v2/caches/` (see "The registered snapshots" below).
 
 **The recipe** (`inputs/cache-recipe-lang.json`, checked by `lib/cache-recipe-lang.mjs`). Each x-range is resolved ONCE, at build time, by `pickHighest` (v1) with a `line`, inside the box, and the exact version is recorded in the record's `resolved` and in the filled step argv. NuGet: the flat-container index of `api.nuget.org`; npm: `npm view <name>@<range> version --json`.
 
@@ -370,9 +370,292 @@ A placeholder name is `[A-Z_]+` only, with no digit: v1's `fill` and `unresolved
 
 **The command** (`node spikes/lang-bench/make-snapshots.mjs`): `[--stack csharp] [--stack node]` builds and registers (default both, csharp first), `--supersede`, `--prune-superseded`, `--print-packages-md <stack>`; `--caches` (default `~/rsd/lang-v2/caches`, refused inside a git worktree), `--record`, `--recipe`, `--stacks`, `--work` (default `~/.cache/lang-v2/w`), `--gate-lock` (default `~/.cache/lang-v2/gate.lock`). Exit 0 done, 1 a build failed, 2 usage (or a caches folder inside a worktree), 3 refused (gate lock held, already registered, preflight, tag rule, claim exists). The command lowers its own priority first, as `run-tests.mjs` does. `--tags-remote <url>` names the remote the tag reader asks (see the store). A missing or unparsable `--recipe` or `--stacks` file is exit 2 with one line naming the flag. A build, a supersede and a prune each take the gate lock, released in `finally`. A build sweeps, refuses a registered stack BEFORE any build, runs `preflightLang`, makes one snapshot per stack in one owned work folder, and prints `egress <stack>: <JSON>` (the hosts the proxy allowed and refused), `registered <stack> <dirName> (<bytes> bytes, <n> packages)` and `built <stack> in <s> s`.
 
-**Measured** (one host, 2026-11-04, the registries as they were that day; an unregistered test build): the whole command (both stacks, preflight included) 45-51 s over three runs; the C# build 18-21 s (`api.nuget.org`, 33-35 connections, about 44 MB down), the Node build 21 s (`registry.npmjs.org`, 36 connections, about 51 MB down); no host refused. C#: 174,187,832 bytes, 60 packages (resolved HOSTING 10.0.14, JWT_BEARER 10.0.14, XUNIT 4.0.2, XUNIT_VS 4.0.1, TEST_SDK 18.11.0); the tree hash was identical in every build observed (three coder builds, and the Opus reviewer's build). Node: 180,129,178 bytes, 164 packages (resolved TYPES_NODE 26.6.6, TS_ESLINT 8.72.1, ESLINT 10.14.0, ESLINT_JS 10.0.1, PINO 10.4.0, TYPEBOX 1.1.39); its tree hash differed in each build, while the manifest was identical (the same 164 name, version and integrity rows, the same `manifestSha256`; checked between the coder's builds before and after the fix batch). The reason: every `_cacache/index-v5` entry holds `time`, `metadata.time` and the registry's `date` header, so the index bytes change on every build; the tarballs under `content-v2` are content-addressed and immutable. **Consequence: the registered Node folder is irreplaceable.** After registration it is backed up to the operator's NAS (`V:\dew_flow_backup`, copy and verify by hash) and is never "repaired" by a rebuild, which would give another tree hash. The identity a rebuild CAN match is the manifest (name, version, integrity), so the record also carries `manifestSha256` (sha256 of the sorted rows `[ecosystem, name, version, integrity]`). The Node manifest has one `pino` (10.4.0) and one `typebox` (1.1.39); the C# manifest also holds `microsoft.extensions.logging.abstractions` 8.0.0 beside 10.0.14 (the restore does not use 8.0.0: it is the only manifest-minus-used entry). The network test file takes about 92 s (the build 45 s; the offered set offline: Node 9.6 s, C# 12.5 s; the two missing-package cases 3.3 s and 6.6 s; the lint 12.8 s).
+**Measured** (one host, 2026-11-04, the registries as they were that day; coder test builds before the registration): the whole command (both stacks, preflight included) 45-51 s over three runs; the C# build 18-21 s (`api.nuget.org`, 33-35 connections, about 44 MB down), the Node build 21 s (`registry.npmjs.org`, 36 connections, about 51 MB down); no host refused. C#: 174,187,832 bytes, 60 packages (resolved HOSTING 10.0.14, JWT_BEARER 10.0.14, XUNIT 4.0.2, XUNIT_VS 4.0.1, TEST_SDK 18.11.0); the tree hash was identical in every build observed (three coder builds, and the Opus reviewer's build). Node: 180,129,178 bytes, 164 packages (resolved TYPES_NODE 26.6.6, TS_ESLINT 8.72.1, ESLINT 10.14.0, ESLINT_JS 10.0.1, PINO 10.4.0, TYPEBOX 1.1.39); its tree hash differed in each build, while the manifest was identical (the same 164 name, version and integrity rows, the same `manifestSha256`; checked between the coder's builds before and after the fix batch). The reason: every `_cacache/index-v5` entry holds `time`, `metadata.time` and the registry's `date` header, so the index bytes change on every build; the tarballs under `content-v2` are content-addressed and immutable. **Consequence: the registered Node folder is irreplaceable.** After registration it is backed up to the operator's NAS (`V:\dew_flow_backup`, copy and verify by hash) and is never "repaired" by a rebuild, which would give another tree hash. The identity a rebuild CAN match is the manifest (name, version, integrity), so the record also carries `manifestSha256` (sha256 of the sorted rows `[ecosystem, name, version, integrity]`). The Node manifest has one `pino` (10.4.0) and one `typebox` (1.1.39); the C# manifest also holds `microsoft.extensions.logging.abstractions` 8.0.0 beside 10.0.14 (the restore does not use 8.0.0: it is the only manifest-minus-used entry). The network test file takes about 92 s (the build 45 s; the offered set offline: Node 9.6 s, C# 12.5 s; the two missing-package cases 3.3 s and 6.6 s; the lint 12.8 s).
 
 **Coupling.** This story builds on v1's modules (`spikes/minigit-bench/lib/cache-snapshot.mjs`, `sandbox.mjs`, `packages.mjs`, `egress.mjs`, `bwrap.mjs`): the snapshot maker, the agent box and the package readers are v1's, widened by optional parameters. A change to those files can change the v2 snapshot build, and v1's own code-shape test (`test/code-shape.test.mjs`) pins their function size and complexity; `research/architecture.md` names the dependency.
+
+**The registered snapshots** (`inputs/cache-snapshots-lang.json`, written only by `make-snapshots.mjs`; the folders are read-only under `~/rsd/lang-v2/caches/`, never to be touched by a test or a rebuild). The Node folder is irreplaceable (see Measured): it is backed up to the NAS and verified by hash, and the identity a rebuild could match is the manifest.
+
+| Stack | Folder | Tree sha256 | Manifest sha256 | Packages | Bytes | Made on |
+|---|---|---|---|---|---|---|
+| csharp | `csharp-452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee` | `452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee` | `2e897fc5db4ded367bced1478f4d0a260d1b3277f75bbf6cd58c9d0b03acc002` | 60 | 174,187,832 | 2026-11-04 |
+| node | `node-bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6` | `bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6` | `a21813acac9013bc8869d4a11e2e49e93ed2c6bfd60591606b85e2da1b40ab61` | 164 | 180,132,320 | 2026-11-04 |
+
+The versions resolved once at the build (`resolved`):
+- csharp: HOSTING 10.0.14, JWT_BEARER 10.0.14, XUNIT 4.0.2, XUNIT_VS 4.0.1, TEST_SDK 18.11.0
+- node: TYPES_NODE 26.6.6, TS_ESLINT 8.72.1, ESLINT 10.14.0, ESLINT_JS 10.0.1, PINO 10.4.0, TYPEBOX 1.1.39
+
+The licence and maintenance table is above (the recipe's `licence` and `maintenance` fields, the licence compared by test with the snapshot's own metadata). The recipe's `recipeSha256` and the C# `projectSha256` are in the record.
+
+**`PACKAGES.md` as derived from the record**, quoted as of 2026-11-04 (`node spikes/lang-bench/make-snapshots.mjs --print-packages-md csharp` and `... node`; derived output, never typed: it is regenerated from the record and the recipe, and S3 writes it into the workspaces).
+
+C#:
+
+````markdown
+# Packages
+
+Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603, which fails the build where warnings are errors; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.
+Install a package with the exact version listed: `<PackageReference Include="NAME" Version="VERSION" />`.
+ASP.NET Core (Minimal API, its built-in validation, System.Text.Json) and the .NET base library come with SDK 10.0.403 as shared frameworks; they are not packages.
+
+Cache snapshot: tree sha256 `452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee`, made 2026-11-04.
+
+## Offered
+
+| Package | Version | Purpose |
+|---|---|---|
+| `Microsoft.AspNetCore.Authentication.JwtBearer` | 10.0.14 | JWT bearer authentication for ASP.NET Core Minimal API |
+| `Microsoft.Extensions.Hosting` | 10.0.14 | Generic Host for daemons: lifetime and graceful stop (IHostApplicationLifetime), dependency injection, configuration, ILogger |
+| `Microsoft.NET.Test.Sdk` | 18.11.0 | VSTest host for dotnet test in VSTest mode |
+| `xunit.runner.visualstudio` | 4.0.1 | xUnit adapter for the VSTest runner (dotnet test in VSTest mode) |
+| `xunit.v3` | 4.0.2 | Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable |
+
+## In the cache as dependencies of the offered packages
+
+| Package | Version |
+|---|---|
+| `microsoft.applicationinsights` | 2.23.0 |
+| `microsoft.bcl.asyncinterfaces` | 6.0.0 |
+| `microsoft.bcl.cryptography` | 10.0.2 |
+| `microsoft.codecoverage` | 18.11.0 |
+| `microsoft.extensions.configuration` | 10.0.14 |
+| `microsoft.extensions.configuration.abstractions` | 10.0.14 |
+| `microsoft.extensions.configuration.binder` | 10.0.14 |
+| `microsoft.extensions.configuration.commandline` | 10.0.14 |
+| `microsoft.extensions.configuration.environmentvariables` | 10.0.14 |
+| `microsoft.extensions.configuration.fileextensions` | 10.0.14 |
+| `microsoft.extensions.configuration.json` | 10.0.14 |
+| `microsoft.extensions.configuration.usersecrets` | 10.0.14 |
+| `microsoft.extensions.dependencyinjection` | 10.0.14 |
+| `microsoft.extensions.dependencyinjection.abstractions` | 10.0.14 |
+| `microsoft.extensions.diagnostics` | 10.0.14 |
+| `microsoft.extensions.diagnostics.abstractions` | 10.0.14 |
+| `microsoft.extensions.fileproviders.abstractions` | 10.0.14 |
+| `microsoft.extensions.fileproviders.physical` | 10.0.14 |
+| `microsoft.extensions.filesystemglobbing` | 10.0.14 |
+| `microsoft.extensions.hosting.abstractions` | 10.0.14 |
+| `microsoft.extensions.logging` | 10.0.14 |
+| `microsoft.extensions.logging.abstractions` | 8.0.0 |
+| `microsoft.extensions.logging.abstractions` | 10.0.14 |
+| `microsoft.extensions.logging.configuration` | 10.0.14 |
+| `microsoft.extensions.logging.console` | 10.0.14 |
+| `microsoft.extensions.logging.debug` | 10.0.14 |
+| `microsoft.extensions.logging.eventlog` | 10.0.14 |
+| `microsoft.extensions.logging.eventsource` | 10.0.14 |
+| `microsoft.extensions.options` | 10.0.14 |
+| `microsoft.extensions.options.configurationextensions` | 10.0.14 |
+| `microsoft.extensions.primitives` | 10.0.14 |
+| `microsoft.identitymodel.abstractions` | 8.19.2 |
+| `microsoft.identitymodel.jsonwebtokens` | 8.19.2 |
+| `microsoft.identitymodel.logging` | 8.19.2 |
+| `microsoft.identitymodel.protocols` | 8.19.2 |
+| `microsoft.identitymodel.protocols.openidconnect` | 8.19.2 |
+| `microsoft.identitymodel.tokens` | 8.19.2 |
+| `microsoft.testing.extensions.telemetry` | 2.5.1 |
+| `microsoft.testing.extensions.trxreport.abstractions` | 2.5.1 |
+| `microsoft.testing.platform` | 2.5.1 |
+| `microsoft.testing.platform.msbuild` | 2.5.1 |
+| `microsoft.testplatform.objectmodel` | 18.11.0 |
+| `microsoft.testplatform.testhost` | 18.11.0 |
+| `microsoft.win32.registry` | 5.0.0 |
+| `system.diagnostics.eventlog` | 10.0.14 |
+| `system.identitymodel.tokens.jwt` | 8.19.2 |
+| `system.security.accesscontrol` | 6.0.1 |
+| `xunit.analyzers` | 2.2.0 |
+| `xunit.v3.assert` | 4.0.2 |
+| `xunit.v3.common` | 4.0.2 |
+| `xunit.v3.core.mtp-v2` | 4.0.2 |
+| `xunit.v3.extensibility.core` | 4.0.2 |
+| `xunit.v3.mtp-v2` | 4.0.2 |
+| `xunit.v3.runner.common` | 4.0.2 |
+| `xunit.v3.runner.inproc.console` | 4.0.2 |
+````
+
+Node:
+
+````markdown
+# Packages
+
+Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.
+Install a package with the exact version listed: `npm install NAME@VERSION`.
+
+Cache snapshot: tree sha256 `bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6`, made 2026-11-04.
+
+## Offered
+
+| Package | Version | Purpose |
+|---|---|---|
+| `@eslint/js` | 10.0.1 | ESLint's recommended JavaScript rules |
+| `@fastify/jwt` | 10.2.6 | JWT sign and verify as a Fastify plugin |
+| `@fastify/type-provider-typebox` | 6.3.0 | TypeBox schemas as Fastify route types |
+| `@types/node` | 26.6.6 | Types of the Node 26 API |
+| `eslint` | 10.14.0 | The lint runner |
+| `fastify` | 5.12.7 | HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close() |
+| `pino` | 10.4.0 | Structured logging (Fastify's logger), the version Fastify 5.12.7 resolves |
+| `typebox` | 1.1.39 | JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set) |
+| `typescript` | 6.0.3 | Type check (tsc --noEmit) and the compiler API the type-aware lint uses |
+| `typescript-eslint` | 8.72.1 | TypeScript parser and type-aware lint rules for ESLint |
+
+## In the cache as dependencies of the offered packages
+
+| Package | Version |
+|---|---|
+| `@cacheable/memory` | 2.2.0 |
+| `@cacheable/utils` | 2.5.0 |
+| `@eslint-community/eslint-utils` | 4.10.1 |
+| `@eslint-community/regexpp` | 4.12.2 |
+| `@eslint/config-array` | 0.23.5 |
+| `@eslint/config-helpers` | 0.7.0 |
+| `@eslint/core` | 1.2.1 |
+| `@eslint/object-schema` | 3.0.5 |
+| `@eslint/plugin-kit` | 0.7.3 |
+| `@fastify/ajv-compiler` | 4.0.7 |
+| `@fastify/deepmerge` | 3.2.4 |
+| `@fastify/error` | 4.2.1 |
+| `@fastify/fast-json-stringify-compiler` | 5.1.1 |
+| `@fastify/forwarded` | 3.1.2 |
+| `@fastify/merge-json-schemas` | 0.2.2 |
+| `@fastify/proxy-addr` | 5.1.2 |
+| `@humanfs/core` | 0.19.2 |
+| `@humanfs/node` | 0.16.8 |
+| `@humanfs/types` | 0.15.0 |
+| `@humanwhocodes/module-importer` | 1.0.1 |
+| `@humanwhocodes/retry` | 0.4.3 |
+| `@keyv/bigmap` | 1.3.1 |
+| `@keyv/serialize` | 1.1.1 |
+| `@lukeed/ms` | 2.0.2 |
+| `@pinojs/redact` | 0.4.0 |
+| `@types/esrecurse` | 4.3.1 |
+| `@types/estree` | 1.0.10 |
+| `@types/json-schema` | 7.0.15 |
+| `@typescript-eslint/eslint-plugin` | 8.72.1 |
+| `@typescript-eslint/parser` | 8.72.1 |
+| `@typescript-eslint/project-service` | 8.72.1 |
+| `@typescript-eslint/scope-manager` | 8.72.1 |
+| `@typescript-eslint/tsconfig-utils` | 8.72.1 |
+| `@typescript-eslint/type-utils` | 8.72.1 |
+| `@typescript-eslint/types` | 8.72.1 |
+| `@typescript-eslint/typescript-estree` | 8.72.1 |
+| `@typescript-eslint/utils` | 8.72.1 |
+| `@typescript-eslint/visitor-keys` | 8.72.1 |
+| `abstract-logging` | 2.0.1 |
+| `acorn` | 8.19.0 |
+| `acorn-jsx` | 5.3.2 |
+| `ajv` | 6.15.0 |
+| `ajv` | 8.20.0 |
+| `ajv-formats` | 3.0.1 |
+| `asn1.js` | 5.4.1 |
+| `atomic-sleep` | 1.0.0 |
+| `avvio` | 9.3.1 |
+| `balanced-match` | 4.0.4 |
+| `bn.js` | 4.12.5 |
+| `brace-expansion` | 5.0.12 |
+| `cacheable` | 2.5.0 |
+| `cookie` | 2.0.1 |
+| `cross-spawn` | 7.0.6 |
+| `debug` | 4.4.3 |
+| `deep-is` | 0.1.4 |
+| `dequal` | 2.0.3 |
+| `ecdsa-sig-formatter` | 1.0.11 |
+| `escape-string-regexp` | 4.0.0 |
+| `eslint-scope` | 9.1.2 |
+| `eslint-visitor-keys` | 3.4.3 |
+| `eslint-visitor-keys` | 5.0.1 |
+| `espree` | 11.2.0 |
+| `esquery` | 1.7.0 |
+| `esrecurse` | 4.3.0 |
+| `estraverse` | 5.3.0 |
+| `esutils` | 2.0.3 |
+| `fast-decode-uri-component` | 1.0.1 |
+| `fast-deep-equal` | 3.1.3 |
+| `fast-json-stable-stringify` | 2.1.0 |
+| `fast-json-stringify` | 7.2.1 |
+| `fast-jwt` | 6.3.6 |
+| `fast-levenshtein` | 2.0.6 |
+| `fast-querystring` | 1.1.2 |
+| `fast-uri` | 3.1.9 |
+| `fast-uri` | 4.2.3 |
+| `fastfall` | 1.5.1 |
+| `fastify-plugin` | 6.0.1 |
+| `fastparallel` | 2.4.1 |
+| `fastq` | 1.20.3 |
+| `fastseries` | 1.7.2 |
+| `fdir` | 6.5.0 |
+| `file-entry-cache` | 11.1.5 |
+| `find-my-way` | 9.10.0 |
+| `find-up` | 5.0.0 |
+| `flat-cache` | 6.1.23 |
+| `flatted` | 3.4.4 |
+| `glob-parent` | 6.0.2 |
+| `hashery` | 1.5.1 |
+| `hookified` | 1.15.1 |
+| `hookified` | 2.2.0 |
+| `ignore` | 5.3.2 |
+| `ignore` | 7.0.14 |
+| `imurmurhash` | 0.1.4 |
+| `inherits` | 2.0.4 |
+| `ipaddr.js` | 2.5.0 |
+| `is-extglob` | 2.1.1 |
+| `is-glob` | 4.0.3 |
+| `isexe` | 2.0.0 |
+| `json-schema-ref-resolver` | 3.0.1 |
+| `json-schema-traverse` | 0.4.1 |
+| `json-schema-traverse` | 1.0.0 |
+| `json-stable-stringify-without-jsonify` | 1.0.1 |
+| `keyv` | 5.6.0 |
+| `levn` | 0.4.1 |
+| `light-my-request` | 6.8.0 |
+| `locate-path` | 6.0.0 |
+| `minimalistic-assert` | 1.0.1 |
+| `minimatch` | 10.2.6 |
+| `mnemonist` | 0.40.7 |
+| `ms` | 2.1.3 |
+| `natural-compare` | 1.4.0 |
+| `obliterator` | 2.0.5 |
+| `on-exit-leak-free` | 2.1.2 |
+| `optionator` | 0.9.4 |
+| `p-limit` | 3.1.0 |
+| `p-locate` | 5.0.0 |
+| `path-exists` | 4.0.0 |
+| `path-key` | 3.1.1 |
+| `picomatch` | 4.0.7 |
+| `pino-abstract-transport` | 3.0.0 |
+| `pino-std-serializers` | 7.1.0 |
+| `prelude-ls` | 1.2.1 |
+| `process-warning` | 5.1.1 |
+| `punycode` | 2.3.1 |
+| `qified` | 0.10.1 |
+| `quick-format-unescaped` | 4.0.4 |
+| `real-require` | 1.0.0 |
+| `require-from-string` | 2.0.2 |
+| `ret` | 0.5.1 |
+| `reusify` | 1.1.0 |
+| `rfdc` | 1.4.1 |
+| `safe-buffer` | 5.2.1 |
+| `safe-regex2` | 5.1.2 |
+| `safe-stable-stringify` | 2.5.0 |
+| `safer-buffer` | 2.1.2 |
+| `secure-json-parse` | 4.1.1 |
+| `semver` | 7.8.6 |
+| `set-cookie-parser` | 3.2.2 |
+| `shebang-command` | 2.0.0 |
+| `shebang-regex` | 3.0.0 |
+| `sonic-boom` | 4.2.1 |
+| `split2` | 4.2.0 |
+| `steed` | 1.1.3 |
+| `thread-stream` | 4.2.1 |
+| `tinyglobby` | 0.2.17 |
+| `toad-cache` | 3.7.4 |
+| `ts-api-utils` | 2.5.0 |
+| `type-check` | 0.4.0 |
+| `undici-types` | 8.9.0 |
+| `uri-js` | 4.4.1 |
+| `which` | 2.0.2 |
+| `word-wrap` | 1.2.5 |
+| `xtend` | 4.0.2 |
+| `yocto-queue` | 0.1.0 |
+````
+
 
 **Notes for later stories.**
 - S3 reuses `offlineNugetConfig`, `NPMRC_OFFLINE`, `NPM_OFFLINE_ENV` and `npmOfflineArgv` for the workspaces, and `renderPackagesMd` for `PACKAGES.md`.
