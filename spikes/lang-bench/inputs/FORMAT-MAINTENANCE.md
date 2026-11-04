@@ -76,7 +76,8 @@ Exit codes of both tools: 0 success, 1 a refusal (one line each: the heading, th
   heading line to the byte before the `## 6.` heading line. The output is the same bytes on every run. It never overwrites a file. A change
   in section 4 changes the output; a change in section 7 changes only the sha256 in the header.
 - **`tools/format-classes.mjs`** has two modes.
-  `--self <FORMAT>` checks the class table of the document (section 3 below).
+  `--self <FORMAT>` checks the class table of the document (section 3 below) and also the restricted grammar over its unprotected parts and the whole-file rules (exit 1), so a
+  document that would fail as a frozen reference shows it before its gate.
   `--frozen <A's FORMAT> --candidate <B's FORMAT> [--record <format.json>]` checks that B changed nothing that is protected in A.
   The frozen file must be the one the record names: the one source of truth for the reference is `A.sha256` in
   `spikes/lang-bench/inputs/specs.d/format.json`. A frozen file with another sha256 is refused (exit 1); there is no other way to name the
@@ -120,7 +121,8 @@ class table only.
   `spec-frozen-<one capital letter>-<yyyymmdd>`. Class-table rows after the frozen file's last row may be added. A row of a part that is not protected may
   change or go, and it is matched to the frozen row by the number of the heading it names, so an unprotected heading can be renamed together with its row; a
   protected row stays byte for byte and in its place;
-- section 7 (the changelog) must start with the frozen file's bytes; it may only grow;
+- section 7 (the changelog) must start with the frozen file's bytes; it may only grow, and the text appended after them must start after a blank line (it may not continue the
+  frozen last line or its list item) and obey the line forms of the restricted grammar below, like an unprotected part;
 - 2.1's table of fixed sentences is compared row by row. The rows are the contiguous block of `|` lines right under the `| Id |` header row and its separator
   row; any other `| F-…` line is plain text of its part and compared as such. The rows are matched by their first cell, and an F-id has one row (a second row,
   in either file, is refused, naming the id and both lines). A row whose sentence is defined only in parts that are not protected may differ, but the kinds cell of a changed or added row may not
@@ -141,7 +143,7 @@ naming the part, its class, the line and the form):
    have) whose title, without its number, is the title of a protected heading is refused (no look-alike section);
 3. a paragraph line: it starts at column 0 with a character that does not start a block: not a space or a tab, not `#`, `<`, `>`, `|`, `~`, `=`, `-`, `+`, `_`, `]`; not three
    backticks; not `*`, except `**` that is not `***` (emphasis); not an ordered list marker (digits, `.` or `)`, then a space or the end of the line, so `4.6).` is text); not `[`
-   unless a `]` closes on the line and no `:` follows it (no reference definition, not even one whose label runs over two lines). One or two backticks and `**` may start a line;
+   unless a `]` closes on the line, no backslash stands inside the first bracket and no `:` follows it (no reference definition, not even one whose label runs over two lines). One or two backticks and `**` may start a line;
 4. a list item: `- ` or one to three digits and `. ` at column 0, then text that is a paragraph line (rule 3 on the text); its continuation lines are indented by exactly the marker
    width (2 for `- `, the digits plus 2 for a numbered one) and the text after the indent obeys rule 3; no deeper indent, no nested list, no fence and no heading inside an item;
    an item ends at any column-0 line that is not an item;
@@ -149,7 +151,7 @@ naming the part, its class, the line and the form):
 6. a fenced block: an opener at column 0 that is exactly three backticks or three backticks and lower-case letters, a closer of exactly three backticks at column 0, both in the
    SAME part; the lines between are free text, except that none is a fence marker line (three or more backticks or tildes, up to three spaces of indent) other than the closer.
 
-**Two rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (`^ {0,3}\[...\]:`), and no line whose first
+**Two rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (a line whose first non-space character is a `[` that a `]:` closes, at ANY indent; an escaped bracket in the label and the footnote form `[^x]:` count), and no line whose first
 non-space character is `<` (no raw HTML block start). The argument: every protected part starts at a column-0 heading, where CommonMark starts a fresh block; no unprotected
 construct can stay open across a part boundary (a fence closes in its part, there is no HTML block, no list continues across a heading); and nothing acts at a distance (no
 reference definition). So protected bytes, which are compared byte for byte, render as protected bytes. The checks of the reader (the format errors of section 2) stay and run first.

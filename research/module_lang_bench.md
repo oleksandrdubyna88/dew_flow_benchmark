@@ -264,7 +264,8 @@ definition acts at a distance), so the guarantee is by construction. Every line 
 line, a heading in the exact structure form (no closing `#`s; an added heading may not carry the title of a protected heading), a paragraph line (no block starter at column 0; `**` and one or two backticks
 may start a line; a digit marker needs a space after it), a list item (`- ` or one to three digits and `. `, text obeying the paragraph rule, continuation lines indented by exactly the marker width, no nested
 list, no fence or heading inside), a table row, or a fenced block (opener three backticks and lower-case letters, closer three backticks, both in the part, no other fence marker line inside). Two whole-file
-rules, protected parts too, outside fences: no link reference definition and no line whose first non-space character is `<`. The argument: every protected part starts at a column-0 heading, where CommonMark
+rules, protected parts too, outside fences: no link reference definition (at any indent, an escaped bracket or a footnote form included) and no line whose first non-space character is `<`. Fix batch 3: the
+text appended to the changelog must start after a blank line and obey the same line forms; `--self` also reports the grammar (exit 1); the refusal arrays are built without `push`. The argument: every protected part starts at a column-0 heading, where CommonMark
 starts a fresh block; no unprotected construct stays open across a part boundary; nothing acts at a distance. Refusals are exit 1 naming the part, its class, the line and the form. The kinds cell of a changed
 or added free 2.1 row holds only `daemon`, `web`, `and`, `or`, commas and the words the frozen free rows already use (read from the frozen file), as plain ASCII. The `Gate verdict` also accepts the spec-header
 form (a back-quoted word, optionally ` · yyyy-mm-dd`). Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
