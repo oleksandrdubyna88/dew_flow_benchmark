@@ -1,10 +1,16 @@
 // E1.S4: how a build runs from a snapshot ALONE. The box options of both stacks (one function, so the build and every offline box cannot drift), the exact offline npm invocation, the offline NuGet source, and the
-// check of what a restore really used against the registered manifest. The functions here are pure.
+// check of what a restore really used against the registered manifest. `openBox` (the fresh box that holds only a seeded snapshot) is at the end; the rest is pure.
 //
 // Why a fresh box, and why the flags: a registry that the box can reach fills any hole in the snapshot silently, so a missing package would only show on the first run without network. Copying the cache is not
 // enough either: npm still asks the registry unless it is told not to (`--offline`, `npm_config_offline`, `offline=true`), and NuGet adds the user-level nuget.org source back unless every inherited source is cleared.
 // The two not-in-cache errors that name the package are npm's `ENOTCACHED` and NuGet's `NU1101`; a generic network error is neither.
+import { appendFileSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { inBox, seedCaches } from '../../minigit-bench/lib/cache-snapshot.mjs';
+import { egressProxy, egressSummary } from '../../minigit-bench/lib/egress.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
 import { DISTRIBUTION_DOTNET_PATHS } from './preflight-box.mjs';
 
 /**
@@ -70,4 +76,48 @@ const manifestId = p => (p.ecosystem === 'nuget' ? `${p.name}@${p.version}`.toLo
 export function outsideManifest(used, manifest, ecosystem = undefined) {
   const listed = new Set(manifest.filter(p => ecosystem === undefined || p.ecosystem === ecosystem).map(manifestId));
   return used.filter(id => !listed.has(id));
+}
+
+// ---- the fresh box ---------------------------------------------------------------------------------------------------------------
+
+const V1_SPIKE = fileURLToPath(new URL('../../minigit-bench/', import.meta.url));
+/** The environment every C# box of this story has besides the box's own: the build servers off, the certificate revocation check offline (the proxy carries CONNECT to :443 only), no first-run noise. */
+const STACK_ENV = Object.freeze({
+  csharp: Object.freeze({ DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_CERT_REVOCATION_MODE: 'offline', DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1', TESTINGPLATFORM_TELEMETRY_OPTOUT: '1' }),
+  node: Object.freeze({}),
+});
+
+const readLines = file => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
+
+/**
+ * One command in the box, with its WHOLE output and exit code: v1's `inBox` keeps only the last 600 characters of a failure, and the not-in-cache error that names the package must be read in full. The command runs
+ * through a fixed `sh -c` wrapper (the command is positional arguments, never a string to parse) that writes its output and its exit code into the box's `out` folder, which the host reads after the box ends.
+ * -> `ok({ code, output })` | `fail` (the box did not run, or timed out).
+ */
+async function runWrapped({ layout, dirs, stack, n, command, env, timeoutMs }) {
+  const [out, code] = [path.join(layout.out, `o${n}`), path.join(layout.out, `c${n}`)];
+  const box = boxOptionsFor(dirs);
+  const wrapped = ['sh', '-c', `"$@" > "${out}" 2>&1; echo $? > "${code}"`, 'sh', ...command];
+  const r = await inBox({ layout, nodeDir: dirs.node, command: wrapped, timeoutMs, name: layout.rid, ...box, env: { ...box.env, ...STACK_ENV[stack], ...env } });
+  return r.ok ? ok({ code: Number(readFileSync(code, 'utf8')), output: readFileSync(out, 'utf8') }) : r;
+}
+
+/**
+ * A FRESH box that holds only the seeded snapshot (accepted plan finding 1): a new layout under `root` (`rid` is never reused), the stack's snapshot copied in by v1's `seedCaches` (each part re-hashed against the
+ * record; `box/nuget`, `box/home/.dotnet`, `box/npm`), `HOME` and `DOTNET_CLI_HOME` the fresh `box/home` (no host cache, no CLI home but the snapshot's), and the egress proxy started with `allow` (none by default: every
+ * registry is refused, and the layout's `egress.ndjson` says so). `allow` exists only so the refuted shape, a box that reaches the registry, can be built beside the right one. The box adds no offline flag of its own:
+ * `npmOfflineArgv`, `NPM_OFFLINE_ENV`, `NPMRC_OFFLINE` and `offlineNugetConfig` are the caller's, so a test can also show the box without them.
+ * -> `ok({ layout, run(command, { env, timeoutMs }), egress(), close() })` | `fail`.
+ */
+export async function openBox({ stack, snapshot, root, rid, dirs, allow = [] }) {
+  const made = sessionLayout(root, rid);
+  if (!made.ok) return made;
+  const layout = made.value;
+  copyFileSync(path.join(V1_SPIKE, 'harness', 'box-init.mjs'), layout.files.boxInit);
+  const seeded = seedCaches({ layout, snapshots: { [stack]: snapshot } });
+  if (!seeded.ok) return seeded;
+  const proxy = await egressProxy({ socketPath: layout.sockets.proxy, allow, log: line => appendFileSync(layout.files.egressLog, `${JSON.stringify(line)}\n`) });
+  let n = 0;
+  const run = (command, { env = {}, timeoutMs = 600_000 } = {}) => runWrapped({ layout, dirs, stack, n: (n += 1), command, env, timeoutMs });
+  return ok({ layout, run, egress: () => egressSummary(readLines(layout.files.egressLog)), close: () => proxy.close() });
 }
