@@ -32,6 +32,14 @@ export function readSamplesFolder(dir) {
 const printable = byte => byte === 0x0a || (byte >= 0x20 && byte <= 0x7e);
 const sizeShowable = length => length >= 1 && length <= MAX_CELL_BYTES;
 
+/** Why FORMAT 3.4 lets a sample's bytes be shown by their size only (more than 200 bytes, only spaces, two backticks in a row), or null when they can be shown as bytes. */
+export function sizeOnlyReason(bytes) {
+  const text = bytes.toString('latin1');
+  if (!sizeShowable(bytes.length)) return `has ${bytes.length} bytes`;
+  if (/^ +$/.test(text)) return 'has only spaces';
+  return text.includes('``') ? 'holds two backticks in a row' : null;
+}
+
 /** Whether FORMAT 3.4 lets a sample's bytes be shown as bytes: printable ASCII and line feeds, 1 to 200 bytes, not only spaces, no two backticks in a row. */
 export function showable(bytes) {
   const text = bytes.toString('latin1');
@@ -68,15 +76,27 @@ export function decodeCell(cell) {
 const cellsOf = line => line.split(/(?<!\\)\|/).slice(1, -1).map(cell => cell.trim());
 const idOf = cell => /^`(.+)`$/.exec(cell)?.[1] ?? cell;
 
+const inSix = (spec, no) => spec.sectionAt(no) === 6;
+
+/** What an olympiad spec's section 6 must not hold besides its one table: a second table, a fenced block, a `###` heading. */
+function sixProblems(spec) {
+  const tables = spec.tables.filter(entry => inSix(spec, entry.startNo));
+  return [
+    ...(tables.length > 1 ? [`line ${tables[1].startNo}: section 6 holds more than one table; the samples are one table`] : []),
+    ...spec.blocks.filter(block => inSix(spec, block.openNo)).map(block => `line ${block.openNo}: section 6 of an olympiad spec holds a fenced code block`),
+    ...spec.headings.filter(heading => heading.level === 3 && inSix(spec, heading.no)).map(heading => `line ${heading.no}: section 6 of an olympiad spec holds a ### heading`),
+  ];
+}
+
 /** The olympiad table of section 6: `{ rows: [{ id, no, input, output }], problems }`. */
 function olympiadRows(spec) {
-  const table = spec.tables.find(entry => spec.sectionAt(entry.startNo) === 6);
-  if (table === undefined) return { rows: [], problems: ['section 6 holds no table of samples'] };
+  const table = spec.tables.find(entry => inSix(spec, entry.startNo));
+  if (table === undefined) return { rows: [], problems: ['section 6 holds no table of samples', ...sixProblems(spec)] };
   const [head, separator, ...rest] = table.lines;
   const heading = cellsOf(head.text);
   const problems = heading.join('|') === 'Id|Standard input|Expected standard output' && /^\|[-| :]+\|$/.test(separator?.text ?? '') ? [] : [`line ${head.no}: the table must start with \`| Id | Standard input | Expected standard output |\` and a separator row`];
   const rows = rest.map(line => ({ no: line.no, cells: cellsOf(line.text) })).map(row => ({ id: idOf(row.cells[0] ?? ''), no: row.no, input: row.cells[1], output: row.cells[2], width: row.cells.length }));
-  return { rows, problems: [...problems, ...rows.filter(row => row.width !== 3).map(row => `line ${row.no}: a sample row has three cells`)] };
+  return { rows, problems: [...problems, ...rows.filter(row => row.width !== 3).map(row => `line ${row.no}: a sample row has three cells`), ...sixProblems(spec)] };
 }
 
 /** The `### <id>` subsections of section 6 with their fenced blocks: `{ rows: [{ id, no, blocks }], problems }`. */

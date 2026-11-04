@@ -1,7 +1,7 @@
 // Checks 7 to 9 (E1.S8): the samples folder against section 6, the forms CP1's F11 names, and the `env` lines against the execution layer's own lists. The runner's parse of each pair is
 // started by conformance.mjs (conformance-runner.mjs) and joins check 7's findings.
 import { ALLOW_LIST, CASE_KEYS } from './exec-layer/env.mjs';
-import { decodeCell, showable } from './conformance-shown.mjs';
+import { decodeCell, showable, sizeOnlyReason } from './conformance-shown.mjs';
 
 const SAMPLE_ID = /^s\d\d$/;
 
@@ -40,7 +40,12 @@ function sizeProblems(where, decoded, bytes, file) {
   return showable(bytes) ? [`${where}: samples/${file} can be shown as bytes (FORMAT 3.4); the size form is only for what cannot`] : [];
 }
 
-const byteProblems = (where, shownBytes, bytes, file) => (shownBytes.equals(bytes) ? [] : [`${where}: the cell shows ${shownBytes.length} bytes, samples/${file} holds ${bytes.length}; first difference at byte ${firstDifference(shownBytes, bytes) + 1}`]);
+const sizeOnly = (where, bytes, file) => {
+  const reason = sizeOnlyReason(bytes);
+  return reason === null ? [] : [`${where}: samples/${file} ${reason} and can be shown only by its size (FORMAT 3.4)`];
+};
+
+const byteProblems = (where, shownBytes, bytes, file) => (shownBytes.equals(bytes) ? sizeOnly(where, bytes, file) : [`${where}: the cell shows ${shownBytes.length} bytes, samples/${file} holds ${bytes.length}; first difference at byte ${firstDifference(shownBytes, bytes) + 1}`]);
 
 function cellProblems(row, label, cell, bytes, file) {
   const decoded = decodeCell(cell ?? '');
