@@ -401,8 +401,8 @@ test('The_tag_reader_takes_the_remote_from_the_flag_before_origin_and_still_fail
 
 // ---- Low 1: the discard also runs on an exception; an unreadable record never keeps a folder; an orphan folder is swept -----------
 
-test('A_made_folder_is_removed_when_the_registration_throws_and_when_the_record_cannot_be_read', t => {
-  // fix batch 3 (F2): the second half of this name is no longer done. A record that cannot be read (or is absent, or has the wrong shape) authorises NOTHING, neither keeping nor removing, and a C# rebuild can equal a
+test('A_made_folder_is_kept_and_named_when_the_registration_throws_on_a_record_that_cannot_be_read', t => {
+  // fix batch 3 (F2). A record that cannot be read (or is absent, or has the wrong shape) authorises NOTHING, neither keeping nor removing, and a C# rebuild can equal a
   // registered folder (C# is reproducible), so the made folder is KEPT and named. The cases that remove are in the next test.
   const root = ownedFolder(t, 'thr');
   const caches = path.join(root, 'caches');
@@ -442,7 +442,7 @@ test('A_made_folder_is_removed_when_the_registration_throws_or_fails_with_a_reco
   makeWritable(root);
 });
 
-test('An_unregistered_snapshot_folder_is_swept_only_when_the_claim_of_its_build_is_gone_and_the_record_does_not_hold_it', t => {
+test('An_unregistered_snapshot_folder_is_never_removed_and_is_named_when_the_claim_of_its_build_is_gone_and_the_record_does_not_hold_it', t => {
   // fix batch 3 (F1): the sweep never removes a `<stack>-<hash>` folder. The record path is per checkout and the caches folder is global, so no record the run happens to read can license a deletion of
   // an irreplaceable snapshot. The sweep LISTS each unregistered folder whose build's claim is gone, with the manual step, and removes the orphan claim file only.
   const caches = ownedFolder(t, 'osf');
