@@ -21,7 +21,8 @@ function outcomeOf(run, timeoutMs) {
   if (timedOut) return fail(`the runner did not finish within ${timeoutMs / 1000} s and was stopped`, { kind: 'env' });
   if (code === 0) return ok([]);
   const lines = linesOf(stderr).slice(0, MAX_LINES);
-  return code === EXIT_CONFIG ? ok(lines.map(line => `the runner refuses the pairs — ${line}`)) : endedWith(code, lines);
+  if (code !== EXIT_CONFIG) return endedWith(code, lines);
+  return lines.length === 0 ? fail('the runner exited 4 and named no problem on standard error: a refusal it does not explain is never a pass', { kind: 'env' }) : ok(lines.map(line => `the runner refuses the pairs — ${line}`));
 }
 
 /**
