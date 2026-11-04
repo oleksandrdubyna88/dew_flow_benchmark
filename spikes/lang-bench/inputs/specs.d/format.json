@@ -1,0 +1,9 @@
+{
+  "A": {
+    "version": 2,
+    "sha256": "d293bafcf3e6d176d0c31bc07e4ae1c0dcd242fbda14421b7c873f26d9b73e73",
+    "gate": "inputs/gates/FORMAT-v2.md",
+    "grammarSha256": "95f3c26e59a9e5956ae083ba7aa90ebe6543cadfb21e7629e24f28381bceca8c",
+    "tasks": ["01", "02", "03", "09"]
+  }
+}

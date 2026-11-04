@@ -242,7 +242,88 @@ hash (2026-11-02). The tests and the probe build their C# programs inside the bo
 
 ## FORMAT v2 (E1.S9)
 
-not built yet
+**Purpose.** The bench's part of the story: the code that checks the task format document (`todo/tasks/FORMAT.md` of the task repository), a record that says
+which version and bytes are A's, and the maintainers' document. The format text itself is the team lead's; nothing here edits it. Built 2026-11-04 against the
+draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`); since fix batch 2 the record named the draft at `593fb7a` (layout only: F-TIMING's fence outside the list in 2.5, a wrapped line of 5.3 that no longer starts with a tag-like span; sha256 `a1990215…c161`), and since fix batch 4 it names the draft at `2683747` (layout only: 3.4's two-backtick example sits in a three-backtick span, so the code spans after it pair as written; sha256 `6a526107…81b3`).
+
+**Common reading** (`lib/format-structure.mjs`). FORMAT is read as raw bytes: UTF-8, LF only; a carriage return anywhere or a byte order mark is a format error
+(exit 4) that names the first line; nothing is normalised and the sha256 is over the raw bytes. A heading is a line that starts with `## ` or `### ` at column 0 outside a
+fenced code block, so the `# 1.` comments and lookalike headings of a scenario are never headings. A fence opens with three or more backticks or tildes (at column 0; inside a list item
+at the item's content column and up to three more) and closes with a line of the same character, at least as long, indented at most three columns, nothing else on it (CommonMark's
+closing rule); a fence in a list item ends where the item ends. The structure is exact: `## 1.` to `## 7.` once each, ascending; under `## k`, `### k.1`, `k.2` … with no gap or
+duplicate; anything else is exit 4 naming the heading and the line. **The reader must not see another document than a CommonMark renderer** (fix batch 1, after the Opus review's
+fence and HTML tricks): in either file, in both tools, these lines are exit 4 naming the line: a backtick fence opener with a backtick in its info string; a fence line with 1 to 3 spaces
+of indent outside a list item (a fence inside a list item is allowed: the real draft has one); an HTML block start at columns 0 to 3 outside a fence (`<!--`, `<?`, `<!X`, `<![CDATA[`,
+the script/pre/style/textarea kinds, the block-level tag names, and a complete tag alone on a line where no paragraph is open); an ATX heading with a tab after the `#`s, with 1 to 3 leading
+spaces or with nothing after the `#`s; a setext heading (a paragraph line, then a line of only `=` or only `-` indented at most three spaces; a `---` after a blank line stays a thematic break);
+an ATX heading or a fence opener inside a block quote or after a list marker on the same line (fix batch 1b: a heading the reader does not see but a renderer shows is the same spoof as the fence trick).
+Not looked at by the reader (listed in `inputs/FORMAT-MAINTENANCE.md`): character references and link labels that spell a heading.
+
+**What the grammar defends.** Agents read FORMAT and `GRAMMAR.md` as raw bytes; the byte comparison protects the bytes of the protected parts (the exceptions are listed here: the header rows, the class-table rows after the last row, the changelog's appended text, the free rows of 2.1), and it does not judge what an unprotected part says. A free part can still contradict protected text in plain words (`Notwithstanding 2.6, any normalisation is allowed for olympiad tasks.` in 2.5 passes), which remains a point for human review of any amendment. The restricted grammar and the inline-HTML rule defend a human reviewer who reads a RENDERED page against a misleading amendment; they were checked with markdown-it in CommonMark mode and are not a proof about every renderer. A blank line before an appended changelog entry makes that list "loose" when rendered (spacing only; the words do not change).
+
+Direct evidence on the real draft (fix batch 5): three changes to every line (delete the line, append ` zz` to it, insert an empty line after it), 3,435 candidates; the only passes in protected parts are the `Gate verdict` value, the 14 free 2.1 rows, and one extra line feed at the end of the file. `test/format-evidence.test.mjs` runs a sample of this (every 53rd line and the lines that matter, about 3 seconds); the full sweep takes about two minutes and is recorded here only.
+
+Fix batch 5: the code-span scan (`closerOf`, `runEnd`) is a loop, not a recursion (a paragraph of 20,000 backtick runs no longer overflows the stack); an ordered item whose number is not 1 directly after a paragraph line or a bullet item is refused; a table row that holds `\\|` is refused (whole file).
+
+**The restricted grammar** (`lib/format-grammar.mjs`, fix batch 2). Patching the reader one form at a time cannot close the class (a deletion can turn a literal inside a fence into a heading; a reference
+definition acts at a distance), so the guarantee is by construction. Every line of every unprotected part of the CANDIDATE (and, as a sanity check, of the frozen file: a failure there is exit 4) is a blank
+line, a heading in the exact structure form (no closing `#`s; an added heading may not carry the title of a protected heading), a paragraph line (no block starter at column 0; `**` and one or two backticks
+may start a line; a digit marker needs a space after it), a list item (`- ` or one to three digits and `. `, text obeying the paragraph rule, continuation lines indented by exactly the marker width, no nested
+list, no fence or heading inside), a table row, or a fenced block (opener three backticks and lower-case letters, closer three backticks, both in the part, no other fence marker line inside). Two whole-file
+rules, protected parts too, outside fences: no link reference definition (at any indent, an escaped bracket or a footnote form included) and no line whose first non-space character is `<`. Fix batch 4 adds a third: no
+raw inline HTML, a `<` followed by a letter, `/`, `!` or `?` outside a code span and not written `\<` (the fourth review's finding: `Read on <details>` in an unprotected part leaves the rest of a rendered page inside a closed element). Code spans follow CommonMark's equal-run rule over a PARAGRAPH (not across a heading, a list item, a quote, a thematic break or a fence); a table is scanned in two readings, as text of a paragraph and as rows cell by cell, and a tag left outside a span by either is refused. Also in batch 4: a tab after an ordered marker or a dash is a list marker form the grammar refuses; the look-alike check takes its titles from every heading inside a protected part and runs on headings appended to the changelog; the changelog must be one whole `common` row in the class table (`--self` and `--frozen`). Fix batch 3: the
+text appended to the changelog must start after a blank line and obey the same line forms; `--self` also reports the grammar (exit 1); the refusal arrays are built without `push`. The argument: every protected part starts at a column-0 heading, where CommonMark
+starts a fresh block; no unprotected construct stays open across a part boundary; nothing acts at a distance. Refusals are exit 1 naming the part, its class, the line and the form. The kinds cell of a changed
+or added free 2.1 row holds only `daemon`, `web`, `and`, `or`, commas and the words the frozen free rows already use (read from the frozen file), as plain ASCII. The `Gate verdict` also accepts the spec-header
+form (a back-quoted word, optionally ` · yyyy-mm-dd`). Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
+
+| File | Role |
+|---|---|
+| `tools/grammar-extract.mjs` | `grammar-extract.mjs <FORMAT.md> <out>`: the header `# Scenario and sample grammar (from FORMAT.md v<version>, sha256 <hex>)`, one empty line, then the raw bytes from the `## 3.` line to the byte before `## 6.`. Deterministic. Written to a temporary file in the output's folder and linked into place (`wx`, then `link`): an existing output is exit 4 and never overwritten, and no temporary file stays. |
+| `tools/format-classes.mjs` | T-L56. `--self <FORMAT>` and `--frozen <A> --candidate <B> [--record <format.json>]`. No `--reference-sha` option: the frozen file must be the file whose sha256 is the record's `A.sha256` (default record `inputs/specs.d/format.json`), else exit 1 "the frozen reference is not A's recorded FORMAT". |
+| `lib/format-structure.mjs`, `lib/format-class-table.mjs`, `lib/format-grammar.mjs`, `lib/format-compare.mjs` | the reading above; the class table, its rules and the parts; the comparison. `checkFrozenCandidate({ frozen, candidate, reference })` is the exported function the tests call with an explicit reference. |
+| `test/grammar-extract.test.mjs`, `test/format-classes.test.mjs`, `test/format-classes-frozen.test.mjs`, `test/format-classes-review.test.mjs`, `test/format-reading.test.mjs`, `test/format-grammar.test.mjs`, `test/format-bounds.test.mjs` | the tests; `test/support/format-fixtures.mjs` (a synthetic FORMAT with the shape of the real one, and the real-draft helper) and `test/support/format-bounds-readers.mjs` (the strict readers) |
+| `inputs/specs.d/format.json` | the record `{ "A": { version, sha256, gate: null, grammarSha256, tasks } }`; `specs-record.mjs` assembles it into `inputs/specs.json` |
+| `inputs/FORMAT-MAINTENANCE.md` | the maintainers' document: the conformance list, the tools, the class rule, the amendments (written from FORMAT v1's sections 7 to 9, public on the task repository's `main`) |
+
+**The class table (`--self`).** The table directly after the `**Section classes.**` paragraph of the preamble, rows `| <heading without ##/###> | <class> |`. Every row names
+an existing heading by its whole text (a heading inside a fence is none), the class is one of `common`, `olympiad`, `daemon`, `web`, `daemon-web`, every `##` section has
+exactly one row or, for a mixed section, each of its `###` has exactly one row and the section none; a heading with two rows, a malformed row and a paragraph or table that cannot
+be found are refused (the last is exit 4, the others exit 1). The lead text of a mixed section is `common` by construction.
+
+**The parts and the comparison (`--frozen`).** The protected set (`common`, `olympiad`) comes from the FROZEN file's table only. A section classed as a whole is one part, from its
+`##` line to the byte before the next `##` (its `###` belong to it); a mixed section is its lead text (class `common`) and each `###` (to the byte before the next `###` or `##`); the
+preamble is byte 0 to the byte before `## 1.`. Boundary blank lines belong to the part before them, so no byte is in two parts or in none. A frozen part is found in the candidate
+by its heading NUMBER and compared as raw bytes, except: the preamble's three header rows (whole lines; each must exist once, on the line the frozen file has it, with a value
+that matches a strict pattern: `Format version: <digits>[.<digits>]`; `Gate verdict:` one to four lower-case words of `[a-z0-9_.-]`, at most 80 characters, no colon; `Freeze tag:` `none yet` or
+`spec-frozen[-<capital>]-<yyyymmdd>`) and class-table rows after the frozen last row (a row of an unprotected part may change or go, and is matched to the frozen row by the number of
+the heading it names, so an unprotected heading can be renamed with its row; a protected row must stay byte for byte, in place); section 7 must START with the frozen bytes; 2.1's
+fixed-sentence table is compared row by row, matched by the F-id. **2.1's rows are only the contiguous `|` block under the `| Id |` header row and its separator**; any other `| F-` line is plain
+text of its part and compared as such. An F-id with more than one row in either file is refused (exit 1, naming the id and both lines); the protected rows keep the frozen order; a row may differ
+only when its sentence is defined only in unprotected parts, and a free or added row whose kinds cell names `all` or `olympiad` is refused. **A sentence is defined where its label stands** (`F-ID` at
+the start of a line outside fences) and, when it has no label (F-ERRORS, F-TIMING, F-BYTES-O-N), where the paragraph that introduces a fenced block names it; checked on the draft, the 14 daemon and web
+sentences are free (F-PORT, F-READY, F-STOP, F-EOF, F-TIMING, F-STDOUT-D, F-BYTES-D, F-BYTES-W, F-JSON, F-LIMITS-D, F-LOAD, F-DEADLINES, F-RUN-D, F-SAMPLES-D) and the other 17 are protected (a test
+pins the split). Refusals name the heading and the FROZEN class (`none` for a part the frozen file did not have): protected bytes differ (with the first differing candidate line; for a retitled
+heading `heading text changed`), a protected class row relabelled or gone, a protected part missing, a part added as `common` or `olympiad` (the lead text of a section that was one unprotected whole
+is the one exception, and only when it is the `##` line and blank lines, or the bytes the frozen section had before its first subsection), a heading number that changed (also when the part moved to
+another section; a `###` inserted inside a protected mixed section moves the numbers after it), a candidate whose own class table breaks the rules. An append at the end of a mixed section with
+the next free number, classed `daemon`, `web` or `daemon-web`, passes; so does turning a `daemon-web` whole section into subsections of those classes. Format errors in either file are exit 4; a frozen
+file that breaks its own class rules is exit 4. `grammar-extract.mjs` ignores only ENOENT when it removes its temporary file; any other error is one line on stderr and the exit code stays the write's.
+
+**The bounds (T-L58).** `format-bounds.test.mjs` reads each figure through a strict reader: a regular expression that tolerates whitespace, wrapping, code spans and quoting variants and
+still demands exactly ONE match (zero or two is the reader's error). F-STDERR (2.2) and 4.6's `writes more than 256 MiB to standard error` against `STDERR_KILL_BYTES` in `runner/rs_exec.py`; F-ENV's
+`TZ` against the base environment of `lib/exec-layer/env.mjs`; 4.2's one settable name (`TZ`) against the layer's real `boxEnv`: every key of the layer's own exports (`ALLOW_LIST`, `CASE_KEYS`),
+in three spellings, is refused except `TZ`, which is accepted (the test derives the keys, it does not retype them; the layer is not changed); F-PROCS's 512 against `pids.max` in
+`lib/exec-layer/scope-entry.sh`. For every mapping there is a case with the value changed in FORMAT (red), one with it changed in the source (red), and cases with the line removed or
+duplicated on each side (the reader's error). The source readers also fail when the value is assigned or written a second time anywhere in the file (`STDERR_KILL_BYTES *= 2`, an annotated or tuple
+assignment, a `tee`, `printf` or `>>` to `pids.max`; comments are not counted); what another module does to the value cannot be seen from the one file. The `boxEnv` side is behaviour, so its source-side cases are stand-ins for `boxEnv` that accept a base key, refuse `TZ` or accept a heap key.
+
+**The real draft in tests.** The positive cases and `--self` also run on the real draft when `LANG_V2_TASK_REPO` names the task repository's checkout; they first check that the checkout's
+`todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256` and fail otherwise. Without the variable they skip with the reason; under `BENCH_REQUIRE_SANDBOX=1` they throw. Refusal cases use the
+synthetic fixture. **The gated record (2026-11-04):** FORMAT v2 on the task repository's `main` (`40e678fe`), sha256 `d293bafc…`, grammar sha256 `95f3c26e…`, gate `inputs/gates/FORMAT-v2.md`. `inputs/specs.d/format.json` was bootstrapped first on drafts (three times: at `0a95d31`, at `593fb7a` and at `2683747`, each with its own commit) in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
+
+**Not done here.** The format's own document gate, the freeze, and `runner/GRAMMAR.md` in the workspaces (the extractor makes the text; E1.S3 places it). The record's `gate` stays `null` until
+the gate passes.
 
 ## The conformance check (E1.S8)
 
