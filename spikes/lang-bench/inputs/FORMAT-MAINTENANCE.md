@@ -10,8 +10,17 @@ It applies to the task format, `Format version: 2`. Where this document and the 
 ## 1. Conformance (for the maintainers)
 
 A spec conforms to the format when a checker finds all of the following. The checker is the spec conformance check, a tool of the bench for
-the visible samples and for the format document, used by every spec's gate. **It is not built yet; nothing runs it.** Until it exists, the
-same list is checked by hand and the result is recorded with the spec's gate. The tools in section 2 check the format document itself, not a spec.
+the visible samples and for the format document, used by every spec's gate. **It is built: `node spikes/lang-bench/conformance.mjs --repo <task repository> --task NN-slug
+--format <FORMAT.md> [--needles <file>]`.** It prints one line per check, `ok <check>` or `FAIL <check> — <what, where>`, and exits 0 when every check is ok, 1 on a
+deviation, 4 when it cannot run (a missing task, spec or samples folder; a format it cannot read or that lacks a sentence it expects; no `python3`, no runner, a runner that
+does not finish in 60 seconds): a refusal to run is never a pass. The result of the run is recorded with the spec's gate. The tools in section 2 check the format document itself, not a spec.
+
+The ten checks of the command, and the items below they cover: `file` (1), `header` (2), `sections` (3), `r-ids` (4 and 5), `sentences` (6), `T/G` (7), `samples` (9),
+`sample-forms` (8, and the forms of the sample files that the runner leaves to the format), `sample-env` (the `env` lines of the samples) and `no-needle` (10, 11 and 12). Four things
+it does only in part, and they stay with the reviewer: a normative sentence outside every requirement that is not a fixed sentence (5); a `body json` or `recv … json` entry is
+refused only when no requirement carries F-JSON, not reply by reply (8); the reading block is recognised as a paragraph that names eight or more of the script's keywords in code
+spans (10); the names of the implementation languages, runtimes and web frameworks of the series (11) are not in the command, whose lists are the push check's plan ids, links and
+known-task needles and the author's `--needles` file. In group B each olympiad spec of A is checked under A's FORMAT and under B's.
 
 1. **The file.** The name matches 1.1; the title's `NN` equals the file's.
 2. **The header.** The five rows of 1.2, in order, each value either its placeholder or its later form; the `Kind` value one of the three

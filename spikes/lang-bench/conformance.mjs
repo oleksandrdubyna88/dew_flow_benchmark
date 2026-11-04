@@ -10,8 +10,17 @@
 import { pathToFileURL } from 'node:url';
 import { run } from './lib/conformance.mjs';
 
+/** The run, with a fault of the checker itself as exit 4: a crash must never look like a deviation (exit 1) or a pass. */
+async function guarded(argv) {
+  try {
+    return await run(argv);
+  } catch (error) {
+    return { exit: 4, lines: [], errors: [`conformance: the checker itself failed: ${error?.stack ?? error}`] };
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = await run(process.argv.slice(2));
+  const result = await guarded(process.argv.slice(2));
   process.stdout.write(result.lines.map(line => `${line}\n`).join(''));
   process.stderr.write(result.errors.map(line => `${line}\n`).join(''));
   process.exit(result.exit);

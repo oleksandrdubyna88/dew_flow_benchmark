@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, CHECK_NAMES, FIXTURES, fixtureRepo, TASKS } from './support/conformance-fixtures.mjs';
+import { argsOf, check, CHECK_NAMES, fixtureRepo, TASKS } from './support/conformance-fixtures.mjs';
 
 const CLI = fileURLToPath(new URL('../conformance.mjs', import.meta.url));
 
@@ -69,5 +69,12 @@ test('An_olympiad_spec_conforms_under_A_and_B_FORMAT', async t => {
   const b = fixtureRepo(t, 'olympiad', { format: [['The program is ready when {readiness}.', 'The program is ready when {readiness}, and not before.']] });
   assert.equal((await check(a)).exit, 0);
   assert.equal((await check({ ...a, format: b.format })).exit, 0, 'the same spec passes under B');
-  assert.ok(FIXTURES.length > 0);
+});
+
+test('A_Kind_row_that_names_no_kind_is_a_deviation_and_the_checks_that_need_the_kind_say_they_were_not_run', async t => {
+  const result = await check(fixtureRepo(t, 'olympiad', { spec: [['| Kind | a program that reads standard input once and writes standard output once |', '| Kind | a script |']] }));
+  assert.equal(result.exit, 1);
+  for (const name of ['sections', 'sentences', 'T/G', 'samples', 'sample-forms', 'sample-env']) {
+    assert.ok(result.lines.includes(`FAIL ${name} — not checked: the Kind row names none of the three kinds`), name);
+  }
 });

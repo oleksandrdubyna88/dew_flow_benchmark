@@ -327,7 +327,40 @@ the gate passes.
 
 ## The conformance check (E1.S8)
 
-not built yet
+Built 2026-11-04 (`todo/PLAN_lang_comparison_v2_E1.md` § E1.S8). One command reads a spec, its visible samples and FORMAT.md and names every deviation:
+`node spikes/lang-bench/conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>]`. The spec is `<repo>/todo/tasks/<task>.md` and its samples are
+`<repo>/tasks/<task>/samples/`. One line per check on standard output, `ok <check>` or `FAIL <check> — <what, where>` (one line per finding). **Exit** 0 every check ok; 1 a deviation; 4 the
+checker cannot run, and nothing is passed: a usage error, a missing or unresolvable `--task`, spec or samples folder, a FORMAT it cannot read or that lacks a sentence, a placement or a slot it
+expects, `python3` or the runner missing, the runner not finished in 60 s, or ended in a way other than 0 or 4. A spec the block reader refuses (CR, byte order mark, a form CommonMark reads otherwise)
+is one `FAIL file` line and exit 1. In group B, check each olympiad spec of A under A's FORMAT and under B's (`An_olympiad_spec_conforms_under_A_and_B_FORMAT`).
+
+**FORMAT is the source.** `lib/conformance-sentences.mjs` reads 2.1's table (id, kinds, where) and takes each sentence's text from the `text` block of section 2 that follows its label: the
+paragraph the block follows names the id (it starts with it, or the last id it names is the one; `F-INVALID (olympiad):` gives the kinds of a variant; two blocks under one label are the parts
+of one sentence, F-HIDDEN). `lib/conformance-facts.mjs` reads the file-name pattern (1.1), the header rows, the verdict words and the kind phrases (1.2), the eight headings of each kind (1.4),
+the series T and G (2.5) and the keyword list (4.5). Nothing is typed again, but the slots' allowed values (`SLOT_PATTERNS`, from 2.1 to 2.5) and the forms of 2.1's `Where` column are the
+checker's own, and a FORMAT that uses one it does not know is refused (exit 4). Sentences are compared after whitespace is collapsed; a sentence not found whole whose first or last words stand
+in the spec is `altered`, with the line. Optional sentences (F-PORT, F-EOF, F-TIMING, F-JSON, F-ERRORS) are checked where they stand; F-INVALID xor F-ERRORS, F-TIMING once per overridden value,
+F-STOP's `{which}` by F-EOF, `{k}` by the samples shown, `{ref}` by the ids that exist; F-BYTES-O-N is refused for this series.
+
+| Check | What it reads |
+|---|---|
+| `file`, `header`, `sections` | the name, the title, the five rows and their later forms, the eight headings, section 8 against the `Amendments` row |
+| `r-ids` | `**R<n>.**` unique and exactly R1 … Rn, ascending before the freeze, F-REQ's `{n}`, the ids amendments name, a table or a fence outside every requirement span |
+| `sentences`, `T/G` | the fixed sentences with their places and slots; T and G against every visible scenario's `start … within` and first `wait-exit within` |
+| `samples`, `sample-forms`, `sample-env` | the folder against section 6; the olympiad cells (FORMAT 3.4's code-span forms) or the daemon and web blocks against the bytes; the runner's parse; CP1's F11 forms; the `env` keys against `ALLOW_LIST` and `CASE_KEYS` of `lib/exec-layer/env.mjs` |
+| `no-needle` | E1.S1's rules (`findVisibleRules`, the known-task file `inputs/needles-lang.json`) and the author's literals (`--needles`, one per line, the leak-token reader; a hit is named by its number) over the spec and the sample files; `⏎` outside section 6; a paragraph with eight or more script keywords in code spans (the reading block) |
+
+**The runner** is `spikes/lang-bench/runner/run_samples.py`, found from the checker's own place (never from `--repo`), run as `python3 -I -B <runner> --kind <daemon|web> --parse-only <samples>` through
+v1's `runBounded` (60 s, TMPDIR a folder of its own, removed after); its `(file, line, message)` lines are quoted in the `samples` findings. `runBounded` already ends the whole process tree at its
+ceiling (`A_runner_that_hangs_…` shows a `setsid` child of the runner gone when the checker returns), so it is not widened. An olympiad task needs neither python nor the runner.
+
+**Not covered, and why.** The language, runtime and framework names of the series are not in the command: E1.S1's patterns hold plan ids, links, the known-task names and the family's names, and
+no list of languages exists in `lib/` to reuse (the author's `--needles` file can carry them). The body-forms rule is coarse (a JSON comparison with no F-JSON anywhere). A normative sentence outside a span
+that is not a fixed sentence is for the reviewer. Complexity of some functions is above four, as in the neighbouring readers; every function is under 50 lines.
+
+**Files.** `conformance.mjs` (command), `lib/conformance.mjs` (the run), `lib/conformance-{blocks,spec,facts,sentences,locate,shown,runner}.mjs` (readers), `lib/conformance-check-{structure,sentences,samples,text}.mjs`
+(the checks); `lib/format-structure.mjs` takes a `structure` rule (a spec has eight sections, FORMAT seven) and `lib/format-compare.mjs` exports `tableOf`. Tests: `test/conformance*.test.mjs`, the synthetic
+repositories and the FORMAT stand-in in `test/fixtures/conformance/`, `test/support/conformance-fixtures.mjs`. Scenarios: [module_tests.md](module_tests.md), section *The conformance checker scenarios (E1.S8)*.
 
 ## Toolchains and the preflight (E1.S5)
 
