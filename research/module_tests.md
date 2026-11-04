@@ -335,6 +335,29 @@ task's real allocation pattern would, and the policy that decides OP-K is the te
 capability set and `lo`, not as a complete sandbox. The C# programs are built with no package; a task that needs the cache snapshots (E1.S4) is not covered by these builds. Timing-sensitive tests (the
 holder's bound, the scope's end) have margins of seconds and were run under the full suite's load.
 
+## The conformance checker scenarios (E1.S8, `spikes/lang-bench/`)
+
+*Last full run, 2026-11-04, branch `feat/lang-v2-e1-s8`: `BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<the task repository> node spikes/lang-bench/run-tests.mjs` 1910 of 1910 (the 1782 before, plus the 128 below); plain `node spikes/lang-bench/run-tests.mjs` 1905 tests, 1880 pass, 25 skipped (the cases that need the task repository), 0 fail; `BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs` 1240 of 1240; `node --test spikes/lang-explore/test/` 302 of 303, 1 skipped by design. The first sandbox run failed one existing timing test of the runner's python units (`A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork_and_the_pid_is_the_programs`) while the host's load average was near 20; the runner files alone failed another one of that kind (`A_program_that_exits_at_once_is_judged_by_its_output_and_…`) and the repeat of the whole run was green (`todo/PLAN_bench_test_leftovers_followups.md` S5).*
+
+The checker of a spec against FORMAT (`node spikes/lang-bench/conformance.mjs`; design in [module_lang_bench.md](module_lang_bench.md), section *The conformance check (E1.S8)*). The tests run it in this process on
+copies of three synthetic task repositories (`test/fixtures/conformance/<kind>/`, one conforming spec with its samples per kind, and a FORMAT stand-in with the real document's sections 1 and 2) in owned
+folders; `edit` throws unless its needle is there exactly once, and `phrase` is the same for a sentence that wraps. Each negative case shows that the unchanged spec is `ok` for the check and that the planted
+change gives the named `FAIL` line, so a checker that finds nothing (or everything) fails. The real FORMAT and the real spec 01 are read only when `LANG_V2_TASK_REPO` is set (skipped otherwise, a failure under
+`BENCH_REQUIRE_SANDBOX=1`).
+
+| Flow | Status | Test files |
+|---|---|---|
+| A conforming spec of each kind: one `ok` per check, exit 0; the command's streams; exit 4 for each usage and format error; olympiad spec under A's and B's FORMAT | covered | `conformance.test.mjs` (14) |
+| Checks 1 to 6: one failing fixture per deviation (title, header, sections, amendments, ids, spans, sentences, slots, T and G), `The_checker_still_finds_a_known_deviation`, the exact `T/G` line | covered | `conformance-checks.test.mjs` (48) |
+| Checks 7 to 10: folder against section 6, cells and blocks against the bytes, the runner's lines quoted, CP1's F11 forms, the env keys, links, plan ids, the needles file, the glyph, the reading block | covered | `conformance-samples.test.mjs` (32) |
+| The runner: python or runner missing, a runner that ends in another way, a hang stopped at the ceiling with its process tree (a session of its own), an olympiad spec without either | covered | `conformance-runner.test.mjs` (8) |
+| FORMAT is the source: a retyped list would pass an old spec, a one-word change is followed, a FORMAT missing a block, a slot, a placement, a table or a fact is exit 4, the real FORMAT's ids all found, spec 01 observed | covered | `conformance-sentences.test.mjs` (16) |
+| The env lines against the layer's own lists, a retyped list missing a new key | covered | `conformance-env.test.mjs` (10) |
+
+**Red again.** The production line of each guarantee was taken out in turn and the named tests watched red (ten mutations, two of them of `runBounded` and of the env list; record in `~/rsd/lang-v2/briefs/s8-reds.txt`).
+The checker was written before its tests, so the first reds are the failures the tests showed on the way (a fingerprint that missed a changed word, a sentence outside every requirement), not a red of the whole checker.
+**Spec 01 under the real FORMAT** (observation, not a requirement; E1.S2 re-conforms the spec): with an empty samples folder, `file`, `header`, `sections`, `r-ids`, `T/G`, `sample-forms`, `sample-env` and `no-needle` are ok; `sentences` names F-STDERR, F-MEMORY and F-ENV as altered and F-PROCS as missing; `samples` names the six sample files it does not find.
+
 ## The FORMAT tools scenarios (E1.S9, `spikes/lang-bench/`)
 
 *Last full run, 2026-11-04, with E1.S4 and E1.S9 merged and the record at the gated FORMAT (`d293bafc…`): `BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<the task repository> node spikes/lang-bench/run-tests.mjs` 1782 of 1782, the FORMAT files with `specs-record` 338 of 338. The numbers below are kept as they were observed on the way.*
