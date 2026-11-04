@@ -31,10 +31,13 @@ export function domainsOf(spec) {
 
 const whole = (domain, hit) => hit.index === 0 && hit.end === domain.text.length;
 
-/** The hits of one compiled sentence in the domains its placement allows. */
-function hitsOf(compiled, domains, mode) {
-  return domains.filter(domain => domain.name === wantedName(mode)).flatMap(domain => findAll(compiled, domain.text)
-    .filter(hit => domain.name === 'r' || domain.name === 'stray' || whole(domain, hit))
+const insideSpan = (text, index) => (text.slice(0, index).split('`').length - 1) % 2 === 1;
+const countsAt = (domain, hit) => !insideSpan(domain.text, hit.index) && (domain.name === 'r' || domain.name === 'stray' || whole(domain, hit));
+
+/** The hits of one compiled sentence in the domains its placement allows; a stray hit leaves out the paragraph that is the sentence's own place (`home`). A hit that starts inside a code span does not count. */
+function hitsOf(compiled, domains, mode, home) {
+  return domains.filter(domain => domain.name === wantedName(mode) && (domain.name !== 'stray' || domain.home !== home)).flatMap(domain => findAll(compiled, domain.text)
+    .filter(hit => countsAt(domain, hit))
     .map(hit => ({ ...hit, domain, r: domain.r, section: domain.section, line: domain.lineAt(hit.index) })));
 }
 
@@ -49,11 +52,11 @@ function alteredAt(fingerprints, domains, mode) {
   return null;
 }
 
-/** The paragraphs that lie in no requirement and are not the lonely paragraphs a sentence may stand in: a fixed sentence there is outside every span. */
+/** The paragraphs that lie in no requirement (a lonely paragraph is the home of the sentence whose place it is, and stray for every other): a fixed sentence there is outside every span. */
 function strayDomains(spec, lonely) {
-  const used = new Set(lonely.map(domain => domain.text));
+  const homes = new Map(lonely.map(domain => [domain.text, domain.name]));
   return spec.paragraphs.filter(p => !p.isTable && p.startNo > 1 && requirementAt(spec, p.startNo) === undefined && spec.sectionAt(p.startNo) !== 8)
-    .map(p => ({ name: 'stray', section: null, r: null, ...collapse(p.lines) })).filter(domain => !used.has(domain.text));
+    .map(p => ({ name: 'stray', section: null, r: null, ...collapse(p.lines) })).map(domain => ({ ...domain, home: homes.get(domain.text) ?? null }));
 }
 
 const missingPart = (variant, partHits) => variant.parts.find((_, index) => partHits[index].length === 0);
@@ -66,7 +69,7 @@ function alteredOf(variant, partHits, domains, mode) {
 function locateOne(entry, kind, domains) {
   const variant = variantFor(entry, kind) ?? entry.variants[0];
   const partHits = variant.parts.map(part => hitsOf(part, domains, entry.where.mode));
-  const stray = variant.parts.flatMap(part => hitsOf(part, domains, 'stray'));
+  const stray = variant.parts.flatMap(part => hitsOf(part, domains, 'stray', entry.where.mode));
   return { entry, variant, partHits, hits: partHits[0], altered: alteredOf(variant, partHits, domains, entry.where.mode), stray, applies: entry.kinds.has(kind) };
 }
 

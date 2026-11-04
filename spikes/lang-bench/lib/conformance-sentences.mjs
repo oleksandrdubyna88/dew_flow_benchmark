@@ -67,7 +67,7 @@ export function compileTemplate(template) {
   if (unknown !== undefined) return unknownSlot(unknown);
   const seen = new Set();
   const source = pieces.map((piece, index) => (index % 2 === 0 ? escapeRegExp(piece) : slotSource(piece, seen))).join('');
-  return ok({ regex: new RegExp(`(?<![A-Za-z0-9])${source}`, 'g'), slots: [...seen], fingerprints: fingerprintsOf(longestOf(pieces.filter((_, index) => index % 2 === 0))) });
+  return ok({ regex: new RegExp(`(?<![A-Za-z0-9])${source}(?![A-Za-z0-9])`, 'g'), slots: [...seen], fingerprints: fingerprintsOf(longestOf(pieces.filter((_, index) => index % 2 === 0))) });
 }
 
 /** Every place `text` (collapsed) holds the compiled sentence: `{ index, end, slots }`. */

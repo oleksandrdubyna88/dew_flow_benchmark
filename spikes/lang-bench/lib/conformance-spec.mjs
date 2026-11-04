@@ -13,15 +13,24 @@ function sectionIndex(sections) {
   return no => sections.findLast(section => section.no <= no)?.number ?? 0;
 }
 
-/** The requirement paragraphs: `{ n, no, startNo, endNo, section, text, lineAt, lines }`; `text` is the span collapsed, from the id on. */
-function requirementsOf(kept, headings, lastNo, sectionAt) {
+const ATX = /^(#{1,6})(?:[ \t]+(.*)|$)/;
+
+/** Every ATX heading of any level outside fences: `{ level, text, no }`. A span ends at any of them. */
+const atxOf = kept => kept.flatMap(line => {
+  const found = ATX.exec(line.text);
+  return found === null ? [] : [{ level: found[1].length, text: (found[2] ?? '').trim(), no: line.no }];
+});
+
+const inRanges = (ranges, no) => ranges.some(range => no >= range.startNo && no <= range.endNo);
+
+/** The requirement paragraphs: `{ n, no, startNo, endNo, section, text, lineAt, lines }`; `text` is the span collapsed, from the id on, without the lines of a table (a sentence in a table cell is not a sentence of the requirement). */
+function requirementsOf({ kept, atx, tables, lastNo, sectionAt }) {
   const starts = kept.flatMap(line => (R_START.test(line.text) ? [{ n: Number(R_START.exec(line.text)[1]), no: line.no }] : []));
-  const stops = new Set(headings.map(heading => heading.no));
   return starts.map((start, index) => {
     const nextStart = starts[index + 1]?.no ?? lastNo + 1;
-    const nextHeading = headings.find(heading => heading.no > start.no)?.no ?? lastNo + 1;
+    const nextHeading = atx.find(heading => heading.no > start.no)?.no ?? lastNo + 1;
     const endNo = Math.min(nextStart, nextHeading) - 1;
-    const lines = kept.filter(line => line.no >= start.no && line.no <= endNo && !stops.has(line.no));
+    const lines = kept.filter(line => line.no >= start.no && line.no <= endNo && !inRanges(tables, line.no));
     return { ...start, startNo: start.no, endNo, section: sectionAt(start.no), lines, ...collapse(lines) };
   });
 }
@@ -37,6 +46,7 @@ export function parseSpec(bytes) {
   const lastNo = lines.at(-1).no;
   const blocks = fencedBlocks(lines);
   const tables = paragraphs(lines).filter(paragraph => paragraph.isTable);
+  const atx = atxOf(kept);
   const spec = {
     text,
     lines,
@@ -44,7 +54,8 @@ export function parseSpec(bytes) {
     headings: headings.map(heading => ({ level: heading.level, text: heading.text, no: heading.no })),
     sections,
     sectionAt,
-    requirements: requirementsOf(kept, headings, lastNo, sectionAt),
+    atx,
+    requirements: requirementsOf({ kept, atx, tables, lastNo, sectionAt }),
     paragraphs: paragraphs(lines),
     tables,
     blocks,
