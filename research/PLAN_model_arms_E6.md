@@ -24,6 +24,8 @@
 > pick-back without its patch-id skip (E6.S4, added by the parent's re-review for epoch 4). Tests under `tests/Bench.Tests/ModelArms/` and `tests/Bench.Tests/Cli/`,
 > fixtures under `tests/Bench.Tests/Fixtures/model-arms/consumers/`, `research/module_model_arms.md`, `research/module_tests.md`,
 > `research/architecture.md`, `README.md`, `todo/PLAN_model_arms_analysis.md` (new).
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 2, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 9; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 

@@ -11,6 +11,8 @@
 > `tests/Bench.Tests/Infrastructure/`), `research/module_model_arms.md`. Nothing here launches a model.
 > Eleven stories, E1.S1–E1.S11 (the parent's map named nine; §8 records the split). Cornerstone area of this epic: **the launch
 > boundary**, marked on **E1.S5** (`model: fable`). The parent's ledger now reads `Cornerstones: 1 of 2 — E1.S5`.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E1.md` gives 4, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E1.md` gives 2; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 

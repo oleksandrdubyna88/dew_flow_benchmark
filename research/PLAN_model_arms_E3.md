@@ -16,6 +16,8 @@
 > stories, E3.S0–E3.S5 — **E3.S0 added 2026-10-30 at `23354c6` by Fable as a SECURITY judgement** (the parent's ledger entry 2.1: the owner
 > overturned E1.S10's decision 4 — macOS and FreeBSD run, not refused, each printing what it did not verify; wave 0, it lands first);
 > **M2** — the attended pilot — and **M2's key check** — the owner's, by hand — close the epic.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E3.md` gives 0, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E3.md` gives 2; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 

@@ -40,6 +40,8 @@
 > E4's obligation in the parent's D17 d); **(3)** nothing kept a step from starting subagents — the new E2.S0 (a change to E1's
 > `StepLaunch`, `StepSpec` and the example). The parent's `## Plan changes` ledger carries them as 1.1–1.3 and is **stopped for
 > re-review** (`common.plan-change-control`); the stories here are the amended baseline that re-review reads.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E2.md` gives 7, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E2.md` gives 4; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 

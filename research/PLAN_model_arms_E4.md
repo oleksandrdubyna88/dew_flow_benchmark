@@ -23,6 +23,8 @@
 > scheme with a `tasks` block, with `stepsOnDeadline` and `status` naming the task coders (E4.S3). Tests under
 > `tests/Bench.Tests/ModelArms/`, fixtures under `tests/Bench.Tests/Fixtures/model-arms/tasks/`, `research/module_model_arms.md`, the
 > `run-arm` row of `research/module_tests.md`.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E4.md` gives 5, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E4.md` gives 6; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 
