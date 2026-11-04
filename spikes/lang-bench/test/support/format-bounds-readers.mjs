@@ -65,10 +65,19 @@ export const formatEnvSettable = formatText => inSubsection(formatText, '4.2', t
   return broken === undefined ? ok(found.find(([clause]) => clause === 'settable')[1].value[1]) : broken[1];
 });
 
-/** The product of the integers of `STDERR_KILL_BYTES = 256 * 1024 * 1024` (one assignment, `*` between integers, underscores allowed) in rs_exec.py. */
+/** The lines of `text` that are not comments (a line whose first non-blank character is `#`), with the text after a trailing ` #` comment cut off. */
+const codeLines = text => text.split('\n').filter(line => !line.trimStart().startsWith('#')).map(line => line.replace(/\s#.*$/, ''));
+
+/** The count of lines that assign `STDERR_KILL_BYTES` in any spelling: `=`, an augmented operator, an annotation, a walrus, a target of a tuple assignment (comments cut off). */
+const stderrAssignments = text => codeLines(text).filter(line => /\bSTDERR_KILL_BYTES\b\s*(?:,[^=\n]*)?(?::[^=\n]*)?(?:\*\*|\/\/|<<|>>|[-+*/%@&|^])?=(?!=)/.test(line)).length;
+
+/** The product of the integers of `STDERR_KILL_BYTES = 256 * 1024 * 1024` (one assignment, `*` between integers, underscores allowed) in rs_exec.py; the name is assigned nowhere else in the file. */
 export function sourceStderrKill(text) {
   const found = exactlyOne(text, /^STDERR_KILL_BYTES\s*=\s*(\d[\d_]*(?:\s*\*\s*\d[\d_]*)*)\s*(?:#.*)?$/m, 'STDERR_KILL_BYTES in rs_exec.py');
-  return found.ok ? ok(found.value[1].split('*').map(part => Number(part.replaceAll('_', '').trim())).reduce((a, b) => a * b, 1)) : found;
+  if (!found.ok) return found;
+  const assigned = stderrAssignments(text);
+  if (assigned !== 1) return fail(`STDERR_KILL_BYTES in rs_exec.py: assigned on ${assigned} lines, exactly one is required`);
+  return ok(found.value[1].split('*').map(part => Number(part.replaceAll('_', '').trim())).reduce((a, b) => a * b, 1));
 }
 
 /** The `TZ` of the layer's base environment in env.mjs (`TZ: 'UTC'`, either quote). */
@@ -77,10 +86,13 @@ export function sourceBaseTz(text) {
   return found.ok ? ok(found.value[2]) : found;
 }
 
-/** The figure written to the scope's `prog/pids.max` in scope-entry.sh: `echo 512 > "$cg/prog/pids.max"`, the path quoted either way or not. */
+/** The figure written to the scope's `prog/pids.max` in scope-entry.sh: `echo 512 > "$cg/prog/pids.max"`, the path quoted either way or not; no other line of the file (a comment apart) names `pids.max`. */
 export function sourcePidsMax(text) {
   const found = exactlyOne(text, /^\s*echo\s+(\d+)\s*>\s*(['"]?)\$\{?cg\}?\/prog\/pids\.max\2\s*$/m, 'pids.max in scope-entry.sh');
-  return found.ok ? ok(Number(found.value[1])) : found;
+  if (!found.ok) return found;
+  const naming = codeLines(text).filter(line => line.includes('pids.max')).length;
+  if (naming !== 1) return fail(`pids.max in scope-entry.sh: ${naming} lines name it, exactly one is required`);
+  return ok(Number(found.value[1]));
 }
 
 /** The two values compared: `{ ok: true }`, `{ ok: false, kind: 'reader', reason }` (a reader could not find its subject) or `{ ok: false, kind: 'mismatch', reason }`. */

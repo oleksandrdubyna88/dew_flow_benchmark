@@ -191,3 +191,26 @@ test('A_FORMAT_without_the_subsection_a_reader_needs_is_the_readers_error', () =
   assert.match(result.reason, /0 matches/);
   assert.equal(formatTz('not a format').ok, false);
 });
+
+// The source readers also fail when the figure is assigned or written a second time anywhere in the file, in any spelling (a later `*=`, an annotated assignment, `tee`, `printf`, `>>`).
+test('The_source_reader_of_the_stderr_stop_fails_when_the_figure_is_assigned_a_second_time_in_any_spelling', () => {
+  for (const second of ['STDERR_KILL_BYTES *= 2', 'STDERR_KILL_BYTES += 1', '    STDERR_KILL_BYTES = 1', 'STDERR_KILL_BYTES: int = 5', 'STDERR_KILL_BYTES //= 2', 'STDERR_KILL_BYTES <<= 1', 'A, STDERR_KILL_BYTES = 1, 2', 'STDERR_KILL_BYTES, OTHER = 1, 2', '(STDERR_KILL_BYTES := 7)']) {
+    const result = sourceStderrKill(`${RS_EXEC}\n${second}\n`);
+    assert.equal(result.ok, false, `${second} is a second assignment`);
+    assert.match(result.reason, /STDERR_KILL_BYTES/);
+    assert.match(result.reason, /exactly one is required/);
+  }
+  assert.equal(sourceStderrKill(`${RS_EXEC}\nVALUE = STDERR_KILL_BYTES * 2\n# STDERR_KILL_BYTES *= 2\nprint(STDERR_KILL_BYTES == 1)\nOTHER = 1  # STDERR_KILL_BYTES = 2\n`).ok, true, 'a use, a comment, a trailing comment and a comparison are not assignments');
+  assert.equal(sourceStderrKill(RS_EXEC).value, 256 * 1024 * 1024);
+});
+
+test('The_source_reader_of_pids_max_fails_when_the_file_writes_the_file_a_second_time_in_any_spelling', () => {
+  for (const second of ['echo 4096 >> "$cg/prog/pids.max"', 'printf 4096 > "$cg/prog/pids.max"', 'echo 4096 | tee "$cg/prog/pids.max"', "echo 4096 > '$cg/prog/pids.max'", 'echo max > ${cg}/prog/pids.max', 'cat /dev/null > "$cg/prog/pids.max"']) {
+    const result = sourcePidsMax(`${SCOPE_ENTRY}\n${second}\n`);
+    assert.equal(result.ok, false, `${second} is a second write`);
+    assert.match(result.reason, /pids\.max/);
+    assert.match(result.reason, /exactly one is required/);
+  }
+  assert.equal(sourcePidsMax(`${SCOPE_ENTRY}\n# echo 4096 > "$cg/prog/pids.max"\n`).ok, true, 'a comment is not a write');
+  assert.equal(sourcePidsMax(SCOPE_ENTRY).value, 512);
+});

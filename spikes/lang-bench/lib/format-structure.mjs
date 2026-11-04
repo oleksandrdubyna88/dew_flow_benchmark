@@ -9,7 +9,6 @@ export const sha256Hex = bytes => createHash('sha256').update(bytes).digest('hex
 const ok = value => ({ ok: true, ...value });
 const fail = (line, reason) => ({ ok: false, line, reason });
 const BOM = [0xef, 0xbb, 0xbf];
-const FENCE_OPEN = /^(`{3,}|~{3,})/;
 
 /** `ok({ text })` for bytes that are UTF-8 with LF only and no byte order mark, else `fail(line, reason)` naming the first line that is not. */
 export function checkBytes(bytes) {
@@ -53,24 +52,93 @@ export function linesOf(text) {
   return lines;
 }
 
-/** Whether `line` closes the fence `open` (the same character, at least as many, nothing else but blanks). */
-const closes = (open, line) => line.startsWith(open[0].repeat(open.length)) && line.trimEnd().split('').every(char => char === open[0]);
+const FENCE = /^(`{3,}|~{3,})(.*)$/;
+const LIST_MARKER = /^([-+*]|\d{1,9}[.)])( +|\t|$)/;
+const THEMATIC_BREAK = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const HTML_BLOCK_6 = /^<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t]|\/?>|$)/i;
+const HTML_BLOCK_1 = /^<(?:script|pre|style|textarea)(?:[ \t>]|$)/i;
+const HTML_BLOCK_7 = /^(?:<[A-Za-z][A-Za-z0-9-]*(?:[ \t][^<>]*)?\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$/;
 
-/** The lines outside fenced code blocks (a fence's own marker lines are inside it): a fence opens with a line starting with three or more backticks or tildes and closes with the same marker. */
-export function unfencedLines(lines) {
+/** The indent of `text` in columns (a tab goes to the next multiple of four) and the text after it. */
+function indentOf(text) {
+  let col = 0;
+  let at = 0;
+  for (; at < text.length; at += 1) {
+    if (text[at] === ' ') col += 1;
+    else if (text[at] === '\t') col += 4 - (col % 4);
+    else break;
+  }
+  return { col, rest: text.slice(at) };
+}
+
+/** The column where the content of a list item starts, for a marker line `rest` at column `col`, or null when `rest` is no list item. */
+function listContentColumn(col, rest) {
+  const marker = LIST_MARKER.exec(rest);
+  if (marker === null || THEMATIC_BREAK.test(rest)) return null;
+  const gap = marker[2].replaceAll('\t', '    ').length;
+  return col + marker[1].length + (rest.length === marker[0].length || gap > 4 ? 1 : gap);
+}
+
+/** The reason when `rest` starts an HTML block that CommonMark renders as raw HTML, else null; a complete tag alone on its line starts one only where no paragraph is open (`freshBlock`). */
+function htmlBlockStart(rest, freshBlock) {
+  if (!rest.startsWith('<')) return null;
+  const type = (HTML_BLOCK_1.test(rest) || rest.startsWith('<!--') || rest.startsWith('<?') || /^<![A-Za-z]/.test(rest) || rest.startsWith('<![CDATA[') || HTML_BLOCK_6.test(rest) || (freshBlock && HTML_BLOCK_7.test(rest)));
+  return type ? 'an HTML block start: CommonMark renders raw HTML here, and the reader cannot read through it' : null;
+}
+
+/** The reason when the raw line is an ATX heading in a form the reader does not take (it takes `## ` and `### ` at column 0), else null. */
+function strangeHeading(text) {
+  if (/^ {1,3}#{1,6}(?:[ \t]|$)/.test(text)) return 'an ATX heading with 1 to 3 leading spaces: the reader takes a heading only at column 0';
+  if (/^#{1,6}\t/.test(text)) return 'an ATX heading with a tab after the hashes: the reader takes `#` and a space';
+  if (/^#{1,6} *$/.test(text)) return 'an ATX heading with nothing after the hashes';
+  return null;
+}
+
+/**
+ * The lines outside fenced code blocks and the first line that CommonMark would read otherwise than this reader does: `{ kept, fault }` (`fault` is `{ no, reason }` or null). A fence
+ * opens at column 0 (inside a list item: at the item's content column, up to three columns more) with three or more backticks or tildes (a backtick fence has no backtick in its info
+ * string) and closes with a line of the same character, at least as long, up to three columns in, and nothing else. A fence line indented 1 to 3 spaces outside a list item, an HTML block
+ * start at columns 0 to 3 and an ATX heading in a form the reader does not take are faults: the reader would see another document than a renderer. A fence in a list item ends where the item does.
+ */
+export function scanBlocks(lines) {
   const kept = [];
+  const lists = [];
   let fence = null;
+  let freshBlock = true;
   for (const line of lines) {
-    if (fence !== null) {
-      if (closes(fence, line.text)) fence = null;
+    const { col, rest } = indentOf(line.text);
+    const blank = rest === '';
+    if (fence !== null && !(fence.inList && !blank && col < fence.base)) {
+      const closer = FENCE.exec(rest);
+      if (col - fence.base <= 3 && closer !== null && closer[1][0] === fence.char && closer[1].length >= fence.length && closer[2].trim() === '') fence = null;
+      freshBlock = fence === null;
       continue;
     }
-    const opened = FENCE_OPEN.exec(line.text);
-    if (opened) fence = opened[1];
-    else kept.push(line);
+    fence = null;
+    if (!blank) while (lists.length > 0 && col < lists.at(-1)) lists.pop();
+    const base = lists.at(-1) ?? 0;
+    const opened = FENCE.exec(rest);
+    if (opened !== null && col - base <= 3) {
+      if (opened[1][0] === '`' && opened[2].includes('`')) return { kept, fault: { no: line.no, reason: 'a backtick fence opener whose info string holds a backtick: CommonMark reads it as text, the reader as a fence' } };
+      if (lists.length === 0 && col >= 1) return { kept, fault: { no: line.no, reason: `a fence indented ${col} space${col === 1 ? '' : 's'} outside a list item: CommonMark opens a fence here and the reader does not` } };
+      fence = { char: opened[1][0], length: opened[1].length, base, inList: lists.length > 0 };
+      freshBlock = false;
+      continue;
+    }
+    const reason = col <= 3 ? htmlBlockStart(rest, freshBlock) ?? strangeHeading(line.text) : null;
+    if (reason !== null) return { kept, fault: { no: line.no, reason } };
+    if (!blank) {
+      const content = listContentColumn(col, rest);
+      if (content !== null) lists.push(content);
+    }
+    kept.push(line);
+    freshBlock = blank || /^ {0,3}#{1,6}[ \t]/.test(line.text);
   }
-  return kept;
+  return { kept, fault: null };
 }
+
+/** The lines outside fenced code blocks (a fence's own lines are inside it); the faults of `scanBlocks` are not looked at here. */
+export const unfencedLines = lines => scanBlocks(lines).kept;
 
 /** The `##` and `###` headings outside fenced code blocks, in order: `{ level, text, no, start }` (`text` is the heading without its marker). */
 export function headingsOf(lines) {
@@ -114,6 +182,8 @@ export function parseFormat(bytes) {
   const checked = checkBytes(bytes);
   if (!checked.ok) return checked;
   const lines = linesOf(checked.text);
+  const scanned = scanBlocks(lines);
+  if (scanned.fault !== null) return fail(scanned.fault.no, scanned.fault.reason);
   const headings = headingsOf(lines);
   const fault = structureFault(headings);
   if (fault !== null) return fail(fault.no === 0 ? lines.length : fault.no, `${fault.text}: ${fault.rule}`);
@@ -139,4 +209,4 @@ export const preambleSlice = format => ({ start: 0, end: format.headings[0].star
 export const versionOf = format => /^Format version: (\S+)$/m.exec(format.text.slice(0, format.headings[0].start))?.[1] ?? null;
 
 /** The line number (1-based) of the character at `offset`. */
-export const lineNumberAt = (format, offset) => format.lines.findLast(line => line.start <= offset).no;
+export const lineNumberAt = (format, offset) => format.lines.findLast(line => line.start <= offset)?.no ?? 1;

@@ -2,9 +2,10 @@
 // Also the shared reading of FORMAT's bytes and headings that both FORMAT tools rely on: LF only, no byte order mark, headings outside fences, sections in order.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, linkSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { main } from '../tools/grammar-extract.mjs';
 import { edit, folder, FORMAT_TEXT, put, realDraft, sha256, TOOLS } from './support/format-fixtures.mjs';
 
 const TOOL = path.join(TOOLS, 'grammar-extract.mjs');
@@ -160,4 +161,49 @@ test('The_real_FORMAT_draft_gives_its_sections_3_to_5_verbatim', t => {
   assert.equal(text.split('\n## 6. ').length, 2, 'one `## 6.` heading line in the draft');
   const body = text.slice(text.indexOf('\n## 3. ') + 1, text.indexOf('\n## 6. ') + 1);
   assert.equal(out.toString('utf8'), headerFor(draft.bytes, '2') + body);
+});
+
+// Removing the temporary file: only "it was never made" (ENOENT) is silent; any other error is on stderr, and the exit code stays the write's.
+const REAL_OPS = { writeFileSync, linkSync, unlinkSync };
+const failing = code => () => {
+  throw Object.assign(new Error(`${code}: the stand-in refuses`), { code });
+};
+const capture = () => ({ text: '', write(chunk) { this.text += chunk; } });
+
+test('A_temporary_file_that_cannot_be_removed_is_reported_on_stderr_and_the_exit_code_stays_the_writes', t => {
+  const dir = folder(t, 'grammar-unlink');
+  const file = put(dir, 'FORMAT.md', FORMAT_TEXT);
+  const stderr = capture();
+  assert.equal(main([file, path.join(dir, 'GRAMMAR.md')], stderr, { ...REAL_OPS, unlinkSync: failing('EPERM') }), 0, 'the write succeeded');
+  assert.match(stderr.text, /EPERM/);
+  assert.match(stderr.text, /temporary/);
+  assert.equal(existsSync(path.join(dir, 'GRAMMAR.md')), true);
+});
+
+test('A_failed_write_and_a_temporary_file_that_cannot_be_removed_are_both_reported_and_the_exit_code_is_the_writes', t => {
+  const dir = folder(t, 'grammar-unlink-both');
+  const file = put(dir, 'FORMAT.md', FORMAT_TEXT);
+  const stderr = capture();
+  assert.equal(main([file, path.join(dir, 'GRAMMAR.md')], stderr, { ...REAL_OPS, linkSync: failing('EACCES'), unlinkSync: failing('EBUSY') }), 4);
+  assert.match(stderr.text, /EACCES/);
+  assert.match(stderr.text, /EBUSY/);
+});
+
+test('A_temporary_file_that_was_never_made_is_not_reported', t => {
+  const dir = folder(t, 'grammar-enoent');
+  const file = put(dir, 'FORMAT.md', FORMAT_TEXT);
+  const stderr = capture();
+  assert.equal(main([file, path.join(dir, 'GRAMMAR.md')], stderr, { ...REAL_OPS, writeFileSync: failing('ENOENT'), unlinkSync: failing('ENOENT') }), 4);
+  assert.doesNotMatch(stderr.text, /could not be removed/);
+  assert.match(stderr.text, /cannot be written/);
+});
+
+test('The_record_names_the_sha256_of_the_extractors_own_output_for_the_recorded_FORMAT', t => {
+  const draft = realDraft(t);
+  if (draft === null) return;
+  const { result, out } = extract(t, draft.bytes);
+  assert.equal(result.status, 0, result.stderr);
+  const recorded = JSON.parse(readFileSync(draft.record, 'utf8')).A;
+  assert.match(recorded.grammarSha256, /^[0-9a-f]{64}$/);
+  assert.equal(sha256(out), recorded.grammarSha256, 'inputs/specs.d/format.json grammarSha256 is the sha256 of GRAMMAR.md as the extractor writes it');
 });

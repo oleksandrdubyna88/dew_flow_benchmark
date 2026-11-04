@@ -60,6 +60,7 @@ The sentences are said identically.
 | Id | Kinds | Where | Slots |
 |---|---|---|---|
 | F-STDERR | all | section 3, in an R | none |
+| F-PROCS | all | section 3, in an R | none |
 | F-READY | daemon, web | section 2, in an R | \`{T}\` |
 
 Text after the table.
