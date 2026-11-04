@@ -73,47 +73,60 @@ function judge(file, probe) {
  * Remove a stale lock through a unique sibling: the file is RENAMED away (one atomic step), its text compared with the one that was judged, and only then removed. A different text is a successor's lock that took the
  * path since: it is put back (a link, which never replaces a file) and `false` is answered. `true` when the way is clear.
  */
-function removeWhileStill(file, judged) {
+function removeWhileStill(file, judged, afterRename) {
   const sibling = `${file}.gone-${process.pid}-${randomBytes(4).toString('hex')}`;
   try {
     renameSync(file, sibling);
   } catch (error) {
     return error.code === 'ENOENT';
   }
+  afterRename?.(file, sibling); // a seam: what happens between the rename and the compare
   const same = readClaimText(sibling) === judged;
-  if (!same) linkSync(sibling, file);
+  if (!same) putBack(sibling, file);
   rmSync(sibling, { force: true });
   return same;
 }
 
+/** Put a successor's lock back where it was (a link never replaces a file): a path a third taker has taken since stays theirs, and that is a plain `false` answer, not a throw. */
+function putBack(sibling, file) {
+  try {
+    linkSync(sibling, file);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+}
+
 const stillExistsUnreadable = now => now !== null && ownerOf(now).unreadable === true;
 
-function releaseWhileMine(file, text, say) {
+/** A lock that was already gone when the unlink came (ENOENT) is not news; any other failure is said, with the manual step. */
+const sayRemoveFailure = (file, error, say) => (error.code === 'ENOENT' ? undefined : say(`could not remove the gate lock ${file} (${error.message}): remove it by hand when no gate run is going`));
+
+function releaseWhileMine(file, text, say, rm) {
   try {
     const now = readClaimText(file);
-    if (now === text) rmSync(file, { force: true });
+    if (now === text) rm(file, { force: true });
     else if (stillExistsUnreadable(now)) say(`gate lock ${file} still exists but cannot be read, and it is not known to be ours: remove it by hand if no gate run is going`);
   } catch (error) {
-    say(`could not remove the gate lock ${file} (${error.message}): remove it by hand when no gate run is going`);
+    sayRemoveFailure(file, error, say);
   }
 }
 
 /** A stale lock of a gone owner: removed (when its text is still the one judged) and said; `null` when the way is clear, a `fail` otherwise. */
-function reclaim({ file, verdict, say }) {
-  if (!removeWhileStill(file, verdict.text)) return fail(`gate lock ${file} changed while its owner was judged; it is left in place`, { held: true });
+function reclaim({ file, verdict, say, afterRename }) {
+  if (!removeWhileStill(file, verdict.text, afterRename)) return fail(`gate lock ${file} changed while its owner was judged; it is left in place`, { held: true });
   say(`removed a gate lock whose owner is gone: ${verdict.text.trim()}`);
   return null;
 }
 
 /** The file is in the way: `null` when it went or was a stale lock that is now removed (try again), else the refusal. A second look at an existing file is final. */
-function clearTheWay({ file, probe, say, retried }) {
+function clearTheWay({ file, probe, say, retried, afterRename }) {
   const verdict = judge(file, probe);
   if (verdict.refuse) return fail(verdict.refuse, { held: true });
   if (retried) return fail(`gate lock ${file} could not be taken after one retry`, { held: true });
-  return verdict.gone ? reclaim({ file, verdict, say }) : null;
+  return verdict.gone ? reclaim({ file, verdict, say, afterRename }) : null;
 }
 
-const outcomeOf = (made, { file, text, say }) => (made.created ? ok({ text, release: () => releaseWhileMine(file, text, say) }) : fail(`gate lock ${file} cannot be created: ${made.error.message}`));
+const outcomeOf = (made, { file, text, say, rm }) => (made.created ? ok({ text, release: () => releaseWhileMine(file, text, say, rm) }) : fail(`gate lock ${file} cannot be created: ${made.error.message}`));
 
 function attempt(args) {
   const made = createExclusive(args.file, args.text, args.write);
@@ -128,9 +141,9 @@ function folderRefusal(dir, uid) {
   return stat.isDirectory() && !stat.isSymbolicLink() && stat.uid === uid ? null : fail(`gate lock folder ${dir} is not a real folder of this user (a link, a file, or another user's): refused`);
 }
 
-/** Take the lock at `file`. -> `ok({ release, text })` | `fail('gate lock held by <owner text>', { held: true })` (or the unknown / unreadable / changed / folder / cannot-create sentence). `probe`, `say`, `uid` and `io.writeSync` are seams. */
+/** Take the lock at `file`. -> `ok({ release, text })` | `fail('gate lock held by <owner text>', { held: true })` (or the unknown / unreadable / changed / folder / cannot-create sentence). `probe`, `say`, `uid` and `io` (`writeSync`, `afterRename`, `rm`) are seams. */
 export function takeGateLock({ file, probe = processProbe, say = sayOnStderr, uid = process.getuid(), io = {} }) {
   const refused = folderRefusal(path.dirname(file), uid);
   if (refused !== null) return refused;
-  return attempt({ file, text: `${formatOwner(runRecord())}\n`, probe, say, retried: false, write: io.writeSync ?? writeSync });
+  return attempt({ file, text: `${formatOwner(runRecord())}\n`, probe, say, retried: false, write: io.writeSync ?? writeSync, afterRename: io.afterRename, rm: io.rm ?? rmSync });
 }

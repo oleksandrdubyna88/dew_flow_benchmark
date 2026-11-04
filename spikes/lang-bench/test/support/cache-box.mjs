@@ -52,6 +52,7 @@ function readReal(root) {
 }
 
 async function build() {
+  assertBuiltForReal(); // a completion run builds for real: no network case may take the reuse seam
   if (process.env.LANG_V2_REUSE_REAL) return readReal(process.env.LANG_V2_REUSE_REAL);
   const root = ownedApi.ownedDir(scope, 'real', { parent: ensureTestRoot() });
   scope.after(() => makeWritable(root)); // after ownedDir: cleanupScope runs last-registered-first, so the read-only snapshots are writable before the folder goes

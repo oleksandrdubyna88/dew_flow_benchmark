@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, openBox, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
-import { nugetLicence, npmLicence } from '../lib/package-metadata.mjs';
+import { nugetLicence, npmLicences } from '../lib/package-metadata.mjs';
 import { manifestSha256Of } from '../lib/cache-store.mjs';
 import { assertBuiltForReal, closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
@@ -186,6 +186,11 @@ async function versionCases(t, real) {
   assert.match(below.output, /NU1603/, 'C#: a lower version resolves to the listed one, with the warning NU1603');
   const assets = JSON.parse(readFileSync(path.join(cs.layout.work, 'obj', 'project.assets.json'), 'utf8'));
   assert.ok(Object.keys(assets.libraries).includes(`Microsoft.Extensions.Hosting/${real.record.csharp.resolved.HOSTING}`), 'and the listed version is what was restored');
+  // fix batch 2 (N2): where warnings are errors the same lower version fails the build, and NU1603 is the error
+  writeFileSync(path.join(cs.layout.work, 'App.csproj'), project('10.0.0').replace('<OutputType>', '<TreatWarningsAsErrors>true</TreatWarningsAsErrors><OutputType>'));
+  const strict = ran(await cs.run(['dotnet', 'restore', 'App.csproj']), 'C#: a lower version where warnings are errors');
+  assert.equal(strict.code, 1, strict.output.slice(-2000));
+  assert.match(strict.output, /error NU1603/, 'NU1603 is an error under TreatWarningsAsErrors');
   writeFileSync(path.join(cs.layout.work, 'App.csproj'), project('10.0.99'));
   const above = ran(await cs.run(['dotnet', 'restore', 'App.csproj']), 'C#: a version above the listed one');
   assert.notEqual(above.code, 0);
@@ -242,10 +247,12 @@ test('The_licence_of_every_offered_package_is_the_one_its_own_metadata_in_the_sn
   assert.equal(real.run.code, 0, 'the shared build must have succeeded');
   for (const stack of STACKS) {
     const [rec, part] = [real.record[stack], stack === 'node' ? 'npm' : 'nuget'];
+    const dir = path.join(real.caches, rec.dirName, part);
+    const wanted = recipe.stacks[stack].packages.map(p => ({ name: p.name, version: filled(p.spec, rec.resolved) }));
+    const npm = stack === 'node' ? npmLicences(dir, wanted) : null; // the npm index is read once for the whole stack
     for (const p of recipe.stacks[stack].packages) {
       const version = filled(p.spec, rec.resolved);
-      const dir = path.join(real.caches, rec.dirName, part);
-      const declared = stack === 'node' ? npmLicence(dir, p.name, version) : nugetLicence(dir, p.name, version);
+      const declared = stack === 'node' ? npm.get(`${p.name}@${version}`) : nugetLicence(dir, p.name, version);
       assert.equal(p.licence, declared, `${stack}: ${p.name}@${version} declares ${declared}, the recipe says ${p.licence}`);
       assert.match(p.maintenance.releasedOn, /^\d{4}-\d{2}-\d{2}$/, `${p.name}: the date of the latest release the registry showed`);
     }

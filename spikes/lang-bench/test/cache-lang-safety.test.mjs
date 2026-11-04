@@ -1,7 +1,7 @@
 // E1.S4, fix batch 1 (the code-round findings C0-C11 and the Opus review's M and L items), fast cases: no network. Each case names the mechanism and builds the unsafe shape beside the safe one.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -10,12 +10,13 @@ import { makeReadOnly, makeWritable, treeHash } from '../../minigit-bench/lib/ca
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
-import { wrappedArgv } from '../lib/cache-offline.mjs';
+import { readWrapped, wrappedArgv } from '../lib/cache-offline.mjs';
 import { loadRecipeLang } from '../lib/cache-recipe-lang.mjs';
-import { buildRecord, manifestSha256Of, pruneSuperseded, registerBuilt, sortPackages, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
+import { buildRecord, discardUnlessRecorded, manifestSha256Of, pruneSuperseded, registerBuilt, remoteUrlFor, sortPackages, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
+import { npmLicences } from '../lib/package-metadata.mjs';
 import { takeGateLock } from '../lib/gate-lock.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
-import { assertBuiltForReal } from './support/cache-box.mjs';
+import { assertBuiltForReal, realBuild } from './support/cache-box.mjs';
 import { exitedPid, recordOf, writeClaim } from './support/owners.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
@@ -146,7 +147,7 @@ test('A_hash_registered_under_another_stack_neither_keeps_nor_licenses_the_remov
   const file = path.join(root, 'rec.json');
   // csharp is REGISTERED with this hash, node has it SUPERSEDED: the node folder may go, the csharp folder is the registered one
   writeFileSync(file, JSON.stringify({ csharp: recordFor(hash), superseded: [{ stack: 'node', supersededOn: '2026-11-05', reason: 'r', record: recordFor(hash) }] }));
-  const pruned = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) });
+  const pruned = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) });
   assert.equal(pruned.ok, true, pruned.reason);
   assert.deepEqual(pruned.value.removed.map(r => r.name), [`node-${hash}`], 'the pair (node, hash) is superseded and not registered: removed');
   assert.equal(pruned.value.kept.find(k => k.name === `csharp-${hash}`).why, 'registered', 'the pair (csharp, hash) is the registered one: kept');
@@ -190,12 +191,12 @@ test('After_the_tag_prune_reads_the_record_at_the_tag_not_the_one_in_the_working
   writeFileSync(file, JSON.stringify({ superseded: [entry] })); // the working tree says "superseded"
   const seen = [];
   const atTag = tag => { seen.push(tag); return ok({ node: recordFor(hash), superseded: [] }); }; // the record at the tag says "registered"
-  const pruned = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: atTag });
+  const pruned = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: atTag });
   assert.equal(pruned.ok, true, pruned.reason);
   assert.deepEqual(seen, ['prereg/lang-v2-A-2026-12-01']);
   assert.deepEqual(pruned.value.removed, [], 'the tagged record decides: registered, kept');
   assert.equal(existsSync(path.join(caches, `node-${hash}`)), true);
-  const unreadable = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => fail('git show failed') });
+  const unreadable = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => fail('git show failed') });
   assert.equal(unreadable.ok, false, 'a record that cannot be read at the tag fails closed');
   makeWritable(root);
 });
@@ -386,4 +387,196 @@ test('A_completion_run_refuses_the_reuse_seam_of_the_real_build', () => {
   } finally {
     restore();
   }
+});
+
+// ======== fix batch 2 =====================================================================================================================
+
+// ---- N1: the remote of the tag reader ----------------------------------------------------------------------------------------------
+
+test('A_GitHub_SSH_remote_is_read_over_https_and_any_other_url_is_used_as_it_is', () => {
+  assert.equal(remoteUrlFor('git@github.com:oleksandrdubyna88/dew_flow_benchmark.git'), 'https://github.com/oleksandrdubyna88/dew_flow_benchmark.git');
+  assert.equal(remoteUrlFor('git@github.com:owner/repo'), 'https://github.com/owner/repo.git', 'a missing .git is added');
+  assert.equal(remoteUrlFor('ssh://git@github.com/owner/repo.git'), 'https://github.com/owner/repo.git');
+  assert.equal(remoteUrlFor('ssh://git@github.com:22/owner/repo.git'), 'https://github.com/owner/repo.git', 'an explicit port goes too');
+  for (const same of ['https://github.com/owner/repo.git', '/srv/git/origin.git', 'git@example.com:owner/repo.git', 'ssh://git@gitlab.com/owner/repo.git']) assert.equal(remoteUrlFor(same), same, `${same} is used as it is`);
+});
+
+test('The_tag_reader_takes_the_remote_from_the_flag_before_origin_and_still_fails_closed', t => {
+  const root = ownedFolder(t, 'trm');
+  const [repo, bare] = [path.join(root, 'repo'), path.join(root, 'bare.git')];
+  mkdirSync(repo); mkdirSync(bare);
+  assert.equal(git(bare, 'init', '--bare', '-q').status, 0);
+  assert.equal(git(repo, 'init', '-q').status, 0);
+  assert.equal(git(repo, 'commit', '--allow-empty', '-q', '-m', 'x').status, 0);
+  assert.equal(git(repo, 'remote', 'add', 'origin', 'git@nowhere.invalid:owner/repo.git').status, 0);
+  assert.equal(git(repo, 'tag', TAG).status, 0);
+  assert.equal(git(repo, 'push', '-q', bare, TAG).status, 0);
+  assert.equal(git(repo, 'tag', '-d', TAG).status, 0);
+  assert.equal(tagsOf(repo).ok, false, 'origin as configured cannot be reached: a refusal');
+  assert.deepEqual(tagsOf(repo, { remote: bare }).value, [TAG], 'the flag names a remote that can be read: the remote-only tag is seen');
+  assert.equal(tagsOf(repo, { remote: path.join(root, 'nowhere.git') }).ok, false, 'an unreachable flag remote is a refusal too');
+});
+
+// ---- Low 1: the discard also runs on an exception; an unreadable record never keeps a folder; an orphan folder is swept -----------
+
+test('A_made_folder_is_removed_when_the_registration_throws_and_when_the_record_cannot_be_read', t => {
+  const root = ownedFolder(t, 'thr');
+  const caches = path.join(root, 'caches');
+  mkdirSync(caches);
+  const m = madeSnapshot(caches, [['demo', '1.0.0', 'QQ==']]);
+  renameSync(m.stage, m.dir);
+  makeReadOnly(m.dir);
+  const file = path.join(root, 'rec.json');
+  writeFileSync(file, '{ not json');
+  const made = { dir: m.dir, treeSha256: m.treeSha256, parts: { nuget: 'p' }, sizeBytes: 1, packages: [{ ecosystem: 'nuget', name: 'demo', version: '1.0.0' }], resolved: {}, steps: [] };
+  assert.throws(() => registerBuilt({ made, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file, madeOn: '2026-11-04' }), /JSON/, 'the registration throws on a record that is not JSON');
+  assert.equal(existsSync(m.dir), false, 'and the folder is gone: an unreadable record authorises nothing');
+  const again = madeSnapshot(path.join(root, 'c2'), [['demo', '1.0.0', 'QQ==']]);
+  renameSync(again.stage, again.dir);
+  assert.throws(() => registerBuilt({ made: { ...made, dir: again.dir, packages: null }, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file: path.join(root, 'none.json'), madeOn: '2026-11-04' }), TypeError);
+  assert.equal(existsSync(again.dir), false, 'an exception inside the steps removes the folder too');
+  assert.equal(discardUnlessRecorded({ dir: again.dir, stack: 'csharp', treeSha256: again.treeSha256, records: {} }).discarded, false, 'nothing left to discard is not an error');
+});
+
+test('An_unregistered_snapshot_folder_is_swept_only_when_the_claim_of_its_build_is_gone_and_the_record_does_not_hold_it', t => {
+  const caches = ownedFolder(t, 'osf');
+  const gone = exitedPid();
+  const folder = (stack, text) => { const stage = path.join(caches, `.w-${stack}-${text}`); mkdirSync(stage); writeFileSync(path.join(stage, 'f'), text); const h = treeHash(stage); const dir = path.join(caches, `${stack}-${h}`); renameSync(stage, dir); makeReadOnly(dir); return { dir, h }; };
+  const stranded = folder('csharp', 'stranded');
+  const registered = folder('csharp', 'registered');
+  const superseded = folder('csharp', 'superseded');
+  const mine = folder('node', 'claimed by a live owner');
+  writeClaim(path.join(caches, `.building-csharp-${gone}`), { pid: gone });
+  writeClaim(path.join(caches, `.building-node-${process.pid}`), {});
+  const records = { csharp: recordFor(registered.h), superseded: [{ stack: 'csharp', supersededOn: '2026-11-05', reason: 'r', record: recordFor(superseded.h) }] };
+  const lines = [];
+  const swept = sweepStaging({ caches, log: line => lines.push(line), records });
+  assert.equal(existsSync(stranded.dir), false, 'the unregistered folder of a dead build goes');
+  for (const kept of [registered.dir, superseded.dir, mine.dir]) assert.equal(existsSync(kept), true, `${kept} stays`);
+  assert.equal(existsSync(path.join(caches, `.building-csharp-${gone}.owner`)), false, 'and the dead claim');
+  assert.match(lines.join('\n'), /remove .*csharp-[0-9a-f]{64}.*unregistered/, 'it is named on the log');
+  assert.equal(swept.removed.some(r => r.dir === stranded.dir), true);
+  // without the record nothing of this kind is removed: the sweep cannot tell what is registered
+  const second = folder('csharp', 'second stranded');
+  writeClaim(path.join(caches, `.building-csharp-${exitedPid()}`), { pid: exitedPid() });
+  sweepStaging({ caches, log: () => {} });
+  assert.equal(existsSync(second.dir), true, 'no record given: no snapshot folder is judged');
+  makeWritable(caches);
+});
+
+// ---- Low 2: the put-back of a stale lock is a value, not a throw -------------------------------------------------------------------
+
+test('A_successor_that_takes_the_lock_between_the_rename_and_the_put_back_is_a_refusal_and_not_a_throw', t => {
+  const dir = ownedFolder(t, 'gls');
+  const file = path.join(dir, 'gate.lock');
+  assert.equal(takeGateLock({ file }).ok, true);
+  writeFileSync(file, recordOf({ pid: exitedPid() }));
+  const successor = recordOf({ host: 'another@linux' });
+  // the hook runs right after the stale file was renamed away: a successor takes the path, and the text of the renamed file is NOT the one that was judged
+  const io = { afterRename: (_, sibling) => { writeFileSync(file, successor); writeFileSync(sibling, 'a text that is not the judged one\n'); } };
+  const taken = takeGateLock({ file, io, say: () => {} });
+  assert.equal(taken.ok, false);
+  assert.equal(readFileSync(file, 'utf8'), successor, 'the successor\'s lock is untouched');
+  assert.deepEqual(readdirSync(dir), ['gate.lock'], 'and the sibling is removed');
+});
+
+test('A_release_that_meets_a_lock_already_gone_is_silent_and_one_that_fails_for_another_reason_says_so', t => {
+  const file = path.join(ownedFolder(t, 'glg'), 'gate.lock');
+  const said = [];
+  const enoent = () => { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); };
+  const mine = takeGateLock({ file, say: line => said.push(line), io: { rm: enoent } });
+  assert.equal(mine.ok, true);
+  assert.doesNotThrow(() => mine.value.release());
+  assert.deepEqual(said, [], 'ENOENT on the unlink is not news');
+  const other = takeGateLock({ file: path.join(path.dirname(file), 'b.lock'), say: line => said.push(line), io: { rm: () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); } } });
+  other.value.release();
+  assert.equal(said.length, 1, 'any other failure is said');
+  assert.match(said[0], /denied/);
+});
+
+// ---- Low 3: the seam cannot be used by any network case of a completion run ----------------------------------------------------------
+
+test('The_shared_real_build_itself_refuses_the_reuse_seam_in_a_completion_run', async () => {
+  const saved = { require: process.env.BENCH_REQUIRE_SANDBOX, reuse: process.env.LANG_V2_REUSE_REAL };
+  try {
+    process.env.BENCH_REQUIRE_SANDBOX = '1';
+    process.env.LANG_V2_REUSE_REAL = '/somewhere';
+    await assert.rejects(realBuild(), /dev seam.*completion run builds for real/, 'every case that asks for the build gets the refusal');
+  } finally {
+    for (const [k, v] of [['BENCH_REQUIRE_SANDBOX', saved.require], ['LANG_V2_REUSE_REAL', saved.reuse]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+// ---- coai round 2: 1, 5, 7, 8, 11, 12 --------------------------------------------------------------------------------------------
+
+test('A_box_that_ran_but_left_no_exit_code_or_output_is_a_typed_failure_naming_the_files', t => {
+  const dir = ownedFolder(t, 'rdw');
+  const [out, code] = [path.join(dir, 'o-abc'), path.join(dir, 'c-abc')];
+  const missing = readWrapped({ out, code });
+  assert.equal(missing.ok, false);
+  assert.match(missing.reason, /o-abc/);
+  assert.match(missing.reason, /c-abc/);
+  writeFileSync(out, 'output');
+  writeFileSync(code, 'not a number\n');
+  assert.equal(readWrapped({ out, code }).ok, false, 'an exit code that is not a number is a failure too');
+  writeFileSync(code, '3\n');
+  assert.deepEqual(readWrapped({ out, code }).value, { code: 3, output: 'output' });
+});
+
+test('A_staging_folder_that_vanishes_between_the_listing_and_the_look_is_skipped_not_a_crash', t => {
+  const caches = ownedFolder(t, 'vns');
+  const [a, b] = [path.join(caches, '.building-node-9201'), path.join(caches, '.building-node-9202')];
+  mkdirSync(a); mkdirSync(b);
+  writeClaim(a, {}); writeClaim(b, {});
+  const lines = [];
+  const lstat = p => { if (p === a) throw Object.assign(new Error('gone'), { code: 'ENOENT' }); return lstatSync(p); };
+  assert.doesNotThrow(() => sweepStaging({ caches, log: line => lines.push(line), lstat }));
+  assert.equal(lines.some(l => l.includes('9202')), true, 'the next folder is still looked at');
+});
+
+test('Prune_says_which_snapshot_it_is_re_hashing_classifies_every_candidate_before_it_removes_and_reports_a_removal_that_failed', t => {
+  const root = ownedFolder(t, 'prc');
+  const caches = path.join(root, 'caches');
+  mkdirSync(caches);
+  const [h1, h2] = [snapshotAt(caches, 'node', { 'npm/a': 'one' }), snapshotAt(caches, 'csharp', { 'nuget/a': 'two' })];
+  const reg = snapshotAt(caches, 'node', { 'npm/b': 'registered' });
+  const records = { node: recordFor(reg), superseded: [{ stack: 'node', supersededOn: '2026-11-05', reason: 'a', record: recordFor(h1) }, { stack: 'csharp', supersededOn: '2026-11-05', reason: 'b', record: recordFor(h2) }] };
+  const events = [];
+  const remove = dir => { events.push(`remove ${path.basename(dir)}`); if (dir.includes('csharp-')) throw new Error('device busy'); makeWritable(dir); rmSync(dir, { recursive: true, force: true }); };
+  const pruned = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => ok(records), log: line => events.push(line), remove });
+  assert.equal(pruned.ok, true, pruned.reason);
+  const checks = events.filter(e => e.startsWith('checking snapshot'));
+  assert.deepEqual(checks.map(e => e.split(' ')[2]), [`csharp-${h2}`, `node-${h1}`], 'one line before each re-hash, and none for the registered folder');
+  assert.ok(events.lastIndexOf(checks.at(-1)) < events.findIndex(e => e.startsWith('remove ')), 'every candidate is classified and re-hashed before the first removal');
+  assert.deepEqual(pruned.value.removed.map(r => r.name), [`node-${h1}`]);
+  assert.equal(pruned.value.failed.length, 1, 'a removal that failed is reported');
+  assert.match(pruned.value.failed[0].why, /device busy/);
+  assert.equal(pruned.value.failed[0].name, `csharp-${h2}`);
+  makeWritable(root);
+});
+
+test('A_placeholder_that_is_not_a_key_lists_the_legal_keys', () => {
+  const bad = structuredClone(realRecipe());
+  bad.stacks.csharp.steps[1].argv.push('-p:X={GHOST}');
+  const refused = loadRecipeLang(bad, stacks);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /legal keys: HOSTING, JWT_BEARER, XUNIT, XUNIT_VS, TEST_SDK/);
+});
+
+test('The_npm_index_is_read_once_for_every_licence_of_a_snapshot', t => {
+  const dir = ownedFolder(t, 'lic');
+  let reads = 0;
+  const readIndex = () => { reads += 1; return []; };
+  const found = npmLicences(dir, [{ name: 'fastify', version: '5.12.7' }, { name: 'pino', version: '10.4.0' }, { name: 'eslint', version: '10.14.0' }], { readIndex });
+  assert.equal(reads, 1, 'one read of the index for three packages');
+  assert.deepEqual([...found.keys()].sort(), ['eslint@10.14.0', 'fastify@5.12.7', 'pino@10.4.0']);
+  assert.deepEqual([...found.values()], [null, null, null], 'a package that is not in the index has no licence, never an invented one');
+});
+
+test('The_command_accepts_a_tags_remote_flag', async t => {
+  const root = ownedFolder(t, 'tgr');
+  const r = await runMake(['--prune-superseded', '--tags-remote', path.join(root, 'bare.git'), '--caches', path.join(root, 'none'), '--record', path.join(root, 'rec.json'), '--gate-lock', path.join(root, 'gate.lock')]);
+  assert.doesNotMatch(r.value.stderr, /Unknown option/, 'the flag is known');
+  assert.equal(r.value.code, 3, r.value.stderr);
+  assert.match(r.value.stderr, /no caches folder/);
 });

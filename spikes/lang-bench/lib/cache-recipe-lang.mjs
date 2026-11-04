@@ -53,7 +53,7 @@ function resolveProblems(stack, spec) {
 /** Every brace token of one text, as a problem when its name is not a key of `resolve` (a name with a digit or lower case is not even a legal key). */
 function tokenProblems(text, at, known) {
   return [...text.matchAll(BRACE_TOKEN)].map(m => m[1]).filter(name => !(PLACEHOLDER_NAME.test(name) && known.has(name)))
-    .map(name => `${at} holds {${name}}, which is not a key of the stack's resolve (a placeholder name is [A-Z_]+ only)`);
+    .map(name => `${at} holds {${name}}, which is not a key of the stack's resolve (legal keys: ${[...known].join(', ') || 'none'}; a placeholder name is [A-Z_]+ only)`);
 }
 
 function placeholderProblems(stack, spec) {

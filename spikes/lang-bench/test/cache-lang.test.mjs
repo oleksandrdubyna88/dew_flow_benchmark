@@ -250,11 +250,11 @@ test('Pruning_removes_only_a_superseded_snapshot_that_re_hashes_to_its_record_an
   const file = path.join(root, 'rec.json');
   const superseded = [[old, '2026-11-05', 'a'], [tampered, '2026-11-05', 'b'], ['e'.repeat(64), '2026-11-06', 'c']].map(([h, on, why]) => ({ stack: 'node', supersededOn: on, reason: why, record: recordFor(h) }));
   writeFileSync(file, JSON.stringify({ csharp: recordFor(registered), superseded }));
-  const refusedEarly = pruneSuperseded({ file, caches, tagsOf: noTag });
+  const refusedEarly = pruneSuperseded({ caches, tagsOf: noTag });
   assert.equal(refusedEarly.ok, false);
   assert.match(refusedEarly.reason, /pre-registration tag/, 'before the tag the rule is named');
   assert.equal(existsSync(path.join(caches, `node-${old}`)), true, 'nothing was removed');
-  const pruned = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) });
+  const pruned = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) });
   assert.equal(pruned.ok, true, pruned.reason);
   assert.deepEqual(pruned.value.removed, [{ name: `node-${old}`, supersededOn: '2026-11-05', reason: 'a' }], 'only the superseded snapshot that still hashes to its record');
   const keptWhy = Object.fromEntries(pruned.value.kept.map(k => [k.name, k.why]));
@@ -265,10 +265,10 @@ test('Pruning_removes_only_a_superseded_snapshot_that_re_hashes_to_its_record_an
   assert.equal(keptWhy['.building-node-77'], 'not a snapshot of this series');
   assert.equal(treeHash(path.join(caches, `csharp-${registered}`)), registered, 'the registered snapshot is untouched');
   assert.equal(existsSync(path.join(caches, `node-${tampered}`)), true);
-  const otherUser = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))), uid: process.getuid() + 1 });
+  const otherUser = pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))), uid: process.getuid() + 1 });
   assert.deepEqual(otherUser.value.removed, [], 'a folder of another uid is never removed');
   writeFileSync(file, JSON.stringify({ node: recordFor(old), superseded }));
-  assert.equal(pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) }).value.kept.some(k => k.name === `node-${old}`), false, 'already removed: nothing left to name');
+  assert.equal(pruneSuperseded({ caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) }).value.kept.some(k => k.name === `node-${old}`), false, 'already removed: nothing left to name');
   makeWritable(caches);
 });
 
@@ -278,7 +278,7 @@ test('Pruning_before_the_pre_registration_tag_is_refused', t => {
   const file = path.join(root, 'rec.json');
   writeFileSync(file, JSON.stringify({ superseded: [] }));
   for (const tagsOf of [noTag, () => fail('git did not answer')]) {
-    const refused = pruneSuperseded({ file, caches: path.join(root, 'caches'), tagsOf });
+    const refused = pruneSuperseded({ caches: path.join(root, 'caches'), tagsOf });
     assert.equal(refused.ok, false);
     assert.match(refused.reason, /pre-registration tag|git did not answer/);
   }

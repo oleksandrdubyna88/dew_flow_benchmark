@@ -8,7 +8,7 @@ const ECOSYSTEM_OF = Object.freeze({ csharp: 'nuget', node: 'npm' });
 const SPEC_TOKEN = /\{([A-Z_]+)\}/g;
 /** The sentence an agent reads first, per stack, in the team lead's words (E1.S4 review, M3): what is available, what a version that is not listed does, and the error that names it. */
 const SENTENCE_OF = Object.freeze({
-  csharp: 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.',
+  csharp: 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603, which fails the build where warnings are errors; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.',
   node: 'Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.',
 });
 const INSTALL_LINE = 'Install a package with the exact version listed (C#: `<PackageReference Include="NAME" Version="VERSION" />`; Node: `npm install NAME@VERSION`).';

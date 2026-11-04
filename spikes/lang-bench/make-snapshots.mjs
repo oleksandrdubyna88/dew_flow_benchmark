@@ -10,6 +10,7 @@
 //     --recipe <file>    default inputs/cache-recipe-lang.json                           --stacks <file>   default inputs/stacks-lang.json
 //     --work <dir>       parent of the build's owned work folder, default ~/.cache/lang-v2/w
 //     --gate-lock <file> default ~/.cache/lang-v2/gate.lock
+//     --tags-remote <url> where supersede and prune look for the pre-registration tag besides the local tags (default: origin's url, a GitHub SSH form read over https; no remote is a refusal)
 // Exit 0 done · 1 a build failed (named on stderr) · 2 usage (or a caches folder inside a git worktree) · 3 refused (gate lock held, already registered, preflight, tag rule, claim exists)
 //
 // A build, a supersede and a prune each take the gate lock first (released in `finally`). A build sweeps what a killed earlier run left (the owned work folders, then its staging folders, each by the conventions' owner rules), refuses a stack that is already registered BEFORE any
@@ -43,7 +44,7 @@ const REPO = path.resolve(SPIKE, '..', '..');
 const STACK_NAMES = Object.freeze(['csharp', 'node']);
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
 const OPTIONS = {
-  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' },
+  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' }, 'tags-remote': { type: 'string' },
   caches: { type: 'string' }, record: { type: 'string' }, recipe: { type: 'string' }, stacks: { type: 'string' }, work: { type: 'string' }, 'gate-lock': { type: 'string' },
 };
 const say = line => process.stdout.write(`${line}\n`);
@@ -64,7 +65,7 @@ function configOf(v, mode) {
   const home = os.homedir();
   const at = (value, ...fallback) => path.resolve(value ?? path.join(...fallback));
   return {
-    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'],
+    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'], tagsRemote: v['tags-remote'],
     caches: at(v.caches, home, 'rsd', 'lang-v2', 'caches'), record: at(v.record, SPIKE, 'inputs', 'cache-snapshots-lang.json'), recipe: at(v.recipe, SPIKE, 'inputs', 'cache-recipe-lang.json'),
     stacks: at(v.stacks, SPIKE, 'inputs', 'stacks-lang.json'), work: at(v.work, home, '.cache', 'lang-v2', 'w'), gateLock: at(v['gate-lock'], home, '.cache', 'lang-v2', 'gate.lock'),
   };
@@ -158,13 +159,18 @@ async function buildStack(args) {
 
 // ---- the build -------------------------------------------------------------------------------------------------------------------
 
+/** The record as the sweep needs it: `{}` when there is none yet, the parsed record, or `undefined` when it cannot be read (then no snapshot folder is judged). */
+function recordsForSweep(file) {
+  try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}; } catch { return undefined; }
+}
+
 /** The folders a build writes in, swept first: the work root (the conventions' own sweep, token `bench`), then the caches root's staging folders. */
 function prepareFolders(config) {
   mkdirSync(config.work, { recursive: true, mode: 0o700 });
   mkdirSync(config.caches, { recursive: true, mode: 0o700 });
   const swept = sweepLeftovers({ repo: REPO, tmp: config.work, token: 'bench' });
   complain(`leftovers in ${config.work}: removed ${swept.removed.length}, preserved ${swept.preserved.length}${swept.errors.length > 0 ? `, ${swept.errors.length} error(s): ${swept.errors.slice(0, 3).join('; ')}` : ''}`);
-  sweepStaging({ caches: config.caches, log: complain });
+  sweepStaging({ caches: config.caches, log: complain, records: recordsForSweep(config.record) });
 }
 
 /** The requested stacks that are already registered are refused BEFORE any build (exit code), else `null`. */
@@ -217,23 +223,24 @@ async function underGateLock(config, run) {
 // ---- supersede and prune ---------------------------------------------------------------------------------------------------------
 
 function supersedeMode(config) {
-  const done = supersede({ file: config.record, stack: config.supersede, reason: config.reason, tagsOf: () => tagsOf(REPO) });
+  const done = supersede({ file: config.record, stack: config.supersede, reason: config.reason, tagsOf: () => tagsOf(REPO, { remote: config.tagsRemote }) });
   if (!done.ok) return stop(EXIT.refused, done.reason);
   say(`superseded ${done.value.stack} on ${done.value.supersededOn}: its record moved to superseded[] in ${config.record}`);
   return EXIT.done;
 }
 
-function printPruned({ removed, kept }) {
+function printPruned({ removed, kept, failed }) {
+  for (const f of failed) complain(`could not remove ${f.name}: ${f.why}`);
   for (const r of removed) say(`removed ${r.name} (superseded ${r.supersededOn}: ${r.reason})`);
   for (const k of kept) say(`kept ${k.name}: ${k.why}`);
 }
 
 function pruneMode(config) {
   if (!existsSync(config.caches)) return stop(EXIT.refused, `there is no caches folder at ${config.caches}: nothing to prune`);
-  const pruned = pruneSuperseded({ caches: config.caches, tagsOf: () => tagsOf(REPO), recordAtTag: tag => recordAtTag(REPO, tag) });
+  const pruned = pruneSuperseded({ caches: config.caches, tagsOf: () => tagsOf(REPO, { remote: config.tagsRemote }), recordAtTag: tag => recordAtTag(REPO, tag), log: complain });
   if (!pruned.ok) return stop(EXIT.refused, pruned.reason);
   printPruned(pruned.value);
-  return EXIT.done;
+  return pruned.value.failed.length === 0 ? EXIT.done : EXIT.failed;
 }
 
 function printMode(config) {

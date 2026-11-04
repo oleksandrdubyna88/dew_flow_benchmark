@@ -39,14 +39,21 @@ function packageJsonOf(tarball) {
 
 const cachedFile = file => (existsSync(file) ? file : null);
 
-/** The cached tarball of `name@version`, or `null`. */
-function tarballOf(npmDir, name, version) {
-  const entry = readNpmPackages(npmDir, { hashes: true }).find(p => p.name === name && p.version === version);
+/** The cached tarball of `name@version` in an index that was read once, or `null`. */
+function tarballIn(npmDir, index, { name, version }) {
+  const entry = index.find(p => p.name === name && p.version === version);
   return entry?.integrity ? cachedFile(contentPath(npmDir, entry.integrity)) : null;
 }
 
-/** The `license` of an npm package's own `package.json`, from the tarball in the cache (`tar`, exe + argv, a ceiling): a string, or `null` when the package or its tarball is not there or declares none. */
-export function npmLicence(npmDir, name, version) {
-  const tarball = tarballOf(npmDir, name, version);
-  return tarball === null ? null : licenceText(packageJsonOf(tarball)?.license);
+/**
+ * The `license` of the npm packages `wanted` (`[{ name, version }]`), each from its own `package.json` inside the tarball the cache holds (`tar`, exe + argv, a ceiling): `Map` of `name@version` -> a string, or `null` for a package
+ * or tarball that is not there or declares none. The cache index is read ONCE for all of them (`readIndex` is a seam).
+ */
+export function npmLicences(npmDir, wanted, { readIndex = readNpmPackages } = {}) {
+  const index = readIndex(npmDir, { hashes: true });
+  const licenceOf = w => { const tarball = tarballIn(npmDir, index, w); return tarball === null ? null : licenceText(packageJsonOf(tarball)?.license); };
+  return new Map(wanted.map(w => [`${w.name}@${w.version}`, licenceOf(w)]));
 }
+
+/** The licence of one npm package (a one-package `npmLicences`). */
+export const npmLicence = (npmDir, name, version) => npmLicences(npmDir, [{ name, version }]).get(`${name}@${version}`);

@@ -28,7 +28,7 @@ const record = () => ({
 });
 
 // fix batch 1 (M3): the sentence an agent reads, per stack, in the team lead's words
-const CS_SENTENCE = 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.';
+const CS_SENTENCE = 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603, which fails the build where warnings are errors; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.';
 const TS_SENTENCE = 'Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.';
 
 const EXPECTED_NODE = `# Packages
