@@ -244,7 +244,7 @@ hash (2026-11-02). The tests and the probe build their C# programs inside the bo
 
 **Purpose.** The bench's part of the story: the code that checks the task format document (`todo/tasks/FORMAT.md` of the task repository), a record that says
 which version and bytes are A's, and the maintainers' document. The format text itself is the team lead's; nothing here edits it. Built 2026-11-04 against the
-draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`).
+draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`); since fix batch 2 the record names the draft at `593fb7a` (layout only: F-TIMING's fence outside the list in 2.5, a wrapped line of 5.3 that no longer starts with a tag-like span; sha256 `a1990215…c161`).
 
 **Common reading** (`lib/format-structure.mjs`). FORMAT is read as raw bytes: UTF-8, LF only; a carriage return anywhere or a byte order mark is a format error
 (exit 4) that names the first line; nothing is normalised and the sha256 is over the raw bytes. A heading is a line that starts with `## ` or `### ` at column 0 outside a
@@ -257,14 +257,24 @@ of indent outside a list item (a fence inside a list item is allowed: the real d
 the script/pre/style/textarea kinds, the block-level tag names, and a complete tag alone on a line where no paragraph is open); an ATX heading with a tab after the `#`s, with 1 to 3 leading
 spaces or with nothing after the `#`s; a setext heading (a paragraph line, then a line of only `=` or only `-` indented at most three spaces; a `---` after a blank line stays a thematic break);
 an ATX heading or a fence opener inside a block quote or after a list marker on the same line (fix batch 1b: a heading the reader does not see but a renderer shows is the same spoof as the fence trick).
-Not looked at (listed in `inputs/FORMAT-MAINTENANCE.md`): character references and link labels that spell a heading. Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
+Not looked at by the reader (listed in `inputs/FORMAT-MAINTENANCE.md`): character references and link labels that spell a heading.
+
+**The restricted grammar** (`lib/format-grammar.mjs`, fix batch 2). Patching the reader one form at a time cannot close the class (a deletion can turn a literal inside a fence into a heading; a reference
+definition acts at a distance), so the guarantee is by construction. Every line of every unprotected part of the CANDIDATE (and, as a sanity check, of the frozen file: a failure there is exit 4) is a blank
+line, a heading in the exact structure form (no closing `#`s; an added heading may not carry the title of a protected heading), a paragraph line (no block starter at column 0; `**` and one or two backticks
+may start a line; a digit marker needs a space after it), a list item (`- ` or one to three digits and `. `, text obeying the paragraph rule, continuation lines indented by exactly the marker width, no nested
+list, no fence or heading inside), a table row, or a fenced block (opener three backticks and lower-case letters, closer three backticks, both in the part, no other fence marker line inside). Two whole-file
+rules, protected parts too, outside fences: no link reference definition and no line whose first non-space character is `<`. The argument: every protected part starts at a column-0 heading, where CommonMark
+starts a fresh block; no unprotected construct stays open across a part boundary; nothing acts at a distance. Refusals are exit 1 naming the part, its class, the line and the form. The kinds cell of a changed
+or added free 2.1 row holds only `daemon`, `web`, `and`, `or`, commas and the words the frozen free rows already use (read from the frozen file), as plain ASCII. The `Gate verdict` also accepts the spec-header
+form (a back-quoted word, optionally ` · yyyy-mm-dd`). Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
 
 | File | Role |
 |---|---|
 | `tools/grammar-extract.mjs` | `grammar-extract.mjs <FORMAT.md> <out>`: the header `# Scenario and sample grammar (from FORMAT.md v<version>, sha256 <hex>)`, one empty line, then the raw bytes from the `## 3.` line to the byte before `## 6.`. Deterministic. Written to a temporary file in the output's folder and linked into place (`wx`, then `link`): an existing output is exit 4 and never overwritten, and no temporary file stays. |
 | `tools/format-classes.mjs` | T-L56. `--self <FORMAT>` and `--frozen <A> --candidate <B> [--record <format.json>]`. No `--reference-sha` option: the frozen file must be the file whose sha256 is the record's `A.sha256` (default record `inputs/specs.d/format.json`), else exit 1 "the frozen reference is not A's recorded FORMAT". |
-| `lib/format-structure.mjs`, `lib/format-class-table.mjs`, `lib/format-compare.mjs` | the reading above; the class table, its rules and the parts; the comparison. `checkFrozenCandidate({ frozen, candidate, reference })` is the exported function the tests call with an explicit reference. |
-| `test/grammar-extract.test.mjs`, `test/format-classes.test.mjs`, `test/format-classes-frozen.test.mjs`, `test/format-classes-review.test.mjs`, `test/format-reading.test.mjs`, `test/format-bounds.test.mjs` | the tests; `test/support/format-fixtures.mjs` (a synthetic FORMAT with the shape of the real one, and the real-draft helper) and `test/support/format-bounds-readers.mjs` (the strict readers) |
+| `lib/format-structure.mjs`, `lib/format-class-table.mjs`, `lib/format-grammar.mjs`, `lib/format-compare.mjs` | the reading above; the class table, its rules and the parts; the comparison. `checkFrozenCandidate({ frozen, candidate, reference })` is the exported function the tests call with an explicit reference. |
+| `test/grammar-extract.test.mjs`, `test/format-classes.test.mjs`, `test/format-classes-frozen.test.mjs`, `test/format-classes-review.test.mjs`, `test/format-reading.test.mjs`, `test/format-grammar.test.mjs`, `test/format-bounds.test.mjs` | the tests; `test/support/format-fixtures.mjs` (a synthetic FORMAT with the shape of the real one, and the real-draft helper) and `test/support/format-bounds-readers.mjs` (the strict readers) |
 | `inputs/specs.d/format.json` | the record `{ "A": { version, sha256, gate: null, grammarSha256, tasks } }`; `specs-record.mjs` assembles it into `inputs/specs.json` |
 | `inputs/FORMAT-MAINTENANCE.md` | the maintainers' document: the conformance list, the tools, the class rule, the amendments (written from FORMAT v1's sections 7 to 9, public on the task repository's `main`) |
 
@@ -302,7 +312,7 @@ assignment, a `tee`, `printf` or `>>` to `pids.max`; comments are not counted); 
 
 **The real draft in tests.** The positive cases and `--self` also run on the real draft when `LANG_V2_TASK_REPO` names the task repository's checkout; they first check that the checkout's
 `todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256` and fail otherwise. Without the variable they skip with the reason; under `BENCH_REQUIRE_SANDBOX=1` they throw. Refusal cases use the
-synthetic fixture. `inputs/specs.d/format.json` was bootstrapped in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
+synthetic fixture. `inputs/specs.d/format.json` was bootstrapped (twice: at `0a95d31`, and again at `593fb7a`, with its own commit) in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
 
 **Not done here.** The format's own document gate, the freeze, and `runner/GRAMMAR.md` in the workspaces (the extractor makes the text; E1.S3 places it). The record's `gate` stays `null` until
 the gate passes.

@@ -66,7 +66,7 @@ item; an HTML block start at columns 0 to 3 outside a fence (`<!--`, `<?`, `<!X`
 alone on a line where no paragraph is open); an ATX heading in a form the tools do not take (a tab after the `#`s, one to three spaces before the `#`s, `#`s
 with nothing after them); a setext heading (a paragraph line followed by a line of only `=` or only `-`, indented at most three spaces: a `---` line after a blank
 line is a thematic break and is allowed); an ATX heading or a fence opener inside a block quote (`> ## x`, `> ```x`) or after a list marker on the same line
-(`- ## x`, `1. ```x`). A fence inside a list item is allowed. A dash line directly under a list item line is refused too (it may be a thematic break, but the tools do
+(`- ## x`, `1. ```x`). A fence inside a list item is read (an unprotected part of a candidate may not hold one: section 3). A dash line directly under a list item line is refused too, with the message "a dash line under a list item (a thematic break or a setext underline: refused)" (it may be a thematic break, but the tools do
 not tell). What the tools do not look at: a character reference or a link label that spells a heading.
 
 Exit codes of both tools: 0 success, 1 a refusal (one line each: the heading, the line, the rule), 4 a usage or format error.
@@ -115,17 +115,44 @@ class table only.
 
 - the three header rows of the preamble (`Format version: …`, `Gate verdict: …`, `Freeze tag: …`, whole lines). Each stays on the line the frozen file has it
   on, and its value matches a strict pattern: `Format version: <digits>` or `<digits>.<digits>`; `Gate verdict:` one to four words of lower-case letters, digits
-  and `_ . -` (no colon, at most 80 characters: `not yet gated`, `proceed`, `passed on 2026-12-01`); `Freeze tag:` `none yet` or `spec-frozen-<yyyymmdd>` or
+  and `_ . -` (no colon, at most 80 characters: `not yet gated`, `proceed`, `passed on 2026-12-01`) or the form of a spec header (a verdict word in backticks, optionally
+  followed by ` · ` and a date `yyyy-mm-dd`); `Freeze tag:` `none yet` or `spec-frozen-<yyyymmdd>` or
   `spec-frozen-<one capital letter>-<yyyymmdd>`. Class-table rows after the frozen file's last row may be added. A row of a part that is not protected may
   change or go, and it is matched to the frozen row by the number of the heading it names, so an unprotected heading can be renamed together with its row; a
   protected row stays byte for byte and in its place;
 - section 7 (the changelog) must start with the frozen file's bytes; it may only grow;
 - 2.1's table of fixed sentences is compared row by row. The rows are the contiguous block of `|` lines right under the `| Id |` header row and its separator
   row; any other `| F-…` line is plain text of its part and compared as such. The rows are matched by their first cell, and an F-id has one row (a second row,
-  in either file, is refused, naming the id and both lines). A row whose sentence is defined only in parts that are not protected may differ, but its kinds cell
-  may not name `all` or `olympiad` (such a change touches no olympiad task; the check looks for the words `all` and `olympiad`, in any case). Every other row is
+  in either file, is refused, naming the id and both lines). A row whose sentence is defined only in parts that are not protected may differ, but the kinds cell of a changed or added row may not
+  name `all` or `olympiad` (such a change touches no olympiad task) and may hold only the words `daemon`, `web`, `and`, `or`, commas, and the words that the kinds cells of
+  the frozen file's free rows already use (read from the frozen file, never typed into the tool), as plain ASCII letters, spaces and commas: no `&`, no entity, no look-alike
+  letter. Every other row is
   equal byte for byte, and the protected rows keep the order the frozen file has. A sentence is defined where its label (`F-…` at the start of a
   line outside fences) stands; a sentence with no label is defined where the paragraph that introduces its fenced block names it.
+
+**The restricted grammar (every candidate).** Patching the reader one form of the markup at a time cannot close the class "the reader and a renderer read a candidate
+differently": a deletion can turn a literal inside a fence into a heading, and a link reference definition acts at a distance. So the guarantee is by construction, and the
+check (`lib/format-grammar.mjs`) applies it to every line of every part that is not protected in the CANDIDATE (parts as the candidate's own class rows cut them; the same check
+runs on the frozen file as a sanity check, and a frozen file that fails is exit 4). Every line of such a part is one of these forms, and a line that is none is refused (exit 1,
+naming the part, its class, the line and the form):
+
+1. a blank line;
+2. a heading at column 0 in the exact form `## k. Title` or `### k.n Title`, without a closing sequence of `#`; an ADDED heading (one the frozen file's unprotected parts do not
+   have) whose title, without its number, is the title of a protected heading is refused (no look-alike section);
+3. a paragraph line: it starts at column 0 with a character that does not start a block: not a space or a tab, not `#`, `<`, `>`, `|`, `~`, `=`, `-`, `+`, `_`, `]`; not three
+   backticks; not `*`, except `**` that is not `***` (emphasis); not an ordered list marker (digits, `.` or `)`, then a space or the end of the line, so `4.6).` is text); not `[`
+   unless a `]` closes on the line and no `:` follows it (no reference definition, not even one whose label runs over two lines). One or two backticks and `**` may start a line;
+4. a list item: `- ` or one to three digits and `. ` at column 0, then text that is a paragraph line (rule 3 on the text); its continuation lines are indented by exactly the marker
+   width (2 for `- `, the digits plus 2 for a numbered one) and the text after the indent obeys rule 3; no deeper indent, no nested list, no fence and no heading inside an item;
+   an item ends at any column-0 line that is not an item;
+5. a table row: `|` at column 0 and `|` at the end, with no reference definition in it;
+6. a fenced block: an opener at column 0 that is exactly three backticks or three backticks and lower-case letters, a closer of exactly three backticks at column 0, both in the
+   SAME part; the lines between are free text, except that none is a fence marker line (three or more backticks or tildes, up to three spaces of indent) other than the closer.
+
+**Two rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (`^ {0,3}\[...\]:`), and no line whose first
+non-space character is `<` (no raw HTML block start). The argument: every protected part starts at a column-0 heading, where CommonMark starts a fresh block; no unprotected
+construct can stay open across a part boundary (a fence closes in its part, there is no HTML block, no list continues across a heading); and nothing acts at a distance (no
+reference definition). So protected bytes, which are compared byte for byte, render as protected bytes. The checks of the reader (the format errors of section 2) stay and run first.
 
 **What a candidate may not do.** The check refuses, naming the heading, the frozen file's class and the line: protected bytes that differ; a
 protected class row that is relabelled or gone; a protected part that is missing; a part added as `common` or `olympiad`; a subsection
