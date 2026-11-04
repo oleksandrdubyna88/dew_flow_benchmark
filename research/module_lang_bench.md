@@ -244,7 +244,7 @@ hash (2026-11-02). The tests and the probe build their C# programs inside the bo
 
 **Purpose.** The bench's part of the story: the code that checks the task format document (`todo/tasks/FORMAT.md` of the task repository), a record that says
 which version and bytes are A's, and the maintainers' document. The format text itself is the team lead's; nothing here edits it. Built 2026-11-04 against the
-draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`); since fix batch 2 the record names the draft at `593fb7a` (layout only: F-TIMING's fence outside the list in 2.5, a wrapped line of 5.3 that no longer starts with a tag-like span; sha256 `a1990215…c161`).
+draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`); since fix batch 2 the record named the draft at `593fb7a` (layout only: F-TIMING's fence outside the list in 2.5, a wrapped line of 5.3 that no longer starts with a tag-like span; sha256 `a1990215…c161`), and since fix batch 4 it names the draft at `2683747` (layout only: 3.4's two-backtick example sits in a three-backtick span, so the code spans after it pair as written; sha256 `6a526107…81b3`).
 
 **Common reading** (`lib/format-structure.mjs`). FORMAT is read as raw bytes: UTF-8, LF only; a carriage return anywhere or a byte order mark is a format error
 (exit 4) that names the first line; nothing is normalised and the sha256 is over the raw bytes. A heading is a line that starts with `## ` or `### ` at column 0 outside a
@@ -259,12 +259,15 @@ spaces or with nothing after the `#`s; a setext heading (a paragraph line, then 
 an ATX heading or a fence opener inside a block quote or after a list marker on the same line (fix batch 1b: a heading the reader does not see but a renderer shows is the same spoof as the fence trick).
 Not looked at by the reader (listed in `inputs/FORMAT-MAINTENANCE.md`): character references and link labels that spell a heading.
 
+**What the grammar defends.** Agents read FORMAT and `GRAMMAR.md` as raw bytes, and the byte comparison protects those. The restricted grammar and the inline-HTML rule defend a human reviewer who reads a RENDERED page against a misleading amendment; they were checked with markdown-it in CommonMark mode and are not a proof about every renderer. A blank line before an appended changelog entry makes that list "loose" when rendered (spacing only; the words do not change).
+
 **The restricted grammar** (`lib/format-grammar.mjs`, fix batch 2). Patching the reader one form at a time cannot close the class (a deletion can turn a literal inside a fence into a heading; a reference
 definition acts at a distance), so the guarantee is by construction. Every line of every unprotected part of the CANDIDATE (and, as a sanity check, of the frozen file: a failure there is exit 4) is a blank
 line, a heading in the exact structure form (no closing `#`s; an added heading may not carry the title of a protected heading), a paragraph line (no block starter at column 0; `**` and one or two backticks
 may start a line; a digit marker needs a space after it), a list item (`- ` or one to three digits and `. `, text obeying the paragraph rule, continuation lines indented by exactly the marker width, no nested
 list, no fence or heading inside), a table row, or a fenced block (opener three backticks and lower-case letters, closer three backticks, both in the part, no other fence marker line inside). Two whole-file
-rules, protected parts too, outside fences: no link reference definition (at any indent, an escaped bracket or a footnote form included) and no line whose first non-space character is `<`. Fix batch 3: the
+rules, protected parts too, outside fences: no link reference definition (at any indent, an escaped bracket or a footnote form included) and no line whose first non-space character is `<`. Fix batch 4 adds a third: no
+raw inline HTML, a `<` followed by a letter, `/`, `!` or `?` outside a code span and not written `\<` (the fourth review's finding: `Read on <details>` in an unprotected part leaves the rest of a rendered page inside a closed element). Code spans follow CommonMark's equal-run rule over a PARAGRAPH (not across a heading, a list item, a quote, a thematic break or a fence); a table is scanned in two readings, as text of a paragraph and as rows cell by cell, and a tag left outside a span by either is refused. Also in batch 4: a tab after an ordered marker or a dash is a list marker form the grammar refuses; the look-alike check takes its titles from every heading inside a protected part and runs on headings appended to the changelog; the changelog must be one whole `common` row in the class table (`--self` and `--frozen`). Fix batch 3: the
 text appended to the changelog must start after a blank line and obey the same line forms; `--self` also reports the grammar (exit 1); the refusal arrays are built without `push`. The argument: every protected part starts at a column-0 heading, where CommonMark
 starts a fresh block; no unprotected construct stays open across a part boundary; nothing acts at a distance. Refusals are exit 1 naming the part, its class, the line and the form. The kinds cell of a changed
 or added free 2.1 row holds only `daemon`, `web`, `and`, `or`, commas and the words the frozen free rows already use (read from the frozen file), as plain ASCII. The `Gate verdict` also accepts the spec-header
@@ -313,7 +316,7 @@ assignment, a `tee`, `printf` or `>>` to `pids.max`; comments are not counted); 
 
 **The real draft in tests.** The positive cases and `--self` also run on the real draft when `LANG_V2_TASK_REPO` names the task repository's checkout; they first check that the checkout's
 `todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256` and fail otherwise. Without the variable they skip with the reason; under `BENCH_REQUIRE_SANDBOX=1` they throw. Refusal cases use the
-synthetic fixture. `inputs/specs.d/format.json` was bootstrapped (twice: at `0a95d31`, and again at `593fb7a`, with its own commit) in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
+synthetic fixture. `inputs/specs.d/format.json` was bootstrapped (three times: at `0a95d31`, at `593fb7a` and at `2683747`, each with its own commit) in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
 
 **Not done here.** The format's own document gate, the freeze, and `runner/GRAMMAR.md` in the workspaces (the extractor makes the text; E1.S3 places it). The record's `gate` stays `null` until
 the gate passes.

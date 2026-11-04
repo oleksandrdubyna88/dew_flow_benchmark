@@ -100,7 +100,8 @@ and the lead text of the section, before its first subsection, is `common`. The 
 
 **The table (`--self`).** Every row names an existing heading by its whole text, and its class is one of the five. Every `##` section has
 exactly one row, or, for a mixed section, each of its `###` has exactly one row and the section has none. A row for a heading that is inside a
-fenced block, a heading with two rows, and a malformed row are refused.
+fenced block, a heading with two rows, and a malformed row are refused. The changelog (section 7) must be one whole `common` row: a row of another class, a missing
+row, or rows for subsections of it are refused, so no class can take the changelog out of the rule that it only grows.
 
 **The freeze.** After the freeze of the first group of tasks the `common` and `olympiad` parts do not change and keep their numbers. A
 `daemon`, `web` or `daemon-web` part may change before the freeze of a later group, as a new dated version that names the tasks it touches,
@@ -132,6 +133,11 @@ class table only.
   equal byte for byte, and the protected rows keep the order the frozen file has. A sentence is defined where its label (`F-…` at the start of a
   line outside fences) stands; a sentence with no label is defined where the paragraph that introduces its fenced block names it.
 
+**Who this protects.** Agents read the format and `runner/GRAMMAR.md` as raw bytes, and the byte comparison protects those. The restricted grammar and the inline-HTML rule below
+defend a human reviewer who reads a RENDERED page against an amendment that is misleading on screen while its bytes look harmless. They were checked with markdown-it in CommonMark
+mode, and they are not a proof about every renderer. One thing is spacing only: a blank line before an appended changelog entry makes that list "loose" when rendered (more space
+between its items); the words do not change.
+
 **The restricted grammar (every candidate).** Patching the reader one form of the markup at a time cannot close the class "the reader and a renderer read a candidate
 differently": a deletion can turn a literal inside a fence into a heading, and a link reference definition acts at a distance. So the guarantee is by construction, and the
 check (`lib/format-grammar.mjs`) applies it to every line of every part that is not protected in the CANDIDATE (parts as the candidate's own class rows cut them; the same check
@@ -140,9 +146,10 @@ naming the part, its class, the line and the form):
 
 1. a blank line;
 2. a heading at column 0 in the exact form `## k. Title` or `### k.n Title`, without a closing sequence of `#`; an ADDED heading (one the frozen file's unprotected parts do not
-   have) whose title, without its number, is the title of a protected heading is refused (no look-alike section);
+   have) whose title, without its number, is the title of ANY heading inside a protected part (a subsection of a whole protected section included), compared without regard to case and
+   to runs of spaces, is refused (no look-alike section); the check also runs on headings in the text appended to the changelog;
 3. a paragraph line: it starts at column 0 with a character that does not start a block: not a space or a tab, not `#`, `<`, `>`, `|`, `~`, `=`, `-`, `+`, `_`, `]`; not three
-   backticks; not `*`, except `**` that is not `***` (emphasis); not an ordered list marker (digits, `.` or `)`, then a space or the end of the line, so `4.6).` is text); not `[`
+   backticks; not `*`, except `**` that is not `***` (emphasis); not an ordered list marker (digits, `.` or `)`, then a space, a tab or the end of the line, so `4.6).` is text), and not a list marker followed by a tab (`-` and a tab: a renderer reads a list item); not `[`
    unless a `]` closes on the line, no backslash stands inside the first bracket and no `:` follows it (no reference definition, not even one whose label runs over two lines). One or two backticks and `**` may start a line;
 4. a list item: `- ` or one to three digits and `. ` at column 0, then text that is a paragraph line (rule 3 on the text); its continuation lines are indented by exactly the marker
    width (2 for `- `, the digits plus 2 for a numbered one) and the text after the indent obeys rule 3; no deeper indent, no nested list, no fence and no heading inside an item;
@@ -151,10 +158,16 @@ naming the part, its class, the line and the form):
 6. a fenced block: an opener at column 0 that is exactly three backticks or three backticks and lower-case letters, a closer of exactly three backticks at column 0, both in the
    SAME part; the lines between are free text, except that none is a fence marker line (three or more backticks or tildes, up to three spaces of indent) other than the closer.
 
-**Two rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (a line whose first non-space character is a `[` that a `]:` closes, at ANY indent; an escaped bracket in the label and the footnote form `[^x]:` count), and no line whose first
-non-space character is `<` (no raw HTML block start). The argument: every protected part starts at a column-0 heading, where CommonMark starts a fresh block; no unprotected
-construct can stay open across a part boundary (a fence closes in its part, there is no HTML block, no list continues across a heading); and nothing acts at a distance (no
-reference definition). So protected bytes, which are compared byte for byte, render as protected bytes. The checks of the reader (the format errors of section 2) stay and run first.
+**Three rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (a line whose first non-space character is a `[` that a `]:` closes, at ANY indent; an escaped bracket in the label and the footnote form `[^x]:` count); no line whose first
+non-space character is `<` (no raw HTML block start); and no raw inline HTML: a `<` followed by a letter, `/`, `!` or `?` that stands outside a code span and is not written `\<` (autolinks
+and comments included). A rendered page lets such a tag act at a distance (`Read on <details>` leaves everything after it inside a closed element), and text between two
+tags, or a tag in a list item or a table cell, is no safer. Code spans follow CommonMark's rule: a run of backticks is closed by the next run of exactly the same length, over a PARAGRAPH (the
+consecutive non-blank lines; a span may pair across lines) and not across a heading, a list item, a quote, a thematic break or a fenced block; a table is read in two ways, as text of a
+paragraph and as rows, one row at a time and cell by cell (a pipe that a backslash escapes does not cut a cell), and a tag that either reading leaves outside a span is refused. A
+guard: `` `<id>` `` in a code span passes, and `` `<id> `` with the span not closed on the line is refused. The argument: every protected part starts at a column-0 heading, where
+CommonMark starts a fresh block; no unprotected construct can stay open across a part boundary (a fence closes in its part, there is no HTML block, no list continues across a heading); and
+nothing acts at a distance (no reference definition, no raw inline HTML). So a renderer shows a protected part as it shows the same bytes of the frozen file (the protected bytes are
+compared byte for byte); the argument is about CommonMark with the reader's checks, not about every renderer. The checks of the reader (the format errors of section 2) stay and run first.
 
 **What a candidate may not do.** The check refuses, naming the heading, the frozen file's class and the line: protected bytes that differ; a
 protected class row that is relabelled or gone; a protected part that is missing; a part added as `common` or `olympiad`; a subsection
