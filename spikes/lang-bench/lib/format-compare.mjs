@@ -128,7 +128,7 @@ function kindsProblem(cell, allowed) {
  * 2.1's table in the text of its part: the rows are the contiguous `|` block right under the `| Id |` header row and its separator row. `{ found, rows, rest }`: `rows` are
  * `{ id, line, index }` for the block's `| F-… |` lines, `rest` the other lines as `{ text, index }` (a `| F-` line anywhere else is one of them: plain text of its part).
  */
-function tableOf(text) {
+export function tableOf(text) {
   const lines = text.split('\n');
   const head = lines.findIndex((line, index) => TABLE_HEADER.test(line) && TABLE_SEPARATOR.test(lines[index + 1] ?? ''));
   let end = head === -1 ? 0 : head + 2;

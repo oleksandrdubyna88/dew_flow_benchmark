@@ -206,15 +206,18 @@ function structureFault(headings) {
   return section < SECTION_COUNT ? { no: 0, text: 'the end of the file', rule: `only ${section} of ${SECTION_COUNT} sections are present` } : null;
 }
 
-/** `{ ok: true, format }` for FORMAT's bytes — `{ bytes, text, lines, headings, sha256 }` — or `{ ok: false, line, reason }` for a format error (exit 4). */
-export function parseFormat(bytes) {
+/**
+ * `{ ok: true, format }` for FORMAT's bytes — `{ bytes, text, lines, headings, sha256 }` — or `{ ok: false, line, reason }` for a format error (exit 4).
+ * `structure` is the rule for the headings (FORMAT's own: seven numbered sections); another document with the same byte and block rules, a spec, gives its own, or `() => null`.
+ */
+export function parseFormat(bytes, { structure = structureFault } = {}) {
   const checked = checkBytes(bytes);
   if (!checked.ok) return checked;
   const lines = linesOf(checked.text);
   const scanned = scanBlocks(lines);
   if (scanned.fault !== null) return fail(scanned.fault.no, scanned.fault.reason);
   const headings = headingsOf(lines);
-  const fault = structureFault(headings);
+  const fault = structure(headings);
   if (fault !== null) return fail(fault.no === 0 ? lines.length : fault.no, `${fault.text}: ${fault.rule}`);
   return ok({ format: { bytes, text: checked.text, lines, headings, sha256: sha256Hex(bytes) } });
 }
