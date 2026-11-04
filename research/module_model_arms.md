@@ -3395,6 +3395,44 @@ Nothing the module writes is deleted by a verb; the operator retires a root (it 
 
 A killed run leaves what it had written and nothing running (the runners hold locks, not state). M3 measured no sizes.
 
+## Closing the plan (2026-11-04)
+
+**The delegation deny, checked on every launch (`LaunchDenial`).** The Ledger 1.1–1.3 box of the parent's §10 asked that every launch of `RunArmSchemeTests` and `RunArmSrsTests` carry `--disallowedTools Agent Task …` unless its spec says `subagents: true`; deviation D-e had found the assertion narrower. `tests/Bench.Tests/ModelArms/LaunchDenial.cs` closes it at one point. `RunArmKit.RunAsync` and `RunWithSeamsAsync`, the two ways the run-arm tests start an arm, call `LaunchDenial.Check(root)` after the run, whatever its exit code (a refusal included). `Check` reads the fake CLI's whole log for the root, not the last call, so a resume is checked as well as a fresh start. For each launch it finds the step spec by the brief the launch was filled from (a resume by the session it continues) and asserts: a step without `subagents: true` has `--disallowedTools` leading with `Agent` and `Task` and an `--allowedTools` holding neither; a step with `subagents: true` denies neither. A launch it cannot place (a resume of a session no logged launch started, a brief no step names) is a failure, never a skip. `LaunchDenialTests` pins the check itself: each way a launch can lack the deny, a resume without a deny, the unplaceable launches, a scheme run and a task-pipeline run both seen (the wrapped coders included), a run that launches nothing reporting zero, and a scan that `RunArmSchemeTests.cs` and `RunArmSrsTests.cs` reach the verb only through the kit. One test, `The_gate_and_the_runner_share_one_clock_one_log_and_one_map` (`RunArmSchemeTests.cs:524`), called the verb directly; it now goes through `RunWithSeamsAsync`, its assertions untouched.
+
+*Red proof.* With `Agent` taken out of the deny in `StepLaunch.cs`, 39 of the 63 tests of `RunArmSchemeTests`, `RunArmSrsTests` and `LaunchDenialTests` went red, among them `Scheme_C_runs_its_four_steps_in_order_against_the_fake`, with the message `Expected denied.Take(2) to be equal to {"Agent", "Task"} because 1-code fresh starts no subagent unless its spec says so…`. The break was never committed. No production launch lacked the deny, so the change is tests only. *Whole suite on this host after the change:* 5173 tests, 4584 passed, 572 failed, 17 skipped; all 572 failures are the Postgres collection fixture's failure (no store is reachable here, as E3 §11 records) and none is in ModelArms. Over the namespace `*ModelArms*`: 2098 total, 2092 passed, 0 failed, 6 skipped. The CI run of the pull request that carries this change is the verdict.
+
+**The growth audit.** The parent's growth box of §10 was audited row by row against §4.11 on 2026-11-04 and stays not met as written; the rows that differ, the grep for a table or a database and the file and line of each are in the parent's deviation D-i (`research/PLAN_model_arms.md`, *Deviations at promotion*).
+
+**A correction to the first sentence of *Growth, as built*.** "Nothing the module writes is deleted by a verb" is stronger than the code. The verbs delete these: staging files (`<name>.staging-<32 hex>`, removed when a write is refused or fails), holder notes (`.isolation.lock.holder`, `.gate.lock.holder`, `pids/<arm>.lock.holder`), probe files (`LockProbe`), `<step>.done` (a blocked gate removes it) and `<step>.continue` (removed when the step is done), the old `out/wt-build-<id>.log` before a worktree's warm build, `out/task-<id>.before` when a worktree is recreated, `base/` when `prep-base` is retried, and the half-made arm folder `r/<token>/` of a `make` that is proven never to have run. The sentence stands above; this paragraph is its correction. The operator-retires-the-root part of the sentence is unchanged.
+
+**The 21 per-story remote branches.** They are deleted after the pull request that carries this section merges, by the owner's delegation of 2026-11-04. Their names and tips, from `git for-each-ref --format='%(refname:lstrip=3) %(objectname)' 'refs/remotes/origin/feat/model-arms-e*'`:
+
+| branch | tip |
+|---|---|
+| `feat/model-arms-e1r5` | `126c9a5288b93e0af9cf5f37ab80158e7a177457` |
+| `feat/model-arms-e1s1` | `233945ac0c033f47df2c2a3916fe2a4f349738ea` |
+| `feat/model-arms-e1s10` | `658c57304b8667fe184456e0eb154a5939845b1a` |
+| `feat/model-arms-e1s11` | `da88391277fd1310be0b1f201926ee4860c8f691` |
+| `feat/model-arms-e1s2` | `188ff9049fcfb35590f198e8e917892801295e4d` |
+| `feat/model-arms-e1s3` | `a91d49370b03a4717ffd24dd2fc5dff78a6b1f58` |
+| `feat/model-arms-e1s4` | `54aa0419cea0cc458bf7e2c9627bc28c0ad82016` |
+| `feat/model-arms-e1s5` | `0d80cca0368957a3c223d86afddf9b3d055405cf` |
+| `feat/model-arms-e1s6` | `7e1a54b2c233d7a472c2733df3974fa691e2084e` |
+| `feat/model-arms-e1s7` | `580e647b575c77397525ed96ffd0797a18465ed5` |
+| `feat/model-arms-e1s8` | `f0a392e46193be9becdb67eaa9b1b2cb3e6ff5eb` |
+| `feat/model-arms-e1s9` | `250d59e6acd0ada3ca7c859c0d7abf12f44d1159` |
+| `feat/model-arms-e2s0` | `718ccb4d11a6d2fa33c823946b9b41fdd8a32a98` |
+| `feat/model-arms-e2s1` | `ca2ffa392363fc1beeb11e5d28315d8d9c966a17` |
+| `feat/model-arms-e2s2` | `32d00f8f3857ca18ae195699b3f3252420481b47` |
+| `feat/model-arms-e2s3` | `47b2506fd6a7d746f517ea7d275b645f07361444` |
+| `feat/model-arms-e2s4` | `c82355b50eab41659545d7149d04191b41ea4c95` |
+| `feat/model-arms-e2s5` | `690541f78d90d0d707ced285f82cccc4b4a91849` |
+| `feat/model-arms-e2s6` | `0b6dba9ac6b69daf097dc69b043774d859f0494a` |
+| `feat/model-arms-e2s7` | `f447128eb78024bc538ba228956de7f6ab6be180` |
+| `feat/model-arms-e2s8` | `b12979ee98863e468799992bf9864c608c85455f` |
+
+*Why nothing is lost.* The 9 `e2s*` tips are ancestors of `refs/pull/119/head` (`bc40284b`, #119). The commits of the 12 `e1*` branches (`e1s1` to `e1s11`, and `e1r5`) are patch-equal to commits of `refs/pull/116/head` (`34349415`, #116): `git cherry refs/pull/116/head <branch>` lists no commit as missing (`+`), except `ec31b270` (on `e1s3`) and `0c5e0e40` (on `e1s6`). Each of those two has a same-subject commit in that head (`d319ba79` and `d8a82d93`), and the line-sorted diffs of each pair are equal. The durable refs are the two pull-request heads, so an exact tip sha above may not stay fetchable after its branch is gone; the content stays.
+
 ## Not proven, gathered
 
 Each section above keeps its own *Not proven*; this is the module's whole as of the E6.S3 build, grouped.
