@@ -90,3 +90,5 @@ or web case can run before part ii-b. **Verified by the team lead:** F1, F2, F3 
 lead, 2026-11-03:** F6 — the gated text says `Format version: 2` (the draft revisions 2.1 and 2.2 stay as changelog lines); F14 — a class of
 its own for sections 4 and 5, after `ask_consultants` `8b776383` (2 of 2 answers for it), recorded as the parent's change 6.2, which stops
 the plan for a whole re-review.
+
+**CP1 addendum, 2026-11-04.** Conditions (1) to (3) held before FORMAT's gate round: F1–F5 fixed, F6 decided, F14 decided (change 6.2, epoch 7, D60). F7, F8 and F9 are also in the gated text, before A's specs and A's freeze, so they do not stay open. F10–F13 stay with part ii-b and E1.S8. The gate: `inputs/gates/FORMAT-v2.md`.

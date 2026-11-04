@@ -337,6 +337,8 @@ holder's bound, the scope's end) have margins of seconds and were run under the 
 
 ## The FORMAT tools scenarios (E1.S9, `spikes/lang-bench/`)
 
+*Last full run, 2026-11-04, with E1.S4 and E1.S9 merged and the record at the gated FORMAT (`d293bafc…`): `BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<the task repository> node spikes/lang-bench/run-tests.mjs` 1782 of 1782, the FORMAT files with `specs-record` 338 of 338. The numbers below are kept as they were observed on the way.*
+
 The bench's part of the FORMAT story: the grammar extractor, the class check (T-L56) and the bounds test (T-L58). Refusal cases use a synthetic FORMAT built in `test/support/format-fixtures.mjs`
 (the shape of the real document, none of its content; `edit` throws unless its needle is there exactly once, so a case never edits nothing). The positive cases and `--self` also run on the real draft when
 `LANG_V2_TASK_REPO` names the task repository checkout (after a check that its `todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256`); without the variable they skip, under
