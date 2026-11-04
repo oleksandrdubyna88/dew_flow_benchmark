@@ -10,6 +10,7 @@ import { loadRecipe, makeReadOnly, makeSnapshot, makeWritable, pickHighest, regi
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { takeGateLock } from '../lib/gate-lock.mjs';
+import { renderPackagesMd } from '../lib/packages-md.mjs';
 import { START_TOLERANCE_S, parseOwner, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { sandboxGate } from '../../minigit-bench/test/helpers.mjs';
 import { loadRecipeLang } from '../lib/cache-recipe-lang.mjs';
@@ -320,4 +321,22 @@ test('The_command_refuses_a_held_gate_lock_an_already_registered_stack_and_bad_u
   assert.equal(beforeBuild.value.code, 3, 'control: a stack that is not registered goes on to the preflight, which refuses this store');
   assert.match(beforeBuild.value.stderr, /preflight/);
   assert.equal(readFileSync(flags['--record'], 'utf8'), JSON.stringify({ csharp: recordFor('a'.repeat(64)), superseded: [] }), 'the record is untouched');
+});
+
+test('The_command_prints_the_PACKAGES_md_of_a_registered_stack_from_the_record_and_refuses_one_that_is_not_there', async t => {
+  const root = ownedFolder(t, 'prt');
+  const real = realRecipe();
+  const resolved = Object.fromEntries(Object.keys(real.stacks.node.resolve).map(k => [k, '1.2.3']));
+  const packages = real.stacks.node.packages.map(p => ({ ecosystem: 'npm', name: p.name, version: p.spec.replace(/\{([A-Z_]+)\}/, (m, k) => resolved[k]), integrity: 'sha512-x' }));
+  const rec = path.join(root, 'rec.json');
+  writeFileSync(rec, JSON.stringify({ node: recordFor('d'.repeat(64), { packages, resolved }), superseded: [] }));
+  const printed = await runMake(['--print-packages-md', 'node', '--record', rec]);
+  assert.equal(printed.value.code, 0, printed.value.stderr);
+  const expected = renderPackagesMd({ stack: 'node', record: JSON.parse(readFileSync(rec, 'utf8')), recipe: real });
+  assert.equal(expected.ok, true, expected.reason);
+  assert.equal(printed.value.stdout, expected.value, 'the command prints exactly what the renderer derives from the record');
+  const missing = await runMake(['--print-packages-md', 'csharp', '--record', rec]);
+  assert.equal(missing.value.code, 3, 'a stack with no record is refused');
+  assert.match(missing.value.stderr, /csharp/);
+  assert.equal((await runMake(['--print-packages-md', 'ruby', '--record', rec])).value.code, 2, 'an unknown stack is a usage error');
 });

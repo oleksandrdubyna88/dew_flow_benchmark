@@ -5,6 +5,7 @@
 //   node spikes/lang-bench/make-snapshots.mjs [--stack csharp] [--stack node]       build and register (default: both, csharp first)
 //   node spikes/lang-bench/make-snapshots.mjs --supersede <stack> --reason "<text>"  move a registered record to superseded[] (before the pre-registration tag only)
 //   node spikes/lang-bench/make-snapshots.mjs --prune-superseded                     remove superseded snapshot folders (after the pre-registration tag only)
+//   node spikes/lang-bench/make-snapshots.mjs --print-packages-md <stack>            print the stack's PACKAGES.md, derived from the record
 //     --caches <dir>     default ~/rsd/lang-v2/caches (refused inside a git worktree)     --record <file>   default inputs/cache-snapshots-lang.json
 //     --recipe <file>    default inputs/cache-recipe-lang.json                           --stacks <file>   default inputs/stacks-lang.json
 //     --work <dir>       parent of the build's owned work folder, default ~/.cache/lang-v2/w
@@ -31,6 +32,7 @@ import { buildRecord, checkManifestMatches, manifestOf, pruneSuperseded, superse
 import { takeGateLock } from './lib/gate-lock.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { preflightLang } from './lib/preflight-lang.mjs';
+import { renderPackagesMd } from './lib/packages-md.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
@@ -38,7 +40,7 @@ const REPO = path.resolve(SPIKE, '..', '..');
 const STACK_NAMES = Object.freeze(['csharp', 'node']);
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
 const OPTIONS = {
-  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' },
+  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' },
   caches: { type: 'string' }, record: { type: 'string' }, recipe: { type: 'string' }, stacks: { type: 'string' }, work: { type: 'string' }, 'gate-lock': { type: 'string' },
 };
 const say = line => process.stdout.write(`${line}\n`);
@@ -48,18 +50,18 @@ const stop = (code, line) => { complain(line); return code; };
 // ---- the arguments ---------------------------------------------------------------------------------------------------------------
 
 const MODE_TESTS = Object.freeze([
-  ['supersede', v => v.supersede !== undefined], ['prune', v => v['prune-superseded'] === true], ['build', v => v.stack !== undefined],
+  ['supersede', v => v.supersede !== undefined], ['prune', v => v['prune-superseded'] === true], ['print', v => v['print-packages-md'] !== undefined], ['build', v => v.stack !== undefined],
 ]);
 const modeOf = v => MODE_TESTS.filter(([, isAsked]) => isAsked(v)).map(([name]) => name);
-/** Every stack name the flags carry that is not a legal one (the stacks of `--stack`). */
-const unknownStacks = v => (v.stack ?? []).filter(s => !STACK_NAMES.includes(s));
+/** Every stack name the flags carry that is not a legal one (the stacks of `--stack` and the one of `--print-packages-md`). */
+const unknownStacks = v => [...(v.stack ?? []), v['print-packages-md']].filter(s => s !== undefined && !STACK_NAMES.includes(s));
 
 /** The flags with their defaults (every folder the command touches is a flag, so a test can point all of them elsewhere). */
 function configOf(v, mode) {
   const home = os.homedir();
   const at = (value, ...fallback) => path.resolve(value ?? path.join(...fallback));
   return {
-    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason,
+    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'],
     caches: at(v.caches, home, 'rsd', 'lang-v2', 'caches'), record: at(v.record, SPIKE, 'inputs', 'cache-snapshots-lang.json'), recipe: at(v.recipe, SPIKE, 'inputs', 'cache-recipe-lang.json'),
     stacks: at(v.stacks, SPIKE, 'inputs', 'stacks-lang.json'), work: at(v.work, home, '.cache', 'lang-v2', 'w'), gateLock: at(v['gate-lock'], home, '.cache', 'lang-v2', 'gate.lock'),
   };
@@ -71,7 +73,7 @@ function readArgs(argv) {
   try { v = parseArgs({ args: argv, options: OPTIONS, strict: true }).values; } catch (e) { return { error: e.message }; }
   const modes = modeOf(v);
   const unknown = unknownStacks(v);
-  if (modes.length > 1) return { error: 'ask for one of: a build (--stack), --supersede <stack> --reason <text>, or --prune-superseded' };
+  if (modes.length > 1) return { error: 'ask for one of: a build (--stack), --supersede <stack> --reason <text>, --prune-superseded, or --print-packages-md <stack>' };
   return unknown.length > 0 ? { error: `--stack names ${unknown.join(', ')}; the legal names are ${STACK_NAMES.join(', ')}` } : { config: configOf(v, modes[0] ?? 'build') };
 }
 
@@ -227,6 +229,15 @@ function pruneMode(config) {
   return EXIT.done;
 }
 
+function printMode(config) {
+  const inputs = loadInputs(config);
+  if (!inputs.ok) return stop(EXIT.usage, inputs.reason);
+  const rendered = renderPackagesMd({ stack: config.print, record: JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}'), recipe: inputs.value.recipe });
+  if (!rendered.ok) return stop(EXIT.refused, rendered.reason);
+  process.stdout.write(rendered.value);
+  return EXIT.done;
+}
+
 // ---- main --------------------------------------------------------------------------------------------------------------------------
 
 /** The modes that work on the caches folder: refused inside a git worktree, then prune or build. */
@@ -241,7 +252,8 @@ function cachesModes(config) {
 async function main(argv) {
   const parsed = readArgs(argv);
   if (parsed.error) return stop(EXIT.usage, parsed.error);
-  return parsed.config.mode === 'supersede' ? supersedeMode(parsed.config) : cachesModes(parsed.config);
+  const modes = { supersede: supersedeMode, print: printMode };
+  return (modes[parsed.config.mode] ?? cachesModes)(parsed.config);
 }
 
 process.exitCode = await main(process.argv.slice(2));
