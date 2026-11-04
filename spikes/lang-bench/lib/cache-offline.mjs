@@ -40,13 +40,7 @@ export const npmOfflineArgv = specs => ['npm', 'install', '--offline', '--no-aud
 
 const SOURCE_PATH = /^[A-Za-z0-9/._-]+$/;
 
-/**
- * The `nuget.config` of an offline workspace: every inherited source and fallback folder cleared, exactly one local source (the seeded global packages folder). -> `ok(text)` | `fail` for a path outside
- * `[A-Za-z0-9/._-]` (it goes into XML). S3 reuses this function for the workspaces' `nuget.config`.
- */
-export function offlineNugetConfig(source) {
-  if (typeof source !== 'string' || !SOURCE_PATH.test(source)) return fail(`the offline NuGet source path ${JSON.stringify(source)} must match ${SOURCE_PATH}: it is written into XML`);
-  return ok(`<?xml version="1.0" encoding="utf-8"?>
+const nugetConfigText = source => `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
     <clear />
@@ -56,8 +50,22 @@ export function offlineNugetConfig(source) {
     <clear />
   </fallbackPackageFolders>
 </configuration>
-`);
+`;
+
+/**
+ * The `nuget.config` of an offline workspace: every inherited source and fallback folder cleared, exactly one local source (the seeded global packages folder). -> `ok(text)` | `fail` for a path outside
+ * `[A-Za-z0-9/._-]` (it goes into XML). S3 reuses this function for the workspaces' `nuget.config`.
+ */
+export function offlineNugetConfig(source) {
+  if (typeof source !== 'string' || !SOURCE_PATH.test(source)) return fail(`the offline NuGet source path ${JSON.stringify(source)} must match ${SOURCE_PATH}: it is written into XML`);
+  return ok(nugetConfigText(source));
 }
+
+/** The source of a workspace's `nuget.config`: NuGet expands `%NAME%` from the environment on Linux, so the text is the same in every session and holds no path (the box sets `NUGET_PACKAGES`). */
+export const WORKSPACE_NUGET_SOURCE = '%NUGET_PACKAGES%';
+
+/** The `nuget.config` of every C# workspace template: the offline config over `%NUGET_PACKAGES%`. A fixed text, so it needs no check of a path. */
+export const workspaceNugetConfig = () => nugetConfigText(WORKSPACE_NUGET_SOURCE);
 
 // ---- what a restore used, against the manifest -----------------------------------------------------------------------------------
 

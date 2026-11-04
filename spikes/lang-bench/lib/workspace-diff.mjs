@@ -1,11 +1,13 @@
-// workspace-diff (E1.S1 brief item 3): per task, `csharp/<t>/` and `node/<t>/` hold the same files, byte for byte, except each stack's pin
-// files (which are that stack's own) and the two marked sentences of STATEMENT.md. A finding is `{ path, what }`; the result is
+// workspace-diff (E1.S1 brief item 3): per task, `csharp/<t>/` and `node/<t>/` hold the same files, byte for byte, except each stack's own
+// files (its pin files, its two scripts and its packages list) and the two marked sentences of STATEMENT.md. A finding is `{ path, what }`; the result is
 // `{ ok, findings }`, findings sorted by path. Nothing here changes anything.
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-export const CSHARP_PINS = Object.freeze(['global.json', 'nuget.config', 'Directory.Build.props', '*.csproj']);
-export const NODE_PINS = Object.freeze(['package.json', 'package-lock.json', 'tsconfig.json', '.npmrc', 'eslint.config.mjs']);
+// Each stack's own files: its pin files, and the three files a built workspace derives or writes for its stack (the build script, the run script, the packages list).
+const OWN_FILES = Object.freeze(['build.sh', 'run.sh', 'PACKAGES.md']);
+export const CSHARP_PINS = Object.freeze(['global.json', 'nuget.config', 'Directory.Build.props', '*.csproj', ...OWN_FILES]);
+export const NODE_PINS = Object.freeze(['package.json', 'package-lock.json', 'tsconfig.json', '.npmrc', 'eslint.config.mjs', ...OWN_FILES]);
 export const MARKERS = Object.freeze(['<!-- stack-sentence -->', '<!-- framework-sentence -->']);
 const STATEMENT = 'STATEMENT.md';
 
