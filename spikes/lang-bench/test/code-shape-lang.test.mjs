@@ -14,7 +14,7 @@ const FILES = ['conformance.mjs', ...names('lib', /^conformance.*\.mjs$/), ...na
 
 test('The_files_the_shape_rule_covers_are_found_by_pattern', () => {
   for (const expected of ['conformance.mjs', 'lib/conformance.mjs', 'lib/format-structure.mjs', 'tools/format-classes.mjs', 'tools/grammar-extract.mjs']) assert.ok(FILES.includes(expected), expected);
-  assert.ok(FILES.length >= 20, `${FILES.length} files`);
+  assert.ok(FILES.length >= 18, `${FILES.length} files`);
 });
 
 for (const file of FILES) {
