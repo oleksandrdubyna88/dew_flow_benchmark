@@ -84,23 +84,31 @@ export function loadRecipe(json) {
   return ok(json);
 }
 
-/** The highest plain `x.y.z` of `npm view ... --json` output (a string or an array); a pre-release is never picked. `null` when there is none. */
-export function pickHighest(stdout) {
+/**
+ * The highest plain `x.y.z` of `npm view ... --json` output (a string or an array) or of NuGet's flat-container index (an object `{ versions: [...] }`); a pre-release is never picked. `null` when there is none.
+ * With `{ line }` (E1.S4: an x-range resolved once at build time) only a version equal to `line` or starting with `${line}.` is kept, so line `4` never takes `40.1.0` and `10.0` never takes `10.01.0`.
+ */
+export function pickHighest(stdout, { line } = {}) {
   let parsed;
   try { parsed = JSON.parse(stdout); } catch { return null; }
-  const versions = [parsed].flat().filter(v => /^\d+\.\d+\.\d+$/.test(v));
   const key = v => v.split('.').map(Number);
-  return versions.sort((a, b) => { const [x, y] = [key(a), key(b)]; return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; }).at(-1) ?? null;
+  return plainVersions(parsed, line).sort((a, b) => { const [x, y] = [key(a), key(b)]; return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; }).at(-1) ?? null;
 }
+
+/** The versions an `npm view` answer (a string or an array) or a flat-container index (`{ versions }`) lists. */
+const listedVersions = parsed => (Array.isArray(parsed?.versions) ? parsed.versions : [parsed].flat());
+const isPlainVersion = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+const isInLine = (v, line) => line === undefined || v === line || v.startsWith(`${line}.`);
+const plainVersions = (parsed, line) => listedVersions(parsed).filter(v => isPlainVersion(v) && isInLine(v, line));
 
 const fill = (argv, resolved) => argv.map(a => a.replace(/\{([A-Z_]+)\}/g, (m, name) => resolved[name] ?? m));
 const unresolved = argv => argv.find(a => /\{[A-Z_]+\}/.test(a));
 
 /** Run one command in the box (the layout, the proxy and the env of a session, nothing of the model's). -> `ok({ code, stdout, stderr })` | `fail`. */
 /** The environment of a step: the allow-list, the dummy token and the recipe's own variables; a variable the allow-list refuses is a `fail`. */
-function boxEnv({ layout, name, nodeDir, extra }) {
+function boxEnv({ layout, name, nodeDir, extra, dotnetDir, tsDir }) {
   try {
-    return ok(agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir, extra }));
+    return ok(agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir, dotnetDir, tsDir, extra }));
   } catch (e) {
     return fail(`the recipe's environment is refused: ${e.message}`);
   }
@@ -114,10 +122,15 @@ function boxResult(r, command, timeoutMs) {
   return r.value.code === 0 ? ok(r.value) : fail(`\`${command.join(' ')}\` exited ${r.value.code}: ${tail}`);
 }
 
-async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {} }) {
-  const env = boxEnv({ layout, name, nodeDir, extra });
+/**
+ * Run one command in the agent's box. `toolchains`, `dotnetDir`, `tsDir`, `hide` (E1.S4) are the box fields of `makeSnapshot`'s `box`: pinned toolchain directories bound read-only, put on PATH, and host paths
+ * hidden. They exist because the snapshot must be made with the pinned toolchains and not with the distribution's `dotnet` (`/usr/bin/dotnet`): every box that runs a pinned-toolchain program hides
+ * `/usr/lib/dotnet`, `/usr/share/dotnet`, `/etc/dotnet` AND sets `DOTNET_ROOT` (through `env`). With none of them the box is what it always was.
+ */
+export async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {}, toolchains = [], dotnetDir = null, tsDir = null, hide = [] }) {
+  const env = boxEnv({ layout, name, nodeDir, extra, dotnetDir, tsDir });
   if (!env.ok) return env;
-  const argv = agentBoxArgv({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, command });
+  const argv = agentBoxArgv({ layout, arm: 'bare', toolchains, hide, claudeBinary: process.execPath, nodeDir, command });
   return boxResult(await runBounded(argv[0], argv.slice(1), { env: env.value, timeoutMs }), command, timeoutMs);
 }
 
@@ -126,7 +139,7 @@ async function resolveAll({ spec = {}, ...box }) {
   for (const [name, r] of Object.entries(spec)) {
     const ran = await inBox({ ...box, command: r.argv });
     if (!ran.ok) return ran;
-    const picked = pickHighest(ran.value.stdout);
+    const picked = pickHighest(ran.value.stdout, { line: r.line });
     if (picked === null) return fail(`${name}: \`${r.argv.join(' ')}\` printed no plain x.y.z version`);
     resolved[name] = picked;
   }
@@ -152,6 +165,9 @@ const sizeOf = root => walk(root).reduce((a, { stat }) => a + (stat.isFile() ? s
  * egress proxy, capture, hash, name `cache-<stack>-<hash12>` under `out`, make it read-only. -> `ok({ dir, treeSha256, parts, sizeBytes, packages, resolved, steps })` | `fail`.
  * A failing step leaves nothing in `out` (the work session stays under `root` for diagnosis).
  */
+/** The folder name of a snapshot: v1's `cache-<stack>-<hash12>`; the caller of E1.S4 passes its own (`<stack>-<whole hash>`). */
+const defaultDirName = (stack, sha) => `cache-${stack}-${sha.slice(0, 12)}`;
+
 /** The first free layout `snapshot-<stack>-<n>` under `root` (a claim is exclusive and never reused), or the last refusal. */
 function claimLayout(root, stack) {
   let made = fail('no layout');
@@ -159,16 +175,18 @@ function claimLayout(root, stack) {
   return made;
 }
 
-export async function makeSnapshot({ stack, recipe, root, out, nodeDir = path.dirname(path.dirname(process.execPath)) }) {
+export async function makeSnapshot({ stack, recipe, root, out, nodeDir = path.dirname(path.dirname(process.execPath)), box = {}, workSeed = null, dirName = defaultDirName }) {
   const spec = recipe.stacks[stack];
   if (!spec) return fail(`the recipe has no stack '${stack}' (it has ${Object.keys(recipe.stacks).join(', ')})`);
   const made = claimLayout(root, stack);
   if (!made.ok) return made;
   const layout = made.value;
   copyFileSync(path.join(SPIKE, 'harness', 'box-init.mjs'), layout.files.boxInit);
+  // `workSeed` (E1.S4): a host folder the recipe's steps work on (the C# projects), copied into the work folder before any command runs
+  if (workSeed !== null) cpSync(workSeed, layout.work, { recursive: true });
   const proxy = await egressProxy({ socketPath: layout.sockets.proxy, allow: EGRESS_HOSTS[recipe.hosts], log: line => appendFileSync(layout.files.egressLog, `${JSON.stringify(line)}\n`) });
   try {
-    return await runRecipe({ stack, spec, recipe, layout, nodeDir, out });
+    return await runRecipe({ stack, spec, recipe, layout, nodeDir, out, box, dirName });
   } finally {
     await proxy.close();
   }
@@ -192,8 +210,9 @@ async function runStep({ step, resolved, box }) {
   return problem ? fail(problem) : ok(stepRecord({ step, command, ran, printed }));
 }
 
-async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
-  const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid, env: spec.env ?? {} };
+async function runRecipe({ stack, spec, recipe, layout, nodeDir, out, box: extraBox, dirName }) {
+  const { env: boxEnvExtra = {}, ...boxFields } = extraBox;
+  const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid, env: { ...(spec.env ?? {}), ...boxEnvExtra }, ...boxFields };
   const resolved = await resolveAll({ ...box, spec: spec.resolve });
   if (!resolved.ok) return resolved;
   const steps = [];
@@ -202,10 +221,10 @@ async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
     if (!ran.ok) return ran;
     steps.push(ran.value);
   }
-  return finishSnapshot({ stack, spec, layout, out, resolved: resolved.value, steps });
+  return finishSnapshot({ stack, spec, layout, out, resolved: resolved.value, steps, dirName });
 }
 
-function finishSnapshot({ stack, spec, layout, out, resolved, steps }) {
+function finishSnapshot({ stack, spec, layout, out, resolved, steps, dirName }) {
   mkdirSync(out, { recursive: true });
   const staging = path.join(out, `.building-${stack}-${process.pid}`);
   rmSync(staging, { recursive: true, force: true });
@@ -214,7 +233,7 @@ function finishSnapshot({ stack, spec, layout, out, resolved, steps }) {
   if (!copied.ok) { rmSync(staging, { recursive: true, force: true }); return copied; }
   const parts = Object.fromEntries(Object.keys(spec.capture).map(p => [p, treeHash(path.join(staging, p))]));
   const treeSha256 = treeHash(staging);
-  const dir = path.join(out, `cache-${stack}-${treeSha256.slice(0, 12)}`);
+  const dir = path.join(out, dirName(stack, treeSha256));
   if (existsSync(dir)) { makeWritable(dir); rmSync(dir, { recursive: true, force: true }); }
   renameSync(staging, dir);
   const packages = [...readNpmPackages(path.join(dir, 'npm')), ...readNugetPackages(path.join(dir, 'nuget'))];

@@ -36,3 +36,12 @@ test('An_extra_key_that_is_already_in_the_base_is_refused_with_the_names_and_nev
   assert.equal(env({ GH_TOKEN: 'x' }).GH_TOKEN, 'x', 'control: a key of its own is the extra slot\'s business');
   assert.equal(env({}).CLAUDE_CODE_OAUTH_TOKEN, dummyToken('d'));
 });
+
+test('A_dotnet_directory_goes_first_on_the_box_PATH_after_node', () => {
+  // The pinned SDK directory (E1.S4): the box finds `dotnet` there and not at the distribution's `/usr/bin/dotnet`. Without it the PATH is what it always was.
+  const withDotnet = extra => agentEnv({ layout, dummyToken: dummyToken('d'), cellId: 'c', nodeDir: '/n', dotnetDir: '/d/sdk', tsDir: '/t/ts', extra });
+  assert.equal(withDotnet({}).PATH, '/n/bin:/d/sdk:/t/ts/node_modules/.bin:/usr/local/bin:/usr/bin:/bin');
+  assert.equal(agentEnv({ layout, dummyToken: dummyToken('d'), cellId: 'c', nodeDir: '/n', dotnetDir: '/d/sdk' }).PATH, '/n/bin:/d/sdk:/usr/local/bin:/usr/bin:/bin');
+  assert.equal(env({}).PATH, '/n/bin:/usr/local/bin:/usr/bin:/bin', 'control: no dotnet directory, the PATH of every earlier box');
+  assert.equal(withDotnet({ DOTNET_ROOT: '/d/sdk' }).DOTNET_ROOT, '/d/sdk', 'DOTNET_ROOT is not a base key: it travels as an extra');
+});

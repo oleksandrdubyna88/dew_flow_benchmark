@@ -54,3 +54,19 @@ test('The_rules_are_validated_and_an_unknown_ecosystem_names_the_legal_ones', ()
   assert.throws(() => flagRules([{ id: 'x', ecosystem: 'npm', nameRegex: '(' }]), /x/);
   assert.equal(flagRules(RULES).length, RULES.length);
 });
+
+test('The_readers_return_each_package_integrity_when_asked', () => {
+  // an npm index entry carries `integrity`; a NuGet folder carries `<id>.<version>.nupkg.sha512` (a package folder without it has no hash: `null`, never an empty string)
+  const npmDir = tmpDir('npmi');
+  mkdirSync(path.join(npmDir, '_cacache', 'index-v5', 'ab', 'cd'), { recursive: true });
+  const entry = key => `deadbeef\t${JSON.stringify({ key: `make-fetch-happen:request-cache:${key}`, integrity: `sha512-${key.length}`, time: 1, size: 1 })}\n`;
+  writeFileSync(path.join(npmDir, '_cacache', 'index-v5', 'ab', 'cd', 'e1'), [tgz('fastify', '5.12.7'), tgz('@fastify/jwt', '10.2.6')].map(entry).join(''));
+  const nugetDir = tmpDir('nugeti');
+  mkdirSync(path.join(nugetDir, 'xunit.v3', '4.0.2'), { recursive: true });
+  writeFileSync(path.join(nugetDir, 'xunit.v3', '4.0.2', 'xunit.v3.4.0.2.nupkg.sha512'), 'AbCd+/==\n');
+  mkdirSync(path.join(nugetDir, 'plain', '1.0.0'), { recursive: true });
+  assert.deepEqual(readNpmPackages(npmDir, { hashes: true }).map(p => [p.name, p.version, p.integrity]).sort(), [['@fastify/jwt', '10.2.6', `sha512-${tgz('@fastify/jwt', '10.2.6').length}`], ['fastify', '5.12.7', `sha512-${tgz('fastify', '5.12.7').length}`]]);
+  assert.deepEqual(readNugetPackages(nugetDir, { hashes: true }).map(p => [p.name, p.version, p.integrity]).sort(), [['plain', '1.0.0', null], ['xunit.v3', '4.0.2', 'sha512-AbCd+/==']]);
+  assert.deepEqual(readNpmPackages(npmDir), [{ ecosystem: 'npm', name: 'fastify', version: '5.12.7' }, { ecosystem: 'npm', name: '@fastify/jwt', version: '10.2.6' }], 'without the option the objects are what they were');
+  assert.deepEqual(readNugetPackages(nugetDir).map(p => Object.keys(p)), [['ecosystem', 'name', 'version'], ['ecosystem', 'name', 'version']]);
+});

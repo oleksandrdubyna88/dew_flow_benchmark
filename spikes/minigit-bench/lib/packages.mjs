@@ -9,26 +9,41 @@ const TARBALL = /registry\.npmjs\.org\/((?:@[^/]+\/)?[^/]+)\/-\/([^/]+)\.tgz$/;
 const dirs = p => (existsSync(p) ? readdirSync(p, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')).map(e => e.name) : []);
 const filesUnder = dir => (!existsSync(dir) ? [] : readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? filesUnder(path.join(dir, e.name)) : [path.join(dir, e.name)])));
 
-/** `[{ ecosystem: 'npm', name, version }]` from the cacache index's tarball entries (a packument entry is metadata, not an installed package). */
-export function readNpmPackages(npmCacheDir) {
-  const keys = filesUnder(path.join(npmCacheDir, '_cacache', 'index-v5')).flatMap(f => readFileSync(f, 'utf8').split('\n').filter(Boolean).flatMap(line => {
-    try { return [JSON.parse(line.slice(line.indexOf('\t') + 1)).key]; } catch { return []; }
-  }));
+/**
+ * `[{ ecosystem: 'npm', name, version }]` from the cacache index's tarball entries (a packument entry is metadata, not an installed package). With `{ hashes: true }` (E1.S4: the snapshot's manifest)
+ * each package also carries `integrity`, the index entry's own `sha512-...` field (`null` when the entry has none).
+ */
+export function readNpmPackages(npmCacheDir, { hashes = false } = {}) {
   const seen = new Set();
-  return keys.flatMap(key => {
-    const m = TARBALL.exec(key ?? '');
-    if (!m) return [];
-    const name = m[1];
-    const version = m[2].slice(`${name.split('/').at(-1)}-`.length);
-    const id = `${name}@${version}`;
-    if (seen.has(id)) return [];
+  return indexEntries(npmCacheDir).flatMap(entry => {
+    const pkg = tarballOf(entry);
+    const id = `${pkg?.name}@${pkg?.version}`;
+    if (pkg === null || seen.has(id)) return [];
     seen.add(id);
-    return [{ ecosystem: 'npm', name, version }];
+    return [{ ecosystem: 'npm', ...pkg, ...(hashes ? { integrity: entry.integrity ?? null } : {}) }];
   });
 }
 
-/** `[{ ecosystem: 'nuget', name, version }]` from `<packages>/<id>/<version>/` (the global packages folder; dot-folders are tooling). */
-export const readNugetPackages = nugetDir => dirs(nugetDir).flatMap(id => dirs(path.join(nugetDir, id)).map(version => ({ ecosystem: 'nuget', name: id, version })));
+/** Every parsed entry of the cacache index (a line that is not JSON is skipped). */
+const indexEntries = npmCacheDir => filesUnder(path.join(npmCacheDir, '_cacache', 'index-v5')).flatMap(f => readFileSync(f, 'utf8').split('\n').filter(Boolean).flatMap(line => {
+  try { return [JSON.parse(line.slice(line.indexOf('\t') + 1))]; } catch { return []; }
+}));
+
+/** `{ name, version }` of an entry whose key is a registry tarball, or `null` (a packument entry is metadata). */
+function tarballOf(entry) {
+  const m = TARBALL.exec(entry.key ?? '');
+  if (!m) return null;
+  return { name: m[1], version: m[2].slice(`${m[1].split('/').at(-1)}-`.length) };
+}
+
+/** The `sha512-<base64>` of a NuGet package folder, from its `<id>.<version>.nupkg.sha512` file; `null` when that file is absent (absent is not empty). */
+const nugetIntegrity = (nugetDir, id, version) => {
+  const file = path.join(nugetDir, id, version, `${id}.${version}.nupkg.sha512`);
+  return existsSync(file) ? `sha512-${readFileSync(file, 'utf8').trim()}` : null;
+};
+
+/** `[{ ecosystem: 'nuget', name, version }]` from `<packages>/<id>/<version>/` (the global packages folder; dot-folders are tooling). With `{ hashes: true }` each also carries `integrity` (see `nugetIntegrity`). */
+export const readNugetPackages = (nugetDir, { hashes = false } = {}) => dirs(nugetDir).flatMap(id => dirs(path.join(nugetDir, id)).map(version => ({ ecosystem: 'nuget', name: id, version, ...(hashes ? { integrity: nugetIntegrity(nugetDir, id, version) } : {}) })));
 
 /** The registered rules, validated: -> the rules with their regexes compiled. Throws naming the rule and the legal ecosystems (a malformed registered rule is a bug). */
 export function flagRules(rules) {
