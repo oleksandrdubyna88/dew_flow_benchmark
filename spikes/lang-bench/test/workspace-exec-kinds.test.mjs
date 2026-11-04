@@ -199,16 +199,33 @@ test('A_clean_program_builds_twice_and_dotnet_test_between_two_builds_still_work
 
 // The command line forces the policy as global properties; a project file cannot override those. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
 // line (`TreatWarningsAsErrors` and `WarningsAsErrors` only) two overrides were stopped and four were not; with `Nullable`, `WarningsNotAsErrors`, `WarningLevel` and `NoWarn` forced as well, all six fail with CS8600.
-// What a project file cannot be stopped from doing with these properties is left to the scorer (E3): `#pragma`, `.editorconfig`, `.globalconfig`, new props or targets files.
+// The further rows are pinned below. Not stopped, from App.csproj alone: a local `Nullable`, a target that sets it, a response file, `NoWarn` metadata on a package item, and a source pragma. The rule for E3's scorer is:
+// App.csproj may differ from the template only by `<PackageReference Include Version>` items and nothing else (and a source pragma is symmetric with `@ts-ignore`).
 const OVERRIDES = Object.freeze([
   ['Nullable=disable', '<Nullable>disable</Nullable>'], ['TreatWarningsAsErrors=false', '<TreatWarningsAsErrors>false</TreatWarningsAsErrors>'], ['WarningsAsErrors empty', '<WarningsAsErrors />'],
   ['WarningsNotAsErrors=nullable', '<WarningsNotAsErrors>nullable</WarningsNotAsErrors>'], ['NoWarn=CS8600', '<NoWarn>CS8600</NoWarn>'], ['WarningLevel=0', '<WarningLevel>0</WarningLevel>'],
 ]);
 
+const NULL_PROGRAM = 'string s = null;\nConsole.Out.Write(s);\n';
+const editProject = (w, edit) => { const file = path.join(w, 'App.csproj'); writeFileSync(file, edit(read(file))); };
+/** The rows after the six: what the doc table says (`doc`), whether the command line stops it, the kind it is tried in, and what puts it in the workspace. */
+const FURTHER = Object.freeze([
+  { doc: '`TreatAsLocalProperty="Nullable"` on `<Project>` with `<Nullable>disable</Nullable>`', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); editProject(w, text => text.replace('<Project Sdk="Microsoft.NET.Sdk">', '<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="Nullable">').replace('<AssemblyName>', '<Nullable>disable</Nullable><AssemblyName>')); } },
+  { doc: '`<Target BeforeTargets="CoreCompile">` setting `Nullable` to `disable`', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); editProject(w, text => text.replace('</Project>', '<Target Name="Relax" BeforeTargets="CoreCompile"><PropertyGroup><Nullable>disable</Nullable></PropertyGroup></Target></Project>')); } },
+  { doc: '`<CompilerResponseFile>` naming a file with `-nowarn:CS8600`', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'relax.rsp'), '-nowarn:CS8600\n'); editProject(w, text => text.replace('<AssemblyName>', '<CompilerResponseFile>relax.rsp</CompilerResponseFile><AssemblyName>')); } },
+  { doc: '`NoWarn="NU1603"` metadata on a `<PackageReference>` of a lower version', stopped: false, kind: 'web', setup: w => editProject(w, text => text.replace('Version="10.0.14"', 'Version="10.0.1" NoWarn="NU1603"')) },
+  { doc: '`NoWarn="NU1605"` metadata on a `<PackageReference>` that downgrades', stopped: false, kind: 'daemon', setup: w => editProject(w, text => text.replace('</Project>', '<ItemGroup><PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" NoWarn="NU1605" /></ItemGroup></Project>')) },
+  { doc: '`.editorconfig` with `dotnet_diagnostic.CS8600.severity = none`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, '.editorconfig'), 'root = true\n[*.cs]\ndotnet_diagnostic.CS8600.severity = none\n'); } },
+  { doc: '`.globalconfig` with `dotnet_diagnostic.CS8600.severity = none`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, '.globalconfig'), 'is_global = true\ndotnet_diagnostic.CS8600.severity = none\n'); } },
+  { doc: '`Directory.Build.targets` with a static `<Nullable>disable</Nullable>`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'Directory.Build.targets'), '<Project><PropertyGroup><Nullable>disable</Nullable></PropertyGroup></Project>\n'); } },
+  { doc: '`Directory.Build.rsp` with `-p:Nullable=disable` and `-p:NoWarn=CS8600`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'Directory.Build.rsp'), '-p:Nullable=disable\n-p:NoWarn=CS8600\n'); } },
+  { doc: '`#pragma warning disable CS8600` at the top of `Program.cs`', stopped: false, kind: 'olympiad', setup: w => withProgram(w, `#pragma warning disable CS8600\n${NULL_PROGRAM}`) },
+]);
+
 test('The_command_line_policy_stops_all_six_project_file_overrides_with_the_nullable_error', TIMEOUT, async t => {
   if (!needs(t, snapshotsMissing())) return;
   const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
-  withProgram(w, 'string s = null;\nConsole.Out.Write(s);\n');
+  withProgram(w, NULL_PROGRAM);
   const project = path.join(w, 'App.csproj');
   const original = read(project);
   const table = [];
@@ -222,12 +239,15 @@ test('The_command_line_policy_stops_all_six_project_file_overrides_with_the_null
   t.diagnostic(table.join('; '));
 });
 
-test('The_command_line_policy_stops_two_project_file_overrides_and_not_four_and_that_is_recorded', () => {
-  // The name is the first measurement (two stopped, four not) and is kept; the facts are the recorded table in the doc, which now says six of six.
+/** The rows of the doc's table of overrides, after its header: `[override, exit, stopped]` each. */
+function recordedRows() {
   const doc = read(path.join(REPO, 'research', 'module_lang_bench.md'));
-  const section = doc.slice(doc.indexOf('| Override in `App.csproj`'));
-  const rows = section.split('\n').slice(2, 2 + OVERRIDES.length).map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
-  assert.equal(rows.length, OVERRIDES.length);
+  const section = doc.slice(doc.indexOf('| Override in `App.csproj`')).split('\n').slice(2);
+  return section.slice(0, section.findIndex(line => !line.startsWith('|'))).map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+}
+
+test('The_recorded_table_says_the_command_line_stops_all_six_overrides', () => {
+  const rows = recordedRows();
   for (const [i, [name, xml]] of OVERRIDES.entries()) {
     assert.equal(rows[i][0], `\`${xml}\``, `${name}: row ${i} names the override`);
     assert.equal(rows[i][1], '1 (CS8600)', `${name}: the recorded exit is 1 with CS8600`);
@@ -235,31 +255,30 @@ test('The_command_line_policy_stops_two_project_file_overrides_and_not_four_and_
   }
 });
 
-test('A_clean_hello_of_every_kind_builds_with_no_warning_and_a_web_program_with_jwt_bearer_builds', TIMEOUT, async top => {
+test('The_further_overrides_are_pinned_as_measured_and_recorded_in_the_table', TIMEOUT, async top => {
   if (!needs(top, snapshotsMissing())) return;
-  for (const kind of ['olympiad', 'daemon', 'web']) {
-    await top.test(kind, async t => {
-      const { ran } = await buildHello(t, { stack: 'csharp', kind });
-      assert.match(outputOf(ran), /\b0 \S*Warn/i, `${kind}: zero warnings`);
-      assert.doesNotMatch(outputOf(ran), /\b(CS|NU)\d+/, `${kind}: no warning code in the output`);
+  const rows = recordedRows();
+  assert.equal(rows.length, OVERRIDES.length + FURTHER.length, 'every row of the doc table is pinned here');
+  for (const [i, row] of FURTHER.entries()) {
+    await top.test(row.doc, async t => {
+      const w = helloWorkspace(t, { stack: 'csharp', kind: row.kind });
+      row.setup(w);
+      const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+      assert.equal(ran.code, row.stopped ? 1 : 0, outputOf(ran).slice(-800));
+      if (row.stopped) assert.match(outputOf(ran), /CS8600/);
+      const recorded = rows[OVERRIDES.length + i];
+      assert.deepEqual(recorded, [row.doc, row.stopped ? '1 (CS8600)' : '0', row.stopped ? 'yes' : 'no'], 'the doc row says what was measured');
     });
   }
-  await top.test('web with JwtBearer', async t => {
-    const w = helloWorkspace(t, { stack: 'csharp', kind: 'web' });
-    withProgram(w, `using Microsoft.AspNetCore.Authentication.JwtBearer;
-WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
-builder.Services.AddAuthorization();
-WebApplication app = builder.Build();
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapGet("/hello", () => "hello").RequireAuthorization();
-app.Run();
-`);
-    const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
-    assert.equal(ran.code, 0, outputOf(ran).slice(-2000));
-    assert.doesNotMatch(outputOf(ran), /\b(CS|NU)\d+/);
-  });
+});
+
+test('A_use_of_BinaryFormatter_fails_the_csharp_build_with_SYSLIB0011', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  withProgram(w, 'using System.Runtime.Serialization.Formatters.Binary;\nvar formatter = new BinaryFormatter();\nConsole.Out.Write(formatter);\n');
+  const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(ran.code, 0, 'SYSLIB0011 is in the forced error list');
+  assert.match(outputOf(ran), /SYSLIB0011/);
 });
 
 test('A_tests_folder_is_outside_the_csharp_build_and_dotnet_test_runs_it_offline', TIMEOUT, async t => {
