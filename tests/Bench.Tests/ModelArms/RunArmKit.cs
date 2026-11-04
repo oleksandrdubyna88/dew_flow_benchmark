@@ -57,12 +57,15 @@ internal static class RunArmKit
     }
 
     /// <summary><c>run-arm</c> through the gate with the verb's seams handed in (a fixed clock, a recording wait, a busy lock) and the writer and stop token of the test's choosing. Its launches are checked as <see cref="RunAsync"/>'s are.</summary>
-    public static async Task<int> RunWithSeamsAsync(ExperimentRoot root, string arm, ModelArmsApp.Verbs.RunArmSeams seams, TextWriter output, CancellationToken stopping)
+    public static async Task<int> RunWithSeamsAsync(ExperimentRoot root, string arm, ModelArmsApp.Verbs.RunArmSeams seams, TextWriter output, CancellationToken stopping) =>
+        (await RunWithSeamsCheckedAsync(root, arm, seams, output, stopping)).Code;
+
+    /// <summary><see cref="RunWithSeamsAsync"/> that also returns how many launches the delegation check saw, as <see cref="ArmRun.LaunchesChecked"/> does, so a test can pin that the check ran on this path.</summary>
+    public static async Task<(int Code, int LaunchesChecked)> RunWithSeamsCheckedAsync(ExperimentRoot root, string arm, ModelArmsApp.Verbs.RunArmSeams seams, TextWriter output, CancellationToken stopping)
     {
         var input = new ModelArmsApp.VerbInput("run-arm", [arm], Bench.Cli.CommandLine.Parse(["--experiment", root.Root]), output, new StringWriter(), root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping);
         var code = await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
-        LaunchDenial.Check(root);
-        return code;
+        return (code, LaunchDenial.Check(root));
     }
 
     /// <summary>The fake replays <paramref name="fixture"/> on every call, except the calls <paramref name="byCall"/> names; the key that makes it leave a transcript stays.</summary>

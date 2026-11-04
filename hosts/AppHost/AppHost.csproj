@@ -7,10 +7,6 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>dew-flow-bench-apphost-2f5c8a10</UserSecretsId>
-    <!-- This DEV-only AppHost runs without the Aspire CLI bundle: AspireUseCliBundle is the SDK's default (false)
-         and is left alone. The SDK warns ASPIRE010 about that, and the warning's own text names suppressing it as
-         the way to continue without the bundle, so it is suppressed here and nowhere else. -->
-    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

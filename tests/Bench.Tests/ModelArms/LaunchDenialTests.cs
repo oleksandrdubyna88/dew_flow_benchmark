@@ -17,6 +17,9 @@ namespace Bench.Tests.ModelArms;
 public sealed class LaunchDenialTests
 {
     private static readonly string Opening1Code = Opening(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "briefs", "1-code.template.md"));
+    /// <summary>The ways to start <c>run-arm</c> without the kit, written split so this file does not hold them itself.</summary>
+    private static readonly string[] Bypasses = ["ExperimentGate" + ".RunAsync(", "Program" + ".RunAsync(", "RunArmVerb" + ".RunAsync("];
+
     private static readonly Guid Session = new("3f2b6f9e-2a4c-4f0e-9d1a-0c6b5a7e8d10");
 
     private static StepSpec Spec(bool subagents) =>
@@ -152,6 +155,22 @@ public sealed class LaunchDenialTests
         run.LaunchesChecked.Should().Be(0);
     }
 
+    [Fact]
+    public async Task The_check_behind_the_seams_path_sees_every_launch_of_a_run_too()
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        var seams = new global::ModelArms.Verbs.RunArmSeams(TimeProvider.System, (span, ct) => Task.Delay(span, ct), null);
+
+        var (code, checkedLaunches) = await RunWithSeamsCheckedAsync(root, "C1", seams, new StringWriter(), CancellationToken.None);
+
+        code.Should().Be(0);
+        fake.Calls().Should().HaveCount(4);
+        checkedLaunches.Should().Be(4, "RunWithSeamsAsync runs the check on its own path; without it a test through the seams would pass with the check gone");
+    }
+
     [Theory]
     [InlineData("RunArmSchemeTests.cs")]
     [InlineData("RunArmSrsTests.cs")]
@@ -160,9 +179,20 @@ public sealed class LaunchDenialTests
         var text = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tests", "Bench.Tests", "ModelArms", file));
 
         text.Should().Contain("RunAsync(", "the scan read a test file, not nothing");
-        foreach (var bypass in new[] { "ExperimentGate" + ".RunAsync(", "Program" + ".RunAsync(", "RunArmVerb" + ".RunAsync(" })
+        foreach (var bypass in Bypasses)
         {
             text.Should().NotContain(bypass, $"{file} must start run-arm through RunArmKit, which checks every launch it logged; a direct call would skip the check");
+        }
+    }
+
+    [Fact]
+    public void The_bypass_patterns_the_scan_looks_for_are_found_in_the_one_sanctioned_site()
+    {
+        var kit = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tests", "Bench.Tests", "ModelArms", "RunArmKit.cs"));
+
+        foreach (var pattern in Bypasses)
+        {
+            kit.Should().Contain(pattern, $"RunArmKit.cs is where run-arm is started, so the scan's pattern '{pattern}' must match there; a pattern that matched nowhere would let every bypass through");
         }
     }
 }
