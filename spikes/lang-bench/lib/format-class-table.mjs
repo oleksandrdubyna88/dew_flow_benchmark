@@ -1,7 +1,7 @@
 // FORMAT.md's class table and the parts it cuts the document into (E1.S9, T-L56). Every section of FORMAT has one class (`common`, `olympiad`, `daemon`, `web`,
 // `daemon-web`), or, where it mixes kinds of task, every subsection has one and the lead text of the section (before its first subsection) is `common`.
 // The table is the markdown table directly after the `**Section classes.**` paragraph of the preamble, rows `| <heading without ##/###> | <class> |`.
-import { headingByNumber, numberOf, parseFormat, preambleSlice, sliceFrom } from './format-structure.mjs';
+import { headingByNumber, numberOf, parseFormat, preambleSlice, SECTION_COUNT, sliceFrom } from './format-structure.mjs';
 
 export const CLASSES = Object.freeze(['common', 'olympiad', 'daemon', 'web', 'daemon-web']);
 /** The classes whose parts do not change after the freeze of the first group of tasks. */
@@ -48,7 +48,16 @@ export function tableProblems(format, rows) {
     seen.add(row.heading);
     if (row.cls !== null && !CLASSES.includes(row.cls)) problems.push({ heading: shown, no: row.no, rule: `class \`${row.cls}\` is not one of ${CLASSES.join(', ')}` });
   }
-  return [...problems, ...sectionProblems(format, rows)];
+  return [...problems, ...sectionProblems(format, rows), ...changelogProblems(format, rows)];
+}
+
+/** The changelog (the last section) is one whole `common` row: nothing may class it otherwise, so the rule that it only grows cannot be avoided by a class. */
+function changelogProblems(format, rows) {
+  const changelog = format.headings.find(heading => heading.level === 2 && numberOf(heading) === String(SECTION_COUNT));
+  const own = changelog === undefined ? [] : rows.filter(row => row.heading === changelog.text);
+  const subs = changelog === undefined ? [] : subsectionsOf(format, changelog).filter(sub => rows.some(row => row.heading === sub.text));
+  const whole = own.length === 1 && own[0].cls === 'common' && subs.length === 0;
+  return changelog === undefined || whole ? [] : [{ heading: changelog.text, no: changelog.no, rule: 'the changelog (the last section) must be one whole `common` row in the class table, with no row for a subsection: it only grows, and no class may avoid that' }];
 }
 
 function sectionProblems(format, rows) {

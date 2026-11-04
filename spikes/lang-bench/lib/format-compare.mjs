@@ -180,9 +180,6 @@ function rowRefusals(part, textA, textB, ctx, at) {
   return [...textDiff, ...protectedRows, ...outOfOrder, ...candidateRows];
 }
 
-/** The number the title of  return refusals;
-}
-
 /** The number the title of `part` has in the candidate: in the same section, or, with `anySection`, anywhere; null when no heading of that level has the title. */
 function movedTo(part, candidate, anySection) {
   const same = candidate.format.headings.filter(heading => heading.level === (part.kind === 'sub' ? 3 : 2) && titleOf(heading.text) === titleOf(part.heading));
