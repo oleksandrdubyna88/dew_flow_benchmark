@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The experiment's published record never carries what holds the owner's key (plan <c>todo/PLAN_model_arms_E6.md</c> §5 E6.S3, E2 §8 item 14): <c>make</c> writes <c>mcp-coai.json</c> (its <c>env</c> may hold <c>COAI_CREDS_KEY</c>) and copies the panel's settings into <c>coai-data/</c> in each arm, and neither may reach <c>research/local-model-coding/data/</c>.
+/// <summary>The experiment's published record never carries what holds the owner's key (plan <c>research/PLAN_model_arms_E6.md</c> §5 E6.S3, E2 §8 item 14): <c>make</c> writes <c>mcp-coai.json</c> (its <c>env</c> may hold <c>COAI_CREDS_KEY</c>) and copies the panel's settings into <c>coai-data/</c> in each arm, and neither may reach <c>research/local-model-coding/data/</c>.
 /// <para>
 /// What this does NOT prove: that nothing else secret-shaped is published (it names the module's own two files and the settings copy's folder); a record kept anywhere but that folder.
 /// </para></summary>

@@ -1,6 +1,7 @@
 # PLAN — E4 stories: the task pipeline of the model-arms module
 
-> Status: **BUILT 2026-11-01 (E4.S0–E4.S3, each through an Opus review and the coai code gate) and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered integrated with E5 and E6 instead of its own pull requests (the repository's three-open cap — the owner's); the real-git pilot ran on git 2.39.4 and 2.45.0 (2026-11-01; the module doc's E4.S0 section).** Stories written 2026-10-31. Epic E4 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D14, D16,
+> Status: **IMPLEMENTED, 2026-11-04** (promoted with its parent; the deviations are in this document's §8 and the parent's *Deviations at promotion*).
+> History: **BUILT 2026-11-01 (E4.S0–E4.S3, each through an Opus review and the coai code gate) and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered integrated with E5 and E6 instead of its own pull requests (the repository's three-open cap — the owner's); the real-git pilot ran on git 2.39.4 and 2.45.0 (2026-11-01; the module doc's E4.S0 section).** Stories written 2026-10-31. Epic E4 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D14, D16,
 > D17 (d), D19, D21, D22, D23, D25, D26; §4.6, §4.11, §4.12; §6 step 4; §7's E4 tests; §9; §10), written at `ecc890c` on
 > `feat/model-arms-e4` (E1–E3 on `main`) by the judge role (Opus), as the epic starts — `common.plan-change-control` § *What counts as a
 > change*: writing them is not a change. **The parent's epoch 3 has ONE entry since, 3.1** (2026-10-31, `contract`: a task whose session
@@ -1028,7 +1029,7 @@ parent; the claims of the parent found wrong or incomplete against the code are 
 1. **No cornerstone.** The ledger is `3 of 3` (parent `## Epics`); E4.S0 and E4.S2 are security judgements, Fable outside the quota. Ledger
    effect: none.
 2. **`setsid` is E5's.** E4 starts no detached process: a batch's tasks are parallel `Task`s of the one `run-arm` process, each a child under
-   `ProcessRunner` (D14, `PLAN_model_arms.md:306`); whether `setsid` forks is the detached launcher's question (D13, `:305`; E5.S3).
+   `ProcessRunner` (D14, `PLAN_model_arms.md:414`); whether `setsid` forks is the detached launcher's question (D13, `:413`; E5.S3).
 3. **The arm clone's allow-list for its submodule update is `GIT_ALLOW_PROTOCOL=file`** — the narrowest value git honours: measured M-a on
    2.53.0, 2.45.0 and 2.39.4 (empty refuses the local clone; `file` admits it without `-c protocol.file.allow=always`; `ext` refuses). And
    `submodule.<name>.update=!cmd` RUNS on that update unless stopped (M-b, all three versions) — E4.S2's spec item 2 chooses how; the

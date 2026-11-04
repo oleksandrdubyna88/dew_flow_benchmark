@@ -1,6 +1,7 @@
 # PLAN — E2 stories: the step of the model-arms module — classify, recover, run, gate
 
-> Status: **in progress — E2.S0–E2.S8 are built on `feat/model-arms-e2` (E2.S8, `run-arm` for C, CR and CHH, last, 2026-10-30; M1 observed, §8 item 61), pending E2's coai code gate and the promotion after it; the rest of this paragraph is the plan's earlier state, kept as history: plan only, nothing implemented yet — rewritten to the re-review's split on 2026-10-30; the parent's epoch 2 is OPEN
+> Status: **IMPLEMENTED, 2026-11-04** (promoted with its parent; the deviations are in this document's §8 and the parent's *Deviations at promotion*).
+> History: **in progress — E2.S0–E2.S8 are built on `feat/model-arms-e2` (E2.S8, `run-arm` for C, CR and CHH, last, 2026-10-30; M1 observed, §8 item 61), pending E2's coai code gate and the promotion after it; the rest of this paragraph is the plan's earlier state, kept as history: plan only, nothing implemented yet — rewritten to the re-review's split on 2026-10-30; the parent's epoch 2 is OPEN
 > (approved 2026-10-30 by the coai document gate, interim path, six findings taken — gate finding 0 and 4 reach C12 here), so E2 may start;
 > E2's own plan round (`mcp__coai__review_plan` on `feat/model-arms-e2` at `431e759`, 2026-10-30 — the round `common.plan-change-control`
 > § *Reviewing the revised plan* orders for an epic not yet started) said PROCEED, five findings taken (§8 items 31–36: E2.S0 strictly
@@ -108,7 +109,7 @@ Every line below was opened in this worktree or, for the shell and the product, 
 | The runtime: `TranscriptAsync` maps `ProcessAttempt.NotFound` to a Failure, `TimedOut` to `TimedOut: true` with no exit code, `Completed` to its exit code; an empty prompt and an argv refusal are Failures too | `src/Bench.Infrastructure/Models/CliAgentRuntime.cs:297-300`, `Transcript` `:352-365`, `LaunchAsync` `:306-347` (both sinks passed `:342-343`) |
 | `ProcessAttempt` = `Completed(ProcessResult)` · `TimedOut(Budget, Output, StandardOutput, StandardError)` · `NotFound(Executable)` | `src/Bench.Infrastructure/Process/ProcessRunner.cs:23-32` |
 | The launcher's core: both readers started `:271-272`; on cancellation the tree is killed `:285` and **the caller's cancellation rethrown without awaiting either reader** `:287-291`; the timeout path awaits stdout THEN stderr `:293`; the completed path the same `:297`; `budget` is a `using` local, disposed when the method leaves; `PumpAsync`'s catch cancels the budget `:339` and rethrows `:340` | `src/Bench.Infrastructure/Process/ProcessRunner.cs:261-300`, `:324-344`; `Reader` `:256-257` |
-| E1 §8 item 15 (owned by E2): with both sinks real, a throwing stdout sink leaves the stderr pump unobserved; its sink can run after `RunAsync` has thrown and its catch can cancel a disposed budget | `todo/PLAN_model_arms_E1.md` §8 item 15 |
+| E1 §8 item 15 (owned by E2): with both sinks real, a throwing stdout sink leaves the stderr pump unobserved; its sink can run after `RunAsync` has thrown and its catch can cancel a disposed budget | `research/PLAN_model_arms_E1.md` §8 item 15 |
 | E1.S5's stderr-sink suite (its own new file; this epic appends two tests) | `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs:18`, `:80` (`Every_existing_launch_without_a_stderr_sink_is_unchanged`) |
 | A line writer that flushes every line: `ScoutStreamWriter(FileStream file)`, `Line(string)` | `src/Bench.Infrastructure/Scouts/ScoutArtifacts.cs:255`, `:259` |
 | Stage → flush → rename, never overwrite: `ArtifactCommit.CommitAsync(string full, ReadOnlyMemory<byte> bytes, ArtifactProbe probe, CancellationToken)`; the synchronous `Stage(string full, byte[] bytes)`; a test's crash seam `ArtifactProbe.None` / `virtual Reached(ArtifactStep)` | `src/Bench.Infrastructure/Gate/ArtifactCommit.cs:23`, `:69`; `src/Bench.Infrastructure/Gate/ArtifactProbe.cs:29-33` |
@@ -129,7 +130,7 @@ Every line below was opened in this worktree or, for the shell and the product, 
 | `BriefFacts(Plan, Base, Branch, ScenarioCount, Deadline, Known, TaskFacts Task, Problems)`, `TaskFacts.None`, `BriefFields.For(kind, paths, facts)` | `tools/model-arms/ModelArms.Core/Briefs/BriefFields.cs:8-24` |
 | `BriefLeakGuard(ArmMap Map, string OwnArm, IReadOnlyCollection<string> Schemes, string Root = "")`; `BriefFiller.Fill(template, fields, guard, templateName = "") → Outcome<string>` | `tools/model-arms/ModelArms.Core/Briefs/BriefFiller.cs:12`, `:25` |
 | `BriefTemplates.NameOf(kind)`; `BriefTemplateFiles(shippedDirectory, overridesDirectory).Read(StepKind) → Outcome<string>` (by KIND — E1's contract said a name; the landed code takes the kind) | `tools/model-arms/ModelArms.Core/Briefs/BriefTemplates.cs:11`; `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs:14`, `:18` |
-| The console is still E1.S2's stub (E1.S9's dispatch, `ExperimentGate`, `VerbInput`, `ExperimentRoot` have not landed); `ScenariosFile`, `ExecutableResolution`, `RootRequirements`, `RootFacts` (E1.S8) have not landed | `tools/model-arms/ModelArms/Program.cs:6-8`; `todo/PLAN_model_arms_E1.md` C4, E1.S8, E1.S9 |
+| The console is still E1.S2's stub (E1.S9's dispatch, `ExperimentGate`, `VerbInput`, `ExperimentRoot` have not landed); `ScenariosFile`, `ExecutableResolution`, `RootRequirements`, `RootFacts` (E1.S8) have not landed | `tools/model-arms/ModelArms/Program.cs:6-8`; `research/PLAN_model_arms_E1.md` C4, E1.S8, E1.S9 |
 | The pure list holds ONE marker for this epic | `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:23-49` (`// E2` at `:42`) |
 | The fake CLI: `Behaviour(Script script, string[] args, string prompt, int call)`; `Run` `:179`; `Answer` chooses a replay by prompt hash, then substring, then `stdoutFile` `:218-226` (`StdoutFor` `:118-121`); `Replay` `:254-290`; `holdAfterLine` `:134`; `stderrBeforeLines` `:139`; the call number is the count of this MODEL's logged calls + 1 `:585`; the home is `FAKE_CLI_HOME` when set, else `Path.GetTempPath()/bench-fake-cli/<model>` `:566-571` — **`GetTempPath` honours `TMPDIR`, which the arm's environment sets to the arm's `tmp/`** | `tests/FakeCli/Program.cs` |
 | The fake's test handle: `new FakeCli(script)` (fresh model id, `Home`), `Executable`, `Rewrite`, `Calls()` (argv, cwd, prompt, pid, env NAMES, `SubagentModelGuard`) | `tests/Bench.Tests/Probes/Driver/FakeCli.cs:10-82` |
@@ -696,7 +697,7 @@ measured, once, with `claude -p --model haiku --output-format stream-json --verb
 Read as: the default deny holds on this CLI build on a fresh launch (A) and on a resumed one (B, D) — on D the session's earlier tool
 inventory did not survive the resume, and a call the model emitted from memory was refused by the CLI itself. **The anomaly of D is the
 caveat for every cost metric**: a resumed haiku attempt carried a sonnet line in `modelUsage` with no subagent — an internal CLI call on
-resume, whose purpose this measurement did not establish. Decided here: (1) a delegation check — E6's consumer check, the analysis plan's
+resume, whose purpose this measurement did not establish. (Re-read 2026-11-04: that sonnet line is explained by the session-cumulative result measured on 2026-11-04 — C's 2026-10-30 cost was not recorded, so the equality is not checked for that day; see `research/module_model_arms.md`, *The delegation policy (E2.S0)*, Re-run 2026-11-04.) Decided here: (1) a delegation check — E6's consumer check, the analysis plan's
 cost split (M3) — reads TOOL EVENTS (`tool_use` named `Agent` or `Task`, present in D as a refused call) and SUBAGENT MESSAGES (a line
 whose `parent_tool_use_id` is non-null), **never `modelUsage` alone**; (2) `modelUsage`'s per-model cost is still the cost, so the analysis
 reports it beside the delegation facts and never infers one from the other; (3) M3 re-runs A–D on the measurement CLI version and records
@@ -1819,7 +1820,7 @@ and `why`.
 
 1. `arm = Positionals[0]`; `ArmNames.SchemeOf(arm)` → the scheme must be among `Experiment.Schemes` (else 4: `"<arm> belongs to scheme
    <s>, which is not among the schemes (C, CR, SRS)"`); a scheme holding a `SchemeEntry.Tasks` → 4: `"<arm>'s scheme runs the task
-   pipeline — not built yet, story E4.S3 of todo/PLAN_model_arms.md"`.
+   pipeline — not built yet, story E4.S3 of research/PLAN_model_arms.md"`.
 2. `map = ArmMap.Read(arms.map.json)` → `TokenOf(arm)` (refusal → 4); `paths = root.Arm(token)`.
 3. Resolve `claude` and `git` through `ExecutableResolution.Resolve` over `input.Verb.Environment["PATH"]`, forbidden roots
    `[Target.Source, root]`; a failure → 3 naming it; (amended) every PATH entry through `ExecutableResolution.PathEntryRefusal` with the
@@ -2157,7 +2158,7 @@ it was taken. **These are the stories document written as the epic starts, not e
     default deny holds on a fresh launch and on a `--resume` — the resumed session's `init` carries no `Agent`, and a call the model still
     emitted was refused by the CLI (`No such tool available: Agent. Agent is disabled for this session, in subagents as well as here.`).
     **The anomaly:** the resumed haiku attempt's `modelUsage` carried `claude-sonnet-5-5` with 5 output tokens and $0.0758 although no
-    subagent ran — an internal CLI call on resume. **Settled:** a delegation check reads tool events and subagent messages, never
+    subagent ran — an internal CLI call on resume. (Re-read 2026-11-04: that sonnet line is explained by the session-cumulative result measured on 2026-11-04 — C's 2026-10-30 cost was not recorded, so the equality is not checked for that day; see `research/module_model_arms.md`, *The delegation policy (E2.S0)*, Re-run 2026-11-04.) **Settled:** a delegation check reads tool events and subagent messages, never
     `modelUsage` alone; `modelUsage`'s cost is reported beside, never inferred from; M3 re-runs A–D on the measurement CLI version and
     records the version — a caveat the analysis plan (`todo/PLAN_model_arms_analysis.md`, E6.S3) carries from its first line.
 44. **(risk 2.7, finding 5) A blocked gate became permanently skipped, and `waits` was not durable.** E2.S7 step 1 answered `Recover is

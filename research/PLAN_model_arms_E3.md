@@ -1,6 +1,7 @@
 # PLAN — E3 stories: preparation and the objective checks of the model-arms module
 
-> Status: **in progress — E3.S0–E3.S5 are built on `feat/model-arms-e3` (each to an Opus 'ready', 2026-10-30/31); the coai code gate passed (4 findings accepted and fixed, 5 rejected with reasons — §8 items 49–51); delivered to `main` by its PR; open: M2 and M2's key check (the owner's, by hand), then the promotion with its parent.** Written 2026-10-30 as: Epic E3 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D4, D8, D11 (the
+> Status: **IMPLEMENTED, 2026-11-04** (promoted with its parent; the deviations are in this document's §8 and the parent's *Deviations at promotion*).
+> History: **in progress — E3.S0–E3.S5 are built on `feat/model-arms-e3` (each to an Opus 'ready', 2026-10-30/31); the coai code gate passed (4 findings accepted and fixed, 5 rejected with reasons — §8 items 49–51); delivered to `main` by its PR; open: M2 and M2's key check (the owner's, by hand), then the promotion with its parent.** Written 2026-10-30 as: Epic E3 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D4, D8, D11 (the
 > reading half), D16–D18, D23, D24, D26, D27; §4.1's `prep-base`, `make`, `status` and `checks` rows; §4.9; §4.12; §6 step 3 — M2 and M2's
 > key check; §7's E3 tests). Written at `5a8b4ce` on `feat/model-arms-e3` (E1 and E2 merged to `main`), by the judge role (Opus), as the epic
 > starts — `common.plan-change-control` § *What counts as a change*: not a change. **No cornerstone** (the ledger stays `3 of 3`, §8 item 1).
