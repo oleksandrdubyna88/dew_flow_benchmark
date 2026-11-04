@@ -32,6 +32,17 @@ export function extractGrammar(formatBytes) {
 
 const REAL_OPS = { writeFileSync, linkSync, unlinkSync };
 
+/** Removes the temporary file: only "it was never made" (ENOENT) is silent, any other error is one line on `stderr`. */
+function removeTemporary(ops, temporary, stderr) {
+  try {
+    ops.unlinkSync(temporary);
+  } catch (error) {
+    if (error.code !== 'ENOENT') stderr.write(`grammar-extract: the temporary file ${temporary} could not be removed (${error.message})\n`);
+  }
+}
+
+const writeFailure = (out, error) => (error.code === 'EEXIST' ? `${out} exists: it is never overwritten` : `${out} cannot be written (${error.message})`);
+
 /**
  * Writes `bytes` to `out` through a temporary file beside it; refuses an existing `out`. Returns an error text or null. The temporary file is removed at the end: only "it was
  * never made" (ENOENT) is silent, any other error is one line on `stderr`, and the result stays the write's.
@@ -43,33 +54,41 @@ function writeNew(out, bytes, stderr, ops) {
     ops.linkSync(temporary, out);
     return null;
   } catch (error) {
-    return error.code === 'EEXIST' ? `${out} exists: it is never overwritten` : `${out} cannot be written (${error.message})`;
+    return writeFailure(out, error);
   } finally {
-    try {
-      ops.unlinkSync(temporary);
-    } catch (error) {
-      if (error.code !== 'ENOENT') stderr.write(`grammar-extract: the temporary file ${temporary} could not be removed (${error.message})\n`);
-    }
+    removeTemporary(ops, temporary, stderr);
   }
+}
+
+const isUsageError = argv => argv.length !== 2 || argv.some(arg => arg.startsWith('--'));
+
+/** `{ bytes }` of the file, or `{ failed: true }` after one line on `stderr`. */
+function readInput(file, stderr) {
+  try {
+    return { bytes: readFileSync(file) };
+  } catch (error) {
+    stderr.write(`grammar-extract: ${file} cannot be read (${error.message})\n`);
+    return { failed: true };
+  }
+}
+
+/** Writes the problem (if any) on `stderr` and returns the exit code. */
+function finish(problem, stderr) {
+  if (problem === null) return 0;
+  stderr.write(`grammar-extract: ${problem}\n`);
+  return EXIT_FORMAT;
 }
 
 /** The command: returns the exit code and writes its one line. */
 export function main(argv, stderr = process.stderr, ops = REAL_OPS) {
-  if (argv.length !== 2 || argv.some(arg => arg.startsWith('--'))) {
+  if (isUsageError(argv)) {
     stderr.write('grammar-extract: usage: grammar-extract.mjs <FORMAT.md> <out>\n');
     return EXIT_USAGE;
   }
-  let bytes;
-  try {
-    bytes = readFileSync(argv[0]);
-  } catch (error) {
-    stderr.write(`grammar-extract: ${argv[0]} cannot be read (${error.message})\n`);
-    return EXIT_FORMAT;
-  }
-  const extracted = extractGrammar(bytes);
-  const problem = extracted.ok ? writeNew(argv[1], extracted.bytes, stderr, ops) : extracted.reason;
-  if (problem !== null) stderr.write(`grammar-extract: ${problem}\n`);
-  return problem === null ? 0 : EXIT_FORMAT;
+  const input = readInput(argv[0], stderr);
+  if (input.failed) return EXIT_FORMAT;
+  const extracted = extractGrammar(input.bytes);
+  return finish(extracted.ok ? writeNew(argv[1], extracted.bytes, stderr, ops) : extracted.reason, stderr);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) process.exit(main(process.argv.slice(2)));
