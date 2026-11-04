@@ -167,6 +167,58 @@ test('The_builder_refuses_a_linked_worktree_whose_admin_folder_is_gone_and_a_pat
   for (const out of [orphan, inGit, path.join(bare, 'ws')]) assert.equal(existsSync(out), false, `nothing was written at ${out}`);
 });
 
+test('A_link_into_a_repository_is_a_way_in_and_is_refused', async t => {
+  const bare = ownedFolder(t, 'bare');
+  await git(bare, ['init', '-q', '--bare']);
+  const repo = await repoWith(t, { 'a.txt': 'x\n' });
+  const places = ownedFolder(t, 'jump');
+  symlinkSync(path.join(bare, 'refs'), path.join(places, 'r'));
+  symlinkSync(path.join(repo, '.git', 'refs'), path.join(places, 'g'));
+  for (const link of ['r', 'g']) {
+    const out = path.join(places, link, 'ws');
+    const r = buildWorkspace(args(t, { out }));
+    assert.equal(r.ok, false, `${link}: a path through a link into a repository`);
+    assert.equal(r.refusal, true);
+    assert.match(r.reason, /through a link/);
+    assert.equal(existsSync(path.join(places, 'r', 'ws')) || existsSync(path.join(places, 'g', 'ws')), false);
+  }
+});
+
+test('Three_plain_folders_or_a_text_file_called_HEAD_are_not_a_repository_and_a_real_HEAD_is', t => {
+  const plainFolders = ownedFolder(t, 'plain');
+  for (const name of ['HEAD', 'objects', 'refs']) mkdirSync(path.join(plainFolders, name));
+  const textHead = writeTree(ownedFolder(t, 'text'), { HEAD: 'just a note\n' });
+  for (const name of ['objects', 'refs']) mkdirSync(path.join(textHead, name));
+  const realHead = writeTree(ownedFolder(t, 'real'), { HEAD: 'ref: refs/heads/main\n' });
+  for (const name of ['objects', 'refs']) mkdirSync(path.join(realHead, name));
+  assert.equal(buildWorkspace(args(t, { out: path.join(plainFolders, 'ws') })).ok, true, 'three plain folders with those names are not refused');
+  assert.equal(buildWorkspace(args(t, { out: path.join(textHead, 'ws') })).ok, true, 'a text file called HEAD that is not a git HEAD is not refused');
+  const refused = buildWorkspace(args(t, { out: path.join(realHead, 'ws') }));
+  assert.equal(refused.ok, false, 'a HEAD file that reads as one, beside objects and refs folders, is a bare repository');
+  assert.match(refused.reason, /bare git repository/);
+});
+
+test('A_destination_the_filesystem_cannot_judge_is_a_refusal_with_a_reason_and_no_trace', t => {
+  const root = ownedFolder(t, 'jud');
+  const closed = path.join(root, 'closed');
+  mkdirSync(closed);
+  symlinkSync(path.join(root, 'loop-b'), path.join(root, 'loop-a'));
+  symlinkSync(path.join(root, 'loop-a'), path.join(root, 'loop-b'));
+  const cases = [['permission denied', path.join(closed, 'ws', 'w'), /EACCES/], ['a link loop', path.join(root, 'loop-a', 'ws'), /ELOOP/], ['a name that is too long', path.join(root, 'n'.repeat(300), 'w'), /ENAMETOOLONG/]];
+  chmodSync(closed, 0o000);
+  try {
+    for (const [what, out, code] of cases) {
+      const r = buildWorkspace(args(t, { out }));
+      assert.equal(r.ok, false, what);
+      assert.equal(r.refusal, true, `${what}: a refusal, not a throw`);
+      assert.match(r.reason, /cannot be judged/, what);
+      assert.match(r.reason, code, what);
+    }
+  } finally {
+    chmodSync(closed, 0o755);
+  }
+});
+
 test('A_failed_write_leaves_no_destination_and_no_staging_folder_and_a_retry_is_not_refused', t => {
   const samples = writeTree(ownedFolder(t, 'smp'), { 's01.in': 'a\n', 's01.out': 'b\n' });
   chmodSync(path.join(samples, 's01.out'), 0o000);
@@ -175,7 +227,7 @@ test('A_failed_write_leaves_no_destination_and_no_staging_folder_and_a_retry_is_
   const parent = path.dirname(a.out);
   const failed = buildWorkspace(a);
   assert.equal(failed.ok, false, 'a file that cannot be read stops the write');
-  assert.match(failed.reason, /nothing was left behind/);
+  assert.match(failed.reason, /staging folder of this call was removed/);
   assert.deepEqual(readdirSync(parent), [], 'neither the destination nor a staging folder is left');
   chmodSync(path.join(samples, 's01.out'), 0o644);
   const retried = buildWorkspace(a);
@@ -407,6 +459,28 @@ test('The_command_exits_2_for_usage_3_for_each_refusal_and_0_for_the_list', asyn
   assert.equal(list.stdout, read(path.join(TEMPLATES, 'stack-files.json')));
 });
 
+test('An_unreadable_statement_or_samples_folder_is_one_usage_line_and_not_a_stack_trace', async t => {
+  const home = ownedFolder(t, 'home');
+  const out = path.join(ownedFolder(t, 'out'), 'w');
+  const files = writeTree(ownedFolder(t, 'inp'), { 'statement.md': 'x\n', 'samples/s01.in': 'a\n' });
+  const flags = (statement, samples) => ['--stack', 'csharp', '--kind', 'olympiad', '--task', 'hello', '--group', 'A', '--out', out, '--statement', statement, '--samples', samples, '--task-repo', files, '--hello'];
+  chmodSync(path.join(files, 'statement.md'), 0o000);
+  chmodSync(path.join(files, 'samples'), 0o000);
+  try {
+    const noStatement = await command(home, flags(path.join(files, 'statement.md'), helloSamples('olympiad')));
+    assert.equal(noStatement.code, 2);
+    assert.match(noStatement.stderr, /--statement .* is not a readable file/);
+    const noSamples = await command(home, flags(helloStatement('olympiad'), path.join(files, 'samples')));
+    assert.equal(noSamples.code, 2);
+    assert.match(noSamples.stderr, /--samples .* is not a readable folder/);
+    for (const result of [noStatement, noSamples]) assert.doesNotMatch(result.stderr, /\n\s+at /, 'a line, not a stack trace');
+  } finally {
+    chmodSync(path.join(files, 'samples'), 0o755);
+    chmodSync(path.join(files, 'statement.md'), 0o644);
+  }
+  assert.equal(existsSync(out), false);
+});
+
 test('A_git_failure_in_the_fetch_exits_1_and_a_missing_statement_or_samples_exits_2_without_a_stack_trace', async t => {
   const home = ownedFolder(t, 'home');
   const out = path.join(ownedFolder(t, 'out'), 'w');
@@ -417,10 +491,10 @@ test('A_git_failure_in_the_fetch_exits_1_and_a_missing_statement_or_samples_exit
   };
   const noStatement = await command(home, build({ '--statement': path.join(plain, 'none.md') }));
   assert.equal(noStatement.code, 2);
-  assert.match(noStatement.stderr, /--statement .* is not a file/);
+  assert.match(noStatement.stderr, /--statement .* is not a readable file/);
   const noSamples = await command(home, build({ '--samples': path.join(plain, 'none') }));
   assert.equal(noSamples.code, 2);
-  assert.match(noSamples.stderr, /--samples .* is not a folder/);
+  assert.match(noSamples.stderr, /--samples .* is not a readable folder/);
   for (const result of [noStatement, noSamples]) assert.doesNotMatch(result.stderr, /\n\s+at /, 'a line, not a stack trace');
   const notARepo = await command(home, build());
   assert.equal(notARepo.code, 1, 'git cannot clone a folder that is not a repository: a failure, not a refusal');

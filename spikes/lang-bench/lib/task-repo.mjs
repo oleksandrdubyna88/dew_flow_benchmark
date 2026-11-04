@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { parseHashes, verifyFiles } from '../../minigit-bench/lib/inputs.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
-import { checkDestination, lstatOrNull } from './workspace-destination.mjs';
+import { checkDestination, lstatOrNull, writeAtomically } from './workspace-destination.mjs';
 
 /** The commit of the task repository's `main` that `inputs/hashes-lang.txt` describes (FORMAT v2, gated). */
 export const PINNED_TASK_SHA = '40e678fe458dedb220afd4a99fd478f3d39157f9';
@@ -175,18 +175,24 @@ function sourceFolder({ root, stack, task }) {
   return isFolder(src) ? ok(src) : fail(`the task folder ${src} does not exist`);
 }
 
-/**
- * `copyTaskFolder({ root, stack, task, out })` -> `ok({ files })` | `fail`: exactly `<root>/<stack>/<task>/` into `out`, nothing else (no root file, no other stack, no `todo/`). `task` is one path segment of
- * letters, digits, `_` and `-`; `out` passes the destination guard of the builder; a link inside the folder is refused before anything is written. Modes are kept.
- */
-export function copyTaskFolder({ root, stack, task, out }) {
+/** Everything the copy needs, checked before anything is written. -> `ok({ src, dest, files })` | `fail`. */
+function copyPlan({ root, stack, task, out }) {
   const src = sourceFolder({ root, stack, task });
   if (!src.ok) return src;
   const dest = checkDestination(out);
   if (!dest.ok) return dest;
   const files = filesOfTask(src.value);
-  if (!files.ok) return files;
-  mkdirSync(dest.value, { recursive: true });
-  cpSync(src.value, dest.value, { recursive: true });
-  return ok({ files: files.value });
+  return files.ok ? ok({ src: src.value, dest: dest.value, files: files.value }) : files;
+}
+
+/**
+ * `copyTaskFolder({ root, stack, task, out })` -> `ok({ files })` | `fail`: exactly `<root>/<stack>/<task>/` into `out`, nothing else (no root file, no other stack, no `todo/`). `task` is one path segment of
+ * letters, digits, `_` and `-`; `out` passes the destination guard of the builder; a link inside the folder is refused before anything is written. Modes are kept. The copy is atomic: it is made in a staging
+ * folder and renamed onto `out` when complete.
+ */
+export function copyTaskFolder(args) {
+  const plan = copyPlan(args);
+  if (!plan.ok) return plan;
+  const written = writeAtomically(plan.value.dest, stage => cpSync(plan.value.src, stage, { recursive: true }));
+  return written.ok ? ok({ files: plan.value.files }) : written;
 }

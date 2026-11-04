@@ -2,8 +2,7 @@
 // and the samples) and checks everything BEFORE the first write: the legal names, the group rule (T-L57), the destination, the pin of the runner, the hash of FORMAT and of its grammar, the packages list and the template's
 // `run.sh`. It adds no stack word, no plan word and no path of this host. The rest of this file is the check of a generated `package-lock.json` against the registered manifest and the list of file patterns the
 // push check accepts in a stack folder. The destination guard that the builder and the bare copy share is in `workspace-destination.mjs`.
-import { randomBytes } from 'node:crypto';
-import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitWorktreeOf } from '../../minigit-bench/lib/git-guard.mjs';
@@ -15,7 +14,7 @@ import { loadRecipeLang } from './cache-recipe-lang.mjs';
 import { renderPackagesMd } from './packages-md.mjs';
 import { computePin, verifyPin } from './runner-pin.mjs';
 import { loadStacksLang } from './toolchain-pins.mjs';
-import { checkDestination } from './workspace-destination.mjs';
+import { checkDestination, writeAtomically } from './workspace-destination.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 export const TEMPLATES_DIR = path.join(SPIKE, 'templates');
@@ -184,33 +183,14 @@ function gatherFiles(args) {
   return derived.ok ? ok([...sources.value, ...derived.value].sort(byPath)) : derived;
 }
 
-// ---- the atomic write (F1) ------------------------------------------------------------------------------------------------------------------------
+// ---- the write -----------------------------------------------------------------------------------------------------------------------------------
 
 function writeFiles(dir, files) {
-  mkdirSync(dir, { recursive: true });
   for (const file of files) {
     const target = path.join(dir, file.rel);
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, file.bytes ?? readFileSync(file.abs));
     chmodSync(target, file.mode);
-  }
-}
-
-const stagingOf = out => path.join(path.dirname(out), `.${path.basename(out)}.staging-${randomBytes(4).toString('hex')}`);
-
-/**
- * The workspace is written into a unique sibling folder and renamed onto `out` only when complete (an existing empty `out` is replaced by the rename). A failure removes the staging folder and leaves `out` as it was,
- * so a retry is not refused. The parent folders of `out` that were created for it stay.
- */
-function writeAtomically(out, files) {
-  const stage = stagingOf(out);
-  try {
-    writeFiles(stage, files);
-    renameSync(stage, out);
-    return ok(out);
-  } catch (error) {
-    rmSync(stage, { recursive: true, force: true });
-    return fail(`the workspace could not be written to ${out} (${error.code ?? error.message}); nothing was left behind`);
   }
 }
 
@@ -223,7 +203,7 @@ export function buildWorkspace(args) {
   if (!request.ok) return request;
   const files = gatherFiles({ ...args, grammar: request.value.grammar });
   if (!files.ok) return files;
-  const written = writeAtomically(request.value.out, files.value);
+  const written = writeAtomically(request.value.out, stage => writeFiles(stage, files.value));
   return written.ok ? ok({ out: written.value, files: files.value.map(file => file.rel) }) : written;
 }
 

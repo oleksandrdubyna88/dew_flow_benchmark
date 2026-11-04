@@ -15,7 +15,7 @@
 // Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does.
 await import('./lib/lower-priority.mjs');
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -178,13 +178,14 @@ async function formatOf(taskRepo) {
   return fetched.ok ? ok(readFileSync(path.join(fetched.value.root, 'todo', 'tasks', 'FORMAT.md'))) : fetched;
 }
 
-const isFile = file => { try { return statSync(file).isFile(); } catch { return false; } };
-const isFolder = dir => { try { return statSync(dir).isDirectory(); } catch { return false; } };
+const readable = (target, mode, isKind) => { try { accessSync(target, mode); return isKind(statSync(target)); } catch { return false; } };
+const isFile = file => readable(file, constants.R_OK, stat => stat.isFile());
+const isFolder = dir => readable(dir, constants.R_OK | constants.X_OK, stat => stat.isDirectory());
 
-/** A usage line for a statement that is not a file or samples that are not a folder, else null. */
+/** A usage line for a statement that is not a readable file or samples that are not a readable folder, else null. */
 function inputUsage(build) {
-  if (!isFile(build.statement)) return `--statement ${build.statement} is not a file`;
-  return isFolder(build.samples) ? null : `--samples ${build.samples} is not a folder`;
+  if (!isFile(build.statement)) return `--statement ${build.statement} is not a readable file`;
+  return isFolder(build.samples) ? null : `--samples ${build.samples} is not a readable folder`;
 }
 
 /** The checks before anything is fetched: the inputs the flags name, then names, group and destination. */

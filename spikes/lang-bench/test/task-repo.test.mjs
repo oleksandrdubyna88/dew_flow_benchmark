@@ -3,11 +3,12 @@
 // repository (LANG_V2_TASK_REPO, as `realDraft` does) at the pinned sha. Needs only `git`.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { PINNED_TASK_SHA, copyTaskFolder, fetchTaskRepo } from '../lib/task-repo.mjs';
+import { writeAtomically } from '../lib/workspace-destination.mjs';
 import { filesUnder, git, SPIKE } from './support/workspace-fixtures.mjs';
 import { realDraft } from './support/format-fixtures.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
@@ -199,4 +200,36 @@ test('The_bare_workspace_refuses_a_task_with_a_path_in_it_and_a_destination_in_a
   assert.match(withLink.reason, /link/);
   assert.equal(existsSync(path.join(parent, 'w')), false, 'a link is refused before anything is copied');
   assert.equal(lstatSync(parent).isDirectory(), true);
+});
+
+test('A_failed_copy_of_a_task_folder_leaves_nothing_and_a_retry_works', t => {
+  const root = taskRoot(t);
+  const parent = ownedFolder(t, 'out');
+  const secret = path.join(root, 'csharp/01-x/sub/deep.txt');
+  chmodSync(secret, 0o000);
+  try {
+    const failed = copyTaskFolder({ root, stack: 'csharp', task: '01-x', out: path.join(parent, 'w') });
+    assert.equal(failed.ok, false, 'a file that cannot be read stops the copy');
+    assert.deepEqual(readdirSync(parent), [], 'neither the destination nor a staging folder is left');
+  } finally {
+    chmodSync(secret, 0o644);
+  }
+  const retried = copyTaskFolder({ root, stack: 'csharp', task: '01-x', out: path.join(parent, 'w') });
+  assert.equal(retried.ok, true, retried.reason);
+  assert.deepEqual(readdirSync(parent), ['w']);
+});
+
+test('A_staging_folder_is_made_exclusively_and_only_a_folder_the_call_made_is_removed', t => {
+  const parent = ownedFolder(t, 'out');
+  const taken = writeTree(path.join(parent, 'taken'), { 'keep.txt': 'someone else\n' });
+  const clash = writeAtomically(path.join(parent, 'w'), () => assert.fail('the fill must not run'), { stageOf: () => taken });
+  assert.equal(clash.ok, false, 'a staging folder that exists is not adopted');
+  assert.match(clash.reason, /EEXIST/);
+  assert.equal(readFileSync(path.join(taken, 'keep.txt'), 'utf8'), 'someone else\n', 'and it is left as it was');
+  const nested = writeAtomically(path.join(parent, 'p', 'q', 'w'), stage => writeFileSync(path.join(stage, 'f.txt'), 'x\n'));
+  assert.equal(nested.ok, true);
+  const failed = writeAtomically(path.join(parent, 'm', 'n', 'w'), () => { throw new Error('the fill failed'); });
+  assert.equal(failed.ok, false);
+  assert.match(failed.reason, /parent folders made for the destination stay/);
+  assert.deepEqual(readdirSync(path.join(parent, 'm', 'n')), [], 'the staging folder is gone and the parents made for it stay');
 });
