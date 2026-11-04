@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The module's console (todo/PLAN_model_arms.md D1, D2): the only project that touches the world — files,
+  <!-- The module's console (research/PLAN_model_arms.md D1, D2): the only project that touches the world — files,
        processes, the clock, the environment. Its decisions live in ModelArms.Core, which stays pure. Nothing under
        src/ or hosts/ references this project or its core; ModelArmsArchitectureTests says so. -->
 
