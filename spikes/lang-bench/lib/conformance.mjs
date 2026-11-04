@@ -23,6 +23,7 @@ import { parseKnownNeedles } from './push-needles.mjs';
 const EXIT_DEVIATION = 1;
 const EXIT_USAGE = 4;
 const NEEDLES_FILE = fileURLToPath(new URL('../inputs/needles-lang.json', import.meta.url));
+const STACK_WORDS_FILE = fileURLToPath(new URL('../inputs/stack-words-lang.json', import.meta.url));
 const OPTIONS = { repo: { type: 'string' }, task: { type: 'string' }, format: { type: 'string' }, needles: { type: 'string' } };
 const USAGE = 'usage: conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>]';
 const NEEDS_KIND = new Set(['sections', 'sentences', 'T/G', 'samples', 'sample-forms', 'sample-env']);
@@ -49,7 +50,7 @@ function parseOptions(argv) {
 }
 
 /** ok({ format, facts, sentences, known, literals }): everything read from outside the spec, or the first fail. FORMAT's own faults are format errors (exit 4). */
-function loadReferences(options) {
+function loadReferences(options, stackWordsFile) {
   const bytes = readFile(options.format);
   if (!bytes.ok) return bytes;
   const parsed = parseFormat(bytes.value);
@@ -58,11 +59,19 @@ function loadReferences(options) {
   if (!facts.ok) return facts;
   const sentences = readSentences(parsed.format);
   if (!sentences.ok) return sentences;
-  const needles = readFile(NEEDLES_FILE);
-  const known = needles.ok ? parseKnownNeedles(parseJson(needles.value.toString('utf8'))) : needles;
-  if (!known.ok) return known;
+  const known = loadWordFile(NEEDLES_FILE);
+  const stack = known.ok ? loadWordFile(stackWordsFile) : known;
+  if (!stack.ok) return stack;
   const literals = options.needles === undefined ? ok(undefined) : readNeedles(options.needles);
-  return literals.ok ? ok({ format: parsed.format, facts: facts.value, sentences: sentences.value, known: known.value, literals: literals.value }) : literals;
+  return literals.ok ? ok({ format: parsed.format, facts: facts.value, sentences: sentences.value, known: known.value, stackWords: stack.value, literals: literals.value }) : literals;
+}
+
+/** ok(matchers) from a needle file of the push check's shape (`words`, `substrings`), or a fail naming the file. */
+function loadWordFile(file) {
+  const text = readFile(file);
+  if (!text.ok) return text;
+  const parsed = parseKnownNeedles(parseJson(text.value.toString('utf8')));
+  return parsed.ok ? parsed : fail(`${file}: ${parsed.reason}`);
 }
 
 const parseJson = text => {
@@ -134,7 +143,7 @@ async function runnerFindings(ctx, dir, seams) {
 export async function run(argv, seams = {}) {
   const options = parseOptions(argv);
   if (!options.ok) return usage(options.reason);
-  const references = loadReferences(options.value);
+  const references = loadReferences(options.value, seams.stackWordsFile ?? STACK_WORDS_FILE);
   if (!references.ok) return usage(references.reason);
   const repo = path.resolve(options.value.repo);
   const specPath = path.join(repo, 'todo', 'tasks', `${options.value.task}.md`);

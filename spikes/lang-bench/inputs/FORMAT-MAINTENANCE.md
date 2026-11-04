@@ -19,8 +19,8 @@ The ten checks of the command, and the items below they cover: `file` (1), `head
 `sample-forms` (8, and the forms of the sample files that the runner leaves to the format), `sample-env` (the `env` lines of the samples) and `no-needle` (10, 11 and 12). Four things
 it does only in part, and they stay with the reviewer: a normative sentence outside every requirement that is not a fixed sentence (5); a `body json` or `recv … json` entry is
 refused only when no requirement carries F-JSON, not reply by reply (8); the reading block is recognised as a paragraph that names eight or more of the script's keywords in code
-spans (10); the names of the implementation languages, runtimes and web frameworks of the series (11) are not in the command, whose lists are the push check's plan ids, links and
-known-task needles and the author's `--needles` file. In group B each olympiad spec of A is checked under A's FORMAT and under B's.
+spans (10). The needles of check 11 are the push check's plan ids, links and known-task needles, the stack words of `inputs/stack-words-lang.json` (the implementation languages, runtimes,
+frameworks and flags of the series, public, named by the word in a finding) and the author's `--needles` file. In group B each olympiad spec of A is checked under A's FORMAT and under B's.
 
 1. **The file.** The name matches 1.1; the title's `NN` equals the file's.
 2. **The header.** The five rows of 1.2, in order, each value either its placeholder or its later form; the `Kind` value one of the three

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "rule": "case-sensitive on word boundaries, ASCII letters and digits as word characters; substrings are exact (the shape and the matching rule of needles-lang.json). The implementation languages, runtimes, frameworks and flags of the series: a spec and its samples name none of them.",
+  "words": [
+    "C#", ".NET", "dotnet", "TypeScript", "JavaScript", "Node", "Node.js", "V8",
+    "Fastify", "ASP.NET", "Kestrel", "typebox", "xunit", "NuGet", "npm"
+  ],
+  "substrings": ["DOTNET_", "NODE_OPTIONS", "max-old-space", "GCHeapHardLimit"]
+}

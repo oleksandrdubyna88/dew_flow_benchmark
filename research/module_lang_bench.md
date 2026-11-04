@@ -348,14 +348,16 @@ F-STOP's `{which}` by F-EOF, `{k}` by the samples shown, `{ref}` by the ids that
 | `r-ids` | `**R<n>.**` unique and exactly R1 … Rn, ascending before the freeze, F-REQ's `{n}`, the ids amendments name, a table or a fence outside every requirement span |
 | `sentences`, `T/G` | the fixed sentences with their places and slots; T and G against every visible scenario's `start … within` and first `wait-exit within` |
 | `samples`, `sample-forms`, `sample-env` | the folder against section 6; the olympiad cells (FORMAT 3.4's code-span forms) or the daemon and web blocks against the bytes; the runner's parse; CP1's F11 forms; the `env` keys against `ALLOW_LIST` and `CASE_KEYS` of `lib/exec-layer/env.mjs` |
-| `no-needle` | E1.S1's rules (`findVisibleRules`, the known-task file `inputs/needles-lang.json`) and the author's literals (`--needles`, one per line, the leak-token reader; a hit is named by its number) over the spec and the sample files; `⏎` outside section 6; a paragraph with eight or more script keywords in code spans (the reading block) |
+| `no-needle` | E1.S1's rules (`findVisibleRules`, the known-task file `inputs/needles-lang.json`), the stack words and the author's literals (`--needles`, one per line, the leak-token reader; a hit is named by its number) over the spec and the sample files; `⏎` outside section 6; a paragraph with eight or more script keywords in code spans (the reading block) |
 
 **The runner** is `spikes/lang-bench/runner/run_samples.py`, found from the checker's own place (never from `--repo`), run as `python3 -I -B <runner> --kind <daemon|web> --parse-only <samples>` through
 v1's `runBounded` (60 s, TMPDIR a folder of its own, removed after); its `(file, line, message)` lines are quoted in the `samples` findings. `runBounded` already ends the whole process tree at its
 ceiling (`A_runner_that_hangs_…` shows a `setsid` child of the runner gone when the checker returns), so it is not widened. An olympiad task needs neither python nor the runner.
 
-**Not covered, and why.** The language, runtime and framework names of the series are not in the command: E1.S1's patterns hold plan ids, links, the known-task names and the family's names, and
-no list of languages exists in `lib/` to reuse (the author's `--needles` file can carry them). The body-forms rule is coarse (a JSON comparison with no F-JSON anywhere). A normative sentence outside a span
+**Stack words.** `inputs/stack-words-lang.json` (public, schema 1, `words` and `substrings` in the shape and with the matching rule of `needles-lang.json`) lists the implementation languages, runtimes,
+frameworks and flags of the series; check 10 always reads it and names a hit by the word. Neither the real FORMAT nor the real spec 01 holds one of them.
+
+**Not covered, and why.** The body-forms rule is coarse (a JSON comparison with no F-JSON anywhere). A normative sentence outside a span
 that is not a fixed sentence is for the reviewer. Complexity of some functions is above four, as in the neighbouring readers; every function is under 50 lines.
 
 **Files.** `conformance.mjs` (command), `lib/conformance.mjs` (the run), `lib/conformance-{blocks,spec,facts,sentences,locate,shown,runner}.mjs` (readers), `lib/conformance-check-{structure,sentences,samples,text}.mjs`
