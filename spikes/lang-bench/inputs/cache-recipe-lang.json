@@ -1,0 +1,318 @@
+{
+  "decidedOn": "2026-11-03",
+  "reason": "The recipe of the two cache snapshots of the language comparison v2 (parent D5, §4.6; E1.S4). Run ONCE per stack by make-snapshots.mjs inside v1's agent box with E1.S5's toolchains bound read-only and the distribution's dotnet hidden, through the egress proxy with the bare host list. Each x-range is resolved once, at build time, to the highest plain version of its line; the exact version is recorded. TypeScript web set (owner's decision of the epoch-7 re-review, 2026-11-03): @fastify/type-provider-typebox 6.3.0 with typebox 1.1.x, the renamed TypeBox 1.x line, its exact patch resolved once here; @sinclair/typebox is dropped. The result is hashed and registered in inputs/cache-snapshots-lang.json; PACKAGES.md is generated from that record.",
+  "hosts": "bare",
+  "stepTimeoutMs": 900000,
+  "stacks": {
+    "csharp": {
+      "project": "inputs/cache-projects/csharp",
+      "env": {
+        "DOTNET_CLI_USE_MSBUILD_SERVER": "0",
+        "MSBUILDDISABLENODEREUSE": "1",
+        "UseSharedCompilation": "false",
+        "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",
+        "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE": "1",
+        "NUGET_CERT_REVOCATION_MODE": "offline",
+        "TESTINGPLATFORM_TELEMETRY_OPTOUT": "1"
+      },
+      "resolve": {
+        "HOSTING": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.hosting/index.json"
+          ],
+          "pick": "highest",
+          "line": "10.0"
+        },
+        "JWT_BEARER": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/microsoft.aspnetcore.authentication.jwtbearer/index.json"
+          ],
+          "pick": "highest",
+          "line": "10.0"
+        },
+        "XUNIT": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/xunit.v3/index.json"
+          ],
+          "pick": "highest",
+          "line": "4"
+        },
+        "XUNIT_VS": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/xunit.runner.visualstudio/index.json"
+          ],
+          "pick": "highest",
+          "line": "4"
+        },
+        "TEST_SDK": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/microsoft.net.test.sdk/index.json"
+          ],
+          "pick": "highest",
+          "line": "18"
+        }
+      },
+      "steps": [
+        {
+          "argv": [
+            "dotnet",
+            "--version"
+          ],
+          "expectStdout": "10.0.403"
+        },
+        {
+          "argv": [
+            "dotnet",
+            "build",
+            "Snap.slnx",
+            "-c",
+            "Release",
+            "--nologo",
+            "-m:4",
+            "-nr:false",
+            "-p:SnapHostingVersion={HOSTING}",
+            "-p:SnapJwtBearerVersion={JWT_BEARER}",
+            "-p:SnapXunitVersion={XUNIT}",
+            "-p:SnapXunitVsVersion={XUNIT_VS}",
+            "-p:SnapTestSdkVersion={TEST_SDK}"
+          ]
+        },
+        {
+          "argv": [
+            "dotnet",
+            "tests/SnapTests/bin/Release/net10.0/SnapTests.dll"
+          ]
+        }
+      ],
+      "capture": {
+        "nuget": "box/nuget",
+        "dotnet": "box/home/.dotnet"
+      },
+      "packages": [
+        {
+          "name": "Microsoft.Extensions.Hosting",
+          "spec": "{HOSTING}",
+          "purpose": "Generic Host for daemons: lifetime and graceful stop (IHostApplicationLifetime), dependency injection, configuration, ILogger"
+        },
+        {
+          "name": "Microsoft.AspNetCore.Authentication.JwtBearer",
+          "spec": "{JWT_BEARER}",
+          "purpose": "JWT bearer authentication for ASP.NET Core Minimal API"
+        },
+        {
+          "name": "xunit.v3",
+          "spec": "{XUNIT}",
+          "purpose": "Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable"
+        },
+        {
+          "name": "xunit.runner.visualstudio",
+          "spec": "{XUNIT_VS}",
+          "purpose": "xUnit adapter for the VSTest runner (dotnet test in VSTest mode)"
+        },
+        {
+          "name": "Microsoft.NET.Test.Sdk",
+          "spec": "{TEST_SDK}",
+          "purpose": "VSTest host for dotnet test in VSTest mode"
+        }
+      ],
+      "packagesNote": "ASP.NET Core (Minimal API, its built-in validation, System.Text.Json) and the .NET base library come with SDK 10.0.403 as shared frameworks; they are not packages."
+    },
+    "node": {
+      "env": {
+        "npm_config_logs_max": "0",
+        "npm_config_update_notifier": "false"
+      },
+      "resolve": {
+        "TYPES_NODE": {
+          "argv": [
+            "npm",
+            "view",
+            "@types/node@26",
+            "version",
+            "--json"
+          ],
+          "pick": "highest"
+        },
+        "TS_ESLINT": {
+          "argv": [
+            "npm",
+            "view",
+            "typescript-eslint@8.72",
+            "version",
+            "--json"
+          ],
+          "pick": "highest"
+        },
+        "ESLINT": {
+          "argv": [
+            "npm",
+            "view",
+            "eslint@10",
+            "version",
+            "--json"
+          ],
+          "pick": "highest"
+        },
+        "ESLINT_JS": {
+          "argv": [
+            "npm",
+            "view",
+            "@eslint/js@10",
+            "version",
+            "--json"
+          ],
+          "pick": "highest"
+        },
+        "PINO": {
+          "argv": [
+            "npm",
+            "view",
+            "pino@^9.14.0 || ^10.1.0",
+            "version",
+            "--json"
+          ],
+          "pick": "highest"
+        },
+        "TYPEBOX": {
+          "argv": [
+            "npm",
+            "view",
+            "typebox@1.1",
+            "version",
+            "--json"
+          ],
+          "pick": "highest",
+          "line": "1.1"
+        }
+      },
+      "steps": [
+        {
+          "argv": [
+            "node",
+            "--version"
+          ],
+          "expectStdout": "v26.13.0"
+        },
+        {
+          "argv": [
+            "npm",
+            "init",
+            "-y"
+          ]
+        },
+        {
+          "argv": [
+            "npm",
+            "install",
+            "--no-audit",
+            "--no-fund",
+            "--no-update-notifier",
+            "fastify@5.12.7",
+            "@fastify/jwt@10.2.6",
+            "@fastify/type-provider-typebox@6.3.0",
+            "typebox@{TYPEBOX}",
+            "pino@{PINO}"
+          ]
+        },
+        {
+          "argv": [
+            "npm",
+            "install",
+            "--save-dev",
+            "--no-audit",
+            "--no-fund",
+            "--no-update-notifier",
+            "typescript@6.0.3",
+            "@types/node@{TYPES_NODE}",
+            "typescript-eslint@{TS_ESLINT}",
+            "eslint@{ESLINT}",
+            "@eslint/js@{ESLINT_JS}"
+          ]
+        },
+        {
+          "argv": [
+            "node",
+            "node_modules/typescript/bin/tsc",
+            "--version"
+          ],
+          "expectStdout": "Version 6.0.3"
+        }
+      ],
+      "capture": {
+        "npm": "box/npm"
+      },
+      "packages": [
+        {
+          "name": "fastify",
+          "spec": "5.12.7",
+          "purpose": "HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close()"
+        },
+        {
+          "name": "@fastify/jwt",
+          "spec": "10.2.6",
+          "purpose": "JWT sign and verify as a Fastify plugin"
+        },
+        {
+          "name": "@fastify/type-provider-typebox",
+          "spec": "6.3.0",
+          "purpose": "TypeBox schemas as Fastify route types"
+        },
+        {
+          "name": "typebox",
+          "spec": "{TYPEBOX}",
+          "purpose": "JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set)"
+        },
+        {
+          "name": "pino",
+          "spec": "{PINO}",
+          "purpose": "Structured logging (Fastify's logger), the version Fastify 5.12.7 resolves"
+        },
+        {
+          "name": "typescript",
+          "spec": "6.0.3",
+          "purpose": "Type check (tsc --noEmit) and the compiler API the type-aware lint uses"
+        },
+        {
+          "name": "@types/node",
+          "spec": "{TYPES_NODE}",
+          "purpose": "Types of the Node 26 API"
+        },
+        {
+          "name": "typescript-eslint",
+          "spec": "{TS_ESLINT}",
+          "purpose": "TypeScript parser and type-aware lint rules for ESLint"
+        },
+        {
+          "name": "eslint",
+          "spec": "{ESLINT}",
+          "purpose": "The lint runner"
+        },
+        {
+          "name": "@eslint/js",
+          "spec": "{ESLINT_JS}",
+          "purpose": "ESLint's recommended JavaScript rules"
+        }
+      ]
+    }
+  }
+}
