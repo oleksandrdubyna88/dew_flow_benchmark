@@ -4,4 +4,4 @@
 # These files are this stack's pin files and stay as they are: global.json, nuget.config, Directory.Build.props.
 set -euo pipefail
 cd "$(dirname "$0")"
-dotnet build App.csproj -c Release --nologo -m:4 -p:TreatWarningsAsErrors=false "-p:WarningsAsErrors=nullable%3BNU1603" -p:Nullable=enable -p:WarningsNotAsErrors= -p:WarningLevel=10 "-p:NoWarn=1701%3B1702"
+dotnet build App.csproj -c Release --nologo -m:4 -p:TreatWarningsAsErrors=false "-p:WarningsAsErrors=nullable%3BNU1603%3BNU1605%3BSYSLIB0011" -p:Nullable=enable -p:WarningsNotAsErrors= -p:WarningLevel=10 "-p:NoWarn=1701%3B1702"

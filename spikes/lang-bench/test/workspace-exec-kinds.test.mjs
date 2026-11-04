@@ -80,6 +80,18 @@ test('A_lower_csharp_version_fails_with_NU1603', TIMEOUT, async t => {
   assert.match(outputOf(higher), /NU1102/);
 });
 
+test('A_package_downgrade_fails_the_csharp_build_with_NU1605', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const record = snapshotRecord().csharp;
+  const lower = record.packages.filter(p => p.name === 'microsoft.extensions.logging.abstractions' && p.version !== record.resolved.HOSTING).map(p => p.version);
+  assert.equal(lower.length, 1, `precondition: the manifest holds one older version of a package that Hosting needs at ${record.resolved.HOSTING} (${lower})`);
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'daemon' });
+  addReference(w, 'Microsoft.Extensions.Logging.Abstractions', lower[0]);
+  const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(ran.code, 0, 'a version below the one Hosting needs is a downgrade, and the SDK default makes it an error');
+  assert.match(outputOf(ran), /NU1605/);
+});
+
 test('A_node_package_outside_the_set_fails_naming_it', TIMEOUT, async t => {
   if (!needs(t, snapshotsMissing())) return;
   const w = helloWorkspace(t, { stack: 'node', kind: 'olympiad' });
