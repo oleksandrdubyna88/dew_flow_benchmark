@@ -34,7 +34,7 @@ const TS_SENTENCE = 'Only the packages and versions listed here are available; t
 const EXPECTED_NODE = `# Packages
 
 ${TS_SENTENCE}
-Install a package with the exact version listed (C#: \`<PackageReference Include="NAME" Version="VERSION" />\`; Node: \`npm install NAME@VERSION\`).
+Install a package with the exact version listed: \`npm install NAME@VERSION\`.
 Types come with the packages.
 
 Cache snapshot: tree sha256 \`${HASH}\`, made 2026-11-05.
@@ -139,4 +139,18 @@ test('The_agent_visible_sentence_is_the_one_written_for_the_stack_and_the_old_on
   assert.equal(ts[2], TS_SENTENCE, 'TypeScript: the third line, one paragraph');
   for (const text of [cs.join('\n'), ts.join('\n')]) assert.doesNotMatch(text, /This workspace builds offline/, 'the earlier wording is not rendered');
   assert.match(ts[3], /^Install a package with the exact version listed/, 'the instruction line stays');
+});
+
+test('A_rendered_file_names_only_its_own_stack_in_the_install_line_and_nowhere_else', () => {
+  // registration: INSTALL_LINE used to name both stacks, so a Node workspace's PACKAGES.md mentioned C# and the other way round
+  const recipeReal = JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe-lang.json'), 'utf8'));
+  const registered = JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'cache-snapshots-lang.json'), 'utf8'));
+  const cs = renderPackagesMd({ stack: 'csharp', record: registered, recipe: recipeReal });
+  const ts = renderPackagesMd({ stack: 'node', record: registered, recipe: recipeReal });
+  assert.equal(cs.ok, true, cs.reason);
+  assert.equal(ts.ok, true, ts.reason);
+  assert.equal(cs.value.split('\n')[3], 'Install a package with the exact version listed: `<PackageReference Include="NAME" Version="VERSION" />`.');
+  assert.equal(ts.value.split('\n')[3], 'Install a package with the exact version listed: `npm install NAME@VERSION`.');
+  assert.doesNotMatch(cs.value, /Node|npm/, 'the C# file names neither Node nor npm (the whole file, both tables included)');
+  assert.doesNotMatch(ts.value, /C#|NuGet|PackageReference/, 'the Node file names neither C# nor NuGet nor PackageReference (the whole file, both tables included)');
 });
