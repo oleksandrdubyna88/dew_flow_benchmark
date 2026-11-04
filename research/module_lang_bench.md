@@ -242,7 +242,57 @@ hash (2026-11-02). The tests and the probe build their C# programs inside the bo
 
 ## FORMAT v2 (E1.S9)
 
-not built yet
+**Purpose.** The bench's part of the story: the code that checks the task format document (`todo/tasks/FORMAT.md` of the task repository), a record that says
+which version and bytes are A's, and the maintainers' document. The format text itself is the team lead's; nothing here edits it. Built 2026-11-04 against the
+draft at commit `0a95d31` of the task repository (`Format version: 2`, sha256 `27e79c06…695f`).
+
+**Common reading** (`lib/format-structure.mjs`). FORMAT is read as raw bytes: UTF-8, LF only; a carriage return anywhere or a byte order mark is a format error
+(exit 4) that names the first line; nothing is normalised and the sha256 is over the raw bytes. A heading is a line that starts with `## ` or `### ` outside a
+fenced code block (a line that starts with three or more backticks or tildes opens a fence, a line of the same character, at least as long, closes it), so the
+`# 1.` comments and lookalike headings of a scenario are never headings. The structure is exact: `## 1.` to `## 7.` once each, ascending; under `## k`, `### k.1`,
+`k.2` … with no gap or duplicate; anything else is exit 4 naming the heading and the line. Exit codes of both tools: 0 success, 1 a refusal (one line each: heading,
+line, rule), 4 usage or a format error.
+
+| File | Role |
+|---|---|
+| `tools/grammar-extract.mjs` | `grammar-extract.mjs <FORMAT.md> <out>`: the header `# Scenario and sample grammar (from FORMAT.md v<version>, sha256 <hex>)`, one empty line, then the raw bytes from the `## 3.` line to the byte before `## 6.`. Deterministic. Written to a temporary file in the output's folder and linked into place (`wx`, then `link`): an existing output is exit 4 and never overwritten, and no temporary file stays. |
+| `tools/format-classes.mjs` | T-L56. `--self <FORMAT>` and `--frozen <A> --candidate <B> [--record <format.json>]`. No `--reference-sha` option: the frozen file must be the file whose sha256 is the record's `A.sha256` (default record `inputs/specs.d/format.json`), else exit 1 "the frozen reference is not A's recorded FORMAT". |
+| `lib/format-structure.mjs`, `lib/format-class-table.mjs`, `lib/format-compare.mjs` | the reading above; the class table, its rules and the parts; the comparison. `checkFrozenCandidate({ frozen, candidate, reference })` is the exported function the tests call with an explicit reference. |
+| `test/grammar-extract.test.mjs`, `test/format-classes.test.mjs`, `test/format-classes-frozen.test.mjs`, `test/format-bounds.test.mjs` | the tests; `test/support/format-fixtures.mjs` (a synthetic FORMAT with the shape of the real one, and the real-draft helper) and `test/support/format-bounds-readers.mjs` (the strict readers) |
+| `inputs/specs.d/format.json` | the record `{ "A": { version, sha256, gate: null, grammarSha256, tasks } }`; `specs-record.mjs` assembles it into `inputs/specs.json` |
+| `inputs/FORMAT-MAINTENANCE.md` | the maintainers' document: the conformance list, the tools, the class rule, the amendments (written from FORMAT v1's sections 7 to 9, public on the task repository's `main`) |
+
+**The class table (`--self`).** The table directly after the `**Section classes.**` paragraph of the preamble, rows `| <heading without ##/###> | <class> |`. Every row names
+an existing heading by its whole text (a heading inside a fence is none), the class is one of `common`, `olympiad`, `daemon`, `web`, `daemon-web`, every `##` section has
+exactly one row or, for a mixed section, each of its `###` has exactly one row and the section none; a heading with two rows, a malformed row and a paragraph or table that cannot
+be found are refused (the last is exit 4, the others exit 1). The lead text of a mixed section is `common` by construction.
+
+**The parts and the comparison (`--frozen`).** The protected set (`common`, `olympiad`) comes from the FROZEN file's table only. A section classed as a whole is one part, from its
+`##` line to the byte before the next `##` (its `###` belong to it); a mixed section is its lead text (class `common`) and each `###` (to the byte before the next `###` or `##`); the
+preamble is byte 0 to the byte before `## 1.`. Boundary blank lines belong to the part before them, so no byte is in two parts or in none. A frozen part is found in the candidate
+by its heading NUMBER and compared as raw bytes, except: the preamble's three header rows (whole lines; each must exist once) and class-table rows after the frozen last row (a row of an
+unprotected part may change or go; a protected row must stay, in place); section 7 must START with the frozen bytes; 2.1's fixed-sentence table is compared row by row, matched by the F-id,
+and a row may differ only when its sentence is defined only in unprotected parts. **A sentence is defined where its label stands** (`F-ID` at the start of a line outside fences) and,
+when it has no label (F-ERRORS, F-TIMING, F-BYTES-O-N), where the paragraph that introduces a fenced block names it; checked on the draft, the 14 daemon and web sentences are free and
+the other 17 are protected. Refusals name the heading and the FROZEN class (`none` for a part the frozen file did not have): protected bytes differ (with the first differing candidate
+line), a protected class row relabelled or gone, a protected part missing, a part added as `common` or `olympiad` (the lead text of a section that was one unprotected whole is the one
+exception, since it is `common` by construction), a heading number that changed (a `###` inserted inside a protected mixed section moves the numbers after it), a candidate whose own class table
+breaks the rules. An append at the end of a mixed section with the next free number, classed `daemon`, `web` or `daemon-web`, passes; so does turning a `daemon-web` whole section into
+subsections of those classes. Format errors in either file are exit 4; a frozen file that breaks its own class rules is exit 4.
+
+**The bounds (T-L58).** `format-bounds.test.mjs` reads each figure through a strict reader: a regular expression that tolerates whitespace, wrapping, code spans and quoting variants and
+still demands exactly ONE match (zero or two is the reader's error). F-STDERR (2.2) and 4.6's `writes more than 256 MiB to standard error` against `STDERR_KILL_BYTES` in `runner/rs_exec.py`; F-ENV's
+`TZ` against the base environment of `lib/exec-layer/env.mjs`; 4.2's one settable name (`TZ`) against the layer's real `boxEnv`: every key of the layer's own exports (`ALLOW_LIST`, `CASE_KEYS`),
+in three spellings, is refused except `TZ`, which is accepted (the test derives the keys, it does not retype them; the layer is not changed); F-PROCS's 512 against `pids.max` in
+`lib/exec-layer/scope-entry.sh`. For every mapping there is a case with the value changed in FORMAT (red), one with it changed in the source (red), and cases with the line removed or
+duplicated on each side (the reader's error). The `boxEnv` side is behaviour, so its source-side cases are stand-ins for `boxEnv` that accept a base key, refuse `TZ` or accept a heap key.
+
+**The real draft in tests.** The positive cases and `--self` also run on the real draft when `LANG_V2_TASK_REPO` names the task repository's checkout; they first check that the checkout's
+`todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256` and fail otherwise. Without the variable they skip with the reason; under `BENCH_REQUIRE_SANDBOX=1` they throw. Refusal cases use the
+synthetic fixture. `inputs/specs.d/format.json` was bootstrapped in this order: the extractor on the draft (`grammarSha256`), the record, `specs-record.mjs`, the checks.
+
+**Not done here.** The format's own document gate, the freeze, and `runner/GRAMMAR.md` in the workspaces (the extractor makes the text; E1.S3 places it). The record's `gate` stays `null` until
+the gate passes.
 
 ## The conformance check (E1.S8)
 

@@ -335,6 +335,34 @@ task's real allocation pattern would, and the policy that decides OP-K is the te
 capability set and `lo`, not as a complete sandbox. The C# programs are built with no package; a task that needs the cache snapshots (E1.S4) is not covered by these builds. Timing-sensitive tests (the
 holder's bound, the scope's end) have margins of seconds and were run under the full suite's load.
 
+## The FORMAT tools scenarios (E1.S9, `spikes/lang-bench/`)
+
+The bench's part of the FORMAT story: the grammar extractor, the class check (T-L56) and the bounds test (T-L58). Refusal cases use a synthetic FORMAT built in `test/support/format-fixtures.mjs`
+(the shape of the real document, none of its content; `edit` throws unless its needle is there exactly once, so a case never edits nothing). The positive cases and `--self` also run on the real draft when
+`LANG_V2_TASK_REPO` names the task repository checkout (after a check that its `todo/tasks/FORMAT.md` has the sha256 of the record's `A.sha256`); without the variable they skip, under
+`BENCH_REQUIRE_SANDBOX=1` they throw. Design: [module_lang_bench.md](module_lang_bench.md), section *FORMAT v2 (E1.S9)*.
+
+| Flow | Status | Test files |
+|---|---|---|
+| The extractor: GRAMMAR.md is the verbatim sections 3 to 5 under one header line (version of the header row, sha256 of the raw bytes), deterministic; a section-4 edit changes the output, a section-7 edit only the sha; fences (backtick, tilde, longer) hold heading lookalikes; a duplicated section 6, a section 6 before 3, a gap, a missing or eighth section, a subsection before section 1, a CR, a BOM, bytes that are not UTF-8 are exit 4 naming the heading and the line; an existing output is never overwritten and no temporary file stays | covered | `test/grammar-extract.test.mjs` |
+| T-L56 `--self`: the class table directly after the `**Section classes.**` paragraph; a row for no heading, a class outside the five, a section or subsection with no row, a section row beside subsection rows, a second row, a malformed row, a row for a heading inside a fence are refused naming the heading, the line and the rule; the command line shapes; the record (`--record`, `A.sha256`, a frozen file that is not the recorded reference is exit 1) | covered | `test/format-classes.test.mjs` |
+| T-L56 frozen against candidate: protected bytes (whole common section, common and olympiad subsection, the lead text of a mixed section) refused naming heading and frozen class; relabel, deletion, a part added as common or olympiad, a `###` inserted inside a protected section, renumbering; header rows, class rows appended, section 7 growth, an edit of a daemon-web part next to a protected part and an append at the end of a mixed section pass; boundary blank lines belong to the part before; 2.1's table row by row (a row is free when its sentence is defined only in unprotected parts, by label or by the paragraph that introduces its fence) | covered | `test/format-classes-frozen.test.mjs` |
+| T-L58: F-STDERR and 4.6 against `STDERR_KILL_BYTES`, F-ENV's `TZ` against the layer's base, 4.2's one settable name against the real `boxEnv` (every key of the layer's own exports in three spellings refused, `TZ` accepted), F-PROCS against `pids.max`; for each mapping a changed value on either side is red and a removed or duplicated line is the reader's error; the tolerated spellings | covered | `test/format-bounds.test.mjs` |
+| The record `inputs/specs.d/format.json` and its assembly (`specs-record.mjs --check`) | covered | `test/specs-record.test.mjs` |
+
+**Observed (2026-11-04, branch `feat/lang-v2-e1-s9` at `4ac9913d`, plus the docs commit):** the four new files hold 116 tests (grammar-extract 16, format-classes 20, format-classes-frozen 34, format-bounds 46), 8 of them
+real-draft cases. `node spikes/lang-bench/run-tests.mjs` plain: 1505 tests, 1497 pass, 0 fail, 8 skipped (the real-draft cases, no `LANG_V2_TASK_REPO`); the first plain run had one failure, the
+existing `A_fork_bomb_in_the_box_stops_at_the_pids_bound_and_nothing_survives`, while another session ran the minigit suite on the same host; it passes alone (10 of 10) and in the re-run. With
+`BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<task repository checkout at 0a95d31>`: 1505 of 1505, nothing skipped. `BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs`: 1232 of 1232. `node --test spikes/lang-explore/test/`:
+302 of 303, 1 skipped by design. `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` exit 0; `plan-lifecycle.mjs` clean; `push-check.mjs --self --branch feat/lang-v2-e1-s9` PASS
+(a bare `--self` is exit 4: it needs `--branch`). `format-classes.mjs --self` on the real draft: exit 0, "the class table is complete (17 rows)".
+
+**Red first, and red again.** Every case was run red against a stub first (a tool that accepts everything and one that refuses everything; the strict readers likewise), then green, then with the fix taken out: 85 one-line
+mutations of the implementation turn at least one test red each, and every one of the 116 tests is red under at least one of them (the red outputs are kept outside the repository, in `~/rsd/lang-v2/briefs/s9-reds.txt`).
+
+**What these do not prove.** They do not prove that the real FORMAT's later versions keep the shape the readers expect (a changed sentence makes a reader fail loudly, which is the point); the definition rule for 2.1's rows
+(label, else the introducing paragraph) was checked on the draft, where it frees exactly the 14 daemon and web sentences, not on any later text. The format's own gate and freeze are not run here.
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under
