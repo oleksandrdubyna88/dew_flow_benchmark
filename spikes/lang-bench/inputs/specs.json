@@ -1,4 +1,16 @@
 {
+  "A": {
+    "gate": null,
+    "grammarSha256": "2b08374ff7a118b288f797a95c8074108ccd67e4fd95f81b7644ac77605e75fe",
+    "sha256": "27e79c060497ff2dd60c9dec0bc319e58583d4ec53e2e32cb98107f83530695f",
+    "tasks": [
+      "01",
+      "02",
+      "03",
+      "09"
+    ],
+    "version": 2
+  },
   "execLayer": {
     "files": [
       {
