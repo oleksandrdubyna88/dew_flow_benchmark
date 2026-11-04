@@ -7,8 +7,8 @@ using ModelArmsApp = ModelArms;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>What one run of <c>run-arm</c> left on the two writers.</summary>
-internal sealed record ArmRun(int Code, string Output, string Error);
+/// <summary>What one run of <c>run-arm</c> left on the two writers, and how many launches the delegation check (<see cref="LaunchDenial"/>) saw in the fake's log once the run had ended.</summary>
+internal sealed record ArmRun(int Code, string Output, string Error, int LaunchesChecked = 0);
 
 /// <summary>A writer that stops the run the moment a line it waits for is written: the test's way to be told that the gate is waiting for its lock, and then to be the operator who stops it.</summary>
 internal sealed class StopOnLine(string needle, CancellationTokenSource stopping) : StringWriter
@@ -47,20 +47,22 @@ internal static class RunArmKit
             _ => throw new ArgumentException($"no scheme {scheme}", nameof(scheme)),
         };
 
-    /// <summary><c>run-arm &lt;arm&gt; --experiment &lt;root&gt;</c> through the console's own entry point, both writers kept.</summary>
+    /// <summary><c>run-arm &lt;arm&gt; --experiment &lt;root&gt;</c> through the console's own entry point, both writers kept. Every launch the fake logged for the root is then checked against the delegation policy (<see cref="LaunchDenial"/>), whatever the exit code.</summary>
     public static async Task<ArmRun> RunAsync(ExperimentRoot root, string arm, CancellationToken? token = null)
     {
         var output = new StringWriter();
         var error = new StringWriter();
         var code = await ModelArmsApp.Program.RunAsync(["run-arm", arm, "--experiment", root.Root], output, error, root.Environment, token ?? Ct);
-        return new ArmRun(code, output.ToString(), error.ToString());
+        return new ArmRun(code, output.ToString(), error.ToString(), LaunchDenial.Check(root));
     }
 
-    /// <summary><c>run-arm</c> through the gate with the verb's seams handed in (a fixed clock, a recording wait, a busy lock) and the writer and stop token of the test's choosing.</summary>
+    /// <summary><c>run-arm</c> through the gate with the verb's seams handed in (a fixed clock, a recording wait, a busy lock) and the writer and stop token of the test's choosing. Its launches are checked as <see cref="RunAsync"/>'s are.</summary>
     public static async Task<int> RunWithSeamsAsync(ExperimentRoot root, string arm, ModelArmsApp.Verbs.RunArmSeams seams, TextWriter output, CancellationToken stopping)
     {
         var input = new ModelArmsApp.VerbInput("run-arm", [arm], Bench.Cli.CommandLine.Parse(["--experiment", root.Root]), output, new StringWriter(), root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping);
-        return await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
+        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
+        LaunchDenial.Check(root);
+        return code;
     }
 
     /// <summary>The fake replays <paramref name="fixture"/> on every call, except the calls <paramref name="byCall"/> names; the key that makes it leave a transcript stays.</summary>
