@@ -85,8 +85,27 @@ function sectionProblems(ctx, f, hit) {
 
 const sameAsProblems = (ctx, f, hit) => (Array.isArray(f.entry.where.sameAs) ? sameProblems(ctx, f, hit, f.entry.where.sameAs, f.entry.where.after) : []);
 
+const TIMING_BOUNDS = Object.freeze({ readiness: 'F-READY', 'the grace period': 'F-STOP' });
+
+/** One F-TIMING: in section 2, in the same requirement as the sentence its `{what}` bounds, with its own slots. */
+function timingHitProblems(ctx, f, hit) {
+  const bound = TIMING_BOUNDS[hit.slots.what];
+  const mates = (ctx.found.get(bound)?.hits ?? []).filter(mate => mate.r === hit.r);
+  const apart = mates.length === 0 ? [`F-TIMING (${where(hit)}) for ${hit.slots.what} must stand in the same requirement as ${bound}`] : [];
+  return [...sectionProblems(ctx, f, hit), ...apart, ...slotProblems(ctx, f.entry.id, hit)];
+}
+
+/** F-TIMING once per overridden value: a second sentence for the same `{what}` is named. */
+const timingTwice = f => Object.keys(TIMING_BOUNDS).flatMap(what => {
+  const same = f.hits.filter(hit => hit.slots.what === what);
+  return same.length > 1 ? [`F-TIMING for ${what} stands ${same.length} times (${same.map(where).join(', ')}); once per overridden value`] : [];
+});
+
+const timingPlacement = (ctx, f) => [...timingTwice(f), ...f.hits.flatMap(hit => timingHitProblems(ctx, f, hit))];
+
 /** The problems of where the hits of a required or present sentence stand. */
 function placementProblems(ctx, f) {
+  if (f.entry.id === 'F-TIMING') return timingPlacement(ctx, f);
   const hit = f.hits[0];
   const closing = f.entry.where.mode === 'opens-closes' ? opensClosesProblems(f) : [];
   return [...duplicateProblems(f), ...sectionProblems(ctx, f, hit), ...sameAsProblems(ctx, f, hit), ...closing, ...slotProblems(ctx, f.entry.id, hit)];
