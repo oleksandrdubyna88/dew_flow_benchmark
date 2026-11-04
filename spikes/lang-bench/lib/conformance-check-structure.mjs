@@ -174,9 +174,32 @@ function reqProblems(ctx) {
 
 const amendmentIdProblems = ctx => amendmentsOf(ctx.spec).items.flatMap(item => item.ids.filter(id => id > ctx.maxId).map(id => `line ${item.no}: amendment A${item.k} names R${id}, which does not exist`));
 
-const lookalikeProblems = spec => spec.lookalikes.map(entry => `line ${entry.no}: "${entry.text.slice(0, 20)}" looks like a requirement id and is not \`**R<n>.**\``);
+const OPENING = /^\*\*R[1-9]\d*\.\*\*(?=\s|$)/;
+const BOLD_ID = /\*\*R\d/g;
+const PLAIN_ID = /^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)?R\d+\./;
+const REFERENCE = /\bR(\d+)\b/g;
+const bodyLines = spec => spec.kept.filter(line => line.no >= (spec.sections[0]?.no ?? spec.lastNo + 1));
+
+/** True when a `**R<n>` stands anywhere but as the proper opening at the start of the line. */
+const misplacedBold = text => [...text.matchAll(BOLD_ID)].some(found => found.index !== 0 || !OPENING.test(text));
+const looksLikeId = line => misplacedBold(line.text) || PLAIN_ID.test(line.text);
+
+const lookalikeProblems = spec => bodyLines(spec).filter(looksLikeId)
+  .map(line => `line ${line.no}: "${line.text.slice(0, 20)}" looks like a requirement id and is not \`**R<n>.**\` at the start of a line`);
+
+const opensParagraph = (spec, entry) => {
+  const above = spec.lines[entry.startNo - 2];
+  return above === undefined || above.text.trim() === '' || /^#{1,6}\s/.test(above.text);
+};
+
+const glueProblems = spec => spec.requirements.filter(entry => !opensParagraph(spec, entry)).map(entry => `line ${entry.startNo}: R${entry.n} does not open a paragraph: a blank line must stand above it`);
+
+const outOfRange = (text, maxId) => !/^[1-9]\d*$/.test(text) || Number(text) > maxId;
+
+/** Every `R<n>` anywhere in the spec must be one of R1 … Rn, written without a leading zero. */
+const referenceProblems = (spec, maxId) => [...new Set(spec.kept.flatMap(line => [...line.text.matchAll(REFERENCE)].filter(found => outOfRange(found[1], maxId)).map(found => `line ${line.no}: the spec names R${found[1]}, and the spec has requirements R1 to R${maxId} only`)))];
 
 /** Check 4: the requirement ids (`**R<n>.**`, unique, exactly R1 … Rn, ascending before the freeze), F-REQ's n, the ids the amendments name, and the spans of tables and fenced blocks. */
 export const idFindings = ctx => [
-  ...lookalikeProblems(ctx.spec), ...idListProblems(ctx.spec.requirements, isFrozen(ctx)), ...reqProblems(ctx), ...amendmentIdProblems(ctx), ...spanProblems(ctx.spec),
+  ...lookalikeProblems(ctx.spec), ...glueProblems(ctx.spec), ...referenceProblems(ctx.spec, ctx.maxId), ...idListProblems(ctx.spec.requirements, isFrozen(ctx)), ...reqProblems(ctx), ...amendmentIdProblems(ctx), ...spanProblems(ctx.spec),
 ];

@@ -6,7 +6,6 @@ import { collapse, fencedBlocks, paragraphs } from './conformance-blocks.mjs';
 import { parseFormat, unfencedLines } from './format-structure.mjs';
 
 const R_START = /^\*\*R([1-9]\d*)\.\*\*(?=\s|$)/;
-const R_LOOKALIKE = /^\*\*R\S*\*\*/;
 const SECTION = /^(\d+)\. /;
 
 /** The section number whose `##` heading is the last at or before line `no`; 0 before the first. */
@@ -46,7 +45,6 @@ export function parseSpec(bytes) {
     sections,
     sectionAt,
     requirements: requirementsOf(kept, headings, lastNo, sectionAt),
-    lookalikes: kept.filter(line => R_LOOKALIKE.test(line.text) && !R_START.test(line.text)).map(line => ({ no: line.no, text: line.text })),
     paragraphs: paragraphs(lines),
     tables,
     blocks,

@@ -17,6 +17,15 @@ const CASES = [
   ['an_indented_table', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
   ['a_table_without_outer_pipes', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\na | b\n--|--\n1 | 2\n']] }, 'r-ids', /a table outside any requirement paragraph/],
   ['a_table_in_a_block_quote', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\n> | a | b |\n> |---|---|\n> | 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  // C7: requirement ids in any form
+  ['an_id_in_a_list_item', 'olympiad', { spec: [['**R6.** The output', '- **R6.** The output']] }, 'r-ids', /looks like a requirement id/],
+  ['an_indented_id', 'olympiad', { spec: [['**R6.** The output', '  **R6.** The output']] }, 'r-ids', /looks like a requirement id/],
+  ['an_id_in_the_middle_of_a_line', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 and **R3.** the rest']] }, 'r-ids', /looks like a requirement id/],
+  ['a_plain_id_at_the_start_of_a_line', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1\nR3. Another sentence']] }, 'r-ids', /looks like a requirement id/],
+  ['an_id_glued_to_the_paragraph_above', 'olympiad', { spec: [['\n\n**R6.** The output', '\n**R6.** The output']] }, 'r-ids', /does not open a paragraph/],
+  ['a_reference_to_a_requirement_that_does_not_exist', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R99).']] }, 'r-ids', /names R99, and the spec has requirements R1 to R14 only/],
+  ['a_reference_to_R0', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R0).']] }, 'r-ids', /names R0/],
+  ['a_reference_with_a_leading_zero', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R02).']] }, 'r-ids', /names R02/],
 ];
 
 for (const [name, kind, edits, name_, message] of CASES) {
@@ -33,5 +42,10 @@ test('The_phrase_helper_is_available_to_the_batch_cases', () => assert.equal(typ
 
 test('A_table_without_outer_pipes_inside_a_requirement_is_no_finding', async t => {
   const spec = [['| n | output |\n|---|---|\n| 1 | `1` |\n| 2 | `2 1` |', 'n | output\n--|--\n1 | `1`\n2 | `2 1`']];
+  assert.ok(isOk(await check(fixtureRepo(t, 'olympiad', { spec })), 'r-ids'));
+});
+
+test('Plain_references_in_prose_and_the_F_REQ_paragraph_are_no_finding', async t => {
+  const spec = [['**R2.** For n = 1', '**R2.** For n = 1, as R1 says; see R3–R5 and R14. A word like CR3 or R2D2 is no reference.']];
   assert.ok(isOk(await check(fixtureRepo(t, 'olympiad', { spec })), 'r-ids'));
 });
