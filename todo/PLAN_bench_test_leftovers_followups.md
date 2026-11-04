@@ -91,6 +91,10 @@ defect; `research/module_tests.md` updated with the run's numbers; the pull requ
   (4) A folder of the same shape without a valid `.owner`, or with a live owner, is left alone.
 - **Done when:** the seven folders listed in F1 are retired by the fixed sweep (that is the observed GREEN on this host), and a
   full run leaves none.
+- **The layer identity stays as it is (CP2, condition 4, 2026-11-03).** S1 changes nothing in `spikes/lang-bench/lib/exec-layer/` or in
+  any module the layer identity covers: `node spikes/lang-bench/pin-exec-layer.mjs --check` exits 0 on the commit that lands S1. If the fix
+  cannot stay outside it, the probe is re-run and a CP2 addendum is recorded in `spikes/lang-bench/inputs/checkpoints.md` before the first
+  D40 gate (the v2 plan's E1.S8b text names the same boundary).
 
 ### S2 — the exit cleanups remove read-only trees, and say so when they cannot
 

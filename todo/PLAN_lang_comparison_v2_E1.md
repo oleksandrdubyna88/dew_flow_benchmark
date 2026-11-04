@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, E1 stories: the task repository — the runner, the execution layer, FORMAT v2, samples, specs gated and frozen after a pre-freeze execution gate, workspaces, toolchains, caches, process templates
 
-> Status: **plan only, nothing implemented yet, 2026-10-31; rewritten for the parent's epoch 4.** Epic E1 of
+> Status: **Epoch 7 of the parent open 2026-11-04 (re-review closed; D60–D64): E1.S9 and E1.S4 resume.** **The judge's findings J1–J6 of the epoch-7 re-review applied, 2026-11-03 (parent `afc21c2c`, D60, D62, D64), text only:** E1.S9 classes FORMAT per `###` subsection where a `##` section mixes kinds (2.4, 2.5, 3.3, 6.2, 6.3 `daemon-web`; 2.3, 2.6, 3.2, 6.1 `olympiad`) and its check treats the changelog, the preamble and the heading numbers as the parent's D60 says (T-L56's cases named); F-ENV says exactly what the layer refuses, and E1.S8's conformance check refuses the same `env` keys from the layer's lists (T-L58); a freeze rule without its pair blocks the freeze commit, each pair with its owner and milestone (parent D64); E1.S2a's gate record fields named (T-L59). **The owner's decision of the re-review (2026-11-03, `ask_consultants` `40498063`):** E1.S4's Node set takes `typebox` 1.1.x with `@fastify/type-provider-typebox` 6.3.0, and `@sinclair/typebox` is dropped. *Before the findings:* **Revised 2026-11-03 for the parent's epoch-7 re-review** (the parent stopped at change 6.2, found by CP1's F14; parent D60–D64), text only: E1.S9 gets the fifth section class `daemon-web` for FORMAT's sections 4 and 5, B's check on A's frozen classification with a relabel-and-edit refused, a protected-section deletion refused and a `daemon-web` edit permitted (T-L56), the grammar pinned per task (T-L57), CP1's F5–F7 and `F-PROCS` written before its gate and F1–F4 required before it (T-L58); E1.S2a owns CP2's conditions (1)–(3) (T-L59), E1.S8b condition (4), part ii-b CP2's F5; §3 gains the rule that every freeze is shown on real files (parent D64), read at CP4; change 6.1 (Node's medium-buffers at 256 MiB recorded, never asserted) is carried into §1, E1.S8b's probe text and §11. Done before the stop: E1.S8b merged (#153), CP2 recorded (#155), CP1 recorded (the stop commit). The parent is **stopped** until its epoch-7 re-review closes; nothing here starts before epoch 7 opens. Still twelve stories, still one cornerstone; no ledger here. *Before this revision:* **plan only, nothing implemented yet, 2026-10-31; rewritten for the parent's epoch 4.** Epic E1 of
 > [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (§14 step 1), written when the epic started — a stories document is
 > not a plan change (`common.plan-change-control`) and keeps no ledger: its changes are entries in the parent. Its first
 > version (`51a80ba`) found the two changes that stopped epoch 3 (3.1 and 3.2); the epoch-4 re-review judged it `fits` and
@@ -51,7 +51,7 @@ the Node stack table; `leakcheck` clean.
 
 **Done when, per group (parent D44, D45, D51; 2026-11-01).** **A** — the done-when above for 01, 02, 03 and 09:
 `workspace-diff` on those four pairs, their specs gated and frozen under `spec-frozen-A-<yyyymmdd>`, the layer whole with its
-memory view asserted (T-L43 — revised 2026-11-02: parent D55's settings and the object-graph regression asserted, the mixed workload recorded; the fix forward and re-pin of parent D59 before CP2), E1.S8a parts i and ii-a pinned (re-pinned after the abort rule's boundary and flags, parent D56), both stacks' full package sets hashed, the tag ruleset and
+memory view asserted (T-L43 — revised 2026-11-02: parent D55's settings and the object-graph regression asserted, the mixed workload recorded *(and, 2026-11-03, change 6.1: Node's medium-buffers at 256 MiB recorded, never asserted)*; the fix forward and re-pin of parent D59 before CP2), E1.S8a parts i and ii-a pinned (re-pinned after the abort rule's boundary and flags, parent D56), both stacks' full package sets hashed, the tag ruleset and
 `main`'s protection read back. **B** — the six others gated and frozen under `spec-frozen-B-<yyyymmdd>`, part ii-b pinned as
 the second runner manifest (T-L38), A's four re-gated on B's identities (parent D50), A's blobs equal across the two tags
 (T-L39). **C** — E1.S7 whole (templates, CI, the remaining rulesets, run bases bound to the frozen commit, parent D52).
@@ -119,6 +119,14 @@ code comment.** The test-design aid lives at `~/rsd/lang-v2/test-design/PLAN-tra
 - **Red, green, red.** A test written first and watched red **for the real symptom**, then green, then the production line the
   behaviour depends on removed and the test watched red again before it is restored (`common.testing`); both observations in
   the story's summary. A guard against a plausible wrong approach is named for it (`…_would_…_and_that_is_the_point`).
+- **Every freeze shown on real files (parent D64; 2026-11-03).** A story that builds a freeze or immutability rule (the spec
+  freeze, FORMAT's classes, the tags, the runner manifests, the layer identity, the memory policy) shows it with one permitted
+  and one refused change against the real files it governs, before the freeze it guards — a named test, or a recorded dry run
+  where the files exist only at the freeze. CP4 (CP4-B in B) reads every pair in one sitting. T-L56 is FORMAT's pair (E1.S9). *(Judges J3, J4, 2026-11-03:)* a
+  rule without its pair blocks the freeze commit; the parent's D64 names each rule's pair, owner and milestone — the spec
+  freeze (T-L20; E1.S1/E1.S3, E3.S1; CP4), the tags (T-L39, T-L48; E1.S2, E3.S1; CP4-B), the runner manifests (T-L38; part ii-b;
+  before B's first D40 gate), the layer identity (T-L36; E1.S2a, E2.S3; CP4), the memory policy (D55; E1.S8b; CP4), FORMAT's
+  classes (T-L56; E1.S9; before S9's gate, CP4, CP4-B).
 - **Roles (`common.subagent-models`).** Scenarios and briefs here are Opus's; code and tests by a Sonnet coder; review by Opus;
   fixes by Sonnet. The task specs, the samples and FORMAT v2 are the team lead's (Opus, main session, D21); E1.S2's story
   brief is Fable's — two kinds of "spec" (OP-10, now D21's text): Fable writes the story's per-task spec briefs, the team lead
@@ -344,7 +352,7 @@ staged series and kept for their history.
 | E1.S5 | merged (#135) | — | — |
 | E1.S8a | part i merged (#141, `ced49afb`, 2026-11-01; the V2 test of D52 included); **part ii-a merged** (#147, `4f2cf79d`, 2026-11-02): coai plan round and five code rounds passed; the third Opus review SAFE TO MERGE; 1078 of 1078 `spikes/lang-bench` tests on `main`, plain and with `BENCH_REQUIRE_SANDBOX=1`; its contracts for E1.S8b are in `research/module_lang_bench.md`; **fixed forward 2026-11-02 on S8b's branch** (parent D56, D59): the abort rule's evidence boundary at the byte, the flags `abort-below-evidence` and `child-abort-line`, the two flag columns in the result; re-pinned as A's manifest | **part ii-b** — the second runner manifest (D50, T-L38); the abort rule inherited unchanged (parent D59, T-L52) | — |
 | E1.S8b | **merged** (#153, `ae144e1f`, 2026-11-03): 12 coai code rounds `proceed`, the Opus checks of fix batches 9 and 10 SAFE TO MERGE, 1389 of 1389 `spikes/lang-bench` tests plain and with `BENCH_REQUIRE_SANDBOX=1`, the final record `inputs/exec-probe-2026-11-03-3.json` (exit 0); **CP2 recorded 2026-11-03 — passes with conditions ([`inputs/checkpoints.md`](../spikes/lang-bench/inputs/checkpoints.md)): S3 phase A may start; the D40 gates wait for its conditions 1–4 (the gate harness passes `data: true` and the stack and records the identity, the policy and the stack; the runner manifest is checked before the first gate; an exit 3 is re-run, a `fork` flag never fails a case; the leftovers follow-up S1 stays outside the layer identity)**. A leftover found after the merge — the probe's sentinel folder under the home is not always removed — is fixed in [PLAN_bench_test_leftovers_followups.md](PLAN_bench_test_leftovers_followups.md) S1, with no E1 story changed. *Before the merge:* **whole**, the netns holder included; CP2; the memory view asserted (T-L43). **Built on `feat/lang-v2-e1-s8b` (pushed; the layer, the delegated scope, the overlay view, fix batch 1, the probe and the OP-K experiment); fixed forward 2026-11-02 to the policy at 90 % for both stacks (parent D55), re-pinned, the probe re-run and recorded as a new dated file (parent D59); CP2 after it** | — (the same identity) | — |
-| E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) | — |
+| E1.S9, E1.S8 | FORMAT v2 with its sections classed, gated; the conformance check *(2026-11-03: five classes, sections 4 and 5 `daemon-web`; CP1's F1–F7 and `F-PROCS` before the gate; T-L56, T-L57's extractor half and T-L58 green — parent D60–D63)* | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) *(2026-11-03: a `daemon`, `web` or `daemon-web` section, checked against A's frozen classification (T-L56); A's four keep A's `GRAMMAR.md` (T-L57))* | — |
 | E1.S4 | the full sets of both stacks, web packages included | — | — |
 | E1.S3 | phase A; phase B for the four | phase B for the six | — |
 | E1.S6, E1.S2, E1.S2a | 01, 02, 03, 09; freeze A | the six; A's four re-gated on B's identities (D50); freeze B | — |
@@ -387,7 +395,11 @@ staged series and kept for their history.
 *(2026-11-01, the staged series:)* CP1 and CP2 run once, in group A. **CP3 and CP4 are group A's** — CP3 after task 01, CP4
 before `spec-frozen-A-…`. Group B adds **CP3-B** (after the first of its six tasks, the first daemon or web chain — a new
 chain shape, so it gets its own retrospective) and **CP4-B** (before `spec-frozen-B-…`, also reading the re-gated A records
-and T-L38/T-L39). Each is recorded in `inputs/checkpoints.md` before what it blocks.
+and T-L38/T-L39). Each is recorded in `inputs/checkpoints.md` before what it blocks. *(2026-11-03, parent D64:)* CP4 and
+CP4-B also read each freeze rule's permitted and refused pair (§3); a rule without its pair blocks the freeze commit. *(2026-11-03,
+parent D62, D63:)* CP1's conditions (1)–(3) are E1.S9's before its gate round (F1–F5 and F7 in the text, F6 decided, F14 decided as
+`daemon-web`); F8 and F9 before A's freeze (CP4 reads them); F10–F13 in part ii-b or E1.S8. CP2's conditions (1)–(3) are E1.S2a's
+and (4) E1.S8b's, before the first D40 gate; CP2's F5 is part ii-b's, before B's first D40 gate.
 
 ---
 
@@ -678,7 +690,10 @@ twelve; its size needs two coders and two reviews.
   V3, V5, V7; V12's connection-buffer bound (`overflow <conn>`). Tests (3), (4), (7). It makes **the second runner manifest**:
   T-L38 (an AST and hash comparison of the olympiad modules, and identical verdicts and JSON results on the olympiad fixtures,
   under both manifests) must be green before B's first D40 gate; a change it needs in an olympiad module is an instrument
-  amendment for group A (parent §6.1's group contract rule), never folded in silently.
+  amendment for group A (parent §6.1's group contract rule), never folded in silently. *(2026-11-03, parent D63 (5) — CP2's F5:)*
+  T-L31's runner half — the `signal TERM` step to the program's host pid and its per-stack TERM test (the guard at
+  `test/exec-layer-runner.test.mjs:161` turned into the test) — is built here and green **before B's first D40 gate**; group A's
+  half (the `exec` and TERM to the host pid) held at CP2.
 
 **Part ii's process rules (2026-11-01, consult B).**
 - **Whom to signal (B1).** With `--cgroup-of`, `signal TERM` goes to **the program's pid**: the one pid in the scope's
@@ -981,6 +996,12 @@ item 1 included — is built and probed before A, and CP2 runs once: the olympia
 loopback-only namespace gives it none without a second code path; a holder added in B would change the layer identity and
 re-date every A gate and limit (parent §6.1). The identity then holds through B and C.
 
+**CP2's condition (4) is this story's (2026-11-03, parent D63).** This story keeps the layer identity. The test-leftovers
+follow-up S1 (`todo/PLAN_bench_test_leftovers_followups.md`) fixes the probe's sentinel cleanup and may not change a file under
+`lib/exec-layer/` or any file the identity covers. On the commit that lands S1, `node spikes/lang-bench/pin-exec-layer.mjs --check`
+must exit 0 **before the first D40 gate**; if it does not, the probe is re-run through the final prefix (a new dated record, T-L53),
+the layer is re-pinned and a CP2 addendum is recorded in `inputs/checkpoints.md` before any gate runs.
+
 **The memory view, asserted (coai risk `19ae7208`; parent D51, T-L43).** Probe line (d) above *printed* what each runtime
 believes; it now **asserts**, and it runs **through the final execution prefix** (the delegated scope, `nsenter`, the v2 box)
 at `MemoryMax` **256 MiB and 512 MiB**. The box's binds (`--tmpfs /` base) mount no `/sys/fs/cgroup`, and .NET finds its
@@ -1026,7 +1047,10 @@ epoch 6 opens, on this branch before its merge:
   layer's data-run refusal (`exit 3`, a policy other than the pinned one) reads the same file.
 - **The probe (T-L43, revised).** The churn and over-limit fixtures stay; the **object-graph regression** (live ordinary objects at
   70 % of L plus 1 GiB churn) is asserted `pass` in both stacks at both limits; the **mixed workload** (objects 45 % + typed arrays
-  35 % + churn) is run and **recorded, never asserted** — its Node result is the property parent T21 names. The probe writes a **new
+  35 % + churn) is run and **recorded, never asserted** — its Node result is the property parent T21 names. *(2026-11-03, parent
+  change 6.1:)* so is **Node's medium-buffers at 256 MiB** — a kernel `oom_kill` at peak = L under every setting measured (typed
+  arrays outside V8's heap, T21): run and recorded, never asserted (`lib/exec-probe/memory.mjs:45-53`, `workloadAsserted`); every
+  other cell stays asserted. The probe writes a **new
   dated file** `inputs/exec-probe-<date>[-<n>].json` (a second probe on one day takes `-2`); it never overwrites, and the two records
   of 2026-11-02 stay as they are, with their layer identities.
 - **The re-pin.** `pin-exec-layer.mjs` writes the new identity after the probe passes; `pin-runner.mjs` after E1.S8a's fix forward
@@ -1052,17 +1076,22 @@ carries, and its grammar sections handed to the agent as `runner/GRAMMAR.md`.
 
 | Repository | Path | Change |
 |---|---|---|
-| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap; **F-MEMORY, revised for parent D55 and D56 (2026-11-02):** the sentence names both causes as "the program's memory reaches the bound" — a process of the program's control group killed by the system at the bound, or the program's own runtime stopping it for lack of memory — and tells the author, in stack-neutral words, that the test machine caps each runtime's own heap at 90 % of the memory bound by that runtime's own setting, — and nothing more: no figure for what a program may hold (the registered bound and the 2 × rule already say it; judge J3: an object graph peaks at 91 % of L under A at 90 %, typed arrays are outside V8's heap, and D57 takes half the floor as a reference's maximum), no stack, runtime, flag name or threshold is named in FORMAT — the text is agent-visible; the class line of the section stays `common`; the scenario and test below guard it |
-| task | `runner/GRAMMAR.md` | generated: v2's sections 3–5 verbatim under a two-line header naming the format version and FORMAT's sha256 |
+| task | `todo/tasks/FORMAT.md` | v2 (branch `docs/format-v2`): `Format version: 2`; the delta V1–V12 of E1.S8a; an F-LOAD fixed sentence with slots for a load scenario's size and duration; `{ref}` lists of any length; a table belongs to the R paragraph it follows; the T and G series defaults (10 s, 5 s), the override with a reason and where the runner reads them (V7); F-BYTES-W against F-JSON (V10); a **neutral daemon example** over a framed TCP protocol that names no real product (D39); the reading block removed from the spec obligations (D37); the base-environment sentence following D15; §1.5's credit sentence without `NOTES.md` (OP-7, now the parent's S9 text); sections 7–9 moved out; a changelog entry per gap; **F-MEMORY, revised for parent D55 and D56 (2026-11-02):** the sentence names both causes as "the program's memory reaches the bound" — a process of the program's control group killed by the system at the bound, or the program's own runtime stopping it for lack of memory — and tells the author, in stack-neutral words, that the test machine caps each runtime's own heap at 90 % of the memory bound by that runtime's own setting, — and nothing more: no figure for what a program may hold (the registered bound and the 2 × rule already say it; judge J3: an object graph peaks at 91 % of L under A at 90 %, typed arrays are outside V8's heap, and D57 takes half the floor as a reference's maximum), no stack, runtime, flag name or threshold is named in FORMAT — the text is agent-visible; the class line of the section stays `common`; the scenario and test below guard it; **revised 2026-11-03 for parent D60–D63:** sections 4 and 5 classed `daemon-web` and the class sentence of D60 (§ *Section classes* below); **F-STDERR** with the content (never compared) and the resource stop (more than 256 MiB of standard error stops the test and fails it) apart, and 4.6 naming the same bound (CP1 F5); **F-ENV and 4.2** saying that `TZ` is `UTC` and that an `env` line may add a variable or replace `TZ` and may not set `LANG`, `LC_ALL`, `HOME`, `TMPDIR`, `PATH` or any documented runtime setting of either stack, in any spelling of its case (CP1 F7) *(judge J2, 2026-11-03 — superseded in part: narrowed to what `boxEnv` refuses: an `env` line may add a variable or replace `TZ`, and may not set any other variable of the base environment, in any spelling of its case, nor the per-case setting by which the test machine caps a runtime's heap — no stack key named; the layer is not changed; E1.S8's check refuses the same keys)*; **`Format version: 2`**, with 2.1 and 2.2 as changelog lines (CP1 F6); the new fixed sentence **`F-PROCS`** (every kind, in the same R as F-MEMORY: at most 512 processes and threads for the program and every process it starts; CP2 F6); CP1's F1–F4 as text fixes (§ *CP1's findings* below) |
+| task | `runner/GRAMMAR.md` | generated: v2's sections 3–5 verbatim under a two-line header naming the format version and FORMAT's sha256 *(2026-11-03, parent D61: so every FORMAT edit changes it, and the grammar is pinned per task — a workspace carries the `GRAMMAR.md` of the FORMAT its group froze it under; A's four keep A's in B, B's six get B's)* |
 | bench | `spikes/lang-bench/inputs/FORMAT-MAINTENANCE.md` | new — v1's §7–§9 for the maintainers, with the plan ids they need |
 | bench | `spikes/lang-bench/tools/grammar-extract.mjs`, `test/grammar-extract.test.mjs` | new |
-| bench | `spikes/lang-bench/inputs/specs.json`, `inputs/gates/FORMAT-v2.md` | `format: { version: 2, sha256, gate }`, `grammar: { sha256 }`; the gate's verdict, reviewer count, every finding and decision, the consultant's answer *(2026-11-01: written to `inputs/specs.d/format.json` and assembled into `inputs/specs.json`, §3; `FORMAT-v2.md` passes `push-check.mjs --self` before the bench push, consult C6b)* |
+| bench | `spikes/lang-bench/tools/format-classes.mjs`, `test/format-classes.test.mjs`, `test/format-bounds.test.mjs` | new (2026-11-03, parent D60, D62, D63): the class check against A's frozen FORMAT (T-L56) and the test that FORMAT's bounds equal the code's (T-L58) |
+| bench | `spikes/lang-bench/inputs/specs.json`, `inputs/gates/FORMAT-v2.md` | `format: { version: 2, sha256, gate }`, `grammar: { sha256 }`; the gate's verdict, reviewer count, every finding and decision, the consultant's answer *(2026-11-01: written to `inputs/specs.d/format.json` and assembled into `inputs/specs.json`, §3; `FORMAT-v2.md` passes `push-check.mjs --self` before the bench push, consult C6b)* *(2026-11-03, parent D61: per group `format: { A: { version, sha256, gate, grammarSha256, tasks }, B: … }`)* |
 
 **Scenarios.** *Given* v2's three examples as files, *then* the runner gives each example's stated verdict against its toy and
 each stated failure against its broken toy. *Given* v2, *then* no plan id matches (`E<n>.S<n>`, `D<n>`, `T-L<n>`, `G-<n>`);
 FORMAT's own `F-…` ids stay. *Given* v2 (2026-11-02, parent D56), *then* no stack, runtime, flag or threshold word matches — `.NET`, `C#`, `Node`, `V8`, `TypeScript`, `DOTNET_`, `NODE_OPTIONS`, `max-old-space`, `GCHeapHardLimit`, `50 %` — **failure case:** a planted `GCHeapHardLimit` in F-MEMORY fails the check. *Given* the daemon example, *then* no D18 needle hits — **failure case:** a planted product name
 fails the check. *Given* a one-line edit to v2's §4, *then* the stored `GRAMMAR.md` no longer matches and S3's check fails.
 *Given* a `revise` verdict that changes a grammar row, *then* the runner changes in the same branch before the next round.
+*(2026-11-03, parent D62, D63:)* *Given* v2, *then* F-STDERR's and 4.6's figure is 256 MiB and equals the runner's
+`STDERR_KILL_BYTES`, F-ENV's `TZ` is `UTC` as in the layer's base, every key F-ENV names as not settable is refused by the layer
+while `TZ` is accepted, and `F-PROCS`'s figure equals `pids.max` in `scope-entry.sh` — **failure case:** a planted 128 MiB in
+F-STDERR fails the check. *Given* v2's header, *then* it reads `Format version: 2`.
 
 **Acceptance (parent S9).** Every gap of the parent's list has a v2 section or fixed sentence, named in the changelog; the three
 examples and the three pilot specs' samples run through the runner against stub programs with the expected verdicts; no plan
@@ -1074,6 +1103,8 @@ alone and every open spec branch is merged up to it and re-conformed (§3, consu
 **Test plan (red, green, red).** `GRAMMAR_md_is_the_verbatim_sections_of_FORMAT`; `FORMAT_carries_no_plan_identifier` — red on
 v1 (its §7), green on v2, red with one id planted; `FORMAT_names_no_stack_flag_or_threshold` (2026-11-02, parent D56) — green on v2,
 red with `GCHeapHardLimit` planted in F-MEMORY, red with `50 %` planted.
+*(2026-11-03, parent D62, D63, T-L58:)* `FORMAT_bounds_equal_the_runner_and_the_layer` — green on v2, red with a different figure
+planted in F-STDERR, in F-ENV's `TZ` or in `F-PROCS`, red with `scope-entry.sh`'s `pids.max` changed in a fixture copy.
 
 **Docs.** `FORMAT.md`; the task repository's `todo/README.md`; `research/module_lang_bench.md`.
 
@@ -1085,7 +1116,11 @@ read a spec and a sample unambiguously; implement the grammar with a standard li
 tasks, the tests); `mcp__coai__resolve` every finding; one `mcp__coai__consult` ("is any rule ambiguous for a runner, a spec
 author or an agent reading a sample?"). **Extractor:** `grammar-extract.mjs <FORMAT.md> <out>` copies from the `## 3.` heading
 to the line before `## 6.`, prefixes `# Scenario and sample grammar (from FORMAT.md v<version>, sha256 <hex>)`, LF line ends;
-refuses when a heading is missing.
+refuses when a heading is missing. *(2026-11-03, parent D61:)* the header names FORMAT's whole-file sha, so the output changes
+with every FORMAT edit; that is why the grammar is pinned per task, never shared across groups: the extractor runs once per
+group's FORMAT, `format.json` records each group's `grammarSha256` and its tasks, and A's four workspaces keep A's output
+(E1.S3). *Test:* `A_replicated_A_task_keeps_A_grammar_bytes_while_B_tasks_get_B_grammar` (T-L57) — green, red when the B
+workspace build regenerates A's four, red when `format.json` names one grammar for both groups.
 
 **Section classes (parent D45; 2026-11-01).** Before the gate, every section of v2 gets one class line — `common`,
 `olympiad`, `daemon` or `web` — in a table at the top of FORMAT (a section that serves two kinds is `common`). After A's freeze
@@ -1095,6 +1130,57 @@ recorded **per group** in `inputs/specs.d/format.json` (`format: { A: { version,
 sha with it. *Scenarios:* *given* v2, *then* every `##` section has exactly one class; *given* a B amendment, *then* the bytes of
 every `common` and `olympiad` section equal A's. *Tests:* `Every_FORMAT_section_has_exactly_one_class`;
 `A_B_amendment_that_touches_an_olympiad_section_is_refused_and_that_is_the_point` (T-L39's FORMAT half).
+
+*Superseded in part (2026-11-03, parent D60 — change 6.2, CP1's F14):* under the rule above every section of v2.2 was `common`
+(sections 4 and 5 serve daemon and web, two kinds), so after A's freeze the amendment path applied to nothing. **The classes are
+five:** `common` (a section shared with olympiad tasks, or global), `olympiad`, `daemon`, `web` and **`daemon-web`** (serves daemon
+and web tasks and no olympiad task). "A section that serves two kinds is `common`" reads: a section that serves olympiad tasks and
+another kind, or every kind, is `common`. In v2, **sections 4 and 5 are `daemon-web`**; sections 1, 2, 3, 6 and 7 stay `common`.
+A `daemon`, `web` or `daemon-web` section may be amended before B's freeze, as above. **B's check reads A's frozen
+classification:** `tools/format-classes.mjs --frozen <FORMAT at A's freeze commit> --candidate <B's FORMAT>` takes the protected
+set — the sections A's frozen class table marks `common` or `olympiad` — from the frozen file only, matches sections by their
+`##` heading, and refuses: a protected section whose bytes differ; a protected section whose class row in B differs (a relabel);
+a protected section missing in B (a deletion); a section B adds as `common` or `olympiad`; a changelog (section 7) in which A's
+lines are not a byte-equal prefix of B's. The header rows (`Format version`, `Gate verdict`, `Freeze tag`) are each group's own
+and are not compared. *Scenarios (on A's real FORMAT, before A's freeze — parent D64):* *given* B's FORMAT with one line of
+section 4 edited and one changelog line added, *then* it passes; *given* B's FORMAT whose class table relabels section 3
+`daemon-web` and whose section 3 has one line edited, *then* it is refused naming section 3 and A's class `common`; *given* B's
+FORMAT without section 1, *then* it is refused naming section 1. *Tests (they replace the two above, which stay as history):*
+`Every_FORMAT_section_has_exactly_one_of_the_five_classes` (red with a section of no class or of two, red with an unknown
+class word); `A_section_relabelled_in_B_and_edited_is_refused_because_the_check_reads_A_frozen_classes_and_that_is_the_point`
+(red when the check reads B's class table); `A_protected_section_deleted_in_B_is_refused`;
+`A_daemon_web_section_edited_in_B_passes` (beside the refusals, so the check is shown to permit what D45 permits) — together
+T-L56, and T-L39's FORMAT half.
+
+*Superseded in part (judges J1 and J5, 2026-11-03; parent D60):* one class per `##` section left daemon-and-web text inside
+`common` sections (2.4 and 2.5, the daemon and web sentences and the timing contract; 3.3; 6.2 and 6.3), so B could not amend
+them — F14 one level down. **The class is given per `###` subsection wherever a `##` section mixes kinds**; a `##` section that
+serves one class keeps one class row. In v2: `common` — 1 (1.1–1.5), 2.1, 2.2, 3.1, 3.4; `olympiad` — 2.3, 2.6, 3.2, 6.1;
+`daemon-web` — 2.4, 2.5, 3.3, 6.2, 6.3, and 4 and 5 whole; 7 (the changelog) `common`, append-only. The class table at the top of
+FORMAT has one row per classed heading. `format-classes.mjs` matches **classed headings by their whole heading line, number and
+text**, against A's frozen classification, and **the numbers of A's headings may not change** — protected text cites FORMAT's own
+numbers (2.1's table: "the closed list of 2.6"; 4.2: "bounds in 4.6"). It treats three places apart: the changelog (A's lines a
+byte-equal prefix of B's); the preamble before `## 1.` (byte-equal to A's except the header rows `Format version`, `Gate
+verdict` and `Freeze tag`, and except class rows B appends after A's rows for subsections it adds); and additions — B adds no
+`##` section, and adds a `###` only inside a `daemon-web` section or at the end of a mixed `##` section, with the next free
+number, classed `daemon`, `web` or `daemon-web`; a section inserted before `## 7.` renumbers an A heading and is refused. 2.1's table of fixed sentences (`common`) is checked row by row: a row whose sentence stands in a
+`daemon-web` subsection may change with that sentence before B's freeze; every other row is byte-equal to A's (parent D60 (d)).
+*Tests added (T-L56, owner this story, green on the draft before the gate round, on A's real FORMAT at CP4 and at B's tag at
+CP4-B):* `A_daemon_web_subsection_edited_in_2_5_passes`; `An_olympiad_subsection_edited_in_2_3_is_refused`;
+`A_common_section_added_in_B_is_refused`; `A_changed_A_changelog_line_is_refused`; `The_header_rows_may_differ_between_A_and_B`;
+`A_class_row_appended_for_a_new_B_subsection_passes`; `A_B_section_inserted_before_section_7_is_refused`; `A_2_1_row_of_a_daemon_web_sentence_changed_with_its_sentence_passes`; `A_2_1_row_of_an_olympiad_sentence_changed_is_refused`; `A_B_subsection_inserted_inside_a_protected_mixed_section_is_refused` (plan round `fae12fd9`, 2026-11-04, finding 2). Before A's freeze exists the reference is a fixture — the draft committed as a stand-in A in the test's temporary repository; at CP4 it is A's freeze candidate, at CP4-B `spec-frozen-A-…` (plan round `fae12fd9`, 2026-11-04, finding 3).
+
+**CP1's findings, carried here (2026-11-03, parent D62; `spikes/lang-bench/inputs/checkpoints.md`, CP1).** **Before S9's gate
+round, as text fixes that make FORMAT say what the pinned runner does (not plan changes; the runner and its pin do not change;
+each with a changelog line):** F1 — 5.5 states that a check relating a binding made inside an unordered group to anything outside
+it is refused (`runner/rs_arrival.py:68-71`); F2 — `header <str> <str>` says that the name is exactly one plain string, as the runner
+requires, so the line is not ambiguous when a string expression holds several strings (`runner/rs_lex.py:388-393`); F3 — 6.3's stated failure names the first difference the
+runner reports, in its order status, headers, body (`runner/rs_match.py:136-143`); F4 — 5.6's memory wording names both causes
+of F-MEMORY, so a runtime's own stop below the bound is `memory limit` there too, as the runner judges it
+(`runner/rs_olympiad.py:147-153`). **Contract-level, settled by the parent (D62, D63), written in the Files row
+above:** F5 (F-STDERR, 4.6), F6 (`Format version: 2`), F7 (F-ENV, 4.2), and CP2's F6 (`F-PROCS`). **Before A's freeze:** F8 (the
+runner's bounds and structure rules stated in 4.6 and 4.4) and F9 (the two grammar examples in 4.1 and 5.6 reframed so they do
+not use a real protocol's framing that a group B task uses). **In part ii-b or E1.S8:** F10–F13.
 
 ---
 
@@ -1116,7 +1202,12 @@ verbatim after whitespace collapse, slots filled with allowed values; F-INVALID 
 **T and G stated and equal to every visible scenario's `start … within` and `wait-exit within`** (V7); the samples — exactly
 `s01…s<k>`, the olympiad table equal to the files with `⏎` read as LF, each daemon and web pair parsed **through
 `run_samples.py --parse-only`, never a second parser**; no needle (`--needles <file>` outside git, plus S1's patterns); `⏎`
-only in section 6; no reading block.
+only in section 6; no reading block. *(Judge J2, 2026-11-03; parent D62, T-L58:)* **the `env` lines of every daemon and web
+sample**: a key the layer would refuse — a variable of the base environment other than `TZ`, in any spelling of its case, or a
+heap-limit key — fails the check, read from the layer's own lists (`ALLOW_LIST`, `CASE_KEYS` imported from
+`lib/exec-layer/env.mjs`, never retyped); `TZ` and keys outside the lists pass. *Test:*
+`A_sample_env_line_the_layer_refuses_fails_conformance_and_a_retyped_list_would_miss_a_new_key` — red with a retyped list,
+green importing the layer's lists.
 
 **Scenarios.** *Given* a conforming synthetic spec of each kind, *then* exit 0, one `ok` per check. *Given* F-STOP saying 5 s
 and a sample waiting `within 4s`, *then* `T/G: sample s02 waits 4 s, the spec says 5 s`. *Given* a table not preceded by an R
@@ -1191,7 +1282,12 @@ it; a build in a box with no registry restores exactly that set and fails naming
 `Microsoft.Extensions.Hosting` 10.0.x, `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.x, `xunit.v3` and the test SDK
 pieces; Node: `fastify@5.12.7`, `@fastify/jwt@10.2.6`, `@fastify/type-provider-typebox@6.3.0`, `@sinclair/typebox@0.34.52`, pino
 as Fastify resolves it, `@types/node` 26.x, `typescript@6.0.<p>` (S5's pin), `typescript-eslint@8.72.x` with its type-aware
-rules, and the lint packages S7's template needs — each with a `purpose` field; `inputs/cache-snapshots-lang.json`,
+rules, and the lint packages S7's template needs — each with a `purpose` field *(superseded in part 2026-11-03 by the owner's
+decision of the parent's epoch-7 re-review, after `ask_consultants` `40498063`, the consultants split 1–1: `typebox@1.1.<p>` in
+place of `@sinclair/typebox@0.34.52` — 6.3.0's peer dependency is `typebox ^1.1.14`, and 5.2.0 is the last version on
+`@sinclair/typebox`; the exact patch is resolved once at the snapshot build and pinned in the recipe, since `^1.1.14` alone
+would take 1.4.3; its `purpose` text, which `PACKAGES.md` shows, says the import name is `typebox`, replacing
+`@sinclair/typebox`)*; `inputs/cache-snapshots-lang.json`,
 `make-snapshots.mjs` (with `--prune-superseded`, §8), `lib/packages-md.mjs`, `test/{cache-lang,packages-md}.test.mjs`. Private area:
 `~/rsd/lang-v2/caches/<stack>-<treeSha256>/`.
 
@@ -1272,7 +1368,9 @@ bin/Release/net10.0/App.dll`. Node: `build.sh` = `npm ci --offline` and `npx --o
 repository, never into a checkout someone works in.
 
 **Per group (2026-11-01).** Phase A once, in group A; phase B per group — the four pairs after A's freeze, the six after B's.
-The workspaces of A's four are not regenerated in B: their files and hashes stay those of A's tag (T-L39).
+The workspaces of A's four are not regenerated in B: their files and hashes stay those of A's tag (T-L39). *(2026-11-03, parent
+D61:)* so A's four keep A's `runner/GRAMMAR.md` byte for byte, and B's six carry B's (T-L57); the build of B's workspaces refuses to
+write into A's four.
 
 ---
 
@@ -1519,6 +1617,24 @@ the team lead's ruling at the second full reading, finding 1:)* a re-gated or re
 instrument finding if a reference fails under A's limit**. B's replication runs under A's registered limits, unchanged; the
 re-run is a check only. Material of the exploratory pilots reaches a draft
 reference only through this chain (parent D44). *Test:* `An_A_record_is_valid_for_A_and_stale_for_B`.
+
+**CP2's conditions (1)–(3) are this tool's (2026-11-03, parent D63; `spikes/lang-bench/inputs/checkpoints.md`, CP2) — before the
+first D40 gate.** (1) Every gate run calls the layer with `data: true` and the reference's stack (`csharp` or `node`), so the layer
+checks its identity and the memory policy and derives the heap keys (`lib/exec-layer/run.mjs:191-198`); the gate record adds
+`treeSha256`, `memoryPolicy` and `stack` beside the runner's JSON. (2) Before the first case, the tool compares the runner tree it
+will use with the pin (`inputs/specs.d/runner.json`, the comparison of `pin-runner.mjs --check`) and refuses on any difference,
+whatever the version string says; the record's `runnerManifest` is that checked hash. The check is in the tool, **not in
+`runCases`**: a change there would change the layer identity after CP2. (3) An exit 3 (the netns holder or the launch) is re-run,
+at most twice (then the gate run ends with exit 3 and records no verdict: the gate record says `verdict: none`, `reason: environment`, with the three exit-3 lines and their stderr, so a reader tells an environment stop from a spec failure — plan round `fae12fd9`, 2026-11-04, finding 5), and each such attempt is kept in the record as
+`environment`, never as `fail` or `pass`; a `fork:` flag line alone
+never fails a case (the runner's `_judge` reads no fork check, `runner/rs_olympiad.py:170-176`; the flag is a report line, `runner/rs_report.py:214-215`):
+the case's verdict is the runner's. *Tests
+(T-L59):* `A_gate_run_without_data_or_a_stack_is_refused_before_any_case`;
+`A_runner_changed_without_a_version_bump_is_refused_before_the_first_case_and_that_is_the_point` (red when the tool trusts the
+version string); `A_gate_exit_3_is_re_run_and_never_counted_as_a_verdict`; `A_fork_flag_alone_never_fails_a_case`.
+*(Judge J6, 2026-11-03:)* the gate record per run adds the fields `treeSha256`, `memoryPolicy`, `stack`, `runnerManifest` (the
+checked hash) and `attempts: [{ exit, class }]` (an exit 3 as `class: environment`) to the record of *Added 2026-11-01*; the
+freeze refuses a record that lacks one. *Test:* `A_gate_record_without_its_CP2_fields_blocks_the_freeze`.
 
 ---
 
@@ -1779,7 +1895,7 @@ immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted th
       recorded; B8's probe line recorded for D15's decision.
 - [ ] *(Added 2026-11-01 — per group, the parent's D44–D53.)* **Group A:** 01, 02, 03 and 09 gated and frozen under
       `spec-frozen-A-<yyyymmdd>`, their hashes, R-ids, T and G in `inputs/specs.json` under group A; E1.S8a parts i and
-      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it *(revised 2026-11-02: T-L43 asserts parent D55's settings and the object-graph regression and records the mixed workload; the fix forward of parent D59 — both stacks' keys at 90 %, the abort rule's boundary and flags — and both re-pins before CP2; T-L50 green and `rs_abort.py` named in T-L38's module set; the new probe record committed; the records of 2026-11-02 unchanged; T-L52 is group B's — judge J1)*;
+      ii-a pinned as A's runner manifest; E1.S8b whole, CP2 recorded, T-L43 asserted at 256 and 512 MiB and OP-K decided on it *(revised 2026-11-02: T-L43 asserts parent D55's settings and the object-graph regression and records the mixed workload — and, 2026-11-03 (change 6.1), Node's medium-buffers at 256 MiB, recorded, never asserted; the fix forward of parent D59 — both stacks' keys at 90 %, the abort rule's boundary and flags — and both re-pins before CP2; T-L50 green and `rs_abort.py` named in T-L38's module set; the new probe record committed; the records of 2026-11-02 unchanged; T-L52 is group B's — judge J1)*;
       FORMAT v2's sections classed; both stacks' full package sets hashed; the tag ruleset and `main`'s protection read back
       before A's tag; CP1–CP4 recorded; the fixes forward on E1.S1 (exact exemptions, T-L47) and E1.S8a (test (1b), T-L44)
       merged with their branches.
@@ -1789,6 +1905,12 @@ immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted th
       recorded.
 - [ ] **Group C:** E1.S7 whole, the required checks added to `main`'s protection and read back, the bound run base
       (T-L46), OP-J answered before the first run base.
+- [ ] *(Added 2026-11-03, parent D60–D64.)* **Group A:** FORMAT's sections 4 and 5 classed `daemon-web` before S9's gate round;
+      CP1's F1–F7 and `F-PROCS` in the gated text, `Format version: 2`; T-L56 shown on A's real FORMAT and T-L58 green before the
+      gate; CP2's conditions (1)–(3) built into the pre-freeze tool (T-L59) and (4) checked by `pin-exec-layer.mjs --check` before
+      the first D40 gate; CP1's F8 and F9 in FORMAT before A's freeze; every freeze rule's permitted and refused pair read at CP4
+      (§3). **Group B:** T-L56 green at B's tag against A's frozen FORMAT; A's four on A's `GRAMMAR.md` (T-L57); T-L31's runner
+      step green before B's first D40 gate; CP1's F10–F13 closed in part ii-b or E1.S8; CP4-B read B's pairs.
 
 ## 12. Parent changes this revision would need (not applied)
 
