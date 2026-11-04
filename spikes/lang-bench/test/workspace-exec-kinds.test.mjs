@@ -171,6 +171,32 @@ test('A_warning_does_not_fail_the_csharp_build_but_a_nullable_error_does', TIMEO
   assert.match(outputOf(nullable), /CS8600/);
 });
 
+test('A_nullable_error_fails_bash_build_sh_even_after_a_plain_build_compiled_the_same_sources', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  withProgram(w, 'string s = null;\nConsole.Out.Write(s);\n');
+  const plain = await inBox(w, 'csharp', ['dotnet', 'build', 'App.csproj', '-c', 'Release', '-m:4']);
+  assert.equal(plain.code, 0, `a plain build compiles the sources with only a warning: ${outputOf(plain).slice(-1500)}`);
+  assert.match(outputOf(plain), /CS8600/);
+  const scripted = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(scripted.code, 0, 'the compile is not skipped as up to date: the agent sees the same result as a clean copy');
+  assert.match(outputOf(scripted), /CS8600/);
+});
+
+test('A_clean_program_builds_twice_and_dotnet_test_between_two_builds_still_works', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  mkdirSync(path.join(w, 'tests'));
+  writeFileSync(path.join(w, 'tests', 'Tests.csproj'), `<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>\n  <ItemGroup><PackageReference Include="xunit.v3" Version="${snapshotRecord().csharp.resolved.XUNIT}" /></ItemGroup>\n</Project>\n`);
+  writeFileSync(path.join(w, 'tests', 'UnitTest1.cs'), 'using Xunit;\npublic class UnitTest1 { [Fact] public void Passes() => Assert.True(true); }\n');
+  const dll = path.join(w, 'bin', 'Release', 'net10.0', 'App.dll');
+  for (const step of ['first build', 'dotnet test', 'second build']) {
+    const ran = await inBox(w, 'csharp', step === 'dotnet test' ? ['dotnet', 'test', '--project', 'tests/Tests.csproj'] : ['bash', 'build.sh']);
+    assert.equal(ran.code, 0, `${step}: ${outputOf(ran).slice(-1500)}`);
+    assert.ok(existsSync(dll), `${step}: App.dll is present`);
+  }
+});
+
 // The command line forces the policy as global properties; a project file cannot override those. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
 // line (`TreatWarningsAsErrors` and `WarningsAsErrors` only) two overrides were stopped and four were not; with `Nullable`, `WarningsNotAsErrors`, `WarningLevel` and `NoWarn` forced as well, all six fail with CS8600.
 // What a project file cannot be stopped from doing with these properties is left to the scorer (E3): `#pragma`, `.editorconfig`, `.globalconfig`, new props or targets files.
