@@ -1,0 +1,9 @@
+{
+  "A": {
+    "version": 2,
+    "sha256": "6a5261079cb92772c49633fa79fae48963b87524ef5458c87e47292d889f81b3",
+    "gate": null,
+    "grammarSha256": "4baba3d1b915a93a0618d0362e9eba71a11e168f37a04836c087ea98ce38f3cb",
+    "tasks": ["01", "02", "03", "09"]
+  }
+}
