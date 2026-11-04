@@ -2,7 +2,7 @@
 // (lib/exec-layer/env.mjs: ALLOW_LIST, CASE_KEYS), never typed again here or in the checker.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { refusedEnvKey } from '../lib/conformance-check-samples.mjs';
+import { envFindings, refusedEnvKey } from '../lib/conformance-check-samples.mjs';
 import { ALLOW_LIST, CASE_KEYS } from '../lib/exec-layer/env.mjs';
 import { check, failsOf, fixtureRepo, isOk } from './support/conformance-fixtures.mjs';
 
@@ -15,6 +15,11 @@ test('A_sample_env_line_the_layer_refuses_fails_conformance_and_a_retyped_list_w
   const later = [...ALLOW_LIST, 'NEW_BASE_KEY'];
   assert.equal(refusedEnvKey('NEW_BASE_KEY', { allowList: retyped }), false, 'a retyped list misses the new key');
   assert.equal(refusedEnvKey('NEW_BASE_KEY', { allowList: later }), true);
+  // every key of the layer's lists, as it is now, fails the check through the same function the command uses
+  const keys = [...ALLOW_LIST, ...CASE_KEYS].filter(key => key !== 'TZ');
+  const script = Buffer.from(`scenario 2\n${keys.map(key => `env ${key} "1"`).join('\n')}\n`);
+  const found = envFindings({ kind: 'daemon', scenarios: new Map([['s01', script]]) });
+  assert.equal(found.length, keys.length, `one finding per key of the layer's lists:\n${found.join('\n')}`);
   const fixture = withEnv(t, 'env NEW_BASE_KEY "1"');
   assert.ok(isOk(await check(fixture), 'sample-env'), 'with the layer as it is today the key is outside the lists');
   const result = await check(fixture, [], { envLists: { allowList: later } });
