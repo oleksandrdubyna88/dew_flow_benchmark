@@ -19,7 +19,7 @@ import { readSentences } from './conformance-sentences.mjs';
 import { readSamplesFolder, shownSamples } from './conformance-shown.mjs';
 import { parseSpec } from './conformance-spec.mjs';
 import { parseFormat, versionOf } from './format-structure.mjs';
-import { parseKnownNeedles } from './push-needles.mjs';
+import { parseWordList } from './conformance-needles.mjs';
 
 const EXIT_DEVIATION = 1;
 const EXIT_USAGE = 4;
@@ -87,7 +87,7 @@ const loadReferences = (options, stackWordsFile) => pipeline([
 function loadWordFile(file) {
   const text = readFile(file);
   if (!text.ok) return text;
-  const parsed = parseKnownNeedles(parseJson(text.value.toString('utf8')));
+  const parsed = parseWordList(parseJson(text.value.toString('utf8')));
   return parsed.ok ? parsed : fail(`${file}: ${parsed.reason}`);
 }
 

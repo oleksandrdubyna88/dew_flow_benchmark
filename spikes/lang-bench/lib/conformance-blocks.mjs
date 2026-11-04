@@ -49,13 +49,13 @@ function squeeze(out, pair) {
 }
 
 /** The characters of a line as `[char, lineNo]` pairs, whitespace as one space, and one space for the line's end. */
-const pairsOf = part => [...[...part.text].map(char => [/\s/.test(char) ? ' ' : char, part.no]), [' ', part.no]];
+const pairsOf = isSpace => part => [...[...part.text].map(char => [isSpace.test(char) ? ' ' : char, part.no]), [' ', part.no]];
 
 const clamp = (index, length) => Math.min(Math.max(index, 0), Math.max(length - 1, 0));
 
-/** `text` with every run of whitespace made one space and the ends trimmed, with `lineAt(index)` giving the document line of the character at `index` of the result. `parts` are `{ no, text }` lines. */
-export function collapse(parts) {
-  const squeezed = parts.flatMap(pairsOf).reduce(squeeze, []);
+/** `text` with every run of whitespace (`isSpace` says which characters are) made one space and the ends trimmed, with `lineAt(index)` giving the document line of the character at `index` of the result. `parts` are `{ no, text }` lines. */
+export function collapse(parts, isSpace = /\s/) {
+  const squeezed = parts.flatMap(pairsOf(isSpace)).reduce(squeeze, []);
   const pairs = squeezed.at(-1)?.[0] === ' ' ? squeezed.slice(0, -1) : squeezed;
   return { text: pairs.map(pair => pair[0]).join(''), lineAt: index => pairs[clamp(index, pairs.length)]?.[1] ?? 1 };
 }

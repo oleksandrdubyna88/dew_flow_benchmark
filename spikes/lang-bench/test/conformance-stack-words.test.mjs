@@ -5,11 +5,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { findKnownNeedles, parseKnownNeedles } from '../lib/push-needles.mjs';
+import { matchersOf, parseWordList, wordFindings } from '../lib/conformance-needles.mjs';
 import { check, failsOf, fixtureRepo, isOk, REAL_FORMAT } from './support/conformance-fixtures.mjs';
 
 const FILE = fileURLToPath(new URL('../inputs/stack-words-lang.json', import.meta.url));
-const LISTED = ['C#', '.NET', 'dotnet', 'TypeScript', 'JavaScript', 'Node', 'Node.js', 'V8', 'Fastify', 'ASP.NET', 'Kestrel', 'typebox', 'xunit', 'NuGet', 'npm', 'DOTNET_', 'NODE_OPTIONS', 'max-old-space', 'GCHeapHardLimit'];
+const LISTED = ['C#', '.NET', 'dotnet', 'TypeScript', 'JavaScript', 'Node', 'Node.js', 'nodejs', 'V8', 'Fastify', 'ASP.NET', 'Kestrel', 'typebox', 'xunit', 'NuGet', 'npm', 'pnpm', 'tsc', 'tsx', 'MSBuild', 'Roslyn', 'CLR', 'DOTNET_', 'NODE_OPTIONS', 'max-old-space', '--max_old_space_size', 'GCHeapHardLimit', 'COMPlus_', 'node_modules', '.csproj', 'package.json', 'Program.cs'];
 const stackWords = () => JSON.parse(readFileSync(FILE, 'utf8'));
 const plant = word => ({ spec: [['**R2.** For n = 1', `**R2.** Use ${word} here. For n = 1`]] });
 
@@ -17,8 +17,10 @@ test('The_stack_words_file_holds_the_words_of_the_series_in_the_shape_of_the_kno
   const file = stackWords();
   assert.equal(file.schema, 1);
   assert.equal(typeof file.rule, 'string');
-  assert.equal(parseKnownNeedles(file).ok, true);
+  assert.equal(parseWordList(file).ok, true);
+  assert.deepEqual(file.caseSensitive, ['Node']);
   assert.deepEqual([...file.words, ...file.substrings].sort(), [...LISTED].sort());
+  assert.match(file.rule, /case-insensitive/);
 });
 
 for (const word of LISTED) {
@@ -41,8 +43,8 @@ test('A_retyped_stack_word_list_would_miss_a_word_added_to_the_file_and_that_is_
   const added = path.join(fixtureRepo(t, 'olympiad').repo, 'stack-words.json');
   writeFileSync(added, JSON.stringify({ ...stackWords(), words: [...stackWords().words, 'Zigzag'] }));
   const fixture = fixtureRepo(t, 'olympiad', plant('Zigzag'));
-  const retyped = parseKnownNeedles({ schema: 1, rule: 'x', words: ['Node'], substrings: [] }).value;
-  assert.deepEqual(findKnownNeedles('x', 'Use Zigzag here', retyped), [], 'a retyped list does not know the new word');
+  const retyped = matchersOf(parseWordList({ schema: 1, rule: 'x', words: ['Node'], substrings: [] }).value);
+  assert.deepEqual(wordFindings('x', 'Use Zigzag here', retyped), [], 'a retyped list does not know the new word');
   assert.ok(isOk(await check(fixture), 'no-needle'), 'with the file as it is, Zigzag is no stack word');
   const result = await check(fixture, [], { stackWordsFile: added });
   assert.ok(failsOf(result, 'no-needle').some(line => line.endsWith('needle Zigzag')), result.lines.join('\n'));
@@ -66,9 +68,9 @@ test('No_stack_word_stands_in_the_real_FORMAT_or_the_real_spec_01', async t => {
     t.skip('LANG_V2_TASK_REPO is not set');
     return;
   }
-  const words = parseKnownNeedles(stackWords()).value;
+  const words = matchersOf(parseWordList(stackWords()).value);
   for (const text of [readFileSync(REAL_FORMAT, 'utf8'), readFileSync(`${repo}/todo/tasks/01-descent-to-one.md`, 'utf8')]) {
-    assert.deepEqual(findKnownNeedles('real', text, words), []);
+    assert.deepEqual(wordFindings('real', text, words), []);
   }
 });
 

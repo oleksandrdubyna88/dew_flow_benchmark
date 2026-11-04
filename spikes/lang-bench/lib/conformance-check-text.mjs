@@ -2,21 +2,24 @@
 // The needles are E1.S1's: the push check's rules for a text an agent can see (plan ids, links, the names of the known tasks, the family's names), the stack words of inputs/stack-words-lang.json (public, named by the word) and the optional list of literal needles the
 // spec author keeps outside git (`--needles`, the format of the leak-token file), both reused from lib/ and run over the spec and over the sample files.
 import { collapsed } from './conformance-blocks.mjs';
-import { aidNeedles, findAidHits, findKnownNeedles } from './push-needles.mjs';
+import { aidNeedles } from './push-needles.mjs';
+import { literalFindings, matchersOf, wordFindings } from './conformance-needles.mjs';
 import { findVisibleRules } from './push-visible.mjs';
 
 const GLYPH = '⏎';
 export const READING_BLOCK_KEYWORDS = 8;
+/** The shared rules read no known-task needles here: the conformance check matches them itself, without regard to case. */
+const NO_KNOWN = Object.freeze({ matchers: [] });
 
 /** ok(needles) for the text of a needles file (one literal per line, the leak-token reader's form), or a fail naming the line. */
 export const literalNeedles = text => aidNeedles({ aids: [], tokensText: text });
 
-/** The findings of E1.S1's rules and of the author's literals over one text: `line N: what`. A literal is named by its number, never by its words. */
+/** The findings of E1.S1's rules, the known-task needles and the stack words, and of the author's literals over one text: `path line N: what`. A literal is named by its number, never by its words. */
 export function needleFindings(path, text, { known, stackWords, literals }) {
-  const rules = findVisibleRules(path, text, { known, assumeVisible: true, links: true });
-  const stack = findKnownNeedles(path, text, stackWords);
-  const hits = literals === undefined ? [] : findAidHits(path, text, literals, { mode: 'self' });
-  return [...rules, ...stack, ...hits].sort((a, b) => a.line - b.line).map(hit => `${path} line ${hit.line}: ${hit.what}`);
+  const rules = findVisibleRules(path, text, { known: NO_KNOWN, assumeVisible: true, links: true });
+  const words = wordFindings(path, text, [...matchersOf(known), ...matchersOf(stackWords)]);
+  const own = literals === undefined ? [] : literalFindings(path, text, literals.literals);
+  return [...rules, ...words, ...own].sort((a, b) => a.line - b.line).map(hit => `${path} line ${hit.line}: ${hit.what}`);
 }
 
 function glyphFindings(spec) {

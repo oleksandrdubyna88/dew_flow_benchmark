@@ -80,6 +80,7 @@ function splitCondition(lower) {
 
 const kindWords = head => head.split(/[ ,]+/).filter(word => word !== '' && word !== 'and');
 const knownKindWords = words => words.length > 0 && words.every(word => word === 'all' || KINDS.includes(word));
+const isRequired = condition => condition === '' || condition === 'the default';
 const readableCondition = condition => condition === '' || CONDITION_FORMS.test(condition);
 
 /** The kinds a table cell names and whether the sentence is required for them: plain kind words are required, a condition (`whose`, `unless`, `instead`, `that`) makes it optional, `the default` does not. */
@@ -87,7 +88,7 @@ export function parseKinds(cell) {
   const { head, condition } = splitCondition(cell.toLowerCase());
   const words = kindWords(head);
   if (!knownKindWords(words) || !readableCondition(condition)) return null;
-  return { kinds: new Set(words.includes('all') ? KINDS : words), required: condition === '' || condition === 'the default' };
+  return { kinds: new Set(words.includes('all') ? KINDS : words), required: isRequired(condition) };
 }
 
 const IDS = 'F-[A-Z0-9]+(?:-[A-Z0-9]+)*';
@@ -166,6 +167,10 @@ function variantKinds(text, startsWithId) {
 function leadOf(text, known) {
   const first = new RegExp(`^(${IDS})`).exec(text)?.[1];
   if (first !== undefined && !known.has(first)) return { id: first, kinds: null, unknown: true };
+  return knownLead(text, known, first);
+}
+
+function knownLead(text, known, first) {
   const named = [...text.matchAll(ID)].map(hit => hit[0]).filter(id => known.has(id));
   if (named.length === 0) return null;
   const id = known.has(first) ? first : named.at(-1);
@@ -209,11 +214,16 @@ function compileVariant(variant, id) {
 const blocksText = count => `${count} text block${count === 1 ? '' : 's'}`;
 
 /** The reader's expectations of the blocks of one sentence: every variant has the expected number of parts, and several variants name disjoint kinds. */
+const kindsOfVariant = variant => [...(variant.kinds ?? KINDS)];
+
+function overlapFault(id, found) {
+  const kinds = found.flatMap(kindsOfVariant);
+  return found.length > 1 && new Set(kinds).size !== kinds.length ? `${id} has two text blocks for the same kinds` : null;
+}
+
 function blockFault(id, found) {
   const wrong = found.find(variant => variant.parts.length !== (EXPECTED_PARTS[id] ?? 1));
-  if (wrong !== undefined) return `${id} has ${blocksText(wrong.parts.length)}, and 2.1 expects ${EXPECTED_PARTS[id] ?? 1}`;
-  const kinds = found.flatMap(variant => (variant.kinds === null ? [...KINDS] : [...variant.kinds]));
-  return found.length > 1 && new Set(kinds).size !== kinds.length ? `${id} has two text blocks for the same kinds` : null;
+  return wrong === undefined ? overlapFault(id, found) : `${id} has ${blocksText(wrong.parts.length)}, and 2.1 expects ${EXPECTED_PARTS[id] ?? 1}`;
 }
 
 function sentenceOf(row, blocks) {

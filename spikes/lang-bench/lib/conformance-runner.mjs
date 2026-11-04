@@ -15,14 +15,16 @@ const linesOf = text => text.split('\n').map(line => line.trimEnd()).filter(line
 
 const endedWith = (code, lines) => fail(`the runner ended with exit ${code}${lines.length > 0 ? `: ${lines[0]}` : ''}`, { kind: 'env' });
 
+/** The runner's exit 4: its own lines are the findings; a refusal it does not explain is never a pass. */
+const refusalOf = lines => (lines.length === 0 ? fail('the runner exited 4 and named no problem on standard error: a refusal it does not explain is never a pass', { kind: 'env' }) : ok(lines.map(line => `the runner refuses the pairs — ${line}`)));
+
 /** What a finished run means: no finding at exit 0, the runner's own lines at exit 4, a fail for a time-out or any other end. */
 function outcomeOf(run, timeoutMs) {
   const { code, stderr, timedOut } = run.value;
   if (timedOut) return fail(`the runner did not finish within ${timeoutMs / 1000} s and was stopped`, { kind: 'env' });
   if (code === 0) return ok([]);
   const lines = linesOf(stderr).slice(0, MAX_LINES);
-  if (code !== EXIT_CONFIG) return endedWith(code, lines);
-  return lines.length === 0 ? fail('the runner exited 4 and named no problem on standard error: a refusal it does not explain is never a pass', { kind: 'env' }) : ok(lines.map(line => `the runner refuses the pairs — ${line}`));
+  return code === EXIT_CONFIG ? refusalOf(lines) : endedWith(code, lines);
 }
 
 /**
