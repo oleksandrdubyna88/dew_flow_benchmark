@@ -29,7 +29,7 @@ test('Each_template_holds_exactly_its_file_set', () => {
 // ---- the two scripts ----------------------------------------------------------------------------------------------------------------
 
 const BUILD_LINES = Object.freeze({
-  csharp: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'dotnet build App.csproj -c Release --nologo -m:4 -p:TreatWarningsAsErrors=false "-p:WarningsAsErrors=nullable%3BNU1603"'],
+  csharp: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'dotnet build App.csproj -c Release --nologo -m:4 -p:TreatWarningsAsErrors=false "-p:WarningsAsErrors=nullable%3BNU1603" -p:Nullable=enable -p:WarningsNotAsErrors= -p:WarningLevel=10 "-p:NoWarn=1701%3B1702"'],
   node: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'npm ci --offline', 'npx --offline tsc --noEmit -p tsconfig.json'],
 });
 const VARIABLE_LINE = /^\s*(export\s+)?[A-Za-z_]+=|^\s*env\s/;

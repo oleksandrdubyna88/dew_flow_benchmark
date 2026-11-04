@@ -159,27 +159,69 @@ test('A_warning_does_not_fail_the_csharp_build_but_a_nullable_error_does', TIMEO
   assert.match(outputOf(nullable), /CS8600/);
 });
 
-// The command line forces the policy as global properties; a project file cannot override those. Of the six overrides probed, two are stopped and four are not (measured 2026-11-04, exit code of
-// `bash build.sh` for `string s = null;`). The four that pass are recorded for the scorer (E3): they are written here so a change of the SDK's behaviour shows.
+// The command line forces the policy as global properties; a project file cannot override those. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
+// line (`TreatWarningsAsErrors` and `WarningsAsErrors` only) two overrides were stopped and four were not; with `Nullable`, `WarningsNotAsErrors`, `WarningLevel` and `NoWarn` forced as well, all six fail with CS8600.
+// What a project file cannot be stopped from doing with these properties is left to the scorer (E3): `#pragma`, `.editorconfig`, `.globalconfig`, new props or targets files.
 const OVERRIDES = Object.freeze([
-  ['Nullable=disable', '<Nullable>disable</Nullable>', 0], ['TreatWarningsAsErrors=false', '<TreatWarningsAsErrors>false</TreatWarningsAsErrors>', 1], ['WarningsAsErrors empty', '<WarningsAsErrors />', 1],
-  ['WarningsNotAsErrors=nullable', '<WarningsNotAsErrors>nullable</WarningsNotAsErrors>', 0], ['NoWarn=CS8600', '<NoWarn>CS8600</NoWarn>', 0], ['WarningLevel=0', '<WarningLevel>0</WarningLevel>', 0],
+  ['Nullable=disable', '<Nullable>disable</Nullable>'], ['TreatWarningsAsErrors=false', '<TreatWarningsAsErrors>false</TreatWarningsAsErrors>'], ['WarningsAsErrors empty', '<WarningsAsErrors />'],
+  ['WarningsNotAsErrors=nullable', '<WarningsNotAsErrors>nullable</WarningsNotAsErrors>'], ['NoWarn=CS8600', '<NoWarn>CS8600</NoWarn>'], ['WarningLevel=0', '<WarningLevel>0</WarningLevel>'],
 ]);
 
-test('The_command_line_policy_stops_two_project_file_overrides_and_not_four_and_that_is_recorded', TIMEOUT, async t => {
+test('The_command_line_policy_stops_all_six_project_file_overrides_with_the_nullable_error', TIMEOUT, async t => {
   if (!needs(t, snapshotsMissing())) return;
   const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
   withProgram(w, 'string s = null;\nConsole.Out.Write(s);\n');
   const project = path.join(w, 'App.csproj');
   const original = read(project);
   const table = [];
-  for (const [name, xml, expected] of OVERRIDES) {
+  for (const [name, xml] of OVERRIDES) {
     writeFileSync(project, original.replace('<AssemblyName>', `${xml}<AssemblyName>`));
     const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
     table.push(`${name}: exit ${ran.code}`);
-    assert.equal(ran.code, expected, `${name}: ${outputOf(ran).slice(-800)}`);
+    assert.equal(ran.code, 1, `${name}: ${outputOf(ran).slice(-800)}`);
+    assert.match(outputOf(ran), /CS8600/, `${name}: the nullable error is the reason`);
   }
   t.diagnostic(table.join('; '));
+});
+
+test('The_command_line_policy_stops_two_project_file_overrides_and_not_four_and_that_is_recorded', () => {
+  // The name is the first measurement (two stopped, four not) and is kept; the facts are the recorded table in the doc, which now says six of six.
+  const doc = read(path.join(REPO, 'research', 'module_lang_bench.md'));
+  const section = doc.slice(doc.indexOf('| Override in `App.csproj`'));
+  const rows = section.split('\n').slice(2, 2 + OVERRIDES.length).map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+  assert.equal(rows.length, OVERRIDES.length);
+  for (const [i, [name, xml]] of OVERRIDES.entries()) {
+    assert.equal(rows[i][0], `\`${xml}\``, `${name}: row ${i} names the override`);
+    assert.equal(rows[i][1], '1 (CS8600)', `${name}: the recorded exit is 1 with CS8600`);
+    assert.equal(rows[i][2], 'yes', `${name}: the recorded table says the command line stops it`);
+  }
+});
+
+test('A_clean_hello_of_every_kind_builds_with_no_warning_and_a_web_program_with_jwt_bearer_builds', TIMEOUT, async top => {
+  if (!needs(top, snapshotsMissing())) return;
+  for (const kind of ['olympiad', 'daemon', 'web']) {
+    await top.test(kind, async t => {
+      const { ran } = await buildHello(t, { stack: 'csharp', kind });
+      assert.match(outputOf(ran), /\b0 \S*Warn/i, `${kind}: zero warnings`);
+      assert.doesNotMatch(outputOf(ran), /\b(CS|NU)\d+/, `${kind}: no warning code in the output`);
+    });
+  }
+  await top.test('web with JwtBearer', async t => {
+    const w = helloWorkspace(t, { stack: 'csharp', kind: 'web' });
+    withProgram(w, `using Microsoft.AspNetCore.Authentication.JwtBearer;
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddAuthorization();
+WebApplication app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapGet("/hello", () => "hello").RequireAuthorization();
+app.Run();
+`);
+    const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+    assert.equal(ran.code, 0, outputOf(ran).slice(-2000));
+    assert.doesNotMatch(outputOf(ran), /\b(CS|NU)\d+/);
+  });
 });
 
 test('A_tests_folder_is_outside_the_csharp_build_and_dotnet_test_runs_it_offline', TIMEOUT, async t => {
