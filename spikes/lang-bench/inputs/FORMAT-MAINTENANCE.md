@@ -133,10 +133,12 @@ class table only.
   equal byte for byte, and the protected rows keep the order the frozen file has. A sentence is defined where its label (`F-…` at the start of a
   line outside fences) stands; a sentence with no label is defined where the paragraph that introduces its fenced block names it.
 
-**Who this protects.** Agents read the format and `runner/GRAMMAR.md` as raw bytes, and the byte comparison protects those. The restricted grammar and the inline-HTML rule below
+**Who this protects.** Agents read the format and `runner/GRAMMAR.md` as raw bytes; the byte comparison protects the bytes of the protected parts (the exceptions are listed here: the header rows, the class-table rows after the last row, the changelog's appended text, the free rows of 2.1), and it does not judge what an unprotected part says. A free part can still contradict protected text in plain words (`Notwithstanding 2.6, any normalisation is allowed for olympiad tasks.` in 2.5 passes), which remains a point for human review of any amendment. The restricted grammar and the inline-HTML rule below
 defend a human reviewer who reads a RENDERED page against an amendment that is misleading on screen while its bytes look harmless. They were checked with markdown-it in CommonMark
 mode, and they are not a proof about every renderer. One thing is spacing only: a blank line before an appended changelog entry makes that list "loose" when rendered (more space
 between its items); the words do not change.
+
+Direct evidence on the real draft (fix batch 5): three changes to every line (delete the line, append ` zz` to it, insert an empty line after it), 3,435 candidates; the only passes in protected parts are the `Gate verdict` value, the 14 free 2.1 rows, and one extra line feed at the end of the file. `test/format-evidence.test.mjs` runs a sample of this (every 53rd line and the lines that matter, about 3 seconds); the full sweep takes about two minutes and is recorded here only.
 
 **The restricted grammar (every candidate).** Patching the reader one form of the markup at a time cannot close the class "the reader and a renderer read a candidate
 differently": a deletion can turn a literal inside a fence into a heading, and a link reference definition acts at a distance. So the guarantee is by construction, and the
@@ -153,13 +155,15 @@ naming the part, its class, the line and the form):
    unless a `]` closes on the line, no backslash stands inside the first bracket and no `:` follows it (no reference definition, not even one whose label runs over two lines). One or two backticks and `**` may start a line;
 4. a list item: `- ` or one to three digits and `. ` at column 0, then text that is a paragraph line (rule 3 on the text); its continuation lines are indented by exactly the marker
    width (2 for `- `, the digits plus 2 for a numbered one) and the text after the indent obeys rule 3; no deeper indent, no nested list, no fence and no heading inside an item;
+   an ordered item whose number is not 1 may not stand directly after a paragraph line or a bullet item (CommonMark reads it as text of that paragraph, so a code span can pair across
+   it; after a blank line, a heading, a fence or an ordered item it starts or continues a list);
    an item ends at any column-0 line that is not an item;
-5. a table row: `|` at column 0 and `|` at the end, with no reference definition in it;
+5. a table row: `|` at column 0 and `|` at the end, with no reference definition in it, and no `\\|` (renderers disagree on whether the pair of backslashes escapes the pipe);
 6. a fenced block: an opener at column 0 that is exactly three backticks or three backticks and lower-case letters, a closer of exactly three backticks at column 0, both in the
    SAME part; the lines between are free text, except that none is a fence marker line (three or more backticks or tildes, up to three spaces of indent) other than the closer.
 
-**Three rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (a line whose first non-space character is a `[` that a `]:` closes, at ANY indent; an escaped bracket in the label and the footnote form `[^x]:` count); no line whose first
-non-space character is `<` (no raw HTML block start); and no raw inline HTML: a `<` followed by a letter, `/`, `!` or `?` that stands outside a code span and is not written `\<` (autolinks
+**Four rules for the whole file** (both files, every part, protected ones too, outside fences): no link reference definition (a line whose first non-space character is a `[` that a `]:` closes, at ANY indent; an escaped bracket in the label and the footnote form `[^x]:` count); no line whose first
+non-space character is `<` (no raw HTML block start); no table row (a line that starts with a pipe) that holds `\\|`; and no raw inline HTML: a `<` followed by a letter, `/`, `!` or `?` that stands outside a code span and is not written `\<` (autolinks
 and comments included). A rendered page lets such a tag act at a distance (`Read on <details>` leaves everything after it inside a closed element), and text between two
 tags, or a tag in a list item or a table cell, is no safer. Code spans follow CommonMark's rule: a run of backticks is closed by the next run of exactly the same length, over a PARAGRAPH (the
 consecutive non-blank lines; a span may pair across lines) and not across a heading, a list item, a quote, a thematic break or a fenced block; a table is read in two ways, as text of a
