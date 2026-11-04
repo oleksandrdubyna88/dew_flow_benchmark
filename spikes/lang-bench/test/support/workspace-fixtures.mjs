@@ -2,7 +2,7 @@
 // template tree, and the hello fixture: `helloWorkspace` builds a workspace of a stack and kind from the fixture's statement and samples and puts a program in it. Workspaces live under `TEST_ROOT`
 // (~/.cache/lang-v2/t, outside every git worktree): /tmp is a tmpfs on this host and a `node_modules` is hundreds of MB. Labels are at most 5 characters.
 import assert from 'node:assert/strict';
-import { cpSync, readFileSync, readdirSync } from 'node:fs';
+import { cpSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
@@ -11,6 +11,11 @@ import { buildWorkspace, loadInputs } from '../../lib/workspace-build.mjs';
 import { ensureTestRoot } from './cache-box.mjs';
 import { FORMAT_TEXT, sha256 } from './format-fixtures.mjs';
 import { ownedFolder } from '../toolchain-fixtures.mjs';
+import { treeHash } from '../../../minigit-bench/lib/cache-snapshot.mjs';
+import { defaultCaches, inBuildBox, snapshotDirOf } from '../../lib/workspace-box.mjs';
+import { pidsIn } from './exec-chain.mjs';
+import { toolchains } from './exec-layer-host.mjs';
+import { owned } from './owned.mjs';
 
 export const SPIKE = fileURLToPath(new URL('../..', import.meta.url));
 export const TEMPLATES = path.join(SPIKE, 'templates');
@@ -90,3 +95,45 @@ export function helloWorkspace(t, { stack, kind, source = helloSource(stack, kin
   if (source !== null) cpSync(source, out, { recursive: true });
   return out;
 }
+
+// ---- the build box, for the tests that run it ---------------------------------------------------------------------------------------------------------------
+
+/** The reason a registered snapshot folder is missing on this host, or null: the `extra` of `needs(t, extra)`. */
+export function snapshotsMissing() {
+  const missing = STACKS.map(stack => snapshotDirOf({ stack, record: snapshotRecord(), caches: defaultCaches() })).find(found => !found.ok);
+  return missing === undefined ? null : missing.reason;
+}
+
+/** One command in the build box of `view` for `stack`: the value of `inBuildBox` (`{ code, stdout, stderr, timedOut, ms }`); a box that could not start fails the test. */
+export async function inBox(view, stack, command, extra = {}) {
+  const ran = await inBuildBox({ owned, view, dirs: toolchains, stack, record: snapshotRecord(), command, ...extra });
+  assert.equal(ran.ok, true, ran.reason);
+  return ran.value;
+}
+
+export const outputOf = ran => `${ran.stdout}${ran.stderr}`;
+
+/** Builds the workspace in the box and asserts it passed: `{ w, ran }`. */
+export async function buildHello(t, options) {
+  const w = helloWorkspace(t, options);
+  const ran = await inBox(w, options.stack, ['bash', 'build.sh']);
+  assert.equal(ran.code, 0, `${options.stack}/${options.kind}: ${outputOf(ran).slice(-3000)}`);
+  return { w, ran };
+}
+
+/** Every registered snapshot re-hashes to its record (call it once, in the file's `after`): nothing a box did changed a read-only snapshot. */
+export function assertSnapshotsUnchanged() {
+  const record = snapshotRecord();
+  for (const stack of STACKS) {
+    const dir = snapshotDirOf({ stack, record, caches: defaultCaches() });
+    if (dir.ok) assert.equal(treeHash(dir.value), record[stack].treeSha256, `${stack}: the snapshot is unchanged`);
+  }
+}
+
+export const toolchainDirs = toolchains;
+
+/** The base name of `/proc/<pid>/exe`, or null when it cannot be read. */
+export const exeBase = pid => { try { return path.basename(readlinkSync(`/proc/${pid}/exe`)); } catch { return null; } };
+
+/** The host pid of the program in `prog/`: the process whose executable is the pinned `dotnet` or `node` (a bwrap init and its monitor are in `prog/` too). */
+export const programPidIn = prog => (pidsIn(prog) ?? []).find(pid => /^(dotnet|node)$/.test(exeBase(pid) ?? '')) ?? null;
