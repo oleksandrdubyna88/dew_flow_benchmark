@@ -72,6 +72,22 @@ test('A_link_under_a_workspace_root_is_refused', async t => {
   assert.equal((await fetched(outside, cacheOf(t))).ok, true, 'a link outside the four roots and off the list is not looked at');
 });
 
+test('A_workspace_root_that_is_a_link_or_a_regular_file_is_refused_and_never_a_throw', async t => {
+  const dangling = await makeRepo(t, FILES, { runner: '/nonexistent' });
+  const first = await fetched(dangling, cacheOf(t));
+  assert.equal(first.ok, false, 'a dangling link in the place of runner/');
+  assert.match(first.reason, /runner \(not a regular file\)/);
+  const redirected = await makeRepo(t, { 'alt/01-x/build.sh': 'build\n', 'node/01-x/run.sh': 'run\n' }, { csharp: 'alt' });
+  const second = await fetched(redirected, cacheOf(t));
+  assert.equal(second.ok, false, 'csharp -> alt, with the file under csharp/ listed');
+  assert.ok(second.mismatches.includes('csharp'), JSON.stringify(second.mismatches));
+  assert.match(second.reason, /csharp \(not a regular file\)/);
+  const plain = await makeRepo(t, { ...FILES, runner: 'a file where a folder belongs\n' });
+  const third = await fetched(plain, cacheOf(t));
+  assert.equal(third.ok, false, 'runner as a regular file');
+  assert.deepEqual(third.mismatches, ['runner']);
+});
+
 // ---- the fetch ---------------------------------------------------------------------------------------------------------------------
 
 test('A_fetch_lands_in_a_folder_named_for_the_sha_and_holds_no_repository', async t => {

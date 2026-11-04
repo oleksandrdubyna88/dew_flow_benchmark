@@ -4,6 +4,7 @@
 // Every folder is an owned folder of token `bench` under ~/.cache/lang-v2/t (a tmpfs /tmp could not hold a node_modules). Run with BENCH_REQUIRE_SANDBOX=1 so that a missing tool is a failure, not a skip.
 import assert from 'node:assert/strict';
 import { rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +12,7 @@ import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers
 import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
-import { scanProcesses } from '../lib/exec-layer/proc.mjs';
+import { endProcess, scanProcesses, statOf } from '../lib/exec-layer/proc.mjs';
 import { runCases } from '../lib/exec-layer/run.mjs';
 import { buildBoxArgv, defaultCaches, snapshotDirOf } from '../lib/workspace-box.mjs';
 import { runnerHash } from '../lib/workspace-build.mjs';
@@ -24,6 +25,7 @@ import { ownedFolder } from './toolchain-fixtures.mjs';
 
 const REPO = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const MIB = 1024 * 1024;
+const CHILD = fileURLToPath(new URL('./support/hung-build-child.mjs', import.meta.url));
 const TIMEOUT = { timeout: 15 * 60_000 };
 
 before(() => { sweepLeftovers({ repo: REPO, tmp: ensureTestRoot(), token: 'bench' }); });
@@ -167,17 +169,41 @@ test('A_snapshot_bound_read_only_cannot_be_written_and_is_unchanged', TIMEOUT, a
 
 // ---- a hung build ------------------------------------------------------------------------------------------------------------------------------------------------
 
-const HUNG = '#!/usr/bin/env bash\nsleep 40001 &\nexec sleep 40002\n';
-const hungSleeps = () => scanProcesses(argv => argv[0] === 'sleep' && ['40001', '40002'].includes(argv[1]));
+const hungBuild = (a, b) => `#!/usr/bin/env bash\nsleep ${a} &\nexec sleep ${b}\n`;
+const sleepsOf = (a, b) => scanProcesses(argv => argv[0] === 'sleep' && [String(a), String(b)].includes(argv[1]));
 const holders = () => scanProcesses(argv => argv[0].startsWith(owned.ownedPrefix('wsh')));
 
 test('A_hung_build_is_killed_whole_and_leaves_no_process_on_the_test_folder', TIMEOUT, async t => {
   if (!needs(t, snapshotsMissing())) return;
   const view = ownedFolder(t, 'ws', ensureTestRoot());
-  writeFileSync(path.join(view, 'build.sh'), HUNG);
-  const ran = await inBox(view, 'csharp', ['bash', 'build.sh'], { timeoutMs: 3000 });
+  writeFileSync(path.join(view, 'build.sh'), hungBuild(40001, 40002));
+  const pending = inBox(view, 'csharp', ['bash', 'build.sh'], { timeoutMs: 8000 });
+  assert.ok(await waitFor(() => sleepsOf(40001, 40002).length === 2 || null, 7000), 'both sleeps of the build were seen running before the timeout: the case cannot pass without them');
+  const ran = await pending;
   assert.equal(ran.timedOut, true);
-  assert.ok(await waitFor(() => hungSleeps().length === 0 || null, 5000), `a sleep of the hung build is still running: ${JSON.stringify(hungSleeps())}`);
-  assert.ok(await waitFor(() => holders().length === 0 || null, 5000), 'the holder of the build box is gone');
+  assert.ok(await waitFor(() => sleepsOf(40001, 40002).length === 0 || null, 5000), `a sleep of the hung build is still running: ${JSON.stringify(sleepsOf(40001, 40002))}`);
+  assert.ok(await waitFor(() => holders().filter(h => statOf(h.pid)?.ppid === process.pid).length === 0 || null, 5000), 'the holder of the build box is gone');
   assert.doesNotThrow(() => rmSync(view, { recursive: true, force: true }), 'the folder is removed without an error');
+});
+
+/** Starts the hung build in a child process, SIGKILLs that child alone and reports whether the sleeps outlived it. What is left is ended by name. */
+async function afterParentKill(t, { keep, sleeps: [a, b] }) {
+  const view = ownedFolder(t, 'ws', ensureTestRoot());
+  writeFileSync(path.join(view, 'build.sh'), hungBuild(a, b));
+  let child = null;
+  const finished = runBounded(process.execPath, [CHILD, view, keep ? 'yes' : 'no'], { timeoutMs: 90_000, env: { PATH: '/usr/sbin:/usr/bin:/bin', HOME: os.homedir() }, onChild: started => { child = started; } });
+  assert.ok(await waitFor(() => sleepsOf(a, b).length === 2 || null, 30_000), 'both sleeps were seen running');
+  const holder = holders().find(identity => statOf(identity.pid)?.ppid === child.pid);
+  process.kill(child.pid, 'SIGKILL');
+  await finished;
+  const gone = (await waitFor(() => sleepsOf(a, b).length === 0 || null, 5000)) === true;
+  for (const identity of scanProcesses(argv => argv[0].endsWith('bwrap') && argv.includes(view))) await endProcess(identity, { graceMs: 200 });
+  for (const identity of [...sleepsOf(a, b), ...(holder ? [holder] : [])]) await endProcess(identity, { graceMs: 200 });
+  return gone;
+}
+
+test('A_build_box_ends_with_its_parent_killed_by_SIGKILL_and_that_is_the_point', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  assert.equal(await afterParentKill(t, { keep: true, sleeps: [40011, 40012] }), true, 'with --die-with-parent no sleep outlives the process that started the box');
+  assert.equal(await afterParentKill(t, { keep: false, sleeps: [40021, 40022] }), false, 'the refuted shape, beside the right one: without the flag the sleeps live on');
 });

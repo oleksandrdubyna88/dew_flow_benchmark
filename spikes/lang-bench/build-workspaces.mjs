@@ -15,7 +15,7 @@
 // Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does.
 await import('./lib/lower-priority.mjs');
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -60,33 +60,57 @@ function buildUsage(v) {
   return KIND_NAMES.includes(v.kind) ? null : `--kind ${v.kind}: the legal names are ${KIND_NAMES.join(', ')}`;
 }
 
-/** `{ config }` or `{ error }`. */
-function readArgs(argv) {
-  let v;
-  try { v = parseArgs({ args: argv, options: OPTIONS, strict: true }).values; } catch (e) { return { error: e.message }; }
+/** `{ v }` of the parsed flags, or `{ error }`. */
+function parseFlags(argv) {
+  try {
+    return { v: parseArgs({ args: argv, options: OPTIONS, strict: true }).values };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+/** `{ mode }` for flags that ask for exactly one mode with a usable build, else `{ error }`. */
+function modeOf(v) {
   const modes = modesOf(v);
   if (modes.length !== 1) return { error: 'ask for exactly one of: a build (--stack --kind --task --group --out --statement --samples), --make-locks, --print-stack-files' };
   const usage = modes[0] === 'build' ? buildUsage(v) : null;
-  if (usage !== null) return { error: usage };
+  return usage === null ? { mode: modes[0] } : { error: usage };
+}
+
+function configOf(v, mode) {
   const taskRepo = v['task-repo'] ?? process.env.LANG_V2_TASK_REPO;
   const build = { stack: v.stack, kind: v.kind, task: v.task, group: v.group, out: v.out, statement: v.statement, samples: v.samples, taskRepo, hello: v.hello === true };
-  return { config: { mode: modes[0], build, forceLocks: v['force-locks'] === true, caches: path.resolve(v.caches ?? defaultCaches()) } };
+  return { mode, build, forceLocks: v['force-locks'] === true, caches: path.resolve(v.caches ?? defaultCaches()) };
+}
+
+/** `{ config }` or `{ error }`. */
+function readArgs(argv) {
+  const parsed = parseFlags(argv);
+  if (parsed.error) return parsed;
+  const picked = modeOf(parsed.v);
+  return picked.error ? picked : { config: configOf(parsed.v, picked.mode) };
 }
 
 // ---- the locks ---------------------------------------------------------------------------------------------------------------------
 
 const templateFile = (kind, name) => path.join(SPIKE, 'templates', 'node', kind, name);
 
-/** Generate the lock of one kind in a fresh owned folder holding only the template's `package.json` and `.npmrc`. -> `{ code, lock }` where `lock` is the text npm wrote. */
-async function generateLock({ kind, owned, dirs, record, config }) {
+const lockSucceeded = ran => ran.ok && ran.value.code === 0 && !ran.value.timedOut;
+const lockFailure = (kind, ran) => (ran.ok ? `${kind}: npm exited ${ran.value.code}${ran.value.timedOut ? ' (timed out)' : ''}: ${ran.value.stderr.slice(-1500)}` : `${kind}: ${ran.reason}`);
+
+/** The lock of one kind made in `view`, which holds only the template's `package.json` and `.npmrc`. -> `{ code, lock }` | `{ code, message }`. */
+async function lockInBox({ kind, owned, dirs, record, config, view }) {
+  for (const name of ['package.json', '.npmrc']) copyFileSync(templateFile(kind, name), path.join(view, name));
+  const ran = await inBuildBox({ owned, view, dirs, stack: 'node', record, caches: config.caches, command: LOCK_COMMAND });
+  return lockSucceeded(ran) ? { code: EXIT.done, lock: readFileSync(path.join(view, 'package-lock.json'), 'utf8') } : { code: EXIT.failed, message: lockFailure(kind, ran) };
+}
+
+/** Generate the lock of one kind in a fresh owned folder (removed in `finally`). */
+async function generateLock(args) {
   const scope = cleanupScope();
   try {
-    const view = owned.ownedDir(scope, 'lock', { parent: workRoot() });
-    for (const name of ['package.json', '.npmrc']) copyFileSync(templateFile(kind, name), path.join(view, name));
-    const ran = await inBuildBox({ owned, view, dirs, stack: 'node', record, caches: config.caches, command: LOCK_COMMAND });
-    if (!ran.ok) return { code: EXIT.failed, message: `${kind}: ${ran.reason}` };
-    if (ran.value.code !== 0 || ran.value.timedOut) return { code: EXIT.failed, message: `${kind}: npm exited ${ran.value.code}${ran.value.timedOut ? ' (timed out)' : ''}: ${ran.value.stderr.slice(-1500)}` };
-    return { code: EXIT.done, lock: readFileSync(path.join(view, 'package-lock.json'), 'utf8') };
+    const view = args.owned.ownedDir(scope, 'lock', { parent: workRoot() });
+    return await lockInBox({ ...args, view });
   } finally {
     await scope.close();
   }
@@ -124,14 +148,19 @@ async function lockOne({ kind, ...rest }) {
   return settle({ kind, lock: made.lock, force: rest.config.forceLocks });
 }
 
-async function makeLocks(config) {
+/** The registered record, the toolchain directories and the owned-name helper a lock generation needs. -> `ok(context)` | `fail`. */
+function lockContext() {
   const record = readJson(path.join(SPIKE, 'inputs', 'cache-snapshots-lang.json'));
   const stacks = loadStacksLang(readJson(path.join(SPIKE, 'inputs', 'stacks-lang.json')));
-  if (!stacks.ok) return stop(EXIT.usage, stacks.reason);
-  const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
-  const owned = ownedFor({ token: 'bench' });
+  if (!stacks.ok) return stacks;
+  return ok({ record, dirs: storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot)), owned: ownedFor({ token: 'bench' }) });
+}
+
+async function makeLocks(config) {
+  const context = lockContext();
+  if (!context.ok) return stop(EXIT.usage, context.reason);
   for (const kind of KIND_NAMES) {
-    const code = signalled === null ? await lockOne({ kind, owned, dirs, record, config }) : signalled;
+    const code = signalled ?? await lockOne({ kind, ...context.value, config });
     if (code !== EXIT.done) return code;
   }
   return EXIT.done;
@@ -140,28 +169,45 @@ async function makeLocks(config) {
 // ---- the build and the list ----------------------------------------------------------------------------------------------------------------
 
 const exitOf = failed => (failed.refusal === true ? EXIT.refused : EXIT.failed);
+const stopFailed = failed => stop(failed.usage === true ? EXIT.usage : exitOf(failed), failed.reason);
 
-/** FORMAT's bytes at the pinned commit of the local task repository. -> `ok(bytes)` | `fail` (exit 3: a hash that does not match is a refusal). */
+/** FORMAT's bytes at the pinned commit of the local task repository. -> `ok(bytes)` | `fail` (a refusal for a rule or a hash, exit 1 for a git failure or a timeout). */
 async function formatOf(taskRepo) {
   if (taskRepo === undefined) return fail('the task repository is --task-repo or LANG_V2_TASK_REPO', { usage: true });
   const fetched = await fetchTaskRepo({ repo: taskRepo });
-  if (!fetched.ok) return { ...fetched, refusal: true };
-  return ok(readFileSync(path.join(fetched.value.root, 'todo', 'tasks', 'FORMAT.md')));
+  return fetched.ok ? ok(readFileSync(path.join(fetched.value.root, 'todo', 'tasks', 'FORMAT.md'))) : fetched;
+}
+
+const isFile = file => { try { return statSync(file).isFile(); } catch { return false; } };
+const isFolder = dir => { try { return statSync(dir).isDirectory(); } catch { return false; } };
+
+/** A usage line for a statement that is not a file or samples that are not a folder, else null. */
+function inputUsage(build) {
+  if (!isFile(build.statement)) return `--statement ${build.statement} is not a file`;
+  return isFolder(build.samples) ? null : `--samples ${build.samples} is not a folder`;
+}
+
+/** The checks before anything is fetched: the inputs the flags name, then names, group and destination. */
+function earlyChecks(args) {
+  const usage = inputUsage(args);
+  return usage === null ? preCheck(args) : fail(usage, { usage: true });
+}
+
+function finishBuild(args, formatBytes) {
+  const made = buildWorkspace({ ...args, formatBytes, statement: readFileSync(args.statement), samplesDir: path.resolve(args.samples) });
+  if (!made.ok) return stopFailed(made);
+  say(`built ${args.stack}/${args.kind} task ${args.task} (group ${args.group}) into ${made.value.out}: ${made.value.files.length} files`);
+  return EXIT.done;
 }
 
 async function buildMode(config) {
   const loaded = loadInputs();
   if (!loaded.ok) return stop(EXIT.usage, loaded.reason);
-  const { build } = config;
-  const args = { ...build, inputs: loaded.value, helloFixture: build.hello };
-  const early = preCheck(args);
-  if (!early.ok) return stop(exitOf(early), early.reason);
-  const format = await formatOf(build.taskRepo);
-  if (!format.ok) return stop(format.usage === true ? EXIT.usage : exitOf(format), format.reason);
-  const made = buildWorkspace({ ...args, formatBytes: format.value, statement: readFileSync(build.statement), samplesDir: path.resolve(build.samples) });
-  if (!made.ok) return stop(exitOf(made), made.reason);
-  say(`built ${build.stack}/${build.kind} task ${build.task} (group ${build.group}) into ${made.value.out}: ${made.value.files.length} files`);
-  return EXIT.done;
+  const args = { ...config.build, inputs: loaded.value, helloFixture: config.build.hello };
+  const early = earlyChecks(args);
+  if (!early.ok) return stopFailed(early);
+  const format = await formatOf(config.build.taskRepo);
+  return format.ok ? finishBuild(args, format.value) : stopFailed(format);
 }
 
 function printMode() {

@@ -50,18 +50,21 @@ export function snapshotDirOf({ stack, record, caches }) {
   return existsSync(dir) ? ok(dir) : fail(`the registered ${stack} snapshot folder ${dir} is missing`);
 }
 
+function csharpBox(snap, seed) {
+  const [nuget, dotnet] = [path.join(snap, 'nuget'), path.join(snap, 'dotnet')];
+  return { extraRo: [nuget, dotnet], seed: seed ? { from: dotnet, to: SEED_DOTNET } : null, extra: { ...CSHARP_ENV, NUGET_PACKAGES: nuget } };
+}
+
+function nodeBox(snap, seed) {
+  const npm = path.join(snap, 'npm');
+  return { extraRo: [npm], seed: seed ? { from: npm, to: SEED_NPM } : null, extra: { ...NPM_OFFLINE_ENV, npm_config_cache: seed ? SEED_NPM : npm } };
+}
+
 /**
  * What a stack's build box binds, seeds and sets, from its snapshot folder `snap`: `{ extraRo, seed: { from, to } | null, extra }`. `seed: false` is the wrong shape that only the tests ask for: nothing is copied,
  * and a Node box then points npm at the read-only snapshot itself.
  */
-export function snapshotBoxOf({ stack, snap, seed = true }) {
-  if (stack === 'csharp') {
-    const [nuget, dotnet] = [path.join(snap, 'nuget'), path.join(snap, 'dotnet')];
-    return { extraRo: [nuget, dotnet], seed: seed ? { from: dotnet, to: SEED_DOTNET } : null, extra: { ...CSHARP_ENV, NUGET_PACKAGES: nuget } };
-  }
-  const npm = path.join(snap, 'npm');
-  return { extraRo: [npm], seed: seed ? { from: npm, to: SEED_NPM } : null, extra: { ...NPM_OFFLINE_ENV, npm_config_cache: seed ? SEED_NPM : npm } };
-}
+export const snapshotBoxOf = ({ stack, snap, seed = true }) => (stack === 'csharp' ? csharpBox(snap, seed) : nodeBox(snap, seed));
 
 /** The environment of a build box: the layer's base plus the stack's extras. NO stack and no memory limit go to `boxEnv`, so no heap key is set (T-L14); a case key would throw. */
 export function workspaceBuildEnv({ dirs, stack, snap, seed = true }) {
@@ -82,7 +85,8 @@ export function buildBoxArgv({ holder, view, dirs, stack, snap, command, seed = 
 /**
  * One command in the build box of a workspace `view`, with the whole output and the exit code. Its own holder (the loopback-only namespace) lives for exactly this call and ends in `finally`. The command
  * runs under `runBounded` with `timeoutMs`, which kills the whole process group; `onChild` tracks it so a stop signal of the CLI ends it too. -> `ok({ code, stdout, stderr, timedOut, ms })` | `fail`.
- * `seed: false` and `dieWithParent` exist only so the tests can build the wrong shapes; a production caller never passes them.
+ * The box carries `--die-with-parent` (it has no scope, `prog: null`): if the process that started it is killed with SIGKILL and cannot clean up, bwrap's death signal ends the box and everything in it. The timeout
+ * of `runBounded` covers the ordinary case. `seed: false` and `dieWithParent: false` exist only so the tests can build the wrong shapes; a production caller never passes them.
  */
 export async function inBuildBox({ owned, view, dirs, stack, record, caches = defaultCaches(), command, timeoutMs = 600_000, seed = true, dieWithParent }) {
   const snap = snapshotDirOf({ stack, record, caches });

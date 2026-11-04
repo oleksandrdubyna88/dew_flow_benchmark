@@ -9,7 +9,7 @@ import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
-import { NPM_OFFLINE_ENV, npmOfflineArgv, openBox } from '../lib/cache-offline.mjs';
+import { npmOfflineArgv, openBox } from '../lib/cache-offline.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { statOf } from '../lib/exec-layer/proc.mjs';
 import { defaultCaches, snapshotDirOf } from '../lib/workspace-box.mjs';
@@ -285,10 +285,10 @@ test('The_same_templates_build_in_the_agent_box', TIMEOUT, async top => {
       const box = opened.value;
       try {
         cpSync(w, box.layout.work, { recursive: true });
-        const ran = await box.run(['bash', 'build.sh'], { env: stack === 'node' ? NPM_OFFLINE_ENV : {} });
+        const ran = await box.run(['bash', 'build.sh'], { env: {} });
         assert.equal(ran.ok && ran.value.code, 0, ran.ok ? ran.value.output.slice(-3000) : ran.reason);
         assert.deepEqual(box.egress().allowed, {}, 'no registry was reached');
-        assert.deepEqual(box.egress().refused, {}, 'and none was asked');
+        assert.deepEqual(box.egress().refused, {}, 'and none was asked: the template files alone, with no extra environment, make no registry request');
       } finally {
         await box.close();
       }

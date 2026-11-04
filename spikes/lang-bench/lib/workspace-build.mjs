@@ -2,18 +2,20 @@
 // and the samples) and checks everything BEFORE the first write: the legal names, the group rule (T-L57), the destination, the pin of the runner, the hash of FORMAT and of its grammar, the packages list and the template's
 // `run.sh`. It adds no stack word, no plan word and no path of this host. The rest of this file is the check of a generated `package-lock.json` against the registered manifest, the destination guard that the builder and
 // the bare copy share, and the list of file patterns the push check accepts in a stack folder.
-import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitWorktreeOf } from '../../minigit-bench/lib/git-guard.mjs';
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { extractGrammar } from '../tools/grammar-extract.mjs';
-import { outsideManifest, usedNpm } from './cache-offline.mjs';
+import { NPMRC_OFFLINE, outsideManifest, usedNpm } from './cache-offline.mjs';
 import { loadRecipeLang } from './cache-recipe-lang.mjs';
 import { renderPackagesMd } from './packages-md.mjs';
 import { computePin, verifyPin } from './runner-pin.mjs';
 import { loadStacksLang } from './toolchain-pins.mjs';
+import { checkDestination } from './workspace-destination.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 export const TEMPLATES_DIR = path.join(SPIKE, 'templates');
@@ -44,35 +46,6 @@ export function lockProblems(lock, manifest, packageJson) {
   return [...outsideManifest(usedNpm(lock), npm, 'npm').map(id => `${id} is not in the registered manifest`), ...wrongIntegrity, ...scripts, ...rootProblems];
 }
 
-// ---- the destination ------------------------------------------------------------------------------------------------------------------
-
-/** `lstat` of `target`, or null when nothing is there. Any other error is thrown: only "absent" is an expected answer. */
-function lstatOrNull(target) {
-  try {
-    return lstatSync(target);
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
-/**
- * Where a workspace may be built (accepted finding a): never inside a git worktree of any state (clean or dirty, the folder itself or a path nested under it, existing or not yet existing, a main checkout or a
- * linked worktree whose `.git` is a file), and a git that cannot answer is a refusal too. Outside every worktree: `out` is not a link, and if it exists it is an empty folder.
- * `worktreeOf` is `gitWorktreeOf`, a parameter so a test can make git unable to answer. -> `ok(resolved out)` | `fail(reason)` with `refusal: true` for the cases that exit 3.
- */
-export function checkDestination(out, worktreeOf = gitWorktreeOf) {
-  const target = path.resolve(out);
-  if (lstatOrNull(target)?.isSymbolicLink()) return fail(`the destination ${target} is a link`, { refusal: true });
-  const inside = worktreeOf(target);
-  if (!inside.ok) return fail(`the destination ${target} cannot be judged: ${inside.reason}`, { refusal: true });
-  if (inside.value !== null) return fail(`the destination ${target} is inside the git worktree ${inside.value}: a workspace is never built where a stray \`git add\` reaches it`, { refusal: true });
-  const found = lstatOrNull(target);
-  if (found === null) return ok(target);
-  if (!found.isDirectory()) return fail(`the destination ${target} exists and is not a folder`, { refusal: true });
-  return readdirSync(target).length === 0 ? ok(target) : fail(`the destination ${target} exists and is not empty`, { refusal: true });
-}
-
 // ---- the inputs -------------------------------------------------------------------------------------------------------------------------
 
 /** `ok({ specs, format, record, recipe })` read from the real input files (a test passes fixtures instead): the spec record (its `runner` pin), the FORMAT rows, the snapshot record and the checked recipe. */
@@ -95,6 +68,9 @@ export function runShProblem(text) {
   return last !== undefined && last.startsWith('exec ') ? null : 'run.sh must end with a line that starts with `exec `: the program has to replace the shell, or a stop signal sent to the process never reaches it';
 }
 
+/** The `.npmrc` of every Node workspace template: the offline file and no update check (the check asks the registry once per npm call, which an agent box without a registry logs as a refused request). */
+export const NPMRC_WORKSPACE = `${NPMRC_OFFLINE}update-notifier=false\n`;
+
 /** The pin of a built workspace's `runner/` (the same pin as the bench's own folder, the grammar file left out: the pin refuses any non-.py file). */
 export const runnerHash = dir => computePin(dir, folder => readdirSync(folder).filter(name => name !== GRAMMAR));
 
@@ -108,9 +84,11 @@ function groupProblem({ format, group, task, helloFixture }) {
   const groups = Object.keys(format).filter(key => Array.isArray(format[key]?.tasks));
   if (!groups.includes(group)) return `the group ${JSON.stringify(group)} is not one of ${groups.join(', ')}`;
   const owner = groups.find(key => format[key].tasks.includes(task));
-  if (owner !== undefined && owner !== group) return `the build of ${group} refuses to write into ${owner}'s tasks: the task ${task} belongs to group ${owner}, not to group ${group}`;
-  return owner === undefined && !helloFixture ? `the task ${JSON.stringify(task)} is in no group's row of FORMAT's record` : null;
+  return owner === undefined ? rowlessProblem(task, helloFixture) : foreignProblem({ owner, group, task });
 }
+
+const rowlessProblem = (task, helloFixture) => (helloFixture ? null : `the task ${JSON.stringify(task)} is in no group's row of FORMAT's record`);
+const foreignProblem = ({ owner, group, task }) => (owner === group ? null : `the build of ${group} refuses to write into ${owner}'s tasks: the task ${task} belongs to group ${owner}, not to group ${group}`);
 
 /** FORMAT's bytes and their grammar against the group's record: `ok(grammar bytes)` | a refusal naming both hashes. */
 function grammarOf({ formatBytes, format, group }) {
@@ -123,21 +101,28 @@ function grammarOf({ formatBytes, format, group }) {
   return grammarHash === row.grammarSha256 ? ok(grammar.bytes) : refuse(`the grammar of FORMAT.md has sha256 ${grammarHash}, but the record of group ${group} has ${row.grammarSha256}`);
 }
 
-/** The regular files under `dir` as `{ rel, abs }`; a link or another kind of entry is a `fail` naming it (the builder copies regular files only). */
+const relativeOf = (base, abs) => path.relative(base, abs).split(path.sep).join('/');
+
+/** The regular files under `abs` (a file is one) as `{ rel, abs }`; a link or another kind of entry is a `fail` naming it (the builder copies regular files only). */
+function entryFiles(abs, base) {
+  const stat = lstatSync(abs);
+  if (stat.isDirectory()) return listFiles(abs, base);
+  return stat.isFile() ? ok([{ rel: relativeOf(base, abs), abs }]) : refuse(`${abs} is a link or another kind of entry: a workspace is made of regular files`);
+}
+
+/** The regular files under `dir`, or a `fail` for a folder that cannot be read or an entry that is not a regular file. */
 function listFiles(dir, base = dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    return fail(`${dir} cannot be read (${error.code ?? error.message})`);
+  }
   const found = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const abs = path.join(dir, entry.name);
-    const stat = lstatSync(abs);
-    if (stat.isDirectory()) {
-      const inner = listFiles(abs, base);
-      if (!inner.ok) return inner;
-      found.push(...inner.value);
-    } else if (stat.isFile()) {
-      found.push({ rel: path.relative(base, abs).split(path.sep).join('/'), abs });
-    } else {
-      return refuse(`${abs} is a link or another kind of entry: a workspace is made of regular files`);
-    }
+  for (const entry of entries) {
+    const inner = entryFiles(path.join(dir, entry.name), base);
+    if (!inner.ok) return inner;
+    found.push(...inner.value);
   }
   return ok(found);
 }
@@ -161,31 +146,71 @@ function checkRequest(args) {
   return grammar.ok ? ok({ out: destination.value, grammar: grammar.value }) : grammar;
 }
 
-/** The template, the runner and the samples as `{ rel, abs | bytes, mode }`; the packages list is rendered here. -> `ok(files)` | `fail`. */
-function gatherFiles({ stack, kind, inputs, samplesDir, statement, grammar, templatesDir = TEMPLATES_DIR, runnerDir = RUNNER_DIR }) {
-  const template = listFiles(path.join(templatesDir, stack, kind));
-  const samples = listFiles(samplesDir);
-  const runner = listFiles(runnerDir);
-  const failed = [template, samples, runner].find(found => !found.ok);
+const modeOfTemplateFile = rel => (SCRIPTS.includes(rel) ? 0o755 : 0o644);
+const copies = (list, prefix, modeOf = () => 0o644) => list.map(file => ({ rel: `${prefix}${file.rel}`, abs: file.abs, mode: modeOf(file.rel) }));
+
+/** The template, the runner and the samples as `{ rel, abs, mode }`. -> `ok(files)` | `fail`. */
+function sourceFiles({ stack, kind, samplesDir, templatesDir, runnerDir }) {
+  const found = [listFiles(path.join(templatesDir, stack, kind)), listFiles(runnerDir), listFiles(samplesDir)];
+  const failed = found.find(result => !result.ok);
   if (failed !== undefined) return failed;
-  const runText = readFileSync(path.join(templatesDir, stack, kind, 'run.sh'), 'utf8');
-  if (runShProblem(runText) !== null) return refuse(`the template ${stack}/${kind}: ${runShProblem(runText)}`);
-  const packages = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
-  if (!packages.ok) return refuse(packages.reason);
-  const copy = (list, prefix, mode) => list.value.map(f => ({ rel: `${prefix}${f.rel}`, abs: f.abs, mode: mode(f.rel) }));
-  return ok([
-    ...copy(template, '', rel => (SCRIPTS.includes(rel) ? 0o755 : 0o644)), ...copy(runner, 'runner/', () => 0o644), ...copy(samples, 'samples/', () => 0o644),
-    { rel: 'PACKAGES.md', bytes: packages.value, mode: 0o644 }, { rel: `runner/${GRAMMAR}`, bytes: grammar, mode: 0o644 }, { rel: 'STATEMENT.md', bytes: statement, mode: 0o644 },
-  ].sort((a, b) => (a.rel < b.rel ? -1 : 1)));
+  const [template, runner, samples] = found.map(result => result.value);
+  return ok([...copies(template, '', modeOfTemplateFile), ...copies(runner, 'runner/'), ...copies(samples, 'samples/')]);
 }
 
-function writeFiles(out, files) {
-  mkdirSync(out, { recursive: true });
+/** A refusal when the template's `run.sh` does not end in `exec`, else null. */
+function scriptRefusal({ stack, kind, templatesDir }) {
+  const problem = runShProblem(readFileSync(path.join(templatesDir, stack, kind, 'run.sh'), 'utf8'));
+  return problem === null ? null : refuse(`the template ${stack}/${kind}: ${problem}`);
+}
+
+/** The files that are written from bytes: the derived packages list, the grammar and the statement. -> `ok(files)` | `fail`. */
+function derivedFiles({ stack, inputs, statement, grammar }) {
+  const packages = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
+  if (!packages.ok) return refuse(packages.reason);
+  return ok([{ rel: 'PACKAGES.md', bytes: packages.value, mode: 0o644 }, { rel: `runner/${GRAMMAR}`, bytes: grammar, mode: 0o644 }, { rel: 'STATEMENT.md', bytes: statement, mode: 0o644 }]);
+}
+
+const byPath = (a, b) => (a.rel < b.rel ? -1 : 1);
+
+/** Every file of the workspace, sorted by path. -> `ok(files)` | `fail`. */
+function gatherFiles(args) {
+  const { templatesDir = TEMPLATES_DIR, runnerDir = RUNNER_DIR } = args;
+  const sources = sourceFiles({ ...args, templatesDir, runnerDir });
+  if (!sources.ok) return sources;
+  const script = scriptRefusal({ ...args, templatesDir });
+  if (script !== null) return script;
+  const derived = derivedFiles(args);
+  return derived.ok ? ok([...sources.value, ...derived.value].sort(byPath)) : derived;
+}
+
+// ---- the atomic write (F1) ------------------------------------------------------------------------------------------------------------------------
+
+function writeFiles(dir, files) {
+  mkdirSync(dir, { recursive: true });
   for (const file of files) {
-    const target = path.join(out, file.rel);
+    const target = path.join(dir, file.rel);
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, file.bytes ?? readFileSync(file.abs));
     chmodSync(target, file.mode);
+  }
+}
+
+const stagingOf = out => path.join(path.dirname(out), `.${path.basename(out)}.staging-${randomBytes(4).toString('hex')}`);
+
+/**
+ * The workspace is written into a unique sibling folder and renamed onto `out` only when complete (an existing empty `out` is replaced by the rename). A failure removes the staging folder and leaves `out` as it was,
+ * so a retry is not refused. The parent folders of `out` that were created for it stay.
+ */
+function writeAtomically(out, files) {
+  const stage = stagingOf(out);
+  try {
+    writeFiles(stage, files);
+    renameSync(stage, out);
+    return ok(out);
+  } catch (error) {
+    rmSync(stage, { recursive: true, force: true });
+    return fail(`the workspace could not be written to ${out} (${error.code ?? error.message}); nothing was left behind`);
   }
 }
 
@@ -198,8 +223,8 @@ export function buildWorkspace(args) {
   if (!request.ok) return request;
   const files = gatherFiles({ ...args, grammar: request.value.grammar });
   if (!files.ok) return files;
-  writeFiles(request.value.out, files.value);
-  return ok({ out: request.value.out, files: files.value.map(f => f.rel) });
+  const written = writeAtomically(request.value.out, files.value);
+  return written.ok ? ok({ out: written.value, files: files.value.map(file => file.rel) }) : written;
 }
 
 // ---- the push check's list ----------------------------------------------------------------------------------------------------------------------

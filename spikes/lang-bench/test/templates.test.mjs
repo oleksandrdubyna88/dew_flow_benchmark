@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
+import { NPM_OFFLINE_ENV, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
 import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';
-import { lockProblems, runShProblem } from '../lib/workspace-build.mjs';
+import { NPMRC_WORKSPACE, lockProblems, runShProblem } from '../lib/workspace-build.mjs';
 import { EXEC_FILE, KINDS, STACKS, TEMPLATES, TEMPLATE_FILES, filesUnder, readJson, readTemplate, snapshotRecord, stacksRecord, templateDir, trackedMode } from './support/workspace-fixtures.mjs';
 
 const everyKind = fn => STACKS.flatMap(stack => KINDS.flatMap(kind => fn(stack, kind)));
@@ -152,7 +152,7 @@ function nodePinProblems(root) {
     const ts = JSON.parse(readTemplate('node', kind, 'tsconfig.json', root)).compilerOptions ?? {};
     for (const flag of ['strict', 'noEmit', 'erasableSyntaxOnly', 'verbatimModuleSyntax']) if (ts[flag] !== true) problems.push(`node/${kind}: tsconfig ${flag} is not true`);
     if (ts.module !== 'nodenext') problems.push(`node/${kind}: tsconfig module is ${ts.module}`);
-    if (readTemplate('node', kind, '.npmrc', root) !== NPMRC_OFFLINE) problems.push(`node/${kind}: .npmrc is not the offline file`);
+    if (readTemplate('node', kind, '.npmrc', root) !== NPMRC_WORKSPACE) problems.push(`node/${kind}: .npmrc is not the offline file without the update check`);
     if (JSON.parse(readTemplate('node', kind, 'package.json', root)).engines?.node !== stacksRecord().pins.node) problems.push(`node/${kind}: engines.node is not the pinned Node`);
     const lint = readTemplate('node', kind, 'eslint.config.mjs', root);
     for (const word of ['@eslint/js', 'eslint/config', 'typescript-eslint', 'projectService']) if (!lint.includes(word)) problems.push(`node/${kind}: eslint config does not name ${word}`);

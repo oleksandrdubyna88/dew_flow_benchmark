@@ -2,7 +2,7 @@
 // grammar, and the agent-visible text of the templates (the push check's scans, no other stack, no comparison word). The files of the templates are in templates.test.mjs; the box tests are in workspace-exec.test.mjs.
 // Most cases build with the synthetic FORMAT of the FORMAT tools' tests (no task repository needed); the cases that name the real record use `realDraft` and skip without LANG_V2_TASK_REPO.
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fail } from '../../minigit-bench/lib/result.mjs';
@@ -12,6 +12,7 @@ import { findStackFolderFiles } from '../lib/push-visible.mjs';
 import { scanText } from '../lib/push-scan.mjs';
 import { computePin } from '../lib/runner-pin.mjs';
 import { CSHARP_PINS, diffTaskPair } from '../lib/workspace-diff.mjs';
+import { PINNED_TASK_SHA } from '../lib/task-repo.mjs';
 import { buildWorkspace, loadInputs, runnerHash, stackFilePatterns } from '../lib/workspace-build.mjs';
 import { edit, FORMAT_TEXT, realDraft, sha256 } from './support/format-fixtures.mjs';
 import { loadInputsForTest } from './support/push-inputs.mjs';
@@ -143,6 +144,43 @@ test('The_builder_refuses_a_linked_worktree_whose_git_is_a_file', async t => {
   const linked = owned.ownedWorktree(t, repo, 'link');
   assert.equal(readFileSync(path.join(linked.path, '.git'), 'utf8').startsWith('gitdir:'), true, 'its .git is a file');
   refusedInside(t, linked.path, [path.join(linked.path, 'ws')]);
+});
+
+test('The_builder_refuses_a_linked_worktree_whose_admin_folder_is_gone_and_a_path_inside_a_git_folder_and_a_bare_repository', async t => {
+  const repo = await repoWith(t, { 'a.txt': 'x\n' });
+  const linked = owned.ownedWorktree(t, repo, 'link');
+  t.after(() => rmSync(linked.path, { recursive: true, force: true }));
+  rmSync(path.join(repo, '.git', 'worktrees'), { recursive: true, force: true });
+  const orphan = path.join(linked.path, 'ws');
+  const refusedOrphan = buildWorkspace(args(t, { out: orphan }));
+  assert.equal(refusedOrphan.ok, false, 'git cannot answer for a worktree whose admin folder is gone, so the walk of .git entries does');
+  assert.ok(refusedOrphan.reason.includes(linked.path), refusedOrphan.reason);
+  const inGit = path.join(repo, '.git', 'ws');
+  const refusedInGit = buildWorkspace(args(t, { out: inGit }));
+  assert.equal(refusedInGit.ok, false);
+  assert.match(refusedInGit.reason, /inside a \.git folder/);
+  const bare = ownedFolder(t, 'bare');
+  await git(bare, ['init', '-q', '--bare']);
+  const refusedBare = buildWorkspace(args(t, { out: path.join(bare, 'ws') }));
+  assert.equal(refusedBare.ok, false);
+  assert.match(refusedBare.reason, /bare git repository/);
+  for (const out of [orphan, inGit, path.join(bare, 'ws')]) assert.equal(existsSync(out), false, `nothing was written at ${out}`);
+});
+
+test('A_failed_write_leaves_no_destination_and_no_staging_folder_and_a_retry_is_not_refused', t => {
+  const samples = writeTree(ownedFolder(t, 'smp'), { 's01.in': 'a\n', 's01.out': 'b\n' });
+  chmodSync(path.join(samples, 's01.out'), 0o000);
+  t.after(() => { if (existsSync(path.join(samples, 's01.out'))) chmodSync(path.join(samples, 's01.out'), 0o644); });
+  const a = args(t, { samplesDir: samples });
+  const parent = path.dirname(a.out);
+  const failed = buildWorkspace(a);
+  assert.equal(failed.ok, false, 'a file that cannot be read stops the write');
+  assert.match(failed.reason, /nothing was left behind/);
+  assert.deepEqual(readdirSync(parent), [], 'neither the destination nor a staging folder is left');
+  chmodSync(path.join(samples, 's01.out'), 0o644);
+  const retried = buildWorkspace(a);
+  assert.equal(retried.ok, true, retried.reason);
+  assert.deepEqual(readdirSync(parent), ['w'], 'the retry is not refused and leaves only the workspace');
 });
 
 test('A_git_that_cannot_answer_is_a_refusal_and_not_a_pass', t => {
@@ -334,32 +372,58 @@ test('The_stack_files_list_is_what_the_function_derives', () => {
 
 // ---- the command -----------------------------------------------------------------------------------------------------------------------------
 
-/** The command itself, through the bounded runner: `{ code, stdout, stderr }`. */
-async function command(flags) {
-  const r = await runBounded(process.execPath, [path.join(SPIKE, 'build-workspaces.mjs'), ...flags], { timeoutMs: 120_000, env: { PATH: '/usr/bin:/bin' }, maxBytes: 1024 * 1024 });
+/** The command itself, through the bounded runner, with a `HOME` of the test's own (no test reads or writes the real ~/.cache/lang-v2): `{ code, stdout, stderr }`. */
+async function command(home, flags) {
+  const r = await runBounded(process.execPath, [path.join(SPIKE, 'build-workspaces.mjs'), ...flags], { timeoutMs: 120_000, env: { PATH: '/usr/bin:/bin', HOME: home }, maxBytes: 1024 * 1024 });
   assert.equal(r.ok, true, r.reason);
   return r.value;
 }
 
 test('The_command_exits_2_for_usage_3_for_each_refusal_and_0_for_the_list', async t => {
+  const home = ownedFolder(t, 'home');
+  const run = flags => command(home, flags);
   const out = path.join(ownedFolder(t, 'out'), 'w');
   const statement = helloStatement('olympiad');
   const build = extra => ['--stack', 'csharp', '--kind', 'olympiad', '--task', 'hello', '--group', 'A', '--out', out, '--statement', statement, '--samples', helloSamples('olympiad'), ...extra];
-  assert.equal((await command([])).code, 2, 'no flags');
-  assert.equal((await command(['--no-such-flag'])).code, 2, 'an unknown flag');
-  assert.equal((await command(['--stack', 'csharp'])).code, 2, 'a build with flags missing');
-  assert.equal((await command(build(['--make-locks']))).code, 2, 'two modes at once');
-  assert.equal((await command(['--stack', 'rust', ...build([]).slice(2)])).code, 2, 'a stack that is not csharp or node');
-  assert.equal((await command(build(['--hello']))).code, 2, 'no task repository named');
-  const noRow = await command(build(['--task-repo', SPIKE]));
+  assert.equal((await run([])).code, 2, 'no flags');
+  assert.equal((await run(['--no-such-flag'])).code, 2, 'an unknown flag');
+  assert.equal((await run(['--stack', 'csharp'])).code, 2, 'a build with flags missing');
+  assert.equal((await run(build(['--make-locks']))).code, 2, 'two modes at once');
+  assert.equal((await run(['--stack', 'rust', ...build([]).slice(2)])).code, 2, 'a stack that is not csharp or node');
+  assert.equal((await run(build(['--hello']))).code, 2, 'no task repository named');
+  const noRow = await run(build(['--task-repo', SPIKE]));
   assert.equal(noRow.code, 3, 'a task in no row of FORMAT\'s record');
   assert.match(noRow.stderr, /in no group's row/);
   const repo = await repoWith(t, { 'a.txt': 'x\n' });
-  assert.equal((await command(['--stack', 'csharp', '--kind', 'olympiad', '--task', 'hello', '--group', 'A', '--out', path.join(repo, 'ws'), '--statement', statement, '--samples', helloSamples('olympiad'), '--hello', '--task-repo', repo])).code, 3, 'a destination inside a worktree');
-  const notPinned = await command(build(['--hello', '--task-repo', repo]));
-  assert.equal(notPinned.code, 3, 'a task repository that does not hold the pinned commit is a refusal');
+  assert.equal((await run(['--stack', 'csharp', '--kind', 'olympiad', '--task', 'hello', '--group', 'A', '--out', path.join(repo, 'ws'), '--statement', statement, '--samples', helloSamples('olympiad'), '--hello', '--task-repo', repo])).code, 3, 'a destination inside a worktree');
+  const cached = path.join(home, '.cache', 'lang-v2', PINNED_TASK_SHA);
+  writeTree(cached, { 'csharp/01-x/stray.txt': 'a cached tree that is not the listed one\n' });
+  const mismatch = await run(build(['--hello', '--task-repo', repo]));
+  assert.equal(mismatch.code, 3, 'a cached tree off the hash list is a refusal');
+  assert.match(mismatch.stderr, /not on the hash list|missing/);
   assert.equal(existsSync(out), false, 'no refusal wrote anything');
-  const list = await command(['--print-stack-files']);
+  const list = await run(['--print-stack-files']);
   assert.equal(list.code, 0);
   assert.equal(list.stdout, read(path.join(TEMPLATES, 'stack-files.json')));
+});
+
+test('A_git_failure_in_the_fetch_exits_1_and_a_missing_statement_or_samples_exits_2_without_a_stack_trace', async t => {
+  const home = ownedFolder(t, 'home');
+  const out = path.join(ownedFolder(t, 'out'), 'w');
+  const plain = ownedFolder(t, 'plain');
+  const build = (over = {}) => {
+    const flags = { '--stack': 'csharp', '--kind': 'olympiad', '--task': 'hello', '--group': 'A', '--out': out, '--statement': helloStatement('olympiad'), '--samples': helloSamples('olympiad'), '--task-repo': plain, ...over };
+    return [...Object.entries(flags).flat(), '--hello'];
+  };
+  const noStatement = await command(home, build({ '--statement': path.join(plain, 'none.md') }));
+  assert.equal(noStatement.code, 2);
+  assert.match(noStatement.stderr, /--statement .* is not a file/);
+  const noSamples = await command(home, build({ '--samples': path.join(plain, 'none') }));
+  assert.equal(noSamples.code, 2);
+  assert.match(noSamples.stderr, /--samples .* is not a folder/);
+  for (const result of [noStatement, noSamples]) assert.doesNotMatch(result.stderr, /\n\s+at /, 'a line, not a stack trace');
+  const notARepo = await command(home, build());
+  assert.equal(notARepo.code, 1, 'git cannot clone a folder that is not a repository: a failure, not a refusal');
+  assert.equal(existsSync(out), false);
+  assert.deepEqual(readdirSync(path.join(home, '.cache', 'lang-v2')).filter(n => n.startsWith('.fetch')), [], 'no scratch folder');
 });
