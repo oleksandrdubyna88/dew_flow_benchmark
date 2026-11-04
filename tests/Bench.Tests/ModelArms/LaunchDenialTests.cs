@@ -17,8 +17,8 @@ namespace Bench.Tests.ModelArms;
 public sealed class LaunchDenialTests
 {
     private static readonly string Opening1Code = Opening(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "briefs", "1-code.template.md"));
-    /// <summary>The ways to start <c>run-arm</c> without the kit, written split so this file does not hold them itself.</summary>
-    private static readonly string[] Bypasses = ["ExperimentGate" + ".RunAsync(", "Program" + ".RunAsync(", "RunArmVerb" + ".RunAsync("];
+    /// <summary>The ways to start <c>run-arm</c> without the kit: the scan looks for each in the two run-arm test classes, and its companion finds each in <c>RunArmKit.cs</c>.</summary>
+    private static readonly string[] Bypasses = ["ExperimentGate.RunAsync(", "Program.RunAsync(", "RunArmVerb.RunAsync("];
 
     private static readonly Guid Session = new("3f2b6f9e-2a4c-4f0e-9d1a-0c6b5a7e8d10");
 
@@ -164,7 +164,7 @@ public sealed class LaunchDenialTests
         Replay(fake, "result-success.jsonl");
         var seams = new global::ModelArms.Verbs.RunArmSeams(TimeProvider.System, (span, ct) => Task.Delay(span, ct), null);
 
-        var (code, checkedLaunches) = await RunWithSeamsCheckedAsync(root, "C1", seams, new StringWriter(), CancellationToken.None);
+        var (code, checkedLaunches) = await RunWithSeamsCheckedAsync(root, "C1", seams, new StringWriter(), Ct);
 
         code.Should().Be(0);
         fake.Calls().Should().HaveCount(4);
