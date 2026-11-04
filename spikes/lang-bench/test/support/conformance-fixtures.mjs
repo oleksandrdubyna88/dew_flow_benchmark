@@ -42,8 +42,12 @@ export function fixtureRepo(t, kind, edits = {}) {
 /** The arguments of one checker run on a fixture repository. */
 export const argsOf = (fixture, extra = []) => ['--repo', fixture.repo, '--task', fixture.task, '--format', fixture.format, ...extra];
 
-/** The checker run on a fixture, in this process: `{ exit, lines, errors }`. */
-export const check = (fixture, extra = [], seams = {}) => run(argsOf(fixture, extra), seams);
+/** The checker run on a fixture, in this process: `{ exit, lines, errors }`. The runner's TMPDIR is a folder inside the fixture, so it dies with the fixture's owned folder. */
+export function check(fixture, extra = [], seams = {}) {
+  const tmp = path.join(fixture.repo, '.run-tmp');
+  mkdirSync(tmp, { recursive: true });
+  return run(argsOf(fixture, extra), { tmp, ...seams });
+}
 
 /** The FAIL lines of a result for one check. */
 export const failsOf = (result, name) => result.lines.filter(line => line.startsWith(`FAIL ${name} — `));
