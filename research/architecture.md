@@ -92,7 +92,7 @@ flowchart TB
 
 `Bench.Hosting` is a project of its own rather than a folder of the CLI because more than one host needs the flag parser, the
 exit-code contract and the root cancellation token, and an exe may not reference an exe
-(`todo/PLAN_model_arms.md` D3); it keeps the namespace `Bench.Cli` so no `using` changed, and it references nothing.
+(`research/PLAN_model_arms.md` D3); it keeps the namespace `Bench.Cli` so no `using` changed, and it references nothing.
 
 Two projects depend on **nothing** and are the layers' floor: `Bench.Domain` and `Bench.Contracts`. That is not
 tidiness — a wire contract able to reference the domain is a contract that leaks it, and a domain able to

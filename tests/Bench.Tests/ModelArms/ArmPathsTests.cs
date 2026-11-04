@@ -6,7 +6,7 @@ using Xunit;
 namespace Bench.Tests.ModelArms;
 
 /// <summary>One spelling of every path of an experiment root and of an arm. The expected strings below are written
-/// out by hand from the shell harness's layout (<c>todo/PLAN_model_arms.md</c> §4.3), so a member renamed in the
+/// out by hand from the shell harness's layout (<c>research/PLAN_model_arms.md</c> §4.3), so a member renamed in the
 /// code cannot quietly agree with itself. The table is also checked against the members the types really have, so
 /// a path added without a spelling here fails the build of this class.
 /// <para>

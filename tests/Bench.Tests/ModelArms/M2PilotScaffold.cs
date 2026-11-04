@@ -8,7 +8,7 @@ using ModelArmsApp = ModelArms;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The scaffold of M2, the attended pilot (plan <c>todo/PLAN_model_arms_E3.md</c> §5 E3.S5, M2): the scratch target and the filled experiment the OWNER runs the verbs over by hand, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what
+/// <summary>The scaffold of M2, the attended pilot (plan <c>research/PLAN_model_arms_E3.md</c> §5 E3.S5, M2): the scratch target and the filled experiment the OWNER runs the verbs over by hand, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what
 /// it makes is meant to outlive the test — the owner removes it after the pilot (<c>rm -rf</c> of the two printed <c>testsToDelete-m2-…</c> folders).
 /// <para>
 /// It writes, under the temp folder and outside every checkout: <c>testsToDelete-m2-target-&lt;id&gt;</c> — a git repository on a plan branch holding a tiny .NET solution with an xunit v3 test project (a real <c>dotnet build</c> and a real CTRF), an <c>src_vs_code</c> folder whose <c>npm test</c> is <c>node --test</c>, the target's own lowering wrapper <c>tools/low-priority.mjs</c> inside the rules

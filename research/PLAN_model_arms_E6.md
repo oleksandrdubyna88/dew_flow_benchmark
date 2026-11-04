@@ -1,6 +1,7 @@
 # PLAN — E6 stories: the compatibility contract and the record of the model-arms module
 
-> Status: **E6.S1–E6.S4 BUILT 2026-11-01 except the promotion, and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered with E4 and E5 (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); E6.S4 — the parent's entries 3.2 and 3.3, added by the parent's re-review for epoch 4 (2026-11-01) — built and gated on #132's branch before #132 merged; the promotion waits for the owner's open lines (§11).** Stories written 2026-10-31; E6.S4 written 2026-11-01 by the judge (part (b)'s spec; part (a)'s is Fable's, to be written). Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
+> Status: **IMPLEMENTED, 2026-11-04** (promoted with its parent; the deviations are in this document's §8 and the parent's *Deviations at promotion*).
+> History: **E6.S1–E6.S4 BUILT 2026-11-01 except the promotion, and ON `main` via PR #132 (merged 2026-11-01, squash `3a0effcc`), delivered with E4 and E5 (E6.S1, E6.S2 through an Opus review and the coai code gate; E6.S3's docs written and M3 run and logged — step 14, the real-claude delegation re-run, not run); E6.S4 — the parent's entries 3.2 and 3.3, added by the parent's re-review for epoch 4 (2026-11-01) — built and gated on #132's branch before #132 merged; the promotion waits for the owner's open lines (§11).** Stories written 2026-10-31; E6.S4 written 2026-11-01 by the judge (part (b)'s spec; part (a)'s is Fable's, to be written). Epic E6 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D5, D28;
 > §4.3, §4.12; §5; §6 step 6; §7's E6 tests; §9; §10; `## Epics` E6; plan-gate round 1's F2), written at `cc02d09` on
 > `feat/model-arms-e6` (E1–E3 on `main`; E4.S0 built; E4.S1–E4.S3 and E5.S1–E5.S4 being built on their own branches against
 > [PLAN_model_arms_E4.md](PLAN_model_arms_E4.md) and [PLAN_model_arms_E5.md](PLAN_model_arms_E5.md)) by the judge role (Opus), as the
@@ -75,7 +76,7 @@ Every line below was opened in this worktree; the E4.S1/S2 module doc as built w
 | `ArmPaths`' task spellings: `CoderHead(id)` / `CoderDiff(id)` = `out/task-<id>-coder.head` and `.diff`, `BatchesJson` = `work/batches.json`, `Continue(step)`, `Objective` = `out/objective.json` | `tools/model-arms/ModelArms.Core/Experiment/ArmPaths.cs:149`, `:159`, `:183`, `:185`, `:211`; pinned by `ArmPathsTests` |
 | A blocked gate in a test: `notes/gate.json` pre-written `{"status":"blocked",…}` with `gateTries: 1` | `tests/Bench.Tests/ModelArms/RunArmSchemeTests.cs:481-507` (`:490-491`) |
 | The test kits: `ExperimentRoot.MakeArmAsync` (every step's model the fake's, minutes 1, `claude` a link), `MakeKit` (a made arm over `TargetBench`), `ChecksKit` (`checks` through the gate with the bench's recording shims), `RunArmKit.Replay` (`stdoutFile` + `stdoutByCall`) | `ExperimentRoot.cs:101-130`; `MakeKit.cs:22-37`; `ChecksKit.cs:29-86`; `RunArmKit.cs:67` |
-| `SrsKit` (E4.S3, being built): a `MakeKit` of `SRS1`, `Plan(params TaskSpec[])` writes `work/tasks.json` and the briefs, `claude` a shell wrapper that commits `<id>.txt` on a task's fresh call | `todo/PLAN_model_arms_E4.md:913-927` |
+| `SrsKit` (E4.S3, being built): a `MakeKit` of `SRS1`, `Plan(params TaskSpec[])` writes `work/tasks.json` and the briefs, `claude` a shell wrapper that commits `<id>.txt` on a task's fresh call | `research/PLAN_model_arms_E4.md:914-928` |
 | The fake: `stdoutByCall.<n>` per model call number; `stdoutByPromptContaining`; `delayMs` read per SCRIPT (the root or `subjects.<model>`), never per call, slept before every call; one script and one call log for every model under `FAKE_CLI_HOME`, numbered per model; it writes no file of the arm's | `tests/FakeCli/Program.cs:116-120`, `:133-137`, `:107`, `:169`, `:190-194`, `:668-669`, `:677-683`; E4 §5 E4.S3 *SrsKit* |
 | Every step of a made arm shares the fake's ONE model id; `wall_s` is whole seconds; `ChecksKit.RunAsync` is an instance method over the kit's own `TargetBench` and its one arm `Name` | `ExperimentRoot.cs:113-120`; `ModelArms.Core/Steps/TimingLine.cs:120`; `ChecksKit.cs:33-45`, `:74-85` |
 | Which readers launch a process: `t-survival.mjs` runs `git` by name, read-only (`diff --name-only`, `show`), errors swallowed; `metrics.mjs` runs `ls` through `/bin/sh` (`execSync`); `metrics6.mjs`, `compare.mjs`, `make-tables.mjs`, `coai-findings.mjs`, `coai-cost.mjs` launch nothing | `t-survival.mjs:7`, `:15`, `:20-21`; `metrics.mjs:9`, `:38`; grep `child_process` over both folders |
@@ -88,7 +89,7 @@ Every line below was opened in this worktree; the E4.S1/S2 module doc as built w
 | `mcp-coai.json` holds the exported key: *"a file the experiment's published record must never carry (E6.S3 excludes `mcp-coai.json` and `coai-data/`)"* | `tools/model-arms/ModelArms.Core/Launch/McpConfig.cs:19`; E2 §8 item 14 |
 | The published record: `research/local-model-coding/data/{arms,part6,part7,…}` — no `mcp-*.json`, no `coai-data`, no `settings.json` today | `find research/local-model-coding/data -name 'mcp-*' -o -name coai-data -o -name settings.json` (none) |
 | The M2 scaffold the M3 one follows | `tests/Bench.Tests/ModelArms/M2PilotScaffold.cs:21-75` (`[Fact(Explicit = true)]` at `:33`) |
-| The delegation measurement M3 re-runs (A–D, haiku, claude 2.1.310) | `todo/PLAN_model_arms_E2.md:682-703` |
+| The delegation measurement M3 re-runs (A–D, haiku, claude 2.1.310) | `research/PLAN_model_arms_E2.md:683-704` |
 | No `todo/PLAN_model_arms_analysis.md`; no `research/PLAN_model_arms*` | `ls` |
 
 ## 3. Conventions every story follows
@@ -410,7 +411,7 @@ paths, one by one — never a glob — and the manifest last; the log names what
 13. **D28 by hand on the pilot's root:** from `<d28>` holding a link `r` → `<root>/r`, under `HOME=<home>`: `node
     research/local-model-coding/harness/part6/metrics6.mjs <root>/arms.map.json` (the absolute path of the worktree's file) → four arms; both
     limited `hreview` steps and `2-hA` with two attempts each; `<d28>/metrics6.json` written there and nowhere else.
-14. **The delegation re-run** (E2 §8 item 43; `todo/PLAN_model_arms_E2.md:682-703`): the four calls A–D with the REAL `claude` and haiku,
+14. **The delegation re-run** (E2 §8 item 43; `research/PLAN_model_arms_E2.md:683-704`): the four calls A–D with the REAL `claude` and haiku,
     exactly as measured there, from `<deleg>` under `HOME=<home14>` — logged in by hand inside that HOME (`HOME=<home14> claude`, then
     its login), no credential copied out of the operator's `~/.claude`, the login removed with the folder; `claude --version` recorded
     beside the table; ≤ $0.20. If the first real experiment will use another build, the analysis plan's first line says the re-run must

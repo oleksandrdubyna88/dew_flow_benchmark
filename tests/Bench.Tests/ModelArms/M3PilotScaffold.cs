@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The scaffold of M3, the attended pilot of the whole module (plan <c>todo/PLAN_model_arms_E6.md</c> §5 E6.S3): everything the hand-run pilot needs, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what it makes is meant to outlive the test — the pilot's last step removes it.
+/// <summary>The scaffold of M3, the attended pilot of the whole module (plan <c>research/PLAN_model_arms_E6.md</c> §5 E6.S3): everything the hand-run pilot needs, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what it makes is meant to outlive the test — the pilot's last step removes it.
 /// <para>
 /// <b>Names and the manifest.</b> Every path is <c>/tmp/testsToDelete-m3-&lt;what&gt;-&lt;id&gt;</c>, M2's form — the LEGACY form of <c>common.test-leftovers</c> §1 (no owner segment: this repository has not reached the producer stage of that rollout), so no sweep collects it by age and the pilot's own teardown is the only thing that removes it. The scaffold draws an <c>&lt;id&gt;</c>, creates FIRST and exclusively (<see cref="FileMode.CreateNew"/>; one already there draws a new id) the manifest <c>testsToDelete-m3-manifest-&lt;id&gt;.json</c> — the id, the caller's uid and the EXACT path of everything it creates or
 /// names, each written before it exists — and only then creates anything. The teardown removes exactly the manifest's paths, one by one, never a glob.

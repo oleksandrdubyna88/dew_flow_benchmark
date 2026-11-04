@@ -5,7 +5,7 @@ using Bench.Domain;
 namespace ModelArms.Core.Experiment;
 
 /// <summary>Every path of an experiment root, spelled once. Nothing else in the module concatenates one:
-/// a verb asks this type, so the layout of <c>todo/PLAN_model_arms.md</c> §4.3 cannot drift between the
+/// a verb asks this type, so the layout of <c>research/PLAN_model_arms.md</c> §4.3 cannot drift between the
 /// verb that writes a file and the verb that reads it. A path segment taken from a caller (an arm name) must
 /// be one name — empty, <c>.</c>, <c>..</c> or a separator is a programming error and throws
 /// <see cref="ArgumentException"/>; an operator's configured file name goes through <see cref="Of"/>, which
