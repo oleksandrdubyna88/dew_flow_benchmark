@@ -7,6 +7,15 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 const MAX_SAMPLE_BYTES = 4 * 1024 * 1024;
 const MAX_CELL_BYTES = 200;
 
+/** One entry of the folder: `{ odd }` for what is not a regular file or is too large, else `{ name, bytes }`. */
+function classify(dir, entry) {
+  const full = path.join(dir, entry.name);
+  const stat = lstatSync(full);
+  if (!stat.isFile()) return { odd: `${entry.name} is not a regular file` };
+  if (stat.size > MAX_SAMPLE_BYTES) return { odd: `${entry.name} is larger than ${MAX_SAMPLE_BYTES} bytes` };
+  return { name: entry.name, bytes: readFileSync(full) };
+}
+
 /** ok({ names, files, odd }) for a samples folder: the sorted names, the bytes of each regular file, and the names that are not regular files or are too large. */
 export function readSamplesFolder(dir) {
   let entries;
@@ -15,42 +24,45 @@ export function readSamplesFolder(dir) {
   } catch (error) {
     return fail(`the samples folder ${dir} cannot be read (${error.code ?? error.message})`);
   }
-  const files = new Map();
-  const odd = [];
-  for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
-    const full = path.join(dir, entry.name);
-    const stat = lstatSync(full);
-    if (!stat.isFile()) odd.push(`${entry.name} is not a regular file`);
-    else if (stat.size > MAX_SAMPLE_BYTES) odd.push(`${entry.name} is larger than ${MAX_SAMPLE_BYTES} bytes`);
-    else files.set(entry.name, readFileSync(full));
-  }
-  return ok({ names: entries.map(entry => entry.name).sort(), files, odd });
+  const classified = [...entries].sort((a, b) => (a.name < b.name ? -1 : 1)).map(entry => classify(dir, entry));
+  const regular = classified.filter(entry => entry.bytes !== undefined);
+  return ok({ names: entries.map(entry => entry.name).sort(), files: new Map(regular.map(entry => [entry.name, entry.bytes])), odd: classified.filter(entry => entry.odd !== undefined).map(entry => entry.odd) });
 }
+
+const printable = byte => byte === 0x0a || (byte >= 0x20 && byte <= 0x7e);
+const sizeShowable = length => length >= 1 && length <= MAX_CELL_BYTES;
 
 /** Whether FORMAT 3.4 lets a sample's bytes be shown as bytes: printable ASCII and line feeds, 1 to 200 bytes, not only spaces, no two backticks in a row. */
 export function showable(bytes) {
   const text = bytes.toString('latin1');
-  return bytes.length >= 1 && bytes.length <= MAX_CELL_BYTES && [...bytes].every(byte => byte === 0x0a || (byte >= 0x20 && byte <= 0x7e)) && !/^ +$/.test(text) && !text.includes('``');
+  return sizeShowable(bytes.length) && [...bytes].every(printable) && !/^ +$/.test(text) && !text.includes('``');
 }
 
 const FALLBACK = /^(\d+) bytes, see samples\/(s\d\d)\.(in|out)$/;
 const SINGLE = /^`([^`]+)`$/;
 const DOUBLE = /^``( .+ )``$/;
 
+const spanOf = cell => {
+  const single = SINGLE.exec(cell);
+  const double = single === null ? DOUBLE.exec(cell) : null;
+  if (single !== null) return { inner: single[1], double: false };
+  return double === null ? null : { inner: double[1].slice(1, -1), double: true };
+};
+
+const printableText = text => [...text].every(char => char === '\n' || (char >= ' ' && char <= '~'));
+const needsDouble = text => text.includes('`') || (text.startsWith(' ') && text.endsWith(' '));
+const formProblem = (span, text) => (span.double === needsDouble(text) ? undefined : needsDouble(text) ? 'must be a code span of two backticks with a space inside each end' : 'uses two backticks where one is enough');
+const textProblem = (span, text) => (printableText(text) ? formProblem(span, text) : 'shows a character that is not printable ASCII, the space or ⏎');
+
 /** What a cell of the olympiad table stands for: `{ bytes }`, `{ size, file }` for the size fallback, or `{ error }`. */
 export function decodeCell(cell) {
   const fallback = FALLBACK.exec(cell);
   if (fallback !== null) return { size: Number(fallback[1]), file: `${fallback[2]}.${fallback[3]}` };
-  const single = SINGLE.exec(cell);
-  const double = single === null ? DOUBLE.exec(cell) : null;
-  if (single === null && double === null) return { error: 'is not one code span, and not the form "<size> bytes, see samples/<id>.<in|out>"' };
-  const inner = single === null ? double[1].slice(1, -1) : single[1];
-  const text = inner.replaceAll('\\|', '|').replaceAll('⏎', '\n');
-  if (![...text].every(char => char === '\n' || (char >= ' ' && char <= '~'))) return { error: 'shows a character that is not printable ASCII, the space or ⏎' };
-  const needsDouble = text.includes('`') || (text.startsWith(' ') && text.endsWith(' '));
-  if (single !== null && needsDouble) return { error: 'must be a code span of two backticks with a space inside each end' };
-  if (double !== null && !needsDouble) return { error: 'uses two backticks where one is enough' };
-  return { bytes: Buffer.from(text, 'utf8') };
+  const span = spanOf(cell);
+  if (span === null) return { error: 'is not one code span, and not the form "<size> bytes, see samples/<id>.<in|out>"' };
+  const text = span.inner.replaceAll('\\|', '|').replaceAll('⏎', '\n');
+  const problem = textProblem(span, text);
+  return problem === undefined ? { bytes: Buffer.from(text, 'utf8') } : { error: problem };
 }
 
 const cellsOf = line => line.split(/(?<!\\)\|/).slice(1, -1).map(cell => cell.trim());

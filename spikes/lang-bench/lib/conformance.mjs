@@ -49,22 +49,27 @@ function parseOptions(argv) {
   }
 }
 
-/** ok({ format, facts, sentences, known, literals }): everything read from outside the spec, or the first fail. FORMAT's own faults are format errors (exit 4). */
-function loadReferences(options, stackWordsFile) {
-  const bytes = readFile(options.format);
-  if (!bytes.ok) return bytes;
-  const parsed = parseFormat(bytes.value);
-  if (!parsed.ok) return fail(`${options.format} is not a readable FORMAT: line ${parsed.line}: ${parsed.reason}`);
-  const facts = readFacts(parsed.format);
-  if (!facts.ok) return facts;
-  const sentences = readSentences(parsed.format);
-  if (!sentences.ok) return sentences;
-  const known = loadWordFile(NEEDLES_FILE);
-  const stack = known.ok ? loadWordFile(stackWordsFile) : known;
-  if (!stack.ok) return stack;
-  const literals = options.needles === undefined ? ok(undefined) : readNeedles(options.needles);
-  return literals.ok ? ok({ format: parsed.format, facts: facts.value, sentences: sentences.value, known: known.value, stackWords: stack.value, literals: literals.value }) : literals;
-}
+/** `ok(f(value))` for an ok result, the fail otherwise. */
+const mapOk = (result, make) => (result.ok ? ok(make(result.value)) : result);
+
+/** The steps run in order on a state: a step returns `ok(more)` to add to the state or a fail, which ends the run. */
+const pipeline = (steps, state) => steps.reduce((acc, step) => (acc.ok ? mapOk(step(acc.value), more => ({ ...acc.value, ...more })) : acc), ok(state));
+
+const readDocument = (bytes, file) => {
+  const parsed = parseFormat(bytes);
+  return parsed.ok ? ok({ format: parsed.format }) : fail(`${file} is not a readable FORMAT: line ${parsed.line}: ${parsed.reason}`);
+};
+
+/** ok({ format, facts, sentences, known, stackWords, literals }): everything read from outside the spec, or the first fail. FORMAT's own faults are format errors (exit 4). */
+const loadReferences = (options, stackWordsFile) => pipeline([
+  () => mapOk(readFile(options.format), bytes => ({ bytes })),
+  ({ bytes }) => readDocument(bytes, options.format),
+  ({ format }) => mapOk(readFacts(format), facts => ({ facts })),
+  ({ format }) => mapOk(readSentences(format), sentences => ({ sentences })),
+  () => mapOk(loadWordFile(NEEDLES_FILE), known => ({ known })),
+  () => mapOk(loadWordFile(stackWordsFile), stackWords => ({ stackWords })),
+  () => mapOk(options.needles === undefined ? ok(undefined) : readNeedles(options.needles), literals => ({ literals })),
+], {});
 
 /** ok(matchers) from a needle file of the push check's shape (`words`, `substrings`), or a fail naming the file. */
 function loadWordFile(file) {
@@ -127,36 +132,62 @@ function reportLines(ctx, extra) {
   });
 }
 
-async function runnerFindings(ctx, dir, seams) {
-  if (ctx.kind === null || ctx.kind === 'olympiad') return ok([]);
-  const own = seams.tmp === undefined ? mkdtempSync(path.join(os.tmpdir(), 'conformance-run-')) : null;
+const needsRunner = ctx => ctx.kind !== null && ctx.kind !== 'olympiad';
+const runnerArgs = (ctx, dir, seams, tmp) => ({ dir, kind: ctx.kind, tmp, python: seams.python, runner: seams.runner, timeoutMs: seams.timeoutMs });
+
+/** The runner's run in a TMPDIR of its own, made here and removed after. */
+async function inOwnTemp(ctx, dir, seams) {
+  const own = mkdtempSync(path.join(os.tmpdir(), 'conformance-run-'));
   try {
-    return await parseSamples({ dir, kind: ctx.kind, tmp: seams.tmp ?? own, python: seams.python, runner: seams.runner, timeoutMs: seams.timeoutMs });
+    return await parseSamples(runnerArgs(ctx, dir, seams, own));
   } finally {
-    if (own !== null) rmSync(own, { recursive: true, force: true });
+    rmSync(own, { recursive: true, force: true });
   }
 }
 
+/** ok([finding]) of the runner's parse of the pairs; an olympiad task or an unknown kind has none to parse. */
+function runnerFindings(ctx, dir, seams) {
+  if (!needsRunner(ctx)) return ok([]);
+  return seams.tmp === undefined ? inOwnTemp(ctx, dir, seams) : parseSamples(runnerArgs(ctx, dir, seams, seams.tmp));
+}
+
+/** The spec and the samples folder of the task, read; the spec's bytes may still be refused later. */
+function readInputs(options) {
+  const repo = path.resolve(options.repo);
+  const dir = path.join(repo, 'tasks', options.task, 'samples');
+  const specBytes = readFile(path.join(repo, 'todo', 'tasks', `${options.task}.md`));
+  const folder = readSamplesFolder(dir);
+  return specBytes.ok ? mapOk(folder, value => ({ dir, specBytes: specBytes.value, folder: value })) : specBytes;
+}
+
+/** A spec the block reader refuses is a deviation of the file (exit 1), not a usage error. */
+function readSpec(specBytes) {
+  const spec = parseSpec(specBytes);
+  return spec.ok ? ok({ spec: spec.value }) : fail(`line ${spec.line}: ${spec.reason}; the spec is not read further`, { deviation: true });
+}
+
+const prepare = (argv, seams) => pipeline([
+  () => mapOk(parseOptions(argv), options => ({ options })),
+  ({ options }) => mapOk(loadReferences(options, seams.stackWordsFile ?? STACK_WORDS_FILE), references => ({ references })),
+  ({ options }) => readInputs(options),
+  ({ specBytes }) => readSpec(specBytes),
+], {});
+
+const refused = prepared => (prepared.deviation ? { exit: EXIT_DEVIATION, lines: [`FAIL file — ${prepared.reason}`], errors: [] } : usage(prepared.reason));
+
+function finish(ctx, found) {
+  const lines = reportLines(ctx, { samples: found });
+  return { exit: lines.every(line => line.startsWith('ok ')) ? 0 : EXIT_DEVIATION, lines, errors: [] };
+}
+
 /**
- * `{ exit, lines, errors }` for the command's arguments. `seams` (tests only): `python`, `runner`, `timeoutMs`, `tmp` for the runner's run, `envLists` for the env check.
+ * `{ exit, lines, errors }` for the command's arguments. `seams` (tests only): `python`, `runner`, `timeoutMs`, `tmp` for the runner's run, `envLists` for the env check, `stackWordsFile`.
  */
 export async function run(argv, seams = {}) {
-  const options = parseOptions(argv);
-  if (!options.ok) return usage(options.reason);
-  const references = loadReferences(options.value, seams.stackWordsFile ?? STACK_WORDS_FILE);
-  if (!references.ok) return usage(references.reason);
-  const repo = path.resolve(options.value.repo);
-  const specPath = path.join(repo, 'todo', 'tasks', `${options.value.task}.md`);
-  const dir = path.join(repo, 'tasks', options.value.task, 'samples');
-  const specBytes = readFile(specPath);
-  const folder = readSamplesFolder(dir);
-  if (!specBytes.ok || !folder.ok) return usage((specBytes.ok ? folder : specBytes).reason);
-  const spec = parseSpec(specBytes.value);
-  if (!spec.ok) return { exit: EXIT_DEVIATION, lines: [`FAIL file — line ${spec.line}: ${spec.reason}; the spec is not read further`], errors: [] };
-  const ctx = { ...contextOf({ options: options.value, references: references.value, spec: spec.value, folder: folder.value }), envLists: seams.envLists };
-  const parsed = await runnerFindings(ctx, dir, seams);
+  const prepared = prepare(argv, seams);
+  if (!prepared.ok) return refused(prepared);
+  const ctx = { ...contextOf(prepared.value), envLists: seams.envLists };
+  const parsed = await runnerFindings(ctx, prepared.value.dir, seams);
   if (!parsed.ok) return usage(parsed.reason);
-  const full = { ...ctx, texts: textsOf(ctx, specBytes.value.toString('utf8')) };
-  const lines = reportLines(full, { samples: parsed.value });
-  return { exit: lines.every(line => line.startsWith('ok ')) ? 0 : EXIT_DEVIATION, lines, errors: [] };
+  return finish({ ...ctx, texts: textsOf(ctx, prepared.value.specBytes.toString('utf8')) }, parsed.value);
 }

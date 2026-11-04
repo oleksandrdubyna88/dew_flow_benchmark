@@ -43,37 +43,44 @@ function fingerprintsOf(literal) {
   return [...new Set([words.slice(0, edge).join(' '), words.slice(-edge).join(' ')])].filter(text => text !== '');
 }
 
+const unknownSlot = name => fail(`the sentence template has the slot {${name}}, which the checker does not know (it knows ${Object.keys(SLOT_PATTERNS).join(', ')})`);
+
+/** The pattern of a slot: the first use is a named group, a repeated use must repeat the first value. */
+function slotSource(name, seen) {
+  const repeated = seen.has(name);
+  seen.add(name);
+  return repeated ? `\\k<${name}>` : `(?<${name}>${SLOT_PATTERNS[name]})`;
+}
+
+const longestOf = pieces => pieces.reduce((longest, piece) => (piece.length > longest.length ? piece : longest), '');
+
 /** `{ regex, slots, fingerprints }` for a sentence template (collapsed text with `{slot}` holes), or a fail naming the slot the checker does not know. */
 export function compileTemplate(template) {
   const pieces = template.split(/\{([A-Za-z]+)\}/);
+  const slotNames = pieces.filter((_, index) => index % 2 === 1);
+  const unknown = slotNames.find(name => SLOT_PATTERNS[name] === undefined);
+  if (unknown !== undefined) return unknownSlot(unknown);
   const seen = new Set();
-  let source = '(?<![A-Za-z0-9])';
-  let longest = '';
-  for (const [index, piece] of pieces.entries()) {
-    if (index % 2 === 0) {
-      source += escapeRegExp(piece);
-      if (piece.length > longest.length) longest = piece;
-    } else if (SLOT_PATTERNS[piece] === undefined) {
-      return fail(`the sentence template has the slot {${piece}}, which the checker does not know (it knows ${Object.keys(SLOT_PATTERNS).join(', ')})`);
-    } else {
-      source += seen.has(piece) ? `\\k<${piece}>` : `(?<${piece}>${SLOT_PATTERNS[piece]})`;
-      seen.add(piece);
-    }
-  }
-  return ok({ regex: new RegExp(source, 'g'), slots: [...seen], fingerprints: fingerprintsOf(longest) });
+  const source = pieces.map((piece, index) => (index % 2 === 0 ? escapeRegExp(piece) : slotSource(piece, seen))).join('');
+  return ok({ regex: new RegExp(`(?<![A-Za-z0-9])${source}`, 'g'), slots: [...seen], fingerprints: fingerprintsOf(longestOf(pieces.filter((_, index) => index % 2 === 0))) });
 }
 
 /** Every place `text` (collapsed) holds the compiled sentence: `{ index, end, slots }`. */
 export const findAll = (compiled, text) => [...text.matchAll(compiled.regex)].map(hit => ({ index: hit.index, end: hit.index + hit[0].length, slots: { ...hit.groups } }));
 
+function splitCondition(lower) {
+  const found = CONDITION.exec(lower);
+  return found === null ? { head: lower, condition: '' } : { head: lower.slice(0, found.index), condition: lower.slice(found.index).trim() };
+}
+
+const kindWords = head => head.split(/[ ,]+/).filter(word => word !== '' && word !== 'and');
+const knownKindWords = words => words.length > 0 && words.every(word => word === 'all' || KINDS.includes(word));
+
 /** The kinds a table cell names and whether the sentence is required for them: plain kind words are required, a condition (`whose`, `unless`, `instead`, `that`) makes it optional, `the default` does not. */
 export function parseKinds(cell) {
-  const lower = cell.toLowerCase();
-  const found = CONDITION.exec(lower);
-  const head = found === null ? lower : lower.slice(0, found.index);
-  const condition = found === null ? '' : lower.slice(found.index).trim();
-  const words = head.split(/[ ,]+/).filter(word => word !== '' && word !== 'and');
-  if (words.length === 0 || words.some(word => word !== 'all' && !KINDS.includes(word))) return null;
+  const { head, condition } = splitCondition(cell.toLowerCase());
+  const words = kindWords(head);
+  if (!knownKindWords(words)) return null;
   return { kinds: new Set(words.includes('all') ? KINDS : words), required: condition === '' || condition === 'the default' };
 }
 
@@ -101,36 +108,52 @@ export function parsePlacement(cell) {
 
 const cellsOf = line => line.split('|').slice(1, -1).map(cell => cell.trim());
 
-/** ok(rows) of 2.1's table as `{ id, kinds, required, where }`, or a fail naming the row that cannot be read. */
-function readTable(format) {
+/** ok(row) for one row of 2.1's table: `{ id, kinds, required, where }`, or a fail naming what cannot be read. */
+function rowOf(row) {
+  const [id, kindsCell, whereCell] = cellsOf(row.line);
+  const kinds = parseKinds(kindsCell ?? '');
+  const where = parsePlacement(whereCell ?? '');
+  if (kinds === null) return fail(`FORMAT 2.1: the kinds of ${id} ("${kindsCell}") are not words the checker knows`);
+  return where === null ? fail(`FORMAT 2.1: where ${id} stands ("${whereCell}") is not a form the checker can read`) : ok({ id, ...kinds, where });
+}
+
+/** The first fail of `results`, else `ok(make(values))`. */
+const allOk = (results, make) => results.find(result => !result.ok) ?? ok(make(results.map(result => result.value)));
+
+/** ok(rows) of the lines of 2.1's table, or a fail when the section or the table is not there. */
+function tableLines(format) {
   const heading = headingByNumber(format, '2.1');
   if (heading === undefined) return fail('FORMAT has no section 2.1');
   const { start, end } = sliceFrom(format, heading, 3);
   const table = tableOf(format.text.slice(start, end));
-  if (!table.found || table.rows.length === 0) return fail('FORMAT 2.1 has no table of fixed sentences');
-  const rows = [];
-  for (const row of table.rows) {
-    const [id, kindsCell, whereCell] = cellsOf(row.line);
-    const kinds = parseKinds(kindsCell ?? '');
-    const where = parsePlacement(whereCell ?? '');
-    if (kinds === null) return fail(`FORMAT 2.1: the kinds of ${id} ("${kindsCell}") are not words the checker knows`);
-    if (where === null) return fail(`FORMAT 2.1: where ${id} stands ("${whereCell}") is not a form the checker can read`);
-    rows.push({ id, ...kinds, where });
-  }
-  return resolveAliases(rows);
+  return !table.found || table.rows.length === 0 ? fail('FORMAT 2.1 has no table of fixed sentences') : ok(table.rows);
 }
 
-/** The rows with every `as F-X` placement replaced by F-X's own, or a fail when F-X is not a row or is itself an alias. */
+/** ok(rows) of 2.1's table as `{ id, kinds, required, where }`, or a fail naming the row that cannot be read. */
+function readTable(format) {
+  const lines = tableLines(format);
+  const rows = lines.ok ? allOk(lines.value.map(rowOf), parsed => parsed) : lines;
+  return rows.ok ? resolveAliases(rows.value) : rows;
+}
+
+/** ok(row) with an `as F-X` placement replaced by F-X's own, or a fail when F-X is not a row or is itself an alias. */
+function resolveOne(row, byId) {
+  if (row.where.alias === undefined) return ok(row);
+  const target = byId.get(row.where.alias);
+  return target === undefined || target.where.alias !== undefined ? fail(`FORMAT 2.1: ${row.id} stands "as ${row.where.alias}", which is not a row with a placement of its own`) : ok({ ...row, where: target.where });
+}
+
+/** The rows with every `as F-X` placement replaced by F-X's own; the failing result when one cannot be. */
 function resolveAliases(rows) {
   const byId = new Map(rows.map(row => [row.id, row]));
-  const resolved = [];
-  for (const row of rows) {
-    if (row.where.alias === undefined) { resolved.push(row); continue; }
-    const target = byId.get(row.where.alias);
-    if (target === undefined || target.where.alias !== undefined) return fail(`FORMAT 2.1: ${row.id} stands "as ${row.where.alias}", which is not a row with a placement of its own`);
-    resolved.push({ ...row, where: target.where });
-  }
-  return ok(resolved);
+  return allOk(rows.map(row => resolveOne(row, byId)), resolved => resolved);
+}
+
+/** The kinds in `(…)` right after the id a paragraph starts with, or null. */
+function variantKinds(text, startsWithId) {
+  const listed = startsWithId ? /^\S+\s*\(([a-z, ]+)\)/.exec(text)?.[1] : undefined;
+  const words = (listed ?? '').split(/[ ,]+/).filter(word => KINDS.includes(word));
+  return words.length > 0 ? new Set(words) : null;
 }
 
 /** The id a paragraph labels: the one it starts with, else the last one it names; with the kinds in `(…)` right after a starting id. */
@@ -139,32 +162,46 @@ function leadOf(text, known) {
   if (named.length === 0) return null;
   const first = new RegExp(`^(${IDS})`).exec(text)?.[1];
   const id = known.has(first) ? first : named.at(-1);
-  const listed = id === first ? /^\S+\s*\(([a-z, ]+)\)/.exec(text)?.[1] : undefined;
-  const words = listed === undefined ? [] : listed.split(/[ ,]+/).filter(word => KINDS.includes(word));
-  return { id, kinds: words.length > 0 ? new Set(words) : null };
+  return { id, kinds: variantKinds(text, id === first) };
 }
+
+const insideOf = range => line => line.start >= range.start && line.start < range.end;
+
+const leadItems = (format, inside, known) => paragraphs(format.lines).filter(p => !p.isTable && inside(p.lines[0]))
+  .map(p => ({ no: p.startNo, lead: leadOf(collapsed(p.lines.map(line => line.text).join(' ')), known) }));
+
+const blockItems = (format, inside) => fencedBlocks(format.lines).filter(b => b.info === 'text' && inside(format.lines[b.openNo - 1])).map(b => ({ no: b.openNo, block: b }));
+
+/** A lead starts a new group of blocks; a block joins the group of the lead above it. */
+function addItem(state, item) {
+  if (item.lead) {
+    const lead = { ...item.lead, parts: [] };
+    return { current: lead, leads: [...state.leads, lead] };
+  }
+  if (item.block !== undefined && state.current !== null) state.current.parts.push(collapsed(item.block.content));
+  return state;
+}
+
+const byIdOf = leads => leads.filter(lead => lead.parts.length > 0).reduce((map, lead) => map.set(lead.id, [...(map.get(lead.id) ?? []), { kinds: lead.kinds, parts: lead.parts }]), new Map());
 
 /** The sentence leads of section 2 with their `text` blocks: `Map(id -> [{ kinds, parts: [collapsed text] }])`, in document order. */
 function readBlocks(format, ids) {
-  const section = headingByNumber(format, '2');
-  const { start, end } = sliceFrom(format, section, 2);
-  const inside = line => line.start >= start && line.start < end;
-  const known = new Set(ids);
-  const items = [
-    ...paragraphs(format.lines).filter(p => !p.isTable && inside(p.lines[0])).map(p => ({ no: p.startNo, lead: leadOf(collapsed(p.lines.map(l => l.text).join(' ')), known) })),
-    ...fencedBlocks(format.lines).filter(b => b.info === 'text' && inside(format.lines[b.openNo - 1])).map(b => ({ no: b.openNo, block: b })),
-  ].sort((a, b) => a.no - b.no);
-  const leads = new Map();
-  let current = null;
-  for (const item of items) {
-    if (item.lead !== undefined && item.lead !== null) {
-      current = { ...item.lead, parts: [] };
-      leads.set(item.no, current);
-    } else if (item.block !== undefined && current !== null) current.parts.push(collapsed(item.block.content));
-  }
-  const byId = new Map();
-  for (const lead of leads.values()) if (lead.parts.length > 0) byId.set(lead.id, [...(byId.get(lead.id) ?? []), { kinds: lead.kinds, parts: lead.parts }]);
-  return byId;
+  const inside = insideOf(sliceFrom(format, headingByNumber(format, '2'), 2));
+  const items = [...leadItems(format, inside, new Set(ids)), ...blockItems(format, inside)].sort((a, b) => a.no - b.no);
+  return byIdOf(items.reduce(addItem, { current: null, leads: [] }).leads);
+}
+
+/** ok(variant) with its parts compiled, or the fail of the first part that cannot be. */
+function compileVariant(variant, id) {
+  const parts = variant.parts.map(template => ({ template, compiled: compileTemplate(template) }));
+  const bad = parts.find(part => !part.compiled.ok);
+  return bad === undefined ? ok({ kinds: variant.kinds, parts: parts.map(part => ({ template: part.template, ...part.compiled.value })) }) : fail(`${id}: ${bad.compiled.reason}`);
+}
+
+function sentenceOf(row, blocks) {
+  const found = blocks.get(row.id);
+  if (found === undefined) return fail(`FORMAT has no \`text\` block for the sentence ${row.id} of 2.1's table`);
+  return allOk(found.map(variant => compileVariant(variant, row.id)), variants => ({ ...row, variants }));
 }
 
 /**
@@ -175,20 +212,7 @@ export function readSentences(format) {
   const rows = readTable(format);
   if (!rows.ok) return rows;
   const blocks = readBlocks(format, rows.value.map(row => row.id));
-  const sentences = new Map();
-  for (const row of rows.value) {
-    const found = blocks.get(row.id);
-    if (found === undefined) return fail(`FORMAT has no \`text\` block for the sentence ${row.id} of 2.1's table`);
-    const variants = [];
-    for (const variant of found) {
-      const parts = variant.parts.map(template => ({ template, compiled: compileTemplate(template) }));
-      const bad = parts.find(part => !part.compiled.ok);
-      if (bad !== undefined) return fail(`${row.id}: ${bad.compiled.reason}`);
-      variants.push({ kinds: variant.kinds, parts: parts.map(part => ({ template: part.template, ...part.compiled.value })) });
-    }
-    sentences.set(row.id, { ...row, variants });
-  }
-  return ok(sentences);
+  return allOk(rows.value.map(row => sentenceOf(row, blocks)), sentences => new Map(sentences.map(sentence => [sentence.id, sentence])));
 }
 
 /** The variant of `entry` that applies to `kind` (one that names no kinds applies to all), or undefined. */

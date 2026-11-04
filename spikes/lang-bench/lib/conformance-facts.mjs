@@ -16,15 +16,25 @@ function textOf(format, number) {
   return format.text.slice(start, end);
 }
 
+const isTableHead = (lines, first) => (line, index) => cellsOf(line)[0] === first && TABLE_SEPARATOR.test(lines[index + 1] ?? '');
+
 /** The rows (cell lists) of the first table in `text` whose header row's first cell is `first`, or null. */
 function tableRows(text, first) {
   const lines = text.split('\n');
-  const head = lines.findIndex((line, index) => cellsOf(line)[0] === first && TABLE_SEPARATOR.test(lines[index + 1] ?? ''));
+  const head = lines.findIndex(isTableHead(lines, first));
   if (head === -1) return null;
-  const rows = [];
-  for (let at = head + 2; at < lines.length && lines[at].startsWith('|'); at += 1) rows.push(cellsOf(lines[at]));
-  return rows;
+  const body = lines.slice(head + 2);
+  const end = body.findIndex(line => !line.startsWith('|'));
+  return (end === -1 ? body : body.slice(0, end)).map(cellsOf);
 }
+
+/** The rows of the table headed by `first` in subsection `number`, or null. */
+const rowsIn = (format, number, first) => {
+  const text = textOf(format, number);
+  return text === null ? null : tableRows(text, first);
+};
+
+const wrongSize = (rows, count) => rows === null || rows.length !== count;
 
 /** ok({ pattern }) from 1.1: the file-name pattern in its code span. */
 function readNamePattern(format) {
@@ -32,27 +42,35 @@ function readNamePattern(format) {
   return found === null ? fail('FORMAT 1.1 does not state the file-name pattern') : ok(new RegExp(found[1]));
 }
 
+const verdictsOf = (rows, labels) => codeSpans((/the verdict being (.*)$/.exec(rows[labels.indexOf('Gate verdict')]?.[2] ?? '') ?? [])[1] ?? '');
+
+function headerParts(rows, phrases) {
+  const labels = rows.map(cells => codeSpans(cells[0])[0]);
+  return {
+    labels,
+    placeholders: Object.fromEntries(rows.map((cells, index) => [labels[index], codeSpans(cells[1])[0]])),
+    verdicts: verdictsOf(rows, labels),
+    kindPhrases: Object.fromEntries(phrases.map(cells => [cells[0], codeSpans(cells[1])[0]])),
+  };
+}
+
+const headerReadable = parts => !parts.labels.includes(undefined) && parts.verdicts.length > 0 && !Object.values(parts.kindPhrases).includes(undefined);
+
 /** ok({ labels, placeholders, verdicts, kindPhrases }) from 1.2's two tables. */
 function readHeader(format) {
-  const text = textOf(format, '1.2');
-  const rows = text === null ? null : tableRows(text, 'Row');
-  const phrases = text === null ? null : tableRows(text, 'Kind');
-  if (rows === null || rows.length !== 5) return fail('FORMAT 1.2 does not hold the table of the five header rows');
-  if (phrases === null || phrases.length !== 3) return fail('FORMAT 1.2 does not hold the table of the three kind phrases');
-  const labels = rows.map(cells => codeSpans(cells[0])[0]);
-  const placeholders = Object.fromEntries(rows.map((cells, index) => [labels[index], codeSpans(cells[1])[0]]));
-  const verdicts = codeSpans((/the verdict being (.*)$/.exec(rows[labels.indexOf('Gate verdict')]?.[2] ?? '') ?? [])[1] ?? '');
-  const kindPhrases = Object.fromEntries(phrases.map(cells => [cells[0], codeSpans(cells[1])[0]]));
-  if (labels.includes(undefined) || verdicts.length === 0 || Object.values(kindPhrases).includes(undefined)) return fail('FORMAT 1.2: a header row, the verdict words or a kind phrase cannot be read');
-  return ok({ labels, placeholders, verdicts, kindPhrases });
+  const rows = rowsIn(format, '1.2', 'Row');
+  const phrases = rowsIn(format, '1.2', 'Kind');
+  if (wrongSize(rows, 5)) return fail('FORMAT 1.2 does not hold the table of the five header rows');
+  if (wrongSize(phrases, 3)) return fail('FORMAT 1.2 does not hold the table of the three kind phrases');
+  const parts = headerParts(rows, phrases);
+  return headerReadable(parts) ? ok(parts) : fail('FORMAT 1.2: a header row, the verdict words or a kind phrase cannot be read');
 }
 
 /** ok({ olympiad: [heading], 'daemon and web': [heading] }) from 1.4's table: the eight `##` lines of each kind. */
 function readSections(format) {
-  const rows = tableRows(textOf(format, '1.4') ?? '', '#');
-  if (rows === null || rows.length !== 8) return fail('FORMAT 1.4 does not hold the table of the eight sections');
-  const olympiad = rows.map(cells => codeSpans(cells[1])[0]);
-  const daemonWeb = rows.map(cells => codeSpans(cells[2])[0]);
+  const rows = rowsIn(format, '1.4', '#');
+  if (wrongSize(rows, 8)) return fail('FORMAT 1.4 does not hold the table of the eight sections');
+  const [olympiad, daemonWeb] = [1, 2].map(column => rows.map(cells => codeSpans(cells[column])[0]));
   return olympiad.includes(undefined) || daemonWeb.includes(undefined) ? fail('FORMAT 1.4: a section heading cannot be read') : ok({ olympiad, daemon: daemonWeb, web: daemonWeb });
 }
 
