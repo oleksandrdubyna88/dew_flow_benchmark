@@ -101,6 +101,12 @@ function opensClosesProblems(f) {
 /** The findings about one sentence (missing, altered, misplaced); `present` says whether it counts as carried. */
 function sentenceProblems(ctx, f) {
   const { entry, hits, altered } = f;
+  const outside = f.stray.map(hit => `${entry.id} (${where(hit)}) stands outside every requirement paragraph; a fixed sentence belongs to a requirement (FORMAT 1.3)`);
+  return [...outside, ...presentProblems(ctx, f, altered)];
+}
+
+function presentProblems(ctx, f, altered) {
+  const { entry, hits } = f;
   if (hits.length === 0) {
     if (altered !== null) return [`${entry.id} is altered at line ${altered}: it does not match FORMAT's sentence word for word (after whitespace is collapsed)`];
     return entry.required && !XOR.includes(entry.id) ? [`${entry.id} is missing: 2.1 requires it in section ${sectionOf(entry, ctx.kind) ?? 'before section 1'}`] : [];

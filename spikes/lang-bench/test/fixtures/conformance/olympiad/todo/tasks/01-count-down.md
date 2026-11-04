@@ -32,6 +32,7 @@ unspecified and is never tested.
 |---|---|
 | 1 | `1` |
 | 2 | `2 1` |
+
 **R6.** The output is compared with the expected output byte for byte. Nothing is normalized: a missing or extra line
 feed, a trailing space or a carriage return makes the test fail.
 

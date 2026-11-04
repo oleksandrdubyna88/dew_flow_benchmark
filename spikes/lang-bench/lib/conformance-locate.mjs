@@ -1,6 +1,7 @@
 // Where the fixed sentences stand in a spec (E1.S8): each sentence FORMAT requires or allows for the kind, searched in the places its row of 2.1 names, after whitespace is collapsed.
 // A sentence found whole is a hit with its slot values; a sentence that is not found whole but whose first words stand somewhere is reported as altered, with the line.
 import { collapse } from './conformance-blocks.mjs';
+import { requirementAt } from './conformance-spec.mjs';
 import { findAll, variantFor } from './conformance-sentences.mjs';
 
 /** The paragraphs outside a requirement that a sentence may stand in alone: the preamble (F-REQ) and the first paragraph of section 6. */
@@ -17,27 +18,35 @@ function lonelyDomains(spec) {
 
 /** The texts to search: one per requirement, then the lonely paragraphs. */
 export function domainsOf(spec) {
-  return [...spec.requirements.map(r => ({ name: 'r', section: r.section, r, text: r.text, lineAt: r.lineAt })), ...lonelyDomains(spec)];
+  const lonely = lonelyDomains(spec);
+  return [...spec.requirements.map(r => ({ name: 'r', section: r.section, r, text: r.text, lineAt: r.lineAt })), ...lonely, ...strayDomains(spec, lonely)];
 }
 
 const whole = (domain, hit) => hit.index === 0 && hit.end === domain.text.length;
 
 /** The hits of one compiled sentence in the domains its placement allows. */
 function hitsOf(compiled, domains, mode) {
-  const wanted = mode === 'preamble' ? 'preamble' : mode === 'first-paragraph' ? 'first-paragraph' : 'r';
-  return domains.filter(domain => domain.name === wanted).flatMap(domain => findAll(compiled, domain.text)
-    .filter(hit => wanted === 'r' || whole(domain, hit))
+  return domains.filter(domain => domain.name === wantedName(mode)).flatMap(domain => findAll(compiled, domain.text)
+    .filter(hit => domain.name === 'r' || domain.name === 'stray' || whole(domain, hit))
     .map(hit => ({ ...hit, domain, r: domain.r, section: domain.section, line: domain.lineAt(hit.index) })));
 }
 
-/** The line of the first place the fingerprint stands in the domains the mode allows, or null. */
-function alteredAt(fingerprint, domains, mode) {
-  const wanted = mode === 'preamble' ? 'preamble' : mode === 'first-paragraph' ? 'first-paragraph' : 'r';
-  for (const domain of domains.filter(entry => entry.name === wanted)) {
-    const at = fingerprint === '' ? -1 : domain.text.indexOf(fingerprint);
-    if (at !== -1) return domain.lineAt(at);
+const wantedName = mode => (['preamble', 'first-paragraph', 'stray'].includes(mode) ? mode : 'r');
+
+/** The line of the first place one of the fingerprints stands in the domains the mode allows, or null. */
+function alteredAt(fingerprints, domains, mode) {
+  for (const domain of domains.filter(entry => entry.name === wantedName(mode))) {
+    const at = fingerprints.map(text => domain.text.indexOf(text)).find(index => index !== -1);
+    if (at !== undefined) return domain.lineAt(at);
   }
   return null;
+}
+
+/** The paragraphs that lie in no requirement and are not the lonely paragraphs a sentence may stand in: a fixed sentence there is outside every span. */
+function strayDomains(spec, lonely) {
+  const used = new Set(lonely.map(domain => domain.text));
+  return spec.paragraphs.filter(p => !p.isTable && p.startNo > 1 && requirementAt(spec, p.startNo) === undefined && spec.sectionAt(p.startNo) !== 8)
+    .map(p => ({ name: 'stray', section: null, r: null, ...collapse(p.lines) })).filter(domain => !used.has(domain.text));
 }
 
 /**
@@ -52,8 +61,9 @@ export function locateSentences({ spec, sentences, kind }) {
     const variant = variantFor(entry, kind);
     if (variant === undefined) continue;
     const partHits = variant.parts.map(part => hitsOf(part, domains, entry.where.mode));
-    const altered = partHits.some(hits => hits.length === 0) ? alteredAt(variant.parts.find((part, index) => partHits[index].length === 0).fingerprint, domains, entry.where.mode) : null;
-    found.set(entry.id, { entry, variant, partHits, hits: partHits[0], altered });
+    const altered = partHits.some(hits => hits.length === 0) ? alteredAt(variant.parts.find((part, index) => partHits[index].length === 0).fingerprints, domains, entry.where.mode) : null;
+    const stray = variant.parts.flatMap(part => hitsOf(part, domains, 'stray'));
+    found.set(entry.id, { entry, variant, partHits, hits: partHits[0], altered, stray });
   }
   return found;
 }

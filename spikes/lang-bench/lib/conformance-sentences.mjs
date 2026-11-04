@@ -36,7 +36,14 @@ export const SLOT_PATTERNS = Object.freeze({
 const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordsOf = text => text.split(' ').filter(word => word !== '');
 
-/** `{ regex, slots, fingerprint }` for a sentence template (collapsed text with `{slot}` holes), or a fail naming the slot the checker does not know. */
+/** The first and the last words (four, fewer in a short sentence) of the longest fixed stretch of a sentence: where either stands, the sentence is there even if a word inside it was changed. */
+function fingerprintsOf(literal) {
+  const words = wordsOf(literal.trim());
+  const edge = Math.min(4, Math.max(2, Math.floor(words.length / 2)));
+  return [...new Set([words.slice(0, edge).join(' '), words.slice(-edge).join(' ')])].filter(text => text !== '');
+}
+
+/** `{ regex, slots, fingerprints }` for a sentence template (collapsed text with `{slot}` holes), or a fail naming the slot the checker does not know. */
 export function compileTemplate(template) {
   const pieces = template.split(/\{([A-Za-z]+)\}/);
   const seen = new Set();
@@ -53,7 +60,7 @@ export function compileTemplate(template) {
       seen.add(piece);
     }
   }
-  return ok({ regex: new RegExp(source, 'g'), slots: [...seen], fingerprint: wordsOf(longest.trim()).slice(0, 5).join(' ') });
+  return ok({ regex: new RegExp(source, 'g'), slots: [...seen], fingerprints: fingerprintsOf(longest) });
 }
 
 /** Every place `text` (collapsed) holds the compiled sentence: `{ index, end, slots }`. */
