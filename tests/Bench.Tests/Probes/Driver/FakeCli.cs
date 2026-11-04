@@ -46,10 +46,18 @@ internal sealed class FakeCli : IDisposable
     public void Rewrite(JsonObject? script) => File.WriteAllText(ScriptPath, (script ?? []).ToJsonString());
 
     /// <summary>Every call the fake logged, in call order.</summary>
-    public IReadOnlyList<FakeCliCall> Calls() =>
-        Directory.Exists(EventsDir)
-            ? [.. Directory.EnumerateFiles(EventsDir, "call-*.json").Select(Read).OrderBy(c => c.Call)]
+    public IReadOnlyList<FakeCliCall> Calls() => CallsIn(Home);
+
+    /// <summary>Every call the fake logged under <paramref name="home"/> (the <c>FAKE_CLI_HOME</c> a subject was given), in call order: how a check that holds only the
+    /// subject's environment, and not the fake, reads the same log.</summary>
+    public static IReadOnlyList<FakeCliCall> CallsIn(string home)
+    {
+        var events = Path.Combine(home, "events");
+
+        return Directory.Exists(events)
+            ? [.. Directory.EnumerateFiles(events, "call-*.json").Select(Read).OrderBy(c => c.Call)]
             : [];
+    }
 
     private static FakeCliCall Read(string path)
     {

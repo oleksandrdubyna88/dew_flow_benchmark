@@ -19,6 +19,8 @@
 > `chain <run>` with the per-run markers, the reconciliation of `locked` with the snapshot and the failure path that leaves the isolation
 > applied (E5.S4). Tests under `tests/Bench.Tests/ModelArms/`, `research/module_model_arms.md`, the `lock`, `unlock`, `run-all` and
 > `chain` rows of `research/module_tests.md`.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E5.md` gives 5, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E5.md` gives 9, `grep -c ' — not verified (checked 2026-11-0[4]):' research/PLAN_model_arms_E5.md` gives 0. The 9 open boxes are exactly the not met and the not verified (9 + 0); the build box is among the not met, because the build prints 1 warning, ASPIRE010 from `hosts/AppHost`, there before the module (the parent's D-a).
 
 ## 1. Goal, before any solution
 
@@ -1623,40 +1625,40 @@ the module claims to close; each is one sentence where the operator reads.
 ## 11. Definition of Done — epic E5
 
 - [ ] E5.S1 specified by Fable, built, every test watched red first, merged to `main` in its own pull request before E5.S2–E5.S4 — that
-      pull request opened only after E4.S0's merged and `main` was merged into this branch, its diff E5.S1's alone (§6, §8 item 52).
+      pull request opened only after E4.S0's merged and `main` was merged into this branch, its diff E5.S1's alone (§6, §8 item 52). — not met as written (checked 2026-11-04): E5.S1 was delivered inside #132, with no pull request of its own; 32 of 36 `IsolationRecoveryTests` rows were green on arrival (`research/module_model_arms.md`, E5.S1 *Red first*).
 - [ ] E5.S2–E5.S4 built on the second branch from a `main` carrying E5.S1 and E4.S0, each test watched red on an assertion first (the
-      messages in the story's summary) and each break-it observed.
+      messages in the story's summary) and each break-it observed. — not met as written (checked 2026-11-04): E5.S2–E5.S4 were built inside #132, with no second branch.
 - [ ] Every test of the parent's §7 E5 block exists under its exact name and is green (the Linux-only and x86-64-only ones skipped
-      elsewhere with their reason); the added ones of §7 here too; `ModelArmsProgramTests.A_verb_not_built_yet_…` removed with `NotBuilt`.
+      elsewhere with their reason); the added ones of §7 here too; `ModelArmsProgramTests.A_verb_not_built_yet_…` removed with `NotBuilt`. — not met as written (checked 2026-11-04): two names of the parent's block do not exist as written (`research/PLAN_model_arms.md` D-b items 2 and 9); item 9 was replaced by the plan itself (§7's `ChainVerbTests` bullet of the parent).
 - [ ] `PosixFolderIsolationTests.A_lock_killed_half_way_is_restored_and_applied_afresh_by_the_next_lock` watched red against an adapter that
       wrote its snapshot late; `IsolationRecoveryTests.Lock_then_run_arm_leaves_the_experiment_locked` and
       `No_verb_but_lock_and_unlock_changes_a_mode_or_restores_a_snapshot` green with every verb that reads an experiment among its rows — and the latter watched red
-      against a chmod planted in another verb (E5.S1 break-it 20).
-- [ ] The amendment of 2026-10-31 observed (E5.S1): a `lock` killed by `SIGKILL` in another process recovered by a new process to the exact original modes
+      against a chmod planted in another verb (E5.S1 break-it 20). — not met as written (checked 2026-11-04): the late-snapshot red is recorded for another test (`research/PLAN_model_arms.md` D-c, `research/module_model_arms.md:2930`).
+- [x] The amendment of 2026-10-31 observed (E5.S1): a `lock` killed by `SIGKILL` in another process recovered by a new process to the exact original modes
       (`A_lock_killed_in_another_process_…`); a failed restore keeping `.locked-modes` on all three paths and the retry restoring the originals; the operator's own mode
       surviving `unlock` and reported; `lock` over an applied snapshot re-verifying and re-applying an opened entry; a runner's shared `.isolation.lock` seen in `/proc/locks`
       and `unlock` refused at once while it holds it (`unlock --force` restoring with its loud line — D11's meaning), the race closed in both orders
       (`No_runner_starts_between_…`); the runner's one warning line under a missing isolation, exit 0; `pids/` made by name and a
       link there refused; `unlock` restoring a standing snapshot after the block was removed, within its bound; the runtime road green on this host through the seam with its
-      one line; every refusal after the runner's locks releasing them; an unlinked `pids/<arm>.lock` under a live runner still `Alive`.
-- [ ] `ChainVerbTests.A_chain_that_fails_leaves_the_isolation_applied_stops_no_runner_and_prints_the_recovery` and
-      `ChainPlanTests.A_locked_marker_whose_runs_snapshot_is_not_applied_is_refused_never_skipped` green; no root-level chain marker left.
+      one line; every refusal after the runner's locks releasing them; an unlinked `pids/<arm>.lock` under a live runner still `Alive`. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/PosixFolderIsolationTests.cs:96`, `tests/Bench.Tests/ModelArms/PosixFolderIsolationTests.cs:145`, `tests/Bench.Tests/ModelArms/PosixFolderIsolationTests.cs:381-414`, `tests/Bench.Tests/ModelArms/PosixFolderIsolationTests.cs:418`, `tests/Bench.Tests/ModelArms/IsolationRestoreTests.cs:19`, `tests/Bench.Tests/ModelArms/IsolationRestoreTests.cs:153`, `tests/Bench.Tests/ModelArms/IsolationRestoreTests.cs:172`, `tests/Bench.Tests/ModelArms/IsolationRestoreTests.cs:221`, `tests/Bench.Tests/ModelArms/IsolationRecoveryTests.cs:157`, `tests/Bench.Tests/ModelArms/RunnerIdentityTests.cs:107`, `tests/Bench.Tests/ModelArms/RunnerIdentityTests.cs:185`, `tests/Bench.Tests/ModelArms/RunnerIdentityTests.cs:298`, `tests/Bench.Tests/ModelArms/RuntimeFolderIsolationTests.cs:22-44`; CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
+- [x] `ChainVerbTests.A_chain_that_fails_leaves_the_isolation_applied_stops_no_runner_and_prints_the_recovery` and
+      `ChainPlanTests.A_locked_marker_whose_runs_snapshot_is_not_applied_is_refused_never_skipped` green; no root-level chain marker left. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/ChainVerbTests.cs:38`, `tests/Bench.Tests/ModelArms/ChainVerbTests.cs:132`, `tests/Bench.Tests/ModelArms/ChainPlanTests.cs:270`; the `ArmPaths.cs:58` chain paths (`tools/model-arms/ModelArms.Core/Experiment/ArmPaths.cs`); CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
 - [ ] The E5.S4 amendment of 2026-10-31 observed, each red first and its break-it seen: a second chain of the run exits 4 naming the holder
       with nothing started; a chain killed beside its live runner frees `chain/<run>/.chain.lock` (no descriptor of it in
       `/proc/<runner>/fd`) and a second chain takes it; a just-started arm awaited, exit 5 at exactly the 60 s startup ceiling; the next
       round started only after the last round's runners exited (no `run-all` exit 4); every bounded wait expiring at exactly its bound
       (90 s → 0, 60, 90); `WaitFor` ending at `ChainWaitCeiling` with exit 5 and the isolation left applied; `pids/` made by the chain;
-      the real `lock`/`unlock` under an isolation block writing no marker.
+      the real `lock`/`unlock` under an isolation block writing no marker. — not met as written (checked 2026-11-04): no break-it is recorded for `tests/Bench.Tests/ModelArms/ChainVerbTests.cs:195` (item 50).
 - [ ] `pids/<arm>.pid` written by the runner, read by the unchanged `RunnerPid.Parse`; `StatusVerbTests` and `ChecksVerbTests` pid tests
-      unedited and green; `unlock`, `run-all` and `chain` ask `RunnerLiveness` alone.
-- [ ] `The_module_launches_nothing_by_a_bare_name` green with `SetsidLauncher.cs`, `WindowsLauncher.cs` (its named exception) and
-      `WslHostAwake.cs` present; the companion scan green.
+      unedited and green; `unlock`, `run-all` and `chain` ask `RunnerLiveness` alone. — not met as written (checked 2026-11-04): the `ChecksVerbTests` pid tests were edited (`research/PLAN_model_arms.md` D-d).
+- [x] `The_module_launches_nothing_by_a_bare_name` green with `SetsidLauncher.cs`, `WindowsLauncher.cs` (its named exception) and
+      `WslHostAwake.cs` present; the companion scan green. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:207`, `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:210`, `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:218`, `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:253`; the three adapters exist; CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
 - [ ] Every review names D26 (a)–(f) per adapter (`PosixFolderIsolation`, `RuntimeFolderIsolation`, `RunnerLiveness`, `WslHostAwake`, `SetsidLauncher`, the chain's
-      failure path).
+      failure path). — not met as written (checked 2026-11-04): E5.S1's table (`research/module_model_arms.md:2905-2911`) uses other meanings for (d)–(f) (environment, results read, identity) than the parent's D26 (the parent's D26: placeholder, exclusive create, re-read gate); the records are module-doc sections (`research/PLAN_model_arms.md` D-g). Not verified: that every review of the listed adapters was opened.
 - [ ] `research/module_model_arms.md` describes E5 as built under its four headings, with the residuals (the wedged gate holder, the
       Windows adapters unobserved, the manual road, a lost relay); `research/module_tests.md`'s `lock`, `unlock`, `run-all`, `chain` rows
-      cover them.
+      cover them. — not met as written (checked 2026-11-04): `lost relay` is not in the `lock`, `unlock`, `run-all` and `chain` rows of `research/module_tests.md` (whether the row reading covers it is ambiguous).
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green (the
-      database and service tests aside, as E3 §11 records for this host); `ModelArmsArchitectureTests` green with the four markers.
-- [ ] The parent's claims of §8 items 24–31 taken into its next change, or answered; items 38–39 ruled inside the parent's words (no parent edit).
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+      database and service tests aside, as E3 §11 records for this host); `ModelArmsArchitectureTests` green with the four markers. — not met as written (checked 2026-11-04): the build prints 1 warning, ASPIRE010 from hosts/AppHost, there before the module (the parent's D-a).
+- [x] The parent's claims of §8 items 24–31 taken into its next change, or answered; items 38–39 ruled inside the parent's words (no parent edit). — met, checked 2026-11-04: `research/PLAN_model_arms_E5.md` §8 items 24 (`:1427`), 25 (`:1431`), 26 (`:1433`), 27 (`:1437`), 28 (`:1440`; its three wording repairs never landed in the parent's text, and the parent's D-i records them, 2026-11-04), 29 (`:1444`), 30 (`:1446`, and `research/PLAN_model_arms.md`:46), 31 (`:1451`) answer the claims; items 38 (`:1482`) and 39 (`:1490`) are ruled inside the parent's words.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41829561662 on `2407ac8a`, job `plans` success.

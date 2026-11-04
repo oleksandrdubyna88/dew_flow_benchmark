@@ -24,6 +24,8 @@
 > pick-back without its patch-id skip (E6.S4, added by the parent's re-review for epoch 4). Tests under `tests/Bench.Tests/ModelArms/` and `tests/Bench.Tests/Cli/`,
 > fixtures under `tests/Bench.Tests/Fixtures/model-arms/consumers/`, `research/module_model_arms.md`, `research/module_tests.md`,
 > `research/architecture.md`, `README.md`, `todo/PLAN_model_arms_analysis.md` (new).
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 5, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 6, `grep -c ' — not verified (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 1. The 7 open boxes are exactly the not met and the not verified (6 + 1); the build box is among the not met, because the build prints 1 warning, ASPIRE010 from `hosts/AppHost`, there before the module (the parent's D-a).
 
 ## 1. Goal, before any solution
 
@@ -837,32 +839,32 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 
 ## 11. Definition of Done — epic E6
 
-- [ ] E4 (both pull requests) and E5 (both) on `main` and merged into this branch before the first E6 code (§8 item 2).
-- [ ] E6.S1: the nine tests of `ConsumerCompatibilityTests` green, each watched red on an assertion first (the messages in the story's
+- [ ] E4 (both pull requests) and E5 (both) on `main` and merged into this branch before the first E6 code (§8 item 2). — not met as written (checked 2026-11-04): E4 and E5 were integrated into the E6 branch as one pull request, #132.
+- [x] E6.S1: the nine tests of `ConsumerCompatibilityTests` green, each watched red on an assertion first (the messages in the story's
       summary), the six break-its observed; the seven readers run over the four fake arms the module wrote; item 5's two numbers in the
-      module doc; `RunArmSchemeTests` and `StepRestartTests` unedited and green.
+      module doc; `RunArmSchemeTests` and `StepRestartTests` unedited and green. — met, checked 2026-11-04: the nine tests are listed in the module doc's *Tests (E6.S1: 2016 → 2037 cases…)* section, each with its red in *Red first* (nine reds); commit `323dd73e` (E6.S1) observes nine break-its, the box asks six (the module doc's *Break-its* list); item 5's two numbers are 3.25 (`metrics.mjs`, summed) and 2.00 (`metrics6.mjs`, the last result per session) in the table under "E2 §8 item 62, measured in the readers" of *The consumer check (E6.S1)*, and 2.00 is in that commit's body. "Unedited": in `refs/pull/132/head` since `5a8b4ce6`, the only commits touching `tests/Bench.Tests/ModelArms/RunArmSchemeTests.cs` or `StepRestartTests.cs` are `a504cfec` (E3), `2e2e6e0f` and `6d2a8b69` (E4.S0) and `0ec35594` (E4.S3), none an E6 commit (`git log 5a8b4ce6..refs/pull/132/head -- <the two files>`). "Unedited" is judged as of E6.S1: the branch of #162 later edits `RunArmSchemeTests.cs` by one routing change (`The_gate_and_the_runner_share_one_clock_one_log_and_one_map` goes through `RunWithSeamsAsync`).
 - [ ] E6.S2: `Every_model_arms_verb_is_derived_from_its_dispatch_and_has_its_row` watched red, then green; the two sources held equal;
-      the three break-its observed.
+      the three break-its observed. — not met as written (checked 2026-11-04): no red or break-its are recorded for E6.S2 (the test exists, `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs:53`).
 - [ ] E6.S3: `research/module_model_arms.md`, `research/architecture.md`, `README.md`, `research/module_tests.md` and `research/README.md`
-      describe the module as it runs (the parent's §10 documentation line); `PublishedRecordTests` green and its red seen.
+      describe the module as it runs (the parent's §10 documentation line); `PublishedRecordTests` green and its red seen. — not verified (checked 2026-11-04): the five documents were not read against the code one by one.
 - [ ] M3 ran all fifteen steps — every verb, the four schemes, one run locked and unlocked (by hand and by the chain), two limited attempts
       resumed, one interrupted arm resumed by `run-all`, one blocked gate continued, the A–D re-run with its CLI version — logged in
-      `research/module_model_arms.md`, its scratch removed.
+      `research/module_model_arms.md`, its scratch removed. — not met as written (checked 2026-11-04): step 14 did not run in M3; it ran on 2026-11-04 with the owner's HOME (`research/PLAN_model_arms.md` D-h).
 - [x] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 was approved and before #132 merged (done, 2026-11-01, `3a0effcc`): part (a) to Fable's spec, its
       theory red at `16e7fd20` then green, the `CLAUDE_*` / `ANTHROPIC_*` rows green; part (b) — the two named tests red then green, the
       log line edited; the docs say runs after it differ from part 6's conditions; #132's code gate passed with it.
-- [ ] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
-      `todo/README.md` row.
-- [ ] The parent's deviations written (every epic; items 3 and 4 here); §8's wording items 3, 18 and 20 written into the parent (not a
-      ledger entry); its defects 6, 11, 19 and 21 taken into its next change or answered by the owner.
-- [ ] **OPEN — the owner's, by hand: M2's key check** (`research/module_model_arms.md` *M2's key check*; E3 §8 item 47): the real `claude`
-      and `coai-mcp`, the owner's key, a FRESH root; the two `providers` answers logged side by side, or the fallback recorded as a deviation.
+- [x] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
+      `todo/README.md` row. — met, checked 2026-11-04: status line `todo/PLAN_model_arms_analysis.md:3`; sections *Boundary* and *The readers E6.S1 did not run* (item 6), both added 2026-11-04; items 5, 7 and 10 in its first paragraph; the row `todo/README.md:91`.
+- [x] The parent's deviations written (every epic; items 3 and 4 here); §8's wording items 3, 18 and 20 written into the parent (not a
+      ledger entry); its defects 6, 11, 19 and 21 taken into its next change or answered by the owner. — met, checked 2026-11-04: with its limits said. "(every epic)" asks that every epic's deviations be written, not one list per epic. The parent's `## Deviations at promotion` (D-a to D-k) does NOT hold them all: E1.S9, E1.S11, E2.S4, E6.S2, E3's edited suites and E2's limit wait are in no D entry. They are written where D-j points, in the not-met suffixes of the stories documents' own boxes, so the clause holds through that pointer and not through D-a to D-k alone. Item 3 is in the parent's §2 ("all twenty files equal these sums, hashed in full on 2026-10-31 — E6 §8 item 3"); item 4 is the parent's D-k, added 2026-11-04 (the `PROTOCOL.md` read, nothing changed in the run half; the example's `part7.closed` differs). §8's wording items are in the parent: item 3 in §2, item 18 in §6 step 6, §7's E6 block and the E6.S1 row of the stories table, item 20 in §5's deferral paragraph. Defects: 6 and 21 are in D28 (with the readers E6.S1 did not run listed in `todo/PLAN_model_arms_analysis.md`), 11 is in D5 and D28. Defect 19 ("a plan with an open Definition-of-Done line is not IMPLEMENTED") is taken into the parent's next change, #162: the parent's status now says implemented, with recorded deviations, and that not every line of §10 is met, and the plan stays in `research/` under `common.planning-docs`. §8 item 19 only ruled who decides ("the owner's to decide, not E6's to do") and that the move waits for the open lines. The owner's answer, "update the plan, but do not move it to research", is about the folder and waives nothing: the nine boxes of the parent's §10 that stay `[ ]` each keep their deviation.
+- [x] **OPEN — the owner's, by hand: M2's key check** (`research/module_model_arms.md` *M2's key check*; E3 §8 item 47): the real `claude`
+      and `coai-mcp`, the owner's key, a FRESH root; the two `providers` answers logged side by side, or the fallback recorded as a deviation. — met, checked 2026-11-04: `research/module_model_arms.md:2279-2291`: the owner's real key, 2026-11-04, claude 2.1.310, the two `vaultNote` fields logged side by side.
 - [ ] **OPEN — the owner's:** the owner's own part-6 and part-7 `experiment.json` written once into a root outside every checkout and read
-      by `model-arms status` without a refusal (the parent's §10 line).
+      by `model-arms status` without a refusal (the parent's §10 line). — not met as written (checked 2026-11-04): written by the agent at the owner's direction; part 7's closed list differs (`research/PLAN_model_arms.md` D-h).
 - [ ] The promotion done when the two OPEN lines above — the parent's own Definition-of-Done lines, nothing beyond them — are closed:
       the parent and `PLAN_model_arms_E1.md`…`_E6.md` moved together, the `git mv` last, the three link cases walked; until then the
       parent's and this document's status lines say what waits for the owner. The owner's open questions (§8 item 26) are NOT promotion
-      conditions: they are listed, open, in the deviations.
+      conditions: they are listed, open, in the deviations. — not met as written (checked 2026-11-04): three link cases and `git mv` last were not verified; one OPEN line (the owner's-root box, "the owner's own part-6 and part-7 `experiment.json`" above) is not met as written.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green (the
-      database and service tests aside, as E3 §11 records for this host).
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+      database and service tests aside, as E3 §11 records for this host). — not met as written (checked 2026-11-04): the build prints 1 warning, ASPIRE010 from hosts/AppHost, there before the module (the parent's D-a).
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41829561662 on `2407ac8a`, job `plans` success.
