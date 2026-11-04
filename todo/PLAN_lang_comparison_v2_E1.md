@@ -1163,11 +1163,12 @@ numbers (2.1's table: "the closed list of 2.6"; 4.2: "bounds in 4.6"). It treats
 byte-equal prefix of B's); the preamble before `## 1.` (byte-equal to A's except the header rows `Format version`, `Gate
 verdict` and `Freeze tag`, and except class rows B appends after A's rows for subsections it adds); and additions — B adds no
 `##` section, and adds a `###` only inside a `daemon-web` section or at the end of a mixed `##` section, with the next free
-number, classed `daemon`, `web` or `daemon-web`; a section inserted before `## 7.` renumbers an A heading and is refused.
+number, classed `daemon`, `web` or `daemon-web`; a section inserted before `## 7.` renumbers an A heading and is refused. 2.1's table of fixed sentences (`common`) is checked row by row: a row whose sentence stands in a
+`daemon-web` subsection may change with that sentence before B's freeze; every other row is byte-equal to A's (parent D60 (d)).
 *Tests added (T-L56, owner this story, green on the draft before the gate round, on A's real FORMAT at CP4 and at B's tag at
 CP4-B):* `A_daemon_web_subsection_edited_in_2_5_passes`; `An_olympiad_subsection_edited_in_2_3_is_refused`;
 `A_common_section_added_in_B_is_refused`; `A_changed_A_changelog_line_is_refused`; `The_header_rows_may_differ_between_A_and_B`;
-`A_class_row_appended_for_a_new_B_subsection_passes`; `A_B_section_inserted_before_section_7_is_refused`.
+`A_class_row_appended_for_a_new_B_subsection_passes`; `A_B_section_inserted_before_section_7_is_refused`; `A_2_1_row_of_a_daemon_web_sentence_changed_with_its_sentence_passes`; `A_2_1_row_of_an_olympiad_sentence_changed_is_refused`.
 
 **CP1's findings, carried here (2026-11-03, parent D62; `spikes/lang-bench/inputs/checkpoints.md`, CP1).** **Before S9's gate
 round, as text fixes that make FORMAT say what the pinned runner does (not plan changes; the runner and its pin do not change;
