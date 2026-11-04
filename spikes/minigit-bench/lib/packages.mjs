@@ -31,7 +31,7 @@ const indexEntries = npmCacheDir => filesUnder(path.join(npmCacheDir, '_cacache'
 
 /** `{ name, version }` of an entry whose key is a registry tarball, or `null` (a packument entry is metadata). */
 function tarballOf(entry) {
-  const m = TARBALL.exec(entry.key ?? '');
+  const m = TARBALL.exec(entry?.key ?? '');
   if (!m) return null;
   return { name: m[1], version: m[2].slice(`${m[1].split('/').at(-1)}-`.length) };
 }

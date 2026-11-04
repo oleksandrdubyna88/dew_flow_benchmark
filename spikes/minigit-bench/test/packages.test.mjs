@@ -70,3 +70,11 @@ test('The_readers_return_each_package_integrity_when_asked', () => {
   assert.deepEqual(readNpmPackages(npmDir), [{ ecosystem: 'npm', name: 'fastify', version: '5.12.7' }, { ecosystem: 'npm', name: '@fastify/jwt', version: '10.2.6' }], 'without the option the objects are what they were');
   assert.deepEqual(readNugetPackages(nugetDir).map(p => Object.keys(p)), [['ecosystem', 'name', 'version'], ['ecosystem', 'name', 'version']]);
 });
+
+test('A_null_line_in_the_npm_index_is_skipped_like_any_other_line_that_is_not_an_entry', () => {
+  // a `null` JSON line parses to null: reading `.key` of it threw before (fix batch 1, L5)
+  const dir = tmpDir('npmnull');
+  mkdirSync(path.join(dir, '_cacache', 'index-v5', 'ab', 'cd'), { recursive: true });
+  writeFileSync(path.join(dir, '_cacache', 'index-v5', 'ab', 'cd', 'entry1'), `deadbeef\tnull\n${indexLine(tgz('fastify', '5.12.7'))}deadbeef\t"text"\n`);
+  assert.deepEqual(readNpmPackages(dir).map(p => `${p.name}@${p.version}`), ['fastify@5.12.7']);
+});
