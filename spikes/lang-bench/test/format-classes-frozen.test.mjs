@@ -160,7 +160,7 @@ test('A_new_row_is_free_only_when_its_definition_stands_in_a_daemon_web_part', (
   assertRefused(compare(withRow), '2.1 How they are used', 'common', /F-TIMING/);
   const defined = edit(withRow, 'The defaults T and G.', 'F-TIMING. The slot `{D}` is a duration.\n\n```text\nThe default is changed by {D}.\n```');
   assertPasses(compare(defined));
-  const introduced = edit(withRow, 'The defaults T and G.', 'The defaults T and G.\n\n- A task that needs another value adds F-TIMING in the same requirement:\n\n  ```text\n  The default is changed by {D}.\n  ```');
+  const introduced = edit(withRow, 'The defaults T and G.', 'The defaults T and G.\n\nA task that needs another value adds F-TIMING in the same requirement:\n\n```text\nThe default is changed by {D}.\n```');
   assertPasses(compare(introduced));
   const inProtected = edit(withRow, 'Standard error is not compared.', 'F-TIMING. Standard error is not compared.');
   assertRefused(compare(inProtected), '2.1 How they are used', 'common', /F-TIMING/);
@@ -198,10 +198,10 @@ test('The_real_draft_against_itself_passes_and_the_class_rule_reads_it_as_the_sy
   assertPasses(run(edit(real, 'One test lasts at most 600 seconds', 'One test lasts at most 700 seconds')));
   assertRefused(run(edit(real, 'Samples are small and clean examples of the', 'Samples are small and dirty examples of the')), '3.1 Files and ids', 'common', /protected bytes differ/);
   assertRefused(run(edit(real, '| F-STDERR | all | section 3, in an R | none |', '| F-STDERR | all | section 4, in an R | none |')), '2.1 How they are used', 'common', /F-STDERR/);
-  assertPasses(run(edit(real, '| F-READY | daemon, web |', '| F-READY | daemon, web, others |')));
-  assertPasses(run(edit(real, '| F-PORT | daemon and web that listen on a port |', '| F-PORT | daemon that listens on a port |')));
-  assertPasses(run(edit(real, '| F-RUN-D | daemon, web |', '| F-RUN-D | daemon, web, others |')));
-  assertPasses(run(edit(real, '| F-TIMING | daemon, web whose', '| F-TIMING | daemon, web with a T or G that is not the series default, whose')));
+  assertPasses(run(edit(real, '| F-READY | daemon, web |', '| F-READY | daemon or web |')));
+  assertPasses(run(edit(real, '| F-PORT | daemon and web that listen on a port |', '| F-PORT | daemon that listen on a port |')));
+  assertPasses(run(edit(real, '| F-RUN-D | daemon, web |', '| F-RUN-D | daemon or web |')));
+  assertPasses(run(edit(real, '| F-TIMING | daemon, web whose', '| F-TIMING | daemon, web whose T or G is not the default series, whose')));
   assertRefused(run(edit(real, '| F-RUN-O | olympiad |', '| F-RUN-O | olympiad, others |')), '2.1 How they are used', 'common', /F-RUN-O/);
   assertRefused(run(edit(real, '| F-ERRORS | all, instead', '| F-ERRORS | all, rather than')), '2.1 How they are used', 'common', /F-ERRORS/);
 });

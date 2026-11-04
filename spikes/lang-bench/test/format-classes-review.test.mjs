@@ -99,12 +99,13 @@ test('The_header_rows_stay_at_the_frozen_lines_a_moved_or_swapped_row_is_refused
 
 test('A_header_value_is_matched_against_a_strict_pattern_the_draft_values_and_the_later_ones_pass', () => {
   for (const [label, value] of [['version', 'Format version: 2-olympiad-tasks-may-ignore-section-2.6\n'], ['version', 'Format version: two\n'], ['version', 'Format version: 2.\n'], ['version', 'Format version: 2.1.1\n'],
-    ['verdict', 'Gate verdict: olympiad tasks may ignore the closed list of section 2.6\n'], ['verdict', 'Gate verdict: a: b\n'], ['verdict', 'Gate verdict: Proceed\n'], ['verdict', `Gate verdict: ${'word '.repeat(20).trim()}\n`], ['verdict', 'Gate verdict: \n'], ['verdict', `Gate verdict: ${'a'.repeat(90)}\n`],
+    ['verdict', 'Gate verdict: olympiad tasks may ignore the closed list of section 2.6\n'], ['verdict', 'Gate verdict: a: b\n'], ['verdict', 'Gate verdict: Proceed\n'], ['verdict', `Gate verdict: ${'word '.repeat(20).trim()}\n`], ['verdict', 'Gate verdict: \n'], ['verdict', `Gate verdict: ${'a'.repeat(90)}\n`], ['verdict', 'Gate verdict: `Proceed`\n'], ['verdict', 'Gate verdict: `proceed` · 2026-13\n'], ['verdict', 'Gate verdict: `proceed` · 2026-12-01 and more\n'], ['verdict', 'Gate verdict: `proceed` 2026-12-01\n'], ['verdict', 'Gate verdict: `two words`\n'],
     ['tag', 'Freeze tag: spec-frozen-A-2026120\n'], ['tag', 'Freeze tag: anything goes here\n'], ['tag', 'Freeze tag: none yet and more\n']]) {
     assertRefused(compare(withRow(label, value)), new RegExp(value.split(':')[0]), /pattern|value/);
   }
   for (const [label, value] of [['version', 'Format version: 2.1\n'], ['version', 'Format version: 3\n'], ['verdict', 'Gate verdict: proceed\n'], ['verdict', 'Gate verdict: not yet gated\n'], ['verdict', 'Gate verdict: passed on 2026-12-01\n'],
-    ['tag', 'Freeze tag: spec-frozen-A-20261201\n'], ['tag', 'Freeze tag: spec-frozen-20261201\n'], ['tag', 'Freeze tag: none yet\n']]) {
+    ['tag', 'Freeze tag: spec-frozen-A-20261201\n'], ['tag', 'Freeze tag: spec-frozen-20261201\n'], ['tag', 'Freeze tag: none yet\n'],
+    ['verdict', 'Gate verdict: `proceed`\n'], ['verdict', 'Gate verdict: `proceed` · 2026-12-01\n'], ['verdict', 'Gate verdict: `not_gated` · 2026-01-31\n']]) {
     assertPasses(compare(withRow(label, value)));
   }
 });
@@ -129,7 +130,7 @@ test('A_free_or_added_row_may_not_name_all_or_olympiad_in_its_kinds_cell', () =>
   assertRefused(compare(edit(FORMAT_TEXT, READY, READY.replace('| daemon, web |', '| all |'))), /F-READY/, /all|olympiad/);
   assertRefused(compare(edit(FORMAT_TEXT, READY, READY.replace('| daemon, web |', '| daemon, web, olympiad |'))), /F-READY/, /olympiad/);
   assertRefused(compare(edit(FORMAT_TEXT, READY, READY.replace('| daemon, web |', '| Olympiad |'))), /F-READY/);
-  assertPasses(compare(edit(FORMAT_TEXT, READY, READY.replace('| daemon, web |', '| daemon, web, others |'))));
+  assertPasses(compare(edit(FORMAT_TEXT, READY, READY.replace('| daemon, web |', '| daemon or web |'))));
   const added = kinds => edit(edit(FORMAT_TEXT, READY, `${READY}\n| F-NEW | ${kinds} | section 2, in an R | none |`), '### 2.4 Daemon and web\n\n', '### 2.4 Daemon and web\n\nF-NEW: a new sentence.\n\n');
   assertRefused(compare(added('all')), /F-NEW/, /all|olympiad/);
   assertRefused(compare(added('daemon and olympiad')), /F-NEW/, /olympiad/);

@@ -79,6 +79,7 @@ const FORMAT_ERRORS = [
   ['a_setext_underline_with_trailing_blanks', () => plantAfterSteps('A paragraph line\n--------  '), '--------  ', /setext/],
   ['a_single_dash_after_a_paragraph_line', () => plantAfterSteps('A paragraph line\n-'), '-', /setext/],
   ['a_setext_heading_over_a_paragraph_of_two_lines', () => plantAfterSteps('First line of the paragraph\nsecond line of it\n=========='), '==========', /setext/],
+  ['a_dash_line_under_a_list_item', () => plantAfterSteps('- an item\n---------'), '---------', /a dash line under a list item \(a thematic break or a setext underline: refused\)/],
   ['an_ATX_heading_in_a_block_quote', () => plantAfterSteps('> ## 2.6 Olympiad output'), '> ## 2.6 Olympiad output', /block quote/],
   ['an_ATX_heading_in_a_block_quote_indented_three_spaces_without_a_space_after_the_marker', () => plantAfterSteps('   >### 2.6 Olympiad output'), '   >### 2.6 Olympiad output', /block quote/],
   ['an_ATX_heading_in_a_nested_block_quote', () => plantAfterSteps('> > ## 2.6 Olympiad output'), '> > ## 2.6 Olympiad output', /block quote/],

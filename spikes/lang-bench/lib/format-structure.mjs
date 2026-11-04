@@ -138,6 +138,7 @@ export function scanBlocks(lines) {
       continue;
     }
     fence = null;
+    const inItem = lists.length > 0;
     if (!blank) while (lists.length > 0 && col < lists.at(-1)) lists.pop();
     const base = lists.at(-1) ?? 0;
     const opened = FENCE.exec(rest);
@@ -148,7 +149,10 @@ export function scanBlocks(lines) {
       freshBlock = false;
       continue;
     }
-    if (col <= 3 && paragraphOpen && SETEXT_UNDERLINE.test(line.text)) return { kept, fault: { no: line.no, reason: 'a setext heading underline under a paragraph line: a renderer shows a heading, the reader does not' } };
+    if (col <= 3 && paragraphOpen && SETEXT_UNDERLINE.test(line.text)) {
+      const reason = inItem && rest.startsWith('-') ? 'a dash line under a list item (a thematic break or a setext underline: refused)' : 'a setext heading underline under a paragraph line: a renderer shows a heading, the reader does not';
+      return { kept, fault: { no: line.no, reason } };
+    }
     const reason = col <= 3 ? hiddenStart(rest) ?? htmlBlockStart(rest, freshBlock) ?? strangeHeading(line.text) : null;
     if (reason !== null) return { kept, fault: { no: line.no, reason } };
     if (!blank) {

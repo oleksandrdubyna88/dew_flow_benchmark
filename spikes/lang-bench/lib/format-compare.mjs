@@ -2,15 +2,16 @@
 // `daemon`, `web` or `daemon-web` part may. The protected set comes from the FROZEN file's class table only. Parts are compared as raw bytes; a boundary blank line belongs to the
 // part before it. Exceptions, each named in the rule: the preamble's three header rows and class-table rows appended after the last row; section 7 (the changelog) may only grow;
 // 2.1's fixed-sentence table is compared row by row. The header rows keep their lines and match a strict pattern; the rest of the preamble is compared as bytes.
+import { grammarRefusals } from './format-grammar.mjs';
 import { checkSelf, isProtected, partsOf, readClassed, sliceLike, tableProblems } from './format-class-table.mjs';
 import { headingByNumber, numberOf, sha256Hex, sliceFrom, unfencedLines } from './format-structure.mjs';
 
 const HEADER_LABELS = Object.freeze(['Format version', 'Gate verdict', 'Freeze tag']);
 const HEADER_ROW = new RegExp(`^(${HEADER_LABELS.join('|')}): `);
-/** The value of each header row: a version number; a verdict of one to four lower-case words (letters, digits, `_`, `.`, `-`; no colon; at most 80 characters); `none yet` or a freeze tag. */
+/** The value of each header row: a version number; a verdict of one to four lower-case words (letters, digits, `_`, `.`, `-`; no colon; at most 80 characters) or the spec-header form (a back-quoted verdict word, then optionally ` · ` and a date `yyyy-mm-dd`); `none yet` or a freeze tag. */
 export const HEADER_PATTERNS = Object.freeze({
   'Format version': /^\d+(?:\.\d+)?$/,
-  'Gate verdict': /^(?=.{1,80}$)[a-z0-9][a-z0-9_.-]*(?: [a-z0-9][a-z0-9_.-]*){0,3}$/,
+  'Gate verdict': /^(?=.{1,80}$)(?:[a-z0-9][a-z0-9_.-]*(?: [a-z0-9][a-z0-9_.-]*){0,3}|`[a-z][a-z_-]*`(?: · \d{4}-\d{2}-\d{2})?)$/,
   'Freeze tag': /^(?:none yet|spec-frozen(?:-[A-Z])?-\d{8})$/,
 });
 const TABLE_HEADER = /^\| Id \|/;
@@ -115,6 +116,16 @@ function isFree(side, id) {
   return classes.length > 0 && classes.every(cls => cls !== undefined && !isProtected(cls));
 }
 
+const kindsOf = line => (line.split('|')[2] ?? '').trim();
+const wordsOf = cell => cell.toLowerCase().split(/[ ,]+/).filter(word => word !== '');
+
+/** Why a kinds cell is not made of the allowed words (plain ASCII letters, spaces and commas), or null. */
+function kindsProblem(cell, allowed) {
+  if (!/^[A-Za-z, ]+$/.test(cell)) return 'holds a character that is not an ASCII letter, a comma or a space';
+  const odd = wordsOf(cell).find(word => !allowed.has(word));
+  return odd === undefined ? null : `holds the word \`${odd}\``;
+}
+
 /**
  * 2.1's table in the text of its part: the rows are the contiguous `|` block right under the `| Id |` header row and its separator row. `{ found, rows, rest }`: `rows` are
  * `{ id, line, index }` for the block's `| F-… |` lines, `rest` the other lines as `{ text, index }` (a `| F-` line anywhere else is one of them: plain text of its part).
@@ -160,11 +171,15 @@ function rowRefusals(part, textA, textB, ctx, at) {
   const order = b.rows.map(row => row.id).filter(id => kept.includes(id));
   const moved = order.findIndex((id, index) => id !== kept[index]);
   if (moved !== -1) refusals.push(name(`the protected rows are out of order: ${order[moved]} stands where the frozen file has ${kept[moved]} (rows of protected sentences keep their order)`, here(at + rowB.get(order[moved]).index)));
+  const kindWords = new Set(['daemon', 'web', 'and', 'or', ...[...rowA.keys()].filter(id => isFree(ctx.frozen, id)).flatMap(id => wordsOf(kindsOf(rowA.get(id).line)))]);
   for (const [id, row] of rowB) {
     const free = isFree(rowA.has(id) ? ctx.frozen : ctx.candidate, id);
     if (!rowA.has(id) && !free) refusals.push(name(`row ${id} is added, and its sentence is not defined in a daemon, web or daemon-web part`, here(at + row.index)));
     else if (free && rowA.get(id)?.line !== row.line && OLYMPIAD_KINDS.test(row.line.split('|')[2] ?? '')) {
       refusals.push(name(`row ${id}${rowA.has(id) ? ' is changed' : ' is added'} and its kinds cell names all or olympiad: a daemon-web change touches no olympiad task`, here(at + row.index)));
+    } else if (free && rowA.get(id)?.line !== row.line) {
+      const odd = kindsProblem(kindsOf(row.line), kindWords);
+      if (odd !== null) refusals.push(name(`row ${id}${rowA.has(id) ? ' is changed' : ' is added'} and its kinds cell ${odd}: only the words daemon, web, and, or and the words the frozen free rows use, as plain ASCII, are allowed`, here(at + row.index)));
     }
   }
   return refusals;
@@ -248,7 +263,10 @@ export function checkFrozenCandidate({ frozen, candidate, reference }) {
   const left = { ...a, parts: partsOf(a.format, a.rows) };
   const right = { ...b, parts: partsOf(b.format, b.rows) };
   const ctx = { frozen: left, candidate: right };
+  const broken = grammarRefusals(left);
+  if (broken.length > 0) return { exit: 4, lines: ['format-classes: the frozen file breaks the restricted grammar', ...broken.map(entry => refusal(entry.heading, entry.cls, there(entry.no), entry.form))] };
   const lines = [
+    ...grammarRefusals(right, left).map(entry => refusal(entry.heading, entry.cls, here(entry.no), entry.form)),
     ...left.parts.filter(part => isProtected(part.cls)).flatMap(part => (part.kind === 'preamble' ? preambleRefusals(left, right) : partRefusals(part, ctx))),
     ...rowClassRefusals(left, right), ...addedRefusals(left, right),
   ];
