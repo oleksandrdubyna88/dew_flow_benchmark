@@ -6,6 +6,8 @@ The readers of what a `model-arms` run leaves — metrics, survival, comparison,
 
 2026-11-04: the boundary table below was added, mirrored from the parent's §5, and the list of readers E6.S1 did not run (the E6 Definition of Done asks for both); the goal and the build order are still for the plan role to write.
 
+2026-11-04: the analysis runs `~/model-arms-runs/audit-streams.py` per arm first, and an arm with a hit is reported, never silently counted; `baseline.json` of the owner's root lists one flaky test, `AZombieIsNotAliveTests.AKilledButUnreapedProcess_IsNotAlive`, so it is treated by name (the module doc, *Prepared for a real run (2026-11-04)*).
+
 ## Boundary (mirrored from the parent's §5, 2026-11-04)
 
 The same table stands in [PLAN_model_arms.md](../research/PLAN_model_arms.md) §5, so the boundary is named on both sides. In it "this plan" is the parent (the run half) and "the analysis plan" is this document. Order: the parent first, because it lands the layout this plan reads. The last column says the two parts are disjoint in every row.
