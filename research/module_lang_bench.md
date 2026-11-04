@@ -328,9 +328,11 @@ the gate passes.
 ## The conformance check (E1.S8)
 
 Built 2026-11-04 (`todo/PLAN_lang_comparison_v2_E1.md` § E1.S8). One command reads a spec, its visible samples and FORMAT.md and names every deviation:
-`node spikes/lang-bench/conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>]`. The spec is `<repo>/todo/tasks/<task>.md` and its samples are
+`node spikes/lang-bench/conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>] [--record <format.json>]`. The spec is `<repo>/todo/tasks/<task>.md` and its samples are
 `<repo>/tasks/<task>/samples/`. One line per check on standard output, `ok <check>` or `FAIL <check> — <what, where>` (one line per finding). **Exit** 0 every check ok; 1 a deviation; 4 the
-checker cannot run, and nothing is passed: a usage error, a missing or unresolvable `--task`, spec or samples folder, a FORMAT it cannot read or that lacks a sentence, a placement or a slot it
+checker cannot run, and nothing is passed: a FORMAT that is not in the record (`inputs/specs.d/format.json`, read as the FORMAT tools read it, `--record` overriding), not Format version 2, or whose
+2.1 table or `text` blocks do not fit what the reader names (a row the code names missing, a part count other than one or F-HIDDEN's two, a labelled block with no row, overlapping variants, a kinds cell or a
+kind label it cannot read, a slot phrase no longer in 2.4 or 2.5); a runner that exits 4 and names no problem; a usage error, a missing or unresolvable `--task`, spec or samples folder, a FORMAT it cannot read or that lacks a sentence, a placement or a slot it
 expects, `python3` or the runner missing, the runner not finished in 60 s, or ended in a way other than 0 or 4. A spec the block reader refuses (CR, byte order mark, a form CommonMark reads otherwise)
 is one `FAIL file` line and exit 1. In group B, check each olympiad spec of A under A's FORMAT and under B's (`An_olympiad_spec_conforms_under_A_and_B_FORMAT`).
 
@@ -354,8 +356,14 @@ F-STOP's `{which}` by F-EOF, `{k}` by the samples shown, `{ref}` by the ids that
 v1's `runBounded` (60 s, TMPDIR a folder of its own, removed after); its `(file, line, message)` lines are quoted in the `samples` findings. `runBounded` already ends the whole process tree at its
 ceiling (`A_runner_that_hangs_…` shows a `setsid` child of the runner gone when the checker returns), so it is not widened. An olympiad task needs neither python nor the runner.
 
-**Stack words.** `inputs/stack-words-lang.json` (public, schema 1, `words` and `substrings` in the shape and with the matching rule of `needles-lang.json`) lists the implementation languages, runtimes,
-frameworks and flags of the series; check 10 always reads it and names a hit by the word. Neither the real FORMAT nor the real spec 01 holds one of them.
+**Stack words.** `inputs/stack-words-lang.json` (public, schema 1: `words`, `substrings`, `caseSensitive`) lists the implementation languages, runtimes, frameworks, build tools and flags of the series; check 10 always
+reads it with its own matcher (`lib/conformance-needles.mjs`: case-insensitive, `Node` excepted, over the whitespace-collapsed text, so a needle wrapped over a line is found; the known-task needles and the
+author's `--needles` literals are matched the same way) and names a hit by the word. Neither the real FORMAT's fixed sentences nor the real spec 01 holds one of them. The shared push rules `lib/push-*.mjs` are unchanged.
+
+**Batch 3 (the review's fixes, 2026-11-04).** Fail-closed: C1 (silent runner exit 4), C2 (the record and the reader's structure), C11 (slot phrases read from FORMAT). Structure: C5 (section 8), C6 (a table found
+by its delimiter row), C7 (ids in any form, every `R<n>` in range, a blank line above each opening), C8 (a sentence the row does not list for the kind), C9 (F-PORT), C10 (every F-TIMING, paired), C12 (olympiad
+section 6), C15 (heading levels), C16 (triggers of the samples), C19 (a sentence in the preamble), C20 (real dates, the tag, `Withdrawn by amendment`, `{k}`). Text: C3, C4, C13, C14, C17, C18. C22: exit 4 with a
+sentence for an unknown kind label and for an unreadable sample. Not built: a fence info string other than `text` in a spec (FORMAT 3.4 gives none).
 
 **Not covered, and why.** The body-forms rule is coarse (a JSON comparison with no F-JSON anywhere). A normative sentence outside a span
 that is not a fixed sentence is for the reviewer. Shape: every function of these files and of the FORMAT readers and tools (`lib/format-*.mjs`, `tools/*.mjs`) has under 50 lines and a complexity of at most 4, measured by v1's scanner (`spikes/minigit-bench/test/code-shape.mjs`) and held by `test/code-shape-lang.test.mjs`, with no exemption; the E1.S9 files were split in batch 2 without a change in behaviour (see `module_tests.md`).

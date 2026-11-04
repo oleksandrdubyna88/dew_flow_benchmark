@@ -11,16 +11,24 @@ It applies to the task format, `Format version: 2`. Where this document and the 
 
 A spec conforms to the format when a checker finds all of the following. The checker is the spec conformance check, a tool of the bench for
 the visible samples and for the format document, used by every spec's gate. **It is built: `node spikes/lang-bench/conformance.mjs --repo <task repository> --task NN-slug
---format <FORMAT.md> [--needles <file>]`.** It prints one line per check, `ok <check>` or `FAIL <check> — <what, where>`, and exits 0 when every check is ok, 1 on a
-deviation, 4 when it cannot run (a missing task, spec or samples folder; a format it cannot read or that lacks a sentence it expects; no `python3`, no runner, a runner that
-does not finish in 60 seconds): a refusal to run is never a pass. The result of the run is recorded with the spec's gate. The tools in section 2 check the format document itself, not a spec.
+--format <FORMAT.md> [--needles <file>] [--record <format.json>]`.** It prints one line per check, `ok <check>` or `FAIL <check> — <what, where>`, and exits 0 when every check is ok, 1 on a
+deviation, 4 when it cannot run: a missing task, spec or samples folder; a FORMAT that is not one the record `inputs/specs.d/format.json` names (by its raw sha256, which the first `ok format sha256 …`
+line prints for the gate record), that is not Format version 2, or whose table and blocks do not fit what the checker names; no `python3`, no runner, a runner that does not finish in 60 seconds or
+exits 4 and says nothing. A refusal to run is never a pass. The result of the run is recorded with the spec's gate. The tools in section 2 check the format document itself, not a spec.
 
-The ten checks of the command, and the items below they cover: `file` (1), `header` (2), `sections` (3), `r-ids` (4 and 5), `sentences` (6), `T/G` (7), `samples` (9),
-`sample-forms` (8, and the forms of the sample files that the runner leaves to the format), `sample-env` (the `env` lines of the samples) and `no-needle` (10, 11 and 12). Four things
-it does only in part, and they stay with the reviewer: a normative sentence outside every requirement that is not a fixed sentence (5); a `body json` or `recv … json` entry is
-refused only when no requirement carries F-JSON, not reply by reply (8); the reading block is recognised as a paragraph that names eight or more of the script's keywords in code
-spans (10). The needles of check 11 are the push check's plan ids, links and known-task needles, the stack words of `inputs/stack-words-lang.json` (the implementation languages, runtimes,
-frameworks and flags of the series, public, named by the word in a finding) and the author's `--needles` file. In group B each olympiad spec of A is checked under A's FORMAT and under B's.
+The ten checks of the command, and the items below they cover: `file` (1, and FORMAT's whole-file markup rules), `header` (2), `sections` (3, and the heading levels of 1.4), `r-ids` (4 and 5), `sentences` (6),
+`T/G` (7, and the triggers of the samples against the spec), `samples` (9), `sample-forms` (8, and the forms of the sample files that the runner leaves to the format), `sample-env` (the `env` lines of
+the samples) and `no-needle` (10, 11 and 12). The threat model of the command is an honest author who makes mistakes in the ordinary forms of Markdown, read afterwards by a gate of human reviewers: it
+catches every mistake a check names in those forms, and never passes because FORMAT or the runner changed or failed. It is not a proof against a hostile author; an elaborate disguise is the gate's
+job. **Three things it does only in part, and they stay with the reviewer:** a normative sentence outside every requirement that is not a fixed sentence (5); a `body json` or `recv … json` entry is
+refused only when no requirement carries F-JSON, not reply by reply (8); the reading block is recognised as a paragraph, table or fenced block that names eight or more of the script's keywords in code
+spans, so a summary in plain words is not (10). The needles of check 11 are the plan's identifiers (any case; `S<n>` and `V<n>` in upper case only, because `s01` is a sample id and the Freeze rule
+sentence says `v2`), links of every kind, the known-task needles and the stack words of `inputs/stack-words-lang.json` (case-insensitive, `Node` excepted; the implementation languages, runtimes,
+frameworks, build tools and flags of the series, public, named by the word in a finding) and the author's `--needles` file (case-insensitive, found across a line break). In group B each olympiad spec
+of A is checked under A's FORMAT and under B's. **A departure from FORMAT 1.2, until the team lead amends FORMAT:** the freeze tag may carry the group letter `A` or `B`
+(`spec-frozen-A-<yyyymmdd>`, as the parent plan's tags do); FORMAT 1.2 shows no letter. **The shape rule's own limits** (`test/code-shape-lang.test.mjs`, v1's scanner): it measures a function declaration
+and a `const name = (…) =>` arrow at column 0 and counts the decisions inside its text; an arrow written inside a table or an object, a method, and a function expression assigned to a property are
+measured only as part of the function that holds them, never alone.
 
 1. **The file.** The name matches 1.1; the title's `NN` equals the file's.
 2. **The header.** The five rows of 1.2, in order, each value either its placeholder or its later form; the `Kind` value one of the three
