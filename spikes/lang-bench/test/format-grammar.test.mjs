@@ -4,13 +4,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkFrozenCandidate } from '../lib/format-compare.mjs';
-import { partRefusals } from '../lib/format-grammar.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { paragraphStartProblem, partRefusals } from '../lib/format-grammar.mjs';
 import { edit, FORMAT_TEXT, realDraft, sha256 } from './support/format-fixtures.mjs';
 
 const compare = (candidate, base = FORMAT_TEXT) => {
   const frozen = Buffer.from(base);
   return checkFrozenCandidate({ frozen, candidate: Buffer.from(candidate), reference: sha256(frozen) });
 };
+const GRAMMAR_SOURCE = fileURLToPath(new URL('../lib/format-grammar.mjs', import.meta.url));
 const joined = result => result.lines.join('\n');
 const lineOf = (text, content) => text.split('\n').indexOf(content) + 1;
 const LAST_ROW = '| 7. Changelog | common |\n';
@@ -53,6 +56,8 @@ const REFUSED = [
   ['a_paragraph_line_that_starts_with_an_ordered_marker_with_a_paren', '1) item', '1) item', /ordered list marker/],
   ['a_paragraph_line_that_starts_with_a_long_ordered_marker', '1234. item', '1234. item', /ordered list marker/],
   ['an_empty_list_item', '- ', '- ', /is empty/],
+  ['a_reference_definition_with_an_escaped_bracket_in_its_label', '[a\\]]: https://example.invalid/', '[a\\]]: https://example.invalid/', /starts with `\[`/],
+  ['a_list_item_holding_a_reference_definition_with_an_escaped_bracket', '- [b\\]]: https://example.invalid/', '- [b\\]]: https://example.invalid/', /list item whose text starts with `\[`/],
   ['a_list_item_whose_text_starts_with_a_hash', '- # text', '- # text', /list item whose text starts with `#`/],
   ['a_list_item_whose_text_starts_with_a_space_the_reviewers_N1', '1.  Note.', '1.  Note.', /list item whose text starts with a space/],
   ['a_nested_list_item', '- item\n  - nested', '  - nested', /continuation line whose text starts with `-`/],
@@ -235,4 +240,67 @@ test('The_real_draft_kinds_words_are_read_from_its_free_rows', t => {
   const refused = run(edit(real, '| F-READY | daemon, web |', '| F-READY | web and every kind |'));
   assert.equal(refused.exit, 1, joined(refused));
   assert.match(joined(refused), /word `every`/);
+});
+
+// Fix batch 3. Section 7's appended bytes are checked by the grammar, and must start after a blank line.
+const CHANGELOG_LINE = '- v2.1 · 2026-12-01 · amendment · touches all — a later line.';
+const appended = tail => `${FORMAT_TEXT}${tail}`;
+function assertAppendRefused(tail, content, form) {
+  const text = appended(tail);
+  const result = compare(text);
+  assert.equal(result.exit, 1, `${JSON.stringify(tail)}: ${joined(result)}`);
+  assert.match(joined(result), /7\. Changelog \(class common\)/);
+  assert.match(joined(result), new RegExp(`line ${lineOf(text, content)}\\b[^\\n]*${form.source}`), joined(result));
+}
+
+test('Appended_changelog_text_must_start_after_a_blank_line_and_obey_the_grammar_the_reviewers_R1_and_R3', () => {
+  assertPasses(compare(FORMAT_TEXT));
+  assertPasses(compare(appended(`\n${CHANGELOG_LINE}\n`)));
+  assertPasses(compare(appended(`\n${CHANGELOG_LINE}\n  continued two spaces in\n- a second line\n`)));
+  assertPasses(compare(appended('\n')), 'a blank line alone');
+  assertAppendRefused(`  The olympiad rules of 2.6 no longer hold.\n`, '  The olympiad rules of 2.6 no longer hold.', /must start after a blank line/);
+  assertAppendRefused(`${CHANGELOG_LINE}\n`, CHANGELOG_LINE, /must start after a blank line/);
+  assertAppendRefused(`\n    ### 2.6 Olympiad output\n\n    Rewritten text.\n`, '    ### 2.6 Olympiad output', /indented line, and no list item is open/);
+  assertAppendRefused(`\n===\n`, '===', /starts with `=`/);
+  assertAppendRefused(`\n[a]: /changed\n`, '[a]: /changed', /starts with `\[`/);
+  assertAppendRefused(`\n\`\`\`unclosed\ncode\n`, '```unclosed', /not closed in its part/);
+  assert.equal(compare(appended('\n<div>\n')).exit, 4, 'an HTML block start is a format error of the reader');
+});
+
+test('Appended_text_after_a_changelog_that_does_not_end_with_a_line_feed_is_refused', () => {
+  const base = FORMAT_TEXT.replace(/\n$/, '');
+  const result = compare(`${base}\n\n${CHANGELOG_LINE}\n`, base);
+  assert.equal(result.exit, 1, joined(result));
+  assert.match(joined(result), /must start after a blank line|must start with the frozen bytes/);
+});
+
+// Fix batch 3. Reference definitions at any indent, with an escaped bracket, a footnote form.
+test('A_reference_definition_at_any_indent_with_an_escaped_bracket_or_as_a_footnote_is_a_whole_file_refusal', () => {
+  for (const [body, content] of [['- an item\n\n    [within <d>]: https://example.invalid/', '    [within <d>]: https://example.invalid/'], ['[a\\]]: https://example.invalid/', '[a\\]]: https://example.invalid/'],
+    ['[^x]: a footnote', '[^x]: a footnote'], ['\t[tabbed]: /x', '\t[tabbed]: /x'], ['        [deep]: /x', '        [deep]: /x']]) {
+    const frozen = edit(FORMAT_TEXT, 'The file name and the header table.', `The file name and the header table.\n\n${body}`);
+    const result = compare(frozen, frozen);
+    assert.equal(result.exit, 4, `${body}: ${joined(result)}`);
+    assert.match(joined(result), new RegExp(`line ${lineOf(frozen, content)}\\b[^\\n]*reference definition`));
+  }
+  assert.equal(paragraphStartProblem('[a\\]]: x') === null, false);
+  assert.equal(paragraphStartProblem('[a] and [b]') === null, true, 'brackets in text are fine');
+  assertPasses(compare(in33('```text\n    [within <d>]: https://example.invalid/\n```')));
+});
+
+// Fix batch 3. The arrays of refusals are built without push.
+test('The_grammar_module_builds_its_refusal_arrays_without_push', () => {
+  assert.doesNotMatch(readFileSync(GRAMMAR_SOURCE, 'utf8'), /\.push\(/);
+});
+
+test('The_real_draft_still_passes_with_the_whole_file_rule_at_any_indent', t => {
+  const draft = realDraft(t);
+  if (draft === null) return;
+  const result = checkFrozenCandidate({ frozen: draft.bytes, candidate: draft.bytes, reference: draft.recorded });
+  assertPasses(result);
+  const real = draft.bytes.toString('utf8');
+  const appendedReal = checkFrozenCandidate({ frozen: draft.bytes, candidate: Buffer.from(`${real}\n${CHANGELOG_LINE}\n`), reference: draft.recorded });
+  assertPasses(appendedReal);
+  const bad = checkFrozenCandidate({ frozen: draft.bytes, candidate: Buffer.from(`${real}\n    [within <d>]: https://example.invalid/\n`), reference: draft.recorded });
+  assert.equal(bad.exit, 1, joined(bad));
 });

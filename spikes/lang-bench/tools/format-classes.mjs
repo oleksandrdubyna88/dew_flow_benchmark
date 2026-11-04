@@ -4,6 +4,7 @@
 //   node spikes/lang-bench/tools/format-classes.mjs --self <FORMAT>
 //       The class table of the document itself: every row names an existing heading by its whole text, with one of the five classes; every `##` section has exactly one row,
 //       or, where it mixes kinds of task, each of its `###` has exactly one row (the lead text of a mixed section is `common`).
+//       It also reports the restricted grammar over the unprotected parts and the whole-file rules (exit 1), so a FORMAT that would fail as a frozen reference shows it early.
 //   node spikes/lang-bench/tools/format-classes.mjs --frozen <A's FORMAT> --candidate <B's FORMAT> [--record <format.json>]
 //       After the freeze of the first group of tasks the `common` and `olympiad` parts of FORMAT do not change. The protected set comes from the FROZEN file's class table only.
 //       The frozen file must be the one the record names (`A.sha256` of inputs/specs.d/format.json, the one source of truth for the reference): there is no other way to name it.
@@ -15,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { checkSelf } from '../lib/format-class-table.mjs';
 import { checkFrozenCandidate } from '../lib/format-compare.mjs';
+import { selfGrammar } from '../lib/format-grammar.mjs';
 
 const EXIT_USAGE = 4;
 const DEFAULT_RECORD = path.join(fileURLToPath(new URL('..', import.meta.url)), 'inputs', 'specs.d', 'format.json');
@@ -55,7 +57,11 @@ export function run(argv) {
   if (self ? values.frozen !== undefined || values.candidate !== undefined || values.record !== undefined : values.frozen === undefined || values.candidate === undefined) return usage('give --self <FORMAT>, or --frozen <A> and --candidate <B>');
   if (self) {
     const bytes = readBytes(values.self);
-    return bytes.error === undefined ? checkSelf(bytes.bytes) : usage(bytes.error);
+    if (bytes.error !== undefined) return usage(bytes.error);
+    const own = checkSelf(bytes.bytes);
+    if (own.exit !== 0) return own;
+    const grammar = selfGrammar(bytes.bytes);
+    return grammar.exit === 0 ? own : grammar;
   }
   const reference = recordedReference(values.record ?? DEFAULT_RECORD);
   const frozen = readBytes(values.frozen);

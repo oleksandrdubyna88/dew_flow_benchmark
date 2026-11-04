@@ -176,3 +176,11 @@ test('The_real_draft_frees_exactly_the_14_daemon_and_web_rows_of_2_1_and_protect
   assert.equal(protectedIds.length, 17, protectedIds.join(' '));
   assert.equal(free.length + protectedIds.length, 31);
 });
+
+test('An_unprotected_section_heading_of_level_two_renamed_with_its_row_passes_and_its_subsections_follow_by_number', () => {
+  const renamed = edit(edit(FORMAT_TEXT, '## 6. Worked examples\n', '## 6. Examples that illustrate\n'), '| 6. Worked examples | daemon-web |', '| 6. Examples that illustrate | daemon-web |');
+  assertPasses(compare(renamed));
+  assert.equal(compare(edit(FORMAT_TEXT, '## 6. Worked examples\n', '## 6. Examples that illustrate\n')).exit, 1, 'without its row the rename is refused by the class rules');
+  const protectedRenamed = edit(edit(FORMAT_TEXT, '## 1. The spec file\n', '## 1. The file of the spec\n'), '| 1. The spec file | common |', '| 1. The file of the spec | common |');
+  assert.equal(compare(protectedRenamed).exit, 1, 'a protected section may not be renamed');
+});

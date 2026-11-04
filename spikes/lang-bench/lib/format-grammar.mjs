@@ -3,7 +3,7 @@
 // the guarantee is by construction: a candidate's unprotected parts may only be made of the line forms below, and no line of any part may start a reference definition or an HTML block.
 // The argument: every protected part starts at a column-0 heading, where CommonMark starts a fresh block; no unprotected construct can stay open across a part boundary (a fence
 // closes inside its part, there is no HTML block, no list continues across a heading); and nothing acts at a distance (no reference definition): so protected bytes render as protected bytes.
-import { isProtected } from './format-class-table.mjs';
+import { isProtected, partsOf, readClassed } from './format-class-table.mjs';
 import { unfencedLines } from './format-structure.mjs';
 
 const SECTION_HEADING = /^## \d+\. \S(?:.*\S)?$/;
@@ -12,7 +12,7 @@ const FENCE_OPEN = /^```[a-z]*$/;
 const FENCE_LINE = /^ {0,3}(?:`{3,}|~{3,})/;
 const LIST_ITEM = /^(- |\d{1,3}\. )(.*)$/;
 const TABLE_ROW = /^\|.*\|$/;
-const REFERENCE_DEFINITION = /^ {0,3}\[[^\]]+\]:/;
+const REFERENCE_DEFINITION = /^\s*\[(?:[^\]\\]|\\.)*\]:/;
 const BLOCK_STARTERS = '#<>|~=-+_]';
 
 const shown = text => (text.length > 50 ? `${text.slice(0, 50)}…` : text);
@@ -26,7 +26,7 @@ export function paragraphStartProblem(text) {
   if (text.startsWith('```')) return 'starts with three backticks (a fence has its own form: an opener of three backticks and lower-case letters, a closer of three backticks, both at column 0)';
   if (first === '*' && (!text.startsWith('**') || text.startsWith('***'))) return 'starts with `*` that is not `**` (a list marker or a thematic break)';
   if (/^\d{1,9}[.)](?: |$)/.test(text)) return 'starts with an ordered list marker';
-  if (first === '[' && !/^\[[^\]]*\](?!:)/.test(text)) return 'starts with `[` and may start a reference definition';
+  if (first === '[' && !/^\[[^\]\\]*\](?!:)/.test(text)) return 'starts with `[` and may start a reference definition';
   return null;
 }
 
@@ -37,51 +37,32 @@ export function paragraphStartProblem(text) {
  * closer `` ``` `` at column 0, both in the part; no line of the block that is a fence marker line (up to three spaces of indent) but the closer).
  */
 export function partRefusals(text, firstLine) {
-  const refusals = [];
-  let fenceAt = null;
-  let item = null;
-  for (const [index, line] of text.split('\n').entries()) {
+  const step = (state, line, index) => {
     const no = firstLine + index;
-    const refuse = form => refusals.push({ no, form: `${form}: ${shown(line)}` });
-    if (fenceAt !== null) {
-      if (line === '```') fenceAt = null;
-      else if (FENCE_LINE.test(line)) refuse('a fence marker line inside a fenced block that is not its closer (the block is closed by a line of exactly three backticks)');
-      continue;
+    const refuse = form => ({ ...state, refusals: [...state.refusals, { no, form: `${form}: ${shown(line)}` }] });
+    if (state.fenceAt !== null) {
+      if (line === '```') return { ...state, fenceAt: null };
+      return FENCE_LINE.test(line) ? refuse('a fence marker line inside a fenced block that is not its closer (the block is closed by a line of exactly three backticks)') : state;
     }
-    if (line === '') continue;
-    if (SECTION_HEADING.test(line) || SUB_HEADING.test(line)) {
-      item = null;
-      if (/ #+$/.test(line)) refuse('a heading with a closing sequence of `#`');
-      continue;
-    }
-    if (FENCE_OPEN.test(line)) {
-      fenceAt = no;
-      item = null;
-      continue;
-    }
-    if (TABLE_ROW.test(line)) {
-      item = null;
-      if (/\|\s*\[[^\]]+\]:/.test(line)) refuse('a table row that holds a reference definition');
-      continue;
-    }
+    if (line === '') return state;
+    if (SECTION_HEADING.test(line) || SUB_HEADING.test(line)) return { ...(/ #+$/.test(line) ? refuse('a heading with a closing sequence of `#`') : state), item: null };
+    if (FENCE_OPEN.test(line)) return { ...state, fenceAt: no, item: null };
+    if (TABLE_ROW.test(line)) return { ...(/\|\s*\[[^\]]+\]:/.test(line) ? refuse('a table row that holds a reference definition') : state), item: null };
     const listed = LIST_ITEM.exec(line);
     if (listed !== null) {
       const problem = paragraphStartProblem(listed[2]);
-      if (problem !== null) refuse(`a list item whose text ${problem}`);
-      item = listed[1].length;
-      continue;
+      return { ...(problem === null ? state : refuse(`a list item whose text ${problem}`)), item: listed[1].length };
     }
     if (line.startsWith(' ')) {
-      if (item === null || !line.startsWith(' '.repeat(item))) refuse(item === null ? 'an indented line, and no list item is open (an indent is only the continuation of a list item)' : `an indented line that is not a continuation of the open list item (a continuation is indented by exactly ${item} spaces)`);
-      else if (paragraphStartProblem(line.slice(item)) !== null) refuse(`a continuation line whose text ${paragraphStartProblem(line.slice(item))}`);
-      continue;
+      if (state.item === null || !line.startsWith(' '.repeat(state.item))) return refuse(state.item === null ? 'an indented line, and no list item is open (an indent is only the continuation of a list item)' : `an indented line that is not a continuation of the open list item (a continuation is indented by exactly ${state.item} spaces)`);
+      const problem = paragraphStartProblem(line.slice(state.item));
+      return problem === null ? state : refuse(`a continuation line whose text ${problem}`);
     }
-    item = null;
     const problem = paragraphStartProblem(line);
-    if (problem !== null) refuse(`a paragraph line that ${problem}`);
-  }
-  if (fenceAt !== null) refusals.push({ no: fenceAt, form: 'a fenced block that is not closed in its part' });
-  return refusals;
+    return { ...(problem === null ? state : refuse(`a paragraph line that ${problem}`)), item: null };
+  };
+  const end = text.split('\n').reduce((state, line, index) => step(state, line, index), { refusals: [], fenceAt: null, item: null });
+  return end.fenceAt === null ? end.refusals : [...end.refusals, { no: end.fenceAt, form: 'a fenced block that is not closed in its part' }];
 }
 
 /** The refusals of the two rules for the whole file, outside fences: no reference definition, and no line whose first non-space character is `<` (an HTML block start): `{ no, form }`. */
@@ -102,19 +83,24 @@ const titleOf = text => text.replace(/^[\d.]+\s*/, '').trim();
  */
 export function grammarRefusals(side, reference = side) {
   const partOf = no => side.parts.find(part => part.no <= no && no < part.no + side.format.text.slice(part.start, part.end).split('\n').length) ?? side.parts[0];
-  const found = wholeFileRefusals(side.format).map(entry => ({ ...entry, part: partOf(entry.no) }));
   const known = new Set(unprotectedTitles(reference));
   const protectedTitles = new Set(reference.parts.filter(part => isProtected(part.cls) && part.kind !== 'preamble').map(part => titleOf(part.heading)));
-  for (const part of side.parts.filter(entry => !isProtected(entry.cls))) {
-    const text = side.format.text.slice(part.start, part.end);
-    for (const entry of partRefusals(text, part.no)) found.push({ ...entry, part });
-    for (const heading of side.format.headings.filter(entry => entry.start >= part.start && entry.start < part.end)) {
-      if (protectedTitles.has(titleOf(heading.text)) && !known.has(titleOf(heading.text))) {
-        found.push({ no: heading.no, part, form: `an added heading with the title of a protected heading (no look-alike of a protected section): ${shown(heading.text)}` });
-      }
-    }
-  }
+  const inPart = part => side.format.headings.filter(heading => heading.start >= part.start && heading.start < part.end);
+  const looks = part => inPart(part).filter(heading => protectedTitles.has(titleOf(heading.text)) && !known.has(titleOf(heading.text)))
+    .map(heading => ({ no: heading.no, part, form: `an added heading with the title of a protected heading (no look-alike of a protected section): ${shown(heading.text)}` }));
+  const found = [
+    ...wholeFileRefusals(side.format).map(entry => ({ ...entry, part: partOf(entry.no) })),
+    ...side.parts.filter(part => !isProtected(part.cls)).flatMap(part => [...partRefusals(side.format.text.slice(part.start, part.end), part.no).map(entry => ({ ...entry, part })), ...looks(part)]),
+  ];
   return found.map(entry => ({ no: entry.no, heading: entry.part.heading, cls: entry.part.cls, form: entry.form }));
+}
+
+/** `--self`: `{ exit, lines }` for FORMAT's bytes: 0, or 1 with one line per refusal of the grammar (the frozen file's own sanity check, shown before it is frozen); the class table is checked elsewhere. */
+export function selfGrammar(bytes) {
+  const read = readClassed(bytes);
+  if (!read.ok) return { exit: 4, lines: [`format-classes: ${read.reason}`] };
+  const found = grammarRefusals({ format: read.format, parts: partsOf(read.format, read.rows) });
+  return found.length === 0 ? { exit: 0, lines: [] } : { exit: 1, lines: found.map(entry => `format-classes: ${entry.heading} (class ${entry.cls}), line ${entry.no}: ${entry.form}`) };
 }
 
 /** The titles of the headings in the unprotected parts of a side, for `grammarRefusals`' reference. */

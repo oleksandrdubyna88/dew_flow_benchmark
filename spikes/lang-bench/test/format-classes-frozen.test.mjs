@@ -90,7 +90,7 @@ test('A_blank_line_added_between_two_protected_parts_is_refused_it_belongs_to_th
 });
 
 test('The_changelog_may_only_grow_it_must_start_with_the_frozen_bytes', () => {
-  assertPasses(compare(`${FORMAT_TEXT}- v2.1 · 2026-12-01 · amendment · touches all — a later line.\n`));
+  assertPasses(compare(`${FORMAT_TEXT}\n- v2.1 · 2026-12-01 · amendment · touches all — a later line.\n`));
   assertRefused(compare(edit(FORMAT_TEXT, 'the first line.', 'the first line, reworded.')), '7. Changelog', 'common', /must start with the frozen bytes/);
   assertRefused(compare(edit(FORMAT_TEXT, '- v2 · 2026-11-04 · draft — the second line.\n', '')), '7. Changelog', 'common', /must start with the frozen bytes/);
 });
@@ -194,7 +194,7 @@ test('The_real_draft_against_itself_passes_and_the_class_rule_reads_it_as_the_sy
   const run = candidate => checkFrozenCandidate({ frozen: draft.bytes, candidate: Buffer.from(candidate), reference: draft.recorded });
   assertPasses(run(real));
   assertPasses(run(real.replace('Gate verdict: not yet gated', 'Gate verdict: passed')));
-  assertPasses(run(`${real}- v2.1 · 2026-12-01 · amendment · touches all — a later line.\n`));
+  assertPasses(run(`${real}\n- v2.1 · 2026-12-01 · amendment · touches all — a later line.\n`));
   assertPasses(run(edit(real, 'One test lasts at most 600 seconds', 'One test lasts at most 700 seconds')));
   assertRefused(run(edit(real, 'Samples are small and clean examples of the', 'Samples are small and dirty examples of the')), '3.1 Files and ids', 'common', /protected bytes differ/);
   assertRefused(run(edit(real, '| F-STDERR | all | section 3, in an R | none |', '| F-STDERR | all | section 4, in an R | none |')), '2.1 How they are used', 'common', /F-STDERR/);

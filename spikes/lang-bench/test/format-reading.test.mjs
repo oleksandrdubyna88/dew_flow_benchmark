@@ -46,7 +46,7 @@ function assertFormatError(t, text, content, rule) {
 
 function assertReadable(t, text) {
   const read = everyReading(t, text);
-  assert.equal(read.self.status, 0, read.self.stderr);
+  assert.notEqual(read.self.status, 4, `the reader reads it (a refusal of the restricted grammar, exit 1, is another check): ${read.self.stderr}`);
   assert.equal(read.extract.status, 0, read.extract.stderr);
 }
 

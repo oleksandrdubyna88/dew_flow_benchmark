@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { headingByNumber, parseFormat, preambleSlice, versionOf } from '../lib/format-structure.mjs';
 
 const EXIT_FORMAT = 4;
+const EXIT_USAGE = 4;
 const fail = reason => ({ ok: false, reason });
 
 /** `{ ok: true, bytes }` — the GRAMMAR.md bytes for FORMAT's bytes — or `{ ok: false, reason }`. */
@@ -56,7 +57,7 @@ function writeNew(out, bytes, stderr, ops) {
 export function main(argv, stderr = process.stderr, ops = REAL_OPS) {
   if (argv.length !== 2 || argv.some(arg => arg.startsWith('--'))) {
     stderr.write('grammar-extract: usage: grammar-extract.mjs <FORMAT.md> <out>\n');
-    return EXIT_FORMAT;
+    return EXIT_USAGE;
   }
   let bytes;
   try {

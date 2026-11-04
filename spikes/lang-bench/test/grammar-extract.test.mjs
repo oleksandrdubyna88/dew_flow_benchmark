@@ -207,3 +207,24 @@ test('The_record_names_the_sha256_of_the_extractors_own_output_for_the_recorded_
   assert.match(recorded.grammarSha256, /^[0-9a-f]{64}$/);
   assert.equal(sha256(out), recorded.grammarSha256, 'inputs/specs.d/format.json grammarSha256 is the sha256 of GRAMMAR.md as the extractor writes it');
 });
+
+// Fix batch 3: a wrong argument count is exit 4, and the temporary file is removed on every error path (a link() that fails with EPERM or EXDEV included).
+test('A_wrong_argument_count_is_exit_4_with_a_usage_line_and_writes_nothing', t => {
+  const dir = folder(t, 'grammar-argc');
+  const file = put(dir, 'FORMAT.md', FORMAT_TEXT);
+  const stderr = capture();
+  for (const argv of [[], [file], [file, path.join(dir, 'a.md'), path.join(dir, 'b.md')]]) assert.equal(main(argv, stderr, REAL_OPS), 4);
+  assert.match(stderr.text, /usage/);
+  assert.deepEqual(readdirSync(dir), ['FORMAT.md']);
+});
+
+test('The_temporary_file_is_removed_when_link_fails_with_EPERM_or_EXDEV_and_the_exit_code_is_the_writes', t => {
+  for (const code of ['EPERM', 'EXDEV']) {
+    const dir = folder(t, `grammar-link-${code}`);
+    const file = put(dir, 'FORMAT.md', FORMAT_TEXT);
+    const stderr = capture();
+    assert.equal(main([file, path.join(dir, 'GRAMMAR.md')], stderr, { ...REAL_OPS, linkSync: failing(code) }), 4, code);
+    assert.match(stderr.text, new RegExp(code));
+    assert.deepEqual(readdirSync(dir), ['FORMAT.md'], `no temporary file stays after ${code}`);
+  }
+});

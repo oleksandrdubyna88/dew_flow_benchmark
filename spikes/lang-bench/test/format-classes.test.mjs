@@ -121,3 +121,21 @@ test('The_real_FORMAT_draft_passes_self_check_and_the_frozen_comparison_with_its
   const same = run(['--frozen', file, '--candidate', file, '--record', draft.record]);
   assert.equal(same.status, 0, same.stderr);
 });
+
+// Fix batch 3: `--self` also reports the restricted grammar over the unprotected parts and the whole-file rules.
+test('Self_check_refuses_what_the_restricted_grammar_refuses_in_an_unprotected_part_and_the_whole_file_rules_anywhere', t => {
+  const plants = [
+    ['#### a level four heading', /starts with `#`/, 'Scenario pairs.'],
+    ['- item\n    deeper', /continuation line whose text starts with a space/, 'Scenario pairs.'],
+    ['[a\\]]: https://example.invalid/', /starts with `\[`|reference definition/, 'Scenario pairs.'],
+    ['    [within <d>]: https://example.invalid/', /reference definition/, 'The file name and the header table.'],
+  ];
+  for (const [body, rule, anchor] of plants) {
+    const text = edit(FORMAT_TEXT, anchor, `${anchor}\n\n${body}`);
+    const result = selfCheck(t, text);
+    assert.equal(result.status, 1, `${JSON.stringify(body)}: ${result.stderr}`);
+    assert.match(result.stderr, rule);
+    assert.match(result.stderr, new RegExp(`line ${text.split('\n').indexOf(body.split('\n').at(-1)) + 1}\\b`));
+  }
+  assert.equal(selfCheck(t, FORMAT_TEXT).status, 0);
+});

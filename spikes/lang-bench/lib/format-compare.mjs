@@ -2,7 +2,7 @@
 // `daemon`, `web` or `daemon-web` part may. The protected set comes from the FROZEN file's class table only. Parts are compared as raw bytes; a boundary blank line belongs to the
 // part before it. Exceptions, each named in the rule: the preamble's three header rows and class-table rows appended after the last row; section 7 (the changelog) may only grow;
 // 2.1's fixed-sentence table is compared row by row. The header rows keep their lines and match a strict pattern; the rest of the preamble is compared as bytes.
-import { grammarRefusals } from './format-grammar.mjs';
+import { grammarRefusals, partRefusals as formRefusals } from './format-grammar.mjs';
 import { checkSelf, isProtected, partsOf, readClassed, sliceLike, tableProblems } from './format-class-table.mjs';
 import { headingByNumber, numberOf, sha256Hex, sliceFrom, unfencedLines } from './format-structure.mjs';
 
@@ -57,16 +57,14 @@ const preambleOf = side => side.format.text.slice(0, side.format.headings[0].sta
 function headerRefusals(frozen, candidate) {
   const a = preambleOf(frozen);
   const b = preambleOf(candidate);
-  const refusals = [];
-  for (const label of HEADER_LABELS) {
+  return HEADER_LABELS.flatMap(label => {
     const rows = b.flatMap((text, index) => (text.startsWith(`${label}: `) ? [index + 1] : []));
     const was = a.findIndex(text => text.startsWith(`${label}: `)) + 1;
-    const fail = (where, rule) => refusals.push(refusal('preamble', 'common', here(where), rule));
-    if (rows.length !== 1) fail(1, `the header row \`${label}\` is missing or appears more than once`);
-    else if (was > 0 && rows[0] !== was) fail(rows[0], `the header row \`${label}\` is at line ${rows[0]}, the frozen file has it at line ${was}: the header rows keep their lines`);
-    else if (!HEADER_PATTERNS[label].test(b[rows[0] - 1].slice(label.length + 2))) fail(rows[0], `the value of the header row \`${label}\` does not match the pattern ${HEADER_PATTERNS[label]}`);
-  }
-  return refusals;
+    const fail = (where, rule) => [refusal('preamble', 'common', here(where), rule)];
+    if (rows.length !== 1) return fail(1, `the header row \`${label}\` is missing or appears more than once`);
+    if (was > 0 && rows[0] !== was) return fail(rows[0], `the header row \`${label}\` is at line ${rows[0]}, the frozen file has it at line ${was}: the header rows keep their lines`);
+    return HEADER_PATTERNS[label].test(b[rows[0] - 1].slice(label.length + 2)) ? [] : fail(rows[0], `the value of the header row \`${label}\` does not match the pattern ${HEADER_PATTERNS[label]}`);
+  });
 }
 
 /** The preamble without the three header rows and the table's data rows must be equal; the data rows follow `firstBadRow`'s rule; the header rows follow `headerRefusals`. */
@@ -159,30 +157,30 @@ function rowRefusals(part, textA, textB, ctx, at) {
   const rowA = new Map(a.rows.map(row => [row.id, row]));
   const rowB = new Map(b.rows.map(row => [row.id, row]));
   const differ = Array.from({ length: Math.max(a.rest.length, b.rest.length) }, (_, index) => index).find(index => a.rest[index]?.text !== b.rest[index]?.text);
-  const refusals = differ === undefined ? [] : [name(`protected bytes differ (first difference at candidate line ${at + (b.rest[differ] ?? b.rest.at(-1) ?? { index: 0 }).index})`)];
-  const protectedIds = [];
-  for (const [id, row] of rowA) {
-    if (isFree(ctx.frozen, id)) continue;
-    protectedIds.push(id);
-    if (!rowB.has(id)) refusals.push(name(`row ${id} is missing, and its sentence is defined in a protected part`));
-    else if (rowB.get(id).line !== row.line) refusals.push(name(`row ${id} differs, and its sentence is defined in a protected part`));
-  }
+  const textDiff = differ === undefined ? [] : [name(`protected bytes differ (first difference at candidate line ${at + (b.rest[differ] ?? b.rest.at(-1) ?? { index: 0 }).index})`)];
+  const protectedIds = [...rowA.keys()].filter(id => !isFree(ctx.frozen, id));
+  const protectedRows = protectedIds.flatMap(id => {
+    if (!rowB.has(id)) return [name(`row ${id} is missing, and its sentence is defined in a protected part`)];
+    return rowB.get(id).line === rowA.get(id).line ? [] : [name(`row ${id} differs, and its sentence is defined in a protected part`)];
+  });
   const kept = protectedIds.filter(id => rowB.has(id));
   const order = b.rows.map(row => row.id).filter(id => kept.includes(id));
   const moved = order.findIndex((id, index) => id !== kept[index]);
-  if (moved !== -1) refusals.push(name(`the protected rows are out of order: ${order[moved]} stands where the frozen file has ${kept[moved]} (rows of protected sentences keep their order)`, here(at + rowB.get(order[moved]).index)));
+  const outOfOrder = moved === -1 ? [] : [name(`the protected rows are out of order: ${order[moved]} stands where the frozen file has ${kept[moved]} (rows of protected sentences keep their order)`, here(at + rowB.get(order[moved]).index))];
   const kindWords = new Set(['daemon', 'web', 'and', 'or', ...[...rowA.keys()].filter(id => isFree(ctx.frozen, id)).flatMap(id => wordsOf(kindsOf(rowA.get(id).line)))]);
-  for (const [id, row] of rowB) {
+  const candidateRows = [...rowB].flatMap(([id, row]) => {
     const free = isFree(rowA.has(id) ? ctx.frozen : ctx.candidate, id);
-    if (!rowA.has(id) && !free) refusals.push(name(`row ${id} is added, and its sentence is not defined in a daemon, web or daemon-web part`, here(at + row.index)));
-    else if (free && rowA.get(id)?.line !== row.line && OLYMPIAD_KINDS.test(row.line.split('|')[2] ?? '')) {
-      refusals.push(name(`row ${id}${rowA.has(id) ? ' is changed' : ' is added'} and its kinds cell names all or olympiad: a daemon-web change touches no olympiad task`, here(at + row.index)));
-    } else if (free && rowA.get(id)?.line !== row.line) {
-      const odd = kindsProblem(kindsOf(row.line), kindWords);
-      if (odd !== null) refusals.push(name(`row ${id}${rowA.has(id) ? ' is changed' : ' is added'} and its kinds cell ${odd}: only the words daemon, web, and, or and the words the frozen free rows use, as plain ASCII, are allowed`, here(at + row.index)));
-    }
-  }
-  return refusals;
+    const verb = rowA.has(id) ? ' is changed' : ' is added';
+    if (!rowA.has(id) && !free) return [name(`row ${id} is added, and its sentence is not defined in a daemon, web or daemon-web part`, here(at + row.index))];
+    if (!free || rowA.get(id)?.line === row.line) return [];
+    if (OLYMPIAD_KINDS.test(row.line.split('|')[2] ?? '')) return [name(`row ${id}${verb} and its kinds cell names all or olympiad: a daemon-web change touches no olympiad task`, here(at + row.index))];
+    const odd = kindsProblem(kindsOf(row.line), kindWords);
+    return odd === null ? [] : [name(`row ${id}${verb} and its kinds cell ${odd}: only the words daemon, web, and, or and the words the frozen free rows use, as plain ASCII, are allowed`, here(at + row.index))];
+  });
+  return [...textDiff, ...protectedRows, ...outOfOrder, ...candidateRows];
+}
+
+/** The number the title of  return refusals;
 }
 
 /** The number the title of `part` has in the candidate: in the same section, or, with `anySection`, anywhere; null when no heading of that level has the title. */
@@ -190,6 +188,14 @@ function movedTo(part, candidate, anySection) {
   const same = candidate.format.headings.filter(heading => heading.level === (part.kind === 'sub' ? 3 : 2) && titleOf(heading.text) === titleOf(part.heading));
   const near = same.find(heading => numberOf(heading).split('.')[0] === part.number.split('.')[0]) ?? (anySection ? same[0] : undefined);
   return near === undefined ? null : numberOf(near);
+}
+
+/** The refusals for the bytes appended to the changelog: after a blank line (the frozen bytes end with a line feed and the first appended line is empty), and every line one of the allowed forms. */
+function appendedRefusals(part, textA, added, at) {
+  if (added === '') return [];
+  const lines = textA.split('\n').length - 1;
+  if (!textA.endsWith('\n') || !added.startsWith('\n')) return [refusal(labelOf(part), part.cls, here(at + lines), 'the text appended to the changelog must start after a blank line (it may not continue the frozen last line or its list item)')];
+  return formRefusals(added, at + lines).map(entry => refusal(labelOf(part), part.cls, here(entry.no), `appended to the changelog: ${entry.form}`));
 }
 
 /** The refusals for one protected part of the frozen file. */
@@ -207,7 +213,8 @@ function partRefusals(part, ctx) {
   const textA = frozen.format.text.slice(part.start, part.end);
   const textB = candidate.format.text.slice(found.start, found.end);
   if (part.number === '7' && part.kind === 'section') {
-    return textB.startsWith(textA) ? [] : [refusal(labelOf(part), part.cls, here(at), `${retitled}the changelog must start with the frozen bytes (first difference at candidate line ${firstDifference(textA, textB, at)})`)];
+    if (!textB.startsWith(textA)) return [refusal(labelOf(part), part.cls, here(at), `${retitled}the changelog must start with the frozen bytes (first difference at candidate line ${firstDifference(textA, textB, at)})`)];
+    return appendedRefusals(part, textA, textB.slice(textA.length), at);
   }
   if (tableOf(textA).found) return rowRefusals(part, textA, textB, ctx, at);
   return textA === textB ? [] : [refusal(labelOf(part), part.cls, here(at), `${retitled}protected bytes differ (first difference at candidate line ${firstDifference(textA, textB, at)})`)];
@@ -215,13 +222,11 @@ function partRefusals(part, ctx) {
 
 /** A protected class row of the frozen file that the candidate does not carry as it was. */
 function rowClassRefusals(frozen, candidate) {
-  const refusals = [];
-  for (const row of frozen.rows.filter(entry => isProtected(entry.cls) && candidate.format.headings.some(heading => heading.text === entry.heading))) {
+  return frozen.rows.filter(entry => isProtected(entry.cls) && candidate.format.headings.some(heading => heading.text === entry.heading)).flatMap(row => {
     const found = candidate.rows.find(entry => entry.heading === row.heading);
-    if (found === undefined) refusals.push(refusal(row.heading, row.cls, there(row.no), 'class row missing in the candidate'));
-    else if (found.cls !== row.cls) refusals.push(refusal(row.heading, row.cls, here(found.no), `class row differs (relabel): the candidate says ${found.cls}`));
-  }
-  return refusals;
+    if (found === undefined) return [refusal(row.heading, row.cls, there(row.no), 'class row missing in the candidate')];
+    return found.cls === row.cls ? [] : [refusal(row.heading, row.cls, here(found.no), `class row differs (relabel): the candidate says ${found.cls}`)];
+  });
 }
 
 /** The lead text of a section that was one unprotected whole may only be its `##` line and blank lines, or the bytes the frozen section had before its first subsection. */
@@ -234,15 +239,13 @@ function leadMayBe(frozen, candidate, part) {
 
 /** A candidate part classed common or olympiad that is not one of the frozen file's own protected parts (the lead text of a section that was one unprotected whole is the one exception, within `leadMayBe`). */
 function addedRefusals(frozen, candidate) {
-  const refusals = [];
-  for (const part of candidate.parts.filter(entry => isProtected(entry.cls) && entry.kind !== 'preamble')) {
+  return candidate.parts.filter(entry => isProtected(entry.cls) && entry.kind !== 'preamble').flatMap(part => {
     const before = frozen.parts.find(entry => entry.key === part.key && entry.heading === part.heading);
     const whole = frozen.parts.find(entry => entry.kind === 'section' && entry.number === part.number);
-    if ((before !== undefined && isProtected(before.cls)) || (part.kind === 'lead' && whole !== undefined && !isProtected(whole.cls) && leadMayBe(frozen, candidate, part))) continue;
+    if ((before !== undefined && isProtected(before.cls)) || (part.kind === 'lead' && whole !== undefined && !isProtected(whole.cls) && leadMayBe(frozen, candidate, part))) return [];
     const same = frozen.parts.find(entry => entry.number === part.number && entry.kind === part.kind);
-    refusals.push(refusal(labelOf(part), same?.cls ?? 'none', here(part.no), `added as ${part.cls}: a part classed common or olympiad is protected, and only the frozen file's own parts are`));
-  }
-  return refusals;
+    return [refusal(labelOf(part), same?.cls ?? 'none', here(part.no), `added as ${part.cls}: a part classed common or olympiad is protected, and only the frozen file's own parts are`)];
+  });
 }
 
 /**
