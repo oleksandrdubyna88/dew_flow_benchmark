@@ -144,9 +144,30 @@ function oneSentence(ctx, f) {
   return f.applies ? sentenceProblems(ctx, f) : misapplied({ ...f, kind: ctx.kind });
 }
 
+const LINE_READINESS = /^it has written the line /;
+const USES_PORT = /^\s*(?:start\s+ready\s+port\b|connect\s)/m;
+
+const readyOnPort = ctx => {
+  const readiness = ctx.found.get('F-READY')?.hits[0]?.slots.readiness;
+  return readiness !== undefined && !LINE_READINESS.test(readiness);
+};
+
+/** Whether the spec must carry F-PORT: a web task always, a daemon when F-READY says the port or any sample is ready on the port or connects. */
+export function portRequired(ctx) {
+  if (ctx.kind !== 'daemon') return ctx.kind === 'web';
+  return readyOnPort(ctx) || [...ctx.scenarios.values()].some(bytes => USES_PORT.test(bytes.toString('utf8')));
+}
+
+const portAbsent = f => f !== undefined && f.hits.length === 0 && f.altered === null;
+const PORT_REASON = Object.freeze({ web: 'a web task listens on a port', daemon: 'this daemon uses the port (F-READY says so, or a sample is ready on it or connects)' });
+
+function portProblems(ctx) {
+  return portAbsent(ctx.found.get('F-PORT')) && portRequired(ctx) ? [`F-PORT is missing: ${PORT_REASON[ctx.kind]}`] : [];
+}
+
 export function sentenceFindings(ctx) {
   const findings = [...ctx.found.values()].flatMap(f => oneSentence(ctx, f));
-  return [...findings, ...xorProblems(ctx), ...timingProblems(ctx)];
+  return [...findings, ...xorProblems(ctx), ...timingProblems(ctx), ...portProblems(ctx)];
 }
 
 const DURATION = /^(\d+)(ms|s)$/;

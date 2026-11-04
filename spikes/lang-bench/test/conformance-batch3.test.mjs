@@ -30,6 +30,9 @@ const CASES = [
   ['F_PORT_in_an_olympiad_spec', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1. The environment variable `PORT` holds a TCP port number; the program listens on it, and the tests connect to it at 127.0.0.1.']] }, 'sentences', /F-PORT \(line \d+\) is carried by this olympiad spec, and 2\.1 lists it for daemon, web only/],
   ['F_BYTES_W_in_a_daemon_spec', 'daemon', { spec: [phrase('Nothing else is normalized.', 'Nothing else is normalized. Every reply is compared on its status code, on each response header that a requirement of this spec names, and on its body; other headers are not compared. The body is compared byte for byte, except where a requirement of this spec names another comparison. Nothing else is normalized.')] }, 'sentences', /F-BYTES-W \(line \d+\) is carried by this daemon spec, and 2\.1 lists it for web only/],
   ['a_sentence_whose_kinds_cell_was_narrowed', 'daemon', { format: [['| F-STDERR | all |', '| F-STDERR | olympiad |']] }, 'sentences', /F-STDERR \(line \d+\) is carried by this daemon spec, and 2\.1 lists it for olympiad only/],
+  // C9: F-PORT is required for a web task and for a daemon that uses the port
+  ['F_PORT_left_out_of_a_web_spec', 'web', { spec: [phrase('The environment variable `PORT` holds a TCP port number; the program listens on it, and the tests connect to it at 127.0.0.1.', '')] }, 'sentences', /F-PORT is missing: a web task listens on a port/],
+  ['F_PORT_left_out_of_a_daemon_spec_that_uses_the_port', 'daemon', { spec: [phrase('The environment variable `PORT` holds a TCP port number; the program listens on it, and the tests connect to it at 127.0.0.1.', '')] }, 'sentences', /F-PORT is missing: .*uses the port/],
 ];
 
 for (const [name, kind, edits, name_, message] of CASES) {
@@ -52,4 +55,21 @@ test('A_table_without_outer_pipes_inside_a_requirement_is_no_finding', async t =
 test('Plain_references_in_prose_and_the_F_REQ_paragraph_are_no_finding', async t => {
   const spec = [['**R2.** For n = 1', '**R2.** For n = 1, as R1 says; see R3–R5 and R14. A word like CR3 or R2D2 is no reference.']];
   assert.ok(isOk(await check(fixtureRepo(t, 'olympiad', { spec })), 'r-ids'));
+});
+
+// ---- C9 on a context made by hand: a daemon that is ready on a line of standard output and connects to nothing needs no F-PORT
+const readyBy = readiness => new Map([['F-READY', { hits: [{ slots: { readiness } }] }]]);
+const scenario = text => new Map([['s01', Buffer.from(text)]]);
+const LINE_READY = 'it has written the line `READY` to standard output';
+const PORT_READY = 'it accepts a TCP connection on that port';
+
+test('F_PORT_is_not_required_of_a_daemon_that_is_ready_on_a_line_and_uses_no_connection', async () => {
+  const { portRequired } = await import('../lib/conformance-check-sentences.mjs');
+  const lines = scenario('scenario 2\nstart ready stdout "READY" within 10s\nsend stdin "x\\n"\nrecv stdout until "\\n"\nsignal TERM\nwait-exit within 5s\n');
+  assert.equal(portRequired({ kind: 'daemon', found: readyBy(LINE_READY), scenarios: lines }), false);
+  assert.equal(portRequired({ kind: 'daemon', found: readyBy(PORT_READY), scenarios: lines }), true, 'the port phrase of F-READY');
+  assert.equal(portRequired({ kind: 'daemon', found: readyBy(LINE_READY), scenarios: scenario('scenario 2\nstart ready port within 10s\n') }), true, 'a sample that is ready on the port');
+  assert.equal(portRequired({ kind: 'daemon', found: readyBy(LINE_READY), scenarios: scenario('scenario 2\nstart ready stdout "R" within 10s\nconnect c1 tcp\n') }), true, 'a sample that connects');
+  assert.equal(portRequired({ kind: 'web', found: readyBy(LINE_READY), scenarios: lines }), true, 'a web task');
+  assert.equal(portRequired({ kind: 'olympiad', found: new Map(), scenarios: new Map() }), false);
 });
