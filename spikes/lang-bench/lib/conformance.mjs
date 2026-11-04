@@ -68,7 +68,7 @@ function checkRecorded(format, file) {
   const record = readRecord(file);
   const label = record.ok ? recordedLabel(record.value, format.sha256, file) : record;
   if (!label.ok) return label;
-  return versionOf(format) === FORMAT_VERSION ? ok({ recorded: { label: label.value, sha256: format.sha256 } }) : fail(`this reader reads Format version ${FORMAT_VERSION} only; the FORMAT says ${versionOf(format)}`);
+  return versionOf(format) === FORMAT_VERSION ? ok({ recorded: { label: label.value.label, gate: label.value.gate, sha256: format.sha256 } }) : fail(`this reader reads Format version ${FORMAT_VERSION} only; the FORMAT says ${versionOf(format)}`);
 }
 
 /** ok({ format, facts, sentences, known, stackWords, literals }): everything read from outside the spec, or the first fail. FORMAT's own faults are format errors (exit 4). */
@@ -187,7 +187,7 @@ const prepare = (argv, seams) => pipeline([
 
 const refused = prepared => (prepared.deviation ? { exit: EXIT_DEVIATION, lines: [`FAIL file — ${prepared.reason}`], errors: [] } : usage(prepared.reason));
 
-const formatLine = ctx => `ok format sha256 ${ctx.recorded.sha256} (record ${ctx.recorded.label})`;
+const formatLine = ctx => `ok format sha256 ${ctx.recorded.sha256} (record ${ctx.recorded.label}, gate ${ctx.recorded.gate ?? 'none'})`;
 
 function finish(ctx, found) {
   const lines = [formatLine(ctx), ...reportLines(ctx, { samples: found })];

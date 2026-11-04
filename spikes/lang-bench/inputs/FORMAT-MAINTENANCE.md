@@ -25,7 +25,18 @@ refused only when no requirement carries F-JSON, not reply by reply (8); the rea
 spans, so a summary in plain words is not (10). The needles of check 11 are the plan's identifiers (any case; `S<n>` and `V<n>` in upper case only, because `s01` is a sample id and the Freeze rule
 sentence says `v2`), links of every kind, the known-task needles and the stack words of `inputs/stack-words-lang.json` (case-insensitive, `Node` excepted; the implementation languages, runtimes,
 frameworks, build tools and flags of the series, public, named by the word in a finding) and the author's `--needles` file (case-insensitive, found across a line break). In group B each olympiad spec
-of A is checked under A's FORMAT and under B's. **A departure from FORMAT 1.2, until the team lead amends FORMAT:** the freeze tag may carry the group letter `A` or `B`
+of A is checked under A's FORMAT and under B's. **What the rules of batches 3 and 4 do, and where they stop.** C7: a `**R<n>` anywhere but at the start of a line as `**R<n>.**`, with a blank line above it, is a finding, and so is a plain `R<n>.` that opens a line
+or a list item and is followed by a sentence on the same line (`R1. Then it stops.` fails; a wrapped cross reference that ends a sentence and stands alone at the start of the next line does not); every
+`R<n>` in prose must lie in R1 … Rn, and a value in a code span is left to the gate. C12: section 6 of an olympiad spec holds one samples table, no fenced block and no `###` heading, and the byte form of a cell
+is accepted only for bytes FORMAT 3.4 lets be shown (not more than 200 bytes, not only spaces, no two backticks in a row). C19: a fixed sentence in a paragraph outside every requirement (the preamble included; a sentence
+in its own place, F-REQ's in the preamble and F-SAMPLES' in the first paragraph of section 6, excepted) is a finding. C20: a date is a real calendar date, a freeze tag stands only beside a gated verdict and carries the group letter A or B, `Withdrawn by
+amendment A<k>` needs the amendment A<k>, `{k}` has no leading zero. The plan-id rule leaves in place what lives in code spans, fenced blocks and the comments of sample files (no comment scan is built); a
+fixed sentence that follows an odd number of backticks in its requirement is not found (rare, not built). `Node` is the one English word the stack words except from their case-insensitive match. **Exit 4 also for:** a sample
+that cannot be read, a kind label in FORMAT that is none of the three kinds, and a FORMAT of a version other than 2 (until `FORMAT_VERSION` in `lib/conformance.mjs` is raised with a reader that reads it). The `ok format`
+line names the record's gate (`gate none` when the record has none), so a gate reader sees a FORMAT that is recorded and not gated. **The author's way out** of a plan-id or reference finding on a value of the
+task: put the value in a code span (the plan-id finding says so).
+
+**A departure from FORMAT 1.2, until the team lead amends FORMAT:** the freeze tag may carry the group letter `A` or `B`
 (`spec-frozen-A-<yyyymmdd>`, as the parent plan's tags do); FORMAT 1.2 shows no letter. **The shape rule's own limits** (`test/code-shape-lang.test.mjs`, v1's scanner): it measures a function declaration
 and a `const name = (…) =>` arrow at column 0 and counts the decisions inside its text; an arrow written inside a table or an object, a method, and a function expression assigned to a property are
 measured only as part of the function that holds them, never alone.
@@ -60,8 +71,8 @@ measured only as part of the function that holds them, never alone.
 11. **No forbidden needle.** No hit, case-insensitive, of any needle of a list the spec author supplies with the check (for a known task,
     its id, title and site names; for every task, anything else the test-design notes say a spec must not carry). The list is kept outside
     git with those notes, since it may name what it guards. Always added to it: the bench plan's identifiers (story, epic, decision, gate and
-    test ids, by pattern), web links (the http and https schemes), and the names of the implementation languages, runtimes and web frameworks
-    of the series.
+    test ids, by pattern), links of every kind (FORMAT 1.5: any `scheme://`, `www.`, a Markdown link, a reference definition, an autolink; the push check's http and https
+    rule is the narrower one), and the names of the implementation languages, runtimes, web frameworks and build tools of the series.
 12. **The `⏎` glyph** occurs only in section 6.
 
 The same parser checks the format document's own examples: the files of 6.2 and 6.3 parse, and the runner, against one stub program per

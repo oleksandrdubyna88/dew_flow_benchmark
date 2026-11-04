@@ -1,5 +1,6 @@
 // Checks 1 to 4 (E1.S8): the file and its title, the header rows, the eight sections of the kind and the amendments, and the requirement ids with their spans. Each returns its findings as
 // text; an empty list is `ok`. FORMAT's facts (the name pattern, the placeholders, the kind phrases, the headings) come from conformance-facts.mjs, read from the document.
+import { blankSpans } from './conformance-blocks.mjs';
 import { wholeFileRefusals } from './format-grammar.mjs';
 import { requirementAt } from './conformance-spec.mjs';
 
@@ -10,7 +11,9 @@ const ITEM = /^- A(\d+) · (\d{4}-\d{2}-\d{2}) · ([^—]+?) — \S/;
 const cellsOf = line => line.split('|').slice(1, -1).map(cell => cell.trim());
 
 /** FORMAT's own whole-file rules (E1.S9), run on the spec: no raw inline HTML, no reference definition, no line that starts with `<`. */
-const markupProblems = spec => wholeFileRefusals({ lines: spec.lines }).map(entry => `line ${entry.no}: ${entry.form}`);
+const LINE_START_TAG = 'a line whose first non-space character is `<`';
+/** FORMAT's refusal of a line that starts with `<` guards its own renderer argument; in a spec a code span may wrap to such a line, and raw inline HTML is found by the other rule. */
+const markupProblems = spec => wholeFileRefusals({ lines: spec.lines }).filter(entry => !entry.form.startsWith(LINE_START_TAG)).map(entry => `line ${entry.no}: ${entry.form}`);
 
 const nameProblems = ctx => (ctx.facts.namePattern.test(`${ctx.task}.md`) ? [] : [`the file name ${ctx.task}.md does not match ${ctx.facts.namePattern}`]);
 
@@ -223,7 +226,7 @@ const amendmentIdProblems = ctx => amendmentsOf(ctx.spec).items.flatMap(item => 
 
 const OPENING = /^\*\*R[1-9]\d*\.\*\*(?=\s|$)/;
 const BOLD_ID = /\*\*R\d/g;
-const PLAIN_ID = /^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)?R\d+\./;
+const PLAIN_ID = /^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)?R\d+\.[ \t]+\S/;
 const REFERENCE = /\bR(\d+)\b/g;
 const bodyLines = spec => spec.kept.filter(line => line.no >= (spec.sections[0]?.no ?? spec.lastNo + 1));
 
@@ -252,7 +255,7 @@ const withdrawnProblems = spec => spec.requirements.flatMap(entry => {
 const outOfRange = (text, maxId) => !/^[1-9]\d*$/.test(text) || Number(text) > maxId;
 
 /** Every `R<n>` anywhere in the spec must be one of R1 … Rn, written without a leading zero. */
-const referenceProblems = (spec, maxId) => [...new Set(spec.kept.flatMap(line => [...line.text.matchAll(REFERENCE)].filter(found => outOfRange(found[1], maxId)).map(found => `line ${line.no}: the spec names R${found[1]}, and the spec has requirements R1 to R${maxId} only`)))];
+const referenceProblems = (spec, maxId) => [...new Set(spec.kept.flatMap(line => [...blankSpans(line.text).matchAll(REFERENCE)].filter(found => outOfRange(found[1], maxId)).map(found => `line ${line.no}: the spec names R${found[1]}, and the spec has requirements R1 to R${maxId} only`)))];
 
 /** Check 4: the requirement ids (`**R<n>.**`, unique, exactly R1 … Rn, ascending before the freeze), F-REQ's n, the ids the amendments name, and the spans of tables and fenced blocks. */
 export const idFindings = ctx => [

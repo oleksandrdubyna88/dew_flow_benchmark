@@ -95,3 +95,6 @@ export function paragraphs(lines) {
   const filled = scanBlocks(lines).kept.filter(line => line.text.trim() !== '');
   return filled.reduce(addLine, []).flatMap(splitAtTable);
 }
+
+/** `text` with every code span (backticks included) made spaces, so a rule that reads prose leaves the values in spans to the gate. */
+export const blankSpans = text => text.replace(/`[^`\n]*`/g, span => ' '.repeat(span.length));

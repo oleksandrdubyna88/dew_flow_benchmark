@@ -12,7 +12,7 @@ const CLI = fileURLToPath(new URL('../conformance.mjs', import.meta.url));
 for (const kind of Object.keys(TASKS)) {
   test(`A_conforming_${kind}_spec_gives_one_ok_per_check_and_exit_0`, async t => {
     const result = await check(fixtureRepo(t, kind));
-    assert.match(result.lines[0], /^ok format sha256 [0-9a-f]{64} \(record A\)$/);
+    assert.match(result.lines[0], /^ok format sha256 [0-9a-f]{64} \(record A, gate none\)$/);
     assert.deepEqual(result.lines.slice(1), CHECK_NAMES.map(name => `ok ${name}`), result.lines.join('\n'));
     assert.equal(result.exit, 0);
     assert.deepEqual(result.errors, []);
@@ -23,7 +23,7 @@ test('The_command_prints_the_check_lines_on_standard_output_and_exits_0_for_a_co
   const fixture = fixtureRepo(t, 'daemon');
   const run = spawnSync(process.execPath, [CLI, ...argsOf(fixture, ['--record', recordFile(fixture)])], { encoding: 'utf8', timeout: 120_000 });
   assert.equal(run.status, 0, run.stderr);
-  assert.match(run.stdout, /^ok format sha256 [0-9a-f]{64} \(record A\)\n/);
+  assert.match(run.stdout, /^ok format sha256 [0-9a-f]{64} \(record A, gate none\)\n/);
   assert.equal(run.stdout.split('\n').slice(1).join('\n'), `${CHECK_NAMES.map(name => `ok ${name}`).join('\n')}\n`);
   assert.equal(run.stderr, '');
 });

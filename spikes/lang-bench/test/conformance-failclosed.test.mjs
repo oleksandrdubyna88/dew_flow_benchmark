@@ -55,7 +55,7 @@ test('A_FORMAT_in_the_record_is_read_and_its_sha256_is_printed_on_an_ok_line_for
   const result = await run(argsOf(fixture, ['--record', recordFile(fixture)]));
   assert.equal(result.exit, 0, result.errors.join('\n'));
   const sha = createHash('sha256').update(readFileSync(fixture.format)).digest('hex');
-  assert.equal(result.lines[0], `ok format sha256 ${sha} (record A)`);
+  assert.equal(result.lines[0], `ok format sha256 ${sha} (record A, gate none)`);
 });
 
 test('A_record_that_cannot_be_read_or_holds_no_sha256_is_exit_4', async t => {

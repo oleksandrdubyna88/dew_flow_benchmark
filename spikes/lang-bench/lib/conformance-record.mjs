@@ -25,16 +25,16 @@ const readText = file => {
 
 const entriesOf = json => Object.entries(json ?? {}).filter(([, entry]) => SHA.test(entry?.sha256 ?? ''));
 
-/** ok([[label, sha256]]) from the record file: every top-level entry that holds a `sha256` of 64 hexadecimal digits. */
+/** ok([[label, sha256, gate]]) from the record file: every top-level entry that holds a `sha256` of 64 hexadecimal digits. */
 export function readRecord(file) {
   const text = readText(file);
   if (!text.ok) return text;
   const entries = entriesOf(parseJson(text.value));
-  return entries.length > 0 ? ok(entries.map(([label, entry]) => [label, entry.sha256])) : fail(`the record ${file} holds no \`sha256\` of 64 hexadecimal digits`);
+  return entries.length > 0 ? ok(entries.map(([label, entry]) => [label, entry.sha256, entry.gate ?? null])) : fail(`the record ${file} holds no \`sha256\` of 64 hexadecimal digits`);
 }
 
-/** ok(label) when `sha256` is one the record names, else a fail naming the record. */
+/** ok({ label, gate }) when `sha256` is one the record names (`gate` is the record's gate file, or null for a FORMAT that is recorded and not gated), else a fail naming the record. */
 export function recordedLabel(entries, sha256, file) {
   const found = entries.find(([, recorded]) => recorded === sha256);
-  return found === undefined ? fail(`this FORMAT (sha256 ${sha256}) is not the FORMAT the record names (${entries.map(([label, sha]) => `${label} ${sha}`).join(', ')} in ${file})`) : ok(found[0]);
+  return found === undefined ? fail(`this FORMAT (sha256 ${sha256}) is not the FORMAT the record names (${entries.map(([label, sha]) => `${label} ${sha}`).join(', ')} in ${file})`) : ok({ label: found[0], gate: found[2] });
 }
