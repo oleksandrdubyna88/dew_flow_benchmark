@@ -12,20 +12,21 @@ import { sentenceFindings, timeFindings } from './conformance-check-sentences.mj
 import { fileFindings, headerFindings, idFindings, kindOf, sectionFindings } from './conformance-check-structure.mjs';
 import { literalNeedles, textFindings } from './conformance-check-text.mjs';
 import { readFacts } from './conformance-facts.mjs';
+import { DEFAULT_RECORD, readRecord, recordedLabel } from './conformance-record.mjs';
 import { locateSentences } from './conformance-locate.mjs';
 import { parseSamples } from './conformance-runner.mjs';
 import { readSentences } from './conformance-sentences.mjs';
 import { readSamplesFolder, shownSamples } from './conformance-shown.mjs';
 import { parseSpec } from './conformance-spec.mjs';
-import { parseFormat } from './format-structure.mjs';
+import { parseFormat, versionOf } from './format-structure.mjs';
 import { parseKnownNeedles } from './push-needles.mjs';
 
 const EXIT_DEVIATION = 1;
 const EXIT_USAGE = 4;
 const NEEDLES_FILE = fileURLToPath(new URL('../inputs/needles-lang.json', import.meta.url));
 const STACK_WORDS_FILE = fileURLToPath(new URL('../inputs/stack-words-lang.json', import.meta.url));
-const OPTIONS = { repo: { type: 'string' }, task: { type: 'string' }, format: { type: 'string' }, needles: { type: 'string' } };
-const USAGE = 'usage: conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>]';
+const OPTIONS = { repo: { type: 'string' }, task: { type: 'string' }, format: { type: 'string' }, needles: { type: 'string' }, record: { type: 'string' } };
+const USAGE = 'usage: conformance.mjs --repo <task repository> --task NN-slug --format <FORMAT.md> [--needles <file>] [--record <format.json>]';
 const NEEDS_KIND = new Set(['sections', 'sentences', 'T/G', 'samples', 'sample-forms', 'sample-env']);
 
 const usage = reason => ({ exit: EXIT_USAGE, lines: [], errors: [`conformance: ${reason}`, USAGE] });
@@ -60,10 +61,21 @@ const readDocument = (bytes, file) => {
   return parsed.ok ? ok({ format: parsed.format }) : fail(`${file} is not a readable FORMAT: line ${parsed.line}: ${parsed.reason}`);
 };
 
+const FORMAT_VERSION = '2';
+
+/** ok({ recorded: { label, sha256 } }) when the FORMAT is one the record names and is of the version this reader reads. */
+function checkRecorded(format, file) {
+  const record = readRecord(file);
+  const label = record.ok ? recordedLabel(record.value, format.sha256, file) : record;
+  if (!label.ok) return label;
+  return versionOf(format) === FORMAT_VERSION ? ok({ recorded: { label: label.value, sha256: format.sha256 } }) : fail(`this reader reads Format version ${FORMAT_VERSION} only; the FORMAT says ${versionOf(format)}`);
+}
+
 /** ok({ format, facts, sentences, known, stackWords, literals }): everything read from outside the spec, or the first fail. FORMAT's own faults are format errors (exit 4). */
 const loadReferences = (options, stackWordsFile) => pipeline([
   () => mapOk(readFile(options.format), bytes => ({ bytes })),
   ({ bytes }) => readDocument(bytes, options.format),
+  ({ format }) => checkRecorded(format, options.record ?? DEFAULT_RECORD),
   ({ format }) => mapOk(readFacts(format), facts => ({ facts })),
   ({ format }) => mapOk(readSentences(format), sentences => ({ sentences })),
   () => mapOk(loadWordFile(NEEDLES_FILE), known => ({ known })),
@@ -175,8 +187,10 @@ const prepare = (argv, seams) => pipeline([
 
 const refused = prepared => (prepared.deviation ? { exit: EXIT_DEVIATION, lines: [`FAIL file — ${prepared.reason}`], errors: [] } : usage(prepared.reason));
 
+const formatLine = ctx => `ok format sha256 ${ctx.recorded.sha256} (record ${ctx.recorded.label})`;
+
 function finish(ctx, found) {
-  const lines = reportLines(ctx, { samples: found });
+  const lines = [formatLine(ctx), ...reportLines(ctx, { samples: found })];
   return { exit: lines.every(line => line.startsWith('ok ')) ? 0 : EXIT_DEVIATION, lines, errors: [] };
 }
 

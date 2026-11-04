@@ -5,14 +5,15 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, CHECK_NAMES, fixtureRepo, TASKS } from './support/conformance-fixtures.mjs';
+import { argsOf, check, CHECK_NAMES, fixtureRepo, recordFile, TASKS } from './support/conformance-fixtures.mjs';
 
 const CLI = fileURLToPath(new URL('../conformance.mjs', import.meta.url));
 
 for (const kind of Object.keys(TASKS)) {
   test(`A_conforming_${kind}_spec_gives_one_ok_per_check_and_exit_0`, async t => {
     const result = await check(fixtureRepo(t, kind));
-    assert.deepEqual(result.lines, CHECK_NAMES.map(name => `ok ${name}`), result.lines.join('\n'));
+    assert.match(result.lines[0], /^ok format sha256 [0-9a-f]{64} \(record A\)$/);
+    assert.deepEqual(result.lines.slice(1), CHECK_NAMES.map(name => `ok ${name}`), result.lines.join('\n'));
     assert.equal(result.exit, 0);
     assert.deepEqual(result.errors, []);
   });
@@ -20,15 +21,16 @@ for (const kind of Object.keys(TASKS)) {
 
 test('The_command_prints_the_check_lines_on_standard_output_and_exits_0_for_a_conforming_spec', t => {
   const fixture = fixtureRepo(t, 'daemon');
-  const run = spawnSync(process.execPath, [CLI, ...argsOf(fixture)], { encoding: 'utf8', timeout: 120_000 });
+  const run = spawnSync(process.execPath, [CLI, ...argsOf(fixture, ['--record', recordFile(fixture)])], { encoding: 'utf8', timeout: 120_000 });
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(run.stdout, `${CHECK_NAMES.map(name => `ok ${name}`).join('\n')}\n`);
+  assert.match(run.stdout, /^ok format sha256 [0-9a-f]{64} \(record A\)\n/);
+  assert.equal(run.stdout.split('\n').slice(1).join('\n'), `${CHECK_NAMES.map(name => `ok ${name}`).join('\n')}\n`);
   assert.equal(run.stderr, '');
 });
 
 test('The_command_exits_1_and_prints_the_deviation_on_standard_output', t => {
   const fixture = fixtureRepo(t, 'olympiad', { spec: [['`s02` | `1⏎` | `1⏎`', '`s02` | `2⏎` | `1⏎`']] });
-  const run = spawnSync(process.execPath, [CLI, ...argsOf(fixture)], { encoding: 'utf8', timeout: 120_000 });
+  const run = spawnSync(process.execPath, [CLI, ...argsOf(fixture, ['--record', recordFile(fixture)])], { encoding: 'utf8', timeout: 120_000 });
   assert.equal(run.status, 1, run.stderr);
   assert.match(run.stdout, /^FAIL samples — .*sample s02 standard input/m);
   assert.match(run.stdout, /^ok file$/m);
@@ -38,9 +40,9 @@ const USAGE_CASES = [
   ['a_missing_option', fixture => ['--repo', fixture.repo, '--task', fixture.task], /missing --format/],
   ['an_unknown_option', fixture => [...argsOf(fixture), '--verbose'], /verbose/],
   ['a_task_that_climbs_out_of_the_repository', fixture => ['--repo', fixture.repo, '--task', '../x', '--format', fixture.format], /not a task name/],
-  ['a_task_with_no_spec', fixture => ['--repo', fixture.repo, '--task', '09-none', '--format', fixture.format], /09-none\.md cannot be read/],
+  ['a_task_with_no_spec', fixture => ['--repo', fixture.repo, '--task', '09-none', '--format', fixture.format, '--record', recordFile(fixture)], /09-none\.md cannot be read/],
   ['a_format_that_does_not_exist', fixture => ['--repo', fixture.repo, '--task', fixture.task, '--format', `${fixture.format}.none`], /cannot be read/],
-  ['a_needles_file_that_does_not_exist', fixture => [...argsOf(fixture), '--needles', `${fixture.repo}/none.txt`], /none\.txt cannot be read/],
+  ['a_needles_file_that_does_not_exist', fixture => [...argsOf(fixture, ['--record', recordFile(fixture)]), '--needles', `${fixture.repo}/none.txt`], /none\.txt cannot be read/],
 ];
 for (const [name, argv, message] of USAGE_CASES) {
   test(`Exit_4_for_${name}`, async t => {

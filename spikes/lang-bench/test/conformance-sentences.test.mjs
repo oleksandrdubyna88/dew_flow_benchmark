@@ -8,7 +8,8 @@ import { numberOf } from '../lib/conformance-check-sentences.mjs';
 import { readFacts } from '../lib/conformance-facts.mjs';
 import { parseKinds, parsePlacement, readSentences } from '../lib/conformance-sentences.mjs';
 import { parseFormat } from '../lib/format-structure.mjs';
-import { check, CHECK_NAMES, failsOf, fixtureRepo, isOk, phrase, REAL_FORMAT } from './support/conformance-fixtures.mjs';
+import { run } from '../lib/conformance.mjs';
+import { argsOf, check, CHECK_NAMES, failsOf, fixtureRepo, isOk, phrase, REAL_FORMAT } from './support/conformance-fixtures.mjs';
 import { edit } from './support/format-fixtures.mjs';
 
 const OFFLINE_OLD = 'The tests run offline, on a pristine copy of the workspace, after the build.';
@@ -124,7 +125,7 @@ test('The_checker_on_the_real_spec_01_names_what_it_lacks_a_recorded_observation
   const real = { ...fixture, task: '01-descent-to-one', format: REAL_FORMAT };
   writeFileSync(path.join(fixture.repo, 'todo', 'tasks', '01-descent-to-one.md'), readFileSync(`${repo}/todo/tasks/01-descent-to-one.md`));
   mkdirSync(path.join(fixture.repo, 'tasks', '01-descent-to-one', 'samples'), { recursive: true });
-  const result = await check(real);
+  const result = await run(argsOf(real), { tmp: path.join(fixture.repo, '.run-tmp') });
   t.diagnostic(`spec 01 under the real FORMAT (the samples folder is empty, as the task repository's is):\n${result.lines.join('\n')}`);
   assert.ok([0, 1].includes(result.exit), result.errors.join('\n'));
   for (const name of CHECK_NAMES) assert.ok(isOk(result, name) || failsOf(result, name).length > 0, `a line for ${name}`);

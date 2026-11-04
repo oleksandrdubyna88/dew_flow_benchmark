@@ -9,6 +9,11 @@ import { headingByNumber, sliceFrom } from './format-structure.mjs';
 export const KINDS = Object.freeze(['olympiad', 'daemon', 'web']);
 const ID = /F-[A-Z0-9]+(?:-[A-Z0-9]+)*/g;
 const CONDITION = /\b(?:unless|instead|whose|that|the default)\b/;
+/** The forms a kinds cell's condition may take (2.1): anything else is a cell the reader cannot read exactly. */
+const CONDITION_FORMS = /^(?:unless \S|instead of F-[A-Z0-9-]+ when \S|whose \S|that \S|the default$)/i;
+/** The ids the checker's own rules name, and how many `text` blocks each sentence has (one, but F-HIDDEN's two). */
+export const NAMED_IDS = Object.freeze(['F-REQ', 'F-INVALID', 'F-ERRORS', 'F-BYTES-O', 'F-BYTES-O-N', 'F-READY', 'F-STOP', 'F-EOF', 'F-TIMING', 'F-PORT', 'F-JSON', 'F-HIDDEN', 'F-SAMPLES-O', 'F-SAMPLES-D']);
+const EXPECTED_PARTS = Object.freeze({ 'F-HIDDEN': 2 });
 
 const RANGE = 'R[1-9]\\d*–R[1-9]\\d*';
 const ITEM = 'R[1-9]\\d*(?:–R[1-9]\\d*)?';
@@ -75,12 +80,13 @@ function splitCondition(lower) {
 
 const kindWords = head => head.split(/[ ,]+/).filter(word => word !== '' && word !== 'and');
 const knownKindWords = words => words.length > 0 && words.every(word => word === 'all' || KINDS.includes(word));
+const readableCondition = condition => condition === '' || CONDITION_FORMS.test(condition);
 
 /** The kinds a table cell names and whether the sentence is required for them: plain kind words are required, a condition (`whose`, `unless`, `instead`, `that`) makes it optional, `the default` does not. */
 export function parseKinds(cell) {
   const { head, condition } = splitCondition(cell.toLowerCase());
   const words = kindWords(head);
-  if (!knownKindWords(words)) return null;
+  if (!knownKindWords(words) || !readableCondition(condition)) return null;
   return { kinds: new Set(words.includes('all') ? KINDS : words), required: condition === '' || condition === 'the default' };
 }
 
@@ -158,9 +164,10 @@ function variantKinds(text, startsWithId) {
 
 /** The id a paragraph labels: the one it starts with, else the last one it names; with the kinds in `(…)` right after a starting id. */
 function leadOf(text, known) {
+  const first = new RegExp(`^(${IDS})`).exec(text)?.[1];
+  if (first !== undefined && !known.has(first)) return { id: first, kinds: null, unknown: true };
   const named = [...text.matchAll(ID)].map(hit => hit[0]).filter(id => known.has(id));
   if (named.length === 0) return null;
-  const first = new RegExp(`^(${IDS})`).exec(text)?.[1];
   const id = known.has(first) ? first : named.at(-1);
   return { id, kinds: variantKinds(text, id === first) };
 }
@@ -182,13 +189,14 @@ function addItem(state, item) {
   return state;
 }
 
-const byIdOf = leads => leads.filter(lead => lead.parts.length > 0).reduce((map, lead) => map.set(lead.id, [...(map.get(lead.id) ?? []), { kinds: lead.kinds, parts: lead.parts }]), new Map());
+const byIdOf = leads => leads.filter(lead => lead.parts.length > 0 && !lead.unknown).reduce((map, lead) => map.set(lead.id, [...(map.get(lead.id) ?? []), { kinds: lead.kinds, parts: lead.parts }]), new Map());
 
-/** The sentence leads of section 2 with their `text` blocks: `Map(id -> [{ kinds, parts: [collapsed text] }])`, in document order. */
+/** The sentence leads of section 2 with their `text` blocks: `{ byId: Map(id -> [{ kinds, parts: [collapsed text] }]), strays }`, `strays` the ids of labelled blocks that have no row. */
 function readBlocks(format, ids) {
   const inside = insideOf(sliceFrom(format, headingByNumber(format, '2'), 2));
   const items = [...leadItems(format, inside, new Set(ids)), ...blockItems(format, inside)].sort((a, b) => a.no - b.no);
-  return byIdOf(items.reduce(addItem, { current: null, leads: [] }).leads);
+  const leads = items.reduce(addItem, { current: null, leads: [] }).leads;
+  return { byId: byIdOf(leads), strays: leads.filter(lead => lead.unknown && lead.parts.length > 0).map(lead => lead.id) };
 }
 
 /** ok(variant) with its parts compiled, or the fail of the first part that cannot be. */
@@ -198,10 +206,21 @@ function compileVariant(variant, id) {
   return bad === undefined ? ok({ kinds: variant.kinds, parts: parts.map(part => ({ template: part.template, ...part.compiled.value })) }) : fail(`${id}: ${bad.compiled.reason}`);
 }
 
+const blocksText = count => `${count} text block${count === 1 ? '' : 's'}`;
+
+/** The reader's expectations of the blocks of one sentence: every variant has the expected number of parts, and several variants name disjoint kinds. */
+function blockFault(id, found) {
+  const wrong = found.find(variant => variant.parts.length !== (EXPECTED_PARTS[id] ?? 1));
+  if (wrong !== undefined) return `${id} has ${blocksText(wrong.parts.length)}, and 2.1 expects ${EXPECTED_PARTS[id] ?? 1}`;
+  const kinds = found.flatMap(variant => (variant.kinds === null ? [...KINDS] : [...variant.kinds]));
+  return found.length > 1 && new Set(kinds).size !== kinds.length ? `${id} has two text blocks for the same kinds` : null;
+}
+
 function sentenceOf(row, blocks) {
   const found = blocks.get(row.id);
   if (found === undefined) return fail(`FORMAT has no \`text\` block for the sentence ${row.id} of 2.1's table`);
-  return allOk(found.map(variant => compileVariant(variant, row.id)), variants => ({ ...row, variants }));
+  const fault = blockFault(row.id, found);
+  return fault === null ? allOk(found.map(variant => compileVariant(variant, row.id)), variants => ({ ...row, variants })) : fail(fault);
 }
 
 /**
@@ -211,9 +230,13 @@ function sentenceOf(row, blocks) {
 export function readSentences(format) {
   const rows = readTable(format);
   if (!rows.ok) return rows;
-  const blocks = readBlocks(format, rows.value.map(row => row.id));
-  return allOk(rows.value.map(row => sentenceOf(row, blocks)), sentences => new Map(sentences.map(sentence => [sentence.id, sentence])));
+  const lacking = NAMED_IDS.find(id => !rows.value.some(row => row.id === id));
+  if (lacking !== undefined) return fail(`FORMAT 2.1 has no row for ${lacking}, which the checker names`);
+  const { byId, strays } = readBlocks(format, rows.value.map(row => row.id));
+  if (strays.length > 0) return fail(`FORMAT has a text block labelled ${strays[0]} and no row for it in 2.1's table`);
+  return allOk(rows.value.map(row => sentenceOf(row, byId)), sentences => new Map(sentences.map(sentence => [sentence.id, sentence])));
 }
+
 
 /** The variant of `entry` that applies to `kind` (one that names no kinds applies to all), or undefined. */
 export const variantFor = (entry, kind) => entry.variants.find(variant => variant.kinds === null || variant.kinds.has(kind));

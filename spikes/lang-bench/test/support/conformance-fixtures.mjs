@@ -1,5 +1,6 @@
 // Fixtures of the conformance tests (E1.S8): a copy of one synthetic task repository in an owned folder, edited by exact needles, and the checker run on it in this process.
 // The synthetic repositories are test/fixtures/conformance/<kind>/ and the FORMAT stand-in beside them; the real FORMAT and the real spec 01 are used only by the tests that name them.
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,11 +43,19 @@ export function fixtureRepo(t, kind, edits = {}) {
 /** The arguments of one checker run on a fixture repository. */
 export const argsOf = (fixture, extra = []) => ['--repo', fixture.repo, '--task', fixture.task, '--format', fixture.format, ...extra];
 
+/** A record file for the fixture's FORMAT as it is now (the gate's record `inputs/specs.d/format.json` has the same shape): `{ A: { sha256 } }`. Returns its path. */
+export function recordFile(fixture) {
+  const file = path.join(fixture.repo, 'format-record.json');
+  writeFileSync(file, JSON.stringify({ A: { version: 2, sha256: createHash('sha256').update(readFileSync(fixture.format)).digest('hex') } }));
+  return file;
+}
+
 /** The checker run on a fixture, in this process: `{ exit, lines, errors }`. The runner's TMPDIR is a folder inside the fixture, so it dies with the fixture's owned folder. */
 export function check(fixture, extra = [], seams = {}) {
   const tmp = path.join(fixture.repo, '.run-tmp');
   mkdirSync(tmp, { recursive: true });
-  return run(argsOf(fixture, extra), { tmp, ...seams });
+  const record = extra.includes('--record') ? [] : ['--record', recordFile(fixture)];
+  return run(argsOf(fixture, [...record, ...extra]), { tmp, ...seams });
 }
 
 /** The FAIL lines of a result for one check. */
