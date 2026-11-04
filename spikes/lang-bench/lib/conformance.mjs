@@ -136,8 +136,9 @@ export async function run(argv, seams = {}) {
   if (!options.ok) return usage(options.reason);
   const references = loadReferences(options.value);
   if (!references.ok) return usage(references.reason);
-  const specPath = path.join(options.value.repo, 'todo', 'tasks', `${options.value.task}.md`);
-  const dir = path.join(options.value.repo, 'tasks', options.value.task, 'samples');
+  const repo = path.resolve(options.value.repo);
+  const specPath = path.join(repo, 'todo', 'tasks', `${options.value.task}.md`);
+  const dir = path.join(repo, 'tasks', options.value.task, 'samples');
   const specBytes = readFile(specPath);
   const folder = readSamplesFolder(dir);
   if (!specBytes.ok || !folder.ok) return usage((specBytes.ok ? folder : specBytes).reason);
