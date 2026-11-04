@@ -1176,10 +1176,11 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
 - [ ] `RunArmSchemeTests`, `GateStatusFileTests` (and E2's suites) unedited and green after the two extractions.
       *(2026-10-31: green, but NOT unedited — the S2 review and the code gate pinned the new git environment (`GIT_ALLOW_PROTOCOL`, the
       `GIT_CONFIG_*` allowance) in `RunArmSchemeTests` and `StepGitTests`, and `ValidateVerbTests`/`ModelArmsScenarioTests` follow the guard
-      `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)*
+      `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)* — not met as written (checked 2026-11-04): the suites were edited (the note above; §8 items 33, 40, 51), and `GateStatusFileTests` does not exist, `GateStatusTests` does.
 - [ ] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
       logged) or its fallback recorded here and in the parent's §11.
-      (Progress: M2 ran 2026-10-31 at `a504cfe`, every verb 0, `objective.json` byte-identical — logged; the key check is still the owner's.)
+      (Progress: M2 ran 2026-10-31 at `a504cfe`, every verb 0, `objective.json` byte-identical — logged; the key check is still the owner's.) — not met as written (checked 2026-11-04): M2 ran with two departures, logged at `research/module_model_arms.md:2240`: it ran under `env -i`, and its first `--parse-only` compared against nothing, so a second full `checks` ran. The key-check half is met: `research/module_model_arms.md:2279-2292`.
+      (2026-11-04: the key check closed — the owner ran it with the real key on 2026-11-04, `research/module_model_arms.md:2279-2292`; the "still the owner's" in the progress note above is out of date. The box stays open for the two departures of M2.)
 - [x] §8 item 2 answered by the owner (2026-10-30: a fix, not a change), and the stories followed the answer (the proposal).
 - [x] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
       residuals); `research/module_tests.md`'s `prep-base`, `make`, `status`, `checks` rows `covered`, and the E5 rows' ids corrected.

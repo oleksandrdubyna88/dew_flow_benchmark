@@ -837,32 +837,32 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 
 ## 11. Definition of Done — epic E6
 
-- [ ] E4 (both pull requests) and E5 (both) on `main` and merged into this branch before the first E6 code (§8 item 2).
+- [ ] E4 (both pull requests) and E5 (both) on `main` and merged into this branch before the first E6 code (§8 item 2). — not met as written (checked 2026-11-04): E4 and E5 were integrated into the E6 branch as one pull request, #132.
 - [ ] E6.S1: the nine tests of `ConsumerCompatibilityTests` green, each watched red on an assertion first (the messages in the story's
       summary), the six break-its observed; the seven readers run over the four fake arms the module wrote; item 5's two numbers in the
-      module doc; `RunArmSchemeTests` and `StepRestartTests` unedited and green.
+      module doc; `RunArmSchemeTests` and `StepRestartTests` unedited and green. — not met as written (checked 2026-11-04): "unedited" was not verified: `tests/Bench.Tests/ModelArms/RunArmSchemeTests.cs`, `tests/Bench.Tests/ModelArms/StepRestartTests.cs` changed inside the squashed #132.
 - [ ] E6.S2: `Every_model_arms_verb_is_derived_from_its_dispatch_and_has_its_row` watched red, then green; the two sources held equal;
-      the three break-its observed.
+      the three break-its observed. — not met as written (checked 2026-11-04): no red or break-its are recorded for E6.S2 (the test exists, `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs:53`).
 - [ ] E6.S3: `research/module_model_arms.md`, `research/architecture.md`, `README.md`, `research/module_tests.md` and `research/README.md`
-      describe the module as it runs (the parent's §10 documentation line); `PublishedRecordTests` green and its red seen.
+      describe the module as it runs (the parent's §10 documentation line); `PublishedRecordTests` green and its red seen. — not met as written (checked 2026-11-04): the five documents were not read against the code one by one.
 - [ ] M3 ran all fifteen steps — every verb, the four schemes, one run locked and unlocked (by hand and by the chain), two limited attempts
       resumed, one interrupted arm resumed by `run-all`, one blocked gate continued, the A–D re-run with its CLI version — logged in
-      `research/module_model_arms.md`, its scratch removed.
+      `research/module_model_arms.md`, its scratch removed. — not met as written (checked 2026-11-04): step 14 did not run in M3; it ran on 2026-11-04 with the owner's HOME (`research/PLAN_model_arms.md` D-h).
 - [x] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 was approved and before #132 merged (done, 2026-11-01, `3a0effcc`): part (a) to Fable's spec, its
       theory red at `16e7fd20` then green, the `CLAUDE_*` / `ANTHROPIC_*` rows green; part (b) — the two named tests red then green, the
       log line edited; the docs say runs after it differ from part 6's conditions; #132's code gate passed with it.
 - [ ] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
-      `todo/README.md` row.
+      `todo/README.md` row. — not met as written (checked 2026-11-04): the file exists with its status line (`todo/PLAN_model_arms_analysis.md:3`), its boundary table (added 2026-11-04, section *Boundary*), items 5, 7 and 10 of §8 (the last result per session, `compare.mjs` lists no `CR*`, `CH*` or `SR*` arm, the rename) and its row (`todo/README.md:91`); item 6 is carried as a pointer only (the file says the readers E6.S1 did not run are to be listed "each with its reason (E6 §8 item 6)" and lists none), so the reasons are missing.
 - [ ] The parent's deviations written (every epic; items 3 and 4 here); §8's wording items 3, 18 and 20 written into the parent (not a
-      ledger entry); its defects 6, 11, 19 and 21 taken into its next change or answered by the owner.
-- [ ] **OPEN — the owner's, by hand: M2's key check** (`research/module_model_arms.md` *M2's key check*; E3 §8 item 47): the real `claude`
-      and `coai-mcp`, the owner's key, a FRESH root; the two `providers` answers logged side by side, or the fallback recorded as a deviation.
+      ledger entry); its defects 6, 11, 19 and 21 taken into its next change or answered by the owner. — not met as written (checked 2026-11-04): the deviations are one list, not one per epic; item 4 is absent.
+- [x] **OPEN — the owner's, by hand: M2's key check** (`research/module_model_arms.md` *M2's key check*; E3 §8 item 47): the real `claude`
+      and `coai-mcp`, the owner's key, a FRESH root; the two `providers` answers logged side by side, or the fallback recorded as a deviation. — met, checked 2026-11-04: `research/module_model_arms.md:2279-2291`: the owner's real key, 2026-11-04, claude 2.1.310, the two `vaultNote` fields logged side by side.
 - [ ] **OPEN — the owner's:** the owner's own part-6 and part-7 `experiment.json` written once into a root outside every checkout and read
-      by `model-arms status` without a refusal (the parent's §10 line).
+      by `model-arms status` without a refusal (the parent's §10 line). — not met as written (checked 2026-11-04): written by the agent at the owner's direction; part 7's closed list differs (`research/PLAN_model_arms.md` D-h).
 - [ ] The promotion done when the two OPEN lines above — the parent's own Definition-of-Done lines, nothing beyond them — are closed:
       the parent and `PLAN_model_arms_E1.md`…`_E6.md` moved together, the `git mv` last, the three link cases walked; until then the
       parent's and this document's status lines say what waits for the owner. The owner's open questions (§8 item 26) are NOT promotion
-      conditions: they are listed, open, in the deviations.
+      conditions: they are listed, open, in the deviations. — not met as written (checked 2026-11-04): three link cases and `git mv` last were not verified; one OPEN line (`research/PLAN_model_arms_E6.md:860`) is not met as written.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green (the
       database and service tests aside, as E3 §11 records for this host).
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41829561662 on `2407ac8a`, job `plans` success.

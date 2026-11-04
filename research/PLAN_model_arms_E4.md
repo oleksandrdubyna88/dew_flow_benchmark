@@ -1151,29 +1151,29 @@ edited there. Tests: every root, clone and worktree is under a `TempFolder` (`te
 ## 11. Definition of Done — epic E4
 
 - [ ] E4.S0 specified by Fable, built, its tests watched red first, its pilot logged, merged to `main` in its own pull request before
-      E4.S1–E4.S3 and before E5.S2–E5.S4.
+      E4.S1–E4.S3 and before E5.S2–E5.S4. — not met as written (checked 2026-11-04): E4.S0 shipped inside #132, with no pull request of its own (`research/PLAN_model_arms_E4.md:4`, `research/PLAN_model_arms.md`:218).
 - [ ] E4.S2 specified by Fable; E4.S1–E4.S3 built on the second branch, each test watched red on an assertion first (the messages in the
-      story's summary) and each break-it observed.
+      story's summary) and each break-it observed. — not met as written (checked 2026-11-04): E4.S2's `ArmGit` rows were not watched red first (`research/module_model_arms.md:2559`); E4.S1–E4.S3 were not built on a second branch.
 - [ ] Every test of the parent's §7 E4 block exists under its exact name and is green; the added ones of §7 here too;
-      `RunArmSchemeTests.An_srs_arm_is_refused_until_the_task_pipeline_exists` replaced as §7 says.
-- [ ] `TasksPlanTests.The_shells_own_checker_says_the_same_on_every_list` green against the pinned `tasks-plan.mjs`, byte for byte.
+      `RunArmSchemeTests.An_srs_arm_is_refused_until_the_task_pipeline_exists` replaced as §7 says. — not met as written (checked 2026-11-04): `A_commit_already_in_the_arm_history_by_patch_id_…` was struck by ledger 3.3 and landed as `tests/Bench.Tests/ModelArms/TaskWorktreesCrashTests.cs:46` (`research/PLAN_model_arms.md` D-b item 1).
+- [x] `TasksPlanTests.The_shells_own_checker_says_the_same_on_every_list` green against the pinned `tasks-plan.mjs`, byte for byte. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/TasksPlanTests.cs:237` (`The_shells_own_checker_says_the_same_on_every_list`); CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
 - [ ] `TaskWorktreesTests.A_task_whose_step_is_recovered_done_is_picked_back_from_its_branch_never_recreated` and
       `A_crash_after_a_pick_and_before_the_marker_skips_the_carried_commits_on_reentry` watched red first; every sentinel row red without its
-      neutralisation; `The_module_launches_nothing_by_a_bare_name` green with `TaskWorktrees.cs` and `TaskPipeline.cs` present.
-- [ ] `RunArmSrsTests` green, including `A_batch_of_many_runs_its_tasks_at_once_each_in_its_worktree`,
+      neutralisation; `The_module_launches_nothing_by_a_bare_name` green with `TaskWorktrees.cs` and `TaskPipeline.cs` present. — not met as written (checked 2026-11-04): no red by name is recorded for the crash test (`research/PLAN_model_arms.md` D-c); four sentinel rows have no red without their neutralisation (`research/module_model_arms.md:2613`, `research/module_model_arms.md:2620`).
+- [x] `RunArmSrsTests` green, including `A_batch_of_many_runs_its_tasks_at_once_each_in_its_worktree`,
       `Every_task_coder_is_launched_without_the_agent_tool_fresh_and_resumed` and
       `A_task_coder_that_ended_on_its_deadline_is_in_stepsOnDeadline_and_in_status`; `An_interrupted_task_stops_the_arm_and_reentry_resumes_only_it`
       counting batch 0's calls and seeing the resume run in the kept worktree (ledger 3.1, end to end); both rows of
       `Tasks_json_changed_after_the_batches_were_fixed_stops_the_arm_with_exit_4` with no call; and
-      `A_done_task_without_its_before_is_refused_with_exit_4_and_its_branch_is_kept` watched red against a `.before` written for every task.
-- [ ] Every review names D26 (a)–(f) per adapter (`TaskWorktrees`, the widened `ArmGit`, `TaskPipeline`, the floor's admission).
-- [ ] `research/module_model_arms.md` describes E4 as built under its four headings (the threat text corrected by E4.S0, the residuals);
-      `research/module_tests.md`'s `run-arm` row covers SRS.
+      `A_done_task_without_its_before_is_refused_with_exit_4_and_its_branch_is_kept` watched red against a `.before` written for every task. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:96`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:165`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:211`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:286-287`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:303`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:390`, `tests/Bench.Tests/ModelArms/RunArmSrsTests.cs:417`; the red of the `.before` test is break-it 6, `research/module_model_arms.md:2724`.
+- [ ] Every review names D26 (a)–(f) per adapter (`TaskWorktrees`, the widened `ArmGit`, `TaskPipeline`, the floor's admission). — not met as written (checked 2026-11-04): only the module-doc sections name D26 per adapter (`research/PLAN_model_arms.md` D-g); no review text was opened.
+- [x] `research/module_model_arms.md` describes E4 as built under its four headings (the threat text corrected by E4.S0, the residuals);
+      `research/module_tests.md`'s `run-arm` row covers SRS. — met, checked 2026-11-04: `research/module_model_arms.md:2368`, `research/module_model_arms.md:2772`, `research/module_model_arms.md:2468`, `research/module_model_arms.md:2638` are the four headings; the threat text at `research/module_model_arms.md:1819`, `research/module_model_arms.md:414-416`; the residuals at `research/module_model_arms.md:2376`, `research/module_model_arms.md:2424-2430`; `research/module_tests.md:111` (`run-arm`). A stray empty duplicate heading at `research/module_model_arms.md:2466` stays (append-only).
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green (the
       database and service tests aside, as E3 §11 records for this host); `ModelArmsArchitectureTests` green with the four markers.
-- [ ] The parent's claims of §8 items 12–14 taken into its next change, or answered.
-- [ ] `TaskWorktreesTests.A_task_whose_session_resumes_keeps_its_worktree_branch_and_uncommitted_edits_on_reentry` and
+- [ ] The parent's claims of §8 items 12–14 taken into its next change, or answered. — not met as written (checked 2026-11-04): §8 items 12 and 13 were not carried into the parent (`research/PLAN_model_arms.md`:674, :1322); item 14 was settled only inside E4.
+- [x] `TaskWorktreesTests.A_task_whose_session_resumes_keeps_its_worktree_branch_and_uncommitted_edits_on_reentry` and
       `A_resuming_task_whose_worktree_branch_or_before_is_inconsistent_is_refused_with_exit_4_naming_the_recovery` watched red against D14 as
       approved, then green (ledger 3.1); `An_empty_source_picked_before_a_crash_is_not_picked_twice_on_reentry` watched red without the intent
-      line; E4.S0's six-road check green; no test writes through the `bin/git` link.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+      line; E4.S0's six-road check green; no test writes through the `bin/git` link. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/TaskWorktreesTests.cs:397`, `tests/Bench.Tests/ModelArms/TaskWorktreesTests.cs:478`, `tests/Bench.Tests/ModelArms/TaskWorktreesCrashTests.cs:182`; the reds at `research/module_model_arms.md:2559` and the B17 and B19 rows of the break-it table; `tests/Bench.Tests/ModelArms/GitFloorAdmissionTests.cs:134`; `ExperimentRoot.ReplaceGit` (`tests/Bench.Tests/ModelArms/ExperimentRoot.cs:208`) and the other `bin/git` sites were read one by one, not by an exhaustive scan.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41803357388 on `469a5109`, job `plans` success; CI run 41829561662 on `2407ac8a`, job `plans` success; CI run 41843706547 on `796e7c3a`, job `plans` success.

@@ -1938,11 +1938,11 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
 
 ## 9. Definition of Done — epic E1
 
-- [ ] E1.S1–E1.S11 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
-- [ ] E1.S5's spec was written by Fable into its section before its coder started; its three break-its observed.
+- [ ] E1.S1–E1.S11 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary). — not met as written (checked 2026-11-04): no red is recorded for E1.S9, E1.S11 and the feat commits of E1.S10; the red messages are not quoted for E1.S4, E1.S6 and E1.S8.
+- [ ] E1.S5's spec was written by Fable into its section before its coder started; its three break-its observed. — not met as written (checked 2026-11-04): the box says three break-its; four were planned and observed (`a6759a05`).
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
-- [ ] `CommandLineTests`, `ShutdownSignalTests`, `ProbeArgvTests`, `ScoutArgvTests`, `AssessorArgvTests`, `ProcessRunnerTests`,
-      `ScoutLaunchProcessTests` unedited and green.
-- [ ] `ArchitectureTests` and `ModelArmsArchitectureTests` green; `PureDeciders` lists every public static class of Core.
-- [ ] `model-arms init` → `validate` walked by hand and quoted in `research/module_model_arms.md`, which describes E1 as built.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+- [x] `CommandLineTests`, `ShutdownSignalTests`, `ProbeArgvTests`, `ScoutArgvTests`, `AssessorArgvTests`, `ProcessRunnerTests`,
+      `ScoutLaunchProcessTests` unedited and green. — met, checked 2026-11-04: `git diff --stat 431e7591~1..469a5109` over the seven files (`Cli/CommandLineTests.cs`, `Cli/ShutdownSignalTests.cs`, `Probes/ProbeArgvTests.cs`, `Scouts/ScoutArgvTests.cs`, `Models/AssessorArgvTests.cs`, `Infrastructure/ProcessRunnerTests.cs`, `Scouts/ScoutLaunchProcessTests.cs`, all under `tests/Bench.Tests/`) is empty; their last edit is 2026-10-13 or earlier (`git log`); none is skipped; CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
+- [x] `ArchitectureTests` and `ModelArmsArchitectureTests` green; `PureDeciders` lists every public static class of Core. — met, checked 2026-11-04: `tests/Bench.Tests/ArchitectureTests.cs` and `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:159-167` (`Every_core_decider_is_named_in_the_pure_list`, which names every public static class of `ModelArms.Core`); CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
+- [x] `model-arms init` → `validate` walked by hand and quoted in `research/module_model_arms.md`, which describes E1 as built. — met, checked 2026-11-04: the hand walk with the refusal output quoted at `research/module_model_arms.md:855-876`; the first-run table at `research/module_model_arms.md:770-790`.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41803357388 on `469a5109`, job `plans` success (`.github/workflows/ci.yml:122-123`, printed `plan-lifecycle: clean.`).
