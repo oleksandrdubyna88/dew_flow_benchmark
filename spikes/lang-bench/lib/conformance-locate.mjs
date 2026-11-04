@@ -64,19 +64,18 @@ function alteredOf(variant, partHits, domains, mode) {
 }
 
 function locateOne(entry, kind, domains) {
-  const variant = variantFor(entry, kind);
-  if (variant === undefined) return null;
+  const variant = variantFor(entry, kind) ?? entry.variants[0];
   const partHits = variant.parts.map(part => hitsOf(part, domains, entry.where.mode));
   const stray = variant.parts.flatMap(part => hitsOf(part, domains, 'stray'));
-  return { entry, variant, partHits, hits: partHits[0], altered: alteredOf(variant, partHits, domains, entry.where.mode), stray };
+  return { entry, variant, partHits, hits: partHits[0], altered: alteredOf(variant, partHits, domains, entry.where.mode), stray, applies: entry.kinds.has(kind) };
 }
 
 /**
- * For every sentence of 2.1 that applies to `kind`: `{ entry, variant, partHits, hits, altered, stray }`. `hits` are the whole matches of the first part; `partHits[i]` of part i; `altered` is the line
- * where the sentence's first words stand although it was not found whole (null when it was found or its words are nowhere); `stray` are whole matches outside every requirement.
+ * For every sentence of 2.1: `{ entry, variant, partHits, hits, altered, stray, applies }`. `applies` is whether the row lists the kind; a sentence the row does not list is located too, so that a spec
+ * carrying it can be told. `hits` are the whole matches of the first part; `partHits[i]` of part i; `altered` is the line where the sentence's first words stand although it was not found whole (null
+ * when it was found or its words are nowhere); `stray` are whole matches outside every requirement.
  */
 export function locateSentences({ spec, sentences, kind }) {
   const domains = domainsOf(spec);
-  const located = [...sentences.values()].filter(entry => entry.kinds.has(kind)).map(entry => [entry.id, locateOne(entry, kind, domains)]);
-  return new Map(located.filter(([, found]) => found !== null));
+  return new Map([...sentences.values()].map(entry => [entry.id, locateOne(entry, kind, domains)]));
 }

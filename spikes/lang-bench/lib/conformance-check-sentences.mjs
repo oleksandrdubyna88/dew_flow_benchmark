@@ -133,16 +133,19 @@ function xorProblems(ctx) {
   return [present.length === 0 ? 'neither F-INVALID nor F-ERRORS stands: a spec carries exactly one' : 'F-INVALID and F-ERRORS both stand: a spec carries exactly one'];
 }
 
+const misapplied = f => (f.hits.length > 0 ? [`${f.entry.id} (${where(f.hits[0])}) is carried by this ${f.kind} spec, and 2.1 lists it for ${[...f.entry.kinds].join(', ')} only`] : []);
+
 /** Check 5: every fixed sentence the kind requires, word for word, in its place, with its slots filled by allowed values. */
+const refusedProblems = f => (f.hits.length > 0 ? [`${REFUSED[f.entry.id]} (${where(f.hits[0])})`] : []);
+
+/** The findings of one located sentence: refused for the series, misapplied to the kind, or its own placement and slots. */
+function oneSentence(ctx, f) {
+  if (REFUSED[f.entry.id] !== undefined) return refusedProblems(f);
+  return f.applies ? sentenceProblems(ctx, f) : misapplied({ ...f, kind: ctx.kind });
+}
+
 export function sentenceFindings(ctx) {
-  const findings = [];
-  for (const [id, f] of ctx.found) {
-    if (REFUSED[id] !== undefined) {
-      if (f.hits.length > 0) findings.push(`${REFUSED[id]} (${where(f.hits[0])})`);
-      continue;
-    }
-    findings.push(...sentenceProblems(ctx, f));
-  }
+  const findings = [...ctx.found.values()].flatMap(f => oneSentence(ctx, f));
   return [...findings, ...xorProblems(ctx), ...timingProblems(ctx)];
 }
 

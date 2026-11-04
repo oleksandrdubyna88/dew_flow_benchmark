@@ -26,6 +26,10 @@ const CASES = [
   ['a_reference_to_a_requirement_that_does_not_exist', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R99).']] }, 'r-ids', /names R99, and the spec has requirements R1 to R14 only/],
   ['a_reference_to_R0', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R0).']] }, 'r-ids', /names R0/],
   ['a_reference_with_a_leading_zero', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1 (see R02).']] }, 'r-ids', /names R02/],
+  // C8: a sentence the table does not list for this kind
+  ['F_PORT_in_an_olympiad_spec', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1. The environment variable `PORT` holds a TCP port number; the program listens on it, and the tests connect to it at 127.0.0.1.']] }, 'sentences', /F-PORT \(line \d+\) is carried by this olympiad spec, and 2\.1 lists it for daemon, web only/],
+  ['F_BYTES_W_in_a_daemon_spec', 'daemon', { spec: [phrase('Nothing else is normalized.', 'Nothing else is normalized. Every reply is compared on its status code, on each response header that a requirement of this spec names, and on its body; other headers are not compared. The body is compared byte for byte, except where a requirement of this spec names another comparison. Nothing else is normalized.')] }, 'sentences', /F-BYTES-W \(line \d+\) is carried by this daemon spec, and 2\.1 lists it for web only/],
+  ['a_sentence_whose_kinds_cell_was_narrowed', 'daemon', { format: [['| F-STDERR | all |', '| F-STDERR | olympiad |']] }, 'sentences', /F-STDERR \(line \d+\) is carried by this daemon spec, and 2\.1 lists it for olympiad only/],
 ];
 
 for (const [name, kind, edits, name_, message] of CASES) {
