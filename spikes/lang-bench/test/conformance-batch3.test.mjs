@@ -10,6 +10,13 @@ const CASES = [
   ['an_empty_section_8', 'olympiad', { spec: [['None yet.', '']] }, 'sections', /section 8 is empty/],
   ['a_fenced_block_in_section_8', 'olympiad', { spec: [['None yet.', 'None yet.\n\n```text\nx\n```']] }, 'sections', /section 8 holds a fenced code block/],
   ['a_table_in_section_8', 'olympiad', { spec: [['None yet.', 'None yet.\n\n| a | b |\n|---|---|\n| 1 | 2 |']] }, 'sections', /section 8 holds a table/],
+  // C6: a table is found by its delimiter row, whatever stands around it
+  ['a_table_right_under_a_heading', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n| a | b |\n|---|---|\n| 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  ['a_table_after_a_text_line', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\nSome text.\n| a | b |\n|---|---|\n| 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  ['a_table_followed_by_text', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\n| a | b |\n|---|---|\n| 1 | 2 |\nTrailing text.\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  ['an_indented_table', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  ['a_table_without_outer_pipes', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\na | b\n--|--\n1 | 2\n']] }, 'r-ids', /a table outside any requirement paragraph/],
+  ['a_table_in_a_block_quote', 'olympiad', { spec: [['## 3. Output\n', '## 3. Output\n\n> | a | b |\n> |---|---|\n> | 1 | 2 |\n']] }, 'r-ids', /a table outside any requirement paragraph/],
 ];
 
 for (const [name, kind, edits, name_, message] of CASES) {
@@ -23,3 +30,8 @@ for (const [name, kind, edits, name_, message] of CASES) {
 }
 
 test('The_phrase_helper_is_available_to_the_batch_cases', () => assert.equal(typeof phrase, 'function'));
+
+test('A_table_without_outer_pipes_inside_a_requirement_is_no_finding', async t => {
+  const spec = [['| n | output |\n|---|---|\n| 1 | `1` |\n| 2 | `2 1` |', 'n | output\n--|--\n1 | `1`\n2 | `2 1`']];
+  assert.ok(isOk(await check(fixtureRepo(t, 'olympiad', { spec })), 'r-ids'));
+});

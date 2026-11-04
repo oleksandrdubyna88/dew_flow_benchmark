@@ -74,8 +74,24 @@ function addLine(paragraphs, line) {
   return [...paragraphs, { startNo: line.no, endNo: line.no, lines: [line] }];
 }
 
-/** The paragraphs of the lines outside fences: runs of non-blank lines on adjacent line numbers, `{ startNo, endNo, lines, isTable }`. */
+/** A table's delimiter row (`|---|---|`, `--|--`, `:-:|-:`), also indented or after block quote markers: only pipes, dashes, colons and spaces, with at least one pipe. */
+const DELIMITER = /^[ \t]*(?:>[ \t]*)*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
+export const isDelimiterRow = text => text.includes('|') && DELIMITER.test(text);
+
+/** A run of lines cut at its table: the lines before the header row (the row above the first delimiter row) are prose, the header row on is the table. */
+function splitAtTable(run) {
+  const delimiter = run.lines.findIndex(line => isDelimiterRow(line.text));
+  if (delimiter === -1) return [{ ...run, isTable: false }];
+  const header = Math.max(delimiter - 1, 0);
+  const prose = run.lines.slice(0, header);
+  const table = run.lines.slice(header);
+  return [...(prose.length > 0 ? [rangeOf(prose, false)] : []), rangeOf(table, true)];
+}
+
+const rangeOf = (lines, isTable) => ({ startNo: lines[0].no, endNo: lines.at(-1).no, lines, isTable });
+
+/** The paragraphs of the lines outside fences: runs of non-blank lines on adjacent line numbers, `{ startNo, endNo, lines, isTable }`; a run that holds a table is cut into its prose and its table. */
 export function paragraphs(lines) {
   const filled = scanBlocks(lines).kept.filter(line => line.text.trim() !== '');
-  return filled.reduce(addLine, []).map(entry => ({ ...entry, isTable: entry.lines.every(line => line.text.startsWith('|')) }));
+  return filled.reduce(addLine, []).flatMap(splitAtTable);
 }
