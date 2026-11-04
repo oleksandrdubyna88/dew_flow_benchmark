@@ -353,6 +353,8 @@ change gives the named `FAIL` line, so a checker that finds nothing (or everythi
 | The runner: python or runner missing, a runner that ends in another way, a hang stopped at the ceiling with its process tree (a session of its own), an olympiad spec without either | covered | `conformance-runner.test.mjs` (8) |
 | FORMAT is the source: a retyped list would pass an old spec, a one-word change is followed, a FORMAT missing a block, a slot, a placement, a table or a fact is exit 4, the real FORMAT's ids all found, spec 01 observed | covered | `conformance-sentences.test.mjs` (16) |
 | The env lines against the layer's own lists, a retyped list missing a new key | covered | `conformance-env.test.mjs` (10) |
+| The stack words of the series (`inputs/stack-words-lang.json`) found in a requirement and in a sample file, named by the word; a retyped list would miss a word added to the file; the real FORMAT and spec 01 hold none | covered | `conformance-stack-words.test.mjs` (23) |
+| The shape rule (under 50 lines, complexity at most 4, no exemption) on the conformance files, the FORMAT readers and the FORMAT tools, one test per file naming its offenders | covered | `code-shape-lang.test.mjs` (20) |
 
 **Red again.** The production line of each guarantee was taken out in turn and the named tests watched red (ten mutations, two of them of `runBounded` and of the env list; record in `~/rsd/lang-v2/briefs/s8-reds.txt`).
 The checker was written before its tests, so the first reds are the failures the tests showed on the way (a fingerprint that missed a changed word, a sentence outside every requirement), not a red of the whole checker.

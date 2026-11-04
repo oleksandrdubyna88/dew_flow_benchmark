@@ -358,7 +358,7 @@ ceiling (`A_runner_that_hangs_…` shows a `setsid` child of the runner gone whe
 frameworks and flags of the series; check 10 always reads it and names a hit by the word. Neither the real FORMAT nor the real spec 01 holds one of them.
 
 **Not covered, and why.** The body-forms rule is coarse (a JSON comparison with no F-JSON anywhere). A normative sentence outside a span
-that is not a fixed sentence is for the reviewer. Complexity of some functions is above four, as in the neighbouring readers; every function is under 50 lines.
+that is not a fixed sentence is for the reviewer. Shape: every function of these files and of the FORMAT readers and tools (`lib/format-*.mjs`, `tools/*.mjs`) has under 50 lines and a complexity of at most 4, measured by v1's scanner (`spikes/minigit-bench/test/code-shape.mjs`) and held by `test/code-shape-lang.test.mjs`, with no exemption; the E1.S9 files were split in batch 2 without a change in behaviour (see `module_tests.md`).
 
 **Files.** `conformance.mjs` (command), `lib/conformance.mjs` (the run), `lib/conformance-{blocks,spec,facts,sentences,locate,shown,runner}.mjs` (readers), `lib/conformance-check-{structure,sentences,samples,text}.mjs`
 (the checks); `lib/format-structure.mjs` takes a `structure` rule (a spec has eight sections, FORMAT seven) and `lib/format-compare.mjs` exports `tableOf`. Tests: `test/conformance*.test.mjs`, the synthetic
