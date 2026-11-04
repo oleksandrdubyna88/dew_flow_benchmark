@@ -1,9 +1,16 @@
-// E1.S3: what the workspace tests share. The template folders and their expected file sets, the registered records the tests read (a version is looked up in them, never typed into a test), and the
-// helpers that read a template tree. The hello programs and the builder call of the box tests are added below as the builder lands.
-import { readFileSync, readdirSync } from 'node:fs';
+// E1.S3: what the workspace tests share. The template folders and their expected file sets, the registered records the tests read (a version is looked up in them, never typed into a test), the helpers that read a
+// template tree, and the hello fixture: `helloWorkspace` builds a workspace of a stack and kind from the fixture's statement and samples and puts a program in it. Workspaces live under `TEST_ROOT`
+// (~/.cache/lang-v2/t, outside every git worktree): /tmp is a tmpfs on this host and a `node_modules` is hundreds of MB. Labels are at most 5 characters.
+import assert from 'node:assert/strict';
+import { cpSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runBounded } from '../../../minigit-bench/lib/run.mjs';
+import { extractGrammar } from '../../tools/grammar-extract.mjs';
+import { buildWorkspace, loadInputs } from '../../lib/workspace-build.mjs';
+import { ensureTestRoot } from './cache-box.mjs';
+import { FORMAT_TEXT, sha256 } from './format-fixtures.mjs';
+import { ownedFolder } from '../toolchain-fixtures.mjs';
 
 export const SPIKE = fileURLToPath(new URL('../..', import.meta.url));
 export const TEMPLATES = path.join(SPIKE, 'templates');
@@ -33,4 +40,53 @@ export async function trackedMode(file) {
   const r = await runBounded('git', ['ls-files', '-s', '--', path.basename(file)], { cwd: path.dirname(file), timeoutMs: 20_000, env: { PATH: '/usr/bin:/bin' } });
   if (!r.ok) throw new Error(r.reason);
   return r.value.stdout.trim() === '' ? null : r.value.stdout.split(' ')[0];
+}
+
+// ---- git, through the bounded runner ------------------------------------------------------------------------------------------------------------
+
+const GIT_ENV = Object.freeze({ PATH: '/usr/bin:/bin', HOME: '/nonexistent', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' });
+
+/** `git <args>` in `cwd` through `runBounded` (a ceiling, no shell), a fixed identity and no signing; asserts exit 0. -> trimmed stdout. */
+export async function git(cwd, args) {
+  const r = await runBounded('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', '-c', 'commit.gpgsign=false', ...args], { cwd, env: GIT_ENV, timeoutMs: 60_000 });
+  assert.equal(r.ok && r.value.code, 0, `git ${args[0]}: ${r.ok ? r.value.stderr : r.reason}`);
+  return r.value.stdout.trim();
+}
+
+// ---- the hello fixture ----------------------------------------------------------------------------------------------------------------------------
+
+export const HELLO = path.join(SPIKE, 'test', 'fixtures', 'hello');
+/** The hello program of a stack and kind (a folder to copy into a built workspace). */
+export const helloSource = (stack, kind) => path.join(HELLO, stack, kind);
+/** The stop stub of a stack: a program that logs `ready`, and `TERM` when it gets SIGTERM. */
+export const stopStubSource = stack => path.join(HELLO, 'stop-stub', stack);
+export const helloStatement = kind => path.join(HELLO, 'statement', `${kind}.md`);
+export const helloSamples = kind => path.join(HELLO, 'samples', kind);
+
+/** The synthetic FORMAT of the FORMAT tools' tests, as bytes, and the record row it would have (hashes of itself and of its grammar). */
+export function formatRow(text = FORMAT_TEXT, tasks = []) {
+  const bytes = Buffer.from(text, 'utf8');
+  return { bytes, row: { version: 2, sha256: sha256(bytes), gate: null, grammarSha256: sha256(extractGrammar(bytes).bytes), tasks } };
+}
+
+/** The real inputs with the FORMAT rows replaced by `rows` (`{ A: row, B: row }`). */
+export function inputsWith(rows) {
+  const loaded = loadInputs();
+  assert.equal(loaded.ok, true, loaded.reason);
+  return { ...loaded.value, format: rows };
+}
+
+/**
+ * Builds a workspace of `stack` and `kind` from the hello fixture's statement and samples with the synthetic FORMAT (`helloFixture`: the task is in no row), into a fresh owned folder under `TEST_ROOT`, and copies
+ * `source` (a folder; the hello program of that stack and kind by default) over it. -> the workspace path.
+ */
+export function helloWorkspace(t, { stack, kind, source = helloSource(stack, kind), label = 'ws' }) {
+  const out = path.join(ownedFolder(t, label, ensureTestRoot()), 'w');
+  const { bytes, row } = formatRow();
+  const built = buildWorkspace({
+    stack, kind, task: 'hello', group: 'A', out, statement: readFileSync(helloStatement(kind)), samplesDir: helloSamples(kind), formatBytes: bytes, inputs: inputsWith({ A: row }), helloFixture: true,
+  });
+  assert.equal(built.ok, true, built.reason);
+  if (source !== null) cpSync(source, out, { recursive: true });
+  return out;
 }

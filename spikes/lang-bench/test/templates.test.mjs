@@ -8,8 +8,8 @@ import { test } from 'node:test';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
 import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';
-import { lockProblems } from '../lib/workspace-build.mjs';
-import { EXEC_FILE, KINDS, STACKS, TEMPLATES, TEMPLATE_FILES, filesUnder, readTemplate, snapshotRecord, stacksRecord, templateDir, trackedMode } from './support/workspace-fixtures.mjs';
+import { lockProblems, runShProblem } from '../lib/workspace-build.mjs';
+import { EXEC_FILE, KINDS, STACKS, TEMPLATES, TEMPLATE_FILES, filesUnder, readJson, readTemplate, snapshotRecord, stacksRecord, templateDir, trackedMode } from './support/workspace-fixtures.mjs';
 
 const everyKind = fn => STACKS.flatMap(stack => KINDS.flatMap(kind => fn(stack, kind)));
 
@@ -75,6 +75,34 @@ async function scriptProblems(root) {
 
 test('The_scripts_hold_the_contract', async () => {
   assert.deepEqual(await scriptProblems(TEMPLATES), []);
+});
+
+test('A_run_sh_whose_last_line_does_not_exec_fails_the_check', () => {
+  const real = everyKind((stack, kind) => readTemplate(stack, kind, 'run.sh'));
+  assert.equal(real.length, 6);
+  assert.deepEqual(real.map(runShProblem), [null, null, null, null, null, null], 'the six real run.sh files end with exec');
+  const without = readTemplate('csharp', 'web', 'run.sh').replace('exec dotnet', 'dotnet');
+  assert.match(runShProblem(without), /exec/);
+  assert.match(runShProblem('#!/usr/bin/env bash\n\n'), /exec/, 'a script with no command at all');
+  assert.equal(runShProblem('#!/usr/bin/env bash\nexec node src/main.ts\n\n'), null, 'trailing empty lines do not count');
+});
+
+// ---- the frozen files, named in build.sh ----------------------------------------------------------------------------------------------------------
+
+const AGENT_EDITABLE = Object.freeze({ csharp: ['App.csproj'], node: ['package-lock.json', 'package.json'] });
+const DERIVED_OR_SCRIPT = Object.freeze(['build.sh', 'run.sh', 'PACKAGES.md', 'STATEMENT.md']);
+
+/** The names a build.sh lists after "pin files ...:" in its comment line. */
+const frozenNamesIn = text => (text.split('\n').find(line => line.startsWith('#') && /pin files/.test(line)) ?? '').replace(/^.*:\s*/, '').replace(/\.$/, '').split(', ').filter(Boolean).sort();
+
+test('The_build_script_names_the_frozen_files_of_its_stack_and_the_list_agrees_with_the_push_checks_list', () => {
+  const listed = readJson('templates/stack-files.json');
+  for (const stack of STACKS) {
+    const names = listed.filter(pattern => pattern.startsWith(`${stack}/<t>/`)).map(pattern => pattern.slice(`${stack}/<t>/`.length)).filter(name => !name.includes('/'));
+    const expected = names.filter(name => !DERIVED_OR_SCRIPT.includes(name) && !AGENT_EDITABLE[stack].includes(name)).sort();
+    assert.ok(expected.length >= 3, `${stack}: the list names the pin files`);
+    for (const kind of KINDS) assert.deepEqual(frozenNamesIn(readTemplate(stack, kind, 'build.sh')), expected, `${stack}/${kind}: the build.sh line is the frozen files of the list`);
+  }
 });
 
 // ---- the offline NuGet source -----------------------------------------------------------------------------------------------------

@@ -8,19 +8,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { PINNED_TASK_SHA, copyTaskFolder, fetchTaskRepo } from '../lib/task-repo.mjs';
-import { filesUnder, SPIKE } from './support/workspace-fixtures.mjs';
+import { filesUnder, git, SPIKE } from './support/workspace-fixtures.mjs';
 import { realDraft } from './support/format-fixtures.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-const GIT_ENV = Object.freeze({ PATH: '/usr/bin:/bin', HOME: '/nonexistent', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' });
-
-async function git(cwd, args) {
-  const r = await runBounded('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', '-c', 'commit.gpgsign=false', ...args], { cwd, env: GIT_ENV, timeoutMs: 60_000 });
-  assert.equal(r.ok && r.value.code, 0, `git ${args[0]}: ${r.ok ? r.value.stderr : r.reason}`);
-  return r.value.stdout.trim();
-}
-
 /** A synthetic repository holding `files` (and `links`: `{ path: target }`) in one commit. -> `{ repo, sha }`. */
 async function makeRepo(t, files, links = {}) {
   const repo = writeTree(ownedFolder(t, 'repo'), files);

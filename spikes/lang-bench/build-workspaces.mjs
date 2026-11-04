@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 // E1.S3: the workspace tools of the language comparison v2.
 //
+//   node spikes/lang-bench/build-workspaces.mjs --stack <csharp|node> --kind <olympiad|daemon|web> --task <name> --group <A|B> --out <dir> --statement <file> --samples <dir> [--task-repo <dir>] [--hello]
+//     Builds one workspace into <dir>: the template of the stack and kind, PACKAGES.md derived from the snapshot record, the pinned runner, the grammar of the group's FORMAT, the statement and the samples.
+//     The task repository (FORMAT comes from it, at the pinned commit) is --task-repo or LANG_V2_TASK_REPO. <dir> is refused inside ANY git worktree, and a task of another group is refused (T-L57). --hello: a task in no row (the fixture).
 //   node spikes/lang-bench/build-workspaces.mjs --make-locks [--force-locks] [--caches <dir>]
 //     Generates the `package-lock.json` of each Node template, offline, in the build box of the registered Node snapshot, and checks it against the manifest. Absent: written. Equal to the committed file: `unchanged`.
 //     Different: refused (exit 3) unless --force-locks.
 //
-// Exit 0 done · 1 a box command failed · 2 usage · 3 refused (a lock that differs, a lock outside the manifest)
+//   node spikes/lang-bench/build-workspaces.mjs --print-stack-files
+//     Prints the list of file patterns the push check accepts in a stack folder (the content of templates/stack-files.json).
+//
+// Exit 0 done · 1 a box command failed · 2 usage · 3 refused (the destination or the group, a pin, a hash, a lock that differs or is outside the manifest)
 // Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does.
 await import('./lib/lower-priority.mjs');
 
@@ -13,18 +19,23 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { fail, ok } from '../minigit-bench/lib/result.mjs';
 import { fileURLToPath } from 'node:url';
 import { cleanupScope, ownedFor } from '../../.agents/conventions/tools/lib/owned.mjs';
 import { endTrackedChildren } from './lib/exec-layer/cleanup.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
+import { fetchTaskRepo } from './lib/task-repo.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { defaultCaches, inBuildBox } from './lib/workspace-box.mjs';
-import { lockProblems } from './lib/workspace-build.mjs';
+import { KINDS as KIND_NAMES, STACKS as STACK_NAMES, buildWorkspace, loadInputs, lockProblems, preCheck, stackFilePatterns } from './lib/workspace-build.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
-const KINDS = Object.freeze(['olympiad', 'daemon', 'web']);
-const OPTIONS = { 'make-locks': { type: 'boolean' }, 'force-locks': { type: 'boolean' }, caches: { type: 'string' } };
+const OPTIONS = {
+  stack: { type: 'string' }, kind: { type: 'string' }, task: { type: 'string' }, group: { type: 'string' }, out: { type: 'string' }, statement: { type: 'string' }, samples: { type: 'string' }, 'task-repo': { type: 'string' }, hello: { type: 'boolean' },
+  'make-locks': { type: 'boolean' }, 'force-locks': { type: 'boolean' }, caches: { type: 'string' }, 'print-stack-files': { type: 'boolean' },
+};
+const BUILD_FLAGS = Object.freeze(['stack', 'kind', 'task', 'group', 'out', 'statement', 'samples']);
 const LOCK_COMMAND = Object.freeze(['npm', 'install', '--package-lock-only', '--offline', '--ignore-scripts', '--no-audit', '--no-fund']);
 const say = line => process.stdout.write(`${line}\n`);
 const complain = line => process.stderr.write(`${line}\n`);
@@ -36,12 +47,30 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
   process.on(signal, () => { signalled = code; endTrackedChildren(); });
 }
 
+/** The mode a set of flags asks for: `build` (any build flag), `locks`, `print`; more than one is an error. */
+function modesOf(v) {
+  return [['build', BUILD_FLAGS.some(flag => v[flag] !== undefined)], ['locks', v['make-locks'] === true], ['print', v['print-stack-files'] === true]].filter(([, asked]) => asked).map(([name]) => name);
+}
+
+/** The first problem of a build's flags, as a usage line, or null. */
+function buildUsage(v) {
+  const missing = BUILD_FLAGS.filter(flag => v[flag] === undefined);
+  if (missing.length > 0) return `a build needs ${missing.map(flag => `--${flag}`).join(', ')}`;
+  if (!STACK_NAMES.includes(v.stack)) return `--stack ${v.stack}: the legal names are ${STACK_NAMES.join(', ')}`;
+  return KIND_NAMES.includes(v.kind) ? null : `--kind ${v.kind}: the legal names are ${KIND_NAMES.join(', ')}`;
+}
+
 /** `{ config }` or `{ error }`. */
 function readArgs(argv) {
   let v;
   try { v = parseArgs({ args: argv, options: OPTIONS, strict: true }).values; } catch (e) { return { error: e.message }; }
-  if (v['make-locks'] !== true) return { error: 'ask for --make-locks' };
-  return { config: { forceLocks: v['force-locks'] === true, caches: path.resolve(v.caches ?? defaultCaches()) } };
+  const modes = modesOf(v);
+  if (modes.length !== 1) return { error: 'ask for exactly one of: a build (--stack --kind --task --group --out --statement --samples), --make-locks, --print-stack-files' };
+  const usage = modes[0] === 'build' ? buildUsage(v) : null;
+  if (usage !== null) return { error: usage };
+  const taskRepo = v['task-repo'] ?? process.env.LANG_V2_TASK_REPO;
+  const build = { stack: v.stack, kind: v.kind, task: v.task, group: v.group, out: v.out, statement: v.statement, samples: v.samples, taskRepo, hello: v.hello === true };
+  return { config: { mode: modes[0], build, forceLocks: v['force-locks'] === true, caches: path.resolve(v.caches ?? defaultCaches()) } };
 }
 
 // ---- the locks ---------------------------------------------------------------------------------------------------------------------
@@ -101,10 +130,44 @@ async function makeLocks(config) {
   if (!stacks.ok) return stop(EXIT.usage, stacks.reason);
   const dirs = storeDirs(stacks.value, path.join(os.homedir(), ...stacks.value.storeRoot));
   const owned = ownedFor({ token: 'bench' });
-  for (const kind of KINDS) {
+  for (const kind of KIND_NAMES) {
     const code = signalled === null ? await lockOne({ kind, owned, dirs, record, config }) : signalled;
     if (code !== EXIT.done) return code;
   }
+  return EXIT.done;
+}
+
+// ---- the build and the list ----------------------------------------------------------------------------------------------------------------
+
+const exitOf = failed => (failed.refusal === true ? EXIT.refused : EXIT.failed);
+
+/** FORMAT's bytes at the pinned commit of the local task repository. -> `ok(bytes)` | `fail` (exit 3: a hash that does not match is a refusal). */
+async function formatOf(taskRepo) {
+  if (taskRepo === undefined) return fail('the task repository is --task-repo or LANG_V2_TASK_REPO', { usage: true });
+  const fetched = await fetchTaskRepo({ repo: taskRepo });
+  if (!fetched.ok) return { ...fetched, refusal: true };
+  return ok(readFileSync(path.join(fetched.value.root, 'todo', 'tasks', 'FORMAT.md')));
+}
+
+async function buildMode(config) {
+  const loaded = loadInputs();
+  if (!loaded.ok) return stop(EXIT.usage, loaded.reason);
+  const { build } = config;
+  const args = { ...build, inputs: loaded.value, helloFixture: build.hello };
+  const early = preCheck(args);
+  if (!early.ok) return stop(exitOf(early), early.reason);
+  const format = await formatOf(build.taskRepo);
+  if (!format.ok) return stop(format.usage === true ? EXIT.usage : exitOf(format), format.reason);
+  const made = buildWorkspace({ ...args, formatBytes: format.value, statement: readFileSync(build.statement), samplesDir: path.resolve(build.samples) });
+  if (!made.ok) return stop(exitOf(made), made.reason);
+  say(`built ${build.stack}/${build.kind} task ${build.task} (group ${build.group}) into ${made.value.out}: ${made.value.files.length} files`);
+  return EXIT.done;
+}
+
+function printMode() {
+  const loaded = loadInputs();
+  if (!loaded.ok) return stop(EXIT.usage, loaded.reason);
+  process.stdout.write(`${JSON.stringify(stackFilePatterns({ specs: loaded.value.specs }), null, 2)}\n`);
   return EXIT.done;
 }
 
@@ -113,7 +176,9 @@ async function makeLocks(config) {
 async function main(argv) {
   const parsed = readArgs(argv);
   if (parsed.error) return stop(EXIT.usage, parsed.error);
-  return makeLocks(parsed.config);
+  const { config } = parsed;
+  if (config.mode === 'build') return buildMode(config);
+  return config.mode === 'print' ? printMode() : makeLocks(config);
 }
 
 const code = await main(process.argv.slice(2));
