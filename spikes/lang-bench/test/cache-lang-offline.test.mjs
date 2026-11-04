@@ -12,7 +12,7 @@ import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, openBox, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
 import { nugetLicence, npmLicences } from '../lib/package-metadata.mjs';
 import { manifestSha256Of } from '../lib/cache-store.mjs';
-import { assertBuiltForReal, closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
+import { closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -49,7 +49,6 @@ function hasNoWriteBits(root) {
 
 test('The_real_build_registers_both_stacks_read_only_and_each_snapshot_re_hashes_to_its_record', { timeout: 45 * 60_000 }, async t => {
   if (!realGate(t)) return;
-  assertBuiltForReal(); // fix batch 1 (M1): a completion run builds for real; LANG_V2_REUSE_REAL is a development loop only
   const real = await realBuild();
   assert.equal(real.run.code, 0, `the command exited ${real.run.code}: ${real.run.stderr.slice(-3000)}`);
   t.diagnostic(`the real build took ${Math.round(real.run.ms / 1000)} s; ${real.run.stdout.split('\n').filter(l => l.startsWith('built ') || l.startsWith('registered ')).join(' | ')}`);

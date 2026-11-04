@@ -1,8 +1,6 @@
 // E1.S4: what the network test file shares. `realGate(t)` is the one gate of that file (the real build runs only under BENCH_REQUIRE_SANDBOX=1, and there a missing bwrap or toolchain is a failure, never a skip);
 // `realBuild()` runs `make-snapshots.mjs` ONCE for both stacks into an owned folder (memoised: the first case past the gate starts it) and hands every case the same record, caches folder and egress lines.
 // The build never writes `~/rsd/lang-v2/caches` or `inputs/cache-snapshots-lang.json`: every path of it is a flag that points into the owned folder.
-//
-// LANG_V2_REUSE_REAL=<folder> (a development loop only, never in a completion run): reuse a folder a finished real build left, instead of building again. The folder is read as it is: its `rec.json`, `caches/`, `run.json`.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,8 +50,6 @@ function readReal(root) {
 }
 
 async function build() {
-  assertBuiltForReal(); // a completion run builds for real: no network case may take the reuse seam
-  if (process.env.LANG_V2_REUSE_REAL) return readReal(process.env.LANG_V2_REUSE_REAL);
   const root = ownedApi.ownedDir(scope, 'real', { parent: ensureTestRoot() });
   scope.after(() => makeWritable(root)); // after ownedDir: cleanupScope runs last-registered-first, so the read-only snapshots are writable before the folder goes
   const started = Date.now();
@@ -72,8 +68,3 @@ export const closeReal = () => scope?.close();
 
 /** `{ dir, parts }` of a stack's registered snapshot in the real build: what `seedCaches` takes. */
 export const snapshotOf = (real, stack) => ({ dir: path.join(real.caches, real.record[stack].dirName), parts: real.record[stack].parts });
-
-/** A completion run (BENCH_REQUIRE_SANDBOX=1) builds for real: LANG_V2_REUSE_REAL, a development loop, makes the build case fail there. */
-export function assertBuiltForReal() {
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1' && process.env.LANG_V2_REUSE_REAL) throw new Error('BENCH_REQUIRE_SANDBOX=1 and LANG_V2_REUSE_REAL is set: that is a dev seam: a completion run builds for real');
-}

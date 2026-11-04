@@ -58,6 +58,9 @@ export function buildRecord({ snapshot, manifest, recipeSha256, projectSha256 })
 
 // ---- the staging sweep ---------------------------------------------------------------------------------------------------------
 
+/** A record file's content must be a plain JSON object (one key per registered stack); `null`, an array and a number are not. */
+export const isRecordObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+
 const STAGING_NAME = /^\.building-(csharp|node)-[1-9][0-9]*$/;
 const keep = why => ({ action: 'keep', why });
 const remove = why => ({ action: 'remove', why });
@@ -177,29 +180,23 @@ const unrecordedFolders = ({ caches, stack, records, uid }) => readdirSync(cache
   .map(({ name }) => path.join(caches, name));
 
 /**
- * A snapshot folder `<stack>-<hash>` that the record does not hold (registered or superseded) and whose build's claim is proven gone (and no other claim of that stack is alive): the maker was killed after it named the
- * folder and before the registration. Never judged without the record (the sweep cannot tell what is registered), never a folder that is not a real folder of this user.
+ * A snapshot folder `<stack>-<hash>` that the record (as this run read it) does not hold, whose build's claim is proven gone: the maker was killed after it named the folder and before the registration. It is only LISTED, never
+ * removed: the record path is per checkout and the caches folder is global, so no record this run happens to read (absent, older, of the wrong shape) can license deleting a snapshot that is registered somewhere else and
+ * cannot be rebuilt (the Node cache is not reproducible). The line carries the manual step. Nothing is listed without a record that is a plain object.
  */
-function sweepStranded({ caches, log, records, uid, orphans }) {
-  if (records === undefined) return [];
+function listStranded({ caches, log, records, uid, orphans }) {
+  if (!isRecordObject(records)) return;
   const stacks = [...orphans.gone].filter(s => !orphans.blocked.has(s));
-  return stacks.flatMap(stack => unrecordedFolders({ caches, stack, records, uid })).flatMap(dir => removeStranded(dir, log));
-}
-
-/** One stranded snapshot folder removed and named; `[]` when the removal failed (said on the log). */
-function removeStranded(dir, log) {
-  const why = 'an unregistered snapshot of a build whose owner is gone';
-  log(`staging remove ${dir}: ${why}`);
-  const problem = removeStaging(dir);
-  if (problem === null) return [{ dir, why }];
-  log(`staging could not remove ${dir}: ${problem}`);
-  return [];
+  for (const dir of stacks.flatMap(stack => unrecordedFolders({ caches, stack, records, uid }))) {
+    log(`staging unregistered snapshot ${dir}: its build's owner is gone; it is NOT removed. If it is not registered anywhere (check every record and the NAS backup), remove it by hand: chmod -R u+w ${dir} && rm -rf ${dir}`);
+  }
 }
 
 export function sweepStaging({ caches, log, probe = processProbe, uid = process.getuid(), me = thisOwner(), lstat = lstatSync, records }) {
   const folders = sweepFolders({ caches, log, probe, uid, me, lstat });
   const orphans = sweepOrphans({ caches, log, probe, me });
-  const removed = [...folders, ...orphans.removed, ...sweepStranded({ caches, log, records, uid, orphans })];
+  listStranded({ caches, log, records, uid, orphans });
+  const removed = [...folders, ...orphans.removed];
   return { removed };
 }
 
@@ -210,7 +207,9 @@ const NO_TAG_RULE = 'a superseded snapshot is kept until the pre-registration ta
 
 const GIT_ENV = () => ({ PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: os.homedir(), LANG: 'C.UTF-8', GIT_TERMINAL_PROMPT: '0' });
 const git = (repo, args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 30_000, env: GIT_ENV() });
-const gitFailure = (what, r) => fail(`could not ${what} (${r.error?.message ?? `git exited ${r.status}: ${r.stderr.trim().split('\n')[0]}`}); nothing is changed`);
+/** `https://user:token@host/...` -> `https://***@host/...` in any text: a remote's credentials never reach a message (an scp-style `git@host:path` carries none and is left alone). */
+export const redactUserInfo = text => text.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/@\s'"]+@/gi, '$1***@');
+const gitFailure = (what, r) => fail(redactUserInfo(`could not ${what} (${r.error?.message ?? `git exited ${r.status}: ${r.stderr.trim().split('\n')[0]}`}); nothing is changed`));
 const tagOfRef = line => line.split('\t')[1]?.replace(/^refs\/tags\//, '').replace(/\^\{\}$/, '');
 
 const GITHUB_SSH = Object.freeze([/^git@github\.com:(.+?)(?:\.git)?$/, /^ssh:\/\/git@github\.com(?::\d+)?\/(.+?)(?:\.git)?$/]);
@@ -369,21 +368,39 @@ function recordAndRegister({ made, stack, recipeSha256, projectSha256, file, mad
   return registered.ok ? ok(record) : registered;
 }
 
-/** The record as it can be read now; one that cannot be read is `{}`, so it authorises keeping nothing. */
+/** The record as it can be read now: a plain object, or `null` when it is absent, not JSON or of the wrong shape (then it authorises nothing, neither keeping nor removing). */
 function readableRecords(file) {
-  try { return readRecords(file); } catch { return {}; }
+  try {
+    const records = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+    return isRecordObject(records) ? records : null;
+  } catch {
+    return null;
+  }
+}
+
+const sayOnStderr = line => process.stderr.write(`${line}\n`);
+
+/** Discard the made folder, but only on the word of a record that reads correctly and does not hold the pair; otherwise KEEP it and say so (a C# rebuild can equal a registered folder, the Node cache cannot be rebuilt). */
+function discardOnFailure({ args, log }) {
+  const records = readableRecords(args.file);
+  const { dir, treeSha256 } = args.made;
+  if (records === null) {
+    if (existsSync(dir)) log(`kept ${dir}: the record ${args.file} is absent or cannot be read, so it cannot be told whether this snapshot is registered; remove it by hand if it is not (chmod -R u+w ${dir} && rm -rf ${dir})`);
+    return;
+  }
+  discardUnlessRecorded({ dir, stack: args.stack, treeSha256, records });
 }
 
 /**
- * The manifest, the record and the registration of a made snapshot. On ANY failure after the maker succeeded (a refusal, or an exception inside the steps) the made folder is removed unless its (stack, hash) is in the record
- * (E1.S4 review M2: a failed build must leave no read-only folder in the caches root); a record that cannot be read keeps nothing. -> `ok(record)` | `fail`.
+ * The manifest, the record and the registration of a made snapshot. On a failure after the maker succeeded (a refusal, or an exception inside the steps) the made folder is removed unless its (stack, hash) is in the record
+ * (E1.S4 review M2: a failed build must leave no read-only folder in the caches root) - and only when the record reads correctly: with an absent, unreadable or wrong-shaped record the folder is KEPT and named. -> `ok(record)` | `fail`.
  */
-export function registerBuilt(args) {
+export function registerBuilt({ log = sayOnStderr, ...args }) {
   let done = null;
   try {
     done = recordAndRegister(args);
     return done;
   } finally {
-    if (done === null || !done.ok) discardUnlessRecorded({ dir: args.made.dir, stack: args.stack, treeSha256: args.made.treeSha256, records: readableRecords(args.file) });
+    if (done === null || !done.ok) discardOnFailure({ args, log });
   }
 }

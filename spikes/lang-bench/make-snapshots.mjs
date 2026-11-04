@@ -32,7 +32,7 @@ import { refuseInsideWorktree } from '../minigit-bench/lib/git-guard.mjs';
 import { fail, ok } from '../minigit-bench/lib/result.mjs';
 import { loadRecipeLang } from './lib/cache-recipe-lang.mjs';
 import { boxOptionsFor } from './lib/cache-offline.mjs';
-import { pruneSuperseded, recordAtTag, registerBuilt, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
+import { isRecordObject, pruneSuperseded, recordAtTag, registerBuilt, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
 import { takeGateLock } from './lib/gate-lock.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { preflightLang } from './lib/preflight-lang.mjs';
@@ -159,23 +159,29 @@ async function buildStack(args) {
 
 // ---- the build -------------------------------------------------------------------------------------------------------------------
 
-/** The record as the sweep needs it: `{}` when there is none yet, the parsed record, or `undefined` when it cannot be read (then no snapshot folder is judged). */
-function recordsForSweep(file) {
-  try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}; } catch { return undefined; }
+const describeJson = x => (x === null ? 'null' : Array.isArray(x) ? 'an array' : typeof x);
+
+/** The record as a plain object: `ok(records)` (an absent file is `{}`), or `fail` with ONE line naming `--record` (not JSON, `null`, an array, a number). */
+function readRecordFlag(file) {
+  try {
+    const records = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+    return isRecordObject(records) ? ok(records) : fail(`--record ${file}: the record must be a JSON object (one key per registered stack), got ${describeJson(records)}`);
+  } catch (error) {
+    return fail(`--record ${file}: ${error.message.replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
 }
 
 /** The folders a build writes in, swept first: the work root (the conventions' own sweep, token `bench`), then the caches root's staging folders. */
-function prepareFolders(config) {
+function prepareFolders(config, records) {
   mkdirSync(config.work, { recursive: true, mode: 0o700 });
   mkdirSync(config.caches, { recursive: true, mode: 0o700 });
   const swept = sweepLeftovers({ repo: REPO, tmp: config.work, token: 'bench' });
   complain(`leftovers in ${config.work}: removed ${swept.removed.length}, preserved ${swept.preserved.length}${swept.errors.length > 0 ? `, ${swept.errors.length} error(s): ${swept.errors.slice(0, 3).join('; ')}` : ''}`);
-  sweepStaging({ caches: config.caches, log: complain, records: recordsForSweep(config.record) });
+  sweepStaging({ caches: config.caches, log: complain, records });
 }
 
 /** The requested stacks that are already registered are refused BEFORE any build (exit code), else `null`. */
-function registeredRefusal(config) {
-  const registered = JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}');
+function registeredRefusal(config, registered) {
   const taken = config.stackNames.filter(name => registered[name] !== undefined);
   return taken.length === 0 ? null : stop(EXIT.refused, `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} already registered in ${config.record}: a registered snapshot is never replaced (supersede it first, before the pre-registration tag)`);
 }
@@ -203,9 +209,11 @@ async function buildAll({ config, inputs, storeRoot }) {
 }
 
 async function buildLocked(config, inputs) {
-  prepareFolders(config);
+  const registered = readRecordFlag(config.record);
+  if (!registered.ok) return stop(EXIT.usage, registered.reason); // before anything is swept or built
+  prepareFolders(config, registered.value);
   const storeRoot = path.join(os.homedir(), ...inputs.stacks.storeRoot);
-  const refused = registeredRefusal(config) ?? await preflightRefusal(inputs, storeRoot);
+  const refused = registeredRefusal(config, registered.value) ?? await preflightRefusal(inputs, storeRoot);
   return refused ?? buildAll({ config, inputs, storeRoot });
 }
 

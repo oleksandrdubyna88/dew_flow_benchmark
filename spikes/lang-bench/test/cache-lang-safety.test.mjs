@@ -12,11 +12,10 @@ import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { readWrapped, wrappedArgv } from '../lib/cache-offline.mjs';
 import { loadRecipeLang } from '../lib/cache-recipe-lang.mjs';
-import { buildRecord, discardUnlessRecorded, manifestSha256Of, pruneSuperseded, registerBuilt, remoteUrlFor, sortPackages, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
+import { buildRecord, discardUnlessRecorded, manifestSha256Of, pruneSuperseded, registerBuilt, redactUserInfo, remoteUrlFor, sortPackages, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
 import { npmLicences } from '../lib/package-metadata.mjs';
 import { takeGateLock } from '../lib/gate-lock.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
-import { assertBuiltForReal, realBuild } from './support/cache-box.mjs';
 import { exitedPid, recordOf, writeClaim } from './support/owners.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
@@ -81,6 +80,8 @@ test('A_snapshot_folder_left_by_a_failed_registration_is_removed_unless_it_is_in
   const file = path.join(root, 'rec.json');
   const mk = (name, nuget) => { const caches = path.join(root, name); mkdirSync(caches); const m = madeSnapshot(caches, nuget); return { ...m, caches, made: { dir: m.dir, treeSha256: m.treeSha256, parts: { nuget: 'p' }, sizeBytes: 1, packages: nuget.map(([n, v]) => ({ ecosystem: 'nuget', name: n, version: v })), resolved: {}, steps: [] } }; };
   const place = m => { renameSync(m.stage, m.dir); makeReadOnly(m.dir); };
+  // fix batch 3 (F2): the discard needs a record that READS CORRECTLY and does not hold the pair; an empty record does
+  writeFileSync(file, '{}\n');
   // a manifest failure after a successful snapshot (a package with no hash): no folder is left
   const bad = mk('c1', [['demo', '1.0.0', null]]);
   place(bad);
@@ -88,7 +89,7 @@ test('A_snapshot_folder_left_by_a_failed_registration_is_removed_unless_it_is_in
   assert.equal(failed.ok, false);
   assert.match(failed.reason, /demo@1\.0\.0.*no integrity/);
   assert.equal(existsSync(bad.dir), false, 'the folder of a failed build is removed, although it is read-only');
-  assert.equal(existsSync(file), false, 'and nothing is registered');
+  assert.equal(readFileSync(file, 'utf8'), '{}\n', 'and nothing is registered');
   // a good one registers and stays
   const good = mk('c2', [['demo', '1.0.0', 'QQ==']]);
   place(good);
@@ -370,25 +371,6 @@ test('The_command_lowers_its_own_priority_before_anything_else_as_the_test_runne
   assert.ok(command.i > 0 && command.i < command.main, 'make-snapshots.mjs lowers itself before it runs');
 });
 
-// ---- M1: the development seam never reaches a completion run ----------------------------------------------------------------------
-
-test('A_completion_run_refuses_the_reuse_seam_of_the_real_build', () => {
-  const saved = { require: process.env.BENCH_REQUIRE_SANDBOX, reuse: process.env.LANG_V2_REUSE_REAL };
-  const restore = () => { for (const [k, v] of [['BENCH_REQUIRE_SANDBOX', saved.require], ['LANG_V2_REUSE_REAL', saved.reuse]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };
-  try {
-    process.env.BENCH_REQUIRE_SANDBOX = '1';
-    process.env.LANG_V2_REUSE_REAL = '/somewhere';
-    assert.throws(() => assertBuiltForReal(), /dev seam.*completion run builds for real/);
-    delete process.env.LANG_V2_REUSE_REAL;
-    assert.doesNotThrow(() => assertBuiltForReal());
-    process.env.LANG_V2_REUSE_REAL = '/somewhere';
-    delete process.env.BENCH_REQUIRE_SANDBOX;
-    assert.doesNotThrow(() => assertBuiltForReal(), 'without the completion flag the seam is only a development loop');
-  } finally {
-    restore();
-  }
-});
-
 // ======== fix batch 2 =====================================================================================================================
 
 // ---- N1: the remote of the tag reader ----------------------------------------------------------------------------------------------
@@ -420,6 +402,8 @@ test('The_tag_reader_takes_the_remote_from_the_flag_before_origin_and_still_fail
 // ---- Low 1: the discard also runs on an exception; an unreadable record never keeps a folder; an orphan folder is swept -----------
 
 test('A_made_folder_is_removed_when_the_registration_throws_and_when_the_record_cannot_be_read', t => {
+  // fix batch 3 (F2): the second half of this name is no longer done. A record that cannot be read (or is absent, or has the wrong shape) authorises NOTHING, neither keeping nor removing, and a C# rebuild can equal a
+  // registered folder (C# is reproducible), so the made folder is KEPT and named. The cases that remove are in the next test.
   const root = ownedFolder(t, 'thr');
   const caches = path.join(root, 'caches');
   mkdirSync(caches);
@@ -429,16 +413,38 @@ test('A_made_folder_is_removed_when_the_registration_throws_and_when_the_record_
   const file = path.join(root, 'rec.json');
   writeFileSync(file, '{ not json');
   const made = { dir: m.dir, treeSha256: m.treeSha256, parts: { nuget: 'p' }, sizeBytes: 1, packages: [{ ecosystem: 'nuget', name: 'demo', version: '1.0.0' }], resolved: {}, steps: [] };
-  assert.throws(() => registerBuilt({ made, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file, madeOn: '2026-11-04' }), /JSON/, 'the registration throws on a record that is not JSON');
-  assert.equal(existsSync(m.dir), false, 'and the folder is gone: an unreadable record authorises nothing');
-  const again = madeSnapshot(path.join(root, 'c2'), [['demo', '1.0.0', 'QQ==']]);
-  renameSync(again.stage, again.dir);
-  assert.throws(() => registerBuilt({ made: { ...made, dir: again.dir, packages: null }, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file: path.join(root, 'none.json'), madeOn: '2026-11-04' }), TypeError);
-  assert.equal(existsSync(again.dir), false, 'an exception inside the steps removes the folder too');
-  assert.equal(discardUnlessRecorded({ dir: again.dir, stack: 'csharp', treeSha256: again.treeSha256, records: {} }).discarded, false, 'nothing left to discard is not an error');
+  const said = [];
+  assert.throws(() => registerBuilt({ made, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file, madeOn: '2026-11-04', log: line => said.push(line) }), /JSON/, 'the registration throws on a record that is not JSON');
+  assert.equal(existsSync(m.dir), true, 'and the folder is KEPT: an unreadable record authorises no removal');
+  assert.match(said.join('\n'), new RegExp(`kept.*${m.dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), 'and named on the log');
+  makeWritable(root);
+});
+
+test('A_made_folder_is_removed_when_the_registration_throws_or_fails_with_a_record_that_reads_correctly_and_kept_when_the_record_is_absent_or_has_the_wrong_shape', t => {
+  const root = ownedFolder(t, 'thk');
+  const mk = name => { const caches = path.join(root, name); mkdirSync(caches); const m = madeSnapshot(caches, [['demo', '1.0.0', 'QQ==']]); renameSync(m.stage, m.dir); makeReadOnly(m.dir); return { ...m, made: { dir: m.dir, treeSha256: m.treeSha256, parts: { nuget: 'p' }, sizeBytes: 1, packages: [{ ecosystem: 'nuget', name: 'demo', version: '1.0.0' }], resolved: {}, steps: [] } }; };
+  const run = (m, file, made = m.made) => registerBuilt({ made, stack: 'csharp', recipeSha256: 'r', projectSha256: null, file, madeOn: '2026-11-04', log: () => {} });
+  // a record that reads correctly and does not hold the pair: an exception inside the steps removes the folder
+  const readable = path.join(root, 'ok.json');
+  writeFileSync(readable, '{}\n');
+  const thrown = mk('c1');
+  assert.throws(() => run(thrown, readable, { ...thrown.made, packages: null }), TypeError);
+  assert.equal(existsSync(thrown.dir), false, 'an exception inside the steps removes the folder when the record reads correctly');
+  // the record is absent, or `null`, or `[]`: the folder is kept (the failure is a refusal here: the manifest differs from the maker's list)
+  for (const [label, content] of [['absent', null], ['null', 'null'], ['an array', '[]']]) {
+    const m = mk(`k-${label.replace(' ', '')}`);
+    const file = path.join(root, `${label.replace(' ', '')}.json`);
+    if (content !== null) writeFileSync(file, content);
+    const failed = run(m, file, { ...m.made, packages: [] });
+    assert.equal(failed.ok, false, label);
+    assert.equal(existsSync(m.dir), true, `${label}: the folder is kept`);
+  }
+  makeWritable(root);
 });
 
 test('An_unregistered_snapshot_folder_is_swept_only_when_the_claim_of_its_build_is_gone_and_the_record_does_not_hold_it', t => {
+  // fix batch 3 (F1): the sweep never removes a `<stack>-<hash>` folder. The record path is per checkout and the caches folder is global, so no record the run happens to read can license a deletion of
+  // an irreplaceable snapshot. The sweep LISTS each unregistered folder whose build's claim is gone, with the manual step, and removes the orphan claim file only.
   const caches = ownedFolder(t, 'osf');
   const gone = exitedPid();
   const folder = (stack, text) => { const stage = path.join(caches, `.w-${stack}-${text}`); mkdirSync(stage); writeFileSync(path.join(stage, 'f'), text); const h = treeHash(stage); const dir = path.join(caches, `${stack}-${h}`); renameSync(stage, dir); makeReadOnly(dir); return { dir, h }; };
@@ -451,16 +457,19 @@ test('An_unregistered_snapshot_folder_is_swept_only_when_the_claim_of_its_build_
   const records = { csharp: recordFor(registered.h), superseded: [{ stack: 'csharp', supersededOn: '2026-11-05', reason: 'r', record: recordFor(superseded.h) }] };
   const lines = [];
   const swept = sweepStaging({ caches, log: line => lines.push(line), records });
-  assert.equal(existsSync(stranded.dir), false, 'the unregistered folder of a dead build goes');
-  for (const kept of [registered.dir, superseded.dir, mine.dir]) assert.equal(existsSync(kept), true, `${kept} stays`);
-  assert.equal(existsSync(path.join(caches, `.building-csharp-${gone}.owner`)), false, 'and the dead claim');
-  assert.match(lines.join('\n'), /remove .*csharp-[0-9a-f]{64}.*unregistered/, 'it is named on the log');
-  assert.equal(swept.removed.some(r => r.dir === stranded.dir), true);
-  // without the record nothing of this kind is removed: the sweep cannot tell what is registered
-  const second = folder('csharp', 'second stranded');
-  writeClaim(path.join(caches, `.building-csharp-${exitedPid()}`), { pid: exitedPid() });
-  sweepStaging({ caches, log: () => {} });
-  assert.equal(existsSync(second.dir), true, 'no record given: no snapshot folder is judged');
+  for (const kept of [stranded.dir, registered.dir, superseded.dir, mine.dir]) assert.equal(existsSync(kept), true, `${kept} stays`);
+  assert.equal(existsSync(path.join(caches, `.building-csharp-${gone}.owner`)), false, 'the dead claim file goes');
+  const named = lines.filter(l => l.includes(stranded.dir));
+  assert.equal(named.length, 1, 'the unregistered folder is named once');
+  assert.match(named[0], /unregistered.*NOT removed.*not registered anywhere.*chmod -R u\+w .* && rm -rf /s, 'with the manual step');
+  assert.equal(lines.some(l => l.includes(registered.dir) || l.includes(superseded.dir) || l.includes(mine.dir)), false, 'the registered, superseded and live ones are not named');
+  assert.equal(swept.removed.some(r => r.dir === stranded.dir), false, 'and it is not in the removed list');
+  // the three records that were dangerous: ABSENT, OLDER (another hash), and the wrong shape. The folder stays in each, and the sweep may name it
+  for (const [label, wrong] of [['absent', {}], ['older', { csharp: recordFor('f'.repeat(64)) }], ['an array', []], ['undefined', undefined]]) {
+    writeClaim(path.join(caches, `.building-csharp-${gone}`), { pid: gone });
+    sweepStaging({ caches, log: () => {}, records: wrong });
+    for (const dir of [stranded.dir, registered.dir]) assert.equal(existsSync(dir), true, `${label} record: ${dir} stays`);
+  }
   makeWritable(caches);
 });
 
@@ -492,19 +501,6 @@ test('A_release_that_meets_a_lock_already_gone_is_silent_and_one_that_fails_for_
   other.value.release();
   assert.equal(said.length, 1, 'any other failure is said');
   assert.match(said[0], /denied/);
-});
-
-// ---- Low 3: the seam cannot be used by any network case of a completion run ----------------------------------------------------------
-
-test('The_shared_real_build_itself_refuses_the_reuse_seam_in_a_completion_run', async () => {
-  const saved = { require: process.env.BENCH_REQUIRE_SANDBOX, reuse: process.env.LANG_V2_REUSE_REAL };
-  try {
-    process.env.BENCH_REQUIRE_SANDBOX = '1';
-    process.env.LANG_V2_REUSE_REAL = '/somewhere';
-    await assert.rejects(realBuild(), /dev seam.*completion run builds for real/, 'every case that asks for the build gets the refusal');
-  } finally {
-    for (const [k, v] of [['BENCH_REQUIRE_SANDBOX', saved.require], ['LANG_V2_REUSE_REAL', saved.reuse]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
-  }
 });
 
 // ---- coai round 2: 1, 5, 7, 8, 11, 12 --------------------------------------------------------------------------------------------
@@ -579,4 +575,34 @@ test('The_command_accepts_a_tags_remote_flag', async t => {
   assert.doesNotMatch(r.value.stderr, /Unknown option/, 'the flag is known');
   assert.equal(r.value.code, 3, r.value.stderr);
   assert.match(r.value.stderr, /no caches folder/);
+});
+
+// ======== fix batch 3 =====================================================================================================================
+
+test('A_record_with_bad_content_is_one_line_and_exit_2_before_anything_is_swept_or_built', async t => {
+  const root = ownedFolder(t, 'brc');
+  const rec = path.join(root, 'rec.json');
+  const base = ['--caches', path.join(root, 'caches'), '--record', rec, '--gate-lock', path.join(root, 'gate.lock'), '--work', path.join(root, 'work')];
+  for (const [label, content] of [['null', 'null'], ['not JSON', '{ not json'], ['an array', '[]'], ['a number', '3']]) {
+    writeFileSync(rec, content);
+    const r = await runMake(base);
+    assert.equal(r.value.code, 2, `${label}: ${r.value.stderr}`);
+    const lines = r.value.stderr.trim().split('\n');
+    assert.equal(lines.length, 1, `${label}: one line, got: ${r.value.stderr}`);
+    assert.match(lines[0], /--record/, 'it names the flag');
+    assert.doesNotMatch(r.value.stderr, /\n\s+at /, 'no stack trace');
+    assert.equal(existsSync(path.join(root, 'caches')), false, `${label}: nothing was made or swept`);
+  }
+});
+
+test('A_remote_url_with_credentials_is_redacted_in_every_message', t => {
+  assert.equal(redactUserInfo('https://user:token@github.com/o/r.git'), 'https://***@github.com/o/r.git');
+  assert.equal(redactUserInfo('could not read https://tok@host:8443/x.git (git exited 128: fatal: unable to access \'https://u:p@host:8443/x.git/\')'), 'could not read https://***@host:8443/x.git (git exited 128: fatal: unable to access \'https://***@host:8443/x.git/\')');
+  assert.equal(redactUserInfo('git@github.com:o/r.git'), 'git@github.com:o/r.git', 'an scp-style address has no secret and is not touched');
+  const repo = ownedFolder(t, 'red');
+  assert.equal(git(repo, 'init', '-q').status, 0);
+  const failed = tagsOf(repo, { remote: 'https://user:s3cretToken@127.0.0.1:1/o/r.git' });
+  assert.equal(failed.ok, false);
+  assert.doesNotMatch(failed.reason, /s3cretToken|user:/, 'the token is not in the refusal');
+  assert.match(failed.reason, /https:\/\/\*\*\*@127\.0\.0\.1:1/);
 });
