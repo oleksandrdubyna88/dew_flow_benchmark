@@ -1,6 +1,7 @@
 # PLAN — E1 stories: facts, layout and the launch boundary of the model-arms module
 
-> Status: **E1.S1–E1.S11 implemented on `feat/model-arms`, 2026-10-29; the document promotes to `research/` with its parent plan.** Epic E1 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D1–D5, D9,
+> Status: **IMPLEMENTED, 2026-11-04** (promoted with its parent; the deviations are in this document's §8 and the parent's *Deviations at promotion*).
+> History: **E1.S1–E1.S11 implemented on `feat/model-arms`, 2026-10-29; the document promotes to `research/` with its parent plan.** Epic E1 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D1–D5, D9,
 > D15, D17–D20, D23, D24; §4.1–§4.4, §4.10, §4.12; §7's E1 tests).
 >
 > Scope: a new `src/Bench.Hosting` (three files moved out of `hosts/Cli`), the two projects under `tools/model-arms/`, the launcher
@@ -179,7 +180,7 @@ public static class ExperimentGate { public static Task<int> RunAsync(VerbInput 
 
 | File | Change |
 |---|---|
-| `src/Bench.Hosting/Bench.Hosting.csproj` | new — `Microsoft.NET.Sdk`, no packages, no references, `<RootNamespace>Bench.Cli</RootNamespace>`, a comment: *"The CLI hosts' shared plumbing — the flag parser, the exit-code contract, the root cancellation token. Moved out of hosts/Cli (todo/PLAN_model_arms.md D3) because two hosts need them and an exe may not reference an exe. The namespace stays Bench.Cli so no using changed."* |
+| `src/Bench.Hosting/Bench.Hosting.csproj` | new — `Microsoft.NET.Sdk`, no packages, no references, `<RootNamespace>Bench.Cli</RootNamespace>`, a comment: *"The CLI hosts' shared plumbing — the flag parser, the exit-code contract, the root cancellation token. Moved out of hosts/Cli (research/PLAN_model_arms.md D3) because two hosts need them and an exe may not reference an exe. The namespace stays Bench.Cli so no using changed."* |
 | `src/Bench.Hosting/CommandLine.cs`, `ExitCodes.cs`, `ShutdownSignal.cs` | `git mv` from `hosts/Cli/`; content unchanged EXCEPT `CommandLine.cs:4`: `<see cref="Program.Run"/>` → `<c>Program.Run</c> of the host` (the type is no longer visible from this assembly; a dangling cref is a broken reference whether or not the compiler checks it) |
 | `hosts/Cli/Cli.csproj` | add `<ProjectReference Include="..\..\src\Bench.Hosting\Bench.Hosting.csproj" />` |
 | `dew_flow_benchmark.slnx` | add `<Project Path="src/Bench.Hosting/Bench.Hosting.csproj" />` in `/src/` after `Bench.Delivered` |
@@ -1257,7 +1258,7 @@ One `"verb" =>` arm per line, block-bodied, so E5.S3's scan (the catalogue's `Ar
 build `VerbInput` with `ModuleFiles.Beside(AppContext.BaseDirectory)`; `await Dispatch(input)`; catch `CommandLineException` → 4;
 `OperationCanceledException` when `stopping` is cancelled → rethrow (Main maps it); any other exception → `model-arms <verb>:
 unexpected <TypeName>: <message>` and `ExitCodes.Environment`. `NotBuilt` prints `model-arms <verb>: not built yet — story <id> of
-todo/PLAN_model_arms.md` and returns 4. `Help.Version` prints `model-arms <informational version of the entry assembly>`; `Help.Usage`
+research/PLAN_model_arms.md` and returns 4. `Help.Version` prints `model-arms <informational version of the entry assembly>`; `Help.Usage`
 prints one line per verb with its shape; both return 0.
 
 **`ExperimentGate.RunAsync(input, verb)`** — the one road in for every verb that reads an experiment (later stories replace a
@@ -1382,7 +1383,7 @@ other than a "no" becomes `false` plus nothing else (the `Decide` sentence names
 `  <name> → <absolute path>` (D17 c); then either `model-arms validate: <root> is valid on this host (<HostKind>)` → 0, or
 `model-arms validate: <n> problem(s):` and `  - <text>` per problem → 4 when any problem is not `Environment`, else 3 (D16: a missing
 CLI is the environment). **`PrepBaseGuardAsync`** — the same checks printed the same way; any problem → its exit code; none →
-`model-arms prep-base: validated; the baseline measurement is not built yet — story E4.S4 of todo/PLAN_model_arms.md` → 4. (The
+`model-arms prep-base: validated; the baseline measurement is not built yet — story E4.S4 of research/PLAN_model_arms.md` → 4. (The
 "baseline already exists" refusal is the gate's, from `RootRequirements`.)
 
 **`ExperimentRoot` extension** — `WithTargetAsync()`: creates `<temp>/example/target` as a git repository (via `TempGitRepo`'s commands or
