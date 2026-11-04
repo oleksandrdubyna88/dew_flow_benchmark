@@ -54,10 +54,18 @@ kind, gives the verdicts the examples state, and each stated failure from its br
 
 The tools use only their language's standard library and are in `spikes/lang-bench/`. FORMAT is read as raw bytes: UTF-8 with line feeds only, no
 byte order mark. A carriage return anywhere, or a byte order mark, is a format error that names the first line. Nothing is normalised, and
-the sha256 of the format is taken over the raw bytes. A heading is a line that starts with `## ` or `### ` outside a fenced code block (a
-fence opens with a line that starts with three or more backticks or tildes and closes with the same marker), so a `#` line in a scenario
-example is never a heading. The structure is exact: `## 1.` to `## 7.` once each, in order, and under `## k` the headings `### k.1`,
-`### k.2` … with no gap and no duplicate. Anything else is a format error that names the heading and the line.
+the sha256 of the format is taken over the raw bytes. A heading is a line that starts with `## ` or `### ` at column 0 outside a fenced code block, so a `#`
+line in a scenario example is never a heading. A fence opens with three or more backticks or tildes (at column 0, or, inside a list item, at the item's
+content column up to three columns more) and closes with a line of the same character, at least as long, indented at most three columns, and nothing else
+on it; a fence in a list item ends where the item ends. The structure is exact: `## 1.` to `## 7.` once each, in order, and under `## k` the headings
+`### k.1`, `### k.2` … with no gap and no duplicate. Anything else is a format error that names the heading and the line.
+
+The tools read the format as CommonMark does, and a line that the two would read differently is a format error (exit 4) that names the line, in either file
+of a comparison and in both tools: a backtick fence whose opening line has a backtick after the marker; a fence line indented one to three spaces outside a list
+item; an HTML block start at columns 0 to 3 outside a fence (`<!--`, `<?`, `<!X`, `<![CDATA[`, the tags of the HTML block kinds one to six, and a complete tag
+alone on a line where no paragraph is open); an ATX heading in a form the tools do not take (a tab after the `#`s, one to three spaces before the `#`s, `#`s
+with nothing after them). A fence inside a list item is allowed. What the tools do not look at: setext headings, headings and fences inside a block quote or
+after a list marker on the same line, and a character reference or a link label that spells a heading.
 
 Exit codes of both tools: 0 success, 1 a refusal (one line each: the heading, the line, the rule), 4 a usage or format error.
 
@@ -103,23 +111,31 @@ class table only.
 
 **What a candidate may change.** A protected part is compared byte for byte, with these exceptions only:
 
-- the three header rows of the preamble (`Format version: …`, `Gate verdict: …`, `Freeze tag: …`, whole lines), and class-table rows after
-  the frozen file's last row; a row of a part that is not protected may also change or go;
+- the three header rows of the preamble (`Format version: …`, `Gate verdict: …`, `Freeze tag: …`, whole lines). Each stays on the line the frozen file has it
+  on, and its value matches a strict pattern: `Format version: <digits>` or `<digits>.<digits>`; `Gate verdict:` one to four words of lower-case letters, digits
+  and `_ . -` (no colon, at most 80 characters: `not yet gated`, `proceed`, `passed on 2026-12-01`); `Freeze tag:` `none yet` or `spec-frozen-<yyyymmdd>` or
+  `spec-frozen-<one capital letter>-<yyyymmdd>`. Class-table rows after the frozen file's last row may be added. A row of a part that is not protected may
+  change or go, and it is matched to the frozen row by the number of the heading it names, so an unprotected heading can be renamed together with its row; a
+  protected row stays byte for byte and in its place;
 - section 7 (the changelog) must start with the frozen file's bytes; it may only grow;
-- 2.1's table of fixed sentences is compared row by row, the rows matched by their first cell. A row whose sentence is defined only in parts
-  that are not protected may differ. Every other row is equal byte for byte. A sentence is defined where its label (`F-…` at the start of a
+- 2.1's table of fixed sentences is compared row by row. The rows are the contiguous block of `|` lines right under the `| Id |` header row and its separator
+  row; any other `| F-…` line is plain text of its part and compared as such. The rows are matched by their first cell, and an F-id has one row (a second row,
+  in either file, is refused, naming the id and both lines). A row whose sentence is defined only in parts that are not protected may differ, but its kinds cell
+  may not name `all` or `olympiad` (such a change touches no olympiad task; the check looks for the words `all` and `olympiad`, in any case). Every other row is
+  equal byte for byte, and the protected rows keep the order the frozen file has. A sentence is defined where its label (`F-…` at the start of a
   line outside fences) stands; a sentence with no label is defined where the paragraph that introduces its fenced block names it.
 
 **What a candidate may not do.** The check refuses, naming the heading, the frozen file's class and the line: protected bytes that differ; a
 protected class row that is relabelled or gone; a protected part that is missing; a part added as `common` or `olympiad`; a subsection
 inserted inside a protected mixed section, because it changes the numbers of the protected parts after it; a heading number of a protected
-part that changed. Appending a subsection at the end of a mixed section with the next free number passes when its class is `daemon`, `web` or
+part that changed; a protected heading whose number stays and whose title changed. When a section that was one unprotected part becomes a mixed section, its
+lead text may only be its `##` line and blank lines, or the bytes it had before (anything else is a part added as `common`). Appending a subsection at the end of a mixed section with the next free number passes when its class is `daemon`, `web` or
 `daemon-web`, and so does turning a `daemon-web` section into subsections of those classes.
 
 ## 4. Amendments (for the maintainers)
 
 **This document and the format.** Before the freeze, a change is a revision of the current version, recorded in the format's changelog
-(section 7 of the format). After the freeze — the tag `spec-frozen-<yyyymmdd>` that also freezes the format, whose sha256 is registered with
+(section 7 of the format). After the freeze — the tag `spec-frozen-<yyyymmdd>` (or `spec-frozen-<letter>-<yyyymmdd>`) that also freezes the format, whose sha256 is registered with
 the specs' — a change is a **dated amendment**: it raises `Format version` by one, adds a changelog line
 `- v<k> · <YYYY-MM-DD> · amendment · touches <NN, NN | all daemon and web tasks | all> — <what changed and why>`, and names every task it
 touches: every task whose spec, samples or held-out cases read differently under the change. A change to the scenario grammar or to the
