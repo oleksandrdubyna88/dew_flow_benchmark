@@ -25,7 +25,7 @@
 > fixtures under `tests/Bench.Tests/Fixtures/model-arms/consumers/`, `research/module_model_arms.md`, `research/module_tests.md`,
 > `research/architecture.md`, `README.md`, `todo/PLAN_model_arms_analysis.md` (new).
 >
-> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 3, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 8; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 5, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 6, `grep -c ' — not verified (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 1. The 7 open boxes are exactly the not met and the not verified (6 + 1); the build box is among the not met, because the build prints 1 warning, ASPIRE010 from `hosts/AppHost`, there before the module (the parent's D-a).
 
 ## 1. Goal, before any solution
 
