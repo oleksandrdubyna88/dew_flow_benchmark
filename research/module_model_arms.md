@@ -3409,7 +3409,7 @@ A killed run leaves what it had written and nothing running (the runners hold lo
 
 **The build warning.** `dotnet build` of the solution prints one warning, `ASPIRE010`, from `hosts/AppHost`, as it did before the module. A `NoWarn` for it was tried on 2026-11-04 and dropped (the warning states no defect, and nobody recorded which Aspire features the AppHost uses); choosing `AspireUseCliBundle=true` or a suppression is the owner's. `tools/model-arms/ModelArms` and `ModelArms.Core` build with 0 warnings (`--no-incremental`, checked 2026-11-04). The parent's D-a has the whole account; the build boxes of the plan stay open. The operator-retires-the-root part of the sentence is unchanged.
 
-**The 21 per-story remote branches.** They are deleted after the pull request that carries this section merges, by the owner's delegation of 2026-11-04. Their names and tips, from `git for-each-ref --format='%(refname:lstrip=3) %(objectname)' 'refs/remotes/origin/feat/model-arms-e*'`:
+**The 21 per-story remote branches.** They are kept: this pull request does not delete them, and deleting them stays the owner's. A local bundle of the 21 tips is at `~/model-arms-owner/model-arms-e-branches.bundle` (outside the repository). Their names and tips, from `git for-each-ref --format='%(refname:lstrip=3) %(objectname)' 'refs/remotes/origin/feat/model-arms-e*'`:
 
 | branch | tip |
 |---|---|
@@ -3435,7 +3435,7 @@ A killed run leaves what it had written and nothing running (the runners hold lo
 | `feat/model-arms-e2s7` | `f447128eb78024bc538ba228956de7f6ab6be180` |
 | `feat/model-arms-e2s8` | `b12979ee98863e468799992bf9864c608c85455f` |
 
-*Why nothing is lost.* The 9 `e2s*` tips are ancestors of `refs/pull/119/head` (`bc40284b`, #119). The commits of the 12 `e1*` branches (`e1s1` to `e1s11`, and `e1r5`) are patch-equal to commits of `refs/pull/116/head` (`34349415`, #116): `git cherry refs/pull/116/head <branch>` lists no commit as missing (`+`), except `ec31b270` (on `e1s3`) and `0c5e0e40` (on `e1s6`). Each of those two has a same-subject commit in that head (`d319ba79` and `d8a82d93`), and the line-sorted diffs of each pair are equal. The durable refs are the two pull-request heads, so an exact tip sha above may not stay fetchable after its branch is gone; the content stays.
+*Why nothing is lost.* The 9 `e2s*` tips are ancestors of `refs/pull/119/head` (`bc40284b`, #119). The commits of the 12 `e1*` branches (`e1s1` to `e1s11`, and `e1r5`) are patch-equal to commits of `refs/pull/116/head` (`34349415`, #116): `git cherry refs/pull/116/head <branch>` lists no commit as missing (`+`), except `ec31b270` (on `e1s3`) and `0c5e0e40` (on `e1s6`). Each of those two has a same-subject commit in that head (`d319ba79` and `d8a82d93`), and the line-sorted diffs of each pair are equal. So the content of the branches is inside the two pull-request heads; if the owner ever deletes the branches, an exact tip sha above may stop being fetchable, and the bundle keeps the tips.
 
 ## Not proven, gathered
 
