@@ -3,8 +3,10 @@
 // the guarantee is by construction: a candidate's unprotected parts may only be made of the line forms below, and no line of any part may start a reference definition or an HTML block.
 // The argument: every protected part starts at a column-0 heading, where CommonMark starts a fresh block; no unprotected construct can stay open across a part boundary (a fence
 // closes inside its part, there is no HTML block, no list continues across a heading); and nothing acts at a distance (no reference definition, no raw inline HTML, fix batch 4): so
-// a renderer shows the protected bytes as it shows them in the frozen file. This defends a HUMAN reviewer who reads a rendered page against a misleading amendment; agents read FORMAT
-// and GRAMMAR.md as raw bytes, and the byte comparison protects those. It was checked with markdown-it in CommonMark mode and is not a proof about every renderer.
+// a renderer shows the protected bytes as it shows them in the frozen file. This defends a HUMAN reviewer who reads a rendered page against a misleading amendment. Agents read FORMAT
+// and GRAMMAR.md as raw bytes; the byte comparison protects the bytes of the protected parts (with its listed exceptions) and does not judge what an unprotected part says: a free part can
+// still contradict protected text in plain words (`Notwithstanding 2.6, any normalisation is allowed for olympiad tasks.` in 2.5 passes), a point for human review of any amendment.
+// It was checked against these forms with markdown-it in CommonMark mode and is not a proof about every renderer.
 import { isProtected, partsOf, readClassed } from './format-class-table.mjs';
 import { SECTION_COUNT, unfencedLines } from './format-structure.mjs';
 
@@ -16,6 +18,7 @@ const LIST_ITEM = /^(- |\d{1,3}\. )(.*)$/;
 const TABLE_ROW = /^\|.*\|$/;
 const REFERENCE_DEFINITION = /^\s*\[(?:[^\]\\]|\\.)*\]:/;
 const BLOCK_STARTERS = '#<>|~=-+_]';
+const ORDERED_NOT_ONE = 'ordered list item whose number is not 1 directly after a paragraph line (CommonMark reads it as text of that paragraph, so a code span can pair across it)';
 
 const shown = text => (text.length > 50 ? `${text.slice(0, 50)}…` : text);
 
@@ -47,24 +50,28 @@ export function partRefusals(text, firstLine) {
       if (line === '```') return { ...state, fenceAt: null };
       return FENCE_LINE.test(line) ? refuse('a fence marker line inside a fenced block that is not its closer (the block is closed by a line of exactly three backticks)') : state;
     }
-    if (line === '') return state;
-    if (SECTION_HEADING.test(line) || SUB_HEADING.test(line)) return { ...(/ #+$/.test(line) ? refuse('a heading with a closing sequence of `#`') : state), item: null };
-    if (FENCE_OPEN.test(line)) return { ...state, fenceAt: no, item: null };
-    if (TABLE_ROW.test(line)) return { ...(/\|\s*\[[^\]]+\]:/.test(line) ? refuse('a table row that holds a reference definition') : state), item: null };
+    if (line === '') return { ...state, last: null };
+    if (SECTION_HEADING.test(line) || SUB_HEADING.test(line)) return { ...(/ #+$/.test(line) ? refuse('a heading with a closing sequence of `#`') : state), item: null, last: null };
+    if (FENCE_OPEN.test(line)) return { ...state, fenceAt: no, item: null, last: null };
+    if (TABLE_ROW.test(line)) return { ...(/\|\s*\[[^\]]+\]:/.test(line) ? refuse('a table row that holds a reference definition') : state), item: null, last: null };
     const listed = LIST_ITEM.exec(line);
     if (listed !== null) {
+      const ordered = listed[1] !== '- ';
+      const interrupts = ordered && Number(listed[1].slice(0, -2)) !== 1 && (state.last === 'paragraph' || state.last === 'bullet');
       const problem = paragraphStartProblem(listed[2]);
-      return { ...(problem === null ? state : refuse(`a list item whose text ${problem}`)), item: listed[1].length };
+      const flagged = interrupts ? refuse(`an ${ORDERED_NOT_ONE}`) : refuse(`a list item whose text ${problem}`);
+      const kind = ordered ? 'ordered' : 'bullet';
+      return { ...(interrupts || problem !== null ? flagged : state), item: listed[1].length, kind, last: kind };
     }
     if (line.startsWith(' ')) {
       if (state.item === null || !line.startsWith(' '.repeat(state.item))) return refuse(state.item === null ? 'an indented line, and no list item is open (an indent is only the continuation of a list item)' : `an indented line that is not a continuation of the open list item (a continuation is indented by exactly ${state.item} spaces)`);
       const problem = paragraphStartProblem(line.slice(state.item));
-      return problem === null ? state : refuse(`a continuation line whose text ${problem}`);
+      return { ...(problem === null ? state : refuse(`a continuation line whose text ${problem}`)), last: state.kind };
     }
     const problem = paragraphStartProblem(line);
-    return { ...(problem === null ? state : refuse(`a paragraph line that ${problem}`)), item: null };
+    return { ...(problem === null ? state : refuse(`a paragraph line that ${problem}`)), item: null, last: 'paragraph' };
   };
-  const end = text.split('\n').reduce((state, line, index) => step(state, line, index), { refusals: [], fenceAt: null, item: null });
+  const end = text.split('\n').reduce((state, line, index) => step(state, line, index), { refusals: [], fenceAt: null, item: null, kind: null, last: null });
   return end.fenceAt === null ? end.refusals : [...end.refusals, { no: end.fenceAt, form: 'a fenced block that is not closed in its part' }];
 }
 
@@ -74,14 +81,21 @@ const BLOCK_START = /^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|(?:[-+*]|\d{1,9}[.)])(?:[ \t]
 const TABLE_LINE = /^ {0,3}\|/;
 const HEADING_LINE = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 
-const runEnd = (text, at) => (text[at] === '`' ? runEnd(text, at + 1) : at);
+/** The offset just after the run of backticks that starts at `at` (a loop: a run or a paragraph of thousands of them must not grow the stack). */
+function runEnd(text, at) {
+  let end = at;
+  while (text[end] === '`') end += 1;
+  return end;
+}
 
 /** Where a run of exactly `length` backticks starts at or after `from` (CommonMark's closer of a code span), or -1. */
 function closerOf(text, from, length) {
-  const at = text.indexOf('`', from);
-  if (at === -1) return -1;
-  const end = runEnd(text, at);
-  return end - at === length ? at : closerOf(text, end, length);
+  for (let at = text.indexOf('`', from); at !== -1;) {
+    const end = runEnd(text, at);
+    if (end - at === length) return at;
+    at = text.indexOf('`', end);
+  }
+  return -1;
 }
 
 /** The offsets of every `<` followed by a letter, `/`, `!` or `?` outside a code span and not escaped, in `text` (CommonMark: a span ends at the next run of exactly as many backticks; a run with no closer is text). */
@@ -135,13 +149,14 @@ function groupOpenings(group) {
 const INLINE_HTML = 'raw inline HTML (a `<` followed by a letter, `/`, `!` or `?` outside a code span and not written `\\<`; a renderer may let it open an element that swallows the text after it)';
 
 /**
- * The refusals of the rules for the whole file, outside fences: no reference definition, no line whose first non-space character is `<` (an HTML block start), and no raw inline
- * HTML (fix batch 4): `{ no, form }`.
+ * The refusals of the rules for the whole file, outside fences: no reference definition, no line whose first non-space character is `<` (an HTML block start), no table row that
+ * holds `\\|` (fix batch 5) and no raw inline HTML (fix batch 4): `{ no, form }`.
  */
 export function wholeFileRefusals(format) {
   const kept = unfencedLines(format.lines);
   const lineRules = kept.flatMap(line => {
     if (REFERENCE_DEFINITION.test(line.text)) return [{ no: line.no, form: `a link reference definition (nothing may act at a distance): ${shown(line.text)}` }];
+    if (TABLE_LINE.test(line.text) && line.text.includes('\\\\|')) return [{ no: line.no, form: `a table row that holds \`\\\\|\` (renderers disagree on whether the pair of backslashes escapes the pipe): ${shown(line.text)}` }];
     if (/^\s*</.test(line.text)) return [{ no: line.no, form: `a line whose first non-space character is \`<\` (an HTML block start): ${shown(line.text)}` }];
     return [];
   });
