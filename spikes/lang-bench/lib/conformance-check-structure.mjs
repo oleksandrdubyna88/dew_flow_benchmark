@@ -85,13 +85,25 @@ function addAmendmentLine(state, line) {
 
 const linesAfter = (spec, section) => spec.kept.filter(line => line.no > section.no && line.text.trim() !== '');
 
+const EMPTY_8 = 'section 8 is empty: it holds `None yet.` or the amendment items';
+const blocksIn8 = (spec, section) => [
+  ...spec.blocks.filter(block => block.openNo > section.no).map(block => `line ${block.openNo}: section 8 holds a fenced code block; it holds \`None yet.\` or the amendment items only`),
+  ...spec.tables.filter(table => table.startNo > section.no).map(table => `line ${table.startNo}: section 8 holds a table; it holds \`None yet.\` or the amendment items only`),
+];
+
+function itemsIn(spec, lines) {
+  const found = lines.reduce(addAmendmentLine, { items: [], problems: [] });
+  return { ...found, problems: lines.length === 0 ? [EMPTY_8] : found.problems };
+}
+
 /** Section 8: `{ none, items: [{ k, ids, no }], problems }`. */
 export function amendmentsOf(spec) {
   const section = spec.sections.find(entry => entry.number === 8);
   if (section === undefined) return { none: false, items: [], problems: [] };
   const lines = linesAfter(spec, section);
-  if (lines.length === 1 && lines[0].text === 'None yet.') return { none: true, items: [], problems: [] };
-  return { none: false, ...lines.reduce(addAmendmentLine, { items: [], problems: [] }) };
+  if (lines.length === 1 && lines[0].text === 'None yet.') return { none: true, items: [], problems: blocksIn8(spec, section) };
+  const found = itemsIn(spec, lines);
+  return { none: false, ...found, problems: [...found.problems, ...blocksIn8(spec, section)] };
 }
 
 const expectedRow = k => (k === 0 ? 'none yet' : k === 1 ? 'A1 (section 8)' : `A1–A${k} (section 8)`);
