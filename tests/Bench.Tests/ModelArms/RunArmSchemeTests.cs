@@ -535,9 +535,8 @@ public sealed class RunArmSchemeTests
         var waits = new RecordingWaits();
         var seams = new ModelArmsApp.Verbs.RunArmSeams(new BenchClock(instant, TimeZoneInfo.Utc), waits.Wait, null);
         var output = new StringWriter();
-        var input = new ModelArmsApp.VerbInput("run-arm", ["C1"], CommandLine.Parse(["--experiment", root.Root]), output, new StringWriter(), root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), Ct);
 
-        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
+        var code = await RunWithSeamsAsync(root, "C1", seams, output, Ct);
 
         code.Should().Be(0, output.ToString());
         var wait = root.TimingOf("C1").OfType<TimingLine.GateWait>().Should().ContainSingle().Subject;

@@ -40,6 +40,8 @@
 > E4's obligation in the parent's D17 d); **(3)** nothing kept a step from starting subagents — the new E2.S0 (a change to E1's
 > `StepLaunch`, `StepSpec` and the example). The parent's `## Plan changes` ledger carries them as 1.1–1.3 and is **stopped for
 > re-review** (`common.plan-change-control`); the stories here are the amended baseline that re-review reads.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E2.md` gives 6, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E2.md` gives 6, `grep -c ' — not verified (checked 2026-11-0[4]):' research/PLAN_model_arms_E2.md` gives 0. The 6 open boxes are exactly the not met and the not verified (6 + 0); the build box is among the not met, because the build prints 1 warning, ASPIRE010 from `hosts/AppHost`, there before the module (the parent's D-a).
 
 ## 1. Goal, before any solution
 
@@ -2271,34 +2273,34 @@ recovery: a `.session` without a stream starts fresh or resumes, a stream withou
 
 - [x] The parent's `## Plan changes` re-review for epoch 2 has passed (2026-10-30, epoch 2 open) and the parent's status no longer says *stopped for re-review*
       — E2.S0 and the amended stories are built against the re-approved baseline, never during the stop (`common.plan-change-control`).
-- [ ] E2.S0–E2.S8 landed on `feat/model-arms-e2`, each with its tests watched red on an assertion first (the messages in its summary).
-- [ ] E2.S0's and E2.S1's scenarios and briefs were written by Fable into their sections before their coders started; the parent's ledger
-      reads `3 of 3`; E2.S0 landed before any other E2 story (§8 item 31).
+- [ ] E2.S0–E2.S8 landed on `feat/model-arms-e2`, each with its tests watched red on an assertion first (the messages in its summary). — not met as written (checked 2026-11-04): the red messages are not quoted for E2.S4 and E2.S7; E2.S2 and E2.S3 give prose, not messages.
+- [x] E2.S0's and E2.S1's scenarios and briefs were written by Fable into their sections before their coders started; the parent's ledger
+      reads `3 of 3`; E2.S0 landed before any other E2 story (§8 item 31). — met, checked 2026-11-04: (`git log` over `refs/pull/119/head`) E2.S0's spec is `research/PLAN_model_arms_E2.md:426`, committed in `0499aa94` (2026-10-30 05:13:59, body "E2.S0 (Fable, cornerstone)"), before its coder's first commit `1a29bfac` (05:30:39); at `c8213f3` that section still said it was written when the epic starts, so that commit is not the evidence. E2.S1's spec is `:872` (`91e8197`, 2026-10-29 18:46:31), before its coder's first commit `9f90cbae` (2026-10-30 06:24:50). "Landed before any other E2 story": E2.S0's last commit `718ccb4d` (06:16:40) precedes the first commit of another story, `a4a9a30a` (06:24:23). the parent's ledger reads `Cornerstones: 3 of 3 — E1.S5, E2.S0, E2.S1`. The order is read from commit times, not from a record of the hand-over.
 - [x] (re-review) `StepContractTests` and `BriefFieldsTests` green; `RunArmSchemeTests.Scheme_CHH_…` green — a scheme configured, not coded;
       M1 ran (E2.S8, §8 item 61): a fake arm of C, CR and CHH, each resumed once after a limit (`A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes`,
       the Opus/Haiku theory) and once after an interruption (`An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme`),
       read by `metrics.mjs` through `PinnedConsumer`.
 - [ ] (E2's plan round) `StepBudget.Deadline` spelled `HH:mm UTC (HH:mm ±hh:mm)` in every consumer and test (§8 item 32);
       `McpConfigTests` state a request and M2's key check is named in E3 (§8 item 34);
-      `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` green with the example still accepted (§8 item 35).
+      `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` green with the example still accepted (§8 item 35). — not met as written (checked 2026-11-04): `tests/Bench.Tests/ModelArms/TimingLineTests.cs:116`, `tests/Bench.Tests/ModelArms/TimingLineTests.cs:122` keep `22:12 UTC (23:12 CET)`, a recorded shell line read as text.
 - [ ] (the S0 spec, 2026-10-30) The ten criteria of E2.S0 green, each seen red, the ten break-its observed; `The_example_binds_every_file_the_shell_wrote`
       green with the eleven sums asserted; the module doc's *The delegation policy (E2.S0)* carries the measurement table with the CLI
       version; `Two_fields_never_bind_one_file_among_the_producers_a_scheme_places` green; the restart matrix of E2.S4 has a green test per
       row (`A_restart_after_the_prompt_and_the_start_line_…` included) and `A_step_done_without_writing_a_bound_output_…` green;
       `GateStepTests.A_gate_killed_after_done_and_before_its_round_was_recorded_or_ordered_is_judged_again_on_restart` (four cases) and
       `A_gate_finished_still_blocked_after_its_tries_is_not_revived_by_a_restart_unless_the_tries_are_raised` green; M3's checklist names
-      the A–D re-run of the delegation measurement on the measurement CLI version.
+      the A–D re-run of the delegation measurement on the measurement CLI version. — not met as written (checked 2026-11-04): ten break-its are unrecorded (only `(j)` is, `research/module_model_arms.md:292`); `A_restart_after_the_prompt_and_the_start_line_…` landed under another name (`tests/Bench.Tests/ModelArms/StepRestartTests.cs:79`; `research/PLAN_model_arms_E2.md:2232` item 56); the eleven sums are asserted by another test (`tests/Bench.Tests/ModelArms/BriefFillerTests.cs:296`, `The_eleven_shipped_templates_are_the_shells_byte_for_byte`).
 - [ ] (amended) `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` and
       `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` green; `The_module_launches_nothing_by_a_bare_name`
       green with `ArmGit.cs` present and `GitCommand` absent from `tools/model-arms`; every launch of `RunArmSchemeTests` carries
-      `--disallowedTools Agent Task …` and the example says `"subagents": false` eight times.
-- [ ] `ClaudeResultEnvelopeTests` and `StepEndTests` pass on the verbatim 2026-10-28 line and the three-results stream; the 2026-10-28
-      attempt classifies as `Limited`, never `Finished` or `Errored`.
-- [ ] The two-process `FileGateLockTests` green on Linux, not skipped; `GateStepTests` show the lock released during every wait.
-- [ ] `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests`, `ProbeArgvTests`, `ScoutArgvTests` unedited and
-      green; `ProcessRunnerStderrSinkTests` holds E1 §8 item 15's two tests.
-- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
-- [ ] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker.
-- [ ] `research/module_model_arms.md` describes E2 as built (the precedence, the formats, the recovery and outputs tables, the runner's
-      flow, the gate, `run-arm` walked once by hand with the fake); `research/module_tests.md` has the two `model-arms` rows.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+      `--disallowedTools Agent Task …` and the example says `"subagents": false` eight times. — not met as written (checked 2026-11-04): the example says `"subagents": false` eleven times, not eight (`research/PLAN_model_arms_E2.md:548`); that every launch of `RunArmSchemeTests` carries `--disallowedTools Agent Task …` is true only from this pull request, by `LaunchDenial` (`tests/Bench.Tests/ModelArms/LaunchDenial.cs`).
+- [x] `ClaudeResultEnvelopeTests` and `StepEndTests` pass on the verbatim 2026-10-28 line and the three-results stream; the 2026-10-28
+      attempt classifies as `Limited`, never `Finished` or `Errored`. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/StepEndTests.cs:91`, `tests/Bench.Tests/ModelArms/StepEndTests.cs:297`, `tests/Bench.Tests/ModelArms/ClaudeResultEnvelopeTests.cs:54`; CI run 41803357388 on `469a5109` (job `build-test`: total 5156, failed 0).
+- [ ] The two-process `FileGateLockTests` green on Linux, not skipped; `GateStepTests` show the lock released during every wait. — not met as written (checked 2026-11-04): a limit wait inside a gate step holds the lock, by design (`tools/model-arms/ModelArms.Core/Steps/GateLockCeiling.cs:10`; `GateStep.RunHeldAsync`, `tools/model-arms/ModelArms/Adapters/GateStep.cs:222`; the module doc's *gate lock's ceiling* paragraph, `research/module_model_arms.md:1558`). `GateStepTests.The_lock_is_released_during_the_wait` covers blocked rounds only, and `The_before_snapshot_is_taken_before_the_first_attempt_and_the_diff_only_from_a_finished_step`, the test with a limited attempt, asserts no lock events. The two-process half holds: `tests/Bench.Tests/ModelArms/FileGateLockTests.cs:37` (`A_second_process_holding_the_lock_makes_the_first_wait`).
+- [x] `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests`, `ProbeArgvTests`, `ScoutArgvTests` unedited and
+      green; `ProcessRunnerStderrSinkTests` holds E1 §8 item 15's two tests. — met, checked 2026-11-04: `git diff 431e7591 5a8b4ce6` is empty for the five files; `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs:288` (`When_both_sinks_throw_…`) and `:86` (`Every_existing_launch_without_a_stderr_sink_is_unchanged`) are E1 §8 item 15's two tests.
+- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green. — not met as written (checked 2026-11-04): the build prints 1 warning, ASPIRE010 from hosts/AppHost, there before the module (the parent's D-a).
+- [x] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker. — met, checked 2026-11-04: `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:159-167` and the E2 markers in its list (`:55-76`); the S3 and S7 markers are empty by design.
+- [x] `research/module_model_arms.md` describes E2 as built (the precedence, the formats, the recovery and outputs tables, the runner's
+      flow, the gate, `run-arm` walked once by hand with the fake); `research/module_tests.md` has the two `model-arms` rows. — met, checked 2026-11-04: `research/module_model_arms.md:949`, `research/module_model_arms.md:1079`, `research/module_model_arms.md:1108`, `research/module_model_arms.md:1121`, `research/module_model_arms.md:1223-1296`, `research/module_model_arms.md:1465`, `research/module_model_arms.md:1574`, `research/module_model_arms.md:1584`; `research/module_tests.md` rows `model-arms run-arm` (`:111`) and `model-arms gate-lock` (`:116`).
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green. — met, checked 2026-11-04: CI run 41803357388 on `469a5109`, job `plans` success.
