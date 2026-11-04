@@ -1,6 +1,6 @@
 # PLAN — test-suite leftovers in the spikes: the home sentinel, read-only fixture folders, the Roslyn compiler server, and the size of `push-check.test.mjs`
 
-> Status: **plan only, nothing implemented yet, 2026-11-03.** Scope: `spikes/lang-bench/` (the exec probe and its tests),
+> Status: **plan only, nothing implemented yet, 2026-11-03; S5 added and S2's and S3's evidence recorded 2026-11-04.** Scope: `spikes/lang-bench/` (the exec probe and its tests),
 > `spikes/minigit-bench/test/` (the shared test helpers), `spikes/lang-explore/test/`. Four small stories, each on its own branch
 > and pull request. The owner asked for them on 2026-11-03, after E1.S8b of
 > [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) was merged (#153).
@@ -99,7 +99,7 @@ defect; `research/module_tests.md` updated with the run's numbers; the pull requ
 ### S2 — the exit cleanups remove read-only trees, and say so when they cannot
 
 - **Find the folder first.** List `testsToDelete-mgb-*` in the temp root before and after the v1 and the pilot suites; name the
-  test that leaves the read-only tree.
+  test that leaves the read-only tree. *Evidence 2026-11-04:* each v1 run leaves one read-only `~/.cache/minigit-bench/test-work/testsToDelete-snap-out-*` from `A_step_that_prints_another_version_than_the_recipe_pins_makes_no_snapshot` (it never makes the tree writable again); `mgb-home`, `mgb-ledger`, `leak` and `real-cal` folders stay after a killed run, because those helpers clean up only at process exit and the start sweep looks only in the temp root. 107 such folders had built up since 2026-10-30; the owner allowed their removal, and they were removed on 2026-11-04 (they come back with each run until S2 is done).
 - **Reuse first.** `makeWritable` (`spikes/minigit-bench/lib/cache-snapshot.mjs:47`) already gives a tree `u+w` before it is removed. One remover
   that restores the write bit and then removes the tree serves both exit cleanups; no second copy.
 - **Scenarios.** (1) A tracked folder with a `0o555` sub-folder and a `0o444` file is gone after the process exits. (2) A
@@ -108,12 +108,17 @@ defect; `research/module_tests.md` updated with the run's numbers; the pull requ
 
 ### S3 — no compiler server outlives a suite
 
+- *Evidence 2026-11-04:* the processes come from the distribution's SDK (`/usr/lib/dotnet/sdk/10.0.114/…`), parent `/init`, started during the lang-explore and lang-bench suites; the pinned SDK with build servers off is not the source. They exit when idle.
 - **Reproduce first.** `pgrep -u "$USER" -x VBCSCompiler` before and after each of the three suites, then per test file in the
   suite that starts it. If three full runs of each suite start no server, the story records *not reproduced*, with the method
   and the runs, and closes with no code change.
 - **If reproduced:** the `dotnet` launch that starts it gets the build-server keys off (`BUILD_SERVERS_OFF`,
   `spikes/minigit-bench/lib/sandbox.mjs:44`) or runs in a box with `--unshare-pid --die-with-parent`; a test asserts that no new
   `VBCSCompiler` of this user exists after that test file.
+
+### S5 — timing tests that fail under a heavy host load
+
+Added 2026-11-04. **The symptom:** under a host load of 20–38 from other sessions, existing timing tests fail now and then and pass alone or on a re-run: `A_run_sh_that_starts_a_short_tool_and_then_execs_is_not_fork…` (`test/py/test_rs_scope.py`, whose comment says it must never flake; seen in about four full runs), `A_fork_bomb_in_the_box_stops_at_the_pids_bound…`, `A_scope_around_the_driver_would_charge_its_memory_to_the_program…`, `A_case_with_a_cgroup_is_not_slower_than_the_plain_one…`, and in v1 `A_cancel_during_the_quiet_wait_of_the_real_wiring_ends_it_at_once`, `A_wait_for_a_quiet_machine_tells_the_operator…`, `The_proxy_allows_only_the_listed_hosts_on_443`; in the pilot `Output_past_the_cap_is_cut_and_fails…`. *Checked:* each passes alone. *Not checked:* whether each fails on `main` under the same load, or whether any is a real race rather than a margin. **Why it matters for v2:** a completion run that goes red for no cause costs a re-run, and a real race would be hidden. **What to do:** per test, decide margin or race; widen a margin only with the measurement that justifies it, or make the test wait on the event. Never weaken what it asserts.
 
 ### S4 — `push-check.test.mjs` split by subject
 

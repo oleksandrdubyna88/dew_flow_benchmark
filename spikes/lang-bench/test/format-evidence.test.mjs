@@ -39,7 +39,9 @@ test('A_change_to_a_protected_line_of_the_real_draft_is_refused_and_the_passes_a
     assert.ok(gate || row || endOfFile, `${pass.name} at line ${pass.at + 1} passed in a protected part: ${pass.text.slice(0, 80)}`);
   }
   const names = (index, change) => passes.some(pass => pass.at === index && pass.name === change);
-  assert.ok(names(forced[0], 'alter'), 'the Gate verdict value may change (the scan can see a pass)');
+  // The scan's ` zz` is not a legal verdict value once the value is in its strict form, so the control states a legal one (the scan can see a pass).
+  const legalVerdict = lines.map((line, index) => (index === forced[0] ? 'Gate verdict: `proceed` · 2030-01-02' : line));
+  assert.equal(checkFrozenCandidate({ frozen: draft.bytes, candidate: Buffer.from(legalVerdict.join('\n')), reference: draft.recorded }).exit, 0, 'the Gate verdict value may change');
   assert.ok(names(forced[2], 'alter') && names(forced[2], 'delete'), 'a free 2.1 row may change or go (the scan can see a pass)');
   assert.ok(names(forced[4], 'blank') || names(forced[3], 'blank'), 'one extra line feed at the end passes (the scan can see a pass)');
   assert.ok(!['delete', 'alter', 'blank'].some(change => names(forced[1], change)), 'a protected 2.1 row never passes');
