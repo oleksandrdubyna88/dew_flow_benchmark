@@ -6,26 +6,31 @@ const XOR = Object.freeze(['F-INVALID', 'F-ERRORS']);
 export const REFUSED = Object.freeze({ 'F-BYTES-O-N': 'F-BYTES-O-N is refused for this series: no task uses a normalised output and the runner does not build it (CP1 F12)' });
 const MAX_SECONDS = 600;
 
-/** The number a `{k}` slot says, in digits or words up to ninety-nine; null when it is neither. */
-export function numberOf(text) {
-  if (/^\d+$/.test(text)) return Number(text);
+/** `twenty-one`: the tens word and the units word. */
+const hyphenated = (tens, units) => (WORDS.get(tens) >= 20 && WORDS.get(units) < 10 ? WORDS.get(tens) + WORDS.get(units) : null);
+
+function wordNumber(text) {
   const [tens, units, more] = text.split('-');
   if (more !== undefined || !WORDS.has(tens)) return null;
-  return units === undefined ? WORDS.get(tens) : WORDS.get(tens) >= 20 && WORDS.has(units) && WORDS.get(units) < 10 ? WORDS.get(tens) + WORDS.get(units) : null;
+  return units === undefined ? WORDS.get(tens) : hyphenated(tens, units);
 }
+
+/** The number a `{k}` slot says, in digits or words up to ninety-nine; null when it is neither. */
+export const numberOf = text => (/^\d+$/.test(text) ? Number(text) : wordNumber(text));
 
 const where = hit => `line ${hit.line}`;
 
-/** The problems of the R-ids a `{ref}` or `{eref}` slot names: each must be a requirement of the spec, and a range must ascend. */
-function refProblems(id, slot, text, nMax, hit) {
-  const problems = [];
-  for (const found of text.matchAll(/R([1-9]\d*)(?:–R([1-9]\d*))?/g)) {
-    const [low, high] = [Number(found[1]), Number(found[2] ?? found[1])];
-    if (low > nMax || high > nMax) problems.push(`${id} (${where(hit)}): {${slot}} names ${found[0]}, and the spec has requirements R1 to R${nMax} only`);
-    if (found[2] !== undefined && high <= low) problems.push(`${id} (${where(hit)}): {${slot}} has the range ${found[0]}, which does not ascend`);
-  }
-  return problems;
+const rangeOf = found => [Number(found[1]), Number(found[2] ?? found[1])];
+
+const missingRef = (id, slot, found, nMax, hit) => (rangeOf(found).some(n => n > nMax) ? [`${id} (${where(hit)}): {${slot}} names ${found[0]}, and the spec has requirements R1 to R${nMax} only`] : []);
+
+function descendingRef(id, slot, found, hit) {
+  const [low, high] = rangeOf(found);
+  return found[2] !== undefined && high <= low ? [`${id} (${where(hit)}): {${slot}} has the range ${found[0]}, which does not ascend`] : [];
 }
+
+/** The problems of the R-ids a `{ref}` or `{eref}` slot names: each must be a requirement of the spec, and a range must ascend. */
+const refProblems = (id, slot, text, nMax, hit) => [...text.matchAll(/R([1-9]\d*)(?:–R([1-9]\d*))?/g)].flatMap(found => [...missingRef(id, slot, found, nMax, hit), ...descendingRef(id, slot, found, hit)]);
 
 /** The overrides T and G imply: `{ what, D, V }` for each value that is not the series default. */
 export function expectedOverrides(T, G, defaults) {
@@ -50,34 +55,41 @@ function timingProblems(ctx) {
   return [...problems, ...lacking.map(want => `F-TIMING is missing for ${want.what}: the task uses ${want.V} s and the series default is ${want.D} s`)];
 }
 
-/** The problems of the slot values of one hit of sentence `id`. */
-function slotProblems(ctx, id, hit) {
-  const { slots } = hit;
-  const problems = [];
-  if (slots.ref !== undefined) problems.push(...refProblems(id, 'ref', slots.ref, ctx.maxId, hit));
-  if (slots.eref !== undefined) problems.push(...refProblems(id, 'eref', slots.eref, ctx.maxId, hit));
-  if (slots.k !== undefined && numberOf(slots.k) !== ctx.shownIds.length) problems.push(`${id} (${where(hit)}): says ${slots.k} samples, and section 6 shows ${ctx.shownIds.length}`);
+const refSlot = (ctx, id, hit, name) => (hit.slots[name] === undefined ? [] : refProblems(id, name, hit.slots[name], ctx.maxId, hit));
+
+const kSlot = (ctx, id, hit) => (hit.slots.k !== undefined && numberOf(hit.slots.k) !== ctx.shownIds.length ? [`${id} (${where(hit)}): says ${hit.slots.k} samples, and section 6 shows ${ctx.shownIds.length}`] : []);
+
+const whichMust = eof => (eof ? '"A test that does not end at the end of its input" because F-EOF is present' : '"A test" because F-EOF is absent');
+
+function whichSlot(ctx, id, hit) {
   const eof = (ctx.found.get('F-EOF')?.hits.length ?? 0) > 0;
-  if (slots.which !== undefined && (slots.which !== 'A test') !== eof) {
-    problems.push(`${id} (${where(hit)}): {which} is "${slots.which}", and it must be ${eof ? '"A test that does not end at the end of its input" because F-EOF is present' : '"A test" because F-EOF is absent'}`);
-  }
-  for (const name of ['T', 'G', 'duration']) if (slots[name] !== undefined && Number(slots[name]) > MAX_SECONDS) problems.push(`${id} (${where(hit)}): {${name}} is ${slots[name]} s, and a duration is at most ${MAX_SECONDS} s`);
-  return problems;
+  const wrong = hit.slots.which !== undefined && (hit.slots.which !== 'A test') !== eof;
+  return wrong ? [`${id} (${where(hit)}): {which} is "${hit.slots.which}", and it must be ${whichMust(eof)}`] : [];
 }
+
+const durationSlot = (id, hit, name) => (hit.slots[name] !== undefined && Number(hit.slots[name]) > MAX_SECONDS ? [`${id} (${where(hit)}): {${name}} is ${hit.slots[name]} s, and a duration is at most ${MAX_SECONDS} s`] : []);
+
+/** The problems of the slot values of one hit of sentence `id`. */
+const slotProblems = (ctx, id, hit) => [
+  ...refSlot(ctx, id, hit, 'ref'), ...refSlot(ctx, id, hit, 'eref'), ...kSlot(ctx, id, hit), ...whichSlot(ctx, id, hit),
+  ...['T', 'G', 'duration'].flatMap(name => durationSlot(id, hit, name)),
+];
+
+const duplicateProblems = f => (f.hits.length > 1 && f.entry.id !== 'F-TIMING' ? [`${f.entry.id} stands ${f.hits.length} times (${f.hits.map(where).join(', ')}); FORMAT says it once`] : []);
+
+function sectionProblems(ctx, f, hit) {
+  const section = sectionOf(f.entry, ctx.kind);
+  const wrong = section !== null && hit.section !== section && f.entry.where.mode !== 'first-paragraph';
+  return wrong ? [`${f.entry.id} (${where(hit)}) stands in section ${hit.section}, and 2.1 puts it in section ${section}`] : [];
+}
+
+const sameAsProblems = (ctx, f, hit) => (Array.isArray(f.entry.where.sameAs) ? sameProblems(ctx, f, hit, f.entry.where.sameAs, f.entry.where.after) : []);
 
 /** The problems of where the hits of a required or present sentence stand. */
 function placementProblems(ctx, f) {
-  const { entry, hits } = f;
-  const id = entry.id;
-  const problems = [];
-  if (hits.length > 1 && id !== 'F-TIMING') problems.push(`${id} stands ${hits.length} times (${hits.map(where).join(', ')}); FORMAT says it once`);
-  const hit = hits[0];
-  const section = sectionOf(entry, ctx.kind);
-  if (section !== null && hit.section !== section && entry.where.mode !== 'first-paragraph') problems.push(`${id} (${where(hit)}) stands in section ${hit.section}, and 2.1 puts it in section ${section}`);
-  const { sameAs, after } = entry.where;
-  if (sameAs !== null && sameAs !== undefined) problems.push(...sameProblems(ctx, f, hit, sameAs, after));
-  if (entry.where.mode === 'opens-closes') problems.push(...opensClosesProblems(f));
-  return [...problems, ...slotProblems(ctx, id, hit)];
+  const hit = f.hits[0];
+  const closing = f.entry.where.mode === 'opens-closes' ? opensClosesProblems(f) : [];
+  return [...duplicateProblems(f), ...sectionProblems(ctx, f, hit), ...sameAsProblems(ctx, f, hit), ...closing, ...slotProblems(ctx, f.entry.id, hit)];
 }
 
 function sameProblems(ctx, f, hit, sameAs, after) {
@@ -98,27 +110,26 @@ function opensClosesProblems(f) {
   return last.end === hit.r.text.length ? problems : [...problems, `${f.entry.id} (${where(last)}): the second sentence does not close the requirement`];
 }
 
-/** The findings about one sentence (missing, altered, misplaced); `present` says whether it counts as carried. */
-function sentenceProblems(ctx, f) {
-  const { entry, hits, altered } = f;
-  const outside = f.stray.map(hit => `${entry.id} (${where(hit)}) stands outside every requirement paragraph; a fixed sentence belongs to a requirement (FORMAT 1.3)`);
-  return [...outside, ...presentProblems(ctx, f, altered)];
+/** A sentence with no whole hit: altered where its words stand, missing when it is required. */
+function absentProblems(ctx, f) {
+  const { entry, altered } = f;
+  if (altered !== null) return [`${entry.id} is altered at line ${altered}: it does not match FORMAT's sentence word for word (after whitespace is collapsed)`];
+  return entry.required && !XOR.includes(entry.id) ? [`${entry.id} is missing: 2.1 requires it in section ${sectionOf(entry, ctx.kind) ?? 'before section 1'}`] : [];
 }
 
-function presentProblems(ctx, f, altered) {
-  const { entry, hits } = f;
-  if (hits.length === 0) {
-    if (altered !== null) return [`${entry.id} is altered at line ${altered}: it does not match FORMAT's sentence word for word (after whitespace is collapsed)`];
-    return entry.required && !XOR.includes(entry.id) ? [`${entry.id} is missing: 2.1 requires it in section ${sectionOf(entry, ctx.kind) ?? 'before section 1'}`] : [];
-  }
-  return placementProblems(ctx, f);
-}
+const outsideProblems = f => f.stray.map(hit => `${f.entry.id} (${where(hit)}) stands outside every requirement paragraph; a fixed sentence belongs to a requirement (FORMAT 1.3)`);
+
+/** The findings about one sentence: outside every requirement, missing or altered, misplaced. */
+const sentenceProblems = (ctx, f) => [...outsideProblems(f), ...(f.hits.length === 0 ? absentProblems(ctx, f) : placementProblems(ctx, f))];
+
+const carried = (ctx, id) => (ctx.found.get(id)?.hits.length ?? 0) > 0;
+const alteredId = (ctx, id) => typeof ctx.found.get(id)?.altered === 'number';
+const settled = (present, altered) => present.length === 1 || (present.length === 0 && altered);
 
 /** F-INVALID xor F-ERRORS: exactly one stands. */
 function xorProblems(ctx) {
-  const present = XOR.filter(id => (ctx.found.get(id)?.hits.length ?? 0) > 0);
-  const altered = XOR.some(id => ctx.found.get(id)?.altered !== null && ctx.found.get(id)?.altered !== undefined);
-  if (present.length === 1 || (present.length === 0 && altered)) return [];
+  const present = XOR.filter(id => carried(ctx, id));
+  if (settled(present, XOR.some(id => alteredId(ctx, id)))) return [];
   return [present.length === 0 ? 'neither F-INVALID nor F-ERRORS stands: a spec carries exactly one' : 'F-INVALID and F-ERRORS both stand: a spec carries exactly one'];
 }
 
@@ -148,25 +159,31 @@ export function scenarioWaits(text) {
   return { start: starts, exit: exit === undefined ? null : within(exit) };
 }
 
-function waitProblems(id, waits, T, G) {
-  const problems = [];
-  if (waits.start.length === 0) problems.push(`sample ${id} has no start line`);
-  for (const ms of waits.start) if (ms !== T * 1000) problems.push(`sample ${id} starts within ${ms === null ? 'an unreadable time' : showMs(ms)}, the spec says ${T} s`);
-  if (waits.exit === null) problems.push(`sample ${id} has no wait-exit within`);
-  else if (waits.exit !== G * 1000) problems.push(`sample ${id} waits ${showMs(waits.exit)}, the spec says ${G} s`);
-  return problems;
+const noStart = (id, waits) => (waits.start.length === 0 ? [`sample ${id} has no start line`] : []);
+const showStart = ms => (ms === null ? 'an unreadable time' : showMs(ms));
+
+const startProblems = (id, waits, T) => waits.start.filter(ms => ms !== T * 1000).map(ms => `sample ${id} starts within ${showStart(ms)}, the spec says ${T} s`);
+
+function exitProblems(id, waits, G) {
+  if (waits.exit === null) return [`sample ${id} has no wait-exit within`];
+  return waits.exit !== G * 1000 ? [`sample ${id} waits ${showMs(waits.exit)}, the spec says ${G} s`] : [];
 }
+
+const waitProblems = (id, waits, T, G) => [...noStart(id, waits), ...startProblems(id, waits, T), ...exitProblems(id, waits, G)];
+
+const notStated = (T, G) => [...(Number.isNaN(T) ? ['T is not stated: F-READY was not found whole'] : []), ...(Number.isNaN(G) ? ['G is not stated: F-STOP was not found whole'] : [])];
+
+const eofDiffers = (eof, G) => eof !== undefined && !Number.isNaN(G) && Number(eof.slots.G) !== G;
+const eofProblems = (ctx, G) => {
+  const eof = ctx.found.get('F-EOF')?.hits[0];
+  return eofDiffers(eof, G) ? [`F-EOF (${where(eof)}) says G is ${eof.slots.G} s, and F-STOP says ${G} s`] : [];
+};
 
 /** Check 6: T and G are stated in F-READY and F-STOP (and F-EOF's G equals F-STOP's), and every visible scenario waits for exactly those times. Olympiad tasks have neither. */
 export function timeFindings(ctx) {
   if (ctx.kind === 'olympiad') return [];
   const { T, G } = timesOf(ctx);
-  const findings = [];
-  if (Number.isNaN(T)) findings.push('T is not stated: F-READY was not found whole');
-  if (Number.isNaN(G)) findings.push('G is not stated: F-STOP was not found whole');
-  const eof = ctx.found.get('F-EOF')?.hits[0];
-  if (eof !== undefined && !Number.isNaN(G) && Number(eof.slots.G) !== G) findings.push(`F-EOF (${where(eof)}) says G is ${eof.slots.G} s, and F-STOP says ${G} s`);
+  const findings = [...notStated(T, G), ...eofProblems(ctx, G)];
   if (Number.isNaN(T) || Number.isNaN(G)) return findings;
-  for (const [id, bytes] of ctx.scenarios) findings.push(...waitProblems(id, scenarioWaits(bytes.toString('utf8')), T, G));
-  return findings;
+  return [...findings, ...[...ctx.scenarios].flatMap(([id, bytes]) => waitProblems(id, scenarioWaits(bytes.toString('utf8')), T, G))];
 }

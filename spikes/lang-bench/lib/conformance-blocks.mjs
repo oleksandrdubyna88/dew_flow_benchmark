@@ -4,70 +4,78 @@ import { scanBlocks } from './format-structure.mjs';
 
 const FENCE = /^(`{3,}|~{3,})(.*)$/;
 
-/** The fenced code blocks of `lines`: `{ openNo, closeNo, info, content, before }`. `content` is the lines joined with LF, each ended by a LF (a block of no line is ''). `before` is the nearest non-blank line above the opener (its text). */
-export function fencedBlocks(lines) {
-  const kept = new Set(scanBlocks(lines).kept.map(line => line.no));
-  const blocks = [];
-  let open = null;
-  const close = (closeNo) => {
-    blocks.push({ openNo: open.openNo, closeNo, info: open.info, content: open.content.map(text => `${text}\n`).join(''), before: open.before });
-    open = null;
-  };
-  for (const line of lines) {
-    if (kept.has(line.no)) {
-      if (open !== null) close(line.no - 1);
-      continue;
-    }
-    const found = FENCE.exec(line.text.trimStart());
-    if (open === null) {
-      if (found !== null) open = { openNo: line.no, char: found[1][0], length: found[1].length, info: found[2].trim(), content: [], before: lineAbove(lines, line.no) };
-    } else if (found !== null && found[1][0] === open.char && found[1].length >= open.length && found[2].trim() === '') close(line.no);
-    else open.content.push(line.text);
-  }
-  return blocks;
-}
-
 /** The text of the nearest non-blank line above line `no`, or ''. */
 function lineAbove(lines, no) {
-  for (let at = no - 2; at >= 0; at -= 1) if (lines[at].text.trim() !== '') return lines[at].text;
-  return '';
+  const above = lines.slice(0, no - 1).findLast(line => line.text.trim() !== '');
+  return above?.text ?? '';
 }
+
+/** True when the fence match closes the open block: the same character, at least as long, and nothing after it. */
+const closes = (found, open) => found !== null && found[1][0] === open.char && found[1].length >= open.length && found[2].trim() === '';
+
+/** The block made of an open fence and the line it ends at. `content` is its lines each ended by a line feed (a block of no line is ''). */
+const finished = (open, closeNo) => ({ openNo: open.openNo, closeNo, info: open.info, content: open.content.map(text => `${text}\n`).join(''), before: open.before });
+
+const opened = (lines, line, found) => ({ openNo: line.no, char: found[1][0], length: found[1].length, info: found[2].trim(), content: [], before: lineAbove(lines, line.no) });
+
+/** A line outside a fence: it may open one. */
+const outside = (state, lines, line, found) => (found === null ? state : { ...state, open: opened(lines, line, found) });
+
+/** A line inside a fence: it closes it or is one of its lines. */
+function inside(state, line, found) {
+  if (closes(found, state.open)) return { blocks: [...state.blocks, finished(state.open, line.no)], open: null };
+  return { ...state, open: { ...state.open, content: [...state.open.content, line.text] } };
+}
+
+/** A line the fence scan keeps (outside every fence): a fence still open there ended with its list item. */
+const kept = (state, line) => (state.open === null ? state : { blocks: [...state.blocks, finished(state.open, line.no - 1)], open: null });
+
+function step(state, lines, line, isKept) {
+  if (isKept) return kept(state, line);
+  const found = FENCE.exec(line.text.trimStart());
+  return state.open === null ? outside(state, lines, line, found) : inside(state, line, found);
+}
+
+/** The fenced code blocks of `lines`: `{ openNo, closeNo, info, content, before }`; `before` is the nearest non-blank line above the opener (its text). */
+export function fencedBlocks(lines) {
+  const keptNos = new Set(scanBlocks(lines).kept.map(line => line.no));
+  return lines.reduce((state, line) => step(state, lines, line, keptNos.has(line.no)), { blocks: [], open: null }).blocks;
+}
+
+/** Adds a pair to the collapsed pairs unless it is a space that starts the text or follows a space. */
+function squeeze(out, pair) {
+  if (pair[0] !== ' ' || (out.length > 0 && out.at(-1)[0] !== ' ')) out.push(pair);
+  return out;
+}
+
+/** The characters of a line as `[char, lineNo]` pairs, whitespace as one space, and one space for the line's end. */
+const pairsOf = part => [...[...part.text].map(char => [/\s/.test(char) ? ' ' : char, part.no]), [' ', part.no]];
+
+const clamp = (index, length) => Math.min(Math.max(index, 0), Math.max(length - 1, 0));
 
 /** `text` with every run of whitespace made one space and the ends trimmed, with `lineAt(index)` giving the document line of the character at `index` of the result. `parts` are `{ no, text }` lines. */
 export function collapse(parts) {
-  let text = '';
-  const lineOf = [];
-  for (const part of parts) {
-    for (const char of part.text) {
-      if (/\s/.test(char)) {
-        if (text !== '' && !text.endsWith(' ')) { text += ' '; lineOf.push(part.no); }
-      } else {
-        text += char;
-        lineOf.push(part.no);
-      }
-    }
-    if (text !== '' && !text.endsWith(' ')) { text += ' '; lineOf.push(part.no); }
-  }
-  if (text.endsWith(' ')) { text = text.slice(0, -1); lineOf.pop(); }
-  return { text, lineAt: index => lineOf[Math.min(Math.max(index, 0), Math.max(lineOf.length - 1, 0))] ?? 1 };
+  const squeezed = parts.flatMap(pairsOf).reduce(squeeze, []);
+  const pairs = squeezed.at(-1)?.[0] === ' ' ? squeezed.slice(0, -1) : squeezed;
+  return { text: pairs.map(pair => pair[0]).join(''), lineAt: index => pairs[clamp(index, pairs.length)]?.[1] ?? 1 };
 }
 
 /** The collapsed text alone. */
 export const collapsed = text => collapse([{ no: 1, text }]).text;
 
+/** A line joins the paragraph under way when it is on the next line number; otherwise it starts a new one. */
+function addLine(paragraphs, line) {
+  const current = paragraphs.at(-1);
+  if (current !== undefined && current.endNo + 1 === line.no) {
+    current.lines.push(line);
+    current.endNo = line.no;
+    return paragraphs;
+  }
+  return [...paragraphs, { startNo: line.no, endNo: line.no, lines: [line] }];
+}
+
 /** The paragraphs of the lines outside fences: runs of non-blank lines on adjacent line numbers, `{ startNo, endNo, lines, isTable }`. */
 export function paragraphs(lines) {
-  const result = [];
-  let current = null;
-  for (const line of scanBlocks(lines).kept) {
-    if (line.text.trim() === '') { current = null; continue; }
-    if (current !== null && current.endNo + 1 === line.no) {
-      current.lines.push(line);
-      current.endNo = line.no;
-    } else {
-      current = { startNo: line.no, endNo: line.no, lines: [line] };
-      result.push(current);
-    }
-  }
-  return result.map(entry => ({ ...entry, isTable: entry.lines.every(line => line.text.startsWith('|')) }));
+  const filled = scanBlocks(lines).kept.filter(line => line.text.trim() !== '');
+  return filled.reduce(addLine, []).map(entry => ({ ...entry, isTable: entry.lines.every(line => line.text.startsWith('|')) }));
 }
