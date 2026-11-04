@@ -1,8 +1,8 @@
 {
   "A": {
     "gate": null,
-    "grammarSha256": "25895f8324cc168010127f952f8554b178d76e88b28eacb0a85a9d4ab4c4b8d2",
-    "sha256": "a199021520543280eafd9c33ed1dd17c4245eda207cbed8d9c095bb7c8c5f161",
+    "grammarSha256": "4baba3d1b915a93a0618d0362e9eba71a11e168f37a04836c087ea98ce38f3cb",
+    "sha256": "6a5261079cb92772c49633fa79fae48963b87524ef5458c87e47292d889f81b3",
     "tasks": [
       "01",
       "02",
