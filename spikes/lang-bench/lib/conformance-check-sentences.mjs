@@ -189,6 +189,25 @@ export function sentenceFindings(ctx) {
   return [...findings, ...xorProblems(ctx), ...timingProblems(ctx), ...portProblems(ctx)];
 }
 
+const READY_START = /^\s*start\s+ready\s+(port|stdout)\b/m;
+const END_TRIGGER = /^\s*(?:signal\s+TERM|(close\s+stdin))\b/m;
+const SAYS = Object.freeze({ port: 'the port', stdout: 'a line of standard output' });
+
+function readyProblems(id, text, onPort) {
+  const found = READY_START.exec(text)?.[1];
+  const says = onPort ? 'port' : 'stdout';
+  return found === undefined || found === says ? [] : [`sample ${id} is ready on ${SAYS[found]}, and F-READY says ${SAYS[says]}`];
+}
+
+const closeProblems = (id, text, hasEof) => (END_TRIGGER.exec(text)?.[1] !== undefined && !hasEof ? [`sample ${id} ends with close stdin, and the spec has no F-EOF`] : []);
+
+/** The triggers of the samples against the spec: the readiness a sample waits for is the one F-READY says, and `close stdin` ends a sample only where the spec has F-EOF. */
+function triggerProblems(ctx) {
+  const hasEof = (ctx.found.get('F-EOF')?.hits.length ?? 0) > 0;
+  const hasReady = (ctx.found.get('F-READY')?.hits.length ?? 0) > 0;
+  return [...ctx.scenarios].flatMap(([id, bytes]) => [...(hasReady ? readyProblems(id, bytes.toString('utf8'), readyOnPort(ctx)) : []), ...closeProblems(id, bytes.toString('utf8'), hasEof)]);
+}
+
 const DURATION = /^(\d+)(ms|s)$/;
 const showMs = ms => (ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`);
 const msOf = text => { const found = DURATION.exec(text); return found === null ? null : Number(found[1]) * (found[2] === 's' ? 1000 : 1); };
@@ -226,7 +245,7 @@ const eofProblems = (ctx, G) => {
 export function timeFindings(ctx) {
   if (ctx.kind === 'olympiad') return [];
   const { T, G } = timesOf(ctx);
-  const findings = [...notStated(T, G), ...eofProblems(ctx, G)];
+  const findings = [...notStated(T, G), ...eofProblems(ctx, G), ...triggerProblems(ctx)];
   if (Number.isNaN(T) || Number.isNaN(G)) return findings;
   return [...findings, ...[...ctx.scenarios].flatMap(([id, bytes]) => waitProblems(id, scenarioWaits(bytes.toString('utf8')), T, G))];
 }

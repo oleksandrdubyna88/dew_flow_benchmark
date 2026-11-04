@@ -7,13 +7,17 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 const MAX_SAMPLE_BYTES = 4 * 1024 * 1024;
 const MAX_CELL_BYTES = 200;
 
-/** One entry of the folder: `{ odd }` for what is not a regular file or is too large, else `{ name, bytes }`. */
+/** One entry of the folder: `{ odd }` for what is not a regular file or is too large, `{ unreadable }` for what cannot be read, else `{ name, bytes }`. */
 function classify(dir, entry) {
   const full = path.join(dir, entry.name);
-  const stat = lstatSync(full);
-  if (!stat.isFile()) return { odd: `${entry.name} is not a regular file` };
-  if (stat.size > MAX_SAMPLE_BYTES) return { odd: `${entry.name} is larger than ${MAX_SAMPLE_BYTES} bytes` };
-  return { name: entry.name, bytes: readFileSync(full) };
+  try {
+    const stat = lstatSync(full);
+    if (!stat.isFile()) return { odd: `${entry.name} is not a regular file` };
+    if (stat.size > MAX_SAMPLE_BYTES) return { odd: `${entry.name} is larger than ${MAX_SAMPLE_BYTES} bytes` };
+    return { name: entry.name, bytes: readFileSync(full) };
+  } catch (error) {
+    return { unreadable: `samples/${entry.name} cannot be read (${error.code ?? error.message})` };
+  }
 }
 
 /** ok({ names, files, odd }) for a samples folder: the sorted names, the bytes of each regular file, and the names that are not regular files or are too large. */
@@ -25,6 +29,8 @@ export function readSamplesFolder(dir) {
     return fail(`the samples folder ${dir} cannot be read (${error.code ?? error.message})`);
   }
   const classified = [...entries].sort((a, b) => (a.name < b.name ? -1 : 1)).map(entry => classify(dir, entry));
+  const unreadable = classified.find(entry => entry.unreadable !== undefined);
+  if (unreadable !== undefined) return fail(unreadable.unreadable);
   const regular = classified.filter(entry => entry.bytes !== undefined);
   return ok({ names: entries.map(entry => entry.name).sort(), files: new Map(regular.map(entry => [entry.name, entry.bytes])), odd: classified.filter(entry => entry.odd !== undefined).map(entry => entry.odd) });
 }

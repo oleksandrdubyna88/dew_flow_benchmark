@@ -23,7 +23,7 @@ export const SLOT_PATTERNS = Object.freeze({
   ref: `(?:R[1-9]\\d*|any of (?:${RANGE}|${ITEM}(?:, ${ITEM})* and ${ITEM}))`,
   eref: `(?:${ITEM}(?:, ${ITEM})* and ${ITEM}|${ITEM})`,
   n: NUMBER,
-  k: '(?:\\d+|[a-z]+(?:-[a-z]+)?)',
+  k: '(?:[1-9]\\d*|[a-z]+(?:-[a-z]+)?)',
   T: NUMBER,
   G: NUMBER,
   V: NUMBER,
@@ -157,10 +157,11 @@ function resolveAliases(rows) {
 }
 
 /** The kinds in `(…)` right after the id a paragraph starts with, or null. */
-function variantKinds(text, startsWithId) {
-  const listed = startsWithId ? /^\S+\s*\(([a-z, ]+)\)/.exec(text)?.[1] : undefined;
-  const words = (listed ?? '').split(/[ ,]+/).filter(word => KINDS.includes(word));
-  return words.length > 0 ? new Set(words) : null;
+const labelWords = (text, startsWithId) => ((startsWithId ? /^\S+\s*\(([a-z, ]+)\)/.exec(text)?.[1] : undefined) ?? '').split(/[ ,]+/).filter(word => word !== '');
+
+function variantKinds(words) {
+  const kinds = words.filter(word => KINDS.includes(word));
+  return kinds.length > 0 ? new Set(kinds) : null;
 }
 
 /** The id a paragraph labels: the one it starts with, else the last one it names; with the kinds in `(…)` right after a starting id. */
@@ -174,7 +175,8 @@ function knownLead(text, known, first) {
   const named = [...text.matchAll(ID)].map(hit => hit[0]).filter(id => known.has(id));
   if (named.length === 0) return null;
   const id = known.has(first) ? first : named.at(-1);
-  return { id, kinds: variantKinds(text, id === first) };
+  const words = labelWords(text, id === first);
+  return { id, kinds: variantKinds(words), badLabel: words.find(word => !KINDS.includes(word)) };
 }
 
 const insideOf = range => line => line.start >= range.start && line.start < range.end;
@@ -201,7 +203,8 @@ function readBlocks(format, ids) {
   const inside = insideOf(sliceFrom(format, headingByNumber(format, '2'), 2));
   const items = [...leadItems(format, inside, new Set(ids)), ...blockItems(format, inside)].sort((a, b) => a.no - b.no);
   const leads = items.reduce(addItem, { current: null, leads: [] }).leads;
-  return { byId: byIdOf(leads), strays: leads.filter(lead => lead.unknown && lead.parts.length > 0).map(lead => lead.id) };
+  const labelled = leads.filter(lead => lead.parts.length > 0);
+  return { byId: byIdOf(leads), strays: labelled.filter(lead => lead.unknown).map(lead => lead.id), badLabels: labelled.filter(lead => lead.badLabel !== undefined) };
 }
 
 /** ok(variant) with its parts compiled, or the fail of the first part that cannot be. */
@@ -233,6 +236,12 @@ function sentenceOf(row, blocks) {
   return fault === null ? allOk(found.map(variant => compileVariant(variant, row.id)), variants => ({ ...row, variants })) : fail(fault);
 }
 
+/** The fault of the labelled blocks as a whole: a block labelled with an id that has no row, or with a kind label that is none of the kinds. */
+function blocksFault(strays, badLabels) {
+  if (strays.length > 0) return `FORMAT has a text block labelled ${strays[0]} and no row for it in 2.1's table`;
+  return badLabels.length > 0 ? `the kind label \`${badLabels[0].badLabel}\` of ${badLabels[0].id} is none of ${KINDS.join(', ')}` : null;
+}
+
 /**
  * ok(Map(id -> { id, kinds, required, where, variants: [{ kinds, parts: [{ template, compiled }] }] })) for every id of 2.1's table, or a fail: a row or a placement that cannot be read, an id with no
  * `text` block, a slot the checker does not know.
@@ -242,8 +251,9 @@ export function readSentences(format) {
   if (!rows.ok) return rows;
   const lacking = NAMED_IDS.find(id => !rows.value.some(row => row.id === id));
   if (lacking !== undefined) return fail(`FORMAT 2.1 has no row for ${lacking}, which the checker names`);
-  const { byId, strays } = readBlocks(format, rows.value.map(row => row.id));
-  if (strays.length > 0) return fail(`FORMAT has a text block labelled ${strays[0]} and no row for it in 2.1's table`);
+  const { byId, strays, badLabels } = readBlocks(format, rows.value.map(row => row.id));
+  const fault = blocksFault(strays, badLabels);
+  if (fault !== null) return fail(fault);
   return allOk(rows.value.map(row => sentenceOf(row, byId)), sentences => new Map(sentences.map(sentence => [sentence.id, sentence])));
 }
 

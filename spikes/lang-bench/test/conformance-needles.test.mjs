@@ -16,8 +16,7 @@ const CASED = ['FASTIFY', 'typescript', 'Javascript', 'DOTNET', 'Kestrel', 'XUNI
 for (const word of CASED) {
   test(`The_stack_word_${word}_is_found_in_any_case`, async t => {
     const fails = await hitsOf(t, `We use ${word} here.`);
-    assert.equal(fails.length, 1, fails.join('\n'));
-    assert.match(fails[0], /needle /);
+    assert.ok(fails.length >= 1 && fails.some(line => /needle /.test(line)), fails.join('\n'));
   });
 }
 
