@@ -5,7 +5,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { NPMRC_OFFLINE, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
+import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
+import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
+import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';
+import { lockProblems } from '../lib/workspace-build.mjs';
 import { EXEC_FILE, KINDS, STACKS, TEMPLATES, TEMPLATE_FILES, filesUnder, readTemplate, snapshotRecord, stacksRecord, templateDir, trackedMode } from './support/workspace-fixtures.mjs';
 
 const everyKind = fn => STACKS.flatMap(stack => KINDS.flatMap(kind => fn(stack, kind)));
@@ -161,4 +164,60 @@ test('Every_referenced_package_is_in_the_registered_manifest_at_its_exact_versio
   for (const kind of ['daemon', 'web']) assert.ok(refs.some(r => r.at === `csharp/${kind}`), `csharp/${kind} names a package: the scan found it`);
   for (const kind of KINDS) assert.ok(refs.filter(r => r.at === `node/${kind}`).length >= 5, `node/${kind} names its packages: the scan found them`);
   assert.deepEqual(packageProblems(TEMPLATES), []);
+});
+
+// ---- the locks -------------------------------------------------------------------------------------------------------------------------
+
+const lockOf = kind => JSON.parse(readTemplate('node', kind, 'package-lock.json'));
+const packageOf = kind => JSON.parse(readTemplate('node', kind, 'package.json'));
+const packagesOf = lock => Object.entries(lock.packages).filter(([key]) => key.includes('node_modules/'));
+
+test('The_lock_pins_the_exact_versions_and_integrities_of_the_manifest', () => {
+  const manifest = snapshotRecord().node.packages;
+  const sizes = [];
+  for (const kind of KINDS) {
+    const lock = lockOf(kind);
+    assert.deepEqual(lockProblems(lock, manifest, packageOf(kind)), [], `node/${kind}`);
+    assert.equal(lock.lockfileVersion, 3);
+    assert.equal(packagesOf(lock).some(([, entry]) => entry.hasInstallScript === true), false, `node/${kind}: the lock records no install script`);
+    for (const [key, entry] of packagesOf(lock)) {
+      const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+      const rows = manifest.filter(row => row.name === name && row.version === entry.version);
+      assert.equal(rows.length, 1, `${key} is one manifest row`);
+      assert.equal(entry.integrity, rows[0].integrity, `${key}: the integrity is the manifest's`);
+    }
+    sizes.push(packagesOf(lock).length);
+  }
+  assert.ok(sizes.every(n => n > 0), `every lock lists packages: ${sizes}`);
+});
+
+test('A_lock_that_is_not_the_manifests_is_reported_by_the_check', () => {
+  const manifest = snapshotRecord().node.packages;
+  const lock = lockOf('olympiad');
+  const changed = edit => { const copy = structuredClone(lock); edit(copy); return lockProblems(copy, manifest, packageOf('olympiad')); };
+  const [key, entry] = packagesOf(lock)[0];
+  assert.match(changed(copy => { copy.packages[key].integrity = 'sha512-AAAA'; })[0], /integrity/);
+  assert.match(changed(copy => { copy.packages[key].hasInstallScript = true; })[0], /install script/);
+  assert.match(changed(copy => { copy.packages['node_modules/left-pad'] = { version: '1.3.0', integrity: entry.integrity }; })[0], /left-pad@1\.3\.0 is not in the registered manifest/);
+  assert.match(changed(copy => { delete copy.packages[''].devDependencies.eslint; })[0], /root devDependencies differ/);
+});
+
+// ---- the environment of a build box --------------------------------------------------------------------------------------------------
+
+const FAKE_DIRS = Object.freeze({ dotnetSdk: '/t/sdk', node: '/t/node', typescript: '/t/ts' });
+const EXTRAS = Object.freeze({
+  csharp: ['DOTNET_CLI_USE_MSBUILD_SERVER', 'DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE', 'DOTNET_GENERATE_ASPNET_CERTIFICATE', 'MSBUILDDISABLENODEREUSE', 'NUGET_CERT_REVOCATION_MODE', 'NUGET_PACKAGES', 'TESTINGPLATFORM_TELEMETRY_OPTOUT', 'UseSharedCompilation'],
+  node: ['npm_config_cache', ...Object.keys(NPM_OFFLINE_ENV)],
+});
+
+test('The_build_box_environment_holds_no_case_key', () => {
+  for (const stack of STACKS) {
+    const env = workspaceBuildEnv({ dirs: FAKE_DIRS, stack, snap: '/s/snap' });
+    assert.deepEqual(caseKeysIn(env), [], `${stack}: no per-case heap key`);
+    assert.equal('DOTNET_GCHeapHardLimit' in env, false);
+    assert.doesNotMatch(env.NODE_OPTIONS ?? '', /old[-_]space/);
+    assert.deepEqual(unlistedKeys(env).sort(), [...EXTRAS[stack]].sort(), `${stack}: the keys off the layer's list are exactly the snapshot box's extras`);
+  }
+  assert.equal(snapshotBoxOf({ stack: 'node', snap: '/s/snap' }).extra.npm_config_cache, '/tmp/npm', 'the writable copy is the cache of every Node command');
+  assert.equal(snapshotBoxOf({ stack: 'csharp', snap: '/s/snap' }).extra.NUGET_PACKAGES, '/s/snap/nuget', 'the read-only snapshot is the packages folder');
 });
