@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="daemon/SnapDaemon.csproj" />
+  <Project Path="web/SnapWeb.csproj" />
+  <Project Path="tests/SnapTests/SnapTests.csproj" />
+</Solution>
