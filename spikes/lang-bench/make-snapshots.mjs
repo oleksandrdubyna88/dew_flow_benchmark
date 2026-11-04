@@ -12,8 +12,11 @@
 //     --gate-lock <file> default ~/.cache/lang-v2/gate.lock
 // Exit 0 done · 1 a build failed (named on stderr) · 2 usage (or a caches folder inside a git worktree) · 3 refused (gate lock held, already registered, preflight, tag rule, claim exists)
 //
-// A build takes the gate lock first, sweeps what a killed earlier run left (the owned work folders, then its staging folders, each by the conventions' owner rules), refuses a stack that is already registered BEFORE any
+// A build, a supersede and a prune each take the gate lock first (released in `finally`). A build sweeps what a killed earlier run left (the owned work folders, then its staging folders, each by the conventions' owner rules), refuses a stack that is already registered BEFORE any
 // build, runs the preflight, and makes one snapshot per stack. A failed build registers nothing. Every build prints `egress <stack>: <JSON>`: the hosts the proxy allowed and refused, from the work folder's log.
+// Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does: the build and its children never compete with the person at the machine.
+await import('./lib/lower-priority.mjs');
+
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
@@ -22,13 +25,13 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { cleanupScope, ownedFor, removeClaimIfStill, writeOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
 import { sweepLeftovers } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
-import { makeSnapshot, registerSnapshot, treeHash } from '../minigit-bench/lib/cache-snapshot.mjs';
+import { makeSnapshot, treeHash } from '../minigit-bench/lib/cache-snapshot.mjs';
 import { egressSummary } from '../minigit-bench/lib/egress.mjs';
 import { refuseInsideWorktree } from '../minigit-bench/lib/git-guard.mjs';
 import { fail, ok } from '../minigit-bench/lib/result.mjs';
 import { loadRecipeLang } from './lib/cache-recipe-lang.mjs';
 import { boxOptionsFor } from './lib/cache-offline.mjs';
-import { buildRecord, checkManifestMatches, manifestOf, pruneSuperseded, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
+import { pruneSuperseded, recordAtTag, registerBuilt, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
 import { takeGateLock } from './lib/gate-lock.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { preflightLang } from './lib/preflight-lang.mjs';
@@ -77,13 +80,30 @@ function readArgs(argv) {
   return unknown.length > 0 ? { error: `--stack names ${unknown.join(', ')}; the legal names are ${STACK_NAMES.join(', ')}` } : { config: configOf(v, modes[0] ?? 'build') };
 }
 
+/** A flag's JSON file: `ok({ bytes, json })` | `fail` with ONE line naming the flag and the file (missing, unreadable or not JSON). */
+function readJsonFlag(flag, file) {
+  try {
+    const bytes = readFileSync(file);
+    return ok({ bytes, json: JSON.parse(bytes.toString('utf8')) });
+  } catch (error) {
+    return fail(`${flag} ${file}: ${error.message.replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+}
+
+/** Both input files, or the first refusal. */
+function readInputFiles(config) {
+  const [stacksFile, recipeFile] = [readJsonFlag('--stacks', config.stacks), readJsonFlag('--recipe', config.recipe)];
+  return stacksFile.ok ? (recipeFile.ok ? ok({ stacksFile: stacksFile.value, recipeFile: recipeFile.value }) : recipeFile) : stacksFile;
+}
+
 /** The recipe (with the hash of its bytes) and the toolchain pins, checked against each other. -> `ok({ recipe, recipeSha256, stacks })` | `fail`. */
 function loadInputs(config) {
-  const stacks = loadStacksLang(JSON.parse(readFileSync(config.stacks, 'utf8')));
-  if (!stacks.ok) return stacks;
-  const bytes = readFileSync(config.recipe);
-  const recipe = loadRecipeLang(JSON.parse(bytes.toString('utf8')), stacks.value);
-  return recipe.ok ? ok({ recipe: recipe.value, recipeSha256: createHash('sha256').update(bytes).digest('hex'), stacks: stacks.value }) : recipe;
+  const files = readInputFiles(config);
+  if (!files.ok) return files;
+  const { stacksFile, recipeFile } = files.value;
+  const stacks = loadStacksLang(stacksFile.json);
+  const recipe = stacks.ok ? loadRecipeLang(recipeFile.json, stacks.value) : stacks;
+  return recipe.ok ? ok({ recipe: recipe.value, recipeSha256: createHash('sha256').update(recipeFile.bytes).digest('hex'), stacks: stacks.value }) : recipe;
 }
 
 // ---- one stack ---------------------------------------------------------------------------------------------------------------
@@ -109,30 +129,16 @@ function egressLine(workDir, stack) {
 
 const seedOf = spec => (spec.project === undefined ? null : path.join(SPIKE, spec.project));
 
-/** The manifest of the made snapshot, checked against the maker's own list, and the record built from both. -> `ok(record)` | `fail`. */
-function recordOf({ made, inputs, spec }) {
-  const manifest = manifestOf(made.dir);
-  if (!manifest.ok) return manifest;
-  const matched = checkManifestMatches(manifest.value, made.packages);
-  if (!matched.ok) return matched;
-  const seed = seedOf(spec);
-  return ok(buildRecord({ snapshot: made, manifest: manifest.value, recipeSha256: inputs.recipeSha256, projectSha256: seed === null ? null : treeHash(seed) }));
-}
-
-function register({ config, stack, record }) {
-  const registered = registerSnapshot({ file: config.record, stack, record, madeOn: new Date().toISOString().slice(0, 10) });
-  if (registered.ok) say(`registered ${stack} ${record.dirName} (${record.sizeBytes} bytes, ${record.packages.length} packages)`);
-  return registered.ok ? ok(record) : registered;
-}
-
-/** Make one snapshot, its record, and register it. -> `ok(record)` | `fail`; the egress line is printed either way. */
+/** Make one snapshot, its record, and register it (a failure after the maker removes the made folder, see `registerBuilt`). -> `ok(record)` | `fail`; the egress line is printed either way. */
 async function buildOne({ stack, config, inputs, dirs, workDir }) {
   const spec = inputs.recipe.stacks[stack];
   const made = await makeSnapshot({ stack, recipe: inputs.recipe, root: workDir, out: config.caches, nodeDir: dirs.node, box: boxOptionsFor(dirs), workSeed: seedOf(spec), dirName: (s, hash) => `${s}-${hash}` });
   say(egressLine(workDir, stack));
   if (!made.ok) return made;
-  const record = recordOf({ made: made.value, inputs, spec });
-  return record.ok ? register({ config, stack, record: record.value }) : record;
+  const seed = seedOf(spec);
+  const record = registerBuilt({ made: made.value, stack, recipeSha256: inputs.recipeSha256, projectSha256: seed === null ? null : treeHash(seed), file: config.record, madeOn: new Date().toISOString().slice(0, 10) });
+  if (record.ok) say(`registered ${stack} ${record.value.dirName} (${record.value.sizeBytes} bytes, ${record.value.packages.length} packages)`);
+  return record;
 }
 
 /** The wall time of one stack's build, said after the egress line (the docs record it). */
@@ -197,11 +203,12 @@ async function buildLocked(config, inputs) {
   return refused ?? buildAll({ config, inputs, storeRoot });
 }
 
-async function build(config, inputs) {
+/** Every mode that changes the record or the caches (a build, supersede, prune) runs under the one gate lock, released in `finally`: a build never meets a supersede or a prune half way. */
+async function underGateLock(config, run) {
   const lock = takeGateLock({ file: config.gateLock });
   if (!lock.ok) return stop(EXIT.refused, lock.reason);
   try {
-    return await buildLocked(config, inputs);
+    return await run();
   } finally {
     lock.value.release();
   }
@@ -223,7 +230,7 @@ function printPruned({ removed, kept }) {
 
 function pruneMode(config) {
   if (!existsSync(config.caches)) return stop(EXIT.refused, `there is no caches folder at ${config.caches}: nothing to prune`);
-  const pruned = pruneSuperseded({ file: config.record, caches: config.caches, tagsOf: () => tagsOf(REPO) });
+  const pruned = pruneSuperseded({ caches: config.caches, tagsOf: () => tagsOf(REPO), recordAtTag: tag => recordAtTag(REPO, tag) });
   if (!pruned.ok) return stop(EXIT.refused, pruned.reason);
   printPruned(pruned.value);
   return EXIT.done;
@@ -244,16 +251,17 @@ function printMode(config) {
 function cachesModes(config) {
   const safe = refuseInsideWorktree(config.caches, 'the caches folder');
   if (!safe.ok) return stop(EXIT.usage, safe.reason);
-  if (config.mode === 'prune') return pruneMode(config);
+  if (config.mode === 'prune') return underGateLock(config, () => pruneMode(config));
   const inputs = loadInputs(config);
-  return inputs.ok ? build(config, inputs.value) : stop(EXIT.usage, inputs.reason);
+  return inputs.ok ? underGateLock(config, () => buildLocked(config, inputs.value)) : stop(EXIT.usage, inputs.reason);
 }
 
 async function main(argv) {
   const parsed = readArgs(argv);
   if (parsed.error) return stop(EXIT.usage, parsed.error);
-  const modes = { supersede: supersedeMode, print: printMode };
-  return (modes[parsed.config.mode] ?? cachesModes)(parsed.config);
+  const { config } = parsed;
+  if (config.mode === 'supersede') return underGateLock(config, () => supersedeMode(config));
+  return (config.mode === 'print' ? printMode : cachesModes)(config);
 }
 
 process.exitCode = await main(process.argv.slice(2));

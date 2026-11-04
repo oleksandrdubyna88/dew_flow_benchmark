@@ -6,10 +6,12 @@ import { plainOrder, versionOrder } from './cache-store.mjs';
 
 const ECOSYSTEM_OF = Object.freeze({ csharp: 'nuget', node: 'npm' });
 const SPEC_TOKEN = /\{([A-Z_]+)\}/g;
-const INTRO = Object.freeze([
-  'This workspace builds offline. The packages below are the only ones in its package cache: a package or version not listed here fails to install, and the error names it.',
-  'Install a package with the exact version listed (C#: `<PackageReference Include="NAME" Version="VERSION" />`; Node: `npm install NAME@VERSION`).',
-]);
+/** The sentence an agent reads first, per stack, in the team lead's words (E1.S4 review, M3): what is available, what a version that is not listed does, and the error that names it. */
+const SENTENCE_OF = Object.freeze({
+  csharp: 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.',
+  node: 'Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.',
+});
+const INSTALL_LINE = 'Install a package with the exact version listed (C#: `<PackageReference Include="NAME" Version="VERSION" />`; Node: `npm install NAME@VERSION`).';
 
 const keyOf = (ecosystem, name) => (ecosystem === 'nuget' ? name.toLowerCase() : name);
 const idOf = (ecosystem, name, version) => `${keyOf(ecosystem, name)}@${version}`;
@@ -78,7 +80,7 @@ export function renderPackagesMd({ stack, record, recipe }) {
   const used = new Set(offered.value.map(r => r.id));
   const rest = snap.packages.filter(m => !used.has(idOf(ecosystem, m.name, m.version)));
   return ok([
-    '# Packages', '', ...INTRO, ...noteLines(spec), '',
+    '# Packages', '', SENTENCE_OF[stack], INSTALL_LINE, ...noteLines(spec), '',
     `Cache snapshot: tree sha256 \`${snap.treeSha256}\`, made ${snap.madeOn}.`, '',
     '## Offered', '', ...offeredTable(offered.value.map(r => r.row)), '',
     '## In the cache as dependencies of the offered packages', '', ...dependencyTable(rest),

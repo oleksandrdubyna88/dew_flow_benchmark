@@ -28,7 +28,10 @@ test('A_held_gate_lock_refuses_naming_its_owner_and_never_waits', t => {
   assert.equal(readFileSync(file, 'utf8'), first.value.text, 'and left as it was');
   const elsewhere = recordOf({ host: 'another-host@linux' });
   writeFileSync(file, elsewhere);
-  assert.equal(takeGateLock({ file }).reason, `gate lock held by ${elsewhere.trim()}`, 'a lock of another host is never judged: refused');
+  // fix batch 1 (L4): an `unknown` owner (another host here) is not "held by": it says the state is unknown and names the manual step
+  const unknown = takeGateLock({ file }).reason;
+  assert.match(unknown, /owner state unknown/, 'a lock of another host is never judged: refused as unknown');
+  assert.match(unknown, new RegExp(`remove ${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} by hand if no gate run is going`));
   assert.equal(readFileSync(file, 'utf8'), elsewhere);
 });
 

@@ -171,10 +171,13 @@ test('A_staging_folder_is_removed_only_when_its_owner_is_proven_gone', t => {
   for (const other of [{ owner: 'u1' }, { host: 'another@linux' }, { ns: me.ns + 1 }]) assert.deepEqual(verdictOf({ owner: claimOf(other), probe: () => ({ state: 'dead' }) }), { action: 'keep', why: 'claimed by another owner or host' });
   assert.deepEqual(verdictOf({ owner: claimOf({ pid: 4242 }), probe: () => ({ state: 'dead' }) }), { action: 'remove', why: 'owner pid 4242 is gone' });
   const reused = verdictOf({ owner: claimOf({ pid: 4242, start: me.start - 500 }), probe: () => ({ state: 'live', start: me.start }) });
-  assert.deepEqual(reused, { action: 'remove', why: `pid 4242 now belongs to another process (start ${me.start} ≠ ${me.start - 500})` }, 'a live pid with another start is not the owner');
-  for (const probe of [() => ({ state: 'live', start: me.start }), () => ({ state: 'live', start: me.start + START_TOLERANCE_S }), () => ({ state: 'live' }), () => ({ state: 'unknown' })]) {
-    assert.deepEqual(verdictOf({ owner: claimOf({}), probe }), { action: 'keep', why: 'owner may be alive' }, 'this process\'s own claim, a start within the tolerance, a start not known, a pid that cannot be asked');
+  // fix batch 1 (C0): the conventions' own `ownerState` calls a live pid with another start time `unknown`, and unknown KEEPS the folder (the accepted code-round finding replaces the old rule 6)
+  assert.equal(reused.action, 'keep', 'a live pid with another start is `unknown`: kept, never removed');
+  assert.match(reused.why, /owner state unknown/, 'and the log line says why');
+  for (const probe of [() => ({ state: 'live', start: me.start }), () => ({ state: 'live', start: me.start + START_TOLERANCE_S }), () => ({ state: 'live' })]) {
+    assert.deepEqual(verdictOf({ owner: claimOf({}), probe }), { action: 'keep', why: 'owner may be alive' }, 'this process\'s own claim, a start within the tolerance, a start not known');
   }
+  assert.match(verdictOf({ owner: claimOf({}), probe: () => ({ state: 'unknown' }) }).why, /owner state unknown/, 'a pid that cannot be asked is unknown (fix batch 1, C0): kept and named');
   // on disk: only the folder of a dead owner goes, with its claim; everything else stays and every folder is named on the log
   const caches = ownedFolder(t, 'stg');
   const make = (name, claim) => { const d = path.join(caches, name); mkdirSync(path.join(d, 'sub'), { recursive: true }); writeFileSync(path.join(d, 'sub', 'f'), 'x'); if (claim !== undefined) writeClaim(d, claim); return d; };
@@ -251,7 +254,7 @@ test('Pruning_removes_only_a_superseded_snapshot_that_re_hashes_to_its_record_an
   assert.equal(refusedEarly.ok, false);
   assert.match(refusedEarly.reason, /pre-registration tag/, 'before the tag the rule is named');
   assert.equal(existsSync(path.join(caches, `node-${old}`)), true, 'nothing was removed');
-  const pruned = pruneSuperseded({ file, caches, tagsOf: taggedA });
+  const pruned = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) });
   assert.equal(pruned.ok, true, pruned.reason);
   assert.deepEqual(pruned.value.removed, [{ name: `node-${old}`, supersededOn: '2026-11-05', reason: 'a' }], 'only the superseded snapshot that still hashes to its record');
   const keptWhy = Object.fromEntries(pruned.value.kept.map(k => [k.name, k.why]));
@@ -262,10 +265,10 @@ test('Pruning_removes_only_a_superseded_snapshot_that_re_hashes_to_its_record_an
   assert.equal(keptWhy['.building-node-77'], 'not a snapshot of this series');
   assert.equal(treeHash(path.join(caches, `csharp-${registered}`)), registered, 'the registered snapshot is untouched');
   assert.equal(existsSync(path.join(caches, `node-${tampered}`)), true);
-  const otherUser = pruneSuperseded({ file, caches, tagsOf: taggedA, uid: process.getuid() + 1 });
+  const otherUser = pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))), uid: process.getuid() + 1 });
   assert.deepEqual(otherUser.value.removed, [], 'a folder of another uid is never removed');
   writeFileSync(file, JSON.stringify({ node: recordFor(old), superseded }));
-  assert.equal(pruneSuperseded({ file, caches, tagsOf: taggedA }).value.kept.some(k => k.name === `node-${old}`), false, 'already removed: nothing left to name');
+  assert.equal(pruneSuperseded({ file, caches, tagsOf: taggedA, recordAtTag: () => ok(JSON.parse(readFileSync(file, 'utf8'))) }).value.kept.some(k => k.name === `node-${old}`), false, 'already removed: nothing left to name');
   makeWritable(caches);
 });
 

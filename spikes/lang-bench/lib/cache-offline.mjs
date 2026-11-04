@@ -89,6 +89,11 @@ const STACK_ENV = Object.freeze({
 
 const readLines = file => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
 
+const WRAPPER_SCRIPT = 'out="$1"; code="$2"; shift 2; "$@" > "$out" 2>&1; echo $? > "$code"';
+
+/** The argv of the fixed wrapper: the output and exit-code paths and the command are POSITIONAL arguments, never part of the script text (a path with a quote or `$(...)` would otherwise be run as shell). */
+export const wrappedArgv = ({ command, out, code }) => ['sh', '-c', WRAPPER_SCRIPT, 'sh', out, code, ...command];
+
 /**
  * One command in the box, with its WHOLE output and exit code: v1's `inBox` keeps only the last 600 characters of a failure, and the not-in-cache error that names the package must be read in full. The command runs
  * through a fixed `sh -c` wrapper (the command is positional arguments, never a string to parse) that writes its output and its exit code into the box's `out` folder, which the host reads after the box ends.
@@ -97,7 +102,7 @@ const readLines = file => (existsSync(file) ? readFileSync(file, 'utf8').split('
 async function runWrapped({ layout, dirs, stack, n, command, env, timeoutMs }) {
   const [out, code] = [path.join(layout.out, `o${n}`), path.join(layout.out, `c${n}`)];
   const box = boxOptionsFor(dirs);
-  const wrapped = ['sh', '-c', `"$@" > "${out}" 2>&1; echo $? > "${code}"`, 'sh', ...command];
+  const wrapped = wrappedArgv({ command, out, code });
   const r = await inBox({ layout, nodeDir: dirs.node, command: wrapped, timeoutMs, name: layout.rid, ...box, env: { ...box.env, ...STACK_ENV[stack], ...env } });
   return r.ok ? ok({ code: Number(readFileSync(code, 'utf8')), output: readFileSync(out, 'utf8') }) : r;
 }

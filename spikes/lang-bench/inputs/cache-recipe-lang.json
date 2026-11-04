@@ -112,27 +112,57 @@
         {
           "name": "Microsoft.Extensions.Hosting",
           "spec": "{HOSTING}",
-          "purpose": "Generic Host for daemons: lifetime and graceful stop (IHostApplicationLifetime), dependency injection, configuration, ILogger"
+          "purpose": "Generic Host for daemons: lifetime and graceful stop (IHostApplicationLifetime), dependency injection, configuration, ILogger",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.0.14",
+            "releasedOn": "2026-10-25",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "Microsoft.AspNetCore.Authentication.JwtBearer",
           "spec": "{JWT_BEARER}",
-          "purpose": "JWT bearer authentication for ASP.NET Core Minimal API"
+          "purpose": "JWT bearer authentication for ASP.NET Core Minimal API",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.0.14",
+            "releasedOn": "2026-10-25",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "xunit.v3",
           "spec": "{XUNIT}",
-          "purpose": "Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable"
+          "purpose": "Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable",
+          "licence": "Apache-2.0",
+          "maintenance": {
+            "latestVersion": "4.0.2",
+            "releasedOn": "2026-10-09",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "xunit.runner.visualstudio",
           "spec": "{XUNIT_VS}",
-          "purpose": "xUnit adapter for the VSTest runner (dotnet test in VSTest mode)"
+          "purpose": "xUnit adapter for the VSTest runner (dotnet test in VSTest mode)",
+          "licence": "Apache-2.0",
+          "maintenance": {
+            "latestVersion": "4.0.1",
+            "releasedOn": "2026-10-09",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "Microsoft.NET.Test.Sdk",
           "spec": "{TEST_SDK}",
-          "purpose": "VSTest host for dotnet test in VSTest mode"
+          "purpose": "VSTest host for dotnet test in VSTest mode",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "18.11.0",
+            "releasedOn": "2026-10-13",
+            "readOn": "2026-11-04"
+          }
         }
       ],
       "packagesNote": "ASP.NET Core (Minimal API, its built-in validation, System.Text.Json) and the .NET base library come with SDK 10.0.403 as shared frameworks; they are not packages."
@@ -224,6 +254,7 @@
           "argv": [
             "npm",
             "install",
+            "--ignore-scripts",
             "--no-audit",
             "--no-fund",
             "--no-update-notifier",
@@ -238,6 +269,7 @@
           "argv": [
             "npm",
             "install",
+            "--ignore-scripts",
             "--save-dev",
             "--no-audit",
             "--no-fund",
@@ -265,52 +297,112 @@
         {
           "name": "fastify",
           "spec": "5.12.7",
-          "purpose": "HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close()"
+          "purpose": "HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close()",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "5.12.8",
+            "releasedOn": "2026-11-02",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "@fastify/jwt",
           "spec": "10.2.6",
-          "purpose": "JWT sign and verify as a Fastify plugin"
+          "purpose": "JWT sign and verify as a Fastify plugin",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.2.7",
+            "releasedOn": "2026-11-02",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "@fastify/type-provider-typebox",
           "spec": "6.3.0",
-          "purpose": "TypeBox schemas as Fastify route types"
+          "purpose": "TypeBox schemas as Fastify route types",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "6.3.0",
+            "releasedOn": "2026-10-12",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "typebox",
           "spec": "{TYPEBOX}",
-          "purpose": "JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set)"
+          "purpose": "JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set)",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "1.4.3",
+            "releasedOn": "2026-10-22",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "pino",
           "spec": "{PINO}",
-          "purpose": "Structured logging (Fastify's logger), the version Fastify 5.12.7 resolves"
+          "purpose": "Structured logging (Fastify's logger), the version Fastify 5.12.7 resolves",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.4.0",
+            "releasedOn": "2026-10-02",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "typescript",
           "spec": "6.0.3",
-          "purpose": "Type check (tsc --noEmit) and the compiler API the type-aware lint uses"
+          "purpose": "Type check (tsc --noEmit) and the compiler API the type-aware lint uses",
+          "licence": "Apache-2.0",
+          "maintenance": {
+            "latestVersion": "7.0.2",
+            "releasedOn": "2026-07-08",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "@types/node",
           "spec": "{TYPES_NODE}",
-          "purpose": "Types of the Node 26 API"
+          "purpose": "Types of the Node 26 API",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "26.6.6",
+            "releasedOn": "2026-10-28",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "typescript-eslint",
           "spec": "{TS_ESLINT}",
-          "purpose": "TypeScript parser and type-aware lint rules for ESLint"
+          "purpose": "TypeScript parser and type-aware lint rules for ESLint",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "8.72.1",
+            "releasedOn": "2026-10-26",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "eslint",
           "spec": "{ESLINT}",
-          "purpose": "The lint runner"
+          "purpose": "The lint runner",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.14.0",
+            "releasedOn": "2026-10-30",
+            "readOn": "2026-11-04"
+          }
         },
         {
           "name": "@eslint/js",
           "spec": "{ESLINT_JS}",
-          "purpose": "ESLint's recommended JavaScript rules"
+          "purpose": "ESLint's recommended JavaScript rules",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.0.1",
+            "releasedOn": "2026-02-06",
+            "readOn": "2026-11-04"
+          }
         }
       ]
     }

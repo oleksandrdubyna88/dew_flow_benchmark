@@ -71,3 +71,8 @@ export const closeReal = () => scope?.close();
 
 /** `{ dir, parts }` of a stack's registered snapshot in the real build: what `seedCaches` takes. */
 export const snapshotOf = (real, stack) => ({ dir: path.join(real.caches, real.record[stack].dirName), parts: real.record[stack].parts });
+
+/** A completion run (BENCH_REQUIRE_SANDBOX=1) builds for real: LANG_V2_REUSE_REAL, a development loop, makes the build case fail there. */
+export function assertBuiltForReal() {
+  if (process.env.BENCH_REQUIRE_SANDBOX === '1' && process.env.LANG_V2_REUSE_REAL) throw new Error('BENCH_REQUIRE_SANDBOX=1 and LANG_V2_REUSE_REAL is set: that is a dev seam: a completion run builds for real');
+}

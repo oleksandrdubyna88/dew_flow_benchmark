@@ -10,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, openBox, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
-import { closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
+import { nugetLicence, npmLicence } from '../lib/package-metadata.mjs';
+import { manifestSha256Of } from '../lib/cache-store.mjs';
+import { assertBuiltForReal, closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -47,6 +49,7 @@ function hasNoWriteBits(root) {
 
 test('The_real_build_registers_both_stacks_read_only_and_each_snapshot_re_hashes_to_its_record', { timeout: 45 * 60_000 }, async t => {
   if (!realGate(t)) return;
+  assertBuiltForReal(); // fix batch 1 (M1): a completion run builds for real; LANG_V2_REUSE_REAL is a development loop only
   const real = await realBuild();
   assert.equal(real.run.code, 0, `the command exited ${real.run.code}: ${real.run.stderr.slice(-3000)}`);
   t.diagnostic(`the real build took ${Math.round(real.run.ms / 1000)} s; ${real.run.stdout.split('\n').filter(l => l.startsWith('built ') || l.startsWith('registered ')).join(' | ')}`);
@@ -57,6 +60,7 @@ test('The_real_build_registers_both_stacks_read_only_and_each_snapshot_re_hashes
     assert.equal(rec.dirName, `${stack}-${rec.treeSha256}`, 'the folder is named by the whole hash');
     assert.equal(hasNoWriteBits(folder), true, `${stack}: read-only, every entry`);
     assert.equal(treeHash(folder), rec.treeSha256, `${stack}: the folder re-hashes to its record`);
+    assert.equal(rec.manifestSha256, manifestSha256Of(rec.packages), `${stack}: the record carries the hash of its sorted manifest`);
     for (const [part, hash] of Object.entries(rec.parts)) assert.equal(treeHash(path.join(folder, part)), hash, `${stack}/${part}`);
     assert.ok(rec.packages.length > 0 && rec.packages.every(p => /^sha512-/.test(p.integrity)), `${stack}: every manifest package has an integrity`);
     assert.equal(rec.recipeSha256, createHash('sha256').update(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe-lang.json'))).digest('hex'));
@@ -90,6 +94,7 @@ async function nodeOffline(t, real) {
   }
   assert.equal(real.record.node.packages.some(p => p.name === '@sinclair/typebox'), false, '@sinclair/typebox is not in the set (the owner\'s decision)');
   assert.deepEqual(box.egress().allowed, {}, 'no registry was reached');
+  assert.deepEqual(box.egress().refused, {}, 'and none was even asked: a refused attempt would be in the log');
 }
 
 const props = resolved => Object.entries({ SnapHostingVersion: 'HOSTING', SnapJwtBearerVersion: 'JWT_BEARER', SnapXunitVersion: 'XUNIT', SnapXunitVsVersion: 'XUNIT_VS', SnapTestSdkVersion: 'TEST_SDK' }).map(([prop, key]) => `-p:${prop}=${resolved[key]}`);
@@ -108,6 +113,7 @@ async function csharpOffline(t, real) {
   assert.deepEqual(outsideManifest(used, real.record.csharp.packages, 'nuget'), [], 'every package the restore used is in the registered manifest');
   t.diagnostic(`csharp: manifest minus used (not a failure): ${idsOf(real.record.csharp, 'nuget').filter(id => !used.includes(id)).join(', ') || '(none)'}`);
   assert.deepEqual(box.egress().allowed, {}, 'no registry was reached');
+  assert.deepEqual(box.egress().refused, {}, 'and none was even asked: a refused attempt would be in the log');
 }
 
 test('The_offered_set_restores_builds_and_runs_offline_from_the_snapshot_alone', { timeout: 15 * 60_000 }, async t => {
@@ -163,12 +169,37 @@ async function nugetHole(t, real) {
   assert.deepEqual(Object.keys(open.egress().allowed), ['api.nuget.org']);
 }
 
+/** The version cases the agent-visible sentence of PACKAGES.md states (fix batch 1, M3). */
+async function versionCases(t, real) {
+  const npm = await fresh(t, real, 'node', 'n1');
+  writeJson(path.join(npm.layout.work, 'package.json'), { name: 'ws', version: '1.0.0', private: true });
+  writeFileSync(path.join(npm.layout.work, '.npmrc'), NPMRC_OFFLINE);
+  const lower = ran(await npm.run(npmOfflineArgv(['pino@9.14.0']), { env: NPM_OFFLINE_ENV }), 'npm: a version below the listed one');
+  assert.notEqual(lower.code, 0);
+  assert.match(lower.output, /ENOTCACHED/, 'npm: a version that is not listed fails ENOTCACHED (the message may name a dependency)');
+  const cs = await fresh(t, real, 'csharp', 'n2');
+  const project = version => `<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup>\n  <ItemGroup><PackageReference Include="Microsoft.Extensions.Hosting" Version="${version}" /></ItemGroup>\n</Project>\n`;
+  writeFileSync(path.join(cs.layout.work, 'nuget.config'), offlineNugetConfig(cs.layout.nuget).value);
+  writeFileSync(path.join(cs.layout.work, 'App.csproj'), project('10.0.0'));
+  const below = ran(await cs.run(['dotnet', 'restore', 'App.csproj']), 'C#: a version below the listed one');
+  assert.equal(below.code, 0, below.output.slice(-2000));
+  assert.match(below.output, /NU1603/, 'C#: a lower version resolves to the listed one, with the warning NU1603');
+  const assets = JSON.parse(readFileSync(path.join(cs.layout.work, 'obj', 'project.assets.json'), 'utf8'));
+  assert.ok(Object.keys(assets.libraries).includes(`Microsoft.Extensions.Hosting/${real.record.csharp.resolved.HOSTING}`), 'and the listed version is what was restored');
+  writeFileSync(path.join(cs.layout.work, 'App.csproj'), project('10.0.99'));
+  const above = ran(await cs.run(['dotnet', 'restore', 'App.csproj']), 'C#: a version above the listed one');
+  assert.notEqual(above.code, 0);
+  assert.match(above.output, /NU1102/, 'C#: a higher version fails with NU1102');
+  assert.match(above.output, /Microsoft\.Extensions\.Hosting/, 'and the error names the package');
+}
+
 test('A_registry_reachable_from_the_box_would_hide_a_missing_package_and_that_is_the_point', { timeout: 15 * 60_000 }, async t => {
   if (!realGate(t)) return;
   const real = await realBuild();
   assert.equal(real.run.code, 0, 'the shared build must have succeeded');
   await t.test('npm', { timeout: 15 * 60_000 }, st => npmHole(st, real));
   await t.test('nuget', { timeout: 15 * 60_000 }, st => nugetHole(st, real));
+  await t.test('versions', { timeout: 15 * 60_000 }, st => versionCases(st, real));
 });
 
 // ---- 4. the type-aware lint under the pinned TypeScript --------------------------------------------------------------------------
@@ -192,12 +223,31 @@ test('Type_aware_lint_runs_under_the_pinned_TypeScript', { timeout: 15 * 60_000 
   const linted = ran(await eslint(box), 'eslint under the pinned TypeScript');
   assert.equal(linted.code, 1, linted.output.slice(-2000));
   assert.match(linted.output, /@typescript-eslint\/no-floating-promises/, 'a rule that needs type information fired: the parser had the TS program');
-  // the other arm, kept: TypeScript 7.0.2 (outside the linter's peer range and outside the set) has no classic compiler API, so the lint cannot see types
+  // the other arm, kept: TypeScript 7.0.2 (outside the linter's peer range and outside the set): typescript-eslint refuses it outright ("does not support TS 7.0"), so the lint cannot run with types
   const open = await fresh(t, real, 'node', 'n2', ['registry.npmjs.org']);
   lintWorkspace(open, real, { typescript: '7.0.2' });
   const seven = ran(await open.run(['npm', 'install', '--legacy-peer-deps', ...NO_FLAGS], { env: { npm_config_update_notifier: 'false', npm_config_logs_max: '0' } }), 'the install of TypeScript 7.0.2');
   assert.equal(seven.code, 0, seven.output.slice(-2000));
   const unlinted = ran(await eslint(open), 'eslint under TypeScript 7.0.2');
   assert.doesNotMatch(unlinted.output, /no-floating-promises/, 'under 7.0.2 the type-aware rule cannot fire');
-  assert.notEqual(unlinted.code, 1, 'and the lint does not report the finding it would under the pin');
+  assert.equal(unlinted.code, 2, 'typescript-eslint refuses to run: ESLint exits 2, not 1 (a finding)');
+  assert.match(unlinted.output, /typescript-eslint does not support TS 7\.0/, 'with its own refusal text (observed with typescript-eslint 8.72.1 and typescript 7.0.2)');
+});
+
+// ---- the licences of the offered packages are the ones the snapshot's own metadata declares (fix batch 1, C7) ----------------------------
+
+test('The_licence_of_every_offered_package_is_the_one_its_own_metadata_in_the_snapshot_declares', { timeout: 15 * 60_000 }, async t => {
+  if (!realGate(t)) return;
+  const real = await realBuild();
+  assert.equal(real.run.code, 0, 'the shared build must have succeeded');
+  for (const stack of STACKS) {
+    const [rec, part] = [real.record[stack], stack === 'node' ? 'npm' : 'nuget'];
+    for (const p of recipe.stacks[stack].packages) {
+      const version = filled(p.spec, rec.resolved);
+      const dir = path.join(real.caches, rec.dirName, part);
+      const declared = stack === 'node' ? npmLicence(dir, p.name, version) : nugetLicence(dir, p.name, version);
+      assert.equal(p.licence, declared, `${stack}: ${p.name}@${version} declares ${declared}, the recipe says ${p.licence}`);
+      assert.match(p.maintenance.releasedOn, /^\d{4}-\d{2}-\d{2}$/, `${p.name}: the date of the latest release the registry showed`);
+    }
+  }
 });

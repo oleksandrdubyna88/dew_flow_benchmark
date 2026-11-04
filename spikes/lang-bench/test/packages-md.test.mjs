@@ -27,9 +27,13 @@ const record = () => ({
   csharp: { treeSha256: 'b'.repeat(64), madeOn: '2026-11-05', resolved: { HOSTING: '10.0.14' }, packages: [pkg('microsoft.extensions.hosting', '10.0.14', 'nuget'), pkg('microsoft.extensions.logging', '10.0.14', 'nuget')] },
 });
 
+// fix batch 1 (M3): the sentence an agent reads, per stack, in the team lead's words
+const CS_SENTENCE = 'Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.';
+const TS_SENTENCE = 'Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.';
+
 const EXPECTED_NODE = `# Packages
 
-This workspace builds offline. The packages below are the only ones in its package cache: a package or version not listed here fails to install, and the error names it.
+${TS_SENTENCE}
 Install a package with the exact version listed (C#: \`<PackageReference Include="NAME" Version="VERSION" />\`; Node: \`npm install NAME@VERSION\`).
 Types come with the packages.
 
@@ -126,4 +130,13 @@ test('A_purpose_with_a_table_breaking_character_is_refused', () => {
     const why = refusal(record(), rcp);
     assert.match(why, /fastify.*purpose|purpose.*fastify/, `${JSON.stringify(purpose)} names the package`);
   }
+});
+
+test('The_agent_visible_sentence_is_the_one_written_for_the_stack_and_the_old_one_is_gone', () => {
+  const cs = render(record(), recipe(), 'csharp').value.split('\n');
+  assert.equal(cs[2], CS_SENTENCE, 'C#: the third line, one paragraph');
+  const ts = render().value.split('\n');
+  assert.equal(ts[2], TS_SENTENCE, 'TypeScript: the third line, one paragraph');
+  for (const text of [cs.join('\n'), ts.join('\n')]) assert.doesNotMatch(text, /This workspace builds offline/, 'the earlier wording is not rendered');
+  assert.match(ts[3], /^Install a package with the exact version listed/, 'the instruction line stays');
 });

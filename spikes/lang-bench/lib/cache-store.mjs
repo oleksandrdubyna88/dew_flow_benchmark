@@ -1,12 +1,13 @@
 // E1.S4: the store of the two cache snapshots. The manifest (every package with its integrity, in one stable order), the record of a snapshot, the sweep of a killed build's staging folder, supersede (a stack's record
 // moves to `superseded[]`, never deleted) and prune (a superseded snapshot's folder goes only after the pre-registration tag, and only when it re-hashes to its record). Every refusal is a value (`fail`).
 // The conventions' owner helpers decide who owns what: nothing here deletes on a name, an age or a pid in a name.
+import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { START_TOLERANCE_S, processProbe, readOwner, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
-import { makeWritable, snapshotRecord, treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
+import { ownerState, processProbe, readOwner, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
+import { makeWritable, registerSnapshot, snapshotRecord, treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { readNpmPackages, readNugetPackages } from '../../minigit-bench/lib/packages.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 
@@ -46,10 +47,13 @@ export function checkManifestMatches(manifest, listed) {
   return onlyManifest.length + onlyListed.length === 0 ? ok(null) : fail(`the manifest and the maker's package list differ: only in the manifest ${onlyManifest.join(', ') || '(none)'}; only in the maker's list ${onlyListed.join(', ') || '(none)'}`);
 }
 
+/** sha256 of the sorted (ecosystem, name, version, integrity) rows: the identity a rebuild can match (the Node tree hash cannot be matched, every npm index entry holds a time). */
+export const manifestSha256Of = manifest => createHash('sha256').update(JSON.stringify(sortPackages(manifest).map(p => [p.ecosystem, p.name, p.version, p.integrity]))).digest('hex');
+
 /** The record of one registered stack (`inputs/cache-snapshots-lang.json`), built from what the maker returned and the manifest; `registerSnapshot` adds `madeOn`. */
 export function buildRecord({ snapshot, manifest, recipeSha256, projectSha256 }) {
   const base = snapshotRecord(snapshot);
-  return { treeSha256: base.treeSha256, dirName: path.basename(snapshot.dir), parts: base.parts, sizeBytes: base.sizeBytes, packages: manifest, resolved: base.resolved, steps: base.steps, recipeSha256, projectSha256 };
+  return { treeSha256: base.treeSha256, dirName: path.basename(snapshot.dir), parts: base.parts, sizeBytes: base.sizeBytes, packages: manifest, manifestSha256: manifestSha256Of(manifest), resolved: base.resolved, steps: base.steps, recipeSha256, projectSha256 };
 }
 
 // ---- the staging sweep ---------------------------------------------------------------------------------------------------------
@@ -58,15 +62,17 @@ const STAGING_NAME = /^\.building-(csharp|node)-[1-9][0-9]*$/;
 const keep = why => ({ action: 'keep', why });
 const remove = why => ({ action: 'remove', why });
 const claimedByOther = (owner, me) => ['owner', 'host', 'ns'].some(key => owner[key] !== me[key]);
-const startsApart = (owner, seen) => owner.start !== undefined && seen !== undefined && Math.abs(owner.start - seen) > START_TOLERANCE_S;
 const notStaging = ({ stat, uid }) => !stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== uid;
 const noClaim = owner => owner === null || owner.unreadable === true;
 
-/** Pid gone -> remove; alive with a start time that differs by more than the tolerance (the pid now belongs to another process) -> remove; otherwise `null`. */
+/**
+ * The conventions' own judgement of the owner (`ownerState`): `gone` (no process has the pid, on this host and namespace, for this user) -> remove; `unknown` (a live pid with another start time, a pid that cannot be asked, ...)
+ * -> KEEP and say so, because deleting on anything but a proven `gone` is how another run's live folder is lost; anything else (`live`) -> `null`, and the caller keeps it as "may be alive".
+ */
 function livenessRule({ owner, probe }) {
-  const seen = probe(owner.pid);
-  if (seen.state === 'dead') return remove(`owner pid ${owner.pid} is gone`);
-  return seen.state === 'live' && startsApart(owner, seen.start) ? remove(`pid ${owner.pid} now belongs to another process (start ${seen.start} ≠ ${owner.start})`) : null;
+  const state = ownerState(owner, probe);
+  if (state === 'gone') return remove(`owner pid ${owner.pid} is gone`);
+  return state === 'unknown' ? keep(`owner state unknown (pid ${owner.pid}: alive with another start time, or it cannot be asked): kept; remove it by hand if no build is going`) : null;
 }
 
 /** The rules of `stagingVerdict`, in order; the first that answers decides. */
@@ -79,8 +85,8 @@ const STAGING_RULES = Object.freeze([
 
 /**
  * Pure. `name`, `stat` (an lstat), the claim `owner` (`readOwner(dir, 'folder')`), `probe(pid)`, `me` (`thisOwner()`), `uid` -> `null` (not a staging folder name: not looked at) or `{ action: 'remove' | 'keep', why }`.
- * The rules in order: not a real folder of this user -> keep; no readable claim -> keep; another owner, host or namespace -> keep; pid gone -> remove; pid alive with a start time that differs by more than the
- * conventions' tolerance -> remove; anything else (alive, unknown) -> keep. The pid in the folder's name is never used.
+ * The rules in order: not a real folder of this user -> keep; no readable claim -> keep; another owner, host or namespace -> keep; the conventions' `ownerState` says `gone` -> remove; `unknown` -> keep and say so;
+ * anything else (alive) -> keep. The pid in the folder's name is never used.
  */
 export function stagingVerdict(context) {
   if (!STAGING_NAME.test(context.name)) return null;
@@ -111,16 +117,47 @@ function visit({ caches, name, log, ...seams }) {
   return { dir, verdict };
 }
 
+const CLAIM_NAME = /^(\.building-(?:csharp|node)-[1-9][0-9]*)\.owner$/;
+const ORPHAN_RULES = STAGING_RULES.slice(1); // the folder rules that read the claim: an orphan claim has no folder to look at
+
+/** An orphan claim (`<caches>/.building-<stack>-<pid>.owner` whose folder is absent), judged by the same owner rules as a folder: `{ action, why }`. */
+export function orphanVerdict({ owner, probe, me }) {
+  for (const rule of ORPHAN_RULES) {
+    const verdict = rule({ owner, probe, me });
+    if (verdict !== null) return verdict;
+  }
+  return keep('owner may be alive');
+}
+
 /** One log line per staging folder looked at; `removed` lists what went. `probe`, `uid` and `me` are seams. */
-export function sweepStaging({ caches, log, probe = processProbe, uid = process.getuid(), me = thisOwner() }) {
+function sweepFolders({ caches, log, ...seams }) {
   const removed = [];
   for (const name of readdirSync(caches).filter(n => STAGING_NAME.test(n)).sort()) { // a claim file is no folder to look at (and one goes while the loop runs)
-    const { dir, verdict } = visit({ caches, name, log, probe, uid, me });
+    const { dir, verdict } = visit({ caches, name, log, ...seams });
     if (verdict?.action !== 'remove') continue;
     const problem = removeStaging(dir);
     if (problem === null) removed.push({ dir, why: verdict.why });
     else log(`staging could not remove ${dir}: ${problem}`);
   }
+  return removed;
+}
+
+const orphanBases = caches => readdirSync(caches).sort().map(name => CLAIM_NAME.exec(name)?.[1]).filter(base => base !== undefined && !existsSync(path.join(caches, base)));
+
+/** The claims whose folder is gone (a build killed between the claim and the folder), judged by the same owner rules; every one is named on the log. */
+function sweepOrphans({ caches, log, probe, me }) {
+  const removed = [];
+  for (const base of orphanBases(caches)) {
+    const dir = path.join(caches, base);
+    const verdict = orphanVerdict({ owner: readOwner(dir, 'folder'), probe, me });
+    log(`staging ${verdict.action} ${dir}.owner (orphan claim): ${verdict.why}`);
+    if (verdict.action === 'remove') { rmSync(`${dir}.owner`, { force: true }); removed.push({ dir, why: verdict.why, orphan: true }); }
+  }
+  return removed;
+}
+
+export function sweepStaging({ caches, log, probe = processProbe, uid = process.getuid(), me = thisOwner() }) {
+  const removed = [...sweepFolders({ caches, log, probe, uid, me }), ...sweepOrphans({ caches, log, probe, me })];
   return { removed };
 }
 
@@ -129,25 +166,43 @@ export function sweepStaging({ caches, log, probe = processProbe, uid = process.
 export const PREREG_TAG_PATTERN = 'prereg/lang-v2-A-*';
 const NO_TAG_RULE = 'a superseded snapshot is kept until the pre-registration tag (prereg/lang-v2-A-*) exists';
 
-/** The real tag reader: `git -C <repo> tag -l 'prereg/lang-v2-A-*'` -> `ok([names])` | `fail` (exe + argv, a ceiling; a git that does not answer is a refusal, never "no tag"). */
+const GIT_ENV = () => ({ PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: os.homedir(), LANG: 'C.UTF-8', GIT_TERMINAL_PROMPT: '0' });
+const git = (repo, args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 30_000, env: GIT_ENV() });
+const gitFailure = (what, r) => fail(`could not ${what} (${r.error?.message ?? `git exited ${r.status}: ${r.stderr.trim().split('\n')[0]}`}); nothing is changed`);
+const tagOfRef = line => line.split('\t')[1]?.replace(/^refs\/tags\//, '').replace(/\^\{\}$/, '');
+
+/**
+ * The real tag reader: the pre-registration tags (`prereg/lang-v2-A-*`) of the LOCAL repository AND of its remote (`git ls-remote --tags origin`: a tag pushed from another checkout counts). exe + argv, a ceiling; a git that
+ * cannot answer either question (no `origin`, no network) is a refusal, never "no tag". -> `ok([names])` | `fail`.
+ */
 export function tagsOf(repo) {
-  const r = spawnSync('git', ['-C', repo, 'tag', '-l', PREREG_TAG_PATTERN], { encoding: 'utf8', timeout: 20_000, env: { PATH: '/usr/bin:/bin', HOME: os.homedir(), LANG: 'C.UTF-8' } });
-  return r.status === 0 ? ok(r.stdout.split('\n').filter(Boolean)) : fail(`could not list the pre-registration tags of ${repo} (${r.error?.message ?? `git exited ${r.status}`}); nothing is changed`);
+  const local = git(repo, ['tag', '-l', PREREG_TAG_PATTERN]);
+  if (local.status !== 0) return gitFailure(`list the pre-registration tags of ${repo}`, local);
+  const remote = git(repo, ['ls-remote', '--tags', 'origin', `refs/tags/${PREREG_TAG_PATTERN}`]);
+  if (remote.status !== 0) return gitFailure(`read the pre-registration tags of the remote of ${repo}`, remote);
+  return ok([...new Set([...local.stdout.split('\n'), ...remote.stdout.split('\n').map(tagOfRef)].filter(Boolean))].sort());
+}
+
+const RECORD_IN_REPO = 'spikes/lang-bench/inputs/cache-snapshots-lang.json';
+
+/** The registered record AT a tag (`git show <tag>:<the record>`): after the tag it is the one authority, whatever the working tree says. -> `ok(records)` | `fail` (a tag git cannot show is a refusal). */
+export function recordAtTag(repo, tag) {
+  const shown = git(repo, ['show', `${tag}:${RECORD_IN_REPO}`]);
+  if (shown.status !== 0) return gitFailure(`read ${RECORD_IN_REPO} at ${tag}`, shown);
+  try { return ok(JSON.parse(shown.stdout)); } catch (error) { return fail(`${RECORD_IN_REPO} at ${tag} is not JSON (${error.message})`); }
 }
 
 const readRecords = file => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {});
 
 /** Beside-and-rename: a reader sees the old file or the new one, never half a file. */
 function writeBeside(file, records) {
-  const temp = `${file}.tmp-${process.pid}`;
+  const temp = `${file}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`; // never a name an earlier killed run may have left
   writeFileSync(temp, `${JSON.stringify(records, null, 2)}\n`, { flag: 'wx' });
   renameSync(temp, file);
 }
 
-/** `ok(true)` when a pre-registration tag exists, `ok(false)` when none, the reader's own `fail` when it could not tell (never read as "no tag"). */
-const tagExists = readTags => { const read = readTags(); return read.ok ? ok(read.value.length > 0) : read; };
-const refuseWhenTagged = (tagged, why) => (!tagged.ok ? tagged : tagged.value ? fail(why) : null);
-const refuseUnlessTagged = (tagged, why) => (!tagged.ok ? tagged : tagged.value ? null : fail(why));
+/** `fail` when the reader could not tell (never read as "no tag"), else `null`; `refuseWhenTagged` refuses supersede after the tag, `tagsOrRefusal` is the list prune needs. */
+const refuseWhenTagged = (read, why) => (!read.ok ? read : read.value.length > 0 ? fail(why) : null);
 
 const missingStack = (records, stack) => stack === 'superseded' || records[stack] === undefined;
 const noReason = reason => typeof reason !== 'string' || reason.trim() === '';
@@ -159,7 +214,7 @@ const supersedeRefusal = ({ records, stack, reason, file }) => (missingStack(rec
  */
 export function supersede({ file, stack, reason, tagsOf: readTags, today = new Date().toISOString().slice(0, 10) }) {
   const records = readRecords(file);
-  const refused = supersedeRefusal({ records, stack, reason, file }) ?? refuseWhenTagged(tagExists(readTags), `the pre-registration tag exists: a registered snapshot can no longer be superseded (${PREREG_TAG_PATTERN})`);
+  const refused = supersedeRefusal({ records, stack, reason, file }) ?? refuseWhenTagged(readTags(), `the pre-registration tag exists: a registered snapshot can no longer be superseded (${PREREG_TAG_PATTERN})`);
   if (refused !== null) return refused;
   const { [stack]: record, superseded = [], ...rest } = records;
   writeBeside(file, { ...rest, superseded: [...superseded, { stack, supersededOn: today, reason: reason.trim(), record }] });
@@ -167,14 +222,15 @@ export function supersede({ file, stack, reason, tagsOf: readTags, today = new D
 }
 
 const SNAPSHOT_NAME = /^(csharp|node)-([0-9a-f]{64})$/;
-const isRegistered = (records, hash) => Object.entries(records).some(([key, r]) => key !== 'superseded' && r?.treeSha256 === hash);
+/** The pair (stack, hash) is the registered one: a hash registered under ANOTHER stack says nothing about this folder. */
+const isRegistered = (records, [, stack, hash]) => stack !== 'superseded' && records[stack]?.treeSha256 === hash;
 const isSuperseded = (records, [, stack, hash]) => (records.superseded ?? []).some(s => s.stack === stack && s.record?.treeSha256 === hash);
 const ownedRealFolder = (dir, uid) => { const stat = lstatSync(dir); return stat.isDirectory() && !stat.isSymbolicLink() && stat.uid === uid; };
 
 /** The rules of prune, in order; the first that answers names why the folder is kept. The last one is the re-hash that proves a folder is that snapshot. */
 const KEEP_RULES = Object.freeze([
   c => (c.match === null ? 'not a snapshot of this series' : null),
-  c => (isRegistered(c.records, c.match[2]) ? 'registered' : null),
+  c => (isRegistered(c.records, c.match) ? 'registered' : null),
   c => (isSuperseded(c.records, c.match) ? null : 'not a snapshot of this series'),
   c => (ownedRealFolder(c.dir, c.uid) ? null : 'not this user\'s'),
   c => (treeHash(c.dir) === c.match[2] ? null : 'hash differs'),
@@ -199,11 +255,52 @@ function pruneOne({ name, caches, records, uid }) {
   return { removed: { name, supersededOn: entry.supersededOn, reason: entry.reason } };
 }
 
-/** Prune: after the pre-registration tag, remove each folder directly under `caches` that is a superseded snapshot of the record, a real folder of this user, and re-hashes to its name. -> `ok({ removed, kept })` | `fail`. */
-export function pruneSuperseded({ file, caches, tagsOf: readTags, uid = process.getuid() }) {
-  const refused = refuseUnlessTagged(tagExists(readTags), `prune is refused: ${NO_TAG_RULE}`);
-  if (refused !== null) return refused;
-  const records = readRecords(file);
-  const done = readdirSync(caches).sort().map(name => pruneOne({ name, caches, records, uid }));
+/** The tags, and the record AT the first of them: `ok({ tag, records })` | `fail` (no tag: the rule; git cannot answer or show: a refusal). */
+function recordAfterTag({ readTags, readRecordAtTag }) {
+  const tags = readTags();
+  if (!tags.ok) return tags;
+  if (tags.value.length === 0) return fail(`prune is refused: ${NO_TAG_RULE}`);
+  const at = readRecordAtTag(tags.value[0]);
+  return at.ok ? ok(at.value) : at;
+}
+
+/**
+ * Prune: after the pre-registration tag, remove each folder directly under `caches` that is a superseded snapshot of the record AT THE TAG (not the working tree's), whose own (stack, hash) is not registered, a real folder
+ * of this user, and re-hashes to its name. -> `ok({ removed, kept })` | `fail`.
+ */
+export function pruneSuperseded({ caches, tagsOf: readTags, recordAtTag: readRecordAtTag, uid = process.getuid() }) {
+  const at = recordAfterTag({ readTags, readRecordAtTag });
+  if (!at.ok) return at;
+  const done = readdirSync(caches).sort().map(name => pruneOne({ name, caches, records: at.value, uid }));
   return ok({ removed: done.flatMap(d => d.removed ?? []), kept: done.flatMap(d => d.kept ?? []) });
+}
+
+const isRecorded = (records, stack, hash) => records[stack]?.treeSha256 === hash || (records.superseded ?? []).some(s => s.stack === stack && s.record?.treeSha256 === hash);
+
+/** A made snapshot folder goes (read-only tree included) unless its own (stack, hash) is in the record, registered or superseded. */
+export function discardUnlessRecorded({ dir, stack, treeSha256, records }) {
+  if (isRecorded(records, stack, treeSha256) || !existsSync(dir)) return { discarded: false };
+  makeWritable(dir);
+  rmSync(dir, { recursive: true, force: true });
+  return { discarded: true };
+}
+
+function recordAndRegister({ made, stack, recipeSha256, projectSha256, file, madeOn }) {
+  const manifest = manifestOf(made.dir);
+  if (!manifest.ok) return manifest;
+  const matched = checkManifestMatches(manifest.value, made.packages);
+  if (!matched.ok) return matched;
+  const record = buildRecord({ snapshot: made, manifest: manifest.value, recipeSha256, projectSha256 });
+  const registered = registerSnapshot({ file, stack, record, madeOn });
+  return registered.ok ? ok(record) : registered;
+}
+
+/**
+ * The manifest, the record and the registration of a made snapshot. On ANY failure after the maker succeeded the made folder is removed unless its (stack, hash) is in the record (E1.S4 review M2: a failed
+ * build must leave no read-only folder in the caches root). -> `ok(record)` | `fail`.
+ */
+export function registerBuilt(args) {
+  const done = recordAndRegister(args);
+  if (!done.ok) discardUnlessRecorded({ dir: args.made.dir, stack: args.stack, treeSha256: args.made.treeSha256, records: readRecords(args.file) });
+  return done;
 }

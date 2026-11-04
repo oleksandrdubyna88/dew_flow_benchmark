@@ -15,13 +15,26 @@ const PLACEHOLDER_NAME = /^[A-Z_]+$/;
 const isText = x => typeof x === 'string' && x.trim() !== '';
 const cellProblem = text => (isText(text) && !/[|\r\n]/.test(text) ? null : 'a non-empty text without `|` or a line break');
 
-/** The problems of one `packages[i]` entry: a name, a spec, and a purpose that fits a table cell. */
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const METADATA_CHECKS = Object.freeze([
+  ['licence', p => isText(p?.licence), 'must be a non-empty text (the SPDX expression the package declares)'],
+  ['maintenance.latestVersion', p => isText(p?.maintenance?.latestVersion), 'must be a non-empty text (the latest release the registry shows)'],
+  ['maintenance.releasedOn', p => DATE.test(p?.maintenance?.releasedOn ?? ''), 'must be a date YYYY-MM-DD (the release date of that version)'],
+  ['maintenance.readOn', p => DATE.test(p?.maintenance?.readOn ?? ''), 'must be a date YYYY-MM-DD (the day the registry was read)'],
+]);
+
+/** The licence (an SPDX expression the snapshot's own metadata is compared with) and the maintenance state (the latest release the registry showed, and the day it was read) of one package (PROJECT section 10). */
+const metadataProblems = (at, p) => METADATA_CHECKS.filter(([, passes]) => !passes(p)).map(([field, , why]) => `${at}.${field} ${why}`);
+
+/** The problems of one `packages[i]` entry: a name, a spec, a purpose that fits a table cell, the licence and the maintenance state. */
 function entryProblems(at, p) {
   const purpose = cellProblem(p?.purpose);
   return [
     ...(isText(p?.name) ? [] : [`${at}.name must be a non-empty text`]),
     ...(isText(p?.spec) ? [] : [`${at}.spec must be a non-empty text`]),
     ...(purpose === null ? [] : [`${at}.purpose must be ${purpose}`]),
+    ...metadataProblems(at, p),
   ];
 }
 
@@ -78,11 +91,19 @@ function pinProblems(stack, spec, pins) {
   ];
 }
 
+/** The SDK version a global.json pins: `{ version }`, or `{ problem }` when it is not JSON. A missing file is a version of `undefined`. */
+function readSdkVersion(file) {
+  if (!existsSync(file)) return { version: undefined };
+  try { return { version: JSON.parse(readFileSync(file, 'utf8')).sdk?.version }; } catch (error) { return { problem: `is not JSON (${error.message.split('\n')[0]})` }; }
+}
+
 /** The global.json of the project must pin the SDK of stacks-lang.json too: a restore under another SDK is another restore. */
 function globalJsonProblems(spec, pins, spikeDir) {
   if (spec.project === undefined) return [];
   const file = path.join(spikeDir, spec.project, 'global.json');
-  const seen = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).sdk?.version : undefined;
+  const read = readSdkVersion(file);
+  if (read.problem !== undefined) return [`${spec.project}/global.json ${read.problem}`];
+  const seen = read.version;
   return seen === pins.dotnetSdk ? [] : [`${spec.project}/global.json pins SDK ${JSON.stringify(seen)}, inputs/stacks-lang.json pins ${pins.dotnetSdk}`];
 }
 
