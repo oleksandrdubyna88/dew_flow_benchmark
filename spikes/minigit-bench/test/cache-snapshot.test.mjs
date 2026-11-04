@@ -1,11 +1,13 @@
 // The cache snapshots (E3b.S1 step 2, parent 7.1): a tree hash that is stable, a seed copy that re-hashes to the registered value, and the recipe run in a real box.
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadRecipe, makeSnapshot, makeWritable, pickHighest, registerSnapshot, seedCaches, treeHash } from '../lib/cache-snapshot.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
-import { homeDir, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
+import { DISTRIBUTION_DOTNET_PATHS, storeDirs } from '../../lang-bench/lib/preflight-box.mjs';
+import { homeDir, hostLacks, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 
 const put = (p, text, mode) => { mkdirSync(path.dirname(p), { recursive: true }); writeFileSync(p, text, mode ? { mode } : undefined); };
 function fixture() {
@@ -166,4 +168,59 @@ test('A_recipe_may_set_environment_variables_for_its_steps_and_they_reach_the_bo
   assert.equal(r.ok, true, r.reason);
   const bad = await makeSnapshot({ stack: 'csharp', recipe: { ...recipe, stacks: { csharp: { ...recipe.stacks.csharp, env: { HOME: '/x' } } } }, root: homeDir('snap-root'), out: homeDir('snap-out') });
   assert.equal(bad.ok, false, 'the recipe may only ADD keys: it cannot replace one the box owns');
+});
+
+// ---- the widenings of E1.S4: the line filter, the pinned toolchains and the hidden dotnet, the work seed, the folder name -----------------
+
+test('The_highest_version_of_one_line_is_picked_from_a_list_or_a_flat_container_index', () => {
+  const index = JSON.stringify({ versions: ['10.0.9', '10.0.14', '11.0.0', '11.0.0-rc.1'] });
+  assert.equal(pickHighest(index, { line: '10.0' }), '10.0.14', 'the flat-container index of NuGet, one line of it');
+  assert.equal(pickHighest(index), '11.0.0', 'without a line: the highest plain version of the index');
+  assert.equal(pickHighest(JSON.stringify({ versions: ['4.0.2', '40.1.0', '4.1.0'] }), { line: '4' }), '4.1.0', 'line 4 never picks 40.1.0');
+  assert.equal(pickHighest(JSON.stringify({ versions: ['10.0.14', '10.01.0'] }), { line: '10.0' }), '10.0.14', 'line 10.0 never picks 10.01.0 (a line ends at a dot)');
+  assert.equal(pickHighest(JSON.stringify(['26.0.9', '26.10.2', '27.0.0']), { line: '26' }), '26.10.2', 'the same filter on npm view output');
+  assert.equal(pickHighest(index, { line: '12' }), null, 'a line with no version is null, not another line');
+  assert.equal(pickHighest(JSON.stringify({ other: [] })), null);
+});
+
+const stacksFile = path.join(spikeDir, '..', 'lang-bench', 'inputs', 'stacks-lang.json');
+const toolchainDirs = () => storeDirs(JSON.parse(readFileSync(stacksFile, 'utf8')), path.join(os.homedir(), 'rsd', 'lang-v2', 'toolchains'));
+
+test('A_snapshot_is_made_with_the_toolchains_bound_and_the_distribution_dotnet_hidden', async t => {
+  if (!sandboxGate(t)) return;
+  const dirs = toolchainDirs();
+  if (!existsSync(path.join(dirs.dotnetSdk, 'dotnet'))) return hostLacks(t, `the pinned SDK is not installed at ${dirs.dotnetSdk}: node spikes/lang-bench/install-toolchains.mjs`);
+  const out = homeDir('snap-out');
+  const step = { argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && command -v dotnet && test ! -e /usr/lib/dotnet/dotnet && test "$DOTNET_ROOT" = "' + dirs.dotnetSdk + '"'], expectStdout: `${dirs.dotnetSdk}/dotnet` };
+  const recipe = { hosts: 'bare', stepTimeoutMs: 60_000, stacks: { csharp: { steps: [step], capture: { nuget: 'box/nuget' } } } };
+  const box = { toolchains: [dirs.dotnetSdk, dirs.typescript], dotnetDir: dirs.dotnetSdk, tsDir: dirs.typescript, hide: DISTRIBUTION_DOTNET_PATHS, env: { DOTNET_ROOT: dirs.dotnetSdk } };
+  const made = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out, box });
+  t.after(() => makeWritable(out));
+  assert.equal(made.ok, true, made.reason);
+  const bare = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out: homeDir('snap-out') });
+  assert.equal(bare.ok, false, 'control: a box without the options finds the distribution\'s dotnet and fails the pin');
+  assert.match(bare.reason, /\/usr\/bin\/dotnet/, 'it names the distribution\'s dotnet it found');
+});
+
+test('A_work_seed_is_copied_into_the_work_folder_before_the_first_step', async t => {
+  if (!sandboxGate(t)) return;
+  const seed = tmpDir('seed');
+  put(path.join(seed, 'sub', 'marker.txt'), 'seed-1');
+  const out = homeDir('snap-out');
+  const recipe = { hosts: 'bare', stepTimeoutMs: 60_000, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && cat sub/marker.txt'], expectStdout: 'seed-1' }], capture: { nuget: 'box/nuget' } } } };
+  const made = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out, workSeed: seed });
+  t.after(() => makeWritable(out));
+  assert.equal(made.ok, true, made.reason);
+  const none = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out: homeDir('snap-out') });
+  assert.equal(none.ok, false, 'control: without a seed the first step finds nothing');
+});
+
+test('The_snapshot_folder_name_can_be_chosen_by_the_caller', async t => {
+  if (!sandboxGate(t)) return;
+  const out = homeDir('snap-out');
+  const recipe = { hosts: 'bare', stepTimeoutMs: 60_000, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES"'] }], capture: { nuget: 'box/nuget' } } } };
+  const made = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out, dirName: (stack, sha) => `${stack}-${sha}` });
+  t.after(() => makeWritable(out));
+  assert.equal(made.ok, true, made.reason);
+  assert.equal(path.basename(made.value.dir), `csharp-${made.value.treeSha256}`, 'the whole hash, the stack first');
 });

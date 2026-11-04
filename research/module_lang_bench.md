@@ -384,7 +384,366 @@ store skips with its reason; `BENCH_REQUIRE_SANDBOX=1` turns the skip into a fai
 
 ## Package sets and snapshots (E1.S4)
 
-not built yet
+Built 2026-11-04 (`todo/PLAN_lang_comparison_v2_E1.md` § E1.S4; parent D5, D6, §4.6). Each stack's offered package set is ONE hashed offline snapshot with a manifest; `PACKAGES.md` is generated from the registered record; a build in a box that holds only the seeded snapshot restores exactly that set and fails, naming it, on anything else (T-L13). **Registered 2026-11-04** by the team lead with `make-snapshots.mjs` (its defaults) after the code review: `inputs/cache-snapshots-lang.json` holds both records and the folders are in `~/rsd/lang-v2/caches/` (see "The registered snapshots" below).
+
+**The recipe** (`inputs/cache-recipe-lang.json`, checked by `lib/cache-recipe-lang.mjs`). Each x-range is resolved ONCE, at build time, by `pickHighest` (v1) with a `line`, inside the box, and the exact version is recorded in the record's `resolved` and in the filled step argv. NuGet: the flat-container index of `api.nuget.org`; npm: `npm view <name>@<range> version --json`.
+
+| Stack | Package | Version | Purpose (as `PACKAGES.md` shows it) |
+|---|---|---|---|
+| C# | `Microsoft.Extensions.Hosting` | `{HOSTING}`: highest of line 10.0 | Generic Host for daemons: lifetime and graceful stop, dependency injection, configuration, ILogger |
+| C# | `Microsoft.AspNetCore.Authentication.JwtBearer` | `{JWT_BEARER}`: highest of 10.0 | JWT bearer authentication for ASP.NET Core Minimal API |
+| C# | `xunit.v3` | `{XUNIT}`: highest of 4 | Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable |
+| C# | `xunit.runner.visualstudio` | `{XUNIT_VS}`: highest of 4 | xUnit adapter for the VSTest runner |
+| C# | `Microsoft.NET.Test.Sdk` | `{TEST_SDK}`: highest of 18 | VSTest host for dotnet test in VSTest mode |
+| Node | `fastify` | 5.12.7 | HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close() |
+| Node | `@fastify/jwt` | 10.2.6 | JWT sign and verify as a Fastify plugin |
+| Node | `@fastify/type-provider-typebox` | 6.3.0 | TypeBox schemas as Fastify route types |
+| Node | `typebox` | `{TYPEBOX}`: highest of 1.1 | JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set) |
+| Node | `pino` | `{PINO}`: highest of `^9.14.0 \|\| ^10.1.0` (what Fastify 5.12.7 resolves) | Structured logging |
+| Node | `typescript` | 6.0.3 (S5's pin) | Type check and the compiler API the type-aware lint uses |
+| Node | `@types/node` | `{TYPES_NODE}`: highest of 26 | Types of the Node 26 API |
+| Node | `typescript-eslint` | `{TS_ESLINT}`: highest of 8.72 | TypeScript parser and type-aware lint rules |
+| Node | `eslint`, `@eslint/js` | `{ESLINT}`: 10, `{ESLINT_JS}`: 10 | The lint runner and its recommended rules |
+
+TypeBox (the owner's decision of the epoch-7 re-review, 2026-11-03, after `ask_consultants` `40498063`): `@fastify/type-provider-typebox` 6.3.0 peers `typebox ^1.1.14`, so the set holds `typebox` 1.1.x and no `@sinclair/typebox`. The patch is resolved once at the build and installed as that exact version (`typebox@{TYPEBOX}`): the provider's peer range alone would let npm take 1.4.x. A test proves there is exactly one `pino` and one `typebox` version in the manifest and that each equals `resolved`. The ASP.NET Core shared framework (Minimal API, its validation, System.Text.Json) comes with the SDK and is not a package.
+
+A placeholder name is `[A-Z_]+` only, with no digit: v1's `fill` and `unresolved` use that pattern, so `{XUNIT_V3}` would reach an argv as text without being filled or noticed. `loadRecipeLang` refuses any brace token that is not such a name and a key of the stack's `resolve`, and a test runs v1's step runner on the refuted shape. The loader also refuses: a stack without a non-empty `packages` list, an entry without name, spec and a `purpose` free of `|` and line breaks, a `resolve` entry without `pick: "highest"`, a `csharp.project` that is absolute, has `..` or is not a folder, a stack called `superseded`, and any toolchain pin that differs from `inputs/stacks-lang.json` (the `node --version`, `dotnet --version` and `tsc --version` steps, the `typescript` package spec, and the project's `global.json`).
+
+**The three C# projects** (`inputs/cache-projects/csharp/`, copied into the box's work folder by v1's `workSeed`): a daemon (console + Generic Host), a web app (Web SDK + JWT bearer) and a test project that references both. With .NET 10's package pruning, which packages a restore downloads depends on the project's SDK and framework references, so the three shapes the agents write are all restored. The test project is restored, built AND run once (`dotnet tests/SnapTests/bin/Release/net10.0/SnapTests.dll`, never `dotnet test`), so every asset an offline test run needs (xunit.v3, the Microsoft Testing Platform pieces, the VSTest host) is in the snapshot. `global.json` pins 10.0.403 with `rollForward: disable`; the online `nuget.config` clears every inherited source and adds nuget.org. All three projects set `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` (PROJECT section 1): the real build is green with it, offline restore included. The npm install steps of the recipe run with `--ignore-scripts` (the cache needs the tarballs only; the manifest is identical with and without it). Deviation from the brief's text: the test project carries `<Using Include="Xunit" />`, because without it `SmokeTests.cs` does not compile (CS0246 on `Fact`).
+
+**The box** (v1's agent box, `agentBoxArgv`; `boxOptionsFor(dirs)` in `lib/cache-offline.mjs` is the one function that builds its options for the snapshot build and every offline box). S5's pinned directories are bound read-only at their full host paths (`dirs.dotnetSdk`, `dirs.typescript`; Node is `nodeDir: dirs.node`); `PATH` starts `<node>/bin : <dotnetSdk> : <typescript>/node_modules/.bin`; the distribution's dotnet is hidden (`DISTRIBUTION_DOTNET_PATHS`, an empty tmpfs over each that exists) AND `DOTNET_ROOT` is the pinned SDK (the contract of S5 for every box that runs a pinned-toolchain program). The widenings of v1 that make this possible (all optional parameters, the defaults keep every v1 byte): `makeSnapshot({ box, workSeed, dirName })`, the exported `inBox`, `pickHighest(stdout, { line })` (also reads NuGet's `{ versions }` and keeps a version only when it equals the line or starts with `<line>.`), `agentEnv({ dotnetDir })`, `agentBoxPrefix({ hide })`, `readNpmPackages` / `readNugetPackages(dir, { hashes })`. Each carries its reason in a comment.
+
+**Licence and maintenance of every offered package** (PROJECT section 10; the recipe's `licence` and `maintenance` fields, required by `loadRecipeLang`). The licence is an SPDX expression and is COMPARED, by `test/cache-lang-offline.test.mjs`, with what the snapshot's own metadata declares (the `.nuspec` `<license>` of the NuGet package, the `license` of the `package.json` inside the npm tarball in the cache; `lib/package-metadata.mjs`), so a typed value cannot drift. The maintenance state is the latest release the registry metadata showed on the day it was read (2026-11-04: npm `time` of `dist-tags.latest`, NuGet's registration `published`); it is not in the snapshot and is not compared, only shaped (a date). How the dates were read (2026-11-04): one box opened by `openBox` on the built snapshot with `allow: ['registry.npmjs.org', 'api.nuget.org']`, i.e. through the egress proxy and nowhere else, ran for each npm package `npm view <name> time dist-tags.latest --json` (the release date of `dist-tags.latest` is its entry in `time`) and `npm view <name>@<version> license --json`, and for each NuGet package `curl -fsSL --compressed --max-time 60 https://api.nuget.org/v3/registration5-gz-semver2/<lower-case id>/index.json` and, where the index does not inline the last page, the same `curl` on that page's `@id`; the date is the `published` of the newest stable listed version on that page (ties: the highest version). The commands ran with the snapshot's npm cache and global packages folder as the cache, with `npm_config_update_notifier=false` and `npm_config_logs_max=0`, and the egress log of that box showed only those two hosts. The licence column was checked the same way against the registries and again, by test, against the snapshot's own metadata. No offered package is unmaintained: the oldest latest release is `typescript` 7.0.2 on 2026-07-08 (the offered 6.0.3 is the line `typescript-eslint` supports) and `@eslint/js` 10.0.1 on 2026-02-06.
+
+| Stack | Package | Offered | Licence | Latest release the registry showed | Released |
+|---|---|---|---|---|---|
+| C# | `Microsoft.Extensions.Hosting` | {HOSTING} | MIT | 10.0.14 | 2026-10-25 |
+| C# | `Microsoft.AspNetCore.Authentication.JwtBearer` | {JWT_BEARER} | MIT | 10.0.14 | 2026-10-25 |
+| C# | `xunit.v3` | {XUNIT} | Apache-2.0 | 4.0.2 | 2026-10-09 |
+| C# | `xunit.runner.visualstudio` | {XUNIT_VS} | Apache-2.0 | 4.0.1 | 2026-10-09 |
+| C# | `Microsoft.NET.Test.Sdk` | {TEST_SDK} | MIT | 18.11.0 | 2026-10-13 |
+| Node | `fastify` | 5.12.7 | MIT | 5.12.8 | 2026-11-02 |
+| Node | `@fastify/jwt` | 10.2.6 | MIT | 10.2.7 | 2026-11-02 |
+| Node | `@fastify/type-provider-typebox` | 6.3.0 | MIT | 6.3.0 | 2026-10-12 |
+| Node | `typebox` | {TYPEBOX} | MIT | 1.4.3 | 2026-10-22 |
+| Node | `pino` | {PINO} | MIT | 10.4.0 | 2026-10-02 |
+| Node | `typescript` | 6.0.3 | Apache-2.0 | 7.0.2 | 2026-07-08 |
+| Node | `@types/node` | {TYPES_NODE} | MIT | 26.6.6 | 2026-10-28 |
+| Node | `typescript-eslint` | {TS_ESLINT} | MIT | 8.72.1 | 2026-10-26 |
+| Node | `eslint` | {ESLINT} | MIT | 10.14.0 | 2026-10-30 |
+| Node | `@eslint/js` | {ESLINT_JS} | MIT | 10.0.1 | 2026-02-06 |
+
+`Offered` is the recipe's spec: a `{NAME}` is the highest version of its line on the build day (the versions are in the record's `resolved`).
+
+**The record** (`inputs/cache-snapshots-lang.json`, written only by `make-snapshots.mjs` through v1's `registerSnapshot`, which refuses a stack that is already there). Per stack: `treeSha256` (v1's `treeHash` of the whole folder), `dirName` (`<stack>-<whole hash>`), `parts` (a hash per captured part: `nuget` and `dotnet`, or `npm`), `sizeBytes`, `packages` (THE MANIFEST: `{ ecosystem, name, version, integrity }` for every package, sorted by ecosystem, name in plain string order, then version by numeric parts; the integrity is the npm index entry's `sha512-...` or `sha512-` plus the text of `<id>.<version>.nupkg.sha512`; a package without one fails the build naming it), `resolved`, `steps` (argv and the pinned stdout only; no path of the operator's home), `manifestSha256` (sha256 of the sorted manifest rows, the identity a rebuild can match), `recipeSha256` (the recipe file's bytes), `projectSha256` (the C# project folder's tree hash, `null` for node), `madeOn` (UTC date). `superseded` is the append-only list of § The store. The manifest's name@version set must equal the list v1's maker returned, or the build fails naming the difference. The folder is `~/rsd/lang-v2/caches/<stack>-<treeSha256>/`, read-only.
+
+**The offline box** (`openBox` in `lib/cache-offline.mjs`). Every restore and outside-package case runs in a FRESH box that holds only the seeded snapshot: a new layout, v1's `seedCaches` (it copies and re-hashes every part against the record), a fresh `box/home` for `HOME` and `DOTNET_CLI_HOME`, and the egress proxy with `allow: []`, so every registry is refused and the layout's `egress.ndjson` says so. `run` returns the whole output and exit code (a fixed `sh -c` wrapper writes them into `box/out`; v1's `inBox` keeps only the last 600 characters of a failure). Registry reachability is the refuted shape, built beside the right one with `allow`.
+- **npm, the exact invocation.** Copying the cache is not enough: npm still asks the registry unless told not to. The workspace has `package.json` and `.npmrc` = `offline=true`; the command is `npm install --offline --no-audit --no-fund --no-update-notifier <name@version>...` (`npmOfflineArgv`) with the extra environment `npm_config_offline=true`, `npm_config_update_notifier=false`, `npm_config_logs_max=0` (`NPM_OFFLINE_ENV`); `npm_config_cache` is the seeded `box/npm`. A bare `npm install typescript` offline resolves the cached packument's `latest` (7.0.2), which is not in the cache: `PACKAGES.md` says to install the exact version listed.
+- **NuGet.** The workspace `nuget.config` (`offlineNugetConfig(<box/nuget>)`, which S3 reuses) clears `packageSources` and `fallbackPackageFolders` and adds one local source, the seeded global packages folder; `NUGET_PACKAGES` is that folder. The extra environment: `DOTNET_ROOT`, the build servers off, `NUGET_CERT_REVOCATION_MODE=offline` (the proxy carries only `CONNECT :443`; the revocation hosts are plain HTTP), `DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1`, `TESTINGPLATFORM_TELEMETRY_OPTOUT=1`.
+- **What a package or version that is not in the set does, as `PACKAGES.md` tells the agent** (the sentence is per stack, the team lead's wording, tested in `test/packages-md.test.mjs` and shown by `test/cache-lang-offline.test.mjs`): npm, a package or version not listed fails `ENOTCACHED` (`request to https://registry.npmjs.org/left-pad failed: cache mode is 'only-if-cached' but no cached response is available`; the message may name a dependency of the package rather than the package itself; `pino@9.14.0` is the version case). NuGet, a reference to a LOWER version than the one listed resolves to the listed version with the warning `NU1603`, which FAILS THE BUILD where warnings are errors (every seed project and, by PROJECT section 1, every workspace sets `TreatWarningsAsErrors`; with the setting the restore exits 1 with `error NU1603`; without it exit 0 and the listed version is what `project.assets.json` holds); a HIGHER version fails `NU1102`; a package not listed fails `NU1101` (`Unable to find package Newtonsoft.Json. No packages exist with this id in source(s): offline`); both errors name the package. Without `--offline` the proxy's refusal is a network error without `ENOTCACHED`; without `<clear />` the default nuget.org source comes back and the restore fails `NU1301`, not `NU1101`.
+- **The manifest check.** `usedNpm(package-lock.json)` and `usedNuget(obj/project.assets.json, type package only, lower-case)` against the registered manifest through `outsideManifest`: a non-empty answer fails naming each package. `manifest - used` is printed as a diagnostic.
+
+**`PACKAGES.md`** (`lib/packages-md.mjs`, `renderPackagesMd({ stack, record, recipe })`; `make-snapshots.mjs --print-packages-md <stack>` prints it). The first paragraph is the agent-visible sentence, per stack (the team lead's wording: see the bullet on what a package or version that is not in the set does). Derived, never typed: the version of each offered package is the manifest's, the expected version is the recipe's spec filled from `resolved` (a manifest without `name@expected` fails naming the package and both values), the purpose is the recipe's, a purpose with `|` or a line break is refused, and every other manifest package is in the second table ("in the cache as dependencies of the offered packages"). LF, one final newline, rows sorted by lower-case name, then name, then version. S3 writes it into the workspaces; this story writes no workspace. The rendered files are put here when the snapshots are registered.
+
+**The store** (`lib/cache-store.mjs`). *Staging claim and sweep:* `make-snapshots.mjs` writes `writeOwner(<caches>/.building-<stack>-<pid>)` BEFORE it calls v1's maker (an `EEXIST` is a refusal, exit 3) and removes the claim in `finally`. At its start, after the gate lock, it sweeps the work root (the conventions' `sweepLeftovers`, token `bench`) and then each `.building-(csharp|node)-<pid>` folder by a fixed rule, in this order: not a real folder of this user: keep; no readable claim: keep; another owner, host or pid namespace: keep; the conventions' own `ownerState` (`owned.mjs`) says `gone` (no process has the pid): **remove**; `unknown` (a live pid with another start time, a pid that cannot be asked): **keep and say so on stderr** (an earlier draft of this story removed a live pid with another start time; the code round replaced that rule by the conventions' three-valued state, because deleting on anything but a proven `gone` is how another run's live folder is lost); anything else: keep. A **stranded snapshot folder** (`<stack>-<hash>` that the record this run read, registered or superseded, does not hold, left by a maker killed after it named the folder and before the registration) is only LISTED on stderr, when the claim of its build is proven gone and no other claim of that stack is alive, with the manual step (`chmod -R u+w <dir> && rm -rf <dir>`, after checking that it is registered nowhere, in no record and not on the NAS). **The sweep never removes a `<stack>-<hash>` folder:** the record path is per checkout and the caches folder is global, so an absent, older or wrong-shaped record would otherwise license deleting a registered, irreplaceable snapshot. Only the orphan claim file is removed. A record that is not a JSON object (`null`, `[]`, not JSON) is exit 2 with one line, before anything is swept or built. An **orphan claim** (`.building-<stack>-<pid>.owner` whose folder is absent, left by a build killed between the claim and the folder) is judged by the same rules after the claim is read, and removed only on `gone`. The pid in the name is never used. Every folder and claim looked at is one stderr line. *After the maker:* if anything fails after v1's maker returned (the manifest has a package without an integrity, the manifest differs from the maker's list, the registration is refused, or an exception is thrown inside these steps: the discard runs in a `finally`), the made folder is removed (`makeWritable`, then removal) unless its own (stack, hash) is in the record, registered or superseded, so a failed build leaves no read-only folder in the caches root; the made folder is discarded only on the word of a record that READS CORRECTLY and does not hold the pair; with an absent, unreadable or wrong-shaped record it is KEPT and named on stderr with the manual step (a C# rebuild can equal a registered folder, because C# is reproducible; the Node cache cannot be rebuilt). *Supersede* (`--supersede <stack> --reason <text>`): moves the stack's whole record into `superseded[]` as `{ stack, supersededOn, reason, record }` and drops the key, so the next build may register again; append only, written beside (a temporary name with a random suffix) and renamed; refused (exit 3) for no record, an empty reason, a `prereg/lang-v2-A-*` tag that exists or that git cannot list. *The tag reader* (`tagsOf`) reads the local tags AND the remote's (`git ls-remote --tags <url>`), and a git that cannot answer either question (no remote, no network) is a refusal, never "no tag". The url is `--tags-remote <url>`, else `remote.origin.url`; on this host `origin` is SSH (`git@github.com:<owner>/<repo>.git`) and no key is available to the command, so a GitHub SSH form (`git@github.com:...`, `ssh://git@github.com/...`) is read over `https://github.com/<owner>/<repo>.git`, and any other url is used as it is. *Prune* (`--prune-superseded`): refused until that tag exists; after it, the record AT THE TAG (`git show <tag>:spikes/lang-bench/inputs/cache-snapshots-lang.json`) is the authority, not the working tree's; a folder directly under the caches root is removed only when its name is `<stack>-<64 hex>`, ITS OWN (stack, hash) pair is a superseded record's and not the registered one (a hash registered under another stack neither keeps it nor licenses removing it), it is a real folder owned by this user, and `treeHash(folder)` equals the hash; every other entry is named as kept with its reason (`registered`, `not a snapshot of this series`, `hash differs`, `not this user's`). Prune first classifies and re-hashes EVERY candidate (each re-hash is announced as `checking snapshot <name> ...` on stderr, because a re-hash of 180 MB takes a while), and only then removes them; a removal that fails is reported (`could not remove <name>: <why>`, exit 1) and does not stop the others. The registered snapshots are never touched.
+
+**The gate lock** (`lib/gate-lock.mjs`; no earlier story built it). `takeGateLock({ file })` first checks the lock's folder (a real directory of this user, not a link, else refused naming it), creates the file with `open(..., 'wx')` and writes the owner's record in the conventions' grammar; a held lock is refused at once naming its owner; an owner whose state is `unknown` (another host, a pid that cannot be asked, a live pid with another start time) is refused with "owner state unknown", the file to remove by hand and no "held by"; a lock whose owner is this user's, on this host and namespace, with no process, is reclaimed by renaming the stale file to a unique sibling, comparing the sibling's text with the text that was judged, and removing it only if they are the same (otherwise it is put back, and if a third taker took the path meanwhile the put-back is a plain refusal, never a throw), and said; an unreadable lock is refused and left in place; a failed write removes the lock only while the path still names the file this taker created (device and inode); `release()` removes the file only while it still holds the text this taker wrote, and a lock that still exists but cannot be read is said on stderr with the manual step. A release that meets a lock already gone (ENOENT) says nothing. A build, `--supersede` and `--prune-superseded` all run under it. The residual is stated in the file's header (an empty lock after a crash between the create and the write; liveness is a pid probe, not a heartbeat).
+
+**The command** (`node spikes/lang-bench/make-snapshots.mjs`): `[--stack csharp] [--stack node]` builds and registers (default both, csharp first), `--supersede`, `--prune-superseded`, `--print-packages-md <stack>`; `--caches` (default `~/rsd/lang-v2/caches`, refused inside a git worktree), `--record`, `--recipe`, `--stacks`, `--work` (default `~/.cache/lang-v2/w`), `--gate-lock` (default `~/.cache/lang-v2/gate.lock`). Exit 0 done, 1 a build failed, 2 usage (or a caches folder inside a worktree), 3 refused (gate lock held, already registered, preflight, tag rule, claim exists). The command lowers its own priority first, as `run-tests.mjs` does. `--tags-remote <url>` names the remote the tag reader asks (see the store). A missing or unparsable `--recipe` or `--stacks` file is exit 2 with one line naming the flag. A build, a supersede and a prune each take the gate lock, released in `finally`. A build sweeps, refuses a registered stack BEFORE any build, runs `preflightLang`, makes one snapshot per stack in one owned work folder, and prints `egress <stack>: <JSON>` (the hosts the proxy allowed and refused), `registered <stack> <dirName> (<bytes> bytes, <n> packages)` and `built <stack> in <s> s`.
+
+**Measured** (one host, 2026-11-04, the registries as they were that day; coder test builds before the registration): the whole command (both stacks, preflight included) 45-51 s over three runs; the C# build 18-21 s (`api.nuget.org`, 33-35 connections, about 44 MB down), the Node build 21 s (`registry.npmjs.org`, 36 connections, about 51 MB down); no host refused. C#: 174,187,832 bytes, 60 packages (resolved HOSTING 10.0.14, JWT_BEARER 10.0.14, XUNIT 4.0.2, XUNIT_VS 4.0.1, TEST_SDK 18.11.0); the tree hash was identical in every build observed (three coder builds, and the Opus reviewer's build). Node: 180,129,178 bytes, 164 packages (resolved TYPES_NODE 26.6.6, TS_ESLINT 8.72.1, ESLINT 10.14.0, ESLINT_JS 10.0.1, PINO 10.4.0, TYPEBOX 1.1.39); its tree hash differed in each build, while the manifest was identical (the same 164 name, version and integrity rows, the same `manifestSha256`; checked between the coder's builds before and after the fix batch). The reason: every `_cacache/index-v5` entry holds `time`, `metadata.time` and the registry's `date` header, so the index bytes change on every build; the tarballs under `content-v2` are content-addressed and immutable. **Consequence: the registered Node folder is irreplaceable.** After registration it is backed up to the operator's NAS (`V:\dew_flow_backup`, copy and verify by hash) and is never "repaired" by a rebuild, which would give another tree hash. The identity a rebuild CAN match is the manifest (name, version, integrity), so the record also carries `manifestSha256` (sha256 of the sorted rows `[ecosystem, name, version, integrity]`). The Node manifest has one `pino` (10.4.0) and one `typebox` (1.1.39); the C# manifest also holds `microsoft.extensions.logging.abstractions` 8.0.0 beside 10.0.14 (the restore does not use 8.0.0: it is the only manifest-minus-used entry). The network test file takes about 92 s (the build 45 s; the offered set offline: Node 9.6 s, C# 12.5 s; the two missing-package cases 3.3 s and 6.6 s; the lint 12.8 s).
+
+**Coupling.** This story builds on v1's modules (`spikes/minigit-bench/lib/cache-snapshot.mjs`, `sandbox.mjs`, `packages.mjs`, `egress.mjs`, `bwrap.mjs`): the snapshot maker, the agent box and the package readers are v1's, widened by optional parameters. A change to those files can change the v2 snapshot build, and v1's own code-shape test (`test/code-shape.test.mjs`) pins their function size and complexity; `research/architecture.md` names the dependency.
+
+**The registered snapshots** (`inputs/cache-snapshots-lang.json`, written only by `make-snapshots.mjs`; the folders are read-only under `~/rsd/lang-v2/caches/`, never to be touched by a test or a rebuild). The Node folder is irreplaceable (see Measured): it is backed up to the NAS and verified by hash, and the identity a rebuild could match is the manifest. The backup is a tar, because the NAS keeps no file modes and `treeHash` covers the read and execute bits, so a plain copy would not re-hash: `/mnt/v/dew_flow_backup/lang-v2/caches/node-bebdc7a2….tar` with its `.tar.sha256` (run `sha256sum -c` inside that folder). To restore: `tar -xpf <tar> -C ~/rsd/lang-v2/caches`, then check it with `treeHash` against the record; a restore from the NAS copy re-hashed equal on 2026-11-04.
+
+| Stack | Folder | Tree sha256 | Manifest sha256 | Packages | Bytes | Made on |
+|---|---|---|---|---|---|---|
+| csharp | `csharp-452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee` | `452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee` | `2e897fc5db4ded367bced1478f4d0a260d1b3277f75bbf6cd58c9d0b03acc002` | 60 | 174,187,832 | 2026-11-04 |
+| node | `node-bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6` | `bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6` | `a21813acac9013bc8869d4a11e2e49e93ed2c6bfd60591606b85e2da1b40ab61` | 164 | 180,132,320 | 2026-11-04 |
+
+The versions resolved once at the build (`resolved`):
+- csharp: HOSTING 10.0.14, JWT_BEARER 10.0.14, XUNIT 4.0.2, XUNIT_VS 4.0.1, TEST_SDK 18.11.0
+- node: TYPES_NODE 26.6.6, TS_ESLINT 8.72.1, ESLINT 10.14.0, ESLINT_JS 10.0.1, PINO 10.4.0, TYPEBOX 1.1.39
+
+The licence and maintenance table is above (the recipe's `licence` and `maintenance` fields, the licence compared by test with the snapshot's own metadata). The recipe's `recipeSha256` and the C# `projectSha256` are in the record.
+
+**`PACKAGES.md` as derived from the record**, quoted as of 2026-11-04 (`node spikes/lang-bench/make-snapshots.mjs --print-packages-md csharp` and `... node`; derived output, never typed: it is regenerated from the record and the recipe, and S3 writes it into the workspaces).
+
+C#:
+
+````markdown
+# Packages
+
+Only the packages and versions listed here are available; there is no network. A reference to a lower version than the one listed resolves to the listed version, with the warning NU1603, which fails the build where warnings are errors; a higher version fails with NU1102, and a package not listed fails with NU1101; both errors name the package.
+Install a package with the exact version listed: `<PackageReference Include="NAME" Version="VERSION" />`.
+ASP.NET Core (Minimal API, its built-in validation, System.Text.Json) and the .NET base library come with SDK 10.0.403 as shared frameworks; they are not packages.
+
+Cache snapshot: tree sha256 `452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee`, made 2026-11-04.
+
+## Offered
+
+| Package | Version | Purpose |
+|---|---|---|
+| `Microsoft.AspNetCore.Authentication.JwtBearer` | 10.0.14 | JWT bearer authentication for ASP.NET Core Minimal API |
+| `Microsoft.Extensions.Hosting` | 10.0.14 | Generic Host for daemons: lifetime and graceful stop (IHostApplicationLifetime), dependency injection, configuration, ILogger |
+| `Microsoft.NET.Test.Sdk` | 18.11.0 | VSTest host for dotnet test in VSTest mode |
+| `xunit.runner.visualstudio` | 4.0.1 | xUnit adapter for the VSTest runner (dotnet test in VSTest mode) |
+| `xunit.v3` | 4.0.2 | Test framework (xUnit v3), run on Microsoft Testing Platform: the test project is an executable |
+
+## In the cache as dependencies of the offered packages
+
+| Package | Version |
+|---|---|
+| `microsoft.applicationinsights` | 2.23.0 |
+| `microsoft.bcl.asyncinterfaces` | 6.0.0 |
+| `microsoft.bcl.cryptography` | 10.0.2 |
+| `microsoft.codecoverage` | 18.11.0 |
+| `microsoft.extensions.configuration` | 10.0.14 |
+| `microsoft.extensions.configuration.abstractions` | 10.0.14 |
+| `microsoft.extensions.configuration.binder` | 10.0.14 |
+| `microsoft.extensions.configuration.commandline` | 10.0.14 |
+| `microsoft.extensions.configuration.environmentvariables` | 10.0.14 |
+| `microsoft.extensions.configuration.fileextensions` | 10.0.14 |
+| `microsoft.extensions.configuration.json` | 10.0.14 |
+| `microsoft.extensions.configuration.usersecrets` | 10.0.14 |
+| `microsoft.extensions.dependencyinjection` | 10.0.14 |
+| `microsoft.extensions.dependencyinjection.abstractions` | 10.0.14 |
+| `microsoft.extensions.diagnostics` | 10.0.14 |
+| `microsoft.extensions.diagnostics.abstractions` | 10.0.14 |
+| `microsoft.extensions.fileproviders.abstractions` | 10.0.14 |
+| `microsoft.extensions.fileproviders.physical` | 10.0.14 |
+| `microsoft.extensions.filesystemglobbing` | 10.0.14 |
+| `microsoft.extensions.hosting.abstractions` | 10.0.14 |
+| `microsoft.extensions.logging` | 10.0.14 |
+| `microsoft.extensions.logging.abstractions` | 8.0.0 |
+| `microsoft.extensions.logging.abstractions` | 10.0.14 |
+| `microsoft.extensions.logging.configuration` | 10.0.14 |
+| `microsoft.extensions.logging.console` | 10.0.14 |
+| `microsoft.extensions.logging.debug` | 10.0.14 |
+| `microsoft.extensions.logging.eventlog` | 10.0.14 |
+| `microsoft.extensions.logging.eventsource` | 10.0.14 |
+| `microsoft.extensions.options` | 10.0.14 |
+| `microsoft.extensions.options.configurationextensions` | 10.0.14 |
+| `microsoft.extensions.primitives` | 10.0.14 |
+| `microsoft.identitymodel.abstractions` | 8.19.2 |
+| `microsoft.identitymodel.jsonwebtokens` | 8.19.2 |
+| `microsoft.identitymodel.logging` | 8.19.2 |
+| `microsoft.identitymodel.protocols` | 8.19.2 |
+| `microsoft.identitymodel.protocols.openidconnect` | 8.19.2 |
+| `microsoft.identitymodel.tokens` | 8.19.2 |
+| `microsoft.testing.extensions.telemetry` | 2.5.1 |
+| `microsoft.testing.extensions.trxreport.abstractions` | 2.5.1 |
+| `microsoft.testing.platform` | 2.5.1 |
+| `microsoft.testing.platform.msbuild` | 2.5.1 |
+| `microsoft.testplatform.objectmodel` | 18.11.0 |
+| `microsoft.testplatform.testhost` | 18.11.0 |
+| `microsoft.win32.registry` | 5.0.0 |
+| `system.diagnostics.eventlog` | 10.0.14 |
+| `system.identitymodel.tokens.jwt` | 8.19.2 |
+| `system.security.accesscontrol` | 6.0.1 |
+| `xunit.analyzers` | 2.2.0 |
+| `xunit.v3.assert` | 4.0.2 |
+| `xunit.v3.common` | 4.0.2 |
+| `xunit.v3.core.mtp-v2` | 4.0.2 |
+| `xunit.v3.extensibility.core` | 4.0.2 |
+| `xunit.v3.mtp-v2` | 4.0.2 |
+| `xunit.v3.runner.common` | 4.0.2 |
+| `xunit.v3.runner.inproc.console` | 4.0.2 |
+````
+
+Node:
+
+````markdown
+# Packages
+
+Only the packages and versions listed here are available; there is no network. A package or version not listed fails to install with ENOTCACHED; the message may name a dependency of the package rather than the package itself.
+Install a package with the exact version listed: `npm install NAME@VERSION`.
+
+Cache snapshot: tree sha256 `bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6`, made 2026-11-04.
+
+## Offered
+
+| Package | Version | Purpose |
+|---|---|---|
+| `@eslint/js` | 10.0.1 | ESLint's recommended JavaScript rules |
+| `@fastify/jwt` | 10.2.6 | JWT sign and verify as a Fastify plugin |
+| `@fastify/type-provider-typebox` | 6.3.0 | TypeBox schemas as Fastify route types |
+| `@types/node` | 26.6.6 | Types of the Node 26 API |
+| `eslint` | 10.14.0 | The lint runner |
+| `fastify` | 5.12.7 | HTTP routing; JSON-schema validation and fast serialization; lifecycle hooks and close() |
+| `pino` | 10.4.0 | Structured logging (Fastify's logger), the version Fastify 5.12.7 resolves |
+| `typebox` | 1.1.39 | JSON-schema builder with static TypeScript types: the renamed TypeBox 1.x line, imported as `typebox` (it replaces `@sinclair/typebox`, which is not in the set) |
+| `typescript` | 6.0.3 | Type check (tsc --noEmit) and the compiler API the type-aware lint uses |
+| `typescript-eslint` | 8.72.1 | TypeScript parser and type-aware lint rules for ESLint |
+
+## In the cache as dependencies of the offered packages
+
+| Package | Version |
+|---|---|
+| `@cacheable/memory` | 2.2.0 |
+| `@cacheable/utils` | 2.5.0 |
+| `@eslint-community/eslint-utils` | 4.10.1 |
+| `@eslint-community/regexpp` | 4.12.2 |
+| `@eslint/config-array` | 0.23.5 |
+| `@eslint/config-helpers` | 0.7.0 |
+| `@eslint/core` | 1.2.1 |
+| `@eslint/object-schema` | 3.0.5 |
+| `@eslint/plugin-kit` | 0.7.3 |
+| `@fastify/ajv-compiler` | 4.0.7 |
+| `@fastify/deepmerge` | 3.2.4 |
+| `@fastify/error` | 4.2.1 |
+| `@fastify/fast-json-stringify-compiler` | 5.1.1 |
+| `@fastify/forwarded` | 3.1.2 |
+| `@fastify/merge-json-schemas` | 0.2.2 |
+| `@fastify/proxy-addr` | 5.1.2 |
+| `@humanfs/core` | 0.19.2 |
+| `@humanfs/node` | 0.16.8 |
+| `@humanfs/types` | 0.15.0 |
+| `@humanwhocodes/module-importer` | 1.0.1 |
+| `@humanwhocodes/retry` | 0.4.3 |
+| `@keyv/bigmap` | 1.3.1 |
+| `@keyv/serialize` | 1.1.1 |
+| `@lukeed/ms` | 2.0.2 |
+| `@pinojs/redact` | 0.4.0 |
+| `@types/esrecurse` | 4.3.1 |
+| `@types/estree` | 1.0.10 |
+| `@types/json-schema` | 7.0.15 |
+| `@typescript-eslint/eslint-plugin` | 8.72.1 |
+| `@typescript-eslint/parser` | 8.72.1 |
+| `@typescript-eslint/project-service` | 8.72.1 |
+| `@typescript-eslint/scope-manager` | 8.72.1 |
+| `@typescript-eslint/tsconfig-utils` | 8.72.1 |
+| `@typescript-eslint/type-utils` | 8.72.1 |
+| `@typescript-eslint/types` | 8.72.1 |
+| `@typescript-eslint/typescript-estree` | 8.72.1 |
+| `@typescript-eslint/utils` | 8.72.1 |
+| `@typescript-eslint/visitor-keys` | 8.72.1 |
+| `abstract-logging` | 2.0.1 |
+| `acorn` | 8.19.0 |
+| `acorn-jsx` | 5.3.2 |
+| `ajv` | 6.15.0 |
+| `ajv` | 8.20.0 |
+| `ajv-formats` | 3.0.1 |
+| `asn1.js` | 5.4.1 |
+| `atomic-sleep` | 1.0.0 |
+| `avvio` | 9.3.1 |
+| `balanced-match` | 4.0.4 |
+| `bn.js` | 4.12.5 |
+| `brace-expansion` | 5.0.12 |
+| `cacheable` | 2.5.0 |
+| `cookie` | 2.0.1 |
+| `cross-spawn` | 7.0.6 |
+| `debug` | 4.4.3 |
+| `deep-is` | 0.1.4 |
+| `dequal` | 2.0.3 |
+| `ecdsa-sig-formatter` | 1.0.11 |
+| `escape-string-regexp` | 4.0.0 |
+| `eslint-scope` | 9.1.2 |
+| `eslint-visitor-keys` | 3.4.3 |
+| `eslint-visitor-keys` | 5.0.1 |
+| `espree` | 11.2.0 |
+| `esquery` | 1.7.0 |
+| `esrecurse` | 4.3.0 |
+| `estraverse` | 5.3.0 |
+| `esutils` | 2.0.3 |
+| `fast-decode-uri-component` | 1.0.1 |
+| `fast-deep-equal` | 3.1.3 |
+| `fast-json-stable-stringify` | 2.1.0 |
+| `fast-json-stringify` | 7.2.1 |
+| `fast-jwt` | 6.3.6 |
+| `fast-levenshtein` | 2.0.6 |
+| `fast-querystring` | 1.1.2 |
+| `fast-uri` | 3.1.9 |
+| `fast-uri` | 4.2.3 |
+| `fastfall` | 1.5.1 |
+| `fastify-plugin` | 6.0.1 |
+| `fastparallel` | 2.4.1 |
+| `fastq` | 1.20.3 |
+| `fastseries` | 1.7.2 |
+| `fdir` | 6.5.0 |
+| `file-entry-cache` | 11.1.5 |
+| `find-my-way` | 9.10.0 |
+| `find-up` | 5.0.0 |
+| `flat-cache` | 6.1.23 |
+| `flatted` | 3.4.4 |
+| `glob-parent` | 6.0.2 |
+| `hashery` | 1.5.1 |
+| `hookified` | 1.15.1 |
+| `hookified` | 2.2.0 |
+| `ignore` | 5.3.2 |
+| `ignore` | 7.0.14 |
+| `imurmurhash` | 0.1.4 |
+| `inherits` | 2.0.4 |
+| `ipaddr.js` | 2.5.0 |
+| `is-extglob` | 2.1.1 |
+| `is-glob` | 4.0.3 |
+| `isexe` | 2.0.0 |
+| `json-schema-ref-resolver` | 3.0.1 |
+| `json-schema-traverse` | 0.4.1 |
+| `json-schema-traverse` | 1.0.0 |
+| `json-stable-stringify-without-jsonify` | 1.0.1 |
+| `keyv` | 5.6.0 |
+| `levn` | 0.4.1 |
+| `light-my-request` | 6.8.0 |
+| `locate-path` | 6.0.0 |
+| `minimalistic-assert` | 1.0.1 |
+| `minimatch` | 10.2.6 |
+| `mnemonist` | 0.40.7 |
+| `ms` | 2.1.3 |
+| `natural-compare` | 1.4.0 |
+| `obliterator` | 2.0.5 |
+| `on-exit-leak-free` | 2.1.2 |
+| `optionator` | 0.9.4 |
+| `p-limit` | 3.1.0 |
+| `p-locate` | 5.0.0 |
+| `path-exists` | 4.0.0 |
+| `path-key` | 3.1.1 |
+| `picomatch` | 4.0.7 |
+| `pino-abstract-transport` | 3.0.0 |
+| `pino-std-serializers` | 7.1.0 |
+| `prelude-ls` | 1.2.1 |
+| `process-warning` | 5.1.1 |
+| `punycode` | 2.3.1 |
+| `qified` | 0.10.1 |
+| `quick-format-unescaped` | 4.0.4 |
+| `real-require` | 1.0.0 |
+| `require-from-string` | 2.0.2 |
+| `ret` | 0.5.1 |
+| `reusify` | 1.1.0 |
+| `rfdc` | 1.4.1 |
+| `safe-buffer` | 5.2.1 |
+| `safe-regex2` | 5.1.2 |
+| `safe-stable-stringify` | 2.5.0 |
+| `safer-buffer` | 2.1.2 |
+| `secure-json-parse` | 4.1.1 |
+| `semver` | 7.8.6 |
+| `set-cookie-parser` | 3.2.2 |
+| `shebang-command` | 2.0.0 |
+| `shebang-regex` | 3.0.0 |
+| `sonic-boom` | 4.2.1 |
+| `split2` | 4.2.0 |
+| `steed` | 1.1.3 |
+| `thread-stream` | 4.2.1 |
+| `tinyglobby` | 0.2.17 |
+| `toad-cache` | 3.7.4 |
+| `ts-api-utils` | 2.5.0 |
+| `type-check` | 0.4.0 |
+| `undici-types` | 8.9.0 |
+| `uri-js` | 4.4.1 |
+| `which` | 2.0.2 |
+| `word-wrap` | 1.2.5 |
+| `xtend` | 4.0.2 |
+| `yocto-queue` | 0.1.0 |
+````
+
+
+**Notes for later stories.**
+- S3 reuses `offlineNugetConfig`, `NPMRC_OFFLINE`, `NPM_OFFLINE_ENV` and `npmOfflineArgv` for the workspaces, and `renderPackagesMd` for `PACKAGES.md`.
+- The offered web set has no in-memory test host for C# web tests: ASP.NET Core's `Microsoft.AspNetCore.Mvc.Testing` is not in the set, while Fastify has `inject()` built in (a fairness question for group B, not decided here).
+- If a workspace sets `IsAotCompatible`, `EnableTrimAnalyzer`, `PublishTrimmed` or `PublishAot`, the SDK restores `Microsoft.NET.ILLink.Tasks` from NuGet (not in the set); with `TreatWarningsAsErrors`, NuGet's audit warnings in an offline box (a local source has no vulnerability data) may become errors. S3 must check both.
+- The lint packages are v1 D4's shape (`eslint`, `@eslint/js`, `typescript-eslint`); if S7's template needs more (for example `globals`), the snapshot is superseded before the pre-registration.
+- The conventions' sweeper scan lists seven owner-blind lines in files this story did not touch (`spikes/lang-bench/test/py/test_burner.py`, `test/support/probe-scope.mjs`, `spikes/minigit-bench/lib/heldout-run.mjs` and four v1 tests); the same seven are listed at `main` 469a5109. This story adds none.
 
 ## Workspaces (E1.S3)
 

@@ -90,10 +90,11 @@ export function sessionLayout(root, rid) {
  * The environment the agent runs with (the same for every arm; the process arm adds its own keys through `extra`): a fixed allow-list, never the parent's. `PATH` is constructed, so no `/mnt` entry and no WSL
  * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot: it may add keys, never replace one of the base (that throws).
  */
-export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, extra = {}, locale }) {
+export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, dotnetDir = null, extra = {}, locale }) {
   const proxy = `http://127.0.0.1:${BOX_PROXY_PORT}`;
   const base = {
-    PATH: [`${nodeDir}/bin`, ...(tsDir ? [`${tsDir}/node_modules/.bin`] : []), '/usr/local/bin', '/usr/bin', '/bin'].join(':'),
+    // `dotnetDir` (E1.S4): the pinned SDK's directory goes right after node, so the box finds `dotnet` there and not at the distribution's `/usr/bin/dotnet`; none given, the PATH is what it always was
+    PATH: [`${nodeDir}/bin`, ...(dotnetDir ? [dotnetDir] : []), ...(tsDir ? [`${tsDir}/node_modules/.bin`] : []), '/usr/local/bin', '/usr/bin', '/bin'].join(':'),
     HOME: layout.home, TMPDIR: '/tmp', LANG: 'C.UTF-8',
     CLAUDE_CODE_OAUTH_TOKEN: dummy, ANTHROPIC_BASE_URL: `http://127.0.0.1:${BOX_API_PORT}`, CLAUDE_CONFIG_DIR: layout.config,
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', DISABLE_AUTOUPDATER: '1',
@@ -165,10 +166,12 @@ export const boxSkeleton = opts => planView(opts).skeleton;
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
  * host's `/tmp`. Its own network, pid and ipc namespaces. No `--setenv`, no `--clearenv`: the environment is the spawn's `env`.
  */
-export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], operatorHome = os.homedir(), exists = existsSync }) {
+export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], operatorHome = os.homedir(), exists = existsSync }) {
   return Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
+    // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over); the distribution's dotnet, because a pinned-toolchain program must not find it
+    ...hide.filter(p => exists(p)).flatMap(tmpfs),
     ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),
     ...roBind(claudeBinary),

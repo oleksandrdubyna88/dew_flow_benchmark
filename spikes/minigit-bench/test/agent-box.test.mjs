@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -253,4 +253,23 @@ test('The_toolchain_is_probed_inside_the_box_node_and_a_box_dir_is_writable_wher
   assert.match(r.out, /net=[1-9]/, 'net/ is read-only');
   assert.equal(readFileSync(path.join(layout.work, 'w'), 'utf8'), 'a\n');
   assert.equal(readFileSync(path.join(layout.tmp, 'w'), 'utf8'), 'c\n');
+});
+
+test('The_hidden_paths_are_replaced_by_an_empty_tmpfs', async t => {
+  // `hide` (E1.S4): a host path the box must not show (the distribution's dotnet) gets an empty tmpfs, right after the shared hide list and before any bind.
+  const layout = layoutPaths('/r', 'a');
+  const argv = agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: p => p !== '/etc/dotnet', hide: ['/usr/lib/dotnet', '/etc/dotnet'] }));
+  const tmpfsAt = p => argv.findIndex((a, i) => a === '--tmpfs' && argv[i + 1] === p);
+  assert.equal(tmpfsAt('/usr/lib/dotnet'), tmpfsAt('/var/tmp') + 2, 'it follows the shared hide list directly');
+  assert.ok(argv.indexOf(layout.harness) > tmpfsAt('/usr/lib/dotnet'), 'the binds come after it, so what is bound back shows');
+  assert.equal(tmpfsAt('/etc/dotnet'), -1, 'a path the host lacks is not mounted over');
+  assert.equal(agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: () => true })).filter(a => a === '--tmpfs').length, 5, 'control: with no hide the box has the five of the shared list');
+  if (!sandboxGate(t)) return;
+  const shown = ['/usr/share/doc', '/etc/alternatives'].find(p => existsSync(p) && readdirSync(p).length > 0);
+  if (shown === undefined) return hostLacks(t, 'no non-empty system directory to hide');
+  const session = newSession();
+  const open = await probe(session, `ls -A ${shown} | head -c 1`);
+  assert.notEqual(open.out.trim(), '', `control: ${shown} lists something in a box that hides nothing`);
+  const hidden = await probe(session, `ls -A ${shown} | wc -l`, { over: { hide: [shown] } });
+  assert.equal(hidden.out.trim(), '0', `${shown} is empty inside the box`);
 });
