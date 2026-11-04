@@ -64,8 +64,10 @@ The tools read the format as CommonMark does, and a line that the two would read
 of a comparison and in both tools: a backtick fence whose opening line has a backtick after the marker; a fence line indented one to three spaces outside a list
 item; an HTML block start at columns 0 to 3 outside a fence (`<!--`, `<?`, `<!X`, `<![CDATA[`, the tags of the HTML block kinds one to six, and a complete tag
 alone on a line where no paragraph is open); an ATX heading in a form the tools do not take (a tab after the `#`s, one to three spaces before the `#`s, `#`s
-with nothing after them). A fence inside a list item is allowed. What the tools do not look at: setext headings, headings and fences inside a block quote or
-after a list marker on the same line, and a character reference or a link label that spells a heading.
+with nothing after them); a setext heading (a paragraph line followed by a line of only `=` or only `-`, indented at most three spaces: a `---` line after a blank
+line is a thematic break and is allowed); an ATX heading or a fence opener inside a block quote (`> ## x`, `> ```x`) or after a list marker on the same line
+(`- ## x`, `1. ```x`). A fence inside a list item is allowed. A dash line directly under a list item line is refused too (it may be a thematic break, but the tools do
+not tell). What the tools do not look at: a character reference or a link label that spells a heading.
 
 Exit codes of both tools: 0 success, 1 a refusal (one line each: the heading, the line, the rule), 4 a usage or format error.
 

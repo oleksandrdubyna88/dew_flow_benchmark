@@ -255,8 +255,9 @@ duplicate; anything else is exit 4 naming the heading and the line. **The reader
 fence and HTML tricks): in either file, in both tools, these lines are exit 4 naming the line: a backtick fence opener with a backtick in its info string; a fence line with 1 to 3 spaces
 of indent outside a list item (a fence inside a list item is allowed: the real draft has one); an HTML block start at columns 0 to 3 outside a fence (`<!--`, `<?`, `<!X`, `<![CDATA[`,
 the script/pre/style/textarea kinds, the block-level tag names, and a complete tag alone on a line where no paragraph is open); an ATX heading with a tab after the `#`s, with 1 to 3 leading
-spaces or with nothing after the `#`s. Not looked at (known, listed in `inputs/FORMAT-MAINTENANCE.md`): setext headings, headings and fences inside a block quote or after a list marker
-on the same line. Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
+spaces or with nothing after the `#`s; a setext heading (a paragraph line, then a line of only `=` or only `-` indented at most three spaces; a `---` after a blank line stays a thematic break);
+an ATX heading or a fence opener inside a block quote or after a list marker on the same line (fix batch 1b: a heading the reader does not see but a renderer shows is the same spoof as the fence trick).
+Not looked at (listed in `inputs/FORMAT-MAINTENANCE.md`): character references and link labels that spell a heading. Exit codes of both tools: 0 success, 1 a refusal (one line each: heading, line, rule), 4 usage or a format error.
 
 | File | Role |
 |---|---|
