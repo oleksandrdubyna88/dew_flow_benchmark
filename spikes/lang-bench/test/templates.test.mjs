@@ -29,7 +29,7 @@ test('Each_template_holds_exactly_its_file_set', () => {
 // ---- the two scripts ----------------------------------------------------------------------------------------------------------------
 
 const BUILD_LINES = Object.freeze({
-  csharp: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'dotnet build App.csproj -c Release --nologo -m:4'],
+  csharp: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'dotnet build App.csproj -c Release --nologo -m:4 -p:TreatWarningsAsErrors=false "-p:WarningsAsErrors=nullable%3BNU1603"'],
   node: ['set -euo pipefail', 'cd "$(dirname "$0")"', 'npm ci --offline', 'npx --offline tsc --noEmit -p tsconfig.json'],
 });
 const VARIABLE_LINE = /^\s*(export\s+)?[A-Za-z_]+=|^\s*env\s/;
@@ -123,10 +123,13 @@ function projectProblems(root) {
   const problems = [];
   for (const kind of KINDS) {
     const props = readTemplate('csharp', kind, 'Directory.Build.props', root);
-    if (!props.includes('<TreatWarningsAsErrors>true</TreatWarningsAsErrors>')) problems.push(`csharp/${kind}: TreatWarningsAsErrors is not true`);
+    if (props.includes('TreatWarningsAsErrors') || props.includes('WarningsAsErrors')) problems.push(`csharp/${kind}: the props file sets a warnings-as-errors policy: build.sh forces it on the command line`);
+    if (!props.includes('<DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>')) problems.push(`csharp/${kind}: tests/ is not excluded from the default items`);
+    if (!props.includes('<Nullable>enable</Nullable>')) problems.push(`csharp/${kind}: Nullable is not enabled in the props file`);
     if (!props.includes('<NuGetAudit>false</NuGetAudit>')) problems.push(`csharp/${kind}: NuGetAudit is not false`);
     const global = JSON.parse(readTemplate('csharp', kind, 'global.json', root));
     if (global.sdk?.version !== sdk || global.sdk?.rollForward !== 'disable') problems.push(`csharp/${kind}: global.json is ${JSON.stringify(global)}, expected SDK ${sdk} with rollForward disable`);
+    if (global.test?.runner !== 'Microsoft.Testing.Platform') problems.push(`csharp/${kind}: global.json does not name the Microsoft.Testing.Platform test runner`);
   }
   for (const [stack, kind] of everyKind((s, k) => [[s, k]])) {
     for (const name of TEMPLATE_FILES[stack]) {

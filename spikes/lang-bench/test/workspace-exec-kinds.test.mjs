@@ -2,7 +2,7 @@
 // may add, the type check and the lint of the Node workspace, the read-only npm cache that would look like a missing package, T-L31 (`run.sh` ends in `exec`, so the program has no bash parent and SIGTERM
 // reaches it), the same templates in the agent box, and the stability of the lock generation. The hello builds, the verdicts and the build box itself are in workspace-exec.test.mjs.
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -74,6 +74,10 @@ test('A_lower_csharp_version_fails_with_NU1603', TIMEOUT, async t => {
   assert.notEqual(ran.code, 0);
   assert.match(outputOf(ran), /NU1603/);
   assert.match(outputOf(ran), /JwtBearer/i);
+  writeFileSync(file, read(file).replace('Version="10.0.1"', 'Version="10.0.99"'));
+  const higher = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(higher.code, 0, 'a higher version is an error by default, with no policy of ours');
+  assert.match(outputOf(higher), /NU1102/);
 });
 
 test('A_node_package_outside_the_set_fails_naming_it', TIMEOUT, async t => {
@@ -103,6 +107,24 @@ test('An_agent_may_add_a_listed_package_and_the_build_still_passes', TIMEOUT, as
     const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
     assert.equal(ran.code, 0, outputOf(ran).slice(-3000));
   });
+  await top.test('csharp with a lock file', async t => {
+    for (const locked of [false, true]) {
+      const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad', label: locked ? 'lock' : 'free' });
+      const props = path.join(w, 'Directory.Build.props');
+      const mode = `<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>${locked ? '<RestoreLockedMode>true</RestoreLockedMode>' : ''}`;
+      writeFileSync(props, read(props).replace('</PropertyGroup>', `${mode}</PropertyGroup>`));
+      const first = await inBox(w, 'csharp', ['bash', 'build.sh']);
+      assert.equal(first.code, 0, outputOf(first).slice(-2000));
+      addReference(w, 'Microsoft.Extensions.Hosting', snapshotRecord().csharp.resolved.HOSTING);
+      const second = await inBox(w, 'csharp', ['bash', 'build.sh']);
+      if (locked) {
+        assert.notEqual(second.code, 0, 'with RestoreLockedMode a package added after the lock file was written fails: that is why the template does not set it');
+        assert.match(outputOf(second), /NU1004/);
+      } else {
+        assert.equal(second.code, 0, outputOf(second).slice(-2000));
+      }
+    }
+  });
   await top.test('node', async t => {
     const w = helloWorkspace(t, { stack: 'node', kind: 'olympiad' });
     const added = await inBox(w, 'node', npmOfflineArgv([`fastify@${snapshotRecord().node.packages.find(p => p.name === 'fastify').version}`]));
@@ -110,6 +132,69 @@ test('An_agent_may_add_a_listed_package_and_the_build_still_passes', TIMEOUT, as
     const ran = await inBox(w, 'node', ['bash', 'build.sh']);
     assert.equal(ran.code, 0, outputOf(ran).slice(-3000));
   });
+});
+
+// ---- the C# build policy (warnings, the command line, the tests folder) -------------------------------------------------------------------------------------
+
+const PROGRAM = 'Program.cs';
+const withProgram = (w, text) => writeFileSync(path.join(w, PROGRAM), text);
+const NOT_AWAITED = 'Task.Delay(1);\n';
+
+test('A_warning_does_not_fail_the_csharp_build_but_a_nullable_error_does', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  const original = read(path.join(w, PROGRAM));
+  const clean = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(clean.code, 0, outputOf(clean).slice(-2000));
+  assert.ok(existsSync(path.join(w, 'bin', 'Release', 'net10.0', 'App.dll')), 'the run still finds bin/Release/net10.0/App.dll');
+  for (const [what, code, warning] of [['an unused local', `int unused = 1;\n${original}`, 'CS0219'], ['a call not awaited', `${NOT_AWAITED}${original}`, 'CS4014'], ['unreachable code', `${original}\nreturn;\nConsole.Out.Write("x");\n`, 'CS0162']]) {
+    withProgram(w, code);
+    const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+    assert.equal(ran.code, 0, `${what} is a warning and the build passes: ${outputOf(ran).slice(-1500)}`);
+    assert.match(outputOf(ran), new RegExp(warning), `${what}: the warning is still shown`);
+  }
+  withProgram(w, `string s = null;\n${original}`);
+  const nullable = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(nullable.code, 0, 'a nullable warning is an error');
+  assert.match(outputOf(nullable), /CS8600/);
+});
+
+// The command line forces the policy as global properties; a project file cannot override those. Of the six overrides probed, two are stopped and four are not (measured 2026-11-04, exit code of
+// `bash build.sh` for `string s = null;`). The four that pass are recorded for the scorer (E3): they are written here so a change of the SDK's behaviour shows.
+const OVERRIDES = Object.freeze([
+  ['Nullable=disable', '<Nullable>disable</Nullable>', 0], ['TreatWarningsAsErrors=false', '<TreatWarningsAsErrors>false</TreatWarningsAsErrors>', 1], ['WarningsAsErrors empty', '<WarningsAsErrors />', 1],
+  ['WarningsNotAsErrors=nullable', '<WarningsNotAsErrors>nullable</WarningsNotAsErrors>', 0], ['NoWarn=CS8600', '<NoWarn>CS8600</NoWarn>', 0], ['WarningLevel=0', '<WarningLevel>0</WarningLevel>', 0],
+]);
+
+test('The_command_line_policy_stops_two_project_file_overrides_and_not_four_and_that_is_recorded', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  withProgram(w, 'string s = null;\nConsole.Out.Write(s);\n');
+  const project = path.join(w, 'App.csproj');
+  const original = read(project);
+  const table = [];
+  for (const [name, xml, expected] of OVERRIDES) {
+    writeFileSync(project, original.replace('<AssemblyName>', `${xml}<AssemblyName>`));
+    const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+    table.push(`${name}: exit ${ran.code}`);
+    assert.equal(ran.code, expected, `${name}: ${outputOf(ran).slice(-800)}`);
+  }
+  t.diagnostic(table.join('; '));
+});
+
+test('A_tests_folder_is_outside_the_csharp_build_and_dotnet_test_runs_it_offline', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  mkdirSync(path.join(w, 'tests'));
+  const xunit = snapshotRecord().csharp.resolved.XUNIT;
+  writeFileSync(path.join(w, 'tests', 'Tests.csproj'), `<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>\n  <ItemGroup><PackageReference Include="xunit.v3" Version="${xunit}" /></ItemGroup>\n</Project>\n`);
+  writeFileSync(path.join(w, 'tests', 'UnitTest1.cs'), 'using Xunit;\npublic class UnitTest1 { [Fact] public void Passes() => Assert.True(true); }\n');
+  const built = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(built.code, 0, `tests/ is not part of the program: ${outputOf(built).slice(-1500)}`);
+  const tested = await inBox(w, 'csharp', ['dotnet', 'test', '--project', 'tests/Tests.csproj']);
+  assert.equal(tested.code, 0, outputOf(tested).slice(-2000));
+  const rebuilt = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(rebuilt.code, 0, 'and the program still builds after the tests project has its own obj and bin');
 });
 
 // ---- the type check and the lint ---------------------------------------------------------------------------------------------------------------------------

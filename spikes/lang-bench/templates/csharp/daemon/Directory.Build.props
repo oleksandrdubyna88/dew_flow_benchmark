@@ -4,7 +4,7 @@
     <LangVersion>14</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 </Project>

@@ -297,10 +297,12 @@ test('The_templates_pass_the_scans_of_the_push_check', t => {
   assert.deepEqual(findStackFolderFiles(entries, { templateFiles: stackFiles() }), [], 'a whole built pair is inside the template set');
   const runnerHits = readdirSync(path.join(cs, 'runner')).filter(n => n.endsWith('.py')).flatMap(n => scanText(`csharp/01-x/runner/${n}`, read(path.join(cs, 'runner', n)), inputs)['run-base-text']);
   t.diagnostic(`the pinned runner is not in this scan; the run-base-text rule finds ${runnerHits.length} plan-id hits in runner/*.py (the plan ids are the runner's own comments)`);
-  const planted = scanText('csharp/01-x/build.sh', `${read(path.join(TEMPLATES, 'csharp', 'olympiad', 'build.sh'))}# E1.S3 of dew_flow_benchmark\n`, inputs);
-  assert.deepEqual(planted['run-base-text'].map(f => [f.line, f.what]), [[7, 'plan story id']], 'the plan id is found, on its line');
+  const base = read(path.join(TEMPLATES, 'csharp', 'olympiad', 'build.sh'));
+  const plantedLine = base.split('\n').length;
+  const planted = scanText('csharp/01-x/build.sh', `${base}# E1.S3 of dew_flow_benchmark\n`, inputs);
+  assert.deepEqual(planted['run-base-text'].map(f => [f.line, f.what]), [[plantedLine, 'plan story id']], 'the plan id is found, on its line');
   assert.equal(planted['family-names'].length, 1, 'the repository name is found');
-  assert.equal(planted['family-names'][0].line, 7);
+  assert.equal(planted['family-names'][0].line, plantedLine);
 });
 
 const OTHER_STACK = Object.freeze({ csharp: /\b(node|npm|npx|typescript|tsc|eslint|fastify|pino)\b/i, node: /\b(dotnet|c#|csharp|nuget|msbuild|asp\.net)\b|\.net\b/i });
