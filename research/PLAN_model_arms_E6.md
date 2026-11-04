@@ -25,7 +25,7 @@
 > fixtures under `tests/Bench.Tests/Fixtures/model-arms/consumers/`, `research/module_model_arms.md`, `research/module_tests.md`,
 > `research/architecture.md`, `README.md`, `todo/PLAN_model_arms_analysis.md` (new).
 >
-> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 2, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 9; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E6.md` gives 3, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E6.md` gives 8; the 1 other open box waits for this pull request's CI, which must show 0 warnings, format clean and the suite green.
 
 ## 1. Goal, before any solution
 
@@ -853,8 +853,8 @@ No table, no database, no process that outlives a verb beyond E5's detached runn
 - [x] **E6.S4** (the parent's entries 3.2 and 3.3), after epoch 4 was approved and before #132 merged (done, 2026-11-01, `3a0effcc`): part (a) to Fable's spec, its
       theory red at `16e7fd20` then green, the `CLAUDE_*` / `ANTHROPIC_*` rows green; part (b) — the two named tests red then green, the
       log line edited; the docs say runs after it differ from part 6's conditions; #132's code gate passed with it.
-- [ ] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
-      `todo/README.md` row. — not met as written (checked 2026-11-04): the file exists with its status line (`todo/PLAN_model_arms_analysis.md:3`), its boundary table (added 2026-11-04, section *Boundary*), items 5, 7 and 10 of §8 (the last result per session, `compare.mjs` lists no `CR*`, `CH*` or `SR*` arm, the rename) and its row (`todo/README.md:91`); item 6 is carried as a pointer only (the file says the readers E6.S1 did not run are to be listed "each with its reason (E6 §8 item 6)" and lists none), so the reasons are missing.
+- [x] `todo/PLAN_model_arms_analysis.md` exists with its status line, its boundary table and items 5, 6, 7, 10 of §8, and its
+      `todo/README.md` row. — met, checked 2026-11-04: status line `todo/PLAN_model_arms_analysis.md:3`; sections *Boundary* and *The readers E6.S1 did not run* (item 6), both added 2026-11-04; items 5, 7 and 10 in its first paragraph; the row `todo/README.md:91`.
 - [ ] The parent's deviations written (every epic; items 3 and 4 here); §8's wording items 3, 18 and 20 written into the parent (not a
       ledger entry); its defects 6, 11, 19 and 21 taken into its next change or answered by the owner. — not met as written (checked 2026-11-04): the deviations are one list, not one per epic; item 4 is absent.
 - [x] **OPEN — the owner's, by hand: M2's key check** (`research/module_model_arms.md` *M2's key check*; E3 §8 item 47): the real `claude`
