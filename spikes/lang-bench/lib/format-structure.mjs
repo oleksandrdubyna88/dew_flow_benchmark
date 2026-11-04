@@ -71,40 +71,59 @@ function indentOf(text) {
   return { col, rest: text.slice(at) };
 }
 
+const gapOf = marker => marker[2].replaceAll('\t', '    ').length;
+const contentGap = (marker, rest) => (rest.length === marker[0].length || gapOf(marker) > 4 ? 1 : gapOf(marker));
+
 /** The column where the content of a list item starts, for a marker line `rest` at column `col`, or null when `rest` is no list item. */
 function listContentColumn(col, rest) {
   const marker = LIST_MARKER.exec(rest);
   if (marker === null || THEMATIC_BREAK.test(rest)) return null;
-  const gap = marker[2].replaceAll('\t', '    ').length;
-  return col + marker[1].length + (rest.length === marker[0].length || gap > 4 ? 1 : gap);
+  return col + marker[1].length + contentGap(marker, rest);
 }
+
+/** The ways a line can start an HTML block whatever is open (CommonMark's types 1 to 6). */
+const HTML_STARTS = Object.freeze([
+  rest => HTML_BLOCK_1.test(rest), rest => rest.startsWith('<!--'), rest => rest.startsWith('<?'), rest => /^<![A-Za-z]/.test(rest), rest => rest.startsWith('<![CDATA['), rest => HTML_BLOCK_6.test(rest),
+]);
+const startsHtmlBlock = (rest, freshBlock) => HTML_STARTS.some(test => test(rest)) || (freshBlock && HTML_BLOCK_7.test(rest));
 
 /** The reason when `rest` starts an HTML block that CommonMark renders as raw HTML, else null; a complete tag alone on its line starts one only where no paragraph is open (`freshBlock`). */
 function htmlBlockStart(rest, freshBlock) {
   if (!rest.startsWith('<')) return null;
-  const type = (HTML_BLOCK_1.test(rest) || rest.startsWith('<!--') || rest.startsWith('<?') || /^<![A-Za-z]/.test(rest) || rest.startsWith('<![CDATA[') || HTML_BLOCK_6.test(rest) || (freshBlock && HTML_BLOCK_7.test(rest)));
-  return type ? 'an HTML block start: CommonMark renders raw HTML here, and the reader cannot read through it' : null;
+  return startsHtmlBlock(rest, freshBlock) ? 'an HTML block start: CommonMark renders raw HTML here, and the reader cannot read through it' : null;
 }
 
 const ATX_START = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
 const QUOTE_MARKER = /^ {0,3}> ?/;
 
+const markerOf = (text, quote) => (quote === null && !THEMATIC_BREAK.test(text) ? LIST_MARKER.exec(text) : null);
+const endsPrefixes = (quote, marker, text) => quote === null && (marker === null || marker[0].length === text.length);
+
+/** One block quote or list marker at the start of `text`: `{ prefix, rest }` (`rest` is the text after it), or null when there is none. */
+function prefixStep(text) {
+  const quote = QUOTE_MARKER.exec(text);
+  const marker = markerOf(text, quote);
+  if (endsPrefixes(quote, marker, text)) return null;
+  return { prefix: quote === null ? 'a list marker' : 'a block quote', rest: text.slice((quote ?? marker)[0].length) };
+}
+
+/** `text` without its block quote and list markers, and the kind of the first one (null when there is none). */
+function stripPrefixes(rest) {
+  let state = { text: rest, prefix: null };
+  for (let step = prefixStep(rest); step !== null; step = prefixStep(state.text)) state = { text: step.rest, prefix: state.prefix ?? step.prefix };
+  return state;
+}
+
+const opensBlock = text => ATX_START.test(text) || FENCE.test(text.trimStart());
+
 /**
  * The reason when the line opens a heading or a fence behind a prefix the reader does not look through: after one or more block quote markers (`> ## x`, `> ```x`) or list
  * markers (`- ## x`, `1. ```x`), else null. A renderer shows the heading or the fence there; the reader sees a line of text.
  */
 function hiddenStart(rest) {
-  let text = rest;
-  let prefix = null;
-  for (;;) {
-    const quote = QUOTE_MARKER.exec(text);
-    const marker = quote === null && !THEMATIC_BREAK.test(text) ? LIST_MARKER.exec(text) : null;
-    if (quote === null && (marker === null || marker[0].length === text.length)) break;
-    prefix ??= quote === null ? 'a list marker' : 'a block quote';
-    text = text.slice((quote ?? marker)[0].length);
-  }
-  return prefix !== null && (ATX_START.test(text) || FENCE.test(text.trimStart())) ? `an ATX heading or a fence opener after ${prefix} on the same line: a renderer shows it, the reader does not` : null;
+  const { text, prefix } = stripPrefixes(rest);
+  return prefix !== null && opensBlock(text) ? `an ATX heading or a fence opener after ${prefix} on the same line: a renderer shows it, the reader does not` : null;
 }
 
 /** The reason when the raw line is an ATX heading in a form the reader does not take (it takes `## ` and `### ` at column 0), else null. */
@@ -115,6 +134,81 @@ function strangeHeading(text) {
   return null;
 }
 
+const viewOf = line => {
+  const { col, rest } = indentOf(line.text);
+  return { line, col, rest, blank: rest === '' };
+};
+
+const closerMatches = (closer, fence) => closer !== null && closer[1][0] === fence.char && closer[1].length >= fence.length && closer[2].trim() === '';
+const closes = (col, fence, closer) => col - fence.base <= 3 && closerMatches(closer, fence);
+
+/** An open fence goes on over the line unless it is a list item's fence and the line is a non-blank line left of the item's content. */
+const staysInFence = (st, v) => st.fence !== null && !(st.fence.inList && !v.blank && v.col < st.fence.base);
+
+function insideFence(st, v) {
+  if (closes(v.col, st.fence, FENCE.exec(v.rest))) st.fence = null;
+  st.freshBlock = st.fence === null;
+  st.paragraphOpen = false;
+  return null;
+}
+
+const popLists = (st, v) => {
+  while (!v.blank && st.lists.length > 0 && v.col < st.lists.at(-1)) st.lists.pop();
+};
+
+const spaces = col => `${col} space${col === 1 ? '' : 's'}`;
+const backtickInfoFault = opened => (opened[1][0] === '`' && opened[2].includes('`') ? 'a backtick fence opener whose info string holds a backtick: CommonMark reads it as text, the reader as a fence' : null);
+const indentedFenceFault = (st, v) => (st.lists.length === 0 && v.col >= 1 ? `a fence indented ${spaces(v.col)} outside a list item: CommonMark opens a fence here and the reader does not` : null);
+
+/** A line that opens a fence: `{ fault }` (null when it opens cleanly), or null when the line opens none. */
+function tryOpen(st, v, base) {
+  const opened = FENCE.exec(v.rest);
+  if (opened === null || v.col - base > 3) return null;
+  const reason = backtickInfoFault(opened) ?? indentedFenceFault(st, v);
+  if (reason !== null) return { fault: { no: v.line.no, reason } };
+  st.fence = { char: opened[1][0], length: opened[1].length, base, inList: st.lists.length > 0 };
+  st.freshBlock = false;
+  return { fault: null };
+}
+
+const underlinesParagraph = (st, v) => v.col <= 3 && st.paragraphOpen && SETEXT_UNDERLINE.test(v.line.text);
+const setextReason = (inItem, rest) => (inItem && rest.startsWith('-') ? 'a dash line under a list item (a thematic break or a setext underline: refused)' : 'a setext heading underline under a paragraph line: a renderer shows a heading, the reader does not');
+const setextFault = (st, v, inItem) => (underlinesParagraph(st, v) ? setextReason(inItem, v.rest) : null);
+
+/** A line that CommonMark would read otherwise than this reader: `{ fault }`, or null. */
+function lineFault(st, v, inItem) {
+  const reason = setextFault(st, v, inItem) ?? (v.col <= 3 ? hiddenStart(v.rest) ?? htmlBlockStart(v.rest, st.freshBlock) ?? strangeHeading(v.line.text) : null);
+  return reason === null ? null : { fault: { no: v.line.no, reason } };
+}
+
+function pushListItem(st, v) {
+  const content = v.blank ? null : listContentColumn(v.col, v.rest);
+  if (content !== null) st.lists.push(content);
+}
+
+const plainLine = v => !v.blank && !ATX_START.test(v.line.text) && !THEMATIC_BREAK.test(v.rest);
+const opensParagraph = (st, v) => plainLine(v) && (v.col <= 3 || st.paragraphOpen);
+
+function keepLine(st, v) {
+  pushListItem(st, v);
+  st.kept.push(v.line);
+  st.freshBlock = v.blank || /^ {0,3}#{1,6}[ \t]/.test(v.line.text);
+  st.paragraphOpen = opensParagraph(st, v);
+}
+
+/** The fault of one line (null when there is none); a line outside the fault cases is kept. */
+function scanLine(st, line) {
+  const v = viewOf(line);
+  if (staysInFence(st, v)) return insideFence(st, v);
+  st.fence = null;
+  const inItem = st.lists.length > 0;
+  popLists(st, v);
+  const outcome = tryOpen(st, v, st.lists.at(-1) ?? 0) ?? lineFault(st, v, inItem);
+  if (outcome !== null) return outcome.fault;
+  keepLine(st, v);
+  return null;
+}
+
 /**
  * The lines outside fenced code blocks and the first line that CommonMark would read otherwise than this reader does: `{ kept, fault }` (`fault` is `{ no, reason }` or null). A fence
  * opens at column 0 (inside a list item: at the item's content column, up to three columns more) with three or more backticks or tildes (a backtick fence has no backtick in its info
@@ -122,48 +216,12 @@ function strangeHeading(text) {
  * start at columns 0 to 3 and an ATX heading in a form the reader does not take are faults: the reader would see another document than a renderer. A fence in a list item ends where the item does.
  */
 export function scanBlocks(lines) {
-  const kept = [];
-  const lists = [];
-  let fence = null;
-  let freshBlock = true;
-  let paragraphOpen = false;
+  const st = { kept: [], lists: [], fence: null, freshBlock: true, paragraphOpen: false };
   for (const line of lines) {
-    const { col, rest } = indentOf(line.text);
-    const blank = rest === '';
-    if (fence !== null && !(fence.inList && !blank && col < fence.base)) {
-      const closer = FENCE.exec(rest);
-      if (col - fence.base <= 3 && closer !== null && closer[1][0] === fence.char && closer[1].length >= fence.length && closer[2].trim() === '') fence = null;
-      freshBlock = fence === null;
-      paragraphOpen = false;
-      continue;
-    }
-    fence = null;
-    const inItem = lists.length > 0;
-    if (!blank) while (lists.length > 0 && col < lists.at(-1)) lists.pop();
-    const base = lists.at(-1) ?? 0;
-    const opened = FENCE.exec(rest);
-    if (opened !== null && col - base <= 3) {
-      if (opened[1][0] === '`' && opened[2].includes('`')) return { kept, fault: { no: line.no, reason: 'a backtick fence opener whose info string holds a backtick: CommonMark reads it as text, the reader as a fence' } };
-      if (lists.length === 0 && col >= 1) return { kept, fault: { no: line.no, reason: `a fence indented ${col} space${col === 1 ? '' : 's'} outside a list item: CommonMark opens a fence here and the reader does not` } };
-      fence = { char: opened[1][0], length: opened[1].length, base, inList: lists.length > 0 };
-      freshBlock = false;
-      continue;
-    }
-    if (col <= 3 && paragraphOpen && SETEXT_UNDERLINE.test(line.text)) {
-      const reason = inItem && rest.startsWith('-') ? 'a dash line under a list item (a thematic break or a setext underline: refused)' : 'a setext heading underline under a paragraph line: a renderer shows a heading, the reader does not';
-      return { kept, fault: { no: line.no, reason } };
-    }
-    const reason = col <= 3 ? hiddenStart(rest) ?? htmlBlockStart(rest, freshBlock) ?? strangeHeading(line.text) : null;
-    if (reason !== null) return { kept, fault: { no: line.no, reason } };
-    if (!blank) {
-      const content = listContentColumn(col, rest);
-      if (content !== null) lists.push(content);
-    }
-    kept.push(line);
-    freshBlock = blank || /^ {0,3}#{1,6}[ \t]/.test(line.text);
-    paragraphOpen = !blank && !ATX_START.test(line.text) && !THEMATIC_BREAK.test(rest) && (col <= 3 || paragraphOpen);
+    const fault = scanLine(st, line);
+    if (fault !== null) return { kept: st.kept, fault };
   }
-  return { kept, fault: null };
+  return { kept: st.kept, fault: null };
 }
 
 /** The lines outside fenced code blocks (a fence's own lines are inside it); the faults of `scanBlocks` are not looked at here. */
@@ -182,29 +240,40 @@ export function headingsOf(lines) {
 const SECTION_NUMBER = /^(\d+)\./;
 const SUB_NUMBER = /^(\d+)\.(\d+)(?:\s|$)/;
 
+/** Each heading with the number of the section it is in (`section`) and its place among the subsections of that section (`sub`). */
+function numbered(headings) {
+  return headings.reduce((all, heading) => {
+    const last = all.at(-1) ?? { section: 0, sub: 0 };
+    all.push({ heading, section: last.section + (heading.level === 2 ? 1 : 0), sub: heading.level === 2 ? 0 : last.sub + 1 });
+    return all;
+  }, []);
+}
+
+const faultAt = (heading, rule) => ({ no: heading.no, text: `${'#'.repeat(heading.level)} ${heading.text}`, rule });
+const sectionRule = section => (section > SECTION_COUNT ? `more than ${SECTION_COUNT} sections` : `expected section ${section} (\`## ${section}.\`)`);
+const subRule = (section, sub) => (section === 0 ? 'a subsection before section 1' : `expected subsection ${section}.${sub} (\`### ${section}.${sub}\`)`);
+
+function sectionFault({ heading, section }) {
+  const found = SECTION_NUMBER.exec(heading.text);
+  return section > SECTION_COUNT || found === null || Number(found[1]) !== section ? faultAt(heading, sectionRule(section)) : null;
+}
+
+const subIsOff = (found, section, sub) => section === 0 || found === null || Number(found[1]) !== section || Number(found[2]) !== sub;
+
+function subFault({ heading, section, sub }) {
+  return subIsOff(SUB_NUMBER.exec(heading.text), section, sub) ? faultAt(heading, subRule(section, sub)) : null;
+}
+
+const endFault = section => (section < SECTION_COUNT ? { no: 0, text: 'the end of the file', rule: `only ${section} of ${SECTION_COUNT} sections are present` } : null);
+
 /** The first structural fault of the headings as `{ no, text }`, or null: `## 1.` to `## 7.` once each ascending, `### k.1`, `k.2` … under `## k`. */
 function structureFault(headings) {
-  let section = 0;
-  let sub = 0;
-  for (const heading of headings) {
-    const marker = '#'.repeat(heading.level);
-    if (heading.level === 2) {
-      section += 1;
-      sub = 0;
-      const found = SECTION_NUMBER.exec(heading.text);
-      if (section > SECTION_COUNT || found === null || Number(found[1]) !== section) {
-        return { no: heading.no, text: `${marker} ${heading.text}`, rule: section > SECTION_COUNT ? `more than ${SECTION_COUNT} sections` : `expected section ${section} (\`## ${section}.\`)` };
-      }
-      continue;
-    }
-    sub += 1;
-    const found = SUB_NUMBER.exec(heading.text);
-    if (section === 0 || found === null || Number(found[1]) !== section || Number(found[2]) !== sub) {
-      return { no: heading.no, text: `${marker} ${heading.text}`, rule: section === 0 ? 'a subsection before section 1' : `expected subsection ${section}.${sub} (\`### ${section}.${sub}\`)` };
-    }
-  }
-  return section < SECTION_COUNT ? { no: 0, text: 'the end of the file', rule: `only ${section} of ${SECTION_COUNT} sections are present` } : null;
+  const all = numbered(headings);
+  const first = all.map(entry => (entry.heading.level === 2 ? sectionFault(entry) : subFault(entry))).find(fault => fault !== null);
+  return first ?? endFault(all.at(-1)?.section ?? 0);
 }
+
+const structureFail = (fault, lines) => fail(fault.no === 0 ? lines.length : fault.no, `${fault.text}: ${fault.rule}`);
 
 /**
  * `{ ok: true, format }` for FORMAT's bytes — `{ bytes, text, lines, headings, sha256 }` — or `{ ok: false, line, reason }` for a format error (exit 4).
@@ -218,8 +287,7 @@ export function parseFormat(bytes, { structure = structureFault } = {}) {
   if (scanned.fault !== null) return fail(scanned.fault.no, scanned.fault.reason);
   const headings = headingsOf(lines);
   const fault = structure(headings);
-  if (fault !== null) return fail(fault.no === 0 ? lines.length : fault.no, `${fault.text}: ${fault.rule}`);
-  return ok({ format: { bytes, text: checked.text, lines, headings, sha256: sha256Hex(bytes) } });
+  return fault === null ? ok({ format: { bytes, text: checked.text, lines, headings, sha256: sha256Hex(bytes) } }) : structureFail(fault, lines);
 }
 
 /** The heading's number: `3` for `## 3. …`, `2.4` for `### 2.4 …`. */
