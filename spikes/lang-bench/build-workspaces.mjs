@@ -11,7 +11,7 @@
 //   node spikes/lang-bench/build-workspaces.mjs --print-stack-files
 //     Prints the list of file patterns the push check accepts in a stack folder (the content of templates/stack-files.json).
 //
-// Exit 0 done · 1 a box command failed · 2 usage · 3 refused (the destination or the group, a pin, a hash, a lock that differs or is outside the manifest)
+// Exit 0 done · 1 a box command failed, a git failure or timeout in the fetch, or a malformed hash list · 2 usage · 3 refused (the destination or the group, a pin, a hash, a cached tree that differs, a lock that differs or is outside the manifest)
 // Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does.
 await import('./lib/lower-priority.mjs');
 

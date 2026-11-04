@@ -1,7 +1,7 @@
 // E1.S3: the workspace builder. `buildWorkspace` writes the file set of one workspace (the template of its stack and kind, the derived `PACKAGES.md`, the pinned runner, the grammar of its group's FORMAT, the statement
 // and the samples) and checks everything BEFORE the first write: the legal names, the group rule (T-L57), the destination, the pin of the runner, the hash of FORMAT and of its grammar, the packages list and the template's
-// `run.sh`. It adds no stack word, no plan word and no path of this host. The rest of this file is the check of a generated `package-lock.json` against the registered manifest, the destination guard that the builder and
-// the bare copy share, and the list of file patterns the push check accepts in a stack folder.
+// `run.sh`. It adds no stack word, no plan word and no path of this host. The rest of this file is the check of a generated `package-lock.json` against the registered manifest and the list of file patterns the
+// push check accepts in a stack folder. The destination guard that the builder and the bare copy share is in `workspace-destination.mjs`.
 import { randomBytes } from 'node:crypto';
 import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
