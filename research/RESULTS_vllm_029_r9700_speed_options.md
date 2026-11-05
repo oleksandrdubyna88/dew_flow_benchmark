@@ -15,6 +15,10 @@
 > but gives no speed (all medians within the spread). `mtp3 + tattn + mnbt8k` cuts 8k/32k time to first token by
 > 18.5 % / 13.1 % with equal decode, for 18–27 % less KV cache: the operator's choice. On Qwen3.8-27B-AWQ the new
 > defaults give +13.5 % / +17.6 % decode but +8.9 % 8k time to first token.
+> **Update 2026-11-05 (§ 15):** the ROCM_ATTN runs of § 14.3 decoded on the Triton fallback, not the custom kernel; a
+> tiny-model check of the custom kernel found no difference. The int4 MoE file was tuned and judged with fp16
+> activations, but production serves bf16: there it is 16.4 % slower than the default at M=640, and a proposed `"512"`
+> entry gives −13.5 % to −28.3 % at M 512–768 as a kernel. Nothing was changed in production.
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -56,6 +60,13 @@ server flags.
 | 1a + 6, ROCM_ATTN | Fused multi-step draft opt-in for ROCM_ATTN (`ra3opt` vs `ra3`) | **correct, no gain**; not shipped | TPOT +0.1 % / +0.2 %; 20 prompts identical; GSM8K 171 vs 169 (§ 14.3) |
 | 1a + 6 + 2 | `mtp3 + tattn + mnbt8k` (`ta3mb` vs production `ta3`) | **trade-off**; the operator's choice, not in production | 8k / 32k median TTFT −18.5 % / −13.1 %; TPOT equal; KV cache −18 % to −27 % (§ 14.3) |
 | 1a + 6 on 27B | The new start-script defaults on Qwen3.8-27B-AWQ (`q27new` vs `q27old`) | **decode passes, prefill fails the rule**; the global defaults stay until the operator decides | +13.5 % / +17.6 % tok/s; TPOT −16 % / −19 %; 8k median TTFT +8.9 % (§ 14.5) |
+
+**Update 2026-11-05 (§ 15; the rows above keep their earlier state):**
+
+| # | Option | Verdict | Main number |
+|---|---|---|---|
+| 1a + 6, ROCM_ATTN | The same opt-in on the custom kernel `paged_attention_rocm` (the row above ran on the Triton fallback) | **no difference found**, tiny random model, gfx1201 only, acceptance under 0.5 % | fused vs unfused: 12/12 requests and 261–262 of 261–262 draft calls identical (§ 15.2) |
+| 3b | A `"512"` entry in the production int4 MoE file | **kernel gain at M 512–768 with bf16**; no end-to-end test; not applied | bf16: −13.5 % / −28.3 % / −13.6 % at M 512 / 640 / 768; without it the file is +16.4 % against the default at M 640 (§ 15.3) |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -845,3 +856,104 @@ Median of 9 values; in brackets the spread (max − min of the 9 values):
 - **The operator's choice:** keep the new defaults for both models (decode +13.5 % / +17.6 %, prefill +8.9 %), or
   start the 27B model with the old behaviour, `start-vllm.ps1 -MtpTokens 2 -AttentionBackend ""` (or make the
   defaults depend on the model). Nothing was changed after this result.
+
+## 15. Runs of 2026-11-05 (the ROCM_ATTN follow-up for vLLM, and the `"512"` MoE entry)
+
+Data in [vllm-r9700-speed-options/night-2026-11-05/](vllm-r9700-speed-options/night-2026-11-05/). All GPU work ran
+beside production (`gpu_memory_utilization` 0.08 or a kernel benchmark of about 1 GiB). Production was not stopped.
+The GPU lease of `common.gpu-lease` could not be taken: no daemon on this PC (`dewflow-gpu.mjs` exit 4).
+
+### 15.1 Which decode kernel § 14.3 used
+
+`ra3opt` decoded on the **Triton fallback**, not on `ops.paged_attention_rocm`. On gfx1x the custom kernel needs head
+size 128, block size 16 and 3–16 query heads per KV head; Qwen3.6-35B has head size 256. Called in the image:
+`use_rocm_custom_paged_attention` is False for the 35B, the 27B and Qwen3-0.6B (ratio 2), True for head 128 ratio 8.
+So § 14.3 says nothing about the custom kernel. Its numbers stand and are kept as written. Our public comment on
+vLLM #63096 omitted this; [a second comment](https://github.com/vllm-project/vllm/pull/63096#issuecomment-6657382686)
+corrects it. The maintainer asked for the opt-in as a follow-up PR. It is committed locally, not pushed: it waits for
+#63096 to merge and for the operator's approval of its text.
+
+### 15.2 The custom kernel with the opt-in (gfx1201 only)
+
+Tiny seeded random Qwen3 (head 128, 8 query heads, 2 KV heads, block size 16), EAGLE draft of the same attention
+shape, 3 draft tokens, `max_model_len` 2048; 12 requests of 17–777 tokens at batch 1, 4 and 6, greedy, 64 new tokens.
+`draft_model` could not be used: on 0.29 it goes to the V1 runner, which has no fused decode. Unit tests on gfx1201:
+without the opt-in the 4 ROCm cases fail, with it they pass, and without it again they fail (`unit_redgreenred.log`).
+The 2 Triton `rswa_window=64` cases fail in all three runs: 0.29 predates that gating.
+
+| Fused (C) vs unfused (B), `custom_kernel/out5/` | Graph | Eager |
+|---|---|---|
+| Final tokens identical | 12/12 | 12/12 |
+| Draft tokens identical at each `propose()` | 262/262 | 261/261 |
+| `use_fused_multi_step_decode` | B False, C True | B False, C True |
+| Accepted / drafted | 10/2259 in both | 11/2256 in both |
+
+- **The comparison can fail.** A wrong `seq_lens` given to the kernel changed the draft tokens in 45 of 261 calls
+  (minus 1) and 139 of 261 calls (minus half), but no final token in the speculative arms. Without speculation it
+  changed the final tokens in 12 of 12 requests. So the draft tokens are the signal in the speculative arms.
+- **Scratch sizing.** At capture `max_seq_len` is `max_model_len` (8 partitions). In about 1,350 eager calls per arm
+  the partitions covered the longest sequence; the smallest margin of `max_seq_len` over it was 0 tokens. A too-small
+  `max_seq_len` fired the assertion in the wrapper before the kernel call.
+- **`compare` says FAIL with 6 mismatches, all against the arm without speculation:** B and C each match A in 11/12
+  (graph) and 10/12 (eager). The unchanged code (B) has the same differences, and A differed from its own earlier run
+  in 1 of 12 requests. The check was not weakened. The criterion "identical to no speculation" does not hold on this
+  random model.
+
+Limits: a random model; acceptance only 0.44–0.49 %, so accepted runs and rewinds are barely exercised; not run on
+CDNA, on current `main`, on the `ROCM_AITER_UNIFIED` and segmented backends, or with a real model on this kernel.
+
+**One difference is not explained.** An earlier model (`models2`: 11.7 % acceptance, attention barely affects the
+output) drafted differently in fused and unfused graph mode, reproducibly: at the last draft position of one
+`propose()` call (`out2_diag.txt`), with final tokens identical in 11 of 12 requests. It did not recur on the model
+above. A near-tie in its four-way argmax is the likely cause; that is not proven.
+
+### 15.3 The `"512"` MoE entry for our tuned file
+
+Another R9700 owner proposed on vLLM #64045 (our tuned-file PR) a `"512"` entry for this shape. Kernel A/B with
+`benchmark_moe.py`, 100 iterations, 5 runs per arm, one container per run, arms alternating. A: default config. B: our
+file, as in production and in #64045. C: B plus the entry. Median µs; the raw values recomputed from `moe512/runs/`.
+
+**BF16 activations, which is what production serves (its log says `dtype=torch.bfloat16`):**
+
+| M | 1 | 16 | 128 | 256 | 384 | 512 | 640 | 768 | 896 | 1024 | 2048 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A default | 95.5 | 647.1 | 1835.6 | 1880.7 | 1905.4 | 1935.9 | 1965.8 | 1995.0 | 2028.2 | 2058.5 | 3080.0 |
+| B our file | 80.3 | 520.2 | 1236.2 | 1292.7 | 1431.0 | 1849.5 | 2288.2 | 2006.2 | 2030.6 | 2061.6 | 2975.3 |
+| C with `"512"` | 82.1 | 522.1 | 1241.8 | 1296.8 | 1431.0 | 1599.9 | 1640.5 | 1732.6 | 2028.0 | 2055.7 | 2964.1 |
+| B vs A | −15.9 % | −19.6 % | −32.7 % | −31.3 % | −24.9 % | −4.5 % | **+16.4 %** | +0.6 % | +0.1 % | +0.2 % | −3.4 % |
+| C vs B | +2.3 % | +0.4 % | +0.4 % | +0.3 % | 0.0 % | **−13.5 %** | **−28.3 %** | **−13.6 %** | −0.1 % | −0.3 % | −0.4 % |
+
+**FP16 activations, the default of `benchmark_moe.py` and the condition of § 5.2 in the fixes record:**
+
+| M | 1 | 16 | 128 | 256 | 384 | 512 | 640 | 768 | 896 | 1024 | 2048 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A default | 85.0 | 575.9 | 1755.9 | 1801.2 | 1828.1 | 1857.0 | 1885.5 | 1914.0 | 1944.1 | 1976.7 | 2988.7 |
+| B our file | 70.2 | 444.4 | 1034.0 | 1088.6 | 1205.6 | 1551.9 | 1910.9 | 1784.2 | 1811.7 | 1843.5 | 2714.1 |
+| C with `"512"` | 70.3 | 444.4 | 1037.1 | 1088.4 | 1208.4 | 1570.9 | 1612.2 | 1701.7 | 1809.5 | 1838.7 | 2707.5 |
+| B vs A | −17.5 % | −22.8 % | −41.1 % | −39.6 % | −34.1 % | −16.4 % | +1.3 % | −6.8 % | −6.8 % | −6.7 % | −9.2 % |
+| C vs B | +0.2 % | 0.0 % | +0.3 % | 0.0 % | +0.2 % | +1.2 % | −15.6 % | −4.6 % | −0.1 % | −0.3 % | −0.2 % |
+
+Entries used: M 256 and 384 use `"256"`; M 512 and 640 use `"256"` in B and `"512"` in C; M 768 uses `"1024"` in B and
+`"512"` in C; each M's printed config was checked against this. The spread is under 2 % except at small M (M=1 fp16
+13–20 %, M=1 bf16 4–7 %, M=16 bf16 up to 3.3 %). The bf16 condition was added after the fp16 result, not planned first.
+Other sessions loaded the CPU (WSL load median 7–8 on 14 CPUs). In production's log one `GET /v1/models` fell inside one
+run (bf16 A-4), and no inference request fell inside any run.
+
+- **The proposal holds on our card with bf16:** −13.5 % and −13.6 % against their −13 % and −14 %.
+- **It does not hold with fp16 at M=512** (+1.2 %), where our file already gains.
+- **Kernel only.** No end-to-end A/B of the entry was run. How often serving hits M of 512–768 was not measured.
+
+### 15.4 What changes in earlier statements
+
+Those statements are kept as written; this section corrects them.
+
+- **§ 5.2 of the fixes record and vLLM #64045 say no batch size is slower.** That is true of the batch sizes measured,
+  in fp16. M=640 was not among them, and in bf16 our file is 16.4 % slower than the default there.
+- **The int4 file was tuned and judged in fp16, but production serves bf16.** The toolkit does the same today:
+  `lib/moe.sh` sets BF16 only for the draft layer. So § 14.1 and the toolkit's "not faster" verdict of 2026-11-02 are
+  fp16 results. Whether a bf16 search finds more is open. The other owner's separate tuning (bf16) reached the same tiles
+  at most batch sizes, which suggests little beyond this gap.
+- **§ 14.3 and § 14.5 said the operator had still to choose.** On 2026-11-04 the operator chose: `start-vllm.ps1` now
+  defaults to `--max-num-batched-tokens 8192`, and the new defaults stay for the 27B model too.
+- **Nothing was changed by this section:** not production's MoE file, not #64045, not the toolkit. These are the
+  operator's decisions.

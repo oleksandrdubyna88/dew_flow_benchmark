@@ -1,0 +1,131 @@
+===== RED1 (unchanged 0.29 image)
+vllm.__file__ /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+flag on RocmAttentionMetadataBuilder: False
+.F.FFF..FF                                                               [100%]
+=================================== FAILURES ===================================
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn.TritonAttentionMetadataBuilder object at 0x731999103250>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn_diffkv.TritonAttentionDiffKVMetadataBuilder object at 0x7318c36dde50>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[RocmAttentionMetadataBuilder-None] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   assert False is not []
+E    +  where False = <vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder object at 0x7318c35b7cb0>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[RocmAiterUnifiedAttentionMetadataBuilder-None] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   assert False is not []
+E    +  where False = <vllm.v1.attention.backends.rocm_aiter_unified_attn.RocmAiterUnifiedAttentionMetadataBuilder object at 0x7318c3360050>.supports_draft_decode_metadata_update
+__ test_draft_decode_update_matches_fresh_build[RocmAttentionMetadataBuilder] __
+tests/v1/attention/test_triton_attn_metadata_builder.py:160: in test_draft_decode_update_matches_fresh_build
+    builder.update_draft_decode_metadata(metadata)
+/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backend.py:732: in update_draft_decode_metadata
+    raise NotImplementedError
+E   NotImplementedError
+_ test_draft_decode_update_matches_fresh_build[RocmAiterUnifiedAttentionMetadataBuilder] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:160: in test_draft_decode_update_matches_fresh_build
+    builder.update_draft_decode_metadata(metadata)
+/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backend.py:732: in update_draft_decode_metadata
+    raise NotImplementedError
+E   NotImplementedError
+
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionMetadataBuilder]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionDiffKVMetadataBuilder]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAttentionMetadataBuilder-None]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAiterUnifiedAttentionMetadataBuilder-None]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAttentionMetadataBuilder]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAiterUnifiedAttentionMetadataBuilder]
+===== GREEN (rocm_attn.py with the opt-in mounted)
+vllm.__file__ /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+flag on RocmAttentionMetadataBuilder: True
+.F.F......                                                               [100%]
+=================================== FAILURES ===================================
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn.TritonAttentionMetadataBuilder object at 0x74ebe9b3b250>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn_diffkv.TritonAttentionDiffKVMetadataBuilder object at 0x74eb183ade50>.supports_draft_decode_metadata_update
+
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAttentionMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAiterUnifiedAttentionMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionMetadataBuilder]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionDiffKVMetadataBuilder]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAttentionMetadataBuilder]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAiterUnifiedAttentionMetadataBuilder]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64]
+===== RED2 (unchanged 0.29 image)
+vllm.__file__ /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+flag on RocmAttentionMetadataBuilder: False
+.F.FFF..FF                                                               [100%]
+=================================== FAILURES ===================================
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn.TritonAttentionMetadataBuilder object at 0x7fdbfb147250>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   AssertionError: assert True is not ['persistent_rswa_prefix_lens']
+E    +  where True = <vllm.v1.attention.backends.triton_attn_diffkv.TritonAttentionDiffKVMetadataBuilder object at 0x7fdb2973de50>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[RocmAttentionMetadataBuilder-None] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   assert False is not []
+E    +  where False = <vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder object at 0x7fdb2961fcb0>.supports_draft_decode_metadata_update
+_ test_draft_decode_update_flag_matches_build_writes[RocmAiterUnifiedAttentionMetadataBuilder-None] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:142: in test_draft_decode_update_flag_matches_build_writes
+    assert builder.supports_draft_decode_metadata_update is (not written)
+E   assert False is not []
+E    +  where False = <vllm.v1.attention.backends.rocm_aiter_unified_attn.RocmAiterUnifiedAttentionMetadataBuilder object at 0x7fdb293c8050>.supports_draft_decode_metadata_update
+__ test_draft_decode_update_matches_fresh_build[RocmAttentionMetadataBuilder] __
+tests/v1/attention/test_triton_attn_metadata_builder.py:160: in test_draft_decode_update_matches_fresh_build
+    builder.update_draft_decode_metadata(metadata)
+/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backend.py:732: in update_draft_decode_metadata
+    raise NotImplementedError
+E   NotImplementedError
+_ test_draft_decode_update_matches_fresh_build[RocmAiterUnifiedAttentionMetadataBuilder] _
+tests/v1/attention/test_triton_attn_metadata_builder.py:160: in test_draft_decode_update_matches_fresh_build
+    builder.update_draft_decode_metadata(metadata)
+/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backend.py:732: in update_draft_decode_metadata
+    raise NotImplementedError
+E   NotImplementedError
+
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-None]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionMetadataBuilder]
+PASSED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[TritonAttentionDiffKVMetadataBuilder]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionMetadataBuilder-64]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[TritonAttentionDiffKVMetadataBuilder-64]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAttentionMetadataBuilder-None]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_flag_matches_build_writes[RocmAiterUnifiedAttentionMetadataBuilder-None]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAttentionMetadataBuilder]
+FAILED tests/v1/attention/test_triton_attn_metadata_builder.py::test_draft_decode_update_matches_fresh_build[RocmAiterUnifiedAttentionMetadataBuilder]

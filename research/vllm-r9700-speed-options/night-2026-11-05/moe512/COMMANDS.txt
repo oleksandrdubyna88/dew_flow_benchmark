@@ -1,0 +1,7 @@
+# moe512 candidate measurement 2026-11-05 (local only)
+cd /mnt/c/Users/strug/vllm/tmp/vllm-pr-work/work/moe512
+nohup nice -n 19 ./sampler.sh logs/fp16/sampler.txt stop_sampler &       # CPU / VRAM sampler, every ~10 s
+nohup nice -n 19 ./run_abc.sh fp16 fp16 5 > logs/fp16/driver.txt &       # primary: ROCm default fp16 activations (as the earlier kernel A/B)
+nohup nice -n 19 ./run_abc.sh bf16 bf16 5 > logs/bf16/driver.txt &       # secondary: MOE_TUNE_ACT_DTYPE=bfloat16 (decided after fp16 result)
+python3 -I analyze.py logs/fp16 ; python3 -I analyze.py logs/bf16
+Note added when this folder was recorded: the run folder was `logs/` on the Windows disk and is `runs/` here, because the repository ignores folders named logs. `benchmark_moe.py` is not copied: it is work/moe/benchmark_moe.py of the earlier runs, sha256 starting 1584d339831452d4.

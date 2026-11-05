@@ -1,0 +1,39 @@
+arm A: status=PASS raw-log fallback-warning lines=0 (log 12215 bytes) kernel_calls={'n': 76, 'eager': 64, 'captured': 12}
+arm B: status=PASS raw-log fallback-warning lines=0 (log 17605 bytes) kernel_calls={'n': 223, 'eager': 191, 'captured': 32}
+arm C: status=PASS raw-log fallback-warning lines=0 (log 17079 bytes) kernel_calls={'n': 239, 'eager': 199, 'captured': 40}
+arm A_eager: status=PASS raw-log fallback-warning lines=0 (log 9888 bytes) kernel_calls={'n': 536, 'eager': 536, 'captured': 0}
+arm B_eager: status=PASS raw-log fallback-warning lines=0 (log 12411 bytes) kernel_calls={'n': 1335, 'eager': 1335, 'captured': 0}
+arm C_eager: status=PASS raw-log fallback-warning lines=0 (log 12220 bytes) kernel_calls={'n': 1335, 'eager': 1335, 'captured': 0}
+--- final tokens (64 new tokens x 12 requests)
+B vs A: 11/12 requests token-identical
+C vs A: 11/12 requests token-identical
+C vs B: 12/12 requests token-identical
+B_eager vs A_eager: 10/12 requests token-identical
+C_eager vs A_eager: 10/12 requests token-identical
+C_eager vs B_eager: 12/12 requests token-identical
+A_eager vs A: 11/12 requests token-identical   (informational: graph vs eager numerics)
+B_eager vs A: 9/12 requests token-identical   (informational: graph vs eager numerics)
+C_eager vs A: 9/12 requests token-identical   (informational: graph vs eager numerics)
+--- draft tokens recorded at every speculator.propose() (the kernel feeds these)
+C vs B: 262/262 propose() calls with identical draft tokens (entries 262 vs 262)
+C_eager vs B_eager: 261/261 propose() calls with identical draft tokens (entries 261 vs 261)
+informational B(graph) vs B_eager: 118/262 propose() calls with identical draft tokens (graph vs eager numerics)
+--- acceptance, distinct tokens
+arm A: accepted/drafted n/a; per-position None; distinct tokens per request min/mean/max = 3/5.6/8
+arm B: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm C: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm A_eager: accepted/drafted n/a; per-position None; distinct tokens per request min/mean/max = 3/5.6/8
+arm B_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm C_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+COMPARE: FAIL (6 mismatches)
+--- NEGATIVE CONTROLS
+sabotage=seqlens on arm C_eager: final tokens vs unsabotaged C_eager: 12/12 identical; draft-token propose() calls identical: 216/261; accepted/drafted 10/2259 (unsabotaged 11/2256)
+  -> final-token comparison detects it: False; draft-token comparison detects it: True
+sabotage=seqlens on arm A_eager: final tokens vs unsabotaged A_eager: 0/12 identical
+  -> final-token comparison detects it: True; draft-token comparison detects it: n/a
+sabotage=seqlens_half on arm C_eager: final tokens vs unsabotaged C_eager: 12/12 identical; draft-token propose() calls identical: 122/261; accepted/drafted 9/2262 (unsabotaged 11/2256)
+  -> final-token comparison detects it: False; draft-token comparison detects it: True
+sabotage=seqlens_half on arm A_eager: final tokens vs unsabotaged A_eager: 0/12 identical
+  -> final-token comparison detects it: True; draft-token comparison detects it: n/a
+sabotage=maxseq on C_eager: assertion (c) fired in the wrapper before the kernel call: True (violations 9, wrapper entries 39, kernel calls with a violation 0)
+CONTROLS: PASS

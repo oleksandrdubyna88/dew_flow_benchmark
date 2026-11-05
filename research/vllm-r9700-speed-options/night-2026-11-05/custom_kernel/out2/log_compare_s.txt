@@ -1,0 +1,27 @@
+arm A: raw container log /t/out2/log_A.txt: fallback-warning lines = 0, log bytes = 12375
+arm B: raw container log /t/out2/log_B.txt: fallback-warning lines = 0, log bytes = 17030
+arm C: raw container log /t/out2/log_C.txt: fallback-warning lines = 0, log bytes = 16920
+arm A: status=PASS requests=12
+arm B: status=PASS requests=12
+arm C: status=PASS requests=12
+  DIFF arm B vs A: phase mixed6_17_129_240_256_500_777 request 3: first divergence at token 44
+arm B vs A: 11/12 requests token-identical, 1 differ
+  DIFF arm C vs A: phase c1_len500 request 0: first divergence at token 37
+  DIFF arm C vs A: phase mixed6_17_129_240_256_500_777 request 3: first divergence at token 44
+arm C vs A: 10/12 requests token-identical, 2 differ
+arm B_eager: status=PASS requests=12
+arm B_eager vs A: 11/12 requests token-identical
+arm C_eager: status=PASS requests=12
+arm C_eager vs A: 11/12 requests token-identical
+arm C vs B: 11/12 requests token-identical, 1 differ
+COMPARE: FAIL
+--- acceptance and distinct generated tokens per arm (v2 models)
+arm A: accepted/drafted n/a (no speculation); per-position None; distinct tokens per request min/mean/max = 2/3.3/4 over 12 requests
+arm B: accepted/drafted 199/1707 = 0.1166; per-position [173, 21, 5]; distinct tokens per request min/mean/max = 2/3.3/4 over 12 requests
+arm C: accepted/drafted 201/1701 = 0.1182; per-position [173, 22, 6]; distinct tokens per request min/mean/max = 2/3.3/4 over 12 requests
+arm B_eager: accepted/drafted 199/1707 = 0.1166; per-position [173, 21, 5]; distinct tokens per request min/mean/max = 2/3.3/4 over 12 requests
+arm C_eager: accepted/drafted 199/1707 = 0.1166; per-position [173, 21, 5]; distinct tokens per request min/mean/max = 2/3.3/4 over 12 requests
+--- NEGATIVE CONTROL: sabotage=seqlens
+sabotaged arm: status=PASS failures=0 n_violations=0 kernel_calls={'n': 1105, 'eager': 1105, 'captured': 0} kernel_calls_with_violation=0
+sabotaged C_eager vs A: 11/12 requests token-identical, 1 differ
+COMPARE (sabotaged arm included): FAIL on 1/12 requests -> the comparison can fail. NEGATIVE CONTROL: DETECTED

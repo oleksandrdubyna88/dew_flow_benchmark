@@ -1,0 +1,1 @@
+GEN_SEED=1234 K_PAIRS=4 ALPHA=1.5 QK_STD=0.02 V_STD=0.03 O_STD=0.05 EMB_STD=0.1 python3 gen_models4.py /t/models4
