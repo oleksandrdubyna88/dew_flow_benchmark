@@ -124,7 +124,7 @@ function projectProblems(root) {
   for (const kind of KINDS) {
     const props = readTemplate('csharp', kind, 'Directory.Build.props', root);
     if (props.includes('TreatWarningsAsErrors') || props.includes('WarningsAsErrors')) problems.push(`csharp/${kind}: the props file sets a warnings-as-errors policy: build.sh forces it on the command line`);
-    if (!props.includes('<DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>')) problems.push(`csharp/${kind}: tests/ is not excluded from the default items`);
+    if (!props.includes('<DefaultItemExcludes>$(DefaultItemExcludes);tests/**;**/bin/**;**/obj/**;**/node_modules/**</DefaultItemExcludes>')) problems.push(`csharp/${kind}: tests/ is not excluded from the default items`);
     if (!props.includes('<Nullable>enable</Nullable>')) problems.push(`csharp/${kind}: Nullable is not enabled in the props file`);
     if (!props.includes('<NuGetAudit>false</NuGetAudit>')) problems.push(`csharp/${kind}: NuGetAudit is not false`);
     const global = JSON.parse(readTemplate('csharp', kind, 'global.json', root));

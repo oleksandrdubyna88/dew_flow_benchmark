@@ -4,7 +4,7 @@
     <LangVersion>14</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**;**/bin/**;**/obj/**;**/node_modules/**</DefaultItemExcludes>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 </Project>
