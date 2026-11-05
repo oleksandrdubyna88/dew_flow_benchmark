@@ -69,6 +69,18 @@ test('A_pin_file_of_the_other_stack_is_not_a_pin_file_here', t => {
   assert.ok(CSHARP_PINS.includes('global.json') && NODE_PINS.includes('eslint.config.mjs'));
 });
 
+test('The_scripts_and_the_packages_list_are_each_stacks_own', t => {
+  const { cs, nd } = pair(t);
+  for (const name of ['build.sh', 'run.sh', 'PACKAGES.md']) {
+    write(cs, name, `${name} of one stack\n`);
+    write(nd, name, `${name} of the other stack\n`);
+  }
+  assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'the two scripts and the packages list differ by stack and that is not a finding');
+  write(cs, 'check.sh', 'one\n');
+  write(nd, 'check.sh', 'two\n');
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['check.sh', 'bytes differ']], 'any other script is still the same bytes on both sides');
+});
+
 test('A_symlink_or_a_task_folder_present_on_one_side_only_is_refused', t => {
   const { root, cs, nd } = pair(t);
   symlinkSync('/etc/hostname', path.join(nd, 'link'));

@@ -1,0 +1,4 @@
+transcript 2
+ready
+recv c1 "hello world\n"
+exit 0
