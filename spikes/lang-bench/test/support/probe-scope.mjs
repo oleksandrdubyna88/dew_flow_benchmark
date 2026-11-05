@@ -42,6 +42,24 @@ export function thingsOf(ids) {
 /** Every pid whose argv mentions `text` (a build's marker). */
 export const pidsMentioning = text => readdirSync('/proc').filter(entry => /^\d+$/.test(entry)).filter(pid => { try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes(text); } catch { return false; } });
 
+const KILL_WAIT = Object.freeze({ boundMs: 2000, stepMs: 20 });
+
+/**
+ * Waits, with a bound, until `scan()` lists no pid. `process.kill(pid, 'SIGKILL')` returns before the target has finished dying, so a check made in the very next hook can still see the pid in `/proc`
+ * (the marker test failed that way in two whole runs, 2026-11-05). The bound (2 s) is well above a kill under load and well below a child's `sleep 30`, so a kill that truly failed still fails: the error names the pids.
+ * `scan` is the seam (`() => pids`); `options` may lower `boundMs` / `stepMs` and name `what` the pids were.
+ */
+export async function awaitNoPids(scan, options = {}) {
+  const { boundMs, stepMs, what } = { ...KILL_WAIT, what: 'the killed process', ...options };
+  const end = Date.now() + boundMs;
+  let left = scan();
+  while (left.length > 0 && Date.now() < end) {
+    await new Promise(resolve => setTimeout(resolve, stepMs));
+    left = scan();
+  }
+  if (left.length > 0) throw new Error(`${what} is still there ${boundMs} ms after its kill: pid ${left.join(', ')}`);
+}
+
 /** The entries of `dir` whose name matches `pattern` (a test's check that a folder kind was not left in the child's OWN temp root). */
 export const leftNamed = (dir, pattern) => { try { return readdirSync(dir).filter(name => pattern.test(name)); } catch { return []; } };
 

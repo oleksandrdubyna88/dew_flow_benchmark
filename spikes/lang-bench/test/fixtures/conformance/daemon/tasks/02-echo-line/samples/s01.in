@@ -1,0 +1,8 @@
+scenario 2
+default within 2s
+start ready port within 10s
+connect c1 tcp
+send c1 "ping\n"
+recv c1 until "\n"
+close stdin
+wait-exit within 5s

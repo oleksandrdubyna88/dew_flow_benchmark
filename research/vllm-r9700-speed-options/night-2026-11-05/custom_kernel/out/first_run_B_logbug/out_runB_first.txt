@@ -1,0 +1,22 @@
+== production ready? (count can be stale, so also require Up)
+startup-complete count: 1
+CONTAINER ID   IMAGE                  COMMAND                  CREATED          STATUS          PORTS                      NAMES
+35e1a42f4ae4   rocm/vllm:rocm10.1.…   "vllm serve /root/.c…"   21 minutes ago   Up 21 minutes   127.0.0.1:8000->8000/tcp   vllm
+baseline 4566
+===== arm B
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck-B --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm B --expect-fused 0 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models/target", "tokenizer": "/t/models/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "speculative_config": {"method": "eagle", "model": "/t/models/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": false, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": false, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "FULL_AND_PIECEWISE"}
+phase c1_len240: c=1 OK in 2.1s
+phase c1_len500: c=1 OK in 0.3s
+phase c4_240_500_100_255: c=4 OK in 0.6s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.5s
+FAIL: arm B did not log that fused multi-step draft decode is unsupported
+SUMMARY: {"arm": "B", "status": "FAIL", "kernel_calls": {"n": 223, "eager": 191, "captured": 32}, "graph_replays": 1087, "log_has_fallback_warning": false, "captured_max_seq_len_values": [2048], "captured_tmp_output_partitions": [8], "eager_stats": {"max_seqlen_seen": 777, "max_partitions_needed": 4, "max_partitions_alloc": 8, "max_max_seq_len": 2048, "min_slack_partitions": 0, "q_tokens_set": [1, 2, 4, 5, 8, 16, 24, 32, 40, 48, 56, 64, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.8581581115722656, "free_start_gib": 4.341854095458984, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: FAIL
+arm B exit status 1
+OK: no new disk event (newest 4566)
+production still: Up 26 minutes   127

@@ -1,0 +1,8 @@
+scenario 2
+default within 2s
+start ready port within 10s
+connect a http
+request a GET "/hello"
+recv a
+signal TERM
+wait-exit within 8s

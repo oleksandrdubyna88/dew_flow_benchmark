@@ -1,0 +1,236 @@
+== production ready? (count can be stale, so also require Up)
+startup-complete count: 1
+CONTAINER ID   IMAGE                  COMMAND                  CREATED       STATUS       PORTS                      NAMES
+35e1a42f4ae4   rocm/vllm:rocm10.1.…   "vllm serve /root/.c…"   2 hours ago   Up 2 hours   127.0.0.1:8000->8000/tcp   vllm
+baseline 4566
+===== arm A
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-A --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm A --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": false}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": null, "kv_cache_groups": [{"layers": 2, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "FULL_AND_PIECEWISE"}
+phase c1_len240: c=1 OK in 0.1s
+phase c1_len500: c=1 OK in 0.1s
+phase c4_240_500_100_255: c=4 OK in 0.1s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.1s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+SUMMARY: {"arm": "A", "status": "PASS", "kernel_calls": {"n": 76, "eager": 64, "captured": 12}, "graph_replays": 265, "log_has_fallback_warning": false, "captured_max_seq_len_values": [2048], "captured_tmp_output_partitions": [8], "eager_stats": {"max_seqlen_seen": 777, "max_partitions_needed": 4, "max_partitions_alloc": 8, "max_max_seq_len": 2048, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 52, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 8, 16, 32, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.7852058410644531, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm A exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 2 hours   127
+===== arm B
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-B --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm B --expect-fused 0 --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": false, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": false, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": false, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "FULL_AND_PIECEWISE"}
+phase c1_len240: c=1 OK in 1.7s
+phase c1_len500: c=1 OK in 0.6s
+phase c4_240_500_100_255: c=4 OK in 0.6s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.7s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+acceptance: 10/2259 = 0.0044
+SUMMARY: {"arm": "B", "status": "PASS", "kernel_calls": {"n": 223, "eager": 191, "captured": 32}, "graph_replays": 1079, "log_has_fallback_warning": false, "captured_max_seq_len_values": [2048], "captured_tmp_output_partitions": [8], "eager_stats": {"max_seqlen_seen": 777, "max_partitions_needed": 4, "max_partitions_alloc": 8, "max_max_seq_len": 2048, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 159, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 5, 8, 16, 24, 32, 40, 48, 56, 64, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.9342803955078125, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm B exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm C
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-C --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface -v C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test\mounts\rocm_attn_029_optin.py:/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py:ro -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm C --expect-fused 1 --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = True
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": false, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": true, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": true, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "FULL_AND_PIECEWISE"}
+phase c1_len240: c=1 OK in 1.0s
+phase c1_len500: c=1 OK in 0.3s
+phase c4_240_500_100_255: c=4 OK in 0.4s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.5s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+acceptance: 10/2259 = 0.0044
+SUMMARY: {"arm": "C", "status": "PASS", "kernel_calls": {"n": 239, "eager": 199, "captured": 40}, "graph_replays": 811, "log_has_fallback_warning": false, "captured_max_seq_len_values": [2048], "captured_tmp_output_partitions": [8], "eager_stats": {"max_seqlen_seen": 777, "max_partitions_needed": 4, "max_partitions_alloc": 8, "max_max_seq_len": 2048, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 159, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 5, 8, 16, 24, 32, 40, 48, 56, 64, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.9342880249023438, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm C exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Ae
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Ae --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm A --eager --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": null, "kv_cache_groups": [{"layers": 2, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 0.5s
+phase c1_len500: c=1 OK in 0.4s
+phase c4_240_500_100_255: c=4 OK in 0.4s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.5s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+SUMMARY: {"arm": "A", "status": "PASS", "kernel_calls": {"n": 536, "eager": 536, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 840, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 840, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 536, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 6, 8, 16, 32, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.6283111572265625, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Ae exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Be
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Be --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm B --expect-fused 0 --eager --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": false, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": false, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 1.6s
+phase c1_len500: c=1 OK in 0.8s
+phase c4_240_500_100_255: c=4 OK in 0.9s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.9s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+acceptance: 11/2256 = 0.0049
+SUMMARY: {"arm": "B", "status": "PASS", "kernel_calls": {"n": 1335, "eager": 1335, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 843, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 849, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 1335, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 3, 4, 5, 6, 8, 12, 16, 20, 24, 32, 40, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.632476806640625, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Be exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Ce
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Ce --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface -v C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test\mounts\rocm_attn_029_optin.py:/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py:ro -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm C --expect-fused 1 --eager --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = True
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": true, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": true, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 1.7s
+phase c1_len500: c=1 OK in 0.9s
+phase c4_240_500_100_255: c=4 OK in 1.0s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.9s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+acceptance: 11/2256 = 0.0049
+SUMMARY: {"arm": "C", "status": "PASS", "kernel_calls": {"n": 1335, "eager": 1335, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 843, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 849, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 1335, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 3, 4, 5, 6, 8, 12, 16, 20, 24, 32, 40, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.6402854919433594, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Ce exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Cs
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Cs --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface -v C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test\mounts\rocm_attn_029_optin.py:/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py:ro -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm C --expect-fused 1 --eager --sabotage seqlens --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = True
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": true, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": true, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 1.8s
+phase c1_len500: c=1 OK in 0.9s
+phase c4_240_500_100_255: c=4 OK in 1.0s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 1.0s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+SUMMARY: {"arm": "C", "status": "PASS", "kernel_calls": {"n": 1335, "eager": 1335, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 843, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 849, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 1335, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 3, 4, 5, 6, 8, 12, 16, 20, 24, 32, 40, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.635955810546875, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Cs exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Ch
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Ch --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface -v C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test\mounts\rocm_attn_029_optin.py:/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py:ro -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm C --expect-fused 1 --eager --sabotage seqlens_half --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = True
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": true, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": true, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 2.1s
+phase c1_len500: c=1 OK in 1.0s
+phase c4_240_500_100_255: c=4 OK in 1.1s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 1.1s
+distinct generated tokens per request: [5, 6, 4, 8, 6, 4, 6, 7, 5, 7, 6, 3]
+SUMMARY: {"arm": "C", "status": "PASS", "kernel_calls": {"n": 1335, "eager": 1335, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 843, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 849, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 1335, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 3, 4, 5, 6, 8, 12, 16, 24, 32, 40, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.6219406127929688, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Ch exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm As
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-As --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm A --eager --sabotage seqlens --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": null, "kv_cache_groups": [{"layers": 2, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 0.3s
+phase c1_len500: c=1 OK in 0.2s
+phase c4_240_500_100_255: c=4 OK in 0.2s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.3s
+distinct generated tokens per request: [7, 8, 6, 8, 7, 6, 8, 8, 8, 8, 8, 8]
+SUMMARY: {"arm": "A", "status": "PASS", "kernel_calls": {"n": 536, "eager": 536, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 840, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 840, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 536, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 6, 8, 16, 32, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.6239852905273438, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm As exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Ah
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Ah --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm A --eager --sabotage seqlens_half --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = False
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": null, "kv_cache_groups": [{"layers": 2, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+phase c1_len240: c=1 OK in 0.4s
+phase c1_len500: c=1 OK in 0.4s
+phase c4_240_500_100_255: c=4 OK in 0.3s
+phase mixed6_17_129_240_256_500_777: c=6 OK in 0.4s
+distinct generated tokens per request: [7, 8, 8, 8, 8, 7, 8, 8, 7, 7, 8, 8]
+SUMMARY: {"arm": "A", "status": "PASS", "kernel_calls": {"n": 536, "eager": 536, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 840, "max_partitions_needed": 4, "max_partitions_alloc": 4, "max_max_seq_len": 840, "min_slack_partitions": 0, "min_margin_tokens": 0, "n_calls_max_seq_len_lt_2048": 536, "min_margin_tokens_lt_2048": 0, "q_tokens_set": [1, 2, 4, 6, 8, 16, 32, 240, 500, 1095, 1919]}, "n_violations": 0, "vram": {"free_min_gib": 1.6177787780761719, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "OK", "c1_len500": "OK", "c4_240_500_100_255": "OK", "mixed6_17_129_240_256_500_777": "OK"}}
+RESULT: PASS
+arm Ah exit status 0
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm Cm
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-Cm --gpus all --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface -v C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test\mounts\rocm_attn_029_optin.py:/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py:ro -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --arm C --expect-fused 1 --eager --sabotage maxseq --v2 --gpu-util 0.08'
+vllm.__file__ = /opt/python/lib/python3.14/site-packages/vllm/__init__.py 0.29.1.dev0+g98dff2a81.d20261002
+rocm_attn.__file__ = /opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py
+RocmAttentionMetadataBuilder.supports_draft_decode_metadata_update = True
+LLM kwargs: {"model": "/t/models4/target", "tokenizer": "/t/models4/target", "dtype": "float16", "max_model_len": 2048, "gpu_memory_utilization": 0.08, "max_num_seqs": 8, "max_num_batched_tokens": 2048, "attention_backend": "ROCM_ATTN", "block_size": 16, "seed": 0, "enable_prefix_caching": false, "disable_log_stats": false, "enforce_eager": true, "speculative_config": {"method": "eagle", "model": "/t/models4/draft", "num_speculative_tokens": 3}}
+probe: {"model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner", "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator", "use_fused_multi_step_decode": true, "num_speculative_steps": 3, "advance_draft_positions": true, "draft_max_seq_len_last": 22, "speculator_max_model_len": 2048, "draft_attn_groups": [{"backend": "ROCM_ATTN", "supports_draft_decode_metadata_update": true, "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder", "block_size": 16}], "kv_cache_groups": [{"layers": 3, "block_size": 16, "head_size": 128, "num_kv_heads": 2}], "cache_config_block_size": 16, "cudagraph_mode": "NONE"}
+FAIL: (e) phase c1_len240: exception
+Traceback (most recent call last):
+    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")
+AssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 1, 'capturing': False, 'max_seq_len': 240, 'tmp_output_shape': [1, 8, 1, 128], 'q_tokens': 240, 'num_seqs': 1, 'seq_lens_max': 240, 'sabotaged_max_seq_len': 120}
+FAIL: (e) phase c1_len500: exception
+Traceback (most recent call last):
+    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")
+AssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 2, 'have': 2, 'capturing': False, 'max_seq_len': 500, 'tmp_output_shape': [3, 8, 2, 128], 'q_tokens': 508, 'num_seqs': 3, 'seq_lens_max': 500, 'sabotaged_max_seq_len': 250}
+FAIL: (e) phase c4_240_500_100_255: exception
+Traceback (most recent call last):
+    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")
+AssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 2, 'have': 2, 'capturing': False, 'max_seq_len': 508, 'tmp_output_shape': [8, 8, 2, 128], 'q_tokens': 1111, 'num_seqs': 8, 'seq_lens_max': 500, 'sabotaged_max_seq_len': 250}
+FAIL: (e) phase mixed6_17_129_240_256_500_777: exception
+Traceback (most recent call last):
+    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")
+AssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 3, 'capturing': False, 'max_seq_len': 516, 'tmp_output_shape': [8, 8, 3, 128], 'q_tokens': 32, 'num_seqs': 8, 'seq_lens_max': 4, 'sabotaged_max_seq_len': 2}
+FAIL: (e) follow-up request not served: {'tag': 'after_exception_c1_len240', 'served': False, 'error': ',\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File "/t/custom_kernel_check.py", line 472, in wrapped\n    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\'kind\': \'eager partitions do not cover seq_lens\', \'need\': 1, \'have\': 1, \'capturing\': False, \'max_seq_len\': 244, \'tmp_output_shape\': [2, 8, 1, 128], \'q_tokens\': 36, \'num_seqs\': 2, \'seq_lens_max\': 32, \'sabotaged_max_seq_len\': 16}\n'}
+FAIL: (e) follow-up request not served: {'tag': 'after_exception_c1_len500', 'served': False, 'error': ',\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File "/t/custom_kernel_check.py", line 472, in wrapped\n    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\'kind\': \'eager partitions do not cover seq_lens\', \'need\': 1, \'have\': 2, \'capturing\': False, \'max_seq_len\': 504, \'tmp_output_shape\': [4, 8, 2, 128], \'q_tokens\': 44, \'num_seqs\': 4, \'seq_lens_max\': 32, \'sabotaged_max_seq_len\': 16}\n'}
+FAIL: (e) follow-up request not served: {'tag': 'after_exception_c4_240_500_100_255', 'served': False, 'error': 'ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File "/t/custom_kernel_check.py", line 472, in wrapped\n    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\'kind\': \'eager partitions do not cover seq_lens\', \'need\': 1, \'have\': 2, \'capturing\': False, \'max_seq_len\': 512, \'tmp_output_shape\': [8, 8, 2, 128], \'q_tokens\': 32, \'num_seqs\': 8, \'seq_lens_max\': 4, \'sabotaged_max_seq_len\': 2}\n'}
+FAIL: (e) follow-up request not served: {'tag': 'after_exception_mixed6_17_129_240_256_500_777', 'served': False, 'error': 'ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File "/t/custom_kernel_check.py", line 472, in wrapped\n    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\'kind\': \'eager partitions do not cover seq_lens\', \'need\': 1, \'have\': 3, \'capturing\': False, \'max_seq_len\': 520, \'tmp_output_shape\': [8, 8, 3, 128], \'q_tokens\': 32, \'num_seqs\': 8, \'seq_lens_max\': 4, \'sabotaged_max_seq_len\': 2}\n'}
+FAIL: (e) follow-up request not served: {'tag': 'final', 'served': False, 'error': 'ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File "/t/custom_kernel_check.py", line 472, in wrapped\n    raise AssertionError(f"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\'kind\': \'eager partitions do not cover seq_lens\', \'need\': 1, \'have\': 3, \'capturing\': False, \'max_seq_len\': 524, \'tmp_output_shape\': [8, 8, 3, 128], \'q_tokens\': 32, \'num_seqs\': 8, \'seq_lens_max\': 4, \'sabotaged_max_seq_len\': 2}\n'}
+distinct generated tokens per request: []
+FAIL: (c) 9 scratch-sizing violations, first: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 1, 'capturing': False, 'max_seq_len': 240, 'tmp_output_shape': [1, 8, 1, 128], 'q_tokens': 240, 'num_seqs': 1, 'seq_lens_max': 240, 'sabotaged_max_seq_len': 120}
+SUMMARY: {"arm": "C", "status": "FAIL", "kernel_calls": {"n": 39, "eager": 39, "captured": 0}, "graph_replays": 0, "log_has_fallback_warning": false, "captured_max_seq_len_values": [], "captured_tmp_output_partitions": [], "eager_stats": {"max_seqlen_seen": 500, "max_partitions_needed": 2, "max_partitions_alloc": 3, "max_max_seq_len": 524, "min_slack_partitions": 0, "min_margin_tokens": -250, "n_calls_max_seq_len_lt_2048": 39, "min_margin_tokens_lt_2048": -250, "q_tokens_set": [1, 2, 4, 5, 8, 32, 36, 40, 44, 240, 508, 1111]}, "n_violations": 9, "vram": {"free_min_gib": 1.6422996520996094, "free_start_gib": 4.417987823486328, "total_gib": 31.715484619140625}, "phase_status": {"c1_len240": "EXCEPTION", "c1_len500": "EXCEPTION", "c4_240_500_100_255": "EXCEPTION", "mixed6_17_129_240_256_500_777": "EXCEPTION"}}
+RESULT: FAIL
+arm Cm exit status 1
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127
+===== arm compare
+CMD: "/mnt/c/Program Files/WSL/wslc.exe" run --rm --name vllmprtest-ck2-compare  --shm-size 4g -e HIP_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e PYTHONHASHSEED=0 -v hf-cache:/root/.cache/huggingface  -v "C:\Users\strug\vllm\tmp\vllm-pr-work\work\optin-test:/t" -w /t rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0 sh -c 'nice -n 19 python3 custom_kernel_check.py --compare --v2 '
+arm A: status=PASS raw-log fallback-warning lines=0 (log 12215 bytes) kernel_calls={'n': 76, 'eager': 64, 'captured': 12}
+arm B: status=PASS raw-log fallback-warning lines=0 (log 17605 bytes) kernel_calls={'n': 223, 'eager': 191, 'captured': 32}
+arm C: status=PASS raw-log fallback-warning lines=0 (log 17079 bytes) kernel_calls={'n': 239, 'eager': 199, 'captured': 40}
+arm A_eager: status=PASS raw-log fallback-warning lines=0 (log 9888 bytes) kernel_calls={'n': 536, 'eager': 536, 'captured': 0}
+arm B_eager: status=PASS raw-log fallback-warning lines=0 (log 12411 bytes) kernel_calls={'n': 1335, 'eager': 1335, 'captured': 0}
+arm C_eager: status=PASS raw-log fallback-warning lines=0 (log 12220 bytes) kernel_calls={'n': 1335, 'eager': 1335, 'captured': 0}
+--- final tokens (64 new tokens x 12 requests)
+--- draft tokens recorded at every speculator.propose() (the kernel feeds these)
+--- acceptance, distinct tokens
+arm A: accepted/drafted n/a; per-position None; distinct tokens per request min/mean/max = 3/5.6/8
+arm B: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm C: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm A_eager: accepted/drafted n/a; per-position None; distinct tokens per request min/mean/max = 3/5.6/8
+arm B_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+arm C_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8
+COMPARE: FAIL (6 mismatches)
+--- NEGATIVE CONTROLS
+arm compare exit status 1
+OK: no new disk event (newest 4566)
+production still: Up 3 hours   127

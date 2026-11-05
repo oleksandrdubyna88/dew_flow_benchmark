@@ -1,0 +1,1 @@
+GEN_SEED=1235 python3 gen_models2.py /t/models2

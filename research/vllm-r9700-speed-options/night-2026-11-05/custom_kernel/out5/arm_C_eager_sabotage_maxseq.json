@@ -1,0 +1,483 @@
+{
+ "arm": "C",
+ "vllm_file": "/opt/python/lib/python3.14/site-packages/vllm/__init__.py",
+ "vllm_version": "0.29.1.dev0+g98dff2a81.d20261002",
+ "rocm_attn_file": "/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py",
+ "builder_flag_class_attr": true,
+ "gpu_util_requested": 0.08,
+ "eager": true,
+ "init_seconds": 96.5,
+ "vram_after_init_free_gib": 1.6056785583496094,
+ "probe": {
+  "model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner",
+  "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator",
+  "use_fused_multi_step_decode": true,
+  "num_speculative_steps": 3,
+  "advance_draft_positions": true,
+  "draft_max_seq_len_last": 22,
+  "speculator_max_model_len": 2048,
+  "draft_attn_groups": [
+   {
+    "backend": "ROCM_ATTN",
+    "supports_draft_decode_metadata_update": true,
+    "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder",
+    "block_size": 16
+   }
+  ],
+  "kv_cache_groups": [
+   {
+    "layers": 3,
+    "block_size": 16,
+    "head_size": 128,
+    "num_kv_heads": 2
+   }
+  ],
+  "cache_config_block_size": 16,
+  "cudagraph_mode": "NONE"
+ },
+ "vllm_config_block_size": 16,
+ "backend_log_lines": [
+  "non-default args: {'tokenizer': '/t/models4/target', 'dtype': 'float16', 'max_model_len': 2048, 'block_size': 16, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.08, 'max_num_batched_tokens': 2048, 'max_num_seqs': 8, 'enforce_eager': True, 'speculative_config': {'method': 'eagle', 'model': '/t/models4/draft', 'num_speculative_tokens': 3}, 'attention_backend': 'ROCM_ATTN', 'model': '/t/models4/target'}",
+  "Using ROCM_ATTN backend (selected via --attention-backend)."
+ ],
+ "canaries": [
+  {
+   "tag": "after_exception_c1_len240",
+   "served": false,
+   "error": ",\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 1, 'capturing': False, 'max_seq_len': 244, 'tmp_output_shape': [2, 8, 1, 128], 'q_tokens': 36, 'num_seqs': 2, 'seq_lens_max': 32, 'sabotaged_max_seq_len': 16}\n"
+  },
+  {
+   "tag": "after_exception_c1_len500",
+   "served": false,
+   "error": ",\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 2, 'capturing': False, 'max_seq_len': 504, 'tmp_output_shape': [4, 8, 2, 128], 'q_tokens': 44, 'num_seqs': 4, 'seq_lens_max': 32, 'sabotaged_max_seq_len': 16}\n"
+  },
+  {
+   "tag": "after_exception_c4_240_500_100_255",
+   "served": false,
+   "error": "ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 2, 'capturing': False, 'max_seq_len': 512, 'tmp_output_shape': [8, 8, 2, 128], 'q_tokens': 32, 'num_seqs': 8, 'seq_lens_max': 4, 'sabotaged_max_seq_len': 2}\n"
+  },
+  {
+   "tag": "after_exception_mixed6_17_129_240_256_500_777",
+   "served": false,
+   "error": "ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 3, 'capturing': False, 'max_seq_len': 520, 'tmp_output_shape': [8, 8, 3, 128], 'q_tokens': 32, 'num_seqs': 8, 'seq_lens_max': 4, 'sabotaged_max_seq_len': 2}\n"
+  },
+  {
+   "tag": "final",
+   "served": false,
+   "error": "ut,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 3, 'capturing': False, 'max_seq_len': 524, 'tmp_output_shape': [8, 8, 3, 128], 'q_tokens': 32, 'num_seqs': 8, 'seq_lens_max': 4, 'sabotaged_max_seq_len': 2}\n"
+  }
+ ],
+ "distinct_tokens_per_request": [],
+ "phase_status": {
+  "c1_len240": "EXCEPTION",
+  "c1_len500": "EXCEPTION",
+  "c4_240_500_100_255": "EXCEPTION",
+  "mixed6_17_129_240_256_500_777": "EXCEPTION"
+ },
+ "tokens": {},
+ "spec_metrics": {
+  "vllm:spec_decode_num_drafts": 0,
+  "vllm:spec_decode_num_draft_tokens": 0,
+  "vllm:spec_decode_num_accepted_tokens": 0,
+  "vllm:spec_decode_num_accepted_tokens_per_pos": "[0, 0, 0]"
+ },
+ "probe_after": {
+  "model_runner": "vllm.v1.worker.gpu.model_runner.GPUModelRunner",
+  "speculator": "vllm.v1.worker.gpu.spec_decode.eagle.speculator.EagleSpeculator",
+  "use_fused_multi_step_decode": true,
+  "num_speculative_steps": 3,
+  "advance_draft_positions": true,
+  "draft_max_seq_len_last": 22,
+  "speculator_max_model_len": 2048,
+  "draft_attn_groups": [
+   {
+    "backend": "ROCM_ATTN",
+    "supports_draft_decode_metadata_update": true,
+    "builder": "vllm.v1.attention.backends.rocm_attn.RocmAttentionMetadataBuilder",
+    "block_size": 16
+   }
+  ],
+  "kv_cache_groups": [
+   {
+    "layers": 3,
+    "block_size": 16,
+    "head_size": 128,
+    "num_kv_heads": 2
+   }
+  ],
+  "cache_config_block_size": 16,
+  "cudagraph_mode": "NONE"
+ },
+ "kernel_calls": {
+  "n": 39,
+  "eager": 39,
+  "captured": 0
+ },
+ "guard": {
+  "raised": 9,
+  "kernel_calls_with_violation": 0
+ },
+ "kernel_calls_with_violation": 0,
+ "sabotage": "maxseq",
+ "graph_replays": 0,
+ "log_has_fallback_warning": false,
+ "log_has_fused_unsupported_info": false,
+ "eager_stats": {
+  "max_seqlen_seen": 500,
+  "max_partitions_needed": 2,
+  "max_partitions_alloc": 3,
+  "max_max_seq_len": 524,
+  "min_slack_partitions": 0,
+  "min_margin_tokens": -250,
+  "n_calls_max_seq_len_lt_2048": 39,
+  "min_margin_tokens_lt_2048": -250,
+  "q_tokens_set": [
+   1,
+   2,
+   4,
+   5,
+   8,
+   32,
+   36,
+   40,
+   44,
+   240,
+   508,
+   1111
+  ]
+ },
+ "captured_max_seq_len_values": [],
+ "captured_tmp_output_partitions": [],
+ "raw_call_samples": [
+  {
+   "capturing": false,
+   "max_seq_len": 5,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 40,
+   "num_seqs": 8,
+   "seq_lens_max": 5
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 5,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 40,
+   "num_seqs": 8,
+   "seq_lens_max": 5
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 5,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 40,
+   "num_seqs": 8,
+   "seq_lens_max": 5
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 8,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 8,
+   "num_seqs": 8,
+   "seq_lens_max": 6
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 8,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 8,
+   "num_seqs": 8,
+   "seq_lens_max": 7
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 9,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 9
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 9,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 9
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 9,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 9
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 12,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 8,
+   "num_seqs": 8,
+   "seq_lens_max": 7
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 12,
+   "tmp_output_shape": [
+    8,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 8,
+   "num_seqs": 8,
+   "seq_lens_max": 8
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 13,
+   "tmp_output_shape": [
+    2,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 5,
+   "num_seqs": 2,
+   "seq_lens_max": 10
+  },
+  {
+   "capturing": false,
+   "max_seq_len": 13,
+   "tmp_output_shape": [
+    2,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 5,
+   "num_seqs": 2,
+   "seq_lens_max": 10
+  }
+ ],
+ "violations": [
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 1,
+   "capturing": false,
+   "max_seq_len": 240,
+   "tmp_output_shape": [
+    1,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 240,
+   "num_seqs": 1,
+   "seq_lens_max": 240,
+   "sabotaged_max_seq_len": 120
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 1,
+   "capturing": false,
+   "max_seq_len": 244,
+   "tmp_output_shape": [
+    2,
+    8,
+    1,
+    128
+   ],
+   "q_tokens": 36,
+   "num_seqs": 2,
+   "seq_lens_max": 32,
+   "sabotaged_max_seq_len": 16
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 2,
+   "have": 2,
+   "capturing": false,
+   "max_seq_len": 500,
+   "tmp_output_shape": [
+    3,
+    8,
+    2,
+    128
+   ],
+   "q_tokens": 508,
+   "num_seqs": 3,
+   "seq_lens_max": 500,
+   "sabotaged_max_seq_len": 250
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 2,
+   "capturing": false,
+   "max_seq_len": 504,
+   "tmp_output_shape": [
+    4,
+    8,
+    2,
+    128
+   ],
+   "q_tokens": 44,
+   "num_seqs": 4,
+   "seq_lens_max": 32,
+   "sabotaged_max_seq_len": 16
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 2,
+   "have": 2,
+   "capturing": false,
+   "max_seq_len": 508,
+   "tmp_output_shape": [
+    8,
+    8,
+    2,
+    128
+   ],
+   "q_tokens": 1111,
+   "num_seqs": 8,
+   "seq_lens_max": 500,
+   "sabotaged_max_seq_len": 250
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 2,
+   "capturing": false,
+   "max_seq_len": 512,
+   "tmp_output_shape": [
+    8,
+    8,
+    2,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 4,
+   "sabotaged_max_seq_len": 2
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 3,
+   "capturing": false,
+   "max_seq_len": 516,
+   "tmp_output_shape": [
+    8,
+    8,
+    3,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 4,
+   "sabotaged_max_seq_len": 2
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 3,
+   "capturing": false,
+   "max_seq_len": 520,
+   "tmp_output_shape": [
+    8,
+    8,
+    3,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 4,
+   "sabotaged_max_seq_len": 2
+  },
+  {
+   "kind": "eager partitions do not cover seq_lens",
+   "need": 1,
+   "have": 3,
+   "capturing": false,
+   "max_seq_len": 524,
+   "tmp_output_shape": [
+    8,
+    8,
+    3,
+    128
+   ],
+   "q_tokens": 32,
+   "num_seqs": 8,
+   "seq_lens_max": 4,
+   "sabotaged_max_seq_len": 2
+  }
+ ],
+ "n_violations": 9,
+ "vram": {
+  "free_min_gib": 1.6422996520996094,
+  "free_start_gib": 4.417987823486328,
+  "total_gib": 31.715484619140625
+ },
+ "status": "FAIL",
+ "failures": [
+  "(e) phase c1_len240: exception\nTraceback (most recent call last):\n  File \"/t/custom_kernel_check.py\", line 631, in main\n    outs = gen(prompts, sp_main, PHASE_TIMEOUT_S)\n  File \"/t/custom_kernel_check.py\", line 611, in gen\n    return llm.generate([{\"prompt_token_ids\": p} for p in prompts], sp, use_tqdm=False)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/llm.py\", line 472, in generate\n    return self._run_completion(\n           ~~~~~~~~~~~~~~~~~~~~^\n        prompts=prompts,\n        ^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        mm_processor_kwargs=mm_processor_kwargs,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 350, in _run_completion\n    return self._run_engine(use_tqdm=use_tqdm, output_type=output_type)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 596, in _run_engine\n    step_outputs = self.llm_engine.step()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/llm_engine.py\", line 307, in step\n    outputs = self.engine_core.get_output()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core_client.py\", line 320, in get_output\n    outputs, model_executed = self.engine_core.step_fn()\n                              ~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core.py\", line 668, in step_with_batch_queue\n    exec_future = self.model_executor.execute_model(\n        scheduler_output, non_block=True\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 131, in execute_model\n    output.result()\n    ~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 447, in result\n    return self.__get_result()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 396, in __get_result\n    raise self._exception\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 109, in collective_rpc\n    result = run_method(self.driver_worker, method, args, kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/serial_utils.py\", line 510, in run_method\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/worker_base.py\", line 375, in execute_model\n    return self.worker.execute_model(scheduler_output)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu_worker.py\", line 1170, in execute_model\n    output = self.model_runner.execute_model(\n        scheduler_output, intermediate_tensors\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu/model_runner.py\", line 1776, in execute_model\n    model_output = self.model(**model_inputs)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 325, in forward\n    hidden_states = self.model(\n        input_ids, positions, intermediate_tensors, inputs_embeds\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/compilation/decorators.py\", line 509, in __call__\n    return self.forward(*args, **kwargs)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen2.py\", line 419, in forward\n    hidden_states, residual = layer(positions, hidden_states, residual)\n                              ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 238, in forward\n    hidden_states = self.self_attn(\n        positions=positions,\n        hidden_states=hidden_states,\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 168, in forward\n    attn_output = self.attn(q, k, v)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 562, in forward\n    torch.ops.vllm.unified_attention_with_output(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query,\n        ^^^^^^\n    ...<4 lines>...\n        kv_cache_dummy_dep=kv_cache_dummy_dep,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/torch/_ops.py\", line 1279, in __call__\n    return self._op(*args, **kwargs)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/kv_transfer_utils.py\", line 40, in wrapper\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 762, in unified_attention_with_output\n    self.impl.forward(\n    ~~~~~~~~~~~~~~~~~^\n        self,\n        ^^^^^\n    ...<7 lines>...\n        output_block_scale=output_block_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py\", line 464, in forward\n    chunked_prefill_paged_decode(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query=query[:num_actual_tokens],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<18 lines>...\n        causal=attn_metadata.causal,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/ops/chunked_prefill_paged_decode.py\", line 411, in chunked_prefill_paged_decode\n    ops.paged_attention_rocm(\n    ~~~~~~~~~~~~~~~~~~~~~~~~^\n        output,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 1, 'capturing': False, 'max_seq_len': 240, 'tmp_output_shape': [1, 8, 1, 128], 'q_tokens': 240, 'num_seqs': 1, 'seq_lens_max': 240, 'sabotaged_max_seq_len': 120}\n",
+  "(e) phase c1_len500: exception\nTraceback (most recent call last):\n  File \"/t/custom_kernel_check.py\", line 631, in main\n    outs = gen(prompts, sp_main, PHASE_TIMEOUT_S)\n  File \"/t/custom_kernel_check.py\", line 611, in gen\n    return llm.generate([{\"prompt_token_ids\": p} for p in prompts], sp, use_tqdm=False)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/llm.py\", line 472, in generate\n    return self._run_completion(\n           ~~~~~~~~~~~~~~~~~~~~^\n        prompts=prompts,\n        ^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        mm_processor_kwargs=mm_processor_kwargs,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 350, in _run_completion\n    return self._run_engine(use_tqdm=use_tqdm, output_type=output_type)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 596, in _run_engine\n    step_outputs = self.llm_engine.step()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/llm_engine.py\", line 307, in step\n    outputs = self.engine_core.get_output()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core_client.py\", line 320, in get_output\n    outputs, model_executed = self.engine_core.step_fn()\n                              ~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core.py\", line 668, in step_with_batch_queue\n    exec_future = self.model_executor.execute_model(\n        scheduler_output, non_block=True\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 131, in execute_model\n    output.result()\n    ~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 447, in result\n    return self.__get_result()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 396, in __get_result\n    raise self._exception\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 109, in collective_rpc\n    result = run_method(self.driver_worker, method, args, kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/serial_utils.py\", line 510, in run_method\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/worker_base.py\", line 375, in execute_model\n    return self.worker.execute_model(scheduler_output)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu_worker.py\", line 1170, in execute_model\n    output = self.model_runner.execute_model(\n        scheduler_output, intermediate_tensors\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu/model_runner.py\", line 1776, in execute_model\n    model_output = self.model(**model_inputs)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 325, in forward\n    hidden_states = self.model(\n        input_ids, positions, intermediate_tensors, inputs_embeds\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/compilation/decorators.py\", line 509, in __call__\n    return self.forward(*args, **kwargs)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen2.py\", line 419, in forward\n    hidden_states, residual = layer(positions, hidden_states, residual)\n                              ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 238, in forward\n    hidden_states = self.self_attn(\n        positions=positions,\n        hidden_states=hidden_states,\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 168, in forward\n    attn_output = self.attn(q, k, v)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 562, in forward\n    torch.ops.vllm.unified_attention_with_output(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query,\n        ^^^^^^\n    ...<4 lines>...\n        kv_cache_dummy_dep=kv_cache_dummy_dep,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/torch/_ops.py\", line 1279, in __call__\n    return self._op(*args, **kwargs)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/kv_transfer_utils.py\", line 40, in wrapper\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 762, in unified_attention_with_output\n    self.impl.forward(\n    ~~~~~~~~~~~~~~~~~^\n        self,\n        ^^^^^\n    ...<7 lines>...\n        output_block_scale=output_block_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py\", line 464, in forward\n    chunked_prefill_paged_decode(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query=query[:num_actual_tokens],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<18 lines>...\n        causal=attn_metadata.causal,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/ops/chunked_prefill_paged_decode.py\", line 411, in chunked_prefill_paged_decode\n    ops.paged_attention_rocm(\n    ~~~~~~~~~~~~~~~~~~~~~~~~^\n        output,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 2, 'have': 2, 'capturing': False, 'max_seq_len': 500, 'tmp_output_shape': [3, 8, 2, 128], 'q_tokens': 508, 'num_seqs': 3, 'seq_lens_max': 500, 'sabotaged_max_seq_len': 250}\n",
+  "(e) phase c4_240_500_100_255: exception\nTraceback (most recent call last):\n  File \"/t/custom_kernel_check.py\", line 631, in main\n    outs = gen(prompts, sp_main, PHASE_TIMEOUT_S)\n  File \"/t/custom_kernel_check.py\", line 611, in gen\n    return llm.generate([{\"prompt_token_ids\": p} for p in prompts], sp, use_tqdm=False)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/llm.py\", line 472, in generate\n    return self._run_completion(\n           ~~~~~~~~~~~~~~~~~~~~^\n        prompts=prompts,\n        ^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        mm_processor_kwargs=mm_processor_kwargs,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 350, in _run_completion\n    return self._run_engine(use_tqdm=use_tqdm, output_type=output_type)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 596, in _run_engine\n    step_outputs = self.llm_engine.step()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/llm_engine.py\", line 307, in step\n    outputs = self.engine_core.get_output()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core_client.py\", line 320, in get_output\n    outputs, model_executed = self.engine_core.step_fn()\n                              ~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core.py\", line 668, in step_with_batch_queue\n    exec_future = self.model_executor.execute_model(\n        scheduler_output, non_block=True\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 131, in execute_model\n    output.result()\n    ~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 447, in result\n    return self.__get_result()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 396, in __get_result\n    raise self._exception\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 109, in collective_rpc\n    result = run_method(self.driver_worker, method, args, kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/serial_utils.py\", line 510, in run_method\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/worker_base.py\", line 375, in execute_model\n    return self.worker.execute_model(scheduler_output)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu_worker.py\", line 1170, in execute_model\n    output = self.model_runner.execute_model(\n        scheduler_output, intermediate_tensors\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu/model_runner.py\", line 1776, in execute_model\n    model_output = self.model(**model_inputs)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 325, in forward\n    hidden_states = self.model(\n        input_ids, positions, intermediate_tensors, inputs_embeds\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/compilation/decorators.py\", line 509, in __call__\n    return self.forward(*args, **kwargs)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen2.py\", line 419, in forward\n    hidden_states, residual = layer(positions, hidden_states, residual)\n                              ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 238, in forward\n    hidden_states = self.self_attn(\n        positions=positions,\n        hidden_states=hidden_states,\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 168, in forward\n    attn_output = self.attn(q, k, v)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 562, in forward\n    torch.ops.vllm.unified_attention_with_output(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query,\n        ^^^^^^\n    ...<4 lines>...\n        kv_cache_dummy_dep=kv_cache_dummy_dep,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/torch/_ops.py\", line 1279, in __call__\n    return self._op(*args, **kwargs)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/kv_transfer_utils.py\", line 40, in wrapper\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 762, in unified_attention_with_output\n    self.impl.forward(\n    ~~~~~~~~~~~~~~~~~^\n        self,\n        ^^^^^\n    ...<7 lines>...\n        output_block_scale=output_block_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py\", line 464, in forward\n    chunked_prefill_paged_decode(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query=query[:num_actual_tokens],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<18 lines>...\n        causal=attn_metadata.causal,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/ops/chunked_prefill_paged_decode.py\", line 411, in chunked_prefill_paged_decode\n    ops.paged_attention_rocm(\n    ~~~~~~~~~~~~~~~~~~~~~~~~^\n        output,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 2, 'have': 2, 'capturing': False, 'max_seq_len': 508, 'tmp_output_shape': [8, 8, 2, 128], 'q_tokens': 1111, 'num_seqs': 8, 'seq_lens_max': 500, 'sabotaged_max_seq_len': 250}\n",
+  "(e) phase mixed6_17_129_240_256_500_777: exception\nTraceback (most recent call last):\n  File \"/t/custom_kernel_check.py\", line 631, in main\n    outs = gen(prompts, sp_main, PHASE_TIMEOUT_S)\n  File \"/t/custom_kernel_check.py\", line 611, in gen\n    return llm.generate([{\"prompt_token_ids\": p} for p in prompts], sp, use_tqdm=False)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/llm.py\", line 472, in generate\n    return self._run_completion(\n           ~~~~~~~~~~~~~~~~~~~~^\n        prompts=prompts,\n        ^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        mm_processor_kwargs=mm_processor_kwargs,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 350, in _run_completion\n    return self._run_engine(use_tqdm=use_tqdm, output_type=output_type)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/entrypoints/offline_utils.py\", line 596, in _run_engine\n    step_outputs = self.llm_engine.step()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/llm_engine.py\", line 307, in step\n    outputs = self.engine_core.get_output()\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core_client.py\", line 320, in get_output\n    outputs, model_executed = self.engine_core.step_fn()\n                              ~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/engine/core.py\", line 668, in step_with_batch_queue\n    exec_future = self.model_executor.execute_model(\n        scheduler_output, non_block=True\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 131, in execute_model\n    output.result()\n    ~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 447, in result\n    return self.__get_result()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"/root/.local/share/uv/python/cpython-3.14.8-linux-x86_64-gnu/lib/python3.14/concurrent/futures/_base.py\", line 396, in __get_result\n    raise self._exception\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/executor/uniproc_executor.py\", line 109, in collective_rpc\n    result = run_method(self.driver_worker, method, args, kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/serial_utils.py\", line 510, in run_method\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/worker_base.py\", line 375, in execute_model\n    return self.worker.execute_model(scheduler_output)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu_worker.py\", line 1170, in execute_model\n    output = self.model_runner.execute_model(\n        scheduler_output, intermediate_tensors\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/utils/_contextlib.py\", line 124, in decorate_context\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/worker/gpu/model_runner.py\", line 1776, in execute_model\n    model_output = self.model(**model_inputs)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 325, in forward\n    hidden_states = self.model(\n        input_ids, positions, intermediate_tensors, inputs_embeds\n    )\n  File \"/opt/python/lib/python3.14/site-packages/vllm/compilation/decorators.py\", line 509, in __call__\n    return self.forward(*args, **kwargs)\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen2.py\", line 419, in forward\n    hidden_states, residual = layer(positions, hidden_states, residual)\n                              ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 238, in forward\n    hidden_states = self.self_attn(\n        positions=positions,\n        hidden_states=hidden_states,\n    )\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/models/qwen3.py\", line 168, in forward\n    attn_output = self.attn(q, k, v)\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 562, in forward\n    torch.ops.vllm.unified_attention_with_output(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query,\n        ^^^^^^\n    ...<4 lines>...\n        kv_cache_dummy_dep=kv_cache_dummy_dep,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/torch/_ops.py\", line 1279, in __call__\n    return self._op(*args, **kwargs)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/kv_transfer_utils.py\", line 40, in wrapper\n    return func(*args, **kwargs)\n  File \"/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/attention/attention.py\", line 762, in unified_attention_with_output\n    self.impl.forward(\n    ~~~~~~~~~~~~~~~~~^\n        self,\n        ^^^^^\n    ...<7 lines>...\n        output_block_scale=output_block_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/backends/rocm_attn.py\", line 464, in forward\n    chunked_prefill_paged_decode(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        query=query[:num_actual_tokens],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<18 lines>...\n        causal=attn_metadata.causal,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/python/lib/python3.14/site-packages/vllm/v1/attention/ops/chunked_prefill_paged_decode.py\", line 411, in chunked_prefill_paged_decode\n    ops.paged_attention_rocm(\n    ~~~~~~~~~~~~~~~~~~~~~~~~^\n        output,\n        ^^^^^^^\n    ...<17 lines>...\n        fp8_out_scale=output_scale,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 3, 'capturing': False, 'max_seq_len': 516, 'tmp_output_shape': [8, 8, 3, 128], 'q_tokens': 32, 'num_seqs': 8, 'seq_lens_max': 4, 'sabotaged_max_seq_len': 2}\n",
+  "(e) follow-up request not served: {'tag': 'after_exception_c1_len240', 'served': False, 'error': ',\\n        ^^^^^^^\\n    ...<17 lines>...\\n        fp8_out_scale=output_scale,\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n    )\\n    ^\\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\\'kind\\': \\'eager partitions do not cover seq_lens\\', \\'need\\': 1, \\'have\\': 1, \\'capturing\\': False, \\'max_seq_len\\': 244, \\'tmp_output_shape\\': [2, 8, 1, 128], \\'q_tokens\\': 36, \\'num_seqs\\': 2, \\'seq_lens_max\\': 32, \\'sabotaged_max_seq_len\\': 16}\\n'}",
+  "(e) follow-up request not served: {'tag': 'after_exception_c1_len500', 'served': False, 'error': ',\\n        ^^^^^^^\\n    ...<17 lines>...\\n        fp8_out_scale=output_scale,\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n    )\\n    ^\\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\\'kind\\': \\'eager partitions do not cover seq_lens\\', \\'need\\': 1, \\'have\\': 2, \\'capturing\\': False, \\'max_seq_len\\': 504, \\'tmp_output_shape\\': [4, 8, 2, 128], \\'q_tokens\\': 44, \\'num_seqs\\': 4, \\'seq_lens_max\\': 32, \\'sabotaged_max_seq_len\\': 16}\\n'}",
+  "(e) follow-up request not served: {'tag': 'after_exception_c4_240_500_100_255', 'served': False, 'error': 'ut,\\n        ^^^^^^^\\n    ...<17 lines>...\\n        fp8_out_scale=output_scale,\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n    )\\n    ^\\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\\'kind\\': \\'eager partitions do not cover seq_lens\\', \\'need\\': 1, \\'have\\': 2, \\'capturing\\': False, \\'max_seq_len\\': 512, \\'tmp_output_shape\\': [8, 8, 2, 128], \\'q_tokens\\': 32, \\'num_seqs\\': 8, \\'seq_lens_max\\': 4, \\'sabotaged_max_seq_len\\': 2}\\n'}",
+  "(e) follow-up request not served: {'tag': 'after_exception_mixed6_17_129_240_256_500_777', 'served': False, 'error': 'ut,\\n        ^^^^^^^\\n    ...<17 lines>...\\n        fp8_out_scale=output_scale,\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n    )\\n    ^\\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\\'kind\\': \\'eager partitions do not cover seq_lens\\', \\'need\\': 1, \\'have\\': 3, \\'capturing\\': False, \\'max_seq_len\\': 520, \\'tmp_output_shape\\': [8, 8, 3, 128], \\'q_tokens\\': 32, \\'num_seqs\\': 8, \\'seq_lens_max\\': 4, \\'sabotaged_max_seq_len\\': 2}\\n'}",
+  "(e) follow-up request not served: {'tag': 'final', 'served': False, 'error': 'ut,\\n        ^^^^^^^\\n    ...<17 lines>...\\n        fp8_out_scale=output_scale,\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n    )\\n    ^\\n  File \"/t/custom_kernel_check.py\", line 472, in wrapped\\n    raise AssertionError(f\"(c) scratch sizing violated BEFORE the kernel call, kernel not called: {v}\")\\nAssertionError: (c) scratch sizing violated BEFORE the kernel call, kernel not called: {\\'kind\\': \\'eager partitions do not cover seq_lens\\', \\'need\\': 1, \\'have\\': 3, \\'capturing\\': False, \\'max_seq_len\\': 524, \\'tmp_output_shape\\': [8, 8, 3, 128], \\'q_tokens\\': 32, \\'num_seqs\\': 8, \\'seq_lens_max\\': 4, \\'sabotaged_max_seq_len\\': 2}\\n'}",
+  "(c) 9 scratch-sizing violations, first: {'kind': 'eager partitions do not cover seq_lens', 'need': 1, 'have': 1, 'capturing': False, 'max_seq_len': 240, 'tmp_output_shape': [1, 8, 1, 128], 'q_tokens': 240, 'num_seqs': 1, 'seq_lens_max': 240, 'sabotaged_max_seq_len': 120}"
+ ]
+}
