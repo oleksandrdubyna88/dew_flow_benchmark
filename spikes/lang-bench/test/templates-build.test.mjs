@@ -198,6 +198,31 @@ test('Three_plain_folders_or_a_text_file_called_HEAD_are_not_a_repository_and_a_
   assert.match(refused.reason, /bare git repository/);
 });
 
+test('A_dangling_link_on_the_way_is_a_refusal_that_cannot_be_judged_and_not_a_throw', t => {
+  const root = ownedFolder(t, 'dang');
+  symlinkSync('/nonexistent', path.join(root, 'dang'));
+  const r = buildWorkspace(args(t, { out: path.join(root, 'dang', 'ws') }));
+  assert.equal(r.ok, false);
+  assert.equal(r.refusal, true, 'a refusal, not a throw');
+  assert.match(r.reason, /cannot be judged \(ENOENT\)/);
+  assert.equal(r.reason.includes('\n'), false, 'one line');
+});
+
+test('A_link_called_HEAD_and_a_ref_line_without_a_space_are_still_a_bare_repository', t => {
+  const withLink = ownedFolder(t, 'hl');
+  for (const name of ['objects', 'refs']) mkdirSync(path.join(withLink, name));
+  symlinkSync('refs/heads/main', path.join(withLink, 'HEAD'));
+  const noSpace = writeTree(ownedFolder(t, 'hn'), { HEAD: 'ref:refs/heads/main\n' });
+  for (const name of ['objects', 'refs']) mkdirSync(path.join(noSpace, name));
+  const tabbed = writeTree(ownedFolder(t, 'ht'), { HEAD: 'ref:\trefs/heads/main\n' });
+  for (const name of ['objects', 'refs']) mkdirSync(path.join(tabbed, name));
+  for (const [what, dir] of [['a symlink HEAD', withLink], ['ref: without a space', noSpace], ['ref: and a tab', tabbed]]) {
+    const r = buildWorkspace(args(t, { out: path.join(dir, 'ws') }));
+    assert.equal(r.ok, false, what);
+    assert.match(r.reason, /bare git repository/, what);
+  }
+});
+
 test('A_destination_the_filesystem_cannot_judge_is_a_refusal_with_a_reason_and_no_trace', t => {
   const root = ownedFolder(t, 'jud');
   const closed = path.join(root, 'closed');

@@ -30,11 +30,12 @@ function ancestorsOf(target) {
 
 const hasEntry = (dir, name) => lstatOrNull(path.join(dir, name)) !== null;
 const isFolderEntry = (dir, name) => lstatOrNull(path.join(dir, name))?.isDirectory() === true;
-const HEAD_LINE = /^(ref: |[0-9a-f]{40})/;
+const HEAD_LINE = /^(ref:\s*|[0-9a-f]{40})/;
 
-/** `HEAD` is a regular file that reads as a git HEAD (a `ref:` line or a commit id): three plain folders, or a text file called HEAD, are not a repository. */
+/** `HEAD` is a link (the old form of a symbolic ref), or a regular file that reads as a git HEAD (a `ref:` line or a commit id): three plain folders, or a text file called HEAD, are not a repository. */
 function isHeadFile(dir) {
   const head = lstatOrNull(path.join(dir, 'HEAD'));
+  if (head?.isSymbolicLink() === true) return true;
   return head?.isFile() === true && HEAD_LINE.test(readFileSync(path.join(dir, 'HEAD'), 'utf8').slice(0, 64));
 }
 
@@ -88,7 +89,7 @@ function contentProblem(target) {
   return readdirSync(target).length === 0 ? null : 'exists and is not empty';
 }
 
-const JUDGE_ERRORS = new Set(['EACCES', 'ELOOP', 'ENAMETOOLONG']);
+const JUDGE_ERRORS = new Set(['EACCES', 'ELOOP', 'ENAMETOOLONG', 'ENOENT']);
 
 /** The first problem of the destination, or null. A path the filesystem cannot answer for (permission, a link loop, a name too long) is a problem that says so, never a throw. */
 function destinationProblem(target, worktreeOf) {
