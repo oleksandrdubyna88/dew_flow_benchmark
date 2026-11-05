@@ -78,7 +78,7 @@ for (const [name, mutate, message] of FORMAT_FAULTS) {
 
 test('A_FORMAT_that_is_not_a_readable_document_is_exit_4', async t => {
   const fixture = fixtureRepo(t, 'olympiad');
-  writeFileSync(fixture.format, readFileSync(fixture.format, 'utf8').replace('\n', '\r\n'));
+  writeFileSync(fixture.format, readFileSync(fixture.format, 'utf8').replaceAll('\n', '\r\n'));
   const result = await check(fixture);
   assert.equal(result.exit, 4);
   assert.match(result.errors.join('\n'), /not a readable FORMAT: line 1: a carriage return/);
