@@ -5,7 +5,7 @@
 | Kind | a long-running program that serves until it is stopped by SIGTERM |
 | Gate verdict | not yet gated |
 | Freeze tag | none yet |
-| Freeze rule | frozen: changes only by a dated amendment before the v2 pre-registration |
+| Freeze rule | this text changes only by a dated amendment from its authors |
 | Amendments | none yet |
 
 Every numbered sentence (**R1** … **R16**) is a requirement. Hidden tests refer to these numbers; nothing outside them
@@ -52,7 +52,7 @@ says is compared otherwise. Nothing else is normalized.
 **R10.** Each test starts the program once, in a fresh process, and drives one scenario against it under a bound on
 the program's memory. The exact bound is registered when the hidden suite is calibrated against reference solutions in
 both stacks, before any session, and is given to the test runner, not to the program's author. The registered bound is
-never below a floor of **256 MB**. (The registration rule: at least twice the peak memory of the larger reference over
+never below a floor of **256 MiB**. (The registration rule: at least twice the peak memory of the larger reference over
 all the task's load scenarios.) The load scenarios are hidden scenarios of up to 50 connections, each lasting at most
 30 seconds; the bound on memory holds in every test, whether it is a load scenario or not. Memory is measured as the
 peak memory of the program's own control group (cgroup `memory.peak`), which counts the program and every process it
@@ -72,7 +72,7 @@ stacks meet each of them with margin.
 ## 5. Build and run — the workspace contract
 
 **R12.** The workspace holds `STATEMENT.md`, `samples/`, `runner/`, `build.sh`, `run.sh`, `PACKAGES.md` and the
-toolchain pin files of the stack. These are frozen inputs: do not change, rename or remove them. The program's sources
+toolchain pin files named in `build.sh`. These are frozen inputs: do not change, rename or remove them. The program's sources
 go where `build.sh` and `run.sh` expect them; the two scripts say where.
 
 **R13.** `bash build.sh`, run in the workspace directory, builds the program with no network access and with no
@@ -86,8 +86,10 @@ program itself. Every test gives the program the same base environment, identica
 documented runtime settings of each stack: in it `LANG` and `LC_ALL` are `de_DE.UTF-8`, nothing else selects a locale,
 and `TZ` is `UTC`.
 
-**R15.** The tests run offline, on a pristine copy of the workspace, after the build. The program must not depend on
-the network, on files outside the workspace, or on anything written during an earlier run.
+**R15.** The tests run offline. They use a clean copy of the workspace as you left it: build output and installed
+packages are removed, and the frozen inputs are put back as they were given. Every other file is yours, including the
+project files that declare or lock your packages, and is built as you left it, by `bash build.sh`. The program must not
+depend on the network, on files outside the workspace, or on anything written during an earlier run.
 
 ## 6. Visible samples
 

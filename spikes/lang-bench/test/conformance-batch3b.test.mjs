@@ -11,7 +11,10 @@ const R2 = ['**R2.** For n = 1', null];
 const inR2 = text => ({ spec: [[R2[0], `**R2.** ${text} For n = 1`]] });
 const KEYS = ['env', 'file', 'start', 'connect', 'send', 'request', 'recv', 'expect', 'close'].map(word => `\`${word}\``).join(' ');
 const STDERR = 'Standard error is not compared and may hold anything; it is recorded, not judged. Only its size is bounded: a run that writes more than 256 MiB to standard error is stopped, and that test fails.';
-const OFFLINE = 'The tests run offline, on a pristine copy of the workspace, after the build. The program must not depend on the network, on files outside the workspace, or on anything written during an earlier run.';
+const OFFLINE = 'The tests run offline. They use a clean copy of the workspace as you left it: build output and installed packages are removed, and the frozen inputs are put back as they were given. Every other file is yours, including the project files that declare or lock your packages, and is built as you left it, by `bash build.sh`. The program must not depend on the network, on files outside the workspace, or on anything written during an earlier run.';
+
+const GATE_OFF = '| Gate verdict | not yet gated |\n| Freeze tag | none yet |';
+const GATED = '| Gate verdict | `proceed` · 2026-11-04 |\n';
 
 // [name, kind, edits, check, message]
 const CASES = [
@@ -19,7 +22,7 @@ const CASES = [
   ...['HTTP://example.org/x', 'Https://example.org', 'ftp://host/file', 'www.example.org', '[the page](page.md)', '[the page][ref]', '<mailto:a@b.example>'].map(link => [`the_link_${link.replace(/[^A-Za-z0-9]/g, '_')}`, 'olympiad', inR2(`See ${link}.`), 'no-needle', /: link$/]),
   ['a_reference_definition', 'olympiad', { spec: [['**R2.** For n = 1', '**R2.** For n = 1\n\n[ref]: page.md']] }, 'no-needle', /: link$/],
   // C14: plan ids in any case
-  ...['E1.S8', 'e5', 'E12', 'd41', 'D123', 'T-L56', 't-l5', 'S3', 'CP2', 'OP-K', 'V12', 'F10'].map(id => [`the_plan_id_${id.replace(/[^A-Za-z0-9]/g, '_')}`, 'olympiad', inR2(`Note ${id} here.`), 'no-needle', /: plan id /]),
+  ...['E1.S8', 'e5', 'E12', 'd41', 'D123', 'T-L56', 't-l5', 'S3', 'CP2', 'OP-K', 'V12', 'v12', 'v2', 'F10'].map(id => [`the_plan_id_${id.replace(/[^A-Za-z0-9]/g, '_')}`, 'olympiad', inR2(`Note ${id} here.`), 'no-needle', /: plan id /]),
   // C15: heading levels
   ['a_level_1_heading_in_the_middle', 'olympiad', { spec: [['## 3. Output\n', '# Another title\n\n## 3. Output\n']] }, 'sections', /a # heading at line \d+/],
   ['a_level_4_heading_ends_a_span', 'olympiad', { spec: [['**R2.** For n = 1 the output is the single term 1.', '**R2.** For n = 1 the output is the single term 1.\n\n#### Detail\n\n| a | b |\n|---|---|\n| 1 | 2 |']] }, 'r-ids', /a table outside any requirement paragraph/],
@@ -45,6 +48,8 @@ const CASES = [
   ['an_amendment_date_that_is_no_calendar_date', 'olympiad', { spec: [['None yet.', '- A1 · 2026-13-01 · R1 — changed'], ['| Amendments | none yet |', '| Amendments | A1 (section 8) |']] }, 'sections', /2026-13-01 is not a real date/],
   ['a_freeze_tag_without_a_gated_verdict', 'olympiad', { spec: [['| Freeze tag | none yet |', '| Freeze tag | `spec-frozen-A-20261110` |']] }, 'header', /a freeze tag needs a gated verdict/],
   ['a_freeze_tag_with_a_group_letter_outside_A_and_B', 'olympiad', { spec: [['| Gate verdict | not yet gated |\n| Freeze tag | none yet |', '| Gate verdict | `proceed` · 2026-11-04 |\n| Freeze tag | `spec-frozen-C-20261110` |']] }, 'header', /group letter/],
+  ['a_freeze_tag_without_a_group_letter', 'olympiad', { spec: [[GATE_OFF, `${GATED}| Freeze tag | \`spec-frozen-20261105\` |`]] }, 'header', /Freeze tag is "`spec-frozen-20261105`", which is neither its placeholder "none yet" nor its later form/],
+  ['a_freeze_tag_with_the_group_letter_C', 'olympiad', { spec: [[GATE_OFF, `${GATED}| Freeze tag | \`spec-frozen-C-20261105\` |`]] }, 'header', /Freeze tag is "`spec-frozen-C-20261105`", which is neither its placeholder/],
   ['a_freeze_tag_with_an_invalid_date', 'olympiad', { spec: [['| Gate verdict | not yet gated |\n| Freeze tag | none yet |', '| Gate verdict | `proceed` · 2026-11-04 |\n| Freeze tag | `spec-frozen-A-20261310` |']] }, 'header', /20261310 is not a real date/],
   ['a_withdrawn_requirement_without_its_amendment', 'olympiad', { spec: [['**R2.** For n = 1 the output is the single term 1.', '**R2.** Withdrawn by amendment A2.']] }, 'r-ids', /Withdrawn by amendment A2, which section 8 does not hold/],
   ['a_sample_count_with_a_leading_zero', 'olympiad', { spec: [['The same two cases', 'The same 02 cases']] }, 'sentences', /F-SAMPLES-O is altered/],
@@ -59,6 +64,17 @@ for (const [name, kind, edits, name_, message] of CASES) {
     assert.equal(result.exit, 1);
   });
 }
+
+test('A_sample_id_in_prose_is_no_plan_id', async t => {
+  assert.ok(isOk(await check(fixtureRepo(t, 'olympiad', inR2('The samples s01 and s2 are listed.'))), 'no-needle'));
+});
+
+test('A_freeze_tag_with_the_group_letter_A_or_B_is_ok_for_the_header', async t => {
+  for (const letter of ['A', 'B']) {
+    const result = await check(fixtureRepo(t, 'olympiad', { spec: [[GATE_OFF, `${GATED}| Freeze tag | \`spec-frozen-${letter}-20261105\` |`]] }));
+    assert.ok(isOk(result, 'header'), `${letter}: ${result.lines.join('\n')}`);
+  }
+});
 
 test('Code_spans_and_sample_files_are_no_link_and_no_plan_id_and_a_gated_spec_with_its_amendment_is_ok', async t => {
   const prose = inR2('A pattern like `[a-z](x)` and a sample `s01`, a word D1234 and Day5 and E are no links and no ids.');
