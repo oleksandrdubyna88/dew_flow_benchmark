@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, E1 stories: the task repository — the runner, the execution layer, FORMAT v2, samples, specs gated and frozen after a pre-freeze execution gate, workspaces, toolchains, caches, process templates
 
-> Status: **Epoch 7 of the parent open 2026-11-04 (re-review closed; D60–D64): E1.S9 and E1.S4 resume.** **The judge's findings J1–J6 of the epoch-7 re-review applied, 2026-11-03 (parent `afc21c2c`, D60, D62, D64), text only:** E1.S9 classes FORMAT per `###` subsection where a `##` section mixes kinds (2.4, 2.5, 3.3, 6.2, 6.3 `daemon-web`; 2.3, 2.6, 3.2, 6.1 `olympiad`) and its check treats the changelog, the preamble and the heading numbers as the parent's D60 says (T-L56's cases named); F-ENV says exactly what the layer refuses, and E1.S8's conformance check refuses the same `env` keys from the layer's lists (T-L58); a freeze rule without its pair blocks the freeze commit, each pair with its owner and milestone (parent D64); E1.S2a's gate record fields named (T-L59). **The owner's decision of the re-review (2026-11-03, `ask_consultants` `40498063`):** E1.S4's Node set takes `typebox` 1.1.x with `@fastify/type-provider-typebox` 6.3.0, and `@sinclair/typebox` is dropped. *Before the findings:* **Revised 2026-11-03 for the parent's epoch-7 re-review** (the parent stopped at change 6.2, found by CP1's F14; parent D60–D64), text only: E1.S9 gets the fifth section class `daemon-web` for FORMAT's sections 4 and 5, B's check on A's frozen classification with a relabel-and-edit refused, a protected-section deletion refused and a `daemon-web` edit permitted (T-L56), the grammar pinned per task (T-L57), CP1's F5–F7 and `F-PROCS` written before its gate and F1–F4 required before it (T-L58); E1.S2a owns CP2's conditions (1)–(3) (T-L59), E1.S8b condition (4), part ii-b CP2's F5; §3 gains the rule that every freeze is shown on real files (parent D64), read at CP4; change 6.1 (Node's medium-buffers at 256 MiB recorded, never asserted) is carried into §1, E1.S8b's probe text and §11. Done before the stop: E1.S8b merged (#153), CP2 recorded (#155), CP1 recorded (the stop commit). The parent is **stopped** until its epoch-7 re-review closes; nothing here starts before epoch 7 opens. Still twelve stories, still one cornerstone; no ledger here. *Before this revision:* **plan only, nothing implemented yet, 2026-10-31; rewritten for the parent's epoch 4.** Epic E1 of
+> Status: **2026-11-05: the parent is stopped for re-review (changes 7.1 and 7.2); no new code on any story until its epoch 8 opens. Revised for that re-review, text only:** three stories join, all before the first D40 gate — **E1.S3b** (the submission contract, parent D65), **E1.S4b** (the `Mvc.Testing` supersede and the matrix, change 7.1) and **E1.S8c** (the runner's comments and the case record's fields, OP-3, parent D67 (4)); E1.S3's build line and frozen list are cited from D65, never restated; E1.S2a builds through the shared module, and its record holds `buildContract`; each group's workspace commit is named (D67 (3), T-L67); E1.S7 gets the `strict` jobs and the precedence sentence (D66) and the root `.gitignore`; the merge condition is D68's (§3). *Before this:* **Epoch 7 of the parent open 2026-11-04 (re-review closed; D60–D64): E1.S9 and E1.S4 resume.** **The judge's findings J1–J6 of the epoch-7 re-review applied, 2026-11-03 (parent `afc21c2c`, D60, D62, D64), text only:** E1.S9 classes FORMAT per `###` subsection where a `##` section mixes kinds (2.4, 2.5, 3.3, 6.2, 6.3 `daemon-web`; 2.3, 2.6, 3.2, 6.1 `olympiad`) and its check treats the changelog, the preamble and the heading numbers as the parent's D60 says (T-L56's cases named); F-ENV says exactly what the layer refuses, and E1.S8's conformance check refuses the same `env` keys from the layer's lists (T-L58); a freeze rule without its pair blocks the freeze commit, each pair with its owner and milestone (parent D64); E1.S2a's gate record fields named (T-L59). **The owner's decision of the re-review (2026-11-03, `ask_consultants` `40498063`):** E1.S4's Node set takes `typebox` 1.1.x with `@fastify/type-provider-typebox` 6.3.0, and `@sinclair/typebox` is dropped. *Before the findings:* **Revised 2026-11-03 for the parent's epoch-7 re-review** (the parent stopped at change 6.2, found by CP1's F14; parent D60–D64), text only: E1.S9 gets the fifth section class `daemon-web` for FORMAT's sections 4 and 5, B's check on A's frozen classification with a relabel-and-edit refused, a protected-section deletion refused and a `daemon-web` edit permitted (T-L56), the grammar pinned per task (T-L57), CP1's F5–F7 and `F-PROCS` written before its gate and F1–F4 required before it (T-L58); E1.S2a owns CP2's conditions (1)–(3) (T-L59), E1.S8b condition (4), part ii-b CP2's F5; §3 gains the rule that every freeze is shown on real files (parent D64), read at CP4; change 6.1 (Node's medium-buffers at 256 MiB recorded, never asserted) is carried into §1, E1.S8b's probe text and §11. Done before the stop: E1.S8b merged (#153), CP2 recorded (#155), CP1 recorded (the stop commit). The parent is **stopped** until its epoch-7 re-review closes; nothing here starts before epoch 7 opens. Still twelve stories, still one cornerstone; no ledger here. *Before this revision:* **plan only, nothing implemented yet, 2026-10-31; rewritten for the parent's epoch 4.** Epic E1 of
 > [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (§14 step 1), written when the epic started — a stories document is
 > not a plan change (`common.plan-change-control`) and keeps no ledger: its changes are entries in the parent. Its first
 > version (`51a80ba`) found the two changes that stopped epoch 3 (3.1 and 3.2); the epoch-4 re-review judged it `fits` and
@@ -126,7 +126,9 @@ code comment.** The test-design aid lives at `~/rsd/lang-v2/test-design/PLAN-tra
   rule without its pair blocks the freeze commit; the parent's D64 names each rule's pair, owner and milestone — the spec
   freeze (T-L20; E1.S1/E1.S3, E3.S1; CP4), the tags (T-L39, T-L48; E1.S2, E3.S1; CP4-B), the runner manifests (T-L38; part ii-b;
   before B's first D40 gate), the layer identity (T-L36; E1.S2a, E2.S3; CP4), the memory policy (D55; E1.S8b; CP4), FORMAT's
-  classes (T-L56; E1.S9; before S9's gate, CP4, CP4-B).
+  classes (T-L56; E1.S9; before S9's gate, CP4, CP4-B). *(2026-11-05, parent D64's dated reading:)* at CP4, T-L20 is its guard half (E1.S2's `specBlobMatches`), and T-L36 its gate half; T-L20's launch half blocks A's pre-registration tag, T-L36's limits half blocks E2-A's first registration; the build contract's pair is T-L60 (E1.S3b).
+- **A contract stands in a decision, and a brief cites it (parent D67; 2026-11-05).** A value that an agent or a later story reads — a build flag, a frozen list, a file an agent may edit, a record's field — stands in a parent decision or a story's acceptance. A brief's "decisions" section is read by the judge, who classes each item as contract or not; in doubt it is a change, and it is entered in the parent. Before a freeze, every consumer of the frozen bytes is named, and it is built, or the part it reads is shown end to end (T-L66).
+- **The merge condition (parent D68; 2026-11-05).** Checks present and passing for the head sha; the completion run with every test passed. A failure of a test on S5's list of `todo/PLAN_bench_test_leftovers_followups.md` does not block when the pull request names the test and the load above the online CPU count minus one and shows the test and its file passing in the re-run. Anything else blocks, and a D40 gate keeps the gate lock's own rule below.
 - **Roles (`common.subagent-models`).** Scenarios and briefs here are Opus's; code and tests by a Sonnet coder; review by Opus;
   fixes by Sonnet. The task specs, the samples and FORMAT v2 are the team lead's (Opus, main session, D21); E1.S2's story
   brief is Fable's — two kinds of "spec" (OP-10, now D21's text): Fable writes the story's per-task spec briefs, the team lead
@@ -319,6 +321,9 @@ per push:
 | E1.S5 | Toolchains pinned read-only with checksums (TypeScript 6.0.x); the preflight | S (~300) | — ; branches from S8a part i's scaffold commit | coder sonnet |
 | E1.S4 | **(2026-11-04: merged, #159, `796e7c3a`.)** **Built on branch `feat/lang-v2-e1-s4` (2026-11-04); both snapshots registered in `inputs/cache-snapshots-lang.json`: C# `452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee` (60 packages, manifest `2e897fc5db4d…`), Node `bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6` (164 packages, manifest `a21813acac90…`). The TypeScript web set is `@fastify/type-provider-typebox` 6.3.0 with `typebox` 1.1.39 (the owner's decision; no `@sinclair/typebox`). Shipped differently from the plan: the staging sweep NAMES a stranded snapshot folder with the manual step and never removes one (the record path is per checkout, the caches folder is global); the tag reader takes `--tags-remote` (a GitHub SSH origin is read over https); the recipe restores three seed projects (daemon, web, test) built with `TreatWarningsAsErrors`; every offered package carries a `licence` and `maintenance`; supersede and prune run under the D40 gate lock this story built. Detail: `research/module_lang_bench.md`.** Package sets and the two cache snapshots; `PACKAGES.md` from the manifest | M (~350) | S5 | coder sonnet |
 | E1.S3 | The workspaces: templates (phase A), the ten task pairs after the freeze (phase B) | M (~600) | S4, S5, S8a, S8b; phase B: S2 frozen, S6 | coder sonnet |
+| E1.S3b | **(Added 2026-11-05, parent D65.)** The submission contract: `lib/submission.mjs`, the deviations, `ignore-scripts`, the build contract's identity, the CI seed dry run, the end-to-end dry run | M (~400 + tests) | S3 phase A merged | coder sonnet · brief opus |
+| E1.S4b | **(Added 2026-11-05, change 7.1, parent D65.)** `Microsoft.AspNetCore.Mvc.Testing`, the C# snapshot superseded; every offered package built in each applicable template; the test-host example | S (~200 + tests) | S3 phase A merged | coder sonnet · brief opus |
+| E1.S8c | **(Added 2026-11-05, OP-3, parent D67 (4).)** The runner's plan ids and stack names out of its comments; the per-case CPU and the RSS curve given a source; re-pinned, the probe re-run, CP2 addended | S (~100 + tests) | S3 phase A merged | coder sonnet · brief opus |
 | E1.S6 | The visible samples, per task, before the spec's conformance gate | M (10 tasks) | S9, S8 | author: team lead (opus) |
 | E1.S2 | **The ten task specs, gated and frozen** | L (10 specs) | S9 gated, S8, per task S6, S2a and the D40 gate | **`model: fable`** (story brief) · spec text: team lead (opus) · review opus |
 | E1.S2a | Draft references outside git; the pre-freeze tool on the execution layer | L (20 programs outside git; ~350-line tool) | S3 phase A, S4, S5, S6, S8b, the spec draft per task | coders sonnet (one launch per program) · briefs: team lead (opus) |
@@ -354,9 +359,10 @@ staged series and kept for their history.
 | E1.S8b | **merged** (#153, `ae144e1f`, 2026-11-03): 12 coai code rounds `proceed`, the Opus checks of fix batches 9 and 10 SAFE TO MERGE, 1389 of 1389 `spikes/lang-bench` tests plain and with `BENCH_REQUIRE_SANDBOX=1`, the final record `inputs/exec-probe-2026-11-03-3.json` (exit 0); **CP2 recorded 2026-11-03 — passes with conditions ([`inputs/checkpoints.md`](../spikes/lang-bench/inputs/checkpoints.md)): S3 phase A may start; the D40 gates wait for its conditions 1–4 (the gate harness passes `data: true` and the stack and records the identity, the policy and the stack; the runner manifest is checked before the first gate; an exit 3 is re-run, a `fork` flag never fails a case; the leftovers follow-up S1 stays outside the layer identity)**. A leftover found after the merge — the probe's sentinel folder under the home is not always removed — is fixed in [PLAN_bench_test_leftovers_followups.md](PLAN_bench_test_leftovers_followups.md) S1, with no E1 story changed. *Before the merge:* **whole**, the netns holder included; CP2; the memory view asserted (T-L43). **Built on `feat/lang-v2-e1-s8b` (pushed; the layer, the delegated scope, the overlay view, fix batch 1, the probe and the OP-K experiment); fixed forward 2026-11-02 to the policy at 90 % for both stacks (parent D55), re-pinned, the probe re-run and recorded as a new dated file (parent D59); CP2 after it** | — (the same identity) | — |
 | E1.S9, E1.S8 | **(2026-11-04: E1.S9 done — FORMAT v2 gated and on the task repository's `main` (PR #2, `40e678fe`, sha256 `d293bafc…`, the record `inputs/specs.d/format.json`, the gate `inputs/gates/FORMAT-v2.md`: two document rounds `proceed`, one consultant reading, every finding applied); its tools merged (#160). E1.S8, the conformance check, is next.)** FORMAT v2 with its sections classed, gated; the conformance check **(2026-11-04: S9's bench part built on `feat/lang-v2-e1-s9` — `tools/grammar-extract.mjs`, `tools/format-classes.mjs` (T-L56), `test/format-bounds.test.mjs` (T-L58), `inputs/specs.d/format.json` (A = FORMAT v2 at task-repository `0a95d31`, `gate: null`), `inputs/FORMAT-MAINTENANCE.md`; coai plan round PROCEED in round 2, code rounds PROCEED twice; an Opus review found five ways a B FORMAT could change protected text and pass, all closed and kept as tests. Shipped differently from the plan: shared `lib/format-*.mjs` modules; the output linked into place with `link()` (never overwritten) instead of a rename; the reader refuses every line it and CommonMark could read differently (fence openers, HTML blocks, ATX and setext forms, headings or fences in quotes or after list markers); 2.1's rows are only the table block, one row per F-id, in A's order, and a free or added row may not name `all` or `olympiad`; an unprotected section that becomes mixed gets only an empty lead; the header rows stay at A's lines with strict value patterns; no `.gitattributes` rule — a CR is a format error instead. FORMAT's own document gate is next.)** *(2026-11-03: five classes, sections 4 and 5 `daemon-web`; CP1's F1–F7 and `F-PROCS` before the gate; T-L56, T-L57's extractor half and T-L58 green — parent D60–D63)* | a `daemon` or `web` section amended only before B's freeze; olympiad specs conform under both shas (T-L39) *(2026-11-03: a `daemon`, `web` or `daemon-web` section, checked against A's frozen classification (T-L56); A's four keep A's `GRAMMAR.md` (T-L57))* | — |
 | E1.S4 | the full sets of both stacks, web packages included | — | — |
-| E1.S3 | phase A; phase B for the four | phase B for the six | — |
+| E1.S3 | phase A; phase B for the four, whose commit is A's workspace commit | phase B for the six, B's workspace commit | — |
+| E1.S3b, E1.S4b, E1.S8c | all three, before the first D40 gate; T-L66's olympiad half at CP4 | T-L66's daemon and web half at CP4-B | — |
 | E1.S6, E1.S2, E1.S2a | 01, 02, 03, 09; freeze A | the six; A's four re-gated on B's identities (D50); freeze B | — |
-| E1.S7 | **the tag ruleset and `main`'s protection only**, read back before A's freeze | — | everything else: templates, CI, `run-main`, the deploy key's road, the PAT, the conventions snapshot, the bound run base (D52) |
+| E1.S7 | **the tag ruleset and `main`'s protection only**, read back before A's freeze | — | everything else: templates, CI, the `strict` jobs and the precedence sentence (D66), the root `.gitignore`, `run-main`, the deploy key's road, the PAT, the conventions snapshot, the bound run base (D52), cut from B's workspace commit |
 
 **Waves per group (2026-11-01).**
 
@@ -367,6 +373,7 @@ staged series and kept for their history.
   the team lead decides OP-K on it before E2-A calibrates (§9). *(2026-11-02: OP-K is closed by parent D55; CP2 runs after the fix
   forward of parent D59 on the re-pinned identities, and reads T-L43's revised record and T-L50 with the consult's items; T-L52 is group B's (part ii-b) and T-L49 is E2.S3's — neither gates CP2 (judge J1).)*
 - **W-A3:** S8 ∥ S3 phase A (after CP2).
+- **W-A3b (2026-11-05, parent §14 A1's dated order):** S8 and S3 phase A merged after the judge sorted them; then, in any order, each with its own review: **FORMAT's amendment** (parent D65: F-OFFLINE, the tag form, MiB, and Q-I's row if taken; one document gate) ∥ **S3b** ∥ **S4b** ∥ **S8c**; `build-contract.json` is computed last. Nothing of W-A4 starts before all four are merged.
 - **W-A4, per task, 01 first, then 02, 03 and 09:** S6 → S2 draft and conformance → S2a → **the D40 gate on S8b's layer,
   behind the gate lock** (§3) → S2's document gate, consultant and bias review → gated. **CP3** after task 01 has run this
   chain end to end, before 02, 03 and 09.
@@ -399,7 +406,7 @@ and T-L38/T-L39). Each is recorded in `inputs/checkpoints.md` before what it blo
 CP4-B also read each freeze rule's permitted and refused pair (§3); a rule without its pair blocks the freeze commit. *(2026-11-03,
 parent D62, D63:)* CP1's conditions (1)–(3) are E1.S9's before its gate round (F1–F5 and F7 in the text, F6 decided, F14 decided as
 `daemon-web`); F8 and F9 before A's freeze (CP4 reads them); F10–F13 in part ii-b or E1.S8. CP2's conditions (1)–(3) are E1.S2a's
-and (4) E1.S8b's, before the first D40 gate; CP2's F5 is part ii-b's, before B's first D40 gate.
+and (4) E1.S8b's, before the first D40 gate; CP2's F5 is part ii-b's, before B's first D40 gate. *(2026-11-05, parent D65, D67:)* **CP2 gets an addendum**, E1.S8c's, before the first D40 gate: CP2 read runner 0.2.4, manifest `df118665…`, so the addendum names the new manifest, the `ast` proof for its comment changes, the new fields, and the probe's new dated record. **CP4 and CP4-B also read T-L66** (its olympiad half; its daemon and web half) and T-L60, and CP4 reads that §6.2's rows for group A are closed.
 
 ---
 
@@ -1063,6 +1070,22 @@ epoch 6 opens, on this branch before its merge:
 
 ---
 
+## E1.S8c — the runner's comments and the case record's fields (added 2026-11-05)
+
+**Model:** scenarios + brief Opus · code Sonnet · review Opus. **Parent:** OP-3 of E1.S3's brief (it blocks A's freeze), D67 (4), T-L64. **Before the first D40 gate**, so a re-pin re-dates nothing: no D40 gate or calibration has run on any identity.
+
+**Goal.** No plan id and no stack name stands in a file an agent reads; every field parent §4.3 records per case has a source before the runner's bytes are frozen in a workspace.
+
+**Part 1, text.** The 12 plan ids in seven files (`run_samples.py` 1, 13, 22; `rs_exec.py` 4, 156; `rs_layer.py` 1; `rs_abort.py` 1, 55; `rs_cgroup.py` 6; `rs_report.py` 162, 179; `rs_track.py` 1; read at 0.2.4) and the stack names in `rs_abort.py`'s comments go. **The detection strings stay** (`Out of memory.`, `System.OutOfMemoryException`, `JavaScript heap out of memory`): they are behaviour, and the push check takes them as exact approved entries (parent D52 (3)). The proof that nothing else moved: `ast` of every module with docstrings removed is equal to the old one but for the version constant (some ids stand in docstrings, which `ast` holds). E1.S3's scan then covers `runner/*.py`, where it left them out.
+
+**Part 2, fields.** The case record gains `cpuMs`, read from `prog/cpu.stat` beside `memory.peak`. The RSS curve (100 ms olympiad, 1 s daemon and web; descriptive, parent D14) gets its source: a host-side sampler over `prog/cgroup.procs` outside both identities if the layer gives that path while the program runs; otherwise the layer changes, is re-pinned, and CP2's addendum says so. The story's plan round decides, and whichever it is, E3.S3's `lib/rss-sampler.mjs` reads it. A field that cannot be taken says `not captured` with its reason, never zero.
+
+**The identities.** The runner's version moves past 0.2.4 and its manifest changes: `pin-runner.mjs` writes `inputs/specs.d/runner.json` and `inputs/runner-versions.json`, `specs-record.mjs` assembles `inputs/specs.json`, and `build-workspaces.mjs`'s pin check follows. **The probe is re-run** as a new dated `inputs/exec-probe-<date>.json` (T-L53), because each record names the runner's manifest (`exec-probe-2026-11-03-3.json`: `df118665…`). **CP2 is addended** in `inputs/checkpoints.md`: both manifests, the `ast` proof, the fields, the record. The layer's identity moves only if part 2 needs it, and then `pin-exec-layer.mjs` and condition (4) of CP2 apply.
+
+**Acceptance.** T-L64; T-L38's module set still names `rs_abort.py`; `pin-runner.mjs --check`, `specs-record.mjs --check` and, if the layer did not move, `pin-exec-layer.mjs --check` exit 0; the whole set green under D68.
+
+---
+
 ## E1.S9 — `FORMAT.md` v2, checked against the runner, gated before any spec gate
 
 **Model:** the document by the team lead (Opus, main session); the grammar extractor and its test by Sonnet; the gate by coai's
@@ -1181,6 +1204,8 @@ of F-MEMORY, so a runtime's own stop below the bound is `memory limit` there too
 above:** F5 (F-STDERR, 4.6), F6 (`Format version: 2`), F7 (F-ENV, 4.2), and CP2's F6 (`F-PROCS`). **Before A's freeze:** F8 (the
 runner's bounds and structure rules stated in 4.6 and 4.4) and F9 (the two grammar examples in 4.1 and 5.6 reframed so they do
 not use a real protocol's framing that a group B task uses). **In part ii-b or E1.S8:** F10–F13.
+
+**One amendment before the first D40 gate (2026-11-05, parent D65; author: the team lead).** F-OFFLINE says what is scored; 1.2's `Freeze tag` value is `spec-frozen-<group>-<yyyymmdd>` (parent D45); F-LIMITS-O and F-LIMITS-D say `256 MiB` (parent D57); and 1.2's `Freeze rule` row changes if the team lead takes the parent's Q-I, as the parent recommends. One document gate, each item with a changelog line, `Format version: 2` kept. `inputs/specs.d/format.json` moves to the new sha and grammar hash, `inputs/gates/FORMAT-v2.md` appends the round, T-L56's real-FORMAT cases and T-L58 re-run. E1.S8's checks read the sentences from FORMAT and follow; spec 01 re-conforms in its own chain. These parts are `common` and `olympiad`, so after A's freeze they cannot change: this is the last moment.
 
 ---
 
@@ -1317,6 +1342,20 @@ are pinned for the series.
 
 ---
 
+## E1.S4b — the `Mvc.Testing` supersede and the matrix (added 2026-11-05)
+
+**Model:** scenarios + brief Opus · code Sonnet · review Opus. **Parent:** change 7.1, D65, §4.6, T-L63. **Before the first D40 gate;** the snapshot's hash is in the build contract's identity, so a gate record cannot outlive it.
+
+**Goal.** The offered set holds what was promised (a C# in-memory test host, as Fastify's `inject()` gives Node), and it is shown to work in every kind an agent can add it to.
+
+**Files.** `inputs/cache-recipe-lang.json` (`Microsoft.AspNetCore.Mvc.Testing` with `licence` and `maintenance`), `inputs/cache-snapshots-lang.json` (the C# row superseded; Node's stays), new `inputs/package-matrix.json` (per package, per template: `works`, or `unsupported` with the code), `lib/packages-md.mjs` (the sentence on unsupported combinations, derived from the matrix; `PACKAGES.md` stays byte-equal across a stack's kinds), `test/package-matrix.test.mjs`, `research/module_lang_bench.md`.
+
+**Scenarios.** *Given* each offered package and each applicable template, *when* it is added and `bash build.sh` runs in the build box with no registry, *then* the record has its row. *Given* `Microsoft.AspNetCore.Authentication.JwtBearer` in the olympiad kind (measured on `feat/lang-v2-e1-s3`: `NU1603`, through `Microsoft.Extensions.Logging.Abstractions` 8.0.0 whose dependency is in the cache only at 10.0.14), *then* the recipe is changed so that it works, or `PACKAGES.md` says it is for the web kind. *Given* the web kind in C#, *then* a `tests/Tests.csproj` with `WebApplicationFactory` passes under `dotnet test --project tests/Tests.csproj` offline, and `build.sh` still ignores `tests/`. **The Node peer, recorded:** `inject()` needs no package; a `node --test` example passes in the web kind with no added package. **Failure case:** a typed sentence in `PACKAGES.md` that the matrix does not hold fails the test.
+
+**Acceptance.** T-L63, T-L13; the template versions are looked up in the new manifest; the old snapshot pruned with `--prune-superseded` under the gate lock; the snapshot of the Node stack unchanged. Real builds keep `-m:4`.
+
+---
+
 ## E1.S3 — the workspaces
 
 **Model:** scenarios + brief Opus · code Sonnet · review Opus.
@@ -1329,13 +1368,13 @@ statements, which need a frozen spec) after.
 **Files.** Bench: `spikes/lang-bench/templates/{csharp,node}/{olympiad,daemon,web}/**` (one source: `build.sh`, `run.sh`, the pin
 files, the `.csproj` skeleton, `nuget.config` with the offline source only, `Directory.Build.props`, `package.json`,
 `package-lock.json`, `tsconfig.json` — `strict`, `noEmit`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `module nodenext` —
-`.npmrc` `offline=true`, `eslint.config.mjs`), `build-workspaces.mjs`, `lib/statement.mjs`, `lib/task-repo.mjs` (fetch at a sha
+`.npmrc` `offline=true` and `update-notifier=false` (and `ignore-scripts=true`, which E1.S3b adds; parent D65), `eslint.config.mjs`), `build-workspaces.mjs`, `lib/statement.mjs`, `lib/task-repo.mjs` (fetch at a sha
 into `~/.cache/lang-v2/<sha>/`, verified against `inputs/hashes-lang.txt`, v1's `fetchInputs` shape), `inputs/hashes-lang.txt`,
 `test/{templates,statement,task-repo,workspace-exec}.test.mjs`, `test/fixtures/hello/**`. Task repository: `runner/` (S8a's
 pinned tree plus `GRAMMAR.md`), `csharp/<NN-slug>/**`, `node/<NN-slug>/**` (phase B).
 
 **Phase B's statement.** `STATEMENT.md` = the frozen spec's text + the stack sentence (C#: *"Use C# 14 on .NET 10 (SDK 10.0.403
-is installed; the project files in this folder are pinned)."*; TypeScript: *"Use TypeScript 6.0 with `strict`, run by Node 26
+is installed)."*, by parent D67 (5), since the agent edits `App.csproj`; TypeScript: *"Use TypeScript 6.0 with `strict`, run by Node 26
 with native type stripping (no build step), with `tsc --noEmit` as the type check."*, with S5's exact patch written into the
 registered sentence) + the framework sentence for a web task, each on its own marked line.
 
@@ -1361,16 +1400,32 @@ task-9 file set; `workspace-diff` clean on ten tasks (phase B).
 
 **Docs.** The task repository's `research/module_tests.md`; bench `research/module_lang_bench.md`.
 
-**Brief (Sonnet coder).** C#: `build.sh` = `dotnet build App.csproj -c Release --nologo` against the offline source of
-`nuget.config`; `run.sh` = `#!/usr/bin/env bash`, `set -euo pipefail`, `cd "$(dirname "$0")"`, `exec dotnet
-bin/Release/net10.0/App.dll`. Node: `build.sh` = `npm ci --offline` and `npx --offline tsc --noEmit -p tsconfig.json`; `run.sh`
-= … `exec node src/main.ts`. Neither script sets D15's variables (the layer does). Generate into a worktree of the task
-repository, never into a checkout someone works in.
+**Brief (Sonnet coder).** The contract is **parent D65's**: the lines of `build.sh` and `run.sh`, the frozen list, what the agent may edit, the `tests/` folder; the failure policy is parent D66's. It is not restated here, so a build flag is plan text in one place. Neither script sets D15's variables (the layer does). `run.sh` begins `#!/usr/bin/env bash`, `set -euo pipefail`, `cd "$(dirname "$0")"`. *(2026-11-05, OP-2 of the story's brief, superseded:)* the builder refuses every destination inside a git worktree, so phase B builds outside every worktree, runs its checks there, and a separate reviewed copy step moves the result into a worktree of the task repository, never into a checkout someone works in.
 
-**Per group (2026-11-01).** Phase A once, in group A; phase B per group — the four pairs after A's freeze, the six after B's.
+**Per group (2026-11-01).** Phase A once, in group A; phase B per group — the four pairs after A's freeze, the six after B's. *(2026-11-05, parent D67 (3):)* phase B's commit is the group's **workspace commit**; the group manifest pins it, D65's restore and the bare harness read at it, and T-L67 keeps it a descendant of the tag with equal spec blobs.
 The workspaces of A's four are not regenerated in B: their files and hashes stay those of A's tag (T-L39). *(2026-11-03, parent
 D61:)* so A's four keep A's `runner/GRAMMAR.md` byte for byte, and B's six carry B's (T-L57); the build of B's workspaces refuses to
 write into A's four.
+
+---
+
+## E1.S3b — the submission contract (added 2026-11-05)
+
+**Model:** scenarios + brief Opus · code Sonnet · review Opus. **Parent:** D65, D64, D67, T-L60, T-L61, T-L62, T-L66, T-L68. **After S3 phase A's merge, before the first D40 gate; `spec-frozen-A-…` waits for its pairs green.**
+
+**Goal.** One module says what is scored and how it is built, shown on the real templates before anything reads it: the gate, the calibration and the scorer build one way.
+
+**Files.** `spikes/lang-bench/lib/submission.mjs` (or the name the brief chooses): `frozenFiles(stack)`; `submittedCopy({ from, to, stack })` (no `bin`, `obj` or `node_modules` at any depth; links are kept as links, as v1's `copyTree`, `verbatimSymlinks`); `restoreFrozen({ copy, workspace })` (`samples/` and `runner/` whole; a frozen path that is a link or a folder is replaced; what it had to change is returned); `buildSubmission(...)` (the build box of `lib/workspace-box.mjs` over the registered snapshot, read-only); `deviations({ tree, workspace, stack })`, a pure function. `spikes/lang-bench/build-contract.mjs` writes `inputs/specs.d/build-contract.json` (one writer, §3; `specs-record.mjs` assembles it) and has `--check`. `lib/workspace-build.mjs`'s `NPMRC_WORKSPACE` and the three `templates/node/*/.npmrc` get `ignore-scripts=true`. `test/{submission,deviations,scripts-stopped,ci-seed-dry-run,contract-dry-run}.test.mjs`. `research/module_lang_bench.md`, `research/module_tests.md`.
+
+**Scenarios: T-L60's pairs, in the build box, on both stacks' real templates.** *Permitted:* `<AllowUnsafeBlocks>` with a program that needs it builds, passes, and shows one deviation; a listed package added builds. *Refused in effect:* a frozen file weakened is restored and the type error fails the build, for `tsconfig.json` and `Directory.Build.props`; `build.sh` as `exit 0` is restored; a frozen file removed or made a link is restored; a package planted in the session's own cache is not found. **Wrong approaches, named for what they would do:** `A_regenerated_project_file_would_fail_a_correct_program_and_that_is_the_point`; `A_refused_project_edit_would_fail_a_correct_program_and_that_is_the_point`; `A_build_on_the_session_cache_would_find_a_planted_package_and_that_is_the_point`.
+
+**T-L61:** a fixture per row of the 21 rows and per Node peer, with its category; no route from the function to `accepted`. **T-L62:** D65's measurement made permanent, the control beside it. **T-L68:** the CI seed dry run. **T-L66:** a synthetic suite (no held-out content) goes through seal, clear, this module, build, `runCases` under a limits file with `data: true` and the runner's JSON, and a helper lists every field of parent §4.3's "Also recorded", D13's `accepted`, T-L3's classes and T-L11's list with its source or its owner; a field with neither fails. The helper is test code: E3.S4 replaces it, and nothing of E3 is built here.
+
+**The frozen list is one list.** The test compares it with F-FROZEN's words, the `build.sh` comment line and `templates/stack-files.json`. **What it does not do:** it refuses nothing and regenerates nothing; `deviations` never touches a verdict.
+
+**Acceptance.** T-L60, T-L61, T-L62, T-L68 green with `BENCH_REQUIRE_SANDBOX=1`, nothing skipped; T-L66's olympiad half recorded in `inputs/checkpoints.md` for CP4; `The_build_contract_identity_changes_with_a_template_a_snapshot_or_the_module`; `node spikes/lang-bench/build-contract.mjs --check` exit 0; the hello builds still pass; the Node locks do not move (they were generated with `--ignore-scripts`).
+
+**Brief.** Reuse `lib/workspace-box.mjs`, `lib/workspace-destination.mjs` and v1's `copyTree` and `excludedDirs`; no copy of any. Functions under 50 lines, complexity at most 4; the module's tests own their folders. Real C# builds keep `-m:4`.
 
 ---
 
@@ -1536,7 +1591,7 @@ and one tool that runs the gate on S8b's layer the same way every time and recor
 **Files.** Private area: `~/rsd/lang-v2/refs/<NN-slug>/{csharp,node}/` (each a full workspace: S3's template plus sources).
 Bench: `spikes/lang-bench/inputs/references.json` (per task and stack `treeSha256`, `state: draft`, `specSha256`, `writtenOn`,
 and per gate run `{ result, on, runnerManifest, execLayer, formatSha256, specSha256 }`), `prefreeze.mjs`, `lib/prefreeze.mjs`,
-`lib/gate-staleness.mjs`, `test/{prefreeze,gate-staleness}.test.mjs`.
+`lib/gate-staleness.mjs`, `test/{prefreeze,gate-staleness}.test.mjs`. *(2026-11-05, parent D65:)* each reference's copy and build go through `lib/submission.mjs` (E1.S3b), not a copy of its own, its `deviations` are in the record (expected none, read by the team lead if any), and the record and `gate-staleness.mjs` hold `buildContract` beside `runnerManifest` and `execLayer`.
 
 **The tool.** `node spikes/lang-bench/prefreeze.mjs --task NN-slug --refs ~/rsd/lang-v2/refs --extra <private dir>` copies each
 reference to an owned pristine folder, runs the runner over the task's `samples/` and over the private scenario pairs given by
@@ -1658,7 +1713,7 @@ job per stack; the visible-sample job not required; `branches: [main, 'run/**']`
 seed E3.S7a's per-run bare repository is made from), `lib/github-lang.mjs` (settings and rulesets as data, applied with
 `gh api` and read back), `lib/conventions-snapshot.mjs` (OP-A (c), below), `p0-lang.mjs`,
 `test/{run-base,github-lang,templates-d42,conventions-snapshot}.test.mjs`. Private area: `~/rsd/lang-v2/conventions/<sha>.git`
-(read-only).
+(read-only). *(2026-11-05, group C; parent D66, D67 (3), OP-6:)* the task repository's root `.gitignore` (`bin/`, `obj/`, `node_modules/`; in no stack folder; the scorer does not read it); the **`strict · csharp`** and **`strict · node`** jobs in `ci.yml`, required, with their exact commands measured here, each from the seed step E1.S3b's dry run recorded (T-L68); the sentence in the generated tree's `.agents/PROJECT.md` that the frozen acceptance build takes precedence and that the stricter rule is met in the strict job (T-L65); `cutRunBase` from B's workspace commit, with every spec blob compared with its tag.
 
 **What the templates must not assume (D42).** No file of the generated tree tells the agent to reach `github.com` directly, names
 another repository or another run, or carries a remote URL; CI runs on the branch the broker mirrors, so a workflow needs no
@@ -1882,7 +1937,8 @@ immutable group manifest (E1.S2, E1.S2a); item 1 — the memory view asserted th
       repository's README, `todo/README.md` and research stubs match its tree.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs .` clean.
 - [ ] *(Added 2026-11-01.)* CP1 … CP4 recorded in `inputs/checkpoints.md`, each before what it blocks (§5).
-- [ ] E1.S8a and E1.S7 each built as two coder briefs with two reviews; the epic still twelve stories.
+- [ ] E1.S8a and E1.S7 each built as two coder briefs with two reviews; the epic still twelve stories. *(2026-11-05: fifteen, with E1.S3b, E1.S4b and E1.S8c; the cornerstone mark is still E1.S2's.)*
+- [ ] *(Added 2026-11-05, parent D65–D68.)* **Group A:** FORMAT's amendment gated before the first D40 gate; E1.S3b's pairs green and `build-contract.json` in the assembled record; E1.S4b's matrix recorded; E1.S8c's new manifest pinned, the probe re-run, CP2 addended; `prefreeze.mjs` built through the module; T-L66's olympiad half read at CP4; A's workspace commit in the manifest (T-L67). **Group B:** T-L66's daemon and web half read at CP4-B; B's workspace commit. **Group C:** the `strict` jobs, the precedence sentence, the root `.gitignore`, the run base from B's workspace commit. Every merge met D68.
 - [ ] `inputs/specs.json` equals the assembly of the four writers' files; no story wrote another's file (§3).
 - [ ] Every D40 gate run held the gate lock and recorded its load; no flagged result stood without its re-run (§3).
 - [ ] Operator steps O1a, O1b, O2 and O3 done on the operator's go and read back (OP-H decided 2026-11-01); the rulesets created
