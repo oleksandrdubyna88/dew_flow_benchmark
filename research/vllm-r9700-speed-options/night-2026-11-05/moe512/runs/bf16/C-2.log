@@ -1,0 +1,29 @@
+2026-11-05 12:17:36,701	WARNING authentication_token_setup.py:85 -- Token authentication is enabled for this Ray cluster. Set RAY_AUTH_MODE=disabled to opt out. For more information, see https://docs.ray.io/en/latest/ray-security/token-auth.html
+2026-11-05 12:17:36,701	INFO authentication_token_setup.py:50 -- Generated new authentication token and saved to /root/.ray/auth_token
+2026-11-05 12:17:38,069	WARNING services.py:2248 -- WARNING: The object store is using /tmp/ray instead of /dev/shm because /dev/shm has only 4294967296 bytes available. This will harm performance! You may be able to free up space by deleting files in /dev/shm. If you are inside a Docker container, you can increase /dev/shm size by passing '--shm-size=10.24gb' to 'docker run' (or add it to the run_options list in a Ray cluster config). Make sure to set this to more than 30% of available RAM.
+2026-11-05 12:17:39,252	INFO worker.py:2033 -- Started a local Ray instance.
+Namespace(model='/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ', tp_size=1, enable_expert_parallel=False, dtype='int4_w4a16', use_deep_gemm=False, save_dir='./', seed=0, batch_size=[1, 16, 128, 256, 384, 512, 640, 768, 896, 1024, 2048], tune=False, trust_remote_code=True, model_prefix=None)
+[36m(pid=394)[0m WARNING 11-05 12:17:42 [rocm.py:134] Using CUDA_VISIBLE_DEVICES on ROCm is deprecated and support will be removed in vLLM v0.26.0. Please use HIP_VISIBLE_DEVICES instead.
+[36m(BenchmarkWorker pid=394)[0m INFO 11-05 12:17:49 [fused_moe.py:1154] Using configuration from /moe/cfgC/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+Batch size: 1, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4, 'SPLIT_K': 1}
+Kernel time: 78.88 us
+Batch size: 16, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4, 'SPLIT_K': 1}
+Kernel time: 519.56 us
+Batch size: 128, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4, 'SPLIT_K': 1}
+Kernel time: 1242.09 us
+Batch size: 256, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4, 'SPLIT_K': 1}
+Kernel time: 1297.76 us
+Batch size: 384, config: {'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 4, 'SPLIT_K': 1}
+Kernel time: 1434.28 us
+Batch size: 512, config: {'BLOCK_SIZE_M': 32, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 4, 'SPLIT_K': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 0}
+Kernel time: 1600.54 us
+Batch size: 640, config: {'BLOCK_SIZE_M': 32, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 4, 'SPLIT_K': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 0}
+Kernel time: 1640.55 us
+Batch size: 768, config: {'BLOCK_SIZE_M': 32, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 4, 'SPLIT_K': 1, 'num_warps': 1, 'num_stages': 2, 'waves_per_eu': 0}
+Kernel time: 1732.56 us
+Batch size: 896, config: {'BLOCK_SIZE_M': 64, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 32, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 2, 'waves_per_eu': 0, 'SPLIT_K': 1}
+Kernel time: 2030.21 us
+Batch size: 1024, config: {'BLOCK_SIZE_M': 64, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 32, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 2, 'waves_per_eu': 0, 'SPLIT_K': 1}
+Kernel time: 2066.46 us
+Batch size: 2048, config: {'BLOCK_SIZE_M': 128, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 32, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 2, 'waves_per_eu': 0, 'SPLIT_K': 1}
+Kernel time: 2977.71 us

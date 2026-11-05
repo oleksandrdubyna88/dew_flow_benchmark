@@ -1,0 +1,62 @@
+baseline 4566
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:12:04 arm A rep 1 load: 12.27 9.01 7.03
+A-1 start=1793880724 end=1793880784 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 6.98 8.20 6.88
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:13:05 arm B rep 1 load: 6.98 8.20 6.88
+B-1 start=1793880785 end=1793880847 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 5.76 7.77 6.82
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:14:08 arm C rep 1 load: 5.76 7.77 6.82
+C-1 start=1793880848 end=1793880902 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 6.44 7.46 6.77
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:15:03 arm A rep 2 load: 6.44 7.46 6.77
+A-2 start=1793880903 end=1793880974 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 11.20 8.65 7.23
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:16:15 arm B rep 2 load: 11.20 8.65 7.23
+B-2 start=1793880975 end=1793881040 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 9.12 8.59 7.31
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:17:21 arm C rep 2 load: 9.12 8.59 7.31
+C-2 start=1793881041 end=1793881093 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 5.24 7.63 7.05
+production: Up 3 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:18:14 arm A rep 3 load: 4.82 7.50 7.01
+A-3 start=1793881094 end=1793881147 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 3.88 6.83 6.81
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:19:08 arm B rep 3 load: 3.88 6.83 6.81
+B-3 start=1793881148 end=1793881203 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 4.27 6.44 6.68
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:20:04 arm C rep 3 load: 4.49 6.45 6.68
+C-3 start=1793881204 end=1793881256 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 4.10 5.97 6.50
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:20:57 arm A rep 4 load: 4.10 5.97 6.50
+A-4 start=1793881257 end=1793881321 rc=0 kernel_times=11 new_prod_log_lines=1 load_after: 12.33 7.87 7.11
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:22:02 arm B rep 4 load: 12.33 7.87 7.11
+B-4 start=1793881322 end=1793881386 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 10.35 8.00 7.19
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:23:08 arm C rep 4 load: 10.35 8.00 7.19
+C-4 start=1793881388 end=1793881464 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 10.83 8.81 7.56
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:24:26 arm A rep 5 load: 10.83 8.81 7.56
+A-5 start=1793881466 end=1793881533 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 6.55 8.10 7.40
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:25:36 arm B rep 5 load: 6.11 7.98 7.37
+B-5 start=1793881536 end=1793881590 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 2.91 6.81 7.00
+production: Up 4 hours   127
+OK: no new disk event (newest 4566)
+=== 2026-11-05 13:26:31 arm C rep 5 load: 2.91 6.81 7.00
+C-5 start=1793881591 end=1793881643 rc=0 kernel_times=11 new_prod_log_lines=0 load_after: 1.57 5.84 6.66
+production: Up 4 hours   127
+ALL DONE 2026-11-05 13:27:24

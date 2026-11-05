@@ -1,0 +1,10 @@
+arm A: raw container log /t/out/log_A.txt: fallback-warning lines = 0, log bytes = 12178
+arm B: raw container log /t/out/log_B.txt: fallback-warning lines = 0, log bytes = 16877
+arm C: raw container log /t/out/log_C.txt: fallback-warning lines = 0, log bytes = 16848
+arm A: status=PASS requests=12
+arm B: status=PASS requests=12
+arm C: status=PASS requests=12
+arm B vs A: 12/12 requests token-identical, 0 differ
+arm C vs A: 12/12 requests token-identical, 0 differ
+arm C vs B: 12/12 requests token-identical, 0 differ
+COMPARE: PASS
