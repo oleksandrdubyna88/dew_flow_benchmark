@@ -9,6 +9,7 @@ import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
+import { nodeFs, excludedDirs } from '../../minigit-bench/lib/score-deps.mjs';
 import { npmOfflineArgv, openBox } from '../lib/cache-offline.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { statOf } from '../lib/exec-layer/proc.mjs';
@@ -197,7 +198,52 @@ test('A_clean_program_builds_twice_and_dotnet_test_between_two_builds_still_work
   }
 });
 
-// The command line forces the policy as global properties; a project file cannot override those. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
+test('Nested_bin_and_obj_folders_are_not_compiled_so_a_build_in_place_and_on_the_clean_copy_agree', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  for (const folder of ['Lib/obj', 'Lib/bin', 'node_modules/pkg']) {
+    mkdirSync(path.join(w, folder), { recursive: true });
+    writeFileSync(path.join(w, folder, 'Extra.cs'), 'this is not a C# file\n');
+  }
+  const inPlace = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(inPlace.code, 0, `the sources in bin, obj and node_modules folders at any depth are not compiled: ${outputOf(inPlace).slice(-1500)}`);
+  const copy = path.join(ownedFolder(t, 'cpy', ensureTestRoot()), 'w');
+  nodeFs.copyTree(w, copy, excludedDirs('csharp'));
+  assert.equal(existsSync(path.join(copy, 'Lib', 'obj')), false, 'the scorer copy leaves them out at any depth');
+  const onCopy = await inBox(copy, 'csharp', ['bash', 'build.sh']);
+  assert.equal(onCopy.code, 0, outputOf(onCopy).slice(-1500));
+});
+
+test('A_second_project_built_first_does_not_break_the_root_build', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
+  mkdirSync(path.join(w, 'Helper'));
+  writeFileSync(path.join(w, 'Helper', 'Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><OutputType>Library</OutputType></PropertyGroup>\n</Project>\n');
+  writeFileSync(path.join(w, 'Helper', 'Helper.cs'), 'namespace Helper;\npublic static class Greeting { public static string Of(string name) => $"hello {name}"; }\n');
+  const helper = await inBox(w, 'csharp', ['dotnet', 'build', 'Helper/Helper.csproj', '-c', 'Release', '-m:4']);
+  assert.equal(helper.code, 0, outputOf(helper).slice(-1500));
+  assert.ok(existsSync(path.join(w, 'Helper', 'obj')), 'the helper left its own obj folder');
+  const root = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(root.code, 0, `no CS0579 from the helper's generated files: ${outputOf(root).slice(-1500)}`);
+});
+
+test('All_three_kinds_build_then_dotnet_test_with_a_project_reference_then_build_again', TIMEOUT, async top => {
+  if (!needs(top, snapshotsMissing())) return;
+  for (const kind of ['olympiad', 'daemon', 'web']) {
+    await top.test(kind, async t => {
+      const w = helloWorkspace(t, { stack: 'csharp', kind });
+      mkdirSync(path.join(w, 'tests'));
+      writeFileSync(path.join(w, 'tests', 'Tests.csproj'), `<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>\n  <ItemGroup><PackageReference Include="xunit.v3" Version="${snapshotRecord().csharp.resolved.XUNIT}" /><ProjectReference Include="../App.csproj" /></ItemGroup>\n</Project>\n`);
+      writeFileSync(path.join(w, 'tests', 'UnitTest1.cs'), 'using Xunit;\npublic class UnitTest1 { [Fact] public void Passes() => Assert.True(true); }\n');
+      for (const step of ['first build', 'dotnet test', 'second build']) {
+        const ran = await inBox(w, 'csharp', step === 'dotnet test' ? ['dotnet', 'test', '--project', 'tests/Tests.csproj'] : ['bash', 'build.sh']);
+        assert.equal(ran.code, 0, `${kind}, ${step}: ${outputOf(ran).slice(-1500)}`);
+      }
+    });
+  }
+});
+
+// The command line forces the policy as global properties, which a plain property in a project file cannot override. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
 // line (`TreatWarningsAsErrors` and `WarningsAsErrors` only) two overrides were stopped and four were not; with `Nullable`, `WarningsNotAsErrors`, `WarningLevel` and `NoWarn` forced as well, all six fail with CS8600.
 // The further rows are pinned below. Not stopped, from App.csproj alone: a local `Nullable`, a target that sets it, a response file, `NoWarn` metadata on a package item, and a source pragma. The rule for E3's scorer is:
 // App.csproj may differ from the template only by `<PackageReference Include Version>` items and nothing else (and a source pragma is symmetric with `@ts-ignore`).
@@ -207,6 +253,8 @@ const OVERRIDES = Object.freeze([
 ]);
 
 const NULL_PROGRAM = 'string s = null;\nConsole.Out.Write(s);\n';
+const RELAX_TARGET = '<Project><Target Name="Relax" BeforeTargets="CoreCompile"><PropertyGroup><Nullable>disable</Nullable></PropertyGroup></Target></Project>\n';
+const LOGIC_CLASS = 'static class Logic { public static string Make() { string s = null; return s; } }\n';
 const editProject = (w, edit) => { const file = path.join(w, 'App.csproj'); writeFileSync(file, edit(read(file))); };
 /** The rows after the six: what the doc table says (`doc`), whether the command line stops it, the kind it is tried in, and what puts it in the workspace. */
 const FURTHER = Object.freeze([
@@ -220,6 +268,11 @@ const FURTHER = Object.freeze([
   { doc: '`Directory.Build.targets` with a static `<Nullable>disable</Nullable>`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'Directory.Build.targets'), '<Project><PropertyGroup><Nullable>disable</Nullable></PropertyGroup></Project>\n'); } },
   { doc: '`Directory.Build.rsp` with `-p:Nullable=disable` and `-p:NoWarn=CS8600`', stopped: true, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'Directory.Build.rsp'), '-p:Nullable=disable\n-p:NoWarn=CS8600\n'); } },
   { doc: '`#pragma warning disable CS8600` at the top of `Program.cs`', stopped: false, kind: 'olympiad', setup: w => withProgram(w, `#pragma warning disable CS8600\n${NULL_PROGRAM}`) },
+  { doc: '`Directory.Build.targets` with a `<Target BeforeTargets="CoreCompile">` setting `Nullable` to `disable`', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'Directory.Build.targets'), RELAX_TARGET); } },
+  { doc: '`App.csproj.user` with the same target', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, 'App.csproj.user'), RELAX_TARGET); } },
+  { doc: '`.editorconfig` with `[*.cs] generated_code = true`', stopped: false, kind: 'olympiad', setup: w => { withProgram(w, NULL_PROGRAM); writeFileSync(path.join(w, '.editorconfig'), 'root = true\n[*.cs]\ngenerated_code = true\n'); } },
+  { doc: 'a file named `Logic.g.cs` holding `string s = null;` in a method', stopped: false, kind: 'olympiad', setup: w => writeFileSync(path.join(w, 'Logic.g.cs'), LOGIC_CLASS) },
+  { doc: 'a `// <auto-generated/>` header at the top of `Logic.cs`, which holds `string s = null;` in a method', stopped: false, kind: 'olympiad', setup: w => writeFileSync(path.join(w, 'Logic.cs'), `// <auto-generated/>\n${LOGIC_CLASS}`) },
 ]);
 
 test('The_command_line_policy_stops_all_six_project_file_overrides_with_the_nullable_error', TIMEOUT, async t => {
