@@ -1,0 +1,10 @@
+baseline 4566
+distinct generated tokens per request: [2, 4, 3, 4, 3, 3, 4, 2, 4, 3, 4, 4]
+acceptance: 201/1701 = 0.1182
+RESULT: PASS
+OK: no new disk event (newest 4566)
+baseline 4566
+distinct generated tokens per request: [2, 4, 3, 4, 3, 3, 4, 2, 4, 3, 4, 4]
+acceptance: 199/1707 = 0.1166
+RESULT: PASS
+OK: no new disk event (newest 4566)

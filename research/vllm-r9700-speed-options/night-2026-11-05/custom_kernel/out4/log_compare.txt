@@ -1,0 +1,20 @@
+arm A: raw container log /t/out4/log_A.txt: fallback-warning lines = 0, log bytes = 12215
+arm B: raw container log /t/out4/log_B.txt: fallback-warning lines = 0, log bytes = 17278
+arm C: raw container log /t/out4/log_C.txt: fallback-warning lines = 0, log bytes = 17257
+arm A: status=PASS requests=12
+arm B: status=PASS requests=12
+arm C: status=PASS requests=12
+arm B vs A: 12/12 requests token-identical, 0 differ
+arm C vs A: 12/12 requests token-identical, 0 differ
+arm B_eager: status=PASS requests=12
+arm B_eager vs A: 10/12 requests token-identical
+arm C_eager: status=PASS requests=12
+arm C_eager vs A: 10/12 requests token-identical
+arm C vs B: 12/12 requests token-identical, 0 differ
+COMPARE: FAIL
+--- acceptance and distinct generated tokens per arm (v2 models)
+arm A: accepted/drafted n/a (no speculation); per-position None; distinct tokens per request min/mean/max = 3/5.6/8 over 12 requests
+arm B: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8 over 12 requests
+arm C: accepted/drafted 10/2259 = 0.0044; per-position [8, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8 over 12 requests
+arm B_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8 over 12 requests
+arm C_eager: accepted/drafted 11/2256 = 0.0049; per-position [9, 1, 1]; distinct tokens per request min/mean/max = 3/5.6/8 over 12 requests
