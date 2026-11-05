@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "rule": "case-insensitive on word boundaries (ASCII letters and digits as word characters), except the words listed in caseSensitive, which match their case because the English word exists; substrings are exact text, case-insensitive. The implementation languages, runtimes, frameworks, build tools and flags of the series: a spec and its samples name none of them. Public, no trap content.",
+  "words": [
+    "C#", ".NET", "dotnet", "TypeScript", "JavaScript", "Node", "Node.js", "nodejs", "V8",
+    "Fastify", "ASP.NET", "Kestrel", "typebox", "xunit", "NuGet", "npm", "pnpm",
+    "tsc", "tsx", "MSBuild", "Roslyn", "CLR"
+  ],
+  "caseSensitive": ["Node"],
+  "substrings": ["DOTNET_", "NODE_OPTIONS", "max-old-space", "--max_old_space_size", "GCHeapHardLimit", "COMPlus_", "node_modules", ".csproj", "package.json", "Program.cs"]
+}

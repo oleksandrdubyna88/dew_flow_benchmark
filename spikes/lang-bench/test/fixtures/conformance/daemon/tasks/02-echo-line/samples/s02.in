@@ -1,0 +1,9 @@
+scenario 2
+default within 2s
+env TZ "Europe/Berlin"
+start ready port within 10s
+connect c1 tcp
+send c1 "ping\n"
+recv c1 until "\n"
+signal TERM
+wait-exit within 5s

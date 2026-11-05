@@ -49,25 +49,36 @@ function recordedReference(file) {
   }
 }
 
-/** `{ exit, lines }` for the command's arguments. */
-export function run(argv) {
-  const { values, error } = parse(argv);
-  if (error !== undefined) return usage(error);
-  const self = values.self !== undefined;
-  if (self ? values.frozen !== undefined || values.candidate !== undefined || values.record !== undefined : values.frozen === undefined || values.candidate === undefined) return usage('give --self <FORMAT>, or --frozen <A> and --candidate <B>');
-  if (self) {
-    const bytes = readBytes(values.self);
-    if (bytes.error !== undefined) return usage(bytes.error);
-    const own = checkSelf(bytes.bytes);
-    if (own.exit !== 0) return own;
-    const grammar = selfGrammar(bytes.bytes);
-    return grammar.exit === 0 ? own : grammar;
-  }
+const selfWithOthers = values => values.frozen !== undefined || values.candidate !== undefined || values.record !== undefined;
+const compareMissing = values => values.frozen === undefined || values.candidate === undefined;
+const badCombination = (values, self) => (self ? selfWithOthers(values) : compareMissing(values));
+
+/** `--self <FORMAT>`: the class table of the document itself, then its restricted grammar. */
+function selfRun(file) {
+  const bytes = readBytes(file);
+  if (bytes.error !== undefined) return usage(bytes.error);
+  const own = checkSelf(bytes.bytes);
+  if (own.exit !== 0) return own;
+  const grammar = selfGrammar(bytes.bytes);
+  return grammar.exit === 0 ? own : grammar;
+}
+
+/** `--frozen <A> --candidate <B>`: the candidate against the frozen file the record names. */
+function compareRun(values) {
   const reference = recordedReference(values.record ?? DEFAULT_RECORD);
   const frozen = readBytes(values.frozen);
   const candidate = readBytes(values.candidate);
   const problem = reference.error ?? frozen.error ?? candidate.error;
   return problem === undefined ? checkFrozenCandidate({ frozen: frozen.bytes, candidate: candidate.bytes, reference: reference.sha }) : usage(problem);
+}
+
+/** `{ exit, lines }` for the command's arguments. */
+export function run(argv) {
+  const { values, error } = parse(argv);
+  if (error !== undefined) return usage(error);
+  const self = values.self !== undefined;
+  if (badCombination(values, self)) return usage('give --self <FORMAT>, or --frozen <A> and --candidate <B>');
+  return self ? selfRun(values.self) : compareRun(values);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

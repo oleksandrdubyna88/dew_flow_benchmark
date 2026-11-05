@@ -22,19 +22,81 @@ const ORDERED_NOT_ONE = 'ordered list item whose number is not 1 directly after 
 
 const shown = text => (text.length > 50 ? `${text.slice(0, 50)}…` : text);
 
-/** How a paragraph line (or the text of a list item) may not start, as a phrase after "that", or null: it must not start a block of any kind, in either reading. */
-export function paragraphStartProblem(text) {
-  const first = text[0];
-  if (first === undefined) return 'is empty';
-  if (first === ' ' || first === '\t') return 'starts with a space or a tab';
-  if (/^[-+*]\t/.test(text)) return 'has a tab after a list marker (a renderer reads a list item here)';
-  if (BLOCK_STARTERS.includes(first)) return `starts with \`${first}\` (a block starter)`;
-  if (text.startsWith('```')) return 'starts with three backticks (a fence has its own form: an opener of three backticks and lower-case letters, a closer of three backticks, both at column 0)';
-  if (first === '*' && (!text.startsWith('**') || text.startsWith('***'))) return 'starts with `*` that is not `**` (a list marker or a thematic break)';
-  if (/^\d{1,9}[.)](?: |\t|$)/.test(text)) return 'starts with an ordered list marker';
-  if (first === '[' && !/^\[[^\]\\]*\](?!:)/.test(text)) return 'starts with `[` and may start a reference definition';
-  return null;
+/** How a paragraph line (or the text of a list item) may not start, as a phrase after "that", or null: it must not start a block of any kind, in either reading (the first rule that holds names it). */
+const START_RULES = Object.freeze([
+  (text, first) => (first === undefined ? 'is empty' : null),
+  (text, first) => (first === ' ' || first === '\t' ? 'starts with a space or a tab' : null),
+  (text, first) => (/^[-+*]\t/.test(text) ? 'has a tab after a list marker (a renderer reads a list item here)' : null),
+  (text, first) => (BLOCK_STARTERS.includes(first) ? `starts with \`${first}\` (a block starter)` : null),
+  (text, first) => (text.startsWith('```') ? 'starts with three backticks (a fence has its own form: an opener of three backticks and lower-case letters, a closer of three backticks, both at column 0)' : null),
+  (text, first) => (first === '*' && (!text.startsWith('**') || text.startsWith('***')) ? 'starts with `*` that is not `**` (a list marker or a thematic break)' : null),
+  (text, first) => (/^\d{1,9}[.)](?: |\t|$)/.test(text) ? 'starts with an ordered list marker' : null),
+  (text, first) => (first === '[' && !/^\[[^\]\\]*\](?!:)/.test(text) ? 'starts with `[` and may start a reference definition' : null),
+]);
+
+export const paragraphStartProblem = text => START_RULES.reduce((found, rule) => found ?? rule(text, text[0]), null);
+
+const refuse = (state, no, line, form) => ({ ...state, refusals: [...state.refusals, { no, form: `${form}: ${shown(line)}` }] });
+const RESET = Object.freeze({ item: null, last: null });
+
+function inFence(state, line, no) {
+  if (state.fenceAt === null) return null;
+  if (line === '```') return { ...state, fenceAt: null };
+  return FENCE_LINE.test(line) ? refuse(state, no, line, 'a fence marker line inside a fenced block that is not its closer (the block is closed by a line of exactly three backticks)') : state;
 }
+
+const blankLine = (state, line) => (line === '' ? { ...state, last: null } : null);
+
+function headingLine(state, line, no) {
+  if (!SECTION_HEADING.test(line) && !SUB_HEADING.test(line)) return null;
+  return { ...(/ #+$/.test(line) ? refuse(state, no, line, 'a heading with a closing sequence of `#`') : state), ...RESET };
+}
+
+const fenceOpener = (state, line, no) => (FENCE_OPEN.test(line) ? { ...state, fenceAt: no, ...RESET } : null);
+
+function tableRow(state, line, no) {
+  if (!TABLE_ROW.test(line)) return null;
+  return { ...(/\|\s*\[[^\]]+\]:/.test(line) ? refuse(state, no, line, 'a table row that holds a reference definition') : state), ...RESET };
+}
+
+const interruptsParagraph = (state, listed, ordered) => ordered && Number(listed[1].slice(0, -2)) !== 1 && (state.last === 'paragraph' || state.last === 'bullet');
+
+/** The state after the refusal a list item earns, if any: an ordered number that is not 1 right after a paragraph line, or text that starts a block. */
+function listRefusal(state, listed, line, no) {
+  if (interruptsParagraph(state, listed, listed[1] !== '- ')) return refuse(state, no, line, `an ${ORDERED_NOT_ONE}`);
+  const problem = paragraphStartProblem(listed[2]);
+  return problem === null ? state : refuse(state, no, line, `a list item whose text ${problem}`);
+}
+
+function listItem(state, line, no) {
+  const listed = LIST_ITEM.exec(line);
+  if (listed === null) return null;
+  const kind = listed[1] === '- ' ? 'bullet' : 'ordered';
+  return { ...listRefusal(state, listed, line, no), item: listed[1].length, kind, last: kind };
+}
+
+const continues = (state, line) => state.item !== null && line.startsWith(' '.repeat(state.item));
+const strayIndent = state => (state.item === null ? 'an indented line, and no list item is open (an indent is only the continuation of a list item)' : `an indented line that is not a continuation of the open list item (a continuation is indented by exactly ${state.item} spaces)`);
+
+function continuationLine(state, line, no) {
+  const problem = paragraphStartProblem(line.slice(state.item));
+  return { ...(problem === null ? state : refuse(state, no, line, `a continuation line whose text ${problem}`)), last: state.kind };
+}
+
+function indentedLine(state, line, no) {
+  if (!line.startsWith(' ')) return null;
+  return continues(state, line) ? continuationLine(state, line, no) : refuse(state, no, line, strayIndent(state));
+}
+
+function paragraphLine(state, line, no) {
+  const problem = paragraphStartProblem(line);
+  return { ...(problem === null ? state : refuse(state, no, line, `a paragraph line that ${problem}`)), item: null, last: 'paragraph' };
+}
+
+/** The line forms in the order they are tried: the first that applies reads the line; a paragraph line applies to any. */
+const LINE_FORMS_IN_ORDER = Object.freeze([inFence, blankLine, headingLine, fenceOpener, tableRow, listItem, indentedLine, paragraphLine]);
+
+const lineStep = firstLine => (state, line, index) => LINE_FORMS_IN_ORDER.reduce((next, form) => next ?? form(state, line, firstLine + index), null);
 
 /**
  * The refusals in the text of one unprotected part: `{ no, form }` per line that is not one of the allowed forms: a blank line; a heading in the exact form (`## k. Title`, `### k.n Title`);
@@ -43,35 +105,7 @@ export function paragraphStartProblem(text) {
  * closer `` ``` `` at column 0, both in the part; no line of the block that is a fence marker line (up to three spaces of indent) but the closer).
  */
 export function partRefusals(text, firstLine) {
-  const step = (state, line, index) => {
-    const no = firstLine + index;
-    const refuse = form => ({ ...state, refusals: [...state.refusals, { no, form: `${form}: ${shown(line)}` }] });
-    if (state.fenceAt !== null) {
-      if (line === '```') return { ...state, fenceAt: null };
-      return FENCE_LINE.test(line) ? refuse('a fence marker line inside a fenced block that is not its closer (the block is closed by a line of exactly three backticks)') : state;
-    }
-    if (line === '') return { ...state, last: null };
-    if (SECTION_HEADING.test(line) || SUB_HEADING.test(line)) return { ...(/ #+$/.test(line) ? refuse('a heading with a closing sequence of `#`') : state), item: null, last: null };
-    if (FENCE_OPEN.test(line)) return { ...state, fenceAt: no, item: null, last: null };
-    if (TABLE_ROW.test(line)) return { ...(/\|\s*\[[^\]]+\]:/.test(line) ? refuse('a table row that holds a reference definition') : state), item: null, last: null };
-    const listed = LIST_ITEM.exec(line);
-    if (listed !== null) {
-      const ordered = listed[1] !== '- ';
-      const interrupts = ordered && Number(listed[1].slice(0, -2)) !== 1 && (state.last === 'paragraph' || state.last === 'bullet');
-      const problem = paragraphStartProblem(listed[2]);
-      const flagged = interrupts ? refuse(`an ${ORDERED_NOT_ONE}`) : refuse(`a list item whose text ${problem}`);
-      const kind = ordered ? 'ordered' : 'bullet';
-      return { ...(interrupts || problem !== null ? flagged : state), item: listed[1].length, kind, last: kind };
-    }
-    if (line.startsWith(' ')) {
-      if (state.item === null || !line.startsWith(' '.repeat(state.item))) return refuse(state.item === null ? 'an indented line, and no list item is open (an indent is only the continuation of a list item)' : `an indented line that is not a continuation of the open list item (a continuation is indented by exactly ${state.item} spaces)`);
-      const problem = paragraphStartProblem(line.slice(state.item));
-      return { ...(problem === null ? state : refuse(`a continuation line whose text ${problem}`)), last: state.kind };
-    }
-    const problem = paragraphStartProblem(line);
-    return { ...(problem === null ? state : refuse(`a paragraph line that ${problem}`)), item: null, last: 'paragraph' };
-  };
-  const end = text.split('\n').reduce((state, line, index) => step(state, line, index), { refusals: [], fenceAt: null, item: null, kind: null, last: null });
+  const end = text.split('\n').reduce(lineStep(firstLine), { refusals: [], fenceAt: null, item: null, kind: null, last: null });
   return end.fenceAt === null ? end.refusals : [...end.refusals, { no: end.fenceAt, form: 'a fenced block that is not closed in its part' }];
 }
 
@@ -98,39 +132,54 @@ function closerOf(text, from, length) {
   return -1;
 }
 
-/** The offsets of every `<` followed by a letter, `/`, `!` or `?` outside a code span and not escaped, in `text` (CommonMark: a span ends at the next run of exactly as many backticks; a run with no closer is text). */
-export function htmlOpenings(text) {
-  function* walk(from) {
-    for (let at = from; at < text.length;) {
-      if (text[at] === '\\' && ESCAPABLE.test(text[at + 1] ?? '')) at += 2;
-      else if (text[at] === '`') {
-        const end = runEnd(text, at);
-        const close = closerOf(text, end, end - at);
-        at = close === -1 ? end : close + (end - at);
-      } else {
-        if (text[at] === '<' && TAG_START.test(text[at + 1] ?? '')) yield at;
-        at += 1;
-      }
-    }
-  }
-  return [...walk(0)];
+const isEscape = (text, at) => text[at] === '\\' && ESCAPABLE.test(text[at + 1] ?? '');
+const opensTag = (text, at) => text[at] === '<' && TAG_START.test(text[at + 1] ?? '');
+
+/** Where the scan goes on after the code span that starts at `at`: past its closer, or past the run of backticks when it has none. */
+function afterSpan(text, at) {
+  const end = runEnd(text, at);
+  const close = closerOf(text, end, end - at);
+  return close === -1 ? end : close + (end - at);
 }
+
+/** One step of the scan at `at`: `{ next, open }` (an escape is skipped, a code span is skipped whole, a `<` before a tag character is an opening). */
+function scanStep(text, at) {
+  if (isEscape(text, at)) return { next: at + 2, open: false };
+  if (text[at] === '`') return { next: afterSpan(text, at), open: false };
+  return { next: at + 1, open: opensTag(text, at) };
+}
+
+function* openingsOf(text) {
+  for (let at = 0; at < text.length;) {
+    const step = scanStep(text, at);
+    if (step.open) yield at;
+    at = step.next;
+  }
+}
+
+/** The offsets of every `<` followed by a letter, `/`, `!` or `?` outside a code span and not escaped, in `text` (CommonMark: a span ends at the next run of exactly as many backticks; a run with no closer is text). */
+export const htmlOpenings = text => [...openingsOf(text)];
 
 /**
  * The unfenced lines grouped as a renderer reads them: `{ lines, row }`. A paragraph (a list item with its continuation lines) is one group; a heading, a list marker line, a quote, a
  * thematic break, a blank line or a gap (a fenced block) ends one. A table extension is not certain to be there, so there are two readings: with `rows` false the lines of a table are
  * text of one paragraph; with `rows` true a line that starts with a pipe, and every line after it up to a blank line or a block start, is a row on its own (GFM reads each row alone).
  */
+const isRowLine = (rows, starts, line, table) => rows && !starts && (TABLE_LINE.test(line.text) || table);
+const adjoins = (last, line) => last.lines.length > 0 && last.lines.at(-1).no === line.no - 1 && !HEADING_LINE.test(last.lines.at(-1).text);
+const joinsGroup = (starts, row, last, line) => !starts && !row && adjoins(last, line);
+const addToGroups = (groups, last, line, row, joins) => (joins ? [...groups.slice(0, -1), { lines: [...last.lines, line], row: false }] : [...groups, { lines: [line], row }]);
+
+const groupStep = rows => ({ groups, table }, line) => {
+  if (line.text.trim() === '') return { groups, table: false };
+  const last = groups.at(-1) ?? { lines: [] };
+  const starts = BLOCK_START.test(line.text);
+  const row = isRowLine(rows, starts, line, table);
+  return { groups: addToGroups(groups, last, line, row, joinsGroup(starts, row, last, line)), table: row };
+};
+
 function inlineGroups(lines, rows) {
-  const step = ({ groups, table }, line) => {
-    const last = groups.at(-1) ?? { lines: [] };
-    const starts = BLOCK_START.test(line.text);
-    const row = rows && !starts && (TABLE_LINE.test(line.text) || table);
-    const joins = !starts && !row && last.lines.length > 0 && last.lines.at(-1).no === line.no - 1 && !HEADING_LINE.test(last.lines.at(-1).text);
-    const next = joins ? [...groups.slice(0, -1), { lines: [...last.lines, line], row: false }] : [...groups, { lines: [line], row }];
-    return line.text.trim() === '' ? { groups, table: false } : { groups: next, table: row };
-  };
-  return lines.reduce(step, { groups: [], table: false }).groups;
+  return lines.reduce(groupStep(rows), { groups: [], table: false }).groups;
 }
 
 /** The cells of a table row, cut at every pipe that no backslash escapes (a backslash escapes the character after it, so `\\|` is a cut: the cut is the safe reading, a span never crosses it). */
@@ -148,21 +197,28 @@ function groupOpenings(group) {
 
 const INLINE_HTML = 'raw inline HTML (a `<` followed by a letter, `/`, `!` or `?` outside a code span and not written `\\<`; a renderer may let it open an element that swallows the text after it)';
 
+const LINE_FORMS = Object.freeze([
+  [line => REFERENCE_DEFINITION.test(line.text), line => `a link reference definition (nothing may act at a distance): ${shown(line.text)}`],
+  [line => TABLE_LINE.test(line.text) && line.text.includes('\\\\|'), line => `a table row that holds \`\\\\|\` (renderers disagree on whether the pair of backslashes escapes the pipe): ${shown(line.text)}`],
+  [line => /^\s*</.test(line.text), line => `a line whose first non-space character is \`<\` (an HTML block start): ${shown(line.text)}`],
+]);
+
+/** The refusals of the whole-file rules that read one line alone: a reference definition, a table row with an escaped pipe pair, a line that starts with `<`. */
+const lineRefusals = kept => kept.flatMap(line => {
+  const form = LINE_FORMS.find(([test]) => test(line));
+  return form === undefined ? [] : [{ no: line.no, form: form[1](line) }];
+});
+
+const openedLines = kept => [...new Set([false, true].flatMap(rows => inlineGroups(kept, rows).flatMap(groupOpenings)))].sort((a, b) => a - b);
+const inlineRefusals = kept => openedLines(kept).map(no => ({ no, form: `${INLINE_HTML}: ${shown(kept.find(line => line.no === no).text)}` }));
+
 /**
  * The refusals of the rules for the whole file, outside fences: no reference definition, no line whose first non-space character is `<` (an HTML block start), no table row that
  * holds `\\|` (fix batch 5) and no raw inline HTML (fix batch 4): `{ no, form }`.
  */
 export function wholeFileRefusals(format) {
   const kept = unfencedLines(format.lines);
-  const lineRules = kept.flatMap(line => {
-    if (REFERENCE_DEFINITION.test(line.text)) return [{ no: line.no, form: `a link reference definition (nothing may act at a distance): ${shown(line.text)}` }];
-    if (TABLE_LINE.test(line.text) && line.text.includes('\\\\|')) return [{ no: line.no, form: `a table row that holds \`\\\\|\` (renderers disagree on whether the pair of backslashes escapes the pipe): ${shown(line.text)}` }];
-    if (/^\s*</.test(line.text)) return [{ no: line.no, form: `a line whose first non-space character is \`<\` (an HTML block start): ${shown(line.text)}` }];
-    return [];
-  });
-  const opened = [...new Set([false, true].flatMap(rows => inlineGroups(kept, rows).flatMap(groupOpenings)))].sort((a, b) => a - b);
-  const inline = opened.map(no => ({ no, form: `${INLINE_HTML}: ${shown(kept.find(line => line.no === no).text)}` }));
-  return [...lineRules, ...inline];
+  return [...lineRefusals(kept), ...inlineRefusals(kept)];
 }
 
 const titleOf = text => text.replace(/^[\d.]+\s*/, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -171,23 +227,38 @@ const CHANGELOG = String(SECTION_COUNT);
 /** The headings of a side inside a part's bytes, from `skip` bytes into the part. */
 const headingsIn = (side, part, skip = 0) => side.format.headings.filter(heading => heading.start >= part.start + skip && heading.start < part.end);
 
+const partOfLine = (side, no) => side.parts.find(part => part.no <= no && no < part.no + side.format.text.slice(part.start, part.end).split('\n').length) ?? side.parts[0];
+
+const protectedTitlesOf = reference => new Set(reference.parts.filter(part => isProtected(part.cls) && part.kind !== 'preamble').flatMap(part => headingsIn(reference, part).map(heading => titleOf(heading.text))));
+
+const isChangelogPart = part => part.number === CHANGELOG && part.kind === 'section';
+const frozenSkip = frozenChangelog => (frozenChangelog === undefined ? 0 : frozenChangelog.end - frozenChangelog.start);
+
+/** The headings of a part of the candidate that count as added: all of an unprotected part, the text appended to the changelog, none of another protected part. */
+function addedHeadings(side, part, frozenChangelog) {
+  if (!isProtected(part.cls)) return headingsIn(side, part);
+  return isChangelogPart(part) ? headingsIn(side, part, frozenSkip(frozenChangelog)) : [];
+}
+
+/** The added headings with the title of a protected heading of the reference (no look-alike of a protected section). */
+function lookAlikes(side, reference) {
+  const known = new Set(unprotectedTitles(reference));
+  const protectedTitles = protectedTitlesOf(reference);
+  const frozenChangelog = reference.parts.find(part => part.kind === 'section' && part.number === CHANGELOG);
+  return side.parts.flatMap(part => addedHeadings(side, part, frozenChangelog).filter(heading => protectedTitles.has(titleOf(heading.text)) && !known.has(titleOf(heading.text)))
+    .map(heading => ({ no: heading.no, part, form: `an added heading with the title of a protected heading (no look-alike of a protected section): ${shown(heading.text)}` })));
+}
+
 /**
  * Every refusal of the restricted grammar for one file (`{ format, parts }`, the parts cut by its own class rows): the whole-file rules, the allowed line forms in each part that is not
  * protected, and an added heading with the title of ANY heading inside a protected part of `reference` (the frozen file: no look-alike of a protected section or subsection), in an
  * unprotected part or in the text appended to the changelog. `{ no, heading, cls, form }`.
  */
 export function grammarRefusals(side, reference = side) {
-  const partOf = no => side.parts.find(part => part.no <= no && no < part.no + side.format.text.slice(part.start, part.end).split('\n').length) ?? side.parts[0];
-  const known = new Set(unprotectedTitles(reference));
-  const protectedTitles = new Set(reference.parts.filter(part => isProtected(part.cls) && part.kind !== 'preamble').flatMap(part => headingsIn(reference, part).map(heading => titleOf(heading.text))));
-  const frozenChangelog = reference.parts.find(part => part.kind === 'section' && part.number === CHANGELOG);
-  const added = part => (isProtected(part.cls) ? (part.number === CHANGELOG && part.kind === 'section' ? headingsIn(side, part, frozenChangelog === undefined ? 0 : frozenChangelog.end - frozenChangelog.start) : []) : headingsIn(side, part));
-  const looks = side.parts.flatMap(part => added(part).filter(heading => protectedTitles.has(titleOf(heading.text)) && !known.has(titleOf(heading.text)))
-    .map(heading => ({ no: heading.no, part, form: `an added heading with the title of a protected heading (no look-alike of a protected section): ${shown(heading.text)}` })));
   const found = [
-    ...wholeFileRefusals(side.format).map(entry => ({ ...entry, part: partOf(entry.no) })),
+    ...wholeFileRefusals(side.format).map(entry => ({ ...entry, part: partOfLine(side, entry.no) })),
     ...side.parts.filter(part => !isProtected(part.cls)).flatMap(part => partRefusals(side.format.text.slice(part.start, part.end), part.no).map(entry => ({ ...entry, part }))),
-    ...looks,
+    ...lookAlikes(side, reference),
   ];
   return found.map(entry => ({ no: entry.no, heading: entry.part.heading, cls: entry.part.cls, form: entry.form }));
 }
