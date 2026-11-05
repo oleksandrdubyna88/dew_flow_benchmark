@@ -16,6 +16,8 @@
 > stories, E3.S0–E3.S5 — **E3.S0 added 2026-10-30 at `23354c6` by Fable as a SECURITY judgement** (the parent's ledger entry 2.1: the owner
 > overturned E1.S10's decision 4 — macOS and FreeBSD run, not refused, each printing what it did not verify; wave 0, it lands first);
 > **M2** — the attended pilot — and **M2's key check** — the owner's, by hand — close the epic.
+>
+> History (2026-11-04): the Definition-of-Done boxes were walked one by one on 2026-11-04, each against the code, the tests and the CI runs it names; `grep -c ' — met, checked 2026-11-0[4]:' research/PLAN_model_arms_E3.md` gives 1, `grep -c ' — not met as written (checked 2026-11-0[4]):' research/PLAN_model_arms_E3.md` gives 2, `grep -c ' — not verified (checked 2026-11-0[4]):' research/PLAN_model_arms_E3.md` gives 0. The 2 open boxes are exactly the not met and the not verified (2 + 0); the build box is among the not met, because the build prints 1 warning, ASPIRE010 from `hosts/AppHost`, there before the module (the parent's D-a).
 
 ## 1. Goal, before any solution
 
@@ -1176,15 +1178,15 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
 - [ ] `RunArmSchemeTests`, `GateStatusFileTests` (and E2's suites) unedited and green after the two extractions.
       *(2026-10-31: green, but NOT unedited — the S2 review and the code gate pinned the new git environment (`GIT_ALLOW_PROTOCOL`, the
       `GIT_CONFIG_*` allowance) in `RunArmSchemeTests` and `StepGitTests`, and `ValidateVerbTests`/`ModelArmsScenarioTests` follow the guard
-      `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)*
-- [ ] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
+      `prep-base` replaced (§8 items 33, 40, 51); there is no class `GateStatusFileTests` — `GateStatusTests` ran unedited.)* — not met as written (checked 2026-11-04): the suites were edited (the note above; §8 items 33, 40, 51), and `GateStatusFileTests` does not exist, `GateStatusTests` does.
+- [x] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
       logged) or its fallback recorded here and in the parent's §11.
-      (Progress: M2 ran 2026-10-31 at `a504cfe`, every verb 0, `objective.json` byte-identical — logged; the key check is still the owner's.)
+      (Progress: M2 ran 2026-10-31 at `a504cfe`, every verb 0, `objective.json` byte-identical — logged; the key check is still the owner's.) — met, checked 2026-11-04: parent §6 step 3 defines M2 as the scratch target with `tests/FakeCli` as `claude`, `init → validate → prep-base → make → run-arm C1 → checks C1`, by hand, logged; every one of those verbs ran, each with its exit, in the log of that section (*Run 2026-10-31 16:55Z at `a504cfe`*) (the steps are the numbered list of the module doc's *M2 — the attended pilot*), and step 8's same bytes held (`cmp`, `objective.json` 891 bytes). E3 §5 (`research/PLAN_model_arms_E3.md:872`) asks for a `PATH` holding a `bin` folder and `FAKE_CLI_HOME` set; the run used `env -i` with exactly those (plus `HOME` and `LANG`), which obeys it. Two things were ADDED to the run, none is missing: the first `--parse-only` compared against nothing (the operator's script looked for the file under the arm's name) and was discarded, and a second full `checks` made the comparison. **M2's key check** is observed with the owner's real key, 2026-11-04 (`4 vendor key(s) loaded` beside the no-key sentence, the two vault fields side by side): the module doc's *M2's key check*, *Ran with the owner's real key, 2026-11-04*; the "still the owner's" in the progress note above is out of date.
 - [x] §8 item 2 answered by the owner (2026-10-30: a fix, not a change), and the stories followed the answer (the proposal).
 - [x] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
       residuals); `research/module_tests.md`'s `prep-base`, `make`, `status`, `checks` rows `covered`, and the E5 rows' ids corrected.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
       *(2026-10-31: `dotnet format --verify-no-changes` clean; the build's one warning is AppHost's ASPIRE010, on `main` before E3; the
-      whole suite on this host fails only the 572 database/service tests `main` fails here (no store reachable) — the PR's CI is the verdict.)*
+      whole suite on this host fails only the 572 database/service tests `main` fails here (no store reachable) — the PR's CI is the verdict.)* — not met as written (checked 2026-11-04): the build prints 1 warning, ASPIRE010 from hosts/AppHost, there before the module (the parent's D-a).
 - [x] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker.
 - [x] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
