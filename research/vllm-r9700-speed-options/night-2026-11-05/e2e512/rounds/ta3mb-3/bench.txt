@@ -1,0 +1,63 @@
+ta3mb-3 c=1 r=1 Output token throughput (tok/s):         122.21    
+ta3mb-3 c=1 r=1 Mean TTFT (ms):                          247.16    
+ta3mb-3 c=1 r=1 Mean TPOT (ms):                          7.71      
+ta3mb-3 c=1 r=2 Output token throughput (tok/s):         118.46    
+ta3mb-3 c=1 r=2 Mean TTFT (ms):                          216.86    
+ta3mb-3 c=1 r=2 Mean TPOT (ms):                          8.03      
+ta3mb-3 c=1 r=3 Output token throughput (tok/s):         124.58    
+ta3mb-3 c=1 r=3 Mean TTFT (ms):                          212.87    
+ta3mb-3 c=1 r=3 Mean TPOT (ms):                          7.63      
+ta3mb-3 c=4 r=1 Output token throughput (tok/s):         296.45    
+ta3mb-3 c=4 r=1 Mean TTFT (ms):                          397.86    
+ta3mb-3 c=4 r=1 Mean TPOT (ms):                          12.01     
+ta3mb-3 c=4 r=2 Output token throughput (tok/s):         326.14    
+ta3mb-3 c=4 r=2 Mean TTFT (ms):                          379.58    
+ta3mb-3 c=4 r=2 Mean TPOT (ms):                          11.19     
+ta3mb-3 c=4 r=3 Output token throughput (tok/s):         322.03    
+ta3mb-3 c=4 r=3 Mean TTFT (ms):                          369.27    
+ta3mb-3 c=4 r=3 Mean TPOT (ms):                          11.39     
+ta3mb-3 prefill512 r=1 Output token throughput (tok/s):         114.98    
+ta3mb-3 prefill512 r=1 Mean TTFT (ms):                          259.56    
+ta3mb-3 prefill512 r=1 Median TTFT (ms):                        264.22    
+ta3mb-3 prefill512 r=2 Output token throughput (tok/s):         103.87    
+ta3mb-3 prefill512 r=2 Mean TTFT (ms):                          242.24    
+ta3mb-3 prefill512 r=2 Median TTFT (ms):                        233.78    
+ta3mb-3 prefill512 r=3 Output token throughput (tok/s):         92.05     
+ta3mb-3 prefill512 r=3 Mean TTFT (ms):                          384.53    
+ta3mb-3 prefill512 r=3 Median TTFT (ms):                        380.97    
+ta3mb-3 prefill640 r=1 Output token throughput (tok/s):         94.78     
+ta3mb-3 prefill640 r=1 Mean TTFT (ms):                          355.34    
+ta3mb-3 prefill640 r=1 Median TTFT (ms):                        336.45    
+ta3mb-3 prefill640 r=2 Output token throughput (tok/s):         107.22    
+ta3mb-3 prefill640 r=2 Mean TTFT (ms):                          194.94    
+ta3mb-3 prefill640 r=2 Median TTFT (ms):                        193.41    
+ta3mb-3 prefill640 r=3 Output token throughput (tok/s):         98.27     
+ta3mb-3 prefill640 r=3 Mean TTFT (ms):                          191.52    
+ta3mb-3 prefill640 r=3 Median TTFT (ms):                        194.42    
+ta3mb-3 prefill768 r=1 Output token throughput (tok/s):         108.82    
+ta3mb-3 prefill768 r=1 Mean TTFT (ms):                          174.30    
+ta3mb-3 prefill768 r=1 Median TTFT (ms):                        177.95    
+ta3mb-3 prefill768 r=2 Output token throughput (tok/s):         83.54     
+ta3mb-3 prefill768 r=2 Mean TTFT (ms):                          170.89    
+ta3mb-3 prefill768 r=2 Median TTFT (ms):                        166.13    
+ta3mb-3 prefill768 r=3 Output token throughput (tok/s):         90.98     
+ta3mb-3 prefill768 r=3 Mean TTFT (ms):                          169.67    
+ta3mb-3 prefill768 r=3 Median TTFT (ms):                        165.77    
+ta3mb-3 prefill8192 r=1 Output token throughput (tok/s):         40.99     
+ta3mb-3 prefill8192 r=1 Mean TTFT (ms):                          1640.52   
+ta3mb-3 prefill8192 r=1 Median TTFT (ms):                        1637.63   
+ta3mb-3 prefill8192 r=2 Output token throughput (tok/s):         40.30     
+ta3mb-3 prefill8192 r=2 Mean TTFT (ms):                          1623.57   
+ta3mb-3 prefill8192 r=2 Median TTFT (ms):                        1624.95   
+ta3mb-3 prefill8192 r=3 Output token throughput (tok/s):         35.32     
+ta3mb-3 prefill8192 r=3 Mean TTFT (ms):                          1639.13   
+ta3mb-3 prefill8192 r=3 Median TTFT (ms):                        1638.38   
+ta3mb-3 prefill32768 r=1 Output token throughput (tok/s):         7.78      
+ta3mb-3 prefill32768 r=1 Mean TTFT (ms):                          12216.87  
+ta3mb-3 prefill32768 r=1 Median TTFT (ms):                        12216.36  
+ta3mb-3 prefill32768 r=2 Output token throughput (tok/s):         7.66      
+ta3mb-3 prefill32768 r=2 Mean TTFT (ms):                          13358.85  
+ta3mb-3 prefill32768 r=2 Median TTFT (ms):                        13392.21  
+ta3mb-3 prefill32768 r=3 Output token throughput (tok/s):         7.55      
+ta3mb-3 prefill32768 r=3 Mean TTFT (ms):                          13370.32  
+ta3mb-3 prefill32768 r=3 Median TTFT (ms):                        13391.25  

@@ -1,0 +1,4 @@
+(EngineCore pid=189) INFO 11-05 13:27:05 [auto_gptq.py:363] Using RDNAHybridW4A16LinearKernel for AutoGPTQLinearMethod
+(EngineCore pid=189) INFO 11-05 13:30:57 [fused_moe.py:1154] Using configuration from /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700,dtype=int4_w4a16.json for MoE layer.
+(EngineCore pid=189) INFO 11-05 13:31:10 [kv_cache_utils.py:2032] GPU KV cache size: 190,909 tokens, Maximum concurrency for 131,072 tokens per request: 1.46x
+(EngineCore pid=189) WARNING 11-05 13:30:59 [fused_moe.py:1167] Using default MoE config. Performance might be sub-optimal! Config file not found at /work/moe/tune/merged/E=256,N=512,device_name=AMD_Radeon_R9700.json, /opt/python/lib/python

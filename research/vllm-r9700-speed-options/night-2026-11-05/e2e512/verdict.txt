@@ -1,0 +1,12 @@
+series /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512: base ta3mb, 3 rounds, fingerprint 91283be2c07a
+invoking: python3 /home/jinx/git/wt/r9700-accept/lib/verdict.py ship --base ta3mb --arm ta3mb512 --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb-1/bench.txt --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb-2/bench.txt --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb-3/bench.txt --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb512-1/bench.txt --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb512-2/bench.txt --bench /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/rounds/ta3mb512-3/bench.txt --prefill-lens 512 640 768 8192 32768 --rounds 3 --gsm8k-dir /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512/quality
+arm ta3mb512 vs ta3mb: 3 rounds, 9 values per concurrency
+  c=1 output tok/s: median 121.99 vs 121.43, delta +0.56, base spread 7.71 -> within, not lower
+  c=4 output tok/s: median 319.74 vs 323.73, delta -3.99, base spread 37.64 -> within, lower
+  prefill512 median TTFT ms: median 175.85 vs 177.89, delta -2.04, base spread 212.85 (information)
+  prefill640 median TTFT ms: median 197.47 vs 198.58, delta -1.11, base spread 143.04 (information)
+  prefill768 median TTFT ms: median 194.02 vs 178.01, delta +16.01, base spread 37.75 (information)
+  prefill8192 median TTFT ms: median 1640.93 vs 1631.89, delta +9.04, base spread 45.17 (information)
+  prefill32768 median TTFT ms: median 13409.94 vs 13182.78, delta +227.16, base spread 1379.72 (information)
+  gsm8k accuracy: 0.8400 vs 0.8450, delta -0.0050, limit 0.0518 -> pass
+verdict ta3mb512: FAIL (no decode median is higher than the base spread)

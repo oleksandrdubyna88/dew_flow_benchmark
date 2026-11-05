@@ -1,0 +1,13 @@
+series: outdir /mnt/c/Users/strug/vllm/tmp/r9700-results/e2e512
+2026-11-05T13:25:11Z coai-exp processes=0 load=3.85 quiet-checks=1/1
+2026-11-05T13:25:11Z QUIET
+2026-11-05T13:25:12Z disk gate: baseline 4566
+2026-11-05T13:25:24Z stopped the operator's server (stop 1 of 3)
+2026-11-05T13:25:24Z admitted
+2026-11-05T13:25:24Z worker started: session 1231611, start ticks 1712666
+2026-11-05T15:43:26Z worker ended rc=0
+restore: starting vllm with C:\Users\strug\vllm\start-vllm.ps1
+vLLM patches active from C:\Users\strug\vllm\patches: auto_gptq.py, gptq_utils.py, moe\ tuned config (see README.md there)
+9bf1049c9b4f83160abf8b1c191b0644bbe994528594121d1486e614372cfa82
+2026-11-05T15:48:27Z restored
+SERIES-EXIT 0 2026-11-05T16:48:27+01:00

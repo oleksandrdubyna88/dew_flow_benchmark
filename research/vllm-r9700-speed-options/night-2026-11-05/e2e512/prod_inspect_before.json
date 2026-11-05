@@ -1,0 +1,179 @@
+[
+  {
+    "Config": {
+      "Cmd": [
+        "vllm",
+        "serve",
+        "/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ",
+        "--served-model-name",
+        "qwen3.6-35b-a3b",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--max-model-len",
+        "131072",
+        "--gpu-memory-utilization",
+        "0.85",
+        "--max-num-seqs",
+        "4",
+        "--limit-mm-per-prompt.image",
+        "0",
+        "--limit-mm-per-prompt.video",
+        "0",
+        "--reasoning-parser",
+        "qwen3",
+        "--default-chat-template-kwargs.reasoning_effort",
+        "medium",
+        "--generation-config",
+        "/genconfig",
+        "--speculative-config.method",
+        "mtp",
+        "--speculative-config.num_speculative_tokens",
+        "3",
+        "--attention-backend",
+        "TRITON_ATTN",
+        "--max-num-batched-tokens",
+        "8192"
+      ],
+      "Entrypoint": null,
+      "Env": [
+        "HIP_VISIBLE_DEVICES=0",
+        "TRITON_CACHE_DIR=/root/.cache/vllm/triton",
+        "VLLM_TUNED_CONFIG_FOLDER=/vllm-tuned-moe",
+        "PYTHONPYCACHEPREFIX=/tmp/pyc-patched",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/bin:/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/lib/llvm/bin:/opt/python/lib/python3.14/site-packages/_rocm_sdk_core/bin:/opt/python/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "PYTORCH_ROCM_ARCH=gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1152;gfx1153;gfx1200;gfx1201",
+        "AITER_ROCM_ARCH=gfx942;gfx950",
+        "MAX_JOBS=64",
+        "HSA_NO_SCRATCH_RECLAIM=1",
+        "DEBIAN_FRONTEND=noninteractive",
+        "UV_PYTHON=/opt/python/bin/python",
+        "UV_HTTP_TIMEOUT=500",
+        "UV_INDEX_STRATEGY=unsafe-best-match",
+        "UV_LINK_MODE=copy",
+        "SCCACHE_BUCKET=",
+        "SCCACHE_REGION=",
+        "SCCACHE_S3_NO_CREDENTIALS=",
+        "SCCACHE_IDLE_TIMEOUT=",
+        "SCCACHE_ENDPOINT=",
+        "SCCACHE_S3_KEY_PREFIX=",
+        "SCCACHE_S3_USE_SSL=",
+        "PIP_EXTRA_INDEX_URL=https://stable.repo.amd.com/rocm/whl-next/",
+        "SITE_PACKAGES=/opt/python/lib/python3.14/site-packages",
+        "ROCM_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel",
+        "ROCM_HOME=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel",
+        "HIP_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel",
+        "HIP_CLANG_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/lib/llvm/bin",
+        "HIP_DEVICE_LIB_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_core/lib/llvm/amdgcn/bitcode",
+        "LD_LIBRARY_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/lib:/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/opt/python/lib/python3.14/site-packages/_rocm_sdk_core/lib:/opt/python/lib/python3.14/site-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+        "PYTHONPATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_core/share/amd_smi:",
+        "CMAKE_PREFIX_PATH=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel/lib/cmake:",
+        "CMAKE_HIP_COMPILER_ROCM_ROOT=/opt/python/lib/python3.14/site-packages/_rocm_sdk_devel",
+        "RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1",
+        "RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES=1",
+        "ROCM_VERSION=10.1.0",
+        "TOKENIZERS_PARALLELISM=false",
+        "SAFETENSORS_FAST_GPU=1",
+        "HIP_FORCE_DEV_KERNARG=1",
+        "KINETO_CONFIG=/app/libkineto.conf"
+      ],
+      "Healthcheck": null,
+      "Image": "rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0",
+      "Labels": {
+        "org.opencontainers.image.version": "24.04"
+      },
+      "StopTimeout": null,
+      "User": "",
+      "WorkingDir": "/app"
+    },
+    "Created": "2026-11-05T08:48:23.57013501Z",
+    "HostConfig": {
+      "Memory": 0,
+      "NanoCpus": 0,
+      "NetworkMode": "bridge",
+      "Ulimits": []
+    },
+    "Id": "35e1a42f4ae49229a00cccceae5499c2de0abdd409142c394e80400859a9435f",
+    "Image": "sha256:2d41964ed4f4c7732197d9ad46f4c2ed59e7f0935fe418398a1c554ec266ae83",
+    "Labels": {
+      "org.opencontainers.image.version": "24.04"
+    },
+    "Mounts": [
+      {
+        "Destination": "/genconfig",
+        "Name": "",
+        "ReadWrite": true,
+        "Source": "C:\\Users\\strug\\vllm\\genconfig",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/quantization/auto_gptq.py",
+        "Name": "",
+        "ReadWrite": false,
+        "Source": "C:\\Users\\strug\\vllm\\patches\\auto_gptq.py",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/quantization/utils/gptq_utils.py",
+        "Name": "",
+        "ReadWrite": false,
+        "Source": "C:\\Users\\strug\\vllm\\patches\\gptq_utils.py",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/vllm-tuned-moe",
+        "Name": "",
+        "ReadWrite": false,
+        "Source": "C:\\Users\\strug\\vllm\\patches\\moe",
+        "Type": "bind"
+      },
+      {
+        "Destination": "/root/.cache/huggingface",
+        "Name": "hf-cache",
+        "ReadWrite": true,
+        "Source": "hf-cache",
+        "Type": "volume"
+      },
+      {
+        "Destination": "/root/.cache/vllm",
+        "Name": "vllm-cache",
+        "ReadWrite": true,
+        "Source": "vllm-cache",
+        "Type": "volume"
+      }
+    ],
+    "Name": "/vllm",
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "Aliases": [],
+          "DriverOpts": {},
+          "Gateway": "172.17.0.1",
+          "IPAMConfig": null,
+          "IPAddress": "172.17.0.2",
+          "IPPrefixLen": 16,
+          "Links": [],
+          "MacAddress": "02:42:ac:11:00:02"
+        }
+      }
+    },
+    "Ports": {
+      "8000/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "8000"
+        }
+      ]
+    },
+    "State": {
+      "ExitCode": 0,
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": null,
+      "Running": true,
+      "StartedAt": "2026-11-05T08:48:24.522986584Z",
+      "Status": "running"
+    }
+  }
+]
