@@ -10,7 +10,7 @@ import { computeIdentity, LAYER_DIR } from '../lib/exec-layer/identity.mjs';
 import { makeReservation, reserveRecord } from '../lib/exec-probe/record-path.mjs';
 import { INCOMPLETE_EXIT, runStop, stopCleanly } from '../lib/exec-probe/stop.mjs';
 import { needs, spikeDir, toolchains } from './support/exec-layer-host.mjs';
-import { idsOf, markerFolder, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
+import { awaitNoPids, idsOf, markerFolder, pidsMentioning, privateProbeEnv } from './support/probe-scope.mjs';
 import { owned } from './support/owned.mjs';
 
 const lines = () => { const said = []; return { said, say: text => said.push(text) }; };
@@ -229,11 +229,13 @@ test('A_stop_after_the_record_whose_owned_folder_close_times_out_or_fails_says_s
 test('The_marker_kill_hook_really_kills_a_hanging_child_before_its_folder_is_removed', async t => {
   const marker = `testsToDelete-u${process.getuid()}-bench-hangingchild-${process.pid}-${Date.now()}`;
   const { markerFile } = markerFolder(t, 'hang');
-  t.after(() => assert.deepEqual(pidsMentioning(marker), [], 'the hook killed the hanging child: it is gone after the hooks')); // registered AFTER the helper: runs after the kill hook
+  t.after(() => awaitNoPids(() => pidsMentioning(marker), { what: 'the hanging child' })); // registered AFTER the helper: runs after the kill hook; waits, with a bound, because SIGKILL returns before the process has left /proc
   const child = spawn('bash', ['-c', `exec -a ${marker} sleep 30`], { stdio: 'ignore', detached: true });
   child.unref();
   writeFileSync(markerFile, marker);
+  // `bash -c 'exec -a MARKER …'` carries MARKER in bash's own argv BEFORE the exec and in the child's AFTER it, but /proc/PID/cmdline reads empty DURING the execve: so wait for argv[0] itself to be the marker (the exec is done), not for any scan to see it once.
+  const execed = () => { try { return readFileSync(`/proc/${child.pid}/cmdline`, 'utf8').startsWith(marker); } catch { return false; } };
   const end = Date.now() + 5000;
-  while (pidsMentioning(marker).length === 0 && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 20));
-  assert.ok(pidsMentioning(marker).length > 0, 'the child hangs while the test body ends');
+  while (!execed() && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(execed() && pidsMentioning(marker).length > 0, 'the child hangs while the test body ends');
 });
