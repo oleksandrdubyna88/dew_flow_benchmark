@@ -18,7 +18,8 @@
 > **Update 2026-11-05 (§ 15):** the ROCM_ATTN runs of § 14.3 decoded on the Triton fallback, not the custom kernel; a
 > tiny-model check of the custom kernel found no difference. The int4 MoE file was tuned and judged with fp16
 > activations, but production serves bf16: there it is 16.4 % slower than the default at M=640, and a proposed `"512"`
-> entry gives −13.5 % to −28.3 % at M 512–768 as a kernel. Nothing was changed in production.
+> entry gives −13.5 % to −28.3 % at M 512–768 as a kernel. Nothing was changed in production. End to end (§ 15.5, 3
+> rounds): no gain measured, every median inside the base's spread, so production's file stays.
 > Follow-up to
 > [RESULTS_vllm_029_r9700_fixes.md](RESULTS_vllm_029_r9700_fixes.md) — read that first for the server, the
 > three fixes and the harness. Raw data, server logs, quality files and scripts:
@@ -67,6 +68,7 @@ server flags.
 |---|---|---|---|
 | 1a + 6, ROCM_ATTN | The same opt-in on the custom kernel `paged_attention_rocm` (the row above ran on the Triton fallback) | **no difference found**, tiny random model, gfx1201 only, acceptance under 0.5 % | fused vs unfused: 12/12 requests and 261–262 of 261–262 draft calls identical (§ 15.2) |
 | 3b | A `"512"` entry in the production int4 MoE file | **kernel gain at M 512–768 with bf16**; no end-to-end test; not applied | bf16: −13.5 % / −28.3 % / −13.6 % at M 512 / 640 / 768; without it the file is +16.4 % against the default at M 640 (§ 15.3) |
+| 3b, end to end | The same entry, series `e2e512`, 3 rounds, with prefill at 512, 640 and 768 tokens | **no gain measured; not applied** | median TTFT −1.1 % / −0.6 % / +9.0 %, all inside the spread; decode equal; GSM8K within the limit; 20 prompts identical (§ 15.5) |
 
 Not tested yet: the combination (`mtp3` + `tattn`, with and without `mnbt8k`); its A/B started on 2026-10-28
 and was paused after the first `base` round (§ 11.2). Nothing was changed in the operator's `start-vllm.ps1`;
@@ -957,3 +959,43 @@ Those statements are kept as written; this section corrects them.
   defaults to `--max-num-batched-tokens 8192`, and the new defaults stay for the 27B model too.
 - **Nothing was changed by this section:** not production's MoE file, not #64045, not the toolkit. These are the
   operator's decisions.
+
+### 15.5 Series `e2e512` — the `"512"` entry end to end, 3 rounds (the same day, after § 15.3)
+
+The operator approved this run and its stop of production. Plan gate `review_plan` proceed (1 of 2 reviewers answered, the
+other rate limited). "§ 15.3: no end-to-end A/B was run" was true when written; it is kept. Data in
+[vllm-r9700-speed-options/night-2026-11-05/e2e512/](vllm-r9700-speed-options/night-2026-11-05/e2e512/).
+
+- **Arms.** `ta3mb` is production's shape and its MoE file (same hash). `ta3mb512` adds `VLLM_TUNED_CONFIG_FOLDER` for the
+  file with the entry (§ 15.3's arm C). Toolkit `bin/r9700 series`, no code change; order A B in each round; 9 values per
+  measure. Each server log names the intended file. Only the prefill lengths were added: 512, 640 and 768 tokens, because at
+  8192 and 32768 the chunks do not use this entry. Each prefill value is the median of 3 prompts.
+- **The rule, written before the run:** the entry passes only if median TTFT at 512, 640 or 768 improves outside the base
+  spread, with no decode, 8k or 32k regression outside it and equal quality.
+
+| Measure | `ta3mb` median (range) | `ta3mb512` median (range) | Change |
+|---|---|---|---|
+| TTFT 512, ms | 177.9 (168.1–381.0) | 175.9 (147.1–453.3) | −1.1 % |
+| TTFT 640, ms | 198.6 (193.4–336.4) | 197.5 (174.3–427.8) | −0.6 % |
+| TTFT 768, ms | 178.0 (165.8–203.5) | 194.0 (178.9–607.3) | +9.0 % |
+| TTFT 8192, ms | 1631.9 (1612.0–1657.1) | 1640.9 (1608.7–1693.7) | +0.6 % |
+| TTFT 32768, ms | 13182.8 (12078.4–13458.1) | 13409.9 (12300.2–13634.5) | +1.7 % |
+| tok/s c=1 | 121.43 (116.9–124.6) | 121.99 (108.7–125.2) | +0.5 % |
+| tok/s c=4 | 323.73 (296.4–334.1) | 319.74 (293.4–326.5) | −1.2 % |
+| TPOT c=1, ms | 7.69 | 7.68 | −0.1 % |
+| TPOT c=4, ms | 11.29 | 11.51 | +1.9 % |
+| GSM8K-200 | 0.8450 | 0.8400 | inside the limit 0.0518 |
+| 20 fixed prompts | | | 20/20 identical |
+
+**No end-to-end gain was measured, and the entry does not pass the rule.** All medians are within the base's spread. The
+toolkit's `verdict` also says FAIL, on its own decode rule (`verdict.txt`); its prefill lines are information only.
+
+- **What this does not show.** It does not show that the entry does nothing. My estimate before the run was 10–26 ms at these
+  lengths (the kernel gain times 40 layers), and single values here reach 381–607 ms against a usual 150–210 ms. A gain of that
+  size cannot be seen in this measurement. The cause of those high values was not looked for, and they are in both arms. The
+  +9.0 % at 768 has no reason in the kernel result, where the entry is faster at that size. It is within the base's spread.
+- **Consequence.** Production's file stays as it is. Any upstream text gives the kernel gain with this limit.
+- **Production.** Stopped 13:25, restored 15:48 UTC, by the toolkit's one stop and one restore. The container's command, mounts
+  and image are the same as before (`prod_inspect_before.json`, `prod_inspect_after.json`), and its log says
+  `max_num_batched_tokens: 8192` and names its MoE file. No lease (§ 15). CPU load was not sampled during the run beyond the
+  quiet check at the start (load 3.85).

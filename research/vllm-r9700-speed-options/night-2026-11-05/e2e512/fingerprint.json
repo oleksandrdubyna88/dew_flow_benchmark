@@ -1,0 +1,110 @@
+{
+ "version": 1,
+ "sha256": "91283be2c07ad33125aa1ee30f59bacaced25f4699fd1ae4de0e97edda68da00",
+ "components": {
+  "model": {
+   "dir": "/root/.cache/huggingface/local/Qwen3.6-35B-A3B-GPTQ",
+   "served_name": "qwen3.6-35b-a3b",
+   "max_model_len": 131072,
+   "max_num_seqs": 4,
+   "gpu_mem_util": "0.85",
+   "extra_serve_args": "--limit-mm-per-prompt.image 0 --limit-mm-per-prompt.video 0",
+   "tuned_config_dir": "/work/moe/tune/merged",
+   "mounts": "C/auto_gptq.py:/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/quantization/auto_gptq.py:ro C/gptq_utils.py:/opt/python/lib/python3.14/site-packages/vllm/model_executor/layers/quantization/utils/gptq_utils.py:ro",
+   "listing": "a6ada1b0e38aa827fd1a3b2655b4c7a8875c810af873dd17492625c9e38a5936"
+  },
+  "genconfig": "7501ce4ca96123b7ca4b03bc2b0729561b3ab005eb7a24cdf6dd8a81e0c15baa",
+  "image": "rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0",
+  "patches": {
+   "C/auto_gptq.py": "420703fd1fcec057f9d763799d22045b685ed4f9e62d56b4b3872f479c03651a",
+   "C/gptq_utils.py": "82d51028fe6616de14147e1edea45bc7ae784263fdc4bdc811498bc7d5019902"
+  },
+  "arms": {
+   "ta3mb": {
+    "args": [
+     "--speculative-config.method",
+     "mtp",
+     "--speculative-config.num_speculative_tokens",
+     "3",
+     "--attention-backend",
+     "TRITON_ATTN",
+     "--max-num-batched-tokens",
+     "8192"
+    ],
+    "env": [],
+    "mounts": []
+   },
+   "ta3mb512": {
+    "args": [
+     "--speculative-config.method",
+     "mtp",
+     "--speculative-config.num_speculative_tokens",
+     "3",
+     "--attention-backend",
+     "TRITON_ATTN",
+     "--max-num-batched-tokens",
+     "8192"
+    ],
+    "env": [
+     "VLLM_TUNED_CONFIG_FOLDER=/work/moe512/cfgC"
+    ],
+    "mounts": []
+   }
+  },
+  "base": "ta3mb",
+  "workload": {
+   "bench": {
+    "input": 1024,
+    "output": 512,
+    "prompts": {
+     "1": 6,
+     "4": 12
+    },
+    "seeds": [
+     1,
+     2,
+     3
+    ]
+   },
+   "prefill": {
+    "lens": [
+     512,
+     640,
+     768,
+     8192,
+     32768
+    ],
+    "output": 128,
+    "prompts": 3,
+    "seeds": [
+     1,
+     2,
+     3
+    ]
+   },
+   "quality": {
+    "prompts": 20,
+    "gsm8k_n": 200
+   }
+  },
+  "rounds": 3,
+  "tools": {
+   "config_sh": "8b2d0d2606e196748b9bd836a19f187fbcdfea52390e718b8053397ca18534bf",
+   "run_guarded_sh": "c88b697e72a7bfdfc76e9f62d75f134de02328da7ba6dd56c1758e66ecee64f4",
+   "adapter_sh": "217a09a85a5b5d2e5577eaf8de9a0f01af94c72a41b22766e9988985a4478510",
+   "serve_sh": "1ecc31e1d5bb4500799c12d29741ecc7c6c789ffaec8edde8e94f833130b8dc4",
+   "wait_ready_sh": "e353cb6780274ab83644a12df094f97a8dd975665600f4cce6cf8c29089e18c0",
+   "bench_sh": "2a6351828129ba7da1f61334ae1fa06a0d3965e26641f43ab0ac53eb3f640b61",
+   "disk_gate_sh": "b3bf851f49eb5d3b854e492a1fc27040a53ac7267e3d55e66316665b7706a2bc",
+   "guard_quiet_sh": "8a85242e2eeb77af911a1154801ae650e81e7519d1d4120a70cfb13d37d6722c",
+   "series_sh": "5cc68fb229f89fdd5ce92d78949aed69e8c123b425a99d4bfca3a9f70fd791da",
+   "fingerprint_py": "37cd5a6b88272a096341bae332aa7cd97da754f489955dadf3f5b9c61b3bdaf1",
+   "verdict_py": "fb61a5c84ab6683448b753889ea2231a3ed761d9b217f4401aa376dffffacfb1",
+   "harness_py": "577e87b1058245c649daa54cca1abc0a119fc8b4fbbfc3c60de51511bd707f41"
+  },
+  "machine": {
+   "container_prefix": "r9700tune-",
+   "gsm8k_data": "/work/gsm8k/test.jsonl"
+  }
+ }
+}

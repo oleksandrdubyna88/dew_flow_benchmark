@@ -1,0 +1,8 @@
+2026-11-05T13:25:11Z coai-exp processes=0 load=3.85 quiet-checks=1/1
+2026-11-05T13:25:11Z QUIET
+2026-11-05T13:25:12Z disk gate: baseline 4566
+2026-11-05T13:25:24Z stopped the operator's server (stop 1 of 3)
+2026-11-05T13:25:24Z admitted
+2026-11-05T13:25:24Z worker started: session 1231611, start ticks 1712666
+2026-11-05T15:43:26Z worker ended rc=0
+2026-11-05T15:48:27Z restored
