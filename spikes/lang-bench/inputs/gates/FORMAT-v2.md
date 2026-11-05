@@ -37,3 +37,20 @@ Items 6 and 7 state what the pinned runner does. The other five decide for the d
 **Declined:** nothing. **Not re-read after round 2:** the four changes of `9e91d5a` and the header row; the class check, the bounds test and the push check ran on them.
 
 **Reviewers' account** (their notes, in short): a format contract for specs and samples with a detailed grammar and comparison rules, which keeps stack-neutral and leaves the tasks, the hidden tests and the runner's code out.
+
+## The first amendment (2026-11-05, epoch 8, parent D65; task repository PR #3, `main` at `4ddb8f80`)
+
+FORMAT's raw sha256 is now `06c3660883d1ac7ddd8411ac93b5f4c9b98739c2e7d1b01288b7b7184f5bd14b`; the version stays 2. The grammar's body is unchanged and
+only its header's hash moved (`grammarSha256` in `specs.d/format.json`, computed by `tools/grammar-extract.mjs`). The words of the amendment are in FORMAT itself, which is the source.
+
+**Document gate, three rounds, all `proceed`,** each with 2 of 4 reviewers, because the gate's second vendor was out of quota.
+
+1. Round 1: a finding, project files against pin files. Accepted and applied.
+2. Round 2: no findings.
+3. Round 3: a finding, `PACKAGES.md` against "list your packages". Accepted and applied.
+
+The consultants `e53d5f8a` gave the second vendor's reading and the wording of F-FROZEN, of the clean copy and of the row's subject.
+
+**Not re-gated:** the last one-phrase edit.
+
+**Checks:** `format-classes --self` passes, 17 rows. The grammar's body is unchanged.
