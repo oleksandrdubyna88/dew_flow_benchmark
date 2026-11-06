@@ -83,7 +83,7 @@ test('Only_an_ended_void_contaminated_session_is_rescored_every_other_class_is_r
   const problemOf = over => { const e = entry(over); return sessionProblem({ map: { sessions: { a1: e } }, entry: e, layout, rid: 'a1' }); };
   assert.equal(problemOf({}), null, 'the one class the rescore exists for passes');
   for (const [cls, data] of [['stop: security', false], ['stop: alias drift', false], ['stop: auth', false], ['void: rate limit', false], ['void: upstream', false], ['void: harness', false], ['void: harness (interrupted)', false], ['void: harness (disposed)', false], ['completed', true], ['killed: cap', true]]) {
-    assert.match(problemOf({ class: cls, data }), new RegExp(`is ${cls.replace(/[()]/g, '\\$&')}: only a void: contaminated session`), cls);
+    assert.ok(problemOf({ class: cls, data }).includes(`is ${cls}: only a void: contaminated session`), cls);
   }
 });
 

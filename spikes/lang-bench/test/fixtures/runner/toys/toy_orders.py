@@ -7,7 +7,7 @@ class H(BaseHTTPRequestHandler):
     def send(self, code, body, extra=()):
         b = json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(b)))
-        for k,v in extra: self.send_header(k,v)
+        for k,v in extra: self.send_header(k,v.replace("\r","").replace("\n",""))
         self.end_headers(); self.wfile.write(b)
     def do_POST(self):
         n=int(self.headers.get("Content-Length",0)); body=json.loads(self.rfile.read(n))
