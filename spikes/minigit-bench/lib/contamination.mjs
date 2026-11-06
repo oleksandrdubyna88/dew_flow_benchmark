@@ -76,7 +76,9 @@ function outsidePath(text, ctx, call) {
   const found = reachesOf(call, ctx).filter(f => !skeleton.has(f.resolved)); // a shell command: each simple command on its own, its words from the directory the `cd` segments before it left, no heredoc body (contamination-reach.mjs)
   if (found.length === 0) return null;
   const roots = [...(ctx.partnerPaths ?? []), ...(ctx.harnessPaths ?? []), ctx.home].filter(Boolean);
-  const high = found.find(f => !inOwnBox(f.resolved, ctx) && isHigh(f.resolved, roots, f.walks));
+  // `ctx.lostCwdLow` (the quick run): a relative walk in a directory the scan lost (`cd -`, a variable) reaches nothing it can name; in the box nothing outside is visible, so it is a low hit. An absolute walk (`find /`) and a real outside path stay high.
+  const forgiven = f => ctx.lostCwdLow === true && f.unplaced === true;
+  const high = found.find(f => !forgiven(f) && !inOwnBox(f.resolved, ctx) && isHigh(f.resolved, roots, f.walks));
   const first = high ?? found[0];
   return { ...at(Math.max(0, text.indexOf(first.path)), high ? 'high' : 'low'), excerpt: first.excerpt ?? first.resolved };
 }

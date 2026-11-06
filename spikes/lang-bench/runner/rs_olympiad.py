@@ -1,5 +1,5 @@
 """rs_olympiad: one olympiad case. `bash run.sh` gets the case's input on standard input; its standard output is compared as a STREAM
-against the expected bytes and stops at the first difference (B9); standard error goes to a file, never a pipe. What is kept of the
+against the expected bytes and stops at the first difference; standard error goes to a file, never a pipe. What is kept of the
 output for the report is capped, and a capped capture is never what decides: a PASS needs the stream to have matched every expected
 byte and nothing more. A wall time over the limit is a time limit even when the program exited by itself.
 """

@@ -1,4 +1,4 @@
-"""rs_pump: moves bytes between a case's program and the runner without ever blocking on either, and finds the case's end (B6, P3).
+"""rs_pump: moves bytes between a case's program and the runner without ever blocking on either, and finds the case's end.
 
 Input goes out, output comes in (compared as a stream by the olympiad path), and the end is awaited on descriptors, never polled: the
 program's own pidfd, and the launch status pipe. The look into the program's cgroup (rs_track.py) is a wake-up of this same loop, so the
@@ -27,7 +27,8 @@ class _Nothing:
 
 
 class Pump:
-    def __init__(self, launched, data, comparer, stderr_path):
+    def __init__(self, launched, data, comparer, stderr_path, keep_stdin=False):
+        self.keep_stdin, self.closing = keep_stdin, False  # keep_stdin: a daemon or web case feeds stdin step by step (send_input, close_input)
         self.launched, self.proc, self.tracker = launched, launched.proc, launched.tracker
         self.comparer, self.stderr_path = comparer or _Nothing(), stderr_path
         self.pending, self.exit_ns, self.sel = memoryview(data), None, selectors.DefaultSelector()
@@ -55,6 +56,8 @@ class Pump:
     def _start_input(self):
         if self.proc.stdin is None:
             return
+        if self.keep_stdin:
+            return os.set_blocking(self.proc.stdin.fileno(), False)
         if not len(self.pending):
             return self.proc.stdin.close()
         os.set_blocking(self.proc.stdin.fileno(), False)
@@ -80,7 +83,31 @@ class Pump:
 
     def _input_done(self):
         self.sel.unregister(self.proc.stdin)
-        self.proc.stdin.close()
+        if not self.keep_stdin or self.closing:
+            self.proc.stdin.close()
+
+    def _input_open(self):
+        stdin = self.proc.stdin
+        return stdin is not None and not stdin.closed and not self.closing
+
+    def send_input(self, data):
+        """Queue bytes for the program's standard input (keep_stdin cases); the loop writes them as the pipe takes them."""
+        if not (data and self._input_open()):
+            return
+        first = not len(self.pending)
+        self.pending = memoryview(bytes(self.pending) + data)
+        if first:
+            self.sel.register(self.proc.stdin, selectors.EVENT_WRITE, self.write_input)
+
+    def input_drained(self):
+        return not len(self.pending)
+
+    def close_input(self):
+        """End the program's standard input once what is queued is written."""
+        self.closing = True
+        stdin = self.proc.stdin
+        if not len(self.pending) and stdin is not None and not stdin.closed:
+            stdin.close()
 
     def read_output(self):
         try:

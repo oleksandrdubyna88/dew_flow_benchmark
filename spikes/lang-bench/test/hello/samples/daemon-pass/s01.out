@@ -1,0 +1,5 @@
+transcript 2
+ready
+recv c "echo:hi"
+quiet c
+exit 0

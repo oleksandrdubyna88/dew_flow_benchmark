@@ -43,7 +43,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/prefix.mjs",
-        "sha256": "7a343b7a804a83512ec32e7557aca0309e19194ee04754e6da1a616e933382d9"
+        "sha256": "d05c6dfc00706db0d2a7c67676104d6b957ead6e65fa01e6fe5e530690a2ff5c"
       },
       {
         "path": "lang-bench/lib/exec-layer/proc.mjs",
@@ -51,7 +51,7 @@
       },
       {
         "path": "lang-bench/lib/exec-layer/run.mjs",
-        "sha256": "67807455469d796354cc8c92946b818a822cd2e12a7fdf9068aa1d174d9e97fa"
+        "sha256": "c0e7e316f2070034b077c3835f2ef43a9c2801c3f8b3850491f69444ad405d76"
       },
       {
         "path": "lang-bench/lib/exec-layer/scope-entry.sh",
@@ -99,6 +99,6 @@
       "systemd": "systemd 259 (259.5-0ubuntu3.4)"
     },
     "probedOn": "2026-11-03T11:05:31.552Z",
-    "treeSha256": "2cba87c276de32401d451be1ff8585a588a9ec705f71f103511b93b97fa1c6ad"
+    "treeSha256": "2b0220aacd28643b7a7fa2ac1407d70859156e5f391a67bb71038de8a2d64305"
   }
 }

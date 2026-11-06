@@ -40,21 +40,41 @@ const taskOneProblems = e => [
 
 /** The sentences saying what in the `tasks` map is not what it must be (`[]` when it is sound). */
 export function taskProblems(e) {
-  if (e?.tasks === null || typeof e?.tasks !== 'object' || Object.keys(e.tasks)[0] !== '01') return ['tasks must be a map whose first entry is task 01'];
+  if (e?.tasks === null || typeof e?.tasks !== 'object' || !Object.hasOwn(e.tasks, '01')) return ['tasks must be a map that holds task 01']; // not "whose first entry": a key such as "10" is an integer index, which JSON.parse lists first
   return [...Object.entries(e.tasks).flatMap(([k, t]) => entryProblems(k, t)), ...taskOneProblems(e)];
 }
 
 const pausePositive = point => [point?.usd, point?.projectedFloorUsd, point?.projectedFactor, point?.pairSessions].every(positive);
-const planTasksNamed = e => Array.isArray(e?.olympiad?.planTasks) && e.olympiad.planTasks.length > 0 && e.olympiad.planTasks.every(k => Object.hasOwn(e.tasks ?? {}, k) && k !== '01');
+const planTasksNamed = e => Array.isArray(e?.olympiad?.planTasks) && e.olympiad.planTasks.length > 0 && e.olympiad.planTasks.every(k => Object.hasOwn(e.tasks ?? {}, k));
 
 /** The sentences saying what in the `olympiad` block is not what it must be. */
 const materialPositive = m => [m?.minCases, m?.minMutants].every(positive);
 
 export const pauseProblems = e => [
-  ...(planTasksNamed(e) ? [] : ['planTasks must name tasks of the map, never task 01']),
+  ...(planTasksNamed(e) ? [] : ['planTasks must name tasks of the map']),
   ...(pausePositive(e?.olympiad?.pausePoint) ? [] : ['pausePoint needs positive numbers']),
   ...(materialPositive(e?.olympiad?.material) ? [] : ['material needs positive minCases and minMutants']),
 ];
+
+const isQuickTaskOf = e => k => e.tasks?.[k]?.quick === true && ['daemon', 'web'].includes(e.tasks[k].kind);
+const planTasksOk = e => Array.isArray(e.quick.planTasks) && e.quick.planTasks.length > 0 && e.quick.planTasks.every(isQuickTaskOf(e));
+const quickLimitsOk = q => [q.limits?.timeMs, q.limits?.memoryBytes, q.limits?.buildTimeoutMs, q.caseWallMs, q.runCeilingMs].every(positive);
+const quickPartsOk = q => [q.dotnet?.dirParts, q.node?.dirParts, q.typescript?.toolchainDirParts, q.cachesDirParts].every(parts);
+const quickVersionsOk = q => [q.dotnet?.sdk, q.node?.version, q.typescript?.version].every(v => typeof v === 'string');
+
+/** Each check of the `quick` block as `[holds(e), the sentence saying what is wrong]`. */
+const QUICK_CHECKS = Object.freeze([
+  [planTasksOk, 'quick.planTasks must name tasks marked quick, of kind daemon or web'],
+  [e => pausePositive(e.quick.pausePoint), 'quick.pausePoint needs positive numbers'],
+  [e => quickLimitsOk(e.quick), 'quick: limits, caseWallMs and runCeilingMs must be positive numbers'],
+  [e => quickPartsOk(e.quick) && quickVersionsOk(e.quick), 'quick: dotnet, node, typescript and cachesDirParts must be pinned as path parts under the home'],
+]);
+
+/** The sentences saying what in the `quick` block (the quick run's profile, see quick.mjs) is not what it must be. */
+export function quickProblems(e) {
+  if (e?.quick === undefined) return Object.values(e?.tasks ?? {}).some(t => t?.quick === true) ? ['a task is marked quick and the `quick` block is absent'] : [];
+  return QUICK_CHECKS.filter(([holds]) => !holds(e)).map(([, why]) => why);
+}
 
 /** Each check of `explore.json` as `[holds(e), the sentence saying what is wrong]`. */
 const CHECKS = Object.freeze([
@@ -69,6 +89,7 @@ const CHECKS = Object.freeze([
   [e => typeof e?.locale === 'string', 'locale'],
   [e => taskProblems(e).length === 0, 'tasks: every task pins a spec, a FORMAT, private notes, a held-out folder, a calibration file, a note label, a baselineCommit and a UTC heldoutBorn, and task 01 repeats the recorded task-1 pins'],
   [e => pauseProblems(e).length === 0, 'olympiad: planTasks name tasks of the map and pausePoint holds positive numbers'],
+  [e => quickProblems(e).length === 0, 'quick: planTasks name quick tasks of the map; pausePoint, limits and the pinned toolchains are sound'],
 ]);
 
 /** The sentences saying what in `explore.json` is not what it must be (`[]` when it is sound). */

@@ -50,7 +50,7 @@ const COMMENT_MARK = /^\/(?:\/+|\*[^/]*)$/;
 const isQuotedMark = (segment, f) => COMMENT_MARK.test(f.path) && !segment.replace(QUOTED, ' ').includes(f.path);
 
 /** What a relative word of a walk reaches when its directory is unknown: anything. The root holds every protected root, so the hit is high, as `find /` is. */
-const unplaced = (call, word) => ({ agent: call.agent, tool: call.tool, path: word, resolved: '/', walks: true, excerpt: `directory unknown: ${word}` });
+const unplaced = (call, word) => ({ agent: call.agent, tool: call.tool, path: word, resolved: '/', walks: true, unplaced: true, excerpt: `directory unknown: ${word}` });
 
 /** The relative word of a walking simple command whose directory is unknown (the conservative case), or undefined. */
 const lostWord = (step, walks, words) => (step.cwd === null && walks ? words[0] : undefined);

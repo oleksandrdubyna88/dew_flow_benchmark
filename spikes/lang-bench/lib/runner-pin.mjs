@@ -65,8 +65,11 @@ export function verifyPin(dir, record) {
   return same ? { ok: true } : fail('the pin\'s version or manifest hash differs from the runner folder');
 }
 
-/** The modules only group B's manifest has (parent D50): everything else of the runner is the olympiad path, and is frozen across manifests (T-L38). */
-export const GROUP_B_ONLY = Object.freeze(['rs_net.py']);
+/**
+ * The modules only group B's manifest has (parent D50): everything else of the runner is the olympiad path, and is frozen across manifests (T-L38). These are the modules the daemon and web path added (the session and its
+ * connections, the shared base, `capture` and the evidence a rejected case keeps); no olympiad module imports one of them (a test reads the imports), and `run_samples.py` is the entry of both paths.
+ */
+export const GROUP_B_ONLY = Object.freeze(['rs_base.py', 'rs_capture.py', 'rs_conn.py', 'rs_evidence.py', 'rs_net.py', 'rs_session.py']);
 
 /** The olympiad modules among `paths`: all of them but the group-B-only ones. `rs_abort.py` and its evidence function are in the set (D56). */
 export const OLYMPIAD_MODULES = paths => paths.filter(name => !GROUP_B_ONLY.includes(name));

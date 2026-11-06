@@ -1,4 +1,4 @@
-"""rs_view: the case's view (B7). The execution layer makes, per case and outside the timed window, a fresh writable copy of the built tree
+"""rs_view: the case's view. The execution layer makes, per case and outside the timed window, a fresh writable copy of the built tree
 and names it with `--case-view TEMPLATE` (`{case}` filled in). The runner never assumes the program's filesystem is its own or that it
 persists from one case to the next: it launches in the view of THIS case, writes a scenario's `.scenario/` fixtures into that view before
 the launch, and never reads a result back from it. For a held-out run the samples directory must not lie inside a view (the view is what the

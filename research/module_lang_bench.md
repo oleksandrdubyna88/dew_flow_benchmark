@@ -10,7 +10,7 @@ first mismatch under FORMAT v2's rules (grammar 2). It knows nothing of boxes, s
 **Built so far: part i** (olympiad runs, parsing and validation of daemon and web samples, the matcher, the report, the pin) and **part ii-a** (what the
 olympiad path needs from the execution layer: the launch prefix and status, the case clock, the pidfd waits, the cgroup read and kill, the case view, the
 program's environment). **Part ii-b** (sockets, the daemon and web runs, readiness, `signal TERM` to the program's host pid, V3, V5, V7, `overflow <conn>`)
-is not built; a daemon or web run ends with exit 5 and says so.
+was built for the owner's quick run (2026-11-05): see *The daemon and web runner* below.
 
 **Files** (`spikes/lang-bench/`):
 
@@ -144,6 +144,80 @@ the cgroup (`cgroup.kill`) is killed; one test is at most 600 s (`--limits` refu
 will use; the pidfd wait is `rs_exec.wait_exit`; `run_samples._after_parsing` is where daemon and web dispatch; `rs_transcript.Actual` and `rs_match.compare` take the
 observations part ii records; `Actual.step_line` and `step_text` feed the report's `step` line; `rs_script.Step` carries what each step needs.
 The tests are in [module_tests.md](module_tests.md), section "The language-comparison runner scenarios".
+
+## The daemon and web runner (the owner's quick run, runner 0.3.6)
+
+**Purpose.** `run_samples.py --kind daemon|web` runs every pair of scenario samples against a program the runner starts (`bash run.sh` with `PORT` and the scenario's environment), drives
+the scenario's steps over sockets and standard input, records the actual transcript and judges it against the expected one with the matcher of part i. The olympiad path is unchanged.
+The runner is pinned as `0.3.6` (`node spikes/lang-bench/pin-runner.mjs --check`); the earlier versions stay in `inputs/runner-versions.json`.
+
+| File | Role |
+|---|---|
+| `runner/rs_session.py` | one daemon or web case: start, the wait loop, the program's lifecycle, the steps, the judgement; one thread drives everything, the scenario's sockets are registered in the pump's selector |
+| `runner/rs_net.py` | the connections of a case as a mixin of the session: connect and retry, writes, a start-together group, the reads (`recv` modes, one HTTP response, `quiet`, `closed`) |
+| `runner/rs_base.py` | what the pieces share: `RunnerFault`, `Abort`, the case, the standard-output sink, the together gate, the constants |
+| `runner/rs_conn.py` | a connection's buffer, the chunked reads and the HTTP/1.1 response parser (`DONE`, `CONTINUE`, `BAD`) |
+| `runner/rs_capture.py` | the `capture` of a step: a regular expression or a JSON path, checked against its declared type |
+| `runner/rs_evidence.py` | what a failing case keeps (see below) |
+| `runner/rs_launch.py` | `_unblock_all`: the program starts with the signals the runner held off around the spawn unblocked, or it would never see a scenario's `signal TERM` |
+
+**The shape rule holds for the whole runner** (no exemption: functions under 50 lines and a complexity of at most 4, files under 800 lines). The split of `rs_session.py` and `rs_conn.py` into small functions changed no behaviour; it was checked outside git against the module before the split on thousands of generated cases (the wait loop and its guard, the judgement, the finish, the stop, the reads, the request bytes), and the toy-program tests (`test_rs_session.py`) were not run for it: they start programs and wait for the end of the series.
+
+**A harness failure is never a verdict.** What a program does wrong is an entry of the actual transcript (`not-ready`, `refused`, `timeout`, `eof`, `early-exit`, `exit-signal`, ...). A runner
+fault (`RunnerFault`, or any exception that is not an observation of the program) ends the runner with exit 5 and no result for the case; a launch that the layer cannot confirm is exit 3. The
+connect step follows this rule exactly: only a refused, reset, aborted or timed-out connect means the program is not listening yet (it is retried until the step's deadline and then recorded as
+`refused`); any other error of the socket (no descriptors, ports, buffers or memory, no route) is the host's own and is a `RunnerFault`. The same holds for a read: only a reset, an abort, a broken pipe or a timeout of the peer's end is the end of a connection (`eof`); any other error of `recv` is a `RunnerFault` (runner 0.3.6). The readiness probe of `ready port` follows the same rule (2026-11-06): only the program's not listening yet is `not-ready`; a host error of the probe is a `RunnerFault`. A process found in the cgroup after the exit counts as a leftover only when it is still there after 2 s (`LEFTOVER_SETTLE_MS`, 2026-11-06): one recheck after 20 ms read a process still exiting on a loaded machine as a leftover, a false reject seen once at load 22.
+
+**What a reject keeps.** A failing case's `firstMismatch` holds, next to `entry`, `of`, `part` and `detail`, an `evidence` object: the expected entry as the report prints it, and the observations that explain the
+difference: the one differing observation of an ordered transcript, every observation of an unordered group that no assignment matched (with the connection names), or the last eight of a session that ended with
+another count. Every string is cut the way the report's lines are (`abbreviate`), at most 64 observations and 16 headers are kept. It is a program's output: the harness writes it into the session's `score.json` under the
+series folder, never into git. No verdict reads it; `test_rs_evidence.py` holds the verdict fields of every kind of mismatch as goldens taken before the evidence existed.
+
+**Scoring a quick task** (`spikes/lang-explore/lib/score-quick.mjs`, `build-quick.mjs`): the agent's tree is copied cleanly (its build output removed, every frozen file put back), the frozen `build.sh` runs once in the
+stack's build box (all quick scoring runs on CPUs 6 and 7, in both stacks: `run`, `rehearse`, `rescore` and `replay` each re-execute under `taskset -c 6,7`, so a re-score and a diagnostic are measured in the same conditions as the score they are compared with), then the layer runs the runner over the visible samples and the held-out pairs. Anything thrown while scoring, including the making of the scratch folder, is a void (`environment`), and a scratch folder that cannot be removed afterwards never loses the result: a score keeps `explore.cleanupFailed` with the reason, a void says it in its own reason. Everything that is the harness's failure is a void (`environment`): the layer halting or failing, a pair the runner
+refuses, a case missing from the record, a launch that failed, a case whose peak memory was not read, a build box that never started the build, a build killed from outside. The build runs under a marker: the command
+prints a fixed line to standard error and then `exec`s `build.sh`; no marker means `nsenter`, `bwrap` or the seed step failed, so it is a void; a timeout and a marked non-zero exit are submissions. A host fault
+*during* a marked build (a full disk, for example) is a non-zero exit of `build.sh` and still reads as a submission: the code cannot tell the two apart; the kept tail is how a person can.
+
+## The quick run's code on `main` (exploratory)
+
+**What it is.** The owner's two-day quick run of 2026-11-05: bare C# (.NET 10) and Node/TypeScript sessions on six daemon and web tasks (04 web, 05 daemon, 06 web, 07 daemon, 08 web, 10 daemon), scored by the visible samples and a
+held-out set, with real costs. The results are **exploratory**: the specs are ungated drafts, the held-out sets were written quickly and not validated against two references or mutants, there is no oracle and no calibration
+(`explore.json` `quick.limits` are fixed), and nothing in them is the language comparison's verdict. The series of the parent plan stays paused. The code lives in `spikes/lang-explore/` (the harness) and
+`spikes/lang-bench/runner/` (the runner above); the notes generated from the olympiad records are `research/lang-v2/EXPLORE_*`.
+
+**Where the private material lives (never in git).** `~/rsd/lang-v2/explore/heldout-NN/` (`cases/` with `hNNN.in`, `hNNN.out`, `cases.txt`, an optional `traps.txt`, the generator), `~/rsd/lang-v2/explore/refs-NN/` (the
+reference solutions), `~/rsd/lang-v2/test-design/NN.md` (the private test notes), and the series folders under `~/rsd/lang-v2/explore/` (the records, the ledgers, `score.json` with the evidence of rejects). D41 holds: no held-out
+scenario, expected output, reference line or trap name enters git. `explore.mjs leakcheck` reads `heldout-NN/` and `refs-NN/` of the quick tasks as it reads the olympiad tasks' folders; a held-out line that the committed runner,
+templates, FORMAT examples, hello programs or rehearsal programs also hold, **as `origin/main` holds them** (never as the branch under scan does: a line committed on the branch cannot exempt itself, the runner directory included), is FORMAT grammar or boilerplate by construction, and is a collision by that rule (quick tasks only), not by a list of lines. A separate line-match scan
+outside git runs before any diff leaves the machine.
+
+**The person-reviewed list of `leakcheck`.** Some private lines are generic text that no rule can tell from a leak without a person: a FORMAT grammar line, Python boilerplate, a public URL, a code idiom, a number sequence. A person who
+has read such a match can put it on a list: `~/rsd/lang-v2/explore/leak-reviewed.json` (`lib/leak-reviewed.mjs`), which lives outside git beside the held-out folders. A person's reading is the only way in: no rule, pattern, length or
+location adds to it, and no tool of the check does. The file is `{ "entries": [{ "sha256", "kind": "line" | "shingle", "reason", "reviewedAt", "by" }] }`: a hash and the words of a reason, never a text. A field beyond those five is refused,
+so the list cannot grow into a copy of the private side. The hash is the sha256 of the normal form the tiers match (for a line `normLine`'s result, for a phrase its six normalised words); `reviewHash` is that function. Before the
+needles and keys of any tier are built (substring, exact line, window, chunk, shingle), `leakMaterial` drops a private line or phrase whose hash is on the list. A window that holds a reviewed line is still a key if any other line of it is
+neither reviewed nor FORMAT grammar; a window of only such lines is dropped. A new text, or the same text with one word changed, is still found, and a line committed on the branch under `test/hello` is still found unless it is on the list
+(the grammar rule reads `origin/main`, the list is read from the file, and neither reads the branch). An absent file exempts nothing and is not an error; one that cannot be read or understood (not JSON, a bad hash or kind, a time that is
+not a UTC instant, a repeated entry, an extra field) is a refusal, exit 4, never an empty list. Every run with an exemption says `N private line(s) and M phrase(s) exempt by a person's reading` in its result line, success or failure, and
+never what they were. The file is written from the private findings by a helper that sits outside git too (`~/rsd/lang-v2/briefs/leak-review-write.mjs`), which keeps the entries already there and prints counts only.
+
+**`explore.mjs rescore --task NN --series DIR --rid R [--wait S]`** (free). It re-classifies one session that ended as `void: contaminated` from its own evidence under the quick run's rule (a relative walk in a directory the scan
+lost is a low hit, not contamination) and, only when the evidence now reads as data, scores its kept tree. It refuses every other class by name, a session that is not `ran`, one without a workspace, a cell that already holds another
+data session, and a series whose lock a live run holds. It is append only: the run-map entry keeps every field and gains `reclassifiedFrom: [{ class, data, reason, at }]`, the record carries it, the ledger gets an `event` line (no charge,
+so the pause point's spend is unchanged), and a scoring failure leaves every file as it was (exit 3). `rescore` and `replay` can be stopped (SIGINT, SIGTERM): `rescore` ends its wait for the series lock at once and, when the signal comes during the scoring, ends before any write (exit 130 or 143, nothing changed); `replay` ends between two runs, removes its `work-*` folder and writes no file, partial or whole (a signal after the last run leaves the complete file).
+
+**`run` finishes a pair that stopped between `scored` and its records.** A run that ended after a session was marked `scored` but before its `record.json` (or before the pair's record) used to leave a pair that `run` refused as already run and `rescore` refused as scored. Now the next `run --pair k` finishes it by itself, free (`lib/finish.mjs`): it writes the missing records from the kept `score/score.json` and the session's evidence by the series' own code, then the pair record, and appends a ledger `event` line (`finished after interruption`) for each record as it is written (with the `rid`, or the `pair` when only its record was lacking), so a finish that stops after the first of two records has still logged the first. No session is launched, nothing is scored and nothing is charged: every reader of the ledger skips event lines, and the plan's spend is unchanged (tested). It acts only on a pair with nothing open; a pair with ANY scored session that kept no score (checked for every scored session, also one whose record is there, because the pair is finalized from the scores and a missing one would replace the record's `explore` section with "not scored"), a moved pin, a complete pair, a void and a `--rerun` request are refused as before.
+
+**Other seams of the quick run.** `--accept-noisy <why>` starts at once, flagged `started not quiet`, instead of waiting out the quiet window first. A rehearsal series (`r-...`) never counts toward the plan's spend. Task 01 may have
+a second series. The scan of a session directory bounds the files outside the evidence paths (64 MiB each, 1 GiB in all; the evidence paths are always read) because one session wrote 9.6 GB of load-test output into its `/tmp`.
+The box is unchanged: `/home`, `/mnt`, `/run` and `/var/tmp` stay empty tmpfs, the network namespace is its own and the broker the only way out; the quick run adds the pinned .NET SDK read-only and hides the distribution's dotnet.
+
+**The comments of `runner/` name no plan item.** The whole folder is copied into the agents' workspaces, so a comment says what the code does and an id of the plan, a decision or a review finding does not stand in it
+(`quick-agent-visible.test.mjs` reads every agent-visible runner, template and olympiad-runner file for such an id). The reasons that were behind the old ids: the program's environment is the runner's own plus the documented per-stack
+variables (decision D15, rule V11); a runtime's own out-of-memory abort is a memory-limit verdict like a kernel kill (D15's OP-K, plan change 5.1, D56); the program is found through its cgroup and never through the launcher's process
+group (D38, findings B1 and B4); the launch status is the layer's `--json-status-fd` (B5, B6). The olympiad runner (`lang-explore/runner/run_samples.py`) holds no such id; it does say "the exploratory pilot" and describes the
+harness's held-out mode, and it is left as it was because the olympiad workspaces are pinned with it.
 
 ## The execution layer (E1.S8b)
 

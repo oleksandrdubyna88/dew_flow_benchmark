@@ -24,7 +24,7 @@ def _flat_parts(expr):
 
 
 def static_length(expr):
-    """The joined length in bytes of a string expression when it holds no variable, else None (V9)."""
+    """The joined length in bytes of a string expression when it holds no variable, else None."""
     parts = list(_flat_parts(expr))
     if not all(isinstance(p, lex.Lit) for p, _ in parts):
         return None

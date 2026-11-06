@@ -121,6 +121,9 @@ function heldoutStep(result, cases, traps) {
   };
 }
 
+/** Which runner judged the run and whether its memory claim was certified, when the result says (the quick path does; an olympiad judge's result has neither, and its score is byte for byte what it was). */
+const provenanceOf = result => ({ ...(result.runner === undefined ? {} : { runner: result.runner }), ...(result.memoryCertified === undefined ? {} : { memoryCertified: result.memoryCertified }) });
+
 /** The judge's JSON -> v1's score shape (`build`, `visible`, `heldout`, `upstream`) plus `explore`. `traps` are held-out ids whose failures are counted: the list is read from the private side at run time, and only the count is ever rendered. */
 export function scoreShape({ result, traps = [], frozen = [] }) {
   const visible = bySet(result.cases, 'visible');
@@ -128,7 +131,7 @@ export function scoreShape({ result, traps = [], frozen = [] }) {
   return {
     build: { ok: result.build.ok }, visible: [visibleStep(result, visible)], heldout: heldoutStep(result, held, traps), upstream: [],
     explore: {
-      limits: result.limits, build: result.build, frozenChanges: frozen, cases: result.cases, verdicts: { visible: verdictCounts(visible), heldout: verdictCounts(held) },
+      limits: result.limits, build: result.build, frozenChanges: frozen, ...provenanceOf(result), cases: result.cases, verdicts: { visible: verdictCounts(visible), heldout: verdictCounts(held) },
       passRate: { visible: percent(passed(visible), visible.length), heldout: percent(passed(held), held.length) },
       trapHits: held.filter(c => traps.includes(c.id) && c.verdict !== 'pass').length, trapCases: traps.length,
     },

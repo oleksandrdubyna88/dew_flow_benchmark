@@ -2,7 +2,7 @@
 
 A string is a list of parts (Lit, Var, Field). Variables are substituted first; a field then matches the SHORTEST run of bytes that lets
 the rest of the string match (backtracking, with a memo of failed (part, position) pairs so it cannot go exponential), and a field
-may bind what it matched (V6). Numbers inside a `num` field are compared as exact fractions, never as floats.
+may bind what it matched. Numbers inside a `num` field are compared as exact fractions, never as floats.
 """
 import re
 from datetime import datetime, timedelta, timezone

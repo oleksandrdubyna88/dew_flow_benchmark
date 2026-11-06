@@ -2,6 +2,7 @@
 // the shape of task 09's millions of short numeric lines. For every case file, each window of three consecutive QUALIFYING lines (normalised, at least 8 characters, not one repeated character) gets a 53-bit key in a sorted
 // typed array; the haystack's non-blank lines slide through the same ring (`git log -p` lines with their diff prefix removed). A key that hits is verified against the case lines (lib/leak-verify.mjs) before it is reported.
 import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
+import { NO_REVIEW } from './leak-reviewed.mjs';
 import { KeyIndex, normLine, pack, polyHash, stripDiffPrefix, usable } from './leak-text.mjs';
 
 export const WINDOW_LINE_MIN = 8;
@@ -49,17 +50,23 @@ export class LineRing {
   }
 }
 
-/** The keys of every window of every case file of the folders `[{ casesDir }]`: a frozen sorted index. */
+/** Is a line exempt: FORMAT grammar (a line of `grammar`, the set a quick task shares with the public examples) or a line a person reviewed (see leak-reviewed.mjs)? */
+const isExempt = (text, { grammar, reviewed }) => grammar?.has(text) === true || reviewed.hasLine(text);
+
+/** Is a window made only of exempt lines? Such a window is no key: it is grammar and reviewed text three lines long. One line that is neither keeps it. With nothing exempt there is nothing to look up. */
+const allExempt = (ring, exempt) => (exempt.grammar !== null || exempt.reviewed.counts.lines > 0) && ring.window().texts.every(t => isExempt(t, exempt));
+
+/** The keys of every window of every case file of the folders `[{ casesDir, grammar?, reviewed? }]`: a frozen sorted index. */
 export function buildWindowKeys(sources, hash = polyHash) {
   const keys = new KeyIndex();
-  for (const { casesDir } of sources) for (const name of caseFilesOf(casesDir)) addFile(keys, caseLinesOf(casesDir, name), hash);
+  for (const { casesDir, grammar = null, reviewed = NO_REVIEW } of sources) for (const name of caseFilesOf(casesDir)) addFile(keys, caseLinesOf(casesDir, name), { hash, grammar, reviewed });
   return keys.freeze();
 }
 
-function addFile(keys, lines, hash) {
+function addFile(keys, lines, { hash, grammar, reviewed }) {
   const ring = new LineRing();
   lines.forEach((raw, i) => {
-    if (takeLine(ring, normLine(raw), raw, i + 1, hash)) keys.add(ring.key());
+    if (takeLine(ring, normLine(raw), raw, i + 1, hash) && !allExempt(ring, { grammar, reviewed })) keys.add(ring.key());
   });
 }
 

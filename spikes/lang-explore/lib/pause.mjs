@@ -19,10 +19,17 @@ const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
  * What one direct child of the explore root is to the plan, whatever its name: `{ kind: 'plan' }` (its state names a task of the plan), `{ kind: 'other' }` (a series of another task, or a directory that holds no series),
  * or `{ kind: 'bad', why }` (it holds a state file or a ledger but its state cannot be read or classified: the spend cannot be counted).
  */
-function classify(child, explore) {
-  const task = taskNamed(child, explore);
+function classify(child, explore, plan) {
+  return isRehearsal(child) ? OTHER : classifyTask(taskNamed(child, explore), child, plan);
+}
+
+const OTHER = Object.freeze({ kind: 'other' });
+/** A rehearsal never spends (the owner's quick run: another worker's rehearsal of a new task must not stop a paid pair). */
+const isRehearsal = child => child.name?.startsWith('r-') === true;
+
+function classifyTask(task, child, plan) {
   if (!task.ok) return { kind: task.absent ? 'other' : 'bad', why: task.reason };
-  return explore.olympiad.planTasks.includes(task.value) ? planKind(child) : { kind: 'other' };
+  return plan.planTasks.includes(task.value) ? planKind(child) : OTHER;
 }
 
 /** A series of the plan counts by its ledger; one without a ledger is never $0. */
@@ -44,13 +51,13 @@ function taskNamed(child, explore) {
 }
 
 /** The given children of the explore root classified: `{ plan: [dir], bad: ['name: why'] }`. */
-function classifyAll(children, explore) {
-  const all = children.map(child => ({ child, c: classify(child, explore) }));
+function classifyAll(children, explore, plan) {
+  const all = children.map(child => ({ child, c: classify(child, explore, plan) }));
   return { plan: all.filter(({ c }) => c.kind === 'plan').map(({ child }) => child.dir), bad: all.filter(({ c }) => c.kind === 'bad').map(({ child, c }) => `${child.name}: ${c.why}`) };
 }
 
 /** The series directories of the plan: every direct child of the explore root whose state names a task in `explore.olympiad.planTasks`, whatever its name. */
-export const planSeriesDirs = (home, explore) => classifyAll(exploreChildren(home), explore).plan;
+export const planSeriesDirs = (home, explore, _ignoredScan, plan = explore.olympiad) => classifyAll(exploreChildren(home), explore, plan).plan;
 
 const validAmount = usd => typeof usd === 'number' && Number.isFinite(usd) && usd >= 0;
 
@@ -74,7 +81,7 @@ function readLedgerText(dir) {
 }
 
 /** What the plan has spent, scanning the explore root itself (the one-scan seam `children` belongs to `pauseVerdict` alone): the total, the most expensive session (its charges summed per series and rid), the counts and the ledger lines whose amount is invalid. */
-export const planSpend = ({ home, explore }) => spendOf(planSeriesDirs(home, explore));
+export const planSpend = ({ home, explore, plan = explore.olympiad }) => spendOf(planSeriesDirs(home, explore, undefined, plan));
 
 /** The spend of the given plan series directories: the total, the most expensive session, the counts and the ledger lines that cannot be added up. */
 function spendOf(dirs) {
@@ -114,11 +121,11 @@ const blank = text => typeof text !== 'string' || text.trim() === '';
  * The pause point's verdict for the next pair: `{ stop: true, message }`, or `{ stop: false, record }` where `record` is what the pair record keeps (`null` when no `--allow-over` was given).
  * `allowOver` is the owner's text or null.
  */
-export function pauseVerdict({ home, explore, allowOver = null, now = systemClock, children = exploreChildren }) {
-  const counted = countSpend({ home, explore, children });
+export function pauseVerdict({ home, explore, allowOver = null, now = systemClock, children = exploreChildren, plan = explore.olympiad }) {
+  const counted = countSpend({ home, explore, children, plan });
   if (!counted.ok) return { stop: true, message: counted.reason };
   const spend = counted.value;
-  const pause = explore.olympiad.pausePoint;
+  const pause = plan.pausePoint;
   const projected = projectedUsd(pause, spend.maxSessionUsd);
   const over = spend.spentUsd + projected > pause.usd;
   if (over && blank(allowOver)) return { stop: true, message: stopSentence({ spend, projected, pause }) };
@@ -129,8 +136,8 @@ export function pauseVerdict({ home, explore, allowOver = null, now = systemCloc
  * The plan's spend, or the sentence saying it cannot be counted (a child that cannot be read or classified, a ledger that is invalid): `ok(spend)` | `fail`. The explore root is classified ONCE (`children`, the scan, is
  * called once) and the plan directories it collected are what is summed, so the check for bad children and the sum can never disagree.
  */
-function countSpend({ home, explore, children }) {
-  const classified = classifyAll(children(home), explore);
+function countSpend({ home, explore, children, plan }) {
+  const classified = classifyAll(children(home), explore, plan);
   const bad = unreadableProblem(classified.bad);
   if (bad) return fail(bad);
   const spend = spendOf([...classified.plan].sort());

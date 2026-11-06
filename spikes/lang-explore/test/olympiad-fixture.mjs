@@ -1,7 +1,7 @@
 // Fixtures of the olympiad tests: a held-out folder in a temp home, written the way `gen.py` leaves one (directories 0700, files 0600, a manifest of every file's sha256, brute.py and handcheck.md beside it), so no test ever
 // reads or writes a real `heldout-NN/`. Not a test file (no `.test.mjs`), so the suite's glob does not run it.
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { materialOf } from '../lib/material.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
@@ -153,4 +153,24 @@ export function calibratedHome(id, real) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify({ task: id, limits: { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 }, material: materialOf(task, home) }));
   return home;
+}
+
+/**
+ * A home of the test's own for the tests that run the real toolchains, boxes and judge: the explore root (the series, the plan lock, the held-out folders) is its own and empty, and the toolchains, the snapshots and the pinned CLI
+ * are LINKED from `realHome` (read, never written), so a test never sees, takes a lock in, or writes to the operator's real `~/rsd/lang-v2/explore/` (a paid run in progress holds its lock). -> the home.
+ */
+export function rigHome(realHome) {
+  const home = tmpDir('o-rig-home');
+  for (const parts of [['.nvm'], ['rsd', 'minigit', 'toolchains'], ['rsd', 'lang-v2', 'caches']]) linkIfThere(realHome, home, parts);
+  const own = path.join('rsd', 'lang-v2', 'explore', 'toolchains'); // a real folder (the pause check classifies the children of the explore root; a link there has no type), its entries linked
+  mkdirSync(path.join(home, own), { recursive: true });
+  if (existsSync(path.join(realHome, own))) for (const name of readdirSync(path.join(realHome, own))) linkIfThere(realHome, home, [...own.split(path.sep), name]);
+  return home;
+}
+
+function linkIfThere(realHome, home, parts) {
+  const from = path.join(realHome, ...parts);
+  if (!existsSync(from)) return;
+  mkdirSync(path.dirname(path.join(home, ...parts)), { recursive: true });
+  symlinkSync(from, path.join(home, ...parts));
 }

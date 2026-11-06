@@ -32,13 +32,18 @@ export function recordWaitingStop({ h, deps }) {
 /** The flags of a phase that every one of its sessions carries: the quiet check's, the sampler's and a start skew over 5 s. */
 const phaseFlagsOf = ({ state, phase }) => [...(state.quiet?.flags ?? []), ...(state.sampler?.flags ?? []), ...(phase.startSkewMs > 5000 ? ['start skew'] : [])];
 
+/** The arguments of `collectSession` for one session of the phase. */
+function collectArgs({ ctx, phase, signal, s }) {
+  return {
+    layout: s.layout, plan: s.plan, launched: s.launched, canaryTokens: s.canary.tokens, aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(s.rid),
+    abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), table: ctx.table, policy: ctx.policy, home: ctx.home, ...(ctx.lostCwdLow === true ? { lostCwdLow: true, skipBigOutside: true } : {}),
+  };
+}
+
 /** `collectSession` for one session of the phase; a throw is a `fail` like any evidence that cannot be read. */
-function collectOne({ ctx, phase, signal, s }) {
+export function collectOne({ ctx, phase, signal, s, collect = collectSession }) {
   try {
-    return collectSession({
-      layout: s.layout, plan: s.plan, launched: s.launched, canaryTokens: s.canary.tokens, aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(s.rid),
-      abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), table: ctx.table, policy: ctx.policy, home: ctx.home,
-    });
+    return collect(collectArgs({ ctx, phase, signal, s }));
   } catch (e) {
     return fail(e.message);
   }

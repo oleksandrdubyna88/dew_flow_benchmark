@@ -1,6 +1,7 @@
-"""rs_abort: a runtime's own out-of-memory abort (plan change 5.1, parent D15's OP-K; evidence added in fix batch 1, O7). Under the memory view the execution
-layer gives a program (its own cgroup, and .NET's hard limit equal to the case's limit) a genuinely over-limit program usually ends in its runtime's abort
-before the kernel's oom_kill. Both are `memory limit`, but only WITH evidence: `memory.peak` is at least half of `memory.max` (both are in the record).
+"""rs_abort: a runtime's own out-of-memory abort. A runtime that aborts itself on running out of memory is a memory-limit verdict, like a kernel kill.
+Under the memory view the execution layer gives a program (its own cgroup, and .NET's hard limit equal to the case's limit)
+a genuinely over-limit program usually ends in its runtime's abort before the kernel's oom_kill.
+Both are `memory limit`, but only WITH evidence: `memory.peak` is at least half of `memory.max` (both are in the record).
 
   .NET: exit status 134 (SIGABRT, as bwrap reports it) AND a stderr line exactly `Out of memory.`, OR an `Unhandled exception.` line with
         `System.OutOfMemoryException` anywhere in the stderr tail (also one wrapped in an `AggregateException`)
@@ -52,7 +53,7 @@ NO_ABORT = _facts(None, False, False)
 
 
 def abort_facts(returncode, stderr_path, memory):
-    """What the stderr line and the exit status say about a memory abort (parent D56): `{runtimeAbort, abortBelowEvidence, childAbortLine}`.
+    """What the stderr line and the exit status say about a memory abort (a memory abort): `{runtimeAbort, abortBelowEvidence, childAbortLine}`.
 
     - exit 134 and a runtime's line WITH evidence (`memory.peak` at least half of `memory.max`): `runtimeAbort` is the runtime ("dotnet" or "v8");
     - exit 134 and the line WITHOUT evidence (the peak below the threshold, or not read): a runtime error, `abortBelowEvidence` is true (never

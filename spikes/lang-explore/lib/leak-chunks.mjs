@@ -3,6 +3,7 @@
 // This is a superset of "haystack tokens": a window of a token is a window of its line, and a long case line with spaces is found too. A key that hits is verified against the chunk's text (lib/leak-verify.mjs). A paste of 127
 // characters or more of a long line always contains an aligned chunk; a shorter one may not.
 import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
+import { NO_REVIEW } from './leak-reviewed.mjs';
 import { KeyIndex, forEachWindowKey, hasOneChar, normLine, polyHash, stripDiffPrefix } from './leak-text.mjs';
 
 export const CHUNK = 64;
@@ -15,15 +16,15 @@ export function chunkOffsets(n) {
   return offsets;
 }
 
-/** The keys of the aligned chunks of every long case line of the folders `[{ casesDir }]`. */
+/** The keys of the aligned chunks of every long case line of the folders `[{ casesDir, reviewed? }]`; a long line a person reviewed (see leak-reviewed.mjs) gives none. */
 export function buildChunkKeys(sources) {
   const keys = new KeyIndex();
-  for (const { casesDir } of sources) for (const name of caseFilesOf(casesDir)) for (const raw of caseLinesOf(casesDir, name)) addChunks(keys, normLine(raw));
+  for (const { casesDir, reviewed = NO_REVIEW } of sources) for (const name of caseFilesOf(casesDir)) for (const raw of caseLinesOf(casesDir, name)) addChunks(keys, normLine(raw), reviewed);
   return keys.freeze();
 }
 
-function addChunks(keys, n) {
-  if (n.length < LONG_LINE_MIN) return;
+function addChunks(keys, n, reviewed) {
+  if (n.length < LONG_LINE_MIN || reviewed.hasLine(n)) return;
   for (const at of chunkOffsets(n)) keys.add(polyHash(n, at, at + CHUNK));
 }
 

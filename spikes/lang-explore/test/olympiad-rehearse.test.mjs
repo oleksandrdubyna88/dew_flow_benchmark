@@ -1,7 +1,7 @@
 // The $0 rehearsal per task, end to end (plan research/PLAN_lang_explore_olympiad.md T-O6), and a stub pair past the $60 pause point by `--allow-over` (D-O7's record). The task material is a TOY task in a temp directory (see
 // `olympiad-fixture.mjs`): the entries of tasks 02, 03 and 09 are replaced in a copy of the pins by toy ones, so the real toolchains, boxes, broker and judge run while no real `heldout-NN/` is read. Each series made
 // is removed. The tests of this file run one after the other: each uses the two CPU masks. A host that lacks the toolchains, bwrap or the snapshots is `hostLacks`.
-import { realHome } from '../../minigit-bench/test/fake-home.mjs';
+import { realHome as operatorHome } from '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -22,9 +22,11 @@ import { removeArea } from '../lib/score.mjs';
 import { createSeries, drawMask, ledgerFileOf, loadSeries, runMapFileOf, seriesDirs } from '../lib/series.mjs';
 import { planSeriesDirs } from '../lib/pause.mjs';
 import { resolveTask } from '../lib/tasks.mjs';
-import { toyExplore, writeToyHeldout } from './olympiad-fixture.mjs';
+import { rigHome, toyExplore, writeToyHeldout } from './olympiad-fixture.mjs';
 
 const REAL = loadExplore().value;
+/** The home these tests run with: its explore root is its own; the toolchains are linked from the operator's home (see `rigHome`). */
+const realHome = rigHome(operatorHome);
 const subject = { branch: 'test', sha: 'a'.repeat(40), harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: 'b'.repeat(12), pilotIdentity: 'c'.repeat(40) };
 
 /** A toy world for `ids`, or null (`hostLacks`) when this host cannot score here (no bwrap, or the real toolchains and snapshots are not prepared). */

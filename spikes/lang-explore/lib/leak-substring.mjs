@@ -3,6 +3,8 @@
 
 const PREFIX = 8;
 const BASE = 31;
+/** The slots of the prefix bitmap: the quick no of the scan. A quarter of them taken keeps about one window in five from reaching the verify step. */
+export const BITMAP_SLOTS = 65536;
 
 /** `31 ** n` modulo 2^32. */
 function power(n) {
@@ -18,7 +20,7 @@ const prefixHash = s => { let h = 0; for (let i = 0; i < PREFIX; i += 1) h = (Ma
 /** The prefix table of `needles` (`[{ text, ... }]`, each text at least 8 characters): a bitmap for a quick no, and a map from the prefix hash to the needles that start so. */
 export function buildSubstringIndex(needles) {
   const byHash = new Map();
-  const bitmap = new Uint8Array(65536);
+  const bitmap = new Uint8Array(BITMAP_SLOTS);
   for (const needle of needles) {
     const h = prefixHash(needle.text);
     bitmap[h & 0xffff] = 1;

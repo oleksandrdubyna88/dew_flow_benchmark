@@ -1,4 +1,4 @@
-"""run_samples: the baseline visible-sample runner (E1.S8a; FORMAT v2 grammar 2).
+"""run_samples: the baseline visible-sample runner (FORMAT v2 grammar 2).
 
     python3 -I run_samples.py [--workspace DIR] [--kind olympiad|daemon|web] [--no-build] [--limits FILE] [--launch-prefix JSON]
                               [--launch-status FD] [--cgroup-of TEMPLATE] [--case-view TEMPLATE]
@@ -8,9 +8,9 @@
 Exit 0 every case passed, 1 a case failed (a failing build fails every case), 3 the environment (no workspace, no bash, a case view that
 is missing, a LAUNCH FAILED), 4 configuration (usage, a malformed sample with its file and line, a version or limits problem), 5 the
 runner itself failed. Without --limits the olympiad time limit is the floor (1 s) and every time verdict says so; without a cgroup every
-case says its memory is not certified. The daemon and web kinds run in part ii-b of the story; here they parse (--parse-only).
+case says its memory is not certified. The daemon and web kinds run every pair through rs_session (a harness failure is exit 5 with no verdict for the case).
 
-The execution layer's options (E1.S8b builds the layer; this runner only reads what it hands over):
+The execution layer's options (the execution layer builds them; this runner only reads what it hands over):
   --launch-prefix JSON   a JSON array of strings put before `bash run.sh`; `{case}` in any element is replaced by the case id.
   --launch-status FD     the descriptor number the prefix gives bwrap as `--json-status-fd FD`. The runner makes a pipe per case and puts
                          its write end at FD in the launcher. `{"child-pid": P}` is the start of the case clock (bwrap writes it right after
@@ -19,7 +19,7 @@ The execution layer's options (E1.S8b builds the layer; this runner only reads w
   --cgroup-of TEMPLATE   the program's cgroup2 directory (`{case}` filled in): `memory.peak`, `memory.events` and `cgroup.procs` are read
                          after the program's exit and before any kill; the kill is `cgroup.kill`. Host pids only.
   --wrapper-pid-file T   (with --cgroup-of) the file in which the layer's wrapper writes its pid (`{case}` filled in); the wrapper is then not
-                         taken for a leftover. Without the flag nothing is excluded as a wrapper; E1.S8b's delegated scope has none.
+                         taken for a leftover. Without the flag nothing is excluded as a wrapper; the layer's delegated scope has none.
   --case-view TEMPLATE   the fresh writable view of the built tree the layer made for the case (`{case}` filled in): the program starts in
                          it and a scenario's `.scenario/` fixtures are written into it first. The samples directory may not lie in it.
 """
@@ -53,6 +53,7 @@ import rs_report as rp
 import rs_samples as sm
 import rs_scope
 import rs_script
+import rs_session
 import rs_stop
 import rs_transcript
 import rs_view
@@ -240,9 +241,12 @@ def progress(message):
     print(f"run_samples: {message}", file=sys.stderr, flush=True)
 
 
-def _run_one(pair, config):
+def _run_one(pair, config, kind="olympiad"):
     progress(f"{pair.id} started")
-    result = ro.run_case(ro.Case(pair.id, pair.stdin, pair.expected, pair.r_ids, pair.comparison), config)
+    if kind == "olympiad":
+        result = ro.run_case(ro.Case(pair.id, pair.stdin, pair.expected, pair.r_ids, pair.comparison), config)
+    else:
+        result = rs_session.run_case(rs_session.Case(pair.id, pair.stdin, pair.expected, pair.in_name, pair.out_name, pair.r_ids, pair.comparison), config)
     progress(f"{pair.id} {result.status} ({result.wall_ms} ms)")
     return result
 
@@ -262,7 +266,7 @@ def _run_cases(plan, scratch):
     try:
         empty = _timed_empty(config, scratch)
         for pair in plan.pairs:
-            results.append(_run_one(pair, config))
+            results.append(_run_one(pair, config, plan.kind))
     except rl.LaunchFailed as failed:
         return results, layer.launch_failure(failed)
     return results, layer.RunInfo(empty)
@@ -371,8 +375,6 @@ def _after_parsing(plan):
     if plan.args.parse_only:
         print(f"{len(plan.pairs)} pairs parsed")
         return EXIT_OK
-    if plan.kind != "olympiad":
-        return Failure(EXIT_RUNNER, [f"running a {plan.kind} sample is part ii of this story and is not built in this runner (use --parse-only)"])
     return _run_olympiad(plan)
 
 

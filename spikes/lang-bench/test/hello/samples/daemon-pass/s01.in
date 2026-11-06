@@ -1,0 +1,9 @@
+scenario 2
+default within 2s
+start ready port within 10s
+connect c tcp
+send c "hi"
+recv c bytes 7
+expect c quiet for 100ms
+signal TERM
+wait-exit within 5s

@@ -10,28 +10,46 @@ import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { loadHeldout } from './heldout.mjs';
 import { listOf } from './idlist.mjs';
 import { buildMaterial, materialCounts } from './leak-material.mjs';
+import { loadReviewed } from './leak-reviewed.mjs';
 import { scanRepository } from './leak-scan.mjs';
 import { normLine } from './leak-text.mjs';
 import { REPO } from './paths.mjs';
 import { resolveTask, taskIds, taskPaths } from './tasks.mjs';
 
 const RUNNER_DIR = 'spikes/lang-explore/runner';
+/**
+ * Where the quick tasks' grammar and boilerplate lines are read from: committed files every agent holds a copy of or that show the FORMAT itself: the runner and the templates of the workspace, the FORMAT's worked
+ * examples, the hello programs and samples, the rehearsal programs. A held-out line that is also a line of one of them is FORMAT grammar or boilerplate by construction (the authors were told to write in that grammar,
+ * and the same line is already public), not held-out content. Only the quick tasks use this set, and they use it ALONE (the runner is one of its directories): the olympiad tasks keep the runner exemption they always had, read at HEAD.
+ * The set is read at `PUBLIC_REF` (what `main` already holds), never at HEAD: a line committed on the branch under scan cannot exempt itself. A ref that cannot be read gives no exemption, the stricter check.
+ */
+export const PUBLIC_REF = 'origin/main';
+export const PUBLIC_DIRS = Object.freeze(['spikes/lang-bench/runner', 'spikes/lang-bench/templates', 'spikes/lang-bench/test/fixtures/runner/format', 'spikes/lang-bench/test/hello', 'spikes/lang-explore/rehearsal', RUNNER_DIR]);
 
 /**
  * The lines (normalised like the material, blank ones dropped) of the pilot's own agent-visible runner files as COMMITTED at `ref` (HEAD): the exemption of code needles that collide with them. Every agent holds a copy of `runner/` in its workspace and
  * the file was public before any held-out generator existed, so a generic line both share is a collision, not a leak. Read through git, never from the working copy: an uncommitted edit creates no exemption. Not pinned by sha in the
  * pins, so it is HEAD's. Nothing readable (no repository, no runner, git failing) gives no exemption, the stricter check. A set.
  */
-export async function committedRunnerLines({ repoRoot = REPO, ref = 'HEAD' }) {
-  const listed = await runBounded('git', ['ls-tree', '-r', '--name-only', ref, '--', RUNNER_DIR], { cwd: repoRoot, timeoutMs: 30_000 });
+export const committedRunnerLines = ({ repoRoot = REPO, ref = 'HEAD' }) => committedLinesIn({ repoRoot, ref, dirs: [RUNNER_DIR] });
+
+/** The quick tasks' grammar set: the public directories as `main` holds them (`io.publicRef` and `io.gitRun` are for tests). */
+export const publicLines = ({ repoRoot, io = {} }) => committedLinesIn({ repoRoot, ref: io.publicRef ?? PUBLIC_REF, dirs: PUBLIC_DIRS, ...(io.gitRun ? { run: io.gitRun } : {}) });
+
+/** The normalised lines of the files committed at `ref` under `dirs` (see `committedRunnerLines`; the same stricter-on-failure rule). */
+export async function committedLinesIn({ repoRoot = REPO, ref = 'HEAD', dirs, run = runBounded }) {
+  const listed = await run('git', ['ls-tree', '-r', '--name-only', ref, '--', ...dirs], { cwd: repoRoot, timeoutMs: 30_000 });
   const files = listed.ok && listed.value.code === 0 ? listed.value.stdout.split('\n').filter(Boolean) : [];
-  const texts = await Promise.all(files.map(f => runBounded('git', ['show', `${ref}:${f}`], { cwd: repoRoot, timeoutMs: 30_000 })));
+  const texts = await Promise.all(files.map(f => run('git', ['show', `${ref}:${f}`], { cwd: repoRoot, timeoutMs: 30_000 })));
   const lines = texts.filter(r => r.ok && r.value.code === 0).flatMap(r => r.value.stdout.split('\n')).map(normLine).filter(l => l !== '');
   return new Set(lines);
 }
 
 /** The mutant ids and trap ids of a task's manifest: short names (`M-03`, `h007`) that are no needles but must not appear as words in a public note. */
 export const manifestIds = manifest => [...new Set([...Object.keys(manifest.mutants ?? {}), ...(manifest.traps ?? [])])];
+
+/** The ids of a held-out side: an olympiad task's manifest names mutants and traps; a quick task has traps only (`traps.txt`, case ids). */
+const idsOfHeldout = held => (held.manifest ? manifestIds(held.manifest) : [...new Set(held.traps ?? [])]);
 
 /** The public files (`research/lang-v2/*.md` under `repo`) in which any of `ids` occurs as a whole word: `[file name]`, never the id. */
 export function leakIds({ repo = REPO, ids }) {
@@ -71,41 +89,53 @@ function scanProblem(loaded, home) {
   return loaded.some(l => l.held.ok) ? null : `no held-out folder is present (${loaded.map(l => taskPaths(l.task, home).heldoutDir).join(', ')}): the leak check would scan for nothing`;
 }
 
+/** The sentence refusing the scan, or null: a reviewed list that is unreadable or malformed (the check would not know what it exempts), else the scan's own problem. */
+const refusalOf = ({ loaded, home, reviewed }) => (reviewed.ok ? scanProblem(loaded, home) : reviewed.reason);
+
 /**
  * The structured material of the tasks to scan (`only` is one task id, or null for EVERY task of the pins): `ok({ material, ids, scanned, absent })` | `fail`. A task whose folder is not there has nothing to leak and is
- * listed in `absent`. `runnerLines` are the committed runner's normalised lines: a code needle that collides with one is dropped.
+ * listed in `absent`. `runnerLines` are the committed runner's normalised lines: a code needle that collides with one is dropped. The person-reviewed list of `home` (leak-reviewed.mjs) drops the lines and phrases it holds from the
+ * needles and keys of every tier; `reviewed` in the result says how many entries it holds, by kind (counts only).
  */
-export function leakMaterial({ home, explore, only = null, publicText = decidedPublicText(), runnerLines = new Set() }) {
+export function leakMaterial({ home, explore, only = null, publicText = decidedPublicText(), runnerLines = new Set(), grammarLines = new Set() }) {
   const loaded = loadTasks(home, explore, only);
-  const problem = scanProblem(loaded, home);
+  const reviewed = loadReviewed({ home });
+  const problem = refusalOf({ loaded, home, reviewed });
   if (problem) return fail(problem);
   const present = loaded.filter(l => l.held.ok);
   const notes = present.map(l => ({ id: l.task.id, text: notesOf(l.task, home) }));
   const missing = notes.filter(n => n.text === null).map(n => n.id);
   if (missing.length > 0) return fail(`the private notes of task ${listOf(missing)} are missing (${listOf(missing.map(id => taskPaths(resolveTask(explore, id).value, home).notesFile))}): the leak check would read no shingles of a task whose material is there`);
-  const tasks = present.map((l, i) => ({ id: l.task.id, heldout: l.held.value, shinglesText: leakShingles(notes[i].text, publicText), baselineCommit: l.task.baselineCommit, heldoutBorn: l.task.heldoutBorn }));
-  const built = buildMaterial({ tasks, runnerLines });
+  const tasks = present.map((l, i) => ({ id: l.task.id, heldout: l.held.value, shinglesText: leakShingles(notes[i].text, publicText), baselineCommit: l.task.baselineCommit, heldoutBorn: l.task.heldoutBorn, quick: l.task.quick === true }));
+  const built = buildMaterial({ tasks, runnerLines, grammarLines, reviewed: reviewed.value });
   if (!built.ok) return built;
-  return ok({ material: built.value, ids: [...new Set(present.flatMap(l => manifestIds(l.held.value.manifest)))], scanned: tasks.map(x => x.id), absent: loaded.filter(l => !l.held.ok).map(l => l.task.id) });
+  return ok({ material: built.value, ids: [...new Set(present.flatMap(l => idsOfHeldout(l.held.value)))], scanned: tasks.map(x => x.id), absent: loaded.filter(l => !l.held.ok).map(l => l.task.id), reviewed: reviewed.value.counts });
 }
 
 const orNone = ids => (ids.length === 0 ? 'none' : listOf(ids));
 const skippedText = skipped => (skipped.length === 0 ? 'none' : skipped.map(s => `task ${s.task}: ${s.lines}`).join(', '));
 const exemptText = exempt => (Object.keys(exempt ?? {}).length === 0 ? 'none' : Object.entries(exempt).map(([task, n]) => `task ${task}: ${n}`).join(', '));
-export const leakLine = (r, m) => (r.ok
+
+/** The result line with the count of what a person's reading exempted, when there is any (counts only, never a text): every run with an exemption says so. */
+export const withReviewed = (text, m) => {
+  const { lines, shingles } = m.reviewed ?? { lines: 0, shingles: 0 };
+  return lines + shingles === 0 ? text : `${text}; ${lines} private line(s) and ${shingles} phrase(s) exempt by a person's reading`;
+};
+
+export const leakLine = (r, m) => withReviewed(r.ok
   ? `leakcheck clean: ${r.scanned} files (${r.binary.length} binary: line tiers only) and ${r.history.join(' + ') || 'no history'} scanned for the held-out case lines, reference, mutant, generator and oracle lines, test-note shingles and mutant and trap ids of tasks ${orNone(m.scanned)} (held-out folder not present: ${orNone(m.absent)}; short case lines left to the other tiers: ${skippedText(r.skipped)}; collisions with the baseline commit (not leaks): ${exemptText(r.exempt)}; substring needles: ${m.material.substrings.length})`
-  : `leakcheck FAILED: ${r.reason}`);
+  : `leakcheck FAILED: ${r.reason}`, m);
 
 /** The material of the command: the named task's, or every task's. -> `ok(material)` | `fail`. */
-function materialOf({ values, io, explore, runnerLines }) {
+function materialOf({ values, io, explore, runnerLines, grammarLines }) {
   const named = values.task === undefined ? ok(null) : resolveTask(explore, values.task);
-  return named.ok ? leakMaterial({ home: io.home, explore, only: values.task ?? null, runnerLines }) : named;
+  return named.ok ? leakMaterial({ home: io.home, explore, only: values.task ?? null, runnerLines, grammarLines }) : named;
 }
 
 /** The failure of the id scan (the files that name a mutant or trap id as a word), or null. */
 const idProblem = (r, material) => {
   const named = r.ok ? leakIds({ ids: material.ids }) : [];
-  return named.length > 0 ? `leakcheck FAILED: a mutant or trap id of the held-out material is a word in ${listOf(named)}` : null;
+  return named.length > 0 ? withReviewed(`leakcheck FAILED: a mutant or trap id of the held-out material is a word in ${listOf(named)}`, material) : null;
 };
 
 /**
@@ -116,7 +146,7 @@ export async function leakcheckCommand({ values, io, explore, say }) {
   const repoRoot = io.repoRoot ?? REPO;
   const progress = io.progress ?? (line => process.stderr.write(`${line}\n`));
   progress(`building the material of tasks ${values.task ?? taskIds(explore).join(', ')}`);
-  const material = materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }) });
+  const material = materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) });
   if (!material.ok) return { exit: 4, message: material.reason };
   progress(`material: ${materialCounts(material.value.material)}`);
   const r = await scanRepository({ repoRoot, material: material.value.material, range: rangeOf(values).range, progress });

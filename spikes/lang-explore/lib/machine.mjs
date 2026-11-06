@@ -71,7 +71,7 @@ export function machineFor({ thresholds, calibratedMs, seriesDir, acceptNoisy = 
     const sampler = await build(cellIds);
     const sleep = sleepFn ?? (ms => abortableSleep(ms, signal));
     const onRetry = ({ verdict, waitedMs, nextCheckInMs }) => say(`the machine is not quiet (${failureList(verdict)}); waited ${secs(waitedMs)} s of ${secs(thresholds.maxWaitMs)} s; next check in ${secs(nextCheckInMs)} s`);
-    const waited = await waitForQuiet({ check: () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep }), maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep, onRetry, signal });
+    const waited = await waitForQuiet({ check: () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep }), maxWaitMs: acceptNoisy ? 0 : thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep, onRetry, signal });
     if (waited.aborted) return fail('cancelled while waiting for a quiet machine');
     return waited.quiet ? ok({ quiet: true, flags: [], numbers: waited.verdict.numbers, waitedMs: waited.waitedMs }) : notQuiet({ waited, acceptNoisy });
   }

@@ -7,6 +7,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadExplore } from './inputs.mjs';
 import { materialProblem } from './material.mjs';
 import { taskPaths } from './tasks.mjs';
+import { isQuick, quickCalibration } from './quick.mjs';
 
 const MAX_TIME_FACTOR = 10; // an effective TL above ten calibration ceilings is not a limit
 const MAX_MEMORY_BYTES = 64 * 1024 ** 3;
@@ -39,14 +40,24 @@ export function validLimits(limits, registered, subject) {
 
 const readJsonOr = file => { try { return ok(JSON.parse(readFileSync(file, 'utf8'))); } catch (e) { return fail(`${file} is unreadable: ${e.message}`); } };
 
-/** The calibration of `task` (`explore.mjs calibrate --task NN`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. `exploreFn` loads the registered inputs (a test passes its own). */
-export function loadCalibration(home, task, exploreFn = loadExplore) {
+/** The quick tasks have fixed limits and no calibration file (no oracle, no mutants). */
+function fixedCalibration(exploreFn) {
+  const e = exploreFn();
+  return e.ok ? ok(quickCalibration(e.value)) : e;
+}
+
+function fileCalibration(home, task, exploreFn) {
   const file = taskPaths(task, home).calibrationFile;
   if (!existsSync(file)) return fail(`${file} is not there: run \`explore.mjs calibrate --task ${task.id}\` first (the limits are measured before any paid session)`);
   const got = chainSync([() => exploreFn(), () => readJsonOr(file)]);
   if (!got.ok) return got;
   const valid = validLimits(got.value[1]?.limits, got.value[0].limits, `${file} is not a usable calibration`);
   return valid.ok ? bound({ calibration: got.value[1], task, home }) : valid;
+}
+
+/** The calibration of `task` (`explore.mjs calibrate --task NN`) for `home`, checked for its shape and bounds; or the sentence saying to run it: no paid session starts without limits. `exploreFn` loads the registered inputs (a test passes its own). */
+export function loadCalibration(home, task, exploreFn = loadExplore) {
+  return isQuick(task) ? fixedCalibration(exploreFn) : fileCalibration(home, task, exploreFn);
 }
 
 /** The calibration, when the held-out folder is still the material it was made over; else the sentence saying it moved. */

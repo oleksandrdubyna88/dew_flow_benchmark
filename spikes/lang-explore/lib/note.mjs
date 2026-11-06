@@ -2,7 +2,7 @@
 // recorded before the run, names every difference from v2's harness, and carries the banner. It gives counts and rates only: no case id, no requirement breakdown, no input or expected value, no trap name, no
 // agent code or transcript (the private detail stays in `~/rsd/lang-v2/explore/<series>/private/`). Pure: records in, text out.
 
-import { bannerOf, extraDifferencesOf, notSettledOf, predictedOf } from './note-tasks.mjs';
+import { QUICK_BASE, bannerOf, extraDifferencesOf, notSettledOf, predictedOf } from './note-tasks.mjs';
 
 const DASH = '—';
 
@@ -182,6 +182,9 @@ export const DIFFERENCES = Object.freeze([
   'v1\'s contamination rules run as they are (the rules that name minigit are idle; the path rules are active).',
 ]);
 
+/** The differences list of a task: the olympiad pilot's, or the quick run's own. */
+const differencesOf = task => (task.quick === true ? [...QUICK_BASE, ...extraDifferencesOf(task)] : [...DIFFERENCES, ...extraDifferencesOf(task)]);
+
 /** The pins and the subject, by sha, harness path and date (`common.measurement` rule 6). */
 function pinLines({ input }) {
   const e = input.pins;
@@ -192,7 +195,9 @@ function pinLines({ input }) {
     `- Agent: CLI ${e.cli.version} (sha256 \`${e.cli.sha256.slice(0, 12)}\`), model \`${e.cli.model}\`, effort \`${e.cli.effort}\`; caps $${e.caps.capUsd} per session, ${e.caps.wallMs / 60000} min wall, ${e.caps.stallMs / 60000} min stall.`,
     `- Stacks: .NET SDK ${e.dotnet.sdk}, Node ${e.node.version}, TypeScript ${e.typescript.version}; locale \`${e.locale}\`; python3 ${e.python3.version} (sha256 \`${e.python3.sha256.slice(0, 12)}\`).`,
     `- Task: spec ${task.id} at \`${task.spec.sha}\` (sha256 \`${task.spec.sha256.slice(0, 12)}\`), FORMAT ${task.format.label} at \`${task.format.sha}\` (sha256 \`${task.format.sha256.slice(0, 12)}\`).`,
-    `- Limits: time limit ${input.limits.timeMs} ms, memory limit ${input.limits.memoryBytes} bytes (calibrated on this host before pair 1).`,
+    input.task.quick === true
+      ? `- Limits: memory ${input.limits.memoryBytes} bytes, build ${input.limits.buildTimeoutMs} ms, each scenario's own deadlines (fixed; not calibrated).`
+      : `- Limits: time limit ${input.limits.timeMs} ms, memory limit ${input.limits.memoryBytes} bytes (calibrated on this host before pair 1).`,
   ];
 }
 
@@ -217,11 +222,11 @@ export function renderNote(input) {
     '## Cost: the views and their cross-checks', '', ...costTable(cells), '',
     '## Time: wall, model_api, active - model_api, and the build/test time of the agent\'s own calls', '', ...timeTable(cells), '',
     '## The time partition, every category', '', ...partitionTable(cells), '',
-    '## Quality: pass rates and trap hits (counts only)', '', ...qualityTable(cells), '', floorLine(input.sessions), '',
+    '## Quality: pass rates and trap hits (counts only)', '', ...qualityTable(cells), '', input.task.quick === true ? 'The time floors of the olympiad tasks do not apply to daemon and web cases: a scenario\'s own deadlines judge time.' : floorLine(input.sessions), '',
     '## Pairs', '', ...pairTable(input.pairs), '',
     '## Cost per correct solution', '', ...cpcLines(input.cpc), '',
     '## Voids, contamination and timeouts', '', ...incidentLines(cells), '',
-    '## Differences from v2\'s harness', '', ...[...DIFFERENCES, ...extraDifferencesOf(input.task)].map(d => `- ${d}`), '',
+    '## Differences from v2\'s harness', '', ...differencesOf(input.task).map(d => `- ${d}`), '',
     '## What this does not settle', '', notSettledOf(input.task), '',
   ].join('\n');
 }

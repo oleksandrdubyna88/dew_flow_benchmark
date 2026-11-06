@@ -2,22 +2,23 @@
 // and each whitespace token of 30 characters or more in it, is looked up by its key. A `git log -p` line is looked up as it is AND without its one-character diff prefix. A key that hits is only a CANDIDATE: the verify step
 // (lib/leak-verify.mjs) finds the case line it came from and compares the text, so a hash collision is never a finding.
 import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
+import { NO_REVIEW } from './leak-reviewed.mjs';
 import { KeyIndex, normLine, polyHash, stripDiffPrefix, usable } from './leak-text.mjs';
 
 export const LINE_MIN = 30;
 
-/** The keys of every case line of 30 characters or more of the folders `[{ casesDir }]` (one pass over each case file; a sorted index, not a JS object per line). */
+/** The keys of every case line of 30 characters or more of the folders `[{ casesDir, grammar?, reviewed? }]` (one pass over each case file; a sorted index, not a JS object per line). A line of `grammar` (FORMAT grammar a quick task shares with the public examples) or one a person reviewed (`reviewed`, see leak-reviewed.mjs) is no key. */
 export function buildLineKeys(sources, hash = polyHash) {
   const keys = new KeyIndex();
-  for (const { casesDir } of sources) {
+  for (const { casesDir, grammar = null, reviewed = NO_REVIEW } of sources) {
     for (const name of caseFilesOf(casesDir)) {
-      for (const raw of caseLinesOf(casesDir, name)) addLine(keys, normLine(raw), hash);
+      for (const raw of caseLinesOf(casesDir, name)) addLine(keys, normLine(raw), { hash, grammar, reviewed });
     }
   }
   return keys.freeze();
 }
 
-const addLine = (keys, n, hash) => { if (usable(n, LINE_MIN)) keys.add(hash(n)); };
+const addLine = (keys, n, { hash, grammar, reviewed }) => { if (usable(n, LINE_MIN) && !grammar?.has(n) && !reviewed.hasLine(n)) keys.add(hash(n)); };
 
 /** The private code needles by key: `Map(key -> [needle])` (a few thousand at most). */
 export function codeByKey(needles, hash = polyHash) {

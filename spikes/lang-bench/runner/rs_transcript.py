@@ -2,8 +2,8 @@
 the writer of strings in the transcript's canonical form.
 
 `parse_transcript(data, file)` returns `(transcript, problems)` like `rs_script.parse_script`: None whenever there is a problem,
-`transcript 1` is a format error (V1), a repeated member name or NaN in an expected JSON body is a problem, and the relational
-`check` lines of V6 are kept apart from the entries (a check produces no entry).
+`transcript 1` is a format error, a repeated member name or NaN in an expected JSON body is a problem, and the relational
+`check` lines are kept apart from the entries (a check produces no entry).
 """
 import itertools
 import re

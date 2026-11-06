@@ -18,9 +18,16 @@ import { allOk } from './chain.mjs';
 import { calibrationFor, loadCalibration } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
 import { canonicalNameProblem, isRehearsal, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
+import { finishInterrupted, interruptedPair } from './finish.mjs';
 import { pauseVerdict } from './pause.mjs';
 import { acquirePlanLock } from './plan-lock.mjs';
 import { frozenPinsProblem, seriesTaskProblem } from './tasks.mjs';
+import { isQuick, quickPlan } from './quick.mjs';
+import { heldoutMovedProblem, parseProblem } from './heldout-quick.mjs';
+import { BENCH_RUNNER } from './workspace-quick.mjs';
+
+/** The plan a task belongs to: the quick run's, or the olympiad pilot's (its pause point and its task list). */
+export const planOf = (explore, task) => (isQuick(task) ? quickPlan(explore) : explore.olympiad);
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
@@ -83,7 +90,7 @@ export async function runPair({ seriesDir, pair, rerun = null, io, explore, task
 
 /** The plan's tasks run under ONE lock (lib/plan-lock.mjs) held from the pause check to the end of the pair; task 1's own series does not. */
 async function underPlanLock(a) {
-  if (!a.explore.olympiad.planTasks.includes(a.task.id)) return runLocked(a);
+  if (!planOf(a.explore, a.task).planTasks.includes(a.task.id)) return runLocked(a);
   const lock = acquirePlanLock({ home: a.io.home });
   if (!lock.ok) return { exit: 4, message: lock.reason };
   try {
@@ -106,14 +113,27 @@ function seriesRefusal(seriesDir, series, task, nameOk) {
 
 const stoppedRefusal = map => (map.stopped ? { exit: 2, message: `the series is stopped (${map.stopped.rule}): a stop is final for its series` } : null);
 
+/** A quick task's held-out set, checked before a paid pair: it is the set the series was made over, and the real runner reads every pair of it (a pair the runner refuses is a defect to fix, not a verdict). -> a sentence or null. */
+export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
+  const inputs = seriesInputs(seriesDir);
+  const moved = inputs.ok ? heldoutMovedProblem({ inputs: inputs.value, heldout }) : inputs.reason;
+  if (moved) return moved;
+  const parsed = await parseProblem({ casesDir: heldout.casesDir, kind: task.kind, runner: path.join(BENCH_RUNNER, 'run_samples.py') });
+  return parsed.ok ? null : parsed.reason;
+}
+
 /** What a pair needs besides its plan: the task's calibration, its held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
 async function prerequisites({ home, series, task, worldFn, tokenFn }) {
   const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => loadHeldout(home, task), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
   const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
-  return pins.ok ? ok({ calibration, heldout, world, token, prompts }) : pins;
+  if (!pins.ok) return pins;
+  const quick = await quickProblem({ series, heldout, task });
+  return quick ? fail(quick) : ok({ calibration, heldout, world, token, prompts });
 }
+
+const quickProblem = ({ series, heldout, task }) => (isQuick(task) ? quickHeldoutProblem({ seriesDir: series.dir, heldout, task }) : null);
 
 /** The plan reaches the run map only now, when everything the pair needs is in hand: a pair that cannot start leaves run-map.json as it was. */
 function commitPlan({ series, pair, planned, say }) {
@@ -135,9 +155,19 @@ function pinsMoved({ series, task }) {
 }
 
 /** The pause point (lib/pause.mjs) applies to the plan's tasks only; task 1's own series, made before it existed, is not under it. */
-const pauseOf = ({ io, explore, task }) => (explore.olympiad.planTasks.includes(task.id) ? pauseVerdict({ home: io.home, explore, allowOver: io.allowOver ?? null, ...(io.now ? { now: io.now } : {}) }) : { stop: false, record: null });
+const pauseOf = ({ io, explore, task }) => (planOf(explore, task).planTasks.includes(task.id) ? pauseVerdict({ home: io.home, explore, plan: planOf(explore, task), allowOver: io.allowOver ?? null, ...(io.now ? { now: io.now } : {}) }) : { stop: false, record: null });
 
-async function runLocked({ series, pair, rerun, io, explore, task }) {
+/** A pair a run left between `scored` and its records is finished from the kept evidence (lib/finish.mjs), free, before any planning; only on today's pins. -> a result, or null when the pair is not such a pair. */
+async function finishedIfInterrupted({ series, pair, rerun, io, task }) {
+  const found = rerun === null ? interruptedPair({ seriesDir: series.dir, map: series.map, pair }) : null;
+  if (found === null) return null;
+  const moved = pinsMoved({ series, task });
+  return moved ? { exit: 4, message: moved } : finishInterrupted({ series, pair, task, io, found, finalize: finalizePair });
+}
+
+const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
+
+async function runPlanned({ series, pair, rerun, io, explore, task }) {
   const planned = planOnPins({ series, pair, rerun, task });
   if (!planned.ok) return { exit: 4, message: planned.reason };
   const pause = pauseOf({ io, explore, task });

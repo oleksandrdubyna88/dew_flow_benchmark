@@ -1,7 +1,7 @@
-"""rs_match: expected transcript entries compared with what the runner observed (FORMAT v2 5.2 to 5.5, V6).
+"""rs_match: expected transcript entries compared with what the runner observed (FORMAT v2 5.2 to 5.5).
 
 `match_entry` compares one expected entry with one observation; `compare` walks the expanded transcript in order (an `unordered`
-group by one-to-one assignment), binds what fields matched, and then evaluates the V6 `check` lines in file order. The first
+group by one-to-one assignment), binds what fields matched, and then evaluates the `check` lines in file order. The first
 difference becomes a `Verdict`; the report module (rs_report) only prints it.
 """
 from datetime import datetime
@@ -34,6 +34,7 @@ class Verdict(NamedTuple):
     detail: str = ""
     kind: str = ""
     entries: int = 0
+    group: tuple = ()  # the observations of an unordered group that no assignment matched (evidence only: no verdict reads it)
 
 
 OK = Result(True)
@@ -193,7 +194,7 @@ class _Run:
         owner = rs_assign.assign(size, size, lambda r, c: match_entry(rows[r], cols[c], self.variables).ok)
         lost = rs_assign.unmatched_rows(size, owner)
         if lost:
-            return self.differs(start + lost[0], _fail("entry", "no assignment of the group's observations matches it"), None)
+            return self.differs(start + lost[0], _fail("entry", "no assignment of the group's observations matches it"), None)._replace(group=tuple(cols))
         for c, r in enumerate(owner):
             self.take(match_entry(rows[r], cols[c], self.variables).binds)
         return None

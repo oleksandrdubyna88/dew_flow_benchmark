@@ -548,11 +548,13 @@ class ParseOnlyTests(unittest.TestCase):
         self.assertEqual(code, 4)
         self.assertIn("x2.out", err)
 
-    def test_A_daemon_or_web_run_without_parse_only_is_refused_until_part_two_exists(self):
+    def test_A_daemon_run_starts_the_program_and_a_program_that_exits_before_it_is_ready_is_a_failed_case_not_a_crash(self):
         box = self.daemon_box(self)
-        code, _, err = box.cli()
-        self.assertEqual(code, 5)
-        self.assertIn("daemon", err)
+        code, out, _ = box.cli()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL x2", out)
+        self.assertIn("early-exit", out)
+        self.assertTrue(os.path.exists(os.path.join(box.ws, "started")), "the daemon kind runs the program")
 
     def test_An_olympiad_parse_only_checks_the_pairs_exist_and_runs_nothing(self):
         box = Box(self, run_sh="touch started\n")

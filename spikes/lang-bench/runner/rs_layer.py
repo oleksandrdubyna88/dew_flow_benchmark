@@ -1,4 +1,4 @@
-"""rs_layer: the options of the execution layer (E1.S8b) as the command line takes them: `--launch-status`, `--case-view`, and the
+"""rs_layer: the options of the execution layer as the command line takes them: `--launch-status`, `--case-view`, and the
 `Config` the olympiad path runs under; plus what a run observed besides its cases (`RunInfo`) and the text of a failed launch."""
 import os
 import re
@@ -139,5 +139,5 @@ def host_problems(args):
 
 
 def empty_record(run):
-    """The control of F1 as the JSON result keeps it: its time, its launch time, and which pid the wait was on and how that was found."""
+    """The empty-program control as the JSON result keeps it: its time, its launch time, and which pid the wait was on and how that was found."""
     return {"ms": run.wall_ms, "launchMs": run.launch_ms, "pid": run.program["pid"], "found": run.program["found"], "comm": run.program["comm"]}
