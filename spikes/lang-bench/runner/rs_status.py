@@ -1,4 +1,4 @@
-"""rs_status: the launch status the layer's bwrap writes with `--json-status-fd N` (B5), read here as `--launch-status N`.
+"""rs_status: the launch status the layer's bwrap writes with `--json-status-fd N`, read here as `--launch-status N`.
 
 bwrap writes one JSON object per line: `{"child-pid": P}` right after it clones the sandbox (before its mounts are made), later
 `{"exit-code": C}`. The runner makes one
@@ -56,7 +56,7 @@ def release(number):
 
 class StatusReader:
     """Collects the lines of one case: `child_pid` and `exit_code` stay None until their line is whole. `problem` names the first thing that
-    breaks the rules (P2): a line that is not one JSON object or a record that is neither before `child-pid`, a doubled or invalid
+    breaks the rules: a line that is not one JSON object or a record that is neither before `child-pid`, a doubled or invalid
     `child-pid` or `exit-code`. Before `child-pid` a problem is a failed launch; after it the lines that are not status records are the case
     and are ignored, and the launch is judged on what the runner had read when it took the clock."""
 

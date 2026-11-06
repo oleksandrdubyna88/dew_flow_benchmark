@@ -3,6 +3,7 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { SUBSTRING_NEEDLES_MAX } from '../lib/leak-material.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { EXPLORE, caseWith, commitFiles, git, materialOf, repoWith } from './leak-scan-fixture.mjs';
 
@@ -51,8 +52,11 @@ test('More_than_3000_substring_needles_is_a_clear_failure_and_a_task_with_over_2
   const exactly = materialOf({ '03': { cases: [caseWith('h001', lines.slice(0, 2000))] } });
   assert.equal(exactly.material.substrings.filter(n => n.source.startsWith('cases/')).length, 2000, 'a task with 2000 qualifies');
   const own = k => ({ cases: [caseWith('h001', lines.slice(0, 1500).map(l => `${l} of task ${k}`))] });
-  const tooMany = materialOf({ '01': own(1), '02': own(2), '03': own(3) });
+  const tooMany = materialOf({ '01': own(1), '02': own(2), '03': own(3) }, { maxNeedles: 3000 }); // the cap the olympiad's three tasks were registered with
   assert.equal(tooMany.built.ok, false);
+  const underTheRegisteredCap = materialOf({ '01': own(1), '02': own(2), '03': own(3) });
+  assert.equal(underTheRegisteredCap.built.ok, true, 'the registered cap (a quarter of the prefix table) takes the 4,500 needles of three tasks');
+  assert.equal(SUBSTRING_NEEDLES_MAX, 16384);
   assert.match(tooMany.built.reason, /the substring tier holds \d+ needles, over its cap of 3000/);
 });
 

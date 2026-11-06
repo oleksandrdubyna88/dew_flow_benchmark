@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { taskPaths } from './tasks.mjs';
+import { isQuick } from './quick.mjs';
+import { loadHeldoutQuick } from './heldout-quick.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const filesUnder = (root, rel = '') => readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap(e => (e.isDirectory() ? filesUnder(root, path.join(rel, e.name)) : [path.join(rel, e.name)]));
@@ -38,6 +40,7 @@ export function permissionProblems(dir) {
 
 /** `ok(heldout)` with `{ task, dir, manifest, casesDir, bruteFile, handcheckFile, refDir(stack), mutantDir(id), traps, caseIds }` for one task's folder, or a `fail` naming what is absent or changed. */
 export function loadHeldout(home, task) {
+  if (isQuick(task)) return loadHeldoutQuick(home, task);
   const dir = taskPaths(task, home).heldoutDir;
   if (!existsSync(path.join(dir, 'manifest.json'))) return fail(`the held-out side is not there (${dir}/manifest.json): run gen.py there`, { absent: true });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));

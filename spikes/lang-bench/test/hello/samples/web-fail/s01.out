@@ -1,0 +1,8 @@
+transcript 2
+ready
+reply a 200
+  header "content-type" "application/json"
+  body json {"method":"PUT","path":"/hello"}
+reply a 200
+  body json {"path":"/x/hello","method":"POST"}
+exit 0

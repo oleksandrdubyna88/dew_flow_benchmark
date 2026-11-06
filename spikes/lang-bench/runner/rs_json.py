@@ -1,4 +1,4 @@
-"""rs_json: JSON read and compared exactly (FORMAT v2 5.2, decision V2).
+"""rs_json: JSON read and compared exactly (FORMAT v2 5.2).
 
 Numbers are `Decimal` (an integer and a decimal alike), so `2` equals `2.0` and `-0` equals `0` by value, and two integers that
 differ in the last digit of 9007199254740993 stay different. A repeated member name, NaN, Infinity and -Infinity are refused.

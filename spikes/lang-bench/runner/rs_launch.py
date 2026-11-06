@@ -1,4 +1,4 @@
-"""rs_launch: starting a case's program through the launch prefix and finding out whether it really started (B5, B6, B1).
+"""rs_launch: starting a case's program through the launch prefix and finding out whether it really started.
 
 With `--launch-status N` the launcher (the layer's `systemd-run … bwrap --json-status-fd N … bash run.sh`) must report `child-pid` before
 it exits: the line is the START OF THE CASE CLOCK and the proof that the launcher started; it does not say the box is complete. bwrap writes
@@ -66,7 +66,7 @@ class Launched:
 
 
 class EmptyRun(NamedTuple):
-    """The control of F1: an empty program through the same prefix. `wall_ms` is None when its end instant is unknown."""
+    """The empty-program control: an empty program through the same prefix. `wall_ms` is None when its end instant is unknown."""
     wall_ms: Optional[int]
     launch_ms: Optional[int]
     program: dict
@@ -111,12 +111,18 @@ def abandon_active():
         _forget(proc)
 
 
+def _unblock_all():
+    """In the child, before the exec: the signals the runner holds off around the spawn (_deferred_signals) are NOT held off for the program,
+    or it would never see the SIGTERM a daemon or web scenario sends it. The runner is single-threaded here, so preexec_fn is safe."""
+    signal.pthread_sigmask(signal.SIG_SETMASK, ())
+
+
 def _spawn(argv, cwd, stderr_path, status_fd, streams):
-    """The launcher in a session of its own, with the V11 environment and the status descriptor at its number."""
+    """The launcher in a session of its own, with the program environment and the status descriptor at its number."""
     try:
         with open(stderr_path, "wb") as err:
             return subprocess.Popen(argv, cwd=cwd, stdin=streams[0], stdout=streams[1], stderr=err, start_new_session=True,
-                                    env=ex.program_env(), pass_fds=() if status_fd is None else (status_fd,))
+                                    env=ex.program_env(), pass_fds=() if status_fd is None else (status_fd,), preexec_fn=_unblock_all)
     finally:
         if status_fd is not None:
             rs_status.release(status_fd)
@@ -292,7 +298,7 @@ def _empty_wall(end, pump, launched):
 
 
 def time_empty(config, lifecycle_for, stderr_path):
-    """An empty program (`bash -c :`) timed through the same prefix, clock and pump: the control F1 asks for -> EmptyRun. Its `{case}` is
+    """An empty program (`bash -c :`) timed through the same prefix, clock and pump: the empty-program control -> EmptyRun. Its `{case}` is
     EMPTY_CASE, so a layer whose prefix binds a per-case view or cgroup must provide one by that name (no sample may have that id). The
     record says which pid the wait was on, and the launch time."""
     lifecycle = lifecycle_for(config, ex.EMPTY_CASE)

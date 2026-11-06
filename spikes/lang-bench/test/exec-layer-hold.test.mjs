@@ -54,3 +54,21 @@ test('A_limit_the_runner_would_refuse_is_refused_here_too', async t => {
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /timeS/);
 });
+
+test('A_hold_the_caller_gives_that_is_shorter_than_T_plus_G_or_not_a_number_is_refused_and_nothing_is_left', async t => {
+  if (!needs(t)) return;
+  for (const holdSeconds of [10, 34.9, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, '720']) {
+    const options = layerOptions(t, { limitsFile: limitsFile(t, { timeS: 30, graceS: 5 }), caseWallMs: undefined, holdSeconds });
+    const refused = await openRun(options);
+    assert.equal(refused.ok, false, `holdSeconds ${String(holdSeconds)}`);
+    assert.match(refused.reason, new RegExp(`holdSeconds ${String(holdSeconds).replace('.', '\\.')} must be a number of at least 35 s`));
+    assert.deepEqual((await import('node:fs')).readdirSync(options.parent), [], 'no run folder, claim or holder is left');
+  }
+});
+
+test('A_hold_the_caller_gives_that_covers_T_plus_G_is_the_bound_of_the_scope_holder', async t => {
+  if (!needs(t)) return;
+  const run = await opened(t, { limitsFile: limitsFile(t, { timeS: 30, graceS: 5 }), caseWallMs: undefined, holdSeconds: 35 });
+  assert.ok(run.ok, run.reason);
+  assert.equal(holdSeconds(run.value), 35, 'exactly T + G is enough, and it is the bound as given');
+});

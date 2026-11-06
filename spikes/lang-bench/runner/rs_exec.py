@@ -1,7 +1,7 @@
-"""rs_exec: what every program run shares: the build, the launch argv, the program's environment (V11), the process group of the plain
+"""rs_exec: what every program run shares: the build, the launch argv, the program's environment, the process group of the plain
 path, and the wait.
 
-The execution layer (E1.S8b) hands the runner a launch prefix, a launch status descriptor, a cgroup and a case view; `rs_scope.py` is the
+The execution layer hands the runner a launch prefix, a launch status descriptor, a cgroup and a case view; `rs_scope.py` is the
 lifecycle that reads and kills through that cgroup, `PlainLifecycle` here is the one with no box. Wall time is `time.monotonic_ns()` and
 every wait for an exit is `os.pidfd_open` + `select` with the exact remaining time, never `Popen.wait(timeout=...)`'s polling. One clock,
 `time.monotonic_ns`, serves every start, end and deadline of a case.
@@ -31,6 +31,8 @@ LAUNCH_CEILING_MS = 60_000
 SEEK_TICK_S = 0.001
 TRACK_TICK_S = 0.02
 RECHECK_S = 0.02
+# How long a process found after the exit may take to finish exiting before it counts as a leftover: a loaded machine can take far longer than one recheck.
+LEFTOVER_SETTLE_MS = 2000
 EMPTY_CASE = "empty-program"
 RUN_PROGRAM = ("bash", "run.sh")
 POLL_FIRST_S = 0.001
@@ -131,7 +133,7 @@ def now_ms():
 
 def ceil_ms(ns):
     """Whole milliseconds, rounded UP: the one rounding of every figure a result reports (wall, launch, empty program), so that subtracting
-    one from another (the F1 control) never mixes two roundings."""
+    one from another (the empty-program control) never mixes two roundings."""
     return -(-ns // NS_PER_MS)
 
 
@@ -153,7 +155,7 @@ def launch_argv(prefix, case_id, program=RUN_PROGRAM):
 
 
 def program_env(extra=None):
-    """V11: the program's environment is the runner's own (which the layer sets: D15's base plus the documented per-stack variables), plus
+    """The program's environment is the runner's own (which the layer sets: the series base plus the documented per-stack variables), plus
     `extra` (`PORT` and the scenario's `env` lines for the daemon and web kinds; nothing for an olympiad case). Nothing else is added or
     removed here: a copy taken at the launch, so a later change of the runner's own is not seen by a program already started."""
     return {**os.environ, **(extra or {})}

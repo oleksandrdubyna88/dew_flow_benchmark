@@ -15,7 +15,7 @@ import rs_fields
 import rs_lex as lex
 from rs_transcript import abbreviate, canonical, render_actual
 
-RUNNER_VERSION = "0.2.4"
+RUNNER_VERSION = "0.3.9"
 GRAMMAR = 2
 RESULT_FORMAT = 1
 DASH = "—"
@@ -159,7 +159,7 @@ def time_text(wall_ms, limit_ms, basis):
 # ---- the JSON result --------------------------------------------------------------------------------------------------------------
 
 NOT_CERTIFIED = {"known": False, "why": "not certified"}
-# The six fields of the memory record (parent D56). What was not read is null, never zero; the two flags are false when they were not raised.
+# The six fields of the memory record. What was not read is null, never zero; the two flags are false when they were not raised.
 # `known`, `why` and `events` stay beside them.
 MEMORY_FIELDS = {"peakBytes": None, "maxBytes": None, "oomKill": None, "runtimeAbort": None, "abortBelowEvidence": False, "childAbortLine": False}
 
@@ -171,12 +171,12 @@ def memory_record(memory):
 
 
 def leftover_lines(leftover):
-    """The note line of a program that left a process running after its exit (killed by the runner); part ii makes it the lifecycle finding."""
+    """The note line of a program that left a process running after its exit (killed by the runner)."""
     return ("  leftover: process still running after the exit (killed)",) if leftover else ()
 
 
 def abort_lines(memory):
-    """The report lines of the two flags of D56: a case that goes to the blind adjudication says why."""
+    """The report lines of the two flags of the memory record: a case that goes to the blind adjudication says why."""
     peak, limit = _bytes(memory["peakBytes"]), _bytes(memory["maxBytes"])
     below = f"  abort-below-evidence: a runtime's out-of-memory line with exit status 134, but peak {peak} of {limit} bytes is below half of the limit"
     child = "  child-abort-line: a runtime's out-of-memory line stands in the stderr of a program that did not abort itself (judged on its output and status)"

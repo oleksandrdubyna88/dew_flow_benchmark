@@ -14,7 +14,7 @@ import { spikeDir } from './helpers.mjs';
 const E3B_FILES = [
   'bare-runner.mjs',
   'lib/bare-config.mjs', 'lib/bare-collect.mjs', 'lib/bare-exit.mjs', 'lib/bare-gates.mjs', 'lib/bare-init.mjs', 'lib/bare-limits.mjs', 'lib/bare-outcome.mjs', 'lib/bare-phase.mjs', 'lib/bare-pins.mjs', 'lib/bare-plan.mjs',
-  'lib/bare-reclass.mjs', 'lib/bare-record.mjs', 'lib/bare-records-io.mjs', 'lib/bare-resume.mjs', 'lib/bare-schedule.mjs', 'lib/bare-series.mjs', 'lib/bare-settle.mjs',
+  'lib/bare-quick-flags.mjs', 'lib/bare-reclass.mjs', 'lib/bare-record.mjs', 'lib/bare-records-io.mjs', 'lib/bare-resume.mjs', 'lib/bare-schedule.mjs', 'lib/bare-series.mjs', 'lib/bare-settle.mjs',
   'lib/run-map.mjs', 'lib/series-lock.mjs', 'lib/spend-gate.mjs', 'lib/ledger.mjs', 'lib/amendments.mjs', 'lib/alias-store.mjs', 'lib/seed.mjs', 'lib/prereg-guard.mjs', 'lib/prereg-consistency.mjs',
   'lib/contamination-cwd.mjs', 'lib/contamination-heredoc.mjs', 'lib/contamination-links.mjs', 'lib/contamination-pipe.mjs', 'lib/contamination-reach.mjs', 'lib/contamination-session-cwd.mjs',
   'lib/aa-check.mjs', 'lib/aa-facts.mjs', 'lib/aa-rules.mjs', 'lib/aa-rules-twins.mjs', 'lib/aa-smoke.mjs', 'lib/aa-verdicts.mjs',

@@ -12,12 +12,13 @@ import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { retireStale } from '../../minigit-bench/lib/session-state.mjs';
 import { ledgerFileOf, runMapFileOf } from './series.mjs';
-import { fillerFor } from './workspace.mjs';
+import { fillWorkspace, fillerFor } from './workspace.mjs';
 import { loadPrompts, planForSession } from './plan.mjs';
 import { recordPlan } from './readback.mjs';
 import { stacksOf } from './inputs.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 import { INPUTS, REPO, V1, spinFile } from './paths.mjs';
+import { DISTRIBUTION_DOTNET } from './quick.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 /** A spend ceiling no session reaches: the pilot has no total (the per-session cap is the guard), and v1's spend gate asks for one. */
@@ -44,21 +45,26 @@ const readSpin = home => (existsSync(spinFile(home)) ? readJson(spinFile(home)) 
 const snapshotsOfWorld = world => Object.fromEntries(['csharp', 'node'].map(s => [s, { dir: world.snapshots[s].dir, parts: world.snapshots[s].parts }]));
 
 /** The context object, from the pieces `runContext` gathered. */
-function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity, prompts = loadPrompts() }) {
+export function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity, prompts = loadPrompts() }) {
   return {
     seriesDir, sessionsRoot: path.join(seriesDir, 's'), home, kind, pair, seed: null, inputsRoot: null, hashes: [], snapshots: snapshotsOfWorld(world), ...snapshotFacts(world.snapshots),
     packageRules: readJson(path.join(INPUTS, 'package-flags.json')).rules, claudeBinary, cliVersion: world.explore.cli.version, nodeDir: world.paths.nodeDir, tsDir: world.paths.tsDir, token,
+    ...(world.paths.dotnetDir ? { dotnetDir: world.paths.dotnetDir, hide: DISTRIBUTION_DOTNET } : {}),
     prices: policy.table, table: policy.table, policy: policy.policy,
     harnessSources: { boxInit: path.join(V1, 'harness', 'box-init.mjs'), audit: path.join(V1, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
     caps: world.explore.caps, ceilingUsd: NO_TOTAL_USD, bareBudgetUsd: NO_TOTAL_USD, harnessIdentity: identity, preregTag: null, spin: readSpin(home),
     runMapFile: runMapFileOf(seriesDir), ledgerFile: ledgerFileOf(seriesDir), aliasStore: kind === 'rehearsal' ? null : aliasStore(path.join(seriesDir, 'aliases.json')),
     handVerdictsFor: () => [], abortReason: () => abort.reason, abortExit: () => abort.exit, planOver,
+    ...(world.quick === true ? { lostCwdLow: true } : {}),
     fill, planFor: a => recordPlan(planForSession(a)), prompts, locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
   };
 }
 
 /** The pilot's `ctx.fill`: the frozen workspace of the item's stack. */
-export const frozenFill = world => fillerFor({ explore: world.explore, sources: world.sources, typesNode: world.snapshots.typesNode });
+export const frozenFill = world => (world.quick ? quickFiller(world) : fillerFor({ explore: world.explore, sources: world.sources, typesNode: world.snapshots.typesNode }));
+
+/** The quick tasks' `ctx.fill`: the stack's workspace files (`world.filesFor`) written into the session's work directory. */
+export const quickFiller = world => ({ item, layout }) => fillWorkspace({ files: world.filesFor(item.session.stack), work: layout.work });
 
 const projectDirs = home => () => {
   const dir = path.join(home, '.claude', 'projects');
@@ -68,12 +74,12 @@ const projectDirs = home => () => {
 /**
  * The scoring step of the loop: the judge over the session's tree, with its own caches. Writes `<session>/score/score.json`. A harness failure (a process left in a scope) is `failed`, which stops the pilot.
  */
-export function scoreSessionDep({ world, calibration, heldout, home, say = () => {} }) {
+export function scoreSessionDep({ world, calibration, heldout, home, say = () => {}, scoreExtra = {} }) {
   return async ({ session, source, stack, nugetCache, npmCache }) => {
     const work = path.join(session, 'score');
     mkdirSync(work, { recursive: true });
-    const scored = await world.scoreFn({ stack, source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: nugetCache, npm: npmCache }, work, operatorHome: home, say });
-    if (!scored.ok) return { kind: scored.kind === 'scorer-timeout' ? 'scorer-timeout' : 'failed', reason: scored.reason };
+    const scored = await world.scoreFn({ stack, source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: nugetCache, npm: npmCache }, work, operatorHome: home, say, ...scoreExtra });
+    if (!scored.ok) return { kind: ['scorer-timeout', 'environment'].includes(scored.kind) ? scored.kind : 'failed', reason: scored.reason };
     writeFileSync(path.join(work, 'score.json'), `${JSON.stringify(scored.value, null, 2)}\n`);
     return { kind: 'scored', score: scored.value };
   };
@@ -84,7 +90,7 @@ function preflightDep({ ctx, world, preflightHome }) {
   const stacks = stacksOf(world.explore);
   return async () => {
     // always the PINNED CLI copy, also in a rehearsal (the stub CLI cannot answer `--version` without a broker)
-    const r = await preflight({ home: preflightHome, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, claudeBinary: world.paths.claudeBinary, stacks: stacks.value, install: false });
+    const r = await preflight({ home: preflightHome, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, dotnetDir: ctx.dotnetDir ?? null, hide: ctx.hide ?? [], claudeBinary: world.paths.claudeBinary, stacks: stacks.value, install: false });
     return r.ok ? ok(null) : fail(`${r.reason}: ${(r.problems ?? []).join('; ')}`);
   };
 }

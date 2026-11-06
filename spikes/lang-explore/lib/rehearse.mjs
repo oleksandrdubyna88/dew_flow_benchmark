@@ -23,6 +23,8 @@ import { runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
 import { pinsOk } from './pins.mjs';
 import { createSeries, drawMask, planPair, runMapFileOf } from './series.mjs';
+import { isQuick } from './quick.mjs';
+import { quickReferenceFill, quickScoreChecks, rehearsalHeldout } from './rehearsal-quick.mjs';
 
 /** The rehearsal's `ctx.fill`: the item's stack workspace with the REFERENCE source on top, so a stub session that changes nothing leaves a correct solution. */
 export const referenceFill = ({ world, heldout }) => ({ item, layout }) => {
@@ -62,7 +64,7 @@ const noteCheck = (noteText, task) => check('the note renders with its banner', 
  */
 export function rehearsalChecks({ entries, records, noteText, task }) {
   const per = entries.map(e => ({ e, r: records[e.rid] }));
-  return [completedCheck(entries), scoredCheck(per), leavesCheck(per.flatMap(({ e, r }) => sectionProblems(e, r))), stubCheck(per.flatMap(({ e, r }) => crosscheckProblems(e, r))), noteCheck(noteText, task)];
+  return [completedCheck(entries), ...(isQuick(task) ? quickScoreChecks({ entries, records }) : [scoredCheck(per)]), leavesCheck(per.flatMap(({ e, r }) => sectionProblems(e, r))), stubCheck(per.flatMap(({ e, r }) => crosscheckProblems(e, r))), noteCheck(noteText, task)];
 }
 
 /** The note of a series of `task` from its records (a real pair's, or the rehearsal's). `date` is the note's date (today unless a test fixes it). */
@@ -83,9 +85,12 @@ function recordOrPlaceholder(seriesDir, entry) {
   return { ids: { label: entry.label }, class: entry.class ?? entry.status, data: false, flags: ['no record.json'], cost: { headlineUsd: none, stopRuleUsd: none }, time: {}, explore: {} };
 }
 
+/** The held-out cases the rehearsal scores over: the quick tasks' own fixtures (made in the series folder), or the task's real ones. */
+const heldoutFor = ({ task, series, need }) => (isQuick(task) ? rehearsalHeldout({ dir: path.join(series.dir, 'rehearsal', 'fixture'), task }) : need.heldout);
+
 /** What a rehearsal needs on disk: the task's calibration, its held-out side and the world. -> `ok({ calibration, heldout, world })` | the first `fail`. */
 async function prerequisites({ home, task, worldFn }) {
-  const got = await allOk([() => loadCalibration(home, task), () => loadHeldout(home, task), () => worldFn({ home, work: path.join(home, 'rsd', 'lang-v2', 'explore'), task })]);
+  const got = await allOk([() => loadCalibration(home, task), () => (isQuick(task) ? ok(null) : loadHeldout(home, task)), () => worldFn({ home, work: path.join(home, 'rsd', 'lang-v2', 'explore'), task })]);
   if (!got.ok) return got;
   const [calibration, heldout, world] = got.value;
   const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
@@ -102,7 +107,8 @@ export async function rehearse({ task, io }) {
   const lock = made.ok ? acquireSeriesLock({ seriesDir: made.value.dir }) : made;
   if (!lock.ok) return { exit: 4, message: lock.reason };
   try {
-    return await rehearseIn({ io, task, ...need.value, series: made.value, say: io.say });
+    const heldout = heldoutFor({ task, series: made.value, need: need.value });
+    return await rehearseIn({ io, task, ...need.value, heldout, series: made.value, say: io.say });
   } finally {
     lock.value.release();
   }
@@ -128,7 +134,7 @@ const loadMap = dir => JSON.parse(readJsonText(runMapFileOf(dir)));
 
 async function runStubPair({ io, task, world, calibration, heldout, series, planned, stub, stubDir, fake, say }) {
   const planOver = { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 };
-  const ctx = await runContext({ world, calibration, series: series.state, seriesDir: series.dir, kind: 'rehearsal', pair: 1, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, claudeBinary: stubClaude(stubDir), fill: referenceFill({ world, heldout }), planOver, abort: io.abort, home: io.home });
+  const ctx = await runContext({ world, calibration, series: series.state, seriesDir: series.dir, kind: 'rehearsal', pair: 1, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, claudeBinary: stubClaude(stubDir), fill: isQuick(task) ? quickReferenceFill({ world, task }) : referenceFill({ world, heldout }), planOver, abort: io.abort, home: io.home });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
   const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say }), machine: null, preflightHome: fake, stub: true });
   const result = await runLoop({ ctx: ctx.value, deps, map: planned.map, signal: io.signal, say });

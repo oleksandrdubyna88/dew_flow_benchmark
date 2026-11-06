@@ -33,7 +33,7 @@ export function pinProblems({ explore, task, home = os.homedir(), snapshots }) {
     fileProblem(`the private test notes of task ${task.id}`, taskPaths(task, home).notesFile, task.privateNotes.sha256),
     installedIntegrity(paths.tsDir) === explore.typescript.integrity ? null : `the installed TypeScript's integrity is not the recorded one (${explore.typescript.integrity?.slice(0, 20)}...)`,
     treeProblem('node', snapshots.node.dir, snapshots.node.record.treeSha256),
-    treeProblem('csharp', snapshots.csharp.dir, explore.csharpSnapshot.treeSha256),
+    treeProblem('csharp', snapshots.csharp.dir, explore.quickProfile ? snapshots.csharp.record.treeSha256 : explore.csharpSnapshot.treeSha256),
   ].filter(Boolean);
 }
 

@@ -8,7 +8,7 @@ import { underHome } from './paths.mjs';
 export const LEGACY_TASK = '01';
 
 /** The legal task ids of the pins, in order. */
-export const taskIds = explore => Object.keys(explore.tasks);
+export const taskIds = explore => Object.keys(explore.tasks).sort();
 
 const legalSentence = explore => `the tasks are ${taskIds(explore).join(', ')}`;
 

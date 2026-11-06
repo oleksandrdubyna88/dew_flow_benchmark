@@ -158,9 +158,9 @@ test('An_abort_with_another_message_through_the_real_layer_stays_a_runtime_failu
   assert.equal(entry.lifecycle.memory.runtimeAbort, null);
 });
 
-test('T_L31_through_the_runner_is_not_applicable_until_the_runner_runs_a_signal_TERM_step', () => {
+test('T_L31_through_the_runner_the_daemon_and_web_kinds_run_for_real_and_signal_TERM_is_tested_in_exec_layer_session', () => {
   const source = readFileSync(path.join(runnerDir, 'run_samples.py'), 'utf8');
-  assert.match(source, /running a \{plan\.kind\} sample is part ii of this story and is not built in this runner/, 'the runner still refuses the daemon and web kinds: with them goes `signal TERM`, and T-L31 through the runner (9) is NOT APPLICABLE until E1.S8a part ii-b — when ii-b lands this test goes red and (9) must be written');
+  assert.match(source, /rs_session\.run_case/, 'the runner runs daemon and web pairs (quick run W1); the boxed SIGTERM case is test/exec-layer-session.test.mjs');
 });
 
 // T-L50, through the real prefix (coarse: the box's own processes put some bytes in `memory.peak`, so the byte boundary is tested in test_rs_abort.py with a fake cgroup node; here a stub holds

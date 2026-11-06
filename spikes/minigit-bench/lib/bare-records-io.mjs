@@ -7,6 +7,7 @@ import { ok } from './result.mjs';
 import { cellOf, pairRecord, sessionRecord } from './bare-record.mjs';
 import { v2FromRefutedV1 } from './bare-reclass.mjs';
 import { collectSession } from './bare-collect.mjs';
+import { rescoreFlags } from './bare-quick-flags.mjs';
 import { treeSize } from './cache-snapshot.mjs';
 import { locOfTree } from './loc.mjs';
 import { packagesOf, readNpmPackages, readNugetPackages } from './packages.mjs';
@@ -22,10 +23,10 @@ const writeJson = (file, value) => {
 const cacheGrowthOf = ({ ctx, layout }) => (ctx.snapshotBytes == null ? null : treeSize(layout.nuget) + treeSize(layout.npm) + treeSize(path.join(layout.home, '.dotnet')) - ctx.snapshotBytes);
 
 /** The evidence of a session collected again from its directory, with the hand verdicts known now. */
-function collectAgain({ ctx, entry, layout }) {
-  return collectSession({
+export function collectAgain({ ctx, entry, layout, collect = collectSession }) {
+  return collect({
     layout, plan: { token: ctx.token, dummy: entry.dummy }, launched: null, canaryTokens: entry.canaryTokens ?? [], aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(entry.rid),
-    retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], table: ctx.table, policy: ctx.policy, home: ctx.home,
+    retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], table: ctx.table, policy: ctx.policy, home: ctx.home, ...(ctx.lostCwdLow === true ? { lostCwdLow: true, skipBigOutside: true } : {}),
   });
 }
 
@@ -38,9 +39,15 @@ const discrepanciesOf = (entry, c) => (entry.class !== undefined && entry.class 
 function recordOutcome({ entry, c, packages, discrepancies }) {
   return {
     ...c.outcome, class: entry.class ?? c.outcome.class, data: entry.data ?? c.outcome.data,
-    flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : []), ...(entry.reclassified ? ['reclassified by hand'] : [])],
+    flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : []), ...(entry.reclassified ? ['reclassified by hand'] : []), ...rescoreFlags(entry)],
   };
 }
+
+/** The lines of code of the session's tree, or null when the tree is gone. */
+const locOf = layout => (existsSync(layout.work) ? locOfTree(layout.work) : null);
+
+/** Append only: what the session was before a rescore, with the reason (lang-explore `rescore`), is kept in the record. */
+const withReclassifiedFrom = (built, entry) => (entry.reclassifiedFrom ? { ...built, reclassifiedFrom: entry.reclassifiedFrom } : built);
 
 /** Rebuild and write one session's record from its directory. -> `ok(record)` | the collect's `fail`. `entry` is the run-map entry; `score` the session's score.json or null. */
 export function writeSessionRecord({ ctx, entry, score }) {
@@ -50,11 +57,12 @@ export function writeSessionRecord({ ctx, entry, score }) {
   const c = collected.value;
   const packages = packagesOf({ npm: readNpmPackages(layout.npm), nuget: readNugetPackages(layout.nuget), snapshot: ctx.snapshotPackages, rules: ctx.packageRules });
   const discrepancies = discrepanciesOf(entry, c);
-  const record = sessionRecord({
+  const built = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
     outcome: recordOutcome({ entry, c, packages, discrepancies }), run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
-    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, discrepancies, reclassified: entry.reclassified ?? null, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
+    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: locOf(layout), packages, meta: c.meta, discrepancies, reclassified: entry.reclassified ?? null, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
   });
+  const record = withReclassifiedFrom(built, entry);
   writeJson(path.join(layout.dir, 'record.json'), record);
   return ok(record);
 }

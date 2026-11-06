@@ -32,7 +32,7 @@
   "olympiad": {
     "reason": "The pins of the olympiad pilot (todo/PLAN_lang_explore_olympiad.md, D-O2 to D-O8): tasks 02, 03 and 09 on the same harness. The spec drafts are ungated: they are pinned by sha256 at the task repository's branch docs/specs-olympiad, commit 3f115d1, and FORMAT v2.1 on that branch. A later amendment moves a pin in one dated line before pair 1 of its task, never between pairs.",
     "decidedOn": "2026-11-01",
-    "planTasks": ["02", "03", "09"],
+    "planTasks": ["01", "02", "03", "09"],
     "pausePoint": { "usd": 60, "projectedFloorUsd": 5, "projectedFactor": 3, "pairSessions": 2 },
     "material": { "minCases": 15, "minMutants": 6 }
   },
@@ -84,6 +84,103 @@
       "draft": true,
       "baselineCommit": "90d039534d9ed90de2f1d570347c11b192271328",
       "heldoutBorn": "2026-11-01T10:48:42.434Z"
+    },
+    "04": {
+      "title": "Rule API",
+      "kind": "web",
+      "quick": true,
+      "spec": { "sha": "010ed60", "path": "todo/tasks/04-rule-api.md", "sha256": "4d6b98e76665e5d7353f3a82d6acda7ca42b188fa90efe2c67fd214ded38aaf6" },
+      "format": { "sha": "010ed60", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/04.md", "sha256": "f58192f8e6ebf643193610d757fa4def8626a02c9b36111e01a133f166d4d577" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-04"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-04.json"],
+      "noteLabel": "04",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:40:42.000Z"
+    },
+    "05": {
+      "title": "Key-value server with expiry",
+      "kind": "daemon",
+      "quick": true,
+      "spec": { "sha": "efc45b1", "path": "todo/tasks/05-key-value-server.md", "sha256": "29f423088a30eaf5f3dd0cc9233d73497c7e4a1400e05f5ee94595f2dc3fe54b" },
+      "format": { "sha": "efc45b1", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/05.md", "sha256": "b15d7fc97f2ff1a53db2f965159c6cafcc5c3b329d4f78c85b7cbc7561edd18b" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-05"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-05.json"],
+      "noteLabel": "05",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:48:49.000Z"
+    },
+    "06": {
+      "title": "Blog API",
+      "kind": "web",
+      "quick": true,
+      "spec": { "sha": "4f44c80", "path": "todo/tasks/06-blog-api.md", "sha256": "bc0d067152c1c46db9b466a27353389a46dc764612c2b77e5bdad1e41ec0211c" },
+      "format": { "sha": "4f44c80", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/06.md", "sha256": "f1faa3979ae1cd5346e04ab3b1725229005cd31818235bb71f5f8177d198160f" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-06"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-06.json"],
+      "noteLabel": "06",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:18:16.000Z"
+    },
+    "07": {
+      "title": "Stream processor with sliding windows",
+      "kind": "daemon",
+      "quick": true,
+      "spec": { "sha": "7c474a4", "path": "todo/tasks/07-stream-processor.md", "sha256": "2087f5db27956e04748695a08ee47fc3e7853d7e865975664e81ae6338106014" },
+      "format": { "sha": "7c474a4", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/07.md", "sha256": "b4efb52714c88a998c3d08d67d0c6ac0129980058c0d8064704335b6a47e8644" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-07"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-07.json"],
+      "noteLabel": "07",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:21:22.000Z"
+    },
+    "08": {
+      "title": "Ledger API",
+      "kind": "web",
+      "quick": true,
+      "spec": { "sha": "4f44c80", "path": "todo/tasks/08-ledger-api.md", "sha256": "19f916b5169b56020c69f2deb02286c20b6bb3aa94eabbe41142a317aaa716f1" },
+      "format": { "sha": "4f44c80", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/08.md", "sha256": "b3501d82d8363c644abe30eeeb1ec730ac6b9b49245975805a9f977633914304" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-08"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-08.json"],
+      "noteLabel": "08",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:34:50.000Z"
+    },
+    "10": {
+      "title": "DAG job scheduler",
+      "kind": "daemon",
+      "quick": true,
+      "spec": { "sha": "7c474a4", "path": "todo/tasks/10-dag-scheduler.md", "sha256": "3ab78c29b9ceacbccbd21dbe641c20888ab6a17e2baa64688dc2795d8d7b561a" },
+      "format": { "sha": "7c474a4", "path": "todo/tasks/FORMAT.md", "sha256": "4a4e86c48a700aa0a9fd33a8b9e24f9d90c140b4e514480463efa40fba1c41be", "label": "v2.1" },
+      "privateNotes": { "relativePath": "rsd/lang-v2/test-design/10.md", "sha256": "4ec26c791529b7e0482f1396bacb1d39eaa383945d688aaef49e5f935277d631" },
+      "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-10"],
+      "calibrationParts": ["rsd", "lang-v2", "explore", "calibration-10.json"],
+      "noteLabel": "10",
+      "draft": true,
+      "baselineCommit": "c85959525fd3f85eb0d8f6ad0266b51382da5ccc",
+      "heldoutBorn": "2026-11-05T14:55:23.000Z"
     }
+  },
+  "quick": {
+    "reason": "The pins of the quick run (owner's order, 2026-11-05; research/lang-v2 plan 8.1): tasks 04 05 06 07 08 10 (daemon and web), bare C# and Node, exploratory, not evidence. The specs are the DRAFTS on the task repository's branches, pinned by commit and sha256. Toolchains and caches are the language comparison v2's (SDK 10.0.403, Node 26.13.0, TypeScript 6.0.3, the registered snapshots), because the workspace templates pin them. No oracle, mutants or calibration: the limits below are fixed.",
+    "decidedOn": "2026-11-05",
+    "planTasks": ["04", "05", "06", "07", "08", "10"],
+    "pausePoint": { "usd": 150, "projectedFloorUsd": 5, "projectedFactor": 3, "pairSessions": 2 },
+    "limits": { "timeMs": 300000, "memoryBytes": 536870912, "buildTimeoutMs": 600000 },
+    "caseWallMs": 660000,
+    "runCeilingMs": 7200000,
+    "dotnet": { "sdk": "10.0.403", "runtime": "10.0.14", "dirParts": ["rsd", "lang-v2", "toolchains", "dotnet-sdk-10.0.403"] },
+    "node": { "version": "26.13.0", "dirParts": ["rsd", "lang-v2", "toolchains", "node-v26.13.0-linux-x64"] },
+    "typescript": { "version": "6.0.3", "toolchainDirParts": ["rsd", "lang-v2", "toolchains", "typescript-6.0.3"] },
+    "cachesDirParts": ["rsd", "lang-v2", "caches"]
   }
 }

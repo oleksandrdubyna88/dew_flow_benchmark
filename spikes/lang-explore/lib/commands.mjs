@@ -16,7 +16,11 @@ import { exploreRoot, REPO } from './paths.mjs';
 import { noteFor, rehearse } from './rehearse.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadCalibration } from './limits.mjs';
-import { readToken, runPair } from './run.mjs';
+import { planOf, readToken, runPair } from './run.mjs';
+import { isQuick, quickExplore } from './quick.mjs';
+import { quickInitExtra } from './init-quick.mjs';
+import { replay } from './replay.mjs';
+import { rescore } from './rescore.mjs';
 import { createSeries, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
@@ -43,12 +47,15 @@ const refused = (io, reason) => { io.say(reason); return EXIT.config; };
 const firstBad = (...results) => results.find(r => !r.ok);
 
 /** What the series' inputs record besides the limits: the subject, the interpreter, the CLI and the pins of the series' task (its spec, FORMAT and private notes; the pins file's own `specs` block is task 1's). */
-async function initExtra(explore, task) {
-  return { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, taskPins: pinsOfTask(task), prompts: loadPrompts() };
+async function initExtra(explore, task, home) {
+  const common = { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, taskPins: pinsOfTask(task) };
+  if (!isQuick(task)) return { ...common, prompts: loadPrompts() };
+  const quick = await quickInitExtra({ explore, task, home });
+  return quick.ok ? { ...common, ...quick.value } : quick;
 }
 
 /** A series is made for a task of the olympiad plan only: task 1's series (`x-20261101-13cc`) is closed and records, notes and analysis rest on it. */
-const closedProblem = ({ explore, task }) => (explore.olympiad.planTasks.includes(task.id) ? null : `task ${task.id} is not a task of the olympiad plan (${explore.olympiad.planTasks.join(', ')}): its series is closed and no second one is made`);
+const closedProblem = ({ explore, task }) => (planOf(explore, task).planTasks.includes(task.id) ? null : `task ${task.id} is not a task of the ${isQuick(task) ? 'quick' : 'olympiad'} plan (${planOf(explore, task).planTasks.join(', ')}): its series is closed and no second one is made`);
 
 /** What `init` needs: the task, the pins and the task's calibration. -> `ok({ explore, task, calibration })` | `fail`. */
 function initNeeds(values, io) {
@@ -61,13 +68,20 @@ function initNeeds(values, io) {
 
 const openForInit = pins => { const closed = closedProblem(pins); return closed ? fail(closed) : ok(pins); };
 
+/** The series `init` creates for `task`: the quick tasks are made over the quick profile of the pins. -> `ok({ dir, state })` | `fail`. */
+async function createFor({ explore, task, calibration, io }) {
+  const extra = await initExtra(explore, task, io.home);
+  if (extra.ok === false) return extra;
+  return createSeries({ home: io.home, explore: isQuick(task) ? quickExplore(explore, io.home) : explore, calibration, task: task.id, inputsExtra: extra });
+}
+
 /** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
 export async function cmdInit(values, io) {
   const need = initNeeds(values, io);
   if (!need.ok) return refused(io, need.reason);
-  const { explore, task, calibration } = need.value;
-  const made = createSeries({ home: io.home, explore, calibration, task: task.id, inputsExtra: await initExtra(explore, task) });
+  const made = await createFor({ ...need.value, io });
   if (!made.ok) return refused(io, made.reason);
+  const task = need.value.task;
   io.say(`series ${made.value.state.seriesId} created at ${made.value.dir}`);
   io.say(`the mask draw (recorded): C# starts on ${made.value.state.draw.csharpHigh ? 'CPUs 8-13' : 'CPUs 0-5'} in pair 1; the stacks swap every pair`);
   io.say(`task ${task.id} (${task.title}): run its pairs with \`run --task ${task.id} --series ${made.value.dir} --pair <k>\``);
@@ -128,6 +142,52 @@ export async function cmdRehearse(values, io) {
   if (!given.ok) return refused(io, given.reason);
   const r = await rehearse({ task: given.value.task, io: { ...io, worldFn: io.worldFn ?? loadWorld, subject: io.subject ?? await subjectOf() } });
   sayRehearsal(io, r);
+  return r.exit;
+}
+
+/** `--wait` in seconds: `ok(n)` | `fail`. */
+function waitOf(values) {
+  const wait = values.wait === undefined ? 0 : Number(values.wait);
+  return Number.isFinite(wait) && wait >= 0 ? ok(wait) : fail(`--wait is a number of seconds (got '${values.wait}')`);
+}
+
+/** The arguments of `rescore`: `ok({ task, wait })` (seconds) | `fail(sentence)`. */
+function rescoreArgs(values, io) {
+  const given = taskFromValues(values, io.exploreFn);
+  const missing = ['series', 'rid'].filter(k => !values[k]);
+  if (!given.ok) return given;
+  if (missing.length > 0) return fail(`rescore needs ${missing.map(k => `--${k}`).join(' and ')}`);
+  const wait = waitOf(values);
+  return wait.ok ? ok({ task: given.value.task, wait: wait.value }) : wait;
+}
+
+/** `rescore --task NN --series DIR --rid R [--wait S]`: FREE. See lib/rescore.mjs: an ended void that its own evidence now classes as data is scored and recorded; the ledger's spend is unchanged. */
+export async function cmdRescore(values, io) {
+  const args = rescoreArgs(values, io);
+  if (!args.ok) return refused(io, args.reason);
+  const seams = { worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)) };
+  const r = await rescore({ task: args.value.task, seriesDir: path.resolve(values.series), rid: values.rid, waitMs: args.value.wait * 1000, io: { ...io, ...seams } });
+  io.say(r.message);
+  if (r.pairFile) io.say(`pair record: ${r.pairFile}`);
+  return r.exit;
+}
+
+/** The arguments of `replay`: `ok({ task, times })` | `fail(sentence)`. */
+function replayArgs(values, io) {
+  const given = taskFromValues(values, io.exploreFn);
+  const missing = ['series', 'rid', 'case'].filter(k => !values[k]);
+  if (!given.ok) return given;
+  if (missing.length > 0) return fail(`replay needs ${missing.map(k => `--${k}`).join(', ')}`);
+  const times = values.times === undefined ? 1 : Number(values.times);
+  return ok({ task: given.value.task, times });
+}
+
+/** `replay --task NN --series DIR --rid R --case ID [--times N]`: a diagnostic reading of a rejected case on the current runner. See lib/replay.mjs: it changes no record, no verdict and no spend; its one output is `s/<rid>/replay/<time>.json`. */
+export async function cmdReplay(values, io) {
+  const args = replayArgs(values, io);
+  if (!args.ok) return refused(io, args.reason);
+  const r = await replay({ task: args.value.task, seriesDir: path.resolve(values.series), rid: values.rid, caseId: values.case, times: args.value.times, io: { ...io, worldFn: io.worldFn ?? loadWorld } });
+  io.say(r.message);
   return r.exit;
 }
 

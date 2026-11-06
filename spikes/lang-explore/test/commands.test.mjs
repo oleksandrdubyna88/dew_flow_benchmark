@@ -7,7 +7,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
-import { main } from '../explore.mjs';
+import { REEXEC, main } from '../explore.mjs';
 import { EXIT, cmdInit, cmdPrune, cmdQuiet, cmdRun, decidedPublicText, leakShingles, statusLines } from '../lib/commands.mjs';
 import { buildMaterial } from '../lib/leak-material.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
@@ -288,4 +288,8 @@ test('An_unknown_command_is_echoed_back_in_the_usage_error', async () => {
   process.stderr.write = chunk => { written.push(String(chunk)); return true; };
   try { await main(['frobnicate']); } finally { process.stderr.write = real; }
   assert.match(written.join(''), /'frobnicate' is not a command/);
+});
+
+test('Every_command_that_scores_a_quick_session_re_executes_on_the_two_scoring_cpus_so_a_rescore_and_a_replay_run_in_the_conditions_of_the_score_they_compare_with', () => {
+  assert.deepEqual([...REEXEC].sort(), ['rehearse', 'replay', 'rescore', 'run']);
 });

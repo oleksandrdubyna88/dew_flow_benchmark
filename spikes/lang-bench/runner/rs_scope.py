@@ -1,5 +1,5 @@
 """rs_scope: the lifecycle of a case whose program runs in a cgroup the layer made (`--cgroup-of`): leftovers, memory and the kill are read
-and done through that cgroup, never through the launcher's process group (B1, B4).
+and done through that cgroup, never through the launcher's process group.
 
 The runner never measures or kills a cgroup this case does not own: the directory must not exist, or hold no process, before the spawn
 (else `CgroupBusy`, exit 3). The order at the end of a case is fixed: the program's end is seen, `cgroup.procs` is read (the leftover

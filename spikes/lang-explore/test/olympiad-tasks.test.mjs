@@ -25,10 +25,10 @@ const io = (home, over = {}) => { const said = []; return { home, said, say: l =
 const task = id => resolveTask(EXPLORE, id).value;
 
 test('A_missing_or_unknown_task_is_refused_naming_the_legal_ones_and_a_known_one_resolves', () => {
-  for (const bad of [undefined, '', '1', '04', '2', 'all', 'heldout']) {
+  for (const bad of [undefined, '', '1', '11', '2', 'all', 'heldout']) {
     const r = resolveTask(EXPLORE, bad);
     assert.equal(r.ok, false, String(bad));
-    assert.match(r.reason, /the tasks are 01, 02, 03, 09/);
+    assert.match(r.reason, /the tasks are 01, 02, 03, 04, 05, 06, 07, 08, 09, 10/);
   }
   assert.deepEqual(['01', '02', '03', '09'].map(id => resolveTask(EXPLORE, id).value.id), ['01', '02', '03', '09']);
 });
@@ -85,7 +85,7 @@ test('Every_command_that_works_on_a_task_refuses_a_missing_or_unknown_task_with_
   try {
     for (const command of ['init', 'calibrate', 'rehearse', 'run', 'readback', 'status', 'note', 'prune']) {
       assert.equal(await main([command], { home: tmpDir('o-none') }), EXIT.config, `${command} without --task`);
-      assert.equal(await main([command, '--task', '04'], { home: tmpDir('o-none') }), EXIT.config, `${command} --task 04`);
+      assert.equal(await main([command, '--task', '99'], { home: tmpDir('o-none') }), EXIT.config, `${command} --task 99`);
     }
   } finally {
     process.stderr.write = realWrite;
@@ -127,12 +127,12 @@ const subject = { branch: 'test', sha: 'a'.repeat(40), harnessPath: 'spikes/lang
 
 test('Task_1_s_pins_are_byte_for_byte_the_recorded_ones_and_the_tasks_map_repeats_them_exactly', () => {
   const raw = JSON.parse(readFileSync(path.join(INPUTS, 'explore.json'), 'utf8'));
-  const { tasks, olympiad, ...recorded } = raw;
+  const { tasks, olympiad, quick, ...recorded } = raw; // the quick run added the `quick` block beside `olympiad`; task 1's own fields are every other key
   assert.equal(sha(JSON.stringify(recorded)), TASK_1_FIELDS_SHA256, 'a field of task 1 moved');
   assert.deepEqual(tasks['01'].spec, recorded.specs.spec01);
   assert.deepEqual({ ...tasks['01'].format, label: undefined }, { ...recorded.specs.format, label: undefined });
   assert.deepEqual(tasks['01'].privateNotes, recorded.privateNotes);
-  assert.deepEqual(Object.keys(tasks), ['01', '02', '03', '09'], 'task 01 is the first entry');
+  assert.deepEqual(['01', '02', '03', '09'].filter(id => id in tasks), ['01', '02', '03', '09'], 'the olympiad tasks are all registered (the key order of a JS object puts "10" first, so it is not asserted)');
 });
 
 /** A copy of the real task-1 series in a temp home, or null when this host lacks it. */
@@ -234,16 +234,24 @@ test('A_series_whose_state_file_cannot_be_read_is_a_refusal_never_task_1_and_is_
   assert.match(verdict.message, /cannot be counted.*x-20261101-bbbb/);
 });
 
-test('Init_is_refused_for_a_task_that_is_not_a_task_of_the_plan_so_task_1_gets_no_second_series', async () => {
+/** The registered inputs with task 1 outside the olympiad plan, as they were before the quick run gave task 1 a second series. */
+const WITHOUT_TASK_1 = () => ok({ ...EXPLORE, olympiad: { ...EXPLORE.olympiad, planTasks: EXPLORE.olympiad.planTasks.filter(id => id !== '01') } });
+
+test('Init_is_refused_for_a_task_that_is_not_a_task_of_the_plan_so_it_gets_no_series', async () => {
   const home = calibratedHome('01', EXPLORE);
-  const c = io(home);
+  const c = io(home, { exploreFn: WITHOUT_TASK_1 });
   assert.equal(await cmdInit({ task: '01' }, c), EXIT.config);
   assert.match(c.said.join('\n'), /task 01 is not a task of the olympiad plan \(02, 03, 09\): its series is closed/);
   assert.deepEqual(readdirSync(exploreRoot(home)).filter(n => n.startsWith('x-')), [], 'no series was made');
   for (const id of ['02', '03', '09']) {
-    const ok = io(calibratedHome(id, EXPLORE));
-    assert.equal(await cmdInit({ task: id }, ok), EXIT.done, `${id}: ${ok.said.join('\n')}`);
+    const made = io(calibratedHome(id, EXPLORE));
+    assert.equal(await cmdInit({ task: id }, made), EXIT.done, `${id}: ${made.said.join('\n')}`);
   }
+});
+
+test('Task_1_is_a_task_of_the_plan_as_registered_now_the_owner_allowed_it_a_second_series_on_2026_11_05', async () => {
+  const made = io(calibratedHome('01', EXPLORE));
+  assert.equal(await cmdInit({ task: '01' }, made), EXIT.done, made.said.join('\n'));
 });
 
 // ---- the pins a series froze are the pins the task has now (coai finding 1) --------------------------------------------------------------

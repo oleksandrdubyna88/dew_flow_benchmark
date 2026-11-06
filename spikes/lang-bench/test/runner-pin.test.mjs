@@ -114,14 +114,15 @@ function readFileTextOrEmpty(file) {
 
 // T-L38 (D50, D56): the olympiad modules of A's manifest and of every later manifest (group B's adds `rs_net.py`) are byte-identical. `rs_abort.py` and its evidence function are in the set: the daemon
 // and web lifecycles of part ii-b read the same rule and the same `prog/` evidence, so a change ii-b needs there is an instrument amendment for group A (parent D50, §6.1).
+const QUICK_ONLY = ['rs_base.py', 'rs_capture.py', 'rs_conn.py', 'rs_evidence.py', 'rs_net.py', 'rs_session.py'];
 const manifestOf = files => ({ runner: { files: Object.entries(files).map(([name, text]) => ({ path: name, sha256: sha(text) })) } });
 
 test('rs_abort_is_byte_identical_across_the_manifests', () => {
   const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
   const paths = pinned.files.map(f => f.path);
   for (const name of ['rs_abort.py', 'rs_olympiad.py', 'rs_cgroup.py', 'rs_report.py', 'rs_exec.py']) assert.ok(OLYMPIAD_MODULES(paths).includes(name), `${name} is in the olympiad module set`);
-  assert.deepEqual(GROUP_B_ONLY, ['rs_net.py'], 'the set is the runner minus the group-B-only modules');
-  assert.ok(!OLYMPIAD_MODULES(['rs_net.py', ...paths]).includes('rs_net.py'));
+  assert.deepEqual([...GROUP_B_ONLY].sort(), QUICK_ONLY, 'the set is the runner minus the group-B-only modules');
+  for (const name of QUICK_ONLY) assert.ok(!OLYMPIAD_MODULES([name, ...paths]).includes(name), `${name} is no olympiad module`);
   const a = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n' });
   const b = manifestOf({ 'rs_abort.py': 'abort\n', 'rs_olympiad.py': 'olympiad\n', 'rs_net.py': 'net\n' });
   assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'a module only the second manifest has (rs_net) is no difference');
@@ -153,4 +154,17 @@ test('The_committed_runner_pin_is_the_manifest_the_version_ledger_records_for_it
   const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
   assert.equal(ledger.versions[pinned.version], pinned.manifestSha256, `${pinned.version} in the ledger is the pinned manifest`);
   assert.equal(ledgerProblem(ledger, pinned), null);
+});
+
+test('Every_module_the_quick_run_added_to_the_runner_is_group_B_only_and_the_olympiad_modules_import_none_of_them', () => {
+  const pinned = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'specs.d', 'runner.json'), 'utf8')).runner;
+  const names = pinned.files.map(f => f.path);
+  const olympiad = OLYMPIAD_MODULES(names);
+  for (const name of QUICK_ONLY) assert.ok(names.includes(name) && !olympiad.includes(name), name);
+  const importsOf = name => [...readFileSync(path.join(spikeDir, 'runner', name), 'utf8').matchAll(/^\s*(?:import|from)\s+(rs_\w+)/gm)].map(m => `${m[1]}.py`);
+  const wrong = olympiad.filter(name => name !== 'run_samples.py').flatMap(name => importsOf(name).filter(dep => QUICK_ONLY.includes(dep)).map(dep => `${name} imports ${dep}`));
+  assert.deepEqual(wrong, [], 'run_samples.py is the entry of both paths; no other olympiad module reaches a group-B module');
+  const a = manifestOf({ 'rs_abort.py': 'abort\n' });
+  const b = manifestOf({ 'rs_abort.py': 'abort\n', ...Object.fromEntries(QUICK_ONLY.map(n => [n, `${n}\n`])) });
+  assert.deepEqual(olympiadDifferences(a.runner, b.runner), [], 'the six modules alone in the second manifest are no difference');
 });

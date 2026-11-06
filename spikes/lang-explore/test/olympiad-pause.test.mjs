@@ -14,6 +14,8 @@ import { pauseVerdict, planSeriesDirs, planSpend, projectedUsd } from '../lib/pa
 import { createSeries, ledgerFileOf, loadSeries, runMapFileOf } from '../lib/series.mjs';
 
 const EXPLORE = loadExplore().value;
+/** The registered inputs as they were before the owner's quick run gave task 1 a second series and put it in the olympiad plan (2026-11-05): task 1 outside every plan. The tests that pin what a task outside the plan is (not counted, not locked) use it. */
+const EXPLORE_WITHOUT_TASK_1 = { ...EXPLORE, olympiad: { ...EXPLORE.olympiad, planTasks: EXPLORE.olympiad.planTasks.filter(id => id !== '01') } };
 const CALIBRATION = { limits: { timeMs: 2000, memoryBytes: 536870912, buildTimeoutMs: 600000 } };
 let counter = 0;
 
@@ -70,13 +72,13 @@ test('A_session_is_its_charges_summed_per_series_and_rid_and_the_dearest_session
 test('The_sum_reads_every_series_of_the_plan_and_never_another_plans_task_1_or_a_rehearsal', () => {
   const home = tmpDir('o-other');
   seriesWith(home, '01', Array(100).fill(1));
-  seriesWith(home, '02', [0, 0], { prefix: 'r' });
-  assert.deepEqual(planSpend({ home, explore: EXPLORE }), { series: 1, sessions: 2, spentUsd: 0, maxSessionUsd: 0, invalid: [] }, 'a rehearsal series names a plan task and is counted; its ledger holds $0');
-  assert.equal(verdict(home).stop, false, 'task 1\'s $100 and a rehearsal\'s $0 are not this plan\'s spend');
+  seriesWith(home, '02', [5, 5], { prefix: 'r' });
+  assert.deepEqual(planSpend({ home, explore: EXPLORE_WITHOUT_TASK_1 }), { series: 0, sessions: 0, spentUsd: 0, maxSessionUsd: 0, invalid: [] }, 'a rehearsal never counts (the owner\'s quick run: a rehearsal of a new task must not stop a paid pair), nor does a task outside the plan');
+  assert.equal(pauseVerdict({ home, explore: EXPLORE_WITHOUT_TASK_1 }).stop, false, 'task 1\'s $100 and a rehearsal\'s $10 are not this plan\'s spend');
   seriesWith(home, '02', [4, 4]);
   seriesWith(home, '09', [4, 4]);
-  assert.equal(planSpend({ home, explore: EXPLORE }).spentUsd, 16, 'tasks 02 and 09 both count');
-  assert.equal(verdict(home).stop, false, '16 + 2 x 12 = 40 is under 60');
+  assert.equal(planSpend({ home, explore: EXPLORE_WITHOUT_TASK_1 }).spentUsd, 16, 'tasks 02 and 09 both count');
+  assert.equal(pauseVerdict({ home, explore: EXPLORE_WITHOUT_TASK_1 }).stop, false, '16 + 2 x 12 = 40 is under 60');
 });
 
 test('Run_refuses_before_launching_with_exit_2_leaves_the_run_map_alone_and_passes_only_with_allow_over', async () => {
@@ -154,7 +156,7 @@ test('The_plan_lock_is_a_file_in_the_explore_root_taken_exclusively_and_a_task_1
   assert.equal(existsSync(path.join(exploreRoot(home), 'series.lock')), true);
   assert.equal(acquirePlanLock({ home }).ok, false, 'two holders at once are impossible');
   const legacy = seriesWith(home, '01', []);
-  const r = await runPair({ seriesDir: legacy, pair: 1, explore: EXPLORE, task: task('01'), io: runIo(home) });
+  const r = await runPair({ seriesDir: legacy, pair: 1, explore: EXPLORE_WITHOUT_TASK_1, task: task('01'), io: runIo(home) });
   assert.doesNotMatch(r.message, /plan lock/, 'task 1\'s own series never waits for the plan\'s lock');
   held.value.release();
   assert.equal(acquirePlanLock({ home }).ok, true, 'released, it can be taken again');
@@ -229,13 +231,13 @@ test('The_pause_check_counts_every_child_of_the_explore_root_whose_state_names_a
   const home = tmpDir('o-names');
   seriesNamed(home, 'old-copy-of-02', '02', Array(30).fill(1));
   seriesNamed(home, 't-20261101-abcd', '03', Array(26).fill(1));
-  seriesNamed(home, 'r-20261101-abcd', '09', [0, 0]);
+  seriesNamed(home, 'rx-20261101-abcd', '09', [0, 0]); // not a rehearsal's name: a rehearsal (`r-`) never counts, see quick-spend.test.mjs
   seriesNamed(home, 'x-20261101-ABCD', '02', [1, 1]);
   seriesNamed(home, 'legacy-copy', '01', Array(100).fill(1));
   mkdirSync(path.join(exploreRoot(home), 'toolchains', 'x'), { recursive: true });
   mkdirSync(path.join(exploreRoot(home), 'heldout-02'), { recursive: true });
-  assert.deepEqual(planSpend({ home, explore: EXPLORE }), { series: 4, sessions: 60, spentUsd: 58, maxSessionUsd: 1, invalid: [] });
-  const v = pauseVerdict({ home, explore: EXPLORE });
+  assert.deepEqual(planSpend({ home, explore: EXPLORE_WITHOUT_TASK_1 }), { series: 4, sessions: 60, spentUsd: 58, maxSessionUsd: 1, invalid: [] });
+  const v = pauseVerdict({ home, explore: EXPLORE_WITHOUT_TASK_1 });
   assert.equal(v.stop, true, '58 + 10 is over 60 although no counted series has a canonical name');
   assert.match(v.message, /spend is \$58\.0000 over 4 series/);
 });
@@ -297,7 +299,7 @@ test('A_plan_series_whose_ledger_is_missing_stops_the_check_closed_instead_of_co
   }
   const other = tmpDir('o-no-ledger-task1');
   rmSync(ledgerFileOf(seriesWith(other, '01', [1])));
-  assert.equal(pauseVerdict({ home: other, explore: EXPLORE }).stop, false, 'task 1\'s series is not the plan\'s: its ledger does not matter');
+  assert.equal(pauseVerdict({ home: other, explore: EXPLORE_WITHOUT_TASK_1 }).stop, false, 'a series outside the plan: its ledger does not matter');
 });
 
 // ---- a ledger line that is not JSON is a named stop with the locks released (Opus spot-check) -----------------------------------------------------

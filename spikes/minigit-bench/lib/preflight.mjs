@@ -29,14 +29,14 @@ async function install(plan) {
 }
 
 /** Probe outputs from inside a throwaway box: `{ claude, node, dotnetSdks, tsc }` (stdout, '' when the probe failed to run). */
-async function probesInBox({ nodeDir, tsDir, claudeBinary, stacks }) {
+async function probesInBox({ nodeDir, tsDir, dotnetDir = null, hide = [], claudeBinary, stacks }) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'mgb-preflight-'));
   try {
     const made = sessionLayout(root, 'p');
     if (!made.ok) return made;
     const layout = made.value;
-    const prefix = agentBoxPrefix({ layout, arm: 'bare', toolchains: [tsDir], claudeBinary, nodeDir });
-    const env = agentEnv({ layout, dummyToken: dummyToken('preflight'), cellId: 'preflight', nodeDir, tsDir });
+    const prefix = agentBoxPrefix({ layout, arm: 'bare', toolchains: [tsDir, ...(dotnetDir ? [dotnetDir] : [])], claudeBinary, nodeDir, ...(hide.length > 0 ? { hide } : {}) });
+    const env = agentEnv({ layout, dummyToken: dummyToken('preflight'), cellId: 'preflight', nodeDir, tsDir, ...(dotnetDir ? { dotnetDir } : {}) });
     const out = {};
     for (const [name, argv] of Object.entries(stacks.probes)) {
       const command = name === 'claude' ? [claudeBinary, ...argv.slice(1)] : argv;
@@ -53,7 +53,7 @@ async function probesInBox({ nodeDir, tsDir, claudeBinary, stacks }) {
  * -> `ok({ facts, bwrap, token })` or `fail` with `problems` listing everything wrong (all of it, not the first). `install: true` installs the
  * read-only TypeScript toolchain when absent (npm install --prefix, then chmod -R a-w); otherwise its absence is a problem.
  */
-export async function preflight({ home, nodeDir, tsDir, claudeBinary, stacks, install: doInstall = false }) {
+export async function preflight({ home, nodeDir, tsDir, dotnetDir = null, hide = [], claudeBinary, stacks, install: doInstall = false }) {
   const problems = [];
   const bwrap = bwrapFacts({ bwrap: await run('bwrap', ['--version']), unshare: await run('unshare', ['-Ur', 'true']) });
   problems.push(...bwrap.problems);
@@ -67,7 +67,7 @@ export async function preflight({ home, nodeDir, tsDir, claudeBinary, stacks, in
   if (!token.present) problems.push(token.why);
   let facts = null;
   if (bwrap.ok && existsSync(path.join(tsDir, 'node_modules', '.bin', 'tsc'))) {
-    const probes = await probesInBox({ nodeDir, tsDir, claudeBinary, stacks });
+    const probes = await probesInBox({ nodeDir, tsDir, dotnetDir, hide, claudeBinary, stacks });
     if (!probes.ok) problems.push(probes.reason);
     else {
       const read = toolchainFacts(probes.value, stacks.pins);

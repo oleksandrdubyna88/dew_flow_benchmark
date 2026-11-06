@@ -23,8 +23,15 @@ export function requiredWallSeconds(limits) {
   return (limits.timeS ?? DEFAULT_T_S) + (limits.graceS ?? DEFAULT_G_S);
 }
 
-/** The scope holder's bound: T + G of the runner's limits plus the margin, so a crashed layer's holder still ends but never before the runner's own end of a case. */
-export const holdSeconds = run => Math.ceil(requiredWallSeconds(run.limits)) + HOLD_MARGIN_S;
+/**
+ * The scope holder's bound. By default T + G of the runner's limits plus the margin, so a crashed layer's holder still ends but never before the runner's own end of a case. A caller whose cases run longer than T + G (a
+ * daemon or web case lasts up to the runner's test bound) gives `options.holdSeconds`: when the holder ends, the scope and the program in it end with it. T and G are never raised for this: a scenario whose T or G differs
+ * from the registered ones is refused.
+ */
+export const holdSeconds = run => run.options.holdSeconds ?? Math.ceil(requiredWallSeconds(run.limits)) + HOLD_MARGIN_S;
+
+/** The hold for cases that may run `caseWallMs`: that long plus the margin. */
+export const holdForCaseWall = caseWallMs => Math.ceil(caseWallMs / 1000) + HOLD_MARGIN_S;
 
 /** `--launch-prefix`: everything before `bash run.sh`, `{case}` left for the runner. `outside` puts the `nsenter` in (a launch from outside the namespaces). */
 export function launchPrefix(run, { statusFd = STATUS_FD, outside = false } = {}) {

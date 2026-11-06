@@ -9,6 +9,9 @@ import { loadExplore, pinnedPaths } from './inputs.mjs';
 import { INPUTS, REPO, toolchainsDir, underHome } from './paths.mjs';
 import { scoreTree } from './score.mjs';
 import { candidateRepos, loadSources, workspaceFiles } from './workspace.mjs';
+import { isQuick, quickExplore, quickPaths, quickSnapshots } from './quick.mjs';
+import { packagesInputs, quickWorkspaceFiles } from './workspace-quick.mjs';
+import { scoreQuick } from './score-quick.mjs';
 
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -40,7 +43,11 @@ export function pythonProblem(explore) {
  * `scoreFn({ stack, source, files, limits, sets, caches?, work? })` -> `ok(score)` | `fail`. `fail` names the first thing missing (the pins, `prepare`, the task repository, the python pin).
  * `exploreFn` and `candidates` are for tests (a toy task over a toy repository); a real run passes neither.
  */
-export async function loadWorld({ home = os.homedir(), work, task, exploreFn = loadExplore, candidates }) {
+export function loadWorld({ home = os.homedir(), work, task, exploreFn = loadExplore, candidates, quickSeams = {} }) {
+  return isQuick(task) ? loadQuickWorld({ home, work, task, exploreFn, candidates, quickSeams }) : loadOlympiadWorld({ home, work, task, exploreFn, candidates });
+}
+
+async function loadOlympiadWorld({ home, work, task, exploreFn, candidates }) {
   const explore = exploreFn();
   if (!explore.ok) return explore;
   const snapshots = hostThings({ explore: explore.value, home });
@@ -67,4 +74,59 @@ function worldOf({ explore, task, home, snapshots, sources, work }) {
     toolchains: { dirs: [paths.nodeDir, paths.tsDir], tsDir: paths.tsDir }, caches: args.caches ?? defaultCaches(args.stack), python: explore.python3.path, operatorHome: home, say: args.say,
   });
   return { explore, task, home, paths, snapshots, sources, filesFor, scoreFn, work };
+}
+
+/** The workspace files of both stacks of a quick task. -> `ok({ csharp, node })` (each `{ files, frozen }`) | `fail`. */
+function quickBuilt({ explore, task, sources, inputs }) {
+  const built = {};
+  for (const stack of ['csharp', 'node']) {
+    built[stack] = quickWorkspaceFiles({ explore, task, stack, sources, inputs });
+    if (!built[stack].ok) return fail(`the ${stack} workspace of task ${task.id}: ${built[stack].reason}`);
+  }
+  return ok(built);
+}
+
+/** The python pin and the v2 snapshots of the quick profile. -> `ok(snapshots)` | `fail`. */
+function quickHost({ explore, base, home }) {
+  const bad = pythonProblem(explore);
+  return bad ? fail(bad) : quickSnapshots({ base, home });
+}
+
+/** The task's spec and FORMAT texts and the packages inputs of the workspace. -> `ok({ sources, inputs })` | `fail`. */
+async function quickSources({ explore, task, home, candidates }) {
+  const sources = await sourcesFor({ explore, task, home, candidates });
+  if (!sources.ok) return sources;
+  const inputs = packagesInputs();
+  return inputs.ok ? ok({ sources: sources.value, inputs: inputs.value }) : inputs;
+}
+
+/** What the quick world is made from, loaded in order: the pins, the snapshots, the task sources and the packages inputs. -> `ok({ explore, snapshots, sources, inputs })` | `fail`. */
+async function quickParts({ home, task, exploreFn, candidates }) {
+  const base = exploreFn();
+  if (!base.ok) return base;
+  const explore = quickExplore(base.value, home);
+  const snapshots = quickHost({ explore, base: base.value, home });
+  if (!snapshots.ok) return snapshots;
+  const found = await quickSources({ explore, task, home, candidates });
+  return found.ok ? ok({ explore, snapshots: snapshots.value, ...found.value }) : found;
+}
+
+/**
+ * The world of a QUICK task (daemon or web, see quick.mjs): the v2 toolchains and caches, the workspace of lang-bench's templates, and the scoring through the execution layer. Same shape as the olympiad world plus
+ * `frozenFor(stack)` (the files the agent must not change), `profile` (what the scoring box needs) and `quick: true`. `quickSeams` (`{ buildFn, runFn }`) is for tests and the stub runner.
+ */
+async function loadQuickWorld({ home, work, task, exploreFn, candidates, quickSeams }) {
+  const parts = await quickParts({ home, task, exploreFn, candidates });
+  if (!parts.ok) return parts;
+  const { explore, snapshots, sources, inputs } = parts.value;
+  const built = quickBuilt({ explore, task, sources, inputs });
+  if (!built.ok) return built;
+  const paths = quickPaths(explore, home);
+  const profile = { explore, paths, snapshots, kind: task.kind, caseWallMs: explore.quick.caseWallMs, runCeilingMs: explore.quick.runCeilingMs };
+  const scoreFn = args => scoreQuick({
+    stack: args.stack, source: args.source, files: args.files ?? built.value[args.stack].value.frozen, sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work, profile, say: args.say, driftPossible: args.driftPossible === true, only: args.only, ...quickSeams,
+  });
+  return ok({
+    explore, task, home, paths, snapshots, sources, filesFor: stack => built.value[stack].value.files, frozenFor: stack => built.value[stack].value.frozen, scoreFn, work, profile, quick: true,
+  });
 }

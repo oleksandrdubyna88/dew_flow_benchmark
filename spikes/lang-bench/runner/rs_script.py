@@ -1,8 +1,8 @@
 """rs_script: the scenario script (.in) of a daemon or web sample, parsed into frozen dataclasses and validated (FORMAT v2 section 4).
 
 `parse_script(data, file)` returns `(scenario, problems)`: `scenario` is None whenever `problems` (a list of `Problem(file, line,
-message)`) is not empty, and nothing is raised for a malformed sample. Version 1 files are a format error, never run (V1); `sleep`
-has no deadline (V8); a `split` offset counts the joined bytes of the whole string expression (V9).
+message)`) is not empty, and nothing is raised for a malformed sample. Version 1 files are a format error, never run; `sleep`
+has no deadline; a `split` offset counts the joined bytes of the whole string expression.
 """
 import re
 from dataclasses import dataclass

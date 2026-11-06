@@ -38,7 +38,7 @@ export function commitFiles(repo, files, message) {
 /**
  * The structured material of fixture held-out folders: `specs` is `{ taskId: writeHeldout options }`. Each task gets a home of its own folder; `shingles` maps a task to its shingles text. -> `{ material, tasks }`.
  */
-export function materialOf(specs, { shingles = {}, runnerLines = new Set(), hash = undefined, baselines = {}, born = {} } = {}) {
+export function materialOf(specs, { shingles = {}, runnerLines = new Set(), hash = undefined, baselines = {}, born = {}, maxNeedles = undefined } = {}) {
   const home = tmpDir('o-scan-home');
   const tasks = Object.entries(specs).map(([id, over]) => {
     writeHeldout({ home, task: task(id), cases: toyCases(3), brute: 'x = 1\n', handcheck: handcheckOf(5), mutants: {}, ...over });
@@ -46,7 +46,7 @@ export function materialOf(specs, { shingles = {}, runnerLines = new Set(), hash
     if (!held.ok) throw new Error(held.reason);
     return { id, heldout: held.value, shinglesText: shingles[id] ?? '', baselineCommit: baselines[id] ?? null, heldoutBorn: born[id] ?? '2999-01-01T00:00:00.000Z' };
   });
-  const built = buildMaterial({ tasks, runnerLines, ...(hash ? { hash } : {}) });
+  const built = buildMaterial({ tasks, runnerLines, ...(hash ? { hash } : {}), ...(maxNeedles ? { maxNeedles } : {}) });
   return { built, material: built.ok ? built.value : null, tasks };
 }
 

@@ -36,7 +36,11 @@ export function floorBreaches(cases, floors = { timeMs: 1000, memoryBytes: 256 *
   return { time: passing.filter(c => c.wallMs > floors.timeMs).length, memory: passing.filter(c => typeof c.peakBytes === 'number' && c.peakBytes > floors.memoryBytes).length, passing: passing.length };
 }
 
-const stats = xs => (xs.length === 0 ? null : { min: Math.min(...xs), median: [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)], max: Math.max(...xs) });
+/** min, median and max of the numbers among `xs`; a value that is not a number (a wall that was not measured) is unknown and counted as nothing, never as 0; no number at all is `null`. */
+const stats = all => {
+  const xs = all.filter(Number.isFinite);
+  return xs.length === 0 ? null : { min: Math.min(...xs), median: [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)], max: Math.max(...xs) };
+};
 
 /**
  * The `explore` section of a session record: visible and held-out pass rates, verdict counts by class, the wall and certified peak of every case (private: the case ids are in the record, never in the note),

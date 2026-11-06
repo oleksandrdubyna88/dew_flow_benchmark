@@ -77,7 +77,7 @@ export function scanFiles(root, rels, scanText, limits = SCAN_LIMITS, hooks = {}
  * ONE pass over every file (review C2): `extra` is `[{ name, applies(rel), scanText(text) }]`, further text scans that ride on the same read of the files they apply to (the bare collector's
  * canary scan over the evidence files); their hits come back in `extra[name]`. `unreadable` lists `{ rel, why }` for every file no scan could read (too large, swapped after the listing).
  */
-export function scanSessionDir(root, { real, dummy = null, binds = [], limits = SCAN_LIMITS, hooks = {}, extra = [] }) {
+export function scanSessionDir(root, { real, dummy = null, binds = [], limits = SCAN_LIMITS, hooks = {}, extra = [], outsideBudget = null }) {
   const entries = filesUnder(root);
   hooks.afterList?.(); // a test seam: the agent runs while the scan does, and can change the tree between the listing and the reads
   const finding = (f, kind = f.kind, extra = {}) => ({ rel: f.rel, kind, severity: 'high', ...extra });
@@ -91,8 +91,15 @@ export function scanSessionDir(root, { real, dummy = null, binds = [], limits = 
   const tooLarge = [];
   const problems = [];
   const unreadable = [];
+  const skippedOutside = [];
+  let outsideBytes = 0;
   let scanned = 0;
   for (const f of entries.filter(e => e.kind === 'file')) {
+    // `outsideBudget` (the quick run): a file outside the evidence paths that is big, or that would take the files outside them past the total, is NOT read; it is listed in `skippedOutside` and the record flags it. The box holds the dummy only, so the real token cannot be in such a file; the evidence paths are always scanned.
+    if (outsideBudget && !outsideBudget.isEvidence(f.rel)) {
+      if (f.size > outsideBudget.perFileBytes || outsideBytes + f.size > outsideBudget.totalBytes) { skippedOutside.push({ rel: f.rel, size: f.size }); continue; }
+      outsideBytes += f.size;
+    }
     if (f.size <= limits.maxScanBytes) {
       const found = scanWhole(root, f.rel, scanText, ctx);
       // a regular file that is no longer one when it is opened (or whose directories were swapped for a link) was changed after the listing: that is a finding too
@@ -109,6 +116,7 @@ export function scanSessionDir(root, { real, dummy = null, binds = [], limits = 
   const classified = entries.filter(f => f.kind === 'symlink').map(f => ({ f, c: classifyLink({ root, rel: f.rel, binds }) }));
   const strip = ({ scan, ...hit }) => hit;
   return {
+    skippedOutside,
     hits: all.filter(h => h.scan === '').map(strip), extra: Object.fromEntries(extra.map(x => [x.name, all.filter(h => h.scan === x.name).map(strip)])), unreadable, scanned, streamed, tooLarge,
     links: [
       ...entries.filter(f => f.kind === 'other').map(f => finding(f)),

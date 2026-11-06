@@ -12,6 +12,7 @@ export function planRecord(plan) {
   return {
     cellId: plan.cellId, arm: plan.arm, promptSha256: sha256(plan.prompt), promptBytes: Buffer.byteLength(plan.prompt), allow: plan.allow, capUsd: plan.capUsd, wallMs: plan.wallMs, stallMs: plan.stallMs,
     locale: plan.locale ?? null, envExtra: plan.envExtra, toolchains: plan.toolchains, cliVersion: plan.cliVersion, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, tsDir: plan.tsDir,
+    ...(plan.dotnetDir ? { dotnetDir: plan.dotnetDir, hide: plan.hide } : {}),
   };
 }
 

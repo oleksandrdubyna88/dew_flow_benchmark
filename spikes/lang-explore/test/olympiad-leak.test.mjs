@@ -12,7 +12,7 @@ import { loadExplore } from '../lib/inputs.mjs';
 import { leakIds, leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
-import { resolveTask, taskPaths } from '../lib/tasks.mjs';
+import { resolveTask, taskIds, taskPaths } from '../lib/tasks.mjs';
 import { handcheckOf, toyCases, writeHeldout } from './olympiad-fixture.mjs';
 
 const EXPLORE = loadExplore().value;
@@ -80,7 +80,7 @@ test('Leakcheck_reads_every_task_s_material_by_default_and_one_task_s_when_asked
   const home = homeWith(['02', '03']);
   const all = leakMaterial({ home, explore: EXPLORE, publicText: '' });
   assert.equal(all.ok, true, all.reason);
-  assert.deepEqual([all.value.scanned, all.value.absent], [['02', '03'], ['01', '09']]);
+  assert.deepEqual([all.value.scanned, all.value.absent], [['02', '03'], taskIds(EXPLORE).filter(id => !['02', '03'].includes(id))], 'every registered task whose folder is not there is named (the quick run registered ten tasks)');
   for (const id of ['02', '03']) assert.ok(substringsOf(all.value, id).includes(`answer-${id}-h001-xyzzy`), `task ${id}'s outputs are needles of the default scan`);
   assert.ok(all.value.material.shingleTexts.includes('the smallest grid whose first row') && all.value.material.shingleTexts.includes('a division of the minimum value'), 'every task\'s private notes are read');
   const one = leakMaterial({ home, explore: EXPLORE, only: '03', publicText: '' });
@@ -123,8 +123,8 @@ test('A_folder_that_does_not_match_its_manifest_or_no_folder_at_all_fails_the_ch
 test('The_leakcheck_command_refuses_an_unknown_task_and_reports_what_it_could_not_read_with_exit_4', async () => {
   const say = [];
   const unknown = { home: tmpDir('o-leak-cmd'), say: l => say.push(l) };
-  assert.equal(await cmdLeakcheck({ task: '04' }, unknown), EXIT.config);
-  assert.match(say.join('\n'), /--task 04 is not a task of the pilot: the tasks are 01, 02, 03, 09/);
+  assert.equal(await cmdLeakcheck({ task: '11' }, unknown), EXIT.config);
+  assert.match(say.join('\n'), /--task 11 is not a task of the pilot: the tasks are 01, 02, 03, 04, 05, 06, 07, 08, 09, 10/);
   assert.equal(await cmdLeakcheck({}, unknown), EXIT.config);
   assert.match(say.join('\n'), /no held-out folder is present/);
 });

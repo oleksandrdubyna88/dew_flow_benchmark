@@ -101,12 +101,21 @@ function newRun(options, tools) {
   return { owned, scope, dir, id, unitPrefix: unitPrefixOf(owned, id), holderName: holderNameOf(owned, id), options, tools, env, holder: null, holderNet: null, limits: {} };
 }
 
+/** Why `options.holdSeconds` cannot be the scope holder's bound, or null: a positive number that covers the runner's own wall for a case (T + G). */
+function holdProblem(options, required) {
+  if (options.holdSeconds === undefined) return null;
+  const ok = Number.isFinite(options.holdSeconds) && options.holdSeconds >= required;
+  return ok ? null : `holdSeconds ${options.holdSeconds} must be a number of at least ${required} s, the time limit plus the stop grace the runner gives a case`;
+}
+
 async function openSteps(run) {
   const { options } = run;
   if (!statSync(options.tree, { throwIfNoEntry: false })?.isDirectory()) return fail(`the built tree ${options.tree} is not a directory: the box mounts it read-only as the workspace`);
   const limits = readLimits(options.limitsFile);
   if (!limits.ok) return limits;
   const required = requiredWallSeconds(limits.value);
+  const hold = holdProblem(options, required);
+  if (hold) return fail(hold);
   if (options.caseWallMs !== undefined && options.caseWallMs / 1000 < required) return fail(`caseWallMs ${options.caseWallMs} is shorter than the time limit ${limits.value.timeS ?? 10} s plus the stop grace ${limits.value.graceS ?? 5} s the runner gives a case`);
   run.limits = limits.value;
   const long = tooLongForUnit(run.unitPrefix, options.caseIds);

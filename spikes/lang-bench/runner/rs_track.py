@@ -1,4 +1,4 @@
-"""rs_track: which process is the program, and what else the case leaves in its cgroup (B1, D38).
+"""rs_track: which process is the program, and what else the case leaves in its cgroup.
 
 With a launch status (the box is bwrap) the launcher is NEVER the program. The program is the process of `cgroup.procs` whose PARENT is a
 bwrap process: `bash run.sh` execs the program, so it is the one child of bwrap's init (bwrap is told by identity, rs_cgroup.py). A tool or
@@ -147,13 +147,17 @@ class Tracker:
         return [] if found is None else found
 
     def _persisting(self, first):
-        """The ones of `first` that are still in the cgroup a moment later: a process caught in the middle of exiting (its exe is already
-        unreadable, so it looks like no bwrap) is gone by then, a hidden child is not."""
-        if not first:
-            return first
+        """The ones of `first` still in the cgroup after the bound: a process caught in the middle of exiting (its exe is already unreadable,
+        so it looks like no bwrap) is gone by then, however loaded the machine, and a hidden child is not. It looks until none is left."""
+        left, deadline = first, ex.now_ms() + ex.LEFTOVER_SETTLE_MS
+        while left and ex.now_ms() < deadline:
+            left = self._still_listed(left)
+        return left
+
+    def _still_listed(self, pids):
         time.sleep(ex.RECHECK_S)
         still = self._others(self._listed_or_empty())
-        return [pid for pid in first if pid in still]
+        return [pid for pid in pids if pid in still]
 
     def signalled(self):
         if self.orphan:

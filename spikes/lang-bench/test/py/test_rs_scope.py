@@ -18,6 +18,7 @@ import rs_exec as ex
 import rs_launch as rl
 import rs_olympiad as ro
 import rs_scope
+import rs_track
 from box_support import ANSWER, STATUS_FD, Scope, Workspace, box_prefix, case, fake_box, fake_cgroup, reporting_prefix, wait_until
 
 REPLAY = "cat answer.bin\n"
@@ -321,9 +322,10 @@ class SettleOrderTests(unittest.TestCase):
         ws = Workspace(self, f"exec sleep {seconds}\n")
         cgroup = fake_cgroup(ws, files={"memory.peak": "0", "memory.events": CLEAN_EVENTS})
         prefix = box_prefix(fake_box(self), cgroup, after_report=f'rm -r "{cgroup}"')
-        with self.assertRaises(rs_scope.CgroupLost) as raised, contextlib.redirect_stderr(io.StringIO()):
+        # the removal can land before or after the runner's presence check at child-pid: both say the cgroup is gone, and neither is a verdict
+        with self.assertRaises((rs_scope.CgroupLost, rl.LaunchFailed)) as raised, contextlib.redirect_stderr(io.StringIO()):
             ws.run(case(expected=b""), prefix=prefix, status_fd=STATUS_FD, cgroup=cgroup, limit_ms=400)
-        self.assertIsInstance(raised.exception, ex.EnvironmentProblem)
+        self.assertRegex(str(raised.exception), r"(is gone|does not exist) after child-pid")
         self.assertTrue(wait_until(lambda: cmdline_alive(seconds) == []), f"left alive: {cmdline_alive(seconds)}")
 
     def test_A_cgroup_that_vanishes_after_child_pid_is_exit_3_on_the_command_line(self):
@@ -380,6 +382,28 @@ def select_until_readable(fd):
         sel.register(fd, selectors.EVENT_READ)
         sel.select(10)
 
+
+
+class LeftoverSettleTests(unittest.TestCase):
+    """A process caught in the middle of exiting is no leftover, however slow the machine: only one still there after the bound is."""
+
+    def tracker(self, *listings):
+        tracker = rs_track.Tracker.__new__(rs_track.Tracker)
+        looks = iter(listings)
+        tracker._listed_or_empty = lambda: next(looks, listings[-1])
+        tracker._others = lambda pids: list(pids)
+        return tracker
+
+    def test_A_process_still_exiting_at_the_first_recheck_is_no_leftover_when_it_is_gone_within_the_bound(self):
+        with mock.patch.object(ex, "RECHECK_S", 0):
+            self.assertEqual(self.tracker([7], [7], [7], [])._persisting([7]), [])
+
+    def test_A_process_that_stays_past_the_bound_is_a_leftover(self):
+        with mock.patch.object(ex, "RECHECK_S", 0), mock.patch.object(ex, "LEFTOVER_SETTLE_MS", 30):
+            self.assertEqual(self.tracker([7])._persisting([7]), [7])
+
+    def test_No_candidate_means_no_wait_and_no_look(self):
+        self.assertEqual(self.tracker([7])._persisting([]), [])
 
 if __name__ == "__main__":
     unittest.main()

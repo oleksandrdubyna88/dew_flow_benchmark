@@ -8,6 +8,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { SPIKE } from './paths.mjs';
 import { parseSamples } from './samples.mjs';
+import { parseScenarioSamples } from './samples-sd.mjs';
 
 export const STACKS = Object.freeze(['csharp', 'node']);
 const TEMPLATES = path.join(SPIKE, 'templates');
@@ -54,9 +55,13 @@ async function sourcesIn(repo, task) {
   const spec = await pinnedText(repo, task.spec, `the spec of task ${task.id}`);
   if (!spec.ok) return spec;
   const format = await pinnedText(repo, task.format, 'FORMAT.md');
-  const samples = format.ok ? parseSamples(spec.value) : format;
+  if (!format.ok) return format;
+  const samples = samplesReader(task)(spec.value);
   return samples.ok ? ok({ spec: spec.value, format: format.value, repo }) : samples;
 }
+
+/** The reader of the spec's visible samples: the scenario files of a daemon or web task, the olympiad table otherwise. */
+const samplesReader = task => (task.kind === 'daemon' || task.kind === 'web' ? parseScenarioSamples : parseSamples);
 
 /** `runner/GRAMMAR.md`: FORMAT.md's sections 3 to 5, verbatim (FORMAT.md's own rule). */
 export function grammarOf(format) {
