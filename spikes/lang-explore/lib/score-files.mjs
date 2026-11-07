@@ -5,6 +5,7 @@ import * as nodeFs from 'node:fs';
 import path from 'node:path';
 import { systemClock } from './clock.mjs';
 import { attemptRecordProblem } from './attempt-record.mjs';
+import { publishNamed, publishOnce } from './publish-once.mjs';
 import { casesOfRecord } from './score-quick.mjs';
 import { PASS_COUNT, profileOfPass, verdictOf } from './verdict.mjs';
 
@@ -17,29 +18,19 @@ const eventsDir = work => path.join(work, 'events');
 /** `score/passes/pNN-<profile>-aK.json`. */
 export const attemptFile = ({ work, n, profile, attempt }) => path.join(passesDir(work), `p${pad(n)}-${profile}-a${attempt}.json`);
 
-/** Write one attempt, once (`wx`): an attempt that exists is never overwritten (the error is EEXIST). -> the file. */
+/** Write one attempt, whole and once (`publishOnce`): an attempt that exists is never overwritten (the error is EEXIST) and a kill in the middle leaves no truncated attempt. -> the file. */
 export function writeAttempt({ work, n, profile, attempt, body, fs = nodeFs }) {
-  fs.mkdirSync(passesDir(work), { recursive: true });
   const file = attemptFile({ work, n, profile, attempt });
-  fs.writeFileSync(file, `${JSON.stringify({ n, profile, cpus: profileOfPass(n).cpus, attempt, ...body }, null, 2)}\n`, { flag: 'wx' });
-  return file;
+  return publishOnce({ file, text: `${JSON.stringify({ n, profile, cpus: profileOfPass(n).cpus, attempt, ...body }, null, 2)}\n`, fs });
 }
 
 const stampOf = now => now().toISOString().replaceAll(/[-:.]/g, '');
 const eventName = ({ now, kind, n }) => `${stampOf(now)}-${kind}${n === 1 ? '' : `-${n}`}.json`;
 
-/** `true` when the file was created, `false` when the name is taken (`wx`). */
-function createdOnce(file, body, fs) {
-  try { fs.writeFileSync(file, body, { flag: 'wx' }); return true; } catch (e) { if (e.code === 'EEXIST') return false; throw e; }
-}
-
-/** Write one event once (`wx`) as `events/<utc>-<kind>.json`; a name taken in the same millisecond gets `-2`, `-3`... -> the file name. */
+/** Write one event whole and once as `events/<utc>-<kind>.json`; a name taken in the same millisecond gets `-2`, `-3`... -> the file name. */
 export function writeEvent({ work, now = systemClock, kind, detail = {}, fs = nodeFs }) {
-  fs.mkdirSync(eventsDir(work), { recursive: true });
-  const body = `${JSON.stringify({ kind, at: now().toISOString(), ...detail }, null, 2)}\n`;
-  let n = 1;
-  while (!createdOnce(path.join(eventsDir(work), eventName({ now, kind, n })), body, fs)) n += 1;
-  return eventName({ now, kind, n });
+  const text = `${JSON.stringify({ kind, at: now().toISOString(), ...detail }, null, 2)}\n`;
+  return publishNamed({ dir: eventsDir(work), names: n => eventName({ now, kind, n }), text, fs });
 }
 
 const jsonFiles = (dir, fs) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort() : []);
@@ -75,8 +66,16 @@ function attemptOf({ name, body, expectedIds, pinnedRunner }) {
   return judged.cases ? completedAttempt({ base, body, cases: judged.cases }) : envAttempt({ ...base, body, reason: judged.reason });
 }
 
-/** The ten passes `[{ n, profile, cpus, attempts }]` as the verdict rule reads them, from the attempt files alone (a pass without a file has no attempt). */
-export function readAttempts({ work, expectedIds, pinnedRunner, fs = nodeFs }) {
+/** The runner pin a session is judged by: the one stamped into its completion record at the commit, never today's (a runner re-pinned meanwhile must not make a stored attempt invalid). `fallback` before there is a record. */
+export function judgingPin(work, fallback, fs = nodeFs) {
+  const file = path.join(work, 'build.json');
+  const stamp = fs.existsSync(file) ? readJson(file, fs).runnerPin : undefined;
+  return stamp?.format === undefined ? fallback : stamp;
+}
+
+/** The ten passes `[{ n, profile, cpus, attempts }]` as the verdict rule reads them, from the attempt files alone (a pass without a file has no attempt), each judged against the runner pin of the build. */
+export function readAttempts({ work, expectedIds, pinnedRunner: today, fs = nodeFs }) {
+  const pinnedRunner = judgingPin(work, today, fs);
   const names = jsonFiles(passesDir(work), fs).filter(f => ATTEMPT_NAME.test(f));
   const read = names.map(name => ({ n: Number(ATTEMPT_NAME.exec(name)[1]), attempt: attemptOf({ name, body: readJson(path.join(passesDir(work), name), fs), expectedIds, pinnedRunner }) }));
   return Array.from({ length: PASS_COUNT }, (_, i) => ({ n: i + 1, profile: profileOfPass(i + 1).name, cpus: profileOfPass(i + 1).cpus, attempts: read.filter(r => r.n === i + 1).map(r => r.attempt) }));

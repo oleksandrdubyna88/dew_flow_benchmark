@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findOnPath } from '../../minigit-bench/lib/find-on-path.mjs';
@@ -51,7 +51,7 @@ test('Before_a_paid_launch_the_preflight_probes_each_mask_of_the_pair_and_refuse
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /^affinity-not-applied: wanted 0-5, observed 0-4/);
   assert.deepEqual([...probed].sort(), [MASKS.high, MASKS.low].sort(), 'both masks of the pair are probed');
-  assert.equal(existsSync(path.join(seriesDir, 'readback.json')), false, 'readback.json is not written for a refusal');
+  assert.equal(existsSync(path.join(seriesDir, 'readback')), false, 'nothing is written for a refusal');
   // the loop's gates turn it into a resumable halt before anything is launched
   let launched = 0;
   const deps = { guard: async () => ({ ok: true }), retireStale: async () => {}, preflight: async () => maskReadBack({ ctx, probe: wrong }), launch: () => { launched += 1; } };
@@ -59,10 +59,20 @@ test('Before_a_paid_launch_the_preflight_probes_each_mask_of_the_pair_and_refuse
   assert.equal(halt.exit, EXIT.halt);
   assert.match(halt.message, /the preflight refuses: affinity-not-applied/);
   assert.equal(launched, 0);
-  // a good read-back goes, and says so in readback.json (the pair's masks as wanted and as observed)
-  const good = await maskReadBack({ ctx, probe: async cpus => ok(cpus.replace('0-5', '0,1,2,3,4,5')), now: () => new Date('2026-11-07T10:00:00.000Z') });
+  // a good read-back goes, and is kept as a file of its own: one new file per preflight, none ever rewritten
+  const when = () => new Date('2026-11-07T10:00:00.000Z');
+  const good = await maskReadBack({ ctx, probe: async cpus => ok(cpus.replace('0-5', '0,1,2,3,4,5')), now: when });
   assert.equal(good.ok, true, good.reason);
-  assert.deepEqual(JSON.parse(readFileSync(path.join(seriesDir, 'readback.json'), 'utf8')), { pairs: { 1: { at: '2026-11-07T10:00:00.000Z', masks: { '0-5': '0,1,2,3,4,5', '8-13': '8-13' } } } });
+  const folder = path.join(seriesDir, 'readback');
+  const first = readdirSync(folder);
+  assert.equal(first.length, 1);
+  assert.match(first[0], /^p1-\d{8}T\d{9}Z\.json$/);
+  const firstText = readFileSync(path.join(folder, first[0]), 'utf8');
+  assert.deepEqual(JSON.parse(firstText), { pair: 1, at: '2026-11-07T10:00:00.000Z', masks: { '0-5': '0,1,2,3,4,5', '8-13': '8-13' } });
+  assert.equal((await maskReadBack({ ctx, probe: async cpus => ok(cpus), now: when })).ok, true);
+  const second = readdirSync(folder).sort();
+  assert.equal(second.length, 2, 'a second preflight in the same instant adds a file and replaces none');
+  assert.equal(readFileSync(path.join(folder, first[0]), 'utf8'), firstText);
 });
 
 test('The_runs_preflight_edge_calls_the_mask_read_back_after_the_base_preflight_and_a_rehearsal_asks_for_none', async () => {

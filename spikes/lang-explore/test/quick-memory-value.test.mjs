@@ -128,3 +128,14 @@ test('The_score_records_the_enforced_limit_of_every_case_read_back_from_the_cgro
   const missing = await score({}, { runFn: ran([rec('s01'), rec('h001'), unread]) });
   assert.equal(missing.kind, 'environment', 'a case with no read-back is no evidence either');
 });
+
+test('The_calibrate_command_tells_a_quick_task_where_its_limits_live_the_memory_limit_in_its_own_file_and_not_in_the_pins', async () => {
+  const { main } = await import('../explore.mjs');
+  const said = [];
+  const code = await main(['calibrate', '--task', '05'], { say: line => said.push(line), home: '/nonexistent-home' });
+  assert.equal(code, 4);
+  const text = said.join('\n');
+  assert.match(text, /memory-limit\.json/, 'the memory limit is named at its one source');
+  assert.match(text, /quick\.limits/, 'the time and build limits are named where they are');
+  assert.doesNotMatch(text, /limits are fixed \(explore\.json quick\.limits\)/);
+});

@@ -86,3 +86,18 @@ test('The_verdict_is_the_same_whatever_order_the_passes_and_attempts_are_read_in
   const reversed = [...passes].reverse().map(p => ({ ...p, attempts: [...p.attempts].reverse() }));
   assert.equal(JSON.stringify(answer(reversed)), JSON.stringify(answer(passes)));
 });
+
+test('A_rejected_label_that_a_pass_still_open_could_turn_into_intermittently_incorrect_is_not_decided_and_the_label_that_nothing_can_change_is', () => {
+  const open = answer([failingPass(1), passOf(2, [environment(1)])]);
+  assert.equal(open.verdict, 'rejected');
+  assert.equal(open.scoringState, 'open', 'a clean pass may still come: the label is not settled');
+  const later = answer(passesOf({ ...NINE_FAILING, 10: passOf(10, [environment(1)]) }));
+  assert.equal(later.scoringState, 'open', 'nine failing and one pass with an attempt left');
+  const cleaned = answer(passesOf({ ...NINE_FAILING }));
+  assert.equal(cleaned.verdict, 'intermittently incorrect');
+  assert.equal(cleaned.scoringState, 'decided');
+  const intermittentEarly = answer([failingPass(1), cleanPass(2)]);
+  assert.equal(intermittentEarly.scoringState, 'decided', 'a failing pass and a clean pass fix the label whatever the other passes do');
+  assert.equal(answer(passesOf(Object.fromEntries(Array.from({ length: 10 }, (_, i) => [i + 1, failingPass(i + 1)])))).scoringState, 'decided', 'no pass is open: rejected is settled');
+  assert.equal(answer([failingPass(1), exhaustedPass(2)]).scoringState, 'open', 'the other eight passes are untried');
+});

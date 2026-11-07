@@ -3,17 +3,19 @@
 // the tree now (`committedTree`); a `build-*` folder or a `tree/` without a record is uncommitted state and is removed before the build is made again (`discardUncommitted`). A build that really ran and exited non-zero is
 // committed too (`ok: false`); a build that never began commits nothing and is an environment failure. Nothing here is ever rewritten: the record is written once.
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import * as nodeFs from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
+import { publishOnce } from './publish-once.mjs';
 import { removeArea } from './score.mjs';
 
 export const BUILD_FILE = 'build.json';
 export const TREE_DIR = 'tree';
 const TEMP_PREFIX = 'build-';
 
-const DEFAULT_IO = Object.freeze({ rename: renameSync, writeNew: (file, text) => writeFileSync(file, text, { flag: 'wx' }) });
+const DEFAULT_IO = Object.freeze({ rename: renameSync, writeNew: (file, text, fs) => publishOnce({ file, text, fs }) });
 
 /** The relative paths of the files (and links) under `dir`, in name order. */
 function filesUnder(dir, rel = '') {
@@ -48,18 +50,31 @@ export function discardUncommitted(work) {
   return [...gone].sort();
 }
 
-const mismatch = ({ recorded, live }) => fail(`build-record-mismatch: build.json names the tree ${recorded} and the tree on disk hashes to ${live}`);
-
-/** The completion record against the tree it names: `ok(record)`, `ok(null)` when there is no record, `fail('build-record-mismatch: ...')` when the tree is not the one recorded (or is gone). */
-export function committedTree(work) {
-  if (!existsSync(buildFileOf(work))) return ok(null);
-  const record = JSON.parse(readFileSync(buildFileOf(work), 'utf8'));
-  const live = isDir(treeOf(work)) ? treeHash(treeOf(work)) : 'no tree on disk';
-  return live === record.treeSha256 ? ok(record) : mismatch({ recorded: record.treeSha256, live });
+/** The completion record, or a sentence when the file is not a whole record (a kill in the middle of a write by an older writer, a hand edit): never thrown, never read as a passed build. */
+export function readBuildRecord(work) {
+  try {
+    const record = JSON.parse(readFileSync(buildFileOf(work), 'utf8'));
+    return typeof record?.treeSha256 === 'string' && typeof record.ok === 'boolean' ? ok(record) : fail('build-record-invalid: build.json is not a completion record (no tree hash or no outcome)');
+  } catch (e) {
+    return fail(`build-record-invalid: build.json cannot be read (${e.code ?? e.message.slice(0, 80)})`);
+  }
 }
 
-const recordOf = ({ built, prepared, treeSha256, committedAt }) => Object.freeze({
-  treeSha256, ok: built.ok, exit: built.exit, timedOut: built.timedOut === true, wallMs: built.wallMs, tail: built.tail, frozenChanges: prepared.frozen, harnessDrift: prepared.drift, nonRegularLeftOut: prepared.left, committedAt,
+const mismatch = ({ recorded, live }) => fail(`build-record-mismatch: build.json names the tree ${recorded} and the tree on disk hashes to ${live}`);
+
+const treeNow = work => (isDir(treeOf(work)) ? treeHash(treeOf(work)) : 'no tree on disk');
+
+/** The completion record against the tree it names: `ok(record)`, `ok(null)` when there is no record, `fail('build-record-mismatch: ...')` when the tree is not the one recorded (or is gone), `fail('build-record-invalid: ...')` for a record that is not whole. */
+export function committedTree(work) {
+  if (!existsSync(buildFileOf(work))) return ok(null);
+  const read = readBuildRecord(work);
+  if (!read.ok) return read;
+  const live = treeNow(work);
+  return live === read.value.treeSha256 ? read : mismatch({ recorded: read.value.treeSha256, live });
+}
+
+const recordOf = ({ built, prepared, treeSha256, committedAt, runnerPin }) => Object.freeze({
+  treeSha256, runnerPin: runnerPin ? { format: runnerPin.format, version: runnerPin.version } : null, ok: built.ok, exit: built.exit, timedOut: built.timedOut === true, wallMs: built.wallMs, tail: built.tail, frozenChanges: prepared.frozen, harnessDrift: prepared.drift, nonRegularLeftOut: prepared.left, committedAt,
 });
 
 /** Why a build's answer cannot be committed, or null: its exit is not known (and it did not time out), or the tree is not a directory. */
@@ -81,15 +96,15 @@ async function buildInFolder({ folder, prepare, build }) {
  * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, left })`), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`), validate, rename into `work/tree`, then write `work/build.json`
  * (`wx`). `io` (`rename`, `writeNew`) and `now` are seams. -> `ok(record)` | an environment `fail` (the temporary folder is removed; nothing is committed).
  */
-export async function commitBuild({ work, prepare, build, io = DEFAULT_IO, now = systemClock }) {
+export async function commitBuild({ work, prepare, build, runnerPin = null, io = DEFAULT_IO, now = systemClock, fs = nodeFs }) {
   mkdirSync(work, { recursive: true });
   const folder = path.join(work, `${TEMP_PREFIX}${randomBytes(4).toString('hex')}`);
   try {
     const done = await buildInFolder({ folder, prepare, build });
     if (!done.ok) throw Object.assign(new Error(done.reason), { answer: done });
     io.rename(folder, treeOf(work));
-    const record = recordOf({ ...done.value, treeSha256: treeHash(treeOf(work)), committedAt: now().toISOString() });
-    io.writeNew(buildFileOf(work), `${JSON.stringify(record, null, 2)}\n`);
+    const record = recordOf({ ...done.value, treeSha256: treeHash(treeOf(work)), committedAt: now().toISOString(), runnerPin });
+    io.writeNew(buildFileOf(work), `${JSON.stringify(record, null, 2)}\n`, fs);
     return ok(record);
   } catch (e) {
     removeArea(folder);

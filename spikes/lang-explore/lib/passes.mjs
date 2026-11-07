@@ -7,13 +7,16 @@
 //   - A halt before an attempt (a launching session, an affinity that was not applied, a build record that does not match its tree, a ceiling) is an event file and an answer of kind `environment`: nothing is scored, the
 //     loop halts resumably (exit 3).
 //   - A harness failure is never a verdict: an environment attempt counts toward the pass's three and nothing else.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { ok } from '../../minigit-bench/lib/result.mjs';
 import { affinityProblem } from './affinity.mjs';
+import { reapOrphanChild } from './child-record.mjs';
 import { systemClock } from './clock.mjs';
-import { commitBuild, committedTree, discardUncommitted } from './build-commit.mjs';
+import { commitBuild, committedTree, discardUncommitted, readBuildRecord } from './build-commit.mjs';
 import { runnerRecordPinNow } from './harness-pin.mjs';
 import { seriesLockProblem, takeScorerLock } from './pass-locks.mjs';
+import { publishOnce, removeStaleTemps } from './publish-once.mjs';
 import { finishRollup } from './score-quick.mjs';
 import { removeArea } from './score.mjs';
 import { BUILD_ENVIRONMENT_EVENT, readAttempts, readEvents, rebuildVerdict, writeAttempt, writeEvent } from './score-files.mjs';
@@ -51,6 +54,7 @@ export async function scorePasses(a) {
   const lock = takeScorerLock(lockOptions(a));
   if (!lock.ok) return environment(lock.reason);
   try {
+    removeStaleTemps(a.work); // the scorer lock is ours: a temporary file here is a dead scorer's
     return await underLocks({ now: systemClock, ...a, pinnedRunner: a.pinnedRunner ?? runnerRecordPinNow(), ids: null }, lock.value.takeover);
   } finally {
     lock.value.release();
@@ -76,8 +80,18 @@ async function underLocks(a, takeover) {
   if (!caseFolder.ok) return environment(caseFolder.reason);
   const c = { ...a, ids: [...caseFolder.value.ids].sort() };
   if (takeover) noteEvent(c, 'takeover', { reason: `took over the scorer lock of pid ${takeover.pid}, which is gone`, deadPid: takeover.pid });
-  const busy = launchingProblem(c);
+  const orphan = await orphanProblem(c);
+  const busy = orphan ?? launchingProblem(c);
   return busy ?? sessionSteps(c);
+}
+
+/** A pass child a dead scorer left running is killed and waited for before anything starts; its folder (and so any answer it wrote) goes with it. -> a halt, or null. */
+async function orphanProblem(c) {
+  const reaped = await (c.reapChild ?? reapOrphanChild)({ work: c.work });
+  if (reaped.found) noteEvent(c, 'orphan-child', { reason: `a pass child of a dead scorer ${reaped.found.killed ? 'was running and was killed' : 'is not running'}`, pid: reaped.found.pid, killed: reaped.found.killed });
+  if (reaped.problem) return halted(c, 'orphan-child-alive', reaped.problem);
+  rmSync(path.join(c.work, 'child'), { recursive: true, force: true });
+  return null;
 }
 
 /** A halt while another session of the series is still launching: a pass must not disturb it, and it must not disturb the pass. */
@@ -95,16 +109,31 @@ async function sessionSteps(c) {
 
 const readAll = c => readAttempts({ work: c.work, expectedIds: c.ids, pinnedRunner: c.pinnedRunner });
 const anyOpen = c => readAll(c).some(p => passState(p) === 'open');
-const recordedBuild = c => (existsSync(path.join(c.work, 'build.json')) ? JSON.parse(readFileSync(path.join(c.work, 'build.json'), 'utf8')) : null);
+/** The completion record: `ok(null)` when there is none yet, `ok(record)`, or a `fail('build-record-invalid: ...')` for a file that is not a whole record. */
+const recordedBuild = c => (existsSync(path.join(c.work, 'build.json')) ? readBuildRecord(c.work) : ok(null));
 const buildTriesUsed = c => readEvents({ work: c.work }).filter(e => e.kind === BUILD_ENVIRONMENT_EVENT).length;
 
 // ---- the build ------------------------------------------------------------------------------------------------------------------------------------
 
 /** The build's state and what it leaves to do. -> `{ needsPasses }` or `{ answer }` (a halt). */
 async function buildStep(c) {
-  const record = recordedBuild(c);
-  if (record === null) return commitStep(c);
-  return record.ok === false || !anyOpen(c) ? { needsPasses: false } : treeStep(c);
+  const recorded = recordedBuild(c);
+  if (!recorded.ok) return { answer: halted(c, 'build-record-invalid', recorded.reason) };
+  return recorded.value === null ? commitStep(c) : afterRecord(c, recorded.value);
+}
+
+/** The runner moved since the build was committed: the sentence, or null. Attempts stay judged against the pin stamped at the commit; a scoring that still has passes to run does not go on under another runner. */
+function runnerMoved(record, today) {
+  const stamp = record.runnerPin;
+  if (!stamp || (stamp.format === today.format && stamp.version === today.version)) return null;
+  return `runner-moved: the build was committed under runner format ${stamp.format} version ${stamp.version} and the runner is now format ${today.format} version ${today.version}: the stored attempts are not judged again and no pass runs under another runner`;
+}
+
+/** A recorded build: a failed one or a scoring with no pass open is finished from its records (whatever the runner is now); otherwise the runner must be the one of the commit and the tree the one recorded. */
+function afterRecord(c, record) {
+  if (record.ok === false || !anyOpen(c)) return { needsPasses: false };
+  const moved = runnerMoved(record, c.pinnedRunner);
+  return moved ? { answer: halted(c, 'runner-moved', moved) } : treeStep(c);
 }
 
 /** A recorded build whose passes are not all done: the tree on disk must be the tree the record names. */
@@ -118,7 +147,7 @@ async function commitStep(c) {
   const dropped = discardUncommitted(c.work);
   if (dropped.length > 0) noteEvent(c, 'discard', { reason: 'uncommitted build state was removed', removed: dropped });
   for (let used = buildTriesUsed(c); used < BUILD_TRIES; used += 1) {
-    const made = await commitBuild({ work: c.work, prepare: c.prepare, build: c.build, now: c.now });
+    const made = await commitBuild({ work: c.work, prepare: c.prepare, build: c.build, runnerPin: c.pinnedRunner, now: c.now });
     if (made.ok) return { needsPasses: made.value.ok };
     noteEvent(c, BUILD_ENVIRONMENT_EVENT, { reason: made.reason });
   }
@@ -199,11 +228,11 @@ function finish(c) {
 function scoreOf(c, snapshot) {
   const file = path.join(c.work, 'score.json');
   if (!existsSync(file)) {
-    const build = recordedBuild(c);
+    const build = recordedBuild(c).value;
     const rollup = rollupOf({ build, passes: readAll(c), limits: c.limits, ids: c.ids });
     const finished = finishRollup({ rollup, build, traps: c.traps ?? [] }).value;
     const extra = { verdict: snapshot.verdict, scoringState: snapshot.scoringState, passes: rollup.passes, scoringMs: snapshot.scoringMs, buildTreeSha256: build.treeSha256 };
-    writeFileSync(file, `${JSON.stringify({ ...finished, explore: { ...finished.explore, ...extra } }, null, 2)}\n`, { flag: 'wx' });
+    publishOnce({ file, text: `${JSON.stringify({ ...finished, explore: { ...finished.explore, ...extra } }, null, 2)}\n` });
   }
   return JSON.parse(readFileSync(file, 'utf8'));
 }

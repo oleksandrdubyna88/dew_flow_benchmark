@@ -42,7 +42,7 @@ async function cmdPrepare(values, io) {
 async function cmdCalibrate(values, io) {
   const given = taskFromValues(values, io.exploreFn);
   if (!given.ok) { io.say(given.reason); return EXIT.config; }
-  if (isQuick(given.value.task)) { io.say(`task ${given.value.task.id} is a quick-run task: its limits are fixed (explore.json quick.limits) and nothing is calibrated`); return EXIT.config; }
+  if (isQuick(given.value.task)) { io.say(`task ${given.value.task.id} is a quick-run task: its time and build limits are fixed (explore.json quick.limits), its memory limit is the one registered value (inputs/memory-limit.json), and nothing is calibrated`); return EXIT.config; }
   const r = await calibrateCommand({ home: io.home, say: io.say, worldFn: io.worldFn ?? loadWorld, task: given.value.task });
   if (r.ok) { io.say(`calibrated task ${given.value.task.id}: TL ${r.value.calibration.limits.timeMs} ms, ML ${r.value.calibration.limits.memoryBytes} bytes; written to ${r.value.file}`); return EXIT.done; }
   io.say(`calibration stopped: ${r.reason}`);

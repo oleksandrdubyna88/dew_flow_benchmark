@@ -229,3 +229,46 @@ test('A_pre_pass_probe_that_reads_another_mask_is_the_same_halt_before_the_child
   assert.match(r.reason, /^affinity-not-applied: wanted 6-7, observed 0-4/);
   assert.equal(h.calls.pass.length, 0);
 });
+
+// ---- the runner pin of the build (review item 1) ---------------------------------------------------------------------------------------------------
+
+const MOVED = Object.freeze({ format: 1, version: '9.9.9' });
+const stopAfter = (h, n, ctl) => { const inner = h.a.runPass; h.a.runPass = async spec => { const body = await inner(spec); if (spec.n === n) ctl.abort(); return body; }; return inner; };
+
+test('A_runner_re_pinned_after_a_functional_failure_halts_the_resume_as_runner_moved_and_the_stored_failure_is_not_re_judged', async () => {
+  const ctl = new AbortController();
+  const h = harness({ plan: n => (n === 1 ? { failing: { h001: 'wrong answer' } } : 'clean') });
+  const inner = stopAfter(h, 2, ctl);
+  assert.equal((await scorePasses({ ...h.a, signal: ctl.signal })).kind, 'stopped');
+  h.a.runPass = inner;
+  h.calls.pass.length = 0;
+  const before = snapshotOfDir(path.join(h.work, 'passes'));
+  const moved = await scorePasses({ ...h.a, pinnedRunner: MOVED });
+  assert.equal(moved.kind, 'environment');
+  assert.match(moved.reason, /^runner-moved: .*version 9\.9\.9/);
+  assert.equal(h.calls.pass.length, 0, 'no pass runs under another runner');
+  assert.deepEqual(snapshotOfDir(path.join(h.work, 'passes')), before);
+  assert.ok(files(h.work, 'events').some(f => f.endsWith('-runner-moved.json')));
+  const snap = verdictFile(h.work);
+  assert.equal(snap.passes[0].attempts[0].kind, 'completed', 'the stored failing attempt is still a completed attempt');
+  assert.equal(snap.counts.failing, 1);
+  const resumed = await scorePasses(h.a);
+  h.release();
+  assert.equal(resumed.kind, 'scored', resumed.reason);
+  assert.equal(resumed.verdict.verdict, 'intermittently incorrect', 'under the pin of the commit the failure stands');
+  assert.equal(JSON.parse(readFileSync(path.join(h.work, 'build.json'), 'utf8')).runnerPin.version, h.a.pinnedRunner.version);
+});
+
+test('A_decided_session_entered_again_after_a_re_pin_finishes_from_its_records_and_never_reopens_a_pass_or_halts_on_the_removed_tree', async () => {
+  const h = harness({ plan: n => (n === 3 ? { failing: { h002: 'wrong answer' } } : 'clean') });
+  const first = await scorePasses(h.a);
+  assert.equal(first.verdict.verdict, 'intermittently incorrect');
+  assert.equal(existsSync(path.join(h.work, 'tree')), false);
+  h.calls.pass.length = 0;
+  const again = await scorePasses({ ...h.a, pinnedRunner: MOVED });
+  h.release();
+  assert.equal(again.kind, 'scored', again.reason);
+  assert.equal(again.verdict.verdict, 'intermittently incorrect');
+  assert.equal(h.calls.pass.length, 0);
+  assert.deepEqual(again.score, first.score);
+});

@@ -5,6 +5,7 @@
 //     environment one (`pass-child timeout`) that counts toward the pass's three;
 //   - a child that ends without an answer is an environment attempt naming how it ended.
 import { spawn as nodeSpawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,7 @@ import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { maskObserved } from '../../minigit-bench/lib/cpu-sampler.mjs';
 import { realProcApi } from '../../minigit-bench/lib/janitor.mjs';
 import { affinityProblem } from './affinity.mjs';
+import { clearChild, recordChild, startTimeOf } from './child-record.mjs';
 
 /** The time the child may take beyond the layer's ceiling for the case set: the runner's start (the startup sweep, the holder) and its end (the cleanup). Stated once. */
 export const PASS_CHILD_MARGIN_MS = 120_000;
@@ -45,11 +47,12 @@ function tailOf(child) {
 function argsFor({ spec, context }) {
   const dir = path.join(path.dirname(spec.tree), 'child');
   mkdirSync(dir, { recursive: true });
-  const stem = `p${spec.n}-a${spec.attempt}`;
+  const token = randomBytes(6).toString('hex'); // of THIS start: a new child never reads the answer an orphan of an earlier start wrote
+  const stem = `p${spec.n}-a${spec.attempt}-${token}`;
   const out = path.join(dir, `${stem}.answer.json`);
   const argsFile = path.join(dir, `${stem}.args.json`);
   writeFileSync(argsFile, JSON.stringify({ spec, context, out }));
-  return { dir, out, argsFile };
+  return { dir, out, argsFile, token };
 }
 
 /** The sentence naming the mask the child has against the profile, or null when it is the profile. */
@@ -89,6 +92,7 @@ export async function runPassChild({ spec, context, deadlineMs = passChildDeadli
   const child = spawn('taskset', ['-c', spec.cpus, nodePath, childFile, files.argsFile], { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: process.env });
   const tail = tailOf(child);
   const ended = endOf(child);
+  recordChild({ work: path.dirname(spec.tree), pid: child.pid, startTime: startTimeOf(child.pid), token: files.token });
   try {
     const wrong = await maskProblem({ child, wanted: spec.cpus, procApi, pollMs, polls });
     if (wrong) { await killAndWait({ child, ended, killGroup }); return { halt: 'affinity', ...environment(wrong) }; }
@@ -96,6 +100,7 @@ export async function runPassChild({ spec, context, deadlineMs = passChildDeadli
     if (result === null) { await killAndWait({ child, ended, killGroup }); return environment(`pass-child timeout: no answer within ${deadlineMs} ms (the layer's ceiling plus ${PASS_CHILD_MARGIN_MS} ms); its process group was killed`); }
     return answerOf({ out: files.out, ended: result, tail });
   } finally {
+    clearChild(path.dirname(spec.tree));
     rmSync(files.dir, { recursive: true, force: true });
   }
 }

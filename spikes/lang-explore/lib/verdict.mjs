@@ -8,6 +8,10 @@
 // THE ONE TERMINAL RULE: if any completed pass holds a genuine functional failure the session is `rejected` (or `intermittently incorrect` when some pass is clean), whatever any other pass did and with or without
 // retries; it is never `unscored: environment`. While no completed pass is failing and a pass still has an attempt left the answer is `pending`, the driver's working state and never a recorded verdict.
 //
+// `scoringState` is `decided` only when NO attempt that can still be made can change the label. `rejected` while a pass is open is `open`: a clean pass to come would make it `intermittently incorrect`, so the label is not settled
+// (the driver runs every pass to completion or exhaustion anyway, and leaves `open` only then). `intermittently incorrect` is `decided` at once (a failing and a clean pass fix it), and so are `accepted`, a failed build and a
+// `rejected` with no pass open. `exhausted` is `unscored: environment`.
+//
 // An attempt is `{ attempt, kind: 'completed', cases }` or `{ attempt, kind: 'environment', reason }`. An environment attempt holds no case verdict at all (a half-written record is no evidence of anything), so
 // one that carries `cases` is a wrong fixture and throws. The answer has NO finality field: whether the session is final is the run-map's to say (scoring exhaustion is not session finality).
 
@@ -59,16 +63,18 @@ function tenPasses(passes) {
 /** The rules in order: `[when(counts), verdict, scoringState, the sentence]`. The first that holds answers. */
 const RULES = Object.freeze([
   [c => c.failing > 0 && c.clean > 0, 'intermittently incorrect', 'decided', c => `${c.failing} completed pass(es) failing and ${c.clean} clean`],
-  [c => c.failing > 0, 'rejected', 'decided', c => `${c.failing} completed pass(es) failing and no clean pass`],
+  [c => c.failing > 0, 'rejected', c => (c.open > 0 ? 'open' : 'decided'), c => `${c.failing} completed pass(es) failing and no clean pass${c.open > 0 ? `; ${c.open} pass(es) are still open and a clean one would make it intermittently incorrect` : ''}`],
   [c => c.clean === PASS_COUNT, 'accepted', 'decided', () => `all ${PASS_COUNT} passes completed and clean`],
   [c => c.open > 0, 'pending', 'open', c => `${c.open} pass(es) still have an attempt left and none is failing`],
   [() => true, 'unscored: environment', 'exhausted', c => `${c.exhausted} pass(es) used every attempt without a completed run and no completed pass is failing`],
 ]);
 
 const answer = (verdict, scoringState, counts, reason) => Object.freeze({ verdict, scoringState, counts, reason });
+const stateOf = (state, counts) => (typeof state === 'function' ? state(counts) : state);
 
 /** The build step's own answer: exhausted (every try of a build that never began is used) or a build that really exited non-zero. */
 const buildAnswer = build => {
+  if (build.unreadable) return answer('pending', 'open', NO_COUNTS, `the completion record of the build cannot be read (${build.unreadable}): nothing is judged against it`);
   if (build.exhausted === true) return answer('unscored: environment', 'exhausted', NO_COUNTS, 'the build never began after its tries');
   return build.ok === false ? answer('rejected', 'decided', NO_COUNTS, 'the build failed: no pass ran') : null;
 };
@@ -79,7 +85,7 @@ export function verdictOf({ build, passes }) {
   if (early) return early;
   const counts = countOf(tenPasses(passes).map(passState));
   const [, verdict, state, reason] = RULES.find(([when]) => when(counts));
-  return answer(verdict, state, counts, reason(counts));
+  return answer(verdict, stateOf(state, counts), counts, reason(counts));
 }
 
 /** A case of a build that failed: every case is `build failed` and nothing ran. */
