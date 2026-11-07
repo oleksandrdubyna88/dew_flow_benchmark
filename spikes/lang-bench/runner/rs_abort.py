@@ -3,8 +3,8 @@ Under the memory view the execution layer gives a program (its own cgroup, and t
 a genuinely over-limit program usually ends in its runtime's abort before the kernel's oom_kill.
 Both are `memory limit`, but only WITH evidence: `memory.peak` is at least half of `memory.max` (both are in the record).
 
-  First runtime:  exit status 134 (SIGABRT, as bwrap reports it) AND a stderr line exactly `Out of memory.`, OR an `Unhandled exception.` line with
-        `System.OutOfMemoryException` anywhere in the stderr tail (also one wrapped in an `AggregateException`)
+  First runtime:  exit status 134 (SIGABRT, as bwrap reports it) AND a stderr line exactly `Out of memory.`,
+        OR an `Unhandled exception.` line with `System.OutOfMemoryException` anywhere in the stderr tail (also one wrapped in an `AggregateException`)
   Second runtime: exit status 134 AND a stderr line that contains that runtime's own out-of-memory message (the last constant below)
 
 It is never inferred from exit status 134 alone (an `abort()` with another message is a runtime failure), never from a message alone (a program that prints
@@ -40,7 +40,7 @@ def _kind(lines, text):
 
 
 def _line_kind(stderr_path):
-    """The label of the runtime (the string `_kind` returns) or None: whose out-of-memory line stands at the end of the stderr file, whatever the exit status."""
+    """The runtime's label (what `_kind` returns) or None: whose out-of-memory line ends the stderr file, whatever the exit status."""
     text = ex.read_tail(stderr_path, SCAN_BYTES)
     return _kind([line.rstrip("\r") for line in text.split("\n")], text)
 
