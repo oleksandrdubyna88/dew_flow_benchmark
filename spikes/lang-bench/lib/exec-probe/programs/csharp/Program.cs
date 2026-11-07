@@ -116,7 +116,7 @@ switch (mode)
         Console.WriteLine("OK");
         break;
     }
-    case "overlimit-objects": // live ordinary objects that only grow, to about 4 GiB: no limit of 256 or 512 MiB can hold them
+    case "overlimit-objects": // live ordinary objects that only grow, to about 4 GiB: no probe limit (256 or 512 mebibytes) can hold them
     {
         var grown = new List<Rec>();
         for (long i = 0; i < 40_000_000; i++) grown.Add(new Rec { A = i });
@@ -124,7 +124,7 @@ switch (mode)
         Console.WriteLine("OK");
         break;
     }
-    case "overlimit": // live data that only grows, to 3 GiB: no limit of 256 or 512 MiB can hold it
+    case "overlimit": // live data that only grows, to 3 GiB: no probe limit (256 or 512 mebibytes) can hold it
         var kept = new List<byte[]>();
         for (var i = 0; i < 48; i++)
         {

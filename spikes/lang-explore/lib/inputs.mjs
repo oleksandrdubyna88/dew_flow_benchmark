@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { loadStacks } from '../../minigit-bench/lib/host-checks.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { MEMORY_LIMIT_FILE, memoryLimit } from './memory-limit.mjs';
 import { INPUTS, V1, underHome } from './paths.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -58,7 +59,7 @@ export const pauseProblems = e => [
 
 const isQuickTaskOf = e => k => e.tasks?.[k]?.quick === true && ['daemon', 'web'].includes(e.tasks[k].kind);
 const planTasksOk = e => Array.isArray(e.quick.planTasks) && e.quick.planTasks.length > 0 && e.quick.planTasks.every(isQuickTaskOf(e));
-const quickLimitsOk = q => [q.limits?.timeMs, q.limits?.memoryBytes, q.limits?.buildTimeoutMs, q.caseWallMs, q.runCeilingMs].every(positive);
+const quickLimitsOk = q => [q.limits?.timeMs, q.limits?.buildTimeoutMs, q.caseWallMs, q.runCeilingMs].every(positive);
 const quickPartsOk = q => [q.dotnet?.dirParts, q.node?.dirParts, q.typescript?.toolchainDirParts, q.cachesDirParts].every(parts);
 const quickVersionsOk = q => [q.dotnet?.sdk, q.node?.version, q.typescript?.version].every(v => typeof v === 'string');
 
@@ -66,7 +67,7 @@ const quickVersionsOk = q => [q.dotnet?.sdk, q.node?.version, q.typescript?.vers
 const QUICK_CHECKS = Object.freeze([
   [planTasksOk, 'quick.planTasks must name tasks marked quick, of kind daemon or web'],
   [e => pausePositive(e.quick.pausePoint), 'quick.pausePoint needs positive numbers'],
-  [e => quickLimitsOk(e.quick), 'quick: limits, caseWallMs and runCeilingMs must be positive numbers'],
+  [e => quickLimitsOk(e.quick), 'quick: limits (time and build), caseWallMs and runCeilingMs must be positive numbers'],
   [e => quickPartsOk(e.quick) && quickVersionsOk(e.quick), 'quick: dotnet, node, typescript and cachesDirParts must be pinned as path parts under the home'],
 ]);
 
@@ -95,11 +96,13 @@ const CHECKS = Object.freeze([
 /** The sentences saying what in `explore.json` is not what it must be (`[]` when it is sound). */
 export const exploreProblems = e => CHECKS.filter(([holds]) => !holds(e)).map(([, why]) => why);
 
-/** `inputs/explore.json` -> `ok(explore)` | `fail` naming what is wrong. */
-export function loadExplore(file = path.join(INPUTS, 'explore.json')) {
+/** `inputs/explore.json` -> `ok(explore)` | `fail` naming what is wrong. The registered memory value (`inputs/memory-limit.json`, `memoryFile`) is checked here too: no workspace is built on a value that is not a whole number of MiB. */
+export function loadExplore(file = path.join(INPUTS, 'explore.json'), memoryFile = MEMORY_LIMIT_FILE) {
   let json;
   try { json = readJson(file); } catch (e) { return fail(`${file} is unreadable: ${e.message}`); }
   const problems = exploreProblems(json);
+  const memory = memoryLimit({ file: memoryFile });
+  if (!memory.ok) return memory;
   return problems.length === 0 ? ok(Object.freeze(json)) : fail(`explore.json: ${problems.join('; ')}`);
 }
 

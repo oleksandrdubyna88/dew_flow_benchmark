@@ -14,6 +14,7 @@ import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { allOk } from './chain.mjs';
 import { systemClock } from './clock.mjs';
 import { runnerDriftPossible, runnerPinNow } from './harness-pin.mjs';
+import { legacyGenerated } from './generated-drift.mjs';
 import { templateHistory } from './template-drift.mjs';
 import { calibrationFor } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
@@ -107,7 +108,7 @@ const stopped = ({ io, done, times }) => ({ exit: io.abort?.exit ?? 130, message
 async function replayIn({ io, need, seriesDir, entry, layout, rid, caseId, times, work, now, stamp }) {
   const inputs = seriesInputs(seriesDir).value;
   const driftPossible = runnerDriftPossible({ inputs });
-  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, history: templateHistory({ inputs }), work, say: io.say, signal: io.signal });
+  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, history: templateHistory({ inputs, legacy: legacyGenerated({ world: need.world, inputs }) }), work, say: io.say, signal: io.signal });
   if (runs.length < times) return stopped({ io, done: runs.length, times });
   const body = { diagnostic: true, note: DIAGNOSTIC_NOTE, rid, caseId, stack: entry.stack, times, at: now.toISOString(), runner: runnerPinNow(), driftPossible, sessionClass: entry.class, runs };
   const file = writeResult({ layout, stamp, body });

@@ -11,7 +11,10 @@ import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { holdForCaseWall } from '../../lang-bench/lib/exec-layer/prefix.mjs';
 import { runCases, stableRunsParent } from '../../lang-bench/lib/exec-layer/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { attemptRecordProblem } from './attempt-record.mjs';
 import { boxBuild } from './build-quick.mjs';
+import { runnerRecordPinNow } from './harness-pin.mjs';
+import { CASE_VERDICT, badBuildCase } from './verdict.mjs';
 import { layerDirs } from './quick.mjs';
 import { contractIdentity } from './contract-identity.mjs';
 import { quickPristineCopy, splitFrozenChanges } from './copy-quick.mjs';
@@ -98,12 +101,12 @@ export function casesOfRecord({ record, expected }) {
 }
 
 const numberOr = (v, other = null) => (typeof v === 'number' && Number.isFinite(v) ? v : other);
-const verdictOf = c => (c.status === 'PASS' ? 'pass' : (/memory/i.test(c.reason ?? '') ? 'memory limit' : 'wrong answer'));
+const verdictOf = c => (c.status === 'PASS' ? CASE_VERDICT.pass : (/memory/i.test(c.reason ?? '') ? CASE_VERDICT.memoryLimit : CASE_VERDICT.wrongAnswer));
 
 function caseOf(c) {
   const mem = c.lifecycle?.memory ?? {};
   return {
-    id: c.id, set: c.id.startsWith('s') ? 'visible' : 'heldout', verdict: verdictOf(c), wallMs: numberOr(c.wallMs), peakBytes: numberOr(mem.peakBytes), exit: null,
+    id: c.id, set: c.id.startsWith('s') ? 'visible' : 'heldout', verdict: verdictOf(c), wallMs: numberOr(c.wallMs), peakBytes: numberOr(mem.peakBytes), memoryMaxBytes: numberOr(mem.maxBytes), exit: null,
     events: mem.events ?? null, reason: c.reason ?? '', rIds: c.rIds ?? [], comparison: c.comparison ?? null, firstMismatch: c.firstMismatch ?? null,
     leftover: c.lifecycle?.leftover ?? null, oomKill: mem.oomKill ?? null,
   };
@@ -136,14 +139,13 @@ export function uncertifiedProblem(cases) {
 }
 
 /** The default run: the layer over the built tree and the combined case folder. */
-export function layerRun({ owned, dirs, stack, kind, limits, caseWallMs, runCeilingMs, parent = stableRunsParent(), runCasesFn = runCases }) {
+export function layerRun({ owned, dirs, stack, kind, limits, caseWallMs, runCeilingMs, parent = stableRunsParent(), runCasesFn = runCases, runOptions = {} }) {
   // `holdSeconds`: a daemon or web case may last up to the test bound, far past the default T + G + margin of the scope holder, which would end the scope (and the program) under it
   return async ({ tree, samplesDir, caseIds }) => runCasesFn({
-    owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes: limits.memoryBytes, caseWallMs, holdSeconds: holdForCaseWall(caseWallMs), runCeilingMs, stack, kind, data: true,
+    owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes: limits.memoryBytes, caseWallMs, holdSeconds: holdForCaseWall(caseWallMs), runCeilingMs, stack, kind, data: true, ...runOptions,
   });
 }
 
-const badBuildCase = id => ({ id, set: id.startsWith('s') ? 'visible' : 'heldout', verdict: 'build failed', wallMs: null, peakBytes: null, exit: null, events: null, reason: 'build failed', rIds: [], comparison: null, firstMismatch: null });
 const badBuildCases = ids => ids.map(badBuildCase);
 
 /** The case folder and its ids, or an environment failure (a malformed held-out folder, an id the runner would refuse). -> `ok({ dir, ids })` | `fail`. */
@@ -170,31 +172,70 @@ function idsChecked({ cases, heldDir, only }) {
 const buildLine = b => `build ${b.ok ? 'passed' : `FAILED (exit ${b.exit}${b.timedOut ? ', timed out' : ''})`} in ${b.wallMs} ms`;
 const buildRecordOf = b => ({ ran: true, ok: b.ok, status: b.exit, wallMs: b.wallMs, timedOut: b.timedOut, tail: b.tail });
 
+/**
+ * The cases whose enforced limit, read back by the runner from the cgroup (`prog/memory.max`), is not the limit the scoring asked for (or was not read at all). The statement, the load configuration and the scorer
+ * share one registered value; a case enforced under another is the harness failing, never a verdict. -> `environment` | null.
+ */
+export function readBackProblem(cases, expectedBytes) {
+  const bad = cases.filter(c => c.memoryMaxBytes !== expectedBytes).map(c => `${c.id} (read back ${c.memoryMaxBytes ?? 'nothing'})`);
+  return bad.length === 0 ? null : environment(`the memory limit enforced on case(s) ${bad.join(', ')} is not the registered ${expectedBytes} bytes: the limit is not what the statement says, so there is no verdict`);
+}
+
+/** Why the runner's record, stringified, is not the complete judgement of exactly these ids (the pass path only), or null. */
+const completeProblem = ({ record, ids }) => attemptRecordProblem({ text: JSON.stringify(record), expected: ids, pinnedRunner: runnerRecordPinNow() });
+
+/** The judged cases of a record: held to the complete validator first on the pass path (`validate`). -> `ok(cases)` | `fail`. */
+function judgedCases({ record, ids, validate }) {
+  const invalid = validate ? completeProblem({ record, ids }) : null;
+  return invalid ? fail(invalid) : casesOfRecord({ record, expected: ids });
+}
+
 /** The judged cases of a run through the layer. -> `ok({ cases, record, ran })` | `fail`. */
-async function runStep({ a, copy, cases, owned, dirs }) {
+async function runStep({ a, copy, cases, owned, dirs, validate = false }) {
   const runFn = a.runFn ?? layerRun({ owned, dirs, stack: a.stack, kind: a.profile.kind, limits: a.limits, caseWallMs: a.profile.caseWallMs, runCeilingMs: a.profile.runCeilingMs });
   const ran = await runFn({ tree: copy, samplesDir: cases.dir, caseIds: cases.ids });
   const record = judgedRecord(ran);
   if (!record.ok) return record;
-  const judged = casesOfRecord({ record: record.value, expected: cases.ids });
+  const judged = judgedCases({ record: record.value, ids: cases.ids, validate });
   if (!judged.ok) return environment(judged.reason);
-  return uncertifiedProblem(judged.value) ?? ok({ cases: judged.value, record: record.value, ran });
+  return uncertifiedProblem(judged.value) ?? readBackProblem(judged.value, a.limits.memoryBytes) ?? ok({ cases: judged.value, record: record.value, ran });
 }
+
+/** ONE pass over a committed tree: the layer, the complete validator, the certified peaks, the read-back limit. -> `ok({ cases, record, ran })` | `environment`. */
+export const runPass = args => runStep({ ...args, validate: true });
+
+/**
+ * The clean copy of the agent's tree at `dest`: -> `ok({ frozen, drift, undecided, left, identity })` (the agent's frozen changes, the harness's drift, the changes that cannot be judged, the entries left out, and the identity of the
+ * contract the scoring is made under). `a.driftPossible` and `a.history` (`template-drift.mjs`) decide what is the harness's; the ten-pass path takes the same arguments as the one-pass path, so both judge a change per file.
+ */
+export function prepareTree(a, dest) {
+  const made = quickPristineCopy({ source: a.source, dest, stack: a.stack, files: a.files });
+  const decide = driftDecider({ stack: a.stack, kind: a.profile.kind, treeSha: made.treeSha, history: a.history });
+  const split = splitFrozenChanges(made.changed, { runnerDrift: a.driftPossible === true, decide });
+  return ok({ frozen: split.agent, drift: split.harness, undecided: split.undecided, left: made.left, identity: (a.contractIdentityFn ?? contractIdentity)() });
+}
+
+/** The case folder (the visible samples and the held-out cases) under `area`. -> `ok({ dir, ids })` | `environment`. */
+export const caseFolder = (a, area) => casesIn({ files: a.files, sets: a.sets, area, only: a.only });
 
 /** The tree copy, its frozen changes (the agent's, and the harness's drift when `driftPossible`), the entries left out and the case folder. -> `ok({ copy, frozen, drift, left, cases })` | `fail`. */
 function prepare(a, area) {
   const copy = path.join(area, 'tree');
-  const made = quickPristineCopy({ source: a.source, dest: copy, stack: a.stack, files: a.files });
-  const decide = driftDecider({ stack: a.stack, kind: a.profile.kind, treeSha: made.treeSha, history: a.history });
-  const split = splitFrozenChanges(made.changed, { runnerDrift: a.driftPossible === true, decide });
-  const cases = casesIn({ files: a.files, sets: a.sets, area, only: a.only });
-  return cases.ok ? ok({ copy, frozen: split.agent, drift: split.harness, undecided: split.undecided, left: made.left, cases: cases.value, identity: (a.contractIdentityFn ?? contractIdentity)() }) : cases;
+  const tree = prepareTree(a, copy);
+  const cases = caseFolder(a, area);
+  return cases.ok ? ok({ copy, ...tree.value, cases: cases.value }) : cases;
 }
 
 /** The score with what only a quick copy knows: the harness drift in the frozen files (a rescore on a moved runner), the entries left out as non-source. Absent keys when there is nothing to say. */
 function finishScore(score, prep) {
   const extra = { contractIdentity: prep.identity, ...(prep.drift.length > 0 ? { harnessDrift: prep.drift } : {}), ...(prep.undecided.length > 0 ? { undecidedDrift: prep.undecided } : {}), ...(prep.left.length > 0 ? { nonRegularLeftOut: prep.left } : {}) };
   return ok({ ...score, explore: { ...score.explore, enforced: enforcedBounds(score.explore.limits), ...extra } });
+}
+
+/** The score of a session from the rollup of its passes (`rollupOf`) and its completion record (`build.json`): the olympiad judge's own shape, so everything after `scoreShape` is the pilot's. -> `ok(score)`. */
+export function finishRollup({ rollup, build, traps = [] }) {
+  const scored = scoreShape({ result: rollup, traps, frozen: build.frozenChanges ?? [] });
+  return finishScore(scored, { drift: build.harnessDrift ?? [], undecided: build.undecidedDrift ?? [], identity: build.contractIdentity, left: build.nonRegularLeftOut ?? [] });
 }
 
 /** The build. -> `{ done: <the whole answer> }` when it ends the scoring (an environment failure, or a build that failed: every case is `build failed`), else `{ build }`. */

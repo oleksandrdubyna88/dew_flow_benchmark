@@ -14,6 +14,8 @@ import { taskOfSeries } from './tasks.mjs';
 export const MASKS = Object.freeze({ low: '0-5', high: '8-13' });
 export const STACK_ORDER = Object.freeze(['csharp', 'node']);
 export const MAX_ATTEMPTS = 2;
+/** The run-map class of a session whose scoring was exhausted by the environment (`unscored: environment`): it starts with `void:`, so the schedule offers its one re-run. The one source of the string. */
+export const VOID_UNSCORED = 'void: unscored environment';
 
 /** `<prefix>-<yyyymmdd>-<4 hex>`: `x` for a series of the pilot, `r` for a rehearsal (so no command picks a rehearsal by its name). */
 export const seriesIdOf = ({ date, rand, prefix = 'x' }) => `${prefix}-${date.toISOString().slice(0, 10).replaceAll('-', '')}-${rand}`;

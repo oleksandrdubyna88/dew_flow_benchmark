@@ -11,6 +11,7 @@ import { loadInputs } from '../../lang-bench/lib/workspace-build.mjs';
 import { renderPackagesMd } from '../../lang-bench/lib/packages-md.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { SCRIPTS, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
+import { heapSentence, loadTestConfig, memoryLimit, memorySentence } from './memory-limit.mjs';
 import { parseScenarioSamples } from './samples-sd.mjs';
 
 export { PIN_FILES, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
@@ -32,10 +33,14 @@ export function frameworkSentence(explore, stack, record) {
   return `Use Fastify (fastify ${fastify?.version ?? 'unrecorded'}, listed in PACKAGES.md) for the HTTP server.`;
 }
 
-/** The statement: the spec's bytes, a blank line, the marked stack sentence and, for a web task, the marked framework sentence. */
-export function quickStatement({ spec, kind, stackSentence, frameworkSentence: framework }) {
+/**
+ * The statement: the spec's bytes, a blank line, the marked stack sentence, the marked memory and heap sentences (D72: the one registered limit, and the stack's heap setting derived from it) and, for a web task, the
+ * marked framework sentence. The memory and heap lines are left out when no `memorySentence` is given (a caller that builds the older statement).
+ */
+export function quickStatement({ spec, kind, stackSentence, frameworkSentence: framework, memory = null }) {
   const base = `${spec}${spec.endsWith('\n') ? '' : '\n'}\n<!-- stack-sentence -->\n${stackSentence}\n`;
-  return kind === 'web' ? `${base}\n<!-- framework-sentence -->\n${framework}\n` : base;
+  const limited = memory === null ? base : `${base}\n<!-- memory-sentence -->\n${memory.memory}\n\n<!-- heap-sentence -->\n${memory.heap}\n`;
+  return kind === 'web' ? `${limited}\n<!-- framework-sentence -->\n${framework}\n` : limited;
 }
 
 const listFiles = (root, rel = '') => readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap(e => {
@@ -70,10 +75,12 @@ export function packagesMdHashes({ kind, inputs = packagesInputs() }) {
  * The files of one workspace. `explore` is the quick profile (`quickExplore`), `task` the task's pins entry (its `kind`), `sources` the spec and FORMAT texts, `inputs` is `packagesInputs()`'s value,
  * `templates` and `runner` default to the merged ones of lang-bench (tests may pass copies). -> `ok({ files, frozen })` | `fail`; `frozen` is the subset the agent must not change.
  */
-export function quickWorkspaceFiles({ explore, task, stack, sources, inputs, templates = BENCH_TEMPLATES, runner = BENCH_RUNNER }) {
+export function quickWorkspaceFiles({ explore, task, stack, sources, inputs, templates = BENCH_TEMPLATES, runner = BENCH_RUNNER, limit = null }) {
+  const memory = limit === null ? memoryLimit() : ok(limit);
+  if (!memory.ok) return memory;
   const parts = parsedParts({ stack, kind: task.kind, sources, inputs });
   if (!parts.ok) return parts;
-  const files = filesFrom({ explore, task, stack, sources, inputs, templates, runner, ...parts.value });
+  const files = filesFrom({ explore, task, stack, sources, inputs, templates, runner, limit: memory.value, ...parts.value });
   return ok({ files, frozen: frozenOf(files, stack) });
 }
 
@@ -87,14 +94,16 @@ function parsedParts({ stack, kind, sources, inputs }) {
   return packages.ok ? ok({ samples: samples.value, grammar, packages: packages.value }) : fail(`PACKAGES.md: ${packages.reason}`);
 }
 
-function filesFrom({ explore, task, stack, sources, inputs, templates, runner, samples, grammar, packages }) {
-  const statement = quickStatement({ spec: sources.spec, kind: task.kind, stackSentence: quickStackSentence(explore, stack), frameworkSentence: frameworkSentence(explore, stack, inputs.record) });
+function filesFrom({ explore, task, stack, sources, inputs, templates, runner, limit, samples, grammar, packages }) {
+  const memory = { memory: memorySentence(limit), heap: heapSentence(stack, limit) };
+  const statement = quickStatement({ spec: sources.spec, kind: task.kind, stackSentence: quickStackSentence(explore, stack), frameworkSentence: frameworkSentence(explore, stack, inputs.record), memory });
   const files = {
     ...filesOf(path.join(templates, stack, task.kind), '', rel => (SCRIPTS.includes(rel) ? 0o755 : 0o644)),
     ...filesOf(runner, 'runner/', () => 0o644),
     'runner/GRAMMAR.md': { bytes: grammar.bytes, mode: 0o644 },
     'PACKAGES.md': { bytes: Buffer.from(packages), mode: 0o644 },
     'STATEMENT.md': { bytes: Buffer.from(statement), mode: 0o644 },
+    'samples/load.json': { bytes: Buffer.from(`${JSON.stringify(loadTestConfig(stack, limit), null, 2)}\n`), mode: 0o644 },
   };
   for (const s of samples) {
     files[`samples/${s.id}.in`] = { bytes: Buffer.from(s.input), mode: 0o644 };

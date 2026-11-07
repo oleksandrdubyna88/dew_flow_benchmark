@@ -7,6 +7,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadExplore } from './inputs.mjs';
 import { materialProblem } from './material.mjs';
 import { taskPaths } from './tasks.mjs';
+import { memoryLimit } from './memory-limit.mjs';
 import { isQuick, quickCalibration } from './quick.mjs';
 
 const MAX_TIME_FACTOR = 10; // an effective TL above ten calibration ceilings is not a limit
@@ -43,7 +44,9 @@ const readJsonOr = file => { try { return ok(JSON.parse(readFileSync(file, 'utf8
 /** The quick tasks have fixed limits and no calibration file (no oracle, no mutants). */
 function fixedCalibration(exploreFn) {
   const e = exploreFn();
-  return e.ok ? ok(quickCalibration(e.value)) : e;
+  const memory = memoryLimit();
+  if (!e.ok) return e;
+  return memory.ok ? ok(quickCalibration(e.value, memory)) : memory;
 }
 
 function fileCalibration(home, task, exploreFn) {

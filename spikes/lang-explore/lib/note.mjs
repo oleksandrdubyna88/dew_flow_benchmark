@@ -3,6 +3,8 @@
 // agent code or transcript (the private detail stays in `~/rsd/lang-v2/explore/<series>/private/`). Pure: records in, text out.
 
 import { QUICK_BASE, bannerOf, extraDifferencesOf, notSettledOf, predictedOf } from './note-tasks.mjs';
+import { STACK_ORDER, VOID_UNSCORED, stackState } from './series.mjs';
+import { VERDICTS } from './verdict.mjs';
 
 const DASH = '—';
 
@@ -55,7 +57,7 @@ export function sessionCells({ entry, record }) {
     e: leaf(record, 'cost.cliTotalUsd'), b: leaf(record, 'cost.brokerUsd'), headline: leaf(record, 'cost.headlineUsd')?.usd ?? null, checks: checksCell(record), tokens: tokensCell(record), split: splitCell(record),
     wall: leaf(record, 'time.wallMs'), modelApi: leaf(record, 'time.modelApiMs'), active: leaf(record, 'time.activeMs'), diff: leaf(record, 'time.activeMinusModelApiMs'),
     partition: leaf(record, 'time.partition'), partitionSum: partitionSum(record), buildTest: leaf({ explore }, 'explore.buildTest'), rate: leaf({ explore }, 'explore.passRate'),
-    accepted: leaf({ explore }, 'explore.accepted'), deviations: leaf({ explore }, 'explore.deviations'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
+    accepted: leaf({ explore }, 'explore.accepted'), deviations: leaf({ explore }, 'explore.deviations'), verdict: leaf({ explore }, 'explore.verdict'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
   };
 }
 
@@ -239,6 +241,7 @@ export function renderNote(input) {
     '## Time: wall, model_api, active - model_api, and the build/test time of the agent\'s own calls', '', ...timeTable(cells), '',
     '## The time partition, every category', '', ...partitionTable(cells), '',
     '## Quality: pass rates and trap hits (counts only)', '', ...qualityTable(cells), '', input.task.quick === true ? 'The time floors of the olympiad tasks do not apply to daemon and web cases: a scenario\'s own deadlines judge time.' : floorLine(input.sessions), '',
+    ...verdictSection(cells, input.sessions),
     '## Pairs', '', ...pairTable(input.pairs), '',
     '## Cost per correct solution', '', ...cpcLines(input.cpc), '',
     '## Voids, contamination and timeouts', '', ...incidentLines(cells), '',
@@ -246,6 +249,35 @@ export function renderNote(input) {
     '## What this does not settle', '', notSettledOf(input.task), '',
   ].join('\n');
 }
+
+// ---- the scoring verdicts (F1.S2): counted from the records and the run-map, never typed ------------------------------------------------------------
+
+const UNSCORED = VERDICTS.at(-1);
+
+/** Sessions of a stack by verdict word: the first three from the records' `explore.verdict`, `unscored: environment` from the run-map class (such a session has no score of its own). */
+const verdictCount = ({ cells, stack, word }) => count(cells.filter(c => c.stack === cap(stack)), c => (word === UNSCORED ? c.cls === VOID_UNSCORED : c.verdict === word));
+
+/** Cells (a stack of a pair) by the series' own state, from the run-map entries: `done` is scored and final, `void-rerunnable` may be re-run once, `void-final` has used its re-run. */
+function finalityCounts({ sessions, stack }) {
+  const map = { sessions: Object.fromEntries(sessions.map(s => [s.entry.rid, s.entry])) };
+  const pairs = [...new Set(sessions.filter(s => s.entry.stack === stack).map(s => s.entry.pair))];
+  const states = pairs.map(pair => stackState(map, pair, stack));
+  return { done: count(states, x => x === 'done'), rerunnable: count(states, x => x === 'void-rerunnable'), final: count(states, x => x === 'void-final') };
+}
+
+function verdictLines({ cells, sessions }) {
+  const head = ['stack', ...VERDICTS];
+  const rows = STACK_ORDER.map(stack => [cap(stack), ...VERDICTS.map(word => verdictCount({ cells, stack, word }))]);
+  const finality = STACK_ORDER.map(stack => ({ stack, ...finalityCounts({ sessions, stack }) }));
+  return [
+    'A session is scored after it ended, by ten scoring passes (five on the 2-CPU profile, five on the 8-CPU profile) over one build, and the passes become one of four verdicts by one stated rule. Counts only.', '',
+    ...table(head, rows), '',
+    ...finality.map(f => `- ${cap(f.stack)}: ${f.done} scored (final), ${f.rerunnable} void that the series may re-run once, ${f.final} void with its re-run used`),
+  ];
+}
+
+/** The section on the scoring verdicts, only for a note whose sessions were scored by the ten passes (the older notes keep their text). */
+const verdictSection = (cells, sessions) => (cells.some(c => c.verdict !== null || c.cls === VOID_UNSCORED) ? ['## Scoring verdicts: ten passes, four states', '', ...verdictLines({ cells, sessions }), ''] : []);
 
 const isIncident = c => c.flags.length > 0 || !c.data || /^(void|killed|stop|crashed)/.test(c.cls);
 

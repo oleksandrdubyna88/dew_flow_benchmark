@@ -25,6 +25,7 @@ import { isQuick, quickExplore } from './quick.mjs';
 import { finalizePair, quickHeldoutProblem } from './run.mjs';
 import { frozenFill, runContext, scoreSessionDep } from './run-ctx.mjs';
 import { runnerDriftPossible } from './harness-pin.mjs';
+import { legacyGenerated } from './generated-drift.mjs';
 import { templateHistory } from './template-drift.mjs';
 import { isRehearsal, loadSeries, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
 import { frozenPinsProblem, seriesTaskProblem } from './tasks.mjs';
@@ -171,7 +172,7 @@ function contextFor({ need, io, series, seriesDir, entry, seams }) {
 }
 
 /** Score the kept tree (nothing is written yet). -> the scoring dep's answer. */
-const scoreKept = ({ need, io, entry, layout, drift }) => scoreSessionDep({ world: need.world, calibration: need.calibration, heldout: need.heldout, home: io.home, say: io.say, scoreExtra: drift })({ session: layout.dir, source: layout.work, stack: entry.stack, nugetCache: layout.nuget, npmCache: layout.npm });
+const scoreKept = ({ need, io, entry, layout, drift }) => scoreSessionDep({ world: need.world, calibration: need.calibration, heldout: need.heldout, home: io.home, say: io.say, scoreExtra: drift, signal: io.signal })({ session: layout.dir, source: layout.work, stack: entry.stack, nugetCache: layout.nuget, npmCache: layout.npm });
 
 /** The three writes and the pair's records, after a good scoring. -> `{ exit, message, pairFile }`. */
 function recordRescore({ io, ctx, series, seriesDir, entry, layout, now, score, seams }) {
@@ -215,7 +216,7 @@ async function rescoreLocked({ io, task, series, seriesDir, entry, layout }) {
 /** The scoring of the kept tree. -> `{ score }`, or `{ answer }` when the rescore ends here: a stop signal (checked after the scoring, before any write) or a harness failure. */
 async function scoreStep({ need, io, entry, layout, seriesDir }) {
   const inputs = seriesInputs(seriesDir).value;
-  const drift = { driftPossible: runnerDriftPossible({ inputs }), history: templateHistory({ inputs }) };
+  const drift = { driftPossible: runnerDriftPossible({ inputs }), history: templateHistory({ inputs, legacy: legacyGenerated({ world: need.world, inputs }) }) };
   const scored = await scoreKept({ need, io, entry, layout, drift });
   if (stoppedBy(io)) return { answer: stopAnswer(io, 'during the scoring') };
   if (scored.kind !== 'scored') return { answer: refuse(`scoring ${entry.rid}: ${scored.kind}: ${scored.reason}; nothing was changed (a harness failure is a void, never a verdict)`, EXIT.halt) };

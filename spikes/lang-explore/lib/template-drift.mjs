@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { templateFilesOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { allWorksMatrix } from '../../lang-bench/lib/package-matrix.mjs';
 import { renderPackagesMd } from '../../lang-bench/lib/packages-md.mjs';
+import { GENERATED_FILES } from './generated-drift.mjs';
 import { REPO } from './paths.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -15,9 +16,10 @@ const unknown = why => ({ known: false, why });
 const DERIVED = 'PACKAGES.md';
 const INPUTS = 'spikes/lang-bench/inputs';
 const COMMIT = /^[0-9a-f]{40}$/;
+const ABSENT = Object.freeze({ known: true, absent: true });
 
-/** True when a change to `rel` can be the harness's move: a template file of the stack (a script, a pin file) or the derived packages list. */
-export const isMovable = (stack, rel) => rel === DERIVED || templateFilesOf(stack).includes(rel);
+/** True when a change to `rel` can be the harness's move: a template file of the stack (a script, a pin file), the derived packages list, or a file generated from the one memory value (`generated-drift.mjs`). */
+export const isMovable = (stack, rel) => rel === DERIVED || GENERATED_FILES.includes(rel) || templateFilesOf(stack).includes(rel);
 
 /** The bytes of a file at a commit of this repository (git as exe + argv, a ceiling), or null when git cannot show it. */
 export function readAtCommit(commit, rel) {
@@ -45,37 +47,55 @@ function templateAt({ commit, stack, kind, rel, readAt }) {
 }
 
 /**
- * -> `({ stack, kind, rel }) => { known: true, sha256 } | { known: false, why }`: the bytes the file had when the series began. `inputs` is the series' inputs: `templateHashes` and `packagesMdSha256` when it recorded them,
- * `subject.sha` (the commit of the harness it was made with) otherwise. `readAt(commit, path)` is the seam for git.
+ * -> `({ stack, kind, rel }) => { known: true, sha256 } | { known: true, absent: true } | { known: false, why }`: the bytes the file had when the series began (`absent`: it did not exist). `inputs` is the series' inputs:
+ * `templateHashes`, `packagesMdSha256` and `generatedSha256` when it recorded them (a recorded `null` is a file the workspace did not have), `subject.sha` (the commit of the harness it was made with) otherwise. `readAt(commit, path)`
+ * is the seam for git; `legacy` (`generated-drift.mjs`) makes the generated files again as they were at that commit.
  */
-export function templateHistory({ inputs, readAt = readAtCommit }) {
+export function templateHistory({ inputs, readAt = readAtCommit, legacy }) {
   return args => {
     const recorded = recordedFor(inputs, args);
-    if (typeof recorded === 'string') return known(recorded);
+    if (recorded !== undefined) return recorded === null ? ABSENT : known(recorded);
     const commit = usableCommit(inputs);
     if (commit === null) return unknown(`the series recorded no bytes for ${args.rel} and no commit git could show them at`);
-    return args.rel === DERIVED ? packagesMdAt({ commit, ...args, readAt }) : templateAt({ commit, ...args, readAt });
+    return unrecorded({ commit, args, readAt, legacy });
   };
 }
 
-/** The sha256 the series recorded at `init` for the file, or undefined. */
-const recordedFor = (inputs, { stack, kind, rel }) => (rel === DERIVED ? inputs?.packagesMdSha256?.[stack] : inputs?.templateHashes?.[`${stack}/${kind}/${rel}`]);
+/** The old bytes of a file the series recorded nothing for, from git at its commit (the generated files: made again by `legacy`). */
+function unrecorded({ commit, args, readAt, legacy }) {
+  if (args.rel === DERIVED) return packagesMdAt({ commit, ...args, readAt });
+  if (!GENERATED_FILES.includes(args.rel)) return templateAt({ commit, ...args, readAt });
+  return legacy === undefined ? unknown(`the series recorded no bytes for ${args.rel} and nothing can make them again`) : legacy({ commit, ...args, readAt });
+}
+
+/** What the series recorded at `init` for the file: a sha256, `null` (the workspace had no such file), or undefined (nothing recorded). */
+function recordedFor(inputs, { stack, kind, rel }) {
+  if (rel === DERIVED) return inputs?.packagesMdSha256?.[stack];
+  return GENERATED_FILES.includes(rel) ? inputs?.generatedSha256?.[stack]?.[rel] : inputs?.templateHashes?.[`${stack}/${kind}/${rel}`];
+}
 
 /** The commit of the series' subject when it is a full hash git can be asked for, else null. */
 const usableCommit = inputs => (typeof inputs?.subject?.sha === 'string' && COMMIT.test(inputs.subject.sha) ? inputs.subject.sha : null);
 
 /**
  * The judge of one change to a frozen file: `'agent'` | `'harness'` | `{ undecided: why }`. Without a `history` every change is the agent's, as it always was. A file that is gone, or is not a regular file, is the agent's
- * (no bytes can equal the old ones); a movable file whose bytes equal the old bytes is the harness's; whose old bytes cannot be read is undecided; any other is the agent's.
+ * (no bytes can equal the old ones) unless the file did not exist when the series began: then its absence is the harness's change. A movable file whose bytes equal the old bytes is the harness's; whose old bytes cannot be read is
+ * undecided; any other is the agent's.
  */
 export const driftDecider = args => change => (isJudged(args, change) ? verdictOf(args, change) : 'agent');
 
-/** True when the change can be the harness's: there is a history, the file is movable and the tree still had its bytes (it was not deleted or replaced by a link). */
-const isJudged = ({ stack, treeSha, history }, change) => history !== undefined && isMovable(stack, change.path) && typeof treeSha?.[change.path] === 'string';
+/** True when the change can be the harness's: there is a history and the file is one the harness can move. */
+const isJudged = ({ stack, history }, change) => history !== undefined && isMovable(stack, change.path);
 
-/** The verdict on a judged change: the old bytes unreadable is undecided, the tree's bytes equal to them the harness's, any other the agent's. */
+const isAbsence = old => old.known && old.absent === true;
+const bytesOf = (treeSha, rel) => treeSha?.[rel];
+
+/** The verdict on a judged change: a file that did not exist is the harness's change when it is missing now; else the tree must still have its bytes. */
 function verdictOf({ stack, kind, treeSha, history }, change) {
   const old = history({ stack, kind, rel: change.path });
-  if (!old.known) return { undecided: old.why };
-  return treeSha[change.path] === old.sha256 ? 'harness' : 'agent';
+  if (isAbsence(old)) return change.state === 'absent' ? 'harness' : 'agent';
+  return typeof bytesOf(treeSha, change.path) === 'string' ? byBytes(old, bytesOf(treeSha, change.path)) : 'agent';
 }
+
+/** The old bytes unreadable is undecided, the tree's bytes equal to them the harness's, any other the agent's. */
+const byBytes = (old, here) => (old.known ? (here === old.sha256 ? 'harness' : 'agent') : { undecided: old.why });

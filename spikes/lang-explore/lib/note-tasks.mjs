@@ -51,7 +51,7 @@ const QUICK_DIFFERENCES = Object.freeze([
 /** The common list of differences for a quick task (daemon or web): the scoring is v2's execution layer and runner; the toolchains are v2's. */
 export const QUICK_BASE = Object.freeze([
   'The sessions are scored by v2\'s execution layer and runner (E1.S8a, E1.S8b), over the visible samples and the held-out set, on the toolchains and caches of v2 (SDK 10.0.403, Node 26.13.0, TypeScript 6.0.3).',
-  'The limits are fixed (memory 512 MiB, build 600 s, each scenario\'s own deadlines), not registered from reference solutions (v2 D14).',
+  'The limits are fixed (memory: the one registered value, the same for every task; build 600 s; each scenario\'s own deadlines), not registered from reference solutions (v2 D14).',
   'Build and test time is reported beside the time partition as well. From 2026-11-07 v1\'s classifier counts the same work for both stacks as build_test: a shell, `source` or `.` running `build.sh` or `run.sh`, the visible-samples runner (`run_samples.py`), builds, restores, package adds, formatting and linting, test runs and running the built program directly (`dotnet <path>.dll` and `node <path>.ts` alike); before that date it knew `test-v*.sh` and not these, so a partition made earlier shows `build_test` as zero or too low for them, and `explore.mjs repartition` recomputes it from the kept streams into a new dated file.',
   'No pre-registration, no seal and no A/A.',
   'CLI 2.1.310 is not re-pinned (v2 D8).',

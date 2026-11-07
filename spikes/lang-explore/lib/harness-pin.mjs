@@ -21,3 +21,12 @@ export function runnerDriftPossible({ inputs, now = runnerPinNow() }) {
 
 /** What a series records at `init` about the harness that made it: the runner's pin, the templates' identity and the sha256 of every template file. A later rescore or replay of a kept tree tells harness drift from the agent's changes by them (`template-drift.mjs`). */
 export const harnessPinsNow = () => ({ runnerPin: runnerPinNow(), templatesIdentity: templatesIdentity(), templateHashes: templateHashes() });
+
+const RUNNER_REPORT_FILE = path.resolve(SPIKE, '..', 'lang-bench', 'runner', 'rs_report.py');
+
+/** What the runner's JSON result must say it is: `{ format, version }`, the result format the runner writes (read from its report module) and the pinned runner version (read from the pin): never retyped here. */
+export function runnerRecordPinNow({ reportFile = RUNNER_REPORT_FILE, pinFile = RUNNER_PIN_FILE } = {}) {
+  const format = /^RESULT_FORMAT\s*=\s*(\d+)\s*$/m.exec(readFileSync(reportFile, 'utf8'));
+  if (format === null) throw new Error(`${reportFile} has no RESULT_FORMAT: the runner's result format cannot be read`);
+  return Object.freeze({ format: Number(format[1]), version: runnerPinNow(pinFile).version });
+}
