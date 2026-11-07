@@ -175,7 +175,7 @@
     "decidedOn": "2026-11-05",
     "planTasks": ["04", "05", "06", "07", "08", "10"],
     "pausePoint": { "usd": 150, "projectedFloorUsd": 5, "projectedFactor": 3, "pairSessions": 2 },
-    "limits": { "timeMs": 300000, "memoryBytes": 536870912, "buildTimeoutMs": 600000 },
+    "limits": { "timeMs": 300000, "buildTimeoutMs": 600000 },
     "caseWallMs": 660000,
     "runCeilingMs": 7200000,
     "dotnet": { "sdk": "10.0.403", "runtime": "10.0.14", "dirParts": ["rsd", "lang-v2", "toolchains", "dotnet-sdk-10.0.403"] },

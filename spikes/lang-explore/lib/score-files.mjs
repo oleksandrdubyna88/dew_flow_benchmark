@@ -3,6 +3,7 @@
 // merged from itself, so a crash between two writes cannot lose an entry of its lists and a corrupted or invented snapshot cannot survive. `fs` is the seam of the tests (a recording one proves the snapshot is not read).
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
+import { systemClock } from './clock.mjs';
 import { attemptRecordProblem } from './attempt-record.mjs';
 import { casesOfRecord } from './score-quick.mjs';
 import { PASS_COUNT, profileOfPass, verdictOf } from './verdict.mjs';
@@ -33,7 +34,7 @@ function createdOnce(file, body, fs) {
 }
 
 /** Write one event once (`wx`) as `events/<utc>-<kind>.json`; a name taken in the same millisecond gets `-2`, `-3`... -> the file name. */
-export function writeEvent({ work, now = () => new Date(), kind, detail = {}, fs = nodeFs }) {
+export function writeEvent({ work, now = systemClock, kind, detail = {}, fs = nodeFs }) {
   fs.mkdirSync(eventsDir(work), { recursive: true });
   const body = `${JSON.stringify({ kind, at: now().toISOString(), ...detail }, null, 2)}\n`;
   let n = 1;

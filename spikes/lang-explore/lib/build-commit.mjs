@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { systemClock } from './clock.mjs';
 import { removeArea } from './score.mjs';
 
 export const BUILD_FILE = 'build.json';
@@ -44,7 +45,7 @@ const tempFolders = work => (existsSync(work) ? readdirSync(work).filter(n => n.
 export function discardUncommitted(work) {
   const gone = [...tempFolders(work), ...(isDir(treeOf(work)) && !existsSync(buildFileOf(work)) ? [TREE_DIR] : [])];
   gone.forEach(name => removeArea(path.join(work, name)));
-  return gone.sort();
+  return [...gone].sort();
 }
 
 const mismatch = ({ recorded, live }) => fail(`build-record-mismatch: build.json names the tree ${recorded} and the tree on disk hashes to ${live}`);
@@ -80,7 +81,7 @@ async function buildInFolder({ folder, prepare, build }) {
  * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, left })`), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`), validate, rename into `work/tree`, then write `work/build.json`
  * (`wx`). `io` (`rename`, `writeNew`) and `now` are seams. -> `ok(record)` | an environment `fail` (the temporary folder is removed; nothing is committed).
  */
-export async function commitBuild({ work, prepare, build, io = DEFAULT_IO, now = () => new Date() }) {
+export async function commitBuild({ work, prepare, build, io = DEFAULT_IO, now = systemClock }) {
   mkdirSync(work, { recursive: true });
   const folder = path.join(work, `${TEMP_PREFIX}${randomBytes(4).toString('hex')}`);
   try {

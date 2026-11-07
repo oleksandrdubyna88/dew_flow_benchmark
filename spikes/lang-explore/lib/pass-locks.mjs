@@ -4,6 +4,7 @@
 import { closeSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { LOCK_FILE } from '../../minigit-bench/lib/series-lock.mjs';
+import { systemClock } from './clock.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { ownerAlive, processStartTime } from '../../minigit-bench/lib/session-state.mjs';
 
@@ -68,8 +69,8 @@ function tryLock(a) {
 }
 
 /** `score/scorer.lock`, created `wx`. -> `ok({ release, takeover })` (`takeover`: the dead owner whose lock was removed, else null) | `fail('scorer-busy: ...')`. `isAlive(pid, startTime)` is the seam. */
-export function takeScorerLock({ work, pid = process.pid, startTime = processStartTime(process.pid), isAlive = ownerAlive }) {
+export function takeScorerLock({ work, pid = process.pid, startTime = processStartTime(process.pid), isAlive = ownerAlive, now = systemClock }) {
   const file = path.join(work, SCORER_LOCK);
-  const body = `${JSON.stringify({ pid, startTime, at: new Date().toISOString() })}\n`;
+  const body = `${JSON.stringify({ pid, startTime, at: now().toISOString() })}\n`;
   return tryLock({ file, body, pid, isAlive, takeover: null, tries: 3 });
 }
