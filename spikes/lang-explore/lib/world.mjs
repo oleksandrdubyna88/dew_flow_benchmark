@@ -11,6 +11,7 @@ import { scoreTree } from './score.mjs';
 import { candidateRepos, loadSources, workspaceFiles } from './workspace.mjs';
 import { isQuick, quickExplore, quickPaths, quickSnapshots } from './quick.mjs';
 import { packagesInputs, quickWorkspaceFiles } from './workspace-quick.mjs';
+import { passSeams } from './pass-seams.mjs';
 import { scoreQuick } from './score-quick.mjs';
 
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -126,7 +127,9 @@ async function loadQuickWorld({ home, work, task, exploreFn, candidates, quickSe
   const scoreFn = args => scoreQuick({
     stack: args.stack, source: args.source, files: args.files ?? built.value[args.stack].value.frozen, sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work, profile, say: args.say, driftPossible: args.driftPossible === true, only: args.only, ...quickSeams,
   });
+  // the ten passes of F1.S2: the seams `scorePasses` takes, built per scoring call (`scoreFn` stays the single pass `replay` uses)
+  const passSeamsFn = args => passSeams({ a: { ...args, files: args.files ?? built.value[args.stack].value.frozen }, profile, seams: quickSeams, seriesDir: args.seriesDir });
   return ok({
-    explore, task, home, paths, snapshots, sources, filesFor: stack => built.value[stack].value.files, frozenFor: stack => built.value[stack].value.frozen, scoreFn, work, profile, quick: true,
+    explore, task, home, paths, snapshots, sources, filesFor: stack => built.value[stack].value.files, frozenFor: stack => built.value[stack].value.frozen, scoreFn, passSeams: passSeamsFn, work, profile, quick: true,
   });
 }

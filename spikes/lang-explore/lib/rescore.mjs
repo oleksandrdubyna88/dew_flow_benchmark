@@ -170,7 +170,7 @@ function contextFor({ need, io, series, seriesDir, entry, seams }) {
 }
 
 /** Score the kept tree (nothing is written yet). -> the scoring dep's answer. */
-const scoreKept = ({ need, io, entry, layout, driftPossible }) => scoreSessionDep({ world: need.world, calibration: need.calibration, heldout: need.heldout, home: io.home, say: io.say, scoreExtra: { driftPossible } })({ session: layout.dir, source: layout.work, stack: entry.stack, nugetCache: layout.nuget, npmCache: layout.npm });
+const scoreKept = ({ need, io, entry, layout, driftPossible }) => scoreSessionDep({ world: need.world, calibration: need.calibration, heldout: need.heldout, home: io.home, say: io.say, scoreExtra: { driftPossible }, signal: io.signal })({ session: layout.dir, source: layout.work, stack: entry.stack, nugetCache: layout.nuget, npmCache: layout.npm });
 
 /** The three writes and the pair's records, after a good scoring. -> `{ exit, message, pairFile }`. */
 function recordRescore({ io, ctx, series, seriesDir, entry, layout, now, score, seams }) {

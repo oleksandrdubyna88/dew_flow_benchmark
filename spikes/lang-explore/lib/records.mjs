@@ -42,6 +42,12 @@ const stats = all => {
   return xs.length === 0 ? null : { min: Math.min(...xs), median: [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)], max: Math.max(...xs) };
 };
 
+/** The fields of a score made by the ten passes (absent from an olympiad record and from one scored the old way, so those stay what they were): the verdict, the scoring state, the passes completed, the scoring time and the built tree's hash. */
+const scoringPart = e => (e.verdict === undefined ? {} : {
+  verdict: known(e.verdict), scoringState: known(e.scoringState), passes: known(e.passes),
+  ...(e.scoringMs === undefined ? {} : { scoringMs: known(e.scoringMs) }), ...(e.buildTreeSha256 === undefined ? {} : { buildTreeSha256: known(e.buildTreeSha256) }),
+});
+
 /**
  * The `explore` section of a session record: visible and held-out pass rates, verdict counts by class, the wall and certified peak of every case (private: the case ids are in the record, never in the note),
  * the build time, the limits used, the trap hits (a count), the frozen files the agent changed, the build/test time of the agent's own calls, whether the session is accepted. A session that was not scored
@@ -54,7 +60,7 @@ export function exploreSection({ score, audit }) {
   const held = e.cases.filter(c => c.set === 'heldout');
   const visible = e.cases.filter(c => c.set === 'visible');
   return {
-    scored: known(true), accepted: known(acceptedOf(score)), buildTest,
+    scored: known(true), accepted: known(e.verdict === undefined ? acceptedOf(score) : e.verdict === 'accepted'), ...scoringPart(e), buildTest,
     passRate: known({ visible: e.passRate.visible, heldout: e.passRate.heldout, visibleCases: visible.length, heldoutCases: held.length }),
     verdicts: known(e.verdicts), limits: known(e.limits), buildMs: known(e.build.wallMs ?? null),
     trapHits: known({ hits: e.trapHits, trapCases: e.trapCases }), frozenChanges: known(e.frozenChanges),
@@ -76,10 +82,13 @@ export const REQUIRED_PATHS = Object.freeze([
 /** Paths a SCORED session also holds (the explore fields that need a score). */
 export const SCORED_PATHS = Object.freeze(['explore.accepted', 'explore.passRate', 'explore.verdicts', 'explore.cases', 'explore.limits', 'explore.buildMs', 'explore.trapHits', 'explore.floorBreaches', 'quality.heldout.value.percent', 'quality.heldout.value.defects', 'quality.heldout.value.primary100']);
 
+/** Paths a record scored by the ten passes also holds (checked when it carries a verdict: an olympiad record, and one scored the old way, has none and misses none). */
+export const PASSES_PATHS = Object.freeze(['explore.verdict', 'explore.scoringState', 'explore.passes']);
+
 const at = (o, dotted) => dotted.split('.').reduce((x, k) => (x === undefined || x === null ? undefined : x[k]), o);
 
 /** The required paths a record lacks (a scored session's list is longer); `[]` means every metric is there. */
-export const missingPaths = (record, scored = true) => [...REQUIRED_PATHS, ...(scored ? SCORED_PATHS : [])].filter(p => at(record, p) === undefined);
+export const missingPaths = (record, scored = true) => [...REQUIRED_PATHS, ...(scored ? SCORED_PATHS : []), ...(scored && at(record, 'explore.verdict') !== undefined ? PASSES_PATHS : [])].filter(p => at(record, p) === undefined);
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const writeJsonAtomic = (file, value) => { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`); renameSync(tmp, file); };

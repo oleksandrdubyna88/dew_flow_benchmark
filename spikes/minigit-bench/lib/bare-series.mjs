@@ -108,11 +108,30 @@ function scorerProblem(entry, r) {
   return r.kind === 'scored' ? null : done(EXIT.failed, `scoring ${entry.rid} failed: ${r.reason}`);
 }
 
+/**
+ * A session the scorer could not score for the environment's sake (`kind: 'void'`, F1.S2: every pass tried, none functionally failing): it stays `ran` with `data: false` and the scorer's class (one that starts with `void:`,
+ * so the schedule offers its one re-run). No transition: `NEXT` allows only `ran -> scored`. The old class and data and the reason are appended to `reclassifiedFrom`.
+ */
+export const unscoredEntry = ({ entry, result, at }) => Object.freeze({
+  ...entry, class: result.class, data: false, reclassifiedFrom: [...(entry.reclassifiedFrom ?? []), { class: entry.class, data: entry.data, reason: result.reason, at }],
+});
+
+/** The void of one session: the entry patched, an `event` line in the ledger (the spend is untouched: the session was charged when it ended), the record written with no score. */
+function voidOne({ ctx, deps, h, entry, result, say }) {
+  const at = new Date(deps.now()).toISOString();
+  h.commit(Object.freeze({ ...h.get(), sessions: Object.freeze({ ...h.get().sessions, [entry.rid]: unscoredEntry({ entry, result, at }) }) }));
+  appendLedger(ctx.ledgerFile, { event: 'unscored', rid: entry.rid, from: entry.class, to: result.class, reason: result.reason, t: at });
+  writeSessionRecord({ ctx, entry: h.get().sessions[entry.rid], score: null });
+  say(`${entry.rid} could not be scored (${result.reason}); it stays ran and unscored, a void the series may re-run once`);
+  return null;
+}
+
 /** Score one session and write its record. -> `null` or a `{ exit, message }`. */
 async function scoreOne({ ctx, deps, h, ref, flag, say }) {
   const entry = entryOfRef(h.get(), ctx, ref);
   const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
   const r = await deps.scoreSession({ session: layout.dir, source: layout.work, stack: entry.stack, phase: entry.phase, toolchains: [ctx.tsDir, ctx.nodeDir], nugetCache: layout.nuget, npmCache: layout.npm });
+  if (r.kind === 'void') return voidOne({ ctx, deps, h, entry, result: r, say });
   const problem = scorerProblem(entry, r);
   if (problem) return problem;
   const scored = h.apply(transition(h.get(), entry.rid, 'scored', { scoreFlags: flag ? ['scored under load'] : [] }));

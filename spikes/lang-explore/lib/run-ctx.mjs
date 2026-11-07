@@ -11,6 +11,10 @@ import { preflight } from '../../minigit-bench/lib/preflight.mjs';
 import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { retireStale } from '../../minigit-bench/lib/session-state.mjs';
+import { probeMask } from './affinity.mjs';
+import { systemClock } from './clock.mjs';
+import { maskReadBack } from './mask-preflight.mjs';
+import { scorePasses } from './passes.mjs';
 import { ledgerFileOf, runMapFileOf } from './series.mjs';
 import { fillWorkspace, fillerFor } from './workspace.mjs';
 import { loadPrompts, planForSession } from './plan.mjs';
@@ -71,27 +75,54 @@ const projectDirs = home => () => {
   return existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => path.join(dir, e.name)) : [];
 };
 
+/** The loop's answer for a quick scoring by ten passes (`scorePasses`): a decided scoring is `scored`; an exhausted one a `void` (the series offers its one re-run); a halt or a stop is `environment`, which halts the loop resumably. */
+function loopAnswerOf(run) {
+  if (run.kind === 'scored') return { kind: 'scored', score: run.score };
+  if (run.kind === 'void') return { kind: 'void', class: run.class, reason: run.reason };
+  return { kind: 'environment', reason: run.reason };
+}
+
+/** The quick world's scoring: ten passes from one committed build, under the series lock the caller holds. */
+async function scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, signal, call }) {
+  const seriesDir = path.dirname(path.dirname(call.session));
+  const seams = world.passSeams({ stack: call.stack, source: call.source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, say, driftPossible: scoreExtra.driftPossible === true, seriesDir });
+  const run = await scorePasses({ ...seams, work: path.join(call.session, 'score'), seriesDir, signal, now: systemClock });
+  return loopAnswerOf(run);
+}
+
 /**
  * The scoring step of the loop: the judge over the session's tree, with its own caches. Writes `<session>/score/score.json`. A harness failure (a process left in a scope) is `failed`, which stops the pilot.
+ * A quick world scores through the ten passes (`world.passSeams`, F1.S2); the olympiad's world and a test's fake one through `world.scoreFn`, as they always did. `signal` ends the passes between two attempts; `singlePass` (the rehearsal, a free check of the pipeline and no verdict) keeps the one-pass scoring.
  */
-export function scoreSessionDep({ world, calibration, heldout, home, say = () => {}, scoreExtra = {} }) {
+export function scoreSessionDep({ world, calibration, heldout, home, say = () => {}, scoreExtra = {}, signal, singlePass = false }) {
+  const byPasses = world.passSeams !== undefined && !singlePass;
   return async ({ session, source, stack, nugetCache, npmCache }) => {
-    const work = path.join(session, 'score');
-    mkdirSync(work, { recursive: true });
-    const scored = await world.scoreFn({ stack, source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: nugetCache, npm: npmCache }, work, operatorHome: home, say, ...scoreExtra });
-    if (!scored.ok) return { kind: ['scorer-timeout', 'environment'].includes(scored.kind) ? scored.kind : 'failed', reason: scored.reason };
-    writeFileSync(path.join(work, 'score.json'), `${JSON.stringify(scored.value, null, 2)}\n`);
-    return { kind: 'scored', score: scored.value };
+    mkdirSync(path.join(session, 'score'), { recursive: true });
+    if (byPasses) return scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, signal, call: { session, source, stack } });
+    return scoreOnce({ world, calibration, heldout, home, say, scoreExtra, call: { session, source, stack, nugetCache, npmCache } });
   };
 }
 
-/** The preflight edge: v1's, over the pilot's `stacks`, looking at `preflightHome`'s token file (that it exists, never what it holds). */
-function preflightDep({ ctx, world, preflightHome }) {
-  const stacks = stacksOf(world.explore);
+/** The one-pass scoring (the olympiad, a rehearsal, a test's fake world): `world.scoreFn` once, `score.json` beside the session. */
+async function scoreOnce({ world, calibration, heldout, home, say, scoreExtra, call }) {
+  const work = path.join(call.session, 'score');
+  const scored = await world.scoreFn({ stack: call.stack, source: call.source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, caches: { nuget: call.nugetCache, npm: call.npmCache }, work, operatorHome: home, say, ...scoreExtra });
+  if (!scored.ok) return { kind: ['scorer-timeout', 'environment'].includes(scored.kind) ? scored.kind : 'failed', reason: scored.reason };
+  writeFileSync(path.join(work, 'score.json'), `${JSON.stringify(scored.value, null, 2)}\n`);
+  return { kind: 'scored', score: scored.value };
+}
+
+/**
+ * The preflight edge: v1's, over the pilot's `stacks`, looking at `preflightHome`'s token file (that it exists, never what it holds), then (a paid run: `maskProbe` is given) the read-back of the pair's two CPU masks, so a
+ * mask that is not applied refuses the launch before anything is paid (F1.S2). `baseFn` is the seam of the tests.
+ */
+export function preflightDep({ ctx, world, preflightHome, maskProbe = null, baseFn = preflight }) {
   return async () => {
+    const stacks = stacksOf(world.explore);
     // always the PINNED CLI copy, also in a rehearsal (the stub CLI cannot answer `--version` without a broker)
-    const r = await preflight({ home: preflightHome, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, dotnetDir: ctx.dotnetDir ?? null, hide: ctx.hide ?? [], claudeBinary: world.paths.claudeBinary, stacks: stacks.value, install: false });
-    return r.ok ? ok(null) : fail(`${r.reason}: ${(r.problems ?? []).join('; ')}`);
+    const r = await baseFn({ home: preflightHome, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, dotnetDir: ctx.dotnetDir ?? null, hide: ctx.hide ?? [], claudeBinary: world.paths.claudeBinary, stacks: stacks.value, install: false });
+    if (!r.ok) return fail(`${r.reason}: ${(r.problems ?? []).join('; ')}`);
+    return maskProbe === null ? ok(null) : maskReadBack({ ctx, probe: maskProbe });
   };
 }
 
@@ -105,10 +136,10 @@ function machineDeps(machine) {
  * The edges of a loop run. `preflightHome` is the home whose token file the preflight looks at (it checks the file EXISTS, never its content): the operator's for a paid run, a throw-away one holding a fake
  * file for the rehearsal. `machine` is `machineFor`'s value, or `null` for the rehearsal (it measures nothing, so the loop never asks). `stub` leaves the operator's project folders alone (no canary is planted).
  */
-export function runDeps({ ctx, world, scoreDep, machine, preflightHome, stub = false }) {
+export function runDeps({ ctx, world, scoreDep, machine, preflightHome, stub = false, maskProbe = stub ? null : cpus => probeMask({ cpus }) }) {
   return {
     guard: async () => ok(null), retireStale: () => retireStale({ root: ctx.sessionsRoot, now: Date.now(), endCell: a => endCell({ ...a, killTree, procApi: realProcApi }) }),
-    preflight: preflightDep({ ctx, world, preflightHome }), ...machineDeps(machine), now: Date.now,
+    preflight: preflightDep({ ctx, world, preflightHome, maskProbe }), ...machineDeps(machine), now: Date.now,
     scoreSession: scoreDep, phase: { listProjectDirs: stub ? () => [] : projectDirs(ctx.home), maskCheckMs: 15_000 },
   };
 }

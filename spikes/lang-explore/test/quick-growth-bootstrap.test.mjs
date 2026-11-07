@@ -1,11 +1,13 @@
 // The growth record and the disk guard before the first measurement (section 2.11): `growth.json` is validated on write and on load, an ordinary scoring run refuses to start without it, and only the bootstrap goes without.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { growthProblem, loadGrowth, writeGrowth } from '../lib/growth.mjs';
+import { scorePasses } from '../lib/passes.mjs';
+import { harness } from './quick-passes-harness.mjs';
 
 const GOOD = Object.freeze({
   measuredOn: '2026-11-07', host: 'invented-host', sessionTreeBytes: 300_000_000, retainedTenPassesBytes: 20_000_000, retainedTenPassesWorstBytes: 60_000_000,
@@ -44,4 +46,36 @@ test('A_growth_file_that_is_missing_or_invalid_is_a_refusal_naming_the_file_and_
   assert.ok(invalid.reason.includes(file) && invalid.reason.includes('mostAttempts'));
   writeFileSync(file, 'half a file');
   assert.match(loadGrowth({ file }).reason, new RegExp(file.replaceAll('.', '\\.')));
+});
+
+test('An_ordinary_scoring_run_refuses_to_start_without_a_valid_growth_json_and_only_the_bootstrap_flag_goes_without_it', async () => {
+  const file = fileIn();
+  const loaded = () => loadGrowth({ file });
+  const missing = harness({ a: { growth: { loaded } } });
+  const first = await scorePasses(missing.a);
+  assert.equal(first.kind, 'environment');
+  assert.ok(first.reason.includes(file));
+  assert.equal(missing.calls.build.length, 0, 'nothing is built');
+  writeFileSync(file, JSON.stringify({ ...GOOD, mostAttempts: 99 }));
+  const second = await scorePasses(missing.a);
+  assert.equal(second.kind, 'environment');
+  assert.ok(second.reason.includes('mostAttempts'));
+  assert.equal(missing.calls.build.length, 0);
+  const before = readFileSync(file, 'utf8');
+  const boot = await scorePasses({ ...missing.a, bootstrap: true });
+  missing.release();
+  assert.equal(boot.kind, 'scored', boot.reason);
+  assert.equal(readFileSync(file, 'utf8'), before, 'the driver writes nothing to growth.json itself');
+});
+
+test('The_measurement_stops_resumably_after_the_attempt_that_crossed_the_write_ceiling_records_a_ceiling_event_and_leaves_every_attempt_file', async () => {
+  const h = harness();
+  let attempts = 0;
+  const afterAttempt = () => { attempts += 1; return attempts >= 2 ? 'the measurement folder holds 20971521 bytes, past its ceiling of 20971520 bytes' : null; };
+  const r = await scorePasses({ ...h.a, bootstrap: true, afterAttempt });
+  h.release();
+  assert.equal(r.kind, 'environment');
+  assert.match(r.reason, /past its ceiling/);
+  assert.equal(readdirSync(path.join(h.work, 'passes')).length, 2, 'every attempt file is kept and no third is started');
+  assert.ok(readdirSync(path.join(h.work, 'events')).some(f => f.endsWith('-ceiling.json')));
 });

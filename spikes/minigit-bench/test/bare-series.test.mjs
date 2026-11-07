@@ -831,3 +831,40 @@ test('A_fixed_list_run_launches_only_the_sessions_of_its_own_kind', async () => 
   assert.deepEqual(t.launched, ['aaaaaa', 'bbbbbb'], 'and the pilot launches the pilot, scoring only its own: the A/A twin was scored already');
   assert.equal(readRunMap(t.ctx.runMapFile).value.sessions.cccccc.status, 'planned', 'the rehearsal is still waiting for its own command');
 });
+
+// ---- a scorer that could not score for the environment's sake (F1.S2): the one `void` result kind ----------------------------------------------------------------------------------------------------------------------
+
+const UNSCORED = 'void: unscored environment';
+
+test('A_scorer_that_answers_void_leaves_the_session_ran_without_data_with_its_history_appended_and_the_series_offers_its_one_re_run', async () => {
+  const first = rid('csharp', 'v1', 1);
+  const t = harness({ score: async arg => (path.basename(arg.session) === first ? { kind: 'void', class: UNSCORED, reason: 'pass 6 used its three attempts' } : { kind: 'scored', score: SCORE }) });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  const map = readRunMap(t.ctx.runMapFile).value;
+  const entry = map.sessions[first];
+  assert.equal(entry.status, 'ran', 'no transition: NEXT allows only ran -> scored, and the void stays ran');
+  assert.equal(entry.data, false);
+  assert.equal(entry.class, UNSCORED);
+  assert.deepEqual(entry.reclassifiedFrom.map(x => [x.class, x.data, x.reason]), [['completed', true, 'pass 6 used its three attempts']]);
+  assert.match(entry.reclassifiedFrom[0].at, /^\d{4}-\d\d-\d\dT/);
+  assert.equal(map.sessions[rid('csharp', 'v1', 2)].label, 'ran unpaired', 'the schedule offers the one re-run of a class that starts with void:');
+  const ledger = readLedger(t.ctx.ledgerFile);
+  assert.ok(ledger.some(l => l.event === 'unscored' && l.rid === first), 'an event line');
+  assert.equal(ledger.filter(l => l.rid === first && l.usd !== undefined).length, 1, 'the session is charged once, by its settling, and the event line charges nothing');
+  assert.ok(existsSync(path.join(t.ctx.sessionsRoot, first, 'record.json')), 'the session record is written with no score');
+});
+
+test('A_scorer_that_answers_scored_still_makes_the_one_legal_move_ran_to_scored', async () => {
+  const t = harness();
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  assert.ok(Object.values(readRunMap(t.ctx.runMapFile).value.sessions).every(s => s.status === 'scored' && s.reclassifiedFrom === undefined));
+  assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.event === 'unscored').length, 0);
+});
+
+test('A_scorer_that_answers_a_kind_the_loop_does_not_know_is_still_a_runner_failure', async () => {
+  const t = harness({ score: async () => ({ kind: 'surprise', reason: 'invented' }) });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.failed);
+});
