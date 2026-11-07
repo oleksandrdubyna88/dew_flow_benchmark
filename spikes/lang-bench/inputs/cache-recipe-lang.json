@@ -1,6 +1,6 @@
 {
   "decidedOn": "2026-11-03",
-  "reason": "The recipe of the two cache snapshots of the language comparison v2 (parent D5, §4.6; E1.S4). Run ONCE per stack by make-snapshots.mjs inside v1's agent box with E1.S5's toolchains bound read-only and the distribution's dotnet hidden, through the egress proxy with the bare host list. Each x-range is resolved once, at build time, to the highest plain version of its line; the exact version is recorded. TypeScript web set (owner's decision of the epoch-7 re-review, 2026-11-03): @fastify/type-provider-typebox 6.3.0 with typebox 1.1.x, the renamed TypeBox 1.x line, its exact patch resolved once here; @sinclair/typebox is dropped. The result is hashed and registered in inputs/cache-snapshots-lang.json; PACKAGES.md is generated from that record.",
+  "reason": "The recipe of the two cache snapshots of the language comparison v2 (parent D5, §4.6; E1.S4). Run ONCE per stack by make-snapshots.mjs inside v1's agent box with E1.S5's toolchains bound read-only and the distribution's dotnet hidden, through the egress proxy with the bare host list. Each x-range is resolved once, at build time, to the highest plain version of its line; the exact version is recorded. TypeScript web set (owner's decision of the epoch-7 re-review, 2026-11-03): @fastify/type-provider-typebox 6.3.0 with typebox 1.1.x, the renamed TypeBox 1.x line, its exact patch resolved once here; @sinclair/typebox is dropped. The result is hashed and registered in inputs/cache-snapshots-lang.json; PACKAGES.md is generated from that record. 2026-11-07 (F1.S3 (a)): Microsoft.AspNetCore.Mvc.Testing joins the C# set, and each package names the kinds it is offered in; inputs/package-matrix.json (package-matrix.mjs) decides them and its --check holds them equal.",
   "hosts": "bare",
   "stepTimeoutMs": 900000,
   "stacks": {
@@ -34,6 +34,17 @@
             "--max-time",
             "60",
             "https://api.nuget.org/v3-flatcontainer/microsoft.aspnetcore.authentication.jwtbearer/index.json"
+          ],
+          "pick": "highest",
+          "line": "10.0"
+        },
+        "MVC_TESTING": {
+          "argv": [
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "60",
+            "https://api.nuget.org/v3-flatcontainer/microsoft.aspnetcore.mvc.testing/index.json"
           ],
           "pick": "highest",
           "line": "10.0"
@@ -92,6 +103,7 @@
             "-nr:false",
             "-p:SnapHostingVersion={HOSTING}",
             "-p:SnapJwtBearerVersion={JWT_BEARER}",
+            "-p:SnapMvcTestingVersion={MVC_TESTING}",
             "-p:SnapXunitVersion={XUNIT}",
             "-p:SnapXunitVsVersion={XUNIT_VS}",
             "-p:SnapTestSdkVersion={TEST_SDK}"
@@ -118,7 +130,12 @@
             "latestVersion": "10.0.14",
             "releasedOn": "2026-10-25",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "Microsoft.AspNetCore.Authentication.JwtBearer",
@@ -129,7 +146,27 @@
             "latestVersion": "10.0.14",
             "releasedOn": "2026-10-25",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "daemon",
+            "web"
+          ]
+        },
+        {
+          "name": "Microsoft.AspNetCore.Mvc.Testing",
+          "spec": "{MVC_TESTING}",
+          "purpose": "In-memory test host for ASP.NET Core Minimal API tests (WebApplicationFactory): a test project calls the app without a network",
+          "licence": "MIT",
+          "maintenance": {
+            "latestVersion": "10.0.14",
+            "releasedOn": "2026-10-25",
+            "readOn": "2026-11-07"
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "xunit.v3",
@@ -140,7 +177,12 @@
             "latestVersion": "4.0.2",
             "releasedOn": "2026-10-09",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "xunit.runner.visualstudio",
@@ -151,7 +193,12 @@
             "latestVersion": "4.0.1",
             "releasedOn": "2026-10-09",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "Microsoft.NET.Test.Sdk",
@@ -162,7 +209,12 @@
             "latestVersion": "18.11.0",
             "releasedOn": "2026-10-13",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         }
       ],
       "packagesNote": "ASP.NET Core (Minimal API, its built-in validation, System.Text.Json) and the .NET base library come with SDK 10.0.403 as shared frameworks; they are not packages."
@@ -303,7 +355,12 @@
             "latestVersion": "5.12.8",
             "releasedOn": "2026-11-02",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "@fastify/jwt",
@@ -314,7 +371,12 @@
             "latestVersion": "10.2.7",
             "releasedOn": "2026-11-02",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "@fastify/type-provider-typebox",
@@ -325,7 +387,10 @@
             "latestVersion": "6.3.0",
             "releasedOn": "2026-10-12",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "web"
+          ]
         },
         {
           "name": "typebox",
@@ -336,7 +401,12 @@
             "latestVersion": "1.4.3",
             "releasedOn": "2026-10-22",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "pino",
@@ -347,7 +417,12 @@
             "latestVersion": "10.4.0",
             "releasedOn": "2026-10-02",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "typescript",
@@ -358,7 +433,12 @@
             "latestVersion": "7.0.2",
             "releasedOn": "2026-07-08",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "@types/node",
@@ -369,7 +449,12 @@
             "latestVersion": "26.6.6",
             "releasedOn": "2026-10-28",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "typescript-eslint",
@@ -380,7 +465,12 @@
             "latestVersion": "8.72.1",
             "releasedOn": "2026-10-26",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "eslint",
@@ -391,7 +481,12 @@
             "latestVersion": "10.14.0",
             "releasedOn": "2026-10-30",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         },
         {
           "name": "@eslint/js",
@@ -402,7 +497,12 @@
             "latestVersion": "10.0.1",
             "releasedOn": "2026-02-06",
             "readOn": "2026-11-04"
-          }
+          },
+          "kinds": [
+            "olympiad",
+            "daemon",
+            "web"
+          ]
         }
       ]
     }

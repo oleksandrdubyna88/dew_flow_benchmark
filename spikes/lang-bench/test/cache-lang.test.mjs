@@ -56,6 +56,17 @@ test('The_recipe_names_every_offered_package_with_a_purpose_and_pins_the_toolcha
   assert.match(refusal(changed(r => { r.stacks.node.steps.splice(4, 1); })), /tsc --version/, 'a missing pin step is a refusal, not a pass');
 });
 
+test('Every_offered_package_names_the_kinds_it_is_offered_in_and_a_missing_or_unknown_kind_is_refused', () => {
+  for (const [stack, spec] of Object.entries(loadRecipeLang(realRecipe(), stacks).value.stacks)) {
+    for (const p of spec.packages) assert.ok(p.kinds.length > 0 && p.kinds.every(k => ['olympiad', 'daemon', 'web'].includes(k)), `${stack}: ${p.name} names its kinds`);
+  }
+  assert.match(refusal(changed(r => { delete r.stacks.csharp.packages[0].kinds; })), /stacks\.csharp\.packages\[0\]\.kinds.*non-empty/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[1].kinds = []; })), /stacks\.node\.packages\[1\]\.kinds.*non-empty/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[1].kinds = 'web'; })), /stacks\.node\.packages\[1\]\.kinds/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[2].kinds = ['web', 'service']; })), /stacks\.node\.packages\[2\]\.kinds.*service.*olympiad, daemon, web/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[2].kinds = ['web', 'web']; })), /stacks\.node\.packages\[2\]\.kinds.*twice/);
+});
+
 /** The parent of every box folder a test makes: under the home (the agent box replaces /tmp), created once, owner only. */
 const boxParent = () => { const dir = path.join(os.homedir(), '.cache', 'lang-v2', 't'); mkdirSync(dir, { recursive: true, mode: 0o700 }); return dir; };
 
@@ -334,15 +345,24 @@ test('The_command_prints_the_PACKAGES_md_of_a_registered_stack_from_the_record_a
   const packages = real.stacks.node.packages.map(p => ({ ecosystem: 'npm', name: p.name, version: p.spec.replace(/\{([A-Z_]+)\}/, (m, k) => resolved[k]), integrity: 'sha512-x' }));
   const rec = path.join(root, 'rec.json');
   writeFileSync(rec, JSON.stringify({ node: recordFor('d'.repeat(64), { packages, resolved }), superseded: [] }));
-  const printed = await runMake(['--print-packages-md', 'node', '--record', rec]);
+  const matrixFile = path.join(root, 'matrix.json');
+  const allWorks = Object.fromEntries(Object.entries(real.stacks).map(([stack, spec]) => [stack, Object.fromEntries(spec.packages.map(p => [p.name, { olympiad: { state: 'works' }, daemon: { state: 'works' }, web: { state: 'works' } }]))]));
+  writeFileSync(matrixFile, JSON.stringify({ rows: allWorks }));
+  const flagsOf = (stack, ...more) => ['--print-packages-md', stack, '--record', rec, '--matrix', matrixFile, ...more];
+  const printed = await runMake(flagsOf('node', '--kind', 'olympiad'));
   assert.equal(printed.value.code, 0, printed.value.stderr);
-  const expected = renderPackagesMd({ stack: 'node', record: JSON.parse(readFileSync(rec, 'utf8')), recipe: real });
+  const expected = renderPackagesMd({ stack: 'node', kind: 'olympiad', record: JSON.parse(readFileSync(rec, 'utf8')), recipe: real, matrix: { rows: allWorks } });
   assert.equal(expected.ok, true, expected.reason);
-  assert.equal(printed.value.stdout, expected.value, 'the command prints exactly what the renderer derives from the record');
-  const missing = await runMake(['--print-packages-md', 'csharp', '--record', rec]);
+  assert.equal(printed.value.stdout, expected.value, 'the command prints exactly what the renderer derives from the record and the matrix');
+  const noKind = await runMake(flagsOf('node'));
+  assert.equal(noKind.value.code, 2, 'the file depends on the kind: a print without --kind is a usage error');
+  assert.match(noKind.value.stderr, /--kind.*olympiad, daemon, web/);
+  const noMatrix = await runMake(['--print-packages-md', 'node', '--kind', 'web', '--record', rec, '--matrix', path.join(root, 'none.json')]);
+  assert.equal(noMatrix.value.code, 2, 'a matrix that cannot be read is a usage error');
+  const missing = await runMake(flagsOf('csharp', '--kind', 'web'));
   assert.equal(missing.value.code, 3, 'a stack with no record is refused');
   assert.match(missing.value.stderr, /csharp/);
-  assert.equal((await runMake(['--print-packages-md', 'ruby', '--record', rec])).value.code, 2, 'an unknown stack is a usage error');
+  assert.equal((await runMake(flagsOf('ruby', '--kind', 'web'))).value.code, 2, 'an unknown stack is a usage error');
 });
 
 // ---- the Stage 1 pre-registration tag form ------------------------------------------------------------------------------------------

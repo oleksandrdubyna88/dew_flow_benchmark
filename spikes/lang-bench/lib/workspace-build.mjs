@@ -10,7 +10,8 @@ import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { extractGrammar } from '../tools/grammar-extract.mjs';
 import { NPMRC_OFFLINE, outsideManifest, usedNpm } from './cache-offline.mjs';
-import { loadRecipeLang } from './cache-recipe-lang.mjs';
+import { KINDS, loadRecipeLang } from './cache-recipe-lang.mjs';
+import { loadMatrix } from './package-matrix.mjs';
 import { renderPackagesMd } from './packages-md.mjs';
 import { computePin, verifyPin } from './runner-pin.mjs';
 import { loadStacksLang } from './toolchain-pins.mjs';
@@ -20,7 +21,7 @@ const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 export const TEMPLATES_DIR = path.join(SPIKE, 'templates');
 export const RUNNER_DIR = path.join(SPIKE, 'runner');
 export const STACKS = Object.freeze(['csharp', 'node']);
-export const KINDS = Object.freeze(['olympiad', 'daemon', 'web']);
+export { KINDS };
 const SCRIPTS = Object.freeze(['build.sh', 'run.sh']);
 const GRAMMAR = 'GRAMMAR.md';
 const refuse = reason => fail(reason, { refusal: true });
@@ -47,13 +48,20 @@ export function lockProblems(lock, manifest, packageJson) {
 
 // ---- the inputs -------------------------------------------------------------------------------------------------------------------------
 
-/** `ok({ specs, format, record, recipe })` read from the real input files (a test passes fixtures instead): the spec record (its `runner` pin), the FORMAT rows, the snapshot record and the checked recipe. */
+/** The inputs once the recipe is checked: the snapshot record, and the package matrix checked against both. -> `ok({ specs, format, record, recipe, matrix })` | `fail`. */
+function inputsOf({ read, recipe }) {
+  const record = read('inputs/cache-snapshots-lang.json');
+  const matrix = loadMatrix({ json: read('inputs/package-matrix.json'), recipe, record });
+  return matrix.ok ? ok({ specs: read('inputs/specs.json'), format: read('inputs/specs.d/format.json'), record, recipe, matrix: matrix.value }) : matrix;
+}
+
+/** `ok({ specs, format, record, recipe, matrix })` read from the real input files (a test passes fixtures instead): the spec record (its `runner` pin), the FORMAT rows, the snapshot record, the checked recipe and the package matrix. */
 export function loadInputs(spike = SPIKE) {
   try {
     const read = rel => JSON.parse(readFileSync(path.join(spike, rel), 'utf8'));
     const stacks = loadStacksLang(read('inputs/stacks-lang.json'));
     const recipe = stacks.ok ? loadRecipeLang(read('inputs/cache-recipe-lang.json'), stacks.value) : stacks;
-    return recipe.ok ? ok({ specs: read('inputs/specs.json'), format: read('inputs/specs.d/format.json'), record: read('inputs/cache-snapshots-lang.json'), recipe: recipe.value }) : recipe;
+    return recipe.ok ? inputsOf({ read, recipe: recipe.value }) : recipe;
   } catch (error) {
     return fail(`an input file cannot be read: ${error.message}`);
   }
@@ -164,8 +172,8 @@ function scriptRefusal({ stack, kind, templatesDir }) {
 }
 
 /** The files that are written from bytes: the derived packages list, the grammar and the statement. -> `ok(files)` | `fail`. */
-function derivedFiles({ stack, inputs, statement, grammar }) {
-  const packages = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
+function derivedFiles({ stack, kind, inputs, statement, grammar }) {
+  const packages = renderPackagesMd({ stack, kind, record: inputs.record, recipe: inputs.recipe, matrix: inputs.matrix });
   if (!packages.ok) return refuse(packages.reason);
   return ok([{ rel: 'PACKAGES.md', bytes: packages.value, mode: 0o644 }, { rel: `runner/${GRAMMAR}`, bytes: grammar, mode: 0o644 }, { rel: 'STATEMENT.md', bytes: statement, mode: 0o644 }]);
 }

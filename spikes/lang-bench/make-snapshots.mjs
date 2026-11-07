@@ -5,9 +5,10 @@
 //   node spikes/lang-bench/make-snapshots.mjs [--stack csharp] [--stack node]       build and register (default: both, csharp first)
 //   node spikes/lang-bench/make-snapshots.mjs --supersede <stack> --reason "<text>"  move a registered record to superseded[] (before the pre-registration tag only)
 //   node spikes/lang-bench/make-snapshots.mjs --prune-superseded                     remove superseded snapshot folders (after the pre-registration tag only)
-//   node spikes/lang-bench/make-snapshots.mjs --print-packages-md <stack>            print the stack's PACKAGES.md, derived from the record
+//   node spikes/lang-bench/make-snapshots.mjs --print-packages-md <stack> --kind <kind>  print the PACKAGES.md of a stack and kind, derived from the record and the package matrix
 //     --caches <dir>     default ~/rsd/lang-v2/caches (refused inside a git worktree)     --record <file>   default inputs/cache-snapshots-lang.json
 //     --recipe <file>    default inputs/cache-recipe-lang.json                           --stacks <file>   default inputs/stacks-lang.json
+//     --matrix <file>    default inputs/package-matrix.json (read by --print-packages-md only)
 //     --work <dir>       parent of the build's owned work folder, default ~/.cache/lang-v2/w
 //     --gate-lock <file> default ~/.cache/lang-v2/gate.lock
 //     --tags-remote <url> where supersede and prune look for the pre-registration tag besides the local tags (default: origin's url, a GitHub SSH form read over https; no remote is a refusal)
@@ -30,7 +31,7 @@ import { makeSnapshot, treeHash } from '../minigit-bench/lib/cache-snapshot.mjs'
 import { egressSummary } from '../minigit-bench/lib/egress.mjs';
 import { refuseInsideWorktree } from '../minigit-bench/lib/git-guard.mjs';
 import { fail, ok } from '../minigit-bench/lib/result.mjs';
-import { loadRecipeLang } from './lib/cache-recipe-lang.mjs';
+import { KINDS, loadRecipeLang } from './lib/cache-recipe-lang.mjs';
 import { boxOptionsFor } from './lib/cache-offline.mjs';
 import { isRecordObject, pruneSuperseded, recordAtTag, registerBuilt, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
 import { takeGateLock } from './lib/gate-lock.mjs';
@@ -44,7 +45,7 @@ const REPO = path.resolve(SPIKE, '..', '..');
 const STACK_NAMES = Object.freeze(['csharp', 'node']);
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
 const OPTIONS = {
-  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' }, 'tags-remote': { type: 'string' },
+  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' }, kind: { type: 'string' }, matrix: { type: 'string' }, 'tags-remote': { type: 'string' },
   caches: { type: 'string' }, record: { type: 'string' }, recipe: { type: 'string' }, stacks: { type: 'string' }, work: { type: 'string' }, 'gate-lock': { type: 'string' },
 };
 const say = line => process.stdout.write(`${line}\n`);
@@ -65,7 +66,8 @@ function configOf(v, mode) {
   const home = os.homedir();
   const at = (value, ...fallback) => path.resolve(value ?? path.join(...fallback));
   return {
-    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'], tagsRemote: v['tags-remote'],
+    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'], kind: v.kind, tagsRemote: v['tags-remote'],
+    matrix: at(v.matrix, SPIKE, 'inputs', 'package-matrix.json'),
     caches: at(v.caches, home, 'rsd', 'lang-v2', 'caches'), record: at(v.record, SPIKE, 'inputs', 'cache-snapshots-lang.json'), recipe: at(v.recipe, SPIKE, 'inputs', 'cache-recipe-lang.json'),
     stacks: at(v.stacks, SPIKE, 'inputs', 'stacks-lang.json'), work: at(v.work, home, '.cache', 'lang-v2', 'w'), gateLock: at(v['gate-lock'], home, '.cache', 'lang-v2', 'gate.lock'),
   };
@@ -251,10 +253,19 @@ function pruneMode(config) {
   return pruned.value.failed.length === 0 ? EXIT.done : EXIT.failed;
 }
 
+/** The kind and the matrix `--print-packages-md` needs: `ok(matrix)` | `fail` (a usage line). */
+function printInputs(config) {
+  if (!KINDS.includes(config.kind)) return fail(`--print-packages-md needs --kind: the file depends on it (legal kinds: ${KINDS.join(', ')})`);
+  const matrix = readJsonFlag('--matrix', config.matrix);
+  return matrix.ok ? ok(matrix.value.json) : matrix;
+}
+
 function printMode(config) {
   const inputs = loadInputs(config);
   if (!inputs.ok) return stop(EXIT.usage, inputs.reason);
-  const rendered = renderPackagesMd({ stack: config.print, record: JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}'), recipe: inputs.value.recipe });
+  const matrix = printInputs(config);
+  if (!matrix.ok) return stop(EXIT.usage, matrix.reason);
+  const rendered = renderPackagesMd({ stack: config.print, kind: config.kind, record: JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}'), recipe: inputs.value.recipe, matrix: matrix.value });
   if (!rendered.ok) return stop(EXIT.refused, rendered.reason);
   process.stdout.write(rendered.value);
   return EXIT.done;

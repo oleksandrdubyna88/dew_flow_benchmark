@@ -51,10 +51,10 @@ function filesOf(root, prefix, modeOf) {
   return Object.fromEntries(listFiles(root).filter(rel => !rel.includes('__pycache__') && !rel.endsWith('.pyc')).map(rel => [`${prefix}${rel}`, { bytes: readFileSync(path.join(root, rel)), mode: modeOf(rel) }]));
 }
 
-/** The registered inputs of the language comparison v2 that `PACKAGES.md` is derived from, loaded once. -> `ok({ record, recipe })` | `fail`. */
+/** The registered inputs of the language comparison v2 that `PACKAGES.md` is derived from, loaded once. -> `ok({ record, recipe, matrix })` | `fail`. */
 export function packagesInputs() {
   const loaded = loadInputs();
-  return loaded.ok ? ok({ record: loaded.value.record, recipe: loaded.value.recipe }) : loaded;
+  return loaded.ok ? ok({ record: loaded.value.record, recipe: loaded.value.recipe, matrix: loaded.value.matrix }) : loaded;
 }
 
 /**
@@ -62,19 +62,19 @@ export function packagesInputs() {
  * `templates` and `runner` default to the merged ones of lang-bench (tests may pass copies). -> `ok({ files, frozen })` | `fail`; `frozen` is the subset the agent must not change.
  */
 export function quickWorkspaceFiles({ explore, task, stack, sources, inputs, templates = BENCH_TEMPLATES, runner = BENCH_RUNNER }) {
-  const parts = parsedParts({ stack, sources, inputs });
+  const parts = parsedParts({ stack, kind: task.kind, sources, inputs });
   if (!parts.ok) return parts;
   const files = filesFrom({ explore, task, stack, sources, inputs, templates, runner, ...parts.value });
   return ok({ files, frozen: frozenOf(files, stack) });
 }
 
 /** What the files are made from: the visible samples, the grammar of FORMAT.md and the rendered PACKAGES.md. -> `ok({ samples, grammar, packages })` | `fail`. */
-function parsedParts({ stack, sources, inputs }) {
+function parsedParts({ stack, kind, sources, inputs }) {
   const samples = parseScenarioSamples(sources.spec);
   if (!samples.ok) return samples;
   const grammar = extractGrammar(Buffer.from(sources.format, 'utf8'));
   if (!grammar.ok) return fail(`the grammar of FORMAT.md: ${grammar.reason}`);
-  const packages = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
+  const packages = renderPackagesMd({ stack, kind, record: inputs.record, recipe: inputs.recipe, matrix: inputs.matrix });
   return packages.ok ? ok({ samples: samples.value, grammar, packages: packages.value }) : fail(`PACKAGES.md: ${packages.reason}`);
 }
 

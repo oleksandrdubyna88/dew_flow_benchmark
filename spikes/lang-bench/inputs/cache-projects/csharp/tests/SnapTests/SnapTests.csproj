@@ -10,6 +10,7 @@
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(SnapMvcTestingVersion)" />
     <PackageReference Include="xunit.v3" Version="$(SnapXunitVersion)" />
     <PackageReference Include="xunit.runner.visualstudio" Version="$(SnapXunitVsVersion)" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(SnapTestSdkVersion)" />

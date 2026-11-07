@@ -96,7 +96,7 @@ async function nodeOffline(t, real) {
   assert.deepEqual(box.egress().refused, {}, 'and none was even asked: a refused attempt would be in the log');
 }
 
-const props = resolved => Object.entries({ SnapHostingVersion: 'HOSTING', SnapJwtBearerVersion: 'JWT_BEARER', SnapXunitVersion: 'XUNIT', SnapXunitVsVersion: 'XUNIT_VS', SnapTestSdkVersion: 'TEST_SDK' }).map(([prop, key]) => `-p:${prop}=${resolved[key]}`);
+const props = resolved => Object.entries({ SnapHostingVersion: 'HOSTING', SnapJwtBearerVersion: 'JWT_BEARER', SnapMvcTestingVersion: 'MVC_TESTING', SnapXunitVersion: 'XUNIT', SnapXunitVsVersion: 'XUNIT_VS', SnapTestSdkVersion: 'TEST_SDK' }).map(([prop, key]) => `-p:${prop}=${resolved[key]}`);
 
 async function csharpOffline(t, real) {
   const box = await fresh(t, real, 'csharp', 'n1');

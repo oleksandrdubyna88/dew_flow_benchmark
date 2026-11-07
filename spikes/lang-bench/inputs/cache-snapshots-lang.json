@@ -1,420 +1,4 @@
 {
-  "csharp": {
-    "treeSha256": "452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee",
-    "dirName": "csharp-452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee",
-    "parts": {
-      "nuget": "a245bc0eda568b4457e13b24d270ec5a2014018e5e4fad0ad7c063a84e92bbca",
-      "dotnet": "57eefb6d8f3b927708de46ef6dc05818eebba35b94abe9ff48476b33479cf03b"
-    },
-    "sizeBytes": 174187832,
-    "packages": [
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.applicationinsights",
-        "version": "2.23.0",
-        "integrity": "sha512-3Ul7+tDGXlSk940qFkTz0IVNTNAd2DulBvjV1TY14oFSx8EyEN1d05hXgKqxRqdiDePrrq2O8SxvhwiGdsIVfw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.aspnetcore.authentication.jwtbearer",
-        "version": "10.0.14",
-        "integrity": "sha512-grRJez5fL54zGx5wD6Onnjt1BLXsNJgkximGqw3+jR1K9EN7TIny8iSNXyscfbrlc0fsnuRhZ/fgOSHVHYuu1Q=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.bcl.asyncinterfaces",
-        "version": "6.0.0",
-        "integrity": "sha512-IhoFoMkQ96h7Yg2PODHtOStOuV0RK+4nTTXycAmtKiZEXenXzSNf5vtKA/JVCHS9o7493dlu2vnAhSqcI9ewmQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.bcl.cryptography",
-        "version": "10.0.2",
-        "integrity": "sha512-rbP/krRdXXVG10QyWH0rWa5+0qP5Rob8VZDKno910kHnDcmH9XdFbBtdedO5pVVlpA1y2MXWx360zLLNLctJ+Q=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.codecoverage",
-        "version": "18.11.0",
-        "integrity": "sha512-N6vk+NslyMSCN2lUYaqAF0MBnBv/EMbhDjytGrl7bClh2YrzjdhmT3Dzjo0HC2bEN/LoNdgbuhRDbKeDU8E0GQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration",
-        "version": "10.0.14",
-        "integrity": "sha512-bOc8UecSDd09S2pOsrsziUCuxfZLGN33vvUgLrSnC+6G96CpUci6oYFg4dGVD1Yq33npcIXlk6zvjvnACe1Mxg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-BZhMkmPS3MrQnKFLXGmDS/geiUeLW2pN9sdRiLAsxf2gynmSQtqVrkPbCtAZtQ/G9qI50r9zTrh0ofJF+rYb2w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.binder",
-        "version": "10.0.14",
-        "integrity": "sha512-kKD6iek6peqP93if4iGVFauSt1Lk/iSPgKwCmjU8Ddl6HYeMmu3hON3Qo5VU2aBr8S77ecIk7T1yjfTrNlFLJg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.commandline",
-        "version": "10.0.14",
-        "integrity": "sha512-a7hK5/outIEY0F5wUFyrDT39KXCgSt/AMa3jl5rlFvKFzEzZwyt2ohRcMSh7v9VUY8wZxJz4yj+BEmjy8XTTRg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.environmentvariables",
-        "version": "10.0.14",
-        "integrity": "sha512-sSK7aQwmLGUT9zeooT7uj3G4kYwwiorFSfFaX1fAEkq6ZXpxbC3p1nWY+4DRYxa3gMH7MZKAeqT4ZIPzPJ4ulA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.fileextensions",
-        "version": "10.0.14",
-        "integrity": "sha512-uhfmENaa9nhAlu8rqIbh7q0b7TPb1MewnkxcB9Rci/x4HD3SIUQvxxySfcpHtTjI9GlfGLg7vNW4ehO2gYqHzw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.json",
-        "version": "10.0.14",
-        "integrity": "sha512-e6s+msTbrfZTlqkbvwyjQwk9fgTdnRRXwwELlrygOO75Ppvk5uA8YRnbLGHvCcbWk3cdwY1cP8bPYYh5fwdSsg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.configuration.usersecrets",
-        "version": "10.0.14",
-        "integrity": "sha512-2cOPepaxI7v3ExF50djtCN0BpuUBWMjpS35dOxFtqT4fovJT8SZwD0cbsm8Rp5pEkNy0lehJd7YZ45uXBG0H9w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.dependencyinjection",
-        "version": "10.0.14",
-        "integrity": "sha512-1+/NPfu9dMgYhNlndjKMxmCycnT29xLUwb0LRqauXXStVi4U0FqSBlqqR6vXtjL0alzLDSMSCpvro3aknqv/RA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.dependencyinjection.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-Di8PFxjp08vKyonp2pbr2F0SvkWJt3B9v7H/5NESNUebvQJrE4usSVdSTM6nVIQr7cF6obpSm5hXDMU3+X50Og=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.diagnostics",
-        "version": "10.0.14",
-        "integrity": "sha512-1F1uOSNya1FG3RyNwrnFewNnM3jpdDxruLwuxl1F8+8tWsNI7ngo+97LN/MhWAQn/0gWYOdell4saBEQU/68mg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.diagnostics.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-yNfMpoudaSRuRiJMBuveoVtv4HVqvq2VsIBdnIJkfZy+bpIY0cOLt6ZWlTB/bLWknCSA+/Cfrt4SCDOPVjFFsA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.fileproviders.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-//+jj6ugVyJL2ESYBCI54P7PWMjnhCBIOpf5nSiP41870KQBUsIx0VS+YaEY8ZTDJO94rWqeAEkTf8Uj7qDcpQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.fileproviders.physical",
-        "version": "10.0.14",
-        "integrity": "sha512-iNOnKVdGjRtVqkLMGIKgaP3EYO7bXwsS0s9fICSeeYQ70xqrrdjh9egD1LTcIQnT03XvZKEGXhHa0ofZnMr3iQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.filesystemglobbing",
-        "version": "10.0.14",
-        "integrity": "sha512-jXru4kAFOxj7Jed2UMsYb2QeVIqOPGz0Sp77crlNOpVibMzrayiwcsJ8Tpf89YiwxWiQ4bB89ilMrHr+zQECQw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.hosting",
-        "version": "10.0.14",
-        "integrity": "sha512-M4+Fs2oTDwgKoqGKhW10cn4nhdBSpnOSWndAA6Vag/cfeIExlJ0BExv/ony2dC6HgezY23uNOXXoZuxy6XAmpQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.hosting.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-nBmDCsT6B2NWjw6XlnxC7+iqQ9AskJxsqZ5AM8VGAXnRMXKYpqj5vNzvjkfVWsxScuZPVNbvZnnWKfRQiDrYYA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging",
-        "version": "10.0.14",
-        "integrity": "sha512-Su71SotCYl6sHUXga8IrkGkHGr+NekqPnXd3G+bqDOFuaZs31UprqYony4tEr4WcQOqiuMXsV+VLpDawi6bQSQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.abstractions",
-        "version": "8.0.0",
-        "integrity": "sha512-UKCt2W0w2QWA+44ColzqCqFfTSJ0Qnm1rP4YzIVot0QCqgYtXbE8xYh6CL/STgfLyIsvwQ7o7sLDft87zaf4pw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.abstractions",
-        "version": "10.0.14",
-        "integrity": "sha512-AxQQ1pBzZur4SkRixQSkXpbM3P/kBH9BS+XvOshgkjw0bha+981X62R9zvs1GD5W3AVCQNEfm5I8/hicDSTouQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.configuration",
-        "version": "10.0.14",
-        "integrity": "sha512-HL34Mpy5KNBb/QsMfd7WRIR4pVpB+HDX5Ek8zEuOKvqPj/q/sHGjWzfudbiE9JKMi1sJTy/s8w6HyjTdzQCKpA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.console",
-        "version": "10.0.14",
-        "integrity": "sha512-Px3s9ipWvInXXAaZNPGtgsOFRMTfFVLgzEs3cYGjr62W94xJUWbBuMTzc+9Rr4Zhh/29QIL3xAL5wphHzUBsoQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.debug",
-        "version": "10.0.14",
-        "integrity": "sha512-3kXa+h6PC/qIOG1zR03DhTkMnqslw8lh5w3ORMCy6CIuVqHGtLwLY6kR7vYrNP3UQAB63eIrjmqUJwgC9/Dxig=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.eventlog",
-        "version": "10.0.14",
-        "integrity": "sha512-umj0n2R/6WHV/JQ9hoov9TKtQRm8IFkFmboRmbUL4GbJeJx5jQAXA9BQa1rACmNfgliQ4znU2/hAS3aopA6JUQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.logging.eventsource",
-        "version": "10.0.14",
-        "integrity": "sha512-QnlQzLVHPtfnJxCF5LdU8s7fUYSv10bVywN7VhAX3OUn0t0yf4xsLpeqVt7WJ6NkDZvgt/9xaroEel//ephQjg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.options",
-        "version": "10.0.14",
-        "integrity": "sha512-NQJlE55aoetEJdcYHj0JMzw+P9b6ToDyWd3En1qnTg33cQpmAx0PSqcdo5KopJzfHWnU0sJTRp7RiYXSK7W9KA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.options.configurationextensions",
-        "version": "10.0.14",
-        "integrity": "sha512-KuCiZYUMwjbCmYegn6wgF5JkSb4SODFs90RF0Iq2Ull7b/RKZ3lv3VJ8HjscX9ZlVzz2XcWIBZrX+uMsekifFw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.extensions.primitives",
-        "version": "10.0.14",
-        "integrity": "sha512-iTALlkkPsiOteMMvtgCNYX5dLSBhD9I/5oa50ZbKI9V7ndwp9J/kCKGSdD0WEexFdm+vczMUdBdY2WOLrGl8mA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.abstractions",
-        "version": "8.19.2",
-        "integrity": "sha512-ASRJB/oHIKh2N45fTt/t/+p2WaKxWUfvjTrHUq2N39mON6wJTQTX2gwfZOtwWBM4FZ9I7uNi8rFNaynXbMYNsQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.jsonwebtokens",
-        "version": "8.19.2",
-        "integrity": "sha512-9kokzW5MVsHjANELTihcvrI48azhzhdFQW+oaEce2rD/sGe5Vf57BRQdXFIyDoWluxYh3vhe8aLQ3mg3BP983w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.logging",
-        "version": "8.19.2",
-        "integrity": "sha512-15BrxnYEFaE+3svU/8GB7EYQkOd+x0UdlqmNFoV3gY6vN/u4dg10NuXLoDSSUhxHPdc01cvKeoztwGvAw6Vhng=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.protocols",
-        "version": "8.19.2",
-        "integrity": "sha512-+OTRiYr9kxDvuGaNtPblS0ZlUcMmgF07YkPa+5lZ1wL7OXnXDeym29XQWiuKnimfnhkO7T4imtkA8dy46p44OQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.protocols.openidconnect",
-        "version": "8.19.2",
-        "integrity": "sha512-JMioo0XfC6Gk6Ui5Sbs9lSzkFkp78vjcxb7qtzRgK3k1BXB8Baegq/Sr/ROg00qkq99MsZZZt3mgDGdACFTv0w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.identitymodel.tokens",
-        "version": "8.19.2",
-        "integrity": "sha512-4rGCcWWvktrOG1esOPr2DMLJpxl9DjIAD943L8C8K8Rcsq30vnOG0IcFMlckuOMots/FHNSUJDxqsmo/EG6eBw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.net.test.sdk",
-        "version": "18.11.0",
-        "integrity": "sha512-5/af6+3vQ0OgRyL2cnS8hcI81kzJ4iveZ9VCnXw511ZDp1wz8SimgAwySsEg7pF4xXV4N+TwrHa8sLdkE5zUvg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testing.extensions.telemetry",
-        "version": "2.5.1",
-        "integrity": "sha512-H8IrMlaB5PWlgq5DK10cDledyH1KuVf3W7aJxg/H7voSDG9vz+a+Tng7+Xlzk8JLwnD76veM1VRPX+0W7S6j/g=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testing.extensions.trxreport.abstractions",
-        "version": "2.5.1",
-        "integrity": "sha512-/PtK+XveuP1hbPoL9duOfn/dj+uhjyxEIzyzpg1u2lw5T088TcJ1Qj8aK7Ziw6s0ZIgLSRbD1NRDW+9/SgOT2w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testing.platform",
-        "version": "2.5.1",
-        "integrity": "sha512-rNqtkMbcc4LtzZk1I79k5k3j8zlN5UlOz0umKecCrKfe2v4UgjMXDWtpjl3pzOkPwguZQIzQ1qKvOKYlq0fVIw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testing.platform.msbuild",
-        "version": "2.5.1",
-        "integrity": "sha512-fqf4pHVr6I2UDZoe80a/l7jGZ7BTfvMZs98PxWWFjGa8L1RC+FeGRFwNgibshQ8XmAv8f0rvYet2Me82Muf9bQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testplatform.objectmodel",
-        "version": "18.11.0",
-        "integrity": "sha512-mHDFK4yznd4vVYUaIGF8ciIDvAZEecqAM6uoddmVNqrQZMo7N56y5qZA2pxDwej9rIqof6F51HHTNWgg52Vwsg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.testplatform.testhost",
-        "version": "18.11.0",
-        "integrity": "sha512-3UALTneLPt/HPLwd9/a1/8uCV1Y+9u0S2wKNvtsi+9SMFtI278rhTEjyByHc+Kf/lQGyVMiD/OfAxo1tSTJsFA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "microsoft.win32.registry",
-        "version": "5.0.0",
-        "integrity": "sha512-Rx5mVnzlnMhkda7OeBXQUmEmTOEU4MFoi6JVHdUUlJAfpy3XqPdPjo8PPbp0r4WV8XdVLzwGq7S/znZpIZcHbg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "system.diagnostics.eventlog",
-        "version": "10.0.14",
-        "integrity": "sha512-WZsvZuSO/NFiSI1rb5eNgBGhM9Ipnaxr2pVdOSkWhOIJLVIiByYY6xoQcRQ+DhM+H+uu/f13xkkDkoL9On/A3w=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "system.identitymodel.tokens.jwt",
-        "version": "8.19.2",
-        "integrity": "sha512-DXewKSmxxRBuvUOd2aG/TAZafCVR6VcqLD0AJAG74wwoDLqukwTPGa0I2SOItZdhXuz43Mfiog1BSpHAC8SVkg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "system.security.accesscontrol",
-        "version": "6.0.1",
-        "integrity": "sha512-4b66cLRfjMWuBv3s82Xwu1tYua9tfHmsz+8VtafHu+9l4Qz58plBjrQTqshv/vqg6rnZFlDOd8w5jTkPBZftQg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.analyzers",
-        "version": "2.2.0",
-        "integrity": "sha512-oGNwquEwEWjZ+Y1Hkkn89NXHZfZ89QT2lWQ4qZ62q5SlNXANwMfdT7FK0v/7AMR2gHOrzlQpgp1GHKpZhmCbhw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.runner.visualstudio",
-        "version": "4.0.1",
-        "integrity": "sha512-P2zvJo7h/2dbxht2sXqy2KgyLCgvZ5azSP3M6XkdGuVEjTjT1aIFrM/cX/DRJGoNduNJJVmNG63eBEVZEV6rlw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3",
-        "version": "4.0.2",
-        "integrity": "sha512-jPqJKMQnhWCysQkAPjU8E4t3ejl/EOCd3ENcU/biyvtNuRncK+fDFDEw4Ixp6Gh83k5f5FBTH/RzTxaY18jSQg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.assert",
-        "version": "4.0.2",
-        "integrity": "sha512-/LNPM/flmirdCeQpvnBjG+cqmmJfwDmZMOcEdPTOpe/m5H4YUhQqvZpt7qc6LZ7RZMH3ILxDRWQPuiNQMdGStw=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.common",
-        "version": "4.0.2",
-        "integrity": "sha512-DUTzm+tsHSksbFHpweqmuZzJLdUGub/3eATQsuMT7nGGQLTbhAomkFbJ8pTC1BfVjTMldZvJsmK881YRNiAyYA=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.core.mtp-v2",
-        "version": "4.0.2",
-        "integrity": "sha512-u5fn3bF2TZwvJiHA10nDL8FulIPZGdUzaFhP4K2tcK1Rf+ioEZPR2zRxwal1x6BL8qnBLYkjB3SjhuCZOq71lQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.extensibility.core",
-        "version": "4.0.2",
-        "integrity": "sha512-ykwWImyXV4nRDceLmylynYSoD+gP/Cs8KTDIhiG+n8H0jlOJXseC3oTYUaCOOZtn2R0XiGCt9/qT7gcfFlqqhQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.mtp-v2",
-        "version": "4.0.2",
-        "integrity": "sha512-OesFiVVe38QnAO3W7WhSvq1l7rNFS/Kf9ioQXmQ4zkV6fRAsI+RhWz1apRw6s70K2BLk4lq6ql10FKNeAkOyUQ=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.runner.common",
-        "version": "4.0.2",
-        "integrity": "sha512-yqAKEnxozX74OKRRUchG/QVFdwhchqUKiym6wme6hTzbHhGy1kgmBZHXgH0y+etUxLJFCY2Q+F8vk4ce0RAxlg=="
-      },
-      {
-        "ecosystem": "nuget",
-        "name": "xunit.v3.runner.inproc.console",
-        "version": "4.0.2",
-        "integrity": "sha512-xy9wIIPRqkaxu3c6RIBd9vZEPSLf8mZP/kWs8gdaMINwpBZNtis6ceKR0gYkHVEBtzW4640r58b9qO87hhsG8g=="
-      }
-    ],
-    "manifestSha256": "2e897fc5db4ded367bced1478f4d0a260d1b3277f75bbf6cd58c9d0b03acc002",
-    "resolved": {
-      "HOSTING": "10.0.14",
-      "JWT_BEARER": "10.0.14",
-      "XUNIT": "4.0.2",
-      "XUNIT_VS": "4.0.1",
-      "TEST_SDK": "18.11.0"
-    },
-    "steps": [
-      {
-        "argv": [
-          "dotnet",
-          "--version"
-        ],
-        "stdout": "10.0.403"
-      },
-      {
-        "argv": [
-          "dotnet",
-          "build",
-          "Snap.slnx",
-          "-c",
-          "Release",
-          "--nologo",
-          "-m:4",
-          "-nr:false",
-          "-p:SnapHostingVersion=10.0.14",
-          "-p:SnapJwtBearerVersion=10.0.14",
-          "-p:SnapXunitVersion=4.0.2",
-          "-p:SnapXunitVsVersion=4.0.1",
-          "-p:SnapTestSdkVersion=18.11.0"
-        ],
-        "stdout": null
-      },
-      {
-        "argv": [
-          "dotnet",
-          "tests/SnapTests/bin/Release/net10.0/SnapTests.dll"
-        ],
-        "stdout": null
-      }
-    ],
-    "recipeSha256": "7bea0d3b107f5d26bd4d2bd09c0934870f26f473f48762bf2fab2e9fecf56f23",
-    "projectSha256": "144b0d873b666ad30a36f77af12aaa3fa4cec3dd00060cd95263d8a73c1f62bf",
-    "madeOn": "2026-11-04"
-  },
   "node": {
     "treeSha256": "bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6",
     "dirName": "node-bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6",
@@ -1478,5 +1062,864 @@
     "recipeSha256": "7bea0d3b107f5d26bd4d2bd09c0934870f26f473f48762bf2fab2e9fecf56f23",
     "projectSha256": null,
     "madeOn": "2026-11-04"
+  },
+  "superseded": [
+    {
+      "stack": "csharp",
+      "supersededOn": "2026-11-07",
+      "reason": "F1.S3 (a), change 7.1: Microsoft.AspNetCore.Mvc.Testing joins the C# offered set (the in-memory test host of ASP.NET Core tests), so the C# snapshot is made again from the recipe that offers it",
+      "record": {
+        "treeSha256": "452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee",
+        "dirName": "csharp-452c7a571ec0d11b2ab9d8fe4b038b9d3076374f5d0503d94a8e596378cf0cee",
+        "parts": {
+          "nuget": "a245bc0eda568b4457e13b24d270ec5a2014018e5e4fad0ad7c063a84e92bbca",
+          "dotnet": "57eefb6d8f3b927708de46ef6dc05818eebba35b94abe9ff48476b33479cf03b"
+        },
+        "sizeBytes": 174187832,
+        "packages": [
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.applicationinsights",
+            "version": "2.23.0",
+            "integrity": "sha512-3Ul7+tDGXlSk940qFkTz0IVNTNAd2DulBvjV1TY14oFSx8EyEN1d05hXgKqxRqdiDePrrq2O8SxvhwiGdsIVfw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.aspnetcore.authentication.jwtbearer",
+            "version": "10.0.14",
+            "integrity": "sha512-grRJez5fL54zGx5wD6Onnjt1BLXsNJgkximGqw3+jR1K9EN7TIny8iSNXyscfbrlc0fsnuRhZ/fgOSHVHYuu1Q=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.bcl.asyncinterfaces",
+            "version": "6.0.0",
+            "integrity": "sha512-IhoFoMkQ96h7Yg2PODHtOStOuV0RK+4nTTXycAmtKiZEXenXzSNf5vtKA/JVCHS9o7493dlu2vnAhSqcI9ewmQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.bcl.cryptography",
+            "version": "10.0.2",
+            "integrity": "sha512-rbP/krRdXXVG10QyWH0rWa5+0qP5Rob8VZDKno910kHnDcmH9XdFbBtdedO5pVVlpA1y2MXWx360zLLNLctJ+Q=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.codecoverage",
+            "version": "18.11.0",
+            "integrity": "sha512-N6vk+NslyMSCN2lUYaqAF0MBnBv/EMbhDjytGrl7bClh2YrzjdhmT3Dzjo0HC2bEN/LoNdgbuhRDbKeDU8E0GQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration",
+            "version": "10.0.14",
+            "integrity": "sha512-bOc8UecSDd09S2pOsrsziUCuxfZLGN33vvUgLrSnC+6G96CpUci6oYFg4dGVD1Yq33npcIXlk6zvjvnACe1Mxg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-BZhMkmPS3MrQnKFLXGmDS/geiUeLW2pN9sdRiLAsxf2gynmSQtqVrkPbCtAZtQ/G9qI50r9zTrh0ofJF+rYb2w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.binder",
+            "version": "10.0.14",
+            "integrity": "sha512-kKD6iek6peqP93if4iGVFauSt1Lk/iSPgKwCmjU8Ddl6HYeMmu3hON3Qo5VU2aBr8S77ecIk7T1yjfTrNlFLJg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.commandline",
+            "version": "10.0.14",
+            "integrity": "sha512-a7hK5/outIEY0F5wUFyrDT39KXCgSt/AMa3jl5rlFvKFzEzZwyt2ohRcMSh7v9VUY8wZxJz4yj+BEmjy8XTTRg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.environmentvariables",
+            "version": "10.0.14",
+            "integrity": "sha512-sSK7aQwmLGUT9zeooT7uj3G4kYwwiorFSfFaX1fAEkq6ZXpxbC3p1nWY+4DRYxa3gMH7MZKAeqT4ZIPzPJ4ulA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.fileextensions",
+            "version": "10.0.14",
+            "integrity": "sha512-uhfmENaa9nhAlu8rqIbh7q0b7TPb1MewnkxcB9Rci/x4HD3SIUQvxxySfcpHtTjI9GlfGLg7vNW4ehO2gYqHzw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.json",
+            "version": "10.0.14",
+            "integrity": "sha512-e6s+msTbrfZTlqkbvwyjQwk9fgTdnRRXwwELlrygOO75Ppvk5uA8YRnbLGHvCcbWk3cdwY1cP8bPYYh5fwdSsg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.configuration.usersecrets",
+            "version": "10.0.14",
+            "integrity": "sha512-2cOPepaxI7v3ExF50djtCN0BpuUBWMjpS35dOxFtqT4fovJT8SZwD0cbsm8Rp5pEkNy0lehJd7YZ45uXBG0H9w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.dependencyinjection",
+            "version": "10.0.14",
+            "integrity": "sha512-1+/NPfu9dMgYhNlndjKMxmCycnT29xLUwb0LRqauXXStVi4U0FqSBlqqR6vXtjL0alzLDSMSCpvro3aknqv/RA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.dependencyinjection.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-Di8PFxjp08vKyonp2pbr2F0SvkWJt3B9v7H/5NESNUebvQJrE4usSVdSTM6nVIQr7cF6obpSm5hXDMU3+X50Og=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.diagnostics",
+            "version": "10.0.14",
+            "integrity": "sha512-1F1uOSNya1FG3RyNwrnFewNnM3jpdDxruLwuxl1F8+8tWsNI7ngo+97LN/MhWAQn/0gWYOdell4saBEQU/68mg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.diagnostics.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-yNfMpoudaSRuRiJMBuveoVtv4HVqvq2VsIBdnIJkfZy+bpIY0cOLt6ZWlTB/bLWknCSA+/Cfrt4SCDOPVjFFsA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.fileproviders.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-//+jj6ugVyJL2ESYBCI54P7PWMjnhCBIOpf5nSiP41870KQBUsIx0VS+YaEY8ZTDJO94rWqeAEkTf8Uj7qDcpQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.fileproviders.physical",
+            "version": "10.0.14",
+            "integrity": "sha512-iNOnKVdGjRtVqkLMGIKgaP3EYO7bXwsS0s9fICSeeYQ70xqrrdjh9egD1LTcIQnT03XvZKEGXhHa0ofZnMr3iQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.filesystemglobbing",
+            "version": "10.0.14",
+            "integrity": "sha512-jXru4kAFOxj7Jed2UMsYb2QeVIqOPGz0Sp77crlNOpVibMzrayiwcsJ8Tpf89YiwxWiQ4bB89ilMrHr+zQECQw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.hosting",
+            "version": "10.0.14",
+            "integrity": "sha512-M4+Fs2oTDwgKoqGKhW10cn4nhdBSpnOSWndAA6Vag/cfeIExlJ0BExv/ony2dC6HgezY23uNOXXoZuxy6XAmpQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.hosting.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-nBmDCsT6B2NWjw6XlnxC7+iqQ9AskJxsqZ5AM8VGAXnRMXKYpqj5vNzvjkfVWsxScuZPVNbvZnnWKfRQiDrYYA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging",
+            "version": "10.0.14",
+            "integrity": "sha512-Su71SotCYl6sHUXga8IrkGkHGr+NekqPnXd3G+bqDOFuaZs31UprqYony4tEr4WcQOqiuMXsV+VLpDawi6bQSQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.abstractions",
+            "version": "8.0.0",
+            "integrity": "sha512-UKCt2W0w2QWA+44ColzqCqFfTSJ0Qnm1rP4YzIVot0QCqgYtXbE8xYh6CL/STgfLyIsvwQ7o7sLDft87zaf4pw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.abstractions",
+            "version": "10.0.14",
+            "integrity": "sha512-AxQQ1pBzZur4SkRixQSkXpbM3P/kBH9BS+XvOshgkjw0bha+981X62R9zvs1GD5W3AVCQNEfm5I8/hicDSTouQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.configuration",
+            "version": "10.0.14",
+            "integrity": "sha512-HL34Mpy5KNBb/QsMfd7WRIR4pVpB+HDX5Ek8zEuOKvqPj/q/sHGjWzfudbiE9JKMi1sJTy/s8w6HyjTdzQCKpA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.console",
+            "version": "10.0.14",
+            "integrity": "sha512-Px3s9ipWvInXXAaZNPGtgsOFRMTfFVLgzEs3cYGjr62W94xJUWbBuMTzc+9Rr4Zhh/29QIL3xAL5wphHzUBsoQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.debug",
+            "version": "10.0.14",
+            "integrity": "sha512-3kXa+h6PC/qIOG1zR03DhTkMnqslw8lh5w3ORMCy6CIuVqHGtLwLY6kR7vYrNP3UQAB63eIrjmqUJwgC9/Dxig=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.eventlog",
+            "version": "10.0.14",
+            "integrity": "sha512-umj0n2R/6WHV/JQ9hoov9TKtQRm8IFkFmboRmbUL4GbJeJx5jQAXA9BQa1rACmNfgliQ4znU2/hAS3aopA6JUQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.logging.eventsource",
+            "version": "10.0.14",
+            "integrity": "sha512-QnlQzLVHPtfnJxCF5LdU8s7fUYSv10bVywN7VhAX3OUn0t0yf4xsLpeqVt7WJ6NkDZvgt/9xaroEel//ephQjg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.options",
+            "version": "10.0.14",
+            "integrity": "sha512-NQJlE55aoetEJdcYHj0JMzw+P9b6ToDyWd3En1qnTg33cQpmAx0PSqcdo5KopJzfHWnU0sJTRp7RiYXSK7W9KA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.options.configurationextensions",
+            "version": "10.0.14",
+            "integrity": "sha512-KuCiZYUMwjbCmYegn6wgF5JkSb4SODFs90RF0Iq2Ull7b/RKZ3lv3VJ8HjscX9ZlVzz2XcWIBZrX+uMsekifFw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.extensions.primitives",
+            "version": "10.0.14",
+            "integrity": "sha512-iTALlkkPsiOteMMvtgCNYX5dLSBhD9I/5oa50ZbKI9V7ndwp9J/kCKGSdD0WEexFdm+vczMUdBdY2WOLrGl8mA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.abstractions",
+            "version": "8.19.2",
+            "integrity": "sha512-ASRJB/oHIKh2N45fTt/t/+p2WaKxWUfvjTrHUq2N39mON6wJTQTX2gwfZOtwWBM4FZ9I7uNi8rFNaynXbMYNsQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.jsonwebtokens",
+            "version": "8.19.2",
+            "integrity": "sha512-9kokzW5MVsHjANELTihcvrI48azhzhdFQW+oaEce2rD/sGe5Vf57BRQdXFIyDoWluxYh3vhe8aLQ3mg3BP983w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.logging",
+            "version": "8.19.2",
+            "integrity": "sha512-15BrxnYEFaE+3svU/8GB7EYQkOd+x0UdlqmNFoV3gY6vN/u4dg10NuXLoDSSUhxHPdc01cvKeoztwGvAw6Vhng=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.protocols",
+            "version": "8.19.2",
+            "integrity": "sha512-+OTRiYr9kxDvuGaNtPblS0ZlUcMmgF07YkPa+5lZ1wL7OXnXDeym29XQWiuKnimfnhkO7T4imtkA8dy46p44OQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.protocols.openidconnect",
+            "version": "8.19.2",
+            "integrity": "sha512-JMioo0XfC6Gk6Ui5Sbs9lSzkFkp78vjcxb7qtzRgK3k1BXB8Baegq/Sr/ROg00qkq99MsZZZt3mgDGdACFTv0w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.identitymodel.tokens",
+            "version": "8.19.2",
+            "integrity": "sha512-4rGCcWWvktrOG1esOPr2DMLJpxl9DjIAD943L8C8K8Rcsq30vnOG0IcFMlckuOMots/FHNSUJDxqsmo/EG6eBw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.net.test.sdk",
+            "version": "18.11.0",
+            "integrity": "sha512-5/af6+3vQ0OgRyL2cnS8hcI81kzJ4iveZ9VCnXw511ZDp1wz8SimgAwySsEg7pF4xXV4N+TwrHa8sLdkE5zUvg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testing.extensions.telemetry",
+            "version": "2.5.1",
+            "integrity": "sha512-H8IrMlaB5PWlgq5DK10cDledyH1KuVf3W7aJxg/H7voSDG9vz+a+Tng7+Xlzk8JLwnD76veM1VRPX+0W7S6j/g=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testing.extensions.trxreport.abstractions",
+            "version": "2.5.1",
+            "integrity": "sha512-/PtK+XveuP1hbPoL9duOfn/dj+uhjyxEIzyzpg1u2lw5T088TcJ1Qj8aK7Ziw6s0ZIgLSRbD1NRDW+9/SgOT2w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testing.platform",
+            "version": "2.5.1",
+            "integrity": "sha512-rNqtkMbcc4LtzZk1I79k5k3j8zlN5UlOz0umKecCrKfe2v4UgjMXDWtpjl3pzOkPwguZQIzQ1qKvOKYlq0fVIw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testing.platform.msbuild",
+            "version": "2.5.1",
+            "integrity": "sha512-fqf4pHVr6I2UDZoe80a/l7jGZ7BTfvMZs98PxWWFjGa8L1RC+FeGRFwNgibshQ8XmAv8f0rvYet2Me82Muf9bQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testplatform.objectmodel",
+            "version": "18.11.0",
+            "integrity": "sha512-mHDFK4yznd4vVYUaIGF8ciIDvAZEecqAM6uoddmVNqrQZMo7N56y5qZA2pxDwej9rIqof6F51HHTNWgg52Vwsg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.testplatform.testhost",
+            "version": "18.11.0",
+            "integrity": "sha512-3UALTneLPt/HPLwd9/a1/8uCV1Y+9u0S2wKNvtsi+9SMFtI278rhTEjyByHc+Kf/lQGyVMiD/OfAxo1tSTJsFA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "microsoft.win32.registry",
+            "version": "5.0.0",
+            "integrity": "sha512-Rx5mVnzlnMhkda7OeBXQUmEmTOEU4MFoi6JVHdUUlJAfpy3XqPdPjo8PPbp0r4WV8XdVLzwGq7S/znZpIZcHbg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "system.diagnostics.eventlog",
+            "version": "10.0.14",
+            "integrity": "sha512-WZsvZuSO/NFiSI1rb5eNgBGhM9Ipnaxr2pVdOSkWhOIJLVIiByYY6xoQcRQ+DhM+H+uu/f13xkkDkoL9On/A3w=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "system.identitymodel.tokens.jwt",
+            "version": "8.19.2",
+            "integrity": "sha512-DXewKSmxxRBuvUOd2aG/TAZafCVR6VcqLD0AJAG74wwoDLqukwTPGa0I2SOItZdhXuz43Mfiog1BSpHAC8SVkg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "system.security.accesscontrol",
+            "version": "6.0.1",
+            "integrity": "sha512-4b66cLRfjMWuBv3s82Xwu1tYua9tfHmsz+8VtafHu+9l4Qz58plBjrQTqshv/vqg6rnZFlDOd8w5jTkPBZftQg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.analyzers",
+            "version": "2.2.0",
+            "integrity": "sha512-oGNwquEwEWjZ+Y1Hkkn89NXHZfZ89QT2lWQ4qZ62q5SlNXANwMfdT7FK0v/7AMR2gHOrzlQpgp1GHKpZhmCbhw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.runner.visualstudio",
+            "version": "4.0.1",
+            "integrity": "sha512-P2zvJo7h/2dbxht2sXqy2KgyLCgvZ5azSP3M6XkdGuVEjTjT1aIFrM/cX/DRJGoNduNJJVmNG63eBEVZEV6rlw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3",
+            "version": "4.0.2",
+            "integrity": "sha512-jPqJKMQnhWCysQkAPjU8E4t3ejl/EOCd3ENcU/biyvtNuRncK+fDFDEw4Ixp6Gh83k5f5FBTH/RzTxaY18jSQg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.assert",
+            "version": "4.0.2",
+            "integrity": "sha512-/LNPM/flmirdCeQpvnBjG+cqmmJfwDmZMOcEdPTOpe/m5H4YUhQqvZpt7qc6LZ7RZMH3ILxDRWQPuiNQMdGStw=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.common",
+            "version": "4.0.2",
+            "integrity": "sha512-DUTzm+tsHSksbFHpweqmuZzJLdUGub/3eATQsuMT7nGGQLTbhAomkFbJ8pTC1BfVjTMldZvJsmK881YRNiAyYA=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.core.mtp-v2",
+            "version": "4.0.2",
+            "integrity": "sha512-u5fn3bF2TZwvJiHA10nDL8FulIPZGdUzaFhP4K2tcK1Rf+ioEZPR2zRxwal1x6BL8qnBLYkjB3SjhuCZOq71lQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.extensibility.core",
+            "version": "4.0.2",
+            "integrity": "sha512-ykwWImyXV4nRDceLmylynYSoD+gP/Cs8KTDIhiG+n8H0jlOJXseC3oTYUaCOOZtn2R0XiGCt9/qT7gcfFlqqhQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.mtp-v2",
+            "version": "4.0.2",
+            "integrity": "sha512-OesFiVVe38QnAO3W7WhSvq1l7rNFS/Kf9ioQXmQ4zkV6fRAsI+RhWz1apRw6s70K2BLk4lq6ql10FKNeAkOyUQ=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.runner.common",
+            "version": "4.0.2",
+            "integrity": "sha512-yqAKEnxozX74OKRRUchG/QVFdwhchqUKiym6wme6hTzbHhGy1kgmBZHXgH0y+etUxLJFCY2Q+F8vk4ce0RAxlg=="
+          },
+          {
+            "ecosystem": "nuget",
+            "name": "xunit.v3.runner.inproc.console",
+            "version": "4.0.2",
+            "integrity": "sha512-xy9wIIPRqkaxu3c6RIBd9vZEPSLf8mZP/kWs8gdaMINwpBZNtis6ceKR0gYkHVEBtzW4640r58b9qO87hhsG8g=="
+          }
+        ],
+        "manifestSha256": "2e897fc5db4ded367bced1478f4d0a260d1b3277f75bbf6cd58c9d0b03acc002",
+        "resolved": {
+          "HOSTING": "10.0.14",
+          "JWT_BEARER": "10.0.14",
+          "XUNIT": "4.0.2",
+          "XUNIT_VS": "4.0.1",
+          "TEST_SDK": "18.11.0"
+        },
+        "steps": [
+          {
+            "argv": [
+              "dotnet",
+              "--version"
+            ],
+            "stdout": "10.0.403"
+          },
+          {
+            "argv": [
+              "dotnet",
+              "build",
+              "Snap.slnx",
+              "-c",
+              "Release",
+              "--nologo",
+              "-m:4",
+              "-nr:false",
+              "-p:SnapHostingVersion=10.0.14",
+              "-p:SnapJwtBearerVersion=10.0.14",
+              "-p:SnapXunitVersion=4.0.2",
+              "-p:SnapXunitVsVersion=4.0.1",
+              "-p:SnapTestSdkVersion=18.11.0"
+            ],
+            "stdout": null
+          },
+          {
+            "argv": [
+              "dotnet",
+              "tests/SnapTests/bin/Release/net10.0/SnapTests.dll"
+            ],
+            "stdout": null
+          }
+        ],
+        "recipeSha256": "7bea0d3b107f5d26bd4d2bd09c0934870f26f473f48762bf2fab2e9fecf56f23",
+        "projectSha256": "144b0d873b666ad30a36f77af12aaa3fa4cec3dd00060cd95263d8a73c1f62bf",
+        "madeOn": "2026-11-04"
+      }
+    }
+  ],
+  "csharp": {
+    "treeSha256": "0b265e7c7e6553932102ebd2861285b47cbba73807a3d37c5e4507c03888ac9d",
+    "dirName": "csharp-0b265e7c7e6553932102ebd2861285b47cbba73807a3d37c5e4507c03888ac9d",
+    "parts": {
+      "nuget": "6850fb8204c3f121866fffe9ccbb77f2595748eeb50fe939d423ef739338448e",
+      "dotnet": "57eefb6d8f3b927708de46ef6dc05818eebba35b94abe9ff48476b33479cf03b"
+    },
+    "sizeBytes": 175784055,
+    "packages": [
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.applicationinsights",
+        "version": "2.23.0",
+        "integrity": "sha512-3Ul7+tDGXlSk940qFkTz0IVNTNAd2DulBvjV1TY14oFSx8EyEN1d05hXgKqxRqdiDePrrq2O8SxvhwiGdsIVfw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.aspnetcore.authentication.jwtbearer",
+        "version": "10.0.14",
+        "integrity": "sha512-grRJez5fL54zGx5wD6Onnjt1BLXsNJgkximGqw3+jR1K9EN7TIny8iSNXyscfbrlc0fsnuRhZ/fgOSHVHYuu1Q=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.aspnetcore.mvc.testing",
+        "version": "10.0.14",
+        "integrity": "sha512-4v0FDslYCyGoGI+95O9NFkNPpBtOOd3FGRYSREraPzDo7ZCEv/TJYCGVpUUcN68pzcscMqps42LUX+dQJucrbg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.aspnetcore.testhost",
+        "version": "10.0.14",
+        "integrity": "sha512-aG9Iw6quS2MtVj8Gf30yHPbpqTh0zhrt0j7SofSYkpFfkS0BLMuiv2SWWBW71TvNEvC/t5AfoY6QwAfVtvShoA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.bcl.asyncinterfaces",
+        "version": "6.0.0",
+        "integrity": "sha512-IhoFoMkQ96h7Yg2PODHtOStOuV0RK+4nTTXycAmtKiZEXenXzSNf5vtKA/JVCHS9o7493dlu2vnAhSqcI9ewmQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.bcl.cryptography",
+        "version": "10.0.2",
+        "integrity": "sha512-rbP/krRdXXVG10QyWH0rWa5+0qP5Rob8VZDKno910kHnDcmH9XdFbBtdedO5pVVlpA1y2MXWx360zLLNLctJ+Q=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.codecoverage",
+        "version": "18.11.0",
+        "integrity": "sha512-N6vk+NslyMSCN2lUYaqAF0MBnBv/EMbhDjytGrl7bClh2YrzjdhmT3Dzjo0HC2bEN/LoNdgbuhRDbKeDU8E0GQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration",
+        "version": "10.0.14",
+        "integrity": "sha512-bOc8UecSDd09S2pOsrsziUCuxfZLGN33vvUgLrSnC+6G96CpUci6oYFg4dGVD1Yq33npcIXlk6zvjvnACe1Mxg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-BZhMkmPS3MrQnKFLXGmDS/geiUeLW2pN9sdRiLAsxf2gynmSQtqVrkPbCtAZtQ/G9qI50r9zTrh0ofJF+rYb2w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.binder",
+        "version": "10.0.14",
+        "integrity": "sha512-kKD6iek6peqP93if4iGVFauSt1Lk/iSPgKwCmjU8Ddl6HYeMmu3hON3Qo5VU2aBr8S77ecIk7T1yjfTrNlFLJg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.commandline",
+        "version": "10.0.14",
+        "integrity": "sha512-a7hK5/outIEY0F5wUFyrDT39KXCgSt/AMa3jl5rlFvKFzEzZwyt2ohRcMSh7v9VUY8wZxJz4yj+BEmjy8XTTRg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.environmentvariables",
+        "version": "10.0.14",
+        "integrity": "sha512-sSK7aQwmLGUT9zeooT7uj3G4kYwwiorFSfFaX1fAEkq6ZXpxbC3p1nWY+4DRYxa3gMH7MZKAeqT4ZIPzPJ4ulA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.fileextensions",
+        "version": "10.0.14",
+        "integrity": "sha512-uhfmENaa9nhAlu8rqIbh7q0b7TPb1MewnkxcB9Rci/x4HD3SIUQvxxySfcpHtTjI9GlfGLg7vNW4ehO2gYqHzw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.json",
+        "version": "10.0.14",
+        "integrity": "sha512-e6s+msTbrfZTlqkbvwyjQwk9fgTdnRRXwwELlrygOO75Ppvk5uA8YRnbLGHvCcbWk3cdwY1cP8bPYYh5fwdSsg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.configuration.usersecrets",
+        "version": "10.0.14",
+        "integrity": "sha512-2cOPepaxI7v3ExF50djtCN0BpuUBWMjpS35dOxFtqT4fovJT8SZwD0cbsm8Rp5pEkNy0lehJd7YZ45uXBG0H9w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.dependencyinjection",
+        "version": "10.0.14",
+        "integrity": "sha512-1+/NPfu9dMgYhNlndjKMxmCycnT29xLUwb0LRqauXXStVi4U0FqSBlqqR6vXtjL0alzLDSMSCpvro3aknqv/RA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.dependencyinjection.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-Di8PFxjp08vKyonp2pbr2F0SvkWJt3B9v7H/5NESNUebvQJrE4usSVdSTM6nVIQr7cF6obpSm5hXDMU3+X50Og=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.dependencymodel",
+        "version": "10.0.14",
+        "integrity": "sha512-p+n6ZXOU43PiNX8IHkeBr6+13iZ1tuU47coVTsOY24KZb5eEAaZ4hax7vPOPUQvHIn9noGC8wWm46Fi5tYbQYA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.diagnostics",
+        "version": "10.0.14",
+        "integrity": "sha512-1F1uOSNya1FG3RyNwrnFewNnM3jpdDxruLwuxl1F8+8tWsNI7ngo+97LN/MhWAQn/0gWYOdell4saBEQU/68mg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.diagnostics.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-yNfMpoudaSRuRiJMBuveoVtv4HVqvq2VsIBdnIJkfZy+bpIY0cOLt6ZWlTB/bLWknCSA+/Cfrt4SCDOPVjFFsA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.fileproviders.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-//+jj6ugVyJL2ESYBCI54P7PWMjnhCBIOpf5nSiP41870KQBUsIx0VS+YaEY8ZTDJO94rWqeAEkTf8Uj7qDcpQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.fileproviders.physical",
+        "version": "10.0.14",
+        "integrity": "sha512-iNOnKVdGjRtVqkLMGIKgaP3EYO7bXwsS0s9fICSeeYQ70xqrrdjh9egD1LTcIQnT03XvZKEGXhHa0ofZnMr3iQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.filesystemglobbing",
+        "version": "10.0.14",
+        "integrity": "sha512-jXru4kAFOxj7Jed2UMsYb2QeVIqOPGz0Sp77crlNOpVibMzrayiwcsJ8Tpf89YiwxWiQ4bB89ilMrHr+zQECQw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.hosting",
+        "version": "10.0.14",
+        "integrity": "sha512-M4+Fs2oTDwgKoqGKhW10cn4nhdBSpnOSWndAA6Vag/cfeIExlJ0BExv/ony2dC6HgezY23uNOXXoZuxy6XAmpQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.hosting.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-nBmDCsT6B2NWjw6XlnxC7+iqQ9AskJxsqZ5AM8VGAXnRMXKYpqj5vNzvjkfVWsxScuZPVNbvZnnWKfRQiDrYYA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging",
+        "version": "10.0.14",
+        "integrity": "sha512-Su71SotCYl6sHUXga8IrkGkHGr+NekqPnXd3G+bqDOFuaZs31UprqYony4tEr4WcQOqiuMXsV+VLpDawi6bQSQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.abstractions",
+        "version": "8.0.0",
+        "integrity": "sha512-UKCt2W0w2QWA+44ColzqCqFfTSJ0Qnm1rP4YzIVot0QCqgYtXbE8xYh6CL/STgfLyIsvwQ7o7sLDft87zaf4pw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.abstractions",
+        "version": "10.0.14",
+        "integrity": "sha512-AxQQ1pBzZur4SkRixQSkXpbM3P/kBH9BS+XvOshgkjw0bha+981X62R9zvs1GD5W3AVCQNEfm5I8/hicDSTouQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.configuration",
+        "version": "10.0.14",
+        "integrity": "sha512-HL34Mpy5KNBb/QsMfd7WRIR4pVpB+HDX5Ek8zEuOKvqPj/q/sHGjWzfudbiE9JKMi1sJTy/s8w6HyjTdzQCKpA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.console",
+        "version": "10.0.14",
+        "integrity": "sha512-Px3s9ipWvInXXAaZNPGtgsOFRMTfFVLgzEs3cYGjr62W94xJUWbBuMTzc+9Rr4Zhh/29QIL3xAL5wphHzUBsoQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.debug",
+        "version": "10.0.14",
+        "integrity": "sha512-3kXa+h6PC/qIOG1zR03DhTkMnqslw8lh5w3ORMCy6CIuVqHGtLwLY6kR7vYrNP3UQAB63eIrjmqUJwgC9/Dxig=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.eventlog",
+        "version": "10.0.14",
+        "integrity": "sha512-umj0n2R/6WHV/JQ9hoov9TKtQRm8IFkFmboRmbUL4GbJeJx5jQAXA9BQa1rACmNfgliQ4znU2/hAS3aopA6JUQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.logging.eventsource",
+        "version": "10.0.14",
+        "integrity": "sha512-QnlQzLVHPtfnJxCF5LdU8s7fUYSv10bVywN7VhAX3OUn0t0yf4xsLpeqVt7WJ6NkDZvgt/9xaroEel//ephQjg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.options",
+        "version": "10.0.14",
+        "integrity": "sha512-NQJlE55aoetEJdcYHj0JMzw+P9b6ToDyWd3En1qnTg33cQpmAx0PSqcdo5KopJzfHWnU0sJTRp7RiYXSK7W9KA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.options.configurationextensions",
+        "version": "10.0.14",
+        "integrity": "sha512-KuCiZYUMwjbCmYegn6wgF5JkSb4SODFs90RF0Iq2Ull7b/RKZ3lv3VJ8HjscX9ZlVzz2XcWIBZrX+uMsekifFw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.extensions.primitives",
+        "version": "10.0.14",
+        "integrity": "sha512-iTALlkkPsiOteMMvtgCNYX5dLSBhD9I/5oa50ZbKI9V7ndwp9J/kCKGSdD0WEexFdm+vczMUdBdY2WOLrGl8mA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.abstractions",
+        "version": "8.19.2",
+        "integrity": "sha512-ASRJB/oHIKh2N45fTt/t/+p2WaKxWUfvjTrHUq2N39mON6wJTQTX2gwfZOtwWBM4FZ9I7uNi8rFNaynXbMYNsQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.jsonwebtokens",
+        "version": "8.19.2",
+        "integrity": "sha512-9kokzW5MVsHjANELTihcvrI48azhzhdFQW+oaEce2rD/sGe5Vf57BRQdXFIyDoWluxYh3vhe8aLQ3mg3BP983w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.logging",
+        "version": "8.19.2",
+        "integrity": "sha512-15BrxnYEFaE+3svU/8GB7EYQkOd+x0UdlqmNFoV3gY6vN/u4dg10NuXLoDSSUhxHPdc01cvKeoztwGvAw6Vhng=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.protocols",
+        "version": "8.19.2",
+        "integrity": "sha512-+OTRiYr9kxDvuGaNtPblS0ZlUcMmgF07YkPa+5lZ1wL7OXnXDeym29XQWiuKnimfnhkO7T4imtkA8dy46p44OQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.protocols.openidconnect",
+        "version": "8.19.2",
+        "integrity": "sha512-JMioo0XfC6Gk6Ui5Sbs9lSzkFkp78vjcxb7qtzRgK3k1BXB8Baegq/Sr/ROg00qkq99MsZZZt3mgDGdACFTv0w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.identitymodel.tokens",
+        "version": "8.19.2",
+        "integrity": "sha512-4rGCcWWvktrOG1esOPr2DMLJpxl9DjIAD943L8C8K8Rcsq30vnOG0IcFMlckuOMots/FHNSUJDxqsmo/EG6eBw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.net.test.sdk",
+        "version": "18.11.0",
+        "integrity": "sha512-5/af6+3vQ0OgRyL2cnS8hcI81kzJ4iveZ9VCnXw511ZDp1wz8SimgAwySsEg7pF4xXV4N+TwrHa8sLdkE5zUvg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testing.extensions.telemetry",
+        "version": "2.5.1",
+        "integrity": "sha512-H8IrMlaB5PWlgq5DK10cDledyH1KuVf3W7aJxg/H7voSDG9vz+a+Tng7+Xlzk8JLwnD76veM1VRPX+0W7S6j/g=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testing.extensions.trxreport.abstractions",
+        "version": "2.5.1",
+        "integrity": "sha512-/PtK+XveuP1hbPoL9duOfn/dj+uhjyxEIzyzpg1u2lw5T088TcJ1Qj8aK7Ziw6s0ZIgLSRbD1NRDW+9/SgOT2w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testing.platform",
+        "version": "2.5.1",
+        "integrity": "sha512-rNqtkMbcc4LtzZk1I79k5k3j8zlN5UlOz0umKecCrKfe2v4UgjMXDWtpjl3pzOkPwguZQIzQ1qKvOKYlq0fVIw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testing.platform.msbuild",
+        "version": "2.5.1",
+        "integrity": "sha512-fqf4pHVr6I2UDZoe80a/l7jGZ7BTfvMZs98PxWWFjGa8L1RC+FeGRFwNgibshQ8XmAv8f0rvYet2Me82Muf9bQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testplatform.objectmodel",
+        "version": "18.11.0",
+        "integrity": "sha512-mHDFK4yznd4vVYUaIGF8ciIDvAZEecqAM6uoddmVNqrQZMo7N56y5qZA2pxDwej9rIqof6F51HHTNWgg52Vwsg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.testplatform.testhost",
+        "version": "18.11.0",
+        "integrity": "sha512-3UALTneLPt/HPLwd9/a1/8uCV1Y+9u0S2wKNvtsi+9SMFtI278rhTEjyByHc+Kf/lQGyVMiD/OfAxo1tSTJsFA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "microsoft.win32.registry",
+        "version": "5.0.0",
+        "integrity": "sha512-Rx5mVnzlnMhkda7OeBXQUmEmTOEU4MFoi6JVHdUUlJAfpy3XqPdPjo8PPbp0r4WV8XdVLzwGq7S/znZpIZcHbg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "system.diagnostics.eventlog",
+        "version": "10.0.14",
+        "integrity": "sha512-WZsvZuSO/NFiSI1rb5eNgBGhM9Ipnaxr2pVdOSkWhOIJLVIiByYY6xoQcRQ+DhM+H+uu/f13xkkDkoL9On/A3w=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "system.identitymodel.tokens.jwt",
+        "version": "8.19.2",
+        "integrity": "sha512-DXewKSmxxRBuvUOd2aG/TAZafCVR6VcqLD0AJAG74wwoDLqukwTPGa0I2SOItZdhXuz43Mfiog1BSpHAC8SVkg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "system.security.accesscontrol",
+        "version": "6.0.1",
+        "integrity": "sha512-4b66cLRfjMWuBv3s82Xwu1tYua9tfHmsz+8VtafHu+9l4Qz58plBjrQTqshv/vqg6rnZFlDOd8w5jTkPBZftQg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.analyzers",
+        "version": "2.2.0",
+        "integrity": "sha512-oGNwquEwEWjZ+Y1Hkkn89NXHZfZ89QT2lWQ4qZ62q5SlNXANwMfdT7FK0v/7AMR2gHOrzlQpgp1GHKpZhmCbhw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.runner.visualstudio",
+        "version": "4.0.1",
+        "integrity": "sha512-P2zvJo7h/2dbxht2sXqy2KgyLCgvZ5azSP3M6XkdGuVEjTjT1aIFrM/cX/DRJGoNduNJJVmNG63eBEVZEV6rlw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3",
+        "version": "4.0.2",
+        "integrity": "sha512-jPqJKMQnhWCysQkAPjU8E4t3ejl/EOCd3ENcU/biyvtNuRncK+fDFDEw4Ixp6Gh83k5f5FBTH/RzTxaY18jSQg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.assert",
+        "version": "4.0.2",
+        "integrity": "sha512-/LNPM/flmirdCeQpvnBjG+cqmmJfwDmZMOcEdPTOpe/m5H4YUhQqvZpt7qc6LZ7RZMH3ILxDRWQPuiNQMdGStw=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.common",
+        "version": "4.0.2",
+        "integrity": "sha512-DUTzm+tsHSksbFHpweqmuZzJLdUGub/3eATQsuMT7nGGQLTbhAomkFbJ8pTC1BfVjTMldZvJsmK881YRNiAyYA=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.core.mtp-v2",
+        "version": "4.0.2",
+        "integrity": "sha512-u5fn3bF2TZwvJiHA10nDL8FulIPZGdUzaFhP4K2tcK1Rf+ioEZPR2zRxwal1x6BL8qnBLYkjB3SjhuCZOq71lQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.extensibility.core",
+        "version": "4.0.2",
+        "integrity": "sha512-ykwWImyXV4nRDceLmylynYSoD+gP/Cs8KTDIhiG+n8H0jlOJXseC3oTYUaCOOZtn2R0XiGCt9/qT7gcfFlqqhQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.mtp-v2",
+        "version": "4.0.2",
+        "integrity": "sha512-OesFiVVe38QnAO3W7WhSvq1l7rNFS/Kf9ioQXmQ4zkV6fRAsI+RhWz1apRw6s70K2BLk4lq6ql10FKNeAkOyUQ=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.runner.common",
+        "version": "4.0.2",
+        "integrity": "sha512-yqAKEnxozX74OKRRUchG/QVFdwhchqUKiym6wme6hTzbHhGy1kgmBZHXgH0y+etUxLJFCY2Q+F8vk4ce0RAxlg=="
+      },
+      {
+        "ecosystem": "nuget",
+        "name": "xunit.v3.runner.inproc.console",
+        "version": "4.0.2",
+        "integrity": "sha512-xy9wIIPRqkaxu3c6RIBd9vZEPSLf8mZP/kWs8gdaMINwpBZNtis6ceKR0gYkHVEBtzW4640r58b9qO87hhsG8g=="
+      }
+    ],
+    "manifestSha256": "d0cae8af75b56499743eabb5e03b919e5a1bb83299329592271252fa6b8601fd",
+    "resolved": {
+      "HOSTING": "10.0.14",
+      "JWT_BEARER": "10.0.14",
+      "MVC_TESTING": "10.0.14",
+      "XUNIT": "4.0.2",
+      "XUNIT_VS": "4.0.1",
+      "TEST_SDK": "18.11.0"
+    },
+    "steps": [
+      {
+        "argv": [
+          "dotnet",
+          "--version"
+        ],
+        "stdout": "10.0.403"
+      },
+      {
+        "argv": [
+          "dotnet",
+          "build",
+          "Snap.slnx",
+          "-c",
+          "Release",
+          "--nologo",
+          "-m:4",
+          "-nr:false",
+          "-p:SnapHostingVersion=10.0.14",
+          "-p:SnapJwtBearerVersion=10.0.14",
+          "-p:SnapMvcTestingVersion=10.0.14",
+          "-p:SnapXunitVersion=4.0.2",
+          "-p:SnapXunitVsVersion=4.0.1",
+          "-p:SnapTestSdkVersion=18.11.0"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "dotnet",
+          "tests/SnapTests/bin/Release/net10.0/SnapTests.dll"
+        ],
+        "stdout": null
+      }
+    ],
+    "recipeSha256": "7c5679ca630a2dc88fc0889eb97b5a872a2fd54755f65552734f2ad401fe23fe",
+    "projectSha256": "3e74b9b3a8713706e39cf665999cfd3742031b8b29e2c0e9d034344c6e5fe447",
+    "madeOn": "2026-11-07"
   }
 }

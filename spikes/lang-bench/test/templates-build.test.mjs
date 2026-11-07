@@ -12,6 +12,7 @@ import { findStackFolderFiles } from '../lib/push-visible.mjs';
 import { scanText } from '../lib/push-scan.mjs';
 import { computePin } from '../lib/runner-pin.mjs';
 import { CSHARP_PINS, diffTaskPair } from '../lib/workspace-diff.mjs';
+import { isOffered } from '../lib/package-matrix.mjs';
 import { PINNED_TASK_SHA } from '../lib/task-repo.mjs';
 import { buildWorkspace, loadInputs, runnerHash, stackFilePatterns } from '../lib/workspace-build.mjs';
 import { edit, FORMAT_TEXT, realDraft, sha256 } from './support/format-fixtures.mjs';
@@ -76,14 +77,17 @@ const SAME = Object.freeze({ csharp: ['App.csproj'], node: ['package-lock.json',
 /** The paths where the built workspaces of the kinds differ in bytes or presence, over every file but the three of `SAME`. */
 function kindProblems(stack, dirs) {
   const names = [...new Set(dirs.flatMap(filesUnder))].sort();
-  return names.filter(rel => !SAME[stack].includes(rel)).filter(rel => new Set(dirs.map(d => (existsSync(path.join(d, rel)) ? sha256(readFileSync(path.join(d, rel))) : null))).size > 1).map(rel => `${rel} differs between the kinds`);
+  return names.filter(rel => !SAME[stack].includes(rel) && rel !== 'PACKAGES.md').filter(rel => new Set(dirs.map(d => (existsSync(path.join(d, rel)) ? sha256(readFileSync(path.join(d, rel))) : null))).size > 1).map(rel => `${rel} differs between the kinds`);
 }
 
 test('The_kinds_of_a_stack_differ_only_in_the_listed_files', t => {
   for (const stack of STACKS) {
     const dirs = KINDS.map(kind => built(t, { stack, kind, statement: readFileSync(helloStatement('olympiad')), samplesDir: helloSamples('olympiad') }));
     assert.deepEqual(kindProblems(stack, dirs), [], `${stack}: only ${SAME[stack].join(' and ')} differ`);
-    assert.equal(new Set(dirs.map(d => sha256(readFileSync(path.join(d, 'PACKAGES.md'))))).size, 1, `${stack}: PACKAGES.md is byte-equal across the kinds (D47)`);
+    const packagesFiles = new Set(dirs.map(d => sha256(readFileSync(path.join(d, 'PACKAGES.md')))));
+    const matrix = realInputs().matrix;
+    const rowsDiffer = recipeRecord().stacks[stack].packages.some(p => KINDS.some(kind => isOffered(matrix, stack, p.name, kind) !== isOffered(matrix, stack, p.name, KINDS[0])));
+    assert.equal(packagesFiles.size > 1, rowsDiffer, `${stack}: PACKAGES.md differs between the kinds exactly where the matrix does`);
     const planted = path.join(ownedFolder(t, 'copy'), 'w');
     cpSync(dirs[1], planted, { recursive: true });
     writeFileSync(path.join(planted, 'build.sh'), `${read(path.join(planted, 'build.sh'))}echo changed\n`);
@@ -337,7 +341,7 @@ test('The_packages_list_is_the_renderers_output', t => {
   const inputs = realInputs();
   for (const stack of STACKS) {
     const out = built(t, { stack });
-    const rendered = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
+    const rendered = renderPackagesMd({ stack, kind: 'olympiad', record: inputs.record, recipe: inputs.recipe, matrix: inputs.matrix });
     assert.equal(rendered.ok, true, rendered.reason);
     assert.equal(read(path.join(out, 'PACKAGES.md')), rendered.value, stack);
   }
