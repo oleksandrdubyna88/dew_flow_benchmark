@@ -478,8 +478,8 @@ validation package). If F1's stories writer marks F1.S2 and F1.S3 separately, th
   then the other five in parallel. *Accepted when:* per task, the package record in the private area and a public line of
   counts only.
 - **F2.S2 — one freeze** (replaces the per-group freezes and CP3/CP4): one tag, `spec-frozen-B-<yyyymmdd>`, over the six specs
-  and FORMAT; the letter B is the one FORMAT and the checker already give these six tasks (FORMAT 1.2's `Freeze tag` row,
-  `lib/conformance-check-structure.mjs`), so neither changes, and no `-A-` tag is made in Stage 1. The spec hashes in
+  and FORMAT; FORMAT and the checker allow only the letters A and B (FORMAT 1.2's `Freeze tag` row,
+  `lib/conformance-check-structure.mjs` on the pins branch), and B was these six tasks' group under D44, so neither changes, and no `-A-` tag is made in Stage 1. The spec hashes in
   `inputs/specs.json`; the held-out tree hashes and the trap table's hash registered; the six workspaces written (E1.S3
   phase B) and their workspace commit named (D67 (3)); `workspace-diff` and the push check clean; the tag ruleset and
   `main`'s protection on the task repository, from `feat/lang-v2-e1-s7-rulesets` (the owner's go of 2026-11-05 covers the
