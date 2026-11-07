@@ -2,6 +2,7 @@
 // of the task's FORMAT, `PACKAGES.md` derived from the registered v2 snapshot, the spec as `STATEMENT.md` with the stack sentence (and, for a web task, the framework sentence) on their marked lines, and the
 // visible samples of the spec's section 6. Pure but for reading the templates, the runner and the lang-bench inputs. A file map `{ relPath: { bytes, mode } }` is the same shape the olympiad workspace uses, so
 // `fillWorkspace`, `frozenChanges` and `restoreFrozen` serve both.
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +52,18 @@ function filesOf(root, prefix, modeOf) {
 export function packagesInputs() {
   const loaded = loadInputs();
   return loaded.ok ? ok({ record: loaded.value.record, recipe: loaded.value.recipe, matrix: loaded.value.matrix }) : loaded;
+}
+
+/** The sha256 of the `PACKAGES.md` each stack gets for a task of `kind`, from today's record, recipe and matrix: a series records it at `init`, so a later scoring knows the file as the session had it. -> `ok({ csharp, node })` | `fail`. */
+export function packagesMdHashes({ kind, inputs = packagesInputs() }) {
+  if (!inputs.ok) return inputs;
+  const hashes = {};
+  for (const stack of ['csharp', 'node']) {
+    const text = renderPackagesMd({ stack, kind, record: inputs.value.record, recipe: inputs.value.recipe, matrix: inputs.value.matrix });
+    if (!text.ok) return fail(`PACKAGES.md of ${stack}/${kind}: ${text.reason}`);
+    hashes[stack] = createHash('sha256').update(text.value).digest('hex');
+  }
+  return ok(hashes);
 }
 
 /**

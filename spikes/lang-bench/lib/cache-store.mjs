@@ -51,9 +51,9 @@ export function checkManifestMatches(manifest, listed) {
 export const manifestSha256Of = manifest => createHash('sha256').update(JSON.stringify(sortPackages(manifest).map(p => [p.ecosystem, p.name, p.version, p.integrity]))).digest('hex');
 
 /** The record of one registered stack (`inputs/cache-snapshots-lang.json`), built from what the maker returned and the manifest; `registerSnapshot` adds `madeOn`. */
-export function buildRecord({ snapshot, manifest, recipeSha256, projectSha256 }) {
+export function buildRecord({ snapshot, manifest, recipeSha256, stackRecipeSha256, projectSha256 }) {
   const base = snapshotRecord(snapshot);
-  return { treeSha256: base.treeSha256, dirName: path.basename(snapshot.dir), parts: base.parts, sizeBytes: base.sizeBytes, packages: manifest, manifestSha256: manifestSha256Of(manifest), resolved: base.resolved, steps: base.steps, recipeSha256, projectSha256 };
+  return { treeSha256: base.treeSha256, dirName: path.basename(snapshot.dir), parts: base.parts, sizeBytes: base.sizeBytes, packages: manifest, manifestSha256: manifestSha256Of(manifest), resolved: base.resolved, steps: base.steps, recipeSha256, ...(stackRecipeSha256 === undefined ? {} : { stackRecipeSha256 }), projectSha256 };
 }
 
 // ---- the staging sweep ---------------------------------------------------------------------------------------------------------
@@ -358,12 +358,12 @@ export function discardUnlessRecorded({ dir, stack, treeSha256, records }) {
   return { discarded: true };
 }
 
-function recordAndRegister({ made, stack, recipeSha256, projectSha256, file, madeOn }) {
+function recordAndRegister({ made, stack, recipeSha256, stackRecipeSha256, projectSha256, file, madeOn }) {
   const manifest = manifestOf(made.dir);
   if (!manifest.ok) return manifest;
   const matched = checkManifestMatches(manifest.value, made.packages);
   if (!matched.ok) return matched;
-  const record = buildRecord({ snapshot: made, manifest: manifest.value, recipeSha256, projectSha256 });
+  const record = buildRecord({ snapshot: made, manifest: manifest.value, recipeSha256, stackRecipeSha256, projectSha256 });
   const registered = registerSnapshot({ file, stack, record, madeOn });
   return registered.ok ? ok(record) : registered;
 }

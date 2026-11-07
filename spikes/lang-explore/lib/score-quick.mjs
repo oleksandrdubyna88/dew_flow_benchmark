@@ -15,6 +15,7 @@ import { boxBuild } from './build-quick.mjs';
 import { layerDirs } from './quick.mjs';
 import { contractIdentity } from './contract-identity.mjs';
 import { quickPristineCopy, splitFrozenChanges } from './copy-quick.mjs';
+import { driftDecider } from './template-drift.mjs';
 import { removeArea, scoreShape } from './score.mjs';
 
 export const OWNED_TOKEN = 'bench';
@@ -184,14 +185,15 @@ async function runStep({ a, copy, cases, owned, dirs }) {
 function prepare(a, area) {
   const copy = path.join(area, 'tree');
   const made = quickPristineCopy({ source: a.source, dest: copy, stack: a.stack, files: a.files });
-  const split = splitFrozenChanges(made.changed, a.driftPossible === true, { templateDrift: a.templateDriftPossible === true, stack: a.stack });
+  const decide = driftDecider({ stack: a.stack, kind: a.profile.kind, treeSha: made.treeSha, history: a.history });
+  const split = splitFrozenChanges(made.changed, { runnerDrift: a.driftPossible === true, decide });
   const cases = casesIn({ files: a.files, sets: a.sets, area, only: a.only });
-  return cases.ok ? ok({ copy, frozen: split.agent, drift: split.harness, left: made.left, cases: cases.value, identity: (a.contractIdentityFn ?? contractIdentity)() }) : cases;
+  return cases.ok ? ok({ copy, frozen: split.agent, drift: split.harness, undecided: split.undecided, left: made.left, cases: cases.value, identity: (a.contractIdentityFn ?? contractIdentity)() }) : cases;
 }
 
 /** The score with what only a quick copy knows: the harness drift in the frozen files (a rescore on a moved runner), the entries left out as non-source. Absent keys when there is nothing to say. */
 function finishScore(score, prep) {
-  const extra = { contractIdentity: prep.identity, ...(prep.drift.length > 0 ? { harnessDrift: prep.drift } : {}), ...(prep.left.length > 0 ? { nonRegularLeftOut: prep.left } : {}) };
+  const extra = { contractIdentity: prep.identity, ...(prep.drift.length > 0 ? { harnessDrift: prep.drift } : {}), ...(prep.undecided.length > 0 ? { undecidedDrift: prep.undecided } : {}), ...(prep.left.length > 0 ? { nonRegularLeftOut: prep.left } : {}) };
   return ok({ ...score, explore: { ...score.explore, enforced: enforcedBounds(score.explore.limits), ...extra } });
 }
 
@@ -222,7 +224,7 @@ async function scoreIn(a, area) {
 /**
  * Score a tree. `files` is the FROZEN set (`quickWorkspaceFiles().frozen`), `sets` the extra case folders (`[{ name: 'heldout', dir }]`), `limits` `{ memoryBytes, buildTimeoutMs, ... }`, `profile`
  * `{ explore, paths, snapshots, caseWallMs, runCeilingMs }`. A held-out folder that is not there, or holds no case, is an `environment` failure, never a visible-only score. Anything thrown is an `environment` failure too: a paid session is never left unscored by a crash.
- * `only` (a replay) scores that one case: its pair alone in the case folder. `driftPossible` (a rescore or replay on a moved runner) puts the changes under `runner/` in `explore.harnessDrift` and not in `frozenChanges`; `templateDriftPossible` does the same for the template files (the scripts and the pin files). The score names the contract it was made under in `explore.contractIdentity`. -> `ok(score)` (the pilot's score shape) | `fail(reason, { kind })`.
+ * `only` (a replay) scores that one case: its pair alone in the case folder. `driftPossible` (a rescore or replay on a moved runner) puts the changes under `runner/` in `explore.harnessDrift` and not in `frozenChanges`; `history` (`template-drift.mjs`) judges the template files and the derived packages list by their bytes: the old template's bytes are `explore.harnessDrift`, any other difference is the agent's, and a file whose old bytes cannot be read is `explore.undecidedDrift`. The score names the contract it was made under in `explore.contractIdentity`. -> `ok(score)` (the pilot's score shape) | `fail(reason, { kind })`.
  */
 export async function scoreQuick(args) {
   const area = path.join(args.work, 'judge');

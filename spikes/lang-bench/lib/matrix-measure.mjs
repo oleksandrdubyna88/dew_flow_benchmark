@@ -40,10 +40,10 @@ export async function measureRows({ recipe, record, probe, log = () => {} }) {
   return ok(Object.fromEntries(found));
 }
 
-/** The matrix a measurement makes: the day, the reason, the snapshot each stack was measured against, the rows. */
-export const matrixOf = ({ rows, record, today, reason }) => ({
+/** The matrix a measurement makes: the day, the reason, the snapshot each stack and the templates it was measured against, the rows. */
+export const matrixOf = ({ rows, record, today, reason, templatesIdentity }) => ({
   decidedOn: today,
   reason,
-  measuredAgainst: Object.fromEntries(Object.keys(rows).map(stack => [stack, record[stack].treeSha256])),
+  measuredAgainst: { snapshots: Object.fromEntries(Object.keys(rows).map(stack => [stack, record[stack].treeSha256])), templatesIdentity },
   rows,
 });

@@ -1,7 +1,7 @@
 // F1.S3 (a): the package matrix, `inputs/package-matrix.json` (written by `package-matrix.mjs`, never typed). One row per (stack, offered package, kind): `works` (the package added to the template of that kind builds offline over
 // the registered snapshot) or `unsupported` with the code the build failed with. The matrix is the one source of which packages a kind offers: `PACKAGES.md` of a kind lists exactly the `works` rows, and the recipe's `kinds`
 // of each package must equal them (`matrixProblems`, the writer's `--check`). A row that is `unsupported` takes its package out of that kind's offered set; the snapshot stays one per stack.
-// Pure. A matrix is `{ decidedOn, reason, measuredAgainst: { <stack>: <tree sha256> }, rows: { <stack>: { <package name>: { <kind>: { state, code? } } } } }`.
+// Pure. A matrix is `{ decidedOn, reason, measuredAgainst: { snapshots: { <stack>: <tree sha256> }, templatesIdentity }, rows: { <stack>: { <package name>: { <kind>: { state, code? } } } } }`.
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { KINDS } from './cache-recipe-lang.mjs';
 
@@ -43,27 +43,34 @@ function kindsProblems(matrix, stack, spec) {
   });
 }
 
-/** The snapshot each stack was measured against must be the registered one. */
-function measuredProblems(matrix, record) {
-  const stacks = new Set([...Object.keys(matrix.measuredAgainst ?? {}), ...Object.keys(record ?? {}).filter(k => k !== 'superseded')]);
-  return [...stacks].filter(stack => matrix.measuredAgainst?.[stack] !== record?.[stack]?.treeSha256)
-    .map(stack => `the matrix was measured against ${stack} snapshot ${matrix.measuredAgainst?.[stack] ?? 'none'}, the registered one is ${record?.[stack]?.treeSha256 ?? 'none'}`);
+/** The snapshot each stack was measured against must be the registered one, and the templates must be the ones the rows were measured on (`templatesIdentity` is `lib/templates-identity.mjs`'s; a check that is not given it fails). */
+function measuredProblems(matrix, record, templatesIdentity) {
+  const seen = matrix.measuredAgainst?.snapshots ?? {};
+  const stacks = new Set([...Object.keys(seen), ...Object.keys(record ?? {}).filter(k => k !== 'superseded')]);
+  const snapshots = [...stacks].filter(stack => seen[stack] !== record?.[stack]?.treeSha256)
+    .map(stack => `the matrix was measured against ${stack} snapshot ${seen[stack] ?? 'none'}, the registered one is ${record?.[stack]?.treeSha256 ?? 'none'}`);
+  const measured = matrix.measuredAgainst?.templatesIdentity;
+  if (typeof measured !== 'string') return [...snapshots, 'the matrix names no templates identity: it does not say which templates its rows were measured on'];
+  return measured === templatesIdentity ? snapshots : [...snapshots, `the matrix was measured against templates ${measured}, the templates now are ${templatesIdentity}`];
 }
 
-/** Everything wrong with a matrix against the recipe and the registered record: a missing or ill-formed row, a package the recipe does not offer, a recipe `kinds` that is not the `works` rows, a stale snapshot. `[]` is clean. */
-export function matrixProblems({ matrix, recipe, record }) {
+/** Everything wrong with a matrix against the recipe and the registered record: a missing or ill-formed row, a package the recipe does not offer, a recipe `kinds` that is not the `works` rows, a stale snapshot, other templates than the rows were measured on. `[]` is clean. */
+export function matrixProblems({ matrix, recipe, record, templatesIdentity }) {
   if (matrix === null || typeof matrix !== 'object') return ['the matrix is not an object'];
   const stacks = Object.entries(recipe.stacks);
   return [
     ...stacks.flatMap(([stack, spec]) => completeProblems(matrix, stack, spec)),
     ...stacks.flatMap(([stack, spec]) => kindsProblems(matrix, stack, spec)),
-    ...measuredProblems(matrix, record),
+    ...measuredProblems(matrix, record, templatesIdentity),
   ];
 }
 
-/** `ok(matrix)` when `matrixProblems` finds nothing, else `fail` naming them. */
+/**
+ * `ok(matrix)` when the matrix is complete, equals the recipe's kinds and was measured against the registered snapshots, else `fail` naming the problems. The templates' identity is not asked here (a workspace build must not
+ * stop for a file of `templates/` that no probe reads): `package-matrix.mjs --check` asks it.
+ */
 export function loadMatrix({ json, recipe, record }) {
-  const problems = matrixProblems({ matrix: json, recipe, record });
+  const problems = matrixProblems({ matrix: json, recipe, record, templatesIdentity: json?.measuredAgainst?.templatesIdentity });
   return problems.length === 0 ? ok(json) : fail(`package-matrix: ${problems.join('; ')}`, { problems });
 }
 
@@ -91,3 +98,8 @@ export function packagesMdProblems({ text, matrix, stack, kind }) {
 
 /** The matrix as the bytes `package-matrix.json` holds: two-space JSON, one final newline. */
 export const matrixText = matrix => `${JSON.stringify(matrix, null, 2)}\n`;
+
+/** A matrix on which every package of the recipe works in every kind: what every kind offered before the matrix existed (a series made then is judged against the file as it was rendered then). */
+export const allWorksMatrix = recipe => ({
+  rows: Object.fromEntries(Object.entries(recipe.stacks).map(([stack, spec]) => [stack, Object.fromEntries(spec.packages.map(p => [p.name, Object.fromEntries(KINDS.map(kind => [kind, { state: 'works' }]))]))])),
+});

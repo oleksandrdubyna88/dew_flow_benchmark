@@ -24,7 +24,8 @@ import { pinsOk } from './pins.mjs';
 import { isQuick, quickExplore } from './quick.mjs';
 import { finalizePair, quickHeldoutProblem } from './run.mjs';
 import { frozenFill, runContext, scoreSessionDep } from './run-ctx.mjs';
-import { runnerDriftPossible, templateDriftPossible } from './harness-pin.mjs';
+import { runnerDriftPossible } from './harness-pin.mjs';
+import { templateHistory } from './template-drift.mjs';
 import { isRehearsal, loadSeries, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
 import { frozenPinsProblem, seriesTaskProblem } from './tasks.mjs';
 
@@ -214,7 +215,7 @@ async function rescoreLocked({ io, task, series, seriesDir, entry, layout }) {
 /** The scoring of the kept tree. -> `{ score }`, or `{ answer }` when the rescore ends here: a stop signal (checked after the scoring, before any write) or a harness failure. */
 async function scoreStep({ need, io, entry, layout, seriesDir }) {
   const inputs = seriesInputs(seriesDir).value;
-  const drift = { driftPossible: runnerDriftPossible({ inputs }), templateDriftPossible: templateDriftPossible({ inputs }) };
+  const drift = { driftPossible: runnerDriftPossible({ inputs }), history: templateHistory({ inputs }) };
   const scored = await scoreKept({ need, io, entry, layout, drift });
   if (stoppedBy(io)) return { answer: stopAnswer(io, 'during the scoring') };
   if (scored.kind !== 'scored') return { answer: refuse(`scoring ${entry.rid}: ${scored.kind}: ${scored.reason}; nothing was changed (a harness failure is a void, never a verdict)`, EXIT.halt) };

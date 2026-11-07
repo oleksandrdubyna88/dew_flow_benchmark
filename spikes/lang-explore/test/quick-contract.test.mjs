@@ -11,7 +11,6 @@ import * as copyModule from '../lib/copy-quick.mjs';
 import { AGENT_EDITABLE, DERIVED_FILES, FROZEN_FOLDERS, PIN_FILES, SCRIPTS, excludedDirs, frozenEntries, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { CONTRACT_MODULES, SNAPSHOT_RECORD, TEMPLATES_FOLDER, contractIdentity, templatesIdentity } from '../lib/contract-identity.mjs';
 import { exploreSection, finalizeSessionRecord, missingPaths } from '../lib/records.mjs';
-import { harnessPinsNow, templateDriftPossible } from '../lib/harness-pin.mjs';
 import { REPO } from '../lib/paths.mjs';
 import { acceptedOf } from '../lib/score.mjs';
 import { scoreQuick } from '../lib/score-quick.mjs';
@@ -184,8 +183,10 @@ test('An_untouched_tree_has_zero_deviations_known_never_unknown', async t => {
   assert.equal(made.ok, true, made.reason);
   assert.deepEqual(exploreSection({ score: made.value, audit: [] }).deviations, { known: true, value: { count: 0, paths: [] } });
   assert.deepEqual(exploreSection({ score: scoreOf(), audit: [] }).deviations, { known: true, value: { count: 0, paths: [] } }, 'also from a score that names no change at all');
-  const changed = await scoreWith(scoringArea(t), { runFn: ran(['s01', 'h001', 'h002'].map(id => rec(id))) });
-  assert.deepEqual(exploreSection({ score: changed.value, audit: [] }).deviations.value.paths, changed.value.explore.frozenChanges.map(c => c.path).sort(), 'the control: a tree that changed a frozen file lists it');
+  const planted = scoringArea(t);
+  writeFileSync(path.join(planted.source, 'samples', 's01.in'), 'a planted change\n');
+  const changed = await scoreWith(planted, { runFn: ran(['s01', 'h001', 'h002'].map(id => rec(id))) });
+  assert.deepEqual(exploreSection({ score: changed.value, audit: [] }).deviations, { known: true, value: { count: 1, paths: ['samples/s01.in'] } }, 'the control: a planted change to a frozen file is listed, so the zero above can fail');
 });
 
 test('Deviations_never_change_accepted_and_that_is_the_point', () => {
@@ -197,34 +198,6 @@ test('Deviations_never_change_accepted_and_that_is_the_point', () => {
   assert.equal(acceptedOf(failing), false, 'the control: a failing case is what makes a tree not accepted');
   assert.equal(exploreSection({ score: deviating, audit: [] }).accepted.value, true);
   assert.equal(exploreSection({ score: deviating, audit: [] }).deviations.value.count, 2);
-});
-
-// ---- template drift -----------------------------------------------------------------------------------------------------------------
-
-test('Under_a_moved_template_a_changed_template_file_is_harness_drift_and_not_a_deviation', async t => {
-  const a = scoringArea(t);
-  writeFileSync(path.join(a.source, '.npmrc'), 'offline=true\n');
-  writeFileSync(path.join(a.source, 'build.sh'), '#!/bin/bash\n# the build of an older template\n', { mode: 0o755 });
-  writeFileSync(path.join(a.source, 'samples', 's01.in'), 'the agent changed a sample\n');
-  const files = { ...frozenFiles(), '.npmrc': { bytes: Buffer.from('offline=true\nignore-scripts=true\n'), mode: 0o644 } };
-  const common = { runFn: ran(['s01', 'h001', 'h002'].map(id => rec(id))), files };
-  const drifted = await scoreWith(a, { ...common, templateDriftPossible: true });
-  assert.deepEqual(drifted.value.explore.harnessDrift.map(c => c.path).sort(), ['.npmrc', 'build.sh'], 'the template files that differ are the harness\'s');
-  assert.deepEqual(drifted.value.explore.frozenChanges.map(c => c.path), ['samples/s01.in'], 'the sample the agent changed is still the agent\'s');
-  assert.deepEqual(exploreSection({ score: drifted.value, audit: [] }).deviations.value, { count: 1, paths: ['samples/s01.in'] }, 'and so is the only deviation');
-  const plain = await scoreWith(a, common);
-  assert.deepEqual(plain.value.explore.frozenChanges.map(c => c.path).sort(), ['.npmrc', 'build.sh', 'samples/s01.in'], 'without drift all three are the agent\'s, as before');
-  assert.equal('harnessDrift' in plain.value.explore, false);
-});
-
-test('A_series_records_the_runner_pin_and_the_templates_identity_at_init_and_the_drift_rule_reads_them', () => {
-  const pins = harnessPinsNow();
-  assert.deepEqual(Object.keys(pins).sort(), ['runnerPin', 'templatesIdentity']);
-  assert.equal(pins.templatesIdentity, templatesIdentity(), 'the identity of the templates of the day');
-  assert.equal(templateDriftPossible({ inputs: pins }), false, 'a series made under these templates: no drift');
-  assert.equal(templateDriftPossible({ inputs: { ...pins, templatesIdentity: 'f'.repeat(64) } }), true, 'another identity: the templates moved');
-  assert.equal(templateDriftPossible({ inputs: { runnerPin: pins.runnerPin } }), true, 'none recorded: made before the identity existed, so the drift is possible');
-  assert.match(readFileSync(path.join(REPO, 'spikes/lang-explore/lib/init-quick.mjs'), 'utf8'), /harnessPinsNow\(\)/, 'init records both');
 });
 
 test('No_file_under_lang_bench_imports_lang_explore_and_the_scan_can_fail', () => {

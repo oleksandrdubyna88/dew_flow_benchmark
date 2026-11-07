@@ -2,8 +2,11 @@
   "decidedOn": "2026-11-07",
   "reason": "Measured by package-matrix.mjs: each package of the recipe added alone to the template of each kind and built offline over the registered snapshot; an unsupported row carries the code the build failed with.",
   "measuredAgainst": {
-    "csharp": "0b265e7c7e6553932102ebd2861285b47cbba73807a3d37c5e4507c03888ac9d",
-    "node": "bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6"
+    "snapshots": {
+      "csharp": "0b265e7c7e6553932102ebd2861285b47cbba73807a3d37c5e4507c03888ac9d",
+      "node": "bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6"
+    },
+    "templatesIdentity": "b55d0c2058fc7322dc7e96be9ab3bc1f3f34ad1faaa419437dd0504bb92eba67"
   },
   "rows": {
     "csharp": {

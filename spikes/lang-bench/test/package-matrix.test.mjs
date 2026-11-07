@@ -2,6 +2,7 @@
 // in `PACKAGES.md` and (the box cases) for real: adding it to the template and building offline fails with the recorded code. The pure cases read the real inputs; the box cases need the pinned toolchains and the registered
 // snapshots and skip with their reason without them (under BENCH_REQUIRE_SANDBOX=1 a missing tool is a failure).
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -10,6 +11,7 @@ import { KINDS } from '../lib/cache-recipe-lang.mjs';
 import { probeConfirmed } from '../lib/matrix-probe.mjs';
 import { isOffered, kindsOf, matrixProblems, packagesMdProblems } from '../lib/package-matrix.mjs';
 import { recipeVersions, renderPackagesMd } from '../lib/packages-md.mjs';
+import { templatesIdentity } from '../lib/templates-identity.mjs';
 import { defaultCaches } from '../lib/workspace-box.mjs';
 import { needs, toolchains } from './support/exec-layer-host.mjs';
 import { helloWorkspace, inBox, outputOf, readJson, snapshotRecord, snapshotsMissing, STACKS } from './support/workspace-fixtures.mjs';
@@ -17,7 +19,7 @@ import { ensureTestRoot } from './support/cache-box.mjs';
 
 const recipe = () => readJson('inputs/cache-recipe-lang.json');
 const matrix = () => readJson('inputs/package-matrix.json');
-const inputs = () => ({ matrix: matrix(), recipe: recipe(), record: snapshotRecord() });
+const inputs = () => ({ matrix: matrix(), recipe: recipe(), record: snapshotRecord(), templatesIdentity: templatesIdentity() });
 const render = ({ stack, kind, matrix: m = matrix() }) => { const r = renderPackagesMd({ stack, kind, record: snapshotRecord(), recipe: recipe(), matrix: m }); assert.equal(r.ok, true, r.reason); return r.value; };
 const unsupportedRows = () => STACKS.flatMap(stack => Object.entries(matrix().rows[stack]).flatMap(([name, byKind]) => KINDS.filter(kind => byKind[kind].state === 'unsupported').map(kind => ({ stack, name, kind, code: byKind[kind].code }))));
 const copyOf = x => structuredClone(x);
@@ -47,6 +49,12 @@ test('Every_offered_package_in_each_applicable_template_has_a_row_of_the_matrix'
   const missing = copyOf(inputs());
   delete missing.matrix.rows.csharp['Microsoft.AspNetCore.Mvc.Testing'].web;
   assert.match(matrixProblems(missing).join(';'), /Mvc\.Testing\.web has no row/, 'the check can fail: a missing row');
+  const moved = copyOf(inputs());
+  moved.templatesIdentity = 'f'.repeat(64);
+  assert.match(matrixProblems(moved).join(';'), /measured against templates .* the templates now are/, 'the check can fail: the templates moved since the rows were measured');
+  const unsaid = copyOf(inputs());
+  delete unsaid.matrix.measuredAgainst.templatesIdentity;
+  assert.match(matrixProblems(unsaid).join(';'), /names no templates identity/, 'a matrix that does not say which templates it was measured on is not a pass');
   const typo = copyOf(inputs());
   typo.matrix.rows.node.fastify.web = { state: 'unsupported' };
   assert.match(matrixProblems(typo).join(';'), /unsupported and must carry the code/, 'an unsupported row without its code');
@@ -172,6 +180,12 @@ test('A_node_test_with_inject_passes_in_the_web_kind_with_no_added_package', asy
 
 // ---- the registered snapshots ------------------------------------------------------------------------------------------------------------
 
+/** sha256 of a record with its keys sorted at every depth: the whole record, not two of its fields. The two values are of the records of `cache-snapshots-lang.json` at the base commit bf542f1f. */
+const sortKeys = x => (Array.isArray(x) ? x.map(sortKeys) : x !== null && typeof x === 'object' ? Object.fromEntries(Object.keys(x).sort().map(k => [k, sortKeys(x[k])])) : x);
+const canonicalSha = record => createHash('sha256').update(JSON.stringify(sortKeys(record))).digest('hex');
+const NODE_RECORD_AT_BASE = 'a2c104ba1485ec752cd5a0e199e8d5c94ad437d8121a3ba9c5cd23cfaa2efe35';
+const CSHARP_RECORD_AT_BASE = 'c57b091d551d82a080f7ef3e16db381919a35f776a162d3c28cacf78c5c82ddd';
+
 test('The_csharp_snapshot_is_registered_again_the_old_record_is_superseded_and_the_node_record_is_unchanged', () => {
   const record = snapshotRecord();
   const old = record.superseded.filter(s => s.stack === 'csharp');
@@ -182,6 +196,9 @@ test('The_csharp_snapshot_is_registered_again_the_old_record_is_superseded_and_t
   assert.equal(record.csharp.packages.some(p => p.name === 'microsoft.aspnetcore.mvc.testing' && p.version === record.csharp.resolved.MVC_TESTING), true, 'Mvc.Testing is in the manifest at the resolved version');
   assert.equal(record.node.treeSha256, 'bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6', 'the Node record is the one registered on 2026-11-04');
   assert.equal(record.node.dirName, `node-${record.node.treeSha256}`);
+  assert.equal(canonicalSha(record.node), NODE_RECORD_AT_BASE, 'the whole Node record, every field and package, is the one at the base commit (bf542f1f)');
+  assert.equal(canonicalSha(old[0].record), CSHARP_RECORD_AT_BASE, 'and the superseded C# record is the whole record the base commit registered');
+  assert.notEqual(canonicalSha({ ...record.node, sizeBytes: record.node.sizeBytes + 1 }), NODE_RECORD_AT_BASE, 'the comparison can fail: one changed field is seen');
   const nuspec = path.join(defaultCaches(), record.csharp.dirName, 'nuget', 'microsoft.aspnetcore.mvc.testing', record.csharp.resolved.MVC_TESTING, 'microsoft.aspnetcore.mvc.testing.nuspec');
   if (existsSync(path.join(defaultCaches(), record.csharp.dirName))) assert.equal(existsSync(nuspec), true, 'and the snapshot folder on this host holds it');
 });

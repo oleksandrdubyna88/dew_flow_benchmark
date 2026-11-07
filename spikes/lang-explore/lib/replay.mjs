@@ -13,7 +13,8 @@ import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { allOk } from './chain.mjs';
 import { systemClock } from './clock.mjs';
-import { runnerDriftPossible, runnerPinNow, templateDriftPossible } from './harness-pin.mjs';
+import { runnerDriftPossible, runnerPinNow } from './harness-pin.mjs';
+import { templateHistory } from './template-drift.mjs';
 import { calibrationFor } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
 import { heldoutOf } from './rescore.mjs';
@@ -75,12 +76,12 @@ async function needs({ io, seriesDir, task }) {
 }
 
 /** The runs, one after the other (each its own build and run), in a scratch folder that is removed; a stop signal ends them between two runs. -> `[line]`. */
-async function runAll({ need, entry, layout, caseId, times, driftPossible, templateDrift, work, say, signal }) {
+async function runAll({ need, entry, layout, caseId, times, driftPossible, history, work, say, signal }) {
   const lines = [];
   for (let run = 1; run <= times && signal?.aborted !== true; run += 1) {
     const scored = await need.world.scoreFn({
       stack: entry.stack, source: layout.work, limits: need.calibration.limits, sets: [{ name: 'heldout', dir: need.heldout.casesDir }], traps: need.heldout.traps, caches: { nuget: layout.nuget, npm: layout.npm },
-      work, operatorHome: need.home, say, only: caseId, driftPossible, templateDriftPossible: templateDrift,
+      work, operatorHome: need.home, say, only: caseId, driftPossible, history,
     });
     lines.push(runLine({ run, scored, id: caseId }));
     sayRun(say, lines.at(-1));
@@ -105,10 +106,10 @@ const stopped = ({ io, done, times }) => ({ exit: io.abort?.exit ?? 130, message
 /** The runs and the one file, inside the scratch folder `work`. -> the result. */
 async function replayIn({ io, need, seriesDir, entry, layout, rid, caseId, times, work, now, stamp }) {
   const inputs = seriesInputs(seriesDir).value;
-  const [driftPossible, templateDrift] = [runnerDriftPossible({ inputs }), templateDriftPossible({ inputs })];
-  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, templateDrift, work, say: io.say, signal: io.signal });
+  const driftPossible = runnerDriftPossible({ inputs });
+  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, history: templateHistory({ inputs }), work, say: io.say, signal: io.signal });
   if (runs.length < times) return stopped({ io, done: runs.length, times });
-  const body = { diagnostic: true, note: DIAGNOSTIC_NOTE, rid, caseId, stack: entry.stack, times, at: now.toISOString(), runner: runnerPinNow(), driftPossible, templateDriftPossible: templateDrift, sessionClass: entry.class, runs };
+  const body = { diagnostic: true, note: DIAGNOSTIC_NOTE, rid, caseId, stack: entry.stack, times, at: now.toISOString(), runner: runnerPinNow(), driftPossible, sessionClass: entry.class, runs };
   const file = writeResult({ layout, stamp, body });
   io.say(`replay file: ${file}`);
   return { exit: runs.some(r => r.void) ? EXIT.halt : EXIT.done, message: `replayed ${caseId} of ${rid} ${times} time(s); ${runs.filter(r => r.void).length} void; a diagnostic only: nothing of the series was changed`, file };

@@ -4,7 +4,7 @@
 // of each package must be equal to them.
 //
 //   node spikes/lang-bench/package-matrix.mjs            measure every row and write inputs/package-matrix.json (under the gate lock)
-//   node spikes/lang-bench/package-matrix.mjs --check    no box: the matrix has a row for every package and kind, the recipe's kinds equal its works rows, and it was measured against the registered snapshots
+//   node spikes/lang-bench/package-matrix.mjs --check    no box: the matrix has a row for every package and kind, the recipe's kinds equal its works rows, and it was measured against the registered snapshots and these templates
 //     --caches <dir>    default ~/rsd/lang-v2/caches       --record <file>   default inputs/cache-snapshots-lang.json     --recipe <file>   default inputs/cache-recipe-lang.json
 //     --stacks <file>   default inputs/stacks-lang.json    --matrix <file>   default inputs/package-matrix.json           --work <dir>      default ~/.cache/lang-v2/w
 //     --gate-lock <file> default ~/.cache/lang-v2/gate.lock
@@ -25,6 +25,7 @@ import { matrixOf, measureRows } from './lib/matrix-measure.mjs';
 import { probeConfirmed } from './lib/matrix-probe.mjs';
 import { matrixProblems, matrixText } from './lib/package-matrix.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
+import { templatesIdentity } from './lib/templates-identity.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
@@ -65,9 +66,9 @@ function readInputs(config) {
 function checkMode(config, inputs) {
   const matrix = readJsonFlag('--matrix', config.matrix);
   if (!matrix.ok) return stop(EXIT.usage, matrix.reason);
-  const problems = matrixProblems({ matrix: matrix.value, recipe: inputs.recipe, record: inputs.record });
+  const problems = matrixProblems({ matrix: matrix.value, recipe: inputs.recipe, record: inputs.record, templatesIdentity: templatesIdentity() });
   problems.forEach(complain);
-  if (problems.length === 0) say(`package-matrix: ${config.matrix} is complete, equals the recipe's kinds and was measured against the registered snapshots`);
+  if (problems.length === 0) say(`package-matrix: ${config.matrix} is complete, equals the recipe's kinds and was measured against the registered snapshots and these templates`);
   return problems.length === 0 ? EXIT.done : EXIT.failed;
 }
 
@@ -89,7 +90,7 @@ async function writeMode(config, inputs) {
   mkdirSync(config.work, { recursive: true, mode: 0o700 });
   const rows = await measureRows({ recipe: inputs.recipe, record: inputs.record, probe: probeFor({ config, inputs }), log: say });
   if (!rows.ok) return stop(EXIT.failed, `package-matrix: ${rows.reason}; no matrix is written`);
-  const matrix = matrixOf({ rows: rows.value, record: inputs.record, today: new Date().toISOString().slice(0, 10), reason: REASON });
+  const matrix = matrixOf({ rows: rows.value, record: inputs.record, today: new Date().toISOString().slice(0, 10), reason: REASON, templatesIdentity: templatesIdentity() });
   writeMatrix(config.matrix, matrix);
   say(`package-matrix: wrote ${config.matrix}`);
   return checkMode(config, inputs);
