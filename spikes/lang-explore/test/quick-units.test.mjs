@@ -177,6 +177,15 @@ test('The_held_out_reader_refuses_a_cases_folder_that_is_a_link', t => {
   assert.match(r.reason, /cases.*link/);
 });
 
+test('The_held_out_reader_names_a_cases_entry_that_is_a_plain_file_as_a_file_not_as_something_else', t => {
+  const f = casesFolder(t);
+  rmSync(f.cases, { recursive: true });
+  writeFileSync(f.cases, 'x');
+  const r = loadHeldoutQuick(f.home, f.task);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /cases\/ is a file, not a folder/);
+});
+
 test('The_held_out_reader_refuses_a_traps_file_that_is_a_link', t => {
   const f = casesFolder(t);
   symlinkSync(outsideFile(f, 'traps-elsewhere.txt', 'h001\n'), path.join(f.dir, 'traps.txt'));

@@ -4,7 +4,9 @@
 import { wordFindings } from './conformance-needles.mjs';
 import { pythonTextItems } from './py-text.mjs';
 
-export const isRunnerPython = file => file.startsWith('runner/') && file.endsWith('.py');
+const RUNNER_PY = /^(?:(?:csharp|node)\/[^/]+\/)?runner\/[^/]+\.py$/;
+/** The runner's modules: `runner/*.py` and the copy every task folder of the task repository holds, `csharp/<t>/runner/*.py` and `node/<t>/runner/*.py`. */
+export const isRunnerPython = file => RUNNER_PY.test(file);
 
 const hitsOf = (items, what, matchers) => items.flatMap(item => wordFindings('', item.text, matchers).map(hit => ({ line: item.line + hit.line - 1, what })));
 

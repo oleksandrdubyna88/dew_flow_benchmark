@@ -176,7 +176,7 @@ export const DIFFERENCES = Object.freeze([
   '`runner/run_samples.py` is the pilot\'s olympiad-only judge, not v2\'s E1.S8a runner (D37).',
   'SDK 10.0.114, not 10.0.403; Node 26.12.1, not 26.13.0.',
   'The time and memory limits are 2 s and 512 MB, uncalibrated beyond the pilot\'s own calibration (v2 D14, E2.S3 not built).',
-  'Build and test time is reported beside the time partition, not inside it (v1\'s classifier knows `test-v*.sh`, not `build.sh` or `run.sh`, and is not widened).',
+  'Build and test time is reported beside the time partition, not inside it (when these sessions were recorded v1\'s classifier knew `test-v*.sh`, not `build.sh` or `run.sh`; it counts them from 2026-11-07, and these records were not recomputed).',
   'No pre-registration, no seal and no A/A.',
   'CLI 2.1.310 is not re-pinned (v2 D8).',
   'v1\'s contamination rules run as they are (the rules that name minigit are idle; the path rules are active).',

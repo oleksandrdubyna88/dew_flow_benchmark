@@ -75,7 +75,7 @@ test('Build_and_test_time_is_the_summed_span_of_the_Bash_calls_that_build_or_run
 
 test('The_v1_classifier_counts_every_command_explore_buildTest_counts', () => {
   const commands = [
-    'bash build.sh', 'sh build.sh', './build.sh', 'bash ./run.sh', 'cd ws && bash run.sh < x', 'timeout 600 bash build.sh', "bash -c 'bash build.sh'", 'bash build.sh 2>&1 | tail -5',
+    'bash build.sh', 'sh build.sh', './build.sh', 'bash ./run.sh', '/bin/bash build.sh', 'source build.sh', '. ./build.sh', 'cd ws && bash run.sh < x', 'timeout 600 bash build.sh', "bash -c 'bash build.sh'", 'bash build.sh 2>&1 | tail -5',
     'dotnet build src/App.csproj', 'tsc --noEmit', 'npx tsc --noEmit',
     'python3 runner/run_samples.py samples/', 'python3 -I runner/run_samples.py samples/', '/usr/bin/python3 -I runner/run_samples.py samples/', 'cd x && python3 -I runner/run_samples.py samples/',
   ];

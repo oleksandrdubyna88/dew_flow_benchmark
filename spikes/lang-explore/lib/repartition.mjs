@@ -17,7 +17,7 @@ import { RESULT_DIR, findComplete, sweepTemps, writeResult } from './repartition
 export { RESULT_DIR };
 
 /** The v1 files the partition is made by: the classifier first. Their bytes are part of the fingerprint. */
-const CODE_FILES = Object.freeze(['lib/classify.mjs', 'lib/spans.mjs', 'lib/timeline.mjs', 'lib/categories.mjs']);
+const CODE_FILES = Object.freeze(['lib/classify.mjs', 'lib/spans.mjs', 'lib/timeline.mjs', 'lib/categories.mjs', 'lib/smoke-verdicts.mjs', 'capture/verdict-rules.mjs']);
 /** The evidence of a session that the partition reads; all four must be regular files. */
 const EVIDENCE = Object.freeze(['stream.stamped.ndjson', 'otel/otel-raw.ndjson', 'meta.json', 'box/out/audit.ndjson']);
 const RECORD = 'record.json';
@@ -25,6 +25,12 @@ const RECORD = 'record.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const isRegular = file => lstatSync(file, { throwIfNoEntry: false })?.isFile() === true;
 const sum = categories => Object.values(categories).reduce((a, b) => a + b, 0);
+
+/** `{ sumsToWall: true }`, or `{ sumsToWall: false, why }` saying by how much the categories miss the wall. */
+export function sumCheck(part) {
+  const total = sum(part.categories);
+  return total === part.wallMs ? { sumsToWall: true } : { sumsToWall: false, why: `the categories sum to ${total} ms and the wall is ${part.wallMs} ms (${total - part.wallMs} ms)` };
+}
 
 /** `{ rel: sha256 }` of the regular files among `rels` under `dir`, and the names of those that are not there or not regular. */
 function hashesOf(dir, rels) {
@@ -66,18 +72,23 @@ function sessionOf({ dir, rid, policy }) {
   const record = readRecord(dir);
   const made = record.ok ? recompute({ dir, policy }) : record;
   if (!made.ok) return skip(`not recomputed, ${made.reason}`);
-  const session = { rid, stack: record.value.ids?.stack ?? null, old: oldOf(record.value), new: made.value, sumsToWall: sum(made.value.categories) === made.value.wallMs };
+  const session = { rid, stack: record.value.ids?.stack ?? null, old: oldOf(record.value), new: made.value, ...sumCheck(made.value) };
   return { session, hashes: evidence.hashes };
 }
+
+const oddSkip = name => ({ skipped: { rid: name, why: 'not recomputed, not a folder (a link is not followed, a file is no session)' }, hashes: {} });
 
 const codeOf = () => Object.fromEntries(CODE_FILES.map(rel => [rel, sha256(readFileSync(path.join(V1, rel)))]));
 
 /** The fingerprint of the inputs: the classifier and its neighbours' bytes and every session's evidence bytes, in a fixed order. */
 const fingerprintOf = (code, evidence) => sha256(JSON.stringify({ code, evidence: Object.keys(evidence).sort().map(rid => [rid, evidence[rid]]) }));
 
-const ridsOf = seriesDir => {
+/** The entries of `<series>/s/`: `{ rids, odd }` (the folders, and the names of what is not a folder: a link is not followed, a file is nobody's session), or null without an `s/` folder. */
+const entriesOf = seriesDir => {
   const sessions = path.join(seriesDir, 's');
-  return lstatSync(sessions, { throwIfNoEntry: false })?.isDirectory() === true ? readdirSync(sessions, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort() : null;
+  if (lstatSync(sessions, { throwIfNoEntry: false })?.isDirectory() !== true) return null;
+  const all = readdirSync(sessions, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+  return { rids: all.filter(e => e.isDirectory()).map(e => e.name), odd: all.filter(e => !e.isDirectory()).map(e => e.name) };
 };
 
 /** The body of a result: complete, its fingerprint, the code hashes, and per session the stack, the old and the new categories and whether the new ones sum to the wall. */
@@ -94,17 +105,18 @@ function bodyOf({ seriesDir, code, fingerprint, made, now }) {
  * -> `ok({ file, wrote, sessions, skipped, stale: { removed, live, unknown } })` | `fail(reason)`.
  */
 export async function repartitionSeries({ seriesDir, now = systemClock, genId, owned = ownedFor({ token: 'bench' }) }) {
-  const rids = ridsOf(seriesDir);
-  if (rids === null) return fail(`${seriesDir} is not a series folder: it holds no s/ folder of sessions`);
+  const entries = entriesOf(seriesDir);
+  if (entries === null) return fail(`${seriesDir} is not a series folder: it holds no s/ folder of sessions`);
   const policy = crosscheckPolicyFrom(V1, {});
   if (!policy.ok) return policy;
+  const { rids } = entries;
   const made = rids.map(rid => sessionOf({ dir: path.join(seriesDir, 's', rid), rid, policy: policy.value }));
   const code = codeOf();
-  const fingerprint = fingerprintOf(code, Object.fromEntries(rids.map((rid, i) => [rid, made[i].hashes])));
+  const fingerprint = fingerprintOf(code, { ...Object.fromEntries(rids.map((rid, i) => [rid, made[i].hashes])), ...Object.fromEntries(entries.odd.map(name => [name, 'not a folder'])) });
   const folder = path.join(seriesDir, RESULT_DIR);
   const stale = sweepTemps(folder, owned);
   const existing = findComplete(folder, fingerprint);
-  const body = bodyOf({ seriesDir, code, fingerprint, made, now });
+  const body = bodyOf({ seriesDir, code, fingerprint, made: [...made, ...entries.odd.map(oddSkip)], now });
   const file = existing ?? writeResult({ folder, body, now, genId, owned });
   return ok({ file, wrote: existing === null, sessions: body.sessions.length, skipped: body.skipped, stale });
 }

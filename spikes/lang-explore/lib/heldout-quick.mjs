@@ -14,8 +14,8 @@ const lstatOrNull = file => lstatSync(file, { throwIfNoEntry: false }) ?? null;
 
 const KIND_NAMES = Object.freeze([['isSymbolicLink', 'a link'], ['isDirectory', 'a folder'], ['isFIFO', 'a fifo'], ['isSocket', 'a socket'], ['isCharacterDevice', 'a device'], ['isBlockDevice', 'a device']]);
 
-/** What a file system entry is, in words, for one that is not a regular file. */
-const kindName = stat => KIND_NAMES.find(([method]) => stat[method]())?.[1] ?? 'not a regular file';
+/** What a file system entry is, in words (a regular file is `a file`: it is not a folder where a folder is wanted). */
+const kindName = stat => KIND_NAMES.find(([method]) => stat[method]())?.[1] ?? 'a file';
 
 /** The sentence naming every entry of `cases/` that is not a regular file (a link, a folder, a fifo, a socket: by `lstat`, so nothing is followed or read), or null. */
 export function caseEntriesProblem(casesDir) {

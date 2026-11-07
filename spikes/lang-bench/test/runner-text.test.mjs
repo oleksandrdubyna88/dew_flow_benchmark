@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseKnownNeedles } from '../lib/push-needles.mjs';
 import { findVisibleRules } from '../lib/push-visible.mjs';
 import { pythonTextItems } from '../lib/py-text.mjs';
+import { needleScan } from '../lib/run-base-tree.mjs';
 import { approvedLiterals, commentFindings, literalProblems, pythonReading, stackMatchers } from '../lib/runner-text.mjs';
 import { helloWorkspace } from './support/workspace-fixtures.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
@@ -79,10 +80,10 @@ test('The_same_scan_finds_the_planted_line_in_a_workspace_copy_of_the_runner', t
     const copy = path.join(w, 'runner');
     const names = readdirSync(copy).filter(name => name.endsWith('.py'));
     assert.deepEqual(names, runnerFiles(), `${stack}: the workspace holds the pinned runner`);
-    for (const name of names) assert.deepEqual(findVisibleRules(`runner/${name}`, readFileSync(path.join(copy, name), 'utf8'), { known, stackWords: matchers }), [], `${stack} ${name}`);
+    for (const name of names) assert.deepEqual(findVisibleRules(`${stack}/01-x/runner/${name}`, readFileSync(path.join(copy, name), 'utf8'), { known, stackWords: matchers }), [], `${stack} ${name}`);
     const text = `${readFileSync(path.join(copy, 'rs_abort.py'), 'utf8')}\n# the .NET side\n`;
-    const hits = findVisibleRules('runner/rs_abort.py', text, { known, stackWords: matchers });
-    assert.deepEqual(hits.map(h => h.what), ['stack word in a comment'], `${stack}: the planted line is found in the copy`);
+    const hits = findVisibleRules(`${stack}/01-x/runner/rs_abort.py`, text, { known, stackWords: matchers });
+    assert.deepEqual(hits.map(h => h.what), ['stack word in a comment'], `${stack}: the planted line is found in the copy, at its real path in the task repository`);
     assert.equal(hits[0].line, text.split('\n').length - 1, `${stack}: at its line`);
   }
 });
@@ -102,4 +103,14 @@ test('The_lexer_reads_comments_strings_and_docstring_like_statements_the_way_Pyt
   const found = pythonTextItems(text);
   assert.deepEqual(found.comments, [{ line: 3, text: '# a comment' }, { line: 6, text: '# after a bracket line' }]);
   assert.deepEqual(found.docstrings.map(d => [d.line, d.text]), [[1, 'Module doc\non two lines.'], [7, 'Doc.'], [13, 'a bare string statement']]);
+});
+
+test('The_run_base_scan_reads_the_runner_copies_of_the_task_repository_for_stack_words', t => {
+  const root = ownedFolder(t, 'runbase');
+  const copy = path.join(root, 'node', '01-x', 'runner');
+  mkdirSync(copy, { recursive: true });
+  writeFileSync(path.join(copy, 'rs_plant.py'), PLANTED);
+  const found = needleScan({ root, known, stackWords: matchers });
+  assert.deepEqual(found.value.map(h => [h.path, h.line, h.needle]), [['node/01-x/runner/rs_plant.py', 4, 'stack word in a comment']]);
+  assert.deepEqual(needleScan({ root, known }).value, [], 'without the stack words the rule is off');
 });

@@ -3,13 +3,13 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { formatOwner, ownedFor, thisOwner, writeOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { EXIT } from '../lib/commands.mjs';
-import { RESULT_DIR, repartitionSeries } from '../lib/repartition.mjs';
+import { RESULT_DIR, repartitionSeries, sumCheck } from '../lib/repartition.mjs';
 import { main } from '../explore.mjs';
 
 const T0 = Date.parse('2026-11-05T10:00:00Z');
@@ -53,6 +53,7 @@ test('The_recomputed_partition_moves_a_build_sh_call_from_other_tool_to_build_te
   assert.equal(r.ok, true, r.reason);
   const body = readResult(series, resultsOf(series)[0]);
   assert.equal(body.complete, true);
+  for (const file of ['lib/classify.mjs', 'lib/smoke-verdicts.mjs', 'capture/verdict-rules.mjs']) assert.ok(body.codeSha256[file], `${file} is part of the fingerprint`);
   const csharp = body.sessions.find(s => s.rid === 'aaa111');
   assert.equal(csharp.stack, 'csharp');
   assert.deepEqual([csharp.old.categories.build_test, csharp.old.categories.other_tool], [0, 15_000], 'the old categories are read from record.json');
@@ -154,4 +155,23 @@ test('The_repartition_verb_prints_the_result_and_a_folder_that_is_not_a_series_i
   const refused = [];
   assert.equal(await main(['repartition', '--series', tmpDir('repart-empty')], { home: tmpDir('repart-home'), say: line => refused.push(line) }), EXIT.config);
   assert.equal(await main(['repartition'], { home: tmpDir('repart-home'), say: () => {} }), EXIT.config, 'the series is required');
+});
+
+test('An_entry_under_s_that_is_a_link_or_a_file_is_listed_as_not_recomputed_and_never_dropped', async () => {
+  const series = seriesWith({ aaa111: {} });
+  symlinkSync(path.join(series, 's', 'aaa111'), path.join(series, 's', 'linked'));
+  writeFileSync(path.join(series, 's', 'stray.txt'), 'x');
+  const r = await run(series);
+  assert.equal(r.ok, true, r.reason);
+  const body = readResult(series, resultsOf(series)[0]);
+  assert.deepEqual(body.sessions.map(s => s.rid), ['aaa111'], 'a link is not followed into a second copy of the session');
+  assert.deepEqual(body.skipped.map(s => s.rid), ['linked', 'stray.txt']);
+  assert.ok(body.skipped.every(s => /not a folder/.test(s.why)));
+});
+
+test('A_partition_that_does_not_sum_to_the_wall_says_by_how_much', () => {
+  assert.deepEqual(sumCheck({ wallMs: 10, categories: { a: 3, b: 7 } }), { sumsToWall: true });
+  const off = sumCheck({ wallMs: 10, categories: { a: 3, b: 4 } });
+  assert.equal(off.sumsToWall, false);
+  assert.match(off.why, /sum to 7 ms.*wall is 10 ms/);
 });
