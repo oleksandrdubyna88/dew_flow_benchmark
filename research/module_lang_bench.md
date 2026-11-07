@@ -2,7 +2,7 @@
 
 > One `##` section per E1 story; each story writes only under its own heading (`todo/PLAN_lang_comparison_v2_E1.md` § 3, "Conventions for every story").
 >
-> *(2026-11-07: the plan's epics are now F1 to F4 (`todo/PLAN_lang_comparison_v2.md`, epoch 9); the sections below keep their E1 names as built, and Stage 1's scoring engine is `spikes/lang-explore/` (`research/module_lang_explore.md`).)*
+> *(2026-11-07: the plan's revision for epoch 9 replaces its epics with F1 to F4 (`todo/PLAN_lang_comparison_v2.md`; in force from the epoch 9 line); the sections below keep their E1 names as built, and Stage 1's scoring engine is `spikes/lang-explore/` (`research/module_lang_explore.md`).)*
 
 ## The runner (E1.S8a)
 
