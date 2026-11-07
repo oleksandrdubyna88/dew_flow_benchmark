@@ -924,6 +924,8 @@ Each place a wrong verdict could come from, and the scenario that catches it.
    lang-explore after the loop) needs a `scored → ran` move the run-map forbids, so the small v1 seam is the honest
    shape.
 
+**Team lead, from the epic's second plan round (2026-11-07), accepted:** the pass child has a wall bound. `runPassChild` gives the whole child a deadline: the runner's own test bound for the case set, plus the build-free margin the spec names for the runner's start and end, stated once as a constant. At the deadline it kills the child's whole process group, waits for it to be gone, and records an environment attempt with the reason `pass-child timeout`. That attempt counts toward the pass's three. A test with a fake child that never answers proves the kill, the attempt record and that the retry limit is reached. Its red run is the same test against a driver with no deadline.
+
 ## F1.S3 — the submission contract and the offered set
 
 **Model:** scenarios + brief Opus (this document) · code Sonnet · review Opus · fixes Sonnet. **Parent:** F1.S3 (E1.S3b reduced
