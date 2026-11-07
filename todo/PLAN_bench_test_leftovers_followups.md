@@ -60,8 +60,9 @@ repository's, so they are that repository's to trace, and a story for them goes 
 | F1: the probe's sentinel and its sweep | this plan, S1 | [PLAN_lang_comparison_v2_E1.md](PLAN_lang_comparison_v2_E1.md) E1.S8b built the probe and is merged; S1 makes its cleanup hold on every path, as E1.S8b already requires. No E1 story changes. |
 | F2, F3: the v1 and pilot test helpers | this plan, S2 and S3 | `PLAN_minigit_stack_bench.md` owns `spikes/minigit-bench/`; no story of that plan changes. The fixes are test hygiene under `common.test-leftovers`. |
 | F4: the split of one test file | this plan, S4 | E1.S1 wrote the file; no E1 story changes. |
+| The leftovers these stories fix, in `spikes/lang-bench/`, `spikes/minigit-bench/test/` and `spikes/lang-explore/test/` | this plan, S1–S5 | *Added 2026-11-07.* The test-leftovers rollout's epic E6 (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`, § *Epoch 5* item 5) owns this repository's producer stage. E6 does not build these fixes a second time. E6 lists these sites in its inventory, and its guard reads them. E6's done-when checks them itself; it does not take this plan's word that they are handled. A site that this plan leaves open stays a site in E6's inventory. |
 
-The list is complete: nothing else in these plans is touched.
+The list is complete: nothing else in these plans is touched. *(2026-11-07: the E6 row above is the boundary the rollout plan asks for in both plans, written here before E6's stories start. It changes no story of this plan.)*
 
 ## 3. Build order
 
