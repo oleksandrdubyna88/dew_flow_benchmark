@@ -332,6 +332,9 @@ Narrowed: yes — the owner narrowed the scope on 2026-11-06 (bare first, proces
 
 > Epoch 9 · approved 2026-11-07 · by owner · state: open
 
+- 9.1 · 2026-11-07 · agent · dod — F1's done-when asked both references of task 06 to pass 10 of 10, but each task has one reference today and the per-stack references are made in F2.S1, which already requires that check; F1 instead proves the rule on accepted quick-run sessions of both stacks
+  (Found by the Fable writer of F1.S2's spec. The check is moved, not dropped: F2.S1's done-when holds it unchanged. Counted as a change because a done-when moved; this is the epoch's first.)
+
 ## Operative plan for epoch 9 (2026-11-07): Stage 1, one bare series on six tasks
 
 **This part is the revision for epoch 9; from the epoch 9 line on, it is the plan in force.** Until that line, the stop stands
@@ -536,7 +539,7 @@ when the required mask cannot be applied exactly; a refusal halts the series res
   (e) FORMAT's first amendment is on the task repository's `main` (its PR #3, `4ddb8f8`); the bench's side, on
   `feat/lang-v2-format-amend-pins` (the pins, the gate record, the checker's group letter and `V<n>` in any case), is merged
   as a fix forward after merging `main`; F1.S2 adds the memory amendment and moves the pins once more;
-  (f) T-L64's text half (no plan id in an agent-visible runner file) is recorded as done by #173, with its test;
+  (f) T-L64's text half: no plan id in an agent-visible runner file is done by #173, with its test; the rest of T-L64's text half is still owed and is built here: no stack name in an agent-visible runner comment, the scan run inside the push check, and its `ast` proof (dated 2026-11-07, from F1's stories writer);
   (g) the C# wall-clock test of carry item 9 goes to the test-leftovers plan as a dated line; it is not built here.
   *Accepted when:* (b) and (d) each have a test watched failing first, and (c)'s pin test passes on today's code; the
   recomputed partitions file exists; `pin-runner.mjs --check` and `specs-record.mjs --check` exit 0 on the moved pins.
@@ -576,8 +579,8 @@ when the required mask cannot be applied exactly; a refusal halts the series res
   again, `PACKAGES.md` is generated from the matrix. *Accepted when:* a test that the frozen list has one source; the identity
   in the record; the D65 script case exits non-zero with the frozen file unchanged; T-L63.
 - **Done when:** lang-explore's tests are green, plain and with `BENCH_REQUIRE_SANDBOX=1`; the defective quick-run tree is
-  `intermittently incorrect` under F1.S2 on the scoring CPUs, and both references of task 06 pass 10 of 10 under both profiles
-  at the registered limit; `build_test` is not zero for a C# session of a retained stream; the memory figure has one source
+  `intermittently incorrect` under F1.S2 on the scoring CPUs, and accepted quick-run sessions of both stacks read `accepted`
+  10 of 10 under both profiles at the registered limit (both references of task 06 pass 10 of 10 in F2.S1, where they are made; change 9.1); `build_test` is not zero for a C# session of a retained stream; the memory figure has one source
   and the enforcement check passes in both stacks; `research/module_lang_explore.md` describes the one engine (E3.S10's part).
 
 #### F2 — Six validation packages (cornerstone)

@@ -16,8 +16,8 @@ two CPU profiles with one stated rule; the memory limit is one registered value,
 **Needs.** The stop lifted: the parent's epoch 9 line (2026-11-07, by the owner).
 
 **Done when (parent).** lang-explore's tests are green, plain and with `BENCH_REQUIRE_SANDBOX=1`; the defective quick-run tree
-is `intermittently incorrect` under F1.S2 on the scoring CPUs, and both references of task 06 pass 10 of 10 under both
-profiles at the registered limit; `build_test` is not zero for a C# session of a retained stream; the memory figure has one
+is `intermittently incorrect` under F1.S2 on the scoring CPUs, and accepted quick-run sessions of both stacks read
+`accepted` 10 of 10 under both profiles at the registered limit (the references' check is F2.S1's; change 9.1); `build_test` is not zero for a C# session of a retained stream; the memory figure has one
 source and the enforcement check passes in both stacks; `research/module_lang_explore.md` describes the one engine.
 
 **Not in this epic.** The validation packages, the spec fixes, the freeze and the rulesets (F2); the series over six tasks,
@@ -316,7 +316,405 @@ decided. The line says that it widens S5 past that plan's stated scope (`spikes/
 
 ## F1.S2 — repeated scoring and the one memory value · cornerstone, `model: fable`
 
-Cornerstone: the spec (scenarios and brief) is written by Fable, at `~/rsd/lang-v2/briefs/f1s2-spec.md`, and copied in here by the team lead.
+Cornerstone. The scenarios and the brief below are the Fable writer's spec of 2026-11-07, copied in by the team lead without change, except that its section 4 (the measurement before any freeze) stays outside git at `~/rsd/lang-v2/briefs/f1s2-spec.md`, because it names the private series, session and folders it measures. Only counts, times and sizes from that measurement reach git.
+
+scoring CPUs, so one pass is a sample, not a verdict. After this story a session is built once and run ten times under
+two CPU profiles, and one stated rule turns the ten passes into one of four states. The memory limit, which the quick
+run's task 07 agents read wrong, becomes one registered number that the statement, the visible load test's
+configuration and the scorer all read from one file, and a check on the certifying host shows it is enforced.
+
+---
+
+### 1. The verdict rule, in one place
+
+This is D71 as a coder must read it. Where the plan's words and these words differ, say so in the review; they are
+meant to be the same rule.
+
+**The units.**
+
+- A **session** is one agent run of one stack on one task. It is scored after it ended, never while any session runs.
+- A **pass** is one run of the runner over every visible and every held-out case of the task, on the built copy of
+  the session's tree, with a fresh program for every case, the same requests and the same deadlines every time.
+- Every session gets **ten passes**: passes 1, 3, 5, 7, 9 on the **2-CPU profile** (CPUs `6-7`) and passes 2, 4, 6,
+  8, 10 on the **8-CPU profile** (CPUs `0-7`). The profiles alternate so a change of the host halfway cannot be told
+  from a profile. The same ten for both stacks.
+- An **attempt** is one try at a pass. A pass that ends in an **environment failure** (the layer or the runner failed:
+  a box that cannot start, a holder that fails, a missing or wrong snapshot, a halt of the layer, a record that does
+  not judge every case, a missing memory reading, a host fault, an interrupted run) is tried again **whole**, at most
+  **twice**. So a pass has at most three attempts. Every attempt is kept.
+- A pass is **completed** when one of its attempts ended with the runner judging every case. A completed pass is
+  **clean** when every case of it is `pass`, and **failing** when any case of it has another verdict.
+- A **functional failure** is any case verdict other than `pass` in a completed pass: `wrong answer`, `memory limit`,
+  a leftover process, the test bound reached, standard error overflow, a scenario that ended early, and `build failed`.
+  An environment failure is not a case verdict at all; it is the absence of evidence.
+- The **build** happens once per session, before the passes. A build that really ran and exited non-zero makes every
+  case `build failed` and no pass runs. A build that did not begin (no marker) is an environment failure of the
+  session's build step, tried again like a pass, at most twice.
+
+**The four states.** Exactly one of them, from the completed passes and the exhausted ones:
+
+| state | when |
+|---|---|
+| `accepted` | the build passed, all ten passes completed, and every case passed in all ten |
+| `rejected` | the build failed; or at least one completed pass is failing and no completed pass is clean |
+| `intermittently incorrect` | at least one completed pass is failing and at least one completed pass is clean |
+| `unscored: environment` | no completed pass is failing, and some pass has no completed attempt after its three attempts |
+
+While no completed pass is failing and some pass still has an attempt left, the rule answers `pending`; that is the
+driver's working state, never a recorded verdict.
+
+**The one terminal rule (the sentence a test checks):** *if any completed pass of a session holds a genuine
+functional failure, the session is `rejected` (or `intermittently incorrect` when some pass is clean), permanently,
+whatever any other pass did, with or without retries; it never enters the void or re-run schedule, and its cost counts
+in CPC's numerator like any rejected session.*
+
+What that means for the driver: a functional failure in pass 3 with pass 7 still environment after three attempts is
+`rejected` or `intermittently incorrect` according to the clean count, never `unscored: environment`. Every pass still
+runs its attempts to completion or exhaustion (the budget is ten passes, at most thirty attempts; it never stops early),
+because the label `intermittently incorrect` needs to know whether any pass was clean. A majority of clean passes never
+accepts: nine clean and one failing is `intermittently incorrect`.
+
+**What each state does in the series.** `accepted`, `rejected` and `intermittently incorrect` are **data**: the
+session is `scored`, final, never re-run, and its cost is in CPC's numerator (and, for `accepted`, one in the
+denominator). `unscored: environment` is a **void**: the session stays `ran` with `data: false` and a class that
+starts with `void:`, so `series.mjs`'s existing schedule offers its one re-run (`run --pair k --rerun <stack>`); its
+cost goes on D24's void line and is counted per stack in the note and the report.
+
+**What stays as it is.** D66's one acceptance policy for both stacks (the frozen build is the acceptance build; what
+was scored is what was submitted). `replay --times` is a diagnostic reading of one case and never a verdict.
+`rescore` keeps every refusal and every write it has today. The references are validated under both profiles before
+the freeze (F2.S1 runs that; this story makes it possible). Ten passes are a budget, not a proof (T25).
+
+---
+
+### 2. The scenarios
+
+One test per behaviour, named as this repository names a test: a sentence stating the guarantee, in snake case, under
+`node:test`, in `spikes/lang-explore/test/`. **Fakes** means the test runs with `buildFn`, `runFn`, a fake `spawn`,
+a fake `procApi` and a temp home, and starts no box; the fixtures are invented (a toy program that fails on purpose,
+invented case ids `s01`, `h001`, `h002` as the existing fixtures use; never a quick-run tree or a reference).
+**Real box** means bwrap, the user bus and the pinned toolchains, behind `sandboxGate`/`needs` (skipped with the reason,
+a failure under `BENCH_REQUIRE_SANDBOX=1`). **Certifying host** means a real box whose user scope can read
+`memory.peak`, the host the pre-registration names.
+
+A pass in the fakes is `{ profile, cpus, attempts: [{ attempt, kind: 'completed' | 'environment', cases, reason }] }`.
+Every fixture case is built with `rec()` from `test/quick-score-fixture.mjs`, so it passes `casesOfRecord`.
+
+#### 2.1 The verdict rule (`test/quick-verdict.test.mjs`, pure, fakes)
+
+| # | test name | given | observed |
+|---|---|---|---|
+| V1 | `Ten_completed_passes_with_every_case_passing_is_accepted` | build ok; ten completed passes, every case `pass` | `accepted`, `terminal: true`, counts clean 10 |
+| V2 | `A_failed_build_is_rejected_with_no_pass_run_and_every_case_build_failed` | build ran and exited 1 | `rejected`; the rollup's cases all `build failed`; the driver ran zero passes (the pass seam counts 0 calls) |
+| V3 | `One_completed_pass_with_a_functional_failure_and_no_clean_pass_is_rejected` | ten completed passes, each with one `wrong answer` | `rejected`, `terminal: true` |
+| V4 | `A_functional_failure_beside_clean_passes_is_intermittently_incorrect_and_never_a_majority_pass` | nine clean and one failing; also one clean and nine failing | both `intermittently incorrect`; the nine-clean case is not `accepted` |
+| V5 | `A_functional_failure_in_one_pass_beside_an_environment_failure_in_another_rejects` | pass 1 failing; pass 2 one environment attempt, attempts left | `rejected` (not `pending`, not `unscored: environment`) |
+| V6 | `A_functional_failure_stands_when_another_pass_stays_environment_after_its_two_re_runs_the_session_is_rejected_never_unscored_and_never_re_run` | pass 3 completed with a `memory limit`; pass 7 three environment attempts; the rest clean | `intermittently incorrect` (clean passes exist), `terminal: true`, `reRun: false`; with no clean pass, `rejected` |
+| V7 | `An_environment_attempt_re_run_whole_and_then_clean_leaves_the_pass_clean_and_the_session_accepted` | pass 4: attempt 1 environment, attempt 2 completed clean; the rest clean | `accepted`; pass 4 counted clean, its two attempts both present |
+| V8 | `An_environment_failure_that_stays_after_two_re_runs_with_no_functional_failure_anywhere_is_unscored_environment` | pass 6 three environment attempts; the other nine clean | `unscored: environment`, `terminal: false`, `reRun: true` |
+| V9 | `The_verdict_is_pending_while_a_pass_without_a_functional_failure_still_has_an_attempt_left` | passes 1–9 clean, pass 10 one environment attempt | `pending`; after a second environment attempt still `pending`; after the third, V8's answer |
+| V10 | `Every_non_pass_verdict_of_a_completed_pass_is_a_functional_failure_and_an_environment_attempt_holds_no_case_verdict` | for each verdict word the runner's record can carry (derived from the exported list, not retyped): one completed pass with one case of it | each gives `rejected`; an attempt of kind `environment` with a `cases` list present is refused by the shape check (a fixture the code rejects must fail loudly, never pass as empty) |
+| V11 | `A_pass_is_completed_only_when_the_runner_judged_every_expected_case_a_record_missing_a_case_is_an_environment_attempt` | a runner record with `h002` missing | `casesOfRecord` fails; the attempt is kind `environment` with the reason naming the missing id; no verdict |
+| V12 | `The_verdict_is_the_same_whatever_order_the_passes_and_attempts_are_read_in` | V6's passes shuffled | the same answer, byte for byte |
+
+#### 2.2 The pass driver (`test/quick-passes.test.mjs`, fakes)
+
+| # | test name | given | observed |
+|---|---|---|---|
+| P1 | `A_session_is_built_once_and_then_run_ten_times_five_on_the_2_CPU_profile_and_five_on_the_8_CPU_profile` | a fake build and a fake pass child that record their calls | `buildFn` called once; ten pass calls; the `cpus` of calls 1,3,5,7,9 is exactly `'6-7'` and of 2,4,6,8,10 exactly `'0-7'`; each pass file names its profile |
+| P2 | `Every_pass_runs_every_case_on_the_same_built_copy_with_the_same_ids_and_deadlines` | the same | all ten calls carry the same `tree`, the same sorted `caseIds` (visible and held-out), the same `caseWallMs`, `holdSeconds` and `limits` |
+| P3 | `An_environment_attempt_is_re_run_whole_at_most_twice_and_each_attempt_is_kept_as_its_own_file` | a pass child that answers environment, environment, then completed for pass 2; always environment for pass 5 | `passes/p02-8cpu-a1.json`, `-a2.json`, `-a3.json` exist; pass 5 has exactly three files and no fourth call; the verdict is `unscored: environment` |
+| P4 | `No_attempt_file_is_ever_overwritten_or_removed_and_a_second_scoring_of_the_same_session_appends_nothing` | run the driver twice on a session scored ten of ten | the directory listing and every file's bytes are the same after the second run; the pass child was called zero times the second time; files are opened with `wx` |
+| P5 | `A_resume_after_an_interruption_reuses_the_completed_passes_and_runs_only_what_is_missing` | six pass files on disk (passes 1–6 completed), then the driver starts | the pass child is called for passes 7–10 only; the verdict reads all ten |
+| P6 | `The_verdict_file_names_every_pass_its_profile_its_attempts_the_scoring_time_and_keeps_it_apart_from_the_agents_wall` | a fake clock | `verdict.json` has `verdict`, `terminal`, `passes[10]` each `{ n, profile, cpus, attempts: [{ attempt, kind, file, startedAt, ms }] }`, `scoringMs` (the sum), `buildMs`; the session record's `time.wallMs` is unchanged by scoring |
+| P7 | `A_pass_refuses_to_start_while_a_session_of_the_series_is_launching_and_records_the_halt_without_an_attempt` | a run-map with another session `launching` | the driver answers a halt (kind `environment`, reason names the rid); no pass file is written; `verdict.json.halts` gains one line |
+| P8 | `The_rollup_score_keeps_the_records_meaning_each_case_carries_its_worst_verdict_and_largest_peak_over_the_completed_passes_and_accepted_equals_the_verdict` | passes where `h001` fails once with evidence and passes nine times at a smaller peak | `score.json` has `h001` with the failing verdict, its reason and `firstMismatch.evidence` from the failing pass, `peakBytes` the largest of the ten; `explore.verdict` is `intermittently incorrect`; `explore.accepted` is false; `explore.passes` is 10; the v1 fields `quality.heldout.percent`, `defects`, `primary100` are computed from that rollup as before |
+| P9 | `A_stop_signal_ends_the_scoring_between_two_passes_keeps_what_was_written_and_the_next_run_resumes_it` | abort after pass 3's child returns | the driver exits with the stop's code; three pass files; no partial fourth; a second driver run continues at pass 4 |
+| P10 | `A_session_whose_verdict_is_unscored_environment_becomes_a_void_with_its_history_appended_and_the_series_offers_its_one_re_run` | the loop over one stubbed session whose passes exhaust | the run-map entry stays `ran`, `data: false`, `class: 'void: unscored environment'`, `reclassifiedFrom` has one line (the old class, `data: true`, the reason, `at`); the ledger gained an `event` line and no charge; `stackState()` is `void-rerunnable`; the pair record counts it per stack |
+| P11 | `A_rejected_or_intermittently_incorrect_session_is_scored_and_final_and_the_series_offers_no_re_run` | a session whose passes give V4's answer | the entry is `scored`, `data: true`; `stackState()` is `done`; `rerunProblem` refuses `--rerun`; `cellOfSession` holds its cost |
+| P12 | `Rescore_scores_through_the_same_ten_passes_and_its_refusals_and_writes_are_as_they_were` | the rescore fixture of `quick-rescore-run.test.mjs` | the scoring seam is called through the pass driver (ten pass calls); every existing rescore test stays green unchanged; a rescore whose passes give `unscored: environment` writes nothing and halts, as a harness failure does today |
+| P13 | `Replay_stays_a_single_pass_diagnostic_on_one_case_writes_only_its_own_file_and_feeds_no_verdict` | the replay fixture | `scoreFn` called with `only` and once per `--times`; nothing under `score/` is written or read; `DIAGNOSTIC_NOTE` unchanged; every existing replay test stays green unchanged |
+| P14 | `The_note_counts_accepted_rejected_intermittently_incorrect_and_unscored_environment_per_stack_from_the_records_alone` | records of all four states in a series fixture | the note's table has the four counts per stack and no number typed by hand |
+
+#### 2.3 The affinity read-back (`test/quick-affinity.test.mjs`)
+
+| # | test name | given | observed | runs with |
+|---|---|---|---|---|
+| A1 | `The_read_back_accepts_a_Cpus_allowed_list_that_is_exactly_the_profile_in_any_spelling_and_refuses_any_other` | `'0-7'` against `'0,1,2,3,4,5,6,7'`, `'0-3,4-7'`; `'6-7'` against `'6,7'`; then `'0-6'`, `'0-8'`, `'6'`, `''`, null | the first group gives null (no problem); each of the second gives a sentence naming both masks | fakes |
+| A2 | `A_pass_whose_mask_cannot_be_applied_is_refused_before_the_build_recorded_as_a_halt_named_affinity_not_applied_and_never_scored` | a fake `procApi` whose `status` of the child shows `'6'` for a wanted `'6-7'` | the driver kills the child, writes no attempt file, answers kind `environment` with reason starting `affinity-not-applied`; `verdict.json.halts` records wanted and observed; exit 3 at the command | fakes |
+| A3 | `The_pass_child_reads_its_own_affinity_at_start_and_another_mask_is_an_environment_answer_naming_both_masks` | the child entry with a fake `/proc/self/status` text | the child writes an attempt of kind `environment` whose reason starts `affinity-not-applied` and runs no case | fakes |
+| A4 | `On_this_host_a_pass_child_started_under_each_profile_reads_back_exactly_that_profile_even_from_a_parent_pinned_to_CPUs_6_and_7` | a real `taskset -c 6,7 node` parent spawning `taskset -c 0-7 …` and `taskset -c 6-7 …` probe children | each child's `Cpus_allowed_list` normalises to its profile (a child may widen past its parent's mask) | real box (Linux with `taskset`; skipped elsewhere with the reason) |
+| A5 | `Before_a_paid_launch_the_preflight_probes_each_mask_of_the_pair_and_refuses_the_launch_resumably_when_a_probe_reads_back_another_mask` | the pair's preflight with a fake probe answering `'0-4'` for mask `'0-5'` | the preflight fails with the sentence; the loop halts (exit 3) before any session is launched; the run-map is unchanged; `readback.json` is not written | fakes |
+
+#### 2.4 The one memory value (`test/quick-memory-value.test.mjs`)
+
+| # | test name | given | observed | runs with |
+|---|---|---|---|---|
+| M1 | `The_statement_the_load_test_configuration_and_the_scorers_limit_read_one_number_from_the_one_file_and_it_is_536870912` | the real inputs | `memoryLimit().bytes === 536870912`; the generated `STATEMENT.md` of both stacks contains D72's sentence with that number and `512 MiB`; `samples/load.json` of both stacks has `memoryLimitBytes` equal to it; `calibrationFor(...)` for a quick task gives `limits.memoryBytes` equal to it; the three are read back from the generators, never retyped in the test except the one literal above | fakes |
+| M2a | `The_memory_figure_has_exactly_one_source_in_the_tree` | a scan of `spikes/lang-explore/lib/**`, `explore.mjs`, `inputs/explore.json`'s `quick` block, `spikes/lang-bench/lib/**`, `templates/**` for `536870912`, `536_870_912`, `0x20000000`, `512 MiB`, `512MiB` | no match outside `inputs/memory-limit.json` | fakes |
+| M2b | `The_scan_still_finds_the_literal_in_the_registered_file_so_a_pass_is_not_an_empty_scan` | the same scanner on `inputs/memory-limit.json` | one match | fakes |
+| M3 | `Each_stacks_statement_discloses_its_heap_setting_derived_from_the_value_by_the_layers_own_function` | both statements | the C# heap sentence names `DOTNET_GCHeapHardLimit` = the value `heapKeys('csharp', bytes)` gives (expected `0x1ccccccc`, 483,183,820 bytes, 90 %); the Node sentence names `--max-old-space-size=` the value `heapKeys('node', bytes)` gives (expected 460); the words "Build resources are separate." are present | fakes |
+| M4 | `Both_stacks_get_the_same_memory_sentence_and_the_same_load_configuration_and_differ_only_in_the_stack_heap_and_framework_sentences` | the workspace of each quick task (extends the existing quick-workspace test) | the statements agree byte for byte up to the marked sentences; `samples/load.json` is byte-identical across stacks except the per-stack `heap` block | fakes |
+| M5 | `A_registered_value_that_is_not_a_positive_whole_number_of_MiB_is_refused_when_the_inputs_load_and_names_the_file` | `memory-limit.json` with 536870913, 0, a string | `loadExplore`/`memoryLimit` fails naming the file and the rule; no workspace is built | fakes |
+| M6 | `The_score_records_the_enforced_limit_of_every_case_read_back_from_the_cgroup_and_a_case_whose_read_back_differs_from_the_value_is_an_environment_failure_not_a_verdict` | a runner record whose `lifecycle.memory.maxBytes` is the value for every case; then one case at 268435456 | each rollup case has `memoryMaxBytes === 536870912`; the second gives kind `environment` with a reason naming the case and both numbers; no verdict | fakes |
+| M7 | `On_the_certifying_host_a_case_scope_reads_memory_max_536870912_and_an_invented_workload_over_the_limit_is_stopped_and_classified_memory_limit_with_its_cause_in_both_stacks` | the probe's over-limit programs of both stacks (`lang-bench/lib/exec-probe/programs.mjs`, modes `overlimit` and `overlimit-objects`) run as one pass through the lang-explore pass path with the limit from the one file | for each stack and mode: the case's `memoryMaxBytes` is 536870912 (the runner read it from `prog/memory.max`); the verdict is `memory limit`; the cause is recorded (`oomKill >= 1`, or `runtimeAbort` `dotnet`/`v8` with `peakBytes * 2 >= maxBytes`); `memoryCertified` is true; the run's `cleanup.clean` is true | certifying host |
+
+#### 2.5 Growth and the disk rule (`test/quick-growth.test.mjs`, pure, fakes)
+
+| # | test name | given | observed |
+|---|---|---|---|
+| G1 | `The_pairs_worst_case_is_two_sessions_trees_plus_twice_the_measured_retained_size_of_ten_passes_with_every_re_run` | `growth.json` fields `sessionTreeBytes`, `retainedTenPassesWorstBytes` | `pairWorstCaseBytes()` is `2 * sessionTreeBytes + 2 * retainedTenPassesWorstBytes`; a missing field is a refusal naming it, never a default of 0 |
+| G2 | `The_disk_rule_halts_below_twice_the_pairs_measured_worst_case_and_goes_at_or_above_it` | free bytes one under, equal to, one over `2 * pairWorstCaseBytes` | `halt` with the sentence naming both numbers; `go`; `go`. (The series-level halt before a pair, resumable, is F3.S1's test over this function.) |
+
+#### 2.6 Through the real box (`test/quick-passes-real.test.mjs`, real box)
+
+| # | test name | given | observed |
+|---|---|---|---|
+| R1 | `A_toy_program_that_fails_only_when_its_Cpus_allowed_list_is_6_7_reads_intermittently_incorrect_with_exactly_five_failing_passes_so_the_profile_reaches_the_program` | an invented Node daemon on the Node daemon template that reads `/proc/self/status` and answers wrongly when its list normalises to `6-7`; one invented visible scenario and two invented held-out scenarios in a temp home | the verdict is `intermittently incorrect`; the failing passes are exactly 1, 3, 5, 7, 9 (the 2-CPU ones); the clean passes exactly 2, 4, 6, 8, 10; thirty attempts never happened (ten files); every attempt file names the pass's profile and observed affinity |
+| R2 | `A_toy_program_that_passes_everywhere_reads_accepted_10_of_10_under_both_profiles_at_the_registered_limit_in_both_stacks` | the same toy without the failing branch, once per stack (the C# one on the C# daemon template) | `accepted`; `explore.passes` 10; every case's `memoryMaxBytes` is the one value; the scoring time and retained bytes are printed as diagnostics (not asserted) |
+
+That is **43 scenarios**: 12 + 14 + 5 + 8 + 2 + 2 (M2 is two tests, which the structural-scan rule requires). The
+existing tests of `quick-score`, `quick-rescore`, `quick-rescore-run`, `quick-replay`, `quick-records`,
+`quick-workspace` and `code-shape` stay green as they are; a new `lib/*.mjs` is measured by `code-shape` without being
+listed.
+
+---
+
+### 3. The brief: what to change, file by file
+
+Read first: `spikes/lang-explore/lib/score-quick.mjs`, `run-ctx.mjs`, `records.mjs`, `series.mjs`, `rescore.mjs`,
+`replay.mjs`, `workspace-quick.mjs`, `quick.mjs`, `limits.mjs`, `inputs.mjs`, `explore.mjs`;
+`spikes/lang-bench/lib/exec-layer/run.mjs`, `prefix.mjs`, `env.mjs` (`heapKeys`), `scope.mjs`;
+`spikes/minigit-bench/lib/bare-series.mjs` (`scoreOne`), `run-map.mjs` (`transition`, `NEXT`), `score-run.mjs`
+(the pattern of a scorer in a child process), `cpu-sampler.mjs` (`maskObserved`, `allowedList`).
+
+**Limits on the code.** Every function under 50 lines and cyclomatic complexity at most 4, no exemption
+(`test/code-shape.test.mjs` measures every `lib/*.mjs`). Data is immutable: `Object.freeze`, spread, never a mutation
+of an argument. Failures are values (`ok`/`fail` of `minigit-bench/lib/result.mjs`); an environment failure is
+`fail(reason, { kind: 'environment' })`. Files written with `{ flag: 'wx' }` where append-only is the rule. No
+held-out content, case id or trap name reaches a public file; `leakcheck` and the line scan run before the merge.
+
+#### 3.1 New modules under `spikes/lang-explore/lib/`
+
+**`verdict.mjs`** (pure; no I/O).
+- `PROFILES = Object.freeze([{ name: '2cpu', cpus: '6-7' }, { name: '8cpu', cpus: '0-7' }])`, `PASS_COUNT = 10`,
+  `ATTEMPTS_PER_PASS = 3`.
+- `profileOfPass(n)` → the odd passes' profile is `'2cpu'`, the even passes' is `'8cpu'`.
+- `VERDICTS = Object.freeze(['accepted', 'rejected', 'intermittently incorrect', 'unscored: environment'])`.
+- `isClean(cases)` → every case `verdict === 'pass'`.
+- `passState(pass)` → `'clean' | 'failing' | 'open' | 'exhausted'` (open: no completed attempt and attempts left).
+- `verdictOf({ build, passes })` → `Object.freeze({ verdict, terminal, reRun, counts: { clean, failing, open, exhausted }, reason })`
+  where `verdict` is one of `VERDICTS` or `'pending'`; `terminal` is true for `accepted`, `rejected` and
+  `intermittently incorrect`; `reRun` is true only for `unscored: environment`. A pass whose shape is wrong (an
+  environment attempt carrying `cases`, an attempt without a kind) throws, so a wrong fixture is loud.
+- `rollupOf({ build, passes, limits })` → the one score in `scoreShape`'s result shape: per case the worst verdict over
+  the completed passes (the first failing pass's `verdict`, `reason`, `firstMismatch`, `rIds`, `comparison`),
+  `peakBytes` and `wallMs` the largest over the completed passes, `memoryMaxBytes` the common read-back, plus
+  `passes: <completed count>`.
+
+**`passes.mjs`** (the driver; reads and writes `s/<rid>/score/`).
+- Layout: `score/tree/` (the built copy, removed when the verdict is terminal or the void is settled),
+  `score/passes/pNN-<profile>-aK.json` (one attempt, `wx`), `score/verdict.json` (the derived view, written
+  atomically, its `events` and `halts` lists only grow), `score/score.json` (the rollup the record reads).
+- `attemptFile({ work, n, profile, attempt })` → the path. `readAttempts(work)` → the passes as `verdictOf` reads them.
+- `scorePasses({ work, prepare, build, runPass, affinity, seriesState, now, signal, say })` →
+  `{ kind: 'scored', score, verdict } | { kind: 'void', class: 'void: unscored environment', reason, verdict } | { kind: 'environment', reason } | { kind: 'stopped', reason }`.
+  Steps, each its own function: refuse while a session of the series is `launching` (P7); build once (`prepare` +
+  `build`, kept in `score/tree/`); for each pass with an attempt left and no completed attempt: the affinity probe (A2),
+  the child under `taskset -c <cpus>` (P1), the attempt file; `verdictOf` after every attempt; at the end `rollupOf`
+  and `score.json`. `signal` ends it between two attempts (P9).
+- `runPassChild({ cpus, args, spawn })` → spawns `taskset -c <cpus> <node> lib/pass-child.mjs <args file>` and reads
+  back the child's `Cpus_allowed_list` right after the spawn with `maskObserved` from `minigit-bench/lib/cpu-sampler.mjs`;
+  a mismatch kills the child and answers the `affinity-not-applied` halt.
+
+**`pass-child.mjs`** (an entry, run as a process; the shape of `minigit-bench/score-session.mjs`).
+- Reads its own `/proc/self/status`, compares with the wanted `cpus` (A3), then runs one pass: `runPass` of
+  `score-quick.mjs` over `score/tree/` and the case folder; writes the attempt JSON to the path it was given, exit 0
+  (completed), 3 (environment), 4 (usage). It inherits the affinity, and so do the scope, the namespaces, the box and
+  every program: the execution layer is not changed and keeps its pinned identity.
+
+**`affinity.mjs`** (pure but for one read).
+- `normalizeCpuList(text)` → `'0-7'` from `'0,1,2-7'`, null from an empty or malformed text.
+- `affinityProblem({ wanted, observed })` → null or the sentence `affinity-not-applied: wanted <wanted>, observed <observed>`.
+- `probeMask({ cpus, spawn })` → spawns `taskset -c <cpus> cat /proc/self/status`, answers `ok(observed)` or `fail`.
+  Used by the pass driver before each pass and by the pair preflight for both session masks (A5).
+
+**`memory-limit.mjs`**.
+- `memoryLimit({ file = inputs/memory-limit.json })` → `ok(Object.freeze({ bytes, mib, decidedOn, by }))` or a `fail`
+  naming the file when `bytes` is not a positive whole number of MiB (M5).
+- `memorySentence(limit)` → D72's sentence, exactly: *"The program and its descendants run under a 512 MiB
+  (536,870,912-byte) cgroup memory limit, including runtime overhead. Build resources are separate."* with both
+  numbers formatted from `bytes`.
+- `heapSentence(stack, limit)` → the stack's sentence from `heapKeys(stack, bytes)` of `lang-bench/lib/exec-layer/env.mjs`
+  (never a typed hexadecimal or a typed 460).
+- `loadTestConfig(stack, limit)` → the object written to `samples/load.json`: `{ memoryLimitBytes, memoryLimitMiB, heap: heapKeys(stack, bytes), note }`.
+
+**`growth.mjs`** (pure).
+- `pairWorstCaseBytes({ sessionTreeBytes, retainedTenPassesWorstBytes })`, `diskRuleVerdict({ freeBytes, pairWorstCaseBytes })`
+  → `{ go: true } | { go: false, reason }`; both refuse a missing number (G1, G2). Reads `inputs/growth.json`
+  once it exists (section 4 writes it).
+
+#### 3.2 Changed modules
+
+**`spikes/lang-explore/inputs/memory-limit.json`** (new): `{ "bytes": 536870912, "mib": 512, "decidedOn": "2026-11-07", "by": "D72, the team lead, from consult 0a205591", "note": "one registered value for all six quick tasks; the statement, samples/load.json and the scorer read it here" }`.
+`inputs/explore.json`: the `quick.limits.memoryBytes` key goes; `quickCalibration` (`quick.mjs`) reads the memory file
+and `inputs.mjs`'s `quickLimitsOk` no longer asks for it. The olympiad `limits.memoryFloorBytes` is another thing (the
+olympiad calibration floor) and is left alone; M2a's scan names the `quick` block only.
+
+**`inputs/growth.json`** (new, after the measurement): counts, times and sizes only (section 4).
+
+**`score-quick.mjs`**: split `scoreIn` into two exported steps and keep `scoreQuick` as their composition for
+`replay` (one copy, one build, one run, `only`):
+- `prepareAndBuild(args, area)` → `ok({ copy, frozen, drift, left, cases, build })` | `fail`; a failed build is
+  returned with `build.ok false` so the driver writes the `build failed` rollup and runs no pass.
+- `runPass({ a, copy, cases, owned, dirs })` → today's `runStep` plus: carry `maxBytes` of each case's
+  `lifecycle.memory` into the case as `memoryMaxBytes` (`caseOf`), and refuse with `environment` a case whose
+  `memoryMaxBytes` is not `a.limits.memoryBytes` (M6). `enforcedBounds` is unchanged.
+
+**`run-ctx.mjs`**: `scoreSessionDep` for a quick world returns `scorePasses(...)`'s answer mapped to the loop's
+kinds: `scored` → `{ kind: 'scored', score }`; `void` → `{ kind: 'void', class, reason }`; `environment` and
+`stopped` → as today (`environment` halts the loop resumably, exit 3). The olympiad path is unchanged.
+`runDeps.preflight` gains the two mask probes of the pair (A5).
+
+**`spikes/minigit-bench/lib/bare-series.mjs`** `scoreOne`: one new branch for `r.kind === 'void'`: the entry gets
+`{ class: r.class, data: false, reclassifiedFrom: [...(entry.reclassifiedFrom ?? []), { class, data, reason, at }] }`
+on its `ran` status (no transition; `NEXT` allows only `ran → scored` and the void stays `ran`), the ledger gets an
+`event` line, the session record is written with `score: null`, and the loop goes on. Every existing kind behaves byte
+for byte as today; a test in `spikes/minigit-bench/test/bare-series.test.mjs` pins the new branch and one pins that
+`'scored'` still transitions. This is the one change to v1 and it is small; say its line count in the summary.
+
+**`series.mjs`**: nothing in the schedule changes (`isVoid` already reads a class starting with `void:`). Export
+`VOID_UNSCORED = 'void: unscored environment'` here so the class string has one source.
+
+**`records.mjs`** `exploreSection`: `accepted: known(verdict === 'accepted')` read from `score.explore.verdict`
+(`acceptedOf` stays for the olympiad path and for the rollup's own consistency check); add `verdict`, `passes`,
+`scoringMs` (known); `SCORED_PATHS` gains `explore.verdict` and `explore.passes`. `missingPaths` of an existing
+olympiad record is unchanged (a test).
+
+**`note.mjs`**: the four counts per stack (P14), derived from `VERDICTS` and the records, no number typed.
+
+**`workspace-quick.mjs`**: `quickStatement` gains two marked lines after the stack sentence:
+`<!-- memory-sentence -->` + `memorySentence(limit)` and `<!-- heap-sentence -->` + `heapSentence(stack, limit)`;
+`filesFrom` adds `samples/load.json` from `loadTestConfig(stack, limit)` (frozen, since `frozenOf` freezes `samples/`;
+`writeVisible` only matches `sNN.in/out`, so the scorer never reads it as a case). `quickWorkspaceFiles` takes the
+limit from `memoryLimit()` (a seam for tests). The templates' identity moves once with F1.S3's template edit, not here.
+
+**`explore.mjs`**: unchanged in its re-exec (`run`, `rehearse`, `rescore`, `replay` stay under `taskset -c 6,7`;
+the pass children widen to `0-7` themselves, which the kernel allows without a cpuset, and A4 proves on this host).
+
+**`rescore.mjs`, `replay.mjs`**: no edit. Rescore scores through `scoreSessionDep`, so it gets the ten passes (P12);
+replay calls `world.scoreFn` with `only`, which stays the one-pass `scoreQuick` (P13).
+
+**FORMAT's second amendment (D72, part (b)).** In the task repository, F-LIMITS-D's sentence "is given to the test
+runner, not to the program's author" becomes: the bound is the one the statement states, the same for every task,
+registered before the freeze and enforced as F-MEMORY says. One document gate (`review_document`) on that pull request,
+a changelog line, `Format version: 2` kept. Then the bench's pins move: `spikes/lang-bench/inputs/specs.d/format.json`,
+FORMAT's line in `inputs/hashes-lang.txt`, `PINNED_TASK_SHA`, `inputs/gates/FORMAT-v2.md` appends the round; the
+checks `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` exit 0. Order: the pins
+branch of F1.S1 (e) merges first; this amendment moves them once more.
+
+**Documentation**: `research/module_lang_explore.md` describes the one engine with the ten passes, the four states
+and the verdict file (E3.S10's part); `research/module_tests.md` gains the 43 flows as covered with their files, and
+under *what it does not prove*: ten passes catch a race that shows often on the scoring CPUs and a rarer one can pass
+all ten (T25); the certifying-host check runs on the owner's host before the freeze and at each release of the harness,
+not in CI.
+
+#### 3.3 What must not change
+
+- The meaning of every existing record field: `quality.*`, `explore.cases[*]` (set, id, verdict, wallMs, peakBytes,
+  oomKills, exit), `explore.passRate`, `explore.verdicts`, `explore.limits`, `explore.buildMs`, `trapHits`,
+  `frozenChanges`, `buildTest`. New fields are added beside them (D34: metrics are only added). An olympiad record is
+  byte for byte what it was.
+- D66's one acceptance policy: the frozen build is the acceptance build; `copy-quick.mjs` and `build-quick.mjs` are
+  not edited here (F1.S3 owns the contract).
+- `replay`'s diagnostic status: its note, its one output file, its refusals, its lock.
+- The execution layer (`spikes/lang-bench/lib/exec-layer/`) and the runner: no edit, so `exec-layer.json` and
+  `runner.json` keep their identity. The affinity is applied to the pass child, outside the layer.
+- The run-map's transition table.
+- No pass, attempt or verdict file is ever rewritten or removed; `verdict.json` is the one derived file and is
+  rewritten whole, atomically, with lists that only grow.
+
+#### 3.4 Commands the coder runs
+
+```
+node --test spikes/lang-explore/test/                                   # plain
+BENCH_REQUIRE_SANDBOX=1 node --test spikes/lang-explore/test/            # the completion run, nothing skipped
+BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs           # the one v1 change
+BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<task repository checkout> node spikes/lang-bench/run-tests.mjs
+node spikes/lang-explore/explore.mjs leakcheck
+python3 -I ~/rsd/lang-v2/briefs/leakscan-lines.py . history
+```
+
+Every scenario of 2.1 to 2.5 is written RED first and watched failing for its own reason (the message names the
+missing behaviour, not a setup error); the summary carries the red message and the green run of each. R1, R2 and M7
+run on the owner's host; their runs are recorded with their numbers.
+
+---
+
+
+### 4. The measurement before any freeze
+
+Private: `~/rsd/lang-v2/briefs/f1s2-spec.md`, section 4. It measures the real wall time and the retained size of ten passes, and of the worst case of retries and the void re-run, on the known intermittent C# session and on accepted sessions of both stacks; its inputs and outputs stay under `~/rsd/lang-v2/`, and only `growth.json`'s counts, times and sizes and one prose line reach git.
+
+### 5. What could go wrong
+
+Each place a wrong verdict could come from, and the scenario that catches it.
+
+| the risk | how it would show | caught by |
+|---|---|---|
+| The verdict reads a majority or an average: nine clean passes accept | a racy program accepted | V4 |
+| An environment failure counted as a functional one, or the reverse | a harness fault rejects a session; a real failure voided | V5, V6, V8, V10, V11 |
+| The terminal rule weakened: a functional failure beside an exhausted environment pass becomes `unscored: environment` and is re-run as a void | a rejected session re-run for free, biasing CPC | V6, P11 |
+| A pass re-run more than twice, or an attempt dropped on the floor | the budget grows; evidence lost | P3, P4 |
+| A resume re-runs completed passes or overwrites attempt files | append-only broken; scoring time doubled | P4, P5, P9 |
+| The profile never reaches the program (the child inherits the parent's `6,7`, or `taskset` fails silently) | all ten passes on two CPUs; the 8-CPU half is fiction | A2, A3, A4, R1 |
+| The read-back compares spellings (`0,1,2,3,4,5,6,7` vs `0-7`) and refuses a good mask, or accepts a superset | needless halts, or a wrong mask accepted | A1 |
+| A pass starts while a session runs (the 8-CPU profile overlaps mask A) | the session's time and the pass's result both disturbed | P7 (and F3.S1's order) |
+| The statement says one number and the scope enforces another (the quick run's task 07 confound, T26) | agents aim at a wrong limit | M1, M2a, M6, M7 |
+| A typed hexadecimal in the heap sentence drifts from the layer's `heapKeys` | the statement lies about the heap | M3 |
+| The limit literal reappears somewhere (a test fixture copied into `lib/`, a template) | two sources, one changes | M2a, with M2b proving the scan is alive |
+| The runner's `maxBytes` is not carried into the score, so the enforced limit is never read back | M6 passes vacuously | M6 (a fixture the code rejects must fail), M7 |
+| The rollup changes the meaning of a record field (a mean peak, a first-pass verdict) | the report's memory claim or `defects` wrong | P8, the unchanged olympiad record test in `quick-records` |
+| `accepted` in the record still reads `acceptedOf(score)` and ignores the pass count | a session accepted on fewer than ten passes | P8, V1 |
+| `unscored: environment` recorded as `scored` with data, so it enters CPC | a void in the denominator | P10 |
+| A void re-run of a rejected session | a session paid twice and the best kept | P11 |
+| `rescore` or `replay` quietly becomes a second verdict path | two engines | P12, P13 |
+| The note or the report types a count | a number not from data | P14 |
+| The disk rule reads a guessed number or defaults a missing one to zero | a halt that never fires, a disk filled mid-pair | G1, G2, section 4 |
+| Scoring time added to the agent's wall | time partition wrong | P6 |
+| The build box's non-zero exit from a host fault during a marked build reads as a submission | a false `build failed` | known limit of `build-quick.mjs`; the build's tail is kept; the blind adjudication reads it (F3.S3) |
+| A rarer race passes all ten | accepted wrongly | not caught; T25 says so in the report |
+
+---
+
+### 6. Open points for the judge (found while writing; none changes the rule above)
+
+1. **"Both references of task 06."** The plan (F1.S2, F2.S1, D40) speaks of a reference per stack. On disk on
+   2026-11-07 each `refs-NN/` holds one `ref.py`, `samples/` and one `ws/` (`build.sh`, `run.sh`); there is no
+   `csharp/` and `node/` pair. The data path refuses a stack other than `csharp` or `node` (`HALT_STACK`), so the
+   reference as it stands cannot be scored as a data run; it can be scored with `data: false`, which leaves memory
+   uncertified. The measurement in section 4 therefore runs on the references that exist when it runs: if F2.S1 has
+   made the per-stack references of task 06 by then, both; otherwise the one in `ws/` as a non-data run, named as such
+   in `growth.json`. The judge decides whether F1.S2's *Accepted when* ("both references read `accepted`") waits for
+   F2.S1's task 06 references or is read against what exists.
+2. **The class string of the void.** `series.mjs` plans a re-run only for a class starting with `void:`; the plan's
+   label is `unscored: environment`. This spec records the label in `verdict.json` and the record (`explore.verdict`)
+   and uses `void: unscored environment` as the run-map class. If the judge prefers another string, it has one source
+   (`VOID_UNSCORED`).
+3. **"The visible load test's configuration."** No file or module in the tree defines it today (the visible samples are
+   the spec's section 6 table; F-LOAD's load scenarios are hidden). This spec makes it a generated frozen file
+   `samples/load.json` read by the agent, so the value the agent tests against is the enforced one. F2.S1 may name it
+   differently when it generates the load test; the one source stays `memory-limit.json`.
+4. **The session-launch read-back.** *The scoring CPUs* asks for a read-back before each session launch too. Today
+   `bare-phase.mjs` observes the mask 15 s after the launch and records it; it does not refuse. A5 adds a probe in
+   lang-explore's pair preflight that refuses before any paid launch. The in-flight observation stays as it is.
+5. **The olympiad floor.** `inputs/explore.json`'s `limits.memoryFloorBytes` is also 536870912 but is the olympiad
+   calibration's floor, not D72's value. M2a's scan leaves it alone and says so. If the judge wants it to read the
+   same file, that is one line in `limits.mjs`.
+6. **One change to v1.** The `void` result kind in `bare-series.mjs`'s `scoreOne` is the one edit to
+   `spikes/minigit-bench/`; every existing kind keeps its behaviour. The alternative (settling the void in
+   lang-explore after the loop) needs a `scored → ran` move the run-map forbids, so the small v1 seam is the honest
+   shape.
 
 ## F1.S3 — the submission contract and the offered set
 
@@ -510,6 +908,8 @@ only F1.S2.
 7. **(g) widens the leftovers plan's S5** past its stated scope (`spikes/` only) to a C# test; that plan has no ledger, and the
    team lead decides whether its owner counts this as a change there.
 8. **`todo/README.md`'s row for the parent** still reads "still stopped for re-review", though the epoch 9 line is written.
+
+**The team lead's resolutions, 2026-11-07.** (1) The quoted wording of (c) is the carry file's; the doc line (c) writes may use it. (2) T-L64's rest is built in (f) of the parent, now worded so: no stack name in an agent-visible runner comment, the scan inside the push check, its `ast` proof. It satisfies the plan as written, so it is not a change. (3) lang-explore's own FORMAT pins in `inputs/explore.json` move to the amended FORMAT in (e) with the bench's pin, and once more with F1.S2's memory amendment; the one engine must not read a draft FORMAT. (4) `cache-store.mjs`'s tag pattern is fixed in F1.S3 (a), as written above. (5) (b) moves v1's `harnessIdentity`, because `classify.mjs` is hashed: (b)'s PR says so and re-pins what reads it. (6) (d) refuses a folder too, and `leakcheck` names a linked file it skips instead of skipping it silently. (7) (g) stays as written: one dated line in the leftovers plan; its owner decides. (8) `todo/README.md`'s row is updated in this commit. The Fable spec's open point 1, the references of task 06, is change 9.1 in the parent; its points 2 to 7 are the spec's own choices and stand.
 
 ## 11. Definition of Done (F1)
 
