@@ -3,14 +3,15 @@
 // (the scan over a repository is `quick-leak-scan.test.mjs`).
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { leakMaterial } from '../lib/leak.mjs';
+import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
 import { refsDirOf } from '../lib/heldout-quick.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
 import { writeHeldout } from './olympiad-fixture.mjs';
+import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { EXPLORE, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
 const QUICK = ['04', '05', '06', '07', '08', '10'];
@@ -165,4 +166,36 @@ test('A_window_of_three_grammar_lines_is_grammar_too_and_a_window_with_a_held_ou
   const onlyGrammar = leakMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\n' }] }), explore: EXPLORE, publicText: '', grammarLines: grammar }).value.material;
   assert.equal(onlyGrammar.windowKeys.size, 0, 'with it, a window of grammar lines only is no key');
   assert.ok(withValue.windowKeys.size >= 1, 'a window that holds a value line is');
+});
+
+// ---- a link under a private folder is named, never skipped --------------------------------------------------------------------------------
+
+/** A home whose task 05 holds a link in `refs-05/` and one in `mutants/`, both to an outside file with invented text. */
+function homeWithLinks() {
+  const home = homeWith(['05']);
+  const paths = taskPaths(quickTask('05'), home);
+  const outside = path.join(home, 'outside.py');
+  writeFileSync(outside, 'def invented_outside_reference(state): return fold_the_invented_events(state)\n');
+  mkdirSync(path.join(paths.heldoutDir, 'mutants'), { recursive: true });
+  symlinkSync(outside, path.join(refsDirOf(paths.heldoutDir), 'ws', 'linked.py'));
+  symlinkSync(outside, path.join(paths.heldoutDir, 'mutants', 'M-01.py'));
+  return home;
+}
+
+test('A_linked_file_under_a_private_folder_is_named_by_the_leak_check_and_never_skipped', async () => {
+  const home = homeWithLinks();
+  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  assert.equal(r.ok, false, 'a link is not skipped in silence');
+  assert.match(r.reason, /task 05/);
+  assert.match(r.reason, /refs\/ws\/linked\.py/);
+  assert.match(r.reason, /mutants\/M-01\.py/);
+  const said = [];
+  const ran = await leakcheckCommand({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  assert.notEqual(ran.exit, 0, 'the command does not report clean');
+  assert.match(ran.message, /refs\/ws\/linked\.py/, 'the path is reported');
+});
+
+test('A_private_folder_without_a_link_is_read_as_before_and_that_is_the_point', () => {
+  const r = leakMaterial({ home: homeWith(['05']), explore: EXPLORE, publicText: '' });
+  assert.equal(r.ok, true, r.reason);
 });

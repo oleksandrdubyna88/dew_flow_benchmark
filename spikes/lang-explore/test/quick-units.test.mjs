@@ -2,7 +2,10 @@
 // (a build that fails, a runner that fails, a record that misses a case). No box, no layer and no money: the build and the run are injected. The real thing is proved by `rehearse`.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
@@ -122,9 +125,9 @@ test('The_held_out_reader_accepts_the_agreed_shape_and_records_a_tree_hash_that_
   assert.deepEqual(r.value.caseIds, ['h001', 'h002']);
   assert.deepEqual(r.value.traps, ['h002']);
   const before = r.value.treeSha256;
-  assert.equal(before, casesTreeHash(f.cases));
+  assert.equal(before, casesTreeHash(f.cases).value);
   writeFileSync(path.join(f.cases, 'h002.out'), 'out h002 \n');
-  assert.notEqual(casesTreeHash(f.cases), before);
+  assert.notEqual(casesTreeHash(f.cases).value, before);
   assert.match(heldoutMovedProblem({ inputs: { heldoutQuick: { treeSha256: before, caseCount: 2 } }, heldout: loadHeldoutQuick(f.home, f.task).value }), /changed since the series was made/);
   assert.equal(heldoutMovedProblem({ inputs: { heldoutQuick: { treeSha256: before } }, heldout: r.value }), null);
   assert.match(heldoutMovedProblem({ inputs: {}, heldout: r.value }), /no held-out hash/);
@@ -140,6 +143,73 @@ test('The_held_out_reader_refuses_a_missing_folder_a_missing_manifest_a_stray_fi
   assert.match(loadHeldoutQuick(stray.home, stray.task).reason, /not a pair or cases\.txt: notes\.txt/);
   const trap = casesFolder(t, { traps: 'h009\n' });
   assert.match(loadHeldoutQuick(trap.home, trap.task).reason, /traps\.txt names case\(s\) that are not in cases\/: h009/);
+});
+
+// ---- the held-out reader takes regular files only ----------------------------------------------------------------------------------------
+
+const outsideFile = (f, name, bytes) => { const file = path.join(path.dirname(f.dir), name); writeFileSync(file, bytes); return file; };
+const swapForLink = (f, name, target) => { rmSync(path.join(f.cases, name)); symlinkSync(target, path.join(f.cases, name)); };
+
+test('The_held_out_reader_refuses_a_case_file_that_is_a_link_and_names_it_without_reading_through_it', t => {
+  const f = casesFolder(t);
+  swapForLink(f, 'h001.in', outsideFile(f, 'same-bytes.txt', 'in h001\n'));
+  const r = loadHeldoutQuick(f.home, f.task);
+  assert.equal(r.ok, false, 'a link with the same bytes is not the pair file');
+  assert.match(r.reason, /h001\.in/);
+  assert.match(r.reason, /link/);
+  const closed = casesFolder(t);
+  const unreadable = outsideFile(closed, 'closed.txt', 'in h001\n');
+  chmodSync(unreadable, 0o000);
+  swapForLink(closed, 'h001.in', unreadable);
+  const second = loadHeldoutQuick(closed.home, closed.task);
+  assert.equal(second.ok, false, 'refused as a value; the target (mode 000) was never opened, or reading it would have thrown');
+  assert.match(second.reason, /h001\.in/);
+});
+
+test('The_held_out_reader_refuses_a_cases_folder_that_is_a_link', t => {
+  const f = casesFolder(t);
+  const real = path.join(path.dirname(f.dir), 'real-cases');
+  renameSync(f.cases, real);
+  symlinkSync(real, f.cases);
+  const r = loadHeldoutQuick(f.home, f.task);
+  assert.equal(r.ok, false);
+  assert.notEqual(r.absent, true, 'a link is refused as malformed, not reported as an absent folder');
+  assert.match(r.reason, /cases.*link/);
+});
+
+test('The_held_out_reader_refuses_a_traps_file_that_is_a_link', t => {
+  const f = casesFolder(t);
+  symlinkSync(outsideFile(f, 'traps-elsewhere.txt', 'h001\n'), path.join(f.dir, 'traps.txt'));
+  const r = loadHeldoutQuick(f.home, f.task);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /traps\.txt.*link/);
+});
+
+test('The_held_out_reader_refuses_a_folder_a_fifo_and_a_socket_in_the_cases_folder_and_never_throws', async t => {
+  const makers = {
+    folder: file => mkdirSync(file),
+    fifo: file => execFileSync('mkfifo', [file]),
+    socket: file => new Promise(resolve => { const server = net.createServer().listen(file, () => resolve(server)); t.after(() => server.close()); }),
+  };
+  for (const [kind, make] of Object.entries(makers)) {
+    const f = casesFolder(t);
+    rmSync(path.join(f.cases, 'h002.out'));
+    await make(path.join(f.cases, 'h002.out'));
+    let r;
+    assert.doesNotThrow(() => { r = loadHeldoutQuick(f.home, f.task); }, `${kind}: a value, never a throw`);
+    assert.equal(r.ok, false, `${kind} is refused`);
+    assert.match(r.reason, /h002\.out/, `${kind}: the entry is named`);
+  }
+});
+
+test('The_tree_hash_of_a_folder_of_regular_files_is_the_same_value_as_before_the_check', t => {
+  const f = casesFolder(t);
+  const h = createHash('sha256');
+  for (const name of ['cases.txt', 'h001.in', 'h001.out', 'h002.in', 'h002.out']) h.update(`${name}\0`).update(readFileSync(path.join(f.cases, name))).update('\0');
+  const r = casesTreeHash(f.cases);
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.value, h.digest('hex'), 'names and bytes in name order, as a series made before the check recorded them');
+  assert.equal(loadHeldoutQuick(f.home, f.task).value.treeSha256, r.value);
 });
 
 // ---- the scoring with its seams ---------------------------------------------------------------------------------------------------------
