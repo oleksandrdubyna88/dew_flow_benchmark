@@ -4,7 +4,7 @@
 // copy and named, and the score carries the names in a flag (`explore.nonRegularLeftOut`). Links are copied as links (verbatim), as in the olympiad's copy.
 import { cpSync, lstatSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { excludedDirs, templateFilesOf } from './frozen-set.mjs';
+import { excludedDirs, templateFilesOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { frozenChanges, restoreFrozen } from './workspace.mjs';
 
 const isKnownKind = st => st.isFile() || st.isDirectory() || st.isSymbolicLink();

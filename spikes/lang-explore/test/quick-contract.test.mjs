@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { excludedDirs as scorerExcludedDirs } from '../../minigit-bench/lib/score-deps.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import * as copyModule from '../lib/copy-quick.mjs';
-import { AGENT_EDITABLE, DERIVED_FILES, FROZEN_FOLDERS, PIN_FILES, SCRIPTS, excludedDirs, frozenEntries, frozenOf } from '../lib/frozen-set.mjs';
+import { AGENT_EDITABLE, DERIVED_FILES, FROZEN_FOLDERS, PIN_FILES, SCRIPTS, excludedDirs, frozenEntries, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { CONTRACT_MODULES, SNAPSHOT_RECORD, TEMPLATES_FOLDER, contractIdentity, templatesIdentity } from '../lib/contract-identity.mjs';
 import { exploreSection, finalizeSessionRecord, missingPaths } from '../lib/records.mjs';
 import { harnessPinsNow, templateDriftPossible } from '../lib/harness-pin.mjs';
@@ -35,16 +35,16 @@ const LIB_FOLDERS = ['spikes/lang-explore/lib', 'spikes/lang-bench/lib'];
 test('The_frozen_list_and_the_excluded_folders_have_one_source', () => {
   // the scan: no file of the two libraries but the source holds the pin-file names of a stack as literals ...
   const holders = sourcesUnder(LIB_FOLDERS).filter(f => holdsPinList(f.text)).map(f => f.rel);
-  assert.deepEqual(holders, ['spikes/lang-explore/lib/frozen-set.mjs'], 'the one source, and no second list');
+  assert.deepEqual(holders, ['spikes/lang-bench/lib/frozen-set.mjs'], 'the one source, and no second list');
   // ... and the same scan finds the source, so it can match (a planted second list is found too)
-  assert.equal(holdsPinList(read('spikes/lang-explore/lib/frozen-set.mjs')), true);
+  assert.equal(holdsPinList(read('spikes/lang-bench/lib/frozen-set.mjs')), true);
   assert.equal(holdsPinList(`const copy = ['global.json', 'nuget.config', 'Directory.Build.props'];`), true, 'the scan can fail');
   assert.equal(holdsPinList(`const copy = ['global.json', 'nuget.config'];`), false, 'a part of a list is another list (the push check\'s)');
   // the builder, the copy and lang-bench's template test read the one list
-  assert.match(read('spikes/lang-explore/lib/workspace-quick.mjs'), /from '\.\/frozen-set\.mjs'/);
-  assert.match(read('spikes/lang-explore/lib/copy-quick.mjs'), /from '\.\/frozen-set\.mjs'/);
-  assert.match(read('spikes/lang-bench/test/templates.test.mjs'), /lang-explore\/lib\/frozen-set\.mjs/);
-  assert.match(read('spikes/lang-bench/lib/workspace-diff.mjs'), /lang-explore\/lib\/frozen-set\.mjs/);
+  assert.match(read('spikes/lang-explore/lib/workspace-quick.mjs'), /lang-bench\/lib\/frozen-set\.mjs/);
+  assert.match(read('spikes/lang-explore/lib/copy-quick.mjs'), /lang-bench\/lib\/frozen-set\.mjs/);
+  assert.match(read('spikes/lang-bench/test/templates.test.mjs'), /\.\.\/lib\/frozen-set\.mjs/);
+  assert.match(read('spikes/lang-bench/lib/workspace-diff.mjs'), /from '\.\/frozen-set\.mjs'/);
   // the folders a copy leaves out are the scorer's own list, the same function
   assert.equal(excludedDirs, scorerExcludedDirs, 'one copy of the folder list, not two');
   assert.deepEqual(excludedDirs('csharp'), ['bin', 'obj', 'node_modules']);
@@ -72,9 +72,9 @@ test('The_scripts_comment_lines_name_exactly_the_pin_files_of_the_list_for_each_
 
 test('The_module_doc_sentence_of_the_frozen_list_names_exactly_its_entries', () => {
   const doc = read('research/module_lang_bench.md');
-  const sentence = doc.split('\n').flatMap(line => line.split('. ')).find(part => part.includes('The frozen list (one source, `spikes/lang-explore/lib/frozen-set.mjs`'));
+  const sentence = doc.split('\n').flatMap(line => line.split('. ')).find(part => part.includes('The frozen list (one source, `spikes/lang-bench/lib/frozen-set.mjs`'));
   assert.ok(sentence !== undefined, 'the doc has the sentence');
-  const named = [...sentence.matchAll(/`([^`]+)`/g)].map(m => m[1]).filter(name => name !== 'spikes/lang-explore/lib/frozen-set.mjs').sort();
+  const named = [...sentence.matchAll(/`([^`]+)`/g)].map(m => m[1]).filter(name => name !== 'spikes/lang-bench/lib/frozen-set.mjs').sort();
   assert.deepEqual(named, [...new Set(frozenEntries())].sort(), 'the sentence names every entry of the list and no other');
 });
 
@@ -221,4 +221,13 @@ test('A_series_records_the_runner_pin_and_the_templates_identity_at_init_and_the
   assert.equal(templateDriftPossible({ inputs: { ...pins, templatesIdentity: 'f'.repeat(64) } }), true, 'another identity: the templates moved');
   assert.equal(templateDriftPossible({ inputs: { runnerPin: pins.runnerPin } }), true, 'none recorded: made before the identity existed, so the drift is possible');
   assert.match(readFileSync(path.join(REPO, 'spikes/lang-explore/lib/init-quick.mjs'), 'utf8'), /harnessPinsNow\(\)/, 'init records both');
+});
+
+test('No_file_under_lang_bench_imports_lang_explore_and_the_scan_can_fail', () => {
+  const importsExplore = text => /(?:from|import)\s*\(?\s*['"][^'"]*lang-explore[^'"]*['"]/.test(text);
+  const holders = sourcesUnder(['spikes/lang-bench']).filter(f => importsExplore(f.text)).map(f => f.rel);
+  assert.deepEqual(holders, [], 'the bench is the base: the engine imports it, never the other way round');
+  assert.equal(importsExplore("import { x } from '../../lang-explore/lib/y.mjs';"), true, 'the scan finds a static import');
+  assert.equal(importsExplore("const m = await import('../../lang-explore/lib/y.mjs');"), true, 'and a dynamic one');
+  assert.equal(importsExplore('// the lang-explore engine reads this'), false, 'a word in a comment is not an import');
 });

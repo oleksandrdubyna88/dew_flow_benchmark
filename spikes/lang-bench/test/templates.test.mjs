@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { cpSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { AGENT_EDITABLE, DERIVED_FILES, PIN_FILES, SCRIPTS } from '../../lang-explore/lib/frozen-set.mjs';
+import { AGENT_EDITABLE, DERIVED_FILES, PIN_FILES, SCRIPTS } from '../lib/frozen-set.mjs';
 import { NPM_OFFLINE_ENV, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
 import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';

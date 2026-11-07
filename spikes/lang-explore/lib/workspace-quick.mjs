@@ -9,10 +9,10 @@ import { extractGrammar } from '../../lang-bench/tools/grammar-extract.mjs';
 import { loadInputs } from '../../lang-bench/lib/workspace-build.mjs';
 import { renderPackagesMd } from '../../lang-bench/lib/packages-md.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { SCRIPTS, frozenOf } from './frozen-set.mjs';
+import { SCRIPTS, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { parseScenarioSamples } from './samples-sd.mjs';
 
-export { PIN_FILES, frozenOf } from './frozen-set.mjs';
+export { PIN_FILES, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 
 const BENCH = fileURLToPath(new URL('../../lang-bench/', import.meta.url));
 export const BENCH_TEMPLATES = path.join(BENCH, 'templates');

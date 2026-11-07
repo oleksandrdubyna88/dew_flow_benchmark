@@ -9,7 +9,7 @@ import { REPO } from './paths.mjs';
 
 /** The modules of the contract, from the repository root: the copy, the marked build, the frozen list, the build box and the offline settings. */
 export const CONTRACT_MODULES = Object.freeze([
-  'spikes/lang-explore/lib/copy-quick.mjs', 'spikes/lang-explore/lib/build-quick.mjs', 'spikes/lang-explore/lib/frozen-set.mjs', 'spikes/lang-bench/lib/workspace-box.mjs', 'spikes/lang-bench/lib/cache-offline.mjs',
+  'spikes/lang-explore/lib/copy-quick.mjs', 'spikes/lang-explore/lib/build-quick.mjs', 'spikes/lang-bench/lib/frozen-set.mjs', 'spikes/lang-bench/lib/workspace-box.mjs', 'spikes/lang-bench/lib/cache-offline.mjs',
 ]);
 export const TEMPLATES_FOLDER = 'spikes/lang-bench/templates';
 export const SNAPSHOT_RECORD = 'spikes/lang-bench/inputs/cache-snapshots-lang.json';

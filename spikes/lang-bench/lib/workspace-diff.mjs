@@ -3,9 +3,9 @@
 // `{ ok, findings }`, findings sorted by path. Nothing here changes anything.
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { PIN_FILES, SCRIPTS } from '../../lang-explore/lib/frozen-set.mjs';
+import { PIN_FILES, SCRIPTS } from './frozen-set.mjs';
 
-// Each stack's own files (the pin files are the frozen list's, `spikes/lang-explore/lib/frozen-set.mjs`): its pin files, and the three files a built workspace derives or writes for its stack (the build script, the run script, the packages list).
+// Each stack's own files (the pin files are the frozen list's, `spikes/lang-bench/lib/frozen-set.mjs`): its pin files, and the three files a built workspace derives or writes for its stack (the build script, the run script, the packages list).
 const OWN_FILES = Object.freeze([...SCRIPTS, 'PACKAGES.md']);
 export const CSHARP_PINS = Object.freeze([...PIN_FILES.csharp, '*.csproj', ...OWN_FILES]);
 export const NODE_PINS = Object.freeze(['package.json', 'package-lock.json', ...PIN_FILES.node, ...OWN_FILES]);
