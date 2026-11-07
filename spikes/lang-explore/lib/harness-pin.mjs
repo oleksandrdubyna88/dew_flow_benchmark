@@ -2,6 +2,7 @@
 // later scoring of that tree (`rescore`, `replay`) sees them differ from today's frozen set. Whether the runner has moved since the series was made decides how such a difference is reported (see `copy-quick.mjs`).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { templateHashes, templatesIdentity } from '../../lang-bench/lib/templates-identity.mjs';
 import { SPIKE } from './paths.mjs';
 
 const RUNNER_PIN_FILE = path.resolve(SPIKE, '..', 'lang-bench', 'inputs', 'specs.d', 'runner.json');
@@ -17,3 +18,6 @@ export function runnerDriftPossible({ inputs, now = runnerPinNow() }) {
   const recorded = inputs?.runnerPin;
   return recorded === undefined || recorded.manifestSha256 !== now.manifestSha256;
 }
+
+/** What a series records at `init` about the harness that made it: the runner's pin, the templates' identity and the sha256 of every template file. A later rescore or replay of a kept tree tells harness drift from the agent's changes by them (`template-drift.mjs`). */
+export const harnessPinsNow = () => ({ runnerPin: runnerPinNow(), templatesIdentity: templatesIdentity(), templateHashes: templateHashes() });

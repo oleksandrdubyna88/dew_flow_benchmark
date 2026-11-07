@@ -1,8 +1,11 @@
-// E1.S4: `PACKAGES.md` of a stack, DERIVED from the registered record and the recipe, never typed (parent D12; S3 writes it into the workspaces, `make-snapshots.mjs --print-packages-md <stack>` prints it).
+// E1.S4: `PACKAGES.md` of a stack and kind, DERIVED from the registered record, the recipe and the package matrix, never typed (parent D12; S3 writes it into the workspaces, `make-snapshots.mjs --print-packages-md <stack> --kind <kind>` prints it).
+// F1.S3 (a): the matrix (`inputs/package-matrix.json`) is the one source of what a kind offers: a package whose row for the kind is not `works` is in no table of that kind's file.
 // The version of every offered package is the one the MANIFEST holds; the expected version is the recipe's spec filled from the record's `resolved`, and a manifest that does not hold `name@expected` is a refusal naming
 // the package and both values. The purpose is the recipe's. Every manifest package that is not offered goes to the second table. Pure: the same record and recipe give the same bytes.
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { KINDS } from './cache-recipe-lang.mjs';
 import { plainOrder, versionOrder } from './cache-store.mjs';
+import { isOffered, rowOf } from './package-matrix.mjs';
 
 const ECOSYSTEM_OF = Object.freeze({ csharp: 'nuget', node: 'npm' });
 const SPEC_TOKEN = /\{([A-Z_]+)\}/g;
@@ -72,21 +75,45 @@ function sourcesOf({ stack, record, recipe }) {
   return Object.values(parts).includes(undefined) ? fail(`PACKAGES.md of stack '${stack}': the record and the recipe must both have it (legal stacks: ${Object.keys(ECOSYSTEM_OF).join(', ')})`) : ok(parts);
 }
 
+/** The kind and the matrix the file is rendered for, or the refusal: a kind outside `KINDS`, no matrix, or a package of the recipe with no row for the kind (never offered by default). */
+function kindProblem({ stack, kind, matrix, recipe }) {
+  if (!KINDS.includes(kind)) return `PACKAGES.md of stack '${stack}': the kind ${JSON.stringify(kind)} is not one of ${KINDS.join(', ')}`;
+  if (matrix === undefined || matrix === null) return `PACKAGES.md of stack '${stack}': the package matrix is required (inputs/package-matrix.json)`;
+  const lacking = (recipe.stacks[stack].packages ?? []).find(p => rowOf(matrix, stack, p.name, kind) === undefined);
+  return lacking === undefined ? null : `PACKAGES.md of stack '${stack}': the matrix has no row for ${lacking.name} in the ${kind} kind`;
+}
+
 const noteLines = spec => (spec.packagesNote === undefined ? [] : [spec.packagesNote]);
 
-/** `{ stack, record, recipe }` -> `ok(text)` | `fail(reason)`. `record` is the whole `inputs/cache-snapshots-lang.json`, `recipe` the loaded recipe. */
-export function renderPackagesMd({ stack, record, recipe }) {
+/**
+ * `{ stack, kind, record, recipe, matrix }` -> `ok(text)` | `fail(reason)`. `record` is the whole `inputs/cache-snapshots-lang.json`, `recipe` the loaded recipe, `matrix` the loaded `inputs/package-matrix.json`. Every package of the recipe is
+ * checked against the manifest; only those whose row for `kind` is `works` are listed, and a package that is not listed is in neither table.
+ */
+export function renderPackagesMd({ stack, kind, record, recipe, matrix }) {
   const sources = sourcesOf({ stack, record, recipe });
   if (!sources.ok) return sources;
+  const problem = kindProblem({ stack, kind, matrix, recipe });
+  if (problem !== null) return fail(problem);
   const { ecosystem, snap, spec } = sources.value;
   const offered = offeredRows({ packages: spec.packages, ecosystem, manifest: snap.packages, resolved: snap.resolved ?? {} });
   if (!offered.ok) return offered;
   const used = new Set(offered.value.map(r => r.id));
-  const rest = snap.packages.filter(m => !used.has(idOf(ecosystem, m.name, m.version)));
+  const listed = offered.value.filter(r => isOffered(matrix, stack, r.row.name, kind));
+  const left = new Set(offered.value.filter(r => !listed.includes(r)).map(r => keyOf(ecosystem, r.row.name)));
+  const rest = snap.packages.filter(m => !used.has(idOf(ecosystem, m.name, m.version)) && !left.has(keyOf(ecosystem, m.name)));
   return ok([
     '# Packages', '', SENTENCE_OF[stack], INSTALL_LINE_OF[stack], ...noteLines(spec), '',
     `Cache snapshot: tree sha256 \`${snap.treeSha256}\`, made ${snap.madeOn}.`, '',
-    '## Offered', '', ...offeredTable(offered.value.map(r => r.row)), '',
+    '## Offered', '', ...offeredTable(listed.map(r => r.row)), '',
     '## In the cache as dependencies of the offered packages', '', ...dependencyTable(rest),
   ].join('\n') + '\n');
+}
+
+/** Every package of a stack's recipe with the version the manifest holds: `ok([{ name, version }])` | `fail`. The matrix writer probes these. */
+export function recipeVersions({ stack, record, recipe }) {
+  const sources = sourcesOf({ stack, record, recipe });
+  if (!sources.ok) return sources;
+  const { ecosystem, snap, spec } = sources.value;
+  const offered = offeredRows({ packages: spec.packages, ecosystem, manifest: snap.packages, resolved: snap.resolved ?? {} });
+  return offered.ok ? ok(offered.value.map(r => ({ name: r.row.name, version: r.row.version }))) : offered;
 }

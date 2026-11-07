@@ -2,6 +2,7 @@
 // of the task's FORMAT, `PACKAGES.md` derived from the registered v2 snapshot, the spec as `STATEMENT.md` with the stack sentence (and, for a web task, the framework sentence) on their marked lines, and the
 // visible samples of the spec's section 6. Pure but for reading the templates, the runner and the lang-bench inputs. A file map `{ relPath: { bytes, mode } }` is the same shape the olympiad workspace uses, so
 // `fillWorkspace`, `frozenChanges` and `restoreFrozen` serve both.
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,18 +10,14 @@ import { extractGrammar } from '../../lang-bench/tools/grammar-extract.mjs';
 import { loadInputs } from '../../lang-bench/lib/workspace-build.mjs';
 import { renderPackagesMd } from '../../lang-bench/lib/packages-md.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { SCRIPTS, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 import { parseScenarioSamples } from './samples-sd.mjs';
+
+export { PIN_FILES, frozenOf } from '../../lang-bench/lib/frozen-set.mjs';
 
 const BENCH = fileURLToPath(new URL('../../lang-bench/', import.meta.url));
 export const BENCH_TEMPLATES = path.join(BENCH, 'templates');
 export const BENCH_RUNNER = path.join(BENCH, 'runner');
-const SCRIPTS = new Set(['build.sh', 'run.sh']);
-
-/** The files the agent was told are frozen, besides the template's scripts: the stack's pin files. The project file (`App.csproj`), `package.json` and `package-lock.json` are the agent's to edit (D65). */
-export const PIN_FILES = Object.freeze({
-  csharp: Object.freeze(['global.json', 'nuget.config', 'Directory.Build.props']),
-  node: Object.freeze(['.npmrc', 'tsconfig.json', 'eslint.config.mjs']),
-});
 
 /** The stack sentence of the plan's section 4.5 as D67 (5) amended it: no word about pinned project files. */
 export function quickStackSentence(explore, stack) {
@@ -51,10 +48,22 @@ function filesOf(root, prefix, modeOf) {
   return Object.fromEntries(listFiles(root).filter(rel => !rel.includes('__pycache__') && !rel.endsWith('.pyc')).map(rel => [`${prefix}${rel}`, { bytes: readFileSync(path.join(root, rel)), mode: modeOf(rel) }]));
 }
 
-/** The registered inputs of the language comparison v2 that `PACKAGES.md` is derived from, loaded once. -> `ok({ record, recipe })` | `fail`. */
+/** The registered inputs of the language comparison v2 that `PACKAGES.md` is derived from, loaded once. -> `ok({ record, recipe, matrix })` | `fail`. */
 export function packagesInputs() {
   const loaded = loadInputs();
-  return loaded.ok ? ok({ record: loaded.value.record, recipe: loaded.value.recipe }) : loaded;
+  return loaded.ok ? ok({ record: loaded.value.record, recipe: loaded.value.recipe, matrix: loaded.value.matrix }) : loaded;
+}
+
+/** The sha256 of the `PACKAGES.md` each stack gets for a task of `kind`, from today's record, recipe and matrix: a series records it at `init`, so a later scoring knows the file as the session had it. -> `ok({ csharp, node })` | `fail`. */
+export function packagesMdHashes({ kind, inputs = packagesInputs() }) {
+  if (!inputs.ok) return inputs;
+  const hashes = {};
+  for (const stack of ['csharp', 'node']) {
+    const text = renderPackagesMd({ stack, kind, record: inputs.value.record, recipe: inputs.value.recipe, matrix: inputs.value.matrix });
+    if (!text.ok) return fail(`PACKAGES.md of ${stack}/${kind}: ${text.reason}`);
+    hashes[stack] = createHash('sha256').update(text.value).digest('hex');
+  }
+  return ok(hashes);
 }
 
 /**
@@ -62,26 +71,26 @@ export function packagesInputs() {
  * `templates` and `runner` default to the merged ones of lang-bench (tests may pass copies). -> `ok({ files, frozen })` | `fail`; `frozen` is the subset the agent must not change.
  */
 export function quickWorkspaceFiles({ explore, task, stack, sources, inputs, templates = BENCH_TEMPLATES, runner = BENCH_RUNNER }) {
-  const parts = parsedParts({ stack, sources, inputs });
+  const parts = parsedParts({ stack, kind: task.kind, sources, inputs });
   if (!parts.ok) return parts;
   const files = filesFrom({ explore, task, stack, sources, inputs, templates, runner, ...parts.value });
   return ok({ files, frozen: frozenOf(files, stack) });
 }
 
 /** What the files are made from: the visible samples, the grammar of FORMAT.md and the rendered PACKAGES.md. -> `ok({ samples, grammar, packages })` | `fail`. */
-function parsedParts({ stack, sources, inputs }) {
+function parsedParts({ stack, kind, sources, inputs }) {
   const samples = parseScenarioSamples(sources.spec);
   if (!samples.ok) return samples;
   const grammar = extractGrammar(Buffer.from(sources.format, 'utf8'));
   if (!grammar.ok) return fail(`the grammar of FORMAT.md: ${grammar.reason}`);
-  const packages = renderPackagesMd({ stack, record: inputs.record, recipe: inputs.recipe });
+  const packages = renderPackagesMd({ stack, kind, record: inputs.record, recipe: inputs.recipe, matrix: inputs.matrix });
   return packages.ok ? ok({ samples: samples.value, grammar, packages: packages.value }) : fail(`PACKAGES.md: ${packages.reason}`);
 }
 
 function filesFrom({ explore, task, stack, sources, inputs, templates, runner, samples, grammar, packages }) {
   const statement = quickStatement({ spec: sources.spec, kind: task.kind, stackSentence: quickStackSentence(explore, stack), frameworkSentence: frameworkSentence(explore, stack, inputs.record) });
   const files = {
-    ...filesOf(path.join(templates, stack, task.kind), '', rel => (SCRIPTS.has(rel) ? 0o755 : 0o644)),
+    ...filesOf(path.join(templates, stack, task.kind), '', rel => (SCRIPTS.includes(rel) ? 0o755 : 0o644)),
     ...filesOf(runner, 'runner/', () => 0o644),
     'runner/GRAMMAR.md': { bytes: grammar.bytes, mode: 0o644 },
     'PACKAGES.md': { bytes: Buffer.from(packages), mode: 0o644 },
@@ -92,12 +101,6 @@ function filesFrom({ explore, task, stack, sources, inputs, templates, runner, s
     files[`samples/${s.id}.out`] = { bytes: Buffer.from(s.output), mode: 0o644 };
   }
   return files;
-}
-
-/** The frozen subset of a file map: the scripts, the statement, the packages list, the samples, the runner and the stack's pin files. */
-export function frozenOf(files, stack) {
-  const pin = new Set([...SCRIPTS, ...PIN_FILES[stack], 'STATEMENT.md', 'PACKAGES.md']);
-  return Object.fromEntries(Object.entries(files).filter(([rel]) => pin.has(rel) || rel.startsWith('samples/') || rel.startsWith('runner/')));
 }
 
 /** The visible samples as the scoring needs them: `[{ id, input, output }]`. */

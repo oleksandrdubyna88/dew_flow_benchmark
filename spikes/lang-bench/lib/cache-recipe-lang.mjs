@@ -1,5 +1,5 @@
 // E1.S4: `inputs/cache-recipe-lang.json` -> `ok(recipe)` | `fail` naming the field. v1's `loadRecipe` first (hosts, steps, capture), then the v2 checks: every stack offers a non-empty `packages` list (name, spec, a purpose
-// that fits a table cell), every placeholder is `{[A-Z_]+}` and names a key of that stack's `resolve`, `csharp.project` is a relative folder that exists, and the toolchain pins of the recipe are the ones of
+// that fits a table cell, the kinds it is offered in), every placeholder is `{[A-Z_]+}` and names a key of that stack's `resolve`, `csharp.project` is a relative folder that exists, and the toolchain pins of the recipe are the ones of
 // `inputs/stacks-lang.json` (each compared on its own, so each refusal names what differs). Pure but for the look at the project folder.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -9,6 +9,8 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 const RESERVED_STACK = 'superseded';
+/** The kinds of task a workspace template exists for; each offered package names the kinds it is offered in (the matrix of `inputs/package-matrix.json` decides which). */
+export const KINDS = Object.freeze(['olympiad', 'daemon', 'web']);
 /** Any brace token at all: `{XUNIT_V3}` is found (and refused) here although v1's filler, which knows only `{[A-Z_]+}`, would leave it in the argv unnoticed. */
 const BRACE_TOKEN = /\{([A-Za-z0-9_]*)\}/g;
 const PLACEHOLDER_NAME = /^[A-Z_]+$/;
@@ -27,13 +29,25 @@ const METADATA_CHECKS = Object.freeze([
 /** The licence (an SPDX expression the snapshot's own metadata is compared with) and the maintenance state (the latest release the registry showed, and the day it was read) of one package (PROJECT section 10). */
 const metadataProblems = (at, p) => METADATA_CHECKS.filter(([, passes]) => !passes(p)).map(([field, , why]) => `${at}.${field} ${why}`);
 
-/** The problems of one `packages[i]` entry: a name, a spec, a purpose that fits a table cell, the licence and the maintenance state. */
+/** The problems of `packages[i].kinds`: a non-empty list of legal kinds, none twice. */
+function kindsProblems(at, kinds) {
+  if (!Array.isArray(kinds) || kinds.length === 0) return [`${at}.kinds must be a non-empty list of the kinds the package is offered in (${KINDS.join(', ')})`];
+  const unknown = kinds.filter(k => !KINDS.includes(k));
+  const twice = kinds.filter((k, i) => kinds.indexOf(k) !== i);
+  return [
+    ...(unknown.length === 0 ? [] : [`${at}.kinds names ${unknown.map(k => JSON.stringify(k)).join(', ')}, which is not one of ${KINDS.join(', ')}`]),
+    ...(twice.length === 0 ? [] : [`${at}.kinds names ${[...new Set(twice)].join(', ')} twice`]),
+  ];
+}
+
+/** The problems of one `packages[i]` entry: a name, a spec, a purpose that fits a table cell, the kinds, the licence and the maintenance state. */
 function entryProblems(at, p) {
   const purpose = cellProblem(p?.purpose);
   return [
     ...(isText(p?.name) ? [] : [`${at}.name must be a non-empty text`]),
     ...(isText(p?.spec) ? [] : [`${at}.spec must be a non-empty text`]),
     ...(purpose === null ? [] : [`${at}.purpose must be ${purpose}`]),
+    ...kindsProblems(at, p?.kinds),
     ...metadataProblems(at, p),
   ];
 }

@@ -8,3 +8,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/", () => "ok");
 app.Run();
+
+// Visible to the test project: WebApplicationFactory<Program> starts this app in memory.
+public partial class Program;

@@ -2,13 +2,15 @@
 // and the exact registered version of every package they name. The builder, the refusals and the agent-visible text are in templates-build.test.mjs. Each check is a function of the template ROOT, so a
 // planted copy of the tree can be given to it.
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { cpSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { AGENT_EDITABLE, DERIVED_FILES, PIN_FILES, SCRIPTS } from '../lib/frozen-set.mjs';
 import { NPM_OFFLINE_ENV, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
 import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';
 import { NPMRC_WORKSPACE, lockProblems, runShProblem } from '../lib/workspace-build.mjs';
+import { ownedFolder } from './toolchain-fixtures.mjs';
 import { EXEC_FILE, KINDS, STACKS, TEMPLATES, TEMPLATE_FILES, filesUnder, readJson, readTemplate, snapshotRecord, stacksRecord, templateDir, trackedMode } from './support/workspace-fixtures.mjs';
 
 const everyKind = fn => STACKS.flatMap(stack => KINDS.flatMap(kind => fn(stack, kind)));
@@ -89,8 +91,7 @@ test('A_run_sh_whose_last_line_does_not_exec_fails_the_check', () => {
 
 // ---- the frozen files, named in build.sh ----------------------------------------------------------------------------------------------------------
 
-const AGENT_EDITABLE = Object.freeze({ csharp: ['App.csproj'], node: ['package-lock.json', 'package.json'] });
-const DERIVED_OR_SCRIPT = Object.freeze(['build.sh', 'run.sh', 'PACKAGES.md', 'STATEMENT.md']);
+const DERIVED_OR_SCRIPT = Object.freeze([...SCRIPTS, ...DERIVED_FILES]);
 
 /** The names a build.sh lists after "pin files ...:" in its comment line. */
 const frozenNamesIn = text => (text.split('\n').find(line => line.startsWith('#') && /pin files/.test(line)) ?? '').replace(/^.*:\s*/, '').replace(/\.$/, '').split(', ').filter(Boolean).sort();
@@ -101,7 +102,21 @@ test('The_build_script_names_the_frozen_files_of_its_stack_and_the_list_agrees_w
     const names = listed.filter(pattern => pattern.startsWith(`${stack}/<t>/`)).map(pattern => pattern.slice(`${stack}/<t>/`.length)).filter(name => !name.includes('/'));
     const expected = names.filter(name => !DERIVED_OR_SCRIPT.includes(name) && !AGENT_EDITABLE[stack].includes(name)).sort();
     assert.ok(expected.length >= 3, `${stack}: the list names the pin files`);
+    assert.deepEqual(expected, [...PIN_FILES[stack]].sort(), `${stack}: the push check's list and the frozen list agree`);
     for (const kind of KINDS) assert.deepEqual(frozenNamesIn(readTemplate(stack, kind, 'build.sh')), expected, `${stack}/${kind}: the build.sh line is the frozen files of the list`);
+  }
+});
+
+// ---- the build.sh comment lines of the submission contract ---------------------------------------------------------------------------------------
+
+const CS_FOLDER_COMMENT = 'any folder named bin, obj or node_modules, in any letter case';
+const NODE_COPY_COMMENT = 'copy that is scored drops any folder named node_modules, and npm ci makes the one in the root again from the lock';
+
+test('The_build_scripts_comment_lines_state_which_folders_the_scored_copy_drops', () => {
+  for (const kind of KINDS) {
+    assert.ok(readTemplate('csharp', kind, 'build.sh').includes(CS_FOLDER_COMMENT), `csharp/${kind}: the comment names the folders and the letter case`);
+    assert.ok(readTemplate('node', kind, 'build.sh').includes(NODE_COPY_COMMENT), `node/${kind}: the comment says what the copy drops and how the root node_modules returns`);
+    for (const stack of STACKS) assert.deepEqual(codeLines(readTemplate(stack, kind, 'build.sh')), BUILD_LINES[stack], `${stack}/${kind}: only a comment line changed, the build lines are as they were`);
   }
 });
 
@@ -159,6 +174,28 @@ function nodePinProblems(root) {
   }
   return problems;
 }
+
+// ---- the Node .npmrc: scripts stopped and exact versions written (D65) ----------------------------------------------------------------------------
+
+const NPMRC_KEYS = Object.freeze(['offline=true', 'update-notifier=false', 'ignore-scripts=true', 'save-exact=true']);
+const npmrcKeys = text => text.split('\n').filter(line => line.trim() !== '');
+
+/** What is wrong with the `.npmrc` of every Node template: the four keys, each once, and nothing else. */
+function npmrcProblems(root) {
+  return KINDS.flatMap(kind => {
+    const keys = npmrcKeys(readTemplate('node', kind, '.npmrc', root));
+    return [...NPMRC_KEYS.filter(key => !keys.includes(key)).map(key => `node/${kind}: .npmrc lacks ${key}`), ...keys.filter(key => !NPMRC_KEYS.includes(key)).map(key => `node/${kind}: .npmrc holds ${key}`)];
+  });
+}
+
+test('The_node_npmrc_of_every_template_holds_ignore_scripts_and_save_exact', t => {
+  assert.deepEqual(npmrcKeys(NPMRC_WORKSPACE), NPMRC_KEYS, 'the constant the templates follow holds the four keys');
+  assert.deepEqual(npmrcProblems(TEMPLATES), [], 'and so does the .npmrc of each of the three Node templates');
+  const planted = path.join(ownedFolder(t, 'npmrc'), 'templates');
+  cpSync(TEMPLATES, planted, { recursive: true });
+  writeFileSync(path.join(planted, 'node', 'daemon', '.npmrc'), 'offline=true\nupdate-notifier=false\nignore-scripts=true\n');
+  assert.deepEqual(npmrcProblems(planted), ['node/daemon: .npmrc lacks save-exact=true'], 'the check can fail');
+});
 
 test('The_node_pins_set_what_the_contract_sets', () => {
   assert.deepEqual(nodePinProblems(TEMPLATES), []);

@@ -1,0 +1,196 @@
+{
+  "decidedOn": "2026-11-07",
+  "reason": "Measured by package-matrix.mjs: each package of the recipe added alone to the template of each kind and built offline over the registered snapshot; an unsupported row carries the code the build failed with.",
+  "measuredAgainst": {
+    "snapshots": {
+      "csharp": "0b265e7c7e6553932102ebd2861285b47cbba73807a3d37c5e4507c03888ac9d",
+      "node": "bebdc7a20541b446c4efd09099a58354aa877e8137956fa66a67afad969fb2c6"
+    },
+    "templatesIdentity": "b55d0c2058fc7322dc7e96be9ab3bc1f3f34ad1faaa419437dd0504bb92eba67"
+  },
+  "rows": {
+    "csharp": {
+      "Microsoft.Extensions.Hosting": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "Microsoft.AspNetCore.Authentication.JwtBearer": {
+        "olympiad": {
+          "state": "unsupported",
+          "code": "NU1603"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "Microsoft.AspNetCore.Mvc.Testing": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "xunit.v3": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "xunit.runner.visualstudio": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "Microsoft.NET.Test.Sdk": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      }
+    },
+    "node": {
+      "fastify": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "@fastify/jwt": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "@fastify/type-provider-typebox": {
+        "olympiad": {
+          "state": "unsupported",
+          "code": "ENOTCACHED"
+        },
+        "daemon": {
+          "state": "unsupported",
+          "code": "ENOTCACHED"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "typebox": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "pino": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "typescript": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "@types/node": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "typescript-eslint": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "eslint": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      },
+      "@eslint/js": {
+        "olympiad": {
+          "state": "works"
+        },
+        "daemon": {
+          "state": "works"
+        },
+        "web": {
+          "state": "works"
+        }
+      }
+    }
+  }
+}

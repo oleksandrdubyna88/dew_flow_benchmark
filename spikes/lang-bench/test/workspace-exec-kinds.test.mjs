@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { nodeFs, excludedDirs } from '../../minigit-bench/lib/score-deps.mjs';
-import { quickPristineCopy } from '../../lang-explore/lib/copy-quick.mjs';
 import { npmOfflineArgv, openBox } from '../lib/cache-offline.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { statOf } from '../lib/exec-layer/proc.mjs';
@@ -234,8 +233,8 @@ test('A_folder_named_Bin_in_another_letter_case_is_left_out_of_the_csharp_compil
   const inPlace = await inBox(w, 'csharp', ['bash', 'build.sh']);
   assert.equal(inPlace.code, 0, `the default compile items leave these folders out whatever their letter case: ${outputOf(inPlace).slice(-1500)}`);
   const copy = path.join(ownedFolder(t, 'cpy', ensureTestRoot()), 'w');
-  quickPristineCopy({ source: w, dest: copy, stack: 'csharp', files: {} });
-  for (const folder of folders) assert.equal(existsSync(path.join(copy, folder, 'Extra.cs')), true, `the clean copy drops only the exact names, so ${folder} is kept`);
+  nodeFs.copyTree(w, copy, excludedDirs('csharp'));
+  for (const folder of folders) assert.equal(existsSync(path.join(copy, folder, 'Extra.cs')), true, `the scorer copy (the scorer's own excludedDirs list; lang-bench never imports lang-explore) drops only the exact names, so ${folder} is kept`);
   const onCopy = await inBox(copy, 'csharp', ['bash', 'build.sh']);
   assert.equal(onCopy.code, 0, outputOf(onCopy).slice(-1500));
 });

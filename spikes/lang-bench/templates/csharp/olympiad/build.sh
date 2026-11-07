@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The program's sources are the .cs files in this folder and its subfolders, except tests/ (tests go there, outside this build) and any folder named bin, obj or node_modules; App.csproj builds them into bin/Release/net10.0/.
+# The program's sources are the .cs files in this folder and its subfolders, except tests/ (tests go there, outside this build) and any folder named bin, obj or node_modules, in any letter case; App.csproj builds them into bin/Release/net10.0/.
 # These fail the build: a nullable warning, a package version problem (NU1603, NU1605) and a use of BinaryFormatter (SYSLIB0011). Every other warning is shown and the build still passes.
 # These files are this stack's pin files and stay as they are: global.json, nuget.config, Directory.Build.props.
 set -euo pipefail

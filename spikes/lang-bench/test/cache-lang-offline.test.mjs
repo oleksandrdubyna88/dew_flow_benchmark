@@ -12,6 +12,7 @@ import { treeHash } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, openBox, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
 import { nugetLicence, npmLicences } from '../lib/package-metadata.mjs';
 import { manifestSha256Of } from '../lib/cache-store.mjs';
+import { stackRecipeSha256 } from '../lib/stack-recipe.mjs';
 import { closeReal, ensureTestRoot, realBuild, realGate, snapshotOf, toolchains } from './support/cache-box.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
@@ -63,6 +64,7 @@ test('The_real_build_registers_both_stacks_read_only_and_each_snapshot_re_hashes
     for (const [part, hash] of Object.entries(rec.parts)) assert.equal(treeHash(path.join(folder, part)), hash, `${stack}/${part}`);
     assert.ok(rec.packages.length > 0 && rec.packages.every(p => /^sha512-/.test(p.integrity)), `${stack}: every manifest package has an integrity`);
     assert.equal(rec.recipeSha256, createHash('sha256').update(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe-lang.json'))).digest('hex'));
+    assert.equal(rec.stackRecipeSha256, stackRecipeSha256({ spec: recipe.stacks[stack], projectSha256: rec.projectSha256 }), `${stack}: the record carries the hash of what builds that stack`);
     assert.equal(rec.projectSha256, stack === 'csharp' ? treeHash(path.join(SPIKE, recipe.stacks.csharp.project)) : null);
     assert.deepEqual(Object.keys(rec.resolved).sort(), Object.keys(recipe.stacks[stack].resolve).sort(), `${stack}: every x-range was resolved once and recorded`);
     t.diagnostic(`${stack}: ${rec.sizeBytes} bytes, ${rec.packages.length} packages, ${rec.treeSha256}`);
@@ -96,7 +98,7 @@ async function nodeOffline(t, real) {
   assert.deepEqual(box.egress().refused, {}, 'and none was even asked: a refused attempt would be in the log');
 }
 
-const props = resolved => Object.entries({ SnapHostingVersion: 'HOSTING', SnapJwtBearerVersion: 'JWT_BEARER', SnapXunitVersion: 'XUNIT', SnapXunitVsVersion: 'XUNIT_VS', SnapTestSdkVersion: 'TEST_SDK' }).map(([prop, key]) => `-p:${prop}=${resolved[key]}`);
+const props = resolved => Object.entries({ SnapHostingVersion: 'HOSTING', SnapJwtBearerVersion: 'JWT_BEARER', SnapMvcTestingVersion: 'MVC_TESTING', SnapXunitVersion: 'XUNIT', SnapXunitVsVersion: 'XUNIT_VS', SnapTestSdkVersion: 'TEST_SDK' }).map(([prop, key]) => `-p:${prop}=${resolved[key]}`);
 
 async function csharpOffline(t, real) {
   const box = await fresh(t, real, 'csharp', 'n1');
