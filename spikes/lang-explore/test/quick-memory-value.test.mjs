@@ -137,5 +137,5 @@ test('The_calibrate_command_tells_a_quick_task_where_its_limits_live_the_memory_
   const text = said.join('\n');
   assert.match(text, /memory-limit\.json/, 'the memory limit is named at its one source');
   assert.match(text, /quick\.limits/, 'the time and build limits are named where they are');
-  assert.doesNotMatch(text, /limits are fixed \(explore\.json quick\.limits\)/);
+  assert.doesNotMatch(text, /its limits are fixed/);
 });
