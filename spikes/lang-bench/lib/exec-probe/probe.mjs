@@ -1,4 +1,4 @@
-// E1.S8b brief B: the host probe — every line of the plan's probe list, run THROUGH the layer (the real prefix, the delegated scope, the v2 box), then the memory view at 256 and 512 MiB
+// E1.S8b brief B: the host probe — every line of the plan's probe list, run THROUGH the layer (the real prefix, the delegated scope, the v2 box), then the memory view at its two probe limits (256 and 512 mebibytes)
 // asserted by policy. It records first and judges after: the record is complete even when a line fails; the exit is 3 naming the FIRST failed line (`halt`), then the memory verdict.
 // Exit 0 only when every line passed AND a decided memory policy holds.
 import * as fs from 'node:fs';

@@ -16,8 +16,8 @@ import { rescore } from '../lib/rescore.mjs';
 import { scoreSessionDep } from '../lib/run-ctx.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { harness, recordFor } from './quick-passes-harness.mjs';
-import { LIMIT_BYTES, sortedIds } from './quick-passes-fixture.mjs';
-import { built, frozenFiles, ran, rec, scoringArea } from './quick-score-fixture.mjs';
+import { LIMIT_BYTES } from './quick-passes-fixture.mjs';
+import { built, frozenFiles, scoringArea } from './quick-score-fixture.mjs';
 import { EXPLORE, TASK, world } from './quick-series-fixture.mjs';
 
 const read = file => readFileSync(file, 'utf8');
@@ -106,7 +106,8 @@ test('The_quick_worlds_seams_make_the_clean_copy_the_case_folder_and_the_build_a
   assert.ok(passed.every(([tree, ids]) => tree === path.join(a.work, 'tree') && ids.join() === 'h001,h002,s01'));
   assert.equal(r.score.build.ok, true);
   assert.equal(r.score.explore.cases.length, 3);
-  assert.ok(sortedIds().length === 3 && rec('s01').id === 's01');
+  assert.deepEqual(r.score.explore.cases.map(c => c.id), ['h001', 'h002', 's01'], 'the clean copy and the case folder are the ones the seams made');
+  assert.ok(r.score.explore.cases.every(c => c.verdict === 'pass' && c.memoryMaxBytes === LIMIT_BYTES));
   assert.deepEqual(readdirSync(a.work).filter(f => !['events', 'passes'].includes(f)).sort(), ['build.json', 'score.json', 'verdict.json'], 'the tree and the case folder are gone');
 });
 

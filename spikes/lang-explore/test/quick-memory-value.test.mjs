@@ -53,17 +53,16 @@ function sourcesUnder(root, places) {
   return places.flatMap(walk).filter(rel => !/node_modules|\/bin\/|\/obj\/|\.(png|dll|exe)$/.test(rel)).map(rel => [rel, readFileSync(path.join(root, rel), 'utf8')]);
 }
 const LITERAL = /536870912|536_870_912|0x20000000|512 ?MiB/;
-// the probe's own test values (the limits it probes the layer at, 256 and 512 MiB) are not the registered limit; it is the one folder left out, by name
-const PROBE = path.join('lang-bench', 'lib', 'exec-probe');
 const scanPlaces = () => {
   const own = path.join(SPIKES, 'lang-explore');
   const quickBlock = JSON.stringify(JSON.parse(readFileSync(path.join(own, 'inputs', 'explore.json'), 'utf8')).quick);
-  return [...sourcesUnder(SPIKES, ['lang-explore/lib', 'lang-explore/explore.mjs', 'lang-bench/lib', 'lang-bench/templates']).filter(([rel]) => !rel.startsWith(PROBE)), ['inputs/explore.json (quick)', quickBlock]];
+  return [...sourcesUnder(SPIKES, ['lang-explore/lib', 'lang-explore/explore.mjs', 'lang-bench/lib', 'lang-bench/templates']), ['inputs/explore.json (quick)', quickBlock]];
 };
 
 test('The_memory_figure_has_exactly_one_source_in_the_tree', () => {
   const hits = scanPlaces().filter(([, content]) => LITERAL.test(content)).map(([rel]) => rel);
   assert.deepEqual(hits, [], 'the figure is written in inputs/memory-limit.json and nowhere else');
+  assert.ok(scanPlaces().some(([rel]) => rel.startsWith(path.join('lang-bench', 'lib', 'exec-probe'))), 'the probe of the execution layer is in the scan');
 });
 
 test('The_scan_still_finds_the_literal_in_the_registered_file_so_a_pass_is_not_an_empty_scan', () => {

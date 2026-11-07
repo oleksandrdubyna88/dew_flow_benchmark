@@ -272,3 +272,31 @@ test('A_decided_session_entered_again_after_a_re_pin_finishes_from_its_records_a
   assert.equal(h.calls.pass.length, 0);
   assert.deepEqual(again.score, first.score);
 });
+
+test('A_pass_is_completed_only_when_the_runner_judged_every_expected_case_a_record_missing_a_case_is_an_environment_attempt', async () => {
+  const ctl = new AbortController();
+  const h = harness();
+  const inner = h.a.runPass;
+  h.a.runPass = async spec => {
+    const body = await inner(spec);
+    if (spec.n !== 2 || spec.attempt !== 1) return body;
+    ctl.abort();
+    const cases = body.record.cases.filter(c => c.id !== 'h002').map(c => (c.id === 's01' ? { ...c, status: 'FAIL', reason: 'entry 1 differs' } : c));
+    return { ...body, record: { ...body.record, cases } };
+  };
+  const stopped = await scorePasses({ ...h.a, signal: ctl.signal });
+  assert.equal(stopped.kind, 'stopped');
+  const snap = verdictFile(h.work);
+  const attempt = snap.passes[1].attempts[0];
+  assert.equal(attempt.kind, 'environment', 'the partial record is an environment attempt');
+  assert.equal(snap.counts.failing, 0, 'the non-pass verdict inside the partial record is not counted');
+  assert.notEqual(snap.verdict, 'rejected');
+  assert.equal(snap.verdict, 'pending');
+  const body = readFileSync(path.join(h.work, 'passes', attempt.file), 'utf8');
+  assert.ok(body.includes('entry 1 differs'), 'the file keeps what the runner wrote');
+  h.a.runPass = inner;
+  const resumed = await scorePasses(h.a);
+  h.release();
+  assert.equal(resumed.verdict.verdict, 'accepted', 'the pass is run again whole and is clean');
+  assert.deepEqual(resumed.verdict.passes[1].attempts.map(a => a.kind), ['environment', 'completed']);
+});
