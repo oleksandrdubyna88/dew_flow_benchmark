@@ -44,7 +44,7 @@ function laterForm(label, facts) {
   const verdict = new RegExp(`^\`(?:${facts.header.verdicts.join('|')})\` · \\d{4}-\\d{2}-\\d{2}$`);
   return {
     'Gate verdict': value => verdict.test(value) && DATE.test(value.slice(-10)),
-    'Freeze tag': value => /^`spec-frozen(?:-[AB])?-\d{8}`$/.test(value),
+    'Freeze tag': value => /^`spec-frozen-[AB]-\d{8}`$/.test(value),
     Amendments: value => /^A1 \(section 8\)$/.test(value) || /^A1–A(?:[2-9]|[1-9]\d+) \(section 8\)$/.test(value),
   }[label];
 }
@@ -73,11 +73,11 @@ export function isRealDate(text) {
 }
 
 const dateOf = value => /(\d{4}-\d{2}-\d{2})`?$/.exec(value)?.[1];
-const tagParts = value => /^`spec-frozen(?:-([A-Z]))?-(\d{8})`$/.exec(value);
+const tagParts = value => /^`spec-frozen-([A-Z])-(\d{8})`$/.exec(value);
 const notReal = (row, date) => `line ${row.no}: ${date} is not a real date`;
 
 const verdictDateProblems = row => (dateOf(row.value) !== undefined && !isRealDate(dateOf(row.value)) ? [notReal(row, dateOf(row.value))] : []);
-const letterProblems = (row, letter) => (letter !== undefined && !['A', 'B'].includes(letter) ? [`line ${row.no}: the group letter ${letter} of the freeze tag is none of A, B`] : []);
+const letterProblems = (row, letter) => (!['A', 'B'].includes(letter) ? [`line ${row.no}: the group letter ${letter} of the freeze tag is none of A, B`] : []);
 const tagDateProblems = (row, parts) => [...letterProblems(row, parts[1]), ...(isRealDate(parts[2]) ? [] : [notReal(row, parts[2])])];
 const tagProblems = row => (tagParts(row.value) === null ? [] : tagDateProblems(row, tagParts(row.value)));
 const DATED = Object.freeze({ 'Gate verdict': verdictDateProblems, 'Freeze tag': tagProblems });

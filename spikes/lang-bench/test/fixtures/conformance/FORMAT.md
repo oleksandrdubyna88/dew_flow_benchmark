@@ -1,7 +1,7 @@
 # Task spec and sample format
 
 Format version: 2
-Gate verdict: `proceed` · 2026-11-04
+Gate verdict: `proceed` · 2026-11-05
 Freeze tag: none yet
 
 This document fixes the shape of every task spec in `todo/tasks/` and of every visible sample beside it: the file and its
@@ -60,8 +60,8 @@ Directly under the title, a two-column table with an empty header row and exactl
 |---|---|---|
 | `Kind` | the kind phrase of the task (below) | unchanged |
 | `Gate verdict` | `not yet gated` | `` `<verdict>` · <YYYY-MM-DD> ``, the verdict being `proceed`, `good_enough` or `continue_anyway` |
-| `Freeze tag` | `none yet` | `` `spec-frozen-<yyyymmdd>` `` |
-| `Freeze rule` | `frozen: changes only by a dated amendment before the v2 pre-registration` | unchanged |
+| `Freeze tag` | `none yet` | `` `spec-frozen-<group>-<yyyymmdd>` ``, `<group>` being `A` or `B`, the group of tasks frozen together |
+| `Freeze rule` | `this text changes only by a dated amendment from its authors` | unchanged |
 | `Amendments` | `none yet` | `A1 (section 8)`, or `A1–A<k> (section 8)` once there are k |
 
 The kind phrases form a closed list; the phrase is the whole value of the `Kind` row:
@@ -221,7 +221,7 @@ The program and every process it starts may hold at most 512 processes and threa
 F-FROZEN, the frozen list:
 
 ```text
-The workspace holds `STATEMENT.md`, `samples/`, `runner/`, `build.sh`, `run.sh`, `PACKAGES.md` and the toolchain pin files of the stack. These are frozen inputs: do not change, rename or remove them. The program's sources go where `build.sh` and `run.sh` expect them; the two scripts say where.
+The workspace holds `STATEMENT.md`, `samples/`, `runner/`, `build.sh`, `run.sh`, `PACKAGES.md` and the toolchain pin files named in `build.sh`. These are frozen inputs: do not change, rename or remove them. The program's sources go where `build.sh` and `run.sh` expect them; the two scripts say where.
 ```
 
 F-BUILD, the build bound:
@@ -239,7 +239,7 @@ Every test gives the program the same base environment, identical for both stack
 F-OFFLINE:
 
 ```text
-The tests run offline, on a pristine copy of the workspace, after the build. The program must not depend on the network, on files outside the workspace, or on anything written during an earlier run.
+The tests run offline. They use a clean copy of the workspace as you left it: build output and installed packages are removed, and the frozen inputs are put back as they were given. Every other file is yours, including the project files that declare or lock your packages, and is built as you left it, by `bash build.sh`. The program must not depend on the network, on files outside the workspace, or on anything written during an earlier run.
 ```
 
 F-HIDDEN — the first sentence opens the requirement, the task's own sentences about what the hidden tests cover stand
@@ -258,7 +258,7 @@ The visible samples are a small part of the same suite; a program that passes th
 F-LIMITS-O, the limits as floors and the registration rule (F-MEMORY and F-PROCS follow it in the same requirement):
 
 ```text
-Each test runs the program once, in a fresh process, under a limit on wall-clock time and a limit on memory. The exact values are registered when the hidden suite is calibrated against reference solutions in both stacks, before any session, and are given to the test runner, not to the program's author. The registered values are never below these floors: **1 second** of wall-clock time per run and **256 MB** of memory. (The registration rule: at least three times the wall time of the slower reference, and at least twice the peak memory of the larger reference.)
+Each test runs the program once, in a fresh process, under a limit on wall-clock time and a limit on memory. The exact values are registered when the hidden suite is calibrated against reference solutions in both stacks, before any session, and are given to the test runner, not to the program's author. The registered values are never below these floors: **1 second** of wall-clock time per run and **256 MiB** of memory. (The registration rule: at least three times the wall time of the slower reference, and at least twice the peak memory of the larger reference.)
 ```
 
 F-BYTES-O, byte-exact output, the default:
@@ -354,7 +354,7 @@ such values (pairwise distinct, equal to a count) with the checks of 5.5.
 F-LIMITS-D (F-LOAD, F-MEMORY and F-PROCS follow it in the same requirement):
 
 ```text
-Each test starts the program once, in a fresh process, and drives one scenario against it under a bound on the program's memory. The exact bound is registered when the hidden suite is calibrated against reference solutions in both stacks, before any session, and is given to the test runner, not to the program's author. The registered bound is never below a floor of **256 MB**. (The registration rule: at least twice the peak memory of the larger reference over all the task's load scenarios.)
+Each test starts the program once, in a fresh process, and drives one scenario against it under a bound on the program's memory. The exact bound is registered when the hidden suite is calibrated against reference solutions in both stacks, before any session, and is given to the test runner, not to the program's author. The registered bound is never below a floor of **256 MiB**. (The registration rule: at least twice the peak memory of the larger reference over all the task's load scenarios.)
 ```
 
 F-LOAD. `{size}` says in words how large a load scenario gets — counts of connections, requests or bytes, or the R-ids
