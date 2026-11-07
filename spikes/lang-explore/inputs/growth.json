@@ -1,0 +1,14 @@
+{
+  "measuredOn": "2026-11-07",
+  "host": "linux x64, 14 CPUs",
+  "sessionTreeBytes": 57888615,
+  "retainedTenPassesBytes": 800952,
+  "retainedTenPassesWorstBytes": 809061,
+  "tenPassesWallMs": {
+    "defective": 306320,
+    "accepted-csharp": 310155,
+    "accepted-node": 298578
+  },
+  "mostAttempts": 30,
+  "pairWorstCaseBytes": 117395352
+}

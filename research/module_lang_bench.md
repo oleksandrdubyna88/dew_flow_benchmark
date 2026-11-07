@@ -181,6 +181,12 @@ refuses, a case missing from the record, a launch that failed, a case whose peak
 prints a fixed line to standard error and then `exec`s `build.sh`; no marker means `nsenter`, `bwrap` or the seed step failed, so it is a void; a timeout and a marked non-zero exit are submissions. A host fault
 *during* a marked build (a full disk, for example) is a non-zero exit of `build.sh` and still reads as a submission: the code cannot tell the two apart; the kept tail is how a person can.
 
+**Since F1.S2 a quick-run session is scored by ten passes, not one** (`lib/passes.mjs` in lang-explore; the section "Scoring a quick-run session" of [module_lang_explore.md](module_lang_explore.md) has the rule): the build above happens once at an atomic commit point, and the layer then runs the runner ten times, five
+on the 2-CPU profile and five on the 8-CPU profile, each pass in a child process started under `taskset`; the pinned execution layer and runner are not changed and keep their identities (the affinity is applied outside the layer, to the pass child, and
+inherited by the scope, the box and the program). `scoreQuick` stays the one-pass scoring that `replay` (a diagnostic on one case) and the rehearsal use. The memory limit is one registered value (`lang-explore/inputs/memory-limit.json`, 512 MiB): the generated `STATEMENT.md` states it with the stack's heap setting
+(from the layer's own `heapKeys`), the frozen `samples/load.json` carries it, and the score reads back the limit the runner found in `prog/memory.max` for every case. A dated amendment of FORMAT's F-LIMITS-D (the bound is the one the statement states) is
+prepared for the task repository; the bench's pins move after it merges.
+
 ## The quick run's code on `main` (exploratory)
 
 **What it is.** The owner's two-day quick run of 2026-11-05: bare C# (.NET 10) and Node/TypeScript sessions on six daemon and web tasks (04 web, 05 daemon, 06 web, 07 daemon, 08 web, 10 daemon), scored by the visible samples and a
