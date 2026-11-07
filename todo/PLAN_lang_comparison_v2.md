@@ -327,6 +327,7 @@ Narrowed: yes — the owner narrowed the scope on 2026-11-06 (bare first, proces
 
   (Written 2026-11-07 by the re-review's plan writer (Opus). The Verdict column is the Opus judge's to fill at step 5. The brief asked to leave it empty, but `plan-lifecycle.mjs` refuses an empty cell (it accepts only `fits`, `cut` or `—`), so `—` stands as the placeholder in every row, as in the epoch-6 record, and each Action cell says `pending (Opus judge)` with the writer's reading. Nothing is proposed for cutting. Not a row: #171 and #172 change only `research/vllm-r9700-speed-options/`, outside this plan. Step 7: the epics changed, so Fable re-split them (the split of 2026-11-07, `~/rsd/lang-v2/briefs/epoch9-split.md`) after consult `0a205591`; the cornerstone ledger is recounted as 2 of 2 for E = 4. The epoch 9 line below is written on the team lead's instruction, approved by the owner's narrowing of 2026-11-06; the judge's verdicts and the re-review gate on this revision come after this commit.)
   (2026-11-07, after the judge's verdicts: the epoch 9 line that the writer's commit `554d84a1` put here is removed, and epoch 8 is `stopped` again. Step 8 writes the epoch 9 line only after the re-review gate and the owner's approval of the narrowing; the record may stand without it until then. The judge's cells above are unchanged.)
+  (2026-11-07, after the plan gate (`proceed`, 2 of 2 reviewers): its operator ordered 2 or 3 epics of 2 or 3 stories each, so F1 to F4 are now three epics, every story's content and each epic's done-when kept. The ids in the cells above are the ones the judge read: old F1.S3 is now part (b) of F1.S2; old F1.S4 and F1.S5 are F1.S3; old F3.S1 and F3.S2 are F3.S1 (a) and (b); old F3.S3, F3.S4 and F3.S5 are F3.S2 (a), (b) and (c); old F4.S1, F4.S2 and F4.S3 are F3.S3 (a), (b) and (c); F1.S1, F2.S1 and F2.S2 keep their ids. The cornerstone ledger is recounted for E = 3: Q = 2, 2 of 2, F1.S2 and F2.S1. The gate's accepted findings are in the operative part: no scoring while a session runs, with the 8-CPU profile named; one terminal rule for a functional failure; the growth budget measured and a disk rule before each pair; an enforcement check of the 512 MiB limit; the affinity read-back. The judge's cells are unchanged.)
 
 ## Operative plan for epoch 9 (2026-11-07): Stage 1, one bare series on six tasks
 
@@ -410,9 +411,9 @@ languages in general.
       median, the geometric mean and the count, every v1 metric (D34), `deviations` beside `accepted`, the counts of
       `intermittently incorrect` and `unscored: environment` per stack, the claim's limit, and the sentence that the quick
       run's task 07 cost is confounded (T26).
-- [ ] Every failing or mixed case was adjudicated blind (F4.S2).
+- [ ] Every failing or mixed case was adjudicated blind (F3.S3).
 - [ ] Every input but the stack is pinned in the harness; one pair per round in rounds 1 and 2 was read back by hand to prove
-      the stacks differ only there (F3.S5; measurement rule 1). One alias baseline and one CLI copy for the series (D47).
+      the stacks differ only there (F3.S2; measurement rule 1). One alias baseline and one CLI copy for the series (D47).
 - [ ] The instruments were hand-checked before their numbers appear (rule 2): the drivers on the real pilot trees (G-16) and
       the suites through F2.S1's references and mutants. G-15 (the olympiad judge by hand) and G-19 (the process pilot) lapse:
       the first checks an instrument outside the claim, the second is process only.
@@ -457,7 +458,7 @@ languages in general.
       arm moved to this plan, and v1 is closed after its bare arm (D32; a follow-up outside this plan's commits).
 - [ ] `research/lang-v2/` and `research/README.md` are updated; `research/module_lang_explore.md` describes the one engine.
 - [ ] Every merge of a Stage 1 story met the merge conditions below (D68 among them).
-- [ ] The Stage 2 decision line is written and dated (F4.S3).
+- [ ] The Stage 2 decision line is written and dated (F3.S3).
 - [ ] `plan-lifecycle.mjs` is clean. If Stage 2 is cancelled, this plan is promoted with its deviations; otherwise it stays in
       `todo/` with Stage 2 as its open part.
 
@@ -485,23 +486,33 @@ languages in general.
    F2.S1 puts nothing anywhere else.
 4. During Stage 1, no pull request carries Stage 2 code (D76).
 
-### Epics in force: F1 to F4
+### Epics in force: F1 to F3
 
-Four epics, in build order. The F names keep the new epics apart from E0–E6, whose ids stay in the history. Each epic's
-stories document is written by Opus when the epic starts and links back here, under a name the lifecycle check knows as a
-stories document of this plan: **`todo/PLAN_lang_comparison_v2_E7_F1.md`, `_E8_F2.md`, `_E9_F3.md` and `_E10_F4.md`** — the
-epic numbers go on after E6, and the F name follows. The check finds a stories document's parent by `_E<digits>` followed by
-`_` or `.md` (`.agents/conventions/tools/lib/plan-ledger.mjs`, `parentPlanOf`); a plain `_F1.md` name would escape it.
-Proved on 2026-11-07 with a throwaway local file carrying a ledger, deleted afterwards: `PLAN_lang_comparison_v2_E7_F1.md`
-gave the finding "a stories document carries a ledger; its changes count in the parent, todo/PLAN_lang_comparison_v2.md",
-and `PLAN_lang_comparison_v2_F1.md` gave none. **Cornerstones: 2 of 2** (Q = ⌈2·4/5⌉): F1.S2 with F1.S3 under one Fable spec (the verdict), and F2.S1 (the
-validation package). If F1's stories writer marks F1.S2 and F1.S3 separately, that is 3 of 2 and goes to the operator.
+Three epics of two or three stories each, in build order — the shape the plan gate's operator ordered on 2026-11-07 (never
+more than three epics, never more than three stories in one). The F names keep the new epics apart from E0–E6, whose ids
+stay in the history. Each epic's stories document is written by Opus when the epic starts and links back here, under a name
+the lifecycle check knows as a stories document of this plan: **`todo/PLAN_lang_comparison_v2_E7_F1.md`, `_E8_F2.md` and
+`_E9_F3.md`** — the epic numbers go on after E6, and the F name follows. The check finds a stories document's parent by
+`_E<digits>` followed by `_` or `.md` (`.agents/conventions/tools/lib/plan-ledger.mjs`, `parentPlanOf`); a plain `_F1.md`
+name would escape it. Proved on 2026-11-07 with a throwaway local file carrying a ledger, deleted afterwards:
+`PLAN_lang_comparison_v2_E7_F1.md` gave the finding "a stories document carries a ledger; its changes count in the parent,
+todo/PLAN_lang_comparison_v2.md", and `PLAN_lang_comparison_v2_F1.md` gave none. **Cornerstones: 2 of 2** (Q = ⌈2·3/5⌉ = 2):
+F1.S2 (the verdict: repeated scoring and the one memory value, one story under one Fable spec) and F2.S1 (the validation
+package).
 
-#### F1 — One harness, one scoring engine, the 8.2 verdict
+**The scoring CPUs.** Two scoring profiles, fixed for the series and the same for both stacks: the **2-CPU profile is CPUs
+`6-7`** (core 3, where the quick run scored) and the **8-CPU profile is CPUs `0-7`** (cores 0 to 3). The session masks are
+A = `0-5` and B = `8-13` (`spikes/lang-explore/lib/series.mjs` `MASKS`). **Scoring never overlaps a session:** a pair is
+scored only after both its sessions have ended, and the next pair launches only after that scoring has ended, so no session
+runs while either scoring profile is in use. **Every mask is read back:** before each scoring pass and each session launch, a
+preflight reads back the effective CPU affinity of the process it started (its `Cpus_allowed_list`) and refuses a data launch
+when the required mask cannot be applied exactly; a refusal halts the series resumably and is recorded, never scored.
+
+#### F1 — The harness and the verdict
 
 - **Goal:** `spikes/lang-explore/` is the base; nothing is built twice; a session's verdict comes from ten scoring passes
-  under two CPU profiles with a stated rule; the memory limit is one registered value.
-- **Needs:** the stop lifted (epoch 9 open).
+  under two CPU profiles with one stated rule; the memory limit is one registered value, enforced and stated alike.
+- **Needs:** the stop lifted (the epoch 9 line).
 - **F1.S1 — the carry-in merges** (replaces §14 A1's steps 0 to 2; D75):
   (a) #164 (E1.S8) and #167 (E1.S3 phase A) are **already merged**, on 2026-11-05 (`8dcbdee2`, `c8595952`), #167 with its
   doc commit marking E3's scorer rule superseded by D65; they are recorded as done, nothing is merged again;
@@ -515,146 +526,154 @@ validation package). If F1's stories writer marks F1.S2 and F1.S3 separately, th
   "agree for the default compile items" sentence) and a pin test in `spikes/lang-bench/test/`, `Bin/Extra.cs` holding text
   that does not compile builds to exit 0, in place and on the copy. **Not done yet:** on 2026-11-07 neither the line nor a
   test exists (a search of `research/module_lang_bench.md` and `spikes/*/test/` for `Bin/` and "letter case" finds none). No
-  code changes; the `build.sh` comment line about it rides with F1.S4's template edit, so the templates' identity moves once.
+  code changes; the `build.sh` comment line about it rides with F1.S3's template edit, so the templates' identity moves once.
   Carry items 2 to 4 (doc lines only) go with it;
   (d) the held-out reader (`spikes/lang-explore/lib/heldout-quick.mjs`, `casesTreeHash`) refuses any entry that is not a
   regular file or a directory, so the freeze never hashes through a link (carry item 6);
   (e) FORMAT's first amendment is on the task repository's `main` (its PR #3, `4ddb8f8`); the bench's side, on
   `feat/lang-v2-format-amend-pins` (the pins, the gate record, the checker's group letter and `V<n>` in any case), is merged
-  as a fix forward after merging `main`; F1.S3 adds the memory amendment and moves the pins once more;
+  as a fix forward after merging `main`; F1.S2 adds the memory amendment and moves the pins once more;
   (f) T-L64's text half (no plan id in an agent-visible runner file) is recorded as done by #173, with its test;
   (g) the C# wall-clock test of carry item 9 goes to the test-leftovers plan as a dated line; it is not built here.
-  *Accepted when:* (b) and (d) each have a test watched failing first, and (c)'s pin test passes on today's code; the recomputed partitions file exists;
-  `pin-runner.mjs --check` and `specs-record.mjs --check` exit 0 on the moved pins.
-- **F1.S2 — repeated scoring** (new; cornerstone; extends `score-quick.mjs` and `rescore`; D71): per session one build, then
-  ten passes over every visible and held-out case, five with the program on the 2-CPU mask and five on the 8-CPU mask, both
-  masks fixed and the same for both stacks; a fresh program for every case of every pass; the same requests and deadlines;
-  the verdict rule of D71; every attempt kept; `replay --times` stays a diagnostic, never a verdict. **Measured first**, before
-  any freeze: the quick run's defective C# tree of task 06 and both references of task 06, with the wall time of ten passes
-  and the size of what they keep. **These inputs are private:** the defective tree, task 06's references and every output of
-  measuring on them stay under `~/rsd/lang-v2/`, outside git; the commit records only counts, times and sizes. The tests use
-  invented fixtures only (a toy program that fails on purpose, never a quick-run tree or a reference). *Accepted when:* the
-  defective tree reads `intermittently incorrect` on the scoring CPUs; both references read `accepted`; a test on invented
-  fixtures drives each branch of the rule (all clean; mixed; all failing; a functional failure in one pass beside an
-  environment failure in another, which rejects; an environment failure re-run whole and then clean; an environment failure
-  that stays after two re-runs with no functional failure anywhere, which is `unscored: environment`).
-- **F1.S3 — one memory value** (new; under F1.S2's Fable spec; D72): one registered value, 536,870,912 bytes, in one input
-  file; the statement's memory sentence, each stack's heap sentence, the visible load test's configuration and the scorer's
-  `MemoryMax` are generated from it; FORMAT's second amendment makes F-LIMITS-D say the bound is the one the statement states
-  (today it says the bound is registered at calibration and given to the runner, not to the author), with one document gate,
-  and the pins move. *Accepted when:* a test reads the generated statement, the load test's configuration and the scorer's
-  limit and finds one number; the figure has exactly one source in the tree.
-- **F1.S4 — the submission contract named** (E1.S3b, reduced to what exists): `copy-quick.mjs` and `build-quick.mjs` are the
-  contract; the frozen list and the excluded folders live in one exported place that the copy, the restore and the module doc
-  read; the Node `.npmrc` of the templates gets `ignore-scripts=true` and `save-exact=true` (D65's measurements: without the
-  first, a `preinstall` script rewrites a frozen file during `npm ci`); the contract's identity (a sha256 over those modules,
-  the templates and the build box) is in every `record.json`; `frozenChanges` is reported as `deviations`, count and paths,
-  beside `accepted`. D65's lexical taxonomy is follow-up work (D74). *Accepted when:* a test that the frozen list has one
-  source; the identity in the record; the D65 script case exits non-zero with the frozen file unchanged.
-- **F1.S5 — offered-set symmetry** (E1.S4b, small): `Microsoft.AspNetCore.Mvc.Testing` joins the C# snapshot (change 7.1),
-  the snapshot is registered again, `PACKAGES.md` is generated from the matrix. *Accepted when:* T-L63.
+  *Accepted when:* (b) and (d) each have a test watched failing first, and (c)'s pin test passes on today's code; the
+  recomputed partitions file exists; `pin-runner.mjs --check` and `specs-record.mjs --check` exit 0 on the moved pins.
+- **F1.S2 — repeated scoring and the one memory value** (new; **cornerstone**, one Fable spec; extends `score-quick.mjs` and
+  `rescore`; D71, D72). Two parts, one story, because together they are the verdict.
+  *(a) Repeated scoring.* Per session one build, then ten passes over every visible and held-out case, five on the 2-CPU
+  profile and five on the 8-CPU profile; a fresh program for every case of every pass; the same requests and deadlines; the
+  affinity read-back before every pass; the verdict rule of D71, including its terminal rule; every attempt kept;
+  `replay --times` stays a diagnostic, never a verdict. **Measured first**, before any freeze, on the quick run's defective
+  C# tree of task 06 and both references of task 06: the wall time of ten passes, and the **retained size of ten passes plus
+  the most retries and re-runs the rule allows** (every pass re-run twice, and the session's one void re-run), which is the
+  growth budget's number (*Growth*). **These inputs are private:** the defective tree, task 06's references and every output
+  of measuring on them stay under `~/rsd/lang-v2/`, outside git; the commit records only counts, times and sizes. The tests
+  use invented fixtures only (a toy program that fails on purpose, never a quick-run tree or a reference).
+  *(b) The one memory value.* One registered value, 536,870,912 bytes, in one input file; the statement's memory sentence,
+  each stack's heap sentence, the visible load test's configuration and the scorer's `MemoryMax` are generated from it;
+  FORMAT's second amendment makes F-LIMITS-D say the bound is the one the statement states (today it says the bound is
+  registered at calibration and given to the runner, not to the author), with one document gate, and the pins move.
+  **Enforcement, not only agreement:** an integration check on the certifying host reads the actual cgroup limit of a case
+  (the case scope's `memory.max`, which must read 536870912) and shows, in both stacks, that an invented workload over
+  512 MiB is stopped and classified by the memory-failure rules (D56: `memory limit` with its cause).
+  *Accepted when:* the defective tree reads `intermittently incorrect` on the scoring CPUs; both references read `accepted`;
+  a test on invented fixtures drives each branch of the rule (all clean; mixed; all failing; a functional failure in one pass
+  beside an environment failure in another, which rejects; **a functional failure in a completed pass of a session whose
+  other pass stays environment after its re-runs, which is still rejected, never `unscored: environment`, never re-run**;
+  an environment failure re-run whole and then clean; an environment failure that stays after two re-runs with no functional
+  failure anywhere, which is `unscored: environment`); a test of the affinity read-back refusing a mask it cannot apply; a
+  test reads the generated statement, the load test's configuration and the scorer's limit and finds one number; the figure
+  has exactly one source in the tree; the enforcement check passes in both stacks on the certifying host.
+- **F1.S3 — the submission contract and the offered set** (E1.S3b, reduced to what exists; E1.S4b, small):
+  `copy-quick.mjs` and `build-quick.mjs` are the contract; the frozen list and the excluded folders live in one exported place
+  that the copy, the restore and the module doc read; the Node `.npmrc` of the templates gets `ignore-scripts=true` and
+  `save-exact=true` (D65's measurements: without the first, a `preinstall` script rewrites a frozen file during `npm ci`); the
+  contract's identity (a sha256 over those modules, the templates and the build box) is in every `record.json`;
+  `frozenChanges` is reported as `deviations`, count and paths, beside `accepted`; D65's lexical taxonomy is follow-up work
+  (D74). The offered set: `Microsoft.AspNetCore.Mvc.Testing` joins the C# snapshot (change 7.1), the snapshot is registered
+  again, `PACKAGES.md` is generated from the matrix. *Accepted when:* a test that the frozen list has one source; the identity
+  in the record; the D65 script case exits non-zero with the frozen file unchanged; T-L63.
 - **Done when:** lang-explore's tests are green, plain and with `BENCH_REQUIRE_SANDBOX=1`; the defective quick-run tree is
   `intermittently incorrect` under F1.S2 on the scoring CPUs, and both references of task 06 pass 10 of 10 under both profiles
-  at the registered limit; `build_test` is not zero for a C# session of a retained stream; the memory figure has one source;
-  `research/module_lang_explore.md` describes the one engine (E3.S10's part).
+  at the registered limit; `build_test` is not zero for a C# session of a retained stream; the memory figure has one source
+  and the enforcement check passes in both stacks; `research/module_lang_explore.md` describes the one engine (E3.S10's part).
 
 #### F2 — Six validation packages (cornerstone)
 
 - **Goal:** for each of 04, 05, 06, 07, 08 and 10, one package that makes a failure adjudicable.
 - **Needs:** F1.
-- **F2.S1 — a package per task, six** (merges E1.S6, E1.S2, E1.S2a, E2.S1, E2.S2, E2.S3 and E2.S4): the draft spec's defects
-  fixed; the visible samples, the load test generated from F1.S3's value; **both references pass every visible and held-out
-  case 10 of 10 under F1.S2 at F1.S3's limit**, which is D40's gate in the final environment; targeted mutants, one per trap
-  per stack, each caught (named only in the private aid); every case cites an R-id; one bias question per task (D25); the
-  held-out link refusal of F1.S1 (d) green on the task's tree; the conformance check (#164) green; **one document gate per
-  spec**, because a defect in one of six hides in a joint review (the team lead). One task (04 or 05) goes end to end first,
-  then the other five in parallel. *Accepted when:* per task, the package record in the private area and a public line of
-  counts only.
+- **F2.S1 — a package per task, six** (**cornerstone**; merges E1.S6, E1.S2, E1.S2a, E2.S1, E2.S2, E2.S3 and E2.S4): the draft
+  spec's defects fixed; the visible samples, the load test generated from F1.S2's value; **both references pass every visible
+  and held-out case 10 of 10 under F1.S2 at its one memory limit**, which is D40's gate in the final environment; targeted
+  mutants, one per trap per stack, each caught (named only in the private aid); every case cites an R-id; one bias question
+  per task (D25); the held-out link refusal of F1.S1 (d) green on the task's tree; the conformance check (#164) green; **one
+  document gate per spec**, because a defect in one of six hides in a joint review (the team lead). One task (04 or 05) goes
+  end to end first, then the other five in parallel. *Accepted when:* per task, the package record in the private area and a
+  public line of counts only.
 - **F2.S2 — one freeze** (replaces the per-group freezes and CP3/CP4): one tag, `spec-frozen-B-<yyyymmdd>`, over the six specs
   and FORMAT; FORMAT and the checker allow only the letters A and B (FORMAT 1.2's `Freeze tag` row,
-  `lib/conformance-check-structure.mjs` on the pins branch), and B was these six tasks' group under D44, so neither changes, and no `-A-` tag is made in Stage 1. The spec hashes in
-  `inputs/specs.json`; the held-out tree hashes and the trap table's hash registered; the six workspaces written (E1.S3
-  phase B) and their workspace commit named (D67 (3)); `workspace-diff` and the push check clean; the tag ruleset and
-  `main`'s protection on the task repository (the owner's go of 2026-11-05 covers the task repository only, from data with
-  read-back). **F2.S2 builds that code.** What `feat/lang-v2-e1-s7-rulesets` holds is a red step only: five uncommitted files,
-  stubs and tests whose wording still names groups. F2.S2 starts from them, the tests lose the group wording (one freeze, one
-  tag), and the code is written, gated and merged before the rulesets are applied; incremental chunk parsing in `rs_conn.py` only if a frozen task's bodies
-  need it (carry item 5). *Accepted when:* the tag exists; the rulesets read back; `leakcheck` clean.
+  `lib/conformance-check-structure.mjs` on the pins branch), and B was these six tasks' group under D44, so neither changes,
+  and no `-A-` tag is made in Stage 1. The spec hashes in `inputs/specs.json`; the held-out tree hashes and the trap table's
+  hash registered; the six workspaces written (E1.S3 phase B) and their workspace commit named (D67 (3)); `workspace-diff` and
+  the push check clean; the tag ruleset and `main`'s protection on the task repository (the owner's go of 2026-11-05 covers
+  the task repository only, from data with read-back). **F2.S2 builds that code.** What `feat/lang-v2-e1-s7-rulesets` holds is
+  a red step only: five uncommitted files, stubs and tests whose wording still names groups. F2.S2 starts from them, the tests
+  lose the group wording (one freeze, one tag), and the code is written, gated and merged before the rulesets are applied;
+  incremental chunk parsing in `rs_conn.py` only if a frozen task's bodies need it (carry item 5). *Accepted when:* the tag
+  exists; the rulesets read back; `leakcheck` clean.
 - **Done when:** six packages validated and sealed; the tag exists; `leakcheck` is clean; the private aid lists nothing uncaught.
 
-#### F3 — The series
+#### F3 — The series and the report
 
-- **Goal:** one pre-registered bare series over six tasks, isolated, accounted, balanced, with frozen identities, then run.
+- **Goal:** one pre-registered bare series over six tasks, isolated, accounted, balanced, with frozen identities, run and
+  scored; then a generated record on six tasks with the claim's limit stated, and Stage 2 decided on a date.
 - **Needs:** F2's tag.
-- **F3.S1 — a series over six tasks** (E3.S1 thin, E3.S5 reduced): `series.mjs` grows from one task to a round over six in a
-  seeded order, each round every task once; the two stacks of a pair start together. **The mask rule**, which replaces v1's
-  swap per pair and a test checks over the whole schedule: the session masks are A = `0-5` and B = `8-13`
-  (`spikes/lang-explore/lib/series.mjs` `MASKS`; CPUs 6 and 7 stay the harness's). Number the tasks by id, k = 0 for 04, 1 for
-  05, 2 for 06, 3 for 07, 4 for 08, 5 for 10, and the rounds r = 1 to 5. In round r, task k's C# session runs on mask A when
-  r + k is odd and on mask B when it is even; the Node session takes the other mask. So the tasks at k = 0, 2 and 4 start C#
-  on A and give C# mask A 3 times and mask B 2 times; the tasks at k = 1, 3 and 5 start C# on B and give the reverse; over the
-  30 pairs each stack has each mask exactly 15 times. The seed decides the task order inside a round, never the mask. The
-  barrier and the one void re-run stay; the pre-registration
-  guard reads the frozen identities (the runner manifest, the layer, the CLI copy, the snapshots, FORMAT, the specs, the
-  held-out hashes, the one memory value, the contract's identity); D15's environment and isolation checks (T-L14's half); the
-  accounting checks T1–T5; the record schema carries `arm` and `model` (D76). *Accepted when:* a stub series over six tasks
-  shows the order, the mask rule (each pair's masks as the rule says; 15 of each mask per stack; 3 and 2 per task) and the guard
-  refusing a changed identity.
-- **F3.S2 — one pre-registration** (E4.S1, S2 and S3): the price re-read, the CLI pin, `prediction.md`, the analysis contract
-  (D73's claim and limit; per task CPC with D24's undefined outcome; the median of the six per-task ratios, the geometric mean
-  and the count of tasks where C# is higher, D28; the outcome classes, where `rejected` and `intermittently incorrect` are data
-  attempts that add their cost to CPC's numerator and nothing to its denominator, and `unscored: environment` is a void: its
-  cost goes on D24's void line, it is in neither part of the primary CPC, and it is re-run once by the void schedule), the two
-  scoring masks, the pilot's tasks, `seed.sha256`; one tag,
-  `prereg/lang-v2-<yyyymmdd>` (§9's first form). *Accepted when:* the tag precedes the first launch.
-- **F3.S3 — one pilot** (E4.S4, reduced): one pair per kind (a daemon and a web task) as void spend, and one bare A/A pair (two
-  identical bare sessions; it sets the noise floor); G-1 to G-14 and G-16 by hand on the pilot trees, G-17 (read for D72's
-  one value: both references validated at it before the freeze), G-18; the wall and the stall set once, by a dated amendment;
-  the seed revealed after the A/A. *Accepted when:* GO.
-- **F3.S4 — the paid rounds** (E5.S1): five rounds over the six tasks under the $50 per-session cap, the quiet check per pair,
-  every attempt kept, resume after any halt. *Accepted when:* every session is classed; no round k+1 starts with round k
-  unscored.
-- **F3.S5 — the read-back** (E5.S2): in rounds 1 and 2, one pair read back by hand by an Opus judge (argv, binds, cache hashes,
-  package list, environment keys with the heap keys, the spec blob), as dated lines. *Accepted when:* the lines exist before
-  round 3.
+- **F3.S1 — the series over six tasks and one pre-registration** (E3.S1 thin, E3.S5 reduced; E4.S1, S2 and S3).
+  *(a) The series.* `series.mjs` grows from one task to a round over six in a seeded order, each round every task once; the
+  two stacks of a pair start together; each pair is scored only after both its sessions end, and the next pair launches only
+  after that scoring ends (*The scoring CPUs*). **The mask rule**, which replaces v1's swap per pair and a test checks over
+  the whole schedule: number the tasks by id, k = 0 for 04, 1 for 05, 2 for 06, 3 for 07, 4 for 08, 5 for 10, and the rounds
+  r = 1 to 5. In round r, task k's C# session runs on mask A when r + k is odd and on mask B when it is even; the Node session
+  takes the other mask. So the tasks at k = 0, 2 and 4 start C# on A and give C# mask A 3 times and mask B 2 times; the tasks
+  at k = 1, 3 and 5 start C# on B and give the reverse; over the 30 pairs each stack has each mask exactly 15 times. The seed
+  decides the task order inside a round, never the mask. **The disk rule:** before each pair, if free disk under
+  `~/rsd/lang-v2/` is below twice the pair's measured worst case (F1.S2's number for two sessions with every retry and re-run),
+  the series halts resumably and records why; it resumes only when the space is there. The barrier and the one void re-run
+  stay; the pre-registration guard reads the frozen identities (the runner manifest, the layer, the CLI copy, the snapshots,
+  FORMAT, the specs, the held-out hashes, the one memory value, the contract's identity); D15's environment and isolation
+  checks (T-L14's half); the accounting checks T1–T5; the record schema carries `arm` and `model` (D76).
+  *(b) One pre-registration.* The price re-read, the CLI pin, `prediction.md`, the analysis contract (D73's claim and limit;
+  per task CPC with D24's undefined outcome; the median of the six per-task ratios, the geometric mean and the count of tasks
+  where C# is higher, D28; the outcome classes, where `rejected` and `intermittently incorrect` are data attempts that add
+  their cost to CPC's numerator and nothing to its denominator, and `unscored: environment` is a void: its cost goes on D24's
+  void line, it is in neither part of the primary CPC, and it is re-run once by the void schedule), the two scoring profiles
+  and the two session masks, the pilot's tasks, `seed.sha256`; one tag, `prereg/lang-v2-<yyyymmdd>` (§9's first form).
+  *Accepted when:* a stub series over six tasks shows the order, the mask rule (each pair's masks as the rule says; 15 of each
+  mask per stack; 3 and 2 per task), no scoring while a session runs, the disk rule halting below its threshold, and the
+  guard refusing a changed identity; the tag precedes the first launch.
+- **F3.S2 — the pilot, the paid rounds and the read-back** (E4.S4 reduced; E5.S1; E5.S2).
+  *(a) One pilot:* one pair per kind (a daemon and a web task) as void spend, and one bare A/A pair (two identical bare
+  sessions; it sets the noise floor); G-1 to G-14 and G-16 by hand on the pilot trees, G-17 (read for D72's one value: both
+  references validated at it before the freeze), G-18; the wall and the stall set once, by a dated amendment; the seed
+  revealed after the A/A.
+  *(b) The paid rounds:* five rounds over the six tasks under the $50 per-session cap, the quiet check per pair, every attempt
+  kept, resume after any halt.
+  *(c) The read-back:* in rounds 1 and 2, one pair read back by hand by an Opus judge (argv, binds, cache hashes, package list,
+  environment keys with the heap keys, the effective CPU affinity, the spec blob), as dated lines.
+  *Accepted when:* the pilot is GO; every session is classed; no round k+1 starts with round k unscored; the read-back lines
+  exist before round 3.
+- **F3.S3 — the record, blind adjudication and the Stage 2 decision** (E6.S1, from `note.mjs` to a series rollup; E6.S2 with
+  E2.S5's packets; new): *(a)* record tools — per task CPC or the undefined outcome, success rate, tokens, time, `deviations`
+  beside `accepted`, the counts of `intermittently incorrect`, every attempt, the quiet flags; the olympiad notes cited as
+  exploratory controls outside the claim; schemas that can hold `model` and `arm`; *(b)* blind adjudication of every failing
+  or mixed case, stack masked; *(c)* the line of *Stage 2: the dated decision* below, written and dated.
 - **Done when:** the tag preceded the first launch; the pilot is GO; every data session is scored by F1.S2 with its
-  `record.json`; no round k+1 ran with round k unscored.
-
-#### F4 — The bare report and the dated decision
-
-- **Goal:** a generated record on six tasks with the claim's limit stated, and Stage 2 decided on a date.
-- **Needs:** F3.
-- **F4.S1 — record tools** (E6.S1, from `note.mjs` to a series rollup): per task CPC or the undefined outcome, success rate,
-  tokens, time, `deviations` beside `accepted`, the counts of `intermittently incorrect`, every attempt, the quiet flags; the
-  olympiad notes cited as exploratory controls outside the claim; schemas that can hold `model` and `arm`.
-- **F4.S2 — blind adjudication** (E6.S2, with E2.S5's packets): every failing or mixed case, stack masked.
-- **F4.S3 — the Stage 2 decision** (new): the line of *Stage 2: the dated decision* below, written and dated.
-- **Done when:** the record renders from data alone, types no number, and carries the sentence that the quick run's task 07
-  is confounded (T26); the decision line is written and dated.
+  `record.json`; no round k+1 ran with round k unscored; the record renders from data alone, types no number, and carries the
+  sentence that the quick run's task 07 is confounded (T26); the decision line is written and dated.
 
 ### Build order
 
 1. **F1.S1**, the carry-in merges, one small pull request per item or per group of items.
-2. **F1.S2 with F1.S3**, on the existing harness, measured on the defective tree and the references of task 06: the first
-   scoring run, which gives the real time of ten passes before any freeze. **F1.S4 and F1.S5** beside it.
+2. **F1.S2**, on the existing harness, measured on the defective tree and the references of task 06: the first scoring run,
+   which gives the real time and the retained size of ten passes before any freeze. **F1.S3** beside it.
 3. **F2.S1 for one task** (04 or 05) end to end, then the other five in parallel.
 4. **F2.S2**, the freeze.
-5. **F3.S1**, then **F3.S2**'s tag, then **F3.S3**, the pilot, which gives the first scored sessions.
-6. **F3.S4**, five rounds, with **F3.S5** in rounds 1 and 2.
-7. **F4.S1** and **F4.S2**, the bare report; then **F4.S3**, the Stage 2 decision line, dated the day the report is generated.
+5. **F3.S1**: the series code, then the pre-registration's tag.
+6. **F3.S2**: the pilot, which gives the first scored sessions; then five rounds, with the read-back in rounds 1 and 2.
+7. **F3.S3**: the record and the blind adjudication, the bare report; then the Stage 2 decision line, dated the day the
+   report is generated.
 
 ### Decisions D69–D76 (2026-11-07)
 
 | # | Decision | Who, when |
 |---|---|---|
 | D69 | **The scope: Stage 1 and Stage 2.** Stage 1 is one prospective bare series on the six daemon and web tasks (04, 05, 06, 07, 08, 10) and its report. Stage 2 is the process arm on the same six tasks, behind the dated decision of D76. For Stage 1 this supersedes: D1's "10 tasks" and D3's ten-task list as the claim (the tasks stay defined); §1's part (b); D9's and D20's three runs per arm (D73); D10's and D27's arm interleave; D44's groups A, B and C; D45's freezes and pre-registrations per group; D46's CPC per group and A's replication; D49's interim records; D53's budget per group. The development rules and the coai gates stay on the harness's development, and are not the process treatment arm (*Merge conditions*) | the owner, 2026-11-06 (bare first, process later); 2026-11-05 and 2026-11-06 for the size; the shape: the team lead, 2026-11-07 |
-| D70 | **One harness, one scoring engine.** `spikes/lang-explore/` — its scoring (`score-quick.mjs`, `copy-quick.mjs`, `build-quick.mjs`), workspace, records, leak check, series, machine check and read-back — is the base of Stage 1, and drives `spikes/lang-bench/`'s runner 0.3.9 and execution layer through `runCases`. Verified by reading on 2026-11-07. Dead as new code: E1.S3b's `lib/submission.mjs` and `lib/deviations.mjs` (F1.S4 names what exists); E1.S8a part ii-b (the runner 0.3.9 of #173 has the daemon and web path); E3.S2 (the drivers); E3.S4 (the scorer); E3.S3 for Stage 1 (the olympiad judge exists); E3.S1's group dimension; E3.S5's G-15 and G-19 parts. Merged work stays. No large move of files for tidiness; consolidation only where it removes a second engine. This supersedes D43's "consumed by E3's scoring" and D65's sentence that E1.S2a, E2.S1, E2.S3, E3.S4 and E3.S8 import `lib/submission.mjs`: they are replaced by F2.S1 and F1.S2 on lang-explore's copy and build. D40's gate holds and is run by F2.S1 | the team lead, 2026-11-07, from consult `0a205591`; verified by the Fable planner and in this revision |
-| D71 | **Repeated scoring and the verdict (change 8.2).** Pre-registered: ten scoring passes per session, five on 2 CPUs and five on 8 CPUs, on fixed masks, the same for both stacks, with a fresh program for every case and the same requests and deadlines. **`accepted`** = every visible and held-out case passed in all ten passes. **A pass with a genuine functional failure rejects the session, whatever the other passes did, environment failures included:** a real failure is evidence, and an environment failure is only the absence of evidence. A rejected session with at least one clean pass is labelled **`intermittently incorrect`**, never a majority pass; every attempt is kept. **The retry unit is the pass:** a pass with an environment failure (D65's list: a box that cannot start, a holder that fails, a missing or wrong snapshot, a host fault) is re-run whole, at most twice, each attempt recorded. A session is **`unscored: environment`** only when no pass shows a functional failure and some pass is still environment after its two re-runs; it is counted per stack, never accepted or rejected, and enters CPC as a void (F3.S2: its cost on D24's void line, outside the primary CPC, re-run once by the void schedule). The references are validated under both profiles before the freeze. **Ten passes are a practical budget, not a proof**: a rarer race can pass all ten (T25). The real time of ten passes is measured on the known defective tree and both references before the freeze (F1.S2). Acceptance stays the same for both stacks (D66) | the team lead, 2026-11-07, from consult `0a205591` and the quick run's data |
-| D72 | **One memory value, stated to the agent.** The registered value is 536,870,912 bytes (512 MiB) for all six tasks. Each statement says: *"The program and its descendants run under a 512 MiB (536,870,912-byte) cgroup memory limit, including runtime overhead. Build resources are separate."* Each stack's statement also discloses its heap setting under D55: for C#, `DOTNET_GCHeapHardLimit` = 0x1CCCCCCC (483,183,820 bytes, 90 % of the limit); for Node, `--max-old-space-size=460` (MiB, 90 % of the limit). The statement, the visible load test's configuration and the scorer's limit are generated from the one value (F1.S3), and the references are validated at it before the freeze (F2.S1). A reference that cannot pass at it is fixed, or the value changes for all six tasks alike before the freeze, never for one. For the six tasks this supersedes D14's daemon and web memory rule, D57's floor probe and D58's calibration sequence; D55's policy and D56's rule stay. FORMAT's F-LIMITS-D is amended to match (F1.S3). **The quick run's task 07 cost gap stays confounded** — its agents worked against a stated 256 MB floor while 512 MiB was enforced — and is never read as a language result (T26) | the team lead, 2026-11-07, from consult `0a205591` and the quick run's streams |
+| D70 | **One harness, one scoring engine.** `spikes/lang-explore/` — its scoring (`score-quick.mjs`, `copy-quick.mjs`, `build-quick.mjs`), workspace, records, leak check, series, machine check and read-back — is the base of Stage 1, and drives `spikes/lang-bench/`'s runner 0.3.9 and execution layer through `runCases`. Verified by reading on 2026-11-07. Dead as new code: E1.S3b's `lib/submission.mjs` and `lib/deviations.mjs` (F1.S3 names what exists); E1.S8a part ii-b (the runner 0.3.9 of #173 has the daemon and web path); E3.S2 (the drivers); E3.S4 (the scorer); E3.S3 for Stage 1 (the olympiad judge exists); E3.S1's group dimension; E3.S5's G-15 and G-19 parts. Merged work stays. No large move of files for tidiness; consolidation only where it removes a second engine. This supersedes D43's "consumed by E3's scoring" and D65's sentence that E1.S2a, E2.S1, E2.S3, E3.S4 and E3.S8 import `lib/submission.mjs`: they are replaced by F2.S1 and F1.S2 on lang-explore's copy and build. D40's gate holds and is run by F2.S1 | the team lead, 2026-11-07, from consult `0a205591`; verified by the Fable planner and in this revision |
+| D71 | **Repeated scoring and the verdict (change 8.2).** Pre-registered: ten scoring passes per session, five on the 2-CPU profile (CPUs `6-7`) and five on the 8-CPU profile (CPUs `0-7`), the same for both stacks, each pass after a read-back of its effective CPU affinity, never while a session runs, with a fresh program for every case and the same requests and deadlines. **`accepted`** = every visible and held-out case passed in all ten passes. **A pass with a genuine functional failure rejects the session, whatever the other passes did, environment failures included:** a real failure is evidence, and an environment failure is only the absence of evidence. A rejected session with at least one clean pass is labelled **`intermittently incorrect`**, never a majority pass; every attempt is kept. **The terminal rule, as one sentence a test checks:** *if any completed pass of a session holds a genuine functional failure, the session is `rejected` (or `intermittently incorrect` when some pass is clean), permanently, whatever any other pass did, with or without retries; it never enters the void or re-run schedule, and its cost counts in CPC's numerator like any rejected session.* **The retry unit is the pass:** a pass with an environment failure (D65's list: a box that cannot start, a holder that fails, a missing or wrong snapshot, a host fault) is re-run whole, at most twice, each attempt recorded. A session is **`unscored: environment`** only when no pass shows a functional failure and some pass is still environment after its two re-runs; it is counted per stack, never accepted or rejected, and enters CPC as a void (F3.S1: its cost on D24's void line, outside the primary CPC, re-run once by the void schedule). The references are validated under both profiles before the freeze. **Ten passes are a practical budget, not a proof**: a rarer race can pass all ten (T25). The real time of ten passes is measured on the known defective tree and both references before the freeze (F1.S2). Acceptance stays the same for both stacks (D66) | the team lead, 2026-11-07, from consult `0a205591` and the quick run's data |
+| D72 | **One memory value, stated to the agent.** The registered value is 536,870,912 bytes (512 MiB) for all six tasks. Each statement says: *"The program and its descendants run under a 512 MiB (536,870,912-byte) cgroup memory limit, including runtime overhead. Build resources are separate."* Each stack's statement also discloses its heap setting under D55: for C#, `DOTNET_GCHeapHardLimit` = 0x1CCCCCCC (483,183,820 bytes, 90 % of the limit); for Node, `--max-old-space-size=460` (MiB, 90 % of the limit). The statement, the visible load test's configuration and the scorer's limit are generated from the one value (F1.S2), and the references are validated at it before the freeze (F2.S1). A reference that cannot pass at it is fixed, or the value changes for all six tasks alike before the freeze, never for one. For the six tasks this supersedes D14's daemon and web memory rule, D57's floor probe and D58's calibration sequence; D55's policy and D56's rule stay. FORMAT's F-LIMITS-D is amended to match (F1.S2). **The quick run's task 07 cost gap stays confounded** — its agents worked against a stated 256 MB floor while 512 MiB was enforced — and is never read as a language result (T26) | the team lead, 2026-11-07, from consult `0a205591` and the quick run's streams |
 | D73 | **Five pairs per task, and the claim's limit.** 5 pairs per task, 30 pairs, 60 data sessions. From the quick run's within-stack spread (task 07 Node $3.02 to $6.24, task 05 Node $1.37 to $4.33: two to three times), 3 pairs read a per-task cost ratio only above about two to three times; 5 pairs separate per-task medians at about 1.5 times and read the pooled direction over 30 pairs. Neither shows a 20 % difference, and the pre-registration says so as a limit on the claim. Spend is no limit; the machine time of ten passes is measured in F1.S2 before the freeze | the team lead, 2026-11-07 |
 | D74 | **What is reduced, and what stays.** One validation package per task (F2.S1) instead of E1.S6, E1.S2, E1.S2a and E2.S1–S4 apart; one pre-registration, one pilot (with one bare A/A pair, kept by the team lead because it sets the noise floor honestly), one freeze; the per-group freezes go, and no group is a prerequisite of another. **Follow-up work, not built in Stage 1:** D65's lexical deviation taxonomy (its classes (a) to (d)) and E1.S8c's per-case `cpuMs` and RSS curve, because none of them decides `accepted` or CPC, and memory is certified by `memory.peak` (D36). **Stays:** the corrected specs, two-stack reference validation, targeted mutants, common resource limits, isolation, the accounting checks, frozen identities, a balanced order, generated reporting, one pre-registration; changed-input provenance (`frozenChanges` as `deviations`), memory enforcement and failure evidence. The cut fields were planned and never measured, so no record loses a value: D34 holds for every metric that exists (dated lines under D34, D67 (4) and T-L64) | the team lead, 2026-11-07, from consult `0a205591` |
-| D75 | **Carried in now** (F1.S1, F1.S3, F2): the `build_test` classifier fix with the partitions recomputed from retained streams; MSBuild's case-blind compile exclusion recorded by a doc line and a pin test, with no change to the copy, which stays exactly D65's (the judge's finding, 2026-11-07); the held-out reader refusing non-regular entries; FORMAT's amendment and pins as a fix forward, then the memory amendment; the owner's approved O3 rulesets for what publishes tasks (the task repository's tag ruleset and `main` protection), the process-only rulesets deferred to Stage 2; the draft-spec defects fixed before the freeze; incremental chunk parsing only if a frozen task's bodies need it. The C# wall-clock test goes to the test-leftovers plan | the team lead, 2026-11-07 |
-| D76 | **Stage 2 as a dated decision.** Stage 2's stories stay written, moved behind the decision of F4.S3: E0, E1.S7's process half, E3.S6, S7a, S7, S8, S9, the process pilots, the anchor round, E6.S3. T16's window sentence and the bare anchor schedule (D54, T-L55) stay as written: a later process arm needs a bare anchor to compare fairly. Stage 1 builds only the `arm` and `model` fields of the record schema and the accounting, so Stage 2 is not a rewrite. **Publication (E6.S3) is decided so that nothing is lost:** the references, the trap coverage table and the specs' final state publish when the decision line says *cancel*, or at Stage 2's end; before that they stay private, because publishing them would leak into a possible process arm; a *defer* keeps them private until the next dated line. Further deferral or cancellation needs an explicit, recorded decision that does not depend on which stack won Stage 1. The first Stage 2 step, if it goes, is a small engagement pilot (*Stage 2* below), because the earlier policy pilot showed that loading rules does not mean the process ran | the owner, 2026-11-06; the shape: the team lead, 2026-11-07 |
+| D75 | **Carried in now** (F1.S1, F1.S2, F2): the `build_test` classifier fix with the partitions recomputed from retained streams; MSBuild's case-blind compile exclusion recorded by a doc line and a pin test, with no change to the copy, which stays exactly D65's (the judge's finding, 2026-11-07); the held-out reader refusing non-regular entries; FORMAT's amendment and pins as a fix forward, then the memory amendment; the owner's approved O3 rulesets for what publishes tasks (the task repository's tag ruleset and `main` protection), the process-only rulesets deferred to Stage 2; the draft-spec defects fixed before the freeze; incremental chunk parsing only if a frozen task's bodies need it. The C# wall-clock test goes to the test-leftovers plan | the team lead, 2026-11-07 |
+| D76 | **Stage 2 as a dated decision.** Stage 2's stories stay written, moved behind the decision of F3.S3: E0, E1.S7's process half, E3.S6, S7a, S7, S8, S9, the process pilots, the anchor round, E6.S3. T16's window sentence and the bare anchor schedule (D54, T-L55) stay as written: a later process arm needs a bare anchor to compare fairly. Stage 1 builds only the `arm` and `model` fields of the record schema and the accounting, so Stage 2 is not a rewrite. **Publication (E6.S3) is decided so that nothing is lost:** the references, the trap coverage table and the specs' final state publish when the decision line says *cancel*, or at Stage 2's end; before that they stay private, because publishing them would leak into a possible process arm; a *defer* keeps them private until the next dated line. Further deferral or cancellation needs an explicit, recorded decision that does not depend on which stack won Stage 1. The first Stage 2 step, if it goes, is a small engagement pilot (*Stage 2* below), because the earlier policy pilot showed that loading rules does not mean the process ran | the owner, 2026-11-06; the shape: the team lead, 2026-11-07 |
 
 ### Threats this change touches
 
@@ -676,7 +695,7 @@ The rows of §10 stay; these are read as follows from 2026-11-07, and T25–T28 
 
 ### Stage 2: the dated decision
 
-The line, written at F4.S3 and dated the day the bare report is generated:
+The line, written at F3.S3 and dated the day the bare report is generated:
 
 > Stage 2, the process arm on the same six tasks, is decided on `<date>`: go, defer to `<date>`, or cancel, with a reason that
 > does not depend on which stack won Stage 1.
@@ -695,13 +714,13 @@ Stage 2 epic is split. T16's window sentence and the bare anchor schedule stay a
 | E1.S8 (#164), E1.S3 phase A (#167) | merged on 2026-11-05, kept; F1.S1 records them |
 | E1.S3 phase B | F2.S2 |
 | E1.S2, E1.S2a, E1.S6 | merged into F2.S1 |
-| E1.S3b | dead as new code: `copy-quick.mjs` and `build-quick.mjs` are the contract; the identity, the `.npmrc` keys and the `deviations` count go to F1.S4; the lexical taxonomy to follow-up |
-| E1.S4b | F1.S5 |
+| E1.S3b | dead as new code: `copy-quick.mjs` and `build-quick.mjs` are the contract; the identity, the `.npmrc` keys and the `deviations` count go to F1.S3; the lexical taxonomy to follow-up |
+| E1.S4b | F1.S3 |
 | E1.S7 | the tag ruleset and `main`'s protection to F2.S2; the process-only rulesets, CI, the strict jobs, the deploy key and the run bases to Stage 2 |
 | E1.S8a part i, part ii-a | merged, kept; **part ii-b dead**: the runner 0.3.9 (#173) has the daemon and web path; only chunk parsing stays, conditional (F2.S2) |
 | E1.S8c | the comment half done by #173 (recorded in F1.S1); `cpuMs` and the RSS curve to follow-up (D74) |
 | E2.S1–S4 | merged into F2.S1; E2.S3's D58 calibration replaced by D72's one value and the validation at it |
-| E2.S5 | F4.S2 |
+| E2.S5 | F3.S3 |
 | E3.S1 | thin: F3.S1 (no `group` dimension, no group manifest) |
 | E3.S2 | dead: the runner 0.3.9 through `exec-layer/run.mjs`, driven by `score-quick.mjs`; the RSS curve to follow-up |
 | E3.S3 | dead for Stage 1: the olympiad judge exists (`calibrate.mjs`, `score.mjs`); the olympiad tasks are outside the claim |
@@ -709,10 +728,10 @@ Stage 2 epic is split. T16's window sentence and the bare anchor schedule stay a
 | E3.S5 | reduced to F1.S1 (the classifier) and F3.S1 (the environment checks, the accounting); G-15 and G-19's `aaVerdicts` dead |
 | E3.S6, S7a, S7, S8, S9 | Stage 2 |
 | E3.S10 | F1: the one engine's module doc, `research/module_lang_explore.md` |
-| E4.S1, S2, S3 | F3.S2 |
-| E4.S4 | F3.S3 |
-| E5.S1, E5.S2 | F3.S4, F3.S5 |
-| E6.S1, E6.S2 | F4.S1, F4.S2 |
+| E4.S1, S2, S3 | F3.S1 (b) |
+| E4.S4 | F3.S2 (a) |
+| E5.S1, E5.S2 | F3.S2 (b) and (c) |
+| E6.S1, E6.S2 | F3.S3 (a) and (b) |
 | E6.S3 | after the dated decision: published when the line says *cancel*, or at Stage 2's end (D76); before that, publishing the references and the trap table would leak them into a possible process arm |
 | T16, the anchor round (D54, T-L55) | Stage 2, kept as written |
 
@@ -722,8 +741,13 @@ No merged work contradicts this part (the Fable planner's reading; the Opus judg
 
 One surface grows: the retained session trees and the scoring attempts under `~/rsd/lang-v2/`, outside git. Measured
 2026-11-07: the quick run's folder is 50 GB for its 36 sessions, the olympiad re-run, the re-scores and the replays, about
-1.4 GB per session. Stage 1 has 66 sessions (60 data, 6 pilot and A/A), so about 90 GB before the ten passes' own records,
-whose size F1.S2 measures and the pre-registration states; the disk has 632 GB free. **Kept for ever**, append only (D34;
+1.4 GB per session. Stage 1 has 66 sessions (60 data, 6 pilot and A/A), so about 90 GB before the ten passes' own records;
+the disk has 632 GB free (2026-11-07). **The budget's number is measured, not guessed:** F1.S2 measures, before the freeze,
+the retained size of ten passes plus the most retries and re-runs the rule allows (every pass re-run twice, and the
+session's one void re-run), on the known defective tree and both references of task 06. The worst case of a pair is two
+sessions' trees plus that size twice; the pre-registration states the projection for 66 sessions from it. **Before each
+pair, the disk rule (F3.S1):** if free disk under `~/rsd/lang-v2/` is below twice the pair's measured worst case, the
+series halts resumably and records why, and resumes only when the space is there. **Kept for ever**, append only (D34;
 the owner's rule); nothing is pruned. **Interrupted:** a halted pair is resumed by `series.mjs`, which settles what a crash
 left open; an interrupted scoring pass is an environment attempt and is re-run (D71).
 
@@ -731,8 +755,8 @@ left open; an interrupted scoring pass is an environment attempt and is re-run (
 
 Each story's *Accepted when* names its tests, and each bug fix starts with a test watched failing (`common.testing`). The
 tests of merged stories (T-L rows of §15) stay and must stay green. The tests that guard the comparison: F1.S2's verdict
-branches and the defective tree; F1.S3's one-value test; F1.S4's single frozen list and the script case; F2.S1's
-references 10 of 10 and every mutant caught; F3.S1's mask balance and the identity guard; F4.S1's record rendered from data
+branches and the defective tree; F1.S2's one-value test; F1.S3's single frozen list and the script case; F2.S1's
+references 10 of 10 and every mutant caught; F3.S1's mask balance and the identity guard; F3.S3's record rendered from data
 alone.
 
 ## 1. The question, before any solution
@@ -1387,7 +1411,7 @@ cross-group cost line carries a sentence saying so and shows tokens beside the c
 
 ## 9. Pre-registration and analysis (D24, D26, D28, D29)
 
-*(2026-11-07, epoch 9: the per-group form below is superseded. Stage 1 has one pre-registration, `prereg/lang-v2-<yyyymmdd>`, before the pilot (F3.S2), with D71's outcome classes, D72's one value and D73's claim and limit; the overall reading is the median of the six per-task ratios. The text below is kept.)*
+*(2026-11-07, epoch 9: the per-group form below is superseded. Stage 1 has one pre-registration, `prereg/lang-v2-<yyyymmdd>`, before the pilot (F3.S1), with D71's outcome classes, D72's one value and D73's claim and limit; the overall reading is the median of the six per-task ratios. The text below is kept.)*
 
 Committed and tagged `prereg/lang-v2-<yyyymmdd>` **before the pilot** (E4.S3) and amended only by dated lines after it;
 **frozen before any paid data run (D26):** the ten specs' hashes, `FORMAT.md`'s hash and the freeze tag; the suites' hashes and counts; the runner's manifest hash (`runner/`, D37) and the execution layer's identity (D43, §6.1); the GitHub broker's allow-list shape (D42); the private trap aid's sha256 (D41); **the certifying host** (host, kernel, cgroup version, the systemd scope probe — D36) on which every data session runs; the declared culture `de_DE.UTF-8` and the base `TZ=UTC` (D35, D15); the series defaults T = 10 s and G = 5 s with every per-task override (D14); the
@@ -1528,7 +1552,7 @@ and time ranges by a dated line, nothing else; 2026-11-01, D44: registered whole
 
 ## 11. Pilot and A/A (D16)
 
-*(2026-11-07, epoch 9: the per-group form below is superseded. Stage 1 has one pilot, a daemon pair and a web pair as void spend, and one bare A/A pair, gated by G-1 to G-14, G-16, G-17 and G-18 (F3.S3). The G rows and the stops stand. The text below is kept.)*
+*(2026-11-07, epoch 9: the per-group form below is superseded. Stage 1 has one pilot, a daemon pair and a web pair as void spend, and one bare A/A pair, gated by G-1 to G-14, G-16, G-17 and G-18 (F3.S2). The G rows and the stops stand. The text below is kept.)*
 
 **Per group (D44; 2026-11-01) — the form in force for the staged series.** The pilot and the A/A run per group, each before
 that group's first data pair; the paragraph after this table (one pilot before any data pair) is superseded for the staged
@@ -2077,19 +2101,18 @@ C's pilot set, §11.)*
 
 ## Epics
 
-**In force from the epoch 9 line (revision of 2026-11-07): F1 to F4.** Each epic's goal, stories, needs and done-when are
+**In force from the epoch 9 line (revision of 2026-11-07): F1 to F3.** Each epic's goal, stories, needs and done-when are
 written in full in the operative part (*Operative plan for epoch 9*, *Epics in force*), and its stories document,
-`todo/PLAN_lang_comparison_v2_E7_F1.md` to `_E10_F4.md` (named so the lifecycle check knows them), is written by Opus when the epic starts and links back here. What became of every
+`todo/PLAN_lang_comparison_v2_E7_F1.md`, `_E8_F2.md` or `_E9_F3.md` (named so the lifecycle check knows them), is written by Opus when the epic starts and links back here. What became of every
 earlier epic and story is the operative part's table *What happens to every earlier epic and story*.
 
 | Epic | Needs | Cornerstone area |
 |---|---|---|
-| F1 — one harness, one scoring engine, the 8.2 verdict | the stop lifted | F1.S2 with F1.S3 under one Fable spec: the verdict |
+| F1 — the harness and the verdict | the stop lifted | F1.S2: the verdict (repeated scoring and the one memory value) |
 | F2 — six validation packages | F1 | F2.S1: the validation package |
-| F3 — the series | F2's tag | none |
-| F4 — the bare report and the dated decision | F3 | none |
+| F3 — the series and the report | F2's tag | none |
 
-Cornerstones: 2 of 2 — F1.S2 (with F1.S3 under its one Fable spec), F2.S1
+Cornerstones: 2 of 2 — F1.S2, F2.S1
 
 *(Superseded 2026-11-07 by the table and the ledger line above: E0 to E6 below, their group map and the ledger line
 "3 of 3". Everything below is kept as history.)*
