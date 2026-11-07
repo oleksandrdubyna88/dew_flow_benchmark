@@ -355,6 +355,7 @@ Narrowed: yes — one merge condition got smaller: merge condition 2 asked every
 
   (Written 2026-11-08 by the re-review's plan writer (Opus). The Verdict column is the Opus judge's: `—` stands as the placeholder that `plan-lifecycle.mjs` accepts, as in the records of epochs 6 and 9. Not a row: #177 (the leftovers plan's boundary with another plan's E6) and #178 (the epoch-9 revision and the epoch 9 line itself, its baseline) merged before or as epoch 9 opened; the local branch `review/lang-v2-epoch9` is the epoch-9 gate's extract. Step 3 is consult `b52e8663`; the decisions are the team lead's. Step 7: no epic changed, so no re-split; the cornerstones stay 2 of 2. **No epoch 10 line is written here:** step 8 writes it after the judge, the re-review gate and, because this record says `Narrowed: yes`, the owner's approval of item 12.)
   (2026-11-08, after the judge's verdicts, at its findings; its cells are unchanged: build step 2b builds `leakcheck` over both repositories before F2.S1's first spec pull request; merge condition 5 and item 12 now say what happened at #3 and #4 (neither recorded bench-side checks; #4 merged on its document gate while merge condition 2 still asked for CI) and that the condition applies from epoch 10 on, with the checks run on a checkout of the head and run again by the bench pins pull request after the merge; the bias review's leak rule is in D25's dated line and F2.S1; "fails exactly its registered cases" is written for a deterministic and for a race witness; "registered" is a field of `memory-limit.json` that F3.S1's guard reads; D70 and the disposition table name runner 0.3.12; F2.S2's checker is on `main`. `Narrowed: yes` stands, with item 12 as its one item.)
+  (2026-11-08, after the plan gate on the revision, `proceed`, 2 of 2 reviewers; its five accepted findings are written in, the judge's cells unchanged: the race witness rule exactly, in F2.S1; the reserve before the first pair and the recovery path that archives before freeing, in F3.S1 and *Growth*; no task-repository pull request before build step 2b; the clear held-out folder's lifecycle, in F2.S2 and F3.S1. None makes anything smaller.)
 
 ## Operative plan for epoch 9 (2026-11-07): Stage 1, one bare series on six tasks
 
@@ -547,7 +548,8 @@ languages in general.
    pull request runs the same checks again against that commit. **This applies from epoch 10 on.** It is not what #3 and
    #4 did: neither recorded bench-side checks in its pull request; #4 merged on 2026-11-07 on its document gate (two rounds,
    4 of 4 reviewers) while merge condition 2 still asked for CI, and the bench checks ran afterwards against `c204726` on
-   the pins branch. Item 12 of *What got smaller* covers that.
+   the pins branch. Item 12 of *What got smaller* covers that. *(2026-11-08, after the plan gate:)* **No task-repository
+   pull request opens before build step 2b has merged**, so `leakcheck` over both repositories exists for every one.
 
 ### Epics in force: F1 to F3
 
@@ -679,7 +681,11 @@ when the required mask cannot be applied exactly; a refusal halts the series res
     case rejects it, and a witness caught in no pass is a trap with no catching case, a failure of the table. *(2026-11-08,
     after the judge:)* **"Fails exactly its registered cases", checkable for each kind:** a *deterministic* witness, in
     its one pass, fails every case registered for its trap and no other case; a *race* witness, over its ten passes, fails
-    in at least one pass, and every pass that fails fails only cases registered for its trap. **The cost is
+    in at least one pass, and every pass that fails fails only cases registered for its trap. *(2026-11-08, after the
+    plan gate, exactly:)* a **deterministic** witness fails, in its one pass, every case registered for its trap and no
+    other case. A **race** witness is judged only on its failing passes: each failing pass fails at least one case
+    registered for its trap and no case outside them; a timeout or a hang of a registered case counts as that case
+    failing; and at least one of its ten passes fails. Its clean passes are allowed and kept. **The cost is
     measured on task 05 first** (task 05 is the first task end to end) and recorded before the other five start.
   - **The bias question (D25).** Not counts: each spec and its suite (visible and held-out) go to the external vendors'
     review as §4.3 says — the coai document gate and a consultant, with D25's question — under the exposure already
@@ -714,7 +720,9 @@ when the required mask cannot be applied exactly; a refusal halts the series res
   - **"sealed" keeps its inherited meaning** (§4.3, §6): one encrypted archive per task (`heldout-tool.mjs seal`,
     AES-256-GCM, the key a mode-600 file outside every git tree and box), its hash registered; cases are in clear only in a
     scoring temp dir. Hashes alone would weaken it. A clear working folder kept beside the archive is checked against the
-    archive's hash at every pair;
+    archive's hash at every pair; *(2026-11-08, after the plan gate:)* **its lifecycle:** that clear folder is mode 700, is
+    removed after each pair, and is removed again at the start of any run after an interruption, while the archive and its
+    identity stay; a check that needs the clear cases makes the folder again from the archive;
   - FORMAT's protection starts at this freeze: with no group A freeze, B's is the first real freeze, so
     `FORMAT-MAINTENANCE.md` §3's "after the freeze of the first group" binds from B's tag, and the class check reads B's
     frozen classification;
@@ -741,7 +749,14 @@ when the required mask cannot be applied exactly; a refusal halts the series res
   at k = 1, 3 and 5 start C# on B and give the reverse; over the 30 pairs each stack has each mask exactly 15 times. The seed
   decides the task order inside a round, never the mask. **The disk rule:** before each pair, if free disk under
   `~/rsd/lang-v2/` is below twice the pair's measured worst case (F1.S2's number for two sessions with every retry and re-run),
-  the series halts resumably and records why; it resumes only when the space is there. The barrier and the one void re-run
+  the series halts resumably and records why; it resumes only when the space is there. *(2026-11-08, after the plan
+  gate:)* **The reserve:** before the first pair, free disk must be at least the whole series' measured bound — the
+  sessions times the measured worst case, every retry and re-run included — and the per-pair check above still runs.
+  Other sessions that write to the same disk are outside this series' control; the per-pair check is the defence against
+  them. **Recovery keeps the data:** when the disk rule halts the series, the operator first archives the finished series
+  to the private backup, by copy and a verified hash, and records the archive's identity; only then is anything local
+  freed, and nothing is deleted that is not in the verified archive. **The clear held-out folder** (F2.S2) is removed after
+  each pair and again at the start of any run after an interruption. The barrier and the one void re-run
   stay; the pre-registration guard reads the frozen identities (the runner manifest, the layer, the CLI copy, the snapshots,
   FORMAT, the specs, the held-out hashes, the one memory value, the contract's identity) *(2026-11-08, epoch 10: and it
   refuses a series while the memory value is not registered, that is, while `memory-limit.json` lacks F2.S1's
@@ -787,7 +802,8 @@ when the required mask cannot be applied exactly; a refusal halts the series res
    (`chore/lang-v2-format-d72-pins`, `2b0947ef`) merge before F2.S1's first conformance run.
    **2b.** *(2026-11-08, after the judge; D41)* After the pins and before F2.S1's first spec pull request: `leakcheck` over
    both repositories, with the publication-commit scan and the planted-needle check (merge condition 3), built, gated and
-   merged, so every task-repository pull request can run it (merge condition 5).
+   merged, so every task-repository pull request can run it (merge condition 5). *(After the plan gate:)* **no
+   task-repository pull request opens before 2b has merged.**
 3. **F2.S1 for one task** (04 or 05) end to end, then the other five in parallel. *(2026-11-08, epoch 10: task 05, whose
    witness cost is recorded before the other five start.)*
 4. **F2.S2**, the freeze.
@@ -883,7 +899,12 @@ in F1 on the defective tree and accepted quick-run sessions; the references' num
 The worst case of a pair is two
 sessions' trees plus that size twice; the pre-registration states the projection for 66 sessions from it. **Before each
 pair, the disk rule (F3.S1):** if free disk under `~/rsd/lang-v2/` is below twice the pair's measured worst case, the
-series halts resumably and records why, and resumes only when the space is there. **Kept for ever**, append only (D34;
+series halts resumably and records why, and resumes only when the space is there. *(2026-11-08, after the plan gate:)*
+**Before the first pair, the reserve:** free disk is at least the whole series' measured bound (the sessions times the
+measured worst case, every retry and re-run included); the per-pair check still runs, because other sessions that write to
+the same disk are outside this series' control. **The recovery path keeps the data:** after a halt, the operator archives
+the finished series to the private backup by copy and a verified hash, records the archive's identity, and only then frees
+local space; nothing is deleted that is not in the verified archive. **Kept for ever**, append only (D34;
 the owner's rule); nothing is pruned. **Interrupted:** a halted pair is resumed by `series.mjs`, which settles what a crash
 left open; an interrupted scoring pass is an environment attempt and is re-run (D71).
 
