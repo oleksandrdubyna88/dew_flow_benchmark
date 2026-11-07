@@ -119,3 +119,25 @@ test('The_launching_sessions_of_the_series_come_from_its_run_map', async () => {
   const seams = passSeams({ a: { stack: 'node', source: w.layout.work, files: frozenFiles(), sets: [], limits: { buildTimeoutMs: 1 } }, profile, seams: {}, seriesDir: w.dir });
   assert.deepEqual(seams.seriesState(), { launching: ['b2'] });
 });
+
+test('The_loops_scoring_dep_answers_scored_for_a_decided_scoring_void_for_an_exhausted_one_and_environment_for_a_halt', async () => {
+  const answerWith = async (plan, extra = {}) => {
+    const w = world(); // a session of its own each time: a scored session is read back, not scored again
+    const h = harness({ holdSeries: false, plan });
+    const lock = acquireSeriesLock({ seriesDir: w.dir });
+    try {
+      const dep = scoreSessionDep({ world: { passSeams: () => ({ ...seamsOf(h), ...extra }) }, calibration: { limits: h.a.limits }, heldout: { casesDir: '/x', traps: [] }, home: w.home });
+      return await dep({ session: w.layout.dir, source: w.layout.work, stack: 'node', nugetCache: '/n', npmCache: '/p' });
+    } finally { lock.value.release(); }
+  };
+  const decided = await answerWith(() => 'clean');
+  assert.equal(decided.kind, 'scored');
+  assert.equal(decided.score.explore.verdict, 'accepted');
+  const exhausted = await answerWith(() => 'env');
+  assert.equal(exhausted.kind, 'void');
+  assert.equal(exhausted.class, 'void: unscored environment');
+  assert.match(exhausted.reason, /pass\(es\) used every attempt/);
+  const halted = await answerWith(() => 'clean', { seriesState: () => ({ launching: ['zz9999'] }) });
+  assert.equal(halted.kind, 'environment');
+  assert.match(halted.reason, /zz9999/);
+});
