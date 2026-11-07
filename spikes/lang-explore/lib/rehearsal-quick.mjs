@@ -21,7 +21,7 @@ export function fixtureOf(kind, mode = '') {
   return mode === '' ? base : { ...base, input: base.input.replace('start ready', `env HELLO_MODE "${mode}"\nstart ready`) };
 }
 
-/** The fixture cases: h001 passes; the others fail on purpose (a wrong reply, a program killed by SIGTERM, a program that exits 3 on SIGTERM, a program that holds 700 MiB under a 512 MiB bound). */
+/** The fixture cases: h001 passes; the others fail on purpose (a wrong reply, a program killed by SIGTERM, a program that exits 3 on SIGTERM, a program that holds more memory than the registered bound). */
 export const FIXTURE_CASES = Object.freeze([['h001', ''], ['h002', 'wrong'], ['h003', 'sigdie'], ['h004', 'exit3'], ['h005', 'hog']]);
 
 /** Write the rehearsal's held-out set into `dir/cases` and return a held-out object shaped like `loadHeldoutQuick`'s. */
@@ -34,7 +34,9 @@ export function rehearsalHeldout({ dir, task }) {
     writeFileSync(path.join(casesDir, `${id}.out`), f.output);
   }
   writeFileSync(path.join(casesDir, 'cases.txt'), `# the rehearsal fixtures\n${FIXTURE_CASES.map(([id]) => `${id} bytes R1`).join('\n')}\n`);
-  return Object.freeze({ task: task.id, dir, casesDir, caseIds: FIXTURE_CASES.map(([id]) => id), traps: [], treeSha256: casesTreeHash(casesDir), rehearsal: true });
+  const tree = casesTreeHash(casesDir);
+  if (!tree.ok) throw new Error(`the rehearsal wrote only regular files into ${casesDir}, yet ${tree.reason}`);
+  return Object.freeze({ task: task.id, dir, casesDir, caseIds: FIXTURE_CASES.map(([id]) => id), traps: [], treeSha256: tree.value, rehearsal: true });
 }
 
 /** The hello overlay of a stack and kind: `{ relPath: { bytes, mode } }`. */
@@ -70,6 +72,6 @@ export function quickScoreChecks({ entries, records }) {
     check('the correct hello program passed (the pass path)', everywhere(cs => verdictIn(cs, 'h001') === 'pass'), verdicts),
     check('a visible sample was judged and failed (the reject path)', everywhere(cs => cs.some(c => c.set === 'visible' && c.verdict !== 'pass')), verdicts),
     check('a wrong reply, a program killed by SIGTERM and a program that exits 3 all failed, in both stacks', everywhere(cs => ['h002', 'h003', 'h004'].every(id => notPassed(cs, id))), verdicts),
-    check('a program that holds 700 MiB under the 512 MiB bound failed in both stacks (the bound is applied: Node gets the memory limit verdict from the cgroup; .NET stops at its 90 % heap limit, a runtime abort, D55)', everywhere(cs => notPassed(cs, 'h005')), verdicts),
+    check('a program that holds more than the registered memory bound failed in both stacks (the bound is applied: Node gets the memory limit verdict from the cgroup; .NET stops at its 90 % heap limit, a runtime abort, D55)', everywhere(cs => notPassed(cs, 'h005')), verdicts),
   ];
 }

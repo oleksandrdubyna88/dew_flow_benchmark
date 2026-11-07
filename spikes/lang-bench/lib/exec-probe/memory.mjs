@@ -1,5 +1,5 @@
 // E1.S8b brief B: the memory view, ASSERTED (T-L43; coai risk 19ae7208; parent D51). The box mounts no `/sys/fs/cgroup`, and .NET finds its memory limit through the cgroup mount, so the
-// two stacks may believe different limits under one `MemoryMax`. The probe records what each runtime believes at 256 and 512 MiB and checks it against the host's `prog/memory.max`
+// two stacks may believe different limits under one `MemoryMax`. The probe records what each runtime believes at its two probe limits (256 and 512 mebibytes) and checks it against the host's `prog/memory.max`
 // by the policy D15 records. OP-K — which policy — is the team lead's to decide on that record: `inputs/specs.d/memory-policy.json` is `{ policy, decided, by }`, `policy` null while
 // undecided. A probe that only printed a mismatch and exited 0 would let the stacks meet different bounds, so: undecided is exit 3 `memory-policy-undecided`, a mismatch is exit 3
 // `memory-view-mismatch`, and exit 0 only when a policy holds. The judgement is pure: observations in, `{ ok, halt, problems }` out.

@@ -12,8 +12,8 @@ import { run } from '../lib/conformance.mjs';
 import { argsOf, check, CHECK_NAMES, failsOf, fixtureRepo, isOk, phrase, REAL_FORMAT } from './support/conformance-fixtures.mjs';
 import { edit } from './support/format-fixtures.mjs';
 
-const OFFLINE_OLD = 'The tests run offline, on a pristine copy of the workspace, after the build.';
-const OFFLINE_NEW = 'The tests run strictly offline, on a pristine copy of the workspace, after the build.';
+const OFFLINE_OLD = 'The tests run offline. They use a clean copy of the workspace as you left it:';
+const OFFLINE_NEW = 'The tests run strictly offline. They use a clean copy of the workspace as you left it:';
 
 /** The task repository, or null: skipped with its reason, and a failure under BENCH_REQUIRE_SANDBOX=1. */
 function taskRepo(t) {

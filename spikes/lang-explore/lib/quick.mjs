@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { pinnedPaths } from './inputs.mjs';
+import { memoryLimit } from './memory-limit.mjs';
 import { underHome } from './paths.mjs';
 
 const BENCH = fileURLToPath(new URL('../../lang-bench/', import.meta.url));
@@ -62,8 +63,14 @@ function snapshotOf({ record, stack, root }) {
   return dir !== null && existsSync(dir) ? ok({ dir, parts: r.parts, record: r }) : fail(`the v2 ${stack} snapshot ${dir ?? '(unrecorded)'} is not on disk`);
 }
 
-/** The fixed limits of the quick tasks, shaped as a calibration (no oracle, no mutants): `{ quick: true, limits }`. The same bytes every time, so a series' own copy always equals it. */
-export const quickCalibration = explore => Object.freeze({ quick: true, note: 'fixed limits of the quick run; no calibration was made', limits: { ...explore.quick.limits } });
+/**
+ * The fixed limits of the quick tasks, shaped as a calibration (no oracle, no mutants): `{ quick: true, limits }`. The memory limit is the one registered value (`inputs/memory-limit.json`, D72), not a key of the pins.
+ * The same bytes every time, so a series' own copy always equals it.
+ */
+export function quickCalibration(explore, limit = memoryLimit()) {
+  if (!limit.ok) throw new Error(limit.reason);
+  return Object.freeze({ quick: true, note: 'fixed limits of the quick run; no calibration was made', limits: { ...explore.quick.limits, memoryBytes: limit.value.bytes } });
+}
 
 /** `quick.pausePoint` and `quick.planTasks` in the shape `pauseVerdict` reads from the olympiad block. */
 export const quickPlan = explore => ({ planTasks: explore.quick.planTasks, pausePoint: explore.quick.pausePoint });

@@ -1,7 +1,7 @@
 // The private material of the leak scan as STRUCTURED data, never one joined string (a task's held-out inputs can be millions of lines): per tier the keys or needles it matches, each needle with where it came from
 // (task, source file, line), so a finding names WHERE and never the text. Tier 1 (substring): the private CODE lines (references, mutants, gen.py, oracle files; at least 30 characters, minus the lines the committed
 // runner shares) and the short CASE lines (8 to 199 characters) of a task that has at most 2,000 of them. The other tiers add their keys in the modules that own them.
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { parseShingles } from '../../minigit-bench/lib/heldout-leak.mjs';
@@ -31,6 +31,26 @@ function codeFiles(root) {
   const trees = ['refs', 'mutants'].map(d => path.join(root, d)).filter(existsSync).flatMap(d => filesUnder(d, root));
   return [...trees, ...[...ORACLE_FILES, 'gen.py'].filter(f => existsSync(path.join(root, f)))];
 }
+
+/** The links under one private folder, as `prefix` plus the path below it (a link met anywhere, or the folder itself being a link, named as `prefix` alone). A link is never read through and never skipped in silence. */
+function linksIn(dir, prefix) {
+  const self = lstatSync(dir, { throwIfNoEntry: false });
+  if (self === undefined) return [];
+  if (self.isSymbolicLink()) return [prefix.replace(/\/$/, '')];
+  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isSymbolicLink()).map(e => `${prefix}${path.relative(dir, path.join(e.parentPath, e.name))}`);
+}
+
+/** The links under a task's private code folders (`refs`, `mutants`, and a quick task's `refs-NN`, which a finding names as `refs/`): relative paths, never text. */
+export function privateLinks({ root, refsDir = null }) {
+  const quickRefs = refsDir === null ? [] : linksIn(refsDir, 'refs/');
+  return [...linksIn(path.join(root, 'refs'), 'refs/'), ...linksIn(path.join(root, 'mutants'), 'mutants/'), ...quickRefs];
+}
+
+/** The sentence refusing the scan because a private folder holds a link (`task NN: path`), or null. */
+const linkProblem = tasks => {
+  const found = tasks.flatMap(t => privateLinks({ root: t.heldout.dir, refsDir: t.heldout.refsDir }).map(rel => `task ${t.id}: ${rel}`));
+  return found.length === 0 ? null : `the private side holds a link, which the check does not read through and will not skip: ${found.join(', ')}`;
+};
 
 const BUILD_OUTPUT = /(?:^|\/)(?:__pycache__|node_modules|bin|obj)\//;
 const SOURCE_MAX_BYTES = 2_000_000;
@@ -131,7 +151,7 @@ export function shinglesOf(tasks, reviewed = NO_REVIEW) {
  * The structured material of the tasks to scan. `tasks` is `[{ id, heldout, shinglesText }]` (`heldout` as `loadHeldout` returns it); `runnerLines` the committed runner's normalised lines (code needles that collide with
  * them are dropped); `reviewed` the person-reviewed list (leak-reviewed.mjs): a private line or phrase on it is dropped before the needles and keys of EVERY tier are built. -> `ok(material)` | `fail(sentence)`.
  */
-export function buildMaterial({ tasks, runnerLines = new Set(), grammarLines = new Set(), hash = polyHash, maxNeedles = SUBSTRING_NEEDLES_MAX, reviewed = NO_REVIEW }) {
+function buildTiers({ tasks, runnerLines = new Set(), grammarLines = new Set(), hash = polyHash, maxNeedles = SUBSTRING_NEEDLES_MAX, reviewed = NO_REVIEW }) {
   const sub = substringNeedles(tasks, runnerLines, grammarLines, maxNeedles, reviewed);
   const shingles = sub.ok ? shinglesOf(tasks, reviewed) : sub;
   if (!shingles.ok) return shingles;
@@ -140,4 +160,10 @@ export function buildMaterial({ tasks, runnerLines = new Set(), grammarLines = n
     substrings: sub.value.needles, substringIndex: buildSubstringIndex(sub.value.needles), skipped: sub.value.skipped, shingleTexts: shingles.value.texts, shingleOwners: shingles.value.owners, tasks: tasks.map(t => t.id), baselines: Object.fromEntries(tasks.map(t => [t.id, { commit: t.baselineCommit ?? null, born: t.heldoutBorn ?? null }])),
     caseSources: sources, hash, lineKeys: buildLineKeys(sources, hash), windowKeys: buildWindowKeys(sources, hash), chunkKeys: buildChunkKeys(sources), codeByKey: codeByKey(sub.value.needles.filter(n => n.kind === 'code'), hash),
   });
+}
+
+/** The material of the tasks, or the refusal when a private folder of any of them holds a link (see `buildTiers` for the options). -> `ok(material)` | `fail(sentence)`. */
+export function buildMaterial(options) {
+  const linked = linkProblem(options.tasks);
+  return linked === null ? buildTiers(options) : fail(linked);
 }

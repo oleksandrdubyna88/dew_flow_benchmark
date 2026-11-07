@@ -12,6 +12,7 @@
 //   node spikes/lang-explore/explore.mjs status --task NN [--series <dir>]     node spikes/lang-explore/explore.mjs note --task NN [--out <file>] [--force]     node spikes/lang-explore/explore.mjs prune --task NN [--series <dir>]
 //   node spikes/lang-explore/explore.mjs rescore --task NN --series <dir> --rid R [--wait S]   FREE: an ended void whose evidence now classes as data is scored and recorded (the ledger's spend is unchanged)
 //   node spikes/lang-explore/explore.mjs replay --task NN --series <dir> --rid R --case ID [--times N]   FREE and DIAGNOSTIC: reads a rejected case again on the current runner; changes no record, verdict or spend; writes s/<rid>/replay/<time>.json only
+//   node spikes/lang-explore/explore.mjs repartition --series <dir>   FREE: the time partition of every kept session recomputed from its retained evidence with v1's classifier as it is, into a NEW dated file in <dir>/partition-recomputed/; no record changes
 //   node spikes/lang-explore/explore.mjs leakcheck [--task NN] [--range A..B]  v1's leak check with the held-out outputs, reference lines and notes' shingles of EVERY task (or of the one named) as the needles
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
@@ -22,7 +23,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { calibrateCommand } from './lib/calibrate.mjs';
-import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
+import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRepartition, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { prepare } from './lib/prepare.mjs';
 import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
@@ -42,14 +43,14 @@ async function cmdPrepare(values, io) {
 async function cmdCalibrate(values, io) {
   const given = taskFromValues(values, io.exploreFn);
   if (!given.ok) { io.say(given.reason); return EXIT.config; }
-  if (isQuick(given.value.task)) { io.say(`task ${given.value.task.id} is a quick-run task: its limits are fixed (explore.json quick.limits) and nothing is calibrated`); return EXIT.config; }
+  if (isQuick(given.value.task)) { io.say(`task ${given.value.task.id} is a quick-run task: its time and build limits are fixed (explore.json quick.limits), its memory limit is the one registered value (inputs/memory-limit.json), and nothing is calibrated`); return EXIT.config; }
   const r = await calibrateCommand({ home: io.home, say: io.say, worldFn: io.worldFn ?? loadWorld, task: given.value.task });
   if (r.ok) { io.say(`calibrated task ${given.value.task.id}: TL ${r.value.calibration.limits.timeMs} ms, ML ${r.value.calibration.limits.memoryBytes} bytes; written to ${r.value.file}`); return EXIT.done; }
   io.say(`calibration stopped: ${r.reason}`);
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {

@@ -5,9 +5,11 @@
 //   node spikes/lang-bench/make-snapshots.mjs [--stack csharp] [--stack node]       build and register (default: both, csharp first)
 //   node spikes/lang-bench/make-snapshots.mjs --supersede <stack> --reason "<text>"  move a registered record to superseded[] (before the pre-registration tag only)
 //   node spikes/lang-bench/make-snapshots.mjs --prune-superseded                     remove superseded snapshot folders (after the pre-registration tag only)
-//   node spikes/lang-bench/make-snapshots.mjs --print-packages-md <stack>            print the stack's PACKAGES.md, derived from the record
+//   node spikes/lang-bench/make-snapshots.mjs --check-recipe                          hold each registered stack's stackRecipeSha256 equal to today's recipe (exit 1 on a difference; a record made before the field is checked through the recipe text its whole-file hash names, or reported NOT CHECKED)
+//   node spikes/lang-bench/make-snapshots.mjs --print-packages-md <stack> --kind <kind>  print the PACKAGES.md of a stack and kind, derived from the record and the package matrix
 //     --caches <dir>     default ~/rsd/lang-v2/caches (refused inside a git worktree)     --record <file>   default inputs/cache-snapshots-lang.json
 //     --recipe <file>    default inputs/cache-recipe-lang.json                           --stacks <file>   default inputs/stacks-lang.json
+//     --matrix <file>    default inputs/package-matrix.json (read by --print-packages-md only)
 //     --work <dir>       parent of the build's owned work folder, default ~/.cache/lang-v2/w
 //     --gate-lock <file> default ~/.cache/lang-v2/gate.lock
 //     --tags-remote <url> where supersede and prune look for the pre-registration tag besides the local tags (default: origin's url, a GitHub SSH form read over https; no remote is a refusal)
@@ -30,13 +32,14 @@ import { makeSnapshot, treeHash } from '../minigit-bench/lib/cache-snapshot.mjs'
 import { egressSummary } from '../minigit-bench/lib/egress.mjs';
 import { refuseInsideWorktree } from '../minigit-bench/lib/git-guard.mjs';
 import { fail, ok } from '../minigit-bench/lib/result.mjs';
-import { loadRecipeLang } from './lib/cache-recipe-lang.mjs';
+import { KINDS, loadRecipeLang } from './lib/cache-recipe-lang.mjs';
 import { boxOptionsFor } from './lib/cache-offline.mjs';
 import { isRecordObject, pruneSuperseded, recordAtTag, registerBuilt, supersede, sweepStaging, tagsOf } from './lib/cache-store.mjs';
 import { takeGateLock } from './lib/gate-lock.mjs';
 import { storeDirs } from './lib/preflight-box.mjs';
 import { preflightLang } from './lib/preflight-lang.mjs';
 import { renderPackagesMd } from './lib/packages-md.mjs';
+import { stackRecipeProblems, stackRecipeSha256 } from './lib/stack-recipe.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
@@ -44,7 +47,7 @@ const REPO = path.resolve(SPIKE, '..', '..');
 const STACK_NAMES = Object.freeze(['csharp', 'node']);
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
 const OPTIONS = {
-  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'print-packages-md': { type: 'string' }, 'tags-remote': { type: 'string' },
+  stack: { type: 'string', multiple: true }, supersede: { type: 'string' }, reason: { type: 'string' }, 'prune-superseded': { type: 'boolean' }, 'check-recipe': { type: 'boolean' }, 'print-packages-md': { type: 'string' }, kind: { type: 'string' }, matrix: { type: 'string' }, 'tags-remote': { type: 'string' },
   caches: { type: 'string' }, record: { type: 'string' }, recipe: { type: 'string' }, stacks: { type: 'string' }, work: { type: 'string' }, 'gate-lock': { type: 'string' },
 };
 const say = line => process.stdout.write(`${line}\n`);
@@ -54,7 +57,7 @@ const stop = (code, line) => { complain(line); return code; };
 // ---- the arguments ---------------------------------------------------------------------------------------------------------------
 
 const MODE_TESTS = Object.freeze([
-  ['supersede', v => v.supersede !== undefined], ['prune', v => v['prune-superseded'] === true], ['print', v => v['print-packages-md'] !== undefined], ['build', v => v.stack !== undefined],
+  ['supersede', v => v.supersede !== undefined], ['prune', v => v['prune-superseded'] === true], ['check', v => v['check-recipe'] === true], ['print', v => v['print-packages-md'] !== undefined], ['build', v => v.stack !== undefined],
 ]);
 const modeOf = v => MODE_TESTS.filter(([, isAsked]) => isAsked(v)).map(([name]) => name);
 /** Every stack name the flags carry that is not a legal one (the stacks of `--stack` and the one of `--print-packages-md`). */
@@ -65,7 +68,8 @@ function configOf(v, mode) {
   const home = os.homedir();
   const at = (value, ...fallback) => path.resolve(value ?? path.join(...fallback));
   return {
-    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'], tagsRemote: v['tags-remote'],
+    mode, stackNames: v.stack ?? [...STACK_NAMES], supersede: v.supersede, reason: v.reason, print: v['print-packages-md'], kind: v.kind, tagsRemote: v['tags-remote'],
+    matrix: at(v.matrix, SPIKE, 'inputs', 'package-matrix.json'),
     caches: at(v.caches, home, 'rsd', 'lang-v2', 'caches'), record: at(v.record, SPIKE, 'inputs', 'cache-snapshots-lang.json'), recipe: at(v.recipe, SPIKE, 'inputs', 'cache-recipe-lang.json'),
     stacks: at(v.stacks, SPIKE, 'inputs', 'stacks-lang.json'), work: at(v.work, home, '.cache', 'lang-v2', 'w'), gateLock: at(v['gate-lock'], home, '.cache', 'lang-v2', 'gate.lock'),
   };
@@ -77,7 +81,7 @@ function readArgs(argv) {
   try { v = parseArgs({ args: argv, options: OPTIONS, strict: true }).values; } catch (e) { return { error: e.message }; }
   const modes = modeOf(v);
   const unknown = unknownStacks(v);
-  if (modes.length > 1) return { error: 'ask for one of: a build (--stack), --supersede <stack> --reason <text>, --prune-superseded, or --print-packages-md <stack>' };
+  if (modes.length > 1) return { error: 'ask for one of: a build (--stack), --supersede <stack> --reason <text>, --prune-superseded, --check-recipe, or --print-packages-md <stack>' };
   return unknown.length > 0 ? { error: `--stack names ${unknown.join(', ')}; the legal names are ${STACK_NAMES.join(', ')}` } : { config: configOf(v, modes[0] ?? 'build') };
 }
 
@@ -137,7 +141,8 @@ async function buildOne({ stack, config, inputs, dirs, workDir }) {
   say(egressLine(workDir, stack));
   if (!made.ok) return made;
   const seed = seedOf(spec);
-  const record = registerBuilt({ made: made.value, stack, recipeSha256: inputs.recipeSha256, projectSha256: seed === null ? null : treeHash(seed), file: config.record, madeOn: new Date().toISOString().slice(0, 10) });
+  const projectSha256 = seed === null ? null : treeHash(seed);
+  const record = registerBuilt({ made: made.value, stack, recipeSha256: inputs.recipeSha256, stackRecipeSha256: stackRecipeSha256({ spec, projectSha256 }), projectSha256, file: config.record, madeOn: new Date().toISOString().slice(0, 10) });
   if (record.ok) say(`registered ${stack} ${record.value.dirName} (${record.value.sizeBytes} bytes, ${record.value.packages.length} packages)`);
   return record;
 }
@@ -251,10 +256,31 @@ function pruneMode(config) {
   return pruned.value.failed.length === 0 ? EXIT.done : EXIT.failed;
 }
 
+/** The kind and the matrix `--print-packages-md` needs: `ok(matrix)` | `fail` (a usage line). */
+function printInputs(config) {
+  if (!KINDS.includes(config.kind)) return fail(`--print-packages-md needs --kind: the file depends on it (legal kinds: ${KINDS.join(', ')})`);
+  const matrix = readJsonFlag('--matrix', config.matrix);
+  return matrix.ok ? ok(matrix.value.json) : matrix;
+}
+
+function checkRecipeMode(config) {
+  const inputs = loadInputs(config);
+  if (!inputs.ok) return stop(EXIT.usage, inputs.reason);
+  const registered = readRecordFlag(config.record);
+  if (!registered.ok) return stop(EXIT.usage, registered.reason);
+  const out = stackRecipeProblems({ record: registered.value, recipe: inputs.value.recipe, treeHashOf: rel => treeHash(path.join(SPIKE, rel)) });
+  out.verified.forEach(v => say(`${v.stack}: the recipe builds what was registered (${v.how})`));
+  out.unchecked.forEach(u => complain(`${u.stack}: ${u.why}`));
+  out.problems.forEach(complain);
+  return out.problems.length === 0 ? EXIT.done : EXIT.failed;
+}
+
 function printMode(config) {
   const inputs = loadInputs(config);
   if (!inputs.ok) return stop(EXIT.usage, inputs.reason);
-  const rendered = renderPackagesMd({ stack: config.print, record: JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}'), recipe: inputs.value.recipe });
+  const matrix = printInputs(config);
+  if (!matrix.ok) return stop(EXIT.usage, matrix.reason);
+  const rendered = renderPackagesMd({ stack: config.print, kind: config.kind, record: JSON.parse(existsSync(config.record) ? readFileSync(config.record, 'utf8') : '{}'), recipe: inputs.value.recipe, matrix: matrix.value });
   if (!rendered.ok) return stop(EXIT.refused, rendered.reason);
   process.stdout.write(rendered.value);
   return EXIT.done;
@@ -276,6 +302,7 @@ async function main(argv) {
   if (parsed.error) return stop(EXIT.usage, parsed.error);
   const { config } = parsed;
   if (config.mode === 'supersede') return underGateLock(config, () => supersedeMode(config));
+  if (config.mode === 'check') return checkRecipeMode(config);
   return (config.mode === 'print' ? printMode : cachesModes)(config);
 }
 

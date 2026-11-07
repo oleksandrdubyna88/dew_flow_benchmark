@@ -30,7 +30,7 @@ function walk(root, dir = root) {
 }
 
 /** The needle hits of one text, as `{ path, line, needle }`. */
-const textHits = (rel, text, known) => findVisibleRules(rel, text, { known }).map(f => finding(rel, f.line, f.what));
+const textHits = (rel, text, known, stackWords) => findVisibleRules(rel, text, { known, stackWords }).map(f => finding(rel, f.line, f.what));
 
 /** A hit for an entry that is not a regular file within the ceiling, or null. */
 function unreadable(entry) {
@@ -39,11 +39,11 @@ function unreadable(entry) {
   return reason === undefined ? null : finding(entry.rel, null, reason[1]);
 }
 
-function textFindings(entry, { known, extra }) {
+function textFindings(entry, { known, extra, stackWords }) {
   const { text, nul } = decodeBlob(readFileSync(entry.abs));
   const extraHits = extra === null ? [] : textHits(entry.rel, text, extra).filter(h => h.needle.startsWith('needle '));
   const pathHits = textHits(entry.rel, entry.rel, known).map(h => ({ ...h, line: null }));
-  return [...textHits(entry.rel, text, known), ...extraHits, ...pathHits, ...(nul ? [finding(entry.rel, null, 'binary file (NUL byte)')] : [])];
+  return [...textHits(entry.rel, text, known, stackWords), ...extraHits, ...pathHits, ...(nul ? [finding(entry.rel, null, 'binary file (NUL byte)')] : [])];
 }
 
 const fileHits = (entry, options) => { const bad = unreadable(entry); return bad === null ? textFindings(entry, options) : [bad]; };
@@ -56,9 +56,9 @@ const byPathThenLine = (a, b) => a.path.localeCompare(b.path, 'en') || (a.line ?
  * `literals` are further words read by the caller from a file outside git. A symlink, a non-regular file, an oversize file and a NUL byte are
  * hits too: nothing in the tree goes unread. Never the matched text.
  */
-export function needleScan({ root, known, literals = [] }) {
+export function needleScan({ root, known, literals = [], stackWords }) {
   const extra = literals.length === 0 ? ok(null) : parseKnownNeedles({ schema: 1, words: literals, substrings: [] });
-  return extra.ok ? ok(walk(root).flatMap(entry => fileHits(entry, { known, extra: extra.value })).sort(byPathThenLine)) : extra;
+  return extra.ok ? ok(walk(root).flatMap(entry => fileHits(entry, { known, extra: extra.value, stackWords })).sort(byPathThenLine)) : extra;
 }
 
 const emptyOrAbsent = dir => { try { return readdirSync(dir).length === 0; } catch (error) { return error.code === 'ENOENT'; } };
@@ -119,9 +119,9 @@ function finish({ scan, out, removed }) {
  * `## Attribution` (a README without the section or with it twice is refused), credit files removed, then `needleScan`. A hit refuses the
  * cut: the folder is removed and the fail names `path:line needle` for every hit, never the text. `literals` as in needleScan.
  */
-export async function generateRunBaseTree({ repo, ref, out, needles, literals = [] }) {
+export async function generateRunBaseTree({ repo, ref, out, needles, literals = [], stackWords }) {
   const cut = await unpackAndCut(repo, ref, out);
   if (!cut.ok) return cut;
   const removed = removeCredits(out);
-  return finish({ scan: needleScan({ root: out, known: needles, literals }), out, removed });
+  return finish({ scan: needleScan({ root: out, known: needles, literals, stackWords }), out, removed });
 }

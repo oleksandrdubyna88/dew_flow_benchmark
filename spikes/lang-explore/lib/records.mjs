@@ -42,9 +42,28 @@ const stats = all => {
   return xs.length === 0 ? null : { min: Math.min(...xs), median: [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)], max: Math.max(...xs) };
 };
 
+/** The frozen files the agent changed, as a count and the paths (sorted): beside `accepted`, never a verdict (D65; the lexical taxonomy of D65 is not built). A score that names no change has none. */
+export const deviationsOf = (changes = []) => ({ count: changes.length, paths: changes.map(c => c.path).sort() });
+
+/** The deviations leaf: known, unless a changed template file or derived file could not be judged (its old bytes cannot be read): then it is unknown and says which, with what is decided so far. */
+function deviationsLeaf(e) {
+  const counted = deviationsOf(e.frozenChanges);
+  const undecided = (e.undecidedDrift ?? []).map(c => c.path).sort();
+  return undecided.length === 0 ? known(counted) : { known: false, why: `whether ${undecided.join(', ')} was changed by the agent cannot be told: the bytes the file had when the session began cannot be read`, counted };
+}
+
+/** The identity of the contract the score was made under; a score made before it existed says so, and is never given today's. */
+const contractIdentityOf = e => (typeof e.contractIdentity === 'string' ? known(e.contractIdentity) : unknown('the score names no contract identity: it was made before the identity existed, or by a scoring that makes none'));
+
+/** The fields of a score made by the ten passes (absent from an olympiad record and from one scored the old way, so those stay what they were): the verdict, the scoring state, the passes completed, the scoring time and the built tree's hash. */
+const scoringPart = e => (e.verdict === undefined ? {} : {
+  verdict: known(e.verdict), scoringState: known(e.scoringState), passes: known(e.passes),
+  ...(e.scoringMs === undefined ? {} : { scoringMs: known(e.scoringMs) }), ...(e.buildTreeSha256 === undefined ? {} : { buildTreeSha256: known(e.buildTreeSha256) }),
+});
+
 /**
  * The `explore` section of a session record: visible and held-out pass rates, verdict counts by class, the wall and certified peak of every case (private: the case ids are in the record, never in the note),
- * the build time, the limits used, the trap hits (a count), the frozen files the agent changed, the build/test time of the agent's own calls, whether the session is accepted. A session that was not scored
+ * the build time, the limits used, the trap hits (a count), the frozen files the agent changed (and their count beside `accepted`), the contract identity of the scoring, the build/test time of the agent's own calls, whether the session is accepted. A session that was not scored
  * says why for every leaf.
  */
 export function exploreSection({ score, audit }) {
@@ -54,10 +73,10 @@ export function exploreSection({ score, audit }) {
   const held = e.cases.filter(c => c.set === 'heldout');
   const visible = e.cases.filter(c => c.set === 'visible');
   return {
-    scored: known(true), accepted: known(acceptedOf(score)), buildTest,
+    scored: known(true), accepted: known(e.verdict === undefined ? acceptedOf(score) : e.verdict === 'accepted'), ...scoringPart(e), buildTest,
     passRate: known({ visible: e.passRate.visible, heldout: e.passRate.heldout, visibleCases: visible.length, heldoutCases: held.length }),
     verdicts: known(e.verdicts), limits: known(e.limits), buildMs: known(e.build.wallMs ?? null),
-    trapHits: known({ hits: e.trapHits, trapCases: e.trapCases }), frozenChanges: known(e.frozenChanges),
+    trapHits: known({ hits: e.trapHits, trapCases: e.trapCases }), frozenChanges: known(e.frozenChanges), deviations: deviationsLeaf(e), harnessDrift: known(e.harnessDrift ?? []), contractIdentity: contractIdentityOf(e),
     cases: known(e.cases.map(c => ({ set: c.set, id: c.id, verdict: c.verdict, wallMs: c.wallMs, peakBytes: c.peakBytes, maxRssKbDescriptive: c.maxRssKb ?? null, oomKills: c.events?.oom_kill ?? 0, exit: c.exit }))),
     wall: known({ visible: stats(visible.map(c => c.wallMs)), heldout: stats(held.map(c => c.wallMs)) }),
     peak: known({ visible: stats(visible.map(c => c.peakBytes).filter(Number.isFinite)), heldout: stats(held.map(c => c.peakBytes).filter(Number.isFinite)) }),
@@ -74,12 +93,15 @@ export const REQUIRED_PATHS = Object.freeze([
   'explore.scored', 'explore.buildTest',
 ]);
 /** Paths a SCORED session also holds (the explore fields that need a score). */
-export const SCORED_PATHS = Object.freeze(['explore.accepted', 'explore.passRate', 'explore.verdicts', 'explore.cases', 'explore.limits', 'explore.buildMs', 'explore.trapHits', 'explore.floorBreaches', 'quality.heldout.value.percent', 'quality.heldout.value.defects', 'quality.heldout.value.primary100']);
+export const SCORED_PATHS = Object.freeze(['explore.accepted', 'explore.deviations', 'explore.harnessDrift', 'explore.contractIdentity', 'explore.passRate', 'explore.verdicts', 'explore.cases', 'explore.limits', 'explore.buildMs', 'explore.trapHits', 'explore.floorBreaches', 'quality.heldout.value.percent', 'quality.heldout.value.defects', 'quality.heldout.value.primary100']);
+
+/** Paths a record scored by the ten passes also holds (checked when it carries a verdict: an olympiad record, and one scored the old way, has none and misses none). */
+export const PASSES_PATHS = Object.freeze(['explore.verdict', 'explore.scoringState', 'explore.passes']);
 
 const at = (o, dotted) => dotted.split('.').reduce((x, k) => (x === undefined || x === null ? undefined : x[k]), o);
 
 /** The required paths a record lacks (a scored session's list is longer); `[]` means every metric is there. */
-export const missingPaths = (record, scored = true) => [...REQUIRED_PATHS, ...(scored ? SCORED_PATHS : [])].filter(p => at(record, p) === undefined);
+export const missingPaths = (record, scored = true) => [...REQUIRED_PATHS, ...(scored ? SCORED_PATHS : []), ...(scored && at(record, 'explore.verdict') !== undefined ? PASSES_PATHS : [])].filter(p => at(record, p) === undefined);
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const writeJsonAtomic = (file, value) => { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`); renameSync(tmp, file); };

@@ -71,7 +71,7 @@ test('Every_prediction_row_of_the_plan_is_stated_against_an_observation_computed
   const second = predictionRows(failing.map(sessionCells), inputFor(failing).pairs, TASK);
   assert.match(second[4][2], /accepted in 5 of 6 scored session\(s\); trap hits C# 0 session\(s\) with a hit, TypeScript 1 session\(s\) with a hit/, 'one failing trap case is one trap hit, as a count');
   assert.match(second[0][2], /\$0\.21 to \$0\.90/);
-  assert.match(renderNote(inputFor(failing)), /\| 1 \| TypeScript \| 100% \| 80% \| no \| 1 of 2 trap cases \|/, 'the quality table says it: the held-out rate, not accepted, one trap hit');
+  assert.match(renderNote(inputFor(failing)), /\| 1 \| TypeScript \| 100% \| 80% \| no \| 0 \| 1 of 2 trap cases \|/, 'the quality table says it: the held-out rate, not accepted, no deviation, one trap hit');
   const visibleFails = sixSessions();
   const slipped = sessionRecord({ stack: 'csharp', usd: 0.2, failing: ['s02'] });
   visibleFails[0] = { entry: entryOf(1, 'csharp', 1, slipped), record: slipped };
@@ -157,4 +157,31 @@ test('A_session_without_a_record_json_does_not_crash_the_note_and_is_listed_as_a
   assert.match(text, /pair 1 C# attempt 1: launching; flags: no record\.json/);
   assert.match(text, /pair 1 TypeScript attempt 1: planned; flags: no record\.json/);
   assert.ok(text.includes('Exploratory, not evidence'));
+});
+
+test('The_quality_table_shows_the_deviations_beside_accepted_and_a_dash_for_a_record_made_before_they_existed', () => {
+  const plain = sixSessions();
+  const deviating = sessionRecord({ stack: 'csharp', usd: 0.2 });
+  const withTwo = { ...deviating, explore: { ...deviating.explore, deviations: { known: true, value: { count: 2, paths: ['.npmrc', 'build.sh'] } } } };
+  plain[0] = { entry: entryOf(1, 'csharp', 1, withTwo), record: withTwo };
+  const old = sessionRecord({ stack: 'node', usd: 0.2 });
+  const { deviations: dropped, ...withoutKey } = old.explore;
+  assert.equal(dropped.known, true);
+  plain[1] = { entry: entryOf(1, 'node', 1, old), record: { ...old, explore: withoutKey } };
+  const text = renderNote(inputFor(plain));
+  assert.match(text, /\| deviations \|/, 'the column has a heading');
+  assert.match(text, /\| 1 \| C# \| 100% \| 100% \| yes \| 2 \| 0 of 2 trap cases \|/, 'two frozen files changed: a count, beside accepted');
+  assert.match(text, /\| 1 \| TypeScript \| 100% \| 100% \| yes \| — \| 0 of 2 trap cases \|/, 'a record without the field shows a dash, never 0');
+  assert.doesNotMatch(text, /\.npmrc/, 'the paths are in the record, not in the note');
+});
+
+test('A_note_over_records_made_before_deviations_existed_has_no_deviations_column_and_is_the_note_it_was', () => {
+  const sessions = sixSessions().map(({ entry, record }) => {
+    const { deviations, ...explore } = record.explore;
+    assert.equal(deviations.known, true);
+    return { entry, record: { ...record, explore } };
+  });
+  const text = renderNote(inputFor(sessions));
+  assert.doesNotMatch(text, /deviations/, 'no column, no heading');
+  assert.match(text, /\| pair \| stack \| visible pass rate \| held-out pass rate \| accepted \| trap hit \(a count; detail private\) \|/, 'the quality table is as it was');
 });

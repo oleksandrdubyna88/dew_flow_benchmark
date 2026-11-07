@@ -10,6 +10,7 @@ import { parseCredits } from './push-credits.mjs';
 import { aidNeedles, parseKnownNeedles } from './push-needles.mjs';
 import { parseOwnSecrets } from './push-secrets.mjs';
 import { readPublicPlans } from './push-public.mjs';
+import { stackMatchers } from './runner-text.mjs';
 
 const spikePath = relative => fileURLToPath(new URL(`../${relative}`, import.meta.url));
 export const DEFAULT_AIDS = Object.freeze(['PLAN-trap-table.md', 'PLAN-risky-scenarios.md']);
@@ -81,6 +82,16 @@ function loadTemplateFiles(explicit) {
   } catch { return fail(`${file} is not JSON`, { kind: 'config' }); }
 }
 
+/** ok(matchers) of the stack words (`inputs/stack-words-lang.json`, or the named file): the runner rule of the scan reads them. */
+function loadStackWords(file) {
+  try {
+    const matchers = stackMatchers(file);
+    return matchers.ok ? matchers : fail(matchers.reason, { kind: 'config' });
+  } catch (error) {
+    return fail(`the stack words cannot be read (${error.code ?? error.message})`, { kind: 'config' });
+  }
+}
+
 /** ok(inputs) for checkBranch / checkText / checkSelf, or a fail with a `kind`. The credit terms are parsed lazily by the check: a bad file is a value. */
 export async function loadInputs(options) {
   const aids = await loadAids(options);
@@ -93,7 +104,9 @@ export async function loadInputs(options) {
   const credits = creditsText.ok ? parseCredits(creditsText.value) : fail(creditsText.reason);
   const ownSecrets = loadOwnSecrets(options.secretFiles ?? []);
   if (!ownSecrets.ok) return ownSecrets;
-  return ok({ aids: aids.value, known: known.value, credits, templateFiles: templateFiles.value, ownSecrets: ownSecrets.value });
+  const stackWords = loadStackWords(options.stackWords);
+  if (!stackWords.ok) return stackWords;
+  return ok({ aids: aids.value, known: known.value, stackWords: stackWords.value, credits, templateFiles: templateFiles.value, ownSecrets: ownSecrets.value });
 }
 
 /** ok([{ label, value }]): the values of the named secret files, or of the default two that exist; a NAMED file that cannot be read is an `env` fail. */

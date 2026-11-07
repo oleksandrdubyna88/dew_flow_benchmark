@@ -2,6 +2,7 @@
 // The real build and every box case are in cache-lang-offline.test.mjs (BENCH_REQUIRE_SANDBOX=1 only).
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -15,7 +16,7 @@ import { START_TOLERANCE_S, parseOwner, thisOwner } from '../../../.agents/conve
 import { sandboxGate } from '../../minigit-bench/test/helpers.mjs';
 import { loadRecipeLang } from '../lib/cache-recipe-lang.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
-import { checkManifestMatches, manifestOf, pruneSuperseded, stagingVerdict, supersede, sweepStaging } from '../lib/cache-store.mjs';
+import { checkManifestMatches, manifestOf, pruneSuperseded, stagingVerdict, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { exitedPid, recordOf, writeClaim } from './support/owners.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
@@ -53,6 +54,17 @@ test('The_recipe_names_every_offered_package_with_a_purpose_and_pins_the_toolcha
   assert.match(refusal(changed(r => { r.stacks.node.steps[4].expectStdout = 'Version 7.0.2'; })), /tsc --version.*Version 6\.0\.3/);
   assert.match(refusal(changed(r => { r.stacks.node.packages.find(p => p.name === 'typescript').spec = '7.0.2'; })), /typescript.*6\.0\.3/);
   assert.match(refusal(changed(r => { r.stacks.node.steps.splice(4, 1); })), /tsc --version/, 'a missing pin step is a refusal, not a pass');
+});
+
+test('Every_offered_package_names_the_kinds_it_is_offered_in_and_a_missing_or_unknown_kind_is_refused', () => {
+  for (const [stack, spec] of Object.entries(loadRecipeLang(realRecipe(), stacks).value.stacks)) {
+    for (const p of spec.packages) assert.ok(p.kinds.length > 0 && p.kinds.every(k => ['olympiad', 'daemon', 'web'].includes(k)), `${stack}: ${p.name} names its kinds`);
+  }
+  assert.match(refusal(changed(r => { delete r.stacks.csharp.packages[0].kinds; })), /stacks\.csharp\.packages\[0\]\.kinds.*non-empty/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[1].kinds = []; })), /stacks\.node\.packages\[1\]\.kinds.*non-empty/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[1].kinds = 'web'; })), /stacks\.node\.packages\[1\]\.kinds/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[2].kinds = ['web', 'service']; })), /stacks\.node\.packages\[2\]\.kinds.*service.*olympiad, daemon, web/);
+  assert.match(refusal(changed(r => { r.stacks.node.packages[2].kinds = ['web', 'web']; })), /stacks\.node\.packages\[2\]\.kinds.*twice/);
 });
 
 /** The parent of every box folder a test makes: under the home (the agent box replaces /tmp), created once, owner only. */
@@ -333,13 +345,60 @@ test('The_command_prints_the_PACKAGES_md_of_a_registered_stack_from_the_record_a
   const packages = real.stacks.node.packages.map(p => ({ ecosystem: 'npm', name: p.name, version: p.spec.replace(/\{([A-Z_]+)\}/, (m, k) => resolved[k]), integrity: 'sha512-x' }));
   const rec = path.join(root, 'rec.json');
   writeFileSync(rec, JSON.stringify({ node: recordFor('d'.repeat(64), { packages, resolved }), superseded: [] }));
-  const printed = await runMake(['--print-packages-md', 'node', '--record', rec]);
+  const matrixFile = path.join(root, 'matrix.json');
+  const allWorks = Object.fromEntries(Object.entries(real.stacks).map(([stack, spec]) => [stack, Object.fromEntries(spec.packages.map(p => [p.name, { olympiad: { state: 'works' }, daemon: { state: 'works' }, web: { state: 'works' } }]))]));
+  writeFileSync(matrixFile, JSON.stringify({ rows: allWorks }));
+  const flagsOf = (stack, ...more) => ['--print-packages-md', stack, '--record', rec, '--matrix', matrixFile, ...more];
+  const printed = await runMake(flagsOf('node', '--kind', 'olympiad'));
   assert.equal(printed.value.code, 0, printed.value.stderr);
-  const expected = renderPackagesMd({ stack: 'node', record: JSON.parse(readFileSync(rec, 'utf8')), recipe: real });
+  const expected = renderPackagesMd({ stack: 'node', kind: 'olympiad', record: JSON.parse(readFileSync(rec, 'utf8')), recipe: real, matrix: { rows: allWorks } });
   assert.equal(expected.ok, true, expected.reason);
-  assert.equal(printed.value.stdout, expected.value, 'the command prints exactly what the renderer derives from the record');
-  const missing = await runMake(['--print-packages-md', 'csharp', '--record', rec]);
+  assert.equal(printed.value.stdout, expected.value, 'the command prints exactly what the renderer derives from the record and the matrix');
+  const noKind = await runMake(flagsOf('node'));
+  assert.equal(noKind.value.code, 2, 'the file depends on the kind: a print without --kind is a usage error');
+  assert.match(noKind.value.stderr, /--kind.*olympiad, daemon, web/);
+  const noMatrix = await runMake(['--print-packages-md', 'node', '--kind', 'web', '--record', rec, '--matrix', path.join(root, 'none.json')]);
+  assert.equal(noMatrix.value.code, 2, 'a matrix that cannot be read is a usage error');
+  const missing = await runMake(flagsOf('csharp', '--kind', 'web'));
   assert.equal(missing.value.code, 3, 'a stack with no record is refused');
   assert.match(missing.value.stderr, /csharp/);
-  assert.equal((await runMake(['--print-packages-md', 'ruby', '--record', rec])).value.code, 2, 'an unknown stack is a usage error');
+  assert.equal((await runMake(flagsOf('ruby', '--kind', 'web'))).value.code, 2, 'an unknown stack is a usage error');
+});
+
+// ---- the Stage 1 pre-registration tag form ------------------------------------------------------------------------------------------
+
+const gitIn = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8', timeout: 20_000 });
+const STAGE_1_TAG = 'prereg/lang-v2-20261201';
+
+/** A repository with one commit, its tag pushed to a bare origin and removed locally: only the remote holds it, the way another checkout's push leaves it. -> `{ repo, origin }`. */
+function repoTaggedOnRemote(t, tag) {
+  const root = ownedFolder(t, 'st1');
+  const [repo, origin] = [path.join(root, 'repo'), path.join(root, 'origin.git')];
+  mkdirSync(repo); mkdirSync(origin);
+  for (const [cwd, args] of [[origin, ['init', '--bare', '-q']], [repo, ['init', '-q']], [repo, ['commit', '--allow-empty', '-q', '-m', 'x']], [repo, ['remote', 'add', 'origin', origin]], [repo, ['tag', tag]], [repo, ['push', '-q', 'origin', tag]], [repo, ['tag', '-d', tag]]]) assert.equal(gitIn(cwd, ...args).status, 0, args.join(' '));
+  return { repo, origin };
+}
+
+test('A_supersede_after_the_stage_1_pre_registration_tag_is_refused', t => {
+  const { repo, origin } = repoTaggedOnRemote(t, STAGE_1_TAG);
+  const file = path.join(ownedFolder(t, 'sup1'), 'rec.json');
+  writeFileSync(file, `${JSON.stringify({ csharp: recordFor('a'.repeat(64)), superseded: [] }, null, 2)}\n`);
+  const before = readFileSync(file, 'utf8');
+  const refused = supersede({ file, stack: 'csharp', reason: 'the set changed', tagsOf: () => tagsOf(repo, { remote: origin }), today: '2026-12-02' });
+  assert.equal(refused.ok, false, 'the tag of Stage 1 (prereg/lang-v2-<yyyymmdd>) stops a supersede');
+  assert.match(refused.reason, /pre-registration tag exists/);
+  assert.equal(readFileSync(file, 'utf8'), before, 'the record is untouched');
+});
+
+test('The_prune_sees_the_stage_1_pre_registration_tag', t => {
+  const { repo, origin } = repoTaggedOnRemote(t, STAGE_1_TAG);
+  assert.deepEqual(tagsOf(repo, { remote: origin }).value, [STAGE_1_TAG], 'the reader lists the Stage 1 tag form');
+  const caches = path.join(ownedFolder(t, 'prn1'), 'caches');
+  mkdirSync(caches);
+  const old = snapshotAt(caches, 'node', { 'npm/a': 'stage 1 old' });
+  const records = { superseded: [{ stack: 'node', supersededOn: '2026-11-05', reason: 'a', record: recordFor(old) }] };
+  const pruned = pruneSuperseded({ caches, tagsOf: () => tagsOf(repo, { remote: origin }), recordAtTag: () => ok(records) });
+  assert.equal(pruned.ok, true, pruned.reason);
+  assert.deepEqual(pruned.value.removed.map(r => r.name), [`node-${old}`], 'with the Stage 1 tag the prune runs and removes the superseded snapshot');
+  makeWritable(caches);
 });

@@ -6,11 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadExplore, pinnedPaths } from './inputs.mjs';
-import { INPUTS, REPO, toolchainsDir, underHome } from './paths.mjs';
+import { INPUTS, toolchainsDir, underHome } from './paths.mjs';
 import { scoreTree } from './score.mjs';
-import { candidateRepos, loadSources, workspaceFiles } from './workspace.mjs';
+import { taskSources, workspaceFiles } from './workspace.mjs';
 import { isQuick, quickExplore, quickPaths, quickSnapshots } from './quick.mjs';
 import { packagesInputs, quickWorkspaceFiles } from './workspace-quick.mjs';
+import { passSeams } from './pass-seams.mjs';
 import { scoreQuick } from './score-quick.mjs';
 
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -63,7 +64,7 @@ function hostThings({ explore, home }) {
 }
 
 /** The task's spec and FORMAT texts at their pins from the task repository this host has (`candidates` replaces the search, for tests). */
-const sourcesFor = ({ explore, task, home, candidates }) => loadSources({ task, candidates: candidates ?? candidateRepos({ repoName: explore.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark'), home }) });
+const sourcesFor = taskSources;
 
 function worldOf({ explore, task, home, snapshots, sources, work }) {
   const paths = pinnedPaths(explore, home);
@@ -112,6 +113,14 @@ async function quickParts({ home, task, exploreFn, candidates }) {
 }
 
 /**
+ * The single-pass scoring of the quick world (`replay`, a rehearsal): `scoreQuick` over the arguments of a call. `driftPossible`, `only` and `history` go through, so a kept tree is judged per file against the harness the series was made
+ * with (`template-drift.mjs`); `quickSeams` (`{ buildFn, runFn }`) and `scoreFn` are for tests.
+ */
+export const quickScoreFn = ({ frozenFor, work, profile, quickSeams = {}, scoreFn = scoreQuick }) => args => scoreFn({
+  stack: args.stack, source: args.source, files: args.files ?? frozenFor(args.stack), sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work, profile, say: args.say, driftPossible: args.driftPossible === true, only: args.only, history: args.history, ...quickSeams,
+});
+
+/**
  * The world of a QUICK task (daemon or web, see quick.mjs): the v2 toolchains and caches, the workspace of lang-bench's templates, and the scoring through the execution layer. Same shape as the olympiad world plus
  * `frozenFor(stack)` (the files the agent must not change), `profile` (what the scoring box needs) and `quick: true`. `quickSeams` (`{ buildFn, runFn }`) is for tests and the stub runner.
  */
@@ -123,10 +132,10 @@ async function loadQuickWorld({ home, work, task, exploreFn, candidates, quickSe
   if (!built.ok) return built;
   const paths = quickPaths(explore, home);
   const profile = { explore, paths, snapshots, kind: task.kind, caseWallMs: explore.quick.caseWallMs, runCeilingMs: explore.quick.runCeilingMs };
-  const scoreFn = args => scoreQuick({
-    stack: args.stack, source: args.source, files: args.files ?? built.value[args.stack].value.frozen, sets: args.sets, limits: args.limits, traps: args.traps ?? [], work: args.work ?? work, profile, say: args.say, driftPossible: args.driftPossible === true, only: args.only, ...quickSeams,
-  });
+  const scoreFn = quickScoreFn({ frozenFor: stack => built.value[stack].value.frozen, work, profile, quickSeams });
+  // the ten passes of F1.S2: the seams `scorePasses` takes, built per scoring call (`scoreFn` stays the single pass `replay` uses)
+  const passSeamsFn = args => passSeams({ a: { ...args, files: args.files ?? built.value[args.stack].value.frozen }, profile, seams: quickSeams, seriesDir: args.seriesDir });
   return ok({
-    explore, task, home, paths, snapshots, sources, filesFor: stack => built.value[stack].value.files, frozenFor: stack => built.value[stack].value.frozen, scoreFn, work, profile, quick: true,
+    explore, task, home, paths, snapshots, sources, filesFor: stack => built.value[stack].value.files, frozenFor: stack => built.value[stack].value.frozen, scoreFn, passSeams: passSeamsFn, work, profile, quick: true,
   });
 }

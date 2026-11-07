@@ -11,6 +11,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { createHash } from 'node:crypto';
 import { runnerPinNow } from '../lib/harness-pin.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { planSpend } from '../lib/pause.mjs';
@@ -143,6 +144,17 @@ test('A_series_made_under_another_runner_pin_or_under_none_scores_with_harness_d
     assert.equal(r.exit, 0, `${name}: ${r.message}`);
     assert.equal(scoreArgs[0].driftPossible, expected, name);
   }
+});
+
+test('A_rescore_gives_the_scoring_the_history_of_its_series_so_that_template_files_are_judged_by_their_bytes', async () => {
+  const bytes = 'the old build.sh\n';
+  const w = world({ templateHashes: { 'node/web/build.sh': createHash('sha256').update(bytes).digest('hex') } });
+  const scoreArgs = [];
+  const r = await run(w, ioFor(w, { scoreArgs }));
+  assert.equal(r.exit, 0, r.message);
+  assert.equal(typeof scoreArgs[0].history, 'function', 'the scoring is given the series\' history');
+  assert.deepEqual(scoreArgs[0].history({ stack: 'node', kind: 'web', rel: 'build.sh' }), { known: true, sha256: createHash('sha256').update(bytes).digest('hex') }, 'and it answers from the map the series recorded');
+  assert.equal(scoreArgs[0].templateDriftPossible, undefined, 'the flag of the earlier design is gone: the bytes decide');
 });
 
 test('A_stop_signal_ends_the_wait_for_a_series_lock_and_changes_nothing', async () => {

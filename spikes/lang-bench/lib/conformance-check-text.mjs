@@ -28,9 +28,9 @@ export function needleFindings(path, text, { known, stackWords, literals }) {
 
 /** Markup links in prose, code spans left out: `[text](url)`, `[text][ref]`, a reference definition `[ref]: url`, an autolink `<scheme:…>`. */
 const MARKUP_LINK = /(?<![A-Za-z0-9_)\]])\[[^\]]*\]\([^)]*\)|(?<![A-Za-z0-9_)\]])\[[^\]]+\]\[[^\]]*\]|^\s*\[[^\]]+\]:\s*\S|<[A-Za-z][A-Za-z0-9+.-]*:[^>\s]*>/;
-/** The plan's identifiers (FORMAT 1.5), in any case; `S<n>`, `V<n>`, `CP<n>`, `OP-<x>` and `F<n>` in upper case only: `s01` is a sample id, the Freeze rule sentence of every spec says `v2`, and `op-code`, `cp1252`, `f1` are words. */
-const PLAN_ID = /\b(?:E\d+(?:\.S\d+[ab]?)?|D\d{1,3}|T-L\d+)\b/gi;
-const PLAN_STORY = /\b(?:S\d+[ab]?|V\d+|CP\d+|OP-[A-Za-z0-9]+|F\d+)\b/g;
+/** The plan's identifiers (FORMAT 1.5), in any case: `E<n>`, `D<n>`, `T-L<n>` and `V<n>`; `S<n>`, `CP<n>`, `OP-<x>` and `F<n>` in upper case only: `s01` is a sample id, and `op-code`, `cp1252`, `f1` are words. */
+const PLAN_ID = /\b(?:E\d+(?:\.S\d+[ab]?)?|D\d{1,3}|T-L\d+|V\d+)\b/gi;
+const PLAN_STORY = /\b(?:S\d+[ab]?|CP\d+|OP-[A-Za-z0-9]+|F\d+)\b/g;
 
 const markupHits = line => (MARKUP_LINK.test(blankSpans(line.text)) ? [{ line: line.no, what: 'link' }] : []);
 const idHits = line => [...blankSpans(line.text).matchAll(PLAN_ID), ...blankSpans(line.text).matchAll(PLAN_STORY)].map(found => ({ line: line.no, what: `plan id ${found[0]} (a value of the task goes in a code span)` }));

@@ -556,7 +556,7 @@ test('A_placeholder_that_is_not_a_key_lists_the_legal_keys', () => {
   bad.stacks.csharp.steps[1].argv.push('-p:X={GHOST}');
   const refused = loadRecipeLang(bad, stacks);
   assert.equal(refused.ok, false);
-  assert.match(refused.reason, /legal keys: HOSTING, JWT_BEARER, XUNIT, XUNIT_VS, TEST_SDK/);
+  assert.match(refused.reason, /legal keys: HOSTING, JWT_BEARER, MVC_TESTING, XUNIT, XUNIT_VS, TEST_SDK/);
 });
 
 test('The_npm_index_is_read_once_for_every_licence_of_a_snapshot', t => {

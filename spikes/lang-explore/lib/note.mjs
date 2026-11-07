@@ -3,6 +3,8 @@
 // agent code or transcript (the private detail stays in `~/rsd/lang-v2/explore/<series>/private/`). Pure: records in, text out.
 
 import { QUICK_BASE, bannerOf, extraDifferencesOf, notSettledOf, predictedOf } from './note-tasks.mjs';
+import { STACK_ORDER, VOID_UNSCORED, stackState } from './series.mjs';
+import { VERDICTS } from './verdict.mjs';
 
 const DASH = '—';
 
@@ -55,7 +57,7 @@ export function sessionCells({ entry, record }) {
     e: leaf(record, 'cost.cliTotalUsd'), b: leaf(record, 'cost.brokerUsd'), headline: leaf(record, 'cost.headlineUsd')?.usd ?? null, checks: checksCell(record), tokens: tokensCell(record), split: splitCell(record),
     wall: leaf(record, 'time.wallMs'), modelApi: leaf(record, 'time.modelApiMs'), active: leaf(record, 'time.activeMs'), diff: leaf(record, 'time.activeMinusModelApiMs'),
     partition: leaf(record, 'time.partition'), partitionSum: partitionSum(record), buildTest: leaf({ explore }, 'explore.buildTest'), rate: leaf({ explore }, 'explore.passRate'),
-    accepted: leaf({ explore }, 'explore.accepted'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
+    accepted: leaf({ explore }, 'explore.accepted'), deviations: leaf({ explore }, 'explore.deviations'), verdict: leaf({ explore }, 'explore.verdict'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
   };
 }
 
@@ -78,9 +80,15 @@ function partitionTable(cells) {
   return table(['pair', 'stack', ...names], cells.map(c => [c.pair, c.stack, ...names.map(n => secs(c.partition?.categories[n]))]));
 }
 
+const acceptedCell = c => (c.accepted === null ? DASH : (c.accepted ? 'yes' : 'no'));
+const deviationsCell = c => (c.deviations === null ? DASH : String(c.deviations.count));
+const trapCell = c => (c.trap === null ? DASH : `${c.trap.hits} of ${c.trap.trapCases} trap cases`);
+
+/** The quality table. The deviations column is there when any session of the note has the field: a note over records made before it existed is the note it always was (absent is not zero, and a recorded note does not change). */
 function qualityTable(cells) {
-  return table(['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', 'trap hit (a count; detail private)'],
-    cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), c.accepted === null ? DASH : (c.accepted ? 'yes' : 'no'), c.trap === null ? DASH : `${c.trap.hits} of ${c.trap.trapCases} trap cases`]));
+  const withDeviations = cells.some(c => c.deviations !== null);
+  const head = ['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', ...(withDeviations ? ['deviations'] : []), 'trap hit (a count; detail private)'];
+  return table(head, cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), acceptedCell(c), ...(withDeviations ? [deviationsCell(c)] : []), trapCell(c)]));
 }
 
 function pairTable(pairs) {
@@ -183,7 +191,17 @@ export const DIFFERENCES = Object.freeze([
 ]);
 
 /** The differences list of a task: the olympiad pilot's, or the quick run's own. */
-const differencesOf = task => (task.quick === true ? [...QUICK_BASE, ...extraDifferencesOf(task)] : [...DIFFERENCES, ...extraDifferencesOf(task)]);
+/** From this date v1's classifier counts the build, run and sample commands (F1.S1 (b)); a note dated earlier says what was true when it was made, and the recorded notes are reproduced byte for byte. */
+export const CLASSIFIER_WIDENED_ON = '2026-11-07';
+const NOT_WIDENED = DIFFERENCES.findIndex(line => line.includes('is not widened'));
+const WIDENED = 'Build and test time is reported beside the time partition, not inside it (v1\'s classifier counts `build.sh`, `run.sh`, the visible-samples runner and the same work of both stacks as build_test from 2026-11-07; the sessions of this note were recorded earlier and were not recomputed).';
+
+/** The differences of a note dated `date`: the olympiad pilot's list says the classifier is not widened until the date it was. */
+export function differencesOf(task, date) {
+  if (task.quick === true) return [...QUICK_BASE, ...extraDifferencesOf(task)];
+  const base = date >= CLASSIFIER_WIDENED_ON ? DIFFERENCES.map((line, i) => (i === NOT_WIDENED ? WIDENED : line)) : DIFFERENCES;
+  return [...base, ...extraDifferencesOf(task)];
+}
 
 /** The pins and the subject, by sha, harness path and date (`common.measurement` rule 6). */
 function pinLines({ input }) {
@@ -223,13 +241,43 @@ export function renderNote(input) {
     '## Time: wall, model_api, active - model_api, and the build/test time of the agent\'s own calls', '', ...timeTable(cells), '',
     '## The time partition, every category', '', ...partitionTable(cells), '',
     '## Quality: pass rates and trap hits (counts only)', '', ...qualityTable(cells), '', input.task.quick === true ? 'The time floors of the olympiad tasks do not apply to daemon and web cases: a scenario\'s own deadlines judge time.' : floorLine(input.sessions), '',
+    ...verdictSection(cells, input.sessions),
     '## Pairs', '', ...pairTable(input.pairs), '',
     '## Cost per correct solution', '', ...cpcLines(input.cpc), '',
     '## Voids, contamination and timeouts', '', ...incidentLines(cells), '',
-    '## Differences from v2\'s harness', '', ...differencesOf(input.task).map(d => `- ${d}`), '',
+    '## Differences from v2\'s harness', '', ...differencesOf(input.task, input.date).map(d => `- ${d}`), '',
     '## What this does not settle', '', notSettledOf(input.task), '',
   ].join('\n');
 }
+
+// ---- the scoring verdicts (F1.S2): counted from the records and the run-map, never typed ------------------------------------------------------------
+
+const UNSCORED = VERDICTS.at(-1);
+
+/** Sessions of a stack by verdict word: the first three from the records' `explore.verdict`, `unscored: environment` from the run-map class (such a session has no score of its own). */
+const verdictCount = ({ cells, stack, word }) => count(cells.filter(c => c.stack === cap(stack)), c => (word === UNSCORED ? c.cls === VOID_UNSCORED : c.verdict === word));
+
+/** Cells (a stack of a pair) by the series' own state, from the run-map entries: `done` is scored and final, `void-rerunnable` may be re-run once, `void-final` has used its re-run. */
+function finalityCounts({ sessions, stack }) {
+  const map = { sessions: Object.fromEntries(sessions.map(s => [s.entry.rid, s.entry])) };
+  const pairs = [...new Set(sessions.filter(s => s.entry.stack === stack).map(s => s.entry.pair))];
+  const states = pairs.map(pair => stackState(map, pair, stack));
+  return { done: count(states, x => x === 'done'), rerunnable: count(states, x => x === 'void-rerunnable'), final: count(states, x => x === 'void-final') };
+}
+
+function verdictLines({ cells, sessions }) {
+  const head = ['stack', ...VERDICTS];
+  const rows = STACK_ORDER.map(stack => [cap(stack), ...VERDICTS.map(word => verdictCount({ cells, stack, word }))]);
+  const finality = STACK_ORDER.map(stack => ({ stack, ...finalityCounts({ sessions, stack }) }));
+  return [
+    'A session is scored after it ended, by ten scoring passes (five on the 2-CPU profile, five on the 8-CPU profile) over one build, and the passes become one of four verdicts by one stated rule. Counts only.', '',
+    ...table(head, rows), '',
+    ...finality.map(f => `- ${cap(f.stack)}: ${f.done} scored (final), ${f.rerunnable} void that the series may re-run once, ${f.final} void with its re-run used`),
+  ];
+}
+
+/** The section on the scoring verdicts, only for a note whose sessions were scored by the ten passes (the older notes keep their text). */
+const verdictSection = (cells, sessions) => (cells.some(c => c.verdict !== null || c.cls === VOID_UNSCORED) ? ['## Scoring verdicts: ten passes, four states', '', ...verdictLines({ cells, sessions }), ''] : []);
 
 const isIncident = c => c.flags.length > 0 || !c.data || /^(void|killed|stop|crashed)/.test(c.cls);
 

@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
-import { SPIKE } from './paths.mjs';
+import { REPO, SPIKE } from './paths.mjs';
 import { parseSamples } from './samples.mjs';
 import { parseScenarioSamples } from './samples-sd.mjs';
 
@@ -38,6 +38,9 @@ async function pinnedText(repo, pin, what) {
   const hash = sha256(got.value);
   return hash === pin.sha256 ? ok(got.value.toString('utf8')) : fail(`${what} at ${pin.sha} hashes to ${hash.slice(0, 12)}, the pins say ${pin.sha256.slice(0, 12)}`);
 }
+
+/** The spec and FORMAT texts of `task` at their pins from the task repository this host has (`candidates` replaces the search, for tests). -> `ok({ spec, format, repo })` | `fail`. */
+export const taskSources = ({ explore, task, home, candidates }) => loadSources({ task, candidates: candidates ?? candidateRepos({ repoName: explore.specs.repoName, repoRoot: REPO, commonRoot: path.resolve(REPO, '..', '..', 'dew_flow_benchmark'), home }) });
 
 /** The spec and the FORMAT text of `task` from the first candidate repository that has both at their pins. -> `ok({ spec, format, repo })` | `fail`. A spec whose samples table cannot be read is refused here. */
 export async function loadSources({ task, candidates }) {

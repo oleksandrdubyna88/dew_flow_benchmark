@@ -22,8 +22,7 @@ the samples) and `no-needle` (10, 11 and 12). The threat model of the command is
 catches every mistake a check names in those forms, and never passes because FORMAT or the runner changed or failed. It is not a proof against a hostile author; an elaborate disguise is the gate's
 job. **Three things it does only in part, and they stay with the reviewer:** a normative sentence outside every requirement that is not a fixed sentence (5); a `body json` or `recv … json` entry is
 refused only when no requirement carries F-JSON, not reply by reply (8); the reading block is recognised as a paragraph, table or fenced block that names eight or more of the script's keywords in code
-spans, so a summary in plain words is not (10). The needles of check 11 are the plan's identifiers (any case; `S<n>` and `V<n>` in upper case only, because `s01` is a sample id and the Freeze rule
-sentence says `v2`), links of every kind, the known-task needles and the stack words of `inputs/stack-words-lang.json` (case-insensitive, `Node` excepted; the implementation languages, runtimes,
+spans, so a summary in plain words is not (10). The needles of check 11 are the plan's identifiers (any case, `V<n>` among them; `S<n>` in upper case only, because `s01` is a sample id), links of every kind, the known-task needles and the stack words of `inputs/stack-words-lang.json` (case-insensitive, `Node` excepted; the implementation languages, runtimes,
 frameworks, build tools and flags of the series, public, named by the word in a finding) and the author's `--needles` file (case-insensitive, found across a line break). In group B each olympiad spec
 of A is checked under A's FORMAT and under B's. **What the rules of batches 3 and 4 do, and where they stop.** C7: a `**R<n>` anywhere but at the start of a line as `**R<n>.**`, with a blank line above it, is a finding, and so is a plain `R<n>.` that opens a line
 or a list item and is followed by a sentence on the same line (`R1. Then it stops.` fails; a wrapped cross reference that ends a sentence and stands alone at the start of the next line does not); every
@@ -36,8 +35,8 @@ that cannot be read, a kind label in FORMAT that is none of the three kinds, and
 line names the record's gate (`gate none` when the record has none), so a gate reader sees a FORMAT that is recorded and not gated. **The author's way out** of a plan-id or reference finding on a value of the
 task: put the value in a code span (the plan-id finding says so).
 
-**A departure from FORMAT 1.2, until the team lead amends FORMAT:** the freeze tag may carry the group letter `A` or `B`
-(`spec-frozen-A-<yyyymmdd>`, as the parent plan's tags do); FORMAT 1.2 shows no letter. **The shape rule's own limits** (`test/code-shape-lang.test.mjs`, v1's scanner): it measures a function declaration
+**The freeze tag** carries the group letter `A` or `B`, as FORMAT 1.2 has said since its first amendment (2026-11-05): `spec-frozen-<group>-<yyyymmdd>`. The checker requires the letter;
+a tag without it fails the header check. (The tools of section 2 still read a tag with or without a letter in FORMAT's own header, which is a separate check; no limit is added here.) **The shape rule's own limits** (`test/code-shape-lang.test.mjs`, v1's scanner): it measures a function declaration
 and a `const name = (…) =>` arrow at column 0 and counts the decisions inside its text; an arrow written inside a table or an object, a method, and a function expression assigned to a property are
 measured only as part of the function that holds them, never alone.
 

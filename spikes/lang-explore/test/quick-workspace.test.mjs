@@ -31,7 +31,8 @@ for (const id of ['05', '10']) {
     const node = filesOf('node', id);
     const { same, other } = compare(cs.files, node.files);
     for (const prefix of ['samples/', 'runner/']) assert.ok(same.some(p => p.startsWith(prefix)), `${prefix} is shared`);
-    assert.deepEqual(other.filter(p => p.startsWith('samples/') || p.startsWith('runner/')), [], 'no sample and no runner file differs between the stacks');
+    // the one file under samples/ that differs is the load configuration, by its per-stack heap block (the plan's one memory value; quick-memory-value.test.mjs holds the rest of it)
+    assert.deepEqual(other.filter(p => (p.startsWith('samples/') && p !== 'samples/load.json') || p.startsWith('runner/')), [], 'no sample and no runner file differs between the stacks');
     assert.ok(same.includes('runner/GRAMMAR.md'), 'the grammar of the scenarios is the same file');
     const statement = f => f.files['STATEMENT.md'].bytes.toString('utf8');
     assert.ok(statement(cs).startsWith(SPEC) && statement(node).startsWith(SPEC), 'both statements begin with the spec, byte for byte');

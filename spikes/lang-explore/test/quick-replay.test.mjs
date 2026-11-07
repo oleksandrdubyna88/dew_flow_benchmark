@@ -9,11 +9,15 @@ import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { cmdReplay } from '../lib/commands.mjs';
+import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { runnerPinNow } from '../lib/harness-pin.mjs';
 import { planSpend } from '../lib/pause.mjs';
 import { DIAGNOSTIC_NOTE, replay } from '../lib/replay.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { pinsOfTask } from '../lib/tasks.mjs';
+import { quickScoreFn } from '../lib/world.mjs';
+import { built, frozenFiles, ran, rec, scoringArea } from './quick-score-fixture.mjs';
 import { EXPLORE, PLAN, TASK, world } from './quick-series-fixture.mjs';
 
 const EVIDENCE = { expected: 'recv c "b"', group: false, omitted: 0, observed: [{ kind: 'recv', conn: 'c', text: 'recv c "x"', data: '"x"', stepLine: 4, stepText: 'invented step' }] };
@@ -63,9 +67,59 @@ test('A_replay_scores_exactly_the_named_case_of_the_kept_tree_and_says_whether_t
   const io = ioFor(w);
   await run(w, io, { times: 1 });
   const [, args] = io.calls.find(([k]) => k === 'score');
-  assert.deepEqual([args.only, args.stack, args.source, args.driftPossible], ['h003', 'node', w.layout.work, true], 'the series recorded no runner pin');
+  assert.deepEqual([args.only, args.stack, args.source, args.driftPossible, typeof args.history], ['h003', 'node', w.layout.work, true, 'function'], 'the series recorded no runner pin, and the scoring is given its history');
   assert.match(args.work, /replay\/work-/, 'the scratch folder is inside replay/, never score/');
   assert.equal(existsSync(args.work), false, 'and is removed');
+});
+
+// ---- the quick world's single-pass scoring (final seam review of F1, item 2) ----------------------------------------------------------------------------------
+
+const sha = text => createHash('sha256').update(text).digest('hex');
+const OLD_LAUNCHER = '#!/bin/bash\n';
+
+/** The quick world's `scoreFn` (the one `loadQuickWorld` builds) over the scoring area `a`: the frozen set holds a NEW `build.sh`; the tree holds the OLD one, as a tree of a session begun before the template moved does. */
+function quickWorldScore(a, over = {}) {
+  const files = { ...frozenFiles(), 'build.sh': { bytes: Buffer.from('#!/bin/bash\n# the template of today\n'), mode: 0o755 } };
+  const profile = { paths: { dotnetDir: '/d', nodeDir: '/n', tsDir: '/t' }, snapshots: {}, caseWallMs: 1, runCeilingMs: 1 };
+  const quickSeams = { buildFn: built(), runFn: ran(['s01', 'h001', 'h002'].map(id => rec(id))) };
+  const scoreFn = quickScoreFn({ frozenFor: () => files, work: a.work, profile, quickSeams, ...over });
+  return args => scoreFn({ stack: 'node', source: a.source, sets: [{ name: 'heldout', dir: a.held }], limits: { memoryBytes: 512 * 1024 * 1024, buildTimeoutMs: 600_000, timeMs: 300_000 }, ...args });
+}
+
+test('The_quick_worlds_single_pass_scoring_judges_a_template_file_by_its_history_so_a_moved_template_is_the_harness_and_not_the_agent', async t => {
+  const a = scoringArea(t);
+  const old = { known: true, sha256: sha(OLD_LAUNCHER) };
+  const history = ({ rel }) => (rel === 'build.sh' ? old : { known: true, sha256: 'f'.repeat(64) });
+  const score = quickWorldScore(a);
+  const moved = await score({ history, driftPossible: true });
+  assert.equal(moved.ok, true, moved.reason);
+  assert.deepEqual(moved.value.explore.frozenChanges, [], 'the tree has the bytes the file had when the series began: not the agent\'s');
+  assert.deepEqual(moved.value.explore.harnessDrift.map(c => c.path), ['build.sh'], 'it is the harness\'s');
+  const without = await score({ driftPossible: true });
+  assert.deepEqual(without.value.explore.frozenChanges.map(c => c.path), ['build.sh'], 'the control: with no history the same change is charged to the agent, which is what replay did before');
+});
+
+test('The_quick_worlds_single_pass_scoring_hands_scoreQuick_the_history_the_drift_flag_and_the_case', async t => {
+  const a = scoringArea(t);
+  const seen = [];
+  const history = () => ({ known: false, why: 'x' });
+  const score = quickWorldScore(a, { scoreFn: async args => { seen.push(args); return ok({}); } });
+  await score({ history, driftPossible: true, only: 'h001' });
+  assert.deepEqual([seen[0].history === history, seen[0].driftPossible, seen[0].only], [true, true, 'h001']);
+});
+
+test('A_replay_line_names_the_files_that_could_not_be_judged_and_the_contract_the_score_was_made_under', async () => {
+  const w = world();
+  const undecided = [{ path: 'STATEMENT.md', state: 'changed', why: 'the bytes cannot be read' }];
+  const score = ok({ build: { ok: true }, explore: { build: { ok: true, status: 0, wallMs: 90, timedOut: false }, cases: [REJECT], frozenChanges: [], undecidedDrift: undecided, contractIdentity: 'c'.repeat(64) } });
+  const r = await run(w, ioFor(w, { scores: [score] }));
+  const [line] = JSON.parse(readFileSync(r.file, 'utf8')).runs;
+  assert.deepEqual(line.undecidedDrift, undecided, 'unknown deviations are not zero');
+  assert.equal(line.contractIdentity, 'c'.repeat(64));
+  const other = world();
+  const plain = await run(other, ioFor(other, { scores: [goodScore()] }), { times: 1 });
+  const [bare] = JSON.parse(readFileSync(plain.file, 'utf8')).runs;
+  assert.deepEqual([bare.undecidedDrift, bare.contractIdentity], [[], null], 'a score that names neither says so: no undecided file, no identity');
 });
 
 test('Times_runs_the_case_that_many_times_each_one_its_own_line', async () => {
