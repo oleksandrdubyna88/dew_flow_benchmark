@@ -101,7 +101,7 @@ const verdictOf = c => (c.status === 'PASS' ? 'pass' : (/memory/i.test(c.reason 
 function caseOf(c) {
   const mem = c.lifecycle?.memory ?? {};
   return {
-    id: c.id, set: c.id.startsWith('s') ? 'visible' : 'heldout', verdict: verdictOf(c), wallMs: numberOr(c.wallMs), peakBytes: numberOr(mem.peakBytes), exit: null,
+    id: c.id, set: c.id.startsWith('s') ? 'visible' : 'heldout', verdict: verdictOf(c), wallMs: numberOr(c.wallMs), peakBytes: numberOr(mem.peakBytes), memoryMaxBytes: numberOr(mem.maxBytes), exit: null,
     events: mem.events ?? null, reason: c.reason ?? '', rIds: c.rIds ?? [], comparison: c.comparison ?? null, firstMismatch: c.firstMismatch ?? null,
     leftover: c.lifecycle?.leftover ?? null, oomKill: mem.oomKill ?? null,
   };

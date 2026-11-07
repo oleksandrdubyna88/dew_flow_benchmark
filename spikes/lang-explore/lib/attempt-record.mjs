@@ -9,9 +9,14 @@ const invalid = why => `record-invalid: ${why}`;
 const at = (o, dotted) => dotted.split('.').reduce((x, k) => (x === undefined || x === null ? undefined : x[k]), o);
 const named = list => list.join(', ');
 
-function parsed(text) {
+const isObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+
+function parseJson(text) {
   try { return JSON.parse(text); } catch (e) { return invalid(`the record does not parse (${e.message.slice(0, 80)}; ${String(text).length} bytes)`); }
 }
+
+/** The record as an object, or the sentence saying why the text is none. */
+const parsed = text => { const r = parseJson(text); return typeof r === 'string' || isObject(r) ? r : invalid('the record is not a JSON object'); };
 
 const markerProblem = ({ record }) => {
   const missing = COMPLETION_KEYS.filter(k => !Object.hasOwn(record, k));
@@ -44,6 +49,5 @@ const CHECKS = Object.freeze([markerProblem, pinProblem, listProblem, fieldsProb
 export function attemptRecordProblem({ text, expected, pinnedRunner }) {
   const record = parsed(text);
   if (typeof record === 'string') return record;
-  if (record === null || typeof record !== 'object' || Array.isArray(record)) return invalid('the record is not a JSON object');
   return CHECKS.values().map(check => check({ record, expected, pinnedRunner })).find(Boolean) ?? null; // lazy: a later check reads what an earlier one proved
 }

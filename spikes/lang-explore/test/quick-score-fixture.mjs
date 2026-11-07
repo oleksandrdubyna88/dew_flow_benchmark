@@ -36,7 +36,7 @@ export function scoringArea(t) {
 }
 
 export const rec = (id, status = 'PASS', reason = '', peak = 100 * MIB) => ({ id, status, reason, rIds: ['R1'], comparison: 'bytes', entries: 3, firstMismatch: null, lifecycle: { memory: { known: true, peakBytes: peak, maxBytes: LIMIT_BYTES, oomKill: 0 }, leftover: { known: true, found: false } }, wallMs: 321, launchMs: 5 });
-export const ran = (cases, over = {}) => async () => ({ exitCode: cases.every(c => c.status === 'PASS') ? 0 : 1, stdout: '', stderr: '', record: { format: PINNED.format, runner: PINNED.version, grammar: 2, kind: 'daemon', build: { ok: true }, launch: { failed: false, stderr: '' }, cases }, memoryCertified: true, ...over });
+export const ran = (cases, over = {}) => async () => ({ exitCode: cases.every(c => c.status === 'PASS') ? 0 : 1, stdout: '', stderr: '', record: { format: PINNED.format, runner: '0.x', grammar: 2, kind: 'daemon', build: { ok: true }, launch: { failed: false, stderr: '' }, cases }, memoryCertified: true, ...over });
 export const built = (okBuild = true) => async () => ok({ ok: okBuild, exit: okBuild ? 0 : 1, wallMs: 1234, timedOut: false, tail: okBuild ? '' : 'error CS1002' });
 
 /** `scoreQuick` over a ready scoring area `a`, with the fakes of `score`. */
