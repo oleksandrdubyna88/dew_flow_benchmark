@@ -82,9 +82,11 @@ const acceptedCell = c => (c.accepted === null ? DASH : (c.accepted ? 'yes' : 'n
 const deviationsCell = c => (c.deviations === null ? DASH : String(c.deviations.count));
 const trapCell = c => (c.trap === null ? DASH : `${c.trap.hits} of ${c.trap.trapCases} trap cases`);
 
+/** The quality table. The deviations column is there when any session of the note has the field: a note over records made before it existed is the note it always was (absent is not zero, and a recorded note does not change). */
 function qualityTable(cells) {
-  return table(['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', 'deviations', 'trap hit (a count; detail private)'],
-    cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), acceptedCell(c), deviationsCell(c), trapCell(c)]));
+  const withDeviations = cells.some(c => c.deviations !== null);
+  const head = ['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', ...(withDeviations ? ['deviations'] : []), 'trap hit (a count; detail private)'];
+  return table(head, cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), acceptedCell(c), ...(withDeviations ? [deviationsCell(c)] : []), trapCell(c)]));
 }
 
 function pairTable(pairs) {

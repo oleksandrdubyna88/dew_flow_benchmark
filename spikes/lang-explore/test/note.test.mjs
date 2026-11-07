@@ -174,3 +174,14 @@ test('The_quality_table_shows_the_deviations_beside_accepted_and_a_dash_for_a_re
   assert.match(text, /\| 1 \| TypeScript \| 100% \| 100% \| yes \| — \| 0 of 2 trap cases \|/, 'a record without the field shows a dash, never 0');
   assert.doesNotMatch(text, /\.npmrc/, 'the paths are in the record, not in the note');
 });
+
+test('A_note_over_records_made_before_deviations_existed_has_no_deviations_column_and_is_the_note_it_was', () => {
+  const sessions = sixSessions().map(({ entry, record }) => {
+    const { deviations, ...explore } = record.explore;
+    assert.equal(deviations.known, true);
+    return { entry, record: { ...record, explore } };
+  });
+  const text = renderNote(inputFor(sessions));
+  assert.doesNotMatch(text, /deviations/, 'no column, no heading');
+  assert.match(text, /\| pair \| stack \| visible pass rate \| held-out pass rate \| accepted \| trap hit \(a count; detail private\) \|/, 'the quality table is as it was');
+});

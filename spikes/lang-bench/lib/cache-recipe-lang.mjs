@@ -1,5 +1,5 @@
 // E1.S4: `inputs/cache-recipe-lang.json` -> `ok(recipe)` | `fail` naming the field. v1's `loadRecipe` first (hosts, steps, capture), then the v2 checks: every stack offers a non-empty `packages` list (name, spec, a purpose
-// that fits a table cell), every placeholder is `{[A-Z_]+}` and names a key of that stack's `resolve`, `csharp.project` is a relative folder that exists, and the toolchain pins of the recipe are the ones of
+// that fits a table cell, the kinds it is offered in), every placeholder is `{[A-Z_]+}` and names a key of that stack's `resolve`, `csharp.project` is a relative folder that exists, and the toolchain pins of the recipe are the ones of
 // `inputs/stacks-lang.json` (each compared on its own, so each refusal names what differs). Pure but for the look at the project folder.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
