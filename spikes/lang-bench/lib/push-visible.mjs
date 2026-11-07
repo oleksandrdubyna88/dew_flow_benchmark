@@ -1,6 +1,7 @@
 // Where a thing may stand in the public task repository. Findings are `{ path, line, what }`; a rule on a whole path has `line: null`.
 import path from 'node:path';
 import { findKnownNeedles } from './push-needles.mjs';
+import { runnerTextHits } from './push-runner-text.mjs';
 
 export const AGENT_VISIBLE = Object.freeze(['csharp/', 'node/', 'tasks/', 'runner/', 'todo/tasks/']);
 export const OWN_NAME = 'dew_flow_ai_language_comparison';
@@ -39,9 +40,10 @@ function familyHits(lines) {
  * section (D39), so links and the known-task needles apply to EVERY path; `.gitmodules` is exempt (its one URL is the conventions
  * repository's, checked on its own) and a pin file is exempt from links only (a registry URL is its nature). Plan ids stay with the
  * agent-visible folders and the README. The family's names apply to every file but `.gitmodules` (consult D5). `assumeVisible` and
- * `links: false` are for a PR or review body (`--text`): it is public like a README, and links are what a body is for.
+ * `links: false` are for a PR or review body (`--text`): it is public like a README, and links are what a body is for. `stackWords` (the matchers of `inputs/stack-words-lang.json`) switch on the runner rule: a stack word in a
+ * comment or a docstring of a `runner/*.py` file (lib/push-runner-text.mjs).
  */
-export function findVisibleRules(file, text, { known, assumeVisible = false, links = true }) {
+export function findVisibleRules(file, text, { known, stackWords, assumeVisible = false, links = true }) {
   const lines = text.split('\n');
   const ids = assumeVisible || isAgentVisible(file) || file === 'README.md';
   const isGitmodules = file === GITMODULES;
@@ -49,6 +51,7 @@ export function findVisibleRules(file, text, { known, assumeVisible = false, lin
     ...(ids ? ID_RULES.flatMap(rule => ruleHits(lines, rule, GROUP_VISIBLE)) : []),
     ...(isGitmodules ? [] : textRules(file, text, lines, { known, links })),
     ...(isGitmodules ? [] : familyHits(lines)),
+    ...runnerTextHits(file, text, stackWords).map(hit => ({ ...hit, col: 0, group: GROUP_VISIBLE })),
   ];
   return rules.sort((a, b) => a.line - b.line || a.col - b.col).map(({ line, what, group }) => ({ path: file, line, what, group }));
 }
