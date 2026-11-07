@@ -47,7 +47,7 @@ function sessionFor({ wrongOn26, stack }) {
   const context = { stack, kind: 'daemon', dirs: toolchains };
   const a = {
     work, seriesDir, limits, spec, traps: [], growth: { loaded: () => ok({}) }, seriesState: () => ({ launching: [] }), affinity: { probe: cpus => probeMask({ cpus }) },
-    prepare: async dest => { layDaemonTree({ stack, dest }); return ok({ frozen: [], drift: [], left: [] }); },
+    prepare: async dest => { layDaemonTree({ stack, dest }); return ok({ files: {}, frozen: [], drift: [], left: [] }); },
     cases: ({ dir }) => { mkdirSync(dir, { recursive: true }); for (const id of IDS) { writeFileSync(path.join(dir, `${id}.in`), echoScenario(WORDS[id], { wrongOn26 })); writeFileSync(path.join(dir, `${id}.out`), echoTranscript(WORDS[id])); } return ok({ dir, ids: IDS }); },
     build: async arg => { const r = await buildSeam(stack)(arg); facts.builtDll = existsSync(path.join(arg.tree, 'bin', 'Release', 'net10.0', 'App.dll')); facts.built = r.ok && r.value.ok; return r; },
     runPass: s => runPassChild({ spec: s, context }),

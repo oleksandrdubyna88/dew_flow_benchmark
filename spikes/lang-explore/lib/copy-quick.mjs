@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { excludedDirs } from '../../lang-bench/lib/frozen-set.mjs';
 import { frozenChanges, pathKind, restoreFrozen } from './workspace.mjs';
 
@@ -46,14 +47,23 @@ export function quickPristineCopy({ source, dest, stack, files }) {
   return { changed, left: [...left].sort(), treeSha };
 }
 
-/**
- * After the build: every frozen file the build changed is put back, and named with the reason `DURING_BUILD`. The comparison is with the frozen bytes, file by file; the build's output folder is not frozen and is not looked at.
- * -> `[{ path, state, reason }]`.
- */
-export function restoreAfterBuild({ files, root }) {
+/** After the build: every frozen file the build changed is put back, and named with the reason `DURING_BUILD`. The comparison is with the frozen bytes, file by file; the build's output folder is not frozen and is not looked at. -> `[{ path, state, reason }]`. */
+function restoreAfterBuild({ files, root }) {
   const changed = frozenChanges({ files, work: root });
   for (const c of changed) restoreFrozen({ root, rel: c.path, file: files[c.path] });
   return changed.map(c => ({ ...c, reason: DURING_BUILD }));
+}
+
+/**
+ * THE build step, the only way a quick tree is built (F1 final seam review): it runs `build({ tree, ...rest })`, then compares every frozen file with its frozen bytes and puts each changed one back, and returns the build's own answer
+ * with the deviations found during the build in `duringBuild` (never absent). The build is the agent's own (an MSBuild target in `App.csproj`), so no caller gets a result without the restore having run. A build that did not run (a `fail`)
+ * is passed on as it is; a tree that is not a directory after the build is an environment failure. -> `ok({ ...built, duringBuild: [{ path, state, reason }] })` | the build's `fail`.
+ */
+export async function buildAndRestore({ build, tree, files, ...rest }) {
+  const built = await build({ tree, ...rest });
+  if (!built.ok) return built;
+  if (statSync(tree, { throwIfNoEntry: false })?.isDirectory() !== true) return fail(`the built tree ${tree} is not a directory`, { kind: 'environment' });
+  return ok({ ...built.value, duringBuild: restoreAfterBuild({ files, root: tree }) });
 }
 
 /**

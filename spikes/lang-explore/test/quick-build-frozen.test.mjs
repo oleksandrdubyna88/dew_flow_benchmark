@@ -10,10 +10,16 @@ import { test } from 'node:test';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { commitBuild } from '../lib/build-commit.mjs';
-import { DURING_BUILD } from '../lib/copy-quick.mjs';
+import { DURING_BUILD, buildAndRestore } from '../lib/copy-quick.mjs';
+import { passSeams } from '../lib/pass-seams.mjs';
+import { scorePasses } from '../lib/passes.mjs';
+import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
+import { LIMIT_BYTES } from './quick-passes-fixture.mjs';
+import { recordFor } from './quick-passes-harness.mjs';
+import { built } from './quick-score-fixture.mjs';
 import { exploreSection } from '../lib/records.mjs';
 import { finishRollup, prepareTree } from '../lib/score-quick.mjs';
-import { ran, rec, scoreWith, scoringArea } from './quick-score-fixture.mjs';
+import { frozenFiles, ran, rec, scoreWith, scoringArea } from './quick-score-fixture.mjs';
 
 const RUN_SH = '#!/usr/bin/env bash\nexec dotnet bin/Release/net10.0/App.dll\n';
 const REWRITTEN = '#!/usr/bin/env bash\necho a launcher the build wrote\n';
@@ -105,4 +111,58 @@ test('The_one_pass_scoring_of_a_replay_puts_back_a_file_its_build_rewrote_and_na
   assert.equal(made.ok, true, made.reason);
   assert.deepEqual(made.value.explore.frozenChanges, [{ path: 'build.sh', state: 'changed', reason: DURING_BUILD }]);
   assert.deepEqual(seen, ['#!/bin/bash\n'], 'the cases ran against the restored file');
+});
+
+// ---- the build step owns the restore (the code round of the final seam review of F1) ------------------------------------------------------------------------------------
+
+test('The_build_step_runs_the_build_then_restores_and_returns_the_deviations_with_the_builds_own_result', async () => {
+  const source = agentTree();
+  const rewrite = buildThat(t => writeFileSync(path.join(t, 'run.sh'), REWRITTEN));
+  const result = await buildAndRestore({ build: rewrite, tree: source, files: frozen(), timeoutMs: 7 });
+  assert.equal(result.ok, true);
+  assert.deepEqual([result.value.ok, result.value.exit, result.value.wallMs], [true, 0, 5], 'the build\'s own answer is kept');
+  assert.deepEqual(result.value.duringBuild, [{ path: 'run.sh', state: 'changed', reason: DURING_BUILD }]);
+  assert.equal(readFileSync(path.join(source, 'run.sh'), 'utf8'), RUN_SH, 'and the file is back');
+  const seen = [];
+  const quiet = await buildAndRestore({ build: async arg => { seen.push(arg); return ok(GOOD); }, tree: source, files: frozen(), timeoutMs: 7 });
+  assert.deepEqual(quiet.value.duringBuild, [], 'a build that touched nothing reports an empty list, never an absent one');
+  assert.deepEqual(seen, [{ tree: source, timeoutMs: 7 }], 'the build gets the tree and the bound');
+  const refused = await buildAndRestore({ build: async () => ({ ok: false, reason: 'the box did not run', kind: 'environment' }), tree: source, files: frozen() });
+  assert.deepEqual([refused.ok, refused.kind], [false, 'environment'], 'a build that never ran is passed on as it is');
+});
+
+test('Prepare_returns_data_only_and_a_prepare_that_hands_back_no_frozen_files_cannot_be_built_from', async () => {
+  const prepared = prepareTree(args(agentTree()), path.join(tmpDir('quick-build-frozen-data'), 'copy'));
+  assert.equal(prepared.ok, true);
+  assert.deepEqual(Object.entries(prepared.value).filter(([, v]) => typeof v === 'function'), [], 'no closure: the restore is not something a caller must remember');
+  assert.deepEqual(Object.keys(prepared.value.files).sort(), Object.keys(frozen()).sort(), 'the frozen files travel as data, for the build step');
+  let built = 0;
+  const work = tmpDir('quick-build-frozen-nofiles');
+  const noFiles = await commitBuild({ work, prepare: async dest => { mkdirSync(dest, { recursive: true }); return ok({ frozen: [], drift: [], left: [] }); }, build: async () => { built += 1; return ok(GOOD); } });
+  assert.equal(noFiles.ok, false, 'no restore possible, so no result');
+  assert.equal(noFiles.kind, 'environment');
+  assert.match(noFiles.reason, /frozen files/);
+  assert.equal(built, 0, 'and the build is not even run');
+  assert.equal(existsSync(path.join(work, 'build.json')), false);
+});
+
+test('A_build_through_the_ten_pass_seams_is_restored_too_and_the_deviation_reaches_build_json', async () => {
+  const a = scoringArea({});
+  writeFileSync(path.join(a.source, 'run.sh'), RUN_SH, { mode: 0o755 });
+  const seriesDir = tmpDir('quick-build-frozen-series');
+  const lock = acquireSeriesLock({ seriesDir });
+  const files = { ...frozenFiles(), 'run.sh': { bytes: Buffer.from(RUN_SH), mode: 0o755 } };
+  const buildFn = async ({ tree }) => { writeFileSync(path.join(tree, 'run.sh'), REWRITTEN); return built()({ tree }); };
+  const runFn = async arg => { assert.equal(readFileSync(path.join(arg.tree, 'run.sh'), 'utf8'), RUN_SH, 'the pass runs the restored launcher'); return { exitCode: 0, stdout: '', stderr: '', record: recordFor(), memoryCertified: true }; };
+  const profile = { paths: { dotnetDir: '/d', nodeDir: '/n', tsDir: '/t' }, snapshots: {}, kind: 'daemon', caseWallMs: 660_000, runCeilingMs: 7_200_000 };
+  const seams = passSeams({
+    a: { stack: 'node', source: a.source, files, sets: [{ name: 'heldout', dir: a.held }], limits: { memoryBytes: LIMIT_BYTES, buildTimeoutMs: 600_000, timeMs: 300_000 }, traps: [], contractIdentityFn: () => 'a'.repeat(64) },
+    profile, seams: { buildFn, runFn, probeFn: async cpus => ok(cpus), growthFn: () => ok({}) }, seriesDir,
+  });
+  try {
+    const r = await scorePasses({ ...seams, work: a.work, seriesDir });
+    assert.equal(r.kind, 'scored', r.reason);
+    assert.deepEqual(JSON.parse(readFileSync(path.join(a.work, 'build.json'), 'utf8')).frozenChanges, [{ path: 'run.sh', state: 'changed', reason: DURING_BUILD }]);
+    assert.deepEqual(r.score.explore.frozenChanges, [{ path: 'run.sh', state: 'changed', reason: DURING_BUILD }]);
+  } finally { lock.value.release(); }
 });

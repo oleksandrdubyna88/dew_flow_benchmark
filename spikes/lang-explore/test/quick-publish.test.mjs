@@ -47,7 +47,7 @@ test('Events_and_the_completion_record_are_published_the_same_way_and_never_in_p
   const seen = [];
   const spy = { ...nodeFs, linkSync: (a, b) => { seen.push(path.basename(b)); return nodeFs.linkSync(a, b); } };
   writeEvent({ work, kind: 'halt', detail: {}, fs: spy });
-  const prepare = async dest => { mkdirSync(dest, { recursive: true }); return ok({ frozen: [], drift: [], left: [] }); };
+  const prepare = async dest => { mkdirSync(dest, { recursive: true }); return ok({ files: {}, frozen: [], drift: [], left: [] }); };
   const made = await commitBuild({ work, prepare, build: async () => ok({ ok: true, exit: 0, timedOut: false, wallMs: 1, tail: '' }), runnerPin: PINNED, fs: spy });
   assert.equal(made.ok, true, made.reason);
   assert.ok(seen.some(n => n.endsWith('-halt.json')) && seen.includes('build.json'), seen.join(' '));

@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { runnerPinNow } from '../lib/harness-pin.mjs';
-import { harnessMovedProblem } from '../lib/harness-moved.mjs';
+import { harnessMovedForStacks, harnessMovedProblem } from '../lib/harness-moved.mjs';
 import { templatesIdentity } from '../lib/contract-identity.mjs';
 import { scorePasses } from '../lib/passes.mjs';
 import { scoreSessionDep } from '../lib/run-ctx.mjs';
@@ -110,4 +110,29 @@ test('The_run_command_scores_its_sessions_on_the_same_harness_only', () => {
   const wired = source => /scoreSessionDep\(\{[^}]*sameHarness: true/.test(source);
   assert.equal(wired(text), true, 'run.mjs asks for the check');
   assert.equal(wired(text.replace('sameHarness: true', 'sameHarness: false')), false, 'the scan can fail');
+});
+
+// ---- the code round: the refusal says what differs and what to do; `now` is injectable and read once ------------------------------------------------------------------
+
+test('The_refusal_names_what_differs_recorded_against_current_by_short_hashes_and_says_what_to_do', () => {
+  const base = { ...inputsNow(), subject: { sha: 'abcdef0123456789abcdef0123456789abcdef01' } };
+  const moved = { ...base, runnerPin: { ...base.runnerPin, manifestSha256: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90' } };
+  const sentence = problem(moved) ?? '';
+  assert.match(sentence, /the runner pin moved since the series was made \(recorded a1b2c3d4e5f6, now [0-9a-f]{12}\)/, 'recorded against current, twelve characters each');
+  assert.ok(!sentence.includes('a1b2c3d4e5f60718'), 'never the whole hash');
+  assert.ok(sentence.includes('abcdef012345'), 'the recorded subject commit, short');
+  assert.match(sentence, /run it on the harness it recorded/);
+  assert.match(sentence, /`rescore`.*against the series' history/);
+  const { runnerPin: _dropped, ...without } = base;
+  assert.match(problem(without) ?? '', /the series recorded nothing for the runner pin \(now [0-9a-f]{12}\)/, 'what was not recorded says so, with the current value');
+  const none = { ...inputsNow() };
+  assert.match(problem({ ...none, templatesIdentity: 'b'.repeat(64) }) ?? '', /no subject commit was recorded/, 'and a series with no subject says that instead of a commit');
+});
+
+test('The_stacks_check_takes_an_injected_now_so_a_test_can_mock_the_current_harness', () => {
+  const inputs = { ...inputsNow(), runnerPin: { manifestSha256: 'f'.repeat(64) }, templatesIdentity: 'e'.repeat(64) };
+  const world = { filesFor: () => FILES };
+  const now = { runnerPin: { manifestSha256: 'f'.repeat(64) }, templatesIdentity: 'e'.repeat(64) };
+  assert.equal(harnessMovedForStacks({ inputs, world, stacks: ['node', 'node'], now }), null, 'the injected harness is the one compared with');
+  assert.match(harnessMovedForStacks({ inputs, world, stacks: ['node'], now: { ...now, templatesIdentity: '1'.repeat(64) } }) ?? '', /the templates/);
 });

@@ -53,7 +53,7 @@ export function harness(over = {}) {
   const plan = over.plan ?? (() => 'clean');
   const a = {
     work, seriesDir, limits: LIMITS, spec: SPEC, traps: [], pinnedRunner: PINNED, now: clock.now, say: () => {},
-    prepare: async dest => { calls.prepare.push(dest); mkdirSync(path.join(dest, 'src'), { recursive: true }); writeFileSync(path.join(dest, 'src', 'main.txt'), 'invented program'); return ok({ frozen: [], drift: [], left: [] }); },
+    prepare: async dest => { calls.prepare.push(dest); mkdirSync(path.join(dest, 'src'), { recursive: true }); writeFileSync(path.join(dest, 'src', 'main.txt'), 'invented program'); return ok({ files: {}, frozen: [], drift: [], left: [] }); },
     cases: ({ dir }) => { calls.cases.push(dir); mkdirSync(dir, { recursive: true }); return ok({ dir, ids: sortedIds() }); },
     build: async ({ tree }) => { calls.build.push(tree); writeFileSync(path.join(tree, 'built.bin'), 'out'); return ok({ ok: true, exit: 0, timedOut: false, wallMs: 1234, tail: '' }); },
     runPass: async spec => { calls.pass.push(spec); clock.advance(1500); return bodyFor(plan(spec.n, spec.attempt), spec); },

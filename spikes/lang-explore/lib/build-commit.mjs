@@ -8,6 +8,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSy
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
+import { buildAndRestore } from './copy-quick.mjs';
 import { publishOnce } from './publish-once.mjs';
 import { removeArea } from './score.mjs';
 
@@ -83,24 +84,28 @@ const unfitProblem = ({ built, folder }) => {
   return Number.isInteger(built.exit) || built.timedOut === true ? null : 'the build ended with no known exit';
 };
 
-/** The prepared copy with the frozen files the build changed put back (`prepared.settle(folder)`, see `restoreAfterBuild`) and listed, after the agent's earlier changes, as agent deviations with their reason. */
-function settled({ prepared, folder }) {
-  const during = typeof prepared.settle === 'function' ? prepared.settle(folder) : [];
-  return { ...prepared, frozen: [...prepared.frozen, ...during] };
+/** What `prepare` hands back must let the build step restore the frozen files; a prepare that does not cannot be built from. -> a sentence or null. */
+const noFilesProblem = prepared => (prepared.files !== null && typeof prepared.files === 'object' ? null : 'the prepared copy names no frozen files, so the files the build rewrites could not be put back: the build is not run');
+
+/** The build step over the prepared copy, then the checks of its answer. -> `ok({ prepared, built })` | `fail`. */
+async function builtCopy({ folder, prepared, build }) {
+  const built = await buildAndRestore({ build, tree: folder, files: prepared.files });
+  if (!built.ok) return built;
+  const { duringBuild, ...ran } = built.value;
+  const unfit = unfitProblem({ built: ran, folder });
+  return unfit ? fail(unfit, { kind: 'environment' }) : ok({ prepared: { ...prepared, frozen: [...prepared.frozen, ...duringBuild] }, built: ran });
 }
 
 async function buildInFolder({ folder, prepare, build }) {
   const prepared = await prepare(folder);
   if (!prepared.ok) return prepared;
-  const built = await build({ tree: folder });
-  if (!built.ok) return built;
-  const unfit = unfitProblem({ built: built.value, folder });
-  return unfit ? fail(unfit, { kind: 'environment' }) : ok({ prepared: settled({ prepared: prepared.value, folder }), built: built.value });
+  const missing = noFilesProblem(prepared.value);
+  return missing ? fail(missing, { kind: 'environment' }) : builtCopy({ folder, prepared: prepared.value, build });
 }
 
 /**
- * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, undecided, left, identity, settle? })`; the undecided files and the identity of the contract are in the record because it is written once, here), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`),
- * put back every frozen file the build rewrote and record it as an agent deviation (`changed during the build`), validate, rename into `work/tree`, then write `work/build.json`
+ * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, undecided, left, identity, files })`, data only, `files` being the frozen files for the build step; the undecided files and the identity of the contract are in the record because it is written once, here), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`),
+ * through the build step `buildAndRestore` (it puts back every frozen file the build rewrote; each is recorded as an agent deviation, `changed during the build`), validate, rename into `work/tree`, then write `work/build.json`
  * (`wx`). `io` (`rename`, `writeNew`) and `now` are seams. -> `ok(record)` | an environment `fail` (the temporary folder is removed; nothing is committed).
  */
 export async function commitBuild({ work, prepare, build, runnerPin = null, io = DEFAULT_IO, now = systemClock, fs = nodeFs }) {

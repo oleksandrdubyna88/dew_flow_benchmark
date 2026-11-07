@@ -24,21 +24,28 @@ function comparisons({ inputs, stack, files, now }) {
   ];
 }
 
-const phrase = (list, say) => (list.length === 0 ? [] : [say(list.join(', '))]);
-const namesWhere = (all, test) => all.filter(([, recorded, today]) => test(recorded, today)).map(([what]) => what);
+const short = value => (value === null || value === undefined ? 'none' : String(value).slice(0, 12));
+const movedClause = ([what, recorded, today]) => `${what} moved since the series was made (recorded ${short(recorded)}, now ${short(today)})`;
+const unrecordedClause = ([what, , today]) => `the series recorded nothing for ${what} (now ${short(today)})`;
+
+/** The harness of today, as `harnessMovedProblem` compares with it: read once for a whole check. */
+export const currentHarness = () => ({ runnerPin: runnerPinNow(), templatesIdentity: templatesIdentity() });
+
+/** What to do about a moved harness: run the series where it was made, or read a kept tree against the series' history. */
+const advice = inputs => `a series is run on one harness: run it on the harness it recorded (${inputs?.subject?.sha ? `its subject commit ${short(inputs.subject.sha)}` : 'no subject commit was recorded'}), or use \`rescore\`, which reads a kept tree against the series' history`;
 
 /**
- * Why the harness of today is not the one the series was made with, or null. `files` is the workspace of the session's stack (`world.filesFor(stack)`). `now` is the seam of the tests.
- * -> `harness-moved: ...` naming what moved or was not recorded.
+ * Why the harness of today is not the one the series was made with, or null. `files` is the workspace of the session's stack (`world.filesFor(stack)`). `now` is the harness of today (`currentHarness()`), the seam of the tests.
+ * -> `harness-moved: ...` naming what moved or was not recorded, recorded against current by short hashes, and what to do.
  */
-export function harnessMovedProblem({ inputs, stack, files, now = { runnerPin: runnerPinNow(), templatesIdentity: templatesIdentity() } }) {
+export function harnessMovedProblem({ inputs, stack, files, now = currentHarness() }) {
   const all = comparisons({ inputs, stack, files, now });
   const said = [
-    ...phrase(namesWhere(all, (recorded, today) => recorded !== undefined && recorded !== today), what => `${what} moved since the series was made`),
-    ...phrase(namesWhere(all, recorded => recorded === undefined), what => `the series recorded no ${what}`),
+    ...all.filter(([, recorded, today]) => recorded !== undefined && recorded !== today).map(movedClause),
+    ...all.filter(([, recorded]) => recorded === undefined).map(unrecordedClause),
   ];
-  return said.length === 0 ? null : `harness-moved: ${said.join('; ')}: a series is run on one harness, so its sessions are not built or scored here (rescore reads a kept tree against the series' history)`;
+  return said.length === 0 ? null : `harness-moved: ${said.join('; ')}: ${advice(inputs)}`;
 }
 
-/** The same comparison for every stack of the series' workspaces (`world.filesFor(stack)`), the first problem found, or null. For the check before a pair is launched. */
-export const harnessMovedForStacks = ({ inputs, world, stacks }) => stacks.map(stack => harnessMovedProblem({ inputs, stack, files: world.filesFor(stack) })).find(Boolean) ?? null;
+/** The same comparison for every stack of the series' workspaces (`world.filesFor(stack)`), the first problem found, or null; the current harness is read once (`now` is the seam of the tests). For the check before a pair is launched. */
+export const harnessMovedForStacks = ({ inputs, world, stacks, now = currentHarness() }) => stacks.map(stack => harnessMovedProblem({ inputs, stack, files: world.filesFor(stack), now })).find(Boolean) ?? null;

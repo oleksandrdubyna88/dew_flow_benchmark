@@ -17,7 +17,7 @@ import { runnerRecordPinNow } from './harness-pin.mjs';
 import { CASE_VERDICT, badBuildCase } from './verdict.mjs';
 import { layerDirs } from './quick.mjs';
 import { contractIdentity } from './contract-identity.mjs';
-import { quickPristineCopy, restoreAfterBuild, splitFrozenChanges } from './copy-quick.mjs';
+import { buildAndRestore, quickPristineCopy, splitFrozenChanges } from './copy-quick.mjs';
 import { driftDecider } from './template-drift.mjs';
 import { removeArea, scoreShape } from './score.mjs';
 
@@ -205,14 +205,14 @@ async function runStep({ a, copy, cases, owned, dirs, validate = false }) {
 export const runPass = args => runStep({ ...args, validate: true });
 
 /**
- * The clean copy of the agent's tree at `dest`: -> `ok({ frozen, drift, undecided, left, identity })` (the agent's frozen changes, the harness's drift, the changes that cannot be judged, the entries left out, and the identity of the
- * contract the scoring is made under). `a.driftPossible` and `a.history` (`template-drift.mjs`) decide what is the harness's; the ten-pass path takes the same arguments as the one-pass path, so both judge a change per file.
+ * The clean copy of the agent's tree at `dest`: -> `ok({ frozen, drift, undecided, left, identity, files })`, data only (`files` is the frozen set, for the build step `buildAndRestore`): the agent's frozen changes, the harness's drift, the changes that cannot be judged, the entries left out, and the identity of the
+ * contract the scoring is made under. `a.driftPossible` and `a.history` (`template-drift.mjs`) decide what is the harness's; the ten-pass path takes the same arguments as the one-pass path, so both judge a change per file.
  */
 export function prepareTree(a, dest) {
   const made = quickPristineCopy({ source: a.source, dest, stack: a.stack, files: a.files });
   const decide = driftDecider({ stack: a.stack, kind: a.profile.kind, treeSha: made.treeSha, history: a.history, driftPossible: a.driftPossible === true });
   const split = splitFrozenChanges(made.changed, { decide });
-  return ok({ frozen: split.agent, drift: split.harness, undecided: split.undecided, left: made.left, identity: (a.contractIdentityFn ?? contractIdentity)(), settle: root => restoreAfterBuild({ files: a.files, root }) });
+  return ok({ frozen: split.agent, drift: split.harness, undecided: split.undecided, left: made.left, identity: (a.contractIdentityFn ?? contractIdentity)(), files: a.files });
 }
 
 /** The case folder (the visible samples and the held-out cases) under `area`. -> `ok({ dir, ids })` | `environment`. */
@@ -240,10 +240,11 @@ export function finishRollup({ rollup, build, traps = [] }) {
 
 /** The build. -> `{ done: <the whole answer> }` when it ends the scoring (an environment failure, or a build that failed: every case is `build failed`), else `{ build }`. */
 async function buildStep({ a, prep, owned, dirs }) {
-  const build = await (a.buildFn ?? boxBuild({ owned, dirs, snapshots: a.profile.snapshots, stack: a.stack }))({ tree: prep.copy, timeoutMs: a.limits.buildTimeoutMs });
+  const buildFn = a.buildFn ?? boxBuild({ owned, dirs, snapshots: a.profile.snapshots, stack: a.stack });
+  const build = await buildAndRestore({ build: buildFn, tree: prep.copy, files: prep.files, timeoutMs: a.limits.buildTimeoutMs });
   if (!build.ok) return { done: build };
   (a.say ?? (() => {}))(buildLine(build.value));
-  const after = { ...prep, frozen: [...prep.frozen, ...prep.settle(prep.copy)] };
+  const after = { ...prep, frozen: [...prep.frozen, ...build.value.duringBuild] };
   const result = { build: buildRecordOf(build.value), limits: a.limits };
   if (build.value.ok) return { result, prep: after };
   return { done: finishScore(scoreShape({ result: { ...result, cases: badBuildCases(prep.cases.ids) }, traps: a.traps ?? [], frozen: after.frozen }), after) };

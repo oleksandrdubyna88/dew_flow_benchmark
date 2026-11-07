@@ -11,7 +11,7 @@ import { commitBuild, committedTree, discardUncommitted, treeHash } from '../lib
 
 const workOf = () => tmpDir('quick-build-commit');
 const names = work => readdirSync(work).sort();
-const fakePrepare = (extra = {}) => async dest => { mkdirSync(path.join(dest, 'sub'), { recursive: true }); writeFileSync(path.join(dest, 'sub', 'a.txt'), 'invented source'); return ok({ frozen: [{ path: 'build.sh', state: 'changed' }], drift: [], left: ['d.sock'], ...extra }); };
+const fakePrepare = (extra = {}) => async dest => { mkdirSync(path.join(dest, 'sub'), { recursive: true }); writeFileSync(path.join(dest, 'sub', 'a.txt'), 'invented source'); return ok({ files: {}, frozen: [{ path: 'build.sh', state: 'changed' }], drift: [], left: ['d.sock'], ...extra }); };
 const fakeBuild = (seen, result = { ok: true, exit: 0, timedOut: false, wallMs: 77, tail: 'tail' }) => async ({ tree }) => { seen.push(tree); writeFileSync(path.join(tree, 'built.bin'), 'out'); return ok(result); };
 
 test('A_build_happens_in_a_temporary_owned_folder_and_is_renamed_into_place_only_after_it_was_validated_and_its_completion_record_names_the_trees_hash', async () => {
