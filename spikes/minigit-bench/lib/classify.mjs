@@ -87,8 +87,13 @@ function npmIsWork(rest) {
   return rest[0] === 'run' && NPM_RUN_WORK.has(rest[1]);
 }
 
-/** The harness's own test entry points: the upstream `test-v*.sh` and the C# template's `scripts/run-tests.sh`. */
-const isHarnessScript = word => /(^|\/)(test-v[^/]*|run-tests)\.sh$/.test(word ?? '');
+/** The harness's own entry points: the upstream `test-v*.sh`, the C# template's `scripts/run-tests.sh`, and the workspace's `build.sh` and `run.sh`. Reading or editing one (`cat build.sh`) is not running it: the word must BE the command or the shell's script. */
+const isHarnessScript = word => /(^|\/)(test-v[^/]*|run-tests|build|run)\.sh$/.test(word ?? '');
+
+const isPython = word => /(^|\/)python3?$/.test(word);
+
+/** `python3 [options] runner/run_samples.py ...`: the first word that is not an option is the script (so `python3 -c "..."` and `python3 other.py` are not it). */
+const runsSamples = rest => /(^|\/)run_samples\.py$/.test(rest.find(word => !word.startsWith('-')) ?? '');
 
 /** For `bash [options] script` the script word; for `bash -c "cmd"` (also `-lc`) null and the command in `shellCommand`. */
 function shellParts(rest) {
@@ -111,6 +116,7 @@ function isBuildTest(words) {
   if (cmd === 'npm') return npmIsWork(rest);
   if (cmd === 'node') return nodeRunsTests(rest);
   if (SHELLS.has(cmd)) return isHarnessScript(shellParts(rest).script);
+  if (isPython(cmd)) return runsSamples(rest);
   if (cmd === 'make' || cmd === 'tsc') return true;
   return isHarnessScript(cmd) || /\.Tests(\.exe)?$/i.test(cmd);
 }

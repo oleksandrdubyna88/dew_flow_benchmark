@@ -229,7 +229,7 @@ only where no agent is working: one child's `sleep 300` cannot erase another chi
 then `unattributed`. The categories plus `unattributed` sum to the wall to the millisecond; `active` is the sum of the work
 categories, never wall minus waits. Nothing is a sum of spans: the inclusive view is a union, agent-seconds are labelled work
 volume, and `overlapMatrix` is separate. `classifyTool` is pure string work on the command (no process is run); it splits at
-the top level of the quoting and the first matching rule decides. Spans come from OTel (`model_api`, `[ts − duration, ts]`
+the top level of the quoting and the first matching rule decides. From 2026-11-07 (language comparison F1.S1 (b)) `build_test` also counts a shell running `build.sh` or `run.sh` (`bash build.sh`, `./run.sh`, `cd w && bash build.sh`, `timeout 600 bash build.sh`) and `python3 [options] runner/run_samples.py` (the language comparison's workspace scripts and visible-samples runner); reading or editing a script (`cat build.sh`, `chmod +x run.sh`) stays `other_tool`. The folder is one of `harnessIdentity`'s, so v1's identity moved with it; no stored pin in the repository reads it, and the four run-maps of the earlier v1 series under `~/rsd/minigit/` already named other identities. Spans come from OTel (`model_api`, `[ts − duration, ts]`
 because a record's time marks the end of the request), the audit hook's tool records, the hook start/response pairs placed by
 the runner's arrival stamp, and coai `rounds`. `crossCheckTools` compares tool spans with OTel `tool_result` durations within
 max(1 s, 2 %). `mapClock` places the launcher's monotonic clock on the epoch and flags a skew over 1 s.

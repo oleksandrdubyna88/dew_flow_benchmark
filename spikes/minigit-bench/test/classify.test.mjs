@@ -46,6 +46,22 @@ test('Build_and_test_commands_are_work', () => {
   ], 'build_test');
 });
 
+test('A_shell_running_build_sh_or_run_sh_is_build_test', () => {
+  all([
+    'bash build.sh', 'sh build.sh', './build.sh', 'bash ./run.sh', 'cd ws && bash build.sh', "bash -c 'bash build.sh'", 'timeout 600 bash build.sh',
+  ], 'build_test');
+});
+
+test('The_visible_samples_runner_is_build_test', () => {
+  all([
+    'python3 runner/run_samples.py samples/', 'python3 -I runner/run_samples.py samples/', '/usr/bin/python3 -I runner/run_samples.py samples/',
+  ], 'build_test');
+});
+
+test('Reading_or_editing_the_scripts_is_not_build_test', () => {
+  all(['cat build.sh', 'sed -n 1,5p run.sh', 'chmod +x build.sh', 'grep exec run.sh', 'python3 -c "print(1)"'], 'other_tool');
+});
+
 test('Build_commands_behind_a_wrapper_or_a_chain_are_still_work', () => {
   all([
     'node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4',

@@ -20,6 +20,7 @@ import { planOf, readToken, runPair } from './run.mjs';
 import { isQuick, quickExplore } from './quick.mjs';
 import { quickInitExtra } from './init-quick.mjs';
 import { replay } from './replay.mjs';
+import { repartitionSeries } from './repartition.mjs';
 import { rescore } from './rescore.mjs';
 import { createSeries, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
 import { loadWorld } from './world.mjs';
@@ -170,6 +171,19 @@ export async function cmdRescore(values, io) {
   io.say(r.message);
   if (r.pairFile) io.say(`pair record: ${r.pairFile}`);
   return r.exit;
+}
+
+/** `repartition --series DIR`: FREE. See lib/repartition.mjs: the time partition of every kept session recomputed from its retained evidence into a NEW dated result file; no record changes. */
+export async function cmdRepartition(values, io) {
+  if (!values.series) return refused(io, 'repartition needs --series');
+  const r = await repartitionSeries({ seriesDir: path.resolve(values.series), now: io.now, genId: io.genId, owned: io.owned });
+  if (!r.ok) return refused(io, r.reason);
+  const { file, wrote, sessions, skipped, stale } = r.value;
+  io.say(`${wrote ? 'wrote' : 'the complete result of these inputs is already there:'} ${file} (${sessions} session(s) recomputed, ${skipped.length} not recomputed)`);
+  skipped.forEach(s => io.say(`  ${s.rid}: ${s.why}`));
+  stale.removed.forEach(f => io.say(`removed the stale temporary file ${f}: its owner is gone`));
+  [...stale.live, ...stale.unknown].forEach(f => io.say(`left the temporary file ${f}: its owner still runs or cannot be told`));
+  return EXIT.done;
 }
 
 /** The arguments of `replay`: `ok({ task, times })` | `fail(sentence)`. */

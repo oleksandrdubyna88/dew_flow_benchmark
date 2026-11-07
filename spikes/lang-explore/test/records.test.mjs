@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../../minigit-bench/capture/policy-input.mjs';
 import { aliasRecord } from '../../minigit-bench/lib/aliases.mjs';
 import { bareOutcome } from '../../minigit-bench/lib/bare-outcome.mjs';
+import { classifyCommand } from '../../minigit-bench/lib/classify.mjs';
 import { leafProblems, sessionRecord } from '../../minigit-bench/lib/bare-record.mjs';
 import { sessionCost } from '../../minigit-bench/lib/session-cost.mjs';
 import { loadSmoke } from '../../minigit-bench/lib/smoke-load.mjs';
@@ -70,6 +71,17 @@ test('Build_and_test_time_is_the_summed_span_of_the_Bash_calls_that_build_or_run
   assert.deepEqual(['bash build.sh', 'cd w && bash run.sh < x', './run.sh', 'dotnet build src/App.csproj', 'tsc --noEmit', 'python3 -I runner/run_samples.py samples/'].map(isBuildTestCommand), [true, true, true, true, true, true]);
   assert.deepEqual(['cat build.sh', 'grep tscript x', 'bash rebuild.shx', 'ls', 'echo run.sh is frozen'].map(isBuildTestCommand), [false, false, false, false, false]);
   assert.deepEqual(buildTestTime([]), { ms: 0, calls: 0, unpaired: 0 });
+});
+
+test('The_v1_classifier_counts_every_command_explore_buildTest_counts', () => {
+  const commands = [
+    'bash build.sh', 'sh build.sh', './build.sh', 'bash ./run.sh', 'cd ws && bash run.sh < x', 'timeout 600 bash build.sh', "bash -c 'bash build.sh'", 'bash build.sh 2>&1 | tail -5',
+    'dotnet build src/App.csproj', 'tsc --noEmit', 'npx tsc --noEmit',
+    'python3 runner/run_samples.py samples/', 'python3 -I runner/run_samples.py samples/', '/usr/bin/python3 -I runner/run_samples.py samples/', 'cd x && python3 -I runner/run_samples.py samples/',
+  ];
+  const counted = commands.filter(isBuildTestCommand);
+  assert.deepEqual(counted, commands, 'the fixture holds only commands explore.buildTest counts');
+  assert.deepEqual(counted.filter(command => classifyCommand(command) !== 'build_test'), [], 'v1 gives every one of them build_test');
 });
 
 test('Passing_runs_that_would_have_failed_the_specs_own_floors_are_counted', () => {
