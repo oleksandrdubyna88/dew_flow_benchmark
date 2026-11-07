@@ -1,5 +1,5 @@
 // The identity of the submission contract a scoring was made under (F1.S3 (b); parent D65). A sha256 over sorted `path<TAB>sha256` lines of the modules that decide what is copied, restored and built (the clean copy, the marked
-// build, the frozen list, the build box, the offline settings), every file under `spikes/lang-bench/templates/`, and the tree hashes of the two registered snapshots. It moves with exactly those and with nothing else: a fix to the
+// build, the frozen list, the build box, the offline settings, the excluded-folder list, the package matrix), every file under `spikes/lang-bench/templates/`, and the tree hashes of the two registered snapshots. It moves with exactly those and with nothing else: a fix to the
 // scorer (`score-quick.mjs`) or a change to the statement's sentences does not move it. The scoring puts it into `score.json` (`explore.contractIdentity`) and the record reads it from there, so a record finished later still names the
 // identity it was scored under. The templates' identity alone is what a series records at `init`, to tell a moved template from the agent's changes (`harness-pin.mjs`).
 import { createHash } from 'node:crypto';
@@ -7,9 +7,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { REPO } from './paths.mjs';
 
-/** The modules of the contract, from the repository root: the copy, the marked build, the frozen list, the build box and the offline settings. */
+/** The files of the contract, from the repository root: the copy, the marked build, the frozen list, the build box, the offline settings, the excluded-folder list and the package matrix. */
 export const CONTRACT_MODULES = Object.freeze([
   'spikes/lang-explore/lib/copy-quick.mjs', 'spikes/lang-explore/lib/build-quick.mjs', 'spikes/lang-bench/lib/frozen-set.mjs', 'spikes/lang-bench/lib/workspace-box.mjs', 'spikes/lang-bench/lib/cache-offline.mjs',
+  // the folders a copy leaves out (the scorer's own list), and the offered set per kind (the package matrix)
+  'spikes/minigit-bench/lib/score-deps.mjs', 'spikes/lang-bench/inputs/package-matrix.json',
 ]);
 export const TEMPLATES_FOLDER = 'spikes/lang-bench/templates';
 export const SNAPSHOT_RECORD = 'spikes/lang-bench/inputs/cache-snapshots-lang.json';

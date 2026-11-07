@@ -111,6 +111,10 @@ test('The_contract_identity_moves_with_a_template_a_snapshot_or_a_contract_modul
   const moves = [
     ['a template file', () => touch(root, `${TEMPLATES_FOLDER}/node/web/.npmrc`, t => `${t}# moved\n`)],
     ['a registered snapshot', () => touch(root, SNAPSHOT_RECORD, t => t.replace(/("csharp": \{\s*"treeSha256": ")[0-9a-f]{4}/, '$10000'))],
+    ...['spikes/minigit-bench/lib/score-deps.mjs', 'spikes/lang-bench/inputs/package-matrix.json'].map(rel => {
+      assert.ok(CONTRACT_MODULES.includes(rel), `${rel} is part of the contract: the excluded-folder list and the offered set decide what is scored and built`);
+      return [rel, () => touch(root, rel, t => `${t} `)];
+    }),
     ...CONTRACT_MODULES.map(rel => [rel, () => touch(root, rel, t => `${t}// moved\n`)]),
   ];
   const seen = new Set([base]);
