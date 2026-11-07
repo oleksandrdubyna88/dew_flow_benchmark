@@ -10,6 +10,7 @@ import { crosscheckPolicyFrom } from '../../minigit-bench/capture/policy-input.m
 import { loadSessionDir } from '../../minigit-bench/lib/smoke-load.mjs';
 import { smokeViews } from '../../minigit-bench/lib/smoke-verdicts.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { systemClock } from './clock.mjs';
 import { V1 } from './paths.mjs';
 import { RESULT_DIR, findComplete, sweepTemps, writeResult } from './repartition-store.mjs';
 
@@ -92,7 +93,7 @@ function bodyOf({ seriesDir, code, fingerprint, made, now }) {
  * Recompute the partitions of the series `seriesDir`. `now` and `genId` are seams (the clock; the 8 hex digit generation id), `owned` is `ownedFor({ token: 'bench' })`.
  * -> `ok({ file, wrote, sessions, skipped, stale: { removed, live, unknown } })` | `fail(reason)`.
  */
-export async function repartitionSeries({ seriesDir, now = () => new Date(), genId, owned = ownedFor({ token: 'bench' }) }) {
+export async function repartitionSeries({ seriesDir, now = systemClock, genId, owned = ownedFor({ token: 'bench' }) }) {
   const rids = ridsOf(seriesDir);
   if (rids === null) return fail(`${seriesDir} is not a series folder: it holds no s/ folder of sessions`);
   const policy = crosscheckPolicyFrom(V1, {});
