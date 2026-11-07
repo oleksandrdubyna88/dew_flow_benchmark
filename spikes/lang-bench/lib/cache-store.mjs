@@ -202,8 +202,8 @@ export function sweepStaging({ caches, log, probe = processProbe, uid = process.
 
 // ---- supersede and prune -------------------------------------------------------------------------------------------------------
 
-export const PREREG_TAG_PATTERN = 'prereg/lang-v2-A-*';
-const NO_TAG_RULE = 'a superseded snapshot is kept until the pre-registration tag (prereg/lang-v2-A-*) exists';
+export const PREREG_TAG_PATTERN = 'prereg/lang-v2-*';
+const NO_TAG_RULE = 'a superseded snapshot is kept until the pre-registration tag (prereg/lang-v2-*) exists';
 
 const GIT_ENV = () => ({ PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: os.homedir(), LANG: 'C.UTF-8', GIT_TERMINAL_PROMPT: '0' });
 const git = (repo, args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 30_000, env: GIT_ENV() });
@@ -231,7 +231,7 @@ function remoteToRead(repo, remote) {
 }
 
 /**
- * The real tag reader: the pre-registration tags (`prereg/lang-v2-A-*`) of the LOCAL repository AND of its remote (`git ls-remote --tags <url>`: a tag pushed from another checkout counts; the url is `--tags-remote`, else
+ * The real tag reader: the pre-registration tags (`prereg/lang-v2-*`: Stage 1's form `prereg/lang-v2-<yyyymmdd>` and the older group form `prereg/lang-v2-A-*`) of the LOCAL repository AND of its remote (`git ls-remote --tags <url>`: a tag pushed from another checkout counts; the url is `--tags-remote`, else
  * `origin`'s with a GitHub SSH form read over https). exe + argv, a ceiling; a git that cannot answer either question (no remote, no network) is a refusal, never "no tag". -> `ok([names])` | `fail`.
  */
 export function tagsOf(repo, { remote } = {}) {

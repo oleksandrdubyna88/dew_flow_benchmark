@@ -2,6 +2,7 @@
 // The real build and every box case are in cache-lang-offline.test.mjs (BENCH_REQUIRE_SANDBOX=1 only).
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -15,7 +16,7 @@ import { START_TOLERANCE_S, parseOwner, thisOwner } from '../../../.agents/conve
 import { sandboxGate } from '../../minigit-bench/test/helpers.mjs';
 import { loadRecipeLang } from '../lib/cache-recipe-lang.mjs';
 import { NPM_OFFLINE_ENV, NPMRC_OFFLINE, npmOfflineArgv, offlineNugetConfig, outsideManifest, usedNpm, usedNuget } from '../lib/cache-offline.mjs';
-import { checkManifestMatches, manifestOf, pruneSuperseded, stagingVerdict, supersede, sweepStaging } from '../lib/cache-store.mjs';
+import { checkManifestMatches, manifestOf, pruneSuperseded, stagingVerdict, supersede, sweepStaging, tagsOf } from '../lib/cache-store.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { exitedPid, recordOf, writeClaim } from './support/owners.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
@@ -342,4 +343,42 @@ test('The_command_prints_the_PACKAGES_md_of_a_registered_stack_from_the_record_a
   assert.equal(missing.value.code, 3, 'a stack with no record is refused');
   assert.match(missing.value.stderr, /csharp/);
   assert.equal((await runMake(['--print-packages-md', 'ruby', '--record', rec])).value.code, 2, 'an unknown stack is a usage error');
+});
+
+// ---- the Stage 1 pre-registration tag form ------------------------------------------------------------------------------------------
+
+const gitIn = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8', timeout: 20_000 });
+const STAGE_1_TAG = 'prereg/lang-v2-20261201';
+
+/** A repository with one commit, its tag pushed to a bare origin and removed locally: only the remote holds it, the way another checkout's push leaves it. -> `{ repo, origin }`. */
+function repoTaggedOnRemote(t, tag) {
+  const root = ownedFolder(t, 'st1');
+  const [repo, origin] = [path.join(root, 'repo'), path.join(root, 'origin.git')];
+  mkdirSync(repo); mkdirSync(origin);
+  for (const [cwd, args] of [[origin, ['init', '--bare', '-q']], [repo, ['init', '-q']], [repo, ['commit', '--allow-empty', '-q', '-m', 'x']], [repo, ['remote', 'add', 'origin', origin]], [repo, ['tag', tag]], [repo, ['push', '-q', 'origin', tag]], [repo, ['tag', '-d', tag]]]) assert.equal(gitIn(cwd, ...args).status, 0, args.join(' '));
+  return { repo, origin };
+}
+
+test('A_supersede_after_the_stage_1_pre_registration_tag_is_refused', t => {
+  const { repo, origin } = repoTaggedOnRemote(t, STAGE_1_TAG);
+  const file = path.join(ownedFolder(t, 'sup1'), 'rec.json');
+  writeFileSync(file, `${JSON.stringify({ csharp: recordFor('a'.repeat(64)), superseded: [] }, null, 2)}\n`);
+  const before = readFileSync(file, 'utf8');
+  const refused = supersede({ file, stack: 'csharp', reason: 'the set changed', tagsOf: () => tagsOf(repo, { remote: origin }), today: '2026-12-02' });
+  assert.equal(refused.ok, false, 'the tag of Stage 1 (prereg/lang-v2-<yyyymmdd>) stops a supersede');
+  assert.match(refused.reason, /pre-registration tag exists/);
+  assert.equal(readFileSync(file, 'utf8'), before, 'the record is untouched');
+});
+
+test('The_prune_sees_the_stage_1_pre_registration_tag', t => {
+  const { repo, origin } = repoTaggedOnRemote(t, STAGE_1_TAG);
+  assert.deepEqual(tagsOf(repo, { remote: origin }).value, [STAGE_1_TAG], 'the reader lists the Stage 1 tag form');
+  const caches = path.join(ownedFolder(t, 'prn1'), 'caches');
+  mkdirSync(caches);
+  const old = snapshotAt(caches, 'node', { 'npm/a': 'stage 1 old' });
+  const records = { superseded: [{ stack: 'node', supersededOn: '2026-11-05', reason: 'a', record: recordFor(old) }] };
+  const pruned = pruneSuperseded({ caches, tagsOf: () => tagsOf(repo, { remote: origin }), recordAtTag: () => ok(records) });
+  assert.equal(pruned.ok, true, pruned.reason);
+  assert.deepEqual(pruned.value.removed.map(r => r.name), [`node-${old}`], 'with the Stage 1 tag the prune runs and removes the superseded snapshot');
+  makeWritable(caches);
 });
