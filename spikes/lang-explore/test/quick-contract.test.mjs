@@ -87,6 +87,20 @@ test('The_copy_leaves_out_the_folders_of_the_one_list_at_any_depth', () => {
   assert.equal(existsSync(path.join(dest, 'bin')), false);
 });
 
+test('The_copy_drops_only_the_folders_named_exactly_so_and_keeps_Bin_OBJ_and_Node_Modules_as_source', () => {
+  const root = tmpDir('contract-copy-case');
+  const [source, dest] = [path.join(root, 'tree'), path.join(root, 'copy')];
+  for (const dir of ['Bin', 'OBJ', 'Node_Modules', 'src/Obj', 'bin']) mkdirSync(path.join(source, dir), { recursive: true });
+  for (const dir of ['Bin', 'OBJ', 'Node_Modules', 'src/Obj']) writeFileSync(path.join(source, dir, 'Kept.cs'), 'class Kept {}');
+  for (const stack of ['csharp', 'node']) {
+    const copy = path.join(dest, stack);
+    copyModule.quickPristineCopy({ source, dest: copy, stack, files: {} });
+    const names = readdirSync(copy, { recursive: true }).sort();
+    for (const kept of ['Bin/Kept.cs', 'OBJ/Kept.cs', 'Node_Modules/Kept.cs', 'src/Obj/Kept.cs']) assert.ok(names.includes(kept), `${stack}: ${kept} is source (D65 drops the lower-case names only)`);
+    assert.equal(existsSync(path.join(copy, 'bin')), stack === 'node', `${stack}: the exact name \`bin\` goes for C# and is an ordinary folder for Node`);
+  }
+});
+
 // ---- the identity of the contract ---------------------------------------------------------------------------------------------------
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -198,6 +212,18 @@ test('Deviations_never_change_accepted_and_that_is_the_point', () => {
   assert.equal(acceptedOf(failing), false, 'the control: a failing case is what makes a tree not accepted');
   assert.equal(exploreSection({ score: deviating, audit: [] }).accepted.value, true);
   assert.equal(exploreSection({ score: deviating, audit: [] }).deviations.value.count, 2);
+});
+
+test('On_the_ten_pass_path_accepted_comes_from_the_verdict_and_never_reads_the_deviations', () => {
+  const tenPass = (verdict, over = {}) => ({ ...scoreOf(), explore: { ...scoreOf().explore, verdict, scoringState: 'decided', passes: 10, frozenChanges: [], ...over } });
+  const deviations = [{ path: 'build.sh', state: 'changed' }, { path: 'run.sh', state: 'changed', reason: copyModule.DURING_BUILD }];
+  const accepted = score => exploreSection({ score, audit: [] }).accepted;
+  assert.deepEqual(accepted(tenPass('accepted', { frozenChanges: deviations })), { known: true, value: true }, 'ten clean passes and two deviations: accepted');
+  assert.deepEqual(accepted(tenPass('accepted', { frozenChanges: deviations, undecidedDrift: [{ path: 'STATEMENT.md', state: 'changed', why: 'x' }] })), { known: true, value: true }, 'and a file nobody could judge does not make accepted unknown');
+  assert.equal(exploreSection({ score: tenPass('accepted', { undecidedDrift: [{ path: 'STATEMENT.md', state: 'changed', why: 'x' }] }), audit: [] }).deviations.known, false, 'the deviations are unknown then, which is a separate leaf');
+  for (const verdict of ['rejected', 'intermittently incorrect']) assert.equal(accepted(tenPass(verdict)).value, false, `the control: ${verdict} is not accepted with no deviation at all`);
+  const failingCases = scoreOf(['k001']);
+  assert.equal(accepted({ ...failingCases, explore: { ...failingCases.explore, verdict: 'accepted', passes: 10, frozenChanges: [] } }).value, true, 'the verdict decides, not a recount of one pass\'s cases: the live path never reads the one-pass rule');
 });
 
 test('No_file_under_lang_bench_imports_lang_explore_and_the_scan_can_fail', () => {

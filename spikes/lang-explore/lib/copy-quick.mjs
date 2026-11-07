@@ -8,6 +8,9 @@ import path from 'node:path';
 import { excludedDirs } from '../../lang-bench/lib/frozen-set.mjs';
 import { frozenChanges, pathKind, restoreFrozen } from './workspace.mjs';
 
+/** The reason of a frozen file the BUILD changed (an MSBuild target of the agent's project can rewrite `run.sh` in the writable build box). */
+export const DURING_BUILD = 'changed during the build';
+
 const isKnownKind = st => st.isFile() || st.isDirectory() || st.isSymbolicLink();
 
 const isSkippedDir = (p, skip) => skip.has(path.basename(p)) && statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
@@ -44,12 +47,22 @@ export function quickPristineCopy({ source, dest, stack, files }) {
 }
 
 /**
- * The changes to frozen files, told apart. Under `runner/` the harness itself may have moved since the session began (the runner is re-pinned): when `runnerDrift`, a change there is `harness`, not the agent's. The template files and
- * the derived packages list are judged by their bytes (`decide`, see `template-drift.mjs`). Every other change is the agent's; without drift every change is the agent's, as it always was.
+ * After the build: every frozen file the build changed is put back, and named with the reason `DURING_BUILD`. The comparison is with the frozen bytes, file by file; the build's output folder is not frozen and is not looked at.
+ * -> `[{ path, state, reason }]`.
+ */
+export function restoreAfterBuild({ files, root }) {
+  const changed = frozenChanges({ files, work: root });
+  for (const c of changed) restoreFrozen({ root, rel: c.path, file: files[c.path] });
+  return changed.map(c => ({ ...c, reason: DURING_BUILD }));
+}
+
+/**
+ * The changes to frozen files, told apart. A change to a template file, a runner file, the derived packages list or a generated file is judged by its bytes (`decide`, see `template-drift.mjs`): the harness's when the tree has the bytes the
+ * file had when the series began, the agent's when it has any other, undecided where the old bytes cannot be read. Every other change is the agent's; without a history every change is the agent's, as it always was.
  * -> `{ agent, harness, undecided: [{ path, state, why }] }`.
  */
-export function splitFrozenChanges(changes, { runnerDrift = false, decide = () => 'agent' } = {}) {
-  const verdicts = changes.map(c => [c, runnerDrift && c.path.startsWith('runner/') ? 'harness' : decide(c)]);
+export function splitFrozenChanges(changes, { decide = () => 'agent' } = {}) {
+  const verdicts = changes.map(c => [c, decide(c)]);
   const of = name => verdicts.filter(([, v]) => v === name).map(([c]) => c);
   return { agent: of('agent'), harness: of('harness'), undecided: verdicts.filter(([, v]) => typeof v === 'object').map(([c, v]) => ({ ...c, why: v.undecided })) };
 }

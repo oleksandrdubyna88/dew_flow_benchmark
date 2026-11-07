@@ -83,17 +83,24 @@ const unfitProblem = ({ built, folder }) => {
   return Number.isInteger(built.exit) || built.timedOut === true ? null : 'the build ended with no known exit';
 };
 
+/** The prepared copy with the frozen files the build changed put back (`prepared.settle(folder)`, see `restoreAfterBuild`) and listed, after the agent's earlier changes, as agent deviations with their reason. */
+function settled({ prepared, folder }) {
+  const during = typeof prepared.settle === 'function' ? prepared.settle(folder) : [];
+  return { ...prepared, frozen: [...prepared.frozen, ...during] };
+}
+
 async function buildInFolder({ folder, prepare, build }) {
   const prepared = await prepare(folder);
   if (!prepared.ok) return prepared;
   const built = await build({ tree: folder });
   if (!built.ok) return built;
   const unfit = unfitProblem({ built: built.value, folder });
-  return unfit ? fail(unfit, { kind: 'environment' }) : ok({ prepared: prepared.value, built: built.value });
+  return unfit ? fail(unfit, { kind: 'environment' }) : ok({ prepared: settled({ prepared: prepared.value, folder }), built: built.value });
 }
 
 /**
- * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, undecided, left, identity })`; the undecided files and the identity of the contract are in the record because it is written once, here), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`), validate, rename into `work/tree`, then write `work/build.json`
+ * Make the clean copy (`prepare(dest)` -> `ok({ frozen, drift, undecided, left, identity, settle? })`; the undecided files and the identity of the contract are in the record because it is written once, here), build it (`build({ tree })` -> `ok({ ok, exit, timedOut, wallMs, tail })` | environment `fail`),
+ * put back every frozen file the build rewrote and record it as an agent deviation (`changed during the build`), validate, rename into `work/tree`, then write `work/build.json`
  * (`wx`). `io` (`rename`, `writeNew`) and `now` are seams. -> `ok(record)` | an environment `fail` (the temporary folder is removed; nothing is committed).
  */
 export async function commitBuild({ work, prepare, build, runnerPin = null, io = DEFAULT_IO, now = systemClock, fs = nodeFs }) {

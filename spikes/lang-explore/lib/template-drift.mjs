@@ -18,8 +18,13 @@ const INPUTS = 'spikes/lang-bench/inputs';
 const COMMIT = /^[0-9a-f]{40}$/;
 const ABSENT = Object.freeze({ known: true, absent: true });
 
-/** True when a change to `rel` can be the harness's move: a template file of the stack (a script, a pin file), the derived packages list, or a file generated from the one memory value (`generated-drift.mjs`). */
-export const isMovable = (stack, rel) => rel === DERIVED || GENERATED_FILES.includes(rel) || templateFilesOf(stack).includes(rel);
+const RUNNER_FOLDER = 'runner/';
+const GRAMMAR = 'runner/GRAMMAR.md';
+const RUNNER_PIN_AT = `${INPUTS}/specs.d/runner.json`;
+export const isRunnerFile = rel => rel.startsWith(RUNNER_FOLDER);
+
+/** True when a change to `rel` can be the harness's move: a template file of the stack (a script, a pin file), the derived packages list, a file generated from the one memory value (`generated-drift.mjs`), or a file of the runner. */
+export const isMovable = (stack, rel) => rel === DERIVED || GENERATED_FILES.includes(rel) || templateFilesOf(stack).includes(rel) || isRunnerFile(rel);
 
 /** The bytes of a file at a commit of this repository (git as exe + argv, a ceiling), or null when git cannot show it. */
 export function readAtCommit(commit, rel) {
@@ -61,9 +66,26 @@ export function templateHistory({ inputs, readAt = readAtCommit, legacy }) {
   };
 }
 
-/** The old bytes of a file the series recorded nothing for, from git at its commit (the generated files: made again by `legacy`). */
+/**
+ * The bytes a runner file had in the runner as pinned at the commit: the pin (`inputs/specs.d/runner.json`) lists the sha256 of each file of the runner folder; a file the pin does not list did not exist then. The grammar is made from FORMAT,
+ * not from the runner folder, so the pin cannot tell what it was.
+ */
+function runnerAt({ commit, rel, readAt }) {
+  if (rel === GRAMMAR) return unknown(`${rel} is made from the FORMAT grammar and is not in the runner pin of commit ${commit}, so its old bytes cannot be read`);
+  const files = jsonOf(readAt(commit, RUNNER_PIN_AT))?.runner?.files;
+  if (!Array.isArray(files)) return unknown(`the runner pin of commit ${commit} cannot be read, so the old bytes of ${rel} are unknown`);
+  const listed = files.find(file => file.path === rel.slice(RUNNER_FOLDER.length));
+  return listed === undefined ? ABSENT : known(listed.sha256);
+}
+
+/** The old bytes of a file the series recorded nothing for, from git at its commit (the derived list: rendered again; the runner files: from the runner pin; the generated files: made again by `legacy`). */
 function unrecorded({ commit, args, readAt, legacy }) {
   if (args.rel === DERIVED) return packagesMdAt({ commit, ...args, readAt });
+  return isRunnerFile(args.rel) ? runnerAt({ commit, rel: args.rel, readAt }) : unrecordedFile({ commit, args, readAt, legacy });
+}
+
+/** The template files (git) and the generated files (made again by `legacy`). */
+function unrecordedFile({ commit, args, readAt, legacy }) {
   if (!GENERATED_FILES.includes(args.rel)) return templateAt({ commit, ...args, readAt });
   return legacy === undefined ? unknown(`the series recorded no bytes for ${args.rel} and nothing can make them again`) : legacy({ commit, ...args, readAt });
 }
@@ -78,11 +100,14 @@ function recordedFor(inputs, { stack, kind, rel }) {
 const usableCommit = inputs => (typeof inputs?.subject?.sha === 'string' && COMMIT.test(inputs.subject.sha) ? inputs.subject.sha : null);
 
 /**
- * The judge of one change to a frozen file: `'agent'` | `'harness'` | `{ undecided: why }`. Without a `history` every change is the agent's, as it always was. A file that is gone, or is not a regular file, is the agent's
+ * The judge of one change to a frozen file: `'agent'` | `'harness'` | `{ undecided: why }`. Without a `history` every change is the agent's, as it always was (a runner file of a series whose runner may have moved, `driftPossible`, is undecided). A file that is gone, or is not a regular file, is the agent's
  * (no bytes can equal the old ones) unless the file did not exist when the series began: then its absence is the harness's change. A movable file whose bytes equal the old bytes is the harness's; whose old bytes cannot be read is
  * undecided; any other is the agent's.
  */
-export const driftDecider = args => change => (isJudged(args, change) ? verdictOf(args, change) : 'agent');
+export const driftDecider = args => change => (isJudged(args, change) ? verdictOf(args, change) : unjudged(args, change));
+
+/** A change that cannot be judged by bytes: without a history, a runner file of a series whose runner may have moved (`driftPossible`) is undecided, never the agent's and never the harness's; every other change is the agent's. */
+const unjudged = ({ history, driftPossible }, change) => (history === undefined && driftPossible === true && isRunnerFile(change.path) ? { undecided: `the runner may have moved since the series was made and no history says what ${change.path} was` } : 'agent');
 
 /** True when the change can be the harness's: there is a history and the file is one the harness can move. */
 const isJudged = ({ stack, history }, change) => history !== undefined && isMovable(stack, change.path);

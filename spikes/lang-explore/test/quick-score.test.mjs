@@ -1,6 +1,7 @@
 // The quick-run scoring where a harness failure must not become a verdict, and where a rejected case must keep what it saw. The build and the run are fakes (`buildFn`, `runFn`, `inBox`); nothing starts.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -103,7 +104,9 @@ test('Under_a_moved_runner_a_changed_runner_file_is_harness_drift_and_not_an_age
   writeFileSync(path.join(a.source, 'build.sh'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const files = { ...frozenFiles(), 'runner/rs_old.py': { bytes: Buffer.from('the 0.3.2 bytes\n'), mode: 0o644 } };
   const common = { runFn: ran(['s01', 'h001', 'h002'].map(id => rec(id))), files };
-  const drifted = await scoreWith(a, { ...common, driftPossible: true });
+  // the blanket rule (every change under runner/ is the harness's when the runner moved) is gone: the file is judged by its bytes against the runner the series was made with (item 5 of the final seam review of F1)
+  const history = ({ rel }) => (rel === 'runner/rs_old.py' ? { known: true, sha256: createHash('sha256').update('the 0.3.1 bytes\n').digest('hex') } : { known: true, sha256: 'f'.repeat(64) });
+  const drifted = await scoreWith(a, { ...common, driftPossible: true, history });
   assert.deepEqual(drifted.value.explore.harnessDrift, [{ path: 'runner/rs_old.py', state: 'changed' }]);
   assert.deepEqual(drifted.value.explore.frozenChanges, [{ path: 'build.sh', state: 'changed' }], 'the agent really changed build.sh');
   const plain = await scoreWith(a, common);

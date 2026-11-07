@@ -4,7 +4,7 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { harnessPinsNow } from '../lib/harness-pin.mjs';
@@ -142,4 +142,57 @@ test('The_record_carries_the_harness_drift_beside_the_deviations', () => {
   const written = finalizeSessionRecord({ sessionDir: dir, score: withDrift, audit: [] });
   assert.deepEqual(written.explore.harnessDrift, { known: true, value: [{ path: 'build.sh', state: 'changed' }] });
   assert.deepEqual(exploreSection({ score, audit: [] }).harnessDrift, { known: true, value: [] }, 'none is a known empty list');
+});
+
+// ---- the runner files, judged by bytes like the templates (final seam review of F1, item 5) --------------------------------------------------------------------------
+
+const RUNNER_OLD = '# rs_old.py of the runner the series was made with\n';
+const RUNNER_NOW = '# rs_old.py of the runner of today\n';
+const runnerPinAt = files => Buffer.from(JSON.stringify({ runner: { version: '0.3.1', files: Object.entries(files).map(([name, text]) => ({ path: name, sha256: sha(text) })), manifestSha256: 'm'.repeat(64) } }));
+/** A runner folder in the tree and the frozen set: `rs_old.py` was edited by the agent or is the old runner's, `rs_new.py` came with today's runner. */
+function runnerTree(t, treeText) {
+  const a = scoringArea(t);
+  mkdirSync(path.join(a.source, 'runner'), { recursive: true });
+  writeFileSync(path.join(a.source, 'runner', 'rs_old.py'), treeText);
+  return { a, files: { ...frozenFiles(), 'runner/rs_old.py': f(RUNNER_NOW), 'runner/rs_new.py': f('# a runner file that is new\n') } };
+}
+const runnerHistory = (pin, inputs = { subject: { sha: COMMIT } }) => templateHistory({ inputs, readAt: (commit, rel) => (rel.endsWith('inputs/specs.d/runner.json') ? pin : null) });
+
+test('Under_a_moved_runner_a_runner_file_with_the_old_runners_bytes_is_the_harnesss_and_an_agents_edit_of_it_is_the_agents_even_when_the_runner_moved', async t => {
+  const history = runnerHistory(runnerPinAt({ 'rs_old.py': RUNNER_OLD }));
+  const old = runnerTree(t, RUNNER_OLD);
+  const moved = await scoreWith(old.a, { runFn: passAll(), files: old.files, history, driftPossible: true });
+  assert.deepEqual(moved.value.explore.harnessDrift.map(c => c.path).sort(), ['runner/rs_new.py', 'runner/rs_old.py'], 'the old runner\'s bytes, and a file that did not exist then, are the harness\'s');
+  assert.deepEqual(moved.value.explore.frozenChanges, [], 'the agent changed nothing');
+  const edited = runnerTree(t, '# the agent edited the runner it was given\n');
+  const charged = await scoreWith(edited.a, { runFn: passAll(), files: edited.files, history, driftPossible: true });
+  assert.deepEqual(charged.value.explore.frozenChanges.map(c => c.path), ['runner/rs_old.py'], 'an edit is the agent\'s though the runner moved: the blanket rule is gone');
+  assert.deepEqual(charged.value.explore.harnessDrift.map(c => c.path), ['runner/rs_new.py']);
+});
+
+test('A_runner_file_that_cannot_be_judged_is_undecided_and_the_deviations_are_unknown_never_zero', async t => {
+  const none = runnerTree(t, RUNNER_OLD);
+  for (const [name, history] of [['the runner pin cannot be read at the commit', runnerHistory(null)], ['the series has no commit', runnerHistory(runnerPinAt({ 'rs_old.py': RUNNER_OLD }), {})]]) {
+    const made = await scoreWith(none.a, { runFn: passAll(), files: { ...frozenFiles(), 'runner/rs_old.py': none.files['runner/rs_old.py'] }, history, driftPossible: true });
+    assert.deepEqual(made.value.explore.undecidedDrift.map(c => c.path), ['runner/rs_old.py'], name);
+    assert.deepEqual(made.value.explore.frozenChanges, [], `${name}: and nobody is charged`);
+    assert.equal(exploreSection({ score: made.value, audit: [] }).deviations.known, false, `${name}: the deviations are unknown`);
+  }
+  const grammar = { ...frozenFiles(), 'runner/GRAMMAR.md': f('the grammar of today\n') };
+  const a = runnerTree(t, RUNNER_OLD).a;
+  mkdirSync(path.join(a.source, 'runner'), { recursive: true });
+  writeFileSync(path.join(a.source, 'runner', 'GRAMMAR.md'), 'the grammar of before\n');
+  const made = await scoreWith(a, { runFn: passAll(), files: grammar, history: runnerHistory(runnerPinAt({})), driftPossible: true });
+  assert.deepEqual(made.value.explore.undecidedDrift.map(c => c.path), ['runner/GRAMMAR.md'], 'the grammar is made from FORMAT, not from the runner folder: its old bytes are not in the runner pin');
+});
+
+test('With_no_history_a_moved_runner_leaves_its_files_undecided_and_an_unmoved_one_leaves_them_the_agents', async t => {
+  const tree = runnerTree(t, RUNNER_OLD);
+  const files = { ...frozenFiles(), 'runner/rs_old.py': tree.files['runner/rs_old.py'] };
+  const moved = await scoreWith(tree.a, { runFn: passAll(), files, driftPossible: true });
+  assert.deepEqual(moved.value.explore.undecidedDrift.map(c => c.path), ['runner/rs_old.py'], 'the runner may have moved and nothing says what it was');
+  assert.deepEqual(moved.value.explore.frozenChanges, []);
+  const same = await scoreWith(tree.a, { runFn: passAll(), files });
+  assert.deepEqual(same.value.explore.frozenChanges.map(c => c.path), ['runner/rs_old.py'], 'the runner did not move: a difference is the agent\'s, as it always was');
+  assert.equal('undecidedDrift' in same.value.explore, false);
 });
