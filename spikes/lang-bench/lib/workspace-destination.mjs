@@ -91,7 +91,7 @@ function contentProblem(target) {
 
 const JUDGE_ERRORS = new Set(['EACCES', 'ELOOP', 'ENAMETOOLONG', 'ENOENT']);
 
-/** The first problem of the destination, or null. A path the filesystem cannot answer for (permission, a link loop, a name too long) is a problem that says so, never a throw. */
+/** The first problem of the destination, or null. A path the filesystem cannot answer for (permission, a link loop, a name too long, a dangling link) is a problem that says so, never a throw. A bare repository's `HEAD` may also be a link (`isHeadFile`). */
 function destinationProblem(target, worktreeOf) {
   try {
     return linkProblem(target) ?? repositoryProblem(target, worktreeOf) ?? contentProblem(target);
