@@ -55,7 +55,7 @@ export function sessionCells({ entry, record }) {
     e: leaf(record, 'cost.cliTotalUsd'), b: leaf(record, 'cost.brokerUsd'), headline: leaf(record, 'cost.headlineUsd')?.usd ?? null, checks: checksCell(record), tokens: tokensCell(record), split: splitCell(record),
     wall: leaf(record, 'time.wallMs'), modelApi: leaf(record, 'time.modelApiMs'), active: leaf(record, 'time.activeMs'), diff: leaf(record, 'time.activeMinusModelApiMs'),
     partition: leaf(record, 'time.partition'), partitionSum: partitionSum(record), buildTest: leaf({ explore }, 'explore.buildTest'), rate: leaf({ explore }, 'explore.passRate'),
-    accepted: leaf({ explore }, 'explore.accepted'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
+    accepted: leaf({ explore }, 'explore.accepted'), deviations: leaf({ explore }, 'explore.deviations'), trap: leaf({ explore }, 'explore.trapHits'), data: record.data === true, stop: leaf(record, 'cost.stopRuleUsd'),
   };
 }
 
@@ -78,9 +78,13 @@ function partitionTable(cells) {
   return table(['pair', 'stack', ...names], cells.map(c => [c.pair, c.stack, ...names.map(n => secs(c.partition?.categories[n]))]));
 }
 
+const acceptedCell = c => (c.accepted === null ? DASH : (c.accepted ? 'yes' : 'no'));
+const deviationsCell = c => (c.deviations === null ? DASH : String(c.deviations.count));
+const trapCell = c => (c.trap === null ? DASH : `${c.trap.hits} of ${c.trap.trapCases} trap cases`);
+
 function qualityTable(cells) {
-  return table(['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', 'trap hit (a count; detail private)'],
-    cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), c.accepted === null ? DASH : (c.accepted ? 'yes' : 'no'), c.trap === null ? DASH : `${c.trap.hits} of ${c.trap.trapCases} trap cases`]));
+  return table(['pair', 'stack', 'visible pass rate', 'held-out pass rate', 'accepted', 'deviations', 'trap hit (a count; detail private)'],
+    cells.map(c => [c.pair, c.stack, pct(c.rate?.visible), pct(c.rate?.heldout), acceptedCell(c), deviationsCell(c), trapCell(c)]));
 }
 
 function pairTable(pairs) {

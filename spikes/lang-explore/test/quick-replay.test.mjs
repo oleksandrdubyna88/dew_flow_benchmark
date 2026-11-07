@@ -63,7 +63,7 @@ test('A_replay_scores_exactly_the_named_case_of_the_kept_tree_and_says_whether_t
   const io = ioFor(w);
   await run(w, io, { times: 1 });
   const [, args] = io.calls.find(([k]) => k === 'score');
-  assert.deepEqual([args.only, args.stack, args.source, args.driftPossible], ['h003', 'node', w.layout.work, true], 'the series recorded no runner pin');
+  assert.deepEqual([args.only, args.stack, args.source, args.driftPossible, args.templateDriftPossible], ['h003', 'node', w.layout.work, true, true], 'the series recorded no runner pin and no templates identity');
   assert.match(args.work, /replay\/work-/, 'the scratch folder is inside replay/, never score/');
   assert.equal(existsSync(args.work), false, 'and is removed');
 });

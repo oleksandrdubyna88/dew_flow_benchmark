@@ -11,6 +11,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { templatesIdentity } from '../lib/contract-identity.mjs';
 import { runnerPinNow } from '../lib/harness-pin.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { planSpend } from '../lib/pause.mjs';
@@ -142,6 +143,16 @@ test('A_series_made_under_another_runner_pin_or_under_none_scores_with_harness_d
     const r = await run(w, ioFor(w, { scoreArgs }));
     assert.equal(r.exit, 0, `${name}: ${r.message}`);
     assert.equal(scoreArgs[0].driftPossible, expected, name);
+  }
+});
+
+test('A_series_made_under_other_templates_or_under_none_scores_with_template_drift_possible_and_one_made_under_these_templates_does_not', async () => {
+  for (const [name, over, expected] of [['no identity recorded', {}, true], ['another identity', { templatesIdentity: 'f'.repeat(64) }, true], ['these templates', { templatesIdentity: templatesIdentity() }, false]]) {
+    const w = world(over);
+    const scoreArgs = [];
+    const r = await run(w, ioFor(w, { scoreArgs }));
+    assert.equal(r.exit, 0, `${name}: ${r.message}`);
+    assert.equal(scoreArgs[0].templateDriftPossible, expected, name);
   }
 });
 

@@ -1,9 +1,9 @@
 // What `init` records for a quick task besides the pilot's own: the prompts of the task's stacks (the bare prompt of v2 section 4.5 with the quick stack sentences) and the identity of the held-out set (its tree hash
-// and size), which every later pair is checked against, and the runner pin it was made under (a later rescore or replay of a kept tree tells harness drift from the agent's changes by it). `init` refuses when the held-out set is absent or the real runner does not accept its pairs.
+// and size), which every later pair is checked against, and the runner pin and the templates' identity it was made under (a later rescore or replay of a kept tree tells harness drift from the agent's changes by them). `init` refuses when the held-out set is absent or the real runner does not accept its pairs.
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { runnerPinNow } from './harness-pin.mjs';
+import { harnessPinsNow } from './harness-pin.mjs';
 import { loadHeldoutQuick, parseProblem } from './heldout-quick.mjs';
 import { PROMPT_TEMPLATE, STACK_NAMES, promptText } from './plan.mjs';
 import { quickExplore } from './quick.mjs';
@@ -30,5 +30,5 @@ export async function quickInitExtra({ explore, task, home }) {
   if (!held.ok) return fail(held.reason);
   const parsed = await parseProblem({ casesDir: held.value.casesDir, kind: task.kind, runner: path.join(BENCH_RUNNER, 'run_samples.py') });
   if (!parsed.ok) return fail(parsed.reason);
-  return ok({ prompts: quickPrompts(quickExplore(explore, home)), runnerPin: runnerPinNow(), heldoutQuick: { treeSha256: held.value.treeSha256, caseCount: held.value.caseIds.length, trapCount: held.value.traps.length, parsed: parsed.value } });
+  return ok({ prompts: quickPrompts(quickExplore(explore, home)), ...harnessPinsNow(), heldoutQuick: { treeSha256: held.value.treeSha256, caseCount: held.value.caseIds.length, trapCount: held.value.traps.length, parsed: parsed.value } });
 }

@@ -4,7 +4,7 @@
 // copy and named, and the score carries the names in a flag (`explore.nonRegularLeftOut`). Links are copied as links (verbatim), as in the olympiad's copy.
 import { cpSync, lstatSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { excludedDirs } from './frozen-set.mjs';
+import { excludedDirs, templateFilesOf } from './frozen-set.mjs';
 import { frozenChanges, restoreFrozen } from './workspace.mjs';
 
 const isKnownKind = st => st.isFile() || st.isDirectory() || st.isSymbolicLink();
@@ -35,10 +35,12 @@ export function quickPristineCopy({ source, dest, stack, files }) {
 }
 
 /**
- * The changes to frozen files, told apart. Under `runner/` the harness itself may have moved since the session began (the runner is re-pinned): when `driftPossible`, a change there is `harness`, not the agent's;
- * every other change is the agent's. Without drift every change is the agent's, as it always was. -> `{ agent, harness }`.
+ * The changes to frozen files, told apart. Under `runner/` the harness itself may have moved since the session began (the runner is re-pinned): when `driftPossible`, a change there is `harness`, not the agent's. The same holds
+ * for the template files (the scripts and the stack's pin files) when `templateDrift` is true: the series was made under other templates, so a difference there is the template's move. Every other change is the agent's;
+ * without drift every change is the agent's, as it always was. -> `{ agent, harness }`.
  */
-export function splitFrozenChanges(changes, driftPossible) {
-  const harness = driftPossible ? changes.filter(c => c.path.startsWith('runner/')) : [];
-  return { agent: changes.filter(c => !harness.includes(c)), harness };
+export function splitFrozenChanges(changes, driftPossible, { templateDrift = false, stack } = {}) {
+  const templateFiles = templateDrift ? new Set(templateFilesOf(stack)) : new Set();
+  const isHarness = c => (driftPossible && c.path.startsWith('runner/')) || templateFiles.has(c.path);
+  return { agent: changes.filter(c => !isHarness(c)), harness: changes.filter(isHarness) };
 }

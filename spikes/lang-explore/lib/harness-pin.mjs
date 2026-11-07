@@ -2,6 +2,7 @@
 // later scoring of that tree (`rescore`, `replay`) sees them differ from today's frozen set. Whether the runner has moved since the series was made decides how such a difference is reported (see `copy-quick.mjs`).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { templatesIdentity } from './contract-identity.mjs';
 import { SPIKE } from './paths.mjs';
 
 const RUNNER_PIN_FILE = path.resolve(SPIKE, '..', 'lang-bench', 'inputs', 'specs.d', 'runner.json');
@@ -17,3 +18,15 @@ export function runnerDriftPossible({ inputs, now = runnerPinNow() }) {
   const recorded = inputs?.runnerPin;
   return recorded === undefined || recorded.manifestSha256 !== now.manifestSha256;
 }
+
+/**
+ * Can the template files in a session's tree be older than today's? True when the series recorded no templates identity (it was made before the identity was recorded) or recorded another one. Then a change to a template file
+ * (a script or a pin file) is not the agent's: the template moved (see `copy-quick.mjs`).
+ */
+export function templateDriftPossible({ inputs, now = templatesIdentity() }) {
+  const recorded = inputs?.templatesIdentity;
+  return recorded === undefined || recorded !== now;
+}
+
+/** What a series records at `init` about the harness that made it: the runner's pin and the templates' identity. A later rescore or replay of a kept tree tells harness drift from the agent's changes by them. */
+export const harnessPinsNow = () => ({ runnerPin: runnerPinNow(), templatesIdentity: templatesIdentity() });
