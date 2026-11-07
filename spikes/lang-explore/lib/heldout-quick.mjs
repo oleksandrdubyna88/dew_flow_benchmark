@@ -2,7 +2,7 @@
 // written for the authors in `~/rsd/lang-v2/briefs/quick-heldout-shape.md`. Nothing is written to this folder; its tree hash is recorded in the series at `init` and checked at every pair, so a pair changed between
 // pairs is refused. Nothing it returns is ever written to a public file.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
@@ -10,20 +10,41 @@ import { taskPaths } from './tasks.mjs';
 
 const H_ID = /^h\d{3}$/;
 
-/** The sha256 of every file of `cases/` (names and bytes, in name order): the identity of the held-out set. */
+const lstatOrNull = file => lstatSync(file, { throwIfNoEntry: false }) ?? null;
+
+const KIND_NAMES = Object.freeze([['isSymbolicLink', 'a link'], ['isDirectory', 'a folder'], ['isFIFO', 'a fifo'], ['isSocket', 'a socket'], ['isCharacterDevice', 'a device'], ['isBlockDevice', 'a device']]);
+
+/** What a file system entry is, in words (a regular file is `a file`: it is not a folder where a folder is wanted). */
+const kindName = stat => KIND_NAMES.find(([method]) => stat[method]())?.[1] ?? 'a file';
+
+/** The sentence naming every entry of `cases/` that is not a regular file (a link, a folder, a fifo, a socket: by `lstat`, so nothing is followed or read), or null. */
+export function caseEntriesProblem(casesDir) {
+  const odd = readdirSync(casesDir).sort().map(name => [name, lstatOrNull(path.join(casesDir, name))]).filter(([, stat]) => stat !== null && !stat.isFile());
+  return odd.length === 0 ? null : `entries of cases/ that are not regular files: ${odd.map(([name, stat]) => `${name} is ${kindName(stat)}`).join(', ')}`;
+}
+
+const casesRootProblem = stat => (stat === null || stat.isDirectory() ? null : `cases/ is ${kindName(stat)}, not a folder`);
+const trapsFileProblem = stat => (stat === null || stat.isFile() ? null : `traps.txt is ${kindName(stat)}, not a regular file`);
+
+/** The sentence refusing `cases/` when it is a link or not a folder, or `traps.txt` when it is there and not a regular file, or null (a missing `cases/` is the caller's `absent`). */
+const rootProblem = ({ dir, casesDir }) => casesRootProblem(lstatOrNull(casesDir)) ?? trapsFileProblem(lstatOrNull(path.join(dir, 'traps.txt')));
+
+/** The held-out set's identity: `ok(sha256)` of every file of `cases/` (names and bytes, in name order), or `fail` naming an entry that is not a regular file. The bytes hashed for a valid folder are what they always were. */
 export function casesTreeHash(casesDir) {
+  const problem = caseEntriesProblem(casesDir);
+  if (problem !== null) return fail(problem);
   const h = createHash('sha256');
   for (const name of readdirSync(casesDir).sort()) {
     h.update(`${name}\0`);
     h.update(readFileSync(path.join(casesDir, name)));
     h.update('\0');
   }
-  return h.digest('hex');
+  return ok(h.digest('hex'));
 }
 
 function readTraps(dir, ids) {
   const file = path.join(dir, 'traps.txt');
-  if (!existsSync(file)) return ok([]);
+  if (lstatOrNull(file) === null) return ok([]);
   const traps = readFileSync(file, 'utf8').split('\n').map(l => l.trim()).filter(l => l !== '' && !l.startsWith('#'));
   const unknown = traps.filter(t => !ids.includes(t));
   return unknown.length === 0 ? ok(traps) : fail(`traps.txt names case(s) that are not in cases/: ${unknown.join(', ')}`);
@@ -45,12 +66,18 @@ const listedIds = file => readFileSync(file, 'utf8').split('\n').map(l => l.trim
 
 function manifestProblems(casesDir, ids) {
   const file = path.join(casesDir, 'cases.txt');
-  if (!existsSync(file)) return ['cases.txt is missing (FORMAT 3.1: one line per case, `<id> <comparison> <R-id> ...`)'];
+  if (lstatOrNull(file) === null) return ['cases.txt is missing (FORMAT 3.1: one line per case, `<id> <comparison> <R-id> ...`)'];
   const listed = listedIds(file);
   return [...listIf(ids.filter(id => !listed.includes(id)), l => `cases.txt does not list ${l}`), ...listIf(listed.filter(id => !ids.includes(id)), l => `cases.txt lists ${l}, which are not in the folder`)];
 }
 
-const isDir = p => existsSync(p) && statSync(p).isDirectory();
+/** `{ ids, problems }` of a present `cases/`: an entry that is not a regular file first (nothing else is read then), else the names and the manifest. */
+function folderShape({ dir, casesDir }) {
+  const odd = rootProblem({ dir, casesDir }) ?? caseEntriesProblem(casesDir);
+  if (odd !== null) return { ids: [], problems: [odd] };
+  const shape = structureProblems(casesDir);
+  return { ids: shape.ids, problems: [...shape.problems, ...manifestProblems(casesDir, shape.ids)] };
+}
 
 /** The folder of a quick task's reference solutions: `refs-NN` beside `heldout-NN` (private, outside every git tree, never bound into a box). */
 export const refsDirOf = dir => path.join(path.dirname(dir), path.basename(dir).replace(/^heldout-/, 'refs-'));
@@ -59,12 +86,14 @@ export const refsDirOf = dir => path.join(path.dirname(dir), path.basename(dir).
 export function loadHeldoutQuick(home, task) {
   const dir = taskPaths(task, home).heldoutDir;
   const casesDir = path.join(dir, 'cases');
-  if (!isDir(casesDir)) return fail(`the held-out side is not there (${casesDir}); its shape is in ~/rsd/lang-v2/briefs/quick-heldout-shape.md`, { absent: true });
-  const shape = structureProblems(casesDir);
-  const problems = [...shape.problems, ...manifestProblems(casesDir, shape.ids)];
-  if (problems.length > 0) return fail(`the held-out folder ${dir} is malformed: ${problems.join('; ')}`);
+  if (lstatOrNull(casesDir) === null) return fail(`the held-out side is not there (${casesDir}); its shape is in ~/rsd/lang-v2/briefs/quick-heldout-shape.md`, { absent: true });
+  const shape = folderShape({ dir, casesDir });
+  if (shape.problems.length > 0) return fail(`the held-out folder ${dir} is malformed: ${shape.problems.join('; ')}`);
   const traps = readTraps(dir, shape.ids);
-  return traps.ok ? ok(Object.freeze({ task: task.id, dir, casesDir, refsDir: refsDirOf(dir), caseIds: shape.ids, traps: traps.value, treeSha256: casesTreeHash(casesDir) })) : traps;
+  const tree = casesTreeHash(casesDir);
+  const unreadable = [traps, tree].find(r => !r.ok);
+  if (unreadable !== undefined) return unreadable;
+  return ok(Object.freeze({ task: task.id, dir, casesDir, refsDir: refsDirOf(dir), caseIds: shape.ids, traps: traps.value, treeSha256: tree.value }));
 }
 
 /** The sentence refusing a held-out set that is not the one a series was made over, or null (a series made before the hash was recorded is not refused for lacking it). */

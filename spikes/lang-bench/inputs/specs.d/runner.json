@@ -3,7 +3,7 @@
     "files": [
       {
         "path": "rs_abort.py",
-        "sha256": "b96df9347a3a858f3d003990533472ae17e03825857f417f0f65994b5379f639"
+        "sha256": "99953d162e62e57bdeb8df27ca996689b97fb690bde03466c83667e1945c3d4c"
       },
       {
         "path": "rs_arrival.py",
@@ -99,7 +99,7 @@
       },
       {
         "path": "rs_report.py",
-        "sha256": "3b48e4051e1e447effecb117cb30fd6b84428c4b2c12dfb3a74e989c050ec162"
+        "sha256": "dd24ac4e8d8d6b8a7cbb6481885e950e81dc91cf4e3132ede51059f8f1829a11"
       },
       {
         "path": "rs_samples.py",
@@ -142,7 +142,7 @@
         "sha256": "bf95a51bae3d396ff969ab846a28b3412789cf2a3e10659ca2a00ac32d11f0d5"
       }
     ],
-    "manifestSha256": "c5face5602f0f38fb5198fc31fb04ac971d25249481aefa582031693a5c5eb4c",
-    "version": "0.3.9"
+    "manifestSha256": "c2d4c07215d41b106930555c05b145de243b83dea4b854d732528cd22c896f95",
+    "version": "0.3.12"
   }
 }

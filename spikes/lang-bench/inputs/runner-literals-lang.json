@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "rule": "The string literals of runner/*.py that are behaviour and hold a stack word or a detection text: exact entries, one reason each. A stack word in any other string literal of a runner file is a finding, and an entry that no literal equals any more is a finding too (test/runner-text.test.mjs). Public, no trap content.",
+  "entries": [
+    { "text": "Out of memory.", "reason": "the first runtime's own out-of-memory line, matched whole against a stderr line (rs_abort.py DOTNET_LINE)" },
+    { "text": "System.OutOfMemoryException", "reason": "the exception name the first runtime prints for an out-of-memory abort, searched in the stderr tail (rs_abort.py DOTNET_EXCEPTION)" },
+    { "text": "JavaScript heap out of memory", "reason": "the second runtime's own out-of-memory message, searched in a stderr line (rs_abort.py V8_TEXT)" },
+    { "text": "dotnet", "reason": "the label of the first runtime that runtimeAbort returns and the record carries (rs_abort.py _kind)" },
+    { "text": "v8", "reason": "the label of the second runtime that runtimeAbort returns and the record carries (rs_abort.py _kind)" }
+  ]
+}

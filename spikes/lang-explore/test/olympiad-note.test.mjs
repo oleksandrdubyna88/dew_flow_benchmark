@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadExplore } from '../lib/inputs.mjs';
-import { DIFFERENCES, predictionRows, renderNote, sessionCells } from '../lib/note.mjs';
+import { DIFFERENCES, differencesOf, predictionRows, renderNote, sessionCells } from '../lib/note.mjs';
 import { bannerOf, extraDifferencesOf } from '../lib/note-tasks.mjs';
 import { cpcBoth, exploreSection, pairRecordOf } from '../lib/records.mjs';
 import { resolveTask } from '../lib/tasks.mjs';
@@ -101,4 +101,14 @@ test('A_note_is_dated_by_the_injected_clock_and_noteFor_refuses_to_guess_a_date'
   assert.throws(() => noteFor(args), /needs the note's date/);
   assert.match(noteFor({ ...args, date: '2031-02-03' }).split('\n')[0], /\(2031-02-03\)$/);
   writeFileSync(path.join(dir, 'x'), '');
+});
+
+test('The_classifier_sentence_of_an_olympiad_note_says_not_widened_before_2026_11_07_and_what_it_counts_from_that_day', () => {
+  const task = resolveTask(loadExplore().value, '02').value;
+  const before = differencesOf(task, '2026-11-06').join('\n');
+  assert.match(before, /is not widened/, 'a note dated before the change reproduces the recorded text');
+  const after = differencesOf(task, '2026-11-07').join('\n');
+  assert.doesNotMatch(after, /is not widened/);
+  assert.match(after, /counts `build.sh`, `run.sh`.*from 2026-11-07/);
+  assert.equal(differencesOf(task, '2026-11-07').length, differencesOf(task, '2026-11-06').length, 'one sentence is replaced, none is added');
 });

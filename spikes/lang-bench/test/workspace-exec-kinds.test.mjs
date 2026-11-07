@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { sweepLeftovers } from '../../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { nodeFs, excludedDirs } from '../../minigit-bench/lib/score-deps.mjs';
+import { quickPristineCopy } from '../../lang-explore/lib/copy-quick.mjs';
 import { npmOfflineArgv, openBox } from '../lib/cache-offline.mjs';
 import { boxEnv } from '../lib/exec-layer/env.mjs';
 import { statOf } from '../lib/exec-layer/proc.mjs';
@@ -214,6 +215,39 @@ test('Nested_bin_and_obj_folders_are_not_compiled_so_a_build_in_place_and_on_the
   assert.equal(onCopy.code, 0, outputOf(onCopy).slice(-1500));
 });
 
+const BROKEN_SOURCE = 'this is not a C# file\n';
+
+/** The daemon template's workspace with a broken `Extra.cs` in each of `folders`. */
+function withBrokenIn(t, folders) {
+  const w = helloWorkspace(t, { stack: 'csharp', kind: 'daemon' });
+  for (const folder of folders) {
+    mkdirSync(path.join(w, folder), { recursive: true });
+    writeFileSync(path.join(w, folder, 'Extra.cs'), BROKEN_SOURCE);
+  }
+  return w;
+}
+
+test('A_folder_named_Bin_in_another_letter_case_is_left_out_of_the_csharp_compile_in_place_and_on_the_clean_copy', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const folders = ['Bin', 'OBJ', 'Node_Modules'];
+  const w = withBrokenIn(t, folders);
+  const inPlace = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.equal(inPlace.code, 0, `the default compile items leave these folders out whatever their letter case: ${outputOf(inPlace).slice(-1500)}`);
+  const copy = path.join(ownedFolder(t, 'cpy', ensureTestRoot()), 'w');
+  quickPristineCopy({ source: w, dest: copy, stack: 'csharp', files: {} });
+  for (const folder of folders) assert.equal(existsSync(path.join(copy, folder, 'Extra.cs')), true, `the clean copy drops only the exact names, so ${folder} is kept`);
+  const onCopy = await inBox(copy, 'csharp', ['bash', 'build.sh']);
+  assert.equal(onCopy.code, 0, outputOf(onCopy).slice(-1500));
+});
+
+test('A_folder_of_another_name_holding_the_same_text_fails_the_build_and_that_is_the_point', TIMEOUT, async t => {
+  if (!needs(t, snapshotsMissing())) return;
+  const w = withBrokenIn(t, ['Bim']);
+  const ran = await inBox(w, 'csharp', ['bash', 'build.sh']);
+  assert.notEqual(ran.code, 0, 'a folder that is not one of the three names is compiled, so the text that does not compile fails the build');
+  assert.match(outputOf(ran), /Extra\.cs/, 'the failure names the file');
+});
+
 test('A_second_project_built_first_does_not_break_the_root_build', TIMEOUT, async t => {
   if (!needs(t, snapshotsMissing())) return;
   const w = helloWorkspace(t, { stack: 'csharp', kind: 'olympiad' });
@@ -246,7 +280,7 @@ test('All_three_kinds_build_then_dotnet_test_with_a_project_reference_then_build
 // The command line forces the policy as global properties, which a plain property in a project file cannot override. Measured 2026-11-04 (exit code of `bash build.sh` for `string s = null;` with the override in App.csproj): with the first
 // line (`TreatWarningsAsErrors` and `WarningsAsErrors` only) two overrides were stopped and four were not; with `Nullable`, `WarningsNotAsErrors`, `WarningLevel` and `NoWarn` forced as well, all six fail with CS8600.
 // The further rows are pinned below. Not stopped, from App.csproj alone: a local `Nullable`, a target that sets it, a response file, `NoWarn` metadata on a package item, and a source pragma. The rule for E3's scorer is:
-// App.csproj may differ from the template only by `<PackageReference Include Version>` items and nothing else (and a source pragma is symmetric with `@ts-ignore`).
+// App.csproj may differ from the template only by `<PackageReference Include Version>` items and nothing else (and a source pragma is symmetric with `@ts-ignore`). Superseded by parent D65 (the scorer scores as submitted, restores the frozen files and regenerates nothing); the text is kept as it was written.
 const OVERRIDES = Object.freeze([
   ['Nullable=disable', '<Nullable>disable</Nullable>'], ['TreatWarningsAsErrors=false', '<TreatWarningsAsErrors>false</TreatWarningsAsErrors>'], ['WarningsAsErrors empty', '<WarningsAsErrors />'],
   ['WarningsNotAsErrors=nullable', '<WarningsNotAsErrors>nullable</WarningsNotAsErrors>'], ['NoWarn=CS8600', '<NoWarn>CS8600</NoWarn>'], ['WarningLevel=0', '<WarningLevel>0</WarningLevel>'],

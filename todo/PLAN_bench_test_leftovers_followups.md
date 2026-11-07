@@ -129,6 +129,8 @@ Added 2026-11-04. **The symptom:** under a host load of 20–38 from other sessi
 
 *Dated 2026-11-05, §14 A1 step 0, a failure on the way:* `BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs` (1240 tests, 1239 pass, 1 fail, 498 s) failed `A_cancel_during_the_quiet_wait_of_the_real_wiring_ends_it_at_once` (`spikes/minigit-bench/test/bare-wiring.test.mjs:240`: "the 60 s window and the 30 min wait were cut short (6198 ms)"; the test is already on this list). `/proc/loadavg` was `9.45 9.40 6.77` at the start of the run and `6.76 7.24 6.97` at its end, other sessions on the host. The same worktree's `spikes/lang-bench` whole run (1785 of 1785) passed right before it. One failure, not two in a row: a whole minigit run follows.
 
+*Dated 2026-11-07, from the language comparison's F1.S1 (g); widens this list by one test, and past this plan's stated scope (`spikes/` only) to a C# test.* `The_wait_for_the_script_says_so_first_and_ends_at_the_callers_cancellation_with_the_child_stopped` (`tests/Bench.Tests/ModelArms/WslHostAwakeTests.cs:349`) waits in `Eventually` (`:357`) on a 15 s wall clock (`Patience`, `:24`). It failed once on a CI runner at 15.018 s on PR #173, which changes no C# file. Whether it is a timing dependency, a margin or a race is not decided. Nothing is built for it here; this plan's owner decides whether the wider scope counts as a change to this plan.
+
 ### S4 — `push-check.test.mjs` split by subject
 
 - The tests move into files named for their subject, each within 200–400 lines. No test is deleted or renamed. The list of

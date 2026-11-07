@@ -13,8 +13,21 @@ const GATE_TOOLS = new Set(['review_plan', 'review_code', 'review_document', 're
 const CONSULT_TOOLS = new Set(['consult', 'ask_consultants', 'close_consult']);
 const COAI_PREFIX = 'mcp__coai__';
 const CONTAINER_TOOLS = new Set(['Agent', 'Task']);
-const DOTNET_WORK = new Set(['build', 'restore', 'run', 'test', 'format']);
+const DOTNET_WORK = new Set(['build', 'restore', 'run', 'test', 'format', 'add']);
 const NPM_RUN_WORK = new Set(['test', 'typecheck', 'lint']);
+/**
+ * The work of the two stacks, side by side: each row is one kind of work and the commands of each stack that do it. Both columns are `build_test`, so the same work is counted whatever the stack (the time partition is compared
+ * across stacks). Running the built program directly (`dotnet <path>.dll`, `node <path>.ts`) is `build_test` for both, like `run.sh` and `dotnet run`: it is the loop of building, running and testing the program under work.
+ * A test reads this table and checks both columns.
+ */
+export const STACK_COMMAND_PAIRS = Object.freeze([
+  { what: 'build and type check', csharp: ['dotnet build -c Release -m:4'], node: ['tsc --noEmit', 'npx tsc -p .', 'npm run typecheck'] },
+  { what: 'restore the packages', csharp: ['dotnet restore'], node: ['npm ci', 'npm install'] },
+  { what: 'add a package', csharp: ['dotnet add package Foo --version 1.0.0'], node: ['npm install foo@1.0.0', 'npm i foo'] },
+  { what: 'run the program', csharp: ['dotnet run', 'dotnet bin/Release/net10.0/App.dll'], node: ['node src/main.ts'] },
+  { what: 'format and lint', csharp: ['dotnet format --verify-no-changes'], node: ['npx eslint .', 'npm run lint'] },
+  { what: 'run the tests', csharp: ['dotnet test'], node: ['node --test', 'npm test'] },
+]);
 const KEYWORDS = /^(?:(?:do|then|else|elif|if|while|until|!)\s+|[({]+\s*)+/;
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 /** Options of a wrapper that take a separate value word. */
@@ -28,6 +41,10 @@ const VALUE_OPTIONS = {
 /** Wrappers whose own options are skipped and whose next word is the real command. */
 const OPTION_WRAPPERS = new Set(['time', 'env', 'command', 'exec', 'npx', 'nice', 'ionice']);
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
+/** A shell by its name or its path (`/bin/bash`). */
+const isShell = word => SHELLS.has(String(word).replace(/^.*\//, ''));
+/** `source` and `.` run their script in the current shell. */
+const isSourcing = word => word === 'source' || word === '.';
 
 /** Split at `&&`, `||`, `;`, `|`, a single `&` and newlines that are outside quotes. Redirections (`2>&1`, `&>f`) are not separators. */
 export function splitTopLevel(command) {
@@ -83,12 +100,23 @@ function nodeRunsTests(rest) {
 }
 
 function npmIsWork(rest) {
-  if (rest[0] === 'ci' || rest[0] === 'test') return true;
+  if (['ci', 'test', 'install', 'i'].includes(rest[0])) return true;
   return rest[0] === 'run' && NPM_RUN_WORK.has(rest[1]);
 }
 
-/** The harness's own test entry points: the upstream `test-v*.sh` and the C# template's `scripts/run-tests.sh`. */
-const isHarnessScript = word => /(^|\/)(test-v[^/]*|run-tests)\.sh$/.test(word ?? '');
+/** The first word that is not an option (the script of `node`, the file of `source`, the dll of `dotnet`), or ''. */
+const firstWord = rest => rest.find(word => !word.startsWith('-')) ?? '';
+
+/** `dotnet build|restore|run|test|format|add`, or `dotnet <path>.dll` (the built program run directly: the counterpart of `node src/main.ts`). */
+const dotnetIsWork = rest => DOTNET_WORK.has(rest[0]) || /\.dll$/.test(firstWord(rest));
+
+/** The harness's own entry points: the upstream `test-v*.sh`, the C# template's `scripts/run-tests.sh`, and the workspace's `build.sh` and `run.sh`. Reading or editing one (`cat build.sh`) is not running it: the word must BE the command or the shell's script. */
+const isHarnessScript = word => /(^|\/)(test-v[^/]*|run-tests|build|run)\.sh$/.test(word ?? '');
+
+const isPython = word => /(^|\/)python3?$/.test(word);
+
+/** `python3 [options] runner/run_samples.py ...`: the first word that is not an option is the script (so `python3 -c "..."` and `python3 other.py` are not it). */
+const runsSamples = rest => /(^|\/)run_samples\.py$/.test(rest.find(word => !word.startsWith('-')) ?? '');
 
 /** For `bash [options] script` the script word; for `bash -c "cmd"` (also `-lc`) null and the command in `shellCommand`. */
 function shellParts(rest) {
@@ -101,17 +129,19 @@ function shellParts(rest) {
   return {};
 }
 
-const shellCommandOf = words => (SHELLS.has(words[0]) ? shellParts(words.slice(1)).command ?? null : null);
+const shellCommandOf = words => (isShell(words[0]) ? shellParts(words.slice(1)).command ?? null : null);
 
 /** Does this peeled segment build or test? (A `bash -c` argument is classified by the caller, recursively.) */
 function isBuildTest(words) {
   const [cmd, ...rest] = words;
   if (cmd === undefined) return false;
-  if (cmd === 'dotnet') return DOTNET_WORK.has(rest[0]);
+  if (cmd === 'dotnet') return dotnetIsWork(rest);
   if (cmd === 'npm') return npmIsWork(rest);
-  if (cmd === 'node') return nodeRunsTests(rest);
-  if (SHELLS.has(cmd)) return isHarnessScript(shellParts(rest).script);
-  if (cmd === 'make' || cmd === 'tsc') return true;
+  if (cmd === 'node') return nodeRunsTests(rest) || /\.ts$/.test(firstWord(rest));
+  if (isShell(cmd)) return isHarnessScript(shellParts(rest).script);
+  if (isSourcing(cmd)) return isHarnessScript(firstWord(rest));
+  if (isPython(cmd)) return runsSamples(rest);
+  if (cmd === 'make' || cmd === 'tsc' || cmd === 'eslint') return true;
   return isHarnessScript(cmd) || /\.Tests(\.exe)?$/i.test(cmd);
 }
 

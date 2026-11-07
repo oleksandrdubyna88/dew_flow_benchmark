@@ -20,7 +20,7 @@ export const isHistoryCheck = name => HISTORY_CHECKS.has(name);
 /** The findings of one text, by check name. `file` decides which placement rules apply; `body` is a PR or review body (links allowed). */
 export function scanText(file, text, inputs, { body = false } = {}) {
   const readme = file === 'README.md';
-  const visible = findVisibleRules(file, readme ? outsideAttribution(text) : text, { known: inputs.known, assumeVisible: body, links: !body });
+  const visible = findVisibleRules(file, readme ? outsideAttribution(text) : text, { known: inputs.known, stackWords: inputs.stackWords, assumeVisible: body, links: !body });
   return {
     leakcheck: findAidHits(file, text, inputs.aids, { mode: inputs.aidMode }),
     secrets: [...findSecrets(file, text), ...findOwnSecrets(file, text, inputs.ownSecrets ?? [])],

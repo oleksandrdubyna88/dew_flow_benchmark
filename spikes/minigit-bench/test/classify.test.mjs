@@ -1,7 +1,7 @@
 // The command and tool classifier (E1.S4, T-T2). Commands are written the way the series' agents write them.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { classifyCommand, classifyTool } from '../lib/classify.mjs';
+import { STACK_COMMAND_PAIRS, classifyCommand, classifyTool } from '../lib/classify.mjs';
 
 const all = (commands, expected) => {
   for (const c of commands) assert.equal(classifyCommand(c), expected, c);
@@ -46,6 +46,23 @@ test('Build_and_test_commands_are_work', () => {
   ], 'build_test');
 });
 
+test('A_shell_running_build_sh_or_run_sh_is_build_test', () => {
+  all([
+    'bash build.sh', 'sh build.sh', './build.sh', 'bash ./run.sh', 'cd ws && bash build.sh', "bash -c 'bash build.sh'", 'timeout 600 bash build.sh',
+    '/bin/bash build.sh', 'source build.sh', '. ./build.sh', 'source ./run.sh',
+  ], 'build_test');
+});
+
+test('The_visible_samples_runner_is_build_test', () => {
+  all([
+    'python3 runner/run_samples.py samples/', 'python3 -I runner/run_samples.py samples/', '/usr/bin/python3 -I runner/run_samples.py samples/',
+  ], 'build_test');
+});
+
+test('Reading_or_editing_the_scripts_is_not_build_test', () => {
+  all(['cat build.sh', 'sed -n 1,5p run.sh', 'chmod +x build.sh', 'grep exec run.sh', 'python3 -c "print(1)"', 'source ~/.profile', '. ~/.bashrc', 'cat ./build.sh', 'dotnet new console', 'node scripts/tool.mjs'], 'other_tool');
+});
+
 test('Build_commands_behind_a_wrapper_or_a_chain_are_still_work', () => {
   all([
     'node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4',
@@ -78,7 +95,7 @@ test('Polling_loops_and_plain_sleeps_are_waits', () => {
 });
 
 test('Other_commands_are_other_tool', () => {
-  all(['git status', 'ls -la', 'cat src/a.cs', 'gh pr checks 12', 'grep -rn "dotnet build" docs', 'echo "node --test"', 'npm install', ''], 'other_tool');
+  all(['git status', 'ls -la', 'cat src/a.cs', 'gh pr checks 12', 'grep -rn "dotnet build" docs', 'echo "node --test"', ''], 'other_tool');
 });
 
 test('Operators_inside_quotes_do_not_split_a_command', () => {
@@ -174,4 +191,18 @@ test('More_keywords_wrappers_and_separators_are_understood', () => {
   assert.equal(classifyCommand('dotnet build 2>&1 | tail -5'), 'build_test');
   assert.equal(classifyCommand('echo a >&2'), 'other_tool');
   assert.equal(classifyCommand('ls &> /dev/null'), 'other_tool');
+});
+
+test('Each_csharp_command_and_its_node_counterpart_classify_the_same_and_that_is_the_point', () => {
+  assert.ok(STACK_COMMAND_PAIRS.length >= 6, 'the table is not empty');
+  for (const row of STACK_COMMAND_PAIRS) {
+    assert.ok(row.csharp.length > 0 && row.node.length > 0, `${row.what}: both columns have a command`);
+    all(row.csharp, 'build_test');
+    all(row.node, 'build_test');
+  }
+});
+
+test('Running_the_built_program_directly_is_build_test_for_both_stacks', () => {
+  all(['dotnet bin/Release/net10.0/App.dll', 'dotnet ./bin/Release/net10.0/App.dll --port 5000', 'node src/main.ts', 'node --no-warnings src/main.ts'], 'build_test');
+  all(['dotnet --version', 'node --version', 'node'], 'other_tool');
 });

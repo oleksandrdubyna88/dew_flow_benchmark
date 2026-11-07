@@ -34,7 +34,9 @@ export function rehearsalHeldout({ dir, task }) {
     writeFileSync(path.join(casesDir, `${id}.out`), f.output);
   }
   writeFileSync(path.join(casesDir, 'cases.txt'), `# the rehearsal fixtures\n${FIXTURE_CASES.map(([id]) => `${id} bytes R1`).join('\n')}\n`);
-  return Object.freeze({ task: task.id, dir, casesDir, caseIds: FIXTURE_CASES.map(([id]) => id), traps: [], treeSha256: casesTreeHash(casesDir), rehearsal: true });
+  const tree = casesTreeHash(casesDir);
+  if (!tree.ok) throw new Error(`the rehearsal wrote only regular files into ${casesDir}, yet ${tree.reason}`);
+  return Object.freeze({ task: task.id, dir, casesDir, caseIds: FIXTURE_CASES.map(([id]) => id), traps: [], treeSha256: tree.value, rehearsal: true });
 }
 
 /** The hello overlay of a stack and kind: `{ relPath: { bytes, mode } }`. */

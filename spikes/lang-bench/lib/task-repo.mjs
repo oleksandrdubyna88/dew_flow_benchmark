@@ -12,8 +12,8 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { checkDestination, lstatOrNull, writeAtomically } from './workspace-destination.mjs';
 
-/** The commit of the task repository's `main` that `inputs/hashes-lang.txt` describes (FORMAT v2, gated). */
-export const PINNED_TASK_SHA = '40e678fe458dedb220afd4a99fd478f3d39157f9';
+/** The commit of the task repository's `main` that `inputs/hashes-lang.txt` describes (FORMAT v2 with its first amendment, gated). */
+export const PINNED_TASK_SHA = '4ddb8f80e84eef8b61db646fdf79560adb885a81';
 export const HASHES_PATH = fileURLToPath(new URL('../inputs/hashes-lang.txt', import.meta.url));
 export const defaultCacheDir = () => path.join(os.homedir(), '.cache', 'lang-v2');
 

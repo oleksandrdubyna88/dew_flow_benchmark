@@ -183,7 +183,17 @@ export const DIFFERENCES = Object.freeze([
 ]);
 
 /** The differences list of a task: the olympiad pilot's, or the quick run's own. */
-const differencesOf = task => (task.quick === true ? [...QUICK_BASE, ...extraDifferencesOf(task)] : [...DIFFERENCES, ...extraDifferencesOf(task)]);
+/** From this date v1's classifier counts the build, run and sample commands (F1.S1 (b)); a note dated earlier says what was true when it was made, and the recorded notes are reproduced byte for byte. */
+export const CLASSIFIER_WIDENED_ON = '2026-11-07';
+const NOT_WIDENED = DIFFERENCES.findIndex(line => line.includes('is not widened'));
+const WIDENED = 'Build and test time is reported beside the time partition, not inside it (v1\'s classifier counts `build.sh`, `run.sh`, the visible-samples runner and the same work of both stacks as build_test from 2026-11-07; the sessions of this note were recorded earlier and were not recomputed).';
+
+/** The differences of a note dated `date`: the olympiad pilot's list says the classifier is not widened until the date it was. */
+export function differencesOf(task, date) {
+  if (task.quick === true) return [...QUICK_BASE, ...extraDifferencesOf(task)];
+  const base = date >= CLASSIFIER_WIDENED_ON ? DIFFERENCES.map((line, i) => (i === NOT_WIDENED ? WIDENED : line)) : DIFFERENCES;
+  return [...base, ...extraDifferencesOf(task)];
+}
 
 /** The pins and the subject, by sha, harness path and date (`common.measurement` rule 6). */
 function pinLines({ input }) {
@@ -226,7 +236,7 @@ export function renderNote(input) {
     '## Pairs', '', ...pairTable(input.pairs), '',
     '## Cost per correct solution', '', ...cpcLines(input.cpc), '',
     '## Voids, contamination and timeouts', '', ...incidentLines(cells), '',
-    '## Differences from v2\'s harness', '', ...differencesOf(input.task).map(d => `- ${d}`), '',
+    '## Differences from v2\'s harness', '', ...differencesOf(input.task, input.date).map(d => `- ${d}`), '',
     '## What this does not settle', '', notSettledOf(input.task), '',
   ].join('\n');
 }
