@@ -75,8 +75,12 @@ export function runShProblem(text) {
   return last !== undefined && last.startsWith('exec ') ? null : 'run.sh must end with a line that starts with `exec `: the program has to replace the shell, or a stop signal sent to the process never reaches it';
 }
 
-/** The `.npmrc` of every Node workspace template: the offline file and no update check (the check asks the registry once per npm call, which an agent box without a registry logs as a refused request). */
-export const NPMRC_WORKSPACE = `${NPMRC_OFFLINE}update-notifier=false\n`;
+/**
+ * The `.npmrc` of every Node workspace template: the offline file; no update check (the check asks the registry once per npm call, which an agent box without a registry logs as a refused request); no lifecycle script
+ * of any package runs (`ignore-scripts=true`: a `preinstall`, `install`, `postinstall` or `prepare` could rewrite a frozen file during the build, D65); and a package an agent installs is written at its exact version
+ * (`save-exact=true`: no range for a later install to move).
+ */
+export const NPMRC_WORKSPACE = `${NPMRC_OFFLINE}update-notifier=false\nignore-scripts=true\nsave-exact=true\n`;
 
 /** The pin of a built workspace's `runner/` (the same pin as the bench's own folder, the grammar file left out: the pin refuses any non-.py file). */
 export const runnerHash = dir => computePin(dir, folder => readdirSync(folder).filter(name => name !== GRAMMAR));
