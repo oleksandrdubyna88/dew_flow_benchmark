@@ -39,3 +39,6 @@ export function harnessMovedProblem({ inputs, stack, files, now = { runnerPin: r
   ];
   return said.length === 0 ? null : `harness-moved: ${said.join('; ')}: a series is run on one harness, so its sessions are not built or scored here (rescore reads a kept tree against the series' history)`;
 }
+
+/** The same comparison for every stack of the series' workspaces (`world.filesFor(stack)`), the first problem found, or null. For the check before a pair is launched. */
+export const harnessMovedForStacks = ({ inputs, world, stacks }) => stacks.map(stack => harnessMovedProblem({ inputs, stack, files: world.filesFor(stack) })).find(Boolean) ?? null;

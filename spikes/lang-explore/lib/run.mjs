@@ -17,7 +17,10 @@ import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from '.
 import { allOk } from './chain.mjs';
 import { calibrationFor, loadCalibration } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
-import { canonicalNameProblem, isRehearsal, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
+import { STACK_ORDER, canonicalNameProblem, isRehearsal, ledgerFileOf, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
+import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { systemClock } from './clock.mjs';
+import { harnessMovedForStacks } from './harness-moved.mjs';
 import { finishInterrupted, interruptedPair } from './finish.mjs';
 import { pauseVerdict } from './pause.mjs';
 import { acquirePlanLock } from './plan-lock.mjs';
@@ -133,6 +136,19 @@ async function prerequisites({ home, series, task, worldFn, tokenFn }) {
   return quick ? fail(quick) : ok({ calibration, heldout, world, token, prompts });
 }
 
+/**
+ * A series is run on one harness (`harness-moved.mjs`): a quick pair is refused BEFORE it is planned or launched when the harness of today is not the one the series was made with (or the series recorded none), so no session starts and
+ * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). The scoring step keeps its own check as the second line of defence. -> a result, or null.
+ */
+function harnessRefusal({ series, pair, world, io }) {
+  if (world.quick !== true) return null;
+  const inputs = seriesInputs(series.dir);
+  const problem = inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
+  if (problem === null) return null;
+  appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
+  return { exit: 3, message: problem };
+}
+
 const quickProblem = ({ series, heldout, task }) => (isQuick(task) ? quickHeldoutProblem({ seriesDir: series.dir, heldout, task }) : null);
 
 /** The plan reaches the run map only now, when everything the pair needs is in hand: a pair that cannot start leaves run-map.json as it was. */
@@ -167,15 +183,23 @@ async function finishedIfInterrupted({ series, pair, rerun, io, task }) {
 
 const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 
+/** What the pair needs, or the answer that ends it here: a missing prerequisite (exit 4) or a harness that moved (exit 3, see `harnessRefusal`). -> `{ need }` | `{ answer }`. */
+async function readyOrRefused({ series, pair, io, task }) {
+  const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn });
+  if (!need.ok) return { answer: { exit: 4, message: need.reason } };
+  const moved = harnessRefusal({ series, pair, world: need.value.world, io });
+  return moved ? { answer: moved } : { need: need.value };
+}
+
 async function runPlanned({ series, pair, rerun, io, explore, task }) {
   const planned = planOnPins({ series, pair, rerun, task });
   if (!planned.ok) return { exit: 4, message: planned.reason };
   const pause = pauseOf({ io, explore, task });
   if (pause.stop) return { exit: 2, message: pause.message };
   await io.afterPauseCheck?.(); // a seam for tests: a run that has passed the check and holds the plan lock
-  const need = await prerequisites({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn });
-  if (!need.ok) return { exit: 4, message: need.reason };
-  return loopAndFinalize({ series, pair, planned: planned.value, ...need.value, io, abort: io.abort, pause: pause.record });
+  const ready = await readyOrRefused({ series, pair, io, task });
+  if (ready.answer) return ready.answer;
+  return (io.runSeams?.loopFn ?? loopAndFinalize)({ series, pair, planned: planned.value, ...ready.need, io, abort: io.abort, pause: pause.record });
 }
 
 /** A resume first lets v1 settle what a crash left `launching` (charge from the broker ledger, class `void: harness`, or plan again a session that never paid); a fresh pair has nothing to settle. */
