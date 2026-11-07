@@ -9,18 +9,14 @@ import { extractGrammar } from '../../lang-bench/tools/grammar-extract.mjs';
 import { loadInputs } from '../../lang-bench/lib/workspace-build.mjs';
 import { renderPackagesMd } from '../../lang-bench/lib/packages-md.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { SCRIPTS, frozenOf } from './frozen-set.mjs';
 import { parseScenarioSamples } from './samples-sd.mjs';
+
+export { PIN_FILES, frozenOf } from './frozen-set.mjs';
 
 const BENCH = fileURLToPath(new URL('../../lang-bench/', import.meta.url));
 export const BENCH_TEMPLATES = path.join(BENCH, 'templates');
 export const BENCH_RUNNER = path.join(BENCH, 'runner');
-const SCRIPTS = new Set(['build.sh', 'run.sh']);
-
-/** The files the agent was told are frozen, besides the template's scripts: the stack's pin files. The project file (`App.csproj`), `package.json` and `package-lock.json` are the agent's to edit (D65). */
-export const PIN_FILES = Object.freeze({
-  csharp: Object.freeze(['global.json', 'nuget.config', 'Directory.Build.props']),
-  node: Object.freeze(['.npmrc', 'tsconfig.json', 'eslint.config.mjs']),
-});
 
 /** The stack sentence of the plan's section 4.5 as D67 (5) amended it: no word about pinned project files. */
 export function quickStackSentence(explore, stack) {
@@ -81,7 +77,7 @@ function parsedParts({ stack, kind, sources, inputs }) {
 function filesFrom({ explore, task, stack, sources, inputs, templates, runner, samples, grammar, packages }) {
   const statement = quickStatement({ spec: sources.spec, kind: task.kind, stackSentence: quickStackSentence(explore, stack), frameworkSentence: frameworkSentence(explore, stack, inputs.record) });
   const files = {
-    ...filesOf(path.join(templates, stack, task.kind), '', rel => (SCRIPTS.has(rel) ? 0o755 : 0o644)),
+    ...filesOf(path.join(templates, stack, task.kind), '', rel => (SCRIPTS.includes(rel) ? 0o755 : 0o644)),
     ...filesOf(runner, 'runner/', () => 0o644),
     'runner/GRAMMAR.md': { bytes: grammar.bytes, mode: 0o644 },
     'PACKAGES.md': { bytes: Buffer.from(packages), mode: 0o644 },
@@ -92,12 +88,6 @@ function filesFrom({ explore, task, stack, sources, inputs, templates, runner, s
     files[`samples/${s.id}.out`] = { bytes: Buffer.from(s.output), mode: 0o644 };
   }
   return files;
-}
-
-/** The frozen subset of a file map: the scripts, the statement, the packages list, the samples, the runner and the stack's pin files. */
-export function frozenOf(files, stack) {
-  const pin = new Set([...SCRIPTS, ...PIN_FILES[stack], 'STATEMENT.md', 'PACKAGES.md']);
-  return Object.fromEntries(Object.entries(files).filter(([rel]) => pin.has(rel) || rel.startsWith('samples/') || rel.startsWith('runner/')));
 }
 
 /** The visible samples as the scoring needs them: `[{ id, input, output }]`. */

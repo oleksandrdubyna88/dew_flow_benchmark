@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { AGENT_EDITABLE, DERIVED_FILES, PIN_FILES, SCRIPTS } from '../../lang-explore/lib/frozen-set.mjs';
 import { NPM_OFFLINE_ENV, offlineNugetConfig, workspaceNugetConfig } from '../lib/cache-offline.mjs';
 import { caseKeysIn, unlistedKeys } from '../lib/exec-layer/env.mjs';
 import { snapshotBoxOf, workspaceBuildEnv } from '../lib/workspace-box.mjs';
@@ -89,8 +90,7 @@ test('A_run_sh_whose_last_line_does_not_exec_fails_the_check', () => {
 
 // ---- the frozen files, named in build.sh ----------------------------------------------------------------------------------------------------------
 
-const AGENT_EDITABLE = Object.freeze({ csharp: ['App.csproj'], node: ['package-lock.json', 'package.json'] });
-const DERIVED_OR_SCRIPT = Object.freeze(['build.sh', 'run.sh', 'PACKAGES.md', 'STATEMENT.md']);
+const DERIVED_OR_SCRIPT = Object.freeze([...SCRIPTS, ...DERIVED_FILES]);
 
 /** The names a build.sh lists after "pin files ...:" in its comment line. */
 const frozenNamesIn = text => (text.split('\n').find(line => line.startsWith('#') && /pin files/.test(line)) ?? '').replace(/^.*:\s*/, '').replace(/\.$/, '').split(', ').filter(Boolean).sort();
@@ -101,6 +101,7 @@ test('The_build_script_names_the_frozen_files_of_its_stack_and_the_list_agrees_w
     const names = listed.filter(pattern => pattern.startsWith(`${stack}/<t>/`)).map(pattern => pattern.slice(`${stack}/<t>/`.length)).filter(name => !name.includes('/'));
     const expected = names.filter(name => !DERIVED_OR_SCRIPT.includes(name) && !AGENT_EDITABLE[stack].includes(name)).sort();
     assert.ok(expected.length >= 3, `${stack}: the list names the pin files`);
+    assert.deepEqual(expected, [...PIN_FILES[stack]].sort(), `${stack}: the push check's list and the frozen list agree`);
     for (const kind of KINDS) assert.deepEqual(frozenNamesIn(readTemplate(stack, kind, 'build.sh')), expected, `${stack}/${kind}: the build.sh line is the frozen files of the list`);
   }
 });
