@@ -194,7 +194,7 @@ async function loopAndFinalize({ series, pair, planned, calibration, heldout, wo
   });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
-  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say, signal: io.signal }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
+  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say, signal: io.signal, sameHarness: true }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
   commitPlan({ series, pair, planned, say: io.say });
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };

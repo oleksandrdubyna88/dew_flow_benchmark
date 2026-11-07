@@ -56,7 +56,7 @@ export function passSeams({ a, profile, seams = {}, seriesDir }) {
     affinity: { probe: seams.probeFn ?? (cpus => probeMask({ cpus })) },
     seriesState: () => launchingIn(seriesDir),
     growth: { loaded: seams.growthFn ?? (() => loadGrowth()) },
-    limits: a.limits, traps: a.traps ?? [], say: a.say,
+    limits: a.limits, traps: a.traps ?? [], say: a.say, ...(a.harnessProblem === undefined ? {} : { harnessProblem: a.harnessProblem }),
     spec: { caseWallMs: profile.caseWallMs, holdSeconds: holdForCaseWall(profile.caseWallMs), runCeilingMs: profile.runCeilingMs },
   };
 }

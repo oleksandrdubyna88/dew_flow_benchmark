@@ -15,7 +15,8 @@ import { probeMask } from './affinity.mjs';
 import { systemClock } from './clock.mjs';
 import { maskReadBack } from './mask-preflight.mjs';
 import { scorePasses } from './passes.mjs';
-import { ledgerFileOf, runMapFileOf } from './series.mjs';
+import { harnessMovedProblem, driftSeamsOf } from './harness-moved.mjs';
+import { ledgerFileOf, runMapFileOf, seriesInputs } from './series.mjs';
 import { fillWorkspace, fillerFor } from './workspace.mjs';
 import { loadPrompts, planForSession } from './plan.mjs';
 import { recordPlan } from './readback.mjs';
@@ -82,10 +83,20 @@ function loopAnswerOf(run) {
   return { kind: 'environment', reason: run.reason };
 }
 
+/** What `run` adds to a quick scoring: the series' drift seams (as a rescore is given) and the check that the harness is the one the series was made with (`harness-moved.mjs`); inputs that cannot be read are a halt too. */
+function sameHarnessExtra({ world, stack, seriesDir }) {
+  const read = seriesInputs(seriesDir);
+  if (!read.ok) return { harnessProblem: () => `harness-moved: ${read.reason}` };
+  return { ...driftSeamsOf({ inputs: read.value, world }), harnessProblem: () => harnessMovedProblem({ inputs: read.value, stack, files: world.filesFor(stack) }) };
+}
+
 /** The quick world's scoring: ten passes from one committed build, under the series lock the caller holds. */
-async function scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, signal, call }) {
+async function scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, sameHarness, signal, call }) {
   const seriesDir = path.dirname(path.dirname(call.session));
-  const seams = world.passSeams({ stack: call.stack, source: call.source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, say, driftPossible: scoreExtra.driftPossible === true, history: scoreExtra.history, seriesDir });
+  const extra = sameHarness ? { ...scoreExtra, ...sameHarnessExtra({ world, stack: call.stack, seriesDir }) } : scoreExtra;
+  const seams = world.passSeams({
+    stack: call.stack, source: call.source, limits: calibration.limits, sets: [{ name: 'heldout', dir: heldout.casesDir }], traps: heldout.traps, say, driftPossible: extra.driftPossible === true, history: extra.history, harnessProblem: extra.harnessProblem, seriesDir,
+  });
   const run = await scorePasses({ ...seams, work: path.join(call.session, 'score'), seriesDir, signal, now: systemClock });
   return loopAnswerOf(run);
 }
@@ -94,11 +105,11 @@ async function scoreByPasses({ world, calibration, heldout, home, say, scoreExtr
  * The scoring step of the loop: the judge over the session's tree, with its own caches. Writes `<session>/score/score.json`. A harness failure (a process left in a scope) is `failed`, which stops the pilot.
  * A quick world scores through the ten passes (`world.passSeams`, F1.S2); the olympiad's world and a test's fake one through `world.scoreFn`, as they always did. `signal` ends the passes between two attempts; `singlePass` (the rehearsal, a free check of the pipeline and no verdict) keeps the one-pass scoring.
  */
-export function scoreSessionDep({ world, calibration, heldout, home, say = () => {}, scoreExtra = {}, signal, singlePass = false }) {
+export function scoreSessionDep({ world, calibration, heldout, home, say = () => {}, scoreExtra = {}, signal, singlePass = false, sameHarness = false }) {
   const byPasses = world.passSeams !== undefined && !singlePass;
   return async ({ session, source, stack, nugetCache, npmCache }) => {
     mkdirSync(path.join(session, 'score'), { recursive: true });
-    if (byPasses) return scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, signal, call: { session, source, stack } });
+    if (byPasses) return scoreByPasses({ world, calibration, heldout, home, say, scoreExtra, sameHarness, signal, call: { session, source, stack } });
     return scoreOnce({ world, calibration, heldout, home, say, scoreExtra, call: { session, source, stack, nugetCache, npmCache } });
   };
 }

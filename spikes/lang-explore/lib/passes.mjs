@@ -142,8 +142,19 @@ function treeStep(c) {
   return tree.ok ? { needsPasses: true } : { answer: halted(c, 'build-record-mismatch', tree.reason) };
 }
 
-/** Make the build (no record yet): drop what an earlier build left uncommitted, then build, up to the three tries of a build that never began. */
+/** A harness that moved since the series was made halts the scoring before anything is touched (`harnessProblem`, see `harness-moved.mjs`; absent for a rescore, which judges drift by the series' history). -> a halt, or null. */
+function harnessHalt(c) {
+  const moved = c.harnessProblem?.() ?? null;
+  return moved ? halted(c, 'harness-moved', moved) : null;
+}
+
+/** Make the build (no record yet): first the harness check; then drop what an earlier build left uncommitted, then build, up to the three tries of a build that never began. */
 async function commitStep(c) {
+  const moved = harnessHalt(c);
+  return moved ? { answer: moved } : buildAfresh(c);
+}
+
+async function buildAfresh(c) {
   const dropped = discardUncommitted(c.work);
   if (dropped.length > 0) noteEvent(c, 'discard', { reason: 'uncommitted build state was removed', removed: dropped });
   for (let used = buildTriesUsed(c); used < BUILD_TRIES; used += 1) {

@@ -3,8 +3,8 @@
 // standard output. It changes no record, no run-map entry, no verdict and no spend, and it writes no `score.json`: its result is a diagnostic reading, and the file says so.
 //   - It takes the series lock itself and refuses at once while a run holds it.
 //   - It refuses a series whose frozen pins are not the task's pins now.
-//   - The frozen files of the copy are today's frozen set. The series recorded no frozen set of its own, so a change under `runner/` is reported as harness drift when the runner pin moved since the series was made
-//     (or the series recorded none), as in a rescore; the file says so.
+//   - The frozen files of the copy are today's frozen set. The series recorded no frozen set of its own, so a change to a template file, a runner file or a generated file is judged by its bytes against the series' history, as in a
+//     rescore (the world's `scoreFn` passes `history`); the file says so, and names the files that could not be judged (`undecidedDrift`) and the contract the score was made under (`contractIdentity`).
 //   - A run that is the harness failing (kind `environment`) is recorded as a void run, never as a verdict.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,9 +13,8 @@ import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { allOk } from './chain.mjs';
 import { systemClock } from './clock.mjs';
-import { runnerDriftPossible, runnerPinNow } from './harness-pin.mjs';
-import { legacyGenerated } from './generated-drift.mjs';
-import { templateHistory } from './template-drift.mjs';
+import { driftSeamsOf } from './harness-moved.mjs';
+import { runnerPinNow } from './harness-pin.mjs';
 import { calibrationFor } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
 import { heldoutOf } from './rescore.mjs';
@@ -60,7 +59,7 @@ export function runLine({ run, scored, id }) {
   return {
     run, void: false, build: { ok: explore.build.ok, status: explore.build.status ?? null, wallMs: explore.build.wallMs ?? null, timedOut: explore.build.timedOut ?? false },
     verdict: c?.verdict ?? null, reason: c?.reason ?? '', wallMs: c?.wallMs ?? null, peakBytes: c?.peakBytes ?? null, firstMismatch: c?.firstMismatch ?? null, runner: explore.runner ?? null,
-    memoryCertified: explore.memoryCertified ?? null, harnessDrift: explore.harnessDrift ?? [], nonRegularLeftOut: explore.nonRegularLeftOut ?? [], frozenChanges: explore.frozenChanges,
+    memoryCertified: explore.memoryCertified ?? null, harnessDrift: explore.harnessDrift ?? [], undecidedDrift: explore.undecidedDrift ?? [], contractIdentity: explore.contractIdentity ?? null, nonRegularLeftOut: explore.nonRegularLeftOut ?? [], frozenChanges: explore.frozenChanges,
   };
 }
 
@@ -107,8 +106,8 @@ const stopped = ({ io, done, times }) => ({ exit: io.abort?.exit ?? 130, message
 /** The runs and the one file, inside the scratch folder `work`. -> the result. */
 async function replayIn({ io, need, seriesDir, entry, layout, rid, caseId, times, work, now, stamp }) {
   const inputs = seriesInputs(seriesDir).value;
-  const driftPossible = runnerDriftPossible({ inputs });
-  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, history: templateHistory({ inputs, legacy: legacyGenerated({ world: need.world, inputs }) }), work, say: io.say, signal: io.signal });
+  const { driftPossible, history } = driftSeamsOf({ inputs, world: need.world });
+  const runs = await runAll({ need: { ...need, home: io.home }, entry, layout, caseId, times, driftPossible, history, work, say: io.say, signal: io.signal });
   if (runs.length < times) return stopped({ io, done: runs.length, times });
   const body = { diagnostic: true, note: DIAGNOSTIC_NOTE, rid, caseId, stack: entry.stack, times, at: now.toISOString(), runner: runnerPinNow(), driftPossible, sessionClass: entry.class, runs };
   const file = writeResult({ layout, stamp, body });
