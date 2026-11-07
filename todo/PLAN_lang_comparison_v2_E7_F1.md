@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, F1 stories: the harness and the verdict — the carry-ins, repeated scoring with the one memory value, the submission contract and the offered set
 
-> Status: **plan only, 2026-11-07: F1's stories document, written when F1 starts (the parent's epoch 9 is open). F1.S1 (a) and (f) are recorded as done here; F1.S1 (b) to (e) and (g), F1.S2 and F1.S3 are open. F1.S2 is a cornerstone: its spec is Fable's and is not yet copied in.**
+> Status: **plan only, 2026-11-07: F1's stories document, written when F1 starts (the parent's epoch 9 is open). F1.S1 (a) is recorded as done here; F1.S1 (b) to (g), F1.S2 and F1.S3 are open ((f) reopened 2026-11-07: only its plan-id half is done). F1.S2 is a cornerstone: its spec is Fable's and is not yet copied in.**
 > Epic F1 of [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (*Operative plan for epoch 9*, *Epics in force*, F1). A
 > stories document keeps no ledger: its changes are entries in the parent (`common.plan-change-control`), and writing it when
 > the epic starts is not a change. Read at `main` `0214a3eb` (#178, the epoch 9 revision). Scope: `spikes/lang-explore/`,
@@ -140,7 +140,7 @@ exit 0 on the moved pins.
 | (c) | the C# compile's letter case recorded, never changed; carry items 2 to 4 | open | PR 3 |
 | (d) | the held-out reader refuses anything but regular files | open | PR 5 |
 | (e) | the bench's side of FORMAT's first amendment merged forward | open (branch built, unmerged) | PR 2 |
-| (f) | no plan id in an agent-visible runner file | **done for plan ids**: #173 `00d88233` | none; recorded here (PR 1) |
+| (f) | T-L64's text half: no plan id and no stack name in an agent-visible runner comment, the scan in the push check, the `ast` proof | **open**: the plan-id half is done by #173 `00d88233`; the rest is not | PR 6 |
 | (g) | the wall-clock C# test goes to the leftovers plan | open | PR 3 |
 
 ### (a) #164 and #167 — done
@@ -168,7 +168,14 @@ again and nothing is built. **Done when:** this document records it, which it do
 - The recompute (`spikes/lang-explore/test/quick-repartition.test.mjs`, a fixture session made of invented stream lines):
   `The_recomputed_partition_moves_a_build_sh_call_from_other_tool_to_build_test_and_still_sums_to_the_wall`;
   `The_recompute_writes_a_new_dated_file_and_never_changes_a_record_or_an_earlier_file` (the session's `record.json` keeps its
-  bytes; an output file that exists already is refused, never overwritten);
+  bytes; an earlier result keeps its bytes and its name);
+  `Two_runs_in_the_same_second_with_changed_inputs_write_two_results_with_two_names` (a fixed clock seam; the generation ids
+  differ, no file is replaced);
+  `A_run_over_unchanged_inputs_reports_the_existing_complete_result_and_writes_nothing` (its path is printed, the folder's
+  listing is the same before and after);
+  `A_temporary_file_left_by_a_killed_run_is_never_read_as_a_result_and_a_retry_completes` (a fixture temporary file with a dead
+  owner and half a JSON body: the retry writes a complete result under a new name and removes the stale file; one with a live
+  owner is left and named);
   `A_session_whose_stamped_stream_is_missing_is_listed_with_its_reason_and_never_as_zero`.
 
 **Brief (Sonnet coder).**
@@ -187,16 +194,26 @@ again and nothing is built. **Done when:** this document records it, which it do
    `explore.mjs` and `lib/commands.mjs`. It reuses v1's path, never a second partition: for each session folder `s/<rid>/` of
    the series it builds the spans and the partition the way `smokeViews` does (`spikes/minigit-bench/lib/smoke-verdicts.mjs:58`,
    with `spansFrom` and `partition` from `timeline.mjs`), from the retained `stream.stamped.ndjson`, `otel/` and `meta.json`.
-   It writes one new file per series, `<series>/partition-recomputed-<yyyy-mm-dd>.json`: per rid the stack, the old categories
-   (read from `record.json`), the new categories, and whether the new partition sums to the wall. It writes the file under a
-   temporary name and renames it, so an interrupted run leaves no partial file, and it writes nothing else. Run
-   it over the six series of `~/rsd/lang-v2/briefs/quick-series.txt`; the files stay in the private area, outside git.
+   **The result and its name.** One result file per run, `<series>/partition-recomputed/<yyyymmddTHHMMSSZ>-<gen>.json`: a UTC
+   timestamp and a short generation id (8 hex digits from a random source), so a second run the same day, or the same second,
+   never takes an existing name. A result is immutable once written: never edited, never renamed again, never removed. It holds
+   per rid the stack, the old categories (read from `record.json`), the new categories, and whether the new partition sums to
+   the wall; and at its head `complete: true` and a fingerprint of its inputs (the classifier's identity, the sha256 of
+   `classify.mjs` and of each session's evidence files read). **Before it writes**, the verb looks in that folder for a complete
+   result with the same fingerprint; if there is one, it reports that file's path and exits 0 without writing anything. A
+   result whose fingerprint differs (the classifier or the evidence moved) is kept, and the new run writes a new name beside it.
+   **Interrupted runs.** The verb writes to a temporary file in the same folder, named with the owned-name helper
+   (`ownedFor({ token: 'bench' })`, so its owner can be read) and with a `.tmp` suffix, fsyncs it and renames it to the final
+   name in one step. A temporary file is never read as a result. A retry first looks for a complete result, as above; it never
+   reuses or appends to an earlier temporary file, and it removes a stale one only when its owner is gone, by the owner rules of
+   `common.test-leftovers`; one whose owner still runs is left alone and named in the output. Run it over the six series of
+   `~/rsd/lang-v2/briefs/quick-series.txt`; the files stay in the private area, outside git.
 4. **Docs.** `research/lang-v2/EXPLORE_quick_2026-11-06_analysis.md` gets one dated line under its `build_test` point (`:50`)
    and one under "Fix the classifier" (`:58`): done, with the per-stack count of sessions and the summed `build_test` seconds
    from the new files (counts and times only). `research/module_lang_explore.md` names the verb.
 
-**Done when:** the three classifier tests and the recompute tests went red, green, red; the six files exist; at least one C#
-session of a retained stream has `build_test` above zero in them (the parent's done-when); every recomputed partition sums to
+**Done when:** the three classifier tests and the recompute tests went red, green, red; a complete result exists for each of the six
+series; at least one C# session of a retained stream has `build_test` above zero in them (the parent's done-when); every recomputed partition sums to
 the wall or says why not; §7's checks for PR 4.
 
 ### (c) the C# compile's letter case, recorded and never changed; carry items 2 to 4
@@ -294,16 +311,60 @@ FORMAT's first amendment is on the task repository's `main` (its PR #3, `4ddb8f8
 **Done when:** merged; the three `--check` tools exit 0 on `main`; F1.S2's memory amendment then moves the pins once more
 (parent F1.S1 (e)).
 
-### (f) no plan id in an agent-visible runner file — done for plan ids
+### (f) T-L64's text half: no plan id and no stack name in an agent-visible runner comment — open
 
-**Proof.** #173 (`00d88233`) removed the plan ids from the agent-visible runner files and added
+**Done part.** #173 (`00d88233`) removed the plan ids from the agent-visible runner files and added
 `spikes/lang-explore/test/quick-agent-visible.test.mjs`:
 `No_file_an_agent_is_given_names_a_plan_item_a_decision_a_story_or_a_review_finding` and its companion
 `The_pattern_finds_the_ids_it_is_meant_to_find_and_leaves_ordinary_words_and_codes_alone`, over `lang-bench/runner`,
-`lang-bench/templates` and `lang-explore/runner`; 2 of 2 pass on `main` (2026-11-07). **What it does not show** of T-L64's
-text half: no stack name in the runner's comments, the scan inside the push check's workspace check, and the `ast` proof (§2:
-`rs_abort.py` still names the stacks in its comments). Whether those clauses still hold in Stage 1 is the team lead's call
-(§10, item 2); this document records the plan-id half as done and nothing more.
+`lang-bench/templates` and `lang-explore/runner`; 2 of 2 pass on `main` (2026-11-07). They stay.
+
+**Open part** (the team lead's resolution (2) in §10: it satisfies the plan as written, so it is not a change). The runner is
+copied whole into the workspace of both stacks, so a stack name in its comments tells each agent what the other side is.
+`spikes/lang-bench/runner/rs_abort.py` names the stacks in comments and docstrings at `:2`, `:6`, `:43`, `:58` and `:79`, and
+the push check leaves the pinned runner out of its scan on purpose (`research/module_lang_bench.md:922`: the plan ids it held
+then are gone since #173).
+
+**Scenarios** (`spikes/lang-bench/test/runner-text.test.mjs`, new, with the Python reading started from it under
+`python3 -I`):
+
+- `No_comment_or_docstring_of_a_runner_file_names_a_stack`: every comment (by Python's `tokenize`) and every docstring (by
+  `ast`) of `runner/*.py` is matched against the stack words of `inputs/stack-words-lang.json`, by that file's own rule
+  (case-insensitive on word boundaries but for its case-sensitive words). **RED today:** the five lines of `rs_abort.py` above.
+- `The_detection_strings_are_kept_as_exact_approved_entries_and_nothing_else_is`: the three detection strings of
+  `rs_abort.py` (`:18`, `:20`, `:21`) and the two runtime labels it returns are behaviour, so they stay, each as one exact
+  entry of an approved list; a stack word in any other string literal of a runner file is a finding, and a stale approved entry
+  that no longer occurs is a finding too, so the list cannot grow quietly.
+- `The_push_check_scans_the_pinned_runner_and_refuses_a_stack_name_in_its_comments`: the push check's agent-visible scan
+  (`lib/push-visible.mjs`, `findVisibleRules`) runs over `runner/*.py` and over each workspace's `runner/` copy, with the plan-id
+  rules it already has and the stack-word rule for comments and docstrings; a planted comment naming a stack is reported with
+  its path and line, and the real runner, after the brief, gives none. Its companion: the same scan finds the planted line in a
+  workspace copy, so it can match there.
+- `The_runner_change_is_comments_and_docstrings_only` (the `ast` proof): for every module of `runner/`, `ast.dump` of the tree
+  with docstrings removed at the branch head equals the same at the base (`git show <base>:<path>`), but for the version
+  constant; watched red once by changing one literal on a scratch copy.
+
+**Brief (Sonnet coder).**
+
+1. Rewrite the five comment and docstring lines of `rs_abort.py` in stack-neutral words ("the first runtime", "the second
+   runtime", or by the detection string's own text); change no code line. Sweep every other `runner/*.py` with the first test
+   before believing it is the only file.
+2. The approved list holds exact strings only, with one reason each, in `inputs/` beside the stack words; the scan reads it.
+3. Find where the push check leaves the pinned runner out (the module doc's sentence at `:922` names it; enumerate with a
+   search for the runner's paths in `lib/push-*.mjs` and `lib/run-base-tree.mjs`, not from memory) and take that exclusion out,
+   so the scan covers `runner/` in the task repository and in every built workspace.
+4. The `ast` proof is a small tool beside the test, run in the pull request against its merge base and recorded in it and in
+   `research/module_tests.md`; it is not a permanent test, because its base moves.
+5. **The identities move.** The runner's version moves past 0.3.9 and its manifest changes: `node spikes/lang-bench/pin-runner.mjs`
+   writes `inputs/specs.d/runner.json` and `inputs/runner-versions.json`, `specs-record.mjs` assembles `inputs/specs.json`, and the
+   three `--check` tools exit 0. The execution probe is re-run as a new dated `inputs/exec-probe-<date>.json` (T-L53; no old
+   record is changed), and `inputs/checkpoints.md` gets CP2's addendum naming the old and the new manifest. A quick-run tree
+   rescored later sees the runner as moved, which `harness-pin.mjs:16` already reports as harness drift, not as the agent's change.
+6. Docs: `research/module_lang_bench.md:922`, the sentence that the runner is not scanned, is replaced by what is scanned now;
+   `research/module_tests.md`.
+
+**Done when:** each new test went red, green, red; the `ast` proof is recorded and was shown to fail on a code change; the push
+check's self run and the three `--check` tools exit 0 on the new manifest; the new probe record exists; §7's checks for PR 6.
 
 ### (g) the wall-clock C# test goes to the leftovers plan
 
@@ -736,8 +797,15 @@ without it):
 - `JwtBearer_in_the_olympiad_kind_has_its_row_with_its_code` (measured on #167's branch: `NU1603`, through
   `Microsoft.Extensions.Logging.Abstractions` 8.0.0, whose dependency is in the cache only at 10.0.14). The recipe is changed so
   that it works, or the row stays `unsupported` and `PACKAGES.md` says it is for the web kind.
-- `The_unsupported_sentence_of_PACKAGES_md_is_derived_from_the_matrix_and_a_typed_sentence_fails`, and
-  `PACKAGES_md_is_byte_equal_across_the_kinds_of_a_stack`.
+- `An_unsupported_row_takes_the_package_out_of_that_kinds_offered_set_in_the_recipe_PACKAGES_md_and_the_box`: for every row
+  `unsupported` (package, template), three things hold, each asserted: the recipe does not offer the package for that kind (its
+  entry's `kinds` leaves it out); that kind's `PACKAGES.md` does not list it; and adding it in that template and running
+  `bash build.sh` in the build box with no registry, over the registered snapshot, fails with the row's recorded code, so the
+  workspace cannot install it. A fixture row is also flipped to `unsupported` for a package that works, and the first two
+  assertions then fail until the recipe and `PACKAGES.md` follow, which shows the test reads the matrix and not a copy of it.
+- `PACKAGES_md_of_a_kind_lists_exactly_the_packages_whose_row_for_that_kind_is_works`, and
+  `A_typed_package_line_in_PACKAGES_md_that_the_matrix_does_not_hold_fails`. `PACKAGES.md` may now differ between the kinds of
+  a stack, exactly where the matrix differs (this replaces E1.S4b's byte-equal rule).
 - `A_csharp_web_test_project_with_WebApplicationFactory_passes_offline_and_build_sh_still_ignores_tests`: in the web kind, a
   `tests/Tests.csproj` with `Microsoft.AspNetCore.Mvc.Testing` passes under `dotnet test --project tests/Tests.csproj` in the
   box with no registry, and `bash build.sh` still exits 0 with it present.
@@ -762,7 +830,12 @@ without it):
    `prereg/lang-v2-*`, which also matches the old group form; red first.
 4. A writer, `spikes/lang-bench/package-matrix.mjs` with `--check`, builds each offered package in each applicable template,
    one at a time, in the build box with no registry, under the gate lock, and writes `inputs/package-matrix.json`.
-   `lib/packages-md.mjs` reads the matrix for its sentence on unsupported combinations; nothing in it is typed by hand.
+   **An `unsupported` row excludes the package from that template's offered set:** each recipe entry gains `kinds`, the kinds it
+   is offered in, which the writer's `--check` holds equal to the matrix's `works` rows; `renderPackagesMd`
+   (`lib/packages-md.mjs:78`) takes the kind as well as the stack and lists only what the matrix says works there, so its caller
+   `spikes/lang-explore/lib/workspace-quick.mjs:77` passes `task.kind`; nothing in it is typed by hand. The snapshot stays one
+   per stack (a package a web task needs is in it), so the third assertion of the test is a real offline build that fails, not a
+   missing file.
 5. Docs: `research/module_lang_bench.md` § Package sets and snapshots, with the known limit on JwtBearer and the new rows;
    `research/module_tests.md`.
 
@@ -824,7 +897,7 @@ without it):
    `research/module_lang_bench.md`: the frozen list and the build line cite the one module; `research/module_tests.md`.
 
 **Done when:** the parent's acceptance above, T-L62 and T-L63 green in the sandbox runs with nothing skipped; §7's checks for
-PRs 6 and 7.
+PRs 7 and 8.
 
 ## 7. The order of the pull requests
 
@@ -842,20 +915,23 @@ committed branch, every finding resolved; **(2)** D68's whole runs of every suit
 
 | # | Items | Branch | What it runs before it merges | Which conditions bite |
 |---|---|---|---|---|
-| 1 | this document, with (a) and (f) recorded; its `todo/README.md` row | `docs/lang-v2-f1-stories` | line scan; `plan-lifecycle`; CI; an Opus reading by the team lead | (2) CI only, (3) line scan, (4) |
+| 1 | this document, with (a) recorded; its `todo/README.md` row | `docs/lang-v2-f1-stories` | line scan; `plan-lifecycle`; CI; an Opus reading by the team lead | (2) CI only, (3) line scan, (4) |
 | 2 | F1.S1 (e), FORMAT's pins merged forward | `feat/lang-v2-format-amend-pins` | the merge of `main` and step 2's re-read; the gates; lang-bench and lang-explore whole runs, both ways, with `LANG_V2_TASK_REPO` at `4ddb8f80`; the three `--check` tools; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it moves FORMAT's pins, from which every workspace's `runner/GRAMMAR.md` is cut, and changes the synthetic spec fixtures; (4) |
-| 3 | F1.S1 (c) with carry items 2 to 4, and (g) | `docs/lang-v2-f1s1-case-blind` | the gates (a test and two comment lines in harness files); lang-bench whole runs, both ways; line scan | (1), (2), (3) line scan only: no agent-visible file moves (the `build.sh` line waits for PR 7); (4) |
+| 3 | F1.S1 (c) with carry items 2 to 4, and (g) | `docs/lang-v2-f1s1-case-blind` | the gates (a test and two comment lines in harness files); lang-bench whole runs, both ways; line scan | (1), (2), (3) line scan only: no agent-visible file moves (the `build.sh` line waits for PR 8); (4) |
 | 4 | F1.S1 (b), the classifier and the recompute | `fix/lang-v2-f1s1-build-test` | the gates; minigit-bench and lang-explore whole runs, both ways; `repartition` over the six series; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it adds lines to `research/lang-v2/`; (4) |
 | 5 | F1.S1 (d), the held-out reader and the leak check's link | `fix/lang-v2-f1s1-heldout-links` | the gates; lang-explore whole runs, both ways; `leakcheck` on the real private side; line scan | (1), (2), (3): the condition asks only for the line scan, and `leakcheck` runs too because the pull request changes what it reads; (4) |
+| 6 | F1.S1 (f), the rest of T-L64: the runner's comments, the push check's scan, the `ast` proof, the re-pin | `fix/lang-v2-f1s1-runner-text` | the gates; lang-bench whole runs, both ways, with `LANG_V2_TASK_REPO` at `4ddb8f80`; lang-explore whole runs (its workspaces copy the runner); the `ast` proof against the merge base; the probe re-run; the three `--check` tools; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the runner is agent-visible; (4) |
 | — | F1.S2, as its spec says | its own | as its spec says; at least (1), (2), and (3) with `leakcheck`, since the statement's memory sentence is agent-visible | all four |
-| 6 | F1.S3 (a), the offered set | `feat/lang-v2-f1s3-offered-set` | the gates; the snapshot built under the gate lock; the matrix written; lang-bench whole runs, both ways; lang-explore whole runs (its `PACKAGES.md` is rendered from these inputs); the three `--check` tools; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: `PACKAGES.md` changes; (4) |
-| 7 | F1.S3 (b), the contract | `feat/lang-v2-f1s3-contract` | the gates; lang-bench and lang-explore whole runs, both ways; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the templates change; (4) |
+| 7 | F1.S3 (a), the offered set | `feat/lang-v2-f1s3-offered-set` | the gates; the snapshot built under the gate lock; the matrix written; lang-bench whole runs, both ways; lang-explore whole runs (its `PACKAGES.md` is rendered from these inputs); the three `--check` tools; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: `PACKAGES.md` changes; (4) |
+| 8 | F1.S3 (b), the contract | `feat/lang-v2-f1s3-contract` | the gates; lang-bench and lang-explore whole runs, both ways; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the templates change; (4) |
 
 **Order and why.** PR 1 first, so every brief cites a merged document. PR 2 next, because F1.S2's FORMAT amendment moves the
 same pins once more and must start from them (parent F1.S1 (e)). PRs 3, 4 and 5 are disjoint in code and are built in
-parallel, then merged in that order (3 is the smallest). F1.S2 starts after PR 2 and before or beside PRs 3 to 5; its first
-measurement wants PR 7's template-drift rule, or it records that the tree it measures predates the template edit. PR 6 before
-PR 7. F1 is done when its done-when (§1) holds on `main`.
+parallel, then merged in that order (3 is the smallest). PR 6 follows PR 2 (both move `inputs/specs.json`, through its tool) and
+closes F1.S1: F1.S1 is done only when PR 6 has merged. F1.S2 starts after PR 2 and before or beside PRs 3 to 6; it rebases
+nothing on the runner, but if its own pull request is ready before PR 6, PR 6 merges first, so the runner's identity moves before
+F1.S2's records name it. Its first measurement wants PR 8's template-drift rule, or it records that the tree it measures
+predates the template edit. PR 7 before PR 8. F1 is done when its done-when (§1) holds on `main`.
 
 ## 8. The model per role
 
@@ -873,9 +949,10 @@ only F1.S2.
 
 ## 9. Growth
 
-- **The recomputed partitions** (F1.S1 (b)): one file per series, a few kilobytes each, six files under `~/rsd/lang-v2/explore/`.
-  Kept for ever, append only (D34); a later recompute writes a new dated file. An interrupted run leaves no partial file: it
-  writes to a temporary name and renames.
+- **The recomputed partitions** (F1.S1 (b)): one result file per run whose inputs changed, a few kilobytes each, in
+  `<series>/partition-recomputed/` of the six quick-run series; a run over unchanged inputs writes nothing. Kept for ever,
+  append only (D34); each result has its own timestamped, generation-named file and is never edited. An interrupted run leaves
+  only an owned temporary file, which no reader takes for a result and the next run removes once its owner is gone.
 - **The C# snapshot** (F1.S3 (a)): one new folder beside the old one under `~/rsd/lang-v2/caches/`, about the old one's 174 MB
   plus the test host's packages. The old folder is pruned by `--prune-superseded` only after F3.S1's tag, so about 0.4 GB is held
   until then (632 GB free on 2026-11-07). A killed build is swept by the next one (`make-snapshots.mjs`: the owned work folders,
@@ -913,8 +990,8 @@ only F1.S2.
 
 ## 11. Definition of Done (F1)
 
-- [ ] F1.S1: (a) and (f) recorded here; (b), (c), (d), (e) and (g) merged, each with its red recorded where it has one; the six
-      recomputed partition files exist; `pin-runner.mjs --check` and `specs-record.mjs --check` exit 0 on `main`.
+- [ ] F1.S1: (a) recorded here; (b) to (g) merged, (f) last of them (PR 6), each with its red recorded where it has one; a
+      complete recomputed partition result exists for each of the six series; `pin-runner.mjs --check` and `specs-record.mjs --check` exit 0 on `main`.
 - [ ] F1.S2: merged as its spec says (the parent's acceptance for it).
 - [ ] F1.S3: the frozen list has one source; the Node `.npmrc` holds `ignore-scripts=true` and `save-exact=true`; every
       `record.json` carries the contract's identity and `deviations` as count and paths beside `accepted`; `Mvc.Testing` is in
