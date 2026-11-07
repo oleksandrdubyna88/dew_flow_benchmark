@@ -158,6 +158,39 @@ for their task, a banner and closing sentence that name the ungated draft, and t
    each run in its own `systemd-run --user --scope` with `MemoryMax`, `MemorySwapMax=0` and `OOMPolicy=continue`; memory
    is the scope's `memory.peak`.
 
+## Scoring a quick-run session: ten passes, four states, one memory value (F1.S2)
+
+A quick-run session (a daemon or web task) is scored AFTER it ended, never while a session of the series runs, by **ten scoring passes under two CPU profiles from one build**. `lib/passes.mjs` is the driver; it reads and writes
+`s/<rid>/score/` and runs under the series lock that `run` and `rescore` take (it proves the lock is held and never takes it; `lib/pass-locks.mjs`) and its own `score/scorer.lock` (one scorer per session; a dead owner's lock is taken over).
+
+- **The units.** A pass is one run of the runner over every visible and held-out case of the task on the built copy, with a fresh program per case. Passes 1, 3, 5, 7, 9 run on the 2-CPU profile (CPUs `6-7`), passes 2, 4, 6, 8, 10 on the
+  8-CPU profile (CPUs `0-7`), for both stacks (`lib/verdict.mjs`: `PROFILES`, `profileOfPass`). Each pass runs in a **pass child** (`lib/pass-run.mjs`, `lib/pass-child.mjs`) started under `taskset -c <profile>`; it inherits the
+  affinity, and so do the scope, the namespaces, the box and every program (the execution layer is not changed). The mask is read back right after the spawn and by the child itself (`lib/affinity.mjs`: compared as a set, any spelling): another
+  mask is a halt (`affinity-not-applied`), never an attempt. The whole child has a deadline (the layer's `runCeilingMs` plus `PASS_CHILD_MARGIN_MS`); at it the child's process group is killed and the attempt is an environment one (`pass-child timeout`).
+- **Attempts.** A pass that ends in an environment failure (the layer or the runner failed, a record that does not judge every case, a missing memory reading, a halt) is tried again whole, at most twice: three attempts per pass, thirty at most per
+  session, every one kept as its own file `passes/pNN-<profile>-aK.json` (written once, `wx`). A record is complete only when `lib/attempt-record.mjs` says so (the runner's completion keys with the pinned format and version, exactly the
+  expected case ids, every required field); a malformed, truncated or partial record is an environment attempt, never a functional failure.
+- **The build** happens once, at an atomic commit point (`lib/build-commit.mjs`): the clean copy is built in `score/build-<token>/`, validated, renamed to `score/tree/`, and only then `score/build.json` is written (`wx`) naming the tree's hash.
+  A pass runs only against a tree whose record exists and whose hash matches; anything uncommitted is discarded on a resume. A build that ran and failed is committed (`ok: false`: every case is `build failed`, no pass runs); a build that never
+  began commits nothing and is tried up to three times.
+- **The four states** (`verdictOf`): `accepted` (the build passed, ten passes completed, every case passed in all ten); `rejected` (the build failed, or a completed pass is failing and none is clean); `intermittently incorrect` (a completed
+  pass is failing and one is clean); `unscored: environment` (no completed pass is failing and some pass has no completed attempt after its three). The terminal rule: a functional failure in any completed pass stands whatever any other pass
+  did; a majority of clean passes never accepts. While a pass without a failure still has an attempt left the answer is `pending`, never recorded.
+- **Scoring exhaustion is not session finality.** `score/verdict.json` (rebuilt whole from `build.json`, `passes/` and `events/` on every write, never read) carries `scoringState` (`open`, `decided`, `exhausted`) and no finality field.
+  Finality is the run-map's: a decided scoring makes v1's `scoreOne` move the session `ran -> scored`; an exhausted one leaves it `ran` with `data: false` and the class `void: unscored environment` (`VOID_UNSCORED`, `lib/series.mjs`), its old
+  class appended to `reclassifiedFrom` and an `unscored` event line in the ledger, so the schedule offers the one re-run (`--rerun`). This is the one change to v1 (`spikes/minigit-bench/lib/bare-series.mjs`, 19 lines and its tests).
+- **The rollup** (`rollupOf`) is the one score the record reads (`score/score.json`, written once): per case the first failing pass's verdict and evidence, the largest `peakBytes` and `wallMs`, the enforced `memoryMaxBytes`. The record's
+  `explore.verdict`, `scoringState`, `passes`, `scoringMs` and `buildTreeSha256` come from it (`lib/records.mjs`); `explore.accepted` is `verdict === 'accepted'`; the note counts the four verdicts per stack from the records and the
+  finality of the cells from the run-map (`lib/note.mjs`). The rehearsal keeps the single-pass scoring (`singlePass`): a free check of the pipeline, no verdict. `replay` stays a one-pass diagnostic on one case.
+- **The one memory value** (parent D72). `inputs/memory-limit.json` holds it (a positive whole number of MiB, checked when the inputs load: `lib/memory-limit.mjs`). The generated `STATEMENT.md` (D72's sentence and the stack's heap sentence
+  from the layer's own `heapKeys`), the frozen `samples/load.json` and the scorer's limit all read it; the runner's read-back of `prog/memory.max` is carried into every case (`memoryMaxBytes`) and a case enforced under another limit is an
+  environment failure, not a verdict. A scan test holds that no other file writes the figure.
+- **Growth.** `inputs/growth.json` (counts, times and sizes) is validated on write and on load (`lib/growth.mjs`); an ordinary scoring run refuses to start without a valid one, and `pairWorstCaseBytes` (2 trees + 2 worst-case retained
+  sets) feeds the disk rule (`diskRuleVerdict`: halt below twice the pair's measured worst case). The first measurement is `node spikes/lang-explore/measure-growth.mjs` (below) under its own temporary guard (60 GiB free, 20 GiB write ceiling).
+- **Before a paid launch** the preflight probes both masks of the pair with `taskset` and refuses the launch (exit 3, resumable) when one reads back another mask (`lib/mask-preflight.mjs`; `readback.json` in the series folder keeps the good read-back).
+
+Ten passes are a budget, not a proof: a race that shows often on the scoring CPUs is caught, a rarer one can pass all ten.
+
 ## The leak check (redesigned for size)
 
 D41: no held-out case content, reference, mutant, trap or private-note sentence enters git. v1's `leakcheck` matched every needle against every file (`needles x bytes`); task 09's 5.5 million numeric case lines made the all-task run take

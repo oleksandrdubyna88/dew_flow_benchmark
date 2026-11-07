@@ -2,6 +2,7 @@
 // itself, the whole child has a deadline after which its process group is killed and the attempt is an environment one, and a child that answers nothing is an environment attempt too. Fakes: no process starts.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -128,4 +129,22 @@ test('The_pass_child_runs_one_pass_when_its_mask_is_the_profile_and_writes_a_com
   assert.equal(bad, 3);
   assert.equal(JSON.parse(readFileSync(failing.out, 'utf8')).kind, 'environment');
   assert.equal(await childMain({ argv: [], readStatus: () => '', runPassFn: async () => {}, write }), 4, 'a usage error is exit 4');
+});
+
+test('A_long_deadline_never_keeps_the_process_alive_after_the_child_has_answered', () => {
+  const dir = tmpDir('quick-pass-timers');
+  const url = new URL('../lib/pass-run.mjs', import.meta.url).href;
+  const script = `
+    import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+    import { readFileSync, writeFileSync } from 'node:fs';
+    import { runPassChild } from ${JSON.stringify(url)};
+    const child = new EventEmitter(); child.pid = 1; child.stderr = new EventEmitter();
+    const spawn = (exe, args) => { setImmediate(() => { writeFileSync(JSON.parse(readFileSync(args.at(-1), 'utf8')).out, '{"kind":"environment","reason":"x"}'); child.emit('close', 0, null); }); return child; };
+    const spec = { n: 1, attempt: 1, cpus: '0-7', tree: ${JSON.stringify(path.join(dir, 'tree'))}, runCeilingMs: 3_600_000 };
+    const body = await runPassChild({ spec, context: {}, spawn, procApi: { read: () => 'Cpus_allowed_list:\\t0-7\\n' }, pollMs: 0, polls: 2 });
+    process.stdout.write(body.kind);`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15_000 });
+  assert.equal(r.error, undefined, 'the process ended by itself, long before the hour of its deadline');
+  assert.equal(r.stdout, 'environment', r.stderr);
 });

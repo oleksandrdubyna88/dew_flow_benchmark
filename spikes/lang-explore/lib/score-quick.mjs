@@ -137,10 +137,10 @@ export function uncertifiedProblem(cases) {
 }
 
 /** The default run: the layer over the built tree and the combined case folder. */
-export function layerRun({ owned, dirs, stack, kind, limits, caseWallMs, runCeilingMs, parent = stableRunsParent(), runCasesFn = runCases }) {
+export function layerRun({ owned, dirs, stack, kind, limits, caseWallMs, runCeilingMs, parent = stableRunsParent(), runCasesFn = runCases, runOptions = {} }) {
   // `holdSeconds`: a daemon or web case may last up to the test bound, far past the default T + G + margin of the scope holder, which would end the scope (and the program) under it
   return async ({ tree, samplesDir, caseIds }) => runCasesFn({
-    owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes: limits.memoryBytes, caseWallMs, holdSeconds: holdForCaseWall(caseWallMs), runCeilingMs, stack, kind, data: true,
+    owned, parent, tree, samplesDir, caseIds, dirs, memoryMaxBytes: limits.memoryBytes, caseWallMs, holdSeconds: holdForCaseWall(caseWallMs), runCeilingMs, stack, kind, data: true, ...runOptions,
   });
 }
 

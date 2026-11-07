@@ -24,6 +24,13 @@ export const passChildDeadlineMs = ({ runCeilingMs }) => runCeilingMs + PASS_CHI
 
 const after = ms => new Promise(resolve => { setTimeout(resolve, ms); });
 
+/** `promise`, or `null` after `ms`; the timer is always cleared, so a long deadline never keeps the process alive after the child is gone. */
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** A promise of how the child ended: `{ code, signal }`. */
 const endOf = child => new Promise(resolve => { child.on('close', (code, signal) => resolve({ code, signal })); child.on('error', e => resolve({ code: null, signal: null, error: e.message })); });
 
@@ -61,7 +68,7 @@ async function maskProblem({ polls, pollMs, ...mask }) {
 
 async function killAndWait({ child, ended, killGroup }) {
   killGroup(child.pid);
-  await Promise.race([ended, after(GONE_WAIT_MS)]);
+  await withTimeout(ended, GONE_WAIT_MS);
 }
 
 const environment = reason => ({ kind: 'environment', reason });
@@ -85,7 +92,7 @@ export async function runPassChild({ spec, context, deadlineMs = passChildDeadli
   try {
     const wrong = await maskProblem({ child, wanted: spec.cpus, procApi, pollMs, polls });
     if (wrong) { await killAndWait({ child, ended, killGroup }); return { halt: 'affinity', ...environment(wrong) }; }
-    const result = await Promise.race([ended, after(deadlineMs).then(() => null)]);
+    const result = await withTimeout(ended, deadlineMs);
     if (result === null) { await killAndWait({ child, ended, killGroup }); return environment(`pass-child timeout: no answer within ${deadlineMs} ms (the layer's ceiling plus ${PASS_CHILD_MARGIN_MS} ms); its process group was killed`); }
     return answerOf({ out: files.out, ended: result, tail });
   } finally {
