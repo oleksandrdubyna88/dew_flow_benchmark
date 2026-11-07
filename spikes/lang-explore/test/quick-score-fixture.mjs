@@ -3,9 +3,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { runnerRecordPinNow } from '../lib/harness-pin.mjs';
 import { scoreQuick } from '../lib/score-quick.mjs';
 
+const PINNED = runnerRecordPinNow();
+
 export const MIB = 1024 * 1024;
+/** The enforced limit every invented case reads back from its cgroup (the plan's one registered value, 512 MiB). */
+export const LIMIT_BYTES = 512 * MIB;
 
 export function frozenFiles() {
   const f = text => ({ bytes: Buffer.from(text), mode: 0o644 });
@@ -30,8 +35,8 @@ export function scoringArea(t) {
   return { source, held, work };
 }
 
-export const rec = (id, status = 'PASS', reason = '', peak = 100 * MIB) => ({ id, status, reason, rIds: ['R1'], comparison: 'bytes', entries: 3, firstMismatch: null, lifecycle: { memory: { known: true, peakBytes: peak, oomKill: 0 }, leftover: { known: true, found: false } }, wallMs: 321, launchMs: 5 });
-export const ran = (cases, over = {}) => async () => ({ exitCode: cases.every(c => c.status === 'PASS') ? 0 : 1, stdout: '', stderr: '', record: { runner: '0.x', launch: { failed: false, stderr: '' }, cases }, memoryCertified: true, ...over });
+export const rec = (id, status = 'PASS', reason = '', peak = 100 * MIB) => ({ id, status, reason, rIds: ['R1'], comparison: 'bytes', entries: 3, firstMismatch: null, lifecycle: { memory: { known: true, peakBytes: peak, maxBytes: LIMIT_BYTES, oomKill: 0 }, leftover: { known: true, found: false } }, wallMs: 321, launchMs: 5 });
+export const ran = (cases, over = {}) => async () => ({ exitCode: cases.every(c => c.status === 'PASS') ? 0 : 1, stdout: '', stderr: '', record: { format: PINNED.format, runner: PINNED.version, grammar: 2, kind: 'daemon', build: { ok: true }, launch: { failed: false, stderr: '' }, cases }, memoryCertified: true, ...over });
 export const built = (okBuild = true) => async () => ok({ ok: okBuild, exit: okBuild ? 0 : 1, wallMs: 1234, timedOut: false, tail: okBuild ? '' : 'error CS1002' });
 
 /** `scoreQuick` over a ready scoring area `a`, with the fakes of `score`. */
