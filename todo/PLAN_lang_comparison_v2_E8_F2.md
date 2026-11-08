@@ -292,8 +292,29 @@ lang-explore gets three FREE verbs over it:
 **The clear folder's lifecycle** (parent F2.S2 and F3.S1, epoch 10): it is mode 700; it is checked against the archive's hash at
 every pair; it is removed after each pair, and removed again at the start of any run after an interruption; a check that needs
 the clear cases makes it again from the archive. F2.S2 builds the three verbs and the hash check; F3.S1 wires the per-pair and
-start-of-run removal into the series. The readers of the clear folder today (`loadHeldoutQuick`, `leakcheck`'s material, the line
-scan) read it through `heldout-open` once the archive exists (§7 item 3).
+start-of-run removal into the series.
+
+**Every reader of a task's clear held-out folder fails closed** (the team lead's decision, 2026-11-08). When the folder is absent
+and a sealed archive is registered for the task in `heldout-frozen.json`, a reader refuses with a named reason, `sealed: open it
+first` (with the task), and never reports clean, empty or "absent". A reader that needs the cases opens the archive itself
+through `heldout-open` and closes it after through `heldout-close`, in a `finally`, so a failure in between does not leave the
+folder behind. One function decides it, `sealedAbsentProblem({ home, task })` in `lib/heldout-quick.mjs`, and every reader below
+calls it before it reads (`common.reuse-first`, one road in). A task with no archive registered keeps today's behaviour. The
+readers, found by a search for `heldoutDir`, `loadHeldoutQuick`, `casesTreeHash` and `heldout-` over `spikes/` and the private
+scripts on 2026-11-08:
+
+| Reader | Today, with the folder absent | After |
+|---|---|---|
+| `loadHeldoutQuick` (`lib/heldout-quick.mjs:86`), and through it `loadHeldout` (`lib/heldout.mjs:43`) | `fail(…, { absent: true })`, which callers may read as "nothing here" | the `sealed` refusal, with no `absent` flag, so no caller can take it for an absent task |
+| `leakcheck`'s task loading and material (`lib/leak.mjs:83-89`, `:112`; build step 2b widens it) | **fails open:** `scanProblem` skips a task whose folder is `absent` when any other task's folder is present, and the clean line lists it as absent | the `sealed` refusal stops the scan (exit 4, never 0); to scan a sealed task, `leakcheck` opens it, scans and closes it |
+| `leakcheck`'s link check (`lib/leak-material.mjs:44-51`, `privateLinks` over `heldout.dir`) | runs only over the tasks that loaded | covered by the row above: a sealed task loads only after `heldout-open` |
+| `init` of a quick series (`lib/init-quick.mjs:38`) | refuses on `absent` | the `sealed` refusal, naming `heldout-open` |
+| the scoring's copy of the held-out pairs (`lib/score-quick.mjs:53-66`, `copyHeld` from `heldoutDir`) | reads the pairs a loaded held-out object names | it scores only from an opened folder whose tree hash equals the archive's, and refuses on `sealed` |
+| the line scan (`~/rsd/lang-v2/briefs/leakscan-lines.py`, outside git, `:30`) | **fails open:** `glob` over a missing `heldout-NN` gives no files, so fewer needles and an exit 0 | exits 2 ("the private sets could not be read") naming `sealed: open it first` when `heldout-frozen.json` in the bench checkout lists the task with an archive and its folder is absent; a script change outside git, recorded by the team lead as a dated line in `inputs/checkpoints.md` |
+| `heldout-freeze` and `heldout-open` themselves (d) | — | they read the archive, never a stale clear folder |
+
+`lib/material.mjs` (`materialOf`) and `lib/oracle.mjs` read the olympiad tasks' folders only; those are not sealed in Stage 1, so
+they do not change, and the scenario below shows they are not reached for a quick task.
 
 **The held-out record (lang-explore owns it; lang-bench imports nothing of lang-explore).** A new FREE verb, `explore.mjs
 heldout-freeze --tasks 04,05,06,07,08,10`, writes `spikes/lang-explore/inputs/heldout-frozen.json`: per task the archive's
@@ -335,6 +356,23 @@ The memory value's registration is not here: it is the field F2.S1 writes into `
 - `spikes/lang-explore/test/quick-heldout-frozen.test.mjs` (new): `The_record_holds_counts_and_hashes_and_no_case_id_or_trap_name`
   (it scans its own output for the fixture's ids and names and finds none); `Init_refuses_a_held_out_tree_or_archive_that_differs_from_the_frozen_record`
   and `Init_accepts_the_same_tree_and_archive` (the pair); `A_task_without_an_archive_or_a_package_record_is_refused`.
+- **Fail closed, one scenario per reader** (`spikes/lang-explore/test/quick-heldout-sealed-readers.test.mjs`, new; each fixture is a
+  sealed invented task registered in a fixture `heldout-frozen.json`, with no clear folder; each test asserts a refusal naming
+  `sealed: open it first` and the task, never a pass, a clean line, an empty result or an `absent` flag; each has a control, the
+  same task opened through `heldout-open`, which reads, so the refusal comes from the rule and not from a broken fixture):
+  `loadHeldoutQuick_refuses_a_sealed_task_with_no_clear_folder`;
+  `loadHeldout_refuses_a_sealed_quick_task_with_no_clear_folder`;
+  `The_leak_check_refuses_a_sealed_task_with_no_clear_folder_even_when_another_tasks_folder_is_present` (exit 4, never 0: the
+  fail-open of `scanProblem` today; its red is watched on today's code);
+  `The_leak_check_link_scan_is_not_reached_for_a_sealed_task_with_no_clear_folder`;
+  `Init_refuses_a_sealed_task_with_no_clear_folder_and_names_heldout_open`;
+  `Scoring_refuses_a_sealed_task_with_no_clear_folder_and_copies_no_pair`;
+  `A_reader_that_opens_the_archive_closes_the_folder_after_it_also_when_it_fails` (the `finally`: a fault planted after the open
+  leaves no clear folder);
+  `The_olympiad_readers_are_not_reached_for_a_quick_task` (`materialOf`, the oracle).
+  The line scan, outside git: the team lead runs it once on a sealed fixture task with no clear folder (it must exit 2 naming
+  `sealed: open it first`) and once opened (exit 0), records both exits in the dated line, and watches the first exit 0 on
+  today's script first, as its red.
 - `spikes/lang-explore/test/quick-freeze-consumers.test.mjs` (new; D67 (2), below): `The_frozen_record_holds_every_field_the_pre_registration_guard_will_read`,
   read through a test stub of F3.S1's guard over a synthetic record: the spec hashes and states, the tag and its commit, the
   workspace commit, the hash list's sha256, the archives' and clear trees' hashes and counts, the trap tables' hashes, the memory
@@ -518,12 +556,11 @@ only F2.S1.
    creation. Whether the owner wants the refused write tried by hand is theirs.
 2. **F2.S1's package record should carry two things for F2.S2:** the largest expected reply body per task (S, for (c)), and the
    name of its trap coverage table file (for `heldout-frozen.json`). F2.S1's spec is not copied in yet; this is for its writer.
-3. **Who reads the clear held-out folder after the seal.** `leakcheck`'s material (2b), the line scan (`leakscan-lines.py`, outside
-   git) and `loadHeldoutQuick` read `~/rsd/lang-v2/explore/heldout-NN/` in clear today. Once that folder lives only between
-   `heldout-open` and `heldout-close`, each of them must open it first, or find nothing to read and report clean. 2b's tool and the
-   line scan need that line; this document gives the verbs, not their callers' change.
-4. **v1's seal tool may not take a quick task's folder as it is.** `heldout-tool.mjs seal` knows v1's suite shape (registry, runner
-   protocol). (d) widens it rather than copying it; how much widening it needs is found by its first red test.
+3. **Settled 2026-11-08 by the team lead:** every reader of a task's clear held-out folder fails closed; (d) holds the rule, the
+   readers and one scenario per reader. Two of today's readers fail open (`leakcheck`'s `scanProblem` and the line scan). Build
+   step 2b's `leakcheck` must carry the rule too, since it widens the same code.
+4. **Settled 2026-11-08 by the team lead:** v1's seal tool is widened, never copied; how much widening it needs is found by its
+   first red test.
 
 ## 8. Definition of Done (F2)
 
@@ -534,6 +571,8 @@ only F2.S1.
       `equal`, recorded.
 - [ ] F2.S2 (c): the decision line exists with its numbers; if built, merged and the re-runs done.
 - [ ] F2.S2 (d): the freeze tools merged, every scenario red, green, red.
+- [ ] Every reader of a task's clear held-out folder fails closed: each of (d)'s readers refuses a sealed task with no clear
+      folder (`sealed: open it first`), one scenario each red, green, red; the line scan's two exits recorded.
 - [ ] F2.S2 (e): six sealed archives; the dry run recorded and read by an Opus judge; `spec-frozen-B-<yyyymmdd>` on the remote,
       annotated, over the six specs and FORMAT; W on the task repository's `main`; `workspace-diff` and the push check clean;
       T1 and T2 merged by merge condition 5.
