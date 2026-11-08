@@ -576,6 +576,30 @@ nothing of it. **Precondition for F2:** on `main`, `PINNED_TASK_SHA` is `c204726
 `specs-record.mjs --check`, `pin-runner.mjs --check` and `pin-exec-layer.mjs --check` exit 0. Every later step of F2.S2 reads the
 FORMAT that 2a records; (e) checks that the frozen FORMAT is that one.
 
+**The `B` entry for the six tasks** (the team lead, 2026-11-08, from this document's check of #182). After 2a,
+`spikes/lang-bench/inputs/specs.d/format.json` holds one entry, `A`, at the amended sha256 `6c3546bb…`, whose `tasks` list names only
+01, 02, 03 and 09: the six tasks are in no entry's list. So `format.json` gains an entry **`B`**: `tasks` 04, 05, 06, 07, 08, 10,
+the same `sha256` (`6c3546bb…`), the same `grammarSha256` (`8d87346f…`), the same `version` and `gate`. **`A` stays as it is.**
+No value is typed: a small writer beside `readRecord` in `lib/conformance-record.mjs` computes the sha256 from FORMAT's bytes at
+`c204726` and the grammar's sha256 through `tools/grammar-extract.mjs`, writes the entry atomically, and `specs-record.mjs` then
+assembles `inputs/specs.json` from it (`specs-record.mjs --check` holds the two equal). It lands in bench PR 4a, or in a small pull
+request of its own (§4, row `B`), whichever comes first, and in any case **before F2.S1's first conformance run**. Every check keyed
+on a task's group then finds the six through `B`:
+
+- T-L57's grammar and `build-workspaces.mjs --group` (`lib/workspace-build.mjs:94`, `groupProblem`; `:105`, `grammarOf`) read the
+  task's row, which is now `B`;
+- the conformance checker's FORMAT lookup (`lib/conformance.mjs:68-69`, `recordedLabel` in `lib/conformance-record.mjs:37`) finds
+  an entry **by sha256 alone**, and `A` and `B` now share it, so it would answer with the first, `A`. It is widened to take the
+  task (`--task`, which it already has) and answer with the entry whose `tasks` list names it, falling back to the sha256 alone only
+  for a task in no list; its first line then reads `record B` for the six and the gate records name `B`.
+
+**Scenarios** (`spikes/lang-bench/test/specs-record.test.mjs` and `test/conformance-record.test.mjs`, red first):
+`Each_of_the_six_tasks_resolves_to_B_and_each_olympiad_task_to_A` (through `groupProblem`, `grammarOf` and the widened
+`recordedLabel`, each of 04, 05, 06, 07, 08 and 10 resolves to `B`; each of 01, 02, 03 and 09 to `A`); `The_B_entry_equals_A_but_for_its_tasks_and_A_is_unchanged`;
+`The_B_entry_is_computed_from_FORMATs_bytes_and_a_typed_value_is_refused_by_check` (a hand-edited `grammarSha256` fails
+`specs-record.mjs --check` or the writer's own check); `The_checker_prints_record_B_for_a_daemon_task_although_A_has_the_same_sha256`
+(the red on today's code: it prints `record A`).
+
 ### (b) the rulesets: `main`'s protection and the tag ruleset
 
 **The go.** The owner's go of 2026-11-05 covers exactly these on the task repository: `template-frozen` and the tag ruleset (its
@@ -1041,6 +1065,7 @@ run is about the head that merges.
 | 1 | bench | this document; its `todo/README.md` row | `feat/lang-v2-f2` | line scan; `plan-lifecycle`; CI; an Opus reading by the team lead | (2) CI only, (3) line scan, (4) |
 | 2a | bench | F1's tail: the d72 pins | `chore/lang-v2-format-d72-pins` | F1's; the parent's build step 2a | (1) to (3), as the parent says |
 | 2b | bench | `leakcheck` over both repositories | the parent's build step 2b | the parent's | (1) to (4) |
+| B | bench | `format.json`'s entry `B` for the six tasks, its writer, the widened `recordedLabel` ((a)); inside PR 4a if that comes first | `chore/lang-v2-format-b-entry` | the gates; lang-bench and lang-explore whole runs, both ways, `LANG_V2_TASK_REPO` at `c204726`; `specs-record.mjs --check` and the other two `--check` tools; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: every workspace's grammar is looked up through it; (4) |
 | — | task | F2.S1's six spec pull requests, from task 05 | F2.S1's | F2.S1's, by merge condition 5 | (3), (5) |
 | 2 | bench | F2.S2 (b), the rulesets | `feat/lang-v2-f2s2-rulesets` | the gates; lang-bench whole runs, both ways; line scan. The apply waits for (e) step 3 | (1), (2), (3) line scan only: nothing agent-visible; (4): `run-main` and CI's checks are not in the data |
 | 3 | bench | F2.S2 (c), only if built | `fix/lang-v2-f2s2-chunks` | the gates; the runner re-pin; the probe re-run; lang-bench and lang-explore whole runs, both ways; the three `--check` tools; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the runner is agent-visible; (4) |
@@ -1052,8 +1077,9 @@ run is about the head that merges.
 | 5 | bench | F2.S2 (f), the freeze record (the bench pins of T1 and T2) | `feat/lang-v2-f2s2-freeze-record` | the gates (a code round over the record's tool runs); lang-bench and lang-explore whole runs, both ways, `LANG_V2_TASK_REPO` at W; the three `--check` tools; `fetchTaskRepo` at W; `leakcheck` over both repositories; line scan; `plan-lifecycle` | (1) to (5) |
 
 **Order and why.** PR 1 first, so every brief cites a merged document. Then the parent's 2a (before F2.S1's first conformance run:
-the checker reads only a recorded FORMAT) and 2b (before any task-repository pull request). PR 4a merges before task 05's package
-is sealed. F2.S1 takes task 05 end to end first; (c)'s numbers come from it, and if (c) is built, PR 3 merges before task 05's
+the checker reads only a recorded FORMAT) and 2b (before any task-repository pull request). The `B` entry (row `B`, or inside PR
+4a) merges before F2.S1's first conformance run, so the six resolve to `B` from the first check on. PR 4a merges before task 05's
+package is sealed. F2.S1 takes task 05 end to end first; (c)'s numbers come from it, and if (c) is built, PR 3 merges before task 05's
 identity and entry are written and before the other five start (the team lead's note on F2.S1, item 2). PR 2 and PR 4 are built
 in parallel with F2.S1; PR 4 merges before the dry run. Then, strictly in this order: the seals checked, the dry run, the
 rulesets applied (the owner's go needs all six packages and a clean dry run), T1 and C, `leakcheck` on C, the tag, T2 and W,
@@ -1111,6 +1137,9 @@ only F2.S1.
 - [ ] F2.S1: done as its spec says (the parent's acceptance: per task, the package record in the private area and a public line
       of counts only; all twelve references pass; the memory value registered by its field).
 - [ ] F2.S2 (a): not F2's; build step 2a merged before F2.S1's first conformance run, checked.
+- [ ] `format.json` holds `B` for the six tasks (the amended sha256 and the same `grammarSha256`, computed, never typed), `A`
+      unchanged, merged before F2.S1's first conformance run; each of the six resolves to `B` in the grammar check,
+      `build-workspaces --group` and the conformance checker's lookup (its test red, green, red).
 - [ ] F2.S2 (b): merged; the two rulesets (three GitHub rulesets) applied under the owner's go of 2026-11-08 and read back
       `equal`, recorded.
 - [ ] F2.S2 (c): the decision line exists with its numbers; if built, merged and the re-runs done.
