@@ -1200,6 +1200,7 @@ only F2.S1.
    and the PAT stay in `~/.config/lang-v2/`). The archive key is a secret. So the backup's place — the NAS with an explicit
    exception for this one key, or another place the owner names — is the owner's to choose before the first seal; the tools take
    the backup's path as an argument and check it, and name no default.
+   *(Settled 2026-11-08, the owner's word: the NAS, with one exception for this key only. The backup is `/mnt/v/dew_flow_backup/lang-v2/keys/heldout.key`, copied, then verified by hash before the first seal; the deploy key and the PAT still never go to the NAS. The tools still take the path as an argument, and the operator gives this one.)*
 
 ## 8. Definition of Done (F2)
 
