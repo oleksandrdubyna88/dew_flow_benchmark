@@ -151,22 +151,41 @@ const idProblem = (r, material) => {
   return named.length > 0 ? withReviewed(`leakcheck FAILED: a mutant or trap id of the held-out material is a word in ${listOf(named)}`, material) : null;
 };
 
+/** The progress sink of a command: `io.progress`, else one line per call on stderr (counts and names only). */
+export const progressOf = io => io.progress ?? (line => process.stderr.write(`${line}\n`));
+
 /**
- * `leakcheck [--task NN] [--range A..B]`: v1's leak check over the repository and the branch range with the needles of EVERY task (the default: a leak of task 02's case in a task-03 commit is still a leak), or of one
- * task when `--task` names it; then the scan of the public notes for the mutant and trap ids. Exit 0 clean | 5 a hit or a failure | 4 the material could not be read.
+ * The material of the command, built once for every repository it scans: `ok({ material, ids, scanned, absent, reviewed })` | `fail(sentence)`. The runner's committed lines and the quick tasks' grammar set are read from the
+ * bench repository (`io.repoRoot`), as always.
  */
-export async function leakcheckCommand({ values, io, explore, say }) {
+export async function commandMaterial({ values, io, explore }) {
   const repoRoot = io.repoRoot ?? REPO;
-  const progress = io.progress ?? (line => process.stderr.write(`${line}\n`));
+  const progress = progressOf(io);
   progress(`building the material of tasks ${values.task ?? taskIds(explore).join(', ')}`);
   const material = materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) });
-  if (!material.ok) return { exit: 4, message: material.reason };
-  progress(`material: ${materialCounts(material.value.material)}`);
-  const r = await scanRepository({ repoRoot, material: material.value.material, range: rangeOf(values).range, progress });
-  const named = idProblem(r, material.value);
-  say(named ?? leakLine(r, material.value));
+  if (material.ok) progress(`material: ${materialCounts(material.value.material)}`);
+  return material;
+}
+
+/** The bench half of the command: the bench repository's files and branch range through the tiers, then the id scan; says its lines and gives the exit code (see `exitOf`). `material` is `commandMaterial`'s value. */
+export async function benchHalf({ values, io, material, say }) {
+  const repoRoot = io.repoRoot ?? REPO;
+  const r = await scanRepository({ repoRoot, material: material.material, range: rangeOf(values).range, progress: progressOf(io) });
+  const named = idProblem(r, material);
+  say(named ?? leakLine(r, material));
   for (const [task, why] of Object.entries(r.baselineProblems ?? {})) say(`baseline of task ${task} gives no exemption: ${why}`);
   return { exit: exitOf(r, named) };
+}
+
+/**
+ * `leakcheck [--task NN] [--range A..B]`, the BENCH half alone: v1's leak check over the bench repository and the branch range with the needles of EVERY task (the default: a leak of task 02's case in a task-03 commit is still a
+ * leak), or of one task when `--task` names it; then the scan of the public notes for the mutant and trap ids. Exit 0 clean | 5 a hit or a failure | 4 the material could not be read. The command line is `leakcheckRepos`
+ * (leak-repos.mjs), which runs this half and the task repository's: this one is never the command, because a check that scans one repository is a pass it did not earn.
+ */
+export async function leakcheckCommand({ values, io, explore, say }) {
+  const material = await commandMaterial({ values, io, explore });
+  if (!material.ok) return { exit: 4, message: material.reason };
+  return benchHalf({ values, io, material: material.value, say });
 }
 
 /** 0 clean; 5 a finding (a leak, or a mutant or trap id in a public note); 4 an incomplete scan (listed files that could not be read: not a leak, not clean). */

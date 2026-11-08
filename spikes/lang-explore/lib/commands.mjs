@@ -7,7 +7,8 @@ import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
-import { decidedPublicText, leakShingles, leakcheckCommand } from './leak.mjs';
+import { decidedPublicText, leakShingles } from './leak.mjs';
+import { leakcheckRepos } from './leak-repos.mjs';
 import { loadExplore } from './inputs.mjs';
 import { pinsOfTask, seriesTaskProblem, taskFromValues } from './tasks.mjs';
 import { loadPrompts } from './plan.mjs';
@@ -320,11 +321,11 @@ export async function cmdQuiet(values, io) {
   return r.ok ? EXIT.done : EXIT.halt;
 }
 
-/** `leakcheck [--task NN] [--range A..B]`: see `leakcheckCommand`. */
+/** `leakcheck [--task NN] [--range A..B] [--task-repo <path>] [--task-base <ref>] [--candidate-repo <path> --candidate <commit>]`: see `leakcheckRepos`. */
 export async function cmdLeakcheck(values, io) {
   const explore = (io.exploreFn ?? loadExplore)();
   if (!explore.ok) return refused(io, explore.reason);
-  const r = await leakcheckCommand({ values, io, explore: explore.value, say: io.say });
+  const r = await leakcheckRepos({ values, io, explore: explore.value, say: io.say });
   if (r.message) io.say(r.message);
   return r.exit;
 }

@@ -13,7 +13,9 @@
 //   node spikes/lang-explore/explore.mjs rescore --task NN --series <dir> --rid R [--wait S]   FREE: an ended void whose evidence now classes as data is scored and recorded (the ledger's spend is unchanged)
 //   node spikes/lang-explore/explore.mjs replay --task NN --series <dir> --rid R --case ID [--times N]   FREE and DIAGNOSTIC: reads a rejected case again on the current runner; changes no record, verdict or spend; writes s/<rid>/replay/<time>.json only
 //   node spikes/lang-explore/explore.mjs repartition --series <dir>   FREE: the time partition of every kept session recomputed from its retained evidence with v1's classifier as it is, into a NEW dated file in <dir>/partition-recomputed/; no record changes
-//   node spikes/lang-explore/explore.mjs leakcheck [--task NN] [--range A..B]  v1's leak check with the held-out outputs, reference lines and notes' shingles of EVERY task (or of the one named) as the needles
+//   node spikes/lang-explore/explore.mjs leakcheck [--task NN] [--range A..B] [--task-repo <path>] [--task-base <ref>]   v1's leak check with the held-out outputs, reference lines and notes' shingles of EVERY task (or of the one named) as the needles,
+//       over the bench repository AND the task repository (`--task-repo`, else the variable LANG_V2_TASK_REPO; with neither it refuses): its files at HEAD, its history over what `--task-base` (default origin/main) does not hold, its staged
+//       changes and its working tree. `--candidate-repo <path> --candidate <commit>` scans ONE commit about to be published (its tree, message and diff); with no `--task-repo` it is the only thing scanned
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
 // `run` and `rehearse` re-execute themselves under `taskset -c 6,7` (an env marker stops a loop), so the broker, the receiver, the proxy and the sampler sit on the harness core, as v1's runner does.
@@ -29,7 +31,7 @@ import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' } };
 /** The commands that run or score under the two scoring CPUs: every scoring of the quick run, the diagnostic and the re-score included, so the numbers they compare are measured in the same conditions. */
 export const REEXEC = new Set(['run', 'rehearse', 'rescore', 'replay']);
 
