@@ -54,3 +54,18 @@ The consultants `e53d5f8a` gave the second vendor's reading and the wording of F
 **Not re-gated:** the last one-phrase edit.
 
 **Checks:** `format-classes --self` passes, 17 rows. The grammar's body is unchanged.
+
+## The second amendment (2026-11-07, epoch 9, parent D72; task repository PR #4, `main` at `c204726280c945c48c885d390e483f31583f25d4`)
+
+FORMAT's raw sha256 is now `6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47`; the version stays 2. The change is in F-LIMITS-D and in section 1.5:
+the memory bound is the one the statement states, the same for every task, registered before the freeze and enforced as F-MEMORY says. The grammar's body is unchanged and
+only its header's hash moved (`grammarSha256` in `specs.d/format.json`, computed by `tools/grammar-extract.mjs`). The words of the amendment are in FORMAT itself, which is the source.
+
+**Document gate, two rounds, both `proceed`,** each with 4 of 4 reviewers.
+
+1. Round 1: four findings, all accepted and applied: section 1.5's bullet, the value's source, the scope, and the changelog.
+2. Round 2: two findings, both accepted and applied: the references must pass under the value in both stacks, and the changelog names section 1.5.
+
+**Not re-gated:** the last edit, which applied round 2's findings word for word.
+
+**Checks:** `format-classes --self` passes, 17 rows. The grammar's body is unchanged.
