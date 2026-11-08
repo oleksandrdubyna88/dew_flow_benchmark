@@ -14,6 +14,7 @@ import { describeFinding } from './leak-scan.mjs';
 import { scanTaskRepository } from './leak-task-repo.mjs';
 import { benchHalf, commandMaterial, progressOf } from './leak.mjs';
 import { REPO } from './paths.mjs';
+import { resolveTask } from './tasks.mjs';
 
 export const TASK_REPO_ENV = 'LANG_V2_TASK_REPO';
 export const DEFAULT_BASE = 'origin/main';
@@ -131,10 +132,22 @@ async function runParts({ setup, values, io, material, say }) {
   return exits;
 }
 
+/** The refusal of a `--task` that is not a task of the pins (named before anything else is read), or null. */
+function taskProblem({ values, explore }) {
+  const named = values.task === undefined ? ok(null) : resolveTask(explore, values.task);
+  return named.ok ? null : refused(named.reason);
+}
+
+/** The refusal that comes before any repository is read: an unknown task, or options that do not fit together; or null. */
+function earlyRefusal({ values, explore }) {
+  const problem = optionsProblem(values);
+  return taskProblem({ values, explore }) ?? (problem === null ? null : refused(problem));
+}
+
 /** The command: `{ exit, message? }` (a refusal carries its sentence in `message`; every other line is said). */
 export async function leakcheckRepos({ values, io, explore, say }) {
-  const problem = optionsProblem(values);
-  if (problem !== null) return refused(problem);
+  const early = earlyRefusal({ values, explore });
+  if (early !== null) return early;
   const repoRoot = io.repoRoot ?? REPO;
   const setup = await setupOf({ values, env: io.env ?? process.env, repoRoot });
   if (!setup.ok) return refused(setup.reason);

@@ -15,6 +15,7 @@ import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskIds, taskPaths } from '../lib/tasks.mjs';
 import { handcheckOf, toyCases, writeHeldout } from './olympiad-fixture.mjs';
 import { presentMaterial } from './quick-leak-fixture.mjs';
+import { repoWith } from './leak-scan-fixture.mjs';
 
 const EXPLORE = loadExplore().value;
 const task = id => resolveTask(EXPLORE, id).value;
@@ -129,7 +130,8 @@ test('The_leakcheck_command_refuses_an_unknown_task_and_reports_what_it_could_no
   const unknown = { home: tmpDir('o-leak-cmd'), say: l => say.push(l) };
   assert.equal(await cmdLeakcheck({ task: '11' }, unknown), EXIT.config);
   assert.match(say.join('\n'), /--task 11 is not a task of the pilot: the tasks are 01, 02, 03, 04, 05, 06, 07, 08, 09, 10/);
-  assert.equal(await cmdLeakcheck({}, unknown), EXIT.config);
+  // step 2b: the command needs a task repository, so the empty home is asked with one (the behaviour pinned here, a refusal on a home with no held-out folder, is unchanged)
+  assert.equal(await cmdLeakcheck({ 'task-repo': repoWith() }, unknown), EXIT.config);
   assert.match(say.join('\n'), /no held-out folder is present/);
 });
 
