@@ -124,7 +124,379 @@ docs), with these additions:
 
 ## F2.S1 — a package per task, six · cornerstone, `model: fable`
 
-Cornerstone: the spec (scenarios and brief) is written by Fable, at `~/rsd/lang-v2/briefs/f2s1-spec-public.md` (its private half outside git), and copied in here by the team lead.
+Cornerstone. The scenarios and the brief below are the Fable writer's spec of 2026-11-07, amended on 2026-11-08 to the plan's epoch-10 revision, copied in by the team lead without change. Its private half (per task: the defects, the traps, the witnesses and the artefact map) stays outside git at `~/rsd/lang-v2/briefs/f2s1-spec-private.md`.
+> Written 2026-11-07 by the Fable spec writer for `todo/PLAN_lang_comparison_v2.md` (epoch 9, *Epics in force*, F2.S1;
+> D69–D76, *Merge conditions*, *Growth*, *Test plan*), read at `main` `57ccc379` with F1 merged. **Amended 2026-11-08 to
+> the epoch-10 revision** (branch `docs/lang-v2-epoch10-revision`, `a10972a3` and after; the plan gate `proceed`, the
+> owner's approval of item 12): defect witnesses in place of the mutant rule, the bias question's leak rule (D25), the
+> registration of the memory value as a field F2.S1's tool writes (D72), the measured F-LOAD rule, the sealed archive per
+> task with the clear folder's lifecycle, task 05 first with its witness cost recorded, merge condition 5 and build steps
+> 2a and 2b. The team lead copies this text into `todo/PLAN_lang_comparison_v2_E8_F2.md` after checking it. It holds no
+> held-out case, trap name, case id or reference text (D41); what names those is the private half,
+> `~/rsd/lang-v2/briefs/f2s1-spec-private.md`, which the coders read on the host and never quote. Models
+> (`common.subagent-models`): this spec is Fable's; Sonnet coders build the tools, the spec fixes, the references and the
+> witnesses; an Opus judge reviews every pull request; Sonnet fixes.
+
+**What the story is.** Six draft specs exist on the task repository's local branches, each with four visible samples
+(five of them; one has none in git yet), a private held-out set of 18 to 32 cases written quickly for the owner's quick
+run, and one Python reference per task that runs outside the box. Nothing has been validated against a reference in
+either stack, no witness has been run, no spec has been gated, and every draft carries the fixed sentences of an older
+FORMAT. After this story each of the six tasks has one **package**: a corrected and gated spec, its samples, two
+references that pass every case ten of ten under F1's scoring, a held-out suite whose every case cites a requirement and
+whose every trap is covered, one defect witness per trap per stack that the registered cases catch exactly, an answered
+bias question, the two leak checks green, a sealed archive, and an identity F2.S2 can freeze. When all six are green the
+memory value is registered. A failure in the series is then adjudicable: a case that fails names the requirement it
+asserts, and a reference exists in the failing stack that passes it.
+
+**Before the first package** (build order 2a, 2b): the bench's FORMAT pins for the second amendment
+(`chore/lang-v2-format-d72-pins`, `2b0947ef`; the task repository's #4 is merged at `c204726`) are merged; `leakcheck` over
+both repositories with the publication-commit scan and the planted-needle check is built, gated and merged. **No
+task-repository pull request opens before 2b has merged** (merge condition 5).
+
+---
+
+### 1. What a package is (one task), with done-when per item
+
+| # | Item | Done when |
+|---|---|---|
+| P1 | **The corrected spec**, gated by one document gate | The spec on its branch passes `node spikes/lang-bench/conformance.mjs --repo <task repo> --task NN-slug --format <FORMAT at c204726> --needles <private needles file>` with exit 0 (today every draft fails the same eight checks against the amended FORMAT: the `Freeze rule` row, F-STDERR, F-LIMITS-D, F-MEMORY, F-PROCS, F-FROZEN, F-ENV, F-OFFLINE; task 04 also lacks its sample files and has two placeholder names the checker reads as plan ids; F-LOAD's duration is set by the measured rule of P3). One `mcp__coai__review_document` round reached `proceed`, `good_enough` or `continue_anyway`, every finding resolved; the header's `Gate verdict` row carries the verdict and date; the gate record is `spikes/lang-bench/inputs/gates/spec-NN.md`, holding **only the verdict, the reviewer count and the findings in words that name no case** — no case text, case id or trap name (D25's leak rule). The spec's pull request on the task repository merges by merge condition 5: the document gate at `proceed`, the bench-side checks (the conformance check, `leakcheck` over both repositories, the pin checks) run against a checkout of its head with their commands, exits and the head sha recorded in the pull request; the bench pins that follow it are a bench branch of their own, merged by conditions 1 to 3, and run the same checks again against the merge commit. The spec's sha256 is then pinned in `spikes/lang-explore/inputs/explore.json` (`tasks.NN.spec`). |
+| P2 | **Visible samples** | `tasks/NN-slug/samples/s01..s04.{in,out}` exist in git and equal section 6 byte for byte (the checker's `samples` check); the runner parses them; the generated workspace of each stack carries them unchanged. |
+| P3 | **Two references**, one C# and one Node, built from the stack's own template | Each lives under `~/rsd/lang-v2/explore/refs-NN/<stack>/` as only the files an agent would write (sources; a project file only if a package outside the template's set is needed), never a frozen file; the package tool lays them on `spikes/lang-bench/templates/<stack>/<kind>/`, builds with the template's `build.sh` under D66's policy, and scores them with F1.S2's ten-pass driver at the one memory value (536,870,912 bytes, **chosen**; registered by P9): both read `accepted` (every visible and held-out case passed in all ten passes, five per CPU profile), with the enforced limit read back as that number in every case. The record keeps, per reference and per pass, the largest peak, the slowest case wall, the ten passes' wall and the retained size with the most retries (they feed *Growth*). **F-LOAD's duration is measured, not assumed:** the slowest whole-scenario wall of each load case (start, readiness, the load, the stop), over every pass of both references under both profiles, is at most 600 s minus 30 s and at most 600 s minus twice the measured non-load part (the wall of the same scenario with its load steps removed, run once per reference); a duration that leaves less is shortened in the spec before the gate; 540 stands only if measured so; the measurement is in the package record. |
+| P4 | **The held-out suite** | `heldout-NN/cases/` has `hNNN.in`/`.out` pairs and `cases.txt`; every line's comparison word is one FORMAT 3.1 allows and every R-id it cites exists in the corrected spec (read from the pinned text, since `specs.json` has no entry before F2.S2); `manifest.json`'s per-case hashes equal the files; `traps.txt` lists exactly the case ids the trap table names; **every trap-and-stack row of the table names at least one existing case and exactly one witness**; the held-out reader (F1.S1 (d)) accepts the folder. |
+| P5 | **Defect witnesses**, one isolated witness per trap per stack the table lists | `heldout-NN/mutants/<id>/` holds the files a witness replaces or adds over its stack's reference (an overlay, never a whole tree, never a frozen file); `manifest.json` lists each with its trap, its stack and its kind, `deterministic` or `race`. The package tool applies each over the reference, builds it, and runs it: a witness must build (one that does not is not caught), its stack's reference must pass, and the cases registered for its trap must reject it. **A deterministic witness** gets one pass on the 2-CPU profile and is caught when it fails every case registered for its trap and no other case. **A race witness** gets ten passes, five per profile, like a session, and is judged only on its failing passes: each failing pass fails at least one registered case and no case outside them; a timeout or a hang of a registered case counts as that case failing; at least one of the ten passes fails; its clean passes are allowed and kept. **An extra failure is a mapping to fix and record, never allowed silently**: the witness reads not caught until the trap table registers the case or the witness is corrected, and the record keeps the actual set. Every witness of the manifest is caught. **The cost** (walls and sizes of every witness run) is recorded, and task 05's cost line is written before the other five start. |
+| P6 | **One bias question** (D25) | The spec and its suite, visible and held-out, go to the external vendors' review — the coai document gate and a consultant — with D25's question, **from a scratch folder outside every repository**, never from git; the reviewers answered per stack. The gate record (`inputs/gates/spec-NN.md`) holds the verdict, the reviewer count and the findings in words that name no case: no case text, case id or trap name; a scan holds it (scenario 29). |
+| P7 | **The two leak checks green** and the link refusal | `node spikes/lang-explore/explore.mjs leakcheck` exits 0 over both repositories, reading the new reference folders and witness overlays as needles; `python3 -I ~/rsd/lang-v2/briefs/leakscan-lines.py . history` exits 0 on the branch; `loadHeldoutQuick` refuses a link anywhere in the package (F1.S1 (d), merged) and the conformance check is green (P1). |
+| P8 | **The identity, registered** | `spikes/lang-explore/inputs/packages.json` gains the task's entry: the spec's sha256 and the FORMAT's, the held-out tree hash, the sealed archive's hash (P10), the trap and witness counts, the references' tree hashes per stack, the witness tree hash, the gate verdict and date, the memory value both references passed at, the F-LOAD measurement's three numbers, and one package identity (a sha256 over all of these) — counts, hashes and durations only, never a case id, trap id or path. F2.S2 reads it for the freeze. The public line of counts in the stories document is this entry's counts. |
+| P9 | **The memory value registered** (D72; once, after all six) | `spikes/lang-explore/inputs/memory-limit.json` gains the field `registration` — the date and the twelve references' identities (task, stack, tree hash) — written by F2.S1's tool and by nothing else, only when all twelve references pass every case under the value in both stacks; the same write fixes the file's note, which calls the value "registered" before that held ("chosen" until the field exists). F3.S1's guard refuses a series without the field. If one reference cannot pass, the value moves for all six (D72) and every package re-runs. |
+| P10 | **The package sealed** | One encrypted archive per task (`heldout-tool.mjs seal`'s shape: AES-256-GCM, the key a mode-600 file outside every git tree and box), its hash in `packages.json`; the cases are in clear only in a scoring temp dir or in one clear working folder beside the archive, **mode 700, checked against the archive's hash at every use, removed after each pair and removed again at the start of any run after an interruption**, while the archive and its identity stay; a check that needs the clear cases makes the folder again from the archive. |
+
+**Done when (the story):** P1–P8 and P10 green for task 05 first, then for the other five; P9 written once; the witness
+cost of 05 recorded before the other five start; `research/module_lang_explore.md` describes the package tool and
+`research/module_tests.md` lists its scenarios; every pull request met the parent's merge conditions 1 to 5.
+
+---
+
+### 2. The scenarios: the checks of a package, as tests
+
+Test names are sentences with underscores, in the style of the files they join. **Fakes** = `buildFn`/`runFn` seams, a
+fake child, a temp folder under `ownedFor({ token: 'bench' })`, invented specs and cases; **real** = bwrap, the user bus,
+the pinned toolchains and the certifying host, behind `needs` (skipped with the reason, a failure under
+`BENCH_REQUIRE_SANDBOX=1`), on invented programs only. No test reads a private file or a quick-run tree.
+
+#### 2.1 The reference trees (`test/quick-package-refs.test.mjs`, fakes)
+
+1. `A_reference_workspace_is_the_templates_files_plus_the_reference_files_and_nothing_else` — given a fake template folder
+   and a reference folder of two source files; observed: the assembled tree's file list equals the union, bytes equal, the
+   template's frozen set is the template's.
+2. `A_reference_folder_that_holds_a_frozen_file_is_refused_naming_the_path` — given `build.sh` or `samples/x.in` inside the
+   reference folder; observed: `fail` with the relative path, nothing assembled.
+3. `A_reference_folder_that_holds_a_link_is_refused_and_never_read_through` — a symbolic link to a file outside; observed:
+   `fail` naming the link; the target's bytes appear nowhere.
+4. `Both_references_are_scored_by_the_ten_pass_driver_and_green_means_accepted_in_both_stacks` — fake seams make
+   `scorePasses` return `accepted` for both stacks; observed: P3 is green, the record names ten passes per stack and the
+   profile of each pass; with one stack `intermittently incorrect` the verdict is red naming the stack and the pass counts,
+   never a case id.
+5. `A_reference_pass_enforced_under_another_memory_limit_is_an_environment_halt_not_a_verdict` — a fake pass record whose
+   `memoryMaxBytes` differs from `inputs/memory-limit.json`; observed: the pass is an environment attempt (F1.S2's rule
+   carried into the package), the package stops with the two numbers.
+6. `The_record_keeps_each_references_largest_peak_slowest_wall_ten_pass_wall_and_retained_size` — fake passes with known
+   numbers; observed: the private record's per-stack rows carry the maximum peak and wall of each pass and of all ten, the
+   ten passes' wall and the retained bytes with the most retries (the numbers *Growth* reads).
+
+#### 2.2 The witnesses (`test/quick-package-witness.test.mjs`, fakes)
+
+7. `A_witness_is_the_reference_with_its_overlay_applied_and_an_overlay_onto_a_frozen_file_is_refused` — an overlay that
+   replaces `src/main.ts` is applied; one that adds `run.sh` is refused naming the path; a whole-tree folder (one that
+   carries the template's files) is refused as not an overlay.
+8. `A_witness_identical_to_its_reference_is_refused` — overlay bytes equal to the reference's; observed: `fail` saying the
+   witness changes nothing.
+9. `A_deterministic_witness_is_caught_when_in_its_one_pass_every_registered_case_fails_and_no_other_case_does` — fake run:
+   exactly the registered cases fail → caught; one registered case passes → not caught, the sentence gives counts
+   (registered, failed, missing).
+10. `An_unregistered_failure_is_a_mapping_to_fix_and_the_witness_is_not_caught_until_the_table_says_so` — a failing case
+    outside the registered set, deterministic or race; observed: not caught, the record keeps the actual failing set and
+    the sentence says "one case beyond the table" with counts; after the table registers the case (or the overlay changes)
+    the same run reads caught. Nothing is allowed silently.
+11. `A_race_witness_gets_ten_passes_and_is_judged_on_its_failing_passes_only` — fake passes: three failing passes, each
+    failing registered cases only, seven clean → caught, the seven clean passes kept in the record; one failing pass with a
+    case outside the registered set → not caught; ten clean passes → not caught, the sentence says "a trap with no catching
+    case"; the passes alternate the two profiles like a session's.
+12. `A_witness_whose_build_fails_is_not_caught_and_that_is_the_point` — `buildFn` returns a failed build; observed: not
+    caught, reason `does not build`; a guard against "every case failed, so it is caught".
+13. `A_timeout_or_a_hang_of_a_registered_case_counts_as_that_case_failing` — a pass whose registered case ends in the test
+    bound, a step deadline or a stop within the grace period; observed: it counts as a failure of that case in both
+    witness kinds; the same on an unregistered case counts as a failure outside the set.
+14. `A_witness_pass_is_the_pass_child_with_the_affinity_read_back_on_its_profile` — the fake child records the mask it was
+    given: the 2-CPU profile for a deterministic witness, the alternating profiles for a race one; another mask is a halt
+    `affinity-not-applied`, never a verdict.
+15. `Every_trap_and_stack_row_of_the_table_names_an_existing_case_and_exactly_one_witness` — a manifest with a row for
+    both stacks and one witness → red naming the row and the missing stack; a row whose case is not in `cases/` → red; two
+    witnesses on one row → red; a witness whose trap row names no case → red; a complete manifest → green.
+
+#### 2.3 The suite, the R-ids, the manifest and the load rule (`test/quick-package-suite.test.mjs`, fakes)
+
+16. `Every_case_cites_at_least_one_R_id_that_exists_in_the_corrected_spec` — an invented spec with `**R1.**`…`**R7.**`;
+    a `cases.txt` line citing `R9` → red naming the case id and `R9` (the tool's own output stays on the host; nothing of
+    it is written to a public file); a line with no R-id → red; a comparison word outside FORMAT 3.1's list → red.
+17. `The_manifest_the_folder_and_cases_txt_agree_byte_for_byte` — a case file changed after `gen.py` ran (its sha256 in
+    `manifest.json` differs) → red naming the case; an id in `cases.txt` with no pair, or a pair not listed → red (the
+    held-out reader's own findings are reused, not rewritten).
+18. `traps_txt_is_exactly_the_union_of_the_trap_tables_cases` — a case in `traps.txt` no row names, or a row's case missing
+    from `traps.txt` → red with the counts.
+19. `A_spec_whose_sha256_differs_from_the_pinned_one_is_refused` — the package reads the spec text from the task
+    repository at the pin in `inputs/explore.json`; a text with another hash → refused before any scoring (the package
+    validates the text that will freeze).
+20. `The_F_LOAD_duration_rule_is_measured_over_every_pass_of_both_references_and_540_is_not_assumed` — fake pass records
+    with whole-scenario walls of the load cases under both profiles and a non-load twin's wall: slowest wall ≤ 600 − 30 and
+    ≤ 600 − 2 × non-load → green with the three numbers in the record; a slowest wall over either bound → red naming the
+    bound missed and the duration to write into the spec; a package with no twin measurement → red, never green by the
+    spec's number.
+
+#### 2.4 Conformance, the gate, the registry and the registration (`test/quick-package-registry.test.mjs`, fakes plus the real checker)
+
+21. `The_package_is_red_while_the_conformance_check_fails_or_the_verdict_row_is_still_its_placeholder` — the real
+    `conformance.mjs` over an invented spec in a temp repository with the FORMAT stand-in of
+    `lang-bench/test/fixtures/conformance/`: exit 1 → red with the checker's first line; exit 0 and a `Gate verdict` row
+    still at its placeholder → red; exit 0 and a verdict with a date → green.
+22. `The_package_identity_moves_with_any_byte_of_the_material_and_with_nothing_else` — same bytes twice → the same
+    identity; one byte of a witness overlay, of a case, of a reference file, of `manifest.json` or of the spec → a
+    different identity; a changed private record (a re-run) → the same identity.
+23. `The_registry_entry_holds_counts_hashes_and_durations_only` — the written `packages.json` entry: a scan finds no
+    `h\d{3}`, no witness or trap id, no absolute path, no text longer than a hash; its counts equal the manifest's; the
+    three F-LOAD numbers are integers of milliseconds.
+24. `register_refuses_while_any_item_is_red_or_the_record_is_older_than_the_material` — a record whose hashes differ
+    from the material now → refused; a red item → refused; everything green and current → the entry is written once,
+    and a second write with the same identity is a no-op.
+25. `The_registration_field_is_written_only_when_all_twelve_references_pass_and_nothing_else_writes_it` — a fake
+    registry with eleven passing references → refused naming the missing task and stack; twelve → `memory-limit.json`
+    gains `registration: { date, references: [12 × { task, stack, treeSha256 }] }`, the note reads "chosen" until then and
+    names the field after, `memoryLimit()` still loads the file, `bytes` is unchanged; a scan over `spikes/` finds no other
+    writer of the field; a second write is a no-op; a reference identity that is not one of the twelve registered ones is
+    named by F3.S1's guard (F3.S1's test, listed here as the consumer).
+
+#### 2.5 The leak checks and the gate records (`test/quick-package-leak.test.mjs`; makes temporary git repositories, as `quick-leak-scan` does)
+
+26. `leakcheck_reads_the_stack_reference_folders_and_the_witness_overlays_of_a_quick_task` — an invented line of 30+
+    characters from `refs-NN/csharp/src/X.cs` planted in a public file → a finding naming the file, never the text; the
+    same from `heldout-NN/mutants/<id>/src/main.ts` → a finding; the manifest's witness ids as words in a
+    `research/lang-v2/*.md` fixture → a finding (the id tier extended to a quick task's manifest).
+27. `A_line_equal_to_a_template_files_line_is_a_collision_not_a_needle` — a reference folder holding a line that also
+    stands in `spikes/lang-bench/templates/**` at HEAD; observed: that line is dropped from the needles and counted as a
+    collision, so the public templates are no finding; the same line with one character changed is a needle (the
+    collision rule of the committed runner, extended to the templates, read through git).
+28. `The_substring_needle_cap_holds_with_two_stack_references_per_task` — six invented tasks with reference folders of
+    the expected size; observed: the needle count stays under `SUBSTRING_NEEDLES_MAX`, or the check fails closed with
+    the count (never a slow run).
+29. `A_gate_record_holds_only_the_verdict_the_reviewer_count_and_findings_that_name_no_case` — over
+    `spikes/lang-bench/inputs/gates/spec-*.md` fixtures: a case id (`h\d{3}`), a witness id, a trap id of the manifest, a
+    line equal to a case line or a six-word window of the private notes → red naming the file and the line number, never
+    the text; a record of the verdict, the count and findings in words → green (`leakcheck`'s shingle tier already covers
+    the notes; this scan adds the ids and the case lines against the gate folder).
+
+#### 2.6 The real box (`test/quick-package-real.test.mjs`, real; invented programs only)
+
+30. `A_toy_reference_pair_on_the_real_templates_goes_through_the_package_check_end_to_end` — the echo daemons of
+    `quick-real-programs.mjs` (C# built by the template's `build.sh` in the real build box; Node started by `run.sh`)
+    with an invented held-out folder of three cases and a manifest with one trap per stack and one deterministic witness
+    each (the daemon answering wrongly on one word, registered to the one case that sends it); observed: both references
+    `accepted` ten of ten, both witnesses caught, the record written, the identity stable across two runs.
+31. `A_witness_that_only_the_memory_bound_catches_is_caught_through_the_certified_box` — the toy's word that allocates
+    without end (both stacks: the typed-buffer path and the object path of F1.S2's enforcement check) as a deterministic
+    witness registered to the one case that sends that word; observed: the case reads `memory limit` with its cause, the
+    witness is caught, the reference passes the same case; it halts on a host that cannot certify memory (never a pass).
+32. `A_race_toy_witness_is_caught_on_its_failing_passes_and_its_clean_passes_are_kept` — the toy's program that answers
+    wrongly only under the 2-CPU mask (`WRONG_ON_TWO`, the F1.S2 fixture) as a race witness registered to its case;
+    observed: the five 2-CPU passes fail that case only, the five 8-CPU passes are clean and kept, the witness is caught;
+    with the same program registered to another case it is not caught (an unregistered failure).
+33. `The_toy_references_are_scored_at_the_chosen_limit_read_back_from_the_cgroup` — every pass record's `memoryMaxBytes`
+    equals `inputs/memory-limit.json`'s bytes.
+
+#### 2.7 The command, the seal and the clear folder (`test/commands.test.mjs`, `quick-package-command.test.mjs`, `quick-package-seal.test.mjs`, fakes)
+
+34. `package_is_a_free_command_that_runs_on_the_scoring_CPUs_under_the_series_lock` — `package` is in `REEXEC`; it takes
+    the series lock of the task's explore root (so no session or scoring runs beside it) and releases it; a held lock is
+    a resumable halt (exit 3) with the holder named.
+35. `A_halted_package_check_resumes_from_its_records_and_runs_only_what_is_missing` — an environment halt after the C#
+    reference's sixth pass and two witnesses; a second run re-reads `passes/` and the witness records and runs the rest;
+    every record is written once (`wx`), nothing rewritten.
+36. `seal_makes_one_encrypted_archive_per_task_whose_unsealed_tree_hash_is_the_held_out_tree_hash` — the minigit seal
+    (`sealSuite`, `unseal`, a test key file) over an invented `cases/`: the archive decrypts to the same `casesTreeHash`;
+    the archive's sha256 goes into the registry entry; a changed archive byte fails to unseal or gives another hash.
+37. `The_clear_folder_is_mode_700_checked_against_the_archive_and_removed_after_each_pair_and_at_a_restart` — a clear
+    folder with mode 755 → refused naming the mode; one whose tree hash differs from the archive's → refused; after a
+    (fake) pair ends → removed; a run that starts with a stale clear folder → removed and remade from the archive, the
+    archive untouched; the check that needs the clear cases finds them again.
+
+Thirty-seven scenarios. Real-box ones: 30 to 33. Each is written red first and watched failing (`common.testing`); the
+reds file is `~/rsd/lang-v2/briefs/f2s1-reds.txt`.
+
+---
+
+### 3. The brief: what to build or extend, file by file
+
+All under `spikes/lang-explore/` unless said. Plain ESM on Node 26, no new dependency; functions under 50 lines,
+complexity at most 4 (`code-shape.test.mjs` holds it); expected failures are `ok`/`fail` values; an unknown is
+`{ known: false, why }`. Reuse before writing: every item names the code to call.
+
+| File | What | Limits |
+|---|---|---|
+| `lib/package-quick.mjs` (new) | `loadPackage(home, task)`: the held-out side (`loadHeldoutQuick`), the manifest's `traps` and `witnesses` blocks with their shape checks (trap → stack, cases; witness → trap, stack, kind `deterministic`/`race`, overlay folder), `refs-NN/<stack>/` listings by `lstat` (a link or a frozen file refused), the pinned spec text (`world.sources.spec`, hash-checked against `inputs/explore.json`). `assembleReference({ template, refFiles })` → a tree in an owned temp folder (the shape of `layDaemonTree` in `test/quick-real-programs.mjs`, which moves into `lib/` as a generic helper). `packageIdentity(material)` → the sha256 of section 1 P8. | Pure but for reading; no box here. |
+| `lib/package-refs.mjs` (new) | `validateReference({ world, stack, tree, heldout })`: `world.passSeams({ stack, source: tree, limits, sets: [{ name: 'heldout', dir }], traps })` into `scorePasses` (the exact call `measure-growth.mjs` makes), then `verdictOf`; green only on `accepted`; the per-pass peak, wall, ten-pass wall and retained size rows for the record (`dirBytes` from `lib/measure.mjs`); the memory read-back compared with `memoryLimit().bytes`. `loadRule({ passes, twinWall })`: the slowest whole-scenario wall of each load case against 600 s − 30 s and 600 s − 2 × the non-load twin's wall, the three numbers out. | Nothing of the pass driver changes; `passes.mjs` is called, not copied. The twin scenario (the load case with its load steps removed) is written by the suite author beside the case, outside `cases/`, under `heldout-NN/twins/`, and run once per reference through the same seams. |
+| `lib/package-witness.mjs` (new) | `applyWitness({ referenceTree, overlayDir })` (reuse `overlay` from `lib/heldout.mjs`; refuse a whole tree, a frozen file, an empty diff), the build through `buildAndRestore` (`copy-quick.mjs`), the runs: a deterministic witness through `runPassChild` once on `PROFILES[0]`; a race witness through `scorePasses` with ten passes exactly as a session (its `verdict.json` is not the witness verdict: the witness verdict is computed from the per-pass case sets). `witnessVerdict({ kind, registered, passes })`: the two rules of section 1 P5 as small predicates — deterministic: failing set equals the registered set; race: every failing pass's set is non-empty and a subset of the registered set, and at least one pass fails; a case whose verdict is the test bound, a deadline or a stop-timeout counts as failing. One record file per witness, `wx`, under the package run folder, with every pass's set and the walls (the cost). | A witness run is never shortened to `--only`: the "no other case" half needs the whole suite. The cost of 05 is written into its record and quoted in the stories document (counts and durations) before the other five start. |
+| `lib/package-suite.mjs` (new) | The R-id check (`**R<n>.**` ids parsed from the spec text, the way `conformance-spec.mjs` does — import it from lang-bench, do not re-parse), the comparison-word check (FORMAT 3.1's list, from `conformance-facts.mjs`), the manifest/folder/`cases.txt` agreement (reusing the held-out reader's problems), the trap table checks (every trap-and-stack row: ≥ 1 existing case, exactly one witness), `traps.txt` as the union. | Text in, findings out; no I/O beyond the folder reads. |
+| `lib/package-record.mjs` (new) | The private run folder `~/rsd/lang-v2/explore/package-NN/<yyyymmddTHHMMSSZ>-<gen>/` (the name shape of `repartition`), `record.json` written once at the end (items P1–P8 and P10 with `ok`, the counts, the hashes, the F-LOAD numbers, the witness cost, the trace lines the operator adds for a failure), and `registerPackage()` → `inputs/packages.json` (counts, hashes, durations only; the whole file rewritten with sorted keys; refused while any item is red or the material's hashes moved). | Append-only folder; nothing in it is ever edited. |
+| `lib/memory-limit.mjs`, `inputs/memory-limit.json` | `registerMemoryValue({ packages })`: writes the `registration` field (date; twelve `{ task, stack, treeSha256 }`) only when `packages.json` holds all six tasks with both references `accepted` at the file's `bytes`, and rewrites the note ("chosen" → the field); `memoryLimit()` returns `registration` (or `null`) beside `bytes`. The loader's checks stay; a file with the field whose twelve identities are not twelve distinct task-stack pairs is refused. A scan test holds that no other module writes the field (the shape of the one-source scan of the figure). | One writer. F3.S1's guard (`series.mjs`) reads the field; that half is F3.S1's. |
+| `lib/package-seal.mjs` (new) | `sealPackage({ casesDir, keyFile, outDir })` and `unsealTo({ archive, keyFile, clearDir })` over minigit's `sealSuite`/`unseal` (`spikes/minigit-bench/lib/heldout-seal.mjs`, `heldout-crypto.mjs`: AES-256-GCM, the key a mode-600 file outside every git tree and box); `clearFolderProblem(dir, archiveHash)`: mode not 700, or the tree hash not the archive's → a sentence; `removeClear(dir)` after each pair and at the start of a run after an interruption (`removeUnder` of `policy-ab-quick/lib/safe-rm.mjs`). The archive lives at `~/rsd/lang-v2/explore/heldout-NN/suite.enc`, the clear working folder is `heldout-NN/cases/` itself (made again from the archive when absent). | The seal is written once per package state; a re-seal after a case change is a new archive hash and a new identity. F2.S2 registers the hash; F3.S1's series uses `removeClear` after each pair. |
+| `lib/commands.mjs`, `explore.mjs` | The command `node spikes/lang-explore/explore.mjs package --task NN [--only refs\|witnesses\|suite\|load\|all] [--register] [--seal] [--accept-noisy <why>]`, FREE, in `REEXEC` (re-executed under `taskset -c 6,7`), the series lock taken as `rescore` takes it, the quiet check as `measure-growth.mjs` runs it (a package validation is a measurement of the references' peaks and walls). A separate verb, `register-memory`, reads `packages.json` and writes the field (P9). Exit 0 green, 1 an item red (the sentence names the item and counts), 3 a resumable halt, 4 usage or a refusal, 5 a failure. | One command; the sub-steps are the modules above. The conformance check is run by the operator, not by this command (it lives in lang-bench and needs the task repository): the command reads the header row and the gate record's existence and says so. |
+| `lib/leak-material.mjs`, `lib/leak.mjs` | `codeFiles(root)` already reads `mutants/` under the held-out root and `quickRefFiles(refsDir)` reads `refs-NN/**` recursively: confirm with scenario 26, change nothing unless red. New: the collision rule extended to every file under `spikes/lang-bench/templates/**` at HEAD (read through git like the runner's lines; `committedRunnerLines` is the model), so a template line inside a reference folder is a collision. `idsOfHeldout` reads a quick task's `manifest.witnesses` keys beside `traps.txt`. The gate-record scan of scenario 29 (`leakGates`) over `spikes/lang-bench/inputs/gates/`: case ids, witness and trap ids of every manifest, exact case lines. The both-repositories scope and the publication-commit scan are build step 2b's, merged before this story's first spec pull request. | A code line that is a template's line is dropped from the needles only; case lines and note shingles never are. |
+| `lib/heldout-quick.mjs` | `loadHeldoutQuick` also returns the manifest when present (`manifest.json` read with its per-case hashes checked against the files); a manifest with an unknown top-level key is refused naming the key; an absent `cases/` beside a present `suite.enc` is "sealed, not unsealed", not "absent". | The tree hash stays what it was (F2.S2 registers it). |
+| `inputs/explore.json`, `inputs/packages.json` (new) | Per task the `spec` pin moves to the corrected text's sha and sha256 on the task repository's `main` (after its pull request merges by merge condition 5); the six `format` pins and `spikes/lang-bench/inputs/specs.d/format.json` are the pins branch's (`c204726`, sha256 `6c3546bb…`), merged first; `privateNotes.sha256` moves with the test-design files. `packages.json`: `{ "NN": { specSha256, formatSha256, heldoutTreeSha256, archiveSha256, refsTreeSha256: { csharp, node }, witnessesTreeSha256, counts: { cases, traps, witnesses }, memoryBytes, load: { slowestWallMs, twinWallMs, durationS }, gate: { verdict, date, reviewers }, identity, validatedOn } }`. | Hashes, counts and durations only; a scan test (scenario 23) holds it. |
+| `spikes/lang-bench/inputs/gates/spec-NN.md` (new, six) | The gate record in `FORMAT-v2.md`'s shape, reduced to D25's leak rule: the checker's `ok format sha256 …` line, each round's verdict, the reviewer count, the findings in words that name no case, the per-stack bias answer in words, what was declined and why. | No case text, case id or trap name; scenario 29's scan and `leakcheck`'s shingles hold it. |
+| The task repository (six pull requests, one per spec, none before build step 2b has merged) | The corrected spec and its samples; the header row; the eight fixed sentences; F-LOAD's measured duration; task 04's sample files and placeholder names; nothing else of substance. Each pull request carries the conformance line, the gate verdict, and the bench-side checks' commands, exits and head sha (merge condition 5); `leakcheck` over both repositories and the line scan run before each merge; the bench pins pull request runs them again against the merge commit. | A spec change after its gate is a dated amendment in section 8, applied to both stacks (FORMAT 1.3). |
+| `research/module_lang_explore.md`, `research/module_tests.md`, `research/module_lang_bench.md` | The package tool's section (what a package is, the command, the records, the registry, the two witness rules, the registration field, the seal and the clear folder's lifecycle), the scenario table with observed numbers and load, the gate records' row. | Doc lines only. |
+
+**Where each private artefact lives, so both leak checks read it** (merge condition 3; the line scan reads `heldout-NN`
+and `refs-NN` recursively, `leakcheck` reads the case lines, `refs-NN/**`, `mutants/**`, `gen.py`, the oracle files and
+the test designs' shingles):
+
+- `~/rsd/lang-v2/explore/heldout-NN/cases/` — the pairs and `cases.txt` (the clear working folder, mode 700, remade from
+  the archive); `heldout-NN/suite.enc` — the sealed archive; `heldout-NN/traps.txt`; `heldout-NN/manifest.json` (cases,
+  traps, witnesses); `heldout-NN/mutants/<id>/…` (the witness overlays; the folder keeps the plan's name); `heldout-NN/twins/`
+  (the load cases without their load steps, for the F-LOAD rule); `heldout-NN/gen.py`.
+- `~/rsd/lang-v2/explore/refs-NN/csharp/`, `refs-NN/node/` — the two references (agent-written files only); `refs-NN/ref.py`
+  stays as the generator's oracle.
+- `~/rsd/lang-v2/explore/package-NN/<run>/` — the records (they hold case ids; the leak checks do not read this folder
+  and nothing publishes from it).
+- `~/rsd/lang-v2/test-design/NN.md` — the designs, updated with the real case ids (pinned by sha in `explore.json`);
+  `test-design/needles-NN.txt` — the conformance needles, one per line, for `--needles`.
+- The scratch folder of the bias review — outside every repository and every private folder the harness reads (a temp
+  folder under the operator's scratch area), made for the round and removed after it.
+- The seal key — one mode-600 file outside every git tree and box, as `heldout-tool.mjs keygen` makes it.
+
+**Growth.** Per task: the records of two ten-pass validations (about 0.8 MB each, F1.S2's measurement), one record per
+deterministic witness (a few KB) and ten passes' records per race witness (about 0.8 MB), kept for ever under
+`~/rsd/lang-v2/explore/package-NN/`, append only; one archive per task beside the cases; the built trees live only during a
+run and are removed with it (the Node tree with its packages is about 58 MB). Six tasks: well under 1 GB in all.
+Interrupted: a run resumes from its records (scenario 35), a dead run's temporary files are removed by the next
+(`publish-once.mjs`), and a stale clear folder is removed and remade from the archive (scenario 37).
+
+**Commands, one suite at a time, lowered** (`LOW=.agents/conventions/tools/low-priority.mjs`): the three suites of the F1
+stories document's §3 with `BENCH_REQUIRE_SANDBOX=1` and plain; the three `--check`s; `leakcheck` over both repositories and
+the line scan; `plan-lifecycle`. Real C# builds keep `-m:4`; documents are written with Write or Edit, never a heredoc
+that quotes a build line.
+
+---
+
+### 4. The order across the six tasks
+
+**Task 05 first, end to end** (spec fix, gate, samples, two references, the load rule, suite checks, witnesses, leak
+checks, seal, registry), **its witness cost recorded** (walls and sizes per witness kind, in the private record and as
+counts and durations in the stories document), then **04, 06, 07, 08 and 10 in parallel**. Parallel means the
+authoring: the spec fixes, the references and the witnesses are written at once by separate coders; the validation runs
+serialise on the scoring CPUs under the series lock, one task's run after another's, because scoring never shares the
+CPUs with anything (the plan's *The scoring CPUs*). The memory value is registered once, after the sixth package.
+
+Why 05 and not 04 (the plan now fixes 05; the reasons stand):
+
+1. 05 is the task whose spec makes the memory bound itself a tested behaviour (its R24, on releasing the memory of what
+   no longer exists; its R26, on serving every other connection while one reads slowly). A witness there can be caught
+   only by the memory bound in the certified box, a package path that no other kind of trap needs and that the first task
+   must prove or disprove before five tasks run in parallel. Task 04 has no such path.
+2. 05's suite is the slowest per pass (expiry margins, a slow-reader wait, a churn load), so its ten-pass cost — and the
+   cost of a race witness's ten passes — bounds the budget for the other five honestly; 04's would flatter it.
+3. 05 is the known task with needles (D18), so the `--needles` half of the conformance check and the needle half of the
+   push scan are exercised on the first package.
+4. 05 is a daemon over TCP with byte-exact replies, the shape 10 shares; 04's HTTP and JSON path is then exercised by
+   three tasks at once (04, 06, 08) on a `runCases` path F1 already ran over the quick run's 36 sessions of both kinds.
+
+Against 05 first: 04 is the web pilot and has one more defect (no sample files in git). Both are small.
+
+---
+
+### 5. What could go wrong, and the scenario that catches it
+
+| Where a package could let a wrong verdict through later | Caught by |
+|---|---|
+| A reference passes nine passes of ten and is called green, so a flaky suite case ships and rejects honest sessions | 4 (green only on `accepted`, ten of ten, both stacks) |
+| A reference is validated under another memory limit than the series enforces (a stale `memory-limit.json`, a changed cgroup) | 5, 33 |
+| The memory value is called registered while a reference has not passed under it, so the series runs on an unconfirmed bound | 25; F3.S1's guard reads the field |
+| A load scenario fits 540 s on paper and not on the scoring CPUs, so an honest program fails the test bound | 20 (measured over every pass of both references under both profiles, with the non-load twin) |
+| A witness "is caught" because its build failed, so a trap looks covered that no case catches | 12 |
+| A witness equals its reference, so a trap is "covered" by a program that is the reference | 8 |
+| A witness is caught by a case outside its trap, and its own trap's cases never fired; or a wide defect fails cases the table never registered, so the table lies about what each case catches | 9, 10, 11 ("no other case"; an extra failure is a mapping to fix) |
+| A race witness passes on the 8-CPU profile and is called caught, or fails once by a hang that is read as "no verdict" | 11, 13, 14, 32 |
+| A race witness is judged by a majority of clean passes | 11 (judged on its failing passes only) |
+| A trap-and-stack row has no witness, or two, so "one per trap per stack" is not what the manifest says | 15 |
+| A case cites a requirement the corrected spec no longer has, or none, so a failure cannot be adjudicated | 16 |
+| A case file was edited after the generator ran, so the manifest's hash and the file disagree | 17 |
+| `traps.txt` and the trap table drift, so the record's trap-hit count means another thing than the table | 18 |
+| The package validates one spec text and another freezes | 19, P1's pin |
+| A spec is called gated while the checker fails or the header says otherwise | 21 |
+| The registry names a case id, a trap id or a path | 23 |
+| The registry is written from a stale run | 24, 22 |
+| A reference line or a witness line enters git unseen | 26; the line scan by hand before each merge; 2b's both-repositories scope |
+| The leak check refuses to run because two stack references push the needle count over the cap, and someone disables it | 28 (fails closed with the count; the fix is fewer needles, never a weaker check) |
+| The template's own lines inside a reference folder flood the check with false findings, and the findings are then waved through | 27 |
+| A gate record carries a case id, a trap name or a case line in a finding | 29 |
+| The suite goes to the vendors from a repository checkout, so a scratch copy of it is left where git or a box can see it | P6 (a scratch folder outside every repository); the operator's record of the folder's removal |
+| A reference folder carries a frozen file, so the package scores a different `build.sh` than the series will | 2 |
+| A package run overlaps a session or another scoring and the measured peaks and walls are wrong | 34 |
+| A halted run is restarted from scratch and the earlier records are overwritten | 35 |
+| The clear cases stay on disk between pairs, world-readable, or drift from the archive | 37, 36 |
+| The load cases are too small to let a program that keeps what the spec says it must release cross the limit inside the test bound, so a trap the spec names is never catchable | 31 for the tool's half; the sizing itself is a private matter of the first daemon package and is recorded in its trace lines |
+
+---
+
+### 6. Fairness: two references of comparable care
+
+Neither stack's reference may fail for a reason of its own, because a failing reference moves the spec or the suite for
+both stacks (D72, the joint validation). How the package keeps them comparable:
+
+1. **Same brief, same template, same effort.** One Sonnet coder per stack per task, from the same corrected spec and the
+   same private notes, on the stack's own template with the offered packages only (`PACKAGES.md`), under D66's build
+   policy; no flag, no file and no setting an agent could not use. The two coders do not see each other's code.
+2. **One judge reads both before validation.** An Opus judge reads the two references side by side and writes one line
+   per task: of comparable care, or what one has that the other lacks (error handling per connection, a bounded write
+   queue, a sweep, a lock). A gap is closed before the ten passes run, so the validation measures the suite and the spec,
+   not one coder's afternoon.
+3. **The same ten passes, at the same value, on both profiles** (section 1 P3), and the record keeps each reference's
+   largest peak and slowest wall per pass beside the other's. A reference near the limit or near a deadline is seen; the
+   plan's rule applies (a reference that cannot pass is fixed, or the value moves for all six — never for one, D72) and
+   the deadlines of the suite, the load durations included (P3's measured rule), are set so both references meet them with
+   margin (F-DEADLINES), never so one does.
+4. **Nothing in a reference is tuned to the scoring CPUs**: a reference that passes only on one profile is a defect of the
+   reference (or of the case's margin), traced and fixed, never a reason to drop a pass.
+5. **A reference is not a model answer.** It never enters a workspace, a prompt, a run base or git; agents never see it
+   (D40, D41, item 11: the references and the trap table stay private past the freeze). Its only job is to show that the
+   suite is passable in that stack by a program of ordinary care.
+6. **The trap table is reported per stack** (T2): where one stack has more trap rows or heavier ones, the table says so
+   and the witnesses per stack stand beside it; `defects` in the series counts distinct trap classes, so one wide trap does
+   not outweigh several narrow ones. The witness rule does not differ by stack: the same two kinds, the same passes,
+   the same "no other case".
+
+---
+
+### Ambiguities in the plan found while writing (for the team lead; also in the hand-back report)
+
+Settled by the epoch-10 revision (kept here as the record): the bias question's document and its leak rule (D25); the
+registration of the memory value as a field (D72); FORMAT PR #4 merged, the bench pins as build step 2a; the first task.
+Still open or new:
+
+1. "Every case cites an R-id" is read as "an R-id that exists in the corrected spec", checked against the pinned text
+   (there is no `specs.json` entry for the six before F2.S2).
+2. The analysis cites "known defects" of the draft specs; no written list exists. The conformance run of 2026-11-07
+   against the amended FORMAT (section 1, P1) is the list now; one task also lacks its sample files in git.
+3. The test-design files change with the package (the table gets real case ids), so `explore.json`'s private-notes
+   hashes move in the same pull request.
+4. **The F-LOAD rule's "non-load part"** is not defined by the plan. This spec reads it as the wall of the same scenario
+   with its load steps removed (a twin scenario, run once per reference through the same seams), because the runner
+   records a case's wall and not a step's. If the team lead prefers a per-step measure, the runner's record must grow by
+   per-step timing first (a runner pin move).
+5. **"One per trap per stack" and the "no other case" rule together** make the trap table name every case a wide defect
+   fails (a defect that fails every scenario is registered to every case). That is what the rule asks; it is said here so
+   the table's size is not read as a mistake.
+6. **Race witnesses cost ten passes each.** The plan asks for 05's cost to be measured first; if the cost is too high for
+   the other five, the decision is the team lead's (fewer race rows, or more scoring time), never a shortened run.
 
 ## F2.S2 — one freeze
 
