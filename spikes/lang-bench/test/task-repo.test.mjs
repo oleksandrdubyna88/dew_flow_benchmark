@@ -149,7 +149,7 @@ test('The_real_task_repository_at_the_pin_matches_the_hash_list', async t => {
   assert.equal(r.ok, true, r.reason);
   assert.equal(r.value.sha, PINNED_TASK_SHA);
   assert.equal(list.trim().split('\n').length, r.value.entries.length);
-  const wrong = list.replace('06c36608', '06c36609');
+  const wrong = list.replace('6c3546bb', '6c3546bc');
   const other = await fetchTaskRepo({ cacheDir: cacheOf(t), repo: process.env.LANG_V2_TASK_REPO, hashesText: wrong });
   assert.equal(other.ok, false);
   assert.match(other.reason, /todo\/tasks\/FORMAT\.md \(sha256 differs\)/);

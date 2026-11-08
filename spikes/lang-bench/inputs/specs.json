@@ -1,8 +1,8 @@
 {
   "A": {
     "gate": "inputs/gates/FORMAT-v2.md",
-    "grammarSha256": "8b6943ac54aad0838160307b8c805de7684e1e8007b14ab030f60cbf7baed4c5",
-    "sha256": "06c3660883d1ac7ddd8411ac93b5f4c9b98739c2e7d1b01288b7b7184f5bd14b",
+    "grammarSha256": "8d87346f11d43d0ccdebec5d73116324fe3af43132f5887ff1fd89628c9d45f2",
+    "sha256": "6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47",
     "tasks": [
       "01",
       "02",
