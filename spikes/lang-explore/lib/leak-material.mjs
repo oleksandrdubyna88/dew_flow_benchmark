@@ -9,6 +9,7 @@ import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
 import { buildLineKeys, codeByKey } from './leak-lines.mjs';
 import { buildChunkKeys } from './leak-chunks.mjs';
 import { buildWindowKeys } from './leak-windows.mjs';
+import { sealedAbsentProblem } from './heldout-quick.mjs';
 import { BITMAP_SLOTS, buildSubstringIndex } from './leak-substring.mjs';
 import { NO_REVIEW } from './leak-reviewed.mjs';
 import { isBinary, normLine, polyHash, usable } from './leak-text.mjs';
@@ -51,6 +52,9 @@ const linkProblem = tasks => {
   const found = tasks.flatMap(t => privateLinks({ root: t.heldout.dir, refsDir: t.heldout.refsDir }).map(rel => `task ${t.id}: ${rel}`));
   return found.length === 0 ? null : `the private side holds a link, which the check does not read through and will not skip: ${found.join(', ')}`;
 };
+
+/** The sentence refusing a sealed task whose clear folder is gone before the link check reads it (the same function as the task loading: `sealedAbsentProblem`), or null. A task given without its pins (`pins`) is not asked. */
+const sealedProblem = ({ tasks, home, frozenFile }) => tasks.filter(t => t.pins !== undefined).map(t => sealedAbsentProblem({ home, task: t.pins, frozenFile })).find(p => p !== null) ?? null;
 
 const BUILD_OUTPUT = /(?:^|\/)(?:__pycache__|node_modules|bin|obj)\//;
 const SOURCE_MAX_BYTES = 2_000_000;
@@ -164,6 +168,6 @@ function buildTiers({ tasks, runnerLines = new Set(), grammarLines = new Set(), 
 
 /** The material of the tasks, or the refusal when a private folder of any of them holds a link (see `buildTiers` for the options). -> `ok(material)` | `fail(sentence)`. */
 export function buildMaterial(options) {
-  const linked = linkProblem(options.tasks);
-  return linked === null ? buildTiers(options) : fail(linked);
+  const problem = sealedProblem(options) ?? linkProblem(options.tasks);
+  return problem === null ? buildTiers(options) : fail(problem);
 }

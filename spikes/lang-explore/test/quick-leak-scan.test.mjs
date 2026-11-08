@@ -7,7 +7,7 @@ import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { commitFiles, git, repoWith } from './leak-scan-fixture.mjs';
-import { EXPLORE, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
+import { EXPLORE, presentMaterial, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
 const VALUE = 'recv c "invented-answer-for-the-scan-XYZZY-918273"';
 const REF = 'def invented_reference_for_the_scan(state, event): return fold(state, event, 918273)';
@@ -21,7 +21,7 @@ function homeWithTask04() {
 }
 
 const materialFor = (home, grammarLines = new Set()) => {
-  const m = leakMaterial({ home, explore: EXPLORE, publicText: '', grammarLines });
+  const m = presentMaterial({ home, publicText: '', grammarLines });
   assert.equal(m.ok, true, m.reason);
   return m.value.material;
 };

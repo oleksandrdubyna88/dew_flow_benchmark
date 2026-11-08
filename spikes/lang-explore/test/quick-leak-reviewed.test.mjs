@@ -13,7 +13,7 @@ import { normLine } from '../lib/leak-text.mjs';
 import { loadReviewed, parseReviewed, reviewHash, reviewedPath } from '../lib/leak-reviewed.mjs';
 import { verifyCandidates } from '../lib/leak-verify.mjs';
 import { commitFiles, git, repoWith } from './leak-scan-fixture.mjs';
-import { EXPLORE, quickHome, quickTask, reviewedEntry, writeQuickHeldout, writeReviewed } from './quick-leak-fixture.mjs';
+import { EXPLORE, presentMaterial, quickHome, quickTask, reviewedEntry, writeQuickHeldout, writeReviewed } from './quick-leak-fixture.mjs';
 
 const LINE_A = 'recv c "invented-reviewed-answer-alpha-4471"';
 const LINE_B = 'recv c "invented-reviewed-answer-bravo-4471"'; // LINE_A with one word changed
@@ -35,7 +35,7 @@ function homeWith(over = {}, list = null) {
 }
 
 const materialOf = home => {
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, true, r.reason);
   return r.value;
 };
@@ -104,7 +104,7 @@ test('A_window_of_a_reviewed_line_and_new_lines_is_found_and_a_window_of_reviewe
 test('A_window_of_FORMAT_grammar_and_reviewed_lines_is_dropped_and_one_new_line_in_it_keeps_it', () => {
   const grammar = new Set([normLine(WIN[0])]);
   const build = list => {
-    const r = leakMaterial({ home: windowHome(list), explore: EXPLORE, publicText: '', grammarLines: grammar });
+    const r = presentMaterial({ home: windowHome(list), publicText: '', grammarLines: grammar });
     return r.value.material;
   };
   assert.equal(build([reviewedEntry('line', WIN[1]), reviewedEntry('line', WIN[2])]).windowKeys.size, 0, 'grammar, reviewed, reviewed');
@@ -170,7 +170,7 @@ const MALFORMED = {
 test('A_malformed_file_is_a_refusal_never_an_empty_list', () => {
   for (const [what, content] of Object.entries(MALFORMED)) {
     const home = homeWith({}, content);
-    const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+    const r = presentMaterial({ home, publicText: '' });
     assert.equal(r.ok, false, `${what}: refused`);
     assert.match(r.reason, /leak-reviewed\.json/, what);
   }
