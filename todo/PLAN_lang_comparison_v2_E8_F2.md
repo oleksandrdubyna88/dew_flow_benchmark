@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, F2 stories: six validation packages and one freeze — the packages, the rulesets, the seal, the tag, the workspaces and the freeze record
 
-> Status: **plan only, 2026-11-08: F2's stories document, revised to the parent's epoch-10 revision (branch `docs/lang-v2-epoch10-revision`, `a10972a3` and after, its PR #181). Nothing of F2 is built. F2 starts after the parent's build steps 2a (F1's tail, the bench pins of FORMAT's second amendment) and 2b (`leakcheck` over both repositories). F2.S1 is a cornerstone: its spec is Fable's and is not yet copied in.** *Before this:* 2026-11-07, written when F2 started, against epoch 9.
+> Status: **plan only, 2026-11-08: F2's stories document, on the parent's epoch 10 (#181); build step 2a is merged (#182); revised for F2's plan round (`revise`, 2 of 2, nine findings accepted): the freeze's git sequence, the post-merge leak checks, the local and the superseding tag, FORMAT's bytes, atomic outputs, and the team lead's note on F2.S1 (the race witness's hangs, task 05 and the chunk decision, the atomic locked clear folder, one archive path and one registry). Nothing of F2 is built. F2 starts after build step 2b (`leakcheck` over both repositories). F2.S1's cornerstone spec is Fable's, copied in.** *Before this:* 2026-11-08, revised to the epoch-10 revision; 2026-11-07, written when F2 started, against epoch 9.
 > Epic F2 of [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (*Operative plan for epoch 9* with its epoch-10 lines,
 > *Epics in force*, F2). A stories document keeps no ledger: its changes are entries in the parent
 > (`common.plan-change-control`), and writing it when the epic starts is not a change. Read at `main` `57ccc379` (#179, epic F1)
@@ -498,6 +498,60 @@ Still open or new:
 6. **Race witnesses cost ten passes each.** The plan asks for 05's cost to be measured first; if the cost is too high for
    the other five, the decision is the team lead's (fewer race rows, or more scoring time), never a shortened run.
 
+### The team lead's note on F2.S1 (2026-11-08, F2's plan round)
+
+The Fable spec above is copied without change. F2's plan round (`revise`, 2 of 2 reviewers, nine findings, all accepted) asked
+for four clarifications of it. They are written here, as F1's document did for its cornerstone, and where they differ from the
+text above, **this note holds**.
+
+1. **A race witness and a hang outside its trap** (P5, scenarios 11 and 13). In a failing pass, a timeout or a hang of a case
+   that is **not** registered for the witness's trap is a failure outside the registered cases, so that pass breaks the rule
+   "each failing pass fails at least one registered case and no case outside them", and the witness is **not caught**: the
+   record keeps the case and the sentence says "a hang outside the trap" with counts. It is a mapping to fix (the table, or the
+   witness), never allowed silently, exactly as for any other extra failure. A hang cannot outlive its case: every case runs
+   under the runner's per-step deadlines and its 600 s test bound (`spikes/lang-bench/runner/rs_session.py:153-156`,
+   `check_bound`, and `stop_at` at `:198`), and the runner ends a case by killing the program's whole cgroup
+   (`rs_cgroup.py:174`, `cgroup.kill`), with the launcher's process group killed too where the cgroup kill cannot be written
+   (`rs_scope.py:9`, `:128`; `rs_launch.py:100`); the execution layer bounds each case's wall (`caseWallMs`,
+   `spikes/lang-bench/lib/exec-layer/run.mjs:119`); and F1's pass child has its own wall bound and kills its whole process tree
+   when it passes (`spikes/lang-explore/lib/pass-run.mjs:90`, `runPassChild` with `passChildDeadlineMs`, `killTree` at `:12`). A
+   pass ended by the pass child's bound, not by a case, is an environment attempt (D71), never a witness verdict.
+2. **The order of task 05 and the chunk-parsing decision** (section 4, P8; F2.S2 (c)). Task 05's package runs first and gives
+   the two numbers of F2.S2 (c): **S**, its largest expected reply body, counted from its suite as soon as the suite is written,
+   and **P**, the current parser's time on a body of that size. If (c)'s rule says build: the runner is changed, re-pinned and
+   gated, and merged, **before** task 05's package identity (P8) and its `packages.json` entry are written and **before** any of
+   the other five tasks starts its validation; task 05's references and witnesses then run again on the new runner, ten of ten.
+   Only then is task 05's entry written. If the rule says no, the dated "not needed" line is written first, and then the entry.
+3. **The clear folder is made atomically, under a lock** (P10, scenario 37; `lib/package-seal.mjs` `unsealTo`, and F2.S2's
+   `heldout-open`). An exclusive lock on the task's folder, `heldout-NN/.clear.lock`, is held for every open and every close: a
+   file created `wx` with the owner's pid and start time, in the shape of `takeScorerLock`
+   (`spikes/lang-explore/lib/pass-locks.mjs:72`), a dead owner's lock taken over and named. `unsealTo` unseals into an owned
+   temporary folder **inside `heldout-NN/`** (same filesystem; an `ownedFor` name starting with `.`), sets mode 700, checks its
+   tree hash against the registered `treeSha256`, and only then renames it to `heldout-NN/cases/` in one step; a rename that
+   finds the name taken fails and the temporary folder is removed. A crash leaves at most an owned temporary folder, which the
+   next open or close removes once its owner is gone; it never leaves a half-written `cases/`. Close removes `cases/` under the
+   same lock.
+4. **One archive path and one registry** (P8, P10; F2.S2 (d)).
+   - The archive is `~/rsd/lang-v2/explore/heldout-NN/suite.enc`, and no other name. The clear working folder is
+     `heldout-NN/cases/`.
+   - The one registry of the seal is `spikes/lang-explore/inputs/heldout-frozen.json` (per task: the archive's path relative to
+     the explore root, its sha256, the clear tree's `treeSha256`, `caseCount`, `trapCount`, the sha256 of `manifest.json` (the
+     trap coverage table) and the date). **`packages.json` does not hold `archiveSha256`**: P8's package identity reads the
+     archive's hash from `heldout-frozen.json`, so no second copy exists to drift.
+   - Sealing writes the archive first, whole, through the publish-once path (`spikes/lang-explore/lib/publish-once.mjs`
+     `publishOnce`: a temporary name, fsync, a hard link that fails if `suite.enc` exists), then the registry entry, written
+     the same way to a temporary file and renamed. Both steps resume: an archive present with no entry is unsealed to a
+     temporary folder and, when its tree hash equals today's `cases/`, its entry is written; when it does not, the seal refuses
+     and names the task (nothing is overwritten); an archive and an equal entry are a no-op.
+   - **Every entry point first removes a stale clear folder whose registered archive exists** — each reader of F2.S2 (d)'s
+     fail-closed table, `package`, `init`, `run`, `rescore`, `replay`, `leakcheck` — under the lock: a `cases/` whose tree
+     hash equals the archive's is removed; one whose hash differs is **refused, not removed** ("the clear folder differs from
+     its archive: changed after sealing"), because removing it would delete bytes that are in no archive (the parent's
+     recovery rule). Then the reader opens the archive if it needs the cases, or fails closed.
+   - `lib/package-seal.mjs`, the lock, the registry writer, the stale-folder removal and the fail-closed readers ship in **one
+     pull request** (§4, bench PR 4a), merged before task 05's package is sealed, so no archive is ever registered while a
+     reader can still fail open. F2.S1's `package --seal` calls that module.
+
 ## F2.S2 — one freeze
 
 **Model:** scenarios + brief Opus (this document) · code Sonnet · review Opus · fixes Sonnet; the ruleset apply and the tag push
@@ -587,9 +641,13 @@ read scans only new bytes; the caller stops copying the whole buffer. Nothing el
 D40 gate of every task validated on the old one** (parent §6.1): F2.S1's 10 of 10 runs for those tasks are re-run on the new
 runner before the freeze.
 
-**When.** The decision needs S from task 05, the first task F2.S1 takes end to end (parent *Build order* 3, epoch 10). Decide
-right after task 05's package, before the other five validate, so at most task 05 re-runs. A later package whose S breaks the rule reopens the decision before
-its own validation. The runner is copied into every workspace, so (c) is settled before (e) writes any.
+**When, exactly** (the team lead's note on F2.S1, item 2). Task 05's package runs first and gives S (counted from its suite as
+soon as the suite is written) and P. If the rule says build, the runner change is made, re-pinned, gated and merged **before**
+task 05's package identity and its `packages.json` entry are written and **before** any of the other five tasks starts; task
+05's references and witnesses then run again on the new runner, ten of ten, and only then is its entry written. If the rule says
+no, the dated "not needed" line comes first, then task 05's entry. A later task whose S breaks the rule stops before its own
+validation and reopens the decision; any task already validated on the old runner then re-runs (parent §6.1). The runner is
+copied into every workspace, so (c) is settled before (e) writes any.
 
 **Done when:** the dated line exists; if built, merged with its red recorded and the re-runs done.
 
@@ -599,17 +657,29 @@ Built in parallel with F2.S1, on synthetic fixtures only (`ownedFor({ token: 'be
 never a real spec draft, case, reference or private file). Merged before the dry run of (e). `leakcheck` over both repositories
 is not built here: it is build step 2b's, and (e) runs it.
 
-**One CLI for the freeze:** `spikes/lang-bench/freeze.mjs`, with these verbs; each reads, prints and exits, and only `record`
-writes, one file:
+**One CLI for the freeze:** `spikes/lang-bench/freeze.mjs`, with these verbs; each reads, prints and exits, and only `hashes
+--write` and `record` write, one file each:
 
 | Verb | What it does | Exit |
 |---|---|---|
 | `plan --repo <task> --ref <commit> --date <yyyymmdd>` | prints the freeze commit's edits: in each of the six specs, the `Freeze tag` row set to `` `spec-frozen-B-<date>` ``, and nothing else; refuses first | 0 a plan, 3 refused |
-| `check-commit --repo <task> --before <commit> --after <commit>` | the freeze commit changes only those six rows | 0, 1 |
-| `check-tag --repo <task> --tag <t>` | the tag is annotated, named `spec-frozen-B-<yyyymmdd>` with a real date equal to every spec's row, and its commit holds the six specs and FORMAT with the sha256 the freeze commit gave them | 0, 1 |
-| `check-workspace --repo <task> --tag <t> --commit <w>` | T-L67: `<w>` descends from the tag, and every spec blob and FORMAT's blob at `<w>` equal the tag's; only `csharp/<NN-slug>/**` and `node/<NN-slug>/**` of the six tasks differ | 0, 1 |
-| `hashes --root <checkout at w>` | prints `inputs/hashes-lang.txt` for that tree: every file under `csharp/`, `node/`, `runner/` and `tasks/`, plus FORMAT and the six specs, `sha256  path`, sorted | 0 |
-| `record --repo <task> --tag <t> --commit <w>` | writes `inputs/specs.d/spec-states.json` (below) after every check above passes | 0, 1, 3 |
+| `check-commit --repo <task> --before <commit> --after <commit>` | the freeze commit changes only those six rows; **any change to `todo/tasks/FORMAT.md` is refused**, as is any other path | 0, 1 |
+| `check-local-tag --repo <task> --tag <t> --commit <C> --message-file <f>` | **before the push**: the tag exists only locally (not in `git ls-remote --tags origin`), is annotated (`git cat-file -t` is `tag`), points at exactly `<C>` (`git rev-parse <t>^{commit}`), its message equals the intended annotation byte for byte, its name is `spec-frozen-B-<yyyymmdd>` with the date of every spec's row, and `<C>` is the squash-merge commit on the remote's `main` | 0, 1 |
+| `check-tag --repo <task> --tag <t> --commit <C>` | **after the push**: the remote's peeled tag equals `<C>`; the tag is annotated, its name and date as above; at `<C>` the six specs' blobs have the sha256 the freeze commit gave them; **FORMAT's blob at `<C>` and its sha256 equal the step-2a pin directly**: the entry of `spikes/lang-bench/inputs/specs.d/format.json` whose `sha256` is `6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47` (merged in #182), never a hash taken from the freeze commit itself | 0, 1 |
+| `check-workspace --repo <task> --tag <t> --commit <W>` | T-L67, on the git sequence of (e): `git merge-base --is-ancestor <C> <W>` holds (C the tag's peeled commit); every spec blob and FORMAT's blob at `<W>` equal C's; `git diff --name-only <C> <W>` lists only files under `csharp/<NN-slug>/` and `node/<NN-slug>/` of the six tasks | 0, 1 |
+| `hashes --root <checkout at W> [--write]` | the `inputs/hashes-lang.txt` of that tree: every file under `csharp/`, `node/`, `runner/` and `tasks/`, plus FORMAT and the six specs, `sha256  path`, sorted; printed, or written atomically with `--write` (below) | 0 |
+| `record --repo <task> --tag <t> --commit <W> [--supersedes <old tag> --why <sentence>]` | writes `inputs/specs.d/spec-states.json` (below), atomically, after every check above passes | 0, 1, 3 |
+
+**Atomic outputs, and what a restart does** (F2's plan round). `hashes --write` and `record` write their file to an owned
+temporary name beside it (`ownedFor`, a `.tmp` suffix, fsynced), validate it (it parses; `record`'s output is assembled by
+`specs-record.mjs`'s `assemble` without error; `hashes`'s output verifies the tree through `fetchTaskRepo`'s rules), and only then
+publish it with one `rename` onto the name. The engine's workspace writer publishes the whole output folder with one rename
+(`writeAtomically`, a staging folder beside the destination). `workspaces-copy` copies each of the twelve folders into an owned
+staging folder inside the task repository's worktree (same filesystem), checks its tree hash against the source, and renames it
+to `csharp/<NN-slug>/` or `node/<NN-slug>/`; a rename onto an existing name fails. **A restart never reads a partial output:** it
+removes every owned temporary file or staging folder whose owner is gone (the owner rules of `common.test-leftovers`; one whose
+owner still runs is named and left), and runs the step again from its inputs. The outputs are deterministic, so a re-run after an
+interruption gives the same bytes.
 
 **What `plan` refuses** (each a sentence naming the spec): a `Gate verdict` row that is still its placeholder; a spec whose gate
 record's first line names a FORMAT record other than the amended FORMAT's; a conformance check that is not all `ok` (it calls the
@@ -626,8 +696,19 @@ judges against B's frozen classes.
 
 **`inputs/specs.d/spec-states.json`**, E1's shape where it applies (E1 § 3): per spec `{ path, sha256, state: "frozen", gate,
 rIds, commitSha, tagObjectSha }` for the six, and one `freeze` entry `{ tag, tagObjectSha, commitSha, workspaceCommit,
-formatSha256, hashesLangSha256 }`. The frozen sha256 differs from the gated one only by the `Freeze tag` row; `record` checks that
-too. `specs-record.mjs` assembles it into `inputs/specs.json`.
+formatSha256, hashesLangSha256, leakcheck: { freezeCommit, workspaceCommit }, superseded }`. `leakcheck` names the two clean
+results of (e) steps 5 and 8 (each: the commit, the exit `0`, the date); `record` refuses while either is missing. `superseded`
+is `[]`, or the list of tags that a later tag replaced (below), each with its tag object sha and the sentence why. The frozen
+sha256 differs from the gated one only by the `Freeze tag` row; `record` checks that too. `specs-record.mjs` assembles it into
+`inputs/specs.json`. **Every consumer reads `freeze.tag` only**; a tag in `superseded` is never read as the freeze.
+
+**When `check-tag` fails after the push** (F2's plan round). A pushed `spec-frozen-*` tag cannot be moved or deleted (the tag
+ruleset). The recovery is a **superseding tag** with a later date in the same name form, `spec-frozen-B-<yyyymmdd>`: the next UTC
+day, or later if that name is also taken, because the checker accepts only `` `spec-frozen-[AB]-\d{8}` ``
+(`lib/conformance-check-structure.mjs:47`) and the tag ruleset covers `refs/tags/spec-frozen-*`. It is made only after the cause
+of the failure is found and fixed. It needs its own freeze commit, because every spec's `Freeze tag` row must name the tag: a new
+T1 whose only change against C is the six rows (`check-commit` with `--before C`), squash-merged as C2; then the steps of (e) from
+step 5 on, with C2 in place of C. `record --supersedes <old tag> --why <sentence>` names both tags; `freeze.tag` is the new one.
 
 **The guards for F3.S1's launch half.** `lib/spec-freeze.mjs` exports `specBlobMatches({ repo, tag, path, sha256 })` (T-L20's guard
 half: the blob of the spec at the tag has the pinned sha256) and `workspaceCommitProblems({ repo, tag, commit })` (the
@@ -649,21 +730,28 @@ epoch 10). `build-workspaces.mjs` refuses a task of the six and names the engine
 stacks only in its `heap` key (every other key equal, compared as JSON); nothing else changes.
 
 **"Sealed" keeps its inherited meaning (parent §4.3, §6; F2.S2, epoch 10).** One encrypted archive per task, made by v1's
-`spikes/minigit-bench/heldout-tool.mjs seal` (`sealSuite`, AES-256-GCM, the key a mode-600 file outside every git tree and box),
-its hash registered; cases are in clear only in a scoring temporary folder. Hashes alone would weaken it. The tool is reused, never
-copied: where its shape check refuses a quick task's folder (`cases/` with `cases.txt` and pairs, `traps.txt`, `mutants/`), it is
-widened by an option or a seam for that shape (`common.reuse-first`, move 1), and v1's suites keep their bytes and their tests.
-lang-explore gets three FREE verbs over it:
+seal (`spikes/minigit-bench/lib/heldout-seal.mjs` `sealSuite`, `heldout-crypto.mjs`: AES-256-GCM, the key a mode-600 file outside
+every git tree and box), its hash registered; cases are in clear only in a scoring temporary folder or the clear working folder.
+Hashes alone would weaken it. The seal is widened, never copied: where its shape check refuses a quick task's `cases/`, it gets an
+option or a seam for that shape (`common.reuse-first`, move 1), and v1's suites keep their bytes and their tests. **One module,
+one path, one registry** (the team lead's note on F2.S1, items 3 and 4): `lib/package-seal.mjs` seals into
+`heldout-NN/suite.enc` through `publishOnce` and then writes the task's entry of `inputs/heldout-frozen.json`; `unsealTo` makes
+`heldout-NN/cases/` atomically under the lock `heldout-NN/.clear.lock`. lang-explore gets two FREE verbs over it, and F2.S1's
+`package --seal` is the only way to seal:
 
-- `explore.mjs heldout-seal --task NN` seals the task's held-out folder into `heldout-NN.enc` beside it and prints the archive's
-  sha256 and the counts; it refuses to seal over an existing archive of other bytes.
-- `explore.mjs heldout-open --task NN` makes **the clear working folder** from the archive: mode 700, its tree hash checked
-  against the hash recorded with the archive; it refuses when the folder already exists with other bytes.
-- `explore.mjs heldout-close --task NN` removes the clear working folder; the archive and its identity stay.
+- `explore.mjs heldout-open --task NN` takes the lock, removes a stale owned temporary folder, and makes `cases/` from the
+  archive by `unsealTo` (temporary folder, mode 700, tree hash checked against the registry, one rename); it refuses when
+  `cases/` already exists with other bytes.
+- `explore.mjs heldout-close --task NN` takes the lock and removes `cases/`; the archive and its entry stay.
+- `explore.mjs heldout-check --tasks 04,05,06,07,08,10` reads only: for each task, the entry exists, `suite.enc`'s sha256 equals
+  it, the archive unseals (into a temporary folder, removed after) to the registered `treeSha256`, and the counts agree. (e) step 1
+  runs it.
 
 **The clear folder's lifecycle** (parent F2.S2 and F3.S1, epoch 10): it is mode 700; it is checked against the archive's hash at
 every pair; it is removed after each pair, and removed again at the start of any run after an interruption; a check that needs
-the clear cases makes it again from the archive. F2.S2 builds the three verbs and the hash check; F3.S1 wires the per-pair and
+the clear cases makes it again from the archive. Every entry point first removes a stale clear folder whose registered archive
+exists, under the lock, and refuses one whose tree hash differs from the archive's (the team lead's note on F2.S1, item 4).
+F2.S2 builds the verbs, the lock, the stale-folder removal and the hash check (bench PR 4a); F3.S1 wires the per-pair and
 start-of-run removal into the series.
 
 **Every reader of a task's clear held-out folder fails closed** (the team lead's decision, 2026-11-08). When the folder is absent
@@ -683,17 +771,19 @@ scripts on 2026-11-08:
 | `init` of a quick series (`lib/init-quick.mjs:38`) | refuses on `absent` | the `sealed` refusal, naming `heldout-open` |
 | the scoring's copy of the held-out pairs (`lib/score-quick.mjs:53-66`, `copyHeld` from `heldoutDir`) | reads the pairs a loaded held-out object names | it scores only from an opened folder whose tree hash equals the archive's, and refuses on `sealed` |
 | the line scan (`~/rsd/lang-v2/briefs/leakscan-lines.py`, outside git, `:30`) | **fails open:** `glob` over a missing `heldout-NN` gives no files, so fewer needles and an exit 0 | exits 2 ("the private sets could not be read") naming `sealed: open it first` when `heldout-frozen.json` in the bench checkout lists the task with an archive and its folder is absent; a script change outside git, recorded by the team lead as a dated line in `inputs/checkpoints.md` |
-| `heldout-freeze` and `heldout-open` themselves (d) | — | they read the archive, never a stale clear folder |
+| `heldout-check` and `heldout-open` themselves (d) | — | they read the archive, never a stale clear folder |
+| F2.S1's `package` | reads `cases/` while authoring, before the seal | after the task's seal, it opens and closes the archive like any reader |
 
 `lib/material.mjs` (`materialOf`) and `lib/oracle.mjs` read the olympiad tasks' folders only; those are not sealed in Stage 1, so
 they do not change, and the scenario below shows they are not reached for a quick task.
 
-**The held-out record (lang-explore owns it; lang-bench imports nothing of lang-explore).** A new FREE verb, `explore.mjs
-heldout-freeze --tasks 04,05,06,07,08,10`, writes `spikes/lang-explore/inputs/heldout-frozen.json`: per task the archive's
-sha256, the clear tree's `treeSha256` (`casesTreeHash`), `caseCount`, `trapCount`, and the sha256 of the task's trap coverage
-table and of its package record (both files as F2.S1's package names them). Counts and hashes only: no id, no name, no line. It
-refuses a task without an archive. `init` of a quick series refuses a clear tree or an archive whose hash differs from this file.
-The memory value's registration is not here: it is the field F2.S1 writes into `memory-limit.json` (§2).
+**The held-out record, the one registry (lang-explore owns it; lang-bench imports nothing of lang-explore).**
+`spikes/lang-explore/inputs/heldout-frozen.json`, written only by `lib/package-seal.mjs` at the seal, per task: the archive's path
+(`heldout-NN/suite.enc`, relative to the explore root), its sha256, the clear tree's `treeSha256` (`casesTreeHash`), `caseCount`,
+`trapCount`, the sha256 of `manifest.json` (the trap coverage table) and the date. Counts and hashes only: no id, no name, no line.
+`init` of a quick series refuses a clear tree or an archive whose hash differs from this file. The package identity (P8) reads the
+archive's hash from here; `packages.json` keeps no copy. The memory value's registration is not here: it is the field F2.S1
+writes into `memory-limit.json` (§2).
 
 **Scenarios** (each a red first; test files beside their modules):
 
@@ -708,6 +798,28 @@ The memory value's registration is not here: it is the field F2.S1 writes into `
   `A_lightweight_tag_or_a_tag_whose_date_differs_from_the_spec_rows_is_refused`;
   `The_hash_list_of_a_tree_lists_every_file_under_the_workspace_roots_and_fetchTaskRepo_accepts_it` and its companion
   `A_file_added_after_the_list_was_written_is_refused_by_the_fetch` (T-L1, through the real `fetchTaskRepo`).
+  **FORMAT's bytes:** `A_freeze_commit_that_changes_FORMAT_by_one_byte_is_refused` (the six rows alone pass);
+  `check_tag_refuses_a_FORMAT_whose_blob_differs_from_the_step_2a_pin_even_when_the_freeze_commit_is_self_consistent` (a fixture
+  repository whose FORMAT was changed before the freeze commit and whose rows are right: refused, because the comparison is
+  with `format.json`'s pinned sha256, not with the commit's own hash); its control, the pinned bytes, passes.
+  **The git sequence under squash merges** (the GitHub merge is simulated by `git merge --squash` and a commit on the
+  fixture's `main`): `The_tag_on_the_squash_commit_C_and_a_workspaces_branch_cut_from_C_and_squash_merged_give_a_W_that_descends_from_C`
+  (permitted); `A_tag_on_the_freeze_branch_head_instead_of_C_is_refused_because_it_is_not_an_ancestor_of_W` (refused: the
+  pre-squash commit is on no path of `main`); `A_merge_into_main_between_C_and_W_is_refused_by_the_changed_paths_rule`.
+  **Before and after the push:** `check_local_tag_refuses_a_tag_on_another_commit_a_lightweight_tag_and_a_changed_annotation`
+  and passes the intended one; `check_local_tag_refuses_a_tag_already_on_the_remote`;
+  `A_superseding_tag_name_with_a_later_date_passes_the_checkers_pattern` (it runs the real `laterForm` of
+  `lib/conformance-check-structure.mjs` over `` `spec-frozen-B-<day after>` ``: accepted; a suffixed name such as
+  `spec-frozen-B-<date>-r2` is refused, which is why the recovery never uses one);
+  `A_superseding_freeze_commit_changes_only_the_six_rows_against_C`;
+  `The_record_names_both_tags_and_freeze_tag_is_the_superseding_one`;
+  `A_guard_given_the_superseded_tag_refuses_it` (`specBlobMatches` and `workspaceCommitProblems` read `freeze.tag` only);
+  `record_refuses_while_either_post_merge_leakcheck_result_is_missing`.
+  **Interruptions** (each kills the writer at a planted point through a seam, then restarts it):
+  `A_record_killed_before_its_rename_leaves_only_an_owned_temporary_file_that_the_restart_removes_and_never_reads`;
+  `A_hash_list_killed_before_its_rename_leaves_the_old_list_whole`;
+  `A_restart_leaves_a_temporary_file_whose_owner_still_runs_and_names_it`;
+  `A_rerun_after_an_interruption_writes_the_same_bytes`.
 - `spikes/lang-bench/test/format-classes-frozen.test.mjs`: `After_B_is_frozen_a_change_to_a_common_section_is_refused_and_a_change_to_a_daemon_web_section_is_permitted`
   (the pair, on a synthetic FORMAT pair, reading B's frozen classification).
 - `spikes/lang-bench/test/workspace-diff.test.mjs`: `The_heap_sentence_is_a_marked_sentence_and_may_differ_by_stack`;
@@ -719,15 +831,28 @@ The memory value's registration is not here: it is the field F2.S1 writes into `
   refused; the frozen FORMAT's, permitted);
   `The_check_finds_one_changed_byte_in_a_committed_workspace_and_passes_an_equal_one` (the pair);
   `The_copy_refuses_a_dirty_worktree_a_worktree_at_another_commit_and_an_existing_workspace`;
-  `The_writer_refuses_a_destination_inside_a_git_worktree` (through `checkDestination`).
-- `spikes/lang-explore/test/quick-heldout-seal.test.mjs` (new; an invented key in an owned folder):
-  `A_sealed_quick_folder_opens_to_the_same_tree_hash`; `The_clear_folder_is_mode_700`;
-  `Close_removes_the_clear_folder_and_keeps_the_archive`; `A_clear_folder_whose_hash_differs_from_the_archive_is_refused` (the
-  pair: an unchanged folder passes); `Sealing_over_an_existing_archive_of_other_bytes_is_refused`;
-  `The_v1_suite_seals_to_the_same_bytes_as_before` (the widened tool keeps v1's shape).
+  `The_writer_refuses_a_destination_inside_a_git_worktree` (through `checkDestination`);
+  `A_workspace_writer_killed_before_its_rename_leaves_no_output_folder_and_the_restart_writes_it_whole`;
+  `A_copy_killed_mid_folder_leaves_only_an_owned_staging_folder_that_the_restart_removes_and_no_half_workspace`.
+- `spikes/lang-explore/test/quick-heldout-seal.test.mjs` (new; an invented key in an owned folder; bench PR 4a):
+  `A_sealed_quick_folder_opens_to_the_same_tree_hash`; `The_archive_is_heldout_NN_suite_enc_and_no_other_name`;
+  `The_clear_folder_is_mode_700`; `Close_removes_the_clear_folder_and_keeps_the_archive`;
+  `A_clear_folder_whose_hash_differs_from_the_archive_is_refused` (the pair: an unchanged folder passes);
+  `Sealing_over_an_existing_archive_of_other_bytes_is_refused`; `The_v1_suite_seals_to_the_same_bytes_as_before` (the widened
+  seal keeps v1's shape).
+  **Atomic and locked:** `Open_unseals_into_an_owned_temporary_folder_on_the_same_filesystem_and_renames_it_only_after_the_hash_check`
+  (a planted wrong hash leaves no `cases/` and no temporary folder); `An_open_killed_before_its_rename_leaves_no_cases_folder_and_the_next_open_removes_the_temporary_one`;
+  `Open_and_close_wait_for_the_lock_and_a_dead_owners_lock_is_taken_over_and_named`;
+  `Two_opens_at_once_make_one_cases_folder` (the second finds it equal and returns it, or waits).
+  **One registry, resumable:** `Sealing_publishes_the_archive_once_then_writes_the_registry_entry`;
+  `A_seal_killed_after_the_archive_and_before_the_entry_resumes_by_writing_the_entry_when_the_archive_unseals_to_todays_cases`
+  and `…refuses_and_names_the_task_when_it_does_not` (nothing overwritten); `A_second_seal_with_an_equal_entry_is_a_no_op`;
+  `packages_json_holds_no_archive_hash_and_the_identity_reads_it_from_the_registry`.
+  **Stale folders at every entry point:** `An_entry_point_removes_a_stale_clear_folder_equal_to_its_archive_under_the_lock`
+  (for each reader of the fail-closed table, `package`, `run`, `rescore` and `replay`); `An_entry_point_refuses_a_clear_folder_that_differs_from_its_archive_and_removes_nothing`.
 - `spikes/lang-explore/test/quick-heldout-frozen.test.mjs` (new): `The_record_holds_counts_and_hashes_and_no_case_id_or_trap_name`
   (it scans its own output for the fixture's ids and names and finds none); `Init_refuses_a_held_out_tree_or_archive_that_differs_from_the_frozen_record`
-  and `Init_accepts_the_same_tree_and_archive` (the pair); `A_task_without_an_archive_or_a_package_record_is_refused`.
+  and `Init_accepts_the_same_tree_and_archive` (the pair); `heldout_check_refuses_a_task_without_an_entry_or_whose_archive_differs`.
 - **Fail closed, one scenario per reader** (`spikes/lang-explore/test/quick-heldout-sealed-readers.test.mjs`, new; each fixture is a
   sealed invented task registered in a fixture `heldout-frozen.json`, with no clear folder; each test asserts a refusal naming
   `sealed: open it first` and the task, never a pass, a clean line, an empty result or an `absent` flag; each has a control, the
@@ -759,83 +884,127 @@ lifecycle, the held-out record), `research/module_minigit_bench.md` (the seal to
 ### (e) the freeze in the task repository
 
 **Preconditions, all on `main` of their repositories:** build steps 2a and 2b; (b) merged (not yet applied); (c) decided (and
-merged if built); (d); F2.S1's six packages done, all twelve references passing, the memory value registered by F2.S1's field,
-each spec gated (its `Gate verdict` row filled under the amended FORMAT) and merged with its samples (`tasks/<NN-slug>/samples/`)
-by merge condition 5.
+merged if built); bench PRs 4a and 4; F2.S1's six packages done, all twelve references passing, the memory value registered by
+F2.S1's field, each task sealed (`heldout-frozen.json` holds its entry), each spec gated (its `Gate verdict` row filled under the
+amended FORMAT) and merged with its samples (`tasks/<NN-slug>/samples/`) by merge condition 5.
 
-1. **The seal.** For each task, `explore.mjs heldout-seal`, then `heldout-open` and `explore.mjs heldout-freeze` over the six:
-   the archives exist, each clear folder opens to the hash the archive records, and `heldout-frozen.json` is written on a bench
-   branch (it goes into bench PR 5). The clear folders are then closed.
-2. **The dry run on the real files (D64).** In a scratch clone of the task repository outside every worktree: `freeze.mjs plan`,
-   apply the plan, commit, an annotated tag made locally and **never pushed**, `explore.mjs workspaces` and `workspaces-copy`, a
-   second commit, then every check of steps 4 to 6, including each guard's refused case on a planted change in a copy of that
-   clone (a one-word edit in a spec, a changed byte in a workspace, a changed held-out file in a clear folder opened from a copy
-   of the archive, a grammar of another FORMAT in a workspace, a change to a `common` section of FORMAT under the class check),
-   and build step 2b's `leakcheck` over both repositories with the scratch clone's two commits as the candidate publication
-   commits, its planted-needle check failing as it must. An Opus judge reads the output against this list (it replaces CP4-B's
-   reading); the result is one dated line in `spikes/lang-bench/inputs/checkpoints.md` (counts and verdicts, no content), in bench
-   PR 5. A failure is fixed in the tools or a spec's package, and the dry run runs again, before anything is pushed. The scratch
-   clone is removed afterwards. **A clean dry run with all six packages passing is the condition of the owner's go of
-   2026-11-08.**
+**The git sequence, exactly.** Every change reaches the task repository's `main` by a pull request merged by **squash**, so the
+commit that lands on `main` is a new commit whose parent is `main`'s previous tip, never the branch's head:
+
+- **C** is T1's squash-merge commit on `main` (read from `gh pr view <T1> --json mergeCommit`, and equal to `origin/main` after
+  a fetch). **The tag points at C**, never at the freeze branch's head, which is on no path of `main`.
+- **The workspaces branch is cut directly from C** (`git switch -c workspaces/spec-frozen-B-<date> C`).
+- **T2 is squash-merged into `main`**, so its merge commit **W** has C on its parent chain. **No other task-repository pull
+  request merges between T1 and T2**; `check-workspace` asserts `git merge-base --is-ancestor C W` and that `git diff --name-only
+  C W` lists only the twelve workspace folders, so a merge in between is refused, not absorbed.
+- **How the rulesets let this through** (applied at step 3): the tag is created by the owner's admin login, which is the one
+  bypass of `spec-frozen-tags-create` (rule `creation`); `spec-frozen-tags` (rules `update`, `deletion`, `non_fast_forward`, no
+  bypass) does not stop a creation, and from then on stops any move or deletion of the tag. T1 and T2 reach `main` as pull
+  requests, which `template-frozen`'s `pull_request` rule asks for (thread resolution required); the squash merge adds one commit
+  on top of `main`, so `required_linear_history` holds and `main` only moves forward (`non_fast_forward`, `deletion` not hit).
+  Nothing is pushed to `main` directly.
+
+**Steps.**
+
+1. **The seals, checked.** `explore.mjs heldout-check --tasks 04,05,06,07,08,10` exits 0: six entries in `heldout-frozen.json`,
+   six archives `heldout-NN/suite.enc` with those hashes, each unsealing to its registered tree. The seals themselves were made by
+   F2.S1 (`package --seal`); nothing is sealed here.
+2. **The dry run on the real files (D64).** In a scratch clone of the task repository outside every worktree, with a local
+   `main` standing for the remote's: `freeze.mjs plan`; apply the plan on a freeze branch; **squash-merge it into the local
+   `main` (`git merge --squash` and a commit) to make C′**; the intended annotation written to a file and `git tag -a` on C′ made
+   locally and **never pushed**; `check-local-tag` against C′; `explore.mjs workspaces`; a workspaces branch cut from C′;
+   `workspaces-copy`; **squash-merged into the local `main` to make W′**; then every check of steps 4 to 8 against C′ and W′,
+   `check-workspace` among them, which proves the ancestry under squash merges. Then each guard's refused case on a planted
+   change in a copy of that clone: a one-word edit in a spec; one byte of FORMAT changed in the freeze commit; a tag placed on the
+   freeze branch's head instead of C′ (refused by the ancestry rule); a changed byte in a workspace; a merge into the local `main`
+   between C′ and W′; a changed held-out file in a clear folder opened from a copy of the archive; a grammar of another FORMAT in
+   a workspace; a change to a `common` section of FORMAT under the class check; and build step 2b's `leakcheck` over both
+   repositories with C′ and W′ as the candidate publication commits, its planted-needle check failing as it must. An Opus judge
+   reads the output against this list (it replaces CP4-B's reading); the result is one dated line in
+   `spikes/lang-bench/inputs/checkpoints.md` (counts and verdicts, no content), in bench PR 5. A failure is fixed in the tools or
+   a spec's package, and the dry run runs again, before anything is pushed. The scratch clone is removed afterwards. **A clean
+   dry run with all six packages passing is the condition of the owner's go of 2026-11-08.**
 3. **The rulesets, under the owner's go of 2026-11-08** (the team lead): (b)'s apply and read-back, `equal` three times, recorded.
    From here on, `main` takes only pull requests and no `spec-frozen-*` tag can be moved or deleted.
-4. **T1, the freeze commit.** Branch `freeze/spec-frozen-B-<date>` in a worktree of the task repository: `freeze.mjs plan` and its
-   edits only. Merge condition 5: a document gate at `proceed` over the six changed rows; before the merge, against a checkout of
-   the head: conformance of all six against the frozen FORMAT, all `ok`; `freeze.mjs check-commit`; `push-check --branch`
-   (through the hook on push); 2b's `leakcheck` over both repositories with this branch's commit as the candidate publication
-   commit; the line scan on the task repository; each command, exit and the head sha recorded in the pull request. Merged by
-   squash: the merge commit is **C**.
-5. **The tag, under the owner's go of 2026-11-08.** It cannot be undone. `git tag -a spec-frozen-B-<date> C` with a message that
-   names the six tasks by number and nothing else; `push-check.mjs --tag`; the tag pushed **alone** with the owner's login (the
-   creation ruleset's only bypass is the admin role); `git ls-remote --tags origin` shows it, and `freeze.mjs check-tag` exits 0.
-   No workflow listens for tags there, so no run is awaited (`common.task-lifecycle` §3 checked: nothing to verify but the ref).
-   FORMAT's protection binds from this tag.
-6. **T2, the workspaces.** `explore.mjs workspaces --tag <t>` into an owned folder outside every worktree; `workspace-diff --root`
-   over it; then `workspaces-copy --into` a worktree of the task repository at C, branch `workspaces/spec-frozen-B-<date>`. Merge
-   condition 5: a document gate at `proceed` over the statements; before the merge, against a checkout of the head:
-   `workspace-diff --root`; `explore.mjs workspaces --check --root`; `push-check --branch`; 2b's `leakcheck` over both repositories
-   with this branch's commit as the candidate publication commit; the line scan; recorded in the pull request. Merged by squash:
-   the merge commit is the **workspace commit W**. Then `freeze.mjs check-workspace --tag <t> --commit W` exits 0 on a fresh fetch.
+4. **T1, the freeze commit.** Branch `freeze/spec-frozen-B-<date>`, cut from `main`'s tip, in a worktree of the task repository:
+   `freeze.mjs plan` and its edits only. Merge condition 5: a document gate at `proceed` over the six changed rows; before the
+   merge, against a checkout of the head: conformance of all six against the frozen FORMAT, all `ok`; `freeze.mjs check-commit`
+   (the six rows only; FORMAT unchanged); `push-check --branch` (through the hook on push); 2b's `leakcheck` over both
+   repositories with the branch's head as the candidate publication commit; the line scan on the task repository; each command,
+   exit and the head sha recorded in the pull request. Merged by squash: the merge commit is **C**.
+5. **`leakcheck` on C.** After the merge and **before the tag is made**: 2b's `leakcheck` over both repositories with **C itself**
+   as the candidate publication commit, and the line scan at C. Both clean, recorded (commit, exit, date) for `record`'s
+   `leakcheck.freezeCommit`. A finding here stops the freeze: no tag, no workspaces; C is already public, so the team lead tells
+   the owner at once and fixes it forward by a new pull request (history is never rewritten), and the freeze starts again from
+   step 4 with the fixed text.
+6. **The tag, under the owner's go of 2026-11-08.** It cannot be undone. **Before the push:** the intended annotation (the six
+   task numbers, nothing else) written to a file; `git tag -a spec-frozen-B-<date> C -F <file>` locally; `freeze.mjs
+   check-local-tag --tag <t> --commit C --message-file <file>` exits 0; `push-check.mjs --tag <t>`. Then the tag is pushed
+   **alone** with the owner's login. **After the push:** `git ls-remote --tags origin` shows it, and `freeze.mjs check-tag --tag
+   <t> --commit C` exits 0. No workflow listens for tags there, so no run is awaited (`common.task-lifecycle` §3 checked: nothing
+   to verify but the ref). FORMAT's protection binds from this tag. **If `check-tag` fails after the push**, the tag stays (it
+   cannot be deleted); the cause is found and fixed; a superseding tag `spec-frozen-B-<later date>` is made on a new freeze
+   commit by steps 4 to 6 (see *When `check-tag` fails after the push* in (d)); nothing of step 7 starts on the failed tag.
+7. **T2, the workspaces.** `explore.mjs workspaces --tag <t>` into an owned folder outside every worktree; `workspace-diff --root`
+   over it; then a branch `workspaces/spec-frozen-B-<date>` **cut from C**, in a worktree of the task repository, and
+   `workspaces-copy --into` it. Merge condition 5: a document gate at `proceed` over the statements; before the merge, against a
+   checkout of the head: `workspace-diff --root`; `explore.mjs workspaces --check --root`; `push-check --branch`; 2b's `leakcheck`
+   over both repositories with the head as the candidate publication commit; the line scan; recorded in the pull request. No other
+   task-repository pull request merges meanwhile. Merged by squash: the merge commit is the **workspace commit W**.
+8. **`leakcheck` on W, and W accepted.** After the merge, on a fresh fetch: `freeze.mjs check-workspace --tag <t> --commit W`
+   exits 0 (C is an ancestor of W, only the twelve folders changed, the spec and FORMAT blobs equal C's); then 2b's `leakcheck`
+   over both repositories with **W itself** as the candidate publication commit, and the line scan at W. Both clean, recorded for
+   `record`'s `leakcheck.workspaceCommit`. **W is accepted only then**; until then no bench pin names W. A finding stops here as in
+   step 5.
 
-**Done when:** the archives exist and their hashes are written; the dry run's line is recorded; the rulesets read back; the tag
-is on the remote and checks; W is on the task repository's `main` and checks.
+**Done when:** the six seals check; the dry run's line is recorded; the rulesets read back; the tag is on the remote and checks;
+`leakcheck` is clean on C and on W; W is on the task repository's `main` and checks.
 
 ### (f) the freeze record in the bench
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f2s2-freeze-record`:
 
-1. `freeze.mjs record --tag <t> --commit W` writes `inputs/specs.d/spec-states.json`; `specs-record.mjs` assembles `inputs/specs.json`.
-2. `freeze.mjs hashes --root <checkout at W>` writes `inputs/hashes-lang.txt`; `PINNED_TASK_SHA` becomes W (D67 (3): the bare
-   harness fetches at the workspace commit, never at the tag).
-3. `spikes/lang-explore/inputs/heldout-frozen.json` from (e) step 1.
+1. `freeze.mjs record --tag <t> --commit W` (with `--supersedes` when step 6 needed a superseding tag) writes
+   `inputs/specs.d/spec-states.json`, atomically, naming both clean `leakcheck` results of steps 5 and 8; `specs-record.mjs`
+   assembles `inputs/specs.json`.
+2. `freeze.mjs hashes --root <checkout at W> --write` writes `inputs/hashes-lang.txt`; `PINNED_TASK_SHA` becomes W (D67 (3): the
+   bare harness fetches at the workspace commit, never at the tag).
+3. `spikes/lang-explore/inputs/heldout-frozen.json` is already on `main` from F2.S1's six package pull requests;
+   `heldout-check` runs again here.
 4. `spikes/lang-explore/inputs/explore.json`: the six tasks' `spec` pins move to C with their frozen sha256, `draft: false`, and
    `quick.reason` gets one dated sentence. A test holds them equal to `spec-states.json`:
    `The_engine_pins_of_the_six_specs_equal_the_freeze_record` (`spikes/lang-explore/test/quick-workspace.test.mjs`), because the
    spec pins otherwise live in two places (§2; parent F2.S2, epoch 10: derived from one source, or a test cross-checks them).
 5. The class check's frozen reference is the frozen FORMAT (d).
-6. `inputs/checkpoints.md`: the dated lines of (b)'s read-back, (c)'s decision if not already there, and (e)'s dry run.
-7. Docs: `research/module_lang_bench.md` and `research/module_lang_explore.md` name the tag, C, W and the records; this document's
-   status line; the parent's status line names the freeze.
+6. `inputs/checkpoints.md`: the dated lines of (b)'s read-back, (c)'s decision if not already there, (e)'s dry run, and the two
+   post-merge `leakcheck` results.
+7. Docs: `research/module_lang_bench.md` and `research/module_lang_explore.md` name the tag (and a superseded tag, if any), C, W
+   and the records; this document's status line; the parent's status line names the freeze.
 
 This is the bench pins pull request of merge condition 5 for T1 and T2: it runs their checks again against C and W.
 
 **Done when:** merged; `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` exit 0 on `main`;
-`fetchTaskRepo` at W verifies; `explore.mjs workspaces --check --root` passes at W.
+`fetchTaskRepo` at W verifies; `explore.mjs workspaces --check --root` passes at W; `spec-states.json` names both clean
+`leakcheck` results.
 
 ### The freeze rules and their pairs (D64)
 
 | Rule | Refused | Permitted | Where shown |
 |---|---|---|---|
-| the freeze commit (D21) | any byte of a spec but its `Freeze tag` row | that row alone | (d) test; (e) dry run |
-| the spec-freeze guard (T-L20, guard half) | a spec blob that differs from the tag's | a difference outside the spec blob | (d) test; (e) dry run |
-| the workspace commit (T-L67) | not a descendant, or a spec or FORMAT blob that differs | only the six tasks' workspace folders added | (d) test; (e) dry run |
+| the freeze commit (D21) | any byte of a spec but its `Freeze tag` row; any byte of FORMAT | the six rows alone | (d) test; (e) dry run |
+| FORMAT's bytes at the tag | a FORMAT blob whose sha256 is not the step-2a pin, even in a self-consistent commit | the pinned bytes | (d) test; `check-tag` in (e) step 6 |
+| the spec-freeze guard (T-L20, guard half) | a spec blob that differs from the tag's; the superseded tag | a difference outside the spec blob | (d) test; (e) dry run |
+| the workspace commit (T-L67) and the git sequence | C not an ancestor of W (a tag on the freeze branch's head), a merge between C and W, a spec or FORMAT blob that differs | W squash-merged from a branch cut from C, only the twelve folders added | (d) test; (e) dry run under squash merges |
+| the local tag before the push | another commit, a lightweight tag, a changed annotation, a tag already on the remote | the intended annotated tag on C | (d) test; (e) dry run and step 6 |
+| the superseding tag | a suffixed name (`-r2`), refused by the checker's pattern | `spec-frozen-B-<later date>` | (d) test |
+| the atomic outputs and the clear folder | a partial record, hash list, workspace folder, staging folder or clear folder read after a kill | the whole output after the rename | (d) tests (interruptions) |
 | the grammar per task (T-L57) | a workspace grammar of another FORMAT | the frozen FORMAT's grammar | (d) test; (e) dry run |
 | the engine match (D67 (3)) | one changed byte in a committed workspace | equal bytes | (d) test; (e) dry run |
 | the seal and the held-out record | a clear tree or an archive whose hash differs | the same tree and archive | (d) test; (e) dry run on a copy of the archive |
 | FORMAT's protection from B's tag | a change to a `common` or `olympiad` section | a change to a `daemon-web` section | (d) test; (e) dry run |
 | the fetch (T-L1) | a file off the hash list | the listed tree | (d) test; (f) at W |
-| the leak check (merge condition 3) | an invented needle planted in a temporary task repository | the real candidate commits, clean | build step 2b's test; (e) dry run |
-| the tag ruleset | an update or a deletion of a `spec-frozen-*` tag | the admin's creation | the read-back of (b); the creation in (e) step 5; the refused write: §7 item 1 |
+| the leak check (merge condition 3) | an invented needle planted in a temporary task repository | the real candidate commits and the merge commits C and W, clean | build step 2b's test; (e) dry run; (e) steps 5 and 8 |
+| the tag ruleset | an update or a deletion of a `spec-frozen-*` tag | the admin's creation | the read-back of (b); the creation in (e) step 6; the refused write: §7 item 1 |
 | `main`'s protection | a push that is not a pull request | a pull request merged by squash | the read-back of (b); T1 and T2 |
 
 ### Every consumer of the frozen bytes (D67 (2))
@@ -875,19 +1044,22 @@ run is about the head that merges.
 | — | task | F2.S1's six spec pull requests, from task 05 | F2.S1's | F2.S1's, by merge condition 5 | (3), (5) |
 | 2 | bench | F2.S2 (b), the rulesets | `feat/lang-v2-f2s2-rulesets` | the gates; lang-bench whole runs, both ways; line scan. The apply waits for (e) step 3 | (1), (2), (3) line scan only: nothing agent-visible; (4): `run-main` and CI's checks are not in the data |
 | 3 | bench | F2.S2 (c), only if built | `fix/lang-v2-f2s2-chunks` | the gates; the runner re-pin; the probe re-run; lang-bench and lang-explore whole runs, both ways; the three `--check` tools; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the runner is agent-visible; (4) |
-| 4 | bench | F2.S2 (d), the freeze tools | `feat/lang-v2-f2s2-freeze-tools` | the gates; lang-bench, lang-explore and minigit-bench (if the seal tool is widened) whole runs, both ways; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it changes how the held-out side is read; (4) |
-| T1 | task | (e) step 4, the freeze commit | `freeze/spec-frozen-B-<date>` | merge condition 5: the document gate; conformance of the six; `check-commit`; `push-check --branch`; `leakcheck` over both repositories with the candidate commit; line scan; recorded in the pull request | (3) at the freeze, (5) |
-| tag | task | (e) step 5 | — | the owner's go of 2026-11-08 (six packages pass, the dry run clean); `push-check --tag`; `check-tag` after the push | (3): the tag's message is public text |
-| T2 | task | (e) step 6, the workspaces | `workspaces/spec-frozen-B-<date>` | merge condition 5: the document gate; `workspace-diff --root`; `workspaces --check`; `push-check --branch`; `leakcheck` over both repositories with the candidate commit; line scan; recorded; then `check-workspace` | (3) at the freeze, (5) |
+| 4a | bench | the seal module, its lock, the one registry, the stale-folder removal and the fail-closed readers (the team lead's note on F2.S1, items 3 and 4; (d)) | `feat/lang-v2-f2s2-sealed-readers` | the gates; lang-explore and minigit-bench (the seal is widened) whole runs, both ways; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it changes how the held-out side is read; (4) |
+| 4 | bench | F2.S2 (d), the freeze tools (the rest) | `feat/lang-v2-f2s2-freeze-tools` | the gates; lang-bench and lang-explore whole runs, both ways; `push-check --self`; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: the workspace writer is agent-visible output; (4) |
+| T1 | task | (e) step 4, the freeze commit | `freeze/spec-frozen-B-<date>`, cut from `main` | merge condition 5: the document gate; conformance of the six; `check-commit`; `push-check --branch`; `leakcheck` over both repositories with the head as candidate; line scan; recorded in the pull request; squash merge gives C; then (e) step 5, `leakcheck` with C itself | (3) at the freeze, (5) |
+| tag | task | (e) step 6 | — | the owner's go of 2026-11-08 (six packages pass, the dry run clean); the clean `leakcheck` on C; `check-local-tag`; `push-check --tag`; `check-tag` after the push | (3): the tag's message is public text |
+| T2 | task | (e) step 7, the workspaces | `workspaces/spec-frozen-B-<date>`, cut from C | merge condition 5: the document gate; `workspace-diff --root`; `workspaces --check`; `push-check --branch`; `leakcheck` over both repositories with the head as candidate; line scan; recorded; squash merge gives W; then (e) step 8, `check-workspace` and `leakcheck` with W itself | (3) at the freeze, (5) |
 | 5 | bench | F2.S2 (f), the freeze record (the bench pins of T1 and T2) | `feat/lang-v2-f2s2-freeze-record` | the gates (a code round over the record's tool runs); lang-bench and lang-explore whole runs, both ways, `LANG_V2_TASK_REPO` at W; the three `--check` tools; `fetchTaskRepo` at W; `leakcheck` over both repositories; line scan; `plan-lifecycle` | (1) to (5) |
 
 **Order and why.** PR 1 first, so every brief cites a merged document. Then the parent's 2a (before F2.S1's first conformance run:
-the checker reads only a recorded FORMAT) and 2b (before any task-repository pull request). F2.S1 takes task 05 end to end first;
-(c)'s decision comes right after task 05's package, before the other five validate and before T2 (the runner is in every
-workspace). PR 2 and PR 4 are built in parallel with F2.S1; PR 4 merges before the seal and the dry run. Then, strictly in this
-order: the seal, the dry run, the rulesets applied (the owner's go needs all six packages and a clean dry run), T1, the tag, T2,
-PR 5. The bench's cap of three open pull requests holds throughout: PRs 2, 3 and 4 can be open together only while none of
-F2.S1's bench pull requests is open; otherwise land one first.
+the checker reads only a recorded FORMAT) and 2b (before any task-repository pull request). PR 4a merges before task 05's package
+is sealed. F2.S1 takes task 05 end to end first; (c)'s numbers come from it, and if (c) is built, PR 3 merges before task 05's
+identity and entry are written and before the other five start (the team lead's note on F2.S1, item 2). PR 2 and PR 4 are built
+in parallel with F2.S1; PR 4 merges before the dry run. Then, strictly in this order: the seals checked, the dry run, the
+rulesets applied (the owner's go needs all six packages and a clean dry run), T1 and C, `leakcheck` on C, the tag, T2 and W,
+`check-workspace` and `leakcheck` on W, PR 5. No other task-repository pull request merges between T1 and T2. The bench's cap of
+three open pull requests holds throughout: PRs 2, 3, 4a and 4 are open at most three at a time, and fewer while F2.S1's bench
+pull requests are open; otherwise land one first.
 
 ## 5. The model per role
 
@@ -899,7 +1071,7 @@ F2.S1's bench pull requests is open; otherwise land one first.
 | Small edit | main session or sonnet | one file, at most 50 changed lines, bounded before the first edit: (c)'s dated "not needed" line qualifies; every pull request above spans more files and does not |
 | Reviewer and judge | opus | the review of every pull request, beside the coai code round; the reading of (e)'s dry run; the verdict on whether a finding changes a story |
 | Scout | sonnet | evidence only, such as S for (c) from the package records, or the remote state of the task repository |
-| The team lead (main session) | — | the seal (it handles the key), the ruleset apply and read-back and the tag push under the owner's go of 2026-11-08; never a coder |
+| The team lead (main session) | — | the seal (`package --seal`; it handles the key), the ruleset apply and read-back, the local tag and its check, the tag push under the owner's go of 2026-11-08, and a superseding tag if one is needed; never a coder |
 
 The cornerstone ledger does not change: the parent's line reads *Cornerstones: 2 of 2 — F1.S2, F2.S1*, and this document marks
 only F2.S1.
@@ -926,8 +1098,8 @@ only F2.S1.
    tag. D64 wants a refused change shown on the real thing; a real refused write would be a forced push or a deletion attempt
    against the public repository, which this family's tools refuse to send. This document shows the rule by the read-back and the
    creation. Whether the owner wants the refused write tried by hand is theirs.
-2. **F2.S1's package record should carry two things for F2.S2:** the largest expected reply body per task (S, for (c)), and the
-   name of its trap coverage table file (for `heldout-frozen.json`). F2.S1's spec is not copied in yet; this is for its writer.
+2. **Settled by the team lead's note on F2.S1 (2026-11-08):** S is counted from each task's suite (item 2), and the trap coverage
+   table is `manifest.json`, whose sha256 the one registry holds (item 4).
 3. **Settled 2026-11-08 by the team lead:** every reader of a task's clear held-out folder fails closed; (d) holds the rule, the
    readers and one scenario per reader. Two of today's readers fail open (`leakcheck`'s `scanProblem` and the line scan). Build
    step 2b's `leakcheck` must carry the rule too, since it widens the same code.
@@ -942,12 +1114,15 @@ only F2.S1.
 - [ ] F2.S2 (b): merged; the two rulesets (three GitHub rulesets) applied under the owner's go of 2026-11-08 and read back
       `equal`, recorded.
 - [ ] F2.S2 (c): the decision line exists with its numbers; if built, merged and the re-runs done.
-- [ ] F2.S2 (d): the freeze tools merged, every scenario red, green, red.
+- [ ] F2.S2 (d): PR 4a merged before task 05's seal (one archive path, one registry, the lock, atomic open, stale-folder removal),
+      then the rest of the freeze tools; every scenario red, green, red, the interruption scenarios included.
 - [ ] Every reader of a task's clear held-out folder fails closed: each of (d)'s readers refuses a sealed task with no clear
       folder (`sealed: open it first`), one scenario each red, green, red; the line scan's two exits recorded.
-- [ ] F2.S2 (e): six sealed archives; the dry run recorded and read by an Opus judge; `spec-frozen-B-<yyyymmdd>` on the remote,
-      annotated, over the six specs and FORMAT; W on the task repository's `main`; `workspace-diff` and the push check clean;
-      T1 and T2 merged by merge condition 5.
+- [ ] F2.S2 (e): six sealed archives checked; the dry run under squash merges recorded and read by an Opus judge;
+      `spec-frozen-B-<yyyymmdd>` (or its superseding tag, the failed one named in the record) on the remote, annotated, on C,
+      checked before and after the push, with FORMAT equal to the step-2a pin; W squash-merged from a branch cut from C, C an
+      ancestor of W; `leakcheck` clean on C before the tag and on W before W is accepted; `workspace-diff` and the push check
+      clean; T1 and T2 merged by merge condition 5.
 - [ ] F2.S2 (f): the spec hashes in `inputs/specs.json`; the archives', clear trees' and trap tables' hashes registered; the
       workspace commit named; `PINNED_TASK_SHA` at W; the engine's pins at the tag and cross-checked; FORMAT's class check reads
       B's frozen classification.
