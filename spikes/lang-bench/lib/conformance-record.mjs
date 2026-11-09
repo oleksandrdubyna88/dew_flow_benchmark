@@ -52,7 +52,7 @@ const notRecorded = (entries, sha256, file) => fail(`this FORMAT (sha256 ${sha25
 /** The task is in a list: the listed entry with this FORMAT's sha256 answers; a listed task whose FORMAT hash differs gets no record (a changed FORMAT is never reported as another entry's). */
 function listedAnswer({ listed, sha256, task, file }) {
   const found = listed.find(([, recorded]) => recorded === sha256);
-  return found === undefined ? fail(`the task ${task} is listed under ${labelsOf(listed)} in ${file}, and this FORMAT (sha256 ${sha256}) is not the sha256 of ${listed.length === 1 ? 'that entry' : 'those entries'} (${listed.map(([label, sha]) => `${label} ${sha}`).join(', ')}): it gets no record`) : answerOf(found);
+  return found === undefined ? fail(`this FORMAT (sha256 ${sha256}) is not the FORMAT the record names for the task ${task}: it is listed under ${labelsOf(listed)} in ${file}, whose sha256 is ${listed.map(([label, sha]) => `${label} ${sha}`).join(', ')}, so it gets no record`) : answerOf(found);
 }
 
 /** The task is in no list: the sha256 alone answers only when exactly one entry has it; with two or more the answer is unresolved, naming the task and the entries, never the first. */
