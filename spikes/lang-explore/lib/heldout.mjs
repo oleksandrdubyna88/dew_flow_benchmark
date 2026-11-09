@@ -39,8 +39,8 @@ export function permissionProblems(dir) {
 }
 
 /** `ok(heldout)` with `{ task, dir, manifest, casesDir, bruteFile, handcheckFile, refDir(stack), mutantDir(id), traps, caseIds }` for one task's folder, or a `fail` naming what is absent or changed. */
-export function loadHeldout(home, task) {
-  if (isQuick(task)) return loadHeldoutQuick(home, task);
+export function loadHeldout(home, task, frozenFile) {
+  if (isQuick(task)) return loadHeldoutQuick(home, task, frozenFile);
   const dir = taskPaths(task, home).heldoutDir;
   if (!existsSync(path.join(dir, 'manifest.json'))) return fail(`the held-out side is not there (${dir}/manifest.json): run gen.py there`, { absent: true });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));

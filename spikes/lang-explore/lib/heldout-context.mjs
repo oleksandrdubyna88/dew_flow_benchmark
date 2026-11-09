@@ -17,7 +17,8 @@ export const LOCK_NAME = '.clear.lock';
 export const OPEN_STAMP = '.open';
 
 /** `a` with every default filled and the task's folders worked out. The folders, the archive's name and the lock's name are not arguments: no caller can name another archive. */
-export function ctxOf(a) {
+export function ctxOf(given) {
+  const a = Object.fromEntries(Object.entries(given).filter(([, v]) => v !== undefined)); // an option left out is its default, never `undefined`
   const heldoutDir = taskPaths(a.task, a.home).heldoutDir;
   return {
     pid: process.pid, startTime: processStartTime(process.pid), isAlive: ownerAlive, mountOf, unseal, unpackTo, fs: nodeFs, hooks: {}, now: systemClock, frozenFile: FROZEN_FILE, packagesFile: path.join(INPUTS, 'packages.json'), keyFile: defaultKeyFile(a.home), warn: line => process.stderr.write(`${line}\n`), ...a,

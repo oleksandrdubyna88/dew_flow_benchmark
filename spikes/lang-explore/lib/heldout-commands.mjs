@@ -15,13 +15,29 @@ import { resolveTask, taskFromValues } from './tasks.mjs';
 
 const EXIT = Object.freeze({ done: 0, config: 4 });
 
-/** The arguments of the held-out operations for one task: the operator's flags, the private backup file, then the test seams. -> `ok(args)` | `fail`. */
-function argsFor({ values, io, task }) {
+/**
+ * The held-out context of a command, without its task: the operator's flags, the private backup file, then the test seams (`io.heldout`, `io.frozenFile`). Every entry point that may remove a stale clear folder is given it as
+ * `io.heldoutArgs`. -> `ok({ frozenFile?, keyFile?, backupFile?, shareMount?, ...seams })` | `fail`.
+ */
+export function heldoutBase(values, io) {
   const backup = backupSettings(values, io.home);
   if (!backup.ok) return backup;
   const keyFile = values['key-file'] === undefined ? {} : { keyFile: path.resolve(values['key-file']) };
-  return ok({ home: io.home, task, ...(io.frozenFile === undefined ? {} : { frozenFile: io.frozenFile }), ...keyFile, ...backup.value, ...(io.heldout ?? {}) });
+  return ok({ ...(io.frozenFile === undefined ? {} : { frozenFile: io.frozenFile }), ...keyFile, ...backup.value, ...(io.heldout ?? {}) });
 }
+
+/** The arguments of the held-out operations for one task. -> `ok(args)` | `fail`. */
+function argsFor({ values, io, task }) {
+  const base = heldoutBase(values, io);
+  return base.ok ? ok({ home: io.home, task, ...base.value }) : base;
+}
+
+/** A command that reads a task's held-out folder, given the held-out context in `io.heldoutArgs`; a malformed private backup file refuses it (exit 4) before it starts. */
+export const heldoutAware = command => async (values, io) => {
+  const base = heldoutBase(values, io);
+  if (!base.ok) return refused(io, base.reason);
+  return command(values, { ...io, heldoutArgs: base.value });
+};
 
 const refused = (io, reason) => { io.say(reason); return EXIT.config; };
 

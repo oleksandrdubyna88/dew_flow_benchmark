@@ -68,7 +68,7 @@ const sayRun = (say, l) => say(l.void ? `run ${l.run}: VOID (${l.kind}): ${l.rea
 /** What a replay needs: the limits, the held-out set, the world, and (a real series) the hash pins. -> `ok({ calibration, heldout, world })` | `fail`. */
 async function needs({ io, seriesDir, task }) {
   const home = io.home;
-  const got = await allOk([() => calibrationFor({ home, seriesDir, task }), () => heldoutOf({ home, seriesDir, task }), () => io.worldFn({ home, work: path.join(seriesDir, 'private'), task })]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir, task }), () => heldoutOf({ home, seriesDir, task, heldout: io.heldoutArgs }), () => io.worldFn({ home, work: path.join(seriesDir, 'private'), task })]);
   if (!got.ok) return got;
   const [calibration, heldout, world] = got.value;
   const pins = isRehearsal(seriesDir) ? ok(null) : pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
