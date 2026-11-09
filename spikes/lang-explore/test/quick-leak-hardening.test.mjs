@@ -57,6 +57,18 @@ test('A_repository_larger_than_one_batch_is_read_in_several_batches_and_a_needle
   assert.equal(control.exit, 0, 'a repository larger than one batch is not a refusal for its size alone');
 });
 
+test('A_needle_in_the_oldest_range_of_a_history_read_in_several_ranges_is_found_though_no_tree_holds_it', async () => {
+  const repo = clean();
+  git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  commit(repo, { 'oops.md': NEEDLE }, 'a leak');
+  commit(repo, { 'oops.md': null }, 'removed');
+  for (let i = 0; i < 3; i += 1) commit(repo, { [`later/${i}.md`]: `later ${i}\n` }, `later ${i}`);
+  const r = await run(newRepo(), { 'task-repo': repo }, {}, { gitLimits: { blobs: 100, blobBytes: 1_000_000, commits: 2, readBytes: 100_000_000 } });
+  assert.equal(r.exit, 5, 'the leak sits in the third range of five commits read two at a time');
+  assert.match(r.said, /patches of the local branches \(commits 5-5 of 5\)/);
+  assert.equal(holdsNeedle(r.said), false);
+});
+
 test('A_batch_whose_output_is_cut_by_the_read_limit_is_split_and_read_again_never_refused', async () => {
   const repo = newRepo({ 'README.md': 'a readme\n' });
   for (let i = 0; i < 6; i += 1) commit(repo, { [`notes/${i}.md`]: `${'padding of the notes '.repeat(20)}${i}\n${i === 5 ? NEEDLE : ''}` }, `commit ${i}`);
