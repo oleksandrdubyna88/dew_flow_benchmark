@@ -956,7 +956,11 @@ writes into `memory-limit.json` (§2).
   **One registry, resumable:** `Sealing_publishes_the_archive_once_then_writes_the_registry_entry`;
   `A_seal_killed_after_the_archive_and_before_the_entry_resumes_by_writing_the_entry_when_the_archive_unseals_to_todays_cases`
   and `…refuses_and_names_the_task_when_it_does_not` (nothing overwritten); `A_second_seal_with_an_equal_entry_is_a_no_op`;
-  `packages_json_holds_no_archive_hash_and_the_identity_reads_it_from_the_registry`.
+  `packages_json_records_the_archive_hash_its_identity_was_computed_over_and_registration_refuses_when_it_differs_from_the_registry`
+  (F2's code round, 2026-11-09: the pair, an equal hash registers and one changed byte in the registry's hash is refused).
+  **The takeover guard:** `Two_takers_on_one_dead_lock_leave_exactly_one_holder`; `A_live_lock_found_under_the_guard_is_never_removed`;
+  `A_dead_guard_is_refused_with_its_pid_start_time_and_the_remedy_and_nothing_is_removed`; and the backup's mount:
+  `A_backup_folder_that_is_not_on_the_shares_mount_is_refused_naming_both_paths` (a `findmnt` seam; the share's mount, the control).
   **Stale folders at every entry point:** `An_entry_point_removes_a_stale_clear_folder_equal_to_its_archive_under_the_lock`
   (for each reader of the fail-closed table, `package`, `run`, `rescore` and `replay`); `An_entry_point_refuses_a_clear_folder_that_differs_from_its_archive_and_removes_nothing`.
 - `spikes/lang-explore/test/quick-heldout-frozen.test.mjs` (new): `The_record_holds_counts_and_hashes_and_no_case_id_or_trap_name`
