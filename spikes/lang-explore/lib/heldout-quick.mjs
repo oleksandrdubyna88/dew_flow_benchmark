@@ -87,7 +87,10 @@ export const refsDirOf = dir => path.join(path.dirname(dir), path.basename(dir).
 export const FROZEN_FILE = path.join(INPUTS, 'heldout-frozen.json');
 
 /** The record's entry of one task, in either layout the record may take (`{ tasks: { NN: entry } }` or `{ NN: entry }`): the entry, or undefined. */
-const entryOf = (record, id) => (record.tasks ?? record)[id];
+export const entryOf = (record, id) => (record.tasks ?? record)[id];
+
+/** The entry of a task in what `readRecord` gave (`ok(record)` with a record or null, or a `fail`): the entry, or undefined when there is none or the record cannot be read. */
+export const entryInRecord = (record, id) => (record.ok && record.value !== null ? entryOf(record.value, id) : undefined);
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -95,7 +98,7 @@ const isObject = value => value !== null && typeof value === 'object' && !Array.
 const recordShapeOk = record => isObject(record) && (record.tasks === undefined || isObject(record.tasks));
 
 /** `ok(record)` for a record file of the right shape, `ok(null)` for no file, `fail` for a file that cannot be read or has another shape (the caller refuses on it: a record that cannot be read may hide a sealed task). */
-function readRecord(file) {
+export function readRecord(file) {
   if (lstatOrNull(file) === null) return ok(null);
   try {
     const record = JSON.parse(readFileSync(file, 'utf8'));
@@ -105,26 +108,46 @@ function readRecord(file) {
 
 /**
  * The ONE decision of the fail-closed readers (F2.S2 (d)): the sentence refusing a read of a task whose clear held-out folder is absent while a sealed archive is registered for it in `heldout-frozen.json`, or null.
- * It says `sealed: open it first` and names the task, so no caller can take the refusal for an absent task, an empty one or a clean one. A task with no entry in the record, or no record file at all, keeps today's
- * behaviour (null). A record that cannot be read is a refusal too, whenever the folder is absent (it may be hiding the task's entry). An entry of any shape registers the task: the check never guesses it away.
+ * It says `sealed: open it first` and names the task and the verb, so no caller can take the refusal for an absent task, an empty one or a clean one. An archive `heldout-NN/suite.enc` with NO entry is an interrupted seal, never
+ * an absent task: the sentence says how to resume it. A task with no entry and no archive, or no record file at all, keeps today's behaviour (null). A record that cannot be read is a refusal too, whenever the folder is absent
+ * (it may be hiding the task's entry). An entry of any shape registers the task: the check never guesses it away.
  */
 export function sealedAbsentProblem({ home, task, frozenFile = FROZEN_FILE }) {
-  if (lstatOrNull(path.join(taskPaths(task, home).heldoutDir, 'cases')) !== null) return null;
-  return registeredProblem({ record: readRecord(frozenFile), task, frozenFile });
+  const dir = taskPaths(task, home).heldoutDir;
+  if (lstatOrNull(path.join(dir, 'cases')) !== null) return null;
+  return registeredProblem({ record: readRecord(frozenFile), task, frozenFile, archive: lstatOrNull(path.join(dir, 'suite.enc')) !== null });
 }
 
-/** The refusal of a task whose folder is absent, read from the record: `sealed: open it first` when the record lists the task, a refusal when it cannot be read, else null. */
-function registeredProblem({ record, task, frozenFile }) {
+/** The refusal of a task whose folder is absent, read from the record: `sealed: open it first` when the record lists the task, an interrupted seal when only the archive is there, a refusal when the record cannot be read, else null. */
+function registeredProblem({ record, task, frozenFile, archive }) {
   if (!record.ok) return `the held-out record ${path.basename(frozenFile)} cannot be read (${record.reason}): a task whose folder is absent may be sealed in it (task ${task.id})`;
-  const listed = record.value !== null && entryOf(record.value, task.id) !== undefined;
-  return listed ? `sealed: open it first (task ${task.id}): its clear held-out folder is absent and a sealed archive is registered for it` : null;
+  if (entryInRecord(record, task.id) !== undefined) return `sealed: open it first (task ${task.id}): its clear held-out folder is absent and a sealed archive is registered for it; run \`explore.mjs heldout-open --task ${task.id}\``;
+  return archive ? `interrupted seal: run \`package --task ${task.id} --seal\` again to resume (task ${task.id}: its archive is there and ${path.basename(frozenFile)} has no entry for it)` : null;
 }
 
-/** `ok(heldout)` with `{ task, dir, casesDir, refsDir, caseIds, traps, treeSha256 }` for a quick task, or a `fail` naming what is absent or malformed. */
-export function loadHeldoutQuick(home, task) {
+/**
+ * The sentence refusing a clear folder that is not the one its archive was sealed from, or null: the registry's entry holds the tree hash of the sealed cases, and a folder changed after sealing is read as nothing.
+ * A task with no entry (an authoring folder) is not refused. `heldout` is `loadHeldoutQuick`'s value.
+ */
+export function openedFolderProblem({ task, heldout, frozenFile = FROZEN_FILE }) {
+  const entry = entryInRecord(readRecord(frozenFile), task.id);
+  return entry === undefined || entry.treeSha256 === heldout.treeSha256 ? null : differsSentence({ task, frozenFile });
+}
+
+/** The sentence of a clear folder whose tree hash is not its archive's. */
+export const differsSentence = ({ task, frozenFile = FROZEN_FILE }) => `the clear folder differs from its archive: changed after sealing (task ${task.id}; the tree hash is not the one in ${path.basename(frozenFile)}); nothing is removed`;
+
+/** The refusal of a task with no clear folder: the sealed or interrupted-seal sentence of `sealedAbsentProblem` (a fail with NO `absent` flag: nothing may read it as an absent task), else today's `absent` fail. */
+function absentFail({ home, task, frozenFile, casesDir }) {
+  const sealed = sealedAbsentProblem({ home, task, frozenFile });
+  return sealed === null ? fail(`the held-out side is not there (${casesDir}); its shape is in ~/rsd/lang-v2/briefs/quick-heldout-shape.md`, { absent: true }) : fail(sealed);
+}
+
+/** `ok(heldout)` with `{ task, dir, casesDir, refsDir, caseIds, traps, treeSha256 }` for a quick task, or a `fail` naming what is absent or malformed. A sealed task whose folder is absent is a refusal, never `absent`. */
+export function loadHeldoutQuick(home, task, frozenFile = FROZEN_FILE) {
   const dir = taskPaths(task, home).heldoutDir;
   const casesDir = path.join(dir, 'cases');
-  if (lstatOrNull(casesDir) === null) return fail(`the held-out side is not there (${casesDir}); its shape is in ~/rsd/lang-v2/briefs/quick-heldout-shape.md`, { absent: true });
+  if (lstatOrNull(casesDir) === null) return absentFail({ home, task, frozenFile, casesDir });
   const shape = folderShape({ dir, casesDir });
   if (shape.problems.length > 0) return fail(`the held-out folder ${dir} is malformed: ${shape.problems.join('; ')}`);
   const traps = readTraps(dir, shape.ids);

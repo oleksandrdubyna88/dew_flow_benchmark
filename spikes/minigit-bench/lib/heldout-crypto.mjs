@@ -15,13 +15,16 @@ const AAD = Buffer.from(MAGIC, 'latin1');
 
 export const defaultKeyPath = () => path.join(os.homedir(), '.config', 'minigit-bench', 'heldout.key');
 
-/** lstat first (a link is refused, never followed), then the owner, the mode and the size; the bytes are read from the same open file. */
-export function readKey(file = defaultKeyPath()) {
+/**
+ * lstat first (a link is refused, never followed), then the owner, the mode and the size; the bytes are read from the same open file. `remedy` is what a missing file is told to do: v1's tool makes the key, the
+ * lang-explore seal (`lang-explore/lib/heldout-key.mjs`) tells its operator which option names the key.
+ */
+export function readKey(file = defaultKeyPath(), { remedy = 'run: heldout-tool.mjs keygen' } = {}) {
   let st;
   try {
     st = lstatSync(file);
   } catch (e) {
-    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return fail(`no key file: ${file} does not exist (run: heldout-tool.mjs keygen)`);
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return fail(`no key file: ${file} does not exist (${remedy})`);
     throw e;
   }
   if (!st.isFile()) return fail(`${file} is not a regular file (a link or a directory is refused)`);

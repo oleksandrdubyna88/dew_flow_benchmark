@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { packDir, unpackTo } from '../lib/heldout-archive.mjs';
-import { MAGIC, unseal } from '../lib/heldout-crypto.mjs';
+import { MAGIC, readKey, unseal } from '../lib/heldout-crypto.mjs';
 import { sealSuite, sealTree } from '../lib/heldout-seal.mjs';
 import { tmpDir } from './helpers.mjs';
 import { writeToySuite } from './toy-suite.mjs';
@@ -100,4 +100,10 @@ test('The_container_layout_is_the_magic_a_twelve_byte_iv_the_ciphertext_and_a_si
   const bent = Buffer.from(sealed);
   bent[0] ^= 1;
   assert.match(unseal(bent, fixtureKey()).reason, /not a sealed suite/, 'the magic is also the AAD: another magic is refused');
+});
+
+test('The_key_reader_tells_a_missing_key_the_remedy_of_its_caller_and_keeps_v1s_words_by_default', () => {
+  const gone = path.join(tmpDir('seal-nokey'), 'heldout.key');
+  assert.match(readKey(gone).reason, /does not exist \(run: heldout-tool\.mjs keygen\)/, 'v1\'s sentence is unchanged');
+  assert.match(readKey(gone, { remedy: 'give the key with --key-file' }).reason, /does not exist \(give the key with --key-file\)/);
 });

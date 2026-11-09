@@ -5,9 +5,9 @@ import { randomBytes } from 'node:crypto';
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
 
-const tempNameOf = file => path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
+export const tempNameOf = file => path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
 
-function writeFlushed({ temp, text, fs }) {
+export function writeFlushed({ temp, text, fs }) {
   const fd = fs.openSync(temp, 'wx', 0o644);
   try {
     fs.writeSync(fd, text);
