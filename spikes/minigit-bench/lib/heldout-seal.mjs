@@ -42,18 +42,29 @@ export function withHashesLine(text, sha) {
   return `${[...lines, line].join('\n')}\n`;
 }
 
+/**
+ * Pack a clear directory, seal it and check that the blob opens to the same pack: the part of a seal that both v1's `sealSuite` and the lang-explore seal (`lang-explore/lib/package-seal.mjs`) share. Nothing is written.
+ * -> `ok({ sealed, plaintextSha256 })` | `fail` (a link or special file in the tree, or a blob that does not round-trip).
+ */
+export function sealTree({ src, key }) {
+  const packed = packDir(src);
+  if (!packed.ok) return packed;
+  const sealed = seal(packed.value, key);
+  const back = unseal(sealed, key);
+  if (!back.ok || !back.value.equals(packed.value)) return fail('the sealed blob does not round-trip: nothing was written');
+  return ok({ sealed, plaintextSha256: sha256Hex(packed.value) });
+}
+
 /** Seal `src` with the key and write the committed files under `outDir`. ok(manifest) | fail (key trouble carries `env: true`). */
 export function sealSuite({ src, keyFile, outDir = HELDOUT_DIR, hashesFile = HASHES_FILE, today = new Date().toISOString().slice(0, 10) }) {
   const valid = validateSource(src);
   if (!valid.ok) return valid;
   const key = readKey(keyFile);
   if (!key.ok) return { ...key, env: true };
-  const packed = packDir(src);
-  if (!packed.ok) return packed;
-  const sealed = seal(packed.value, key.value);
-  const back = unseal(sealed, key.value);
-  if (!back.ok || !back.value.equals(packed.value)) return fail('the sealed blob does not round-trip: nothing was written');
-  const manifest = { format: 1, plaintextSha256: sha256Hex(packed.value), ...countsOf(valid.value), sealedOn: today };
+  const tree = sealTree({ src, key: key.value });
+  if (!tree.ok) return tree;
+  const { sealed, plaintextSha256 } = tree.value;
+  const manifest = { format: 1, plaintextSha256, ...countsOf(valid.value), sealedOn: today };
   mkdirSync(outDir, { recursive: true });
   writeFileSync(path.join(outDir, 'suite.enc'), sealed, { mode: 0o644 });
   writeFileSync(path.join(outDir, 'suite.enc.sha256'), `${sha256Hex(sealed)}  suite.enc\n`);
