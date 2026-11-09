@@ -570,6 +570,9 @@ text above, **this note holds**.
      against `keySha256` before any use; a backup that does not match is not used, and the task's cases are then lost until a
      matching copy is found (the archive stays).
 
+
+**The team lead's note on the task repository's checks (2026-11-09, from step 2b's first real run).** The draft spec branches (`docs/spec-04`, `docs/spec-05`, `docs/specs-web`, `docs/specs-daemon`) are local and are never pushed. Their history matches the private sets about 2,300 times, in the samples and the grammar, which is why they stay local. Each F2.S1 spec pull request is made on a fresh branch from the task repository's `main`, holding the corrected files only. Merge condition 5's `leakcheck` over both repositories runs on a fresh single-branch clone of that pull request's head (`git clone --single-branch --branch <head>` from GitHub), never on the local checkout with its drafts. On 2026-11-09 the public tree at `c204726` and a fresh clone of `main` were both clean, after the team lead read and listed five phrases that the public task-01 spec and FORMAT share with the private notes. A match in a spec pull request is read by the team lead before the merge, and listed only when it names no case, trap or answer.
+
 ## F2.S2 — one freeze
 
 **Model:** scenarios + brief Opus (this document) · code Sonnet · review Opus · fixes Sonnet; the ruleset apply and the tag push
