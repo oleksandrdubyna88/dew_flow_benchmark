@@ -8,7 +8,7 @@ import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { extractGrammar } from '../tools/grammar-extract.mjs';
 import { assemble, canonicalJson, checkRecord, WRITER_FILES } from '../lib/specs-record.mjs';
 import { fail } from '../../minigit-bench/lib/result.mjs';
-import { renderRecord, writeAtomicFile } from '../lib/conformance-record.mjs';
+import { entryDifferences, renderRecord, writeAtomicFile } from '../lib/conformance-record.mjs';
 import { runSpecsRecord } from '../lib/specs-record-cli.mjs';
 import { edit, FORMAT_TEXT, sha256 } from './support/format-fixtures.mjs';
 import { owned } from './support/owned.mjs';
@@ -143,9 +143,9 @@ function inputsWithA(t) {
 /** Every file under `dir` with its bytes, to say that a refusal changed nothing and left nothing behind. */
 const snapshot = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => `${path.join(e.parentPath, e.name)}\n${readFileSync(path.join(e.parentPath, e.name), 'utf8')}`).sort().join('\n--\n');
 
+/** The record file and specs.json written again from `change(record)`, the new record the callback returns (nothing is changed in place). */
 const rewrite = (inputs, change) => {
-  const record = readRecordIn(inputs);
-  change(record);
+  const record = change(readRecordIn(inputs));
   writeFileSync(formatFile(inputs), JSON.stringify(record, null, 2));
   writeFileSync(path.join(inputs, 'specs.json'), assemble(inputs).text);
 };
@@ -172,11 +172,11 @@ test('The_B_entry_is_computed_from_FORMATs_bytes_and_a_typed_value_is_refused_by
   const recomputed = await runSpecsRecord(['--format-entry', 'B', '--task-repo', other.repo, '--check'], { inputs, env: {}, commit: other.commit });
   assert.equal(recomputed.exit, 2, 'the entry follows the FORMAT\'s bytes: other bytes are not the FORMAT A records');
   for (const [field, typed] of [['grammarSha256', 'f'.repeat(64)], ['sha256', 'e'.repeat(64)], ['tasks', ['04', '05']], ['gate', 'inputs/gates/other.md']]) {
-    rewrite(inputs, edited => { edited.B[field] = typed; });
+    rewrite(inputs, edited => ({ ...edited, B: { ...edited.B, [field]: typed } }));
     const refused = await runSpecsRecord(['--format-entry', 'B', '--task-repo', repo, '--check'], { inputs, env: {}, commit });
     assert.equal(refused.exit, 1, `a typed ${field}`);
     assert.match(refused.stderr, new RegExp(field), `the check names ${field}`);
-    rewrite(inputs, edited => { edited.B = record.B; });
+    rewrite(inputs, edited => ({ ...edited, B: record.B }));
   }
 });
 
@@ -196,7 +196,7 @@ test('The_committed_B_entry_is_what_the_writer_computes_from_the_task_repository
   const inputs = path.join(owned.ownedDir(t, 'real'), 'inputs');
   cpSync(path.join(spikeDir, 'inputs', 'specs.d'), path.join(inputs, 'specs.d'), { recursive: true });
   writeFileSync(path.join(inputs, 'specs.json'), assemble(inputs).text);
-  rewrite(inputs, edited => { edited.B.grammarSha256 = '0'.repeat(64); });
+  rewrite(inputs, edited => ({ ...edited, B: { ...edited.B, grammarSha256: '0'.repeat(64) } }));
   const typed = await runSpecsRecord(['--format-entry', 'B', '--check'], { inputs, env: process.env });
   assert.equal(typed.exit, 1);
   assert.match(typed.stderr, /grammarSha256/);
@@ -305,4 +305,48 @@ test('A_failed_cleanup_of_the_temporary_file_never_hides_the_error_that_made_it_
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /EACCES/, 'the first error is the refusal');
   assert.doesNotMatch(refused.reason, /EBUSY/);
+});
+
+// ---- code round 2 of PR B -----------------------------------------------------------------------------------------------------------------------------
+
+/** A `write` seam: the calls whose number (1 = format.json, 2 = specs.json, 3 = the put-back) is in `failing` fail with a reason naming the file; the others write for real. */
+function writesFailing(failing) {
+  let calls = 0;
+  return (file, text, tmpFolder) => {
+    calls += 1;
+    return failing.includes(calls) ? fail(`${path.basename(file)} could not be written (EIO ${calls})`) : writeAtomicFile(file, text, tmpFolder);
+  };
+}
+
+test('A_put_back_that_fails_too_is_said_with_both_reasons_and_never_as_put_back', async t => {
+  const { repo, commit } = await taskRepo(t);
+  const inputs = inputsWithA(t);
+  const before = snapshot(inputs);
+  const both = await runSpecsRecord(['--format-entry', 'B', '--task-repo', repo], { inputs, env: {}, commit, write: writesFailing([2, 3]) });
+  assert.equal(both.exit, 2);
+  assert.match(both.stderr, /specs\.json could not be written \(EIO 2\)/);
+  assert.match(both.stderr, /format\.json could not be put back: format\.json could not be written \(EIO 3\)/);
+  assert.match(both.stderr, /format\.json now holds the new entry/);
+  assert.doesNotMatch(both.stderr, /put back as it was/);
+  assert.notEqual(snapshot(inputs), before, 'the new entry really is in format.json, as the sentence says');
+  const fresh = inputsWithA(t);
+  const control = await runSpecsRecord(['--format-entry', 'B', '--task-repo', repo], { inputs: fresh, env: {}, commit, write: writesFailing([2]) });
+  assert.equal(control.exit, 2);
+  assert.match(control.stderr, /specs\.json could not be written \(EIO 2\)/);
+  assert.match(control.stderr, /put back as it was/);
+  assert.doesNotMatch(control.stderr, /now holds the new entry/);
+  assert.equal(readRecordIn(fresh).B, undefined, 'format.json is as it was');
+});
+
+test('An_entry_that_is_null_or_not_an_object_has_every_field_differ_and_never_throws', () => {
+  const computed = { version: 2, sha256: 'a'.repeat(64), gate: null, grammarSha256: 'b'.repeat(64), tasks: ['04'] };
+  for (const recorded of [null, 'B', 7, ['x'], true]) {
+    let found;
+    assert.doesNotThrow(() => { found = entryDifferences(recorded, computed); }, JSON.stringify(recorded));
+    assert.equal(found.length, Object.keys(computed).length, `every field of the entry differs for ${JSON.stringify(recorded)}`);
+    for (const field of Object.keys(computed)) assert.ok(found.some(line => line.startsWith(`${field} is `)), `${field} is named`);
+    assert.ok(found.every(line => !line.includes('undefined')), 'a missing field is said as absent');
+  }
+  assert.deepEqual(entryDifferences(undefined, computed), ['the entry is not in the record']);
+  assert.deepEqual(entryDifferences({ ...computed }, computed), []);
 });

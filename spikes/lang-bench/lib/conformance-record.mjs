@@ -161,13 +161,14 @@ export async function computeEntry({ label, repo, commit, record }) {
   return bytes.ok ? entryFrom({ bytes: bytes.value, record, tasks: ENTRY_TASKS[label], commit }) : bytes;
 }
 
-const show = value => JSON.stringify(value);
+const show = value => (value === undefined ? 'absent' : JSON.stringify(value));
 
-/** What differs between the entry the record holds and the entry computed: one sentence per field, `[]` when equal. */
+/** What differs between the entry the record holds and the entry computed: one sentence per field, `[]` when equal. A recorded entry that is null or not an object is `{}`: every field differs. */
 export function entryDifferences(recorded, computed) {
   if (recorded === undefined) return ['the entry is not in the record'];
-  const fields = [...new Set([...Object.keys(recorded), ...Object.keys(computed)])];
-  return fields.filter(field => show(recorded[field]) !== show(computed[field])).map(field => `${field} is ${show(recorded[field])} in the record, ${show(computed[field])} computed`);
+  const have = isObject(recorded) ? recorded : {};
+  const fields = [...new Set([...Object.keys(have), ...Object.keys(computed)])];
+  return fields.filter(field => show(have[field]) !== show(computed[field])).map(field => `${field} is ${show(have[field])} in the record, ${show(computed[field])} computed`);
 }
 
 const inline = value => (Array.isArray(value) ? `[${value.map(show).join(', ')}]` : show(value));

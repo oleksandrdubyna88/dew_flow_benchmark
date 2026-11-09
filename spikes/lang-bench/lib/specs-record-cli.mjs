@@ -53,23 +53,28 @@ function checkedEntry({ label, record, entry, inputs }) {
   return problems.length === 0 ? done(0, `specs-record: entry ${label} is what FORMAT's bytes give\n`, '') : done(1, '', problems.map(line => `specs-record: ${line}\n`).join(''));
 }
 
-/** Both files written, format.json first; when specs.json cannot be written, format.json is put back as it was. -> `done(...)`. */
-function writeBoth({ inputs, text, specsText, entry, label }) {
+/** The refusal after specs.json could not be written: format.json is put back, and the sentence says whether that worked, with both reasons when it did not. */
+function putBackRefusal({ file, before, inputs, specs, write }) {
+  const back = write(file, before, inputs);
+  return back.ok ? refusal(`${specs.reason}; inputs/specs.d/format.json was put back as it was`) : refusal(`${specs.reason}; format.json could not be put back: ${back.reason}; format.json now holds the new entry`);
+}
+
+/** Both files written, format.json first; when specs.json cannot be written, format.json is put back and the result of that is checked. -> `done(...)`. */
+function writeBoth({ inputs, text, specsText, entry, label, write }) {
   const file = formatFile(inputs);
   const before = readFileSync(file, 'utf8');
-  const wrote = writeAtomicFile(file, text, inputs);
+  const wrote = write(file, text, inputs);
   if (!wrote.ok) return refusal(wrote.reason);
-  const specs = writeAtomicFile(path.join(inputs, 'specs.json'), specsText, inputs);
+  const specs = write(path.join(inputs, 'specs.json'), specsText, inputs);
   if (specs.ok) return done(0, `specs-record: entry ${label} of inputs/specs.d/format.json holds sha256 ${entry.sha256} for tasks ${entry.tasks.join(', ')}; wrote inputs/specs.json from ${specsText.length} bytes of writers\n`, '');
-  writeAtomicFile(file, before, inputs);
-  return refusal(`${specs.reason}; inputs/specs.d/format.json was put back as it was`);
+  return putBackRefusal({ file, before, inputs, specs, write });
 }
 
 /** The entry's new `format.json` text and the `specs.json` assembled from it, both made in memory; nothing is written unless the assembly succeeds. */
-function writtenEntry({ label, record, entry, inputs, assembleWith }) {
+function writtenEntry({ label, record, entry, inputs, assembleWith, write }) {
   const text = renderRecord({ ...record, [label]: entry });
   const built = assembleWith(inputs, { 'format.json': text });
-  return built.ok ? writeBoth({ inputs, text, specsText: built.text, entry, label }) : refusal(built.reason);
+  return built.ok ? writeBoth({ inputs, text, specsText: built.text, entry, label, write }) : refusal(built.reason);
 }
 
 /** ok(record) of `format.json` once every writer's file reads (a stray or a taken key is found before anything else). */
@@ -79,12 +84,12 @@ function readRecordFile(inputs, assembleWith) {
 }
 
 /** ok({ label, record, entry, inputs }): the entry computed from FORMAT's bytes, nothing written. */
-async function computedEntry({ values, env, inputs, commit, assembleWith }) {
+async function computedEntry({ values, env, inputs, commit, assembleWith, write }) {
   const record = readRecordFile(inputs, assembleWith);
   if (!record.ok) return record;
   const label = values['format-entry'];
   const entry = await computeEntry({ label, repo: values['task-repo'] ?? env.LANG_V2_TASK_REPO, commit, record: record.value });
-  return entry.ok ? ok({ label, record: record.value, entry: entry.value, inputs, assembleWith }) : entry;
+  return entry.ok ? ok({ label, record: record.value, entry: entry.value, inputs, assembleWith, write }) : entry;
 }
 
 /** The entry computed (nothing is written before every refusal is past), then checked or written. */
@@ -94,12 +99,12 @@ async function formatEntry(args) {
   return args.values.check === true ? checkedEntry(computed.value) : writtenEntry(computed.value);
 }
 
-/** `{ exit, stdout, stderr }` for the command's arguments. `env`, `inputs`, `commit` and `assemble` are seams for the tests; the commit is the task repository's pinned one. */
-export async function runSpecsRecord(argv, { env = process.env, inputs = INPUTS, commit = PINNED_TASK_SHA, assemble: assembleWith = assemble } = {}) {
+/** `{ exit, stdout, stderr }` for the command's arguments. `env`, `inputs`, `commit`, `assemble` and `write` (the atomic file writer) are seams for the tests; the commit is the task repository's pinned one. */
+export async function runSpecsRecord(argv, { env = process.env, inputs = INPUTS, commit = PINNED_TASK_SHA, assemble: assembleWith = assemble, write = writeAtomicFile } = {}) {
   const parsed = parse(argv);
   if (!parsed.ok) return refusal(parsed.reason);
   const values = parsed.value;
-  if (values['format-entry'] !== undefined) return formatEntry({ values, env, inputs, commit, assembleWith });
+  if (values['format-entry'] !== undefined) return formatEntry({ values, env, inputs, commit, assembleWith, write });
   if (values['task-repo'] !== undefined) return refusal(`--task-repo goes with --format-entry; ${USAGE}`);
   return assembly({ inputs, checking: values.check === true });
 }
