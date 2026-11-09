@@ -529,16 +529,26 @@ text above, **this note holds**.
    already registered runs its references and witnesses again on the new runner (its identity names the runner, P8, so the old
    entry is stale by its own hash and `registerPackage` refuses it until it runs again). Each task's S and P go into the same
    dated checkpoints line, one pair per task.
+   **One decision for the five, taken before any of them registers** (the same review's second round): the five later tasks
+   may be authored and validated in parallel, but no later task's `packages.json` entry is written until all five have counted
+   their S. The rule is then applied once, to the largest of the five, so at most one runner change follows task 05's, and it
+   comes before any of the five entries exists; only task 05's entry can need its run again.
 3. **The clear folder is made atomically, under a lock** (P10, scenario 37; `lib/package-seal.mjs` `unsealTo`, and F2.S2's
    `heldout-open`). An exclusive lock on the task's folder, `heldout-NN/.clear.lock`, is held for every open and every close: a
    file created `wx` with the owner's pid and start time, in the shape of `takeScorerLock`
-   (`spikes/lang-explore/lib/pass-locks.mjs:72`), a dead owner's lock taken over and named. **The takeover is atomic** (F2's
-   code round, 2026-11-09): `takeScorerLock`'s shape reads the stamp and then removes the file, so two takers that both read
-   the same dead stamp can remove each other's new lock. The clear lock has more than one kind of entry point (`package`,
-   `leakcheck`, `run`, `heldout-open`), so it takes over by renaming the lock file to an owned unique name in the same folder,
-   reading the renamed file's stamp, and removing it only when that stamp is the dead one it judged; any other stamp is put
-   back by `link` (which fails if a new lock exists, and then the taker yields) and the taker tries again, at most three
-   times, then refuses. Scenario 37 adds two takers on one dead stamp: exactly one holds the lock. `unsealTo` unseals into an owned
+   (`spikes/lang-explore/lib/pass-locks.mjs:72`), a dead owner's lock taken over and named. **The takeover is serialized by a guard** (F2's code
+   round, 2026-11-09; its second round replaced a rename-and-put-back takeover that could move a live lock away):
+   `takeScorerLock`'s shape reads the stamp and then removes the file, so two takers that both read the same dead stamp can
+   remove each other's new lock. The clear lock has more than one kind of entry point (`package`, `leakcheck`, `run`,
+   `heldout-open`), so only a process holding the guard `heldout-NN/.clear.lock.takeover` (created `wx` with the same stamp,
+   held for the few file operations below and removed at once) may remove a lock: under the guard it reads the lock's stamp
+   again, removes the lock only when that stamp's owner is dead, then creates its own lock `wx` (a `wx` that fails means another
+   process took the free lock in the normal way: it holds it, and this one yields). A live lock is never moved or removed by
+   anyone but its owner. A guard whose owner is dead is not taken over: it is refused with one sentence naming the guard file,
+   for the operator to remove (a crash inside that window of a few file operations is the one case left to a person). Normal
+   acquisition stays one `wx` create with no guard. Scenario 37 adds two takers on one dead stamp, exactly one holds the lock;
+   a taker that finds a live stamp under the guard, nothing removed; a dead guard, the refusal. (The scorer lock keeps its
+   shape: it is taken only under the series lock, so it never has two takers.) `unsealTo` unseals into an owned
    temporary folder **inside `heldout-NN/`** (same filesystem; an `ownedFor` name starting with `.`), sets mode 700, checks its
    tree hash against the registered `treeSha256`, and only then renames it to `heldout-NN/cases/` in one step; a rename that
    finds the name taken fails and the temporary folder is removed. A crash leaves at most an owned temporary folder, which the
@@ -579,7 +589,12 @@ text above, **this note holds**.
      first and refuse on a mismatch with the entry's `keySha256` ("the key is not the one the archive was sealed with"), before
      any decryption. A key file that is missing, or whose mode is not 600, is refused the same way.
    - **Backed up, and the backup checked before any clear case is removed.** After `keygen` and before the first seal, the key is
-     copied to the private backup and the copy verified by hash against `keySha256`. **Before any clear cases are removed after
+     copied to the private backup and the copy verified by hash against `keySha256`. **The backup folder is checked to be on the
+     mounted NAS** before the copy and before every verification (the same review's second round): `findmnt --target <folder>`
+     must name the share's own mount point (§7 item 5), never the root filesystem, so an unmounted share's empty mount point
+     never receives the key; otherwise exit 4, "the key backup
+     folder is not on the mounted share: <path>". Mode bits are not checked there: the share's access is its own access list,
+     and the WSL mount only emulates POSIX modes, so a mode check would prove nothing. **Before any clear cases are removed after
      sealing** (the authoring `cases/` of a newly sealed task, a stale clear folder at an entry point, `heldout-close`), the tool
      checks that the backup copy exists and hashes to `keySha256`, and refuses to remove anything otherwise: an archive whose key
      can be lost must not become the only copy of the cases. Where the backup is, see §7 item 5.
