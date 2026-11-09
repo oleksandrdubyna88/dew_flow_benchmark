@@ -16,6 +16,10 @@
 //   node spikes/lang-explore/explore.mjs leakcheck [--task NN] [--range A..B] [--task-repo <path>] [--task-base <ref>]   v1's leak check with the held-out outputs, reference lines and notes' shingles of EVERY task (or of the one named) as the needles,
 //       over the bench repository AND the task repository (`--task-repo`, else the variable LANG_V2_TASK_REPO; with neither it refuses): its files at HEAD, its history over what `--task-base` (default origin/main) does not hold, its staged
 //       changes and its working tree. `--candidate-repo <path> --candidate <commit>` scans ONE commit about to be published (its tree, message and diff); with no `--task-repo` it is the only thing scanned
+//   node spikes/lang-explore/explore.mjs heldout-open --task NN [--key-file <file>] [--key-backup <file> --share-mount <dir>]   FREE: the clear held-out folder of a sealed quick task made from its archive (the key's sha256 is checked before any decryption), held for the operator until heldout-close
+//   node spikes/lang-explore/explore.mjs heldout-close --task NN --key-backup <file> --share-mount <dir> [--key-file <file>]   FREE: the clear folder removed, only after the key's backup copy is verified on the share's mount (there is no override); a folder held by another live process is refused
+//   node spikes/lang-explore/explore.mjs heldout-check --tasks NN,NN [--key-file <file>] [--key-backup <file> --share-mount <dir>]   FREE and read only: the registry entry, the archive's hash, the key and the unsealed tree of each task, as counts
+//       the backup file and the mount may also come from the private file ~/.config/lang-v2/heldout-backup.json (mode 600); the flags win. An entry point that must remove a stale clear folder needs them too.
 //
 // Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
 // `run` and `rehearse` re-execute themselves under `taskset -c 6,7` (an env marker stops a loop), so the broker, the receiver, the proxy and the sampler sit on the harness core, as v1's runner does.
@@ -25,13 +29,14 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { calibrateCommand } from './lib/calibrate.mjs';
+import { cmdHeldoutCheck, cmdHeldoutClose, cmdHeldoutOpen } from './lib/heldout-commands.mjs';
 import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRepartition, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { prepare } from './lib/prepare.mjs';
 import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' } };
 /** The commands that run or score under the two scoring CPUs: every scoring of the quick run, the diagnostic and the re-score included, so the numbers they compare are measured in the same conditions. */
 export const REEXEC = new Set(['run', 'rehearse', 'rescore', 'replay']);
 
@@ -52,7 +57,7 @@ async function cmdCalibrate(values, io) {
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {
