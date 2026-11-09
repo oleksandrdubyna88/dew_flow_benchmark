@@ -6,13 +6,14 @@ import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { refsDirOf } from '../lib/heldout-quick.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
 import { writeHeldout } from './olympiad-fixture.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
-import { EXPLORE, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
+import { EXPLORE, presentMaterial, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
 const QUICK = ['04', '05', '06', '07', '08', '10'];
 const marked = id => [{ id: 'h001', input: `scenario 2\ndefault within 2s\nconnect c tcp\nsend c "invented-${id}-input-QWERTY"\n`, output: `transcript 2\nready\nrecv c "invented-${id}-answer-XYZZY"\nexit 0\n` }, { id: 'h002', input: `scenario 2\n`, output: `transcript 2\n` }];
@@ -29,7 +30,7 @@ function homeWith(ids, over = {}) {
 const substringsOf = (m, id) => m.material.substrings.filter(n => n.task === id);
 
 test('The_needles_of_every_quick_task_come_from_its_cases_its_generator_and_its_reference_solutions', () => {
-  const m = leakMaterial({ home: homeWith(QUICK), explore: EXPLORE, publicText: '' });
+  const m = presentMaterial({ home: homeWith(QUICK), publicText: '' });
   assert.equal(m.ok, true, m.reason);
   assert.deepEqual(m.value.scanned.sort(), QUICK);
   for (const id of QUICK) {
@@ -44,26 +45,29 @@ test('The_needles_of_every_quick_task_come_from_its_cases_its_generator_and_its_
 });
 
 test('A_reference_line_is_named_by_its_refs_path_and_line_never_by_its_text', () => {
-  const m = leakMaterial({ home: homeWith(['04']), explore: EXPLORE, publicText: '' }).value;
+  const m = presentMaterial({ home: homeWith(['04']), publicText: '' }).value;
   const needle = substringsOf(m, '04').find(n => n.text === normLine(refLine('04')));
   assert.deepEqual([needle.source, needle.line, needle.kind], ['refs/ref.py', 2, 'code']);
 });
 
 test('The_trap_ids_of_a_quick_task_are_ids_to_keep_out_of_the_public_notes', () => {
-  const m = leakMaterial({ home: homeWith(['06']), explore: EXPLORE, publicText: '' });
+  const m = presentMaterial({ home: homeWith(['06']), publicText: '' });
   assert.deepEqual(m.value.ids, ['h002']);
 });
 
+// Changed by step 2b (the plan: a task whose folder is absent is never skipped while another task's folder is present). The title is the one the test always had; what it pins now is the refusal.
 test('A_quick_task_whose_folders_are_absent_is_named_and_skipped_like_an_olympiad_task', () => {
-  const m = leakMaterial({ home: homeWith(['04', '05']), explore: EXPLORE, publicText: '' }).value;
-  assert.deepEqual(m.scanned.sort(), ['04', '05']);
-  assert.ok(['06', '07', '08', '10'].every(id => m.absent.includes(id)));
+  const r = leakMaterial({ home: homeWith(['04', '05']), explore: EXPLORE, publicText: '' });
+  assert.equal(r.ok, false, 'the absent tasks are named and the scan is refused, never run over the two that are there');
+  assert.match(r.reason, /task 06, 07, 08, 10 .*not present|tasks? .*06.*not present/);
+  const named = presentMaterial({ home: homeWith(['04', '05']), publicText: '' }).value;
+  assert.deepEqual([named.scanned.sort(), named.absent], [['04', '05'], []], 'with the pins that name the two, both are read and none is absent');
 });
 
 test('A_quick_task_with_a_stray_file_in_its_cases_folder_fails_the_check_instead_of_reading_something_else', () => {
   const home = homeWith(['05']);
   writeFileSync(path.join(taskPaths(quickTask('05'), home).heldoutDir, 'cases', 'notes.txt'), 'stray');
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, false);
   assert.match(r.reason, /task 05: .*malformed.*not a pair or cases\.txt: notes\.txt/);
 });
@@ -72,7 +76,7 @@ test('A_quick_task_whose_private_notes_are_missing_fails_the_check_like_an_olymp
   const home = quickHome();
   writeQuickHeldout({ home, task: quickTask('07'), cases: marked('07') });
   rmSync(taskPaths(quickTask('07'), home).notesFile);
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, false);
   assert.match(r.reason, /the private notes of task 07 are missing/);
 });
@@ -82,7 +86,7 @@ test('A_quick_task_whose_private_notes_are_missing_fails_the_check_like_an_olymp
 const GRAMMAR = new Set(['scenario 2', 'default within 2s', 'connect c tcp', 'transcript 2', 'ready', 'exit 0', 'import os'].map(normLine));
 
 test('A_held_out_line_that_the_public_examples_also_hold_is_grammar_and_no_needle_but_a_line_with_a_value_still_is', () => {
-  const m = leakMaterial({ home: homeWith(['04']), explore: EXPLORE, publicText: '', grammarLines: GRAMMAR }).value;
+  const m = presentMaterial({ home: homeWith(['04']), publicText: '', grammarLines: GRAMMAR }).value;
   const texts = substringsOf(m, '04').map(n => n.text);
   assert.deepEqual(texts.filter(t => GRAMMAR.has(t)), [], 'grammar lines are not needles');
   assert.ok(texts.includes('connect c tcp') === false);
@@ -92,7 +96,7 @@ test('A_held_out_line_that_the_public_examples_also_hold_is_grammar_and_no_needl
 });
 
 test('Without_the_rule_the_same_grammar_lines_are_needles_so_the_rule_is_what_removes_them', () => {
-  const m = leakMaterial({ home: homeWith(['04']), explore: EXPLORE, publicText: '' }).value;
+  const m = presentMaterial({ home: homeWith(['04']), publicText: '' }).value;
   assert.ok(substringsOf(m, '04').map(n => n.text).includes('default within 2s'));
 });
 
@@ -104,7 +108,7 @@ test('The_grammar_rule_is_for_the_quick_tasks_only_an_olympiad_task_keeps_every_
   const notes = taskPaths(resolveTask(EXPLORE, '02').value, home).notesFile;
   mkdirSync(path.dirname(notes), { recursive: true });
   writeFileSync(notes, 'invented notes');
-  const m = leakMaterial({ home, explore: EXPLORE, publicText: '', grammarLines: new Set(['answer-02-h001-xyzzy', 'second line of it']) }).value;
+  const m = presentMaterial({ home, publicText: '', grammarLines: new Set(['answer-02-h001-xyzzy', 'second line of it']) }).value;
   assert.ok(m.material.substrings.some(n => n.text === 'answer-02-h001-xyzzy'), 'the grammar set does not touch an olympiad task');
 });
 
@@ -158,12 +162,12 @@ test('The_command_builds_its_grammar_set_from_origin_main_unless_told_otherwise'
 
 test('A_window_of_three_grammar_lines_is_grammar_too_and_a_window_with_a_held_out_value_in_it_is_still_a_key', () => {
   const grammar = new Set(['scenario 2', 'default within 2s', 'connect c tcp'].map(normLine));
-  const withValueR = leakMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\nrecv c "first-invented-value-AAAA"\nrecv c "second-invented-value-BBBB"\n' }] }), explore: EXPLORE, publicText: '', grammarLines: grammar });
+  const withValueR = presentMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\nrecv c "first-invented-value-AAAA"\nrecv c "second-invented-value-BBBB"\n' }] }), publicText: '', grammarLines: grammar });
   assert.equal(withValueR.ok, true, withValueR.reason);
   const withValue = withValueR.value.material;
-  const without = leakMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\nready\nexit 0\n' }] }), explore: EXPLORE, publicText: '' }).value.material;
+  const without = presentMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\nready\nexit 0\n' }] }), publicText: '' }).value.material;
   assert.ok(without.windowKeys.size >= 1, 'without the rule the three grammar lines of the input are a window');
-  const onlyGrammar = leakMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\n' }] }), explore: EXPLORE, publicText: '', grammarLines: grammar }).value.material;
+  const onlyGrammar = presentMaterial({ home: homeWith(['04'], { traps: [], cases: [{ id: 'h001', input: 'scenario 2\ndefault within 2s\nconnect c tcp\n', output: 'transcript 2\n' }] }), publicText: '', grammarLines: grammar }).value.material;
   assert.equal(onlyGrammar.windowKeys.size, 0, 'with it, a window of grammar lines only is no key');
   assert.ok(withValue.windowKeys.size >= 1, 'a window that holds a value line is');
 });
@@ -184,18 +188,18 @@ function homeWithLinks() {
 
 test('A_linked_file_under_a_private_folder_is_named_by_the_leak_check_and_never_skipped', async () => {
   const home = homeWithLinks();
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, false, 'a link is not skipped in silence');
   assert.match(r.reason, /task 05/);
   assert.match(r.reason, /refs\/ws\/linked\.py/);
   assert.match(r.reason, /mutants\/M-01\.py/);
   const said = [];
-  const ran = await leakcheckCommand({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const ran = await scanBenchHalf({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.notEqual(ran.exit, 0, 'the command does not report clean');
   assert.match(ran.message, /refs\/ws\/linked\.py/, 'the path is reported');
 });
 
 test('A_private_folder_without_a_link_is_read_as_before_and_that_is_the_point', () => {
-  const r = leakMaterial({ home: homeWith(['05']), explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home: homeWith(['05']), publicText: '' });
   assert.equal(r.ok, true, r.reason);
 });

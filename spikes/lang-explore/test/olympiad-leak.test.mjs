@@ -9,11 +9,14 @@ import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { EXIT, cmdLeakcheck } from '../lib/commands.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { leakIds, leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakIds, leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskIds, taskPaths } from '../lib/tasks.mjs';
 import { handcheckOf, toyCases, writeHeldout } from './olympiad-fixture.mjs';
+import { presentMaterial } from './quick-leak-fixture.mjs';
+import { repoWith } from './leak-scan-fixture.mjs';
 
 const EXPLORE = loadExplore().value;
 const task = id => resolveTask(EXPLORE, id).value;
@@ -37,7 +40,7 @@ const substringsOf = (m, id) => m.material.substrings.filter(n => n.task === id)
 
 test('The_needles_of_task_NN_come_from_its_own_folder_only_outputs_reference_lines_and_the_oracle_files', () => {
   const home = homeWith(['02', '03']);
-  const m = leakMaterial({ home, explore: EXPLORE, publicText: '' }).value;
+  const m = presentMaterial({ home, publicText: '' }).value;
   const needles = id => substringsOf(m, id);
   const n02 = needles('02');
   assert.ok(n02.includes('answer-02-h001-xyzzy'), 'a case line, normalised (lower case)');
@@ -50,7 +53,7 @@ test('The_needles_of_task_NN_come_from_its_own_folder_only_outputs_reference_lin
 
 test('The_needles_also_hold_the_held_out_input_lines_of_8_characters_or_more_and_the_generators_lines', () => {
   const home = homeWith(['02']);
-  const n = substringsOf(leakMaterial({ home, explore: EXPLORE, publicText: '' }).value, '02');
+  const n = substringsOf(presentMaterial({ home, publicText: '' }).value, '02');
   assert.ok(n.includes('input-02-h002-qwerty'), 'an input line of a case');
   assert.ok(!n.includes('short'), 'a line under 8 characters is no needle (v1 refuses it)');
   assert.ok(n.some(l => l.startsWith('generator_02_distinctive_line')), 'a line of gen.py, as the references\' lines are');
@@ -58,7 +61,7 @@ test('The_needles_also_hold_the_held_out_input_lines_of_8_characters_or_more_and
 
 test('The_mutant_and_trap_ids_of_a_manifest_are_found_as_whole_words_in_the_public_notes_and_nowhere_else', () => {
   const home = homeWith(['02']);
-  const ids = leakMaterial({ home, explore: EXPLORE, publicText: '' }).value.ids;
+  const ids = presentMaterial({ home, publicText: '' }).value.ids;
   assert.ok(ids.includes('M-01') && ids.includes('M-02') && ids.includes('M-06'), ids.join());
   const repo = tmpDir('o-leak-ids');
   const dir = path.join(repo, 'research', 'lang-v2');
@@ -71,16 +74,19 @@ test('The_mutant_and_trap_ids_of_a_manifest_are_found_as_whole_words_in_the_publ
 
 test('A_present_task_whose_private_notes_are_missing_fails_the_check_instead_of_reading_no_shingles', () => {
   const home = homeWith(['02', '09']);
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, false);
   assert.match(r.reason, /the private notes of task 09 are missing/);
 });
 
 test('Leakcheck_reads_every_task_s_material_by_default_and_one_task_s_when_asked', () => {
   const home = homeWith(['02', '03']);
-  const all = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const all = presentMaterial({ home, publicText: '' });
   assert.equal(all.ok, true, all.reason);
-  assert.deepEqual([all.value.scanned, all.value.absent], [['02', '03'], taskIds(EXPLORE).filter(id => !['02', '03'].includes(id))], 'every registered task whose folder is not there is named (the quick run registered ten tasks)');
+  assert.deepEqual([all.value.scanned, all.value.absent], [['02', '03'], []], 'every task of the pins is read (step 2b: a task whose folder is absent is a refusal, never named and skipped, so the pins here name the two that are there)');
+  const full = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  assert.equal(full.ok, false, 'the full pins name ten tasks and the home holds two: a refusal, not a pass over two');
+  assert.ok(taskIds(EXPLORE).filter(id => !['02', '03'].includes(id)).every(id => full.reason.includes(id)), 'every absent task is named');
   for (const id of ['02', '03']) assert.ok(substringsOf(all.value, id).includes(`answer-${id}-h001-xyzzy`), `task ${id}'s outputs are needles of the default scan`);
   assert.ok(all.value.material.shingleTexts.includes('the smallest grid whose first row') && all.value.material.shingleTexts.includes('a division of the minimum value'), 'every task\'s private notes are read');
   const one = leakMaterial({ home, explore: EXPLORE, only: '03', publicText: '' });
@@ -90,7 +96,7 @@ test('Leakcheck_reads_every_task_s_material_by_default_and_one_task_s_when_asked
 
 test('A_line_of_one_task_copied_into_a_file_is_found_by_the_check_over_every_task_and_never_names_the_needle', async () => {
   const home = homeWith(['02', '03']);
-  const { material } = leakMaterial({ home, explore: EXPLORE, publicText: '' }).value;
+  const { material } = presentMaterial({ home, publicText: '' }).value;
   const repo = tmpDir('o-leak-repo');
   const git = (...args) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@invalid', ...args], { encoding: 'utf8' });
   git('init', '-q');
@@ -112,7 +118,7 @@ test('A_line_of_one_task_copied_into_a_file_is_found_by_the_check_over_every_tas
 test('A_folder_that_does_not_match_its_manifest_or_no_folder_at_all_fails_the_check_instead_of_scanning_less', () => {
   const home = homeWith(['02', '03']);
   writeFileSync(path.join(taskPaths(task('02'), home).heldoutDir, 'cases', 'h001.out'), 'tampered\n', { mode: 0o600 });
-  const broken = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const broken = presentMaterial({ home, publicText: '' });
   assert.equal(broken.ok, false);
   assert.match(broken.reason, /^task 02: the held-out side does not match its manifest/);
   const empty = leakMaterial({ home: tmpDir('o-leak-empty'), explore: EXPLORE, publicText: '' });
@@ -125,7 +131,8 @@ test('The_leakcheck_command_refuses_an_unknown_task_and_reports_what_it_could_no
   const unknown = { home: tmpDir('o-leak-cmd'), say: l => say.push(l) };
   assert.equal(await cmdLeakcheck({ task: '11' }, unknown), EXIT.config);
   assert.match(say.join('\n'), /--task 11 is not a task of the pilot: the tasks are 01, 02, 03, 04, 05, 06, 07, 08, 09, 10/);
-  assert.equal(await cmdLeakcheck({}, unknown), EXIT.config);
+  // step 2b: the command needs a task repository, so the empty home is asked with one (the behaviour pinned here, a refusal on a home with no held-out folder, is unchanged)
+  assert.equal(await cmdLeakcheck({ 'task-repo': repoWith() }, unknown), EXIT.config);
   assert.match(say.join('\n'), /no held-out folder is present/);
 });
 
@@ -242,21 +249,21 @@ test('The_leakcheck_command_exits_4_for_an_incomplete_scan_and_5_for_a_finding',
     git('add', '.');
     git('commit', '-q', '-m', 'x');
     const say = [];
-    return { repo, say, exit: (await leakcheckCommandIn({ repo, home, say })).exit };
+    return { repo, say, exit: (await scanBenchHalfIn({ repo, home, say })).exit };
   };
   const clean = await run({ 'a.md': 'public\n' });
   assert.equal(clean.exit, 0);
   const incomplete = await run({ 'a.md': 'public\n', 'b.md': 'tracked\n' });
   rm(path.join(incomplete.repo, 'b.md'));
-  const again = await leakcheckCommandIn({ repo: incomplete.repo, home, say: [] });
+  const again = await scanBenchHalfIn({ repo: incomplete.repo, home, say: [] });
   assert.equal(again.exit, 4, 'a file listed and gone: the check is incomplete');
   const leak = await run({ 'a.md': 'answer-02-h001-XYZZY\n' });
   assert.equal(leak.exit, 5);
 });
 
-/** `leakcheckCommand` over a temp repository (`io.repoRoot`) and a fixture home. */
-function leakcheckCommandIn({ repo, home, say }) {
-  return leakcheckCommand({ values: { task: '02' }, io: { home, repoRoot: repo, progress: () => {} }, explore: EXPLORE, say: l => say.push(l) });
+/** `scanBenchHalf` over a temp repository (`io.repoRoot`) and a fixture home. */
+function scanBenchHalfIn({ repo, home, say }) {
+  return scanBenchHalf({ values: { task: '02' }, io: { home, repoRoot: repo, progress: () => {} }, explore: EXPLORE, say: l => say.push(l) });
 }
 
 test('The_leakcheck_command_reports_the_material_it_built_in_counts_per_tier_before_it_scans', async () => {
@@ -269,7 +276,7 @@ test('The_leakcheck_command_reports_the_material_it_built_in_counts_per_tier_bef
   git('add', '.');
   git('commit', '-q', '-m', 'x');
   const progress = [];
-  await leakcheckCommand({ values: { task: '02' }, io: { home, repoRoot: repo, progress: l => progress.push(l) }, explore: EXPLORE, say: () => {} });
+  await scanBenchHalf({ values: { task: '02' }, io: { home, repoRoot: repo, progress: l => progress.push(l) }, explore: EXPLORE, say: () => {} });
   assert.match(progress[0], /^building the material of tasks 02$/);
   assert.match(progress[1], /^material: substring needles \d+, exact-line keys \d+, window keys \d+, chunk keys \d+, shingles \d+$/);
   assert.match(progress[2], /^scanning \d+ files$/);
