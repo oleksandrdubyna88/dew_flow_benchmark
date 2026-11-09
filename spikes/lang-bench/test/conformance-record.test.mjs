@@ -111,3 +111,14 @@ test('A_task_is_named_by_a_list_entry_that_is_its_number_or_its_number_before_a_
   assert.equal(labelOf(record, SHA_ONE, '040-echo').ok, false, 'a longer number is another task');
   assert.equal(labelOf(record, SHA_ONE, '4').ok, false);
 });
+
+test('A_missing_task_is_said_as_no_task_given_and_never_printed_as_undefined', t => {
+  const two = entriesOf(t, { A: { sha256: SHA_ONE, tasks: ['01'] }, B: { sha256: SHA_ONE, tasks: ['04'] } });
+  const unresolved = labelOf(two, SHA_ONE, undefined);
+  assert.equal(unresolved.ok, false);
+  assert.match(unresolved.reason, /no task given/);
+  const one = entriesOf(t, { A: { sha256: SHA_ONE, tasks: ['01'] } });
+  const unknown = labelOf(one, SHA_TWO, undefined);
+  assert.equal(unknown.ok, false);
+  for (const answer of [unresolved, unknown, labelOf(two, SHA_ONE, '11-a-slug'), labelOf(two, SHA_TWO, '04-a-slug')]) assert.doesNotMatch(answer.reason, /undefined/);
+});

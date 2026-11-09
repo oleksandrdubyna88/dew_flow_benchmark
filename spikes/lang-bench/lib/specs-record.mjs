@@ -21,9 +21,9 @@ function sortedCopy(value) {
 /** The canonical text of a value: sorted keys, two-space indent, LF, one final newline. */
 export const canonicalJson = value => `${JSON.stringify(sortedCopy(value), null, 2)}\n`;
 
-function readWriter(dir, name) {
+function readWriter(dir, name, replaced) {
   try {
-    const parsed = JSON.parse(readFileSync(path.join(dir, name), 'utf8'));
+    const parsed = JSON.parse(replaced[name] ?? readFileSync(path.join(dir, name), 'utf8'));
     return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? ok({ value: parsed }) : fail(`${name} is not one JSON object`);
   } catch (error) {
     return fail(`${name} cannot be read as JSON (${error.message})`);
@@ -40,14 +40,14 @@ function merge(parts) {
   return ok({ record });
 }
 
-/** `{ ok, text }` of the record assembled from `<inputs>/specs.d/*`, or `{ ok: false, reason }`. */
-export function assemble(inputsDir) {
+/** `{ ok, text }` of the record assembled from `<inputs>/specs.d/*`, or `{ ok: false, reason }`. `replaced` maps a writer's file name to the text it WILL hold: the assembly of a new record, made before anything is written. */
+export function assemble(inputsDir, replaced = {}) {
   const dir = path.join(inputsDir, 'specs.d');
   const stray = readdirSync(dir).find(name => !WRITER_FILES.includes(name));
   if (stray) return fail(`specs.d/${stray} is not one of the writers' files (${WRITER_FILES.join(', ')})`);
   const parts = [];
   for (const name of WRITER_FILES.filter(n => existsSync(path.join(dir, n)))) {
-    const read = readWriter(dir, name);
+    const read = readWriter(dir, name, replaced);
     if (!read.ok) return read;
     parts.push({ name, value: WRAPPED[name] === undefined ? read.value : { [WRAPPED[name]]: read.value } });
   }

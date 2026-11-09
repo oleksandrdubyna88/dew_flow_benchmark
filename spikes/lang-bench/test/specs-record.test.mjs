@@ -1,13 +1,14 @@
 // inputs/specs.json is generated from the writers' files in inputs/specs.d/ and never edited by hand (E1 plan section 3).
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { extractGrammar } from '../tools/grammar-extract.mjs';
 import { assemble, canonicalJson, checkRecord, WRITER_FILES } from '../lib/specs-record.mjs';
-import { renderRecord } from '../lib/conformance-record.mjs';
+import { fail } from '../../minigit-bench/lib/result.mjs';
+import { renderRecord, writeAtomicFile } from '../lib/conformance-record.mjs';
 import { runSpecsRecord } from '../lib/specs-record-cli.mjs';
 import { edit, FORMAT_TEXT, sha256 } from './support/format-fixtures.mjs';
 import { owned } from './support/owned.mjs';
@@ -216,7 +217,7 @@ test('The_writer_refuses_without_the_task_repository_or_its_commit_and_writes_no
     ['a folder that is no repository', ['--task-repo', plain], {}, good.commit, /not a git repository/],
     ['a commit the repository lacks', ['--task-repo', good.repo], {}, 'a'.repeat(40), /does not hold the commit/],
     ['a shallow repository', ['--task-repo', path.join(shallow, 'c')], {}, full.commit, /shallow/],
-    ['a FORMAT that is not the one A records', ['--task-repo', changed.repo], {}, changed.commit, /which entry A records/],
+    ['a FORMAT that is not the one A records', ['--task-repo', changed.repo], {}, changed.commit, /B must equal A, so the writer writes nothing/],
     ['the repository of the environment, shallow', [], { LANG_V2_TASK_REPO: path.join(shallow, 'c') }, full.commit, /shallow/],
   ];
   const before = snapshot(inputs);
@@ -238,4 +239,70 @@ test('The_command_refuses_with_exit_2_when_no_task_repository_is_named_and_chang
   assert.equal(ran.value.code, 2);
   assert.match(ran.value.stderr, /LANG_V2_TASK_REPO/);
   assert.equal(snapshot(path.join(spikeDir, 'inputs', 'specs.d')) + readFileSync(path.join(spikeDir, 'inputs', 'specs.json'), 'utf8'), before);
+});
+
+// ---- code round 1 of PR B ---------------------------------------------------------------------------------------------------------------------------------
+
+test('A_FORMAT_that_is_not_the_one_A_records_is_refused_in_one_sentence_that_names_both_hashes', async t => {
+  const inputs = inputsWithA(t);
+  const other = await taskRepo(t, { bytes: Buffer.from(edit(FORMAT_TEXT, 'It is a synthetic stand-in.', 'It is a synthetic stand-in, as another FORMAT says.')) });
+  const recorded = readRecordIn(inputs).A;
+  const refused = await runSpecsRecord(['--format-entry', 'B', '--task-repo', other.repo], { inputs, env: {}, commit: other.commit });
+  assert.equal(refused.exit, 2);
+  const bytes = Buffer.from(edit(FORMAT_TEXT, 'It is a synthetic stand-in.', 'It is a synthetic stand-in, as another FORMAT says.'));
+  const parts = [`sha256 ${sha256(bytes)}, but entry A records ${recorded.sha256}`, `grammarSha256 ${sha256(extractGrammar(bytes).bytes)}, but entry A records ${recorded.grammarSha256}`];
+  assert.equal(refused.stderr, `specs-record: FORMAT at ${other.commit} has ${parts.join('; ')}: B must equal A, so the writer writes nothing\n`);
+});
+
+test('A_failed_assembly_leaves_format_json_and_specs_json_byte_for_byte_unchanged', async t => {
+  const { repo, commit } = await taskRepo(t);
+  const inputs = inputsWithA(t);
+  const before = snapshot(inputs);
+  const failing = (dir, replaced) => (replaced === undefined ? assemble(dir) : fail('the assembly of the new record failed'));
+  const refused = await runSpecsRecord(['--format-entry', 'B', '--task-repo', repo], { inputs, env: {}, commit, assemble: failing });
+  assert.equal(refused.exit, 2);
+  assert.match(refused.stderr, /the assembly of the new record failed/);
+  assert.equal(snapshot(inputs), before, 'format.json and specs.json are as they were, and no temporary file is left');
+  const honest = await runSpecsRecord(['--format-entry', 'B', '--task-repo', repo], { inputs, env: {}, commit });
+  assert.equal(honest.exit, 0, 'the same call without the seam writes both');
+  assert.deepEqual(JSON.parse(readFileSync(path.join(inputs, 'specs.json'), 'utf8')).B, readRecordIn(inputs).B);
+});
+
+test('A_temporary_folder_on_another_device_than_the_destination_is_refused_and_nothing_is_written', t => {
+  const dir = owned.ownedDir(t, 'dev');
+  mkdirSync(path.join(dir, 'tmp'));
+  mkdirSync(path.join(dir, 'dest'));
+  const file = path.join(dir, 'dest', 'out.json');
+  const apart = folder => (folder.endsWith('tmp') ? 1 : 2);
+  const refused = writeAtomicFile(file, 'text\n', path.join(dir, 'tmp'), { statDev: apart });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /another file system/);
+  assert.equal(existsSync(file), false);
+  assert.deepEqual(readdirSync(path.join(dir, 'tmp')), [], 'no temporary file');
+  assert.equal(writeAtomicFile(file, 'text\n', path.join(dir, 'tmp')).ok, true, 'the same folders on the real file system are written');
+  assert.equal(readFileSync(file, 'utf8'), 'text\n');
+});
+
+test('A_link_to_a_plain_folder_inside_a_git_repository_is_not_that_repository', async t => {
+  const { repo, commit } = await taskRepo(t);
+  mkdirSync(path.join(repo, 'plain'));
+  const link = path.join(owned.ownedDir(t, 'link'), 'task');
+  symlinkSync(path.join(repo, 'plain'), link);
+  const inputs = inputsWithA(t);
+  const before = snapshot(inputs);
+  const refused = await runSpecsRecord(['--format-entry', 'B', '--task-repo', link], { inputs, env: {}, commit });
+  assert.equal(refused.exit, 2, refused.stderr);
+  assert.match(refused.stderr, /not a git repository/);
+  assert.equal(snapshot(inputs), before);
+});
+
+test('A_failed_cleanup_of_the_temporary_file_never_hides_the_error_that_made_it_necessary', t => {
+  const dir = owned.ownedDir(t, 'rm');
+  const file = path.join(dir, 'out.json');
+  const io = { renameSync: () => { throw Object.assign(new Error('no'), { code: 'EACCES' }); }, rmSync: () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); } };
+  let refused;
+  assert.doesNotThrow(() => { refused = writeAtomicFile(file, 'x\n', dir, io); });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /EACCES/, 'the first error is the refusal');
+  assert.doesNotMatch(refused.reason, /EBUSY/);
 });
