@@ -10,6 +10,7 @@ import { ownerAlive, processStartTime } from '../../minigit-bench/lib/session-st
 import { systemClock } from './clock.mjs';
 import { FROZEN_FILE } from './heldout-quick.mjs';
 import { defaultKeyFile, mountOf } from './heldout-key.mjs';
+import { INPUTS } from './paths.mjs';
 import { taskPaths } from './tasks.mjs';
 
 export const LOCK_NAME = '.clear.lock';
@@ -19,7 +20,7 @@ export const OPEN_STAMP = '.open';
 export function ctxOf(a) {
   const heldoutDir = taskPaths(a.task, a.home).heldoutDir;
   return {
-    pid: process.pid, startTime: processStartTime(process.pid), isAlive: ownerAlive, mountOf, unseal, unpackTo, fs: nodeFs, hooks: {}, now: systemClock, frozenFile: FROZEN_FILE, keyFile: defaultKeyFile(a.home), ...a,
+    pid: process.pid, startTime: processStartTime(process.pid), isAlive: ownerAlive, mountOf, unseal, unpackTo, fs: nodeFs, hooks: {}, now: systemClock, frozenFile: FROZEN_FILE, packagesFile: path.join(INPUTS, 'packages.json'), keyFile: defaultKeyFile(a.home), warn: line => process.stderr.write(`${line}\n`), ...a,
     heldoutDir, casesDir: path.join(heldoutDir, 'cases'), archiveFile: path.join(heldoutDir, 'suite.enc'), stampFile: path.join(heldoutDir, OPEN_STAMP), archiveRel: `${path.basename(heldoutDir)}/suite.enc`,
   };
 }

@@ -122,8 +122,11 @@ export function sealedAbsentProblem({ home, task, frozenFile = FROZEN_FILE }) {
 function registeredProblem({ record, task, frozenFile, archive }) {
   if (!record.ok) return `the held-out record ${path.basename(frozenFile)} cannot be read (${record.reason}): a task whose folder is absent may be sealed in it (task ${task.id})`;
   if (entryInRecord(record, task.id) !== undefined) return `sealed: open it first (task ${task.id}): its clear held-out folder is absent and a sealed archive is registered for it; run \`explore.mjs heldout-open --task ${task.id}\``;
-  return archive ? `interrupted seal: run \`package --task ${task.id} --seal\` again to resume (task ${task.id}: its archive is there and ${path.basename(frozenFile)} has no entry for it)` : null;
+  return archive ? interruptedSentence({ task, frozenFile }) : null;
 }
+
+/** The sentence of an archive with no registry entry: the seal was interrupted between the archive and the entry, and running it again resumes it. */
+export const interruptedSentence = ({ task, frozenFile = FROZEN_FILE }) => `interrupted seal: run \`package --task ${task.id} --seal\` again to resume (task ${task.id}: its archive is there and ${path.basename(frozenFile)} has no entry for it)`;
 
 /**
  * The sentence refusing a clear folder that is not the one its archive was sealed from, or null: the registry's entry holds the tree hash of the sealed cases, and a folder changed after sealing is read as nothing.

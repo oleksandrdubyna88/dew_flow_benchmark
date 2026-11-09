@@ -50,12 +50,12 @@ function unpacked({ ctx, blob, key, casesDir }) {
 }
 
 /**
- * Unseal `blob` with `key` into a new owned temporary folder inside `heldout-NN/`. -> `ok({ temp, casesDir, treeSha256, discard })` (`discard()` removes the folder and its claim; the caller renames `casesDir` or discards) | `fail`
+ * Unseal `blob` with `key` into a new owned temporary folder inside `heldout-NN/` (or in `parent`: `heldout-check` does not hold the lock, so it unseals in the temp root). -> `ok({ temp, casesDir, treeSha256, discard })` (`discard()` removes the folder and its claim; the caller renames `casesDir` or discards) | `fail`
  * (the folder and claim are already removed). The lock must be held.
  */
-export async function unsealToTemp({ ctx, blob, key }) {
+export async function unsealToTemp({ ctx, blob, key, parent = ctx.heldoutDir }) {
   const scope = cleanupScope();
-  const temp = owned.ownedDir(scope, 'clear', { parent: ctx.heldoutDir });
+  const temp = owned.ownedDir(scope, 'clear', { parent });
   chmodSync(temp, 0o700);
   ctx.hooks.afterMkdir?.(temp);
   const casesDir = path.join(temp, 'cases');

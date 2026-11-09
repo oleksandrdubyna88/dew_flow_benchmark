@@ -12,9 +12,10 @@ import { sealTree } from '../../minigit-bench/lib/heldout-seal.mjs';
 import { readKey } from '../../minigit-bench/lib/heldout-crypto.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { entryOfSeal, writeEntry } from '../lib/heldout-registry.mjs';
-import { registryMismatchProblem, sealPackage } from '../lib/package-seal.mjs';
+import { casesTreeHash, loadHeldoutQuick } from '../lib/heldout-quick.mjs';
+import { closeClearFolder, openClearFolder, registryMismatchProblem, sealPackage } from '../lib/package-seal.mjs';
 import { quickTask } from './quick-leak-fixture.mjs';
-import { filesUnder, TOKEN, world } from './quick-heldout-fixture.mjs';
+import { filesUnder, sealedClosed, TOKEN, world } from './quick-heldout-fixture.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const entryOf = w => JSON.parse(readFileSync(w.frozenFile, 'utf8')).tasks[w.taskId];
@@ -234,4 +235,112 @@ test('The_registry_writer_writes_an_entry_once_keeps_the_others_and_refuses_anot
   writeFileSync(flat, JSON.stringify({ '04': entry(4) }));
   assert.equal(writeEntry({ frozenFile: flat, task: quickTask('05'), entry: entry(5) }).ok, true);
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(flat, 'utf8')).tasks), ['04', '05'], 'the flat layout is read, and written in the one layout of the writer');
+});
+
+test('A_sealed_quick_folder_opens_to_the_same_tree_hash', async () => {
+  const w = world();
+  const before = casesTreeHash(w.casesDir).value;
+  assert.equal((await sealPackage(w.args)).ok, true);
+  rmSync(w.casesDir, { recursive: true });
+  const opened = await openClearFolder(w.args);
+  assert.equal(opened.ok, true, opened.reason);
+  assert.equal(casesTreeHash(w.casesDir).value, entryOf(w).treeSha256, 'the opened folder is the tree the entry holds');
+  assert.equal(casesTreeHash(w.casesDir).value, before, 'and the tree that was sealed');
+  assert.equal(entryOf(w).caseCount, 3);
+  const loaded = loadHeldoutQuick(w.home, w.task, w.frozenFile);
+  assert.equal(loaded.ok, true, loaded.reason);
+  assert.deepEqual([loaded.value.caseIds.length, loaded.value.treeSha256], [3, before]);
+});
+
+test('The_clear_folder_is_mode_700', async () => {
+  const seen = [];
+  const w = await sealedClosed({ over: { hooks: { afterMkdir: temp => seen.push(statSync(temp).mode & 0o777), beforeRename: temp => seen.push(statSync(path.join(temp, 'cases')).mode & 0o777) } } });
+  const r = await openClearFolder(w.args);
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(seen, [0o700, 0o700], 'the owned temporary folder was 700 before the first file was written, and the folder that is renamed into place is 700');
+  assert.equal(statSync(w.casesDir).mode & 0o777, 0o700);
+  assert.deepEqual([...new Set(filesUnder(w.casesDir).map(f => statSync(path.join(w.casesDir, f)).mode & 0o777))], [0o600], 'the files inside are 600 (the tree hash does not read modes)');
+  assert.equal(casesTreeHash(w.casesDir).value, entryOf(w).treeSha256);
+});
+
+test('Close_removes_the_clear_folder_and_keeps_the_archive', async () => {
+  const w = await sealedClosed();
+  assert.equal((await openClearFolder(w.args)).ok, true);
+  assert.equal(existsSync(path.join(w.heldoutDir, '.open')), true, 'the verb\'s open is held by the operator');
+  const [archive, record] = [readFileSync(archiveOf(w)), readFileSync(w.frozenFile)];
+  const closed = await closeClearFolder(w.args);
+  assert.equal(closed.ok, true, closed.reason);
+  assert.deepEqual([existsSync(w.casesDir), existsSync(path.join(w.heldoutDir, '.open')), existsSync(path.join(w.heldoutDir, '.clear.lock'))], [false, false, false], 'cases/, the stamp and the lock are gone');
+  assert.deepEqual([readFileSync(archiveOf(w)), readFileSync(w.frozenFile)], [archive, record], 'the archive and the entry are as they were');
+  const again = await closeClearFolder(w.args);
+  assert.equal(again.ok, true, 'a second close is a no-op');
+  assert.equal(again.value.state, 'absent');
+});
+
+test('A_clear_folder_whose_hash_differs_from_the_archive_is_refused', async () => {
+  const w = await sealedClosed();
+  assert.equal((await openClearFolder(w.args)).ok, true);
+  const unsealed = w.spies.unseal;
+  const same = await openClearFolder(w.args);
+  assert.equal(same.ok, true, same.reason);
+  assert.equal(same.value.state, 'held');
+  assert.equal(w.spies.unseal, unsealed, 'control: the unchanged folder is returned and the archive is not opened a second time');
+  const file = path.join(w.casesDir, 'h002.out');
+  writeFileSync(file, `${readFileSync(file, 'utf8')}x`);
+  const bent = readFileSync(file);
+  for (const [name, run] of [['open', () => openClearFolder(w.args)], ['check', async () => (await import('../lib/heldout-check.mjs')).checkHeldout(w.args)]]) {
+    const r = await run();
+    assert.equal(r.ok, false, name);
+    assert.match(r.reason, /the clear folder differs from its archive: changed after sealing/, name);
+  }
+  assert.deepEqual(readFileSync(file), bent, 'nothing was removed and the changed byte is still there');
+  assert.equal(w.spies.unseal >= unsealed, true);
+});
+
+test('Open_unseals_into_an_owned_temporary_folder_on_the_same_filesystem_and_renames_it_only_after_the_hash_check', async () => {
+  const w = await sealedClosed();
+  const good = JSON.parse(readFileSync(w.frozenFile, 'utf8'));
+  const real = good.tasks['04'].treeSha256;
+  good.tasks['04'].treeSha256 = 'f'.repeat(64);
+  writeFileSync(w.frozenFile, JSON.stringify(good));
+  let renames = 0;
+  const hooks = { beforeRename: () => { renames += 1; } };
+  const refused = await openClearFolder({ ...w.args, hooks });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /treeSha256/, 'names the hash');
+  assert.equal(existsSync(w.casesDir), false, 'no cases/');
+  assert.deepEqual(leftovers(w.heldoutDir), [], 'no owned temporary folder and no claim');
+  assert.equal(renames, 0, 'the rename was never reached');
+  good.tasks['04'].treeSha256 = real;
+  writeFileSync(w.frozenFile, JSON.stringify(good));
+  const dirs = [];
+  const control = await openClearFolder({ ...w.args, hooks: { beforeRename: temp => { renames += 1; dirs.push(path.dirname(temp)); } } });
+  assert.equal(control.ok, true, control.reason);
+  assert.equal(renames, 1, 'control: the rename happens once');
+  assert.deepEqual(dirs, [w.heldoutDir], 'the temporary folder is inside heldout-NN/: the same file system');
+});
+
+test('An_open_killed_before_its_rename_leaves_no_cases_folder_and_the_next_open_removes_the_temporary_one', async () => {
+  const w = await sealedClosed();
+  await assert.rejects(openClearFolder({ ...w.args, hooks: { beforeRename: () => { throw new Error('planted fault'); } } }), /planted fault/);
+  assert.equal(existsSync(w.casesDir), false, 'no cases/');
+  const [temp] = readdirSync(w.heldoutDir).filter(n => /^testsToDelete-.*-bench-clear-/.test(n) && !n.endsWith('.owner'));
+  assert.ok(temp, 'one owned temporary folder remains');
+  assert.ok(filesUnder(path.join(w.heldoutDir, temp)).length > 0, 'with files in it');
+  assert.equal(existsSync(path.join(w.heldoutDir, `${temp}.owner`)), true, 'and its claim');
+  assert.equal(existsSync(path.join(w.heldoutDir, '.clear.lock')), false, 'the lock was released');
+  const next = await openClearFolder(w.args);
+  assert.equal(next.ok, true, next.reason);
+  assert.deepEqual(leftovers(w.heldoutDir).filter(n => n !== '.clear.lock'), [], 'the temporary folder and its claim are gone');
+  assert.equal(casesTreeHash(w.casesDir).value, entryOf(w).treeSha256, 'cases/ exists and is equal');
+});
+
+test('A_cases_folder_that_appears_while_the_archive_is_unsealed_is_left_as_it_is_and_the_temporary_one_is_removed', async () => {
+  const w = await sealedClosed();
+  const appear = () => { mkdirSync(w.casesDir); writeFileSync(path.join(w.casesDir, 'h001.in'), 'someone else\'s folder\n'); };
+  const r = await openClearFolder({ ...w.args, hooks: { afterMkdir: appear } });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /appeared while task 04 was unsealed/);
+  assert.equal(readFileSync(path.join(w.casesDir, 'h001.in'), 'utf8'), 'someone else\'s folder\n', 'the folder that appeared is not replaced');
+  assert.deepEqual(leftovers(w.heldoutDir).filter(n => n !== '.clear.lock'), []);
 });

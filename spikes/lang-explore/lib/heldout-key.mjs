@@ -20,10 +20,10 @@ const FINDMNT_TIMEOUT_MS = 10_000;
 export const readKeyFile = keyFile => readKey(keyFile, { remedy: KEY_REMEDY });
 
 /** The key of an archive: `ok(bytes)` when the file is a valid key AND its sha256 is `keySha256`, checked before any decryption; else a `fail`. The bytes never go into a sentence. */
-export function loadKey({ keyFile, keySha256 }) {
+export function loadKey({ keyFile, keySha256, task }) {
   const key = readKeyFile(keyFile);
   if (!key.ok || sha256Hex(key.value) === keySha256) return key;
-  return fail(`the key is not the one the archive was sealed with (${keyFile} hashes to another key than the registry's keySha256)`);
+  return fail(`the key is not the one the archive was sealed with${task === undefined ? '' : ` (task ${task.id})`}: ${keyFile} hashes to another key than the registry's keySha256`);
 }
 
 /** The sentence refusing a key that is not the archive's, or null. */

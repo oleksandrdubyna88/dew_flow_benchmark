@@ -3,14 +3,16 @@
 // Invented stamps in owned temporary folders; no real key, folder or share is read.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { acquireGuardedLock } from '../../minigit-bench/lib/series-lock.mjs';
-import { processStartTime } from '../../minigit-bench/lib/session-state.mjs';
+import { ownerAlive, processStartTime } from '../../minigit-bench/lib/session-state.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { casesTreeHash } from '../lib/heldout-quick.mjs';
+import { closeClearFolder, openClearFolder, sweepClearFolder } from '../lib/package-seal.mjs';
 import { seriesLockProblem } from '../lib/pass-locks.mjs';
-
+import { sealedClosed } from './quick-heldout-fixture.mjs';
 const NAME = '.clear.lock';
 const DEAD = 2 ** 22 - 1;
 const alive = (...pids) => pid => pids.includes(pid);
@@ -119,4 +121,92 @@ test('A_dead_owners_lock_is_taken_over_and_the_taker_is_told_whose_it_was', () =
   const free = take(tmpDir('q-lock-free'));
   assert.equal(free.value.takeover, null, 'control: a free lock has no takeover');
   free.value.release();
+});
+
+// ---- the lock as the open and the close take it ---------------------------------------------------------------------------------------------------------------------------
+const ghost = (pid, startTime) => !(startTime === 'not-mine') && ownerAlive(pid, startTime);
+
+test('Open_and_close_wait_for_the_lock_and_a_dead_owners_lock_is_taken_over_and_named', async () => {
+  const opened = await sealedClosed();
+  const lock = lockOf(opened.heldoutDir);
+  writeFileSync(lock, stamp(process.pid, 'not-mine'));
+  const taken = await openClearFolder({ ...opened.args, isAlive: ghost });
+  assert.equal(taken.ok, true, taken.reason);
+  assert.deepEqual([taken.value.takeover.pid, taken.value.takeover.startTime], [process.pid, 'not-mine'], 'the dead owner is named');
+  assert.equal(existsSync(lock), false, 'the lock this process took is released');
+  writeFileSync(lock, stamp(process.pid, 'not-mine'));
+  const closed = await closeClearFolder({ ...opened.args, isAlive: ghost });
+  assert.equal(closed.ok, true, closed.reason);
+  assert.equal(closed.value.takeover.startTime, 'not-mine', 'close names the dead owner too');
+  const live = await sealedClosed();
+  writeFileSync(lockOf(live.heldoutDir), stamp(1234, 'live-start'));
+  const refused = await openClearFolder({ ...live.args, isAlive: (pid, start) => pid === 1234 || ghost(pid, start) });
+  assert.equal(refused.ok, false);
+  assert.ok(/pid 1234/.test(refused.reason) && /live-start/.test(refused.reason), `a live holder is named: ${refused.reason}`);
+  assert.equal(readFileSync(lockOf(live.heldoutDir), 'utf8'), stamp(1234, 'live-start'), 'no file changed');
+  assert.equal(existsSync(live.casesDir), false, 'no cases/ made');
+  const held = await sealedClosed();
+  assert.equal((await openClearFolder(held.args)).ok, true);
+  writeFileSync(lockOf(held.heldoutDir), stamp(1234, 'live-start'));
+  const closeRefused = await closeClearFolder({ ...held.args, isAlive: (pid, start) => pid === 1234 || ghost(pid, start) });
+  assert.equal(closeRefused.ok, false);
+  assert.match(closeRefused.reason, /pid 1234/);
+  assert.equal(existsSync(held.casesDir), true, 'close removed nothing');
+});
+
+test('Two_opens_at_once_make_one_cases_folder', async () => {
+  const w = await sealedClosed();
+  let second;
+  const first = await openClearFolder({ ...w.args, hooks: { beforeRename: () => { second = openClearFolder({ ...w.args, hooks: {}, retry: { tries: 3, sleepMs: 1 } }); } } });
+  assert.equal(first.ok, true, first.reason);
+  const late = await second;
+  assert.equal(late.ok, false, 'the second ran while the first held the lock: it is refused with the holder named, never a second folder');
+  assert.match(late.reason, new RegExp(`pid ${process.pid}`));
+  assert.equal(casesTreeHash(w.casesDir).ok, true);
+  assert.deepEqual(readdirSync(w.heldoutDir).filter(n => /^testsToDelete-/.test(n)), [], 'no temporary folder is left');
+  const unsealed = w.spies.unseal;
+  const third = await openClearFolder(w.args);
+  assert.equal(third.ok, true, third.reason);
+  assert.equal(third.value.state, 'held', 'afterwards an open finds the folder equal and uses it');
+  assert.equal(w.spies.unseal, unsealed, 'the archive is not opened a second time');
+});
+
+test('An_unreadable_open_stamp_or_lock_is_a_refusal_naming_the_file_and_never_judged_dead', async () => {
+  const w = await sealedClosed();
+  assert.equal((await openClearFolder(w.args)).ok, true);
+  const stampFile = path.join(w.heldoutDir, '.open');
+  writeFileSync(stampFile, '{ not json');
+  let asked = 0;
+  const isAlive = () => { asked += 1; return false; };
+  for (const [name, run] of [['sweep', () => sweepClearFolder({ ...w.args, isAlive })], ['close', () => closeClearFolder({ ...w.args, isAlive })], ['open', () => openClearFolder({ ...w.args, isAlive })]]) {
+    const r = await run();
+    assert.equal(r.ok, false, name);
+    assert.ok(r.reason.includes(stampFile), `${name} names the file: ${r.reason}`);
+    assert.equal(existsSync(w.casesDir), true, `${name} removed nothing`);
+    assert.equal(readFileSync(stampFile, 'utf8'), '{ not json');
+  }
+  assert.equal(asked, 0, 'isAlive was never asked about it');
+  writeFileSync(lockOf(w.heldoutDir), '{}');
+  const locked = await openClearFolder({ ...w.args, isAlive });
+  assert.ok(locked.reason.includes(lockOf(w.heldoutDir)) && /unreadable/.test(locked.reason), locked.reason);
+  assert.equal(asked, 0);
+});
+
+test('The_open_stamp_holds_the_operator_or_the_pid_and_startTime_as_takeScorerLock_writes_them', async () => {
+  const w = await sealedClosed({ over: { now: () => new Date('2026-11-09T12:00:00.000Z') } });
+  assert.equal((await openClearFolder(w.args)).ok, true);
+  const operator = JSON.parse(readFileSync(path.join(w.heldoutDir, '.open'), 'utf8'));
+  assert.deepEqual(operator, { operator: true, at: '2026-11-09T12:00:00.000Z' });
+  const { withOpenedHeldout } = await import('../lib/package-seal.mjs');
+  const other = await sealedClosed({ over: { now: () => new Date('2026-11-09T12:00:00.000Z') } });
+  const seen = [];
+  const r = await withOpenedHeldout({ ...other.args, fn: () => { seen.push(JSON.parse(readFileSync(path.join(other.heldoutDir, '.open'), 'utf8'))); return 'value'; } });
+  assert.equal(r, 'value');
+  const [stamped] = seen;
+  assert.deepEqual(Object.keys(stamped).sort(), ['at', 'pid', 'startTime']);
+  assert.equal(stamped.pid, process.pid);
+  assert.equal(stamped.startTime, processStartTime(process.pid));
+  assert.equal(stamped.at, '2026-11-09T12:00:00.000Z');
+  writeFileSync(path.join(other.heldoutDir, 'series.lock'), `${JSON.stringify(stamped)}\n`);
+  assert.equal(seriesLockProblem({ seriesDir: other.heldoutDir }), null, 'pass-locks.mjs\'s stamp parser accepts the pid stamp: the same fields');
 });

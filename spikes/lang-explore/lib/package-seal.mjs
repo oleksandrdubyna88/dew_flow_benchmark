@@ -19,6 +19,9 @@ import { backupProblem, makeBackup, readKeyFile, sha256Hex } from './heldout-key
 import { removeOwnedTemps, unsealToTemp } from './heldout-unseal.mjs';
 
 export { registryMismatchProblem } from './heldout-registry.mjs';
+export { checkHeldout } from './heldout-check.mjs';
+export { closeClearFolder, openClearFolder, sweepClearFolder, withOpenedHeldout } from './heldout-lifecycle.mjs';
+export { openedFolderProblem } from './heldout-quick.mjs';
 
 const readOrNull = (fs, file) => { try { return fs.readFileSync(file); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
 

@@ -2,13 +2,14 @@
 // a registry file path, an invented `manifest.json`, and spies on the two decryption seams. Nothing real is read: no key of the operator, no private folder, no share. Not a test file.
 //
 // Every invented case carries one distinctive token (`TOKEN`), so a test can scan what a verb said or wrote for it (D41).
-import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { generateKey } from '../../minigit-bench/lib/heldout-crypto.mjs';
 import { unseal } from '../../minigit-bench/lib/heldout-crypto.mjs';
 import { unpackTo } from '../../minigit-bench/lib/heldout-archive.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { sealPackage } from '../lib/package-seal.mjs';
 import { taskPaths } from '../lib/tasks.mjs';
 import { quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
@@ -49,6 +50,15 @@ export function world({ taskId = '04', cases = CASES, traps = TRAPS, over = {} }
     mountOf: async dir => { spies.mounts += 1; return mountFor(shareMount)(dir); }, unseal: spied(unseal, spies, 'unseal'), unpackTo: spied(unpackTo, spies, 'unpackTo'), retry: { tries: 3, sleepMs: 1 }, hooks: {}, ...over,
   };
   return { home, task, taskId, heldoutDir: taskPaths(task, home).heldoutDir, casesDir: paths.casesDir, keyFile, backupFile: args.backupFile, shareMount, frozenFile, manifestFile, spies, args };
+}
+
+/** A world whose task is sealed and whose clear folder is removed by hand (the state after `heldout-close`): the archive, the entry and the key backup are there. */
+export async function sealedClosed(options = {}) {
+  const w = world(options);
+  const r = await sealPackage({ ...w.args, hooks: {} });
+  if (!r.ok) throw new Error(`the fixture could not seal: ${r.reason}`);
+  rmSync(w.casesDir, { recursive: true });
+  return w;
 }
 
 /** Every file under `dir` (relative, sorted), recursively. */
