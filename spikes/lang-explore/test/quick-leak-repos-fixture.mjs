@@ -72,3 +72,22 @@ export async function withGitLog(fn) {
     process.env.PATH = before;
   }
 }
+
+/**
+ * `fn` run with `process.stdout` and `process.stderr` captured: `{ value, stdout, stderr }`. The streams are given a moment before the capture starts, so the test runner's own report of the test before this one (it writes to
+ * the same stream, late) is not swallowed by the capture.
+ */
+export async function captureStreams(fn) {
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const out = [];
+  const err = [];
+  const write = { out: process.stdout.write, err: process.stderr.write };
+  process.stdout.write = chunk => { out.push(String(chunk)); return true; };
+  process.stderr.write = chunk => { err.push(String(chunk)); return true; };
+  try {
+    return { value: await fn(), stdout: out.join(''), stderr: err.join('') };
+  } finally {
+    process.stdout.write = write.out;
+    process.stderr.write = write.err;
+  }
+}

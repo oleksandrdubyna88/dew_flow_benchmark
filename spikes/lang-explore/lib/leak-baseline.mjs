@@ -3,7 +3,7 @@
 // git, never the working copy) and the working file holds that line no more often than the baseline did, so a copy at another path, a changed line and an added duplicate are all new text and stay hits. Findings in the git
 // history texts and findings without a line (shingles) are never exempt. A baseline that cannot be read gives no exemption: the stricter check. The count per task is reported, never the text.
 import path from 'node:path';
-import { runBounded } from '../../minigit-bench/lib/run.mjs';
+import { git } from './leak-git.mjs';
 import { readLines, splitLines } from './leak-text.mjs';
 
 const BLOB_MAX_BYTES = 512 * 1024 * 1024;
@@ -22,13 +22,12 @@ export function countWanted(lines, wanted) {
 /** The wanted-line counts of `file` at `commit`, or null when the commit is not a commit id, the file is not there or it is too big to read. */
 async function baselineCounts({ repoRoot, commit, file, wanted }) {
   if (typeof commit !== 'string' || !COMMIT.test(commit)) return null;
-  const r = await runBounded('git', ['show', `${commit}:${file}`], { cwd: repoRoot, timeoutMs: 60_000, maxBytes: BLOB_MAX_BYTES });
+  const r = await git(repoRoot, ['show', `${commit}:${file}`], { maxBytes: BLOB_MAX_BYTES });
   return readable(r) ? countWanted(splitLines(r.value.stdout), wanted) : null;
 }
 
 const readable = r => r.ok && r.value.code === 0 && !r.value.truncated;
 
-const git = (repoRoot, args) => runBounded('git', args, { cwd: repoRoot, timeoutMs: 60_000 });
 const exitsZero = async (repoRoot, args) => { const r = await git(repoRoot, args); return r.ok && r.value.code === 0; };
 
 const asDate = text => { const d = new Date(text); return Number.isFinite(d.getTime()) ? d : null; };
@@ -41,7 +40,7 @@ async function committedAt(repoRoot, commit) {
 
 const idProblem = ({ commit }) => (typeof commit === 'string' && COMMIT.test(commit) ? null : `baselineCommit ${commit} is not a commit id`);
 const existsProblem = async (repoRoot, { commit }) => (await exitsZero(repoRoot, ['cat-file', '-e', `${commit}^{commit}`]) ? null : `baselineCommit ${commit} does not exist in this repository`);
-const ancestorProblem = async (repoRoot, { commit }) => (await exitsZero(repoRoot, ['merge-base', '--is-ancestor', commit, 'HEAD']) ? null : `baselineCommit ${commit} is not an ancestor of HEAD`);
+const ancestorProblem = async (repoRoot, { commit }, head) => (await exitsZero(repoRoot, ['merge-base', '--is-ancestor', commit, head]) ? null : `baselineCommit ${commit} is not an ancestor of ${head}`);
 
 /** `born` as a UTC time (an ISO string ending in Z), or null. */
 const utcTime = born => (typeof born === 'string' && /Z$/.test(born) ? asDate(born) : null);
@@ -54,8 +53,8 @@ async function ageProblem(repoRoot, { commit, born }) {
 }
 
 /** The sentence refusing a baseline, or null: it must be a commit id, exist, be an ancestor of HEAD and be older than the held-out folder (`born`, a UTC time). The first failing check speaks. */
-async function baselineProblem(repoRoot, entry) {
-  const steps = [() => idProblem(entry), () => existsProblem(repoRoot, entry), () => ancestorProblem(repoRoot, entry), () => ageProblem(repoRoot, entry)];
+async function baselineProblem(repoRoot, entry, head) {
+  const steps = [() => idProblem(entry), () => existsProblem(repoRoot, entry), () => ancestorProblem(repoRoot, entry, head), () => ageProblem(repoRoot, entry)];
   for (const step of steps) {
     const problem = await step();
     if (problem) return problem;
@@ -64,12 +63,12 @@ async function baselineProblem(repoRoot, entry) {
 }
 
 /** `{ valid: { task: commit }, problems: { task: sentence } }`: the baselines that may exempt, and why the others may not (a task without a baseline has neither). */
-export async function checkBaselines({ repoRoot, baselines }) {
+export async function checkBaselines({ repoRoot, baselines, head = 'HEAD' }) {
   const valid = {};
   const problems = {};
   for (const [task, entry] of Object.entries(baselines)) {
     if (!entry?.commit) continue;
-    const problem = await baselineProblem(repoRoot, entry);
+    const problem = await baselineProblem(repoRoot, entry, head);
     if (problem) problems[task] = problem; else valid[task] = entry.commit;
   }
   return { valid, problems };
@@ -98,8 +97,8 @@ const pairsOf = (eligible, baselines) => [...new Map(eligible.map(f => [`${basel
  * `{ kept, exempt: { task: count }, problems }`: the findings minus the collisions with a VERIFIED baseline, how many of those there were per task, and why a task's baseline was refused. Each path's working file is read
  * ONCE (as UTF-8, the way git's blob is read; `readWorking` is a seam for the tests) however many tasks have findings in it, and only the findings' own lines are counted.
  */
-export async function applyBaseline({ repoRoot, findings, baselines: declared, readWorking = file => readLines(path.join(repoRoot, file), 'utf8') }) {
-  const { valid: baselines, problems } = await checkBaselines({ repoRoot, baselines: declared });
+export async function applyBaseline({ repoRoot, findings, baselines: declared, head = 'HEAD', readWorking = file => readLines(path.join(repoRoot, file), 'utf8') }) {
+  const { valid: baselines, problems } = await checkBaselines({ repoRoot, baselines: declared, head });
   const eligible = findings.filter(f => isFileFinding(f) && baselines[f.task]);
   const wanted = wantedByFile(eligible);
   const blobs = new Map(await Promise.all(pairsOf(eligible, baselines).map(async p => [`${p.commit}\0${p.file}`, await baselineCounts({ repoRoot, ...p, wanted: wanted.get(p.file) })])));

@@ -4,7 +4,8 @@
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { failed, finished, git, gitText } from './leak-git.mjs';
 import { DEFAULT_LIMITS, treeTexts } from './leak-git-read.mjs';
-import { groupOfTexts } from './leak-texts.mjs';
+import { exemptByBaseline } from './leak-candidate-baseline.mjs';
+import { foundInTexts, groupOf } from './leak-texts.mjs';
 
 const short = sha => sha.slice(0, 12);
 
@@ -59,9 +60,20 @@ export async function candidateTexts({ repo, sha, limits = DEFAULT_LIMITS, progr
   return head.ok ? ok({ texts: [...head.value, ...tree.value.texts], unreadable: tree.value.unreadable, modules: tree.value.modules }) : head;
 }
 
-/** The scan of one candidate commit: `{ group, count }` or `{ refused }`. `name` is the repository's name for the report. */
-export async function scanCandidate({ repo, sha, material, name, limits, progress }) {
+/** The findings of a candidate's texts after the baseline exemption (a BENCH candidate: `baselines` given) or as they are: `{ kept, exempt, problems }`. */
+async function exemptedFindings({ repo, sha, texts, found, baselines }) {
+  if (baselines === undefined) return { kept: found, exempt: null, problems: {} };
+  return exemptByBaseline({ repo, sha, label: `candidate ${short(sha)}`, texts, found, baselines });
+}
+
+/**
+ * The scan of one candidate commit: `{ group, count, problems }` or `{ refused }`. `name` is the repository's name for the report. `baselines` (the material's, for a BENCH candidate only) gives the same baseline exemption
+ * as the full bench scan, over the candidate's own lines; the task repository's candidate passes none and gets none.
+ */
+export async function scanCandidate({ repo, sha, material, name, baselines, limits, progress }) {
   const got = await candidateTexts({ repo, sha, limits, progress });
   if (!got.ok) return { refused: got.reason };
-  return { group: groupOfTexts({ texts: got.value.texts, material, repo: name, unreadable: got.value.unreadable }), count: got.value.texts.length };
+  const { found, binary } = foundInTexts({ texts: got.value.texts, material });
+  const exempted = await exemptedFindings({ repo, sha, texts: got.value.texts, found, baselines });
+  return { group: groupOf({ found: exempted.kept, binary, repo: name, unreadable: got.value.unreadable, exempt: exempted.exempt }), count: got.value.texts.length, problems: exempted.problems };
 }

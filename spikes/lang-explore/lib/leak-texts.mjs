@@ -9,12 +9,23 @@ import { verifyCandidates } from './leak-verify.mjs';
 /** A finding as it is reported: without its haystack lines, with the repository it was found in. */
 const reported = (repo, rename = file => file) => f => ({ ...publicFinding(f), repo, file: rename(f.file) });
 
-/** Texts `[{ name, raw, diff }]` through the tiers and the verify step: `{ findings, binary, unreadable }`. `unreadable` is what the caller could not read before this (names). */
-export function groupOfTexts({ texts, material, repo, unreadable = [] }) {
+/** Texts `[{ name, raw, diff }]` through the tiers and the verify step: `{ found, binary }`, the findings still carrying the haystack lines they were seen in (a baseline check needs them; `reported` drops them). */
+export function foundInTexts({ texts, material }) {
   const done = texts.map(t => scanText({ name: t.name, raw: t.raw, diff: t.diff, material }));
   const pending = done.flatMap(d => d.pending);
   const found = uniqueFindings([...done.flatMap(d => d.findings), ...verifyCandidates(pending, material)]);
-  return { findings: found.map(reported(repo)), binary: texts.filter((_, i) => done[i].binary).map(t => t.name), unreadable };
+  return { found, binary: texts.filter((_, i) => done[i].binary).map(t => t.name) };
+}
+
+/** A finding list as a group of the report: findings named with their repository, what was binary, what could not be read (names), and how many a baseline exempted per task (`exempt`, when a baseline was applied). */
+export function groupOf({ found, binary, repo, unreadable = [], exempt = null }) {
+  return { findings: found.map(reported(repo)), binary, unreadable, ...(exempt === null ? {} : { exempt }) };
+}
+
+/** Texts through the tiers as a group: `{ findings, binary, unreadable }`. `unreadable` is what the caller could not read before this (names). */
+export function groupOfTexts({ texts, material, repo, unreadable = [] }) {
+  const { found, binary } = foundInTexts({ texts, material });
+  return groupOf({ found, binary, repo, unreadable });
 }
 
 /** The working tree of `root` (what git would commit: tracked and untracked files that are not ignored) from the disk, as a group: `ok({ group, count })` | `fail`. A file listed and gone is `unreadable`. */

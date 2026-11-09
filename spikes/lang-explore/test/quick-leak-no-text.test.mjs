@@ -7,21 +7,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { main } from '../explore.mjs';
-import { NEEDLE, commit, git, holdsNeedle, newRepo, privateSide } from './quick-leak-repos-fixture.mjs';
+import { NEEDLE, captureStreams, commit, git, holdsNeedle, newRepo, privateSide } from './quick-leak-repos-fixture.mjs';
 
 /** `explore.mjs leakcheck ...` in this process with both output streams captured: `{ exit, stdout, stderr }`. */
 async function captured(args, seams) {
-  const out = [];
-  const err = [];
-  const write = { out: process.stdout.write, err: process.stderr.write };
-  process.stdout.write = chunk => { out.push(String(chunk)); return true; };
-  process.stderr.write = chunk => { err.push(String(chunk)); return true; };
-  try {
-    return { exit: await main(['leakcheck', ...args], seams), stdout: out.join(''), stderr: err.join('') };
-  } finally {
-    process.stdout.write = write.out;
-    process.stderr.write = write.err;
-  }
+  const r = await captureStreams(() => main(['leakcheck', ...args], seams));
+  return { exit: r.value, stdout: r.stdout, stderr: r.stderr };
 }
 
 const seamsOf = (side, benchRepo) => ({ home: side.home, repoRoot: benchRepo, exploreFn: () => ok(side.explore), env: {} });

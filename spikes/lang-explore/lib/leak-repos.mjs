@@ -41,12 +41,14 @@ async function taskPart({ task, values, material, io, say }) {
   return { exit: exitOfGroups(r.groups) };
 }
 
-/** The candidate's part: says its line and gives `{ exit, refusal? }`. */
+/** The candidate's part: says its line (and the baselines that gave no exemption) and gives `{ exit, refusal? }`. A bench candidate gets the bench's baseline exemption; the task repository's gets none. */
 async function candidatePart({ candidate, material, io, say }) {
   const label = `candidate ${candidate.sha.slice(0, 12)} of ${candidate.name}`;
-  const r = await scanCandidate({ repo: candidate.root, sha: candidate.sha, material: material.material, name: candidate.name, limits: io.gitLimits, progress: progressOf(io) });
+  const baselines = candidate.bench ? material.material.baselines : undefined;
+  const r = await scanCandidate({ repo: candidate.root, sha: candidate.sha, material: material.material, name: candidate.name, baselines, limits: io.gitLimits, progress: progressOf(io) });
   if (r.refused !== undefined) return { exit: 4, refusal: refusedLine(label, r.refused) };
   say(scannedLine({ label, groups: [r.group], read: `${r.count} texts (its tree, its message and its diff against its parent or the empty tree) scanned` }));
+  for (const [task, why] of Object.entries(r.problems)) say(`baseline of task ${task} gives no exemption: ${why}`);
   return { exit: exitOfGroups([r.group]) };
 }
 

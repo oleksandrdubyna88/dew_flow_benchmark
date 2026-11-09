@@ -24,11 +24,19 @@ export const exitOfGroups = groups => (findingsOf(groups).length > 0 ? 5 : (unre
 
 const binaryCount = groups => groups.reduce((n, g) => n + g.binary.length, 0);
 
+/** The count a baseline exempted per task, as the bench's line says it (counts only), or nothing when no baseline was applied or nothing was exempt. */
+function exemptText(groups) {
+  const total = {};
+  for (const g of groups) for (const [task, n] of Object.entries(g.exempt ?? {})) total[task] = (total[task] ?? 0) + n;
+  const parts = Object.entries(total).map(([task, n]) => `task ${task}: ${n}`);
+  return parts.length === 0 ? '' : `; collisions with the baseline commit (not leaks): ${parts.join(', ')}`;
+}
+
 /** The line of a scanned repository (`label` names the repository, or the candidate and its repository): FAILED with the places, or clean with what was read. `read` says what, in counts; `scope` how far the history went. */
 export function scannedLine({ label, groups, read, scope = null }) {
   const problem = failureOf(groups);
   const reach = scope === null ? '' : `; history read: ${scope}`;
-  return problem === '' ? `leakcheck [${label}] clean: ${read}; ${binaryCount(groups)} binary file(s): line tiers only` : `leakcheck [${label}] FAILED: ${problem}${reach}`;
+  return problem === '' ? `leakcheck [${label}] clean: ${read}; ${binaryCount(groups)} binary file(s): line tiers only${exemptText(groups)}` : `leakcheck [${label}] FAILED: ${problem}${reach}${exemptText(groups)}`;
 }
 
 /** What the task repository's scan read, in words and counts. */

@@ -52,7 +52,8 @@ async function candidateOf({ values, bench, hint }) {
   if (!root.ok) return fail(`the candidate repository ${root.reason}`);
   const sha = await resolveCommit(root.value, values.candidate);
   if (!sha.ok) return fail(`the candidate ${values.candidate} is not a commit of ${path}: ${sha.reason}`);
-  return ok({ root: root.value, sha: sha.value, name: await repoNameOf({ root: root.value, path, bench, hint }) });
+  const name = await repoNameOf({ root: root.value, path, bench, hint });
+  return ok({ root: root.value, sha: sha.value, name, bench: name === 'bench repository' });
 }
 
 const taskSetup = args => (isAlone(args.values) ? Promise.resolve(ok(null)) : taskRepoOf(args));
