@@ -63,10 +63,10 @@ const readDocument = (bytes, file) => {
 
 const FORMAT_VERSION = '2';
 
-/** ok({ recorded: { label, sha256 } }) when the FORMAT is one the record names and is of the version this reader reads. */
-function checkRecorded(format, file) {
+/** ok({ recorded: { label, gate, sha256 } }) when the FORMAT is one the record names for the task and is of the version this reader reads. */
+function checkRecorded({ format, file, task }) {
   const record = readRecord(file);
-  const label = record.ok ? recordedLabel(record.value, format.sha256, file) : record;
+  const label = record.ok ? recordedLabel(record.value, format.sha256, file, task) : record;
   if (!label.ok) return label;
   return versionOf(format) === FORMAT_VERSION ? ok({ recorded: { label: label.value.label, gate: label.value.gate, sha256: format.sha256 } }) : fail(`this reader reads Format version ${FORMAT_VERSION} only; the FORMAT says ${versionOf(format)}`);
 }
@@ -75,7 +75,7 @@ function checkRecorded(format, file) {
 const loadReferences = (options, stackWordsFile) => pipeline([
   () => mapOk(readFile(options.format), bytes => ({ bytes })),
   ({ bytes }) => readDocument(bytes, options.format),
-  ({ format }) => checkRecorded(format, options.record ?? DEFAULT_RECORD),
+  ({ format }) => checkRecorded({ format, file: options.record ?? DEFAULT_RECORD, task: options.task }),
   ({ format }) => mapOk(readFacts(format), facts => ({ facts })),
   ({ format }) => mapOk(readSentences(format), sentences => ({ sentences })),
   () => mapOk(loadWordFile(NEEDLES_FILE), known => ({ known })),
