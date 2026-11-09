@@ -5,7 +5,8 @@ import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { SUBSTRING_NEEDLES_MAX } from '../lib/leak-material.mjs';
 import { scanText } from '../lib/leak-scan.mjs';
 import { BITMAP_SLOTS, buildSubstringIndex, findSubstrings } from '../lib/leak-substring.mjs';
@@ -178,7 +179,7 @@ test('A_malformed_file_is_a_refusal_never_an_empty_list', () => {
 
 test('A_malformed_file_makes_the_command_exit_4_and_a_good_one_does_not', async () => {
   const repoRoot = repoWith();
-  const run = home => leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: () => {} });
+  const run = home => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: () => {} });
   const bad = await run(homeWith({}, '{"entries": [{"sha256": "no"}]}'));
   assert.equal(bad.exit, 4);
   assert.match(bad.message, /leak-reviewed\.json/);
@@ -220,7 +221,7 @@ const TEXTS = [LINE_A, SHORT_A, REF_A, 'alpha bravo charlie'];
 
 test('The_result_line_says_how_many_lines_and_phrases_were_exempt_by_a_reading_and_never_what_they_were', async () => {
   const said = [];
-  const run = (home, repoRoot) => leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const run = (home, repoRoot) => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal((await run(homeWith({}, LIST), repoWith())).exit, 0);
   assert.match(said.join('\n'), /2 private line\(s\) and 1 phrase\(s\) exempt by a person's reading/);
   said.length = 0;
@@ -241,7 +242,7 @@ test('A_held_out_line_committed_under_test_hello_on_the_branch_is_still_found_wh
   git(repoRoot, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   commitFiles(repoRoot, { [GRAMMAR_FILE]: `scenario 2\ndefault within 2s\n${LINE_B}\n` }, 'a held-out line added to a public example on the branch');
   const said = [];
-  const r = await leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const r = await scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal(r.exit, 5, said.join('\n'));
   assert.equal(said.join('\n').includes('invented-reviewed-answer-bravo'), false, 'the output never holds the text');
 });

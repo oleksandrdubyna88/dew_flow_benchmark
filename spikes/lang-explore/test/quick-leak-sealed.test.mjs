@@ -8,7 +8,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { loadHeldout } from '../lib/heldout.mjs';
 import { sealedAbsentProblem } from '../lib/heldout-quick.mjs';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { buildMaterial } from '../lib/leak-material.mjs';
 import { taskPaths } from '../lib/tasks.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
@@ -79,7 +80,7 @@ test('The_leakcheck_command_exits_4_for_a_sealed_task_with_no_clear_folder_and_n
   const home = homeWith(['04']);
   const said = [];
   const io = { home, repoRoot: repoWith(), progress: () => {}, frozenFile: writeFrozen(['05']) };
-  const r = await leakcheckCommand({ values: {}, io, explore: exploreOf(['04', '05']), say: l => said.push(l) });
+  const r = await scanBenchHalf({ values: {}, io, explore: exploreOf(['04', '05']), say: l => said.push(l) });
   assert.equal(r.exit, 4, said.join('\n'));
   assert.match(r.message, /sealed: open it first \(task 05\)/);
   assert.doesNotMatch(`${r.message}${said.join('\n')}`, /clean|XYZZY|31415/);

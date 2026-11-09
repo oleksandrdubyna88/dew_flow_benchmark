@@ -9,7 +9,8 @@ import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { EXIT, cmdLeakcheck } from '../lib/commands.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { leakIds, leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakIds, leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskIds, taskPaths } from '../lib/tasks.mjs';
@@ -248,21 +249,21 @@ test('The_leakcheck_command_exits_4_for_an_incomplete_scan_and_5_for_a_finding',
     git('add', '.');
     git('commit', '-q', '-m', 'x');
     const say = [];
-    return { repo, say, exit: (await leakcheckCommandIn({ repo, home, say })).exit };
+    return { repo, say, exit: (await scanBenchHalfIn({ repo, home, say })).exit };
   };
   const clean = await run({ 'a.md': 'public\n' });
   assert.equal(clean.exit, 0);
   const incomplete = await run({ 'a.md': 'public\n', 'b.md': 'tracked\n' });
   rm(path.join(incomplete.repo, 'b.md'));
-  const again = await leakcheckCommandIn({ repo: incomplete.repo, home, say: [] });
+  const again = await scanBenchHalfIn({ repo: incomplete.repo, home, say: [] });
   assert.equal(again.exit, 4, 'a file listed and gone: the check is incomplete');
   const leak = await run({ 'a.md': 'answer-02-h001-XYZZY\n' });
   assert.equal(leak.exit, 5);
 });
 
-/** `leakcheckCommand` over a temp repository (`io.repoRoot`) and a fixture home. */
-function leakcheckCommandIn({ repo, home, say }) {
-  return leakcheckCommand({ values: { task: '02' }, io: { home, repoRoot: repo, progress: () => {} }, explore: EXPLORE, say: l => say.push(l) });
+/** `scanBenchHalf` over a temp repository (`io.repoRoot`) and a fixture home. */
+function scanBenchHalfIn({ repo, home, say }) {
+  return scanBenchHalf({ values: { task: '02' }, io: { home, repoRoot: repo, progress: () => {} }, explore: EXPLORE, say: l => say.push(l) });
 }
 
 test('The_leakcheck_command_reports_the_material_it_built_in_counts_per_tier_before_it_scans', async () => {
@@ -275,7 +276,7 @@ test('The_leakcheck_command_reports_the_material_it_built_in_counts_per_tier_bef
   git('add', '.');
   git('commit', '-q', '-m', 'x');
   const progress = [];
-  await leakcheckCommand({ values: { task: '02' }, io: { home, repoRoot: repo, progress: l => progress.push(l) }, explore: EXPLORE, say: () => {} });
+  await scanBenchHalf({ values: { task: '02' }, io: { home, repoRoot: repo, progress: l => progress.push(l) }, explore: EXPLORE, say: () => {} });
   assert.match(progress[0], /^building the material of tasks 02$/);
   assert.match(progress[1], /^material: substring needles \d+, exact-line keys \d+, window keys \d+, chunk keys \d+, shingles \d+$/);
   assert.match(progress[2], /^scanning \d+ files$/);

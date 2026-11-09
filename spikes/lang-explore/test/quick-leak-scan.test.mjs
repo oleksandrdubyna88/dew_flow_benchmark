@@ -3,7 +3,8 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { commitFiles, git, repoWith } from './leak-scan-fixture.mjs';
@@ -56,7 +57,7 @@ test('The_command_reads_the_public_examples_from_the_committed_files_of_the_repo
   const repoRoot = repoWith({ [GRAMMAR_FILE]: 'scenario 2\ndefault within 2s\nconnect c tcp\n', 'README.md': 'a public readme\n' });
   git(repoRoot, 'update-ref', 'refs/remotes/origin/main', 'HEAD'); // what main already holds
   const said = [];
-  const run = () => leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const run = () => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal((await run()).exit, 0, said.join('\n'));
   commitFiles(repoRoot, { 'docs/oops.md': `pasted by mistake:\n${VALUE}\n` }, 'a leak');
   assert.equal((await run()).exit, 5, 'a held-out value in a public file fails the command');
@@ -69,7 +70,7 @@ test('A_held_out_line_committed_under_test_hello_on_the_branch_is_still_found_be
   git(repoRoot, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   commitFiles(repoRoot, { [GRAMMAR_FILE]: `scenario 2\ndefault within 2s\nconnect c tcp\n${VALUE}\n` }, 'a held-out line added to a public example on the branch');
   const said = [];
-  const r = await leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const r = await scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal(r.exit, 5, said.join('\n'));
   assert.doesNotMatch(said.join('\n'), /XYZZY|918273/);
 });
@@ -80,7 +81,7 @@ test('A_reference_line_committed_under_the_runner_directory_on_the_branch_is_sti
   git(repoRoot, 'update-ref', 'refs/remotes/origin/main', 'HEAD'); // main holds the runner without the reference line
   commitFiles(repoRoot, { 'spikes/lang-explore/runner/keep.py': `import os\n${REF}\n` }, 'a reference line added to the runner on the branch');
   const said = [];
-  const r = await leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const r = await scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal(r.exit, 5, said.join('\n'));
   assert.doesNotMatch(said.join('\n'), /918273/, 'the output never holds the text');
 });

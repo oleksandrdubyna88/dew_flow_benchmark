@@ -1,7 +1,7 @@
 // Fixtures of the two-repository leak check (step 2b): a private side of INVENTED content in a temp home, a bench repository and a task repository made with `git init` in temp folders (never the real ones, never the private
 // folders), and one way to run `leakcheck` over them with its output captured. Not a test file.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
@@ -48,10 +48,27 @@ export function privateSide() {
 }
 
 /** `leakcheck` over the bench repository `benchRepo` with `values` (the parsed options) and `env`: `{ exit, said, progress }`, the two outputs as text. */
-export async function runCheck({ home, explore, benchRepo, values = {}, env = {} }) {
+export async function runCheck({ home, explore, benchRepo, values = {}, env = {}, io: extraIo = {} }) {
   const said = [];
   const progress = [];
-  const io = { home, repoRoot: benchRepo, say: l => said.push(l), progress: l => progress.push(l), exploreFn: () => ok(explore), env };
+  const io = { home, repoRoot: benchRepo, say: l => said.push(l), progress: l => progress.push(l), exploreFn: () => ok(explore), env, ...extraIo };
   const exit = await cmdLeakcheck(values, io);
   return { exit, said: said.join('\n'), progress: progress.join('\n') };
+}
+
+/** The `git` on PATH wrapped by a script that logs each call's arguments (one line per call, arguments joined by a space) and then runs the real one: a fake git whose calls a test can count and read. `fn` runs with PATH put first. -> `{ value, calls }`. */
+export async function withGitLog(fn) {
+  const dir = tmpDir('r-gitlog');
+  const real = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const log = path.join(dir, 'calls.log');
+  writeFileSync(path.join(dir, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nexec '${real}' "$@"\n`, { mode: 0o755 });
+  const before = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${before}`;
+  try {
+    const value = await fn();
+    const calls = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : [];
+    return { value, calls };
+  } finally {
+    process.env.PATH = before;
+  }
 }

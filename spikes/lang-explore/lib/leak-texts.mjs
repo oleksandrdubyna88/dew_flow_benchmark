@@ -1,8 +1,8 @@
 // The tiers over texts of a repository that is not the bench's files and history: a commit's blobs, a diff, the commit messages, the working tree. One group of texts in, `{ findings, binary, unreadable }` out, every finding
 // naming its repository and its place and never the text (the haystack lines a finding was seen in are dropped here). The bench's own scan (leak-scan.mjs) keeps its baseline exemption; the other repositories have none: their
 // text was never in the bench's baseline commit, so every line that matches is a finding.
-import { listCommittable } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { workingFiles } from './leak-git-read.mjs';
 import { publicFinding, scanFiles, scanText, uniqueFindings } from './leak-scan.mjs';
 import { verifyCandidates } from './leak-verify.mjs';
 
@@ -18,9 +18,10 @@ export function groupOfTexts({ texts, material, repo, unreadable = [] }) {
 }
 
 /** The working tree of `root` (what git would commit: tracked and untracked files that are not ignored) from the disk, as a group: `ok({ group, count })` | `fail`. A file listed and gone is `unreadable`. */
-export async function groupOfWorkingTree({ root, material, repo }) {
-  const files = await listCommittable(root);
-  if (!files.ok) return fail(`the files of the working tree could not be listed: ${files.reason}`);
+export async function groupOfWorkingTree({ root, material, repo, progress = () => {} }) {
+  const files = await workingFiles(root);
+  if (!files.ok) return fail(files.reason);
+  progress(`${repo}: reading the working tree (${files.value.length} files)`);
   const scanned = scanFiles({ root, files: files.value, material });
   const found = uniqueFindings([...scanned.findings, ...verifyCandidates(scanned.pending, material)]);
   const rename = file => `${file} (working tree)`;

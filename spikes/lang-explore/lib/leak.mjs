@@ -177,17 +177,6 @@ export async function benchHalf({ values, io, material, say }) {
   return { exit: exitOf(r, named) };
 }
 
-/**
- * `leakcheck [--task NN] [--range A..B]`, the BENCH half alone: v1's leak check over the bench repository and the branch range with the needles of EVERY task (the default: a leak of task 02's case in a task-03 commit is still a
- * leak), or of one task when `--task` names it; then the scan of the public notes for the mutant and trap ids. Exit 0 clean | 5 a hit or a failure | 4 the material could not be read. The command line is `leakcheckRepos`
- * (leak-repos.mjs), which runs this half and the task repository's: this one is never the command, because a check that scans one repository is a pass it did not earn.
- */
-export async function leakcheckCommand({ values, io, explore, say }) {
-  const material = await commandMaterial({ values, io, explore });
-  if (!material.ok) return { exit: 4, message: material.reason };
-  return benchHalf({ values, io, material: material.value, say });
-}
-
 /** 0 clean; 5 a finding (a leak, or a mutant or trap id in a public note); 4 an incomplete scan (listed files that could not be read: not a leak, not clean). */
 const exitOf = (r, named) => (r.ok && !named ? 0 : (incompleteOnly(r, named) ? 4 : 5));
 

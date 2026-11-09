@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { refsDirOf } from '../lib/heldout-quick.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
@@ -193,7 +194,7 @@ test('A_linked_file_under_a_private_folder_is_named_by_the_leak_check_and_never_
   assert.match(r.reason, /refs\/ws\/linked\.py/);
   assert.match(r.reason, /mutants\/M-01\.py/);
   const said = [];
-  const ran = await leakcheckCommand({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const ran = await scanBenchHalf({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.notEqual(ran.exit, 0, 'the command does not report clean');
   assert.match(ran.message, /refs\/ws\/linked\.py/, 'the path is reported');
 });
