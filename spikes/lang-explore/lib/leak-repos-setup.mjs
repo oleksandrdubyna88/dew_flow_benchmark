@@ -33,7 +33,7 @@ export function optionsProblem(values, env) {
 /** `ok({ root, given })` of the task repository, or the refusal: none given, not a repository's top folder, or the bench itself (a second look at the bench is no look at the task repository). `bench` is the bench's canonical root. */
 async function taskRepoOf({ values, env, bench }) {
   const path = given(values['task-repo']) ?? given(env[TASK_REPO_ENV]);
-  if (path === undefined) return fail(`no task repository is given: pass --task-repo <path>, or set ${TASK_REPO_ENV}. A check that scans one repository is a pass it did not earn`);
+  if (path === undefined) return fail(`no task repository is given: pass --task-repo <path>, or set ${TASK_REPO_ENV}; or scan one commit alone with --candidate-repo <path> --candidate <commit>. A check that scans one repository is a pass it did not earn`);
   const root = await repoRootOf(path);
   if (!root.ok) return fail(`the task repository ${root.reason}`);
   return (await sameRepository(root.value, bench)) ? fail(`the task repository ${path} is the bench repository itself (or a worktree of it): the task repository is another repository`) : ok({ root: root.value, given: path });

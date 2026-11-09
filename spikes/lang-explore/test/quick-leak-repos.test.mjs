@@ -22,6 +22,14 @@ test('Leakcheck_refuses_when_no_task_repository_is_given_by_the_option_or_the_en
   assert.doesNotMatch(r.said, /clean/, 'a check that scans one repository is never reported as clean');
 });
 
+test('The_refusal_without_a_task_repository_also_names_the_candidate_alone_as_a_valid_call', async () => {
+  const r = await run(newRepo(), {}, {});
+  assert.equal(r.exit, 4, r.said);
+  assert.match(r.said, /--candidate-repo <path> --candidate <commit>/, 'a candidate alone needs no task repository, and the refusal says so');
+  assert.match(r.said, /--task-repo <path>/);
+  assert.match(r.said, /LANG_V2_TASK_REPO/);
+});
+
 test('The_environment_variable_names_the_task_repository_when_the_option_is_absent_and_the_option_wins', async () => {
   const leaky = newRepo({ 'notes/x.md': NEEDLE });
   const side = privateSide();
