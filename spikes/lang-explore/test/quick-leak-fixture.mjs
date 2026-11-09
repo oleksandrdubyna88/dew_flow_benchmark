@@ -1,8 +1,9 @@
 // Fixtures of the quick-run leak tests: a held-out side in the shape of `quick-heldout-shape.md` (cases, traps, a generator, and `refs-NN` beside it) with INVENTED content, in a temp home. Not a test file.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
 import { refsDirOf } from '../lib/heldout-quick.mjs';
 import { reviewHash, reviewedPath } from '../lib/leak-reviewed.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
@@ -38,3 +39,20 @@ export const reviewedEntry = (kind, text, over = {}) => ({ sha256: reviewHash(ki
 export function writeReviewed(home, listOrText) {
   put(reviewedPath(home), typeof listOrText === 'string' ? listOrText : JSON.stringify({ entries: listOrText }));
 }
+
+/** The pins restricted to the tasks in `ids`: a scan over every task of these pins reads exactly these folders (a task of the pins whose folder is absent is a refusal, so a test that holds fewer folders names fewer tasks). */
+export const exploreOf = ids => ({ ...EXPLORE, tasks: Object.fromEntries(ids.map(id => [id, EXPLORE.tasks[id]])) });
+
+/** A held-out record file (`heldout-frozen.json`) in a temp folder, registering a sealed archive for each task in `ids` (an invented hash: counts and hashes only, as the real record is). -> its path. */
+export function writeFrozen(ids, over = {}) {
+  const file = path.join(tmpDir('q-frozen'), 'heldout-frozen.json');
+  const tasks = Object.fromEntries(ids.map(id => [id, { archiveSha256: 'a'.repeat(64), caseCount: 2, trapCount: 1 }]));
+  put(file, JSON.stringify({ tasks, ...over }));
+  return file;
+}
+
+/** The pins restricted to the tasks whose held-out folder is in `home`: what a scan over every task of the pins reads when the home holds only these (an absent task is a refusal since step 2b, never a skip). */
+export const exploreFor = home => ({ ...EXPLORE, tasks: Object.fromEntries(Object.entries(EXPLORE.tasks).filter(([id]) => existsSync(taskPaths(quickTask(id), home).heldoutDir))) });
+
+/** `leakMaterial` over every task whose folder `home` holds (the options are `leakMaterial`'s, `home` required; give `only` and the pins are the full ones). */
+export const presentMaterial = options => leakMaterial({ ...options, explore: options.only ? EXPLORE : exploreFor(options.home) });

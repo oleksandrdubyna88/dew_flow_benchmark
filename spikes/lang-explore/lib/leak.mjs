@@ -8,6 +8,7 @@ import { normalise } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { loadHeldout } from './heldout.mjs';
+import { sealedAbsentProblem } from './heldout-quick.mjs';
 import { listOf } from './idlist.mjs';
 import { buildMaterial, materialCounts } from './leak-material.mjs';
 import { loadReviewed } from './leak-reviewed.mjs';
@@ -82,32 +83,44 @@ const notesOf = (task, home) => { const f = taskPaths(task, home).notesFile; ret
 /** The tasks of the pins to scan (`only` is one id, or null for every task) as `{ task, held }` with the held-out side loaded. */
 const loadTasks = (home, explore, only) => (only ? [only] : taskIds(explore)).map(id => resolveTask(explore, id).value).map(task => ({ task, held: loadHeldout(home, task) }));
 
-/** The sentence refusing the scan, or null: a folder that does not match its manifest (the check would be reading something else), or no folder at all (a check over nothing proves nothing). */
-function scanProblem(loaded, home) {
+/** The sentence refusing the scan because a task whose clear folder is absent is sealed (`sealedAbsentProblem`, the one decision of every reader), or null. */
+const sealedProblemOf = ({ loaded, home, frozenFile }) => loaded.filter(l => !l.held.ok).map(l => sealedAbsentProblem({ home, task: l.task, frozenFile })).find(p => p !== null) ?? null;
+
+/** The sentence refusing the scan because a task of it has no folder (never skipped: the scan would say "clean" over less than it names), or null. When none is present, the check would scan for nothing. */
+function absentProblem({ loaded, home }) {
+  const gone = loaded.filter(l => !l.held.ok);
+  const folders = gone.map(l => taskPaths(l.task, home).heldoutDir).join(', ');
+  if (gone.length === loaded.length) return `no held-out folder is present (${folders}): the leak check would scan for nothing`;
+  if (gone.length === 0) return null;
+  return `the held-out folder of task ${listOf(gone.map(l => l.task.id))} is not present (${folders}): a task is never skipped, because a clean result must cover every task it names; name one task with --task, or restore the folder`;
+}
+
+/** The sentence refusing the scan, or null: a folder that does not match its manifest (the check would be reading something else), a sealed task with no clear folder, or a task with no folder at all. */
+function scanProblem(loaded, home, frozenFile) {
   const broken = loaded.find(l => !l.held.ok && !l.held.absent);
   if (broken) return `task ${broken.task.id}: ${broken.held.reason}`;
-  return loaded.some(l => l.held.ok) ? null : `no held-out folder is present (${loaded.map(l => taskPaths(l.task, home).heldoutDir).join(', ')}): the leak check would scan for nothing`;
+  return sealedProblemOf({ loaded, home, frozenFile }) ?? absentProblem({ loaded, home });
 }
 
 /** The sentence refusing the scan, or null: a reviewed list that is unreadable or malformed (the check would not know what it exempts), else the scan's own problem. */
-const refusalOf = ({ loaded, home, reviewed }) => (reviewed.ok ? scanProblem(loaded, home) : reviewed.reason);
+const refusalOf = ({ loaded, home, reviewed, frozenFile }) => (reviewed.ok ? scanProblem(loaded, home, frozenFile) : reviewed.reason);
 
 /**
  * The structured material of the tasks to scan (`only` is one task id, or null for EVERY task of the pins): `ok({ material, ids, scanned, absent })` | `fail`. A task whose folder is not there has nothing to leak and is
  * listed in `absent`. `runnerLines` are the committed runner's normalised lines: a code needle that collides with one is dropped. The person-reviewed list of `home` (leak-reviewed.mjs) drops the lines and phrases it holds from the
  * needles and keys of every tier; `reviewed` in the result says how many entries it holds, by kind (counts only).
  */
-export function leakMaterial({ home, explore, only = null, publicText = decidedPublicText(), runnerLines = new Set(), grammarLines = new Set() }) {
+export function leakMaterial({ home, explore, only = null, publicText = decidedPublicText(), runnerLines = new Set(), grammarLines = new Set(), frozenFile }) {
   const loaded = loadTasks(home, explore, only);
   const reviewed = loadReviewed({ home });
-  const problem = refusalOf({ loaded, home, reviewed });
+  const problem = refusalOf({ loaded, home, reviewed, frozenFile });
   if (problem) return fail(problem);
   const present = loaded.filter(l => l.held.ok);
   const notes = present.map(l => ({ id: l.task.id, text: notesOf(l.task, home) }));
   const missing = notes.filter(n => n.text === null).map(n => n.id);
   if (missing.length > 0) return fail(`the private notes of task ${listOf(missing)} are missing (${listOf(missing.map(id => taskPaths(resolveTask(explore, id).value, home).notesFile))}): the leak check would read no shingles of a task whose material is there`);
-  const tasks = present.map((l, i) => ({ id: l.task.id, heldout: l.held.value, shinglesText: leakShingles(notes[i].text, publicText), baselineCommit: l.task.baselineCommit, heldoutBorn: l.task.heldoutBorn, quick: l.task.quick === true }));
-  const built = buildMaterial({ tasks, runnerLines, grammarLines, reviewed: reviewed.value });
+  const tasks = present.map((l, i) => ({ id: l.task.id, pins: l.task, heldout: l.held.value, shinglesText: leakShingles(notes[i].text, publicText), baselineCommit: l.task.baselineCommit, heldoutBorn: l.task.heldoutBorn, quick: l.task.quick === true }));
+  const built = buildMaterial({ tasks, runnerLines, grammarLines, reviewed: reviewed.value, home, frozenFile });
   if (!built.ok) return built;
   return ok({ material: built.value, ids: [...new Set(present.flatMap(l => idsOfHeldout(l.held.value)))], scanned: tasks.map(x => x.id), absent: loaded.filter(l => !l.held.ok).map(l => l.task.id), reviewed: reviewed.value.counts });
 }
@@ -129,7 +142,7 @@ export const leakLine = (r, m) => withReviewed(r.ok
 /** The material of the command: the named task's, or every task's. -> `ok(material)` | `fail`. */
 function materialOf({ values, io, explore, runnerLines, grammarLines }) {
   const named = values.task === undefined ? ok(null) : resolveTask(explore, values.task);
-  return named.ok ? leakMaterial({ home: io.home, explore, only: values.task ?? null, runnerLines, grammarLines }) : named;
+  return named.ok ? leakMaterial({ home: io.home, explore, only: values.task ?? null, runnerLines, grammarLines, frozenFile: io.frozenFile }) : named;
 }
 
 /** The failure of the id scan (the files that name a mutant or trap id as a word), or null. */
@@ -138,20 +151,28 @@ const idProblem = (r, material) => {
   return named.length > 0 ? withReviewed(`leakcheck FAILED: a mutant or trap id of the held-out material is a word in ${listOf(named)}`, material) : null;
 };
 
+/** The progress sink of a command: `io.progress`, else one line per call on stderr (counts and names only). */
+export const progressOf = io => io.progress ?? (line => process.stderr.write(`${line}\n`));
+
 /**
- * `leakcheck [--task NN] [--range A..B]`: v1's leak check over the repository and the branch range with the needles of EVERY task (the default: a leak of task 02's case in a task-03 commit is still a leak), or of one
- * task when `--task` names it; then the scan of the public notes for the mutant and trap ids. Exit 0 clean | 5 a hit or a failure | 4 the material could not be read.
+ * The material of the command, built once for every repository it scans: `ok({ material, ids, scanned, absent, reviewed })` | `fail(sentence)`. The runner's committed lines and the quick tasks' grammar set are read from the
+ * bench repository (`io.repoRoot`), as always.
  */
-export async function leakcheckCommand({ values, io, explore, say }) {
+export async function commandMaterial({ values, io, explore }) {
   const repoRoot = io.repoRoot ?? REPO;
-  const progress = io.progress ?? (line => process.stderr.write(`${line}\n`));
+  const progress = progressOf(io);
   progress(`building the material of tasks ${values.task ?? taskIds(explore).join(', ')}`);
   const material = materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) });
-  if (!material.ok) return { exit: 4, message: material.reason };
-  progress(`material: ${materialCounts(material.value.material)}`);
-  const r = await scanRepository({ repoRoot, material: material.value.material, range: rangeOf(values).range, progress });
-  const named = idProblem(r, material.value);
-  say(named ?? leakLine(r, material.value));
+  if (material.ok) progress(`material: ${materialCounts(material.value.material)}`);
+  return material;
+}
+
+/** The bench half of the command: the bench repository's files and branch range through the tiers, then the id scan; says its lines and gives the exit code (see `exitOf`). `material` is `commandMaterial`'s value. */
+export async function benchHalf({ values, io, material, say }) {
+  const repoRoot = io.repoRoot ?? REPO;
+  const r = await scanRepository({ repoRoot, material: material.material, range: rangeOf(values).range, progress: progressOf(io) });
+  const named = idProblem(r, material);
+  say(named ?? leakLine(r, material));
   for (const [task, why] of Object.entries(r.baselineProblems ?? {})) say(`baseline of task ${task} gives no exemption: ${why}`);
   return { exit: exitOf(r, named) };
 }

@@ -95,13 +95,13 @@ function failureSentence(findings, unreadable) {
 }
 
 /** One finding per place and per private line: the same line found by two tiers is reported once (the first tier, in the order they ran). */
-function uniqueFindings(findings) {
+export function uniqueFindings(findings) {
   const seen = new Set();
   return findings.filter(f => { const key = `${f.file}\0${f.line}\0${f.task}\0${f.caseFile}\0${f.fromLine}`; return !seen.has(key) && seen.add(key); });
 }
 
 /** A finding as it leaves this module: without the haystack lines it was found in (they are what a leak looks like, and are only for the baseline check). */
-const publicFinding = ({ raws, ...finding }) => finding;
+export const publicFinding = ({ raws, ...finding }) => finding;
 
 /** The sentence of a finding: where, never what. */
 export function describeFinding(f) {

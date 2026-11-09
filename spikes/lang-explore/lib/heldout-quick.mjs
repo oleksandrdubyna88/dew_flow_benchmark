@@ -6,6 +6,7 @@ import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
+import { INPUTS } from './paths.mjs';
 import { taskPaths } from './tasks.mjs';
 
 const H_ID = /^h\d{3}$/;
@@ -81,6 +82,43 @@ function folderShape({ dir, casesDir }) {
 
 /** The folder of a quick task's reference solutions: `refs-NN` beside `heldout-NN` (private, outside every git tree, never bound into a box). */
 export const refsDirOf = dir => path.join(path.dirname(dir), path.basename(dir).replace(/^heldout-/, 'refs-'));
+
+/** The held-out record the freeze writes (counts and hashes, F2.S2): in the bench checkout, beside the other pins. It is absent until the first freeze. */
+export const FROZEN_FILE = path.join(INPUTS, 'heldout-frozen.json');
+
+/** The record's entry of one task, in either layout the record may take (`{ tasks: { NN: entry } }` or `{ NN: entry }`): the entry, or undefined. */
+const entryOf = (record, id) => (record.tasks ?? record)[id];
+
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** A record is an object, and its `tasks` (when it has the key) is one too: anything else is read as unreadable, never as "no task is sealed". */
+const recordShapeOk = record => isObject(record) && (record.tasks === undefined || isObject(record.tasks));
+
+/** `ok(record)` for a record file of the right shape, `ok(null)` for no file, `fail` for a file that cannot be read or has another shape (the caller refuses on it: a record that cannot be read may hide a sealed task). */
+function readRecord(file) {
+  if (lstatOrNull(file) === null) return ok(null);
+  try {
+    const record = JSON.parse(readFileSync(file, 'utf8'));
+    return recordShapeOk(record) ? ok(record) : fail('it is not an object of tasks');
+  } catch { return fail('it is not valid JSON'); }
+}
+
+/**
+ * The ONE decision of the fail-closed readers (F2.S2 (d)): the sentence refusing a read of a task whose clear held-out folder is absent while a sealed archive is registered for it in `heldout-frozen.json`, or null.
+ * It says `sealed: open it first` and names the task, so no caller can take the refusal for an absent task, an empty one or a clean one. A task with no entry in the record, or no record file at all, keeps today's
+ * behaviour (null). A record that cannot be read is a refusal too, whenever the folder is absent (it may be hiding the task's entry). An entry of any shape registers the task: the check never guesses it away.
+ */
+export function sealedAbsentProblem({ home, task, frozenFile = FROZEN_FILE }) {
+  if (lstatOrNull(path.join(taskPaths(task, home).heldoutDir, 'cases')) !== null) return null;
+  return registeredProblem({ record: readRecord(frozenFile), task, frozenFile });
+}
+
+/** The refusal of a task whose folder is absent, read from the record: `sealed: open it first` when the record lists the task, a refusal when it cannot be read, else null. */
+function registeredProblem({ record, task, frozenFile }) {
+  if (!record.ok) return `the held-out record ${path.basename(frozenFile)} cannot be read (${record.reason}): a task whose folder is absent may be sealed in it (task ${task.id})`;
+  const listed = record.value !== null && entryOf(record.value, task.id) !== undefined;
+  return listed ? `sealed: open it first (task ${task.id}): its clear held-out folder is absent and a sealed archive is registered for it` : null;
+}
 
 /** `ok(heldout)` with `{ task, dir, casesDir, refsDir, caseIds, traps, treeSha256 }` for a quick task, or a `fail` naming what is absent or malformed. */
 export function loadHeldoutQuick(home, task) {

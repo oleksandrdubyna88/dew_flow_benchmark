@@ -5,7 +5,8 @@ import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
-import { leakMaterial, leakcheckCommand } from '../lib/leak.mjs';
+import { leakMaterial } from '../lib/leak.mjs';
+import { scanBenchHalf } from './bench-half-seam.mjs';
 import { SUBSTRING_NEEDLES_MAX } from '../lib/leak-material.mjs';
 import { scanText } from '../lib/leak-scan.mjs';
 import { BITMAP_SLOTS, buildSubstringIndex, findSubstrings } from '../lib/leak-substring.mjs';
@@ -13,7 +14,7 @@ import { normLine } from '../lib/leak-text.mjs';
 import { loadReviewed, parseReviewed, reviewHash, reviewedPath } from '../lib/leak-reviewed.mjs';
 import { verifyCandidates } from '../lib/leak-verify.mjs';
 import { commitFiles, git, repoWith } from './leak-scan-fixture.mjs';
-import { EXPLORE, quickHome, quickTask, reviewedEntry, writeQuickHeldout, writeReviewed } from './quick-leak-fixture.mjs';
+import { EXPLORE, presentMaterial, quickHome, quickTask, reviewedEntry, writeQuickHeldout, writeReviewed } from './quick-leak-fixture.mjs';
 
 const LINE_A = 'recv c "invented-reviewed-answer-alpha-4471"';
 const LINE_B = 'recv c "invented-reviewed-answer-bravo-4471"'; // LINE_A with one word changed
@@ -35,7 +36,7 @@ function homeWith(over = {}, list = null) {
 }
 
 const materialOf = home => {
-  const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const r = presentMaterial({ home, publicText: '' });
   assert.equal(r.ok, true, r.reason);
   return r.value;
 };
@@ -104,7 +105,7 @@ test('A_window_of_a_reviewed_line_and_new_lines_is_found_and_a_window_of_reviewe
 test('A_window_of_FORMAT_grammar_and_reviewed_lines_is_dropped_and_one_new_line_in_it_keeps_it', () => {
   const grammar = new Set([normLine(WIN[0])]);
   const build = list => {
-    const r = leakMaterial({ home: windowHome(list), explore: EXPLORE, publicText: '', grammarLines: grammar });
+    const r = presentMaterial({ home: windowHome(list), publicText: '', grammarLines: grammar });
     return r.value.material;
   };
   assert.equal(build([reviewedEntry('line', WIN[1]), reviewedEntry('line', WIN[2])]).windowKeys.size, 0, 'grammar, reviewed, reviewed');
@@ -170,7 +171,7 @@ const MALFORMED = {
 test('A_malformed_file_is_a_refusal_never_an_empty_list', () => {
   for (const [what, content] of Object.entries(MALFORMED)) {
     const home = homeWith({}, content);
-    const r = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+    const r = presentMaterial({ home, publicText: '' });
     assert.equal(r.ok, false, `${what}: refused`);
     assert.match(r.reason, /leak-reviewed\.json/, what);
   }
@@ -178,7 +179,7 @@ test('A_malformed_file_is_a_refusal_never_an_empty_list', () => {
 
 test('A_malformed_file_makes_the_command_exit_4_and_a_good_one_does_not', async () => {
   const repoRoot = repoWith();
-  const run = home => leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: () => {} });
+  const run = home => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: () => {} });
   const bad = await run(homeWith({}, '{"entries": [{"sha256": "no"}]}'));
   assert.equal(bad.exit, 4);
   assert.match(bad.message, /leak-reviewed\.json/);
@@ -220,7 +221,7 @@ const TEXTS = [LINE_A, SHORT_A, REF_A, 'alpha bravo charlie'];
 
 test('The_result_line_says_how_many_lines_and_phrases_were_exempt_by_a_reading_and_never_what_they_were', async () => {
   const said = [];
-  const run = (home, repoRoot) => leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const run = (home, repoRoot) => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal((await run(homeWith({}, LIST), repoWith())).exit, 0);
   assert.match(said.join('\n'), /2 private line\(s\) and 1 phrase\(s\) exempt by a person's reading/);
   said.length = 0;
@@ -241,7 +242,7 @@ test('A_held_out_line_committed_under_test_hello_on_the_branch_is_still_found_wh
   git(repoRoot, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   commitFiles(repoRoot, { [GRAMMAR_FILE]: `scenario 2\ndefault within 2s\n${LINE_B}\n` }, 'a held-out line added to a public example on the branch');
   const said = [];
-  const r = await leakcheckCommand({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const r = await scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal(r.exit, 5, said.join('\n'));
   assert.equal(said.join('\n').includes('invented-reviewed-answer-bravo'), false, 'the output never holds the text');
 });

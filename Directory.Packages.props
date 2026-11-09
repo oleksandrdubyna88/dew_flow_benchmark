@@ -31,7 +31,7 @@
          and the execution stay ours. .NLP is preview-only and stays out under the no-previews rule. -->
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation.Reporting" Version="10.10.0" />
-    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
     <!-- Real Postgres for the durability tests. Claim/settle/sweep are about what happens under genuine
@@ -41,7 +41,7 @@
          asserted as MARKUP rather than by trusting that a table which compiles also displays. Version
          matched to the sibling console (dew_flow_rag_qln), which pins the same 2.9.0 — one family, one
          renderer. It carries no test-framework dependency of its own; xunit.v3 above stays the runner. -->
-    <PackageVersion Include="bunit" Version="2.13.3" />
+    <PackageVersion Include="bunit" Version="2.14.0" />
   </ItemGroup>
 
 </Project>
