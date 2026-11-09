@@ -37,11 +37,13 @@ function readText(file) {
   }
 }
 
+const atOf = j => (typeof j.at === 'string' ? j.at : 'unknown');
+
 /** `{ pid, startTime, at, text }` of an owner stamp (`at`: the time it was made, or `'unknown'`), or `null` when the text says nothing usable. */
 function parseOwner(text) {
   try {
     const j = JSON.parse(text);
-    return Number.isInteger(j.pid) && typeof j.startTime === 'string' ? { pid: j.pid, startTime: j.startTime, at: typeof j.at === 'string' ? j.at : 'unknown', text } : null;
+    return Number.isInteger(j.pid) && typeof j.startTime === 'string' ? { pid: j.pid, startTime: j.startTime, at: atOf(j), text } : null;
   } catch {
     return null;
   }
