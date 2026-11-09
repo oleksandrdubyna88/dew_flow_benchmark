@@ -6,13 +6,13 @@
 // removes a stale one and creates its own, and drops the marker only if the marker still names it. So two runs that find the same stale lock cannot both remove it, a fresh creator cannot slip in
 // between the removal and the creation of the one that took over, and a marker another owner created is never removed by anybody else: a contender waits a little for a live holder of the marker,
 // and refuses naming a marker whose owner is gone (a taker killed in the middle: the operator removes that one file).
+// `acquireGuardedLock` is the same lock with the file's name as an argument (bench PR 4a: `heldout-NN/.clear.lock` of the lang-explore seal is the second user); `acquireSeriesLock` is it with `series.lock`.
 import { closeSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 import { ownerAlive, processStartTime } from './session-state.mjs';
 
 export const LOCK_FILE = 'series.lock';
-const TAKEOVER_FILE = `${LOCK_FILE}.takeover`;
 
 /** Create `file` exclusively with `text`. -> `true`, or `false` when it already exists. */
 function createExclusive(file, text) {
@@ -37,11 +37,11 @@ function readText(file) {
   }
 }
 
-/** `{ pid, startTime, text }` of an owner stamp, or `null` when the text says nothing usable. */
+/** `{ pid, startTime, at, text }` of an owner stamp (`at`: the time it was made, or `'unknown'`), or `null` when the text says nothing usable. */
 function parseOwner(text) {
   try {
     const j = JSON.parse(text);
-    return Number.isInteger(j.pid) && typeof j.startTime === 'string' ? { pid: j.pid, startTime: j.startTime, text } : null;
+    return Number.isInteger(j.pid) && typeof j.startTime === 'string' ? { pid: j.pid, startTime: j.startTime, at: typeof j.at === 'string' ? j.at : 'unknown', text } : null;
   } catch {
     return null;
   }
@@ -67,6 +67,7 @@ function removeIfSame(file, held) {
   if (again && !again.gone && again.text === held.text) rmSync(file, { force: true });
 }
 
+const systemNow = () => new Date();
 const sleepMs = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const DEFAULT_RETRY = Object.freeze({ tries: 100, sleepMs: 10 });
 
@@ -76,53 +77,72 @@ function goneOwner(marker, isAlive) {
   return held && !held.gone && !isAlive(held.pid, held.startTime) ? held : null;
 }
 
+/** The sentence refusing a takeover marker whose owner is gone: the marker's path, its owner's pid and start time, when it was made, and the remedy. It is never removed by another run. */
+const deadMarker = ({ file, marker, held }) => `${marker} was made by pid ${held.pid} (started ${held.startTime}, created ${held.at}), which is gone: the pid is not running with that start time (a run killed while it took ${file}). It is not removed by another run. If no run is active, no takeover is in progress; remove ${marker} and run again: rm ${marker}`;
+
 /** Hold the takeover marker, waiting a little for a live holder. -> `ok(null)` | `fail(reason)`. */
 function enterMarker({ file, marker, body, isAlive, retry }) {
   for (let n = 0; n < retry.tries; n += 1) {
     if (createExclusive(marker, body)) return ok(null);
     const held = goneOwner(marker, isAlive);
-    if (held) return fail(`${marker} was made by pid ${held.pid}, which is gone (a run killed while it took ${file}): it is not removed by another run. If no run is active, remove it: rm ${marker}`);
+    if (held) return fail(deadMarker({ file, marker, held }));
     sleepMs(retry.sleepMs);
   }
   return fail(`${file} is stale or free and another run is taking it over (it holds ${marker}): try again in a moment`);
 }
 
-/** What a lock that exists says: a `fail` (a live owner, an unreadable file), or `null` (it was released, or it was stale and is removed): the caller tries to create it again. */
+/** What a lock that exists says: a `fail` (a live owner, an unreadable file), or `ok({ takeover })`: it was released (`takeover` null) or it was stale and is removed (`takeover` its owner): the caller tries to create it again. */
 function judgeLock({ file, isAlive, hooks, busy }) {
   const held = ownerOf(file);
   if (held === null) return fail(`${file} exists and is unreadable: it may be a runner that is writing it, so it is left alone. If no run is active, remove it: rm ${file}`);
-  if (held.gone) return null; // released between our create and our read
+  if (held.gone) return ok({ takeover: null }); // released between our create and our read
   if (isAlive(held.pid, held.startTime)) return busy(held);
   hooks.afterStale?.(held);
   removeIfSame(file, held);
-  return null;
+  return ok({ takeover: held });
 }
 
-/** The lock, under the marker: create it, or judge the one that is there and go round again (it is gone, or stale and removed). */
+/** The lock, under the marker: create it, or judge the one that is there and go round again (it is gone, or stale and removed). -> `ok({ release, takeover })`, `takeover` being the dead owner whose lock was removed, or null. */
 function takeLock({ file, body, mine, isAlive, hooks, busy }) {
+  let takeover = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    if (createExclusive(file, body)) return ok({ release: () => removeIfMine(file, mine) });
+    if (createExclusive(file, body)) {
+      hooks.afterLock?.(); // the marker is still held: a test reads the lock and the marker as they are while the lock is taken
+      return ok({ release: () => removeIfMine(file, mine), takeover });
+    }
     const judged = judgeLock({ file, isAlive, hooks, busy });
-    if (judged) return judged;
+    if (!judged.ok) return judged;
+    takeover = judged.value.takeover ?? takeover;
   }
   return fail(`${file} could not be taken after four tries: the lock keeps changing hands`);
 }
 
+const holderText = o => `pid ${o.pid} (started ${o.startTime})`;
+
 /**
- * Take the lock of a series. `pid`, `startTime`, `isAlive`, `retry` (`{ tries, sleepMs }`: the wait for the takeover marker) and `hooks` (`afterStale`: called, with the marker held, once a stale lock is
- * found) are for tests. -> `ok({ release })` | `fail(reason)` naming the owner of the lock that refused.
+ * Take the lock `name` in `dir`, with its takeover marker `<name>.takeover`. `pid`, `startTime`, `isAlive`, `retry` (`{ tries, sleepMs }`: the wait for the takeover marker), `now` (the clock of the stamp's `at`) and `hooks`
+ * (`afterStale`: called, with the marker held, once a stale lock is found; `afterLock`: called, with the marker held, once the lock is created) are for tests. `busy(owner)` is the refusal for a live owner (a `fail`).
+ * -> `ok({ release, takeover })` | `fail(reason)` naming the owner of the lock that refused.
  */
-export function acquireSeriesLock({ seriesDir, pid = process.pid, startTime = processStartTime(process.pid), isAlive = ownerAlive, retry = DEFAULT_RETRY, hooks = {} }) {
-  const file = path.join(seriesDir, LOCK_FILE);
-  const marker = path.join(seriesDir, TAKEOVER_FILE);
+export function acquireGuardedLock({ dir, name, pid = process.pid, startTime = processStartTime(process.pid), isAlive = ownerAlive, retry = DEFAULT_RETRY, hooks = {}, now = systemNow, busy }) {
+  const file = path.join(dir, name);
+  const marker = path.join(dir, `${name}.takeover`);
   const mine = { pid, startTime };
-  const body = `${JSON.stringify({ ...mine, at: new Date().toISOString() })}\n`;
-  const busy = o => fail(`the series ${path.basename(seriesDir)} is in use by pid ${o.pid} (started ${o.startTime}): another run, resume or settle holds ${file}. One runner per series at a time; wait for it to end`);
+  const body = `${JSON.stringify({ ...mine, at: now().toISOString() })}\n`;
+  const refuse = busy ?? (o => fail(`${file} is held by ${holderText(o)}: wait for it to end`));
   const entered = enterMarker({ file, marker, body, isAlive, retry });
   if (!entered.ok) return entered;
   try {
-    return takeLock({ file, body, mine, isAlive, hooks, busy });
+    return takeLock({ file, body, mine, isAlive, hooks, busy: refuse });
   } finally {
     removeIfMine(marker, mine);
   }
+}
+
+/**
+ * Take the lock of a series: `acquireGuardedLock` over `series.lock`. The arguments are `acquireGuardedLock`'s (`seriesDir` for `dir`). -> `ok({ release, takeover })` | `fail(reason)` naming the owner of the lock that refused.
+ */
+export function acquireSeriesLock({ seriesDir, ...rest }) {
+  const busy = o => fail(`the series ${path.basename(seriesDir)} is in use by pid ${o.pid} (started ${o.startTime}): another run, resume or settle holds ${path.join(seriesDir, LOCK_FILE)}. One runner per series at a time; wait for it to end`);
+  return acquireGuardedLock({ dir: seriesDir, name: LOCK_FILE, busy, ...rest });
 }
