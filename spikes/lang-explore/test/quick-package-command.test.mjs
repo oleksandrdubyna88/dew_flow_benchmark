@@ -189,3 +189,40 @@ test('A_halt_line_holds_counts_and_step_names_only_and_the_full_reason_goes_to_t
     assert.ok(/\/home\/someone\/private\/h00[12]/.test(halt.detail), 'the full reason is in the private halt file');
   }
 });
+
+// ---- code round 1: R2 (the gate checks the pinned spec), R6 (`--only suite` must not spoil the newest record) -------------------------------------------------------
+
+const readRecord = (env, i = -1) => { const runs = recordsOfRun(env); return JSON.parse(readFileSync(path.join(runs.at(i), 'record.json'), 'utf8')); };
+
+test('A_suite_only_run_keeps_the_reference_verdicts_and_a_gate_that_was_not_run_does_not_override_the_carried_one', async () => {
+  const env = commandEnv({ plan: ALL_CAUGHT });
+  assert.equal(await main(argv(), env.io), 0, env.lines.join('\n'));
+  assert.equal(await main(argv('--only', 'suite'), { ...env.io, package: { ...env.io.package, conformance: null } }), 0, env.lines.join('\n'));
+  const second = readRecord(env);
+  assert.deepEqual(second.referenceVerdicts, { csharp: 'accepted', node: 'accepted' }, 'the verdicts come from the merged items, not from this run\'s results');
+  assert.equal(second.items.gate.ok, true, 'a gate that was not run does not override the carried gate of the same material');
+  assert.equal(second.items.refs.ok, true);
+});
+
+test('A_suite_only_run_does_not_resume_a_halted_run_and_a_later_run_that_has_the_halted_step_does', async () => {
+  const ctl = new AbortController();
+  const plan = args => { if (args.stack === 'csharp' && args.id === 'reference' && args.n === 3) ctl.abort(); return ALL_CAUGHT(args); };
+  const env = commandEnv({ plan });
+  assert.equal(await main(argv(), { ...env.io, signal: ctl.signal }), 3);
+  const [halted] = recordsOfRun(env);
+  assert.equal(await main(argv('--only', 'suite'), env.io), 0, env.lines.join('\n'));
+  assert.equal(recordsOfRun(env).length, 2, 'the suite-only run made a folder of its own');
+  assert.equal(existsSync(path.join(halted, 'record.json')), false, 'and did not resume (or finish) the halted run');
+  assert.equal(await main(argv(), env.io), 0, env.lines.join('\n'));
+  assert.equal(existsSync(path.join(halted, 'record.json')), true, 'a run that has the halted step resumes it');
+});
+
+test('Items_carried_from_another_memory_value_are_not_reused', async () => {
+  const env = commandEnv({ plan: ALL_CAUGHT });
+  assert.equal(await main(argv(), env.io), 0);
+  const other = { ...env.world, limits: { ...env.world.limits, memoryBytes: 256 * 1024 * 1024 } };
+  assert.equal(await main(argv('--only', 'suite'), { ...env.io, worldFn: async () => ok(other) }), 0, env.lines.join('\n'));
+  const record = readRecord(env);
+  assert.equal(record.items.refs, undefined, 'the references of another memory value are not carried');
+  assert.equal(record.memoryBytes, 256 * 1024 * 1024);
+});

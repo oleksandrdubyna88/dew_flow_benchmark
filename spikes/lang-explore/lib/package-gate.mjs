@@ -1,6 +1,7 @@
 // P1 and P6 as the tool can read them (F2.S1): the corrected spec passes the conformance checker (`spikes/lang-bench/lib/conformance.mjs`, called in this process; the checker lives in lang-bench and needs the task repository, so the
 // command runs it only when it is given one, and `register` needs it), the header's `Gate verdict` row carries a verdict and a date, and the gate record `spikes/lang-bench/inputs/gates/spec-NN.md` exists. The bias question's review (P6) is
 // the operator's through the coai document gate: the tool reads that its record exists and says so. Sentences name the checker's first line, never a case.
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { run } from '../../lang-bench/lib/conformance.mjs';
@@ -12,8 +13,17 @@ const VERDICTS = ['proceed', 'good_enough', 'continue_anyway'];
 const VERDICT_ROW = new RegExp(`^\\| Gate verdict \\| \`(${VERDICTS.join('|')})\` · (\\d{4}-\\d{2}-\\d{2}) \\|$`, 'm');
 const PLACEHOLDER_ROW = /^\| Gate verdict \|/m;
 
+/** The sentence refusing a checked spec that is not the pinned one (the checker's exit 0 is then about another text), or null. A missing pin is a refusal too. */
+function pinProblem({ file, specSha256 }) {
+  if (typeof specSha256 !== 'string') return 'no spec pin was given: the checker is not run over a text that is not known to be the pinned one';
+  const have = existsSync(file) ? createHash('sha256').update(readFileSync(file)).digest('hex') : null;
+  return have === specSha256 ? null : `the checked spec is not the pinned spec (sha256 ${have?.slice(0, 12) ?? 'none: the file is not there'}, the pin says ${specSha256.slice(0, 12)}): the conformance check would be about another text`;
+}
+
 /** The checker over a task repository: `{ exit, firstLine }`, the first `FAIL` line (or the first line the checker said) when it is not 0. `record` names the FORMAT record (tests); the checker's own default is the committed one. */
-export async function runConformance({ repo, slug, format, needles, record }) {
+export async function runConformance({ repo, slug, format, needles, record, specSha256 }) {
+  const moved = pinProblem({ file: path.join(repo, 'todo', 'tasks', `${slug}.md`), specSha256 });
+  if (moved !== null) return { exit: 4, firstLine: moved };
   const argv = ['--repo', repo, '--task', slug, '--format', format, ...(needles ? ['--needles', needles] : []), ...(record ? ['--record', record] : [])];
   const r = await run(argv);
   const said = [...r.lines, ...(r.errors ?? [])];

@@ -37,20 +37,26 @@ function removeScoringTrees(dir) {
   }
 }
 
-/** Does the halted folder `name` belong to this material? A halt file names the sha256 of the material it stopped over. */
-const resumable = ({ root, run, materialSha }) => run.halts.length > 0 && readJson(path.join(root, run.name, run.halts.at(-1)))?.materialSha === materialSha;
+/** Does the halted folder `name` belong to this material and to a run that has the step it halted in? A halt file names the sha256 of the material it stopped over and the step (`--only suite` has no reference step, so it never resumes a halt in one). */
+function resumable({ root, run, materialSha, steps }) {
+  const halt = run.halts.length > 0 ? readJson(path.join(root, run.name, run.halts.at(-1))) : null;
+  return halt !== null && halt.materialSha === materialSha && steps.includes(halt.step);
+}
+
+/** A halted run of this material may still be resumed by a run that has its step, so its built trees stay; a killed run's (or another material's) are removed. */
+const keepsTrees = ({ root, run, materialSha }) => run.halts.length > 0 && readJson(path.join(root, run.name, run.halts.at(-1)))?.materialSha === materialSha;
 
 /**
  * Open the run: the newest incomplete folder with a halt of THIS material is resumed; every other incomplete folder is named in `incomplete` (not read) and its scoring trees are removed; else a new folder is made.
  * -> `ok({ dir, name, resumed, incomplete: [names] })`. `genId` and `now` are seams.
  */
-export function openRun({ home, task, materialSha, now = systemClock, genId = () => Math.random().toString(16).slice(2, 10) }) {
+export function openRun({ home, task, materialSha, steps, now = systemClock, genId = () => Math.random().toString(16).slice(2, 10) }) {
   const root = packageRoot(home, task);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const open = incompleteRuns(root);
-  const back = [...open].reverse().find(run => resumable({ root, run, materialSha }));
+  const back = [...open].reverse().find(run => resumable({ root, run, materialSha, steps }));
   const others = open.filter(run => run !== back).map(run => run.name);
-  others.forEach(name => removeScoringTrees(path.join(root, name)));
+  open.filter(run => run !== back && !keepsTrees({ root, run, materialSha })).forEach(run => removeScoringTrees(path.join(root, run.name)));
   if (back !== undefined) return ok({ dir: path.join(root, back.name), name: back.name, resumed: true, incomplete: others });
   const name = `${stampOf(now())}-${genId()}`;
   mkdirSync(path.join(root, name), { mode: 0o700 });
@@ -68,8 +74,8 @@ export function writeStep(run, name, body) {
 }
 
 /** Write a halt of the run, `halt-<n>.json`, once each, naming the material the run stopped over. */
-export function writeHalt(run, { reason, detail = reason, materialSha }) {
-  return publishNamed({ dir: run.dir, names: n => `halt-${n}.json`, text: `${JSON.stringify({ reason, detail, materialSha }, null, 2)}\n` });
+export function writeHalt(run, { reason, detail = reason, step, materialSha }) {
+  return publishNamed({ dir: run.dir, names: n => `halt-${n}.json`, text: `${JSON.stringify({ reason, detail, step, materialSha }, null, 2)}\n` });
 }
 
 /** The complete record of the run, written once at its end (a second write fails: `fail`). */

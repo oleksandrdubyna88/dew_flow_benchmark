@@ -63,7 +63,7 @@ async function conformanceOf({ args, io }) {
   if (io.package?.conformance !== undefined) return io.package.conformance;
   if (args.taskRepo === null) return null;
   const needles = needlesOf({ args, io });
-  return runConformance({ repo: args.taskRepo, slug: path.basename(args.task.spec.path, '.md'), format: path.join(args.taskRepo, 'todo', 'tasks', 'FORMAT.md'), ...maybe(needles !== null, { needles }) });
+  return runConformance({ specSha256: args.task.spec.sha256, repo: args.taskRepo, slug: path.basename(args.task.spec.path, '.md'), format: path.join(args.taskRepo, 'todo', 'tasks', 'FORMAT.md'), ...maybe(needles !== null, { needles }) });
 }
 
 const DETAIL = Object.freeze({
@@ -79,7 +79,8 @@ const itemLine = (name, item) => `${name}: ${item.ok ? 'ok' : 'RED'} - ${DETAIL[
 /** The merged items: what this run did over what the newest complete record of the same material already had. */
 function mergedItems({ prev, material, now }) {
   const carried = prev !== null && prev.materialSha === material ? prev.items : {};
-  return { ...carried, ...now };
+  const keepGate = now.gate?.notRun === true && carried.gate !== undefined;
+  return { ...carried, ...now, ...maybe(keepGate, { gate: carried.gate }) };
 }
 
 const REFS_FIRST = 'the references are not accepted: the load measurement and the witnesses need both accepted, so they did not run';
@@ -100,7 +101,7 @@ async function runSteps({ args, c, conformance }) {
   for (const name of STEPS_OF[args.only]) {
     if (blockedBy(name, out)) return { ...out, stopped: REFS_FIRST };
     const r = await RUNNERS[name]({ c, out, conformance });
-    if (r.halted) return { ...out, halted: r.halted, detail: r.detail };
+    if (r.halted) return { ...out, halted: r.halted, detail: r.detail, haltedStep: name };
     out.items = { ...out.items, ...r.items };
     out.results = r.results ?? out.results;
   }
@@ -121,7 +122,7 @@ const quietOf = ({ args, io }) => (args.only === 'suite' ? ok(null) : quietCheck
 
 /** The run folder (a halted run of the same material is resumed), with the lines that say so. */
 function runFolder({ args, io, material }) {
-  const run = openRun({ home: io.home, task: args.task, materialSha: material, now: io.now ?? systemClock, ...maybe(io.genId !== undefined, { genId: io.genId }) }).value;
+  const run = openRun({ home: io.home, task: args.task, materialSha: material, steps: STEPS_OF[args.only], now: io.now ?? systemClock, ...maybe(io.genId !== undefined, { genId: io.genId }) }).value;
   if (run.resumed) io.say(`resuming the run ${run.name}: the finished steps are read, not run again`);
   run.incomplete.forEach(name => io.say(`the run ${name} has no record: it is incomplete and is not read as a result`));
   return run;
@@ -138,19 +139,22 @@ async function opened({ args, io, material }) {
 
 
 /** The record of a complete run: the material, the pins, the items and the numbers the registry copies. */
-function recordOf({ pkg, run, pins, material, items, started, ended, memoryBytes, results }) {
-  const both = results.csharp !== undefined && results.node !== undefined;
+function recordOf({ pkg, run, pins, material, items, started, ended, memoryBytes }) {
+  const both = items.refs?.csharp?.verdict !== undefined && items.refs?.node?.verdict !== undefined;
   return {
     task: pkg.task.id, run: run.name, materialSha: material, startedAt: started.toISOString(), endedAt: ended.toISOString(), resumed: run.resumed, incompleteRuns: run.incomplete, material: materialOf(pkg), pins, memoryBytes, items, s: items.suite?.sBytes ?? null,
-    ...maybe(both, { referenceVerdicts: { csharp: results.csharp?.verdict, node: results.node?.verdict } }),
+    ...maybe(both, { referenceVerdicts: { csharp: items.refs?.csharp?.verdict, node: items.refs?.node?.verdict } }),
     ...maybe(items.load !== undefined, { load: { slowestWallMs: items.load?.slowestWallMs ?? null, twinWallMs: items.load?.twinWallMs ?? null, durationS: items.load?.durationS ?? null } }),
     ...maybe(items.gate?.gate !== undefined, { gate: items.gate?.gate }),
   };
 }
 
+/** The items that are red: not ok, and not an item that was only not run (a gate with no `--task-repo` is a note, and registration refuses it). */
+const redNames = items => Object.entries(items).filter(([, i]) => i.ok !== true && i.notRun !== true).map(([n]) => n);
+
 /** The line that ends a run: green, red with the names, or incomplete. -> `{ green, line }`. */
 function summaryOf({ done, task, run }) {
-  const red = Object.entries(done.items).filter(([, i]) => i.ok !== true).map(([n]) => n);
+  const red = redNames(done.items);
   const green = red.length === 0 && !done.stopped;
   const how = red.length > 0 ? `red: ${red.join(', ')}` : 'incomplete';
   return { green, line: green ? `package of task ${task.id}: the items run are green (record ${run.name})` : `package of task ${task.id}: ${how} (record ${run.name})` };
@@ -161,7 +165,7 @@ function finished({ args, io, pkg, pins, material, run, c, started, done }) {
   Object.entries(done.items).forEach(([name, item]) => io.say(itemLine(name, item)));
   if (done.stopped) io.say(done.stopped);
   const items = mergedItems({ prev: latestRecord({ home: io.home, task: args.task }), material, now: done.items });
-  const record = recordOf({ pkg, run, pins, material, items, started, ended: c.now(), memoryBytes: c.memoryBytes, results: done.results });
+  const record = recordOf({ pkg, run, pins, material, items, started, ended: c.now(), memoryBytes: c.memoryBytes });
   writeRecord(run, record);
   const summary = summaryOf({ done, task: args.task, run });
   io.say(summary.line);
@@ -174,7 +178,7 @@ async function executed({ args, io, world, pkg, pins, material, scope, run }) {
   const started = c.now();
   const done = await runSteps({ args, c, conformance: await conformanceOf({ args, io }) });
   if (!done.halted) return finished({ args, io, pkg, pins, material, run, c, started, done });
-  writeHalt(run, { reason: done.halted, detail: done.detail ?? done.halted, materialSha: material });
+  writeHalt(run, { reason: done.halted, detail: done.detail ?? done.halted, step: done.haltedStep, materialSha: material });
   io.say(`halted (resumable): ${done.halted}`);
   return { exit: EXIT.halt };
 }
@@ -195,10 +199,11 @@ async function runPackage({ args, io, world }) {
   const loaded = loadPackage({ home: io.home, task: args.task, world, frozenFile: io.frozenFile });
   if (!loaded.ok) return { exit: refused(io, loaded.reason) };
   const pins = (io.package?.pinsFn ?? pinsNow)();
+  const memoryBytes = (world.limits ?? quickCalibration(world.explore).limits).memoryBytes;
   const held = acquirePlanLock({ home: io.home });
   if (!held.ok) { io.say(held.reason); return { exit: EXIT.halt }; }
   try {
-    return await inLock({ args, io, world, pkg: loaded.value, pins, material: packageIdentity({ ...materialOf(loaded.value), pins }) });
+    return await inLock({ args, io, world, pkg: loaded.value, pins, material: packageIdentity({ ...materialOf(loaded.value), pins, memoryBytes }) });
   } finally {
     held.value.release();
   }

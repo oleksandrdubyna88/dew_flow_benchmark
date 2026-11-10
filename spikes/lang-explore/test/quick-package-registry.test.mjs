@@ -37,7 +37,7 @@ test('The_package_is_red_while_the_conformance_check_fails_or_the_verdict_row_is
   const record = tmpDir('pkg-gate');
   const gateRecord = path.join(record, 'spec-02.md');
   writeFileSync(gateRecord, 'verdict proceed; 2 reviewers; the findings are in words\n');
-  const run = fixture => runConformance({ repo: fixture.repo, slug: fixture.task, format: fixture.format, record: recordFile(fixture) });
+  const run = fixture => runConformance({ repo: fixture.repo, slug: fixture.task, format: fixture.format, record: recordFile(fixture), specSha256: sha(readFileSync(fixture.spec)) });
   const broken = fixtureRepo(t, 'olympiad', { spec: [['`s02` | `1⏎` | `1⏎`', '`s02` | `2⏎` | `1⏎`']] });
   const red = gateItem({ specText: broken.read('spec'), conformance: await run(broken), task: quickTask('05'), recordFile: gateRecord });
   assert.equal(red.ok, false);
@@ -237,13 +237,13 @@ const clockAt = iso => () => new Date(iso);
 test('A_killed_run_leaves_no_record_and_the_next_run_names_it_incomplete', () => {
   const home = quickHome();
   const task = quickTask('05');
-  const first = openRun({ home, task, materialSha: 'm1', now: clockAt('2026-11-10T10:00:00Z'), genId: () => 'aaaa1111' }).value;
+  const first = openRun({ home, task, materialSha: 'm1', steps: ['refs'], now: clockAt('2026-11-10T10:00:00Z'), genId: () => 'aaaa1111' }).value;
   mkdirSync(path.join(first.dir, 'refs-csharp', 'tree'), { recursive: true });
   writeFileSync(path.join(first.dir, 'refs-csharp', 'tree', 'Program.cs'), '// a built tree\n');
   mkdirSync(path.join(first.dir, 'refs-csharp', 'passes'), { recursive: true });
   writeFileSync(path.join(first.dir, 'refs-csharp', 'passes', 'p01.json'), '{}');
   assert.equal(latestRecord({ home, task }), null, 'a folder with no record.json is not a result');
-  const second = openRun({ home, task, materialSha: 'm1', now: clockAt('2026-11-10T11:00:00Z'), genId: () => 'bbbb2222' }).value;
+  const second = openRun({ home, task, materialSha: 'm1', steps: ['refs'], now: clockAt('2026-11-10T11:00:00Z'), genId: () => 'bbbb2222' }).value;
   assert.deepEqual([second.resumed, second.incomplete], [false, [first.name]], 'a killed run is named incomplete, and not resumed');
   assert.equal(existsSync(path.join(first.dir, 'refs-csharp', 'tree')), false, 'its built tree is removed');
   assert.equal(existsSync(path.join(first.dir, 'refs-csharp', 'passes', 'p01.json')), true, 'what it recorded stays: the folders are append only');
@@ -256,11 +256,11 @@ test('A_killed_run_leaves_no_record_and_the_next_run_names_it_incomplete', () =>
 test('A_halted_run_of_the_same_material_is_resumed_in_its_own_folder_and_another_material_is_not', () => {
   const home = quickHome();
   const task = quickTask('05');
-  const first = openRun({ home, task, materialSha: 'm1', now: clockAt('2026-11-10T10:00:00Z'), genId: () => 'aaaa1111' }).value;
-  writeHalt(first, { reason: 'the machine is not quiet', materialSha: 'm1' });
-  const back = openRun({ home, task, materialSha: 'm1', now: clockAt('2026-11-10T11:00:00Z'), genId: () => 'bbbb2222' }).value;
+  const first = openRun({ home, task, materialSha: 'm1', steps: ['refs'], now: clockAt('2026-11-10T10:00:00Z'), genId: () => 'aaaa1111' }).value;
+  writeHalt(first, { reason: 'the machine is not quiet', step: 'refs', materialSha: 'm1' });
+  const back = openRun({ home, task, materialSha: 'm1', steps: ['refs'], now: clockAt('2026-11-10T11:00:00Z'), genId: () => 'bbbb2222' }).value;
   assert.deepEqual([back.name, back.resumed, back.incomplete], [first.name, true, []]);
-  const other = openRun({ home, task, materialSha: 'm2', now: clockAt('2026-11-10T12:00:00Z'), genId: () => 'cccc3333' }).value;
+  const other = openRun({ home, task, materialSha: 'm2', steps: ['refs'], now: clockAt('2026-11-10T12:00:00Z'), genId: () => 'cccc3333' }).value;
   assert.deepEqual([other.resumed, other.incomplete], [false, [first.name]], 'a halt over other material is not resumed');
 });
 
@@ -280,4 +280,16 @@ test('Temp_trees_of_a_dead_run_are_swept_at_the_start', () => {
   assert.equal(existsSync(dead), false);
   assert.equal(existsSync(`${dead}.owner`), false, 'its claim goes with it');
   assert.equal(existsSync(live) && existsSync(squatter), true, 'nothing else is touched');
+});
+
+test('The_conformance_gate_checks_the_pinned_spec_before_the_checkers_exit_counts', async t => {
+  const fixture = fixtureRepo(t, 'olympiad');
+  const pinned = sha(readFileSync(fixture.spec));
+  const base = { repo: fixture.repo, slug: fixture.task, format: fixture.format, record: recordFile(fixture) };
+  assert.equal((await runConformance({ ...base, specSha256: pinned })).exit, 0, 'control: the checked file is the pinned one');
+  const moved = await runConformance({ ...base, specSha256: 'f'.repeat(64) });
+  assert.notEqual(moved.exit, 0);
+  assert.ok(/not the pinned spec/.test(moved.firstLine) && moved.firstLine.includes(pinned.slice(0, 12)) && moved.firstLine.includes('f'.repeat(12)), moved.firstLine);
+  const missing = await runConformance({ ...base, specSha256: undefined });
+  assert.notEqual(missing.exit, 0, 'no pin is a refusal, never a pass');
 });
