@@ -291,5 +291,5 @@ test('An_unknown_command_is_echoed_back_in_the_usage_error', async () => {
 });
 
 test('Every_command_that_scores_a_quick_session_re_executes_on_the_two_scoring_cpus_so_a_rescore_and_a_replay_run_in_the_conditions_of_the_score_they_compare_with', () => {
-  assert.deepEqual([...REEXEC].sort(), ['rehearse', 'replay', 'rescore', 'run']);
+  assert.deepEqual([...REEXEC].sort(), ['package', 'rehearse', 'replay', 'rescore', 'run']);
 });

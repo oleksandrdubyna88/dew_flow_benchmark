@@ -69,19 +69,21 @@ function quickRefFiles(refsDir) {
 }
 
 /** One code line as a needle, or null: normalised, at least 30 characters, not an import or bare punctuation, not a line the committed runner has. */
-const codeNeedle = (raw, { source, line, task, runnerLines }) => {
+const codeNeedle = (raw, { source, line, task, runnerLines, collided }) => {
   const text = normLine(raw);
-  return usable(text, CODE_LINE_MIN) && !BOILERPLATE.test(text) && !runnerLines.has(text) ? { text, task, source, line, kind: 'code' } : null;
+  if (!usable(text, CODE_LINE_MIN) || BOILERPLATE.test(text)) return null;
+  if (runnerLines.has(text)) { collided?.add(text); return null; }
+  return { text, task, source, line, kind: 'code' };
 };
 
-/** The code needles of a task's folder (`{ text, task, source, line }`, the first of each text); a quick task's `refsDir` adds its reference files. */
-export function codeNeedles({ root, task, runnerLines = new Set(), refsDir = null }) {
+/** The code needles of a task's folder (`{ text, task, source, line }`, the first of each text); a quick task's `refsDir` adds its reference files. `collided` (a `Set`), when given, collects the texts dropped because a public file (the runner, a template) holds the same line: the collisions, counted and never needles. */
+export function codeNeedles({ root, task, runnerLines = new Set(), refsDir = null, collided }) {
   const files = [...codeFiles(root).map(rel => ({ base: root, rel, source: rel })), ...quickRefFiles(refsDir)];
   const seen = new Set();
   const out = [];
   for (const { base, rel, source } of files) {
     readFileSync(path.join(base, rel), 'latin1').split('\n').forEach((raw, i) => {
-      const needle = codeNeedle(raw, { source, line: i + 1, task, runnerLines });
+      const needle = codeNeedle(raw, { source, line: i + 1, task, runnerLines, collided });
       if (needle && !seen.has(needle.text)) { seen.add(needle.text); out.push(needle); }
     });
   }
@@ -117,23 +119,26 @@ function tally(state, { name, task, lines }) {
 }
 
 /** One task's needles into `byText` (the first of each text), its skipped short-line count into `skipped`. A line a person reviewed (`reviewed`, see leak-reviewed.mjs) is no needle; it still counts toward the short-line cap. */
-function addTask({ byText, skipped, task: { id, heldout }, runnerLines, grammar, reviewed }) {
+function addTask({ byText, skipped, collisions, task: { id, heldout }, runnerLines, grammar, reviewed }) {
   const short = shortCaseNeedles({ casesDir: heldout.casesDir, task: id, grammar });
   if (short.skipped !== undefined) skipped.push({ task: id, lines: short.skipped });
-  for (const needle of [...codeNeedles({ root: heldout.dir, task: id, runnerLines, refsDir: heldout.refsDir }), ...(short.needles ?? [])]) if (isNewNeedle(needle, { byText, reviewed })) byText.set(needle.text, needle);
+  const collided = new Set();
+  for (const needle of [...codeNeedles({ root: heldout.dir, task: id, runnerLines, refsDir: heldout.refsDir, collided }), ...(short.needles ?? [])]) if (isNewNeedle(needle, { byText, reviewed })) byText.set(needle.text, needle);
+  collisions[id] = collided.size;
 }
 
 /** A needle is new when no earlier one has its text and no person reviewed it. */
 const isNewNeedle = (needle, { byText, reviewed }) => !byText.has(needle.text) && !reviewed.hasLine(needle.text);
 
-/** The substring needles of the tasks: code and short case lines, deduplicated by text; a total above the cap is a failure, never a slow run. -> `ok({ needles, skipped })` | `fail`. */
+/** The substring needles of the tasks: code and short case lines, deduplicated by text; a total above the cap is a failure, never a slow run. -> `ok({ needles, skipped, collisions })` (`collisions`: per task, the code lines dropped because a public file holds them) | `fail`. */
 export function substringNeedles(tasks, runnerLines, grammarLines = new Set(), maxNeedles = SUBSTRING_NEEDLES_MAX, reviewed = NO_REVIEW) {
   const byText = new Map();
   const skipped = [];
-  for (const task of tasks) addTask({ byText, skipped, task, reviewed, ...(task.quick === true ? { runnerLines: grammarLines, grammar: grammarLines } : { runnerLines, grammar: new Set() }) });
+  const collisions = {};
+  for (const task of tasks) addTask({ byText, skipped, collisions, task, reviewed, ...(task.quick === true ? { runnerLines: grammarLines, grammar: grammarLines } : { runnerLines, grammar: new Set() }) });
   const needles = [...byText.values()];
   if (needles.length > maxNeedles) return fail(`the substring tier holds ${needles.length} needles, over its cap of ${maxNeedles}: it would be a slow run, so the check refuses; reduce the private code or the short case lines`);
-  return ok({ needles, skipped });
+  return ok({ needles, skipped, collisions });
 }
 
 /** The size of each tier's material, as the progress line says it: counts only. */
@@ -161,7 +166,7 @@ function buildTiers({ tasks, runnerLines = new Set(), grammarLines = new Set(), 
   if (!shingles.ok) return shingles;
   const sources = tasks.map(t => ({ id: t.id, casesDir: t.heldout.casesDir, reviewed, ...(t.quick === true ? { grammar: grammarLines } : {}) }));
   return ok({
-    substrings: sub.value.needles, substringIndex: buildSubstringIndex(sub.value.needles), skipped: sub.value.skipped, shingleTexts: shingles.value.texts, shingleOwners: shingles.value.owners, tasks: tasks.map(t => t.id), baselines: Object.fromEntries(tasks.map(t => [t.id, { commit: t.baselineCommit ?? null, born: t.heldoutBorn ?? null }])),
+    substrings: sub.value.needles, substringIndex: buildSubstringIndex(sub.value.needles), skipped: sub.value.skipped, collisions: sub.value.collisions, shingleTexts: shingles.value.texts, shingleOwners: shingles.value.owners, tasks: tasks.map(t => t.id), baselines: Object.fromEntries(tasks.map(t => [t.id, { commit: t.baselineCommit ?? null, born: t.heldoutBorn ?? null }])),
     caseSources: sources, hash, lineKeys: buildLineKeys(sources, hash), windowKeys: buildWindowKeys(sources, hash), chunkKeys: buildChunkKeys(sources), codeByKey: codeByKey(sub.value.needles.filter(n => n.kind === 'code'), hash),
   });
 }

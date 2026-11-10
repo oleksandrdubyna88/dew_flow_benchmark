@@ -11,6 +11,8 @@ import { loadHeldout } from './heldout.mjs';
 import { sealedAbsentProblem } from './heldout-quick.mjs';
 import { withOpenedHeldout } from './heldout-lifecycle.mjs';
 import { isQuick } from './quick.mjs';
+import { leakGates } from './leak-gates.mjs';
+import { quickManifestIds } from './package-manifest.mjs';
 import { listOf } from './idlist.mjs';
 import { buildMaterial, materialCounts } from './leak-material.mjs';
 import { loadReviewed } from './leak-reviewed.mjs';
@@ -51,8 +53,25 @@ export async function committedLinesIn({ repoRoot = REPO, ref = 'HEAD', dirs, ru
 /** The mutant ids and trap ids of a task's manifest: short names (`M-03`, `h007`) that are no needles but must not appear as words in a public note. */
 export const manifestIds = manifest => [...new Set([...Object.keys(manifest.mutants ?? {}), ...(manifest.traps ?? [])])];
 
-/** The ids of a held-out side: an olympiad task's manifest names mutants and traps; a quick task has traps only (`traps.txt`, case ids). */
-const idsOfHeldout = held => (held.manifest ? manifestIds(held.manifest) : [...new Set(held.traps ?? [])]);
+/** A quick task's manifest ids (its witness ids and trap names, F2.S1): `ok([ids])`; a manifest that is there and is not JSON is a `fail`, never "no ids" (the check would scan for less than the package names). */
+function quickManifestIdsOf(held) {
+  const file = path.join(held.dir, 'manifest.json');
+  if (!existsSync(file)) return ok([]);
+  try { return ok(quickManifestIds(JSON.parse(readFileSync(file, 'utf8')))); } catch { return fail(`${file} is not valid JSON: the witness and trap ids of the package cannot be scanned for`); }
+}
+
+/** The ids of a held-out side: `ok([ids])`. An olympiad task's manifest names mutants and traps; a quick task names its trap cases (`traps.txt`) and its manifest's witness ids and trap names. */
+const idsOfHeldout = held => {
+  if (held.manifest) return ok(manifestIds(held.manifest));
+  const quick = quickManifestIdsOf(held);
+  return quick.ok ? ok([...new Set([...(held.traps ?? []), ...quick.value])]) : quick;
+};
+
+/** The ids of every task present, or the first refusal. */
+function idsOfAll(present) {
+  const lists = present.map(l => idsOfHeldout(l.held.value));
+  return lists.find(r => !r.ok) ?? ok([...new Set(lists.flatMap(r => r.value))]);
+}
 
 /** The public files (`research/lang-v2/*.md` under `repo`) in which any of `ids` occurs as a whole word: `[file name]`, never the id. */
 export function leakIds({ repo = REPO, ids }) {
@@ -123,8 +142,13 @@ export function leakMaterial({ home, explore, only = null, publicText = decidedP
   if (missing.length > 0) return fail(`the private notes of task ${listOf(missing)} are missing (${listOf(missing.map(id => taskPaths(resolveTask(explore, id).value, home).notesFile))}): the leak check would read no shingles of a task whose material is there`);
   const tasks = present.map((l, i) => ({ id: l.task.id, pins: l.task, heldout: l.held.value, shinglesText: leakShingles(notes[i].text, publicText), baselineCommit: l.task.baselineCommit, heldoutBorn: l.task.heldoutBorn, quick: l.task.quick === true }));
   const built = buildMaterial({ tasks, runnerLines, grammarLines, reviewed: reviewed.value, home, frozenFile });
-  if (!built.ok) return built;
-  return ok({ material: built.value, ids: [...new Set(present.flatMap(l => idsOfHeldout(l.held.value)))], scanned: tasks.map(x => x.id), absent: loaded.filter(l => !l.held.ok).map(l => l.task.id), reviewed: reviewed.value.counts });
+  return built.ok ? withIds({ built: built.value, present, tasks, loaded, reviewed: reviewed.value }) : built;
+}
+
+/** The leak material with the ids of every task present (a manifest that cannot be read is a refusal): `ok({ material, ids, scanned, absent, reviewed })` | `fail`. */
+function withIds({ built, present, tasks, loaded, reviewed }) {
+  const ids = idsOfAll(present);
+  return ids.ok ? ok({ material: built, ids: ids.value, scanned: tasks.map(x => x.id), absent: loaded.filter(l => !l.held.ok).map(l => l.task.id), reviewed: reviewed.counts }) : ids;
 }
 
 const orNone = ids => (ids.length === 0 ? 'none' : listOf(ids));
@@ -151,6 +175,12 @@ function materialOf({ values, io, explore, runnerLines, grammarLines }) {
 const idProblem = (r, material) => {
   const named = r.ok ? leakIds({ ids: material.ids }) : [];
   return named.length > 0 ? withReviewed(`leakcheck FAILED: a mutant or trap id of the held-out material is a word in ${listOf(named)}`, material) : null;
+};
+
+/** The failure of the gate-record scan (`leak-gates.mjs`): lines of `spikes/lang-bench/inputs/gates/` that hold a case id, a witness or trap id, a case line or a window of the notes, by file, line and kind; or null. */
+const gateProblem = ({ repoRoot, material }) => {
+  const found = leakGates({ repoRoot, ids: material.ids, material: material.material });
+  return found.length === 0 ? null : withReviewed(`leakcheck FAILED: ${found.length} line(s) of the gate records hold what a gate record must not: ${found.map(f => `${f.file}:${f.line} (${f.kind})`).join(', ')}`, material);
 };
 
 /** The progress sink of a command: `io.progress`, else one line per call on stderr (counts and names only). */
@@ -186,7 +216,7 @@ export async function commandMaterial({ values, io, explore }) {
 export async function benchHalf({ values, io, material, say }) {
   const repoRoot = io.repoRoot ?? REPO;
   const r = await scanRepository({ repoRoot, material: material.material, range: rangeOf(values).range, progress: progressOf(io) });
-  const named = idProblem(r, material);
+  const named = idProblem(r, material) ?? gateProblem({ repoRoot, material });
   say(named ?? leakLine(r, material));
   for (const [task, why] of Object.entries(r.baselineProblems ?? {})) say(`baseline of task ${task} gives no exemption: ${why}`);
   return { exit: exitOf(r, named) };
