@@ -293,3 +293,31 @@ test('The_conformance_gate_checks_the_pinned_spec_before_the_checkers_exit_count
   const missing = await runConformance({ ...base, specSha256: undefined });
   assert.notEqual(missing.exit, 0, 'no pin is a refusal, never a pass');
 });
+
+// ---- code round 1: C4 (the registry write is serialized) and the `tasks` list --------------------------------------------------------------------------------------
+
+test('Two_registrations_of_different_tasks_at_once_keep_both_entries', () => {
+  const home = quickHome();
+  const a = writePackage({ taskId: '05', home });
+  const b = writePackage({ taskId: '04', home });
+  const pa = load(a);
+  const pb = load(b);
+  recordS({ home, task: b.task, treeSha256: pb.held.treeSha256, sBytes: 1 });
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const nested = [];
+  const hooks = { afterRead: () => nested.push(registerPackage({ home, task: b.task, tasks: [a.task, b.task], record: greenRecord(pb), pkg: pb, pinsFn: () => PINS, ...files })) };
+  const first = registerPackage({ home, task: a.task, tasks: [a.task, b.task], record: greenRecord(pa), pkg: pa, pinsFn: () => PINS, hooks, ...files });
+  assert.equal(first.ok, true, first.reason);
+  assert.equal(nested.length, 1);
+  assert.ok(nested[0].ok === false && /packages\.json\.lock/.test(nested[0].reason), `the second writer is refused while the first holds the registry: ${nested[0].reason}`);
+  assert.equal(registerPackage({ home, task: b.task, tasks: [a.task, b.task], record: greenRecord(pb), pkg: pb, pinsFn: () => PINS, ...files }).ok, true);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(files.packagesFile, 'utf8'))).sort(), ['04', '05'], 'both entries are kept');
+  assert.equal(existsSync(`${files.packagesFile}.lock`), false, 'the lock is released');
+});
+
+test('A_registration_with_no_task_list_is_a_refusal_not_an_empty_list', () => {
+  const p = writePackage();
+  const pkg = load(p);
+  const r = registerPackage({ home: p.home, task: p.task, record: greenRecord(pkg), pkg, pinsFn: () => PINS, packagesFile: packagesFile(), frozenFile: frozenFile() });
+  assert.ok(r.ok === false && /list of the quick tasks/.test(r.reason), r.reason);
+});

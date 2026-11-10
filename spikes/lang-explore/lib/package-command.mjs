@@ -200,13 +200,7 @@ async function runPackage({ args, io, world }) {
   if (!loaded.ok) return { exit: refused(io, loaded.reason) };
   const pins = (io.package?.pinsFn ?? pinsNow)();
   const memoryBytes = (world.limits ?? quickCalibration(world.explore).limits).memoryBytes;
-  const held = acquirePlanLock({ home: io.home });
-  if (!held.ok) { io.say(held.reason); return { exit: EXIT.halt }; }
-  try {
-    return await inLock({ args, io, world, pkg: loaded.value, pins, material: packageIdentity({ ...materialOf(loaded.value), pins, memoryBytes }) });
-  } finally {
-    held.value.release();
-  }
+  return inLock({ args, io, world, pkg: loaded.value, pins, material: packageIdentity({ ...materialOf(loaded.value), pins, memoryBytes }) });
 }
 
 /** `--seal` alone: the latest complete record of the same material, no step run. */
@@ -246,8 +240,21 @@ async function packageCommand(values, io) {
   const given = await prepared(values, io);
   if (!given.ok) return refused(io, given.reason);
   const { args, world } = given.value;
-  const result = await runOf({ args, io, world });
-  return result.exit === undefined ? refused(io, result.reason) : afterRun({ args, io, result });
+  return underPlanLock({ io, fn: async () => {
+    const result = await runOf({ args, io, world });
+    return result.exit === undefined ? refused(io, result.reason) : afterRun({ args, io, result });
+  } });
+}
+
+/** `fn` under the plan lock of the explore root (the series lock `run` takes), held through the steps, the registration and the seal; a held lock is a resumable halt naming the holder. */
+async function underPlanLock({ io, fn }) {
+  const held = acquirePlanLock({ home: io.home });
+  if (!held.ok) { io.say(held.reason); return EXIT.halt; }
+  try {
+    return await fn();
+  } finally {
+    held.value.release();
+  }
 }
 
 export const cmdPackage = heldoutAware(packageCommand);

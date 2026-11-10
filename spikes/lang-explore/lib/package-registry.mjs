@@ -3,9 +3,10 @@
 // passed at, the F-LOAD numbers, the gate verdict and date, THE RUNNER AND EXECUTION-LAYER PINS the validation ran under, and one identity (a sha256 over these, `packageIdentity`). `registerPackage` refuses while an item is red, the record is
 // older than the material, the pins moved since the run, or the archive's hash differs from `heldout-frozen.json`'s; for a later task (04, 06, 07, 08, 10) it also refuses until all five have their S recorded for their current suites.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { acquireGuardedLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { systemClock } from './clock.mjs';
 import { registeredEntry, registryMismatchProblem } from './heldout-registry.mjs';
 import { FROZEN_FILE, casesTreeHash } from './heldout-quick.mjs';
@@ -64,13 +65,19 @@ const withEntry = (packages, id, entry) => Object.fromEntries(Object.entries({ .
 
 const readPackagesFile = file => { try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}; } catch { return null; } };
 
-/** The sentence refusing a registration, in the order of the rules, or null. Every item of `REQUIRED_ITEMS` must be there and green; the seal reads the same rules, so a seal is never made over a package that could not register. */
-export function registrationProblem({ record, pkg, task, home, tasks, frozenFile = FROZEN_FILE, packagesFile = PACKAGES_FILE, pinsFn = pinsNow }) {
+const listProblem = tasks => (Array.isArray(tasks) ? null : 'the list of the quick tasks was not given: whether the five later tasks have their S cannot be told, so nothing is registered');
+
+/** The sentence refusing a record that is not green or is older than the material, or null. */
+function recordProblem({ record, pkg, task }) {
   const red = redItems(record);
   if (red.length > 0) return `the package of task ${task.id} is not green: ${red.join(', ')} ${red.length === 1 ? 'is' : 'are'} red or not run`;
   const moved = movedMaterial(record.material, materialOf(pkg));
-  if (moved.length > 0) return `the record is older than the material: ${moved.join(', ')} changed since the run, so it is validated again before it is registered`;
-  return pinsProblem(record.pins, pinsFn()) ?? sGateProblem({ home, task, tasks, frozenFile }) ?? registryMismatchProblem({ task, packagesFile, frozenFile });
+  return moved.length > 0 ? `the record is older than the material: ${moved.join(', ')} changed since the run, so it is validated again before it is registered` : null;
+}
+
+/** The sentence refusing a registration, in the order of the rules, or null. Every item of `REQUIRED_ITEMS` must be there and green; the seal reads the same rules, so a seal is never made over a package that could not register. */
+export function registrationProblem({ record, pkg, task, home, tasks, frozenFile = FROZEN_FILE, packagesFile = PACKAGES_FILE, pinsFn = pinsNow }) {
+  return listProblem(tasks) ?? recordProblem({ record, pkg, task }) ?? pinsProblem(record.pins, pinsFn()) ?? sGateProblem({ home, task, tasks, frozenFile }) ?? registryMismatchProblem({ task, packagesFile, frozenFile });
 }
 
 /**
@@ -78,21 +85,32 @@ export function registrationProblem({ record, pkg, task, home, tasks, frozenFile
  * keys; an entry with the same identity is a no-op. The archive's hash joins the entry once the task is sealed (`heldout-frozen.json` is the registry of the seal): the entry then has a new identity and replaces the old one (a re-seal is a
  * new identity, never an edit of one).
  */
-export function registerPackage({ home, task, tasks = [], record, pkg, packagesFile = PACKAGES_FILE, frozenFile = FROZEN_FILE, pinsFn = pinsNow, now = systemClock }) {
+export function registerPackage({ home, task, tasks, record, pkg, packagesFile = PACKAGES_FILE, frozenFile = FROZEN_FILE, pinsFn = pinsNow, now = systemClock, hooks = {} }) {
   const problem = registrationProblem({ record, pkg, task, home, tasks, frozenFile, packagesFile, pinsFn });
   if (problem) return fail(problem);
   const sealed = registeredEntry({ frozenFile, task });
   if (!sealed.ok) return sealed;
   const material = { ...materialOf(pkg), archiveSha256: sealed.value?.archiveSha256 };
   const identity = packageIdentity({ ...material, gate: record.gate, memoryBytes: record.memoryBytes, loadDurationS: record.load?.durationS ?? null, pins: record.pins });
-  return writeEntryOf({ task, packagesFile, identity, entry: entryOf({ record, material, archiveSha256: material.archiveSha256, identity, now }) });
+  return lockedWrite({ task, packagesFile, hooks, identity, entry: entryOf({ record, material, archiveSha256: material.archiveSha256, identity, now }) });
 }
 
 /** Write the entry of `task` unless the registry already holds one with this identity. -> `ok({ state, identity })` | `fail`. */
-function writeEntryOf({ task, packagesFile, identity, entry }) {
+function writeEntryOf({ task, packagesFile, hooks, identity, entry }) {
   const packages = readPackagesFile(packagesFile);
+  hooks.afterRead?.();
   if (packages === null) return fail(`${path.basename(packagesFile)} cannot be read: nothing is written over it`);
   if (packages[task.id]?.identity === identity) return ok({ state: 'unchanged', identity });
   replaceJson({ file: packagesFile, value: withEntry(packages, task.id, entry) });
   return ok({ state: 'registered', identity });
+}
+
+/** The read-modify-write of the whole registry under its own guarded lock (`packages.json.lock`, with its takeover marker, as `heldout-frozen.json` has), so two registrations of different tasks cannot lose each other's entry. */
+function lockedWrite(args) {
+  const dir = path.dirname(args.packagesFile);
+  mkdirSync(dir, { recursive: true });
+  const busy = o => fail(`${path.join(dir, `${path.basename(args.packagesFile)}.lock`)} is held by pid ${o.pid} (started ${o.startTime}): another registration is writing the registry; try again in a moment`);
+  const held = acquireGuardedLock({ dir, name: `${path.basename(args.packagesFile)}.lock`, busy });
+  if (!held.ok) return held;
+  try { return writeEntryOf(args); } finally { held.value.release(); }
 }

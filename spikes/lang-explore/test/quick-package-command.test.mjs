@@ -226,3 +226,22 @@ test('Items_carried_from_another_memory_value_are_not_reused', async () => {
   assert.equal(record.items.refs, undefined, 'the references of another memory value are not carried');
   assert.equal(record.memoryBytes, 256 * 1024 * 1024);
 });
+
+// ---- code round 1: R8 (the plan lock is held through the registration and the seal, and by `--seal` alone) -------------------------------------------------------
+
+test('The_plan_lock_is_held_through_the_registration_and_the_seal_and_by_a_seal_alone', async () => {
+  const env = commandEnv({ plan: ALL_CAUGHT });
+  const heldAt = [];
+  const watch = () => heldAt.push(existsSync(path.join(exploreRoot(env.io.home), 'series.lock')));
+  const pinsFn = () => { watch(); return { runnerSha256: 'a'.repeat(64), execLayerSha256: 'b'.repeat(64) }; };
+  const seams = sealSeams({ frozenFile: env.files.frozenFile, packagesFile: env.files.packagesFile, hooks: { afterArchive: () => { watch(); throw new Error('stop after the archive'); } } });
+  const io = { ...env.io, package: { ...env.io.package, pinsFn }, heldout: seams };
+  assert.equal(await main(argv('--register', '--seal'), io), 5);
+  assert.equal(heldAt.length >= 3, true, 'the pins are read at the start, at the registration and the seal runs');
+  assert.equal(heldAt.every(Boolean), true, 'the lock is held at every one of them');
+  const before = heldAt.length;
+  const resumed = { ...io, heldout: { ...seams, hooks: { afterArchive: () => { watch(); } } } };
+  assert.equal(await main(argv('--seal'), resumed), 0, env.lines.join('\n'));
+  assert.equal(heldAt.slice(before).length > 0 && heldAt.slice(before).every(Boolean), true, 'a seal alone holds the lock too');
+  assert.equal(existsSync(path.join(exploreRoot(env.io.home), 'series.lock')), false, 'and releases it');
+});
