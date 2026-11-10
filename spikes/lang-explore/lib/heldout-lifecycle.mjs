@@ -11,6 +11,7 @@
 //
 // The stamp `heldout-NN/.open` is `{ operator: true, at }` (the verb, held until `heldout-close`) or `{ pid, startTime, at }` (a reader that opened for itself), written `wx` after the rename. "Dead" is `isAlive(pid, startTime)`
 // saying false (`ownerAlive`, which compares the start time read from /proc, so a reused pid is not alive) and nothing else. There is no override of the backup check.
+import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { removeUnder } from '../../policy-ab-quick/lib/safe-rm.mjs';
 import { ctxOf, withTaskLock } from './heldout-context.mjs';
@@ -94,9 +95,23 @@ async function removeClear(ctx, entry) {
   return ok(null);
 }
 
-/** A stamp whose folder is absent guards nothing: it is removed (an unreadable one is a refusal). -> `ok(null)` | `fail`. */
-function dropStamp(ctx) {
-  const problem = stampProblem(ctx, readStamp(ctx));
+/** The refusal of a stamp that holds a folder that is not there: a live process's or (for an entry point) the operator's hold is never dropped. */
+const isDroppable = (hold, operator) => hold.kind === 'free' || hold.kind === 'dead' || (hold.kind === 'operator' && operator);
+const holderOf = (ctx, hold) => (hold.kind === 'operator' ? 'the operator' : `pid ${hold.pid ?? ctx.pid}`);
+const remedyOf = (ctx, hold) => (hold.kind === 'operator' ? `Close it: explore.mjs heldout-close --task ${ctx.task.id}` : 'Wait for that process to end');
+
+function heldStamp(ctx, hold, { operator }) {
+  if (isDroppable(hold, operator)) return null;
+  return fail(`${ctx.stampFile} is a hold of ${holderOf(ctx, hold)} on the clear folder of task ${ctx.task.id}, whose folder is not there: it is not dropped. ${remedyOf(ctx, hold)}`);
+}
+
+/**
+ * A stamp whose folder is absent is JUDGED, not removed blind: an unreadable one is a refusal, a dead process's (or none) is dropped, a running process's is kept and refused, the operator's is kept and refused unless `operator`
+ * (the operator's own `heldout-close`). The folder is removed before its stamp, so a kill between the two leaves exactly this case. -> `ok(null)` | `fail`.
+ */
+function dropStamp(ctx, { operator = false } = {}) {
+  const stamp = readStamp(ctx);
+  const problem = stampProblem(ctx, stamp) ?? heldStamp(ctx, holdOf(ctx, stamp), { operator });
   if (problem !== null) return problem;
   ctx.fs.rmSync(ctx.stampFile, { force: true });
   return ok(null);
@@ -127,13 +142,20 @@ export async function sweepLocked(ctx) {
 /** `then` when the stamp could be dropped, else the refusal that dropping gave. */
 const afterDrop = (dropped, then) => (dropped.ok ? then : dropped);
 
-/** Is the task sealed or being sealed (an entry, or an archive with none)? `none`: today's behaviour, no lock; `unreadable`: the record cannot be read (the loader refuses on it when the folder is absent). */
+/**
+ * What the registry says of the task, read FIRST: `{ kind: 'sealed' }` (an entry, or an archive with no entry: an interrupted seal), `{ kind: 'none' }` (no record file, or neither an entry nor an archive: today's behaviour, no lock),
+ * or `{ kind: 'refused', reason }`: a record that cannot be read (the task may be sealed in it) or an entry whose `heldout-NN/` is gone (the archive is missing). Nothing is opened, removed or read as unsealed on a refusal.
+ */
 function sealState(ctx) {
-  if (!ctx.fs.existsSync(ctx.heldoutDir)) return 'none';
   const record = readRecord(ctx.frozenFile);
-  if (!record.ok) return 'unreadable';
-  return isRegistered(ctx, record) ? 'sealed' : 'none';
+  if (!record.ok) return { kind: 'refused', reason: `the held-out record ${path.basename(ctx.frozenFile)} cannot be read (${record.reason}): task ${ctx.task.id} may be sealed in it, so nothing is opened, removed or read as unsealed` };
+  return ctx.fs.existsSync(ctx.heldoutDir) ? { kind: isRegistered(ctx, record) ? 'sealed' : 'none' } : noFolderState(ctx, record);
 }
+
+/** A task whose `heldout-NN/` is not there: unsealed when the registry has no entry, a refusal when it has one (the archive is gone). */
+const noFolderState = (ctx, record) => (entryInRecord(record, ctx.task.id) === undefined ? { kind: 'none' } : { kind: 'refused', reason: archiveGone(ctx) });
+
+const archiveGone = ctx => `sealed: open it first (task ${ctx.task.id}) cannot be done: the registry holds an entry for it but its folder ${ctx.heldoutDir} is not there, so the archive ${ctx.archiveFile} is missing`;
 
 const isRegistered = (ctx, record) => entryInRecord(record, ctx.task.id) !== undefined || ctx.fs.existsSync(ctx.archiveFile);
 
@@ -146,7 +168,7 @@ const withTakeover = (result, lock) => (result.ok ? ok({ ...result.value, takeov
 export async function sweepClearFolder(args) {
   const ctx = ctxOf(args);
   const state = sealState(ctx);
-  if (state !== 'sealed') return ok({ cases: state === 'none' ? 'unsealed' : 'unchecked' });
+  if (state.kind !== 'sealed') return state.kind === 'none' ? ok({ cases: 'unsealed' }) : fail(state.reason);
   return withTaskLock(ctx, async lock => withTakeover(await sweepLocked(ctx), lock));
 }
 
@@ -210,7 +232,8 @@ async function openLocked(ctx, owner) {
  */
 export async function openClearFolder(args) {
   const ctx = ctxOf(args);
-  if (sealState(ctx) === 'none') return fail(noEntrySentence(ctx));
+  const state = sealState(ctx);
+  if (state.kind !== 'sealed') return fail(state.kind === 'none' ? noEntrySentence(ctx) : state.reason);
   return withTaskLock(ctx, async lock => withTakeover(await openLocked(ctx, args.owner ?? 'operator'), lock));
 }
 
@@ -231,14 +254,15 @@ export async function closeLocked(ctx) {
   const facts = factsOf(ctx);
   if (!facts.ok) return facts;
   const { entry, present } = facts.value;
-  if (!present) return afterDrop(dropStamp(ctx), ok({ state: 'absent' }));
+  if (!present) return afterDrop(dropStamp(ctx, { operator: true }), ok({ state: 'absent' }));
   return entry === undefined ? fail(`task ${ctx.task.id} has no sealed archive registered: its clear folder is an authoring folder and is not removed`) : closePresent(ctx, entry);
 }
 
 /** `heldout-close`: the clear folder removed, with its stamp, after the key's backup is verified. A second close is a no-op. -> `ok({ state: 'closed' | 'absent', takeover })` | `fail`. */
 export async function closeClearFolder(args) {
   const ctx = ctxOf(args);
-  if (sealState(ctx) === 'none') return ok({ state: 'absent', takeover: null });
+  const state = sealState(ctx);
+  if (state.kind !== 'sealed') return state.kind === 'none' ? ok({ state: 'absent', takeover: null }) : fail(state.reason);
   return withTaskLock(ctx, async lock => withTakeover(await closeLocked(ctx), lock));
 }
 
@@ -247,7 +271,7 @@ export async function closeClearFolder(args) {
 /** After the reader: the folder this reader made is closed. A refusal (the backup cannot be verified) leaves the folder, with a stamp of a process that is then gone, for the next entry point's sweep; it is said, never thrown. */
 async function closeAfter(ctx) {
   const closed = await closeLocked(ctx);
-  if (!closed.ok) ctx.warn(`the clear folder of task ${ctx.task.id} was left open: ${closed.reason}`);
+  if (!closed.ok) ctx.warn(`the clear folder of task ${ctx.task.id} was left open: ${closed.reason}; run \`explore.mjs heldout-close --task ${ctx.task.id}\` with the key backup named (flag or the private file)`);
 }
 
 const placeIfAbsent = (ctx, swept) => (swept.value.cases === 'absent' ? openPlaced(ctx, swept.value.entry, 'process') : ok(null));
@@ -272,6 +296,7 @@ async function openedLocked(ctx, fn) {
  */
 export async function withOpenedHeldout({ fn, ...args }) {
   const ctx = ctxOf(args);
-  if (sealState(ctx) !== 'sealed') return fn({ casesDir: ctx.casesDir, opened: false });
+  const state = sealState(ctx);
+  if (state.kind !== 'sealed') return state.kind === 'none' ? fn({ casesDir: ctx.casesDir, opened: false }) : fail(state.reason);
   return withTaskLock(ctx, () => openedLocked(ctx, fn));
 }

@@ -6,6 +6,7 @@
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { acquireGuardedLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { entryInRecord, entryOf, readRecord } from './heldout-quick.mjs';
 import { tempNameOf, writeFlushed } from './publish-once.mjs';
 
@@ -49,16 +50,37 @@ function settled({ have, entry, frozenFile, task }) {
   return sameEntry(have, entry) ? ok('unchanged') : fail(`${path.basename(frozenFile)} already holds another entry for task ${task.id}: a re-seal is a new archive and a new identity, which is not made here`);
 }
 
-/**
- * Register `entry` for `task` in the record at `frozenFile`. -> `ok('written')` | `ok('unchanged')` (an equal entry is there) | `fail` (an entry that differs is there, or the record cannot be read).
- */
-export function writeEntry({ frozenFile, task, entry, fs = nodeFs }) {
+/** The registry's lock beside the record (`heldout-frozen.json.lock`, with its takeover guard): ONE lock for the read-modify-write of the whole record, so two seals of different tasks cannot lose each other's entry. */
+function lockRegistry({ frozenFile, lock }) {
+  const name = `${path.basename(frozenFile)}.lock`;
+  const busy = o => fail(`${path.join(path.dirname(frozenFile), name)} is held by pid ${o.pid} (started ${o.startTime}): another seal is writing the registry; try again in a moment`);
+  return acquireGuardedLock({ dir: path.dirname(frozenFile), name, pid: lock.pid, startTime: lock.startTime, isAlive: lock.isAlive, retry: lock.retry, hooks: lock.hooks ?? {}, now: lock.now, busy });
+}
+
+/** The read-modify-write, the registry lock held. */
+function writeLocked({ frozenFile, task, entry, fs, hooks }) {
   const have = registeredEntry({ frozenFile, task });
   if (!have.ok) return have;
+  hooks.afterRegistryRead?.();
   const done = settled({ have: have.value, entry, frozenFile, task });
   if (done !== null) return done;
   replaceFile({ file: frozenFile, text: `${JSON.stringify(withTask({ record: readRecord(frozenFile).value, id: task.id, entry }), null, 2)}\n`, fs });
   return ok('written');
+}
+
+/**
+ * Register `entry` for `task` in the record at `frozenFile`, under the registry lock (taken inside the per-task lock of the caller, always in that order). `lock` holds the lock's seams (`pid`, `startTime`, `isAlive`, `retry`,
+ * `now`, `hooks`: `afterRegistryRead` is called with the record read and the lock held). -> `ok('written')` | `ok('unchanged')` (an equal entry is there) | `fail` (an entry that differs is there, the record cannot be read, or the registry lock is held by a live writer).
+ */
+export function writeEntry({ frozenFile, task, entry, fs = nodeFs, lock = {} }) {
+  fs.mkdirSync(path.dirname(frozenFile), { recursive: true });
+  const held = lockRegistry({ frozenFile, lock });
+  if (!held.ok) return held;
+  try {
+    return writeLocked({ frozenFile, task, entry, fs, hooks: lock.hooks ?? {} });
+  } finally {
+    held.value.release();
+  }
 }
 
 /** `packages.json`'s entry of a task: its `archiveSha256`, or undefined (the file may be laid out as `{ tasks }`, `{ packages }` or flat). */

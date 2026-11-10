@@ -14,14 +14,31 @@ function pathsOf(file, json) {
   return isPath(json?.keyBackup) && isPath(json?.shareMount) ? ok({ backupFile: json.keyBackup, shareMount: json.shareMount }) : fail(`${file} must hold {"keyBackup": "<file>", "shareMount": "<dir>"}`);
 }
 
-const unsafeFile = stat => !stat.isFile() || stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0;
+const unsafeFile = (stat, uid) => !stat.isFile() || stat.uid !== uid || (stat.mode & 0o077) !== 0;
 
-/** `ok(null)` for no file, `ok({ backupFile, shareMount })`, or a `fail` for a file that is not a regular file of the operator's with mode 600, or that does not parse. */
-export function readBackupConfig(home) {
+/** The sentence refusing a config folder that is not the operator's or is writable by group or others (another user could replace the file), or null. */
+function folderProblem(dir, uid) {
+  const stat = lstatSync(dir, { throwIfNoEntry: false });
+  if (stat === undefined) return null;
+  return unsafeFolder(stat, uid) ? `${dir} must be a folder owned by you and not writable by group or others (chmod go-w)` : null;
+}
+
+const unsafeFolder = (stat, uid) => !stat.isDirectory() || stat.uid !== uid || (stat.mode & 0o022) !== 0;
+
+/** A `fail` for a config folder or file that another user could have replaced, else null. */
+function unsafeConfig(file, stat, uid) {
+  const folder = folderProblem(path.dirname(file), uid);
+  if (folder !== null) return fail(folder);
+  return unsafeFile(stat, uid) ? fail(`${file} must be a regular file owned by you with mode 600`) : null;
+}
+
+/** `ok(null)` for no file, `ok({ backupFile, shareMount })`, or a `fail` for a config folder that is not the operator's or is writable by others, a file that is not a regular file of the operator's with mode 600, or that does not parse. */
+export function readBackupConfig(home, { uid = process.getuid() } = {}) {
   const file = backupConfigFile(home);
   const stat = lstatSync(file, { throwIfNoEntry: false });
   if (stat === undefined) return ok(null);
-  if (unsafeFile(stat)) return fail(`${file} must be a regular file owned by you with mode 600`);
+  const unsafe = unsafeConfig(file, stat, uid);
+  if (unsafe !== null) return unsafe;
   try {
     return pathsOf(file, JSON.parse(readFileSync(file, 'utf8')));
   } catch {

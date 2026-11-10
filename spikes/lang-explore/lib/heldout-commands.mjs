@@ -19,12 +19,13 @@ const EXIT = Object.freeze({ done: 0, config: 4 });
  * The held-out context of a command, without its task: the operator's flags, the private backup file, then the test seams (`io.heldout`, `io.frozenFile`). Every entry point that may remove a stale clear folder is given it as
  * `io.heldoutArgs`. -> `ok({ frozenFile?, keyFile?, backupFile?, shareMount?, ...seams })` | `fail`.
  */
-export function heldoutBase(values, io) {
-  const backup = backupSettings(values, io.home);
-  if (!backup.ok) return backup;
-  const keyFile = values['key-file'] === undefined ? {} : { keyFile: path.resolve(values['key-file']) };
-  return ok({ ...(io.frozenFile === undefined ? {} : { frozenFile: io.frozenFile }), ...keyFile, ...backup.value, ...(io.heldout ?? {}) });
+export function heldoutBase(values, io, { backup: wantsBackup = true } = {}) {
+  const backup = wantsBackup ? backupSettings(values, io.home) : ok({});
+  return backup.ok ? ok({ ...frozenPart(io), ...keyPart(values), ...backup.value, ...(io.heldout ?? {}) }) : backup;
 }
+
+const frozenPart = io => (io.frozenFile === undefined ? {} : { frozenFile: io.frozenFile });
+const keyPart = values => (values['key-file'] === undefined ? {} : { keyFile: path.resolve(values['key-file']) });
 
 /** The arguments of the held-out operations for one task. -> `ok(args)` | `fail`. */
 function argsFor({ values, io, task }) {
@@ -32,9 +33,19 @@ function argsFor({ values, io, task }) {
   return base.ok ? ok({ home: io.home, task, ...base.value }) : base;
 }
 
-/** A command that reads a task's held-out folder, given the held-out context in `io.heldoutArgs`; a malformed private backup file refuses it (exit 4) before it starts. */
+/** Does the command read a quick task's folder, so that the key's backup settings matter? The task is resolved first; an unresolved one is the command's own refusal; with no `--task` (leakcheck) every task is read, the quick ones included. */
+function readsQuickTask(values, io) {
+  if (values.task === undefined) return true;
+  const given = taskFromValues(values, io.exploreFn);
+  return given.ok && isQuick(given.value.task);
+}
+
+/**
+ * A command that reads a task's held-out folder, given the held-out context in `io.heldoutArgs`. The private backup file is read, and a malformed one refuses the command (exit 4) before it starts, only for a quick task: an olympiad
+ * task never reads it.
+ */
 export const heldoutAware = command => async (values, io) => {
-  const base = heldoutBase(values, io);
+  const base = heldoutBase(values, io, { backup: readsQuickTask(values, io) });
   if (!base.ok) return refused(io, base.reason);
   return command(values, { ...io, heldoutArgs: base.value });
 };
@@ -83,11 +94,18 @@ function quickTasks(explore, ids) {
   return bad === undefined ? ok(named.map(t => t.value)) : fail(bad.ok ? `task ${bad.value.id} is not a quick-run task` : bad.reason);
 }
 
-/** The tasks of `--tasks NN,NN`: `ok([task])` | `fail` naming the legal ids or what is missing. */
+/** The sentence refusing a `--tasks` list that is empty or has an empty entry (a doubled, leading or trailing comma), or null: said before any task is resolved. */
+function tasksSyntaxProblem(tasks) {
+  if (typeof tasks !== 'string' || tasks.trim() === '') return 'heldout-check needs --tasks NN,NN';
+  return tasks.split(',').some(id => id.trim() === '') ? `--tasks is NN,NN: ${JSON.stringify(tasks)} has an empty entry (a doubled, leading or trailing comma)` : null;
+}
+
+/** The tasks of `--tasks NN,NN`: `ok([task])` | `fail` naming the syntax or the legal ids. */
 function tasksOf(values, io) {
+  const syntax = tasksSyntaxProblem(values.tasks);
+  if (syntax !== null) return fail(syntax);
   const explore = (io.exploreFn ?? loadExplore)();
-  if (!explore.ok) return explore;
-  return typeof values.tasks === 'string' && values.tasks !== '' ? quickTasks(explore.value, values.tasks.split(',')) : fail('heldout-check needs --tasks NN,NN');
+  return explore.ok ? quickTasks(explore.value, values.tasks.split(',')) : explore;
 }
 
 /** Check one task and say the line (or the refusal). -> true when it passed. */

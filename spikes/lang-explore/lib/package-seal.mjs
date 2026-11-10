@@ -47,7 +47,7 @@ const entryFor = ({ ctx, inputs, archiveSha256 }) => entryOfSeal({
 
 /** The copy of the key at the private backup, made when it is absent and verified (the first seal's step, and a resume's). */
 async function backedUp(ctx, key) {
-  return makeBackup({ task: ctx.task, key, backupFile: ctx.backupFile, shareMount: ctx.shareMount, mountOf: ctx.mountOf, fs: ctx.fs });
+  return makeBackup({ task: ctx.task, key, backupFile: ctx.backupFile, shareMount: ctx.shareMount, mountOf: ctx.mountOf, fs: ctx.fs, pid: ctx.pid, startTime: ctx.startTime, isAlive: ctx.isAlive });
 }
 
 /** A seal of cases nobody has sealed: back the key up, seal, publish the archive once, then write the entry. */
@@ -58,7 +58,7 @@ async function sealFresh({ ctx, inputs }) {
   if (!sealed.ok) return sealed;
   publishOnce({ file: ctx.archiveFile, text: sealed.value.sealed, fs: ctx.fs });
   ctx.hooks.afterArchive?.();
-  const written = writeEntry({ frozenFile: ctx.frozenFile, task: ctx.task, entry: entryFor({ ctx, inputs, archiveSha256: sha256Hex(sealed.value.sealed) }), fs: ctx.fs });
+  const written = writeEntry({ frozenFile: ctx.frozenFile, task: ctx.task, entry: entryFor({ ctx, inputs, archiveSha256: sha256Hex(sealed.value.sealed) }), fs: ctx.fs, lock: ctx });
   return written.ok ? ok({ state: 'sealed' }) : written;
 }
 
@@ -77,7 +77,7 @@ async function sealResume({ ctx, inputs, archive }) {
   const backup = await backedUp(ctx, inputs.key);
   const same = backup.ok ? await sameAsToday({ ctx, inputs, archive }) : backup;
   if (!same.ok) return same;
-  const written = writeEntry({ frozenFile: ctx.frozenFile, task: ctx.task, entry: entryFor({ ctx, inputs, archiveSha256: sha256Hex(archive) }), fs: ctx.fs });
+  const written = writeEntry({ frozenFile: ctx.frozenFile, task: ctx.task, entry: entryFor({ ctx, inputs, archiveSha256: sha256Hex(archive) }), fs: ctx.fs, lock: ctx });
   return written.ok ? ok({ state: 'resumed' }) : written;
 }
 
@@ -97,9 +97,15 @@ const movedProblem = ({ ctx, entry }) => {
   return held.ok && held.value.treeSha256 !== entry.treeSha256 ? fail(`the clear cases of task ${ctx.task.id} are not the ones sealed in ${ctx.archiveFile}: a re-seal after a case change is a new archive and a new identity, which is not made here`) : null;
 };
 
-/** A task with an entry: nothing is sealed again. An archive that is not the registered one, or cases that are no longer the sealed ones, is a refusal; else it is a no-op. */
-function sealRegistered({ ctx, entry }) {
-  return archiveProblem({ ctx, archive: readOrNull(ctx.fs, ctx.archiveFile), entry }) ?? movedProblem({ ctx, entry }) ?? ok({ state: 'unchanged' });
+/**
+ * A task with an entry: nothing is sealed again. An archive that is not the registered one, or cases that are no longer the sealed ones, is a refusal; else it is a no-op, but a no-op that says "done" only over a key whose backup
+ * is verified (on the share's mount, hashing to the entry's `keySha256`).
+ */
+async function sealRegistered({ ctx, entry }) {
+  const problem = archiveProblem({ ctx, archive: readOrNull(ctx.fs, ctx.archiveFile), entry }) ?? movedProblem({ ctx, entry });
+  if (problem !== null) return problem;
+  const missing = await backupProblem({ task: ctx.task, backupFile: ctx.backupFile, shareMount: ctx.shareMount, keySha256: entry.keySha256, mountOf: ctx.mountOf, fs: ctx.fs });
+  return missing === null ? ok({ state: 'unchanged' }) : fail(missing);
 }
 
 async function sealLocked({ ctx }) {

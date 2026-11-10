@@ -1,12 +1,13 @@
 // The archive key and its backup (F2.S1 item 5, bench PR 4a). The key is a mode-600 file read by v1's `readKey` and held in memory only: nothing here formats the key's bytes, and the registry holds only `keySha256`, the sha256 of
 // the key file. Before ANY clear case is removed, the backup copy of the key is checked: its folder is on the share's mount (`findmnt` through a seam, run as a program with an argument list and a timeout), the copy is a regular
 // file and it hashes to `keySha256`. There is no override. The backup path and the share's mount have no default in this code; the operator names them (`--key-backup`, `--share-mount`, or the private file `heldout-backup.json`).
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
 import { readKey } from '../../minigit-bench/lib/heldout-crypto.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
+import { ownerAlive, processStartTime } from '../../minigit-bench/lib/session-state.mjs';
 
 export const sha256Hex = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -41,9 +42,9 @@ export const makeMountOf = (run = runBounded) => async realDir => {
   return r.ok ? mountFrom(r.value, realDir) : fail(`findmnt could not be run: ${r.reason}`);
 };
 
-/** The mount point findmnt printed, or a fail for a non-zero exit or an empty answer. */
+/** The mount point findmnt printed on its FIRST line (`--noheadings --output TARGET`), or a fail for a non-zero exit or an empty answer. */
 function mountFrom(answer, realDir) {
-  const mount = answer.stdout.trim();
+  const mount = answer.stdout.split('\n')[0].trim();
   return answer.code === 0 && mount !== '' ? ok(mount) : fail(`findmnt exited ${answer.code} for ${realDir}: ${answer.stderr.trim() || 'no mount is named'}`);
 }
 
@@ -96,22 +97,45 @@ export async function backupProblem({ task, backupFile, shareMount, keySha256, m
   return (await mountProblem({ task, backupFile, shareMount, mountOf: mountFn, fs })) ?? fileProblem({ task, backupFile, keySha256, fs });
 }
 
-/** Write the copy `wx` (mode 600) when there is none. */
-function ensureCopy({ key, backupFile, fs }) {
-  if (fs.lstatSync(backupFile, { throwIfNoEntry: false }) !== undefined) return;
-  const fd = fs.openSync(backupFile, 'wx', 0o600);
+const TEMP_NAME = base => new RegExp(`^\\.${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.(\\d+)\\.(\\d+)\\.[0-9a-f]{8}\\.tmp$`);
+
+/** Remove the temporary copies a killed run left beside the backup, once their owner is gone (`isAlive(pid, startTime)`, from the name); a running owner's, and any name of another shape, are left. */
+function removeStaleTemps({ backupFile, isAlive, fs }) {
+  const pattern = TEMP_NAME(path.basename(backupFile));
+  for (const name of fs.readdirSync(path.dirname(backupFile))) {
+    const m = pattern.exec(name);
+    if (m !== null && !isAlive(Number(m[1]), m[2])) fs.rmSync(path.join(path.dirname(backupFile), name), { force: true });
+  }
+}
+
+/** Publish the copy whole or not at all: a temporary name of this process beside it (mode 600, flushed), then a hard link that fails when the name exists (a copy that is there is never replaced), then the temporary name is removed. */
+function publishCopy({ key, backupFile, fs, pid, startTime }) {
+  const temp = path.join(path.dirname(backupFile), `.${path.basename(backupFile)}.${pid}.${startTime}.${randomBytes(4).toString('hex')}.tmp`);
+  const fd = fs.openSync(temp, 'wx', 0o600);
   try { fs.writeSync(fd, key); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  try {
+    fs.linkSync(temp, backupFile);
+  } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+  }
+  fs.unlinkSync(temp);
+}
+
+/** The copy, made when there is none (an existing one is verified by the caller, never overwritten). */
+function ensureCopy(a) {
+  removeStaleTemps(a);
+  if (a.fs.lstatSync(a.backupFile, { throwIfNoEntry: false }) === undefined) publishCopy(a);
 }
 
 /**
- * The first seal's copy of the key to the private backup, verified. A copy already there is verified, never overwritten: equal is fine, another one is a refusal. The mount is checked BEFORE the copy: a share that is not mounted
- * would take the copy onto the root disk. -> `ok(null)` | `fail(sentence)`.
+ * The first seal's copy of the key to the private backup, verified. The copy is published whole or not at all (`publishCopy`); a copy already there is verified, never overwritten: one that hashes to the key is accepted (a resume), another
+ * one is a refusal naming it. The mount is checked BEFORE the copy: a share that is not mounted would take the copy onto the root disk. `pid`, `startTime` and `isAlive` name the owner of the temporary copy. -> `ok(null)` | `fail(sentence)`.
  */
-export async function makeBackup({ task, key, backupFile, shareMount, mountOf: mountFn = mountOf, fs = nodeFs }) {
+export async function makeBackup({ task, key, backupFile, shareMount, mountOf: mountFn = mountOf, fs = nodeFs, pid = process.pid, startTime = processStartTime(process.pid), isAlive = ownerAlive }) {
   const named = namedProblem({ task, backupFile, shareMount });
   const misplaced = named ?? (await mountProblem({ task, backupFile, shareMount, mountOf: mountFn, fs }));
   if (misplaced !== null) return fail(misplaced);
-  ensureCopy({ key, backupFile, fs });
+  ensureCopy({ key, backupFile, fs, pid, startTime, isAlive });
   const problem = fileProblem({ task, backupFile, keySha256: sha256Hex(key), fs });
   return problem === null ? ok(null) : fail(problem);
 }

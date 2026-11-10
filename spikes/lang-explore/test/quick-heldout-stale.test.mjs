@@ -96,9 +96,10 @@ test('Close_refuses_a_folder_held_by_another_live_process_and_names_its_pid', as
 test('A_stamp_whose_folder_is_absent_is_removed_under_the_lock_and_a_task_with_no_archive_is_left_alone', async () => {
   const w = await opened();
   rmSync(w.casesDir, { recursive: true });
-  const swept = await sweepClearFolder(w.args);
+  plant(w, { pid: 4242, startTime: 'gone' }); // code round 1, finding 3: a stamp with no folder is judged (a dead process's is dropped; the operator's hold and a live process's are not: quick-heldout-round1.test.mjs)
+  const swept = await sweepClearFolder({ ...w.args, isAlive: () => false });
   assert.equal(swept.ok, true, swept.reason);
-  assert.equal(existsSync(stampOf(w)), false, 'a stamp guarding nothing is removed');
+  assert.equal(existsSync(stampOf(w)), false, 'a stamp of a dead process, guarding nothing, is removed');
   const unsealed = world({ taskId: '06' });
   const locks = [];
   const untouched = await sweepClearFolder({ ...unsealed.args, hooks: { afterLock: () => locks.push(1) } });
