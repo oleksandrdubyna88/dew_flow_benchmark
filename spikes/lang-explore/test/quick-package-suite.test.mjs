@@ -6,12 +6,13 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { loadPackage } from '../lib/package-quick.mjs';
 import { loadRule } from '../lib/package-refs.mjs';
-import { casesTxtProblems, folderProblems, largestReplyBody, specRIds, trapsTxtProblems } from '../lib/package-suite.mjs';
+import { shapeProblem } from '../lib/package-manifest.mjs';
+import { casesTxtProblems, folderProblems, largestReplyBody, specRIds, suiteProblems, trapTableProblems, trapsTxtProblems } from '../lib/package-suite.mjs';
 import { maxOf } from '../lib/package-max.mjs';
 import { suiteStep } from '../lib/package-steps.mjs';
 import { packageRoot, sOfSuite } from '../lib/package-record.mjs';
 import { treeHashOf } from '../lib/package-quick.mjs';
-import { IDS, SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
+import { IDS, SAMPLE_IDS, SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
 
 
 test('Every_case_cites_at_least_one_R_id_that_exists_in_the_corrected_spec', () => {
@@ -58,6 +59,63 @@ test('traps_txt_is_exactly_the_union_of_the_trap_tables_cases', () => {
   assert.ok(extra.length === 1 && extra[0].includes('h004') && /no row of the trap table names/.test(extra[0]), extra.join('|'));
   const missing = trapsTxtProblems({ manifest, traps: ['h001', 'h002'] });
   assert.ok(missing.length === 1 && missing[0].includes('h003') && /not in traps\.txt/.test(missing[0]), missing.join('|'));
+});
+
+// ---- a trap row may name visible samples beside a held-out case (parent entry 10.1) ---------------------------------------------------------------------
+
+const ROW_WITNESSES = { Wc: { trap: 'a', stack: 'csharp', kind: 'deterministic' } };
+const rowOf = cases => ({ traps: { a: { stack: 'csharp', cases } }, witnesses: ROW_WITNESSES });
+const tableOf = (cases, sampleIds = SAMPLE_IDS) => trapTableProblems({ manifest: rowOf(cases), caseIds: IDS, sampleIds });
+
+test('A_trap_row_may_name_a_visible_sample_the_pinned_spec_holds_beside_a_held_out_case', () => {
+  assert.deepEqual(tableOf(['h001']), [], 'control: a row of held-out ids only');
+  assert.deepEqual(tableOf(['h001', 's01']), [], 'a held-out case and a sample the spec holds');
+  assert.deepEqual(tableOf(['h002', 's01', 's02']), [], 'two samples the spec holds');
+});
+
+test('A_sample_id_the_pinned_spec_does_not_hold_is_red_naming_the_row_and_the_id', () => {
+  const unknown = tableOf(['h001', 's07']);
+  assert.equal(unknown.length, 1, unknown.join('|'));
+  assert.ok(unknown[0].includes('trap a on csharp') && unknown[0].includes('s07') && /not one of the samples/.test(unknown[0]), unknown[0]);
+  assert.equal(tableOf(['h001', 's01'], ['s02']).length, 1, 'the same row is red when the spec holds another sample only');
+  const unreadable = tableOf(['h001', 's01'], null);
+  assert.ok(unreadable.length === 1 && /samples of the spec cannot be read/.test(unreadable[0]), `a spec whose samples cannot be parsed is a problem: ${unreadable.join('|')}`);
+});
+
+test('A_trap_row_of_sample_ids_only_is_red_because_a_trap_needs_a_held_out_case', () => {
+  const only = tableOf(['s01', 's02']);
+  assert.equal(only.length, 1, only.join('|'));
+  assert.ok(only[0].includes('trap a on csharp') && /no held-out case/.test(only[0]), only[0]);
+  assert.ok(tableOf([]).some(s => /names no case/.test(s)), 'an empty row stays red as before');
+});
+
+test('traps_txt_holds_the_held_out_ids_of_the_table_only_and_a_sample_id_is_never_in_it', () => {
+  const manifest = { traps: { a: { stack: 'both', cases: ['h001', 's01'] }, b: { stack: 'node', cases: ['h002', 'h003'] } } };
+  assert.deepEqual(trapsTxtProblems({ manifest, traps: ['h001', 'h002', 'h003'] }), [], 'the held-out union, while a row also names a sample: green');
+  const sample = trapsTxtProblems({ manifest, traps: ['h001', 'h002', 'h003', 's01'] });
+  assert.ok(sample.length === 1 && sample[0].includes('s01') && /sample/.test(sample[0]), sample.join('|'));
+  const missing = trapsTxtProblems({ manifest, traps: ['h001', 'h002'] });
+  assert.ok(missing.length === 1 && missing[0].includes('h003') && /not in traps\.txt/.test(missing[0]), missing.join('|'));
+});
+
+test('A_load_case_stays_a_held_out_id_and_the_manifest_shape_takes_a_sample_id_in_a_trap_row_only', () => {
+  const base = { caseCount: 0, cases: {} };
+  assert.equal(shapeProblem({ ...base, traps: { a: { stack: 'node', cases: ['h001', 's01'] } } }), null, 'a trap row may carry a sample id');
+  assert.ok(/traps must map/.test(shapeProblem({ ...base, traps: { a: { stack: 'node', cases: ['s1'] } } })), 's1 is no sample id');
+  assert.ok(/traps must map/.test(shapeProblem({ ...base, traps: { a: { stack: 'node', cases: ['S01'] } } })), 'no normalisation: S01 is refused');
+  assert.ok(/traps must map/.test(shapeProblem({ ...base, traps: { a: { stack: 'node', cases: [' s01'] } } })), 'no trimming');
+  assert.equal(shapeProblem({ ...base, load: { cases: ['h002'], durationS: 5 } }), null, 'control: a held-out load case');
+  assert.ok(/load must be/.test(shapeProblem({ ...base, load: { cases: ['s01'], durationS: 5 } })), 'a load case s01 is still refused');
+});
+
+test('The_suite_takes_the_sample_ids_of_a_row_from_the_pinned_specs_own_samples_and_traps_txt_from_the_held_out_part', () => {
+  const p = writePackage({ traps: { 'trap-alpha': { stack: 'both', cases: ['h001', 'h002', 's01'] }, 'trap-beta': { stack: 'node', cases: ['h003'] } } });
+  const pkg = loadPackage({ home: p.home, task: p.task, world: fakeWorld() }).value;
+  assert.deepEqual(suiteProblems(pkg), [], 'a row that names a sample of the spec, with traps.txt holding the held-out ids: the whole suite is green');
+  const unknown = suiteProblems({ ...pkg, manifest: { ...pkg.manifest, traps: { ...pkg.manifest.traps, 'trap-beta': { stack: 'node', cases: ['h003', 's09'] } } } });
+  assert.ok(unknown.length === 1 && unknown[0].includes('trap trap-beta on node') && unknown[0].includes('s09'), unknown.join('|'));
+  const noSamples = suiteProblems({ ...pkg, specText: SPEC_TEXT.slice(0, SPEC_TEXT.indexOf('## 6.')) });
+  assert.ok(noSamples.some(s => /samples of the spec cannot be read/.test(s)), `a spec with no readable samples is a problem, never no samples: ${noSamples.join('|')}`);
 });
 
 test('A_spec_whose_sha256_differs_from_the_pinned_one_is_refused', async () => {

@@ -84,6 +84,39 @@ test('A_race_witness_gets_ten_passes_and_is_judged_on_its_failing_passes_only', 
   assert.equal(witnessVerdict({ kind: 'race', registered: ['h003'], passes: ten({ 2: ['h003'] }) }).caught, true, 'a majority of clean passes does not decide it');
 });
 
+// ---- a witness pass also runs the visible samples (parent entry 10.1): the verdict judges every case of a pass, a registered sample included ----------------
+
+/** A pass of the four held-out cases and the two samples `s01`, `s02`, failing the ids given. */
+const withSamples = (n, failing) => ({ n, profile: n % 2 === 1 ? '2cpu' : '8cpu', cases: [...clean, { id: 's01', verdict: 'pass', reason: '' }, { id: 's02', verdict: 'pass', reason: '' }].map(c => (failing.includes(c.id) ? CASES([c.id])[0] : c)) });
+
+test('A_deterministic_witness_failing_the_held_out_case_of_its_row_and_its_registered_sample_is_caught', () => {
+  const registered = ['h001', 's01'];
+  const caught = witnessVerdict({ kind: 'deterministic', registered, passes: [withSamples(1, ['h001', 's01'])] });
+  assert.equal(caught.caught, true, caught.sentence);
+  assert.deepEqual(caught.failingSets[0], ['h001', 's01']);
+  const missing = witnessVerdict({ kind: 'deterministic', registered, passes: [withSamples(1, ['h001'])] });
+  assert.ok(missing.caught === false && missing.counts.missing === 1, 'a registered sample that passes is a registered case that did not fail');
+});
+
+test('A_witness_failing_also_a_sample_the_row_does_not_register_is_not_caught_beyond_the_table', () => {
+  const beyond = witnessVerdict({ kind: 'deterministic', registered: ['h001', 's01'], passes: [withSamples(1, ['h001', 's01', 's02'])] });
+  assert.equal(beyond.caught, false);
+  assert.equal(beyond.reason, 'beyond the table');
+  assert.ok(/one case beyond the table/.test(beyond.sentence) && beyond.counts.beyond === 1, beyond.sentence);
+  assert.deepEqual(beyond.failingSets[0], ['h001', 's01', 's02'], 'the actual failing set, the unregistered sample included, is kept');
+});
+
+test('A_race_witness_over_ten_passes_is_caught_when_its_failing_passes_fail_the_registered_held_out_case_and_the_registered_sample', () => {
+  const registered = ['h003', 's02'];
+  const ten = failing => Array.from({ length: 10 }, (_, i) => withSamples(i + 1, failing[i + 1] ?? []));
+  const caught = witnessVerdict({ kind: 'race', registered, passes: ten({ 2: ['h003', 's02'], 6: ['h003', 's02'], 9: ['h003', 's02'] }) });
+  assert.equal(caught.caught, true, caught.sentence);
+  assert.deepEqual([caught.counts.failingPasses, caught.counts.cleanPasses], [3, 7]);
+  const outside = witnessVerdict({ kind: 'race', registered, passes: ten({ 2: ['h003', 's02'], 6: ['h003', 's01'] }) });
+  assert.equal(outside.caught, false, 'a failing pass that fails an unregistered sample');
+  assert.ok(/one case beyond the table/.test(outside.sentence), outside.sentence);
+});
+
 test('A_timeout_or_a_hang_of_a_registered_case_counts_as_that_case_failing', () => {
   for (const kind of ['deterministic', 'race']) {
     const hung = witnessVerdict({ kind, registered: ['h003'], passes: [pass(1, [], ['h003'])] });
@@ -149,16 +182,16 @@ test('A_race_witness_is_run_through_the_driver_and_its_clean_passes_are_kept_in_
 test('Every_trap_and_stack_row_of_the_table_names_an_existing_case_and_exactly_one_witness', () => {
   const caseIds = ['h001', 'h002', 'h003'];
   const base = { traps: { a: { stack: 'both', cases: ['h001'] } }, witnesses: { Wc: { trap: 'a', stack: 'csharp', kind: 'deterministic' }, Wn: { trap: 'a', stack: 'node', kind: 'race' } } };
-  assert.deepEqual(trapTableProblems({ manifest: base, caseIds }), [], 'a complete manifest is green');
-  const oneWitness = trapTableProblems({ manifest: { ...base, witnesses: { Wc: base.witnesses.Wc } }, caseIds });
+  assert.deepEqual(trapTableProblems({ manifest: base, caseIds, sampleIds: [] }), [], 'a complete manifest is green');
+  const oneWitness = trapTableProblems({ manifest: { ...base, witnesses: { Wc: base.witnesses.Wc } }, caseIds, sampleIds: [] });
   assert.ok(oneWitness.length === 1 && /trap a on node has no witness/.test(oneWitness[0]), oneWitness.join('|'));
-  const missingCase = trapTableProblems({ manifest: { ...base, traps: { a: { stack: 'both', cases: ['h009'] } } }, caseIds });
+  const missingCase = trapTableProblems({ manifest: { ...base, traps: { a: { stack: 'both', cases: ['h009'] } } }, caseIds, sampleIds: [] });
   assert.ok(missingCase.some(s => s.includes('h009') && /not in cases/.test(s)), missingCase.join('|'));
-  const two = trapTableProblems({ manifest: { ...base, witnesses: { ...base.witnesses, Wc2: { trap: 'a', stack: 'csharp', kind: 'race' } } }, caseIds });
+  const two = trapTableProblems({ manifest: { ...base, witnesses: { ...base.witnesses, Wc2: { trap: 'a', stack: 'csharp', kind: 'race' } } }, caseIds, sampleIds: [] });
   assert.ok(two.some(s => /2 witnesses/.test(s)), two.join('|'));
-  const noCase = trapTableProblems({ manifest: { ...base, traps: { a: { stack: 'both', cases: [] } } }, caseIds });
+  const noCase = trapTableProblems({ manifest: { ...base, traps: { a: { stack: 'both', cases: [] } } }, caseIds, sampleIds: [] });
   assert.ok(noCase.some(s => /names no case/.test(s)), noCase.join('|'));
-  const stray = trapTableProblems({ manifest: { ...base, witnesses: { ...base.witnesses, Wz: { trap: 'zz', stack: 'node', kind: 'race' } } }, caseIds });
+  const stray = trapTableProblems({ manifest: { ...base, witnesses: { ...base.witnesses, Wz: { trap: 'zz', stack: 'node', kind: 'race' } } }, caseIds, sampleIds: [] });
   assert.ok(stray.some(s => s.includes('Wz') && /no row/.test(s)), stray.join('|'));
 });
 

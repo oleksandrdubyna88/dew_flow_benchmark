@@ -360,6 +360,8 @@ Narrowed: yes — one merge condition got smaller: merge condition 2 asked every
 
 > Epoch 10 · approved 2026-11-08 · by owner · state: open
 
+- 10.1 · 2026-11-10 · agent · contract — every witness pass also runs the visible samples, so a wide defect fails them and could never be caught while a trap row names held-out cases only; a row may now name visible samples beside at least one held-out case, the samples checked against the pinned spec's own samples, and traps.txt stays the held-out part of the table (F2 stories, P4, scenarios 15 and 18)
+
 ## Operative plan for epoch 9 (2026-11-07): Stage 1, one bare series on six tasks
 
 **This part is the revision for epoch 9; from the epoch 9 line on, it is the plan in force.** Until that line, the stop stands

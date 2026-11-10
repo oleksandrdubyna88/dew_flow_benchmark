@@ -282,8 +282,8 @@ registration field. Its records hold case ids and trap names and stay in the pri
 
 | Module | What it holds |
 |---|---|
-| `lib/package-manifest.mjs` | the manifest's shape (`cases` with the sha256 of each pair, `traps` rows, `witnesses`, `load`; an unknown top-level key is refused naming it), `readManifest`, the rows of the trap table |
-| `lib/package-suite.mjs` | text in, findings out: the R-ids of `cases.txt` against the corrected spec (read by the conformance checker's own `parseSpec`), the comparison words, the manifest against the folder, `traps.txt` against the table, the table's rows against the cases and the witnesses, and `largestReplyBody` (S) |
+| `lib/package-manifest.mjs` | the manifest's shape (`cases` with the sha256 of each pair, `traps` rows, `witnesses`, `load`; an unknown top-level key is refused naming it; a trap row takes ids `hNNN` or `sNN`, every other list `hNNN` only), `readManifest`, the rows of the trap table |
+| `lib/package-suite.mjs` | text in, findings out: the R-ids of `cases.txt` against the corrected spec (read by the conformance checker's own `parseSpec`), the comparison words, the manifest against the folder, `traps.txt` against the table's held-out ids, the table's rows against the cases, the spec's samples and the witnesses, and `largestReplyBody` (S) |
 | `lib/package-quick.mjs` | `loadPackage` (the held-out side, the manifest, the pinned spec text with its sha256 checked, the references and overlays listed by `lstat`), `assembleReference`, `materialOf` and `packageIdentity` |
 | `lib/package-pass.mjs` | `wrapPass` (the start line, the 60 s heartbeat, the end line, the memory read-back guard) and `onePass` (`commitBuild`, then the pass child) |
 | `lib/package-refs.mjs` | `validateReference` (the ten-pass driver, green only on `accepted`, the per-pass rows), `loadRule` (F-LOAD), `stageTwins` |
@@ -306,6 +306,11 @@ pass of both references against 600 s minus 30 s and 600 s minus twice the twin'
 case registered for its trap and no other; a **race** witness gets ten passes like a session and is judged on its failing passes only (each fails registered cases only; at least one fails; the clean passes are kept). A timeout or a hang of a case counts
 as that case failing; an extra failure (a case beyond the table, a hang outside the trap) is a mapping to fix and the witness is not caught. A witness that does not build is not caught. Every pass prints a start line, a heartbeat every 60 s
 (the wall only, since the pass child shows nothing before it ends) and a closing line that gives the outcome and the number of cases that failed; the lines carry numbers only.
+
+**The trap row and the visible samples** (parent entry 10.1, 2026-11-10): every witness pass also runs the task's visible samples (`s01`, ...), so a wide defect can fail a sample too. A trap row therefore names at least one held-out case (`hNNN`) and may name visible
+samples (`sNN`) beside it. The package tool reads the sample ids from the pinned spec's own section 6 (`quickSamples`, the samples every pass runs): a row of sample ids only is red, a sample id the spec does not hold is red naming the row and the id, and a spec whose
+samples cannot be read is a problem, never "no samples". `traps.txt` is the union of the rows' held-out ids only; a sample id is never in it. The load cases stay held-out ids. `witnessVerdict` is unchanged: it judges every case of a pass, so a witness that fails
+its row's held-out case and its registered sample is caught, and one that also fails an unregistered sample is not (beyond the table).
 
 **The records** (`~/rsd/lang-v2/explore/package-NN/<yyyymmddTHHMMSSZ>-<gen>/`): `record.json` (a few KiB, written once at the end), `step-<name>.json` for each finished step (written once), `halt-<n>.json` for a resumable halt, and the scoring
 folders (attempt files, written once). The folders are append-only and never pruned (the repository's rule: results are only added); expect tens of runs per task, each well under 1 MiB, so a task stays in the low tens of MiB. A killed

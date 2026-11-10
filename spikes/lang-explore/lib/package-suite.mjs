@@ -1,12 +1,13 @@
 // The checks of a package's suite as text in, findings out (F2.S1, P4 and P5; scenarios 15 to 19): the R-ids of `cases.txt` against the corrected spec, the comparison words, the manifest against the folder, `traps.txt` against the trap
-// table, and the trap table's rows against the cases and the witnesses. The held-out reader's own findings (a pair with no line, a line with no pair) are reused by `loadPackage`, not written again here. Every sentence names cases and
+// table's held-out ids, and the trap table's rows against the cases, the spec's visible samples and the witnesses (a row names at least one held-out case and may name visible samples beside it: every witness pass runs them too; parent entry 10.1). The held-out reader's own findings (a pair with no line, a line with no pair) are reused by `loadPackage`, not written again here. Every sentence names cases and
 // traps, so it stays on the host: it goes to the terminal and the private record, never to a public file.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { parseSpec } from '../../lang-bench/lib/conformance-spec.mjs';
-import { rowsOf } from './package-manifest.mjs';
+import { isHeldOutId, rowsOf } from './package-manifest.mjs';
 import { maxOf } from './package-max.mjs';
+import { quickSamples } from './workspace-quick.mjs';
 
 /** FORMAT 3.1's comparison words: `bytes`, `normalised`, `json`, `relational`, or several of the last three joined by `+`, each at most once (the runner's own rule, `rs_samples.py` `comparison_ok`). */
 const COMPARISONS = Object.freeze(['bytes', 'normalised', 'json', 'relational']);
@@ -62,25 +63,43 @@ export function folderProblems({ manifest, casesDir }) {
   ];
 }
 
-/** The problems of `traps.txt` (the case ids `loadHeldoutQuick` read) against the union of the trap table's cases. */
+/** The problems of `traps.txt` (the case ids `loadHeldoutQuick` read) against the held-out ids of the trap table's rows: a visible sample id is never in `traps.txt`. */
 export function trapsTxtProblems({ manifest, traps }) {
-  const union = new Set(rowsOf(manifest).flatMap(r => r.cases));
+  const union = new Set(rowsOf(manifest).flatMap(r => r.cases).filter(isHeldOutId));
   return [
-    ...traps.filter(id => !union.has(id)).map(id => `traps.txt names case ${id}, which no row of the trap table names`),
+    ...traps.filter(id => !isHeldOutId(id)).map(id => `traps.txt names ${id}, which is no held-out case: a visible sample id is never in traps.txt`),
+    ...traps.filter(id => isHeldOutId(id) && !union.has(id)).map(id => `traps.txt names case ${id}, which no row of the trap table names`),
     ...[...union].filter(id => !traps.includes(id)).sort().map(id => `case ${id} is in the trap table and not in traps.txt`),
   ];
 }
 
+/** The ids of the visible samples a spec text holds (`['s01', ...]`, the samples every pass runs), or `null` when its samples cannot be read: never an empty list in its place. */
+export function specSampleIds(specText) {
+  try { return quickSamples(specText).map(s => s.id); } catch { return null; }
+}
+
 const witnessesOf = (manifest, row) => Object.entries(manifest.witnesses ?? {}).filter(([, w]) => w.trap === row.trap && w.stack === row.stack).map(([id]) => id);
 
-/** The problems of one row: at least one existing case and exactly one witness. */
-function rowProblems(manifest, caseIds, row) {
+const SAMPLES_ONLY = name => `${name} names no held-out case: a trap needs at least one, and visible samples only stand beside it`;
+
+/** The problems of a row's held-out part: none at all, samples only, or a held-out id not in `cases/`. */
+function heldProblems(name, caseIds, row) {
+  const held = row.cases.filter(isHeldOutId);
+  if (row.cases.length === 0) return [`${name} names no case`];
+  if (held.length === 0) return [SAMPLES_ONLY(name)];
+  return held.filter(id => !caseIds.includes(id)).map(id => `${name} names case ${id}, which is not in cases/`);
+}
+
+/** The problems of a row's sample ids: one the pinned spec does not hold (`sampleIds` is `specSampleIds`'s answer; `null` is reported once, by `trapTableProblems`). */
+const sampleProblems = (name, sampleIds, row) => (sampleIds === null ? [] : row.cases.filter(id => !isHeldOutId(id) && !sampleIds.includes(id)).map(id => `${name} names sample ${id}, which is not one of the samples the pinned spec holds`));
+
+/** The problems of one row: its case ids and exactly one witness. */
+function rowProblems(manifest, caseIds, sampleIds, row) {
   const name = `trap ${row.trap} on ${row.stack}`;
-  const missing = row.cases.filter(id => !caseIds.includes(id));
   const witnesses = witnessesOf(manifest, row);
   return [
-    ...(row.cases.length === 0 ? [`${name} names no case`] : []),
-    ...missing.map(id => `${name} names case ${id}, which is not in cases/`),
+    ...heldProblems(name, caseIds, row),
+    ...sampleProblems(name, sampleIds, row),
     ...(witnesses.length === 0 ? [`${name} has no witness (missing the ${row.stack} stack)`] : []),
     ...(witnesses.length > 1 ? [`${name} has ${witnesses.length} witnesses (${witnesses.join(', ')}): exactly one per trap and stack`] : []),
   ];
@@ -89,10 +108,17 @@ function rowProblems(manifest, caseIds, row) {
 /** The witnesses that belong to no row: their trap is not in the table, or the row does not list their stack. */
 const strayWitnesses = (manifest, rows) => Object.entries(manifest.witnesses ?? {}).filter(([, w]) => !rows.some(r => r.trap === w.trap && r.stack === w.stack)).map(([id, w]) => `witness ${id} is for trap ${w.trap} on ${w.stack}, which is no row of the table`);
 
-/** The trap table against the cases and the witnesses: every trap-and-stack row names at least one existing case and exactly one witness, and every witness has its row. */
-export function trapTableProblems({ manifest, caseIds }) {
+/**
+ * The trap table against the cases, the spec's samples and the witnesses: every trap-and-stack row names at least one existing held-out case, only visible samples the pinned spec holds beside it, and exactly one witness; every witness
+ * has its row. `sampleIds` is `specSampleIds`'s answer: a spec whose samples cannot be read is a problem, never "no samples".
+ */
+export function trapTableProblems({ manifest, caseIds, sampleIds }) {
   const rows = rowsOf(manifest);
-  return [...rows.flatMap(row => rowProblems(manifest, caseIds, row)), ...strayWitnesses(manifest, rows)];
+  return [
+    ...(sampleIds === null ? ['the samples of the spec cannot be read, so the sample ids of the trap table cannot be checked'] : []),
+    ...rows.flatMap(row => rowProblems(manifest, caseIds, sampleIds, row)),
+    ...strayWitnesses(manifest, rows),
+  ];
 }
 
 const ESCAPES = Object.freeze({ n: '\n', r: '\r', t: '\t', 0: '\0', '\\': '\\', '"': '"' });
@@ -141,6 +167,6 @@ export function suiteProblems(pkg) {
     ...casesTxtProblems({ text: readFileSync(path.join(pkg.casesDir, 'cases.txt'), 'utf8'), rIds }),
     ...folderProblems({ manifest: pkg.manifest, casesDir: pkg.casesDir }),
     ...trapsTxtProblems({ manifest: pkg.manifest, traps: pkg.held.traps }),
-    ...trapTableProblems({ manifest: pkg.manifest, caseIds: pkg.held.caseIds }),
+    ...trapTableProblems({ manifest: pkg.manifest, caseIds: pkg.held.caseIds, sampleIds: specSampleIds(pkg.specText) }),
   ];
 }
