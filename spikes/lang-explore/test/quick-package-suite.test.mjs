@@ -1,12 +1,15 @@
 // The suite, the R-ids, the manifest and the load rule of a package (F2.S1, section 2.3, scenarios 16 to 20), over an INVENTED task in a temp home. The sentences the tool says name cases and stay on the host.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadPackage } from '../lib/package-quick.mjs';
 import { loadRule } from '../lib/package-refs.mjs';
 import { casesTxtProblems, folderProblems, largestReplyBody, specRIds, trapsTxtProblems } from '../lib/package-suite.mjs';
+import { maxOf } from '../lib/package-max.mjs';
+import { suiteStep } from '../lib/package-steps.mjs';
+import { sOfSuite } from '../lib/package-record.mjs';
 import { IDS, SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
 
 
@@ -96,4 +99,52 @@ test('The_largest_expected_reply_body_S_is_counted_from_the_suite_as_bytes_with_
   writeFileSync(path.join(p.casesDir, 'h003.out'), `transcript 2\nrecv c "${'x'.repeat(30)}\\r\\n"\nrecv c "short"\n`);
   assert.equal(largestReplyBody(p.casesDir), 32, 'thirty bytes and a CR LF, the largest quoted string of any expected transcript');
   assert.equal(IDS.length, 4);
+});
+
+const mkdirSyncP = dir => mkdirSync(dir, { recursive: true });
+const outOf = (p, name, text) => writeFileSync(path.join(p.casesDir, name), text);
+
+test('S_is_counted_as_the_runner_reads_a_body_a_json_value_a_repeat_count_and_adjacent_strings_and_a_header_is_no_body', () => {
+  const p = writePackage();
+  for (const id of IDS) outOf(p, `${id}.out`, 'transcript 2\nready\nexit 0\n');
+  assert.equal(largestReplyBody(p.casesDir), 0, 'control: no body at all');
+  outOf(p, 'h001.out', 'transcript 2\nreply a 200\n  header "content-type" "' + 'h'.repeat(500) + '"\n  body json {"items": [ "aaaaaaaaaa" , "bbbbbbbbbb" ]}\nexit 0\n');
+  assert.equal(largestReplyBody(p.casesDir), JSON.stringify({ items: ['aaaaaaaaaa', 'bbbbbbbbbb'] }).length, 'a JSON body is its serialized value; a header is no body');
+  outOf(p, 'h002.out', 'transcript 2\nrecv c "ab"*1000\n');
+  assert.equal(largestReplyBody(p.casesDir), 2000, 'a repeat count multiplies the decoded length');
+  outOf(p, 'h003.out', 'transcript 2\nreply a 200\n  body "abc" "defg\\n" "x"*3\n');
+  assert.equal(largestReplyBody(p.casesDir), 2000);
+  outOf(p, 'h002.out', 'transcript 2\n');
+  outOf(p, 'h001.out', 'transcript 2\n');
+  assert.equal(largestReplyBody(p.casesDir), 3 + 5 + 3, 'adjacent strings are one body: the sum of each item\'s decoded length times its count');
+});
+
+test('S_counts_the_visible_samples_too_and_takes_a_running_maximum_over_any_number_of_values', () => {
+  const p = writePackage();
+  const samples = path.join(p.dir, '..', 'samples-invented');
+  writeFileSync(path.join(p.casesDir, 'h001.out'), 'transcript 2\nrecv c "short"\n');
+  mkdirSyncP(samples);
+  writeFileSync(path.join(samples, 's01.out'), 'transcript 2\nrecv c "' + 'v'.repeat(40) + '"\n');
+  assert.equal(largestReplyBody([p.casesDir, samples]), 40, 'a visible sample is a case too');
+  assert.equal(largestReplyBody(p.casesDir), 5);
+  assert.equal(maxOf(Array.from({ length: 600_000 }, (_, i) => i)), 599_999, 'a running maximum: no argument list to overflow');
+  assert.equal(maxOf([]), null);
+});
+
+test('S_is_recorded_only_for_a_suite_with_no_problem', () => {
+  const bad = writePackage();
+  writeFileSync(path.join(bad.casesDir, 'cases.txt'), 'h001 bytes R9\nh002 bytes R1\nh003 bytes R1\nh004 bytes R1\n');
+  const badPkg = loadPackage({ home: bad.home, task: bad.task, world: fakeWorld() }).value;
+  const r = suiteStep({ pkg: badPkg, home: bad.home, task: bad.task, conformance: null });
+  assert.equal(r.item.suite.ok, false);
+  assert.equal(sOfSuite({ home: bad.home, task: bad.task, treeSha256: badPkg.held.treeSha256 }), null, 'a suite with a problem has no S on record');
+  const good = writePackage();
+  const goodPkg = loadPackage({ home: good.home, task: good.task, world: fakeWorld() }).value;
+  const samples = path.join(good.dir, '..', 'samples-for-s');
+  mkdirSyncP(samples);
+  writeFileSync(path.join(samples, 's01.out'), `transcript 2\nrecv c "${'v'.repeat(5000)}"\n`);
+  const step = suiteStep({ pkg: goodPkg, home: good.home, task: good.task, conformance: null, samplesDir: samples });
+  assert.equal(step.item.suite.ok, true);
+  assert.equal(step.item.suite.sBytes, 5000, 'the step counts the visible samples beside the held-out cases');
+  assert.notEqual(sOfSuite({ home: good.home, task: good.task, treeSha256: goodPkg.held.treeSha256 }), null);
 });

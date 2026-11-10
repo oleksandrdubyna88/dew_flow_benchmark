@@ -3,6 +3,7 @@
 // running it again; the scoring folders of a step stay in the run folder (the attempt files), the assembled trees are owned temporary folders that go with the run. Every build goes through `buildAndRestore`, every pass through `runPassChild`.
 import path from 'node:path';
 import { gateItem } from './package-gate.mjs';
+import { maxOf } from './package-max.mjs';
 import { STACKS } from './package-manifest.mjs';
 import { onePass, wrapPass } from './package-pass.mjs';
 import { assembleReference } from './package-quick.mjs';
@@ -11,16 +12,25 @@ import { readStep, recordS, writeStep } from './package-record.mjs';
 import { largestReplyBody, suiteProblems } from './package-suite.mjs';
 import { assembleWitness, runWitness } from './package-witness.mjs';
 
-const maxOrNull = list => (list.length === 0 ? null : Math.max(...list));
 const slim = rows => ({ ...rows, passes: rows.passes.map(({ cases, ...row }) => row) });
 
-/** The suite checks, S and the gate: `{ item }`. S is counted from the suite and recorded apart from registration (`package-NN/s.json`, once per suite hash). `conformance` is the checker's answer or `null`. */
-export function suiteStep({ pkg, home, task, conformance, now, recordFile }) {
+const maybe = (holds, part) => (holds ? part : {});
+
+/** The folders S is counted over: the held-out cases and the visible samples when given. */
+const foldersOf = (pkg, samplesDir) => (samplesDir === null ? [pkg.casesDir] : [pkg.casesDir, samplesDir]);
+
+/** The gate item of the record: the verdict, and the verdict and date (or that the checker was not run). */
+function gateOf(gate) {
+  return { ok: gate.ok, sentence: gate.sentence, ...maybe(gate.gate !== undefined, { gate: gate.gate }), ...maybe(gate.notRun === true, { notRun: true }) };
+}
+
+/** The suite checks, S and the gate: `{ item }`. S is counted from the held-out cases and the visible samples (`samplesDir`) and recorded apart from registration (`package-NN/s.json`, once per suite hash), and only for a suite with no problem. `conformance` is the checker's answer or `null`. */
+export function suiteStep({ pkg, home, task, conformance, now, recordFile, samplesDir = null }) {
   const problems = suiteProblems(pkg);
-  const sBytes = largestReplyBody(pkg.casesDir);
-  recordS({ home, task, treeSha256: pkg.held.treeSha256, sBytes, now });
-  const gate = gateItem({ specText: pkg.specText, conformance, task, ...(recordFile === undefined ? {} : { recordFile }) });
-  return { item: { suite: { ok: problems.length === 0, problems, sBytes, counts: { cases: pkg.held.caseIds.length, problems: problems.length } }, gate: { ok: gate.ok, sentence: gate.sentence, ...(gate.gate ? { gate: gate.gate } : {}), ...(gate.notRun ? { notRun: true } : {}) } } };
+  const sBytes = largestReplyBody(foldersOf(pkg, samplesDir));
+  if (problems.length === 0) recordS({ home, task, treeSha256: pkg.held.treeSha256, sBytes, now });
+  const gate = gateItem({ specText: pkg.specText, conformance, task, ...maybe(recordFile !== undefined, { recordFile }) });
+  return { item: { suite: { ok: problems.length === 0, problems, sBytes, counts: { cases: pkg.held.caseIds.length, problems: problems.length } }, gate: gateOf(gate) } };
 }
 
 const treeOf = (c, stack) => assembleReference({ templates: c.world.templates, stack, kind: c.task.kind, refDir: c.pkg.refs[stack].dir, scope: c.scope, parent: c.parent });
@@ -66,7 +76,7 @@ async function runTwins(c, stack, loadCases) {
   const ran = wrapPass({ runPass: seams.runPass, label: `twin ${stack}`, say: c.say, memoryBytes: c.memoryBytes, heartbeatMs: c.heartbeatMs });
   const r = await onePass({ seams, ran, work, now: c.now });
   if (r.kind !== 'completed') return { halted: true, sentence: `the twin of the load cases on the ${stack} reference was not measured (${r.kind}): ${r.reason ?? r.tail ?? ''}` };
-  const wall = maxOrNull(r.cases.filter(x => loadCases.includes(x.id)).map(x => x.wallMs).filter(Number.isFinite));
+  const wall = maxOf(r.cases.filter(x => loadCases.includes(x.id)).map(x => x.wallMs).filter(Number.isFinite));
   return { ok: wall !== null, wallMs: wall, sentence: wall === null ? 'no twin case was judged' : 'measured' };
 }
 
@@ -101,7 +111,7 @@ async function bothTwins(c, loadCases) {
 function ruleItem({ refs, twins, load }) {
   const passes = STACKS.flatMap(stack => refs[stack].rows.passes.filter(p => p.completed).map(p => ({ stack, profile: p.profile, n: p.n, cases: p.cases })));
   const walls = STACKS.map(s => twins[s].wallMs).filter(Number.isFinite);
-  const rule = loadRule({ passes, loadCases: load.cases, twinWallMs: walls.length === STACKS.length ? Math.max(...walls) : null, durationS: load.durationS });
+  const rule = loadRule({ passes, loadCases: load.cases, twinWallMs: walls.length === STACKS.length ? maxOf(walls) : null, durationS: load.durationS });
   return { ok: rule.ok, slowestWallMs: rule.slowestWallMs, twinWallMs: rule.twinWallMs, durationS: rule.durationS, problems: rule.problems };
 }
 

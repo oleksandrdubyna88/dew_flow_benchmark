@@ -5,12 +5,13 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { dirBytes } from './measure.mjs';
+import { maxOf } from './package-max.mjs';
 import { wrapPass } from './package-pass.mjs';
 import { scorePasses } from './passes.mjs';
 import { readAttempts } from './score-files.mjs';
 import { runnerRecordPinNow } from './harness-pin.mjs';
 
-const maxOf = list => (list.length === 0 ? null : Math.max(...list));
+
 const numbers = (cases, key) => cases.map(c => c[key]).filter(Number.isFinite);
 
 /** The rows of one scoring from its files: per pass the attempt that completed (`wallMs`, the largest `peakBytes`, the slowest case wall), and the sums the record keeps. `ids` are the cases the passes judged. */

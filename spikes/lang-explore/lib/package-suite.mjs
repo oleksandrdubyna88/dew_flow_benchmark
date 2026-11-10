@@ -6,6 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { parseSpec } from '../../lang-bench/lib/conformance-spec.mjs';
 import { rowsOf } from './package-manifest.mjs';
+import { maxOf } from './package-max.mjs';
 
 /** FORMAT 3.1's comparison words: `bytes`, `normalised`, `json`, `relational`, or several of the last three joined by `+`, each at most once (the runner's own rule, `rs_samples.py` `comparison_ok`). */
 const COMPARISONS = Object.freeze(['bytes', 'normalised', 'json', 'relational']);
@@ -27,7 +28,7 @@ const wordProblems = (id, comparison) => (comparisonOk(comparison ?? '') ? [] : 
 const ridProblems = (id, rids, known) => [
   ...(rids.length === 0 ? [`case ${id} names no requirement id`] : []),
   ...rids.filter(r => !R_ID.test(r)).map(r => `case ${id} lists "${r}", which is not an R-id`),
-  ...rids.filter(r => R_ID.test(r) && !known.has(Number(R_ID.exec(r)[1]))).map(r => `case ${id} cites ${r}, which the corrected spec does not have (R1 to R${Math.max(0, ...known)})`),
+  ...rids.filter(r => R_ID.test(r) && !known.has(Number(R_ID.exec(r)[1]))).map(r => `case ${id} cites ${r}, which the corrected spec does not have (R1 to R${maxOf([...known]) ?? 0})`),
 ];
 const lineProblems = (id, comparison, rids, known) => [...wordProblems(id, comparison), ...ridProblems(id, rids, known)];
 
@@ -100,10 +101,33 @@ const decoded = body => body
   .replace(/\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})/g, (_, a, b) => String.fromCodePoint(parseInt(a ?? b, 16)))
   .replace(/\\(.)/g, (_, c) => ESCAPES[c] ?? c);
 
-/** S, the largest expected reply body of a suite: the longest quoted string of any expected transcript (`.out`), escapes decoded, in bytes. A count, never a case. */
-export function largestReplyBody(casesDir) {
-  const strings = readdirSync(casesDir).filter(n => n.endsWith('.out')).flatMap(n => [...readFileSync(path.join(casesDir, n), 'utf8').matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map(m => Buffer.byteLength(decoded(m[1]))));
-  return strings.length === 0 ? 0 : Math.max(...strings);
+const STRING = /"((?:[^"\\\n]|\\.)*)"(?:\*(\d+))?/g;
+
+/** The bytes of a quoted string item with its repeat count (`"x"*3`), escapes decoded. A `${...}` field counts its literal bytes only. */
+const itemBytes = m => Buffer.byteLength(decoded(m[1])) * Number(m[2] ?? 1);
+
+/** The bytes of a JSON value as the runner reads it (`body json V`): its serialized length; a value that is not JSON counts its literal text. */
+function jsonBytes(text) {
+  try { return Buffer.byteLength(JSON.stringify(JSON.parse(text))); } catch { return Buffer.byteLength(text); }
+}
+
+/** The bytes of one transcript line, or 0: a `header` is no body; `body json V` is V's serialized length; strings on a line are joined into one body, the sum of each item's decoded length times its count (`rs_lex.py` `take_str_expr`). */
+function lineBytes(line) {
+  const text = line.trim();
+  if (text.startsWith('header ')) return 0;
+  const json = /^body json (.*)$/.exec(text);
+  return json === null ? [...text.matchAll(STRING)].reduce((sum, m) => sum + itemBytes(m), 0) : jsonBytes(json[1]);
+}
+
+const outFiles = dir => readdirSync(dir).filter(n => n.endsWith('.out')).map(n => path.join(dir, n));
+
+/**
+ * S, the largest expected reply body of a suite: over every expected transcript (`.out`) of the folders given (the held-out cases AND the visible samples), the bytes of a body as the runner reads it (see `lineBytes`), by a running
+ * maximum. A `${...}` field counts its literal bytes only (its value is not known before the run). A count, never a case. `dirs` is a folder or a list of folders; one that is not there has nothing.
+ */
+export function largestReplyBody(dirs) {
+  const folders = [dirs].flat().filter(d => existsSync(d));
+  return maxOf(folders.flatMap(outFiles).flatMap(f => readFileSync(f, 'utf8').split('\n').map(lineBytes))) ?? 0;
 }
 
 /** Every problem of the suite checks (the sentences of scenarios 15 to 18), in order. `pkg` is `loadPackage`'s value. */

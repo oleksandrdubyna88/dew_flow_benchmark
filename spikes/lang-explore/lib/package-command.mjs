@@ -88,7 +88,7 @@ const wrapItem = (name, r) => (r.halted ? r : { items: { [name]: r.item } });
 
 /** What runs each step, over `{ c, out, conformance }`: -> `{ items, results? }` | `{ halted }`. */
 const RUNNERS = Object.freeze({
-  suite: ({ c, conformance }) => ({ items: suiteStep({ pkg: c.pkg, home: c.home, task: c.task, conformance, now: c.now, recordFile: c.gateRecordFile }).item }),
+  suite: ({ c, conformance }) => ({ items: suiteStep({ pkg: c.pkg, home: c.home, task: c.task, conformance, now: c.now, recordFile: c.gateRecordFile, samplesDir: c.samplesDir }).item }),
   refs: async ({ c }) => { const r = await refsStep(c); return r.halted ? r : { items: { refs: r.item }, results: r.results }; },
   load: async ({ c, out }) => wrapItem('load', await loadStep(c, out.results)),
   witnesses: async ({ c }) => wrapItem('witnesses', await witnessesStep(c)),
@@ -108,9 +108,12 @@ async function runSteps({ args, c, conformance }) {
 }
 
 /** The context every step reads. */
-function contextOf({ io, world, pkg, run, scope, task }) {
+/** The visible samples of the task (`tasks/<slug>/samples` of `--task-repo`), or `null`: S counts them too. */
+const samplesOf = ({ io, task, taskRepo }) => io.package?.samplesDir ?? (taskRepo === null ? null : path.join(taskRepo, 'tasks', path.basename(task.spec.path, '.md'), 'samples'));
+
+function contextOf({ io, world, pkg, run, scope, task, taskRepo }) {
   const limits = world.limits ?? quickCalibration(world.explore).limits;
-  return { world, pkg, run, scope, parent: io.package?.parent, limits, memoryBytes: limits.memoryBytes, say: io.say, signal: io.signal, seriesDir: exploreRoot(io.home), now: io.now ?? systemClock, home: io.home, task, heartbeatMs: io.package?.heartbeatMs, gateRecordFile: io.package?.gateRecordFile };
+  return { world, pkg, run, scope, parent: io.package?.parent, limits, memoryBytes: limits.memoryBytes, say: io.say, signal: io.signal, seriesDir: exploreRoot(io.home), now: io.now ?? systemClock, home: io.home, task, heartbeatMs: io.package?.heartbeatMs, gateRecordFile: io.package?.gateRecordFile, samplesDir: samplesOf({ io, task, taskRepo }) };
 }
 
 /** The quiet check of a step that measures (`--only suite` measures nothing): `ok` | `fail(reason)`. */
@@ -167,7 +170,7 @@ function finished({ args, io, pkg, pins, material, run, c, started, done }) {
 
 /** The steps run, then the record and the lines (or the halt). -> `{ exit, record, pkg }`. */
 async function executed({ args, io, world, pkg, pins, material, scope, run }) {
-  const c = contextOf({ io, world, pkg, run, scope, task: args.task });
+  const c = contextOf({ io, world, pkg, run, scope, task: args.task, taskRepo: args.taskRepo });
   const started = c.now();
   const done = await runSteps({ args, c, conformance: await conformanceOf({ args, io }) });
   if (!done.halted) return finished({ args, io, pkg, pins, material, run, c, started, done });

@@ -11,6 +11,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { isFrozen } from '../../lang-bench/lib/frozen-set.mjs';
 import { readBuildRecord } from './build-commit.mjs';
 import { dirBytes } from './measure.mjs';
+import { maxOf } from './package-max.mjs';
 import { onePass, wrapPass } from './package-pass.mjs';
 import { registeredOf } from './package-manifest.mjs';
 import { assembleReference, listFolder } from './package-quick.mjs';
@@ -128,7 +129,7 @@ function completedPasses({ work, ids }) {
   return open > 0 ? { halt: `${open} pass(es) have no completed attempt: environment, never a verdict` } : { passes: done.map(([p, a]) => ({ n: p.n, profile: p.profile, cases: a.cases, ms: a.ms })) };
 }
 
-const peakOf = cases => Math.max(0, ...cases.map(c => c.peakBytes).filter(Number.isFinite));
+const peakOf = cases => maxOf(cases.map(c => c.peakBytes).filter(Number.isFinite)) ?? 0;
 
 /** The private record of a witness: every pass's failing set and wall (the cost), counts and ids of the host. */
 function recordOf({ a, witness, registered, verdict, ran, work }) {
