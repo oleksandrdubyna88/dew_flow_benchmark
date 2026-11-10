@@ -115,7 +115,9 @@ Exit codes of both tools: 0 success, 1 a refusal (one line each: the heading, th
   figure is read by a strict reader that demands exactly one match; a missing or doubled line is the reader's error, never a silent pick.
 
 The record `format.json` holds `A`: the version, the sha256 of the format's raw bytes, the gate result (`null` until the format passes its
-gate), the sha256 of the extracted grammar, and the numbers of the tasks whose specs were written against that version.
+gate), the sha256 of the extracted grammar, and the numbers of the tasks whose specs were written against that version. It also holds `B`: the same
+FORMAT for the six tasks 04, 05, 06, 07, 08 and 10. `B` is never typed: `node spikes/lang-bench/specs-record.mjs --format-entry B --task-repo <path>` (or `LANG_V2_TASK_REPO`)
+computes it from FORMAT's bytes at the pinned commit of the task repository, and the same command with `--check` computes it again and names a field that differs.
 `node spikes/lang-bench/specs-record.mjs` assembles `inputs/specs.json` from it; never edit `specs.json` by hand.
 
 ## 3. The classes and the freeze
