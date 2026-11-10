@@ -19,6 +19,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadCalibration } from './limits.mjs';
 import { planOf, readToken, runPair } from './run.mjs';
 import { isQuick, quickExplore } from './quick.mjs';
+import { heldoutAware } from './heldout-commands.mjs';
 import { quickInitExtra } from './init-quick.mjs';
 import { replay } from './replay.mjs';
 import { repartitionSeries } from './repartition.mjs';
@@ -49,10 +50,10 @@ const refused = (io, reason) => { io.say(reason); return EXIT.config; };
 const firstBad = (...results) => results.find(r => !r.ok);
 
 /** What the series' inputs record besides the limits: the subject, the interpreter, the CLI and the pins of the series' task (its spec, FORMAT and private notes; the pins file's own `specs` block is task 1's). */
-async function initExtra(explore, task, home) {
+async function initExtra(explore, task, home, heldout) {
   const common = { subject: await subjectOf(), python3: explore.python3, cli: explore.cli, specs: explore.specs, taskPins: pinsOfTask(task) };
   if (!isQuick(task)) return { ...common, prompts: loadPrompts() };
-  const quick = await quickInitExtra({ explore, task, home });
+  const quick = await quickInitExtra({ explore, task, home, heldout });
   return quick.ok ? { ...common, ...quick.value } : quick;
 }
 
@@ -72,13 +73,13 @@ const openForInit = pins => { const closed = closedProblem(pins); return closed 
 
 /** The series `init` creates for `task`: the quick tasks are made over the quick profile of the pins. -> `ok({ dir, state })` | `fail`. */
 async function createFor({ explore, task, calibration, io }) {
-  const extra = await initExtra(explore, task, io.home);
+  const extra = await initExtra(explore, task, io.home, io.heldoutArgs);
   if (extra.ok === false) return extra;
   return createSeries({ home: io.home, explore: isQuick(task) ? quickExplore(explore, io.home) : explore, calibration, task: task.id, inputsExtra: extra });
 }
 
 /** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
-export async function cmdInit(values, io) {
+async function initCommand(values, io) {
   const need = initNeeds(values, io);
   if (!need.ok) return refused(io, need.reason);
   const made = await createFor({ ...need.value, io });
@@ -89,6 +90,8 @@ export async function cmdInit(values, io) {
   io.say(`task ${task.id} (${task.title}): run its pairs with \`run --task ${task.id} --series ${made.value.dir} --pair <k>\``);
   return EXIT.done;
 }
+
+export const cmdInit = heldoutAware(initCommand);
 
 /** The series a command works on, opened and checked to be a series of `task`: `ok({ dir, state, map })` | `fail`. */
 function openSeriesOf(values, io, task) {
@@ -118,7 +121,7 @@ function runSetup(values, io) {
 }
 
 /** `run --task NN --pair k [--rerun <stack>] [--accept-noisy <reason>] [--allow-over <text>]`: ONE pair. SPENDS MONEY. */
-export async function cmdRun(values, io) {
+async function runCommand(values, io) {
   const setup = runSetup(values, io);
   if (!setup.ok) return refused(io, setup.reason);
   const { explore, task, series } = setup.value;
@@ -129,6 +132,8 @@ export async function cmdRun(values, io) {
   if (r.pairFile) io.say(`pair record: ${r.pairFile}`);
   return r.exit;
 }
+
+export const cmdRun = heldoutAware(runCommand);
 
 /** The lines a rehearsal prints after it ends. */
 function sayRehearsal(io, r) {
@@ -164,7 +169,7 @@ function rescoreArgs(values, io) {
 }
 
 /** `rescore --task NN --series DIR --rid R [--wait S]`: FREE. See lib/rescore.mjs: an ended void that its own evidence now classes as data is scored and recorded; the ledger's spend is unchanged. */
-export async function cmdRescore(values, io) {
+async function rescoreCommand(values, io) {
   const args = rescoreArgs(values, io);
   if (!args.ok) return refused(io, args.reason);
   const seams = { worldFn: io.worldFn ?? loadWorld, tokenFn: io.tokenFn ?? (async home => readToken(home)) };
@@ -173,6 +178,8 @@ export async function cmdRescore(values, io) {
   if (r.pairFile) io.say(`pair record: ${r.pairFile}`);
   return r.exit;
 }
+
+export const cmdRescore = heldoutAware(rescoreCommand);
 
 /** `repartition --series DIR`: FREE. See lib/repartition.mjs: the time partition of every kept session recomputed from its retained evidence into a NEW dated result file; no record changes. */
 export async function cmdRepartition(values, io) {
@@ -198,13 +205,15 @@ function replayArgs(values, io) {
 }
 
 /** `replay --task NN --series DIR --rid R --case ID [--times N]`: a diagnostic reading of a rejected case on the current runner. See lib/replay.mjs: it changes no record, no verdict and no spend; its one output is `s/<rid>/replay/<time>.json`. */
-export async function cmdReplay(values, io) {
+async function replayCommand(values, io) {
   const args = replayArgs(values, io);
   if (!args.ok) return refused(io, args.reason);
   const r = await replay({ task: args.value.task, seriesDir: path.resolve(values.series), rid: values.rid, caseId: values.case, times: args.value.times, io: { ...io, worldFn: io.worldFn ?? loadWorld } });
   io.say(r.message);
   return r.exit;
 }
+
+export const cmdReplay = heldoutAware(replayCommand);
 
 const sessionLine = s => `  ${s.rid} pair ${s.pair} ${s.stack} a${s.attempt} mask ${s.mask} ${s.status}${s.class ? `: ${s.class}` : ''} (${s.label})`;
 const spentOf = dir => readLedger(path.join(dir, 'ledger.ndjson')).filter(l => l.event === undefined).reduce((a, l) => a + l.usd, 0);
@@ -322,12 +331,14 @@ export async function cmdQuiet(values, io) {
 }
 
 /** `leakcheck [--task NN] [--range A..B] [--task-repo <path>] [--task-base <ref>] [--candidate-repo <path> --candidate <commit>]`: see `leakcheckRepos`. */
-export async function cmdLeakcheck(values, io) {
+async function leakcheckCommand(values, io) {
   const explore = (io.exploreFn ?? loadExplore)();
   if (!explore.ok) return refused(io, explore.reason);
   const r = await leakcheckRepos({ values, io, explore: explore.value, say: io.say });
   if (r.message) io.say(r.message);
   return r.exit;
 }
+
+export const cmdLeakcheck = heldoutAware(leakcheckCommand);
 
 export { EXIT, decidedPublicText, leakShingles };

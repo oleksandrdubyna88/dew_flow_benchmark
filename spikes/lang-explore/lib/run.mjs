@@ -11,7 +11,7 @@ import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { readSecretFile } from '../../minigit-bench/lib/secrets.mjs';
 import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
-import { loadHeldout } from './heldout.mjs';
+import { readerHeldout } from './heldout-reader.mjs';
 import { finalizeSessionRecord, missingPaths, pairRecordOf } from './records.mjs';
 import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
@@ -126,8 +126,8 @@ export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
 }
 
 /** What a pair needs besides its plan: the task's calibration, its held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
-async function prerequisites({ home, series, task, worldFn, tokenFn }) {
-  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => loadHeldout(home, task), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
+export async function prerequisites({ home, series, task, worldFn, tokenFn, heldout: context }) {
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => readerHeldout({ home, task, heldout: context }), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
   const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
@@ -185,7 +185,7 @@ const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 
 /** What the pair needs, or the answer that ends it here: a missing prerequisite (exit 4) or a harness that moved (exit 3, see `harnessRefusal`). -> `{ need }` | `{ answer }`. */
 async function readyOrRefused({ series, pair, io, task }) {
-  const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn });
+  const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
   if (!need.ok) return { answer: { exit: 4, message: need.reason } };
   const moved = harnessRefusal({ series, pair, world: need.value.world, io });
   return moved ? { answer: moved } : { need: need.value };

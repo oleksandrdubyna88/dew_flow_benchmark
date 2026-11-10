@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { generatedHashesNow } from './generated-drift.mjs';
 import { harnessPinsNow } from './harness-pin.mjs';
-import { loadHeldoutQuick, parseProblem } from './heldout-quick.mjs';
+import { parseProblem } from './heldout-quick.mjs';
+import { readerHeldout } from './heldout-reader.mjs';
 import { PROMPT_TEMPLATE, STACK_NAMES, promptText } from './plan.mjs';
 import { quickExplore } from './quick.mjs';
 import { taskSources } from './workspace.mjs';
@@ -34,8 +35,8 @@ export async function generatedOf({ explore, task, home, sourcesFn }) {
 }
 
 /** The identity of the held-out set and its parse by the real runner. -> `ok({ heldoutQuick })` | `fail`. */
-async function heldoutOf({ task, home }) {
-  const held = loadHeldoutQuick(home, task);
+async function heldoutOf({ task, home, heldout }) {
+  const held = await readerHeldout({ home, task, heldout });
   if (!held.ok) return fail(held.reason);
   const parsed = await parseProblem({ casesDir: held.value.casesDir, kind: task.kind, runner: path.join(BENCH_RUNNER, 'run_samples.py') });
   return parsed.ok ? ok({ heldoutQuick: { treeSha256: held.value.treeSha256, caseCount: held.value.caseIds.length, trapCount: held.value.traps.length, parsed: parsed.value } }) : fail(parsed.reason);
@@ -50,8 +51,8 @@ async function bytesOf({ explore, task, home, sourcesFn }) {
 }
 
 /** -> `ok({ prompts, heldoutQuick, ... })` | `fail`. `explore` is the base pins (the quick profile is made here). */
-export async function quickInitExtra({ explore, task, home, sourcesFn = taskSources }) {
-  const held = await heldoutOf({ task, home });
+export async function quickInitExtra({ explore, task, home, sourcesFn = taskSources, heldout }) {
+  const held = await heldoutOf({ task, home, heldout });
   const bytes = held.ok ? await bytesOf({ explore, task, home, sourcesFn }) : held;
   return bytes.ok ? ok({ prompts: quickPrompts(quickExplore(explore, home)), ...harnessPinsNow(), ...bytes.value, ...held.value }) : bytes;
 }

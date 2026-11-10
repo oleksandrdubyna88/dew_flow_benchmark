@@ -9,6 +9,8 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { loadHeldout } from './heldout.mjs';
 import { sealedAbsentProblem } from './heldout-quick.mjs';
+import { withOpenedHeldout } from './heldout-lifecycle.mjs';
+import { isQuick } from './quick.mjs';
 import { listOf } from './idlist.mjs';
 import { buildMaterial, materialCounts } from './leak-material.mjs';
 import { loadReviewed } from './leak-reviewed.mjs';
@@ -154,6 +156,19 @@ const idProblem = (r, material) => {
 /** The progress sink of a command: `io.progress`, else one line per call on stderr (counts and names only). */
 export const progressOf = io => io.progress ?? (line => process.stderr.write(`${line}\n`));
 
+/** The held-out context of the command (`io.heldoutArgs`), with the record the command was given. */
+const heldoutArgsOf = io => ({ ...(io.heldoutArgs ?? {}), ...(io.frozenFile === undefined ? {} : { frozenFile: io.frozenFile }) });
+
+/**
+ * `fn` run with every sealed quick task of the scan opened for this reader and closed after it, whether `fn` returns or throws (`withOpenedHeldout`: the task's lock is held for the whole read, the stamp is this process's). A task
+ * that is not sealed, or whose folder is held, is read as it is. -> what `fn` returns | `fail(sentence)` when a folder cannot be opened.
+ */
+function withSealedOpened({ values, io, explore }, fn) {
+  const ids = values.task === undefined ? taskIds(explore) : [values.task];
+  const tasks = ids.map(id => resolveTask(explore, id)).filter(t => t.ok && isQuick(t.value)).map(t => t.value);
+  return tasks.reduceRight((inner, task) => () => withOpenedHeldout({ ...heldoutArgsOf(io), home: io.home, task, fn: inner }), fn)();
+}
+
 /**
  * The material of the command, built once for every repository it scans: `ok({ material, ids, scanned, absent, reviewed })` | `fail(sentence)`. The runner's committed lines and the quick tasks' grammar set are read from the
  * bench repository (`io.repoRoot`), as always.
@@ -162,7 +177,7 @@ export async function commandMaterial({ values, io, explore }) {
   const repoRoot = io.repoRoot ?? REPO;
   const progress = progressOf(io);
   progress(`building the material of tasks ${values.task ?? taskIds(explore).join(', ')}`);
-  const material = materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) });
+  const material = await withSealedOpened({ values, io, explore }, async () => materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) }));
   if (material.ok) progress(`material: ${materialCounts(material.value.material)}`);
   return material;
 }

@@ -18,7 +18,7 @@ import { allOk } from './chain.mjs';
 import { systemClock } from './clock.mjs';
 import { loadExplore } from './inputs.mjs';
 import { quickPrompts } from './init-quick.mjs';
-import { loadHeldout } from './heldout.mjs';
+import { readerHeldout } from './heldout-reader.mjs';
 import { calibrationFor } from './limits.mjs';
 import { pinsOk } from './pins.mjs';
 import { isQuick, quickExplore } from './quick.mjs';
@@ -88,8 +88,8 @@ export function sessionProblem({ map, entry, layout, rid }) {
 }
 
 /** The series' own held-out set, checked against the hash recorded at `init` (a quick task) -> `ok(heldout)` | `fail`. */
-async function seriesHeldout({ home, seriesDir, task }) {
-  const held = loadHeldout(home, task);
+export async function seriesHeldout({ home, seriesDir, task, heldout }) {
+  const held = await readerHeldout({ home, task, heldout });
   const problem = held.ok && isQuick(task) ? await quickHeldoutProblem({ seriesDir, heldout: held.value, task }) : null;
   return problem ? fail(problem) : held;
 }
@@ -114,7 +114,7 @@ function promptsOf({ seriesDir, home }) {
 /** What a rescore needs: the limits, the held-out set, the world, the token, the frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | `fail`. */
 async function prerequisites({ io, seriesDir, task }) {
   const home = io.home;
-  const got = await allOk([() => calibrationFor({ home, seriesDir, task }), () => heldoutOf({ home, seriesDir, task }), () => io.worldFn({ home, work: path.join(seriesDir, 'private'), task }), () => io.tokenFn(home), () => promptsOf({ seriesDir, home })]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir, task }), () => heldoutOf({ home, seriesDir, task, heldout: io.heldoutArgs }), () => io.worldFn({ home, work: path.join(seriesDir, 'private'), task }), () => io.tokenFn(home), () => promptsOf({ seriesDir, home })]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
   const pins = isRehearsal(seriesDir) ? ok(null) : pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });

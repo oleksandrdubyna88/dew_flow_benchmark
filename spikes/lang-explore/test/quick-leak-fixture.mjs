@@ -43,10 +43,10 @@ export function writeReviewed(home, listOrText) {
 /** The pins restricted to the tasks in `ids`: a scan over every task of these pins reads exactly these folders (a task of the pins whose folder is absent is a refusal, so a test that holds fewer folders names fewer tasks). */
 export const exploreOf = ids => ({ ...EXPLORE, tasks: Object.fromEntries(ids.map(id => [id, EXPLORE.tasks[id]])) });
 
-/** A held-out record file (`heldout-frozen.json`) in a temp folder, registering a sealed archive for each task in `ids` (an invented hash: counts and hashes only, as the real record is). -> its path. */
-export function writeFrozen(ids, over = {}) {
+/** A held-out record file (`heldout-frozen.json`) in a temp folder, registering a sealed archive for each task in `ids` (an invented hash: counts and hashes only, as the real record is; `entry` replaces fields of every task's entry). -> its path. */
+export function writeFrozen(ids, over = {}, entry = {}) {
   const file = path.join(tmpDir('q-frozen'), 'heldout-frozen.json');
-  const tasks = Object.fromEntries(ids.map(id => [id, { archiveSha256: 'a'.repeat(64), caseCount: 2, trapCount: 1 }]));
+  const tasks = Object.fromEntries(ids.map(id => [id, { archiveSha256: 'a'.repeat(64), caseCount: 2, trapCount: 1, ...entry }]));
   put(file, JSON.stringify({ tasks, ...over }));
   return file;
 }
