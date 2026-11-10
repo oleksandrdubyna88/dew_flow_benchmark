@@ -286,9 +286,11 @@ test('The_conformance_gate_checks_the_pinned_spec_before_the_checkers_exit_count
   const fixture = fixtureRepo(t, 'olympiad');
   const pinned = sha(readFileSync(fixture.spec));
   const base = { repo: fixture.repo, slug: fixture.task, format: fixture.format, record: recordFile(fixture) };
-  assert.equal((await runConformance({ ...base, specSha256: pinned })).exit, 0, 'control: the checked file is the pinned one');
+  const same = await runConformance({ ...base, specSha256: pinned });
+  assert.deepEqual([same.exit, same.pinned], [0, true], 'control: the checked file is the pinned one, and the run says so');
   const moved = await runConformance({ ...base, specSha256: 'f'.repeat(64) });
   assert.notEqual(moved.exit, 0);
+  assert.equal(moved.pinned, false, 'a checkout whose spec is not the pinned one is not a pinned checkout');
   assert.ok(/not the pinned spec/.test(moved.firstLine) && moved.firstLine.includes(pinned.slice(0, 12)) && moved.firstLine.includes('f'.repeat(12)), moved.firstLine);
   const missing = await runConformance({ ...base, specSha256: undefined });
   assert.notEqual(missing.exit, 0, 'no pin is a refusal, never a pass');

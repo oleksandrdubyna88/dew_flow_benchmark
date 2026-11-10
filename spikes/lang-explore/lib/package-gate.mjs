@@ -23,11 +23,11 @@ function pinProblem({ file, specSha256 }) {
 /** The checker over a task repository: `{ exit, firstLine }`, the first `FAIL` line (or the first line the checker said) when it is not 0. `record` names the FORMAT record (tests); the checker's own default is the committed one. */
 export async function runConformance({ repo, slug, format, needles, record, specSha256 }) {
   const moved = pinProblem({ file: path.join(repo, 'todo', 'tasks', `${slug}.md`), specSha256 });
-  if (moved !== null) return { exit: 4, firstLine: moved };
+  if (moved !== null) return { exit: 4, firstLine: moved, pinned: false };
   const argv = ['--repo', repo, '--task', slug, '--format', format, ...(needles ? ['--needles', needles] : []), ...(record ? ['--record', record] : [])];
   const r = await run(argv);
   const said = [...r.lines, ...(r.errors ?? [])];
-  return { exit: r.exit, firstLine: said.find(l => l.startsWith('FAIL')) ?? said[0] ?? '(the checker said nothing)' };
+  return { exit: r.exit, pinned: true, firstLine: said.find(l => l.startsWith('FAIL')) ?? said[0] ?? '(the checker said nothing)' };
 }
 
 /** The reviewer count a gate record states (`N reviewers`), or `null`: counts only. */

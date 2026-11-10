@@ -1,7 +1,7 @@
 // The suite, the R-ids, the manifest and the load rule of a package (F2.S1, section 2.3, scenarios 16 to 20), over an INVENTED task in a temp home. The sentences the tool says name cases and stay on the host.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadPackage } from '../lib/package-quick.mjs';
@@ -9,7 +9,8 @@ import { loadRule } from '../lib/package-refs.mjs';
 import { casesTxtProblems, folderProblems, largestReplyBody, specRIds, trapsTxtProblems } from '../lib/package-suite.mjs';
 import { maxOf } from '../lib/package-max.mjs';
 import { suiteStep } from '../lib/package-steps.mjs';
-import { sOfSuite } from '../lib/package-record.mjs';
+import { packageRoot, sOfSuite } from '../lib/package-record.mjs';
+import { treeHashOf } from '../lib/package-quick.mjs';
 import { IDS, SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
 
 
@@ -102,6 +103,7 @@ test('The_largest_expected_reply_body_S_is_counted_from_the_suite_as_bytes_with_
 });
 
 const mkdirSyncP = dir => mkdirSync(dir, { recursive: true });
+const PINNED = { exit: 0, firstLine: '', pinned: true };
 const outOf = (p, name, text) => writeFileSync(path.join(p.casesDir, name), text);
 
 test('S_is_counted_as_the_runner_reads_a_body_a_json_value_a_repeat_count_and_adjacent_strings_and_a_header_is_no_body', () => {
@@ -143,8 +145,48 @@ test('S_is_recorded_only_for_a_suite_with_no_problem', () => {
   const samples = path.join(good.dir, '..', 'samples-for-s');
   mkdirSyncP(samples);
   writeFileSync(path.join(samples, 's01.out'), `transcript 2\nrecv c "${'v'.repeat(5000)}"\n`);
-  const step = suiteStep({ pkg: goodPkg, home: good.home, task: good.task, conformance: null, samplesDir: samples });
+  const step = suiteStep({ pkg: goodPkg, home: good.home, task: good.task, conformance: PINNED, samplesDir: samples });
   assert.equal(step.item.suite.ok, true);
   assert.equal(step.item.suite.sBytes, 5000, 'the step counts the visible samples beside the held-out cases');
   assert.notEqual(sOfSuite({ home: good.home, task: good.task, treeSha256: goodPkg.held.treeSha256 }), null);
 });
+
+/** A good package with a sample folder holding one reply of `size` bytes. */
+function withSamples(size = 5000) {
+  const p = writePackage();
+  const pkg = loadPackage({ home: p.home, task: p.task, world: fakeWorld() }).value;
+  const samples = path.join(p.dir, '..', 'samples-for-l1');
+  mkdirSyncP(samples);
+  writeFileSync(path.join(samples, 's01.out'), `transcript 2\nrecv c "${'v'.repeat(size)}"\n`);
+  return { p, pkg, samples };
+}
+
+test('S_is_not_recorded_without_a_task_repo', () => {
+  const { p, pkg } = withSamples();
+  const step = suiteStep({ pkg, home: p.home, task: p.task, conformance: null, samplesDir: null });
+  assert.equal(step.item.suite.sRecorded, false);
+  assert.ok(/no --task-repo/.test(step.item.suite.sNote), step.item.suite.sNote);
+  assert.equal(sOfSuite({ home: p.home, task: p.task, treeSha256: pkg.held.treeSha256 }), null, 'a first wrong S would stay for ever: nothing is recorded');
+  assert.equal(typeof step.item.suite.sBytes, 'number', 'S is still counted and said');
+});
+
+test('S_is_not_recorded_from_a_checkout_whose_spec_is_not_the_pinned_one', () => {
+  const { p, pkg, samples } = withSamples();
+  const step = suiteStep({ pkg, home: p.home, task: p.task, conformance: { exit: 4, firstLine: 'not the pinned spec', pinned: false }, samplesDir: samples });
+  assert.equal(step.item.suite.sRecorded, false);
+  assert.ok(/not the pinned one/.test(step.item.suite.sNote), step.item.suite.sNote);
+  assert.equal(step.item.suite.sBytes < 5000, true, 'the samples of a checkout that is not the pinned one are not counted');
+  assert.equal(sOfSuite({ home: p.home, task: p.task, treeSha256: pkg.held.treeSha256 }), null);
+});
+
+test('S_is_recorded_with_the_pinned_checkout_and_names_the_samples_hash', () => {
+  const { p, pkg, samples } = withSamples();
+  const step = suiteStep({ pkg, home: p.home, task: p.task, conformance: PINNED, samplesDir: samples });
+  assert.equal(step.item.suite.sRecorded, true);
+  assert.equal(step.item.suite.sBytes, 5000);
+  const entry = JSON.parse(readFileSync(path.join(packageRoot(p.home, p.task), 's.json'), 'utf8')).counts.at(-1);
+  assert.equal(entry.suiteTreeSha256, pkg.held.treeSha256);
+  assert.equal(entry.samplesTreeSha256, treeHashOf(samples), 'the samples\' tree hash is beside the suite\'s, for audit');
+  assert.equal(entry.sBytes, 5000);
+});
+

@@ -94,16 +94,16 @@ export function latestRecord({ home, task }) {
 
 const sFile = (home, task) => path.join(packageRoot(home, task), 's.json');
 
-/** The S counts of a task: `[{ suiteTreeSha256, sBytes, countedOn }]`, oldest first (a file that is not there or not valid is none). */
+/** The S counts of a task: `[{ suiteTreeSha256, samplesTreeSha256, sBytes, countedOn }]`, oldest first (a file that is not there or not valid is none). */
 export const sCountsOf = ({ home, task }) => (readJson(sFile(home, task))?.counts ?? []);
 
 /** The S counted for the suite whose tree hash is `treeSha256`, or `null`: an S recorded for an older suite does not count. */
 export const sOfSuite = ({ home, task, treeSha256 }) => sCountsOf({ home, task }).find(c => c.suiteTreeSha256 === treeSha256)?.sBytes ?? null;
 
 /** Record S for a suite once: appended to `package-NN/s.json` (the whole file replaced, every earlier entry kept); a suite already counted is a no-op. -> `ok('recorded' | 'unchanged')`. */
-export function recordS({ home, task, treeSha256, sBytes, now = systemClock }) {
+export function recordS({ home, task, treeSha256, samplesTreeSha256 = null, sBytes, now = systemClock }) {
   if (sOfSuite({ home, task, treeSha256 }) !== null) return ok('unchanged');
-  const counts = [...sCountsOf({ home, task }), { suiteTreeSha256: treeSha256, sBytes, countedOn: now().toISOString().slice(0, 10) }];
+  const counts = [...sCountsOf({ home, task }), { suiteTreeSha256: treeSha256, samplesTreeSha256, sBytes, countedOn: now().toISOString().slice(0, 10) }];
   mkdirSync(packageRoot(home, task), { recursive: true, mode: 0o700 });
   const next = `${sFile(home, task)}.next`;
   rmSync(next, { force: true });

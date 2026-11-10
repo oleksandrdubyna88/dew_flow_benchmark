@@ -126,8 +126,11 @@ const outFiles = dir => readdirSync(dir).filter(n => n.endsWith('.out')).map(n =
  * maximum. A `${...}` field counts its literal bytes only (its value is not known before the run). A count, never a case. `dirs` is a folder or a list of folders; one that is not there has nothing.
  */
 export function largestReplyBody(dirs) {
-  const folders = [dirs].flat().filter(d => existsSync(d));
-  return maxOf(folders.flatMap(outFiles).flatMap(f => readFileSync(f, 'utf8').split('\n').map(lineBytes))) ?? 0;
+  let best = 0;
+  for (const dir of [dirs].flat().filter(d => existsSync(d))) {
+    for (const file of outFiles(dir)) for (const line of readFileSync(file, 'utf8').split('\n')) best = Math.max(best, lineBytes(line));
+  }
+  return best;
 }
 
 /** Every problem of the suite checks (the sentences of scenarios 15 to 18), in order. `pkg` is `loadPackage`'s value. */

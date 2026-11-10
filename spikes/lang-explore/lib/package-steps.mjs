@@ -7,7 +7,7 @@ import { gateItem } from './package-gate.mjs';
 import { maxOf } from './package-max.mjs';
 import { STACKS } from './package-manifest.mjs';
 import { onePass, wrapPass } from './package-pass.mjs';
-import { assembleReference } from './package-quick.mjs';
+import { assembleReference, treeHashOf } from './package-quick.mjs';
 import { loadRule, stageTwins, validateReference } from './package-refs.mjs';
 import { readStep, recordS, writeStep } from './package-record.mjs';
 import { largestReplyBody, suiteProblems } from './package-suite.mjs';
@@ -17,21 +17,33 @@ const slim = rows => ({ ...rows, passes: rows.passes.map(({ cases, ...row }) => 
 
 const maybe = (holds, part) => (holds ? part : {});
 
-/** The folders S is counted over: the held-out cases and the visible samples when given. */
-const foldersOf = (pkg, samplesDir) => (samplesDir === null ? [pkg.casesDir] : [pkg.casesDir, samplesDir]);
+/** Each reason S is not recorded, as `[holds({ problems, conformance, samplesDir }), the sentence]`, in order. S is recorded only for a suite with no problem, from the samples of a `--task-repo` whose spec passed the pin check (a first wrong S would stay for ever). */
+const NOT_RECORDED = Object.freeze([
+  [a => a.problems.length > 0, 'the suite has a problem'],
+  [a => a.conformance === null || a.conformance === undefined || a.samplesDir === null, 'no --task-repo: the visible samples were not read'],
+  [a => a.conformance.pinned !== true, 'the task repository\'s spec is not the pinned one: its samples are not the frozen ones'],
+]);
+
+/** Why S is not recorded, or null. */
+const notRecordedWhy = a => NOT_RECORDED.find(([holds]) => holds(a))?.[1] ?? null;
+
+/** The samples folder S counts: only one that came from a checkout whose spec matched the pin. */
+const trustedSamples = ({ conformance, samplesDir }) => (conformance?.pinned === true ? samplesDir : null);
 
 /** The gate item of the record: the verdict, and the verdict and date (or that the checker was not run). */
 function gateOf(gate) {
   return { ok: gate.ok, sentence: gate.sentence, ...maybe(gate.gate !== undefined, { gate: gate.gate }), ...maybe(gate.notRun === true, { notRun: true }) };
 }
 
-/** The suite checks, S and the gate: `{ item }`. S is counted from the held-out cases and the visible samples (`samplesDir`) and recorded apart from registration (`package-NN/s.json`, once per suite hash), and only for a suite with no problem. `conformance` is the checker's answer or `null`. */
+/** The suite checks, S and the gate: `{ item }`. S is counted from the held-out cases and, when the checkout's spec matched the pin, the visible samples; it is recorded apart from registration (`package-NN/s.json`, once per suite hash, with the samples' tree hash) only under `notRecordedWhy`'s rule, and the item says so. `conformance` is the checker's answer or `null`. */
 export function suiteStep({ pkg, home, task, conformance, now, recordFile, samplesDir = null }) {
   const problems = suiteProblems(pkg);
-  const sBytes = largestReplyBody(foldersOf(pkg, samplesDir));
-  if (problems.length === 0) recordS({ home, task, treeSha256: pkg.held.treeSha256, sBytes, now });
+  const samples = trustedSamples({ conformance, samplesDir });
+  const sBytes = largestReplyBody(samples === null ? [pkg.casesDir] : [pkg.casesDir, samples]);
+  const why = notRecordedWhy({ problems, conformance, samplesDir });
+  if (why === null) recordS({ home, task, treeSha256: pkg.held.treeSha256, samplesTreeSha256: treeHashOf(samples), sBytes, now });
   const gate = gateItem({ specText: pkg.specText, conformance, task, ...maybe(recordFile !== undefined, { recordFile }) });
-  return { item: { suite: { ok: problems.length === 0, problems, sBytes, counts: { cases: pkg.held.caseIds.length, problems: problems.length } }, gate: gateOf(gate) } };
+  return { item: { suite: { ok: problems.length === 0, problems, sBytes, sRecorded: why === null, sNote: why === null ? 'recorded' : `not recorded: ${why}`, counts: { cases: pkg.held.caseIds.length, problems: problems.length } }, gate: gateOf(gate) } };
 }
 
 const treeOf = (c, stack) => assembleReference({ templates: c.world.templates, stack, kind: c.task.kind, refDir: c.pkg.refs[stack].dir, scope: c.scope, parent: c.parent });

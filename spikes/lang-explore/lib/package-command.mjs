@@ -67,7 +67,7 @@ async function conformanceOf({ args, io }) {
 }
 
 const DETAIL = Object.freeze({
-  suite: i => `${i.counts.problems} problem(s), ${i.counts.cases} case(s), S ${i.sBytes} bytes`,
+  suite: i => `${i.counts.problems} problem(s), ${i.counts.cases} case(s), S ${i.sBytes} bytes (${i.sNote})`,
   refs: i => ['csharp', 'node'].map(s => i[s].sentence).join('; '),
   load: i => i.sentence ?? (i.problems?.[0] ?? `slowest ${i.slowestWallMs} ms, twin ${i.twinWallMs} ms, duration ${i.durationS} s`),
   witnesses: i => `${i.caught} of ${i.witnesses} caught${i.notCaught?.length ? `: ${i.notCaught.join('; ')}` : ''}`,
