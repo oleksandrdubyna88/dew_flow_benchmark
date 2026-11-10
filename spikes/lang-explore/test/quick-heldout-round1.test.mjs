@@ -151,11 +151,11 @@ test('A_temporary_copy_of_a_live_owner_is_kept_and_an_existing_equal_copy_is_acc
   const mtime = statSync(w.backupFile).mtimeMs;
   assert.equal((await makeBackup(backupArgs(w))).ok, true, 'resume: a copy that hashes to the key is accepted');
   assert.equal(statSync(w.backupFile).mtimeMs, mtime, 'and not touched');
-  writeFileSync(w.backupFile, 'a different key copy');
+  writeFileSync(w.backupFile, Buffer.alloc(32, 9)); // a different key's size: its hash, not its size, refuses it
   const refused = await makeBackup(backupArgs(w));
   assert.equal(refused.ok, false);
   assert.ok(refused.reason.includes(w.backupFile) && /sha256/.test(refused.reason), refused.reason);
-  assert.equal(readFileSync(w.backupFile, 'utf8'), 'a different key copy', 'never overwritten');
+  assert.deepEqual(readFileSync(w.backupFile), Buffer.alloc(32, 9), 'never overwritten');
 });
 
 // ---- 5: a malformed private file blocks only the quick tasks ----------------------------------------------------------------------------------------------------------------------

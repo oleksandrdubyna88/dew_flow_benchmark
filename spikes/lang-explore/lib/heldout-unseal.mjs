@@ -3,7 +3,7 @@
 // is atomic, and a reader sees no `cases/` or the whole one, never half of one. A temporary folder is made only by a holder of the task's lock, so the next holder removes any it finds, with no liveness test of its maker.
 import { chmodSync, lstatSync, readdirSync, renameSync } from 'node:fs';
 import path from 'node:path';
-import { cleanupScope, removeClaim } from '../../../.agents/conventions/tools/lib/owned.mjs';
+import { cleanupScope, removeClaim, writeOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { removeUnder } from '../../policy-ab-quick/lib/safe-rm.mjs';
@@ -19,7 +19,7 @@ function tightenFiles(dir) {
 
 const isTemp = (name, pattern) => pattern.test(name) && !name.endsWith('.owner');
 
-/** Remove the owned temporary folders (and their claims) of this user in `heldoutDir`: what a killed open left. Only a holder of the lock calls this. -> `ok([names removed])` | `fail`. */
+/** Remove the owned temporary folders (and their claims) of this user in `heldoutDir`: what a killed open left, and the removing-folders of a killed removal (`moveAside`). Only a holder of the lock calls this. -> `ok([names removed])` | `fail`. */
 export function removeOwnedTemps({ heldoutDir }) {
   const found = readdirSync(heldoutDir).filter(name => isTemp(name, owned.ownedPattern()));
   try {
@@ -31,6 +31,24 @@ export function removeOwnedTemps({ heldoutDir }) {
     return fail(`a temporary folder in ${heldoutDir} cannot be removed: ${e.message}`);
   }
   return ok(found);
+}
+
+/**
+ * The first step of a crash-safe removal of the clear folder (the lock held): `cases/` is renamed to an owned name inside `heldout-NN/` (`testsToDelete-<owner>-bench-removing-<id>`, its claim written first), so from that instant no
+ * `cases/` exists, whole or half. The caller deletes the renamed folder, its claim, then the stamp; a kill at any step leaves a removing-folder the next holder of the lock finishes (`removeOwnedTemps`), never a half-deleted `cases/`
+ * that reads as "changed after sealing". -> the renamed folder's path.
+ */
+export function moveAside(ctx) {
+  const aside = path.join(ctx.heldoutDir, owned.ownedName('removing'));
+  writeOwner(aside);
+  ctx.fs.renameSync(ctx.casesDir, aside);
+  return aside;
+}
+
+/** Delete the folder `moveAside` made, then its claim (a link anywhere inside is refused, as everywhere). */
+export function finishRemoval(ctx, aside) {
+  removeUnder(aside, ctx.heldoutDir, ctx.fs);
+  removeClaim(aside);
 }
 
 /** `fail` of a refusal after the temporary folder was made: the folder and its claim are removed first. */

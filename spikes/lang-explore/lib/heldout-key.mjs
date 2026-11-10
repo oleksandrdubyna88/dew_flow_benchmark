@@ -64,19 +64,42 @@ async function mountProblem({ task, backupFile, shareMount, mountOf: mountFn, fs
   return found.value === share ? null : `the key backup folder is not on the mounted share: ${folder} resolves to the mount ${found.value}, expected ${share}`;
 }
 
-const notAKey = stat => !stat.isFile() || stat.size > 64;
+const KEY_BYTES = 32;
 
-/** Why a backup path holds no key (a missing file, a link, a directory, a file of the wrong size), or null. */
-function whyNotAKey(stat) {
-  if (stat === undefined) return 'the file does not exist';
-  return notAKey(stat) ? 'it is not a regular file of the size of a key' : null;
+/** Open the backup without following a link: `ok(fd)` | `fail(why)` (a missing file, a link, anything the system refuses). */
+function openNoFollow(backupFile, fs) {
+  try {
+    return ok(fs.openSync(backupFile, nodeFs.constants.O_RDONLY | nodeFs.constants.O_NOFOLLOW));
+  } catch (e) {
+    return fail(e.code === 'ENOENT' ? 'the file does not exist' : `it cannot be opened without following a link (${e.code})`);
+  }
+}
+
+/** The key's bytes of an open descriptor: `ok(bytes)` when it is a regular file of the size of a key, else a `fail(why)`. Everything is read from this one descriptor. */
+function readKeyBytes(fd, fs) {
+  const stat = fs.fstatSync(fd);
+  if (!stat.isFile() || stat.size !== KEY_BYTES) return fail(`it is not a regular file of the size of a key (${KEY_BYTES} bytes)`);
+  const bytes = Buffer.alloc(KEY_BYTES + 1);
+  const got = fs.readSync(fd, bytes, 0, bytes.length, 0);
+  return got === KEY_BYTES ? ok(bytes.subarray(0, KEY_BYTES)) : fail('it changed while it was read');
+}
+
+/** The bytes of the backup, read through ONE handle (`O_NOFOLLOW`, then `fstat` and `read` of that descriptor): a link put in the copy's place, or a file swapped after a look, cannot be what is hashed. */
+function backupBytes(backupFile, fs) {
+  const opened = openNoFollow(backupFile, fs);
+  if (!opened.ok) return opened;
+  try {
+    return readKeyBytes(opened.value, fs);
+  } finally {
+    fs.closeSync(opened.value);
+  }
 }
 
 /** The sentence refusing a backup file that is not a regular file hashing to `keySha256`, or null. */
 function fileProblem({ task, backupFile, keySha256, fs }) {
-  const why = whyNotAKey(fs.lstatSync(backupFile, { throwIfNoEntry: false }));
-  if (why !== null) return unverified({ task, backupFile, why });
-  return sha256Hex(fs.readFileSync(backupFile)) === keySha256 ? null : unverified({ task, backupFile, why: 'its sha256 is not the entry\'s keySha256' });
+  const bytes = backupBytes(backupFile, fs);
+  if (!bytes.ok) return unverified({ task, backupFile, why: bytes.reason });
+  return sha256Hex(bytes.value) === keySha256 ? null : unverified({ task, backupFile, why: 'its sha256 is not the entry\'s keySha256' });
 }
 
 const isNamed = value => typeof value === 'string' && value !== '';
@@ -121,10 +144,16 @@ function publishCopy({ key, backupFile, fs, pid, startTime }) {
   fs.unlinkSync(temp);
 }
 
-/** The copy, made when there is none (an existing one is verified by the caller, never overwritten). */
+/** The copy, made when there is none (an existing one is verified by the caller, never overwritten). A backup folder that is gone is a refusal naming it. -> `ok(null)` | `fail`. */
 function ensureCopy(a) {
-  removeStaleTemps(a);
+  try {
+    removeStaleTemps(a);
+  } catch (e) {
+    if (e.code === 'ENOENT') return fail(`the key backup folder ${path.dirname(a.backupFile)} is not there: it was removed or unmounted while the copy was made; mount or restore it, then run again`);
+    throw e;
+  }
   if (a.fs.lstatSync(a.backupFile, { throwIfNoEntry: false }) === undefined) publishCopy(a);
+  return ok(null);
 }
 
 /**
@@ -135,7 +164,8 @@ export async function makeBackup({ task, key, backupFile, shareMount, mountOf: m
   const named = namedProblem({ task, backupFile, shareMount });
   const misplaced = named ?? (await mountProblem({ task, backupFile, shareMount, mountOf: mountFn, fs }));
   if (misplaced !== null) return fail(misplaced);
-  ensureCopy({ key, backupFile, fs, pid, startTime, isAlive });
+  const copied = ensureCopy({ key, backupFile, fs, pid, startTime, isAlive });
+  if (!copied.ok) return copied;
   const problem = fileProblem({ task, backupFile, keySha256: sha256Hex(key), fs });
   return problem === null ? ok(null) : fail(problem);
 }

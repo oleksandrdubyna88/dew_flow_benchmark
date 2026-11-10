@@ -13,12 +13,11 @@
 // saying false (`ownerAlive`, which compares the start time read from /proc, so a reused pid is not alive) and nothing else. There is no override of the backup check.
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { removeUnder } from '../../policy-ab-quick/lib/safe-rm.mjs';
 import { ctxOf, withTaskLock } from './heldout-context.mjs';
 import { backupProblem, loadKey, sha256Hex } from './heldout-key.mjs';
 import { casesTreeHash, differsSentence, entryInRecord, interruptedSentence, readRecord } from './heldout-quick.mjs';
 import { registeredEntry } from './heldout-registry.mjs';
-import { removeOwnedTemps, renameIntoPlace, unsealToTemp } from './heldout-unseal.mjs';
+import { finishRemoval, moveAside, removeOwnedTemps, renameIntoPlace, unsealToTemp } from './heldout-unseal.mjs';
 
 // ---- the open stamp -------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -40,11 +39,30 @@ export function readStamp(ctx) {
   }
 }
 
-/** Write the stamp `wx` (mode 600): the operator's, or this process's `{ pid, startTime }` exactly as `takeScorerLock` writes them. */
+/** Create the stamp `wx` (mode 600) with `who` in it. -> true, or false when the stamp already exists. */
+function createStamp(ctx, who) {
+  let fd;
+  try {
+    fd = ctx.fs.openSync(ctx.stampFile, 'wx', 0o600);
+  } catch (e) {
+    if (e.code === 'EEXIST') return false;
+    throw e;
+  }
+  try { ctx.fs.writeSync(fd, `${JSON.stringify({ ...who, at: ctx.now().toISOString() })}\n`); } finally { ctx.fs.closeSync(fd); }
+  return true;
+}
+
+const STAMP_OWNERS = Object.freeze({ operator: () => 'the operator', unreadable: () => 'an owner nobody can read', none: () => 'a reader that has just removed it', process: s => `pid ${s.pid} (started ${s.startTime})` });
+const describeStamp = stamp => STAMP_OWNERS[stamp.kind](stamp);
+
+/**
+ * Write the stamp `wx`: the operator's, or this process's `{ pid, startTime }` exactly as `takeScorerLock` writes them. A stamp that is already there (one appeared between the stale decision and now) is judged and refused, naming
+ * it and its owner, and is never overwritten. -> `ok(null)` | `fail`.
+ */
 function writeStamp(ctx, owner) {
   const who = owner === 'operator' ? { operator: true } : { pid: ctx.pid, startTime: ctx.startTime };
-  const fd = ctx.fs.openSync(ctx.stampFile, 'wx', 0o600);
-  try { ctx.fs.writeSync(fd, `${JSON.stringify({ ...who, at: ctx.now().toISOString() })}\n`); } finally { ctx.fs.closeSync(fd); }
+  if (createStamp(ctx, who)) return ok(null);
+  return fail(`${ctx.stampFile} already exists, held by ${describeStamp(readStamp(ctx))}: the clear folder of task ${ctx.task.id} was made but is not stamped for this reader, and the stamp is not overwritten. Close it with explore.mjs heldout-close --task ${ctx.task.id} once its owner is done`);
 }
 
 const isThisProcess = (ctx, stamp) => stamp.pid === ctx.pid && stamp.startTime === ctx.startTime;
@@ -68,9 +86,16 @@ const stampProblem = (ctx, stamp) => (stamp.kind === 'unreadable' ? unreadableSt
 
 // ---- the facts under the lock ---------------------------------------------------------------------------------------------------------------------------------------------
 
+/** The owned folders a killed open or a killed removal left are removed; finishing a killed removal ends with its stamp. -> `ok(names)` | `fail`. */
+function finishedRemovals(ctx) {
+  const temps = removeOwnedTemps(ctx);
+  if (temps.ok && temps.value.some(name => name.includes('-bench-removing-'))) ctx.fs.rmSync(ctx.stampFile, { force: true });
+  return temps;
+}
+
 /** The owned temporary folders a killed open left are removed (the holder of the lock knows their maker is gone), then `ok({ entry, present })`: the registry's entry (or undefined) and whether `cases/` exists. */
 function factsOf(ctx) {
-  const temps = removeOwnedTemps(ctx);
+  const temps = finishedRemovals(ctx);
   const entry = temps.ok ? registeredEntry({ frozenFile: ctx.frozenFile, task: ctx.task }) : temps;
   return entry.ok ? ok({ entry: entry.value, present: ctx.fs.lstatSync(ctx.casesDir, { throwIfNoEntry: false }) !== undefined }) : entry;
 }
@@ -82,12 +107,15 @@ function treeProblem(ctx, entry) {
   return tree.value === entry.treeSha256 ? null : fail(differsSentence({ task: ctx.task, frozenFile: ctx.frozenFile }));
 }
 
-/** Remove `cases/` and its stamp, after the key's backup is verified. -> `ok(null)` | `fail`. There is no override of the backup check. */
+/**
+ * Remove `cases/` and its stamp, after the key's backup is verified, crash-safely: `cases/` is renamed to an owned removing-folder FIRST (from then on no `cases/` exists), that folder is deleted, then the stamp. The next holder of the lock
+ * finishes a removal that was killed (`factsOf`). -> `ok(null)` | `fail`. There is no override of the backup check.
+ */
 async function removeClear(ctx, entry) {
   const missing = await backupProblem({ task: ctx.task, backupFile: ctx.backupFile, shareMount: ctx.shareMount, keySha256: entry.keySha256, mountOf: ctx.mountOf, fs: ctx.fs });
   if (missing !== null) return fail(missing);
   try {
-    removeUnder(ctx.casesDir, ctx.heldoutDir);
+    finishRemoval(ctx, moveAside(ctx));
   } catch (e) {
     return fail(`the clear folder ${ctx.casesDir} of task ${ctx.task.id} cannot be removed: ${e.message}`);
   }
@@ -215,9 +243,8 @@ const noEntrySentence = ctx => (ctx.fs.existsSync(ctx.archiveFile) ? interrupted
 async function openPlaced(ctx, entry, owner) {
   if (entry === undefined) return fail(noEntrySentence(ctx));
   const placed = await unsealIntoPlace(ctx, entry);
-  if (!placed.ok) return placed;
-  writeStamp(ctx, owner);
-  return ok({ state: 'opened' });
+  const stamped = placed.ok ? writeStamp(ctx, owner) : placed;
+  return stamped.ok ? ok({ state: 'opened' }) : stamped;
 }
 
 async function openLocked(ctx, owner) {

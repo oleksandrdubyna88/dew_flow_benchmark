@@ -66,7 +66,8 @@ function prepared(values, io) {
 }
 
 const takeoverLine = o => `took over the lock of pid ${o.pid} (started ${o.startTime}), whose owner is gone`;
-const openLine = (id, state) => `task ${id}: the clear folder is ${state === 'opened' ? 'open, made from the archive' : 'already open, used as it is'}; it is held until \`explore.mjs heldout-close --task ${id} --key-backup <file> --share-mount <dir>\``;
+const closeFlags = args => `--key-backup ${args.backupFile ?? '<file>'} --share-mount ${args.shareMount ?? '<dir>'}`;
+const openLine = (args, state) => `task ${args.task.id}: the clear folder is ${state === 'opened' ? 'open, made from the archive' : 'already open, used as it is'}; it is held until \`explore.mjs heldout-close --task ${args.task.id} ${closeFlags(args)}\``;
 
 /** `heldout-open --task NN`. */
 export async function cmdHeldoutOpen(values, io) {
@@ -74,7 +75,7 @@ export async function cmdHeldoutOpen(values, io) {
   const r = args.ok ? await openClearFolder(args.value) : args;
   if (!r.ok) return refused(io, r.reason);
   if (r.value.takeover) io.say(takeoverLine(r.value.takeover));
-  io.say(openLine(args.value.task.id, r.value.state));
+  io.say(openLine(args.value, r.value.state));
   return EXIT.done;
 }
 
