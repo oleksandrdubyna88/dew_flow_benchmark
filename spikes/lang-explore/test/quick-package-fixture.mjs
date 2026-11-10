@@ -86,7 +86,7 @@ export function fakeWorld({ plan = () => 'clean', buildOk = () => true, specText
         cases: ({ dir }) => { mkdirSync(dir, { recursive: true }); const ids = readdirSync(sets[0].dir).filter(f => f.endsWith('.in')).map(f => f.slice(0, -3)).sort(); for (const id of ids) { cpSync(path.join(sets[0].dir, `${id}.in`), path.join(dir, `${id}.in`)); } return ok({ dir, ids }); },
         build: async ({ tree }) => ok({ ok: buildOk({ stack, id: idOf(tree) }), exit: 0, timedOut: false, wallMs: 50, tail: '' }),
         runPass: async spec => {
-          log.push({ stack, owner, n: spec.n, cpus: spec.cpus, profile: spec.profile, tree: spec.tree });
+          log.push({ stack, owner, id: idOf(spec.tree), n: spec.n, cpus: spec.cpus, profile: spec.profile, tree: spec.tree });
           if (delayMs > 0) await new Promise(r => { setTimeout(r, delayMs); });
           clock.advance(2000);
           return bodyOf(plan({ stack, id: idOf(spec.tree), n: spec.n, spec }), spec, { observed: observed(spec), memoryMax });

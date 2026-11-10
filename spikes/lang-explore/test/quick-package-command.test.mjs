@@ -83,6 +83,18 @@ test('A_halted_package_check_resumes_from_its_records_and_runs_only_what_is_miss
   assert.equal(existsSync(path.join(run, 'record.json')), true);
 });
 
+test('A_run_halted_in_the_witnesses_resumes_without_running_the_references_or_the_finished_witnesses_again', async () => {
+  const ctl = new AbortController();
+  const plan = args => { if (args.id === 'MXX-beta-n' && args.n === 3) ctl.abort(); return ALL_CAUGHT(args); };
+  const env = commandEnv({ plan });
+  assert.equal(await main(argv(), { ...env.io, signal: ctl.signal }), 3);
+  const before = env.world.log.length;
+  assert.equal(await main(argv(), env.io), 0, env.lines.join('\n'));
+  const again = env.world.log.slice(before);
+  assert.deepEqual([...new Set(again.map(l => l.id))], ['MXX-beta-n'], 'only the witness that was interrupted runs again: the references and the finished witnesses are read from their step files');
+  assert.equal(again.filter(l => l.n <= 2).length, 0, 'and of it only the passes not recorded');
+});
+
 test('A_red_item_stops_before_registration_and_nothing_is_sealed', async () => {
   const env = commandEnv({ plan: ({ id, n }) => (id === 'MXX-alpha-c' ? 'clean' : ALL_CAUGHT({ id, n })) });
   env.io.heldout = sealSeams({ frozenFile: env.files.frozenFile, packagesFile: env.files.packagesFile });
