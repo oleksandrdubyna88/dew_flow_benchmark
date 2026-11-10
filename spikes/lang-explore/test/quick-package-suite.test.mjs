@@ -76,10 +76,17 @@ test('A_trap_row_may_name_a_visible_sample_the_pinned_spec_holds_beside_a_held_o
 test('A_sample_id_the_pinned_spec_does_not_hold_is_red_naming_the_row_and_the_id', () => {
   const unknown = tableOf(['h001', 's07']);
   assert.equal(unknown.length, 1, unknown.join('|'));
-  assert.ok(unknown[0].includes('trap a on csharp') && unknown[0].includes('s07') && /not one of the samples/.test(unknown[0]), unknown[0]);
+  assert.equal(unknown[0], 'trap a on csharp names sample s07, which is not one of the samples the pinned spec holds (s01, s02)', 'the sentence lists the samples the spec holds');
   assert.equal(tableOf(['h001', 's01'], ['s02']).length, 1, 'the same row is red when the spec holds another sample only');
   const unreadable = tableOf(['h001', 's01'], null);
   assert.ok(unreadable.length === 1 && /samples of the spec cannot be read/.test(unreadable[0]), `a spec whose samples cannot be parsed is a problem: ${unreadable.join('|')}`);
+});
+
+test('An_id_that_is_neither_a_held_out_case_nor_a_sample_is_named_as_such_and_never_called_a_sample', () => {
+  const odd = tableOf(['h001', 'x01']);
+  assert.equal(odd.length, 1, odd.join('|'));
+  assert.ok(odd[0].includes('trap a on csharp') && odd[0].includes('x01') && /neither a held-out case id nor a sample id/.test(odd[0]) && !/sample x01/.test(odd[0]), odd[0]);
+  assert.deepEqual(tableOf(['h001', 's01']), [], 'control: a real sample id');
 });
 
 test('A_trap_row_of_sample_ids_only_is_red_because_a_trap_needs_a_held_out_case', () => {

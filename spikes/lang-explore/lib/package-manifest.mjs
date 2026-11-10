@@ -22,6 +22,8 @@ const HASH = /^[0-9a-f]{64}$/;
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 /** Whether `id` is a held-out case id (`h001`): the ids of a load case, of `cases/` and of `traps.txt`. */
 export const isHeldOutId = id => CASE_ID.test(id);
+/** Whether `id` is a visible sample id (`s01`): the ids a trap row may name beside its held-out cases. */
+export const isSampleId = id => /^s\d{2}$/.test(id);
 const idList = v => Array.isArray(v) && v.every(id => typeof id === 'string' && CASE_ID.test(id));
 const trapIdList = v => Array.isArray(v) && v.every(id => typeof id === 'string' && TRAP_CASE_ID.test(id));
 const pairOk = c => isObject(c) && HASH.test(c.in ?? '') && HASH.test(c.out ?? '');

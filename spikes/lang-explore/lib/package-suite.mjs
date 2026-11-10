@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { parseSpec } from '../../lang-bench/lib/conformance-spec.mjs';
-import { isHeldOutId, rowsOf } from './package-manifest.mjs';
+import { isHeldOutId, isSampleId, rowsOf } from './package-manifest.mjs';
 import { maxOf } from './package-max.mjs';
 import { quickSamples } from './workspace-quick.mjs';
 
@@ -90,8 +90,11 @@ function heldProblems(name, caseIds, row) {
   return held.filter(id => !caseIds.includes(id)).map(id => `${name} names case ${id}, which is not in cases/`);
 }
 
-/** The problems of a row's sample ids: one the pinned spec does not hold (`sampleIds` is `specSampleIds`'s answer; `null` is reported once, by `trapTableProblems`). */
-const sampleProblems = (name, sampleIds, row) => (sampleIds === null ? [] : row.cases.filter(id => !isHeldOutId(id) && !sampleIds.includes(id)).map(id => `${name} names sample ${id}, which is not one of the samples the pinned spec holds`));
+/** The problems of a row's sample ids: one the pinned spec does not hold, listing the samples it holds (`sampleIds` is `specSampleIds`'s answer; `null` is reported once, by `trapTableProblems`). */
+const sampleProblems = (name, sampleIds, row) => (sampleIds === null ? [] : row.cases.filter(id => isSampleId(id) && !sampleIds.includes(id)).map(id => `${name} names sample ${id}, which is not one of the samples the pinned spec holds (${sampleIds.join(', ')})`));
+
+/** The problems of a row's ids that are neither a held-out case id nor a sample id (the manifest shape refuses them first; this keeps the pure check from passing them in silence). */
+const idShapeProblems = (name, row) => row.cases.filter(id => !isHeldOutId(id) && !isSampleId(id)).map(id => `${name} names ${id}, which is neither a held-out case id nor a sample id`);
 
 /** The problems of one row: its case ids and exactly one witness. */
 function rowProblems(manifest, caseIds, sampleIds, row) {
@@ -99,6 +102,7 @@ function rowProblems(manifest, caseIds, sampleIds, row) {
   const witnesses = witnessesOf(manifest, row);
   return [
     ...heldProblems(name, caseIds, row),
+    ...idShapeProblems(name, row),
     ...sampleProblems(name, sampleIds, row),
     ...(witnesses.length === 0 ? [`${name} has no witness (missing the ${row.stack} stack)`] : []),
     ...(witnesses.length > 1 ? [`${name} has ${witnesses.length} witnesses (${witnesses.join(', ')}): exactly one per trap and stack`] : []),

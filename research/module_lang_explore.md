@@ -308,7 +308,7 @@ as that case failing; an extra failure (a case beyond the table, a hang outside 
 (the wall only, since the pass child shows nothing before it ends) and a closing line that gives the outcome and the number of cases that failed; the lines carry numbers only.
 
 **The trap row and the visible samples** (parent entry 10.1, 2026-11-10): every witness pass also runs the task's visible samples (`s01`, ...), so a wide defect can fail a sample too. A trap row therefore names at least one held-out case (`hNNN`) and may name visible
-samples (`sNN`) beside it. The package tool reads the sample ids from the pinned spec's own section 6 (`quickSamples`, the samples every pass runs): a row of sample ids only is red, a sample id the spec does not hold is red naming the row and the id, and a spec whose
+samples (`sNN`) beside it. The package tool reads the sample ids from the pinned spec's own section 6 (`quickSamples`, the samples every pass runs): a row of sample ids only is red, a sample id the spec does not hold is red naming the row, the id and the samples the spec holds, an id of neither form is red as such, and a spec whose
 samples cannot be read is a problem, never "no samples". `traps.txt` is the union of the rows' held-out ids only; a sample id is never in it. The load cases stay held-out ids. `witnessVerdict` is unchanged: it judges every case of a pass, so a witness that fails
 its row's held-out case and its registered sample is caught, and one that also fails an unregistered sample is not (beyond the table).
 
