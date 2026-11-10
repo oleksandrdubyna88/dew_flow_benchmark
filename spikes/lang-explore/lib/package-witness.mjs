@@ -101,7 +101,7 @@ export function witnessVerdict({ kind, registered, passes }) {
 
 // ---- the run ----------------------------------------------------------------------------------------------------------------------------------------
 
-const halt = sentence => ({ halted: true, sentence });
+const halt = (sentence, detail = sentence) => ({ halted: true, sentence, detail });
 const buildMsOf = work => (existsSync(path.join(work, 'build.json')) ? readBuildRecord(work).value?.wallMs ?? null : null);
 
 /** The one pass of a deterministic witness: `{ passes }` | `{ buildFailed }` | `{ halt }`. The built tree is measured and removed (it is reproducible). */
@@ -110,14 +110,14 @@ async function deterministicPasses({ seams, ran, work, now }) {
   const treeBytes = dirBytes(path.join(work, 'tree'));
   ['tree', 'cases', 'child'].forEach(d => removeArea(path.join(work, d)));
   if (r.kind === 'build-failed') return { buildFailed: true };
-  if (r.kind !== 'completed') return { halt: r.reason };
+  if (r.kind !== 'completed') return { halt: r.reason, detail: r.detail };
   return { passes: [{ n: 1, profile: '2cpu', cases: r.cases, ms: r.ms }], treeBytes };
 }
 
 /** The ten passes of a race witness through the driver: `{ passes }` | `{ buildFailed }` | `{ halt }`; a pass with no completed attempt is a halt (environment), never a verdict. */
 async function racePasses({ seams, ran, work, seriesDir, signal, now }) {
   const answer = await scorePasses({ ...seams, runPass: ran, work, seriesDir, signal, ...(now === undefined ? {} : { now }) });
-  if (answer.kind !== 'scored') return { halt: answer.reason ?? `the scoring ended ${answer.kind}` };
+  if (answer.kind !== 'scored') return { halt: `the scoring ended ${answer.kind}: nothing was judged`, detail: answer.reason };
   return answer.verdict.build?.ok === false ? { buildFailed: true } : completedPasses({ work, ids: answer.score.explore.cases.map(c => c.id).sort() });
 }
 
@@ -152,7 +152,7 @@ export async function runWitness(a) {
   const seams = world.passSeams({ stack: witness.stack, source: a.source, limits: a.limits, sets: [{ name: 'heldout', dir: pkg.casesDir }], traps: pkg.held.traps, say: a.say, seriesDir: a.seriesDir });
   const ran = wrapPass({ runPass: seams.runPass, label: `witness ${a.ordinal}`, say: a.say ?? (() => {}), memoryBytes: a.memoryBytes, ...(a.heartbeatMs === undefined ? {} : { heartbeatMs: a.heartbeatMs }) });
   const got = await (witness.kind === 'deterministic' ? deterministicPasses : racePasses)({ seams, ran, work: a.work, seriesDir: a.seriesDir, signal: a.signal, now: a.now });
-  return got.halt === undefined ? judged({ a, witness, registered, got }) : halt(`witness ${a.ordinal} was not judged: ${got.halt}`);
+  return got.halt === undefined ? judged({ a, witness, registered, got }) : halt(`witness ${a.ordinal} was not judged: ${got.halt}`, got.detail ?? got.halt);
 }
 
 const DOES_NOT_BUILD = (registered) => ({ caught: false, reason: 'does not build', sentence: 'not caught: the witness does not build, so it proves nothing', counts: { registered: registered.length }, failingSets: [] });

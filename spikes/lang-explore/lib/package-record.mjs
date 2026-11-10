@@ -68,8 +68,8 @@ export function writeStep(run, name, body) {
 }
 
 /** Write a halt of the run, `halt-<n>.json`, once each, naming the material the run stopped over. */
-export function writeHalt(run, { reason, materialSha }) {
-  return publishNamed({ dir: run.dir, names: n => `halt-${n}.json`, text: `${JSON.stringify({ reason, materialSha }, null, 2)}\n` });
+export function writeHalt(run, { reason, detail = reason, materialSha }) {
+  return publishNamed({ dir: run.dir, names: n => `halt-${n}.json`, text: `${JSON.stringify({ reason, detail, materialSha }, null, 2)}\n` });
 }
 
 /** The complete record of the run, written once at its end (a second write fails: `fail`). */

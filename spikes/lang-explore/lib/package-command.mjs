@@ -100,7 +100,7 @@ async function runSteps({ args, c, conformance }) {
   for (const name of STEPS_OF[args.only]) {
     if (blockedBy(name, out)) return { ...out, stopped: REFS_FIRST };
     const r = await RUNNERS[name]({ c, out, conformance });
-    if (r.halted) return { ...out, halted: r.halted };
+    if (r.halted) return { ...out, halted: r.halted, detail: r.detail };
     out.items = { ...out.items, ...r.items };
     out.results = r.results ?? out.results;
   }
@@ -174,7 +174,7 @@ async function executed({ args, io, world, pkg, pins, material, scope, run }) {
   const started = c.now();
   const done = await runSteps({ args, c, conformance: await conformanceOf({ args, io }) });
   if (!done.halted) return finished({ args, io, pkg, pins, material, run, c, started, done });
-  writeHalt(run, { reason: done.halted, materialSha: material });
+  writeHalt(run, { reason: done.halted, detail: done.detail ?? done.halted, materialSha: material });
   io.say(`halted (resumable): ${done.halted}`);
   return { exit: EXIT.halt };
 }

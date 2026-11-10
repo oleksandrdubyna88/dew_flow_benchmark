@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
-import { ok } from '../../minigit-bench/lib/result.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { refsDirOf } from '../lib/heldout-quick.mjs';
 import { taskPaths } from '../lib/tasks.mjs';
@@ -73,7 +73,7 @@ export function writePackage({ taskId = '05', home = quickHome(), traps = TRAPS,
 }
 
 /** The world a package run is given: `sources.spec`, `passSeams` over a plan, and the fake templates. `plan({ stack, id, n, spec })` -> 'clean' | 'env' | `{ failing: { id: verdict word } }` | `{ hang: [ids] }`, where `id` is the witness id read from the tree ('reference' when it is none). */
-export function fakeWorld({ plan = () => 'clean', buildOk = () => true, specText = SPEC_TEXT, observed = spec => spec.cpus, templates = fakeTemplates(), memoryMax = LIMITS.memoryBytes, log = [], delayMs = 0 } = {}) {
+export function fakeWorld({ plan = () => 'clean', buildOk = () => true, buildFail = () => null, specText = SPEC_TEXT, observed = spec => spec.cpus, templates = fakeTemplates(), memoryMax = LIMITS.memoryBytes, log = [], delayMs = 0 } = {}) {
   const clock = fakeClock();
   return {
     templates, clock, log, limits: LIMITS,
@@ -84,7 +84,7 @@ export function fakeWorld({ plan = () => 'clean', buildOk = () => true, specText
       return {
         prepare: async dest => { cpSync(source, dest, { recursive: true }); return ok({ files: {}, frozen: [], drift: [], left: [] }); },
         cases: ({ dir }) => { mkdirSync(dir, { recursive: true }); const ids = readdirSync(sets[0].dir).filter(f => f.endsWith('.in')).map(f => f.slice(0, -3)).sort(); for (const id of ids) { cpSync(path.join(sets[0].dir, `${id}.in`), path.join(dir, `${id}.in`)); } return ok({ dir, ids }); },
-        build: async ({ tree }) => ok({ ok: buildOk({ stack, id: idOf(tree) }), exit: 0, timedOut: false, wallMs: 50, tail: '' }),
+        build: async ({ tree }) => (buildFail({ stack, id: idOf(tree) }) === null ? ok({ ok: buildOk({ stack, id: idOf(tree) }), exit: 0, timedOut: false, wallMs: 50, tail: '' }) : fail(buildFail({ stack, id: idOf(tree) }), { kind: 'environment' })),
         runPass: async spec => {
           log.push({ stack, owner, id: idOf(spec.tree), n: spec.n, cpus: spec.cpus, profile: spec.profile, tree: spec.tree });
           if (delayMs > 0) await new Promise(r => { setTimeout(r, delayMs); });
@@ -102,6 +102,7 @@ const REASON = Object.freeze({ 'wrong answer': 'entry 3 of 4 differs', 'memory l
 /** The attempt body for a plan entry (see `fakeWorld`): the runner's record over `IDS` with the failing cases and their read-back limit. */
 export function bodyOf(entry, spec, { observed, memoryMax }) {
   if (entry === 'env') return { kind: 'environment', reason: 'the box did not start', observedCpus: null };
+  if (entry.env !== undefined) return { kind: 'environment', reason: entry.env, observedCpus: null };
   const failing = entry === 'clean' ? {} : (entry.failing ?? {});
   const hang = entry === 'clean' ? [] : (entry.hang ?? []);
   const limit = entry === 'clean' ? memoryMax : (entry.memoryMax ?? memoryMax);
@@ -141,9 +142,9 @@ export function sealSeams({ frozenFile, packagesFile, hooks = {} }) {
  * Everything a command test needs: an invented package, the fake world, the pins of the invented task, and `io` for `main` (`say` collects `lines`). `over` replaces entries of `io`, `over.package` entries of `io.package`.
  * -> `{ p, world, io, lines, files }`.
  */
-export function commandEnv({ plan, buildOk, over = {}, built, ...pkgOptions } = {}) {
+export function commandEnv({ plan, buildOk, buildFail, over = {}, built, ...pkgOptions } = {}) {
   const p = built ?? writePackage(pkgOptions);
-  const world = fakeWorld({ plan, buildOk });
+  const world = fakeWorld({ plan, buildOk, buildFail });
   const lines = [];
   const files = { packagesFile: path.join(tmpDir('pkg-registry'), 'packages.json'), frozenFile: path.join(tmpDir('pkg-frozen'), 'heldout-frozen.json'), memoryFile: path.join(tmpDir('pkg-memory'), 'memory-limit.json') };
   const gateRecord = path.join(tmpDir('pkg-gate'), 'spec-05.md');

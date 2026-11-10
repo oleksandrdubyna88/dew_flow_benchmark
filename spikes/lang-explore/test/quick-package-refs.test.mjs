@@ -98,7 +98,8 @@ test('A_reference_pass_enforced_under_another_memory_limit_is_an_environment_hal
   const a = await scored({ plan: () => ({ failing: {}, memoryMax: 1_234_567 }) });
   assert.equal(a.ok, false);
   assert.equal(a.halted, true, 'a halt (exit 3 of the command), never a rejected or accepted verdict');
-  assert.ok(a.sentence.includes('1234567') && a.sentence.includes(String(LIMITS.memoryBytes)), a.sentence);
+  assert.ok(a.detail.includes('1234567') && a.detail.includes(String(LIMITS.memoryBytes)), 'the two numbers are in the halt detail, which goes to the private halt file');
+  assert.equal(/\d{6,}/.test(a.sentence), false, 'and the line the command says holds none of them');
   const same = await scored({ plan: () => 'clean' });
   assert.equal(same.halted, false, 'control: the registered value is no halt');
 });

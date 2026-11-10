@@ -35,8 +35,7 @@ function judgedAnswer({ answer, stack }) {
     const v = answer.verdict;
     return { ok: v.verdict === 'accepted', halted: false, verdict: v.verdict, sentence: v.verdict === 'accepted' ? `the ${stack} reference is accepted: ${countsLine(v.counts)}` : `the ${stack} reference reads ${v.verdict} (${countsLine(v.counts)}): green is accepted, ten of ten` };
   }
-  const reason = answer.reason ?? 'no reason given';
-  return { ok: false, halted: true, verdict: answer.kind === 'void' ? 'unscored: environment' : null, sentence: `the ${stack} reference was not scored (${answer.kind}): ${reason}` };
+  return { ok: false, halted: true, verdict: answer.kind === 'void' ? 'unscored: environment' : null, sentence: `the ${stack} reference was not scored (${answer.kind}): nothing was judged`, detail: answer.reason ?? 'no reason given' };
 }
 
 /**

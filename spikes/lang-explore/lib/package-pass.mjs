@@ -8,7 +8,9 @@
 import path from 'node:path';
 import { affinityProblem } from './affinity.mjs';
 import { systemClock } from './clock.mjs';
-import { commitBuild } from './build-commit.mjs';
+import { rmSync } from 'node:fs';
+import { commitBuild, discardUncommitted } from './build-commit.mjs';
+import { removeArea } from './score.mjs';
 import { casesOfRecord } from './score-quick.mjs';
 import { PROFILES } from './verdict.mjs';
 
@@ -46,10 +48,11 @@ export function wrapPass({ runPass, label, say, memoryBytes, heartbeatMs = HEART
   };
 }
 
-const environment = (reason, kind = 'halt') => ({ kind, reason });
+/** An answer that is no verdict: `reason` is what the command may say (counts and step names only), `detail` the full reason for the private halt file (it may hold case ids and paths). */
+const environment = (reason, kind = 'halt', detail = reason) => ({ kind, reason, detail });
 
 /** The answer of a body that is no verdict (a halt, an environment attempt), or null. */
-const kindAnswer = body => (body.halt ? environment(body.reason) : (body.kind === 'completed' ? null : environment(body.reason, 'environment')));
+const kindAnswer = body => (body.halt ? environment(body.reason) : (body.kind === 'completed' ? null : environment('the pass child answered environment: nothing was judged', 'environment', body.reason)));
 
 /** The sentence of a completed body that cannot be judged: a mask that is not the profile, or a memory claim that is not certified; or null. */
 const bodyProblem = (body, spec) => affinityProblem({ wanted: spec.cpus, observed: body.observedCpus }) ?? (body.memoryCertified === true ? null : 'the memory claim of the pass is not certified: a pass whose peaks cannot be read is no verdict');
@@ -61,7 +64,13 @@ function judgedBody({ body, spec }) {
   const problem = bodyProblem(body, spec);
   if (problem !== null) return environment(problem);
   const cases = casesOfRecord({ record: body.record, expected: spec.caseIds });
-  return cases.ok ? { kind: 'completed', cases: cases.value, observedCpus: body.observedCpus } : environment(`the record of the pass is not a judgement of the cases: ${cases.reason}`);
+  return cases.ok ? { kind: 'completed', cases: cases.value, observedCpus: body.observedCpus } : environment(`the record of the pass is not a judgement of the cases (${idCounts(body, spec)})`, 'halt', cases.reason);
+}
+
+/** The counts of a record that is not a judgement of exactly the expected cases: `missing N, unexpected M`. */
+function idCounts(body, spec) {
+  const got = recordCases(body).map(c => c.id);
+  return `missing ${spec.caseIds.filter(id => !got.includes(id)).length}, unexpected ${got.filter(id => !spec.caseIds.includes(id)).length}`;
 }
 
 /** The pass spec of the driver's shape (`passes.mjs` `specOf`) for one pass of `profile` over the committed tree and the case folder. */
@@ -70,13 +79,21 @@ const specOf = ({ seams, work, folder, profile }) => ({
   caseWallMs: seams.spec.caseWallMs, holdSeconds: seams.spec.holdSeconds, runCeilingMs: seams.spec.runCeilingMs, limits: seams.limits,
 });
 
+/** Every one-pass attempt starts clean (a halted attempt leaves its tree, its completion record and its case folder, and `commitBuild` writes the record once): they are reproducible, so they are removed. */
+function cleanStart(work) {
+  discardUncommitted(work);
+  ['tree', 'cases', 'child'].forEach(d => removeArea(path.join(work, d)));
+  rmSync(path.join(work, 'build.json'), { force: true });
+}
+
 /** The build commit and the case folder of a pass: `{ folder }`, or `{ answer }` (a build that never began, one that failed, a case folder that cannot be made). */
 async function builtAndCases({ seams, work, runnerPin, now }) {
+  cleanStart(work);
   const built = await commitBuild({ work, prepare: seams.prepare, build: seams.build, runnerPin, now });
-  if (!built.ok) return { answer: environment(built.reason) };
+  if (!built.ok) return { answer: environment('the build did not begin: nothing was judged', 'halt', built.reason) };
   if (built.value.ok === false) return { answer: { kind: 'build-failed', tail: built.value.tail } };
   const folder = seams.cases({ dir: path.join(work, 'cases') });
-  return folder.ok ? { folder: folder.value } : { answer: environment(folder.reason) };
+  return folder.ok ? { folder: folder.value } : { answer: environment('the case folder could not be made: nothing was judged', 'halt', folder.reason) };
 }
 
 /**

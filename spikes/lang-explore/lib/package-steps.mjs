@@ -2,6 +2,7 @@
 // returns `{ item }` (the record's item: `ok` and counts) or `{ halted: sentence }` (nothing was judged: the run stops resumably). A finished step is written once to the run folder (`step-<name>.json`) and a resumed run reads it instead of
 // running it again; the scoring folders of a step stay in the run folder (the attempt files), the assembled trees are owned temporary folders that go with the run. Every build goes through `buildAndRestore`, every pass through `runPassChild`.
 import path from 'node:path';
+import { removeArea } from './score.mjs';
 import { gateItem } from './package-gate.mjs';
 import { maxOf } from './package-max.mjs';
 import { STACKS } from './package-manifest.mjs';
@@ -59,7 +60,7 @@ export async function refsStep(c) {
   const results = {};
   for (const stack of STACKS) {
     results[stack] = await oneReference(c, stack);
-    if (results[stack].halted) return { halted: results[stack].sentence };
+    if (results[stack].halted) return { halted: results[stack].sentence, detail: results[stack].detail };
   }
   const item = { ok: STACKS.every(s => results[s].ok), ...Object.fromEntries(STACKS.map(s => [s, { ok: results[s].ok, verdict: results[s].verdict, sentence: results[s].sentence, ...(results[s].rows ? { rows: slim(results[s].rows) } : {}) }])) };
   return { item, results };
@@ -75,8 +76,17 @@ async function runTwins(c, stack, loadCases) {
   const seams = c.world.passSeams({ stack, source: tree.value.dir, limits: c.limits, sets: [{ name: 'heldout', dir }], traps: [], say: c.say, seriesDir: c.seriesDir });
   const ran = wrapPass({ runPass: seams.runPass, label: `twin ${stack}`, say: c.say, memoryBytes: c.memoryBytes, heartbeatMs: c.heartbeatMs });
   const r = await onePass({ seams, ran, work, now: c.now });
-  if (r.kind !== 'completed') return { halted: true, sentence: `the twin of the load cases on the ${stack} reference was not measured (${r.kind}): ${r.reason ?? r.tail ?? ''}` };
-  const wall = maxOf(r.cases.filter(x => loadCases.includes(x.id)).map(x => x.wallMs).filter(Number.isFinite));
+  ['tree', 'cases', 'child', 'twin-cases'].forEach(d => removeArea(path.join(work, d)));
+  return twinOutcome({ r, loadCases, stack });
+}
+
+/** What one twin pass means: a halt (nothing was judged), a red twin (a case did not pass) or the slowest twin wall. */
+function twinOutcome({ r, loadCases, stack }) {
+  if (r.kind !== 'completed') return { halted: true, sentence: `the twin of the load cases on the ${stack} reference was not measured (${r.kind}): ${r.reason ?? 'the build failed'}`, detail: r.detail ?? r.tail ?? '' };
+  const twinCases = r.cases.filter(x => loadCases.includes(x.id));
+  const failed = twinCases.filter(x => x.verdict !== 'pass').length;
+  if (failed > 0) return { ok: false, passed: false, wallMs: null, sentence: `${failed} of ${twinCases.length} twin case(s) did not pass on the ${stack} reference: the load measurement stands on passing twins` };
+  const wall = maxOf(twinCases.map(x => x.wallMs).filter(Number.isFinite));
   return { ok: wall !== null, wallMs: wall, sentence: wall === null ? 'no twin case was judged' : 'measured' };
 }
 
@@ -94,7 +104,7 @@ export async function loadStep(c, refs) {
   const load = c.pkg.manifest.load;
   if (load === undefined) return { item: { ok: true, none: true, sentence: 'the manifest names no load case: there is nothing to measure' } };
   const twins = await bothTwins(c, load.cases);
-  return twins.halted ? { halted: twins.sentence } : { item: ruleItem({ refs, twins, load }) };
+  return twins.halted ? { halted: twins.sentence, detail: twins.detail } : { item: twinsItem({ refs, twins, load }) };
 }
 
 /** The twin walls of both references: `{ csharp, node }` | `{ halted, sentence }`. */
@@ -105,6 +115,12 @@ async function bothTwins(c, loadCases) {
     if (twins[stack].halted) return twins[stack];
   }
   return twins;
+}
+
+/** The load item: red, counts only, when a twin case did not pass; else the measured rule. */
+function twinsItem({ refs, twins, load }) {
+  const bad = STACKS.find(stack => twins[stack].passed === false);
+  return bad === undefined ? ruleItem({ refs, twins, load }) : { ok: false, slowestWallMs: null, twinWallMs: null, durationS: load.durationS, problems: [twins[bad].sentence] };
 }
 
 /** The measured rule over every completed pass of both references and the two twins: the item. */
@@ -133,7 +149,7 @@ export async function witnessesStep(c) {
   const results = [];
   for (const [i, id] of ids.entries()) {
     const r = await oneWitness(c, id, i + 1);
-    if (r.halted) return { halted: r.sentence };
+    if (r.halted) return { halted: r.sentence, detail: r.detail };
     results.push({ id, r });
   }
   const caught = results.filter(({ r }) => r.caught).length;

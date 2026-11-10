@@ -134,3 +134,58 @@ test('A_seal_alone_refuses_a_package_with_no_complete_record', async () => {
   assert.ok(env.lines.some(l => /no complete record/.test(l)), env.lines.join('\n'));
   assert.equal(existsSync(path.join(env.p.dir, 'suite.enc')), false);
 });
+
+// ---- code round 1: R3 (a halted one-pass step resumes), R4 (the twin's trees), R5 (the twin must pass), R7 (no id or path in a halt line) ----------------------------
+
+const LOAD = { cases: ['h003'], durationS: 540 };
+const isTwin = spec => spec.caseIds.length < 4; // the twin folder holds only the load case
+const runDirOf = env => recordsOfRun(env)[0];
+const recordsOfRun = env => readdirSync(packageRoot(env.io.home, env.p.task)).filter(n => /^\d{8}T/.test(n)).map(n => path.join(packageRoot(env.io.home, env.p.task), n));
+
+test('A_deterministic_witness_that_halted_once_resumes_and_finishes_instead_of_halting_for_ever', async () => {
+  let halted = false;
+  const plan = args => { if (args.id === 'MXX-alpha-c' && !halted) { halted = true; return { env: 'the box did not start' }; } return ALL_CAUGHT(args); };
+  const env = commandEnv({ plan });
+  assert.equal(await main(argv(), env.io), 3, 'the first run halts in the witness');
+  assert.equal(await main(argv(), env.io), 0, env.lines.join('\n'));
+  assert.equal(existsSync(path.join(runDirOf(env), 'record.json')), true, 'the resumed run finished and wrote its record');
+});
+
+test('A_twin_that_halted_once_resumes_and_finishes_and_a_complete_run_leaves_no_built_tree_of_a_twin', async () => {
+  let halted = false;
+  const plan = args => { if (isTwin(args.spec) && args.stack === 'csharp' && !halted) { halted = true; return { env: 'the box did not start' }; } return ALL_CAUGHT(args); };
+  const env = commandEnv({ plan, load: LOAD });
+  assert.equal(await main(argv(), env.io), 3, 'the first run halts in the twin');
+  assert.equal(await main(argv(), env.io), 0, env.lines.join('\n'));
+  const run = runDirOf(env);
+  for (const stack of ['csharp', 'node']) {
+    for (const name of ['tree', 'cases', 'child', 'twin-cases']) assert.equal(existsSync(path.join(run, `twin-${stack}`, name)), false, `twin-${stack}/${name} is removed after the twin pass`);
+  }
+});
+
+test('A_twin_case_that_does_not_pass_makes_the_load_item_red_with_a_counts_only_sentence', async () => {
+  const plan = args => (isTwin(args.spec) && args.stack === 'node' ? { failing: { h003: 'wrong answer' } } : ALL_CAUGHT(args));
+  const env = commandEnv({ plan, load: LOAD });
+  assert.equal(await main(argv(), env.io), 1, env.lines.join('\n'));
+  const record = JSON.parse(readFileSync(path.join(runDirOf(env), 'record.json'), 'utf8'));
+  assert.equal(record.items.load.ok, false);
+  assert.ok(/1 of 1 twin case\(s\) did not pass on the node reference/.test(record.items.load.problems[0]), record.items.load.problems[0]);
+  assert.equal(/h\d{3}/.test(record.items.load.problems[0]), false);
+});
+
+test('A_halt_line_holds_counts_and_step_names_only_and_the_full_reason_goes_to_the_halt_file', async () => {
+  const reason = '/home/someone/private/h001 exploded in the box';
+  const witnessEnv = commandEnv({ plan: args => (args.id === 'MXX-alpha-c' ? { env: reason } : ALL_CAUGHT(args)) });
+  assert.equal(await main(argv(), witnessEnv.io), 3);
+  const twinEnv = commandEnv({ plan: args => (isTwin(args.spec) ? { env: reason } : ALL_CAUGHT(args)), load: LOAD });
+  assert.equal(await main(argv(), twinEnv.io), 3);
+  const buildEnv = commandEnv({ plan: ALL_CAUGHT, buildFail: ({ id }) => (id === 'MXX-alpha-n' ? '/home/someone/private/h002 build box failed' : null) });
+  assert.equal(await main(argv(), buildEnv.io), 3);
+  for (const env of [witnessEnv, twinEnv, buildEnv]) {
+    const said = env.lines.join('\n');
+    assert.ok(/halted \(resumable\)/.test(said), said);
+    assert.equal(/h\d{3}|\/home|\/tmp/.test(said), false, `no case id and no path in what the command says: ${said}`);
+    const halt = JSON.parse(readFileSync(path.join(runDirOf(env), 'halt-1.json'), 'utf8'));
+    assert.ok(/\/home\/someone\/private\/h00[12]/.test(halt.detail), 'the full reason is in the private halt file');
+  }
+});
