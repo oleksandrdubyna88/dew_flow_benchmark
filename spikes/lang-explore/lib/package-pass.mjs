@@ -7,6 +7,7 @@
 // two numbers, never a verdict.
 import path from 'node:path';
 import { affinityProblem } from './affinity.mjs';
+import { systemClock } from './clock.mjs';
 import { commitBuild } from './build-commit.mjs';
 import { casesOfRecord } from './score-quick.mjs';
 import { PROFILES } from './verdict.mjs';
@@ -82,7 +83,7 @@ async function builtAndCases({ seams, work, runnerPin, now }) {
  * ONE pass of the seams on `profile` (the 2-CPU one by default): the build commit, then the pass child. -> `{ kind: 'completed', cases, ms }` | `{ kind: 'build-failed', tail }` (the build ran and exited non-zero) | `{ kind: 'halt', reason }`
  * (nothing was judged: a build that never began, a mask that was not applied, a read-back limit that is not the registered one) | `{ kind: 'environment', reason }`. `ran` is the pass child's answer wrapper (`wrapPass`).
  */
-export async function onePass({ seams, ran = seams.runPass, work, profile = PROFILES[0], runnerPin = null, now = () => new Date() }) {
+export async function onePass({ seams, ran = seams.runPass, work, profile = PROFILES[0], runnerPin = null, now = systemClock }) {
   const prep = await builtAndCases({ seams, work, runnerPin, now });
   if (prep.answer !== undefined) return prep.answer;
   const spec = specOf({ seams, work, folder: prep.folder, profile });

@@ -26,7 +26,7 @@ import { latestRecord, openRun, sweepOwnedTrees, writeHalt, writeRecord } from '
 import { loadStep, refsStep, suiteStep, witnessesStep } from './package-steps.mjs';
 import { acquirePlanLock } from './plan-lock.mjs';
 import { quickCalibration, isQuick } from './quick.mjs';
-import { taskFromValues } from './tasks.mjs';
+import { taskFromValues, taskPaths } from './tasks.mjs';
 import { loadWorld } from './world.mjs';
 
 const EXIT = Object.freeze({ done: 0, red: 1, halt: 3, config: 4, failed: 5 });
@@ -56,7 +56,7 @@ async function quietCheck({ io, acceptNoisy, signal }) {
 }
 
 /** The needles file of a task's conformance run (`io.package.needlesFile`, `null` for none, else the private default). */
-const needlesOf = ({ args, io }) => (io.package?.needlesFile === undefined ? path.join(io.home, 'rsd', 'lang-v2', 'test-design', `needles-${args.task.id}.txt`) : io.package.needlesFile);
+const needlesOf = ({ args, io }) => (io.package?.needlesFile === undefined ? path.join(path.dirname(taskPaths(args.task, io.home).notesFile), `needles-${args.task.id}.txt`) : io.package.needlesFile);
 
 /** The conformance checker over `--task-repo`, or `null` (not run). */
 async function conformanceOf({ args, io }) {

@@ -50,7 +50,7 @@ export async function validateReference(a) {
   const answer = await (a.scoreFn ?? scorePasses)({ ...seams, runPass, work: a.work, seriesDir: a.seriesDir, signal: a.signal, ...(a.now === undefined ? {} : { now: a.now }) });
   const judged = judgedAnswer({ answer, stack });
   const ids = answer.score?.explore.cases.map(c => c.id);
-  return ids === undefined ? judged : { ...judged, rows: referenceRows({ work: a.work, ids: ids.sort() }) };
+  return ids === undefined ? judged : { ...judged, rows: referenceRows({ work: a.work, ids: [...ids].sort() }) };
 }
 
 const LOAD_BOUND_MS = 570_000;

@@ -31,7 +31,7 @@ export function listFolder(dir) {
   const out = { files: [], problems: [] };
   const todo = existsSync(dir) ? [''] : [];
   while (todo.length > 0) entriesOf(dir, todo.shift()).forEach(e => PLACE[e.kind](e, out, todo));
-  return { files: out.files.sort(), problems: out.problems.sort() };
+  return { files: [...out.files].sort(), problems: [...out.problems].sort() };
 }
 
 /** The sha256 of a folder's tree (names and bytes, in name order), or `null` for a folder that is not there. */

@@ -2,6 +2,7 @@
 // seal (`package-seal.mjs`, bench PR 4a: it publishes the archive first, writes the registry entry next and removes the clear cases only after both and a verified backup; a failed seal leaves the clear cases exactly as they were and `package
 // --task NN --seal` resumes it). Registration precedes the seal, so the archive's hash joins the entry afterwards: the same function writes the entry again with the sealed archive's hash, which is a new identity (a seal is part of the identity).
 import path from 'node:path';
+import { systemClock } from './clock.mjs';
 import { resolveTask, taskIds, taskPaths } from './tasks.mjs';
 import { isQuick } from './quick.mjs';
 import { PACKAGES_FILE, registerPackage, registrationProblem } from './package-registry.mjs';
@@ -15,7 +16,7 @@ const registryOf = io => Object.fromEntries(Object.entries({ frozenFile: io.pack
 
 /** Register the package: -> `ok({ state, identity })` | `fail`. */
 export function registerStep({ io, explore, task, record, pkg }) {
-  return registerPackage({ home: io.home, task, tasks: quickTasks(explore), record, pkg, now: io.now ?? (() => new Date()), ...registryOf(io) });
+  return registerPackage({ home: io.home, task, tasks: quickTasks(explore), record, pkg, now: io.now ?? systemClock, ...registryOf(io) });
 }
 
 /** Seal the clear folder of the task, the seal's own refusals and a stop in the middle of it said as a sentence (a stop is exit 5: the archive and the entry are each whole or absent, and a run of `--seal` resumes). -> `{ exit, state?, say }`. */
