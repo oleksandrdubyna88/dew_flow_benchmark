@@ -1,9 +1,9 @@
 // The manifest of a quick task's package (F2.S1, P4 and P5): `~/rsd/lang-v2/explore/heldout-NN/manifest.json`, read as data. It holds, besides the case count:
 //
 //   cases       { hNNN: { in: <sha256>, out: <sha256> } }                                   the per-case hashes of the pair's two files
-//   traps       { <trap>: { stack: 'csharp' | 'node' | 'both', cases: [hNNN], mutants?: [<witness id>] } }   the trap coverage table; a `both` row is two rows, one per stack
+//   traps       { <trap>: { stack: 'csharp' | 'node' | 'both', cases: [hNNN | sNN], mutants?: [<witness id>] } }   the trap coverage table; a `both` row is two rows, one per stack. A row names held-out cases (`hNNN`) and may name visible samples (`sNN`) beside them: every witness pass also runs the samples (parent entry 10.1)
 //   witnesses   { <id>: { trap, stack: 'csharp' | 'node', kind: 'deterministic' | 'race' } }   one witness per trap-and-stack row; the overlay is `heldout-NN/mutants/<id>/`
-//   load        { cases: [hNNN], durationS }                                                the load cases (each has a twin under `twins/`) and the load duration the spec states (the F-LOAD rule measures it)
+//   load        { cases: [hNNN], durationS }                                                the load cases (each has a twin under `twins/`) and the load duration the spec states (the F-LOAD rule measures it); held-out ids only
 //   references  free text per stack (the author's notes; never read by the tool)
 //
 // An unknown top-level key is refused naming the key. This module checks the SHAPE only; the table's meaning (every row has a case and one witness) is `package-suite.mjs`. Nothing here is ever written to a public file: the
@@ -17,12 +17,18 @@ export const STACKS = Object.freeze(['csharp', 'node']);
 export const KINDS = Object.freeze(['deterministic', 'race']);
 
 const CASE_ID = /^h\d{3}$/;
+const TRAP_CASE_ID = /^(?:h\d{3}|s\d{2})$/;
 const HASH = /^[0-9a-f]{64}$/;
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+/** Whether `id` is a held-out case id (`h001`): the ids of a load case, of `cases/` and of `traps.txt`. */
+export const isHeldOutId = id => CASE_ID.test(id);
+/** Whether `id` is a visible sample id (`s01`): the ids a trap row may name beside its held-out cases. */
+export const isSampleId = id => /^s\d{2}$/.test(id);
 const idList = v => Array.isArray(v) && v.every(id => typeof id === 'string' && CASE_ID.test(id));
+const trapIdList = v => Array.isArray(v) && v.every(id => typeof id === 'string' && TRAP_CASE_ID.test(id));
 const pairOk = c => isObject(c) && HASH.test(c.in ?? '') && HASH.test(c.out ?? '');
 const optionalList = v => v === undefined || Array.isArray(v);
-const trapOk = t => isObject(t) && [...STACKS, 'both'].includes(t.stack) && idList(t.cases) && optionalList(t.mutants);
+const trapOk = t => isObject(t) && [...STACKS, 'both'].includes(t.stack) && trapIdList(t.cases) && optionalList(t.mutants);
 const witnessOk = w => isObject(w) && typeof w.trap === 'string' && STACKS.includes(w.stack) && KINDS.includes(w.kind);
 const loadOk = l => isObject(l) && idList(l.cases) && Number.isInteger(l.durationS) && l.durationS > 0;
 const everyEntry = (obj, ok_) => isObject(obj) && Object.values(obj).every(ok_);
@@ -31,9 +37,9 @@ const everyEntry = (obj, ok_) => isObject(obj) && Object.values(obj).every(ok_);
 const SHAPE = Object.freeze([
   [m => Number.isInteger(m.caseCount) && m.caseCount >= 0, () => 'caseCount must be a whole number'],
   [m => everyEntry(m.cases, pairOk) && Object.keys(m.cases).every(id => CASE_ID.test(id)), () => 'cases must map each case id (h001...) to { in, out }, the sha256 of the two files'],
-  [m => m.traps === undefined || everyEntry(m.traps, trapOk), () => 'traps must map each trap to { stack: csharp | node | both, cases: [case ids] }'],
+  [m => m.traps === undefined || everyEntry(m.traps, trapOk), () => 'traps must map each trap to { stack: csharp | node | both, cases: [held-out case ids (h001...) and visible sample ids (s01...)] }'],
   [m => m.witnesses === undefined || everyEntry(m.witnesses, witnessOk), () => 'witnesses must map each id to { trap, stack: csharp | node, kind: deterministic | race }'],
-  [m => m.load === undefined || loadOk(m.load), () => 'load must be { cases: [case ids], durationS: a whole number of seconds }'],
+  [m => m.load === undefined || loadOk(m.load), () => 'load must be { cases: [held-out case ids (h001...)], durationS: a whole number of seconds }'],
   [m => Object.keys(m.cases ?? {}).length === m.caseCount, m => `caseCount ${m.caseCount} is not the ${Object.keys(m.cases ?? {}).length} cases listed`],
 ]);
 

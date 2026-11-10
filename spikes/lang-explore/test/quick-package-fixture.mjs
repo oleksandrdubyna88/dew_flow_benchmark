@@ -27,7 +27,10 @@ export function fakeClock(start = '2026-11-07T10:00:00.000Z') {
 export const TOKEN = 'invented-package-QZ9';
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export const IDS = Object.freeze(['h001', 'h002', 'h003', 'h004']);
-export const SPEC_TEXT = `# Task 05 — Invented\n\n| | |\n|---|---|\n| Gate verdict | \`proceed\` · 2026-11-09 |\n\n## 2. Requirements\n\n${[1, 2, 3, 4, 5, 6, 7].map(n => `**R${n}.** An invented requirement number ${n}.`).join('\n\n')}\n`;
+/** The spec's section 6 as the pass reads it (FORMAT 3.4): one `### sNN` sub-section per visible sample, each with its two headed blocks. */
+const sampleSection = ids => ids.map(id => `### ${id}\n\n\`samples/${id}.in\`\n\n\`\`\`\nscenario 2\ninvented-in-${id}\n\`\`\`\n\n\`samples/${id}.out\`\n\n\`\`\`\ntranscript 2\ninvented-out-${id}\n\`\`\`\n`).join('\n');
+export const SAMPLE_IDS = Object.freeze(['s01', 's02']);
+export const SPEC_TEXT = `# Task 05 — Invented\n\n| | |\n|---|---|\n| Gate verdict | \`proceed\` · 2026-11-09 |\n\n## 2. Requirements\n\n${[1, 2, 3, 4, 5, 6, 7].map(n => `**R${n}.** An invented requirement number ${n}.`).join('\n\n')}\n\n## 6. Samples\n\n${sampleSection(SAMPLE_IDS)}`;
 export const TRAPS = Object.freeze({ 'trap-alpha': { stack: 'both', cases: ['h001', 'h002'] }, 'trap-beta': { stack: 'node', cases: ['h003'] } });
 export const WITNESSES = Object.freeze({
   'MXX-alpha-c': { trap: 'trap-alpha', stack: 'csharp', kind: 'deterministic' },
@@ -46,7 +49,7 @@ export function fakeTemplates() {
 }
 
 /**
- * The private side of invented task `taskId` in a fresh temp home: cases, `cases.txt`, `traps.txt` (the union of the table), the manifest, the two references, a witness overlay per witness id, the twins of the load cases when given.
+ * The private side of invented task `taskId` in a fresh temp home: cases, `cases.txt`, `traps.txt` (the held-out ids of the table; a sample id is never in it), the manifest, the two references, a witness overlay per witness id, the twins of the load cases when given.
  * `over` replaces `{ manifest, refs, overlays, traps, witnesses, load }`. -> `{ home, task, dir, casesDir, refsDir, mutantsDir, manifestFile, material }`.
  */
 export function writePackage({ taskId = '05', home = quickHome(), traps = TRAPS, witnesses = WITNESSES, load, over = {} } = {}) {
@@ -56,7 +59,7 @@ export function writePackage({ taskId = '05', home = quickHome(), traps = TRAPS,
   const cases = IDS.map(caseOf);
   for (const c of cases) { put(path.join(casesDir, `${c.id}.in`), c.input); put(path.join(casesDir, `${c.id}.out`), c.output); }
   put(path.join(casesDir, 'cases.txt'), `${cases.map(c => `${c.id} bytes R1 R2`).join('\n')}\n`);
-  put(path.join(dir, 'traps.txt'), `${[...new Set(Object.values(traps).flatMap(t => t.cases))].sort().join('\n')}\n`);
+  put(path.join(dir, 'traps.txt'), `${[...new Set(Object.values(traps).flatMap(t => t.cases).filter(id => id.startsWith('h')))].sort().join('\n')}\n`);
   const manifest = {
     caseCount: cases.length, cases: Object.fromEntries(cases.map(c => [c.id, { in: sha(c.input), out: sha(c.output) }])), traps, witnesses, ...(load ? { load } : {}), ...over.manifest,
   };
