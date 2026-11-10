@@ -37,6 +37,8 @@ or unknown task is exit 4, naming the legal ids. `prepare` and `quiet` do not wo
 | `heldout-open --task NN [--key-file <file>] [--key-backup <file> --share-mount <dir>]` | free | a quick task's clear held-out folder made from its sealed archive under the task's lock, held for the operator (`.open` = `{ operator, at }`) until `heldout-close`; the key's sha256 is checked before any decryption; exit 0 or 4 ("The sealed held-out folder", below) |
 | `heldout-close --task NN --key-backup <file> --share-mount <dir> [--key-file <file>]` | free | the clear folder and its stamp removed, only after the key's backup is verified on the share's mount (no override); a folder held by another live process is refused; a second close is a no-op |
 | `heldout-check --tasks NN,NN [--key-file <file>] [--key-backup <file> --share-mount <dir>]` | free, read only | per task: the registry entry, the archive's `archiveSha256`, `packages.json`'s hash when it is there, the key, the unsealed tree, the clear folder's state, the backup when named; counts only; exit 4 when any task refuses |
+| `package --task NN [--only refs\|witnesses\|suite\|load\|all] [--register] [--seal] [--accept-noisy <why>] [--task-repo <path>]` | free; on the scoring CPUs | a quick task's validation package (F2.S1, "The package tool", below): the suite and the gate, S, both references through the ten-pass driver, F-LOAD's measured duration, the defect witnesses; `--register` writes `inputs/packages.json`, `--seal` then seals the archive (the seal is last); exit 0 green, 1 an item red, 3 a resumable halt, 4 a refusal, 5 a failure |
+| `register-memory` | free | writes the memory value's `registration` field once all six packages have both references accepted at it (the one writer of the field) |
 | `prune --task NN` | free | removes the seeded cache copies and scoring copies after the analysis; keeps the records, the ledger, the calibration and the held-out folder |
 | `repartition --series DIR` | free | the time partition of every kept session of a quick-run series, recomputed from its retained `stream.stamped.ndjson`, `otel/`, `meta.json` and audit log with v1's classifier as it is now (`lib/repartition.mjs`; v1's `loadSessionDir`, `smokeViews` and `partition`, never a second partition). One new immutable file per run whose inputs changed, `<series>/partition-recomputed/<yyyymmddTHHMMSSZ>-<gen>.json`, holding per session the stack, the old categories (read from `record.json`, which is never changed), the new ones and whether they sum to the wall, with a fingerprint of the classifier's and the evidence's bytes; a run over unchanged inputs reports the existing result and writes nothing; a session without its evidence is listed with the reason, never as a zero. A temporary file of a killed run is never read as a result and is removed once its owner is gone |
 
@@ -272,6 +274,56 @@ reads it alone; the pins of a test name the tasks the test holds). The function 
 
 **The quick tasks' held-out reader takes regular files only (F1.S1 (d), 2026-11-07).** `lib/heldout-quick.mjs` reads `heldout-NN/cases/` and `traps.txt` by `lstat`, so nothing is followed. `caseEntriesProblem` refuses every entry of `cases/` that is not a regular file (a link, a folder, a fifo, a socket, a device), naming it; `cases/` itself and `traps.txt` are refused when they are a link (or not a folder, or not a regular file). `casesTreeHash` returns `ok(sha256)` or `fail(sentence)` and never throws; for a valid folder the bytes it hashes are the old ones, so a series made before the change still matches at its next pair. `loadHeldoutQuick` and the rehearsal's fixture take the value. The olympiad reader (`lib/heldout.mjs`) has the same shape and is outside the claim, so it is not changed. The leak check had the same blind spot the other way round: `lib/leak-material.mjs` skipped a linked file under `refs/`, `mutants/` or a quick task's `refs-NN/` in silence, so it did not read it. `buildMaterial` now refuses with the task and the path (`task NN: refs/ws/linked.py`), never the text, and `leakcheck` exits 4 on it.
 
+## The package tool (F2.S1; `lib/package-*.mjs`)
+
+A **package** is what makes a failure of a quick task adjudicable: its corrected and gated spec, two references (C# and Node) that pass every case ten of ten, a held-out suite whose every case cites a requirement and whose every trap
+has a witness, and one identity F2.S2 can freeze. The tool checks the parts it can check and records the rest as counts, hashes and durations in `inputs/packages.json`. It writes nothing public but that file and the memory value's
+registration field. Its records hold case ids and trap names and stay in the private area (D41).
+
+| Module | What it holds |
+|---|---|
+| `lib/package-manifest.mjs` | the manifest's shape (`cases` with the sha256 of each pair, `traps` rows, `witnesses`, `load`; an unknown top-level key is refused naming it), `readManifest`, the rows of the trap table |
+| `lib/package-suite.mjs` | text in, findings out: the R-ids of `cases.txt` against the corrected spec (read by the conformance checker's own `parseSpec`), the comparison words, the manifest against the folder, `traps.txt` against the table, the table's rows against the cases and the witnesses, and `largestReplyBody` (S) |
+| `lib/package-quick.mjs` | `loadPackage` (the held-out side, the manifest, the pinned spec text with its sha256 checked, the references and overlays listed by `lstat`), `assembleReference`, `materialOf` and `packageIdentity` |
+| `lib/package-pass.mjs` | `wrapPass` (the start line, the 60 s heartbeat, the end line, the memory read-back guard) and `onePass` (`commitBuild`, then the pass child) |
+| `lib/package-refs.mjs` | `validateReference` (the ten-pass driver, green only on `accepted`, the per-pass rows), `loadRule` (F-LOAD), `stageTwins` |
+| `lib/package-witness.mjs` | `assembleWitness`, `witnessVerdict` (the two rules), `runWitness` |
+| `lib/package-gate.mjs` | the conformance checker called in process (`runConformance`), the header's `Gate verdict` row and the gate record (`gateItem`) |
+| `lib/package-record.mjs` | the private run folders, `openRun` (resume or new), the sweep of a dead run's owned trees, S's file |
+| `lib/package-registry.mjs` | `registerPackage`, `registrationProblem`, `pinsNow`, the five-S gate |
+| `lib/package-steps.mjs`, `lib/package-command.mjs`, `lib/package-finish.mjs` | the steps, the commands, and "register, then seal" |
+| `lib/memory-limit.mjs` | `registerMemoryValue`, the one writer of the `registration` field |
+
+**The reuse.** Builds go through `buildAndRestore` (inside `commitBuild`), every pass through `runPassChild` (it kills the whole process tree at its bound; the runner kills each case's cgroup), the ten passes through `scorePasses` (called as it is),
+the seal through `package-seal.mjs` (bench PR 4a). No spawn path is written here, so a witness that hangs or leaves a grandchild leaves no process behind.
+
+**The two references.** Each reference is the files an agent would write (`refs-NN/<stack>/`), laid on the stack's template; one that holds a frozen file or a link is refused, naming the path. Each is scored at the one memory value: green is
+`accepted` (ten passes, five per profile, every case passed) with the enforced limit read back as that value; another read-back is a halt with both numbers. The record keeps, per reference and per pass, the largest peak, the slowest case wall,
+the ten passes' wall and the retained size (the numbers *Growth* reads). **F-LOAD** is measured, not assumed: the slowest whole-scenario wall of the load cases (`manifest.load.cases`, each with a twin under `twins/` run once per reference) over every
+pass of both references against 600 s minus 30 s and 600 s minus twice the twin's wall; a duration that leaves less is shortened in the spec first. (The rule is applied to the largest wall and the largest twin wall, which is the stricter reading.)
+
+**The witnesses** (`heldout-NN/mutants/<id>/`, an overlay over a stack's reference; refused when empty, a whole tree, frozen, or equal to the reference): a **deterministic** witness gets one pass on the 2-CPU profile and is caught when it fails every
+case registered for its trap and no other; a **race** witness gets ten passes like a session and is judged on its failing passes only (each fails registered cases only; at least one fails; the clean passes are kept). A timeout or a hang of a case counts
+as that case failing; an extra failure (a case beyond the table, a hang outside the trap) is a mapping to fix and the witness is not caught. A witness that does not build is not caught. Every pass prints a start line, a heartbeat every 60 s
+(the wall only, since the pass child shows nothing before it ends) and a closing line that gives the outcome and the number of cases that failed; the lines carry numbers only.
+
+**The records** (`~/rsd/lang-v2/explore/package-NN/<yyyymmddTHHMMSSZ>-<gen>/`): `record.json` (a few KiB, written once at the end), `step-<name>.json` for each finished step (written once), `halt-<n>.json` for a resumable halt, and the scoring
+folders (attempt files, written once). The folders are append-only and never pruned (the repository's rule: results are only added); expect tens of runs per task, each well under 1 MiB, so a task stays in the low tens of MiB. A killed
+run leaves no `record.json`: the next run names it `incomplete` in its record and never reads it as a result; a halted run of the same material is resumed in its own folder. Owned temporary trees of a dead run are swept at the start. **S** is counted
+by `--only suite` and kept in `package-NN/s.json`, one entry per suite tree hash (a changed suite gets a new S); `register` for 04, 06, 07, 08 or 10 refuses until all five have their S for their current suites.
+
+**The registry** (`inputs/packages.json`, `{ "NN": entry }`): the spec's and FORMAT's sha256, the held-out tree hash, the manifest's, the sealed archive's hash (once sealed), the references' tree hashes, the witnesses' and twins' tree hash, the counts, the memory
+value both references passed at, the F-LOAD numbers, the gate verdict and date, **the runner and execution-layer pins the validation ran under** (the sha256 of `specs.d/runner.json` and `specs.d/exec-layer.json`) and the identity (`packageIdentity`: a sha256 over
+the material and what it was validated under; measured walls are not in it, so a re-run of the same material has the same identity). `registerPackage` refuses a red or missing item, a record older than the material, moved pins, and an archive hash that differs
+from `heldout-frozen.json` (`registryMismatchProblem`). **Order: validate everything, register, then seal.** Registration comes first, so the archive's hash joins the entry after the seal by the same function, as a new identity; a failed
+seal leaves the clear cases exactly as they were and `package --task NN --seal` resumes it (it reads the latest complete record and takes no `--only`).
+
+**The memory value's registration.** `register-memory` writes `registration` (`{ date, references: [twelve { task, stack, treeSha256 }] }`) into `inputs/memory-limit.json` only when all six packages have both references `accepted` at the file's `bytes`, and fixes the
+note (`chosen` until then). A task's registration never waits for it. `memoryLimit()` returns the field (or `null`).
+
+**The leak checks** read a quick task's `refs-NN/**` (both stacks) and `mutants/**` as needles; a code line that the runner or a template holds is a collision, counted per task and no needle; a manifest's witness ids and trap names are ids to keep out
+of the public notes (a manifest that is not JSON is a refusal); and `lib/leak-gates.mjs` scans `spikes/lang-bench/inputs/gates/` for a case id, a witness or trap id, a case line or a window of the private notes, naming the file, the line and the kind.
+
 ## The sealed held-out folder (F2.S2 (d) and F2.S1 items 3 to 5, bench PR 4a)
 
 A quick task's clear held-out cases (`~/rsd/lang-v2/explore/heldout-NN/cases/`) are sealed into ONE archive `heldout-NN/suite.enc` (AES-256-GCM: `MAGIC || IV || ciphertext || tag`, AAD = the magic; v1's `sealTree`, shared with `sealSuite`),
@@ -337,7 +389,7 @@ Tests: `test/quick-contract.test.mjs`, `test/quick-drift.test.mjs`, `test/quick-
 
 ## Data
 
-- Private, outside every git tree (mode 0700): `~/rsd/lang-v2/explore/` — `heldout/` and `heldout-NN/` (generator, cases,
+- Private, outside every git tree (mode 0700): `~/rsd/lang-v2/explore/` — `package-NN/<run>/` (a package's records, `s.json`), `refs-NN/<stack>/` (the two references), `heldout/` and `heldout-NN/` (generator, cases,
   references, mutants, manifest, and for the olympiad tasks `brute.py` and `handcheck.md`), `calibration.json` and
   `calibration-NN.json`, `spin.json`, and one directory per series: `run-map.json`, `ledger.ndjson`,
   `pairs/`, `s/<rid>/` per session (records, stream, transcripts, egress and broker logs), `private/` (the hand check and

@@ -109,7 +109,7 @@ export function bodyOf(entry, spec, { observed, memoryMax }) {
   const withLimit = c => ({ ...c, wallMs: wallOf(c.id), lifecycle: { ...c.lifecycle, memory: { ...c.lifecycle.memory, maxBytes: limit } } });
   const judged = id => (hang.includes(id) ? rec(id, 'FAIL', 'timeout: the case ran past its test bound') : rec(id, failing[id] ? 'FAIL' : 'PASS', failing[id] ? REASON[failing[id]] : '', entry === 'clean' ? undefined : entry.peak?.[id]));
   const cases = spec.caseIds.map(id => withLimit(judged(id)));
-  return { kind: 'completed', record: runnerRecord(spec.caseIds, { cases }), runner: runnerRecord().runner, memoryCertified: true, observedCpus: observed };
+  return { kind: 'completed', record: runnerRecord(spec.caseIds, { cases }), runner: runnerRecord().runner, memoryCertified: entry === 'clean' || entry.uncertified !== true, observedCpus: observed };
 }
 
 /** A series folder with the series lock held by this process (the folder a package run scores under). -> `{ seriesDir, release }`. */
@@ -141,8 +141,8 @@ export function sealSeams({ frozenFile, packagesFile, hooks = {} }) {
  * Everything a command test needs: an invented package, the fake world, the pins of the invented task, and `io` for `main` (`say` collects `lines`). `over` replaces entries of `io`, `over.package` entries of `io.package`.
  * -> `{ p, world, io, lines, files }`.
  */
-export function commandEnv({ plan, buildOk, over = {}, ...pkgOptions } = {}) {
-  const p = writePackage(pkgOptions);
+export function commandEnv({ plan, buildOk, over = {}, built, ...pkgOptions } = {}) {
+  const p = built ?? writePackage(pkgOptions);
   const world = fakeWorld({ plan, buildOk });
   const lines = [];
   const files = { packagesFile: path.join(tmpDir('pkg-registry'), 'packages.json'), frozenFile: path.join(tmpDir('pkg-frozen'), 'heldout-frozen.json'), memoryFile: path.join(tmpDir('pkg-memory'), 'memory-limit.json') };

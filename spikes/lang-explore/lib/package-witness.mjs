@@ -135,7 +135,7 @@ function recordOf({ a, witness, registered, verdict, ran, work }) {
   const walls = ran.passes.map(p => p.ms ?? 0);
   return {
     id: a.id, ordinal: a.ordinal, stack: witness.stack, kind: witness.kind, trap: witness.trap, registered, caught: verdict.caught, reason: verdict.reason, sentence: verdict.sentence, counts: verdict.counts,
-    passes: ran.passes.map(p => ({ n: p.n, profile: p.profile, wallMs: p.ms ?? null, failing: idsOf(failingCases(p)), peakBytes: peakOf(p.cases) })),
+    passes: ran.passes.map(p => ({ n: p.n, profile: p.profile, wallMs: p.ms ?? null, failing: idsOf(failingCases(p)), verdicts: Object.fromEntries(failingCases(p).map(c => [c.id, c.verdict])), peakBytes: peakOf(p.cases) })),
     cost: { wallMs: walls.reduce((s, w) => s + w, 0), buildMs: buildMsOf(work), treeBytes: ran.treeBytes ?? null, retainedBytes: dirBytes(work) },
   };
 }

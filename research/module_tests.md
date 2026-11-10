@@ -604,6 +604,27 @@ The first measurement (`research/lang-v2/F1S2_measurement_20261107.md`): ten pas
 **What this part does not prove.** Ten passes catch a race that shows often on the scoring CPUs; a rarer one can pass all ten (T25), and the report says so. R1 and R2 run invented daemons laid on the real daemon templates through the real pass child and layer (the C# one is built by the template's `build.sh` in the real build box; the Node one is started as the template's `run.sh` starts it, with no `npm ci`); the web templates are not run by them. The certifying-host check (M7) runs on the owner's host before the freeze and at each
 release of the harness, not in CI. The wall bound of the pass child is proved with a fake child that never answers; a real hung layer is not provoked.
 
+## F2.S1: the package tool (`spikes/lang-explore/`)
+
+The package tool's scenarios (F2's stories document, F2.S1 section 2, thirty-seven scenarios and the plan round's five findings) run over INVENTED tasks in temp homes: an invented spec, invented cases, an invented manifest, invented references and witness
+overlays, fake template folders and a fake world whose pass seams answer by a plan (`test/quick-package-fixture.mjs`). No private file, no real reference and no key is read. Scenarios 30 to 33 and the grandchild scenario run the REAL box on invented toy daemons laid on the real
+templates (`test/quick-package-toys.mjs`), behind `needs` (skipped with the reason, a failure under `BENCH_REQUIRE_SANDBOX=1`).
+
+```bash
+node .agents/conventions/tools/low-priority.mjs node --test --test-concurrency=4 spikes/lang-explore/test/quick-package-*.test.mjs
+```
+
+| Scenarios | Test file | What it proves |
+|---|---|---|
+| 1 to 6: the reference workspace, a frozen file or a link refused, the ten-pass driver (green only on `accepted`), a read-back limit that is not the registered one is a halt, the record's numbers | `test/quick-package-refs.test.mjs` | the references through `scorePasses` over fake seams |
+| 7 to 15: the overlay, an identical witness, the two verdict rules, an unregistered failure, a hang, a build that fails, the mask read back, the trap table's rows; the progress lines; the verdict word kept | `test/quick-package-witness.test.mjs` | `assembleWitness`, `witnessVerdict`, `runWitness` |
+| 16 to 20 and S: R-ids, the manifest against the folder, `traps.txt`, the pinned spec hash, F-LOAD's measured rule, the largest reply body | `test/quick-package-suite.test.mjs` | the suite checks and `loadRule` |
+| 21 to 25 and findings 2 to 4: the gate item (the real conformance checker over its invented fixtures), the identity, the registry entry's content, `register`'s refusals, the registration field, S apart from registration, the run folders (killed, halted, swept) | `test/quick-package-registry.test.mjs` | `package-gate`, `package-registry`, `package-record`, `registerMemoryValue` |
+| 26 to 29: the references and overlays as needles, a template line a collision, the needle cap, the gate records | `test/quick-package-leak.test.mjs` | `leak.mjs`, `leak-material.mjs`, `leak-gates.mjs` |
+| 34, 35 and finding 5: the lock, the quiet check, the resume, a red item stops before registration, a failed seal after registration | `test/quick-package-command.test.mjs`, `test/commands.test.mjs` (`REEXEC`) | `package-command`, `package-finish` |
+| 36 and 37: the archive, the clear folder (mode 700, checked, removed, a stale one remade, the backup unreachable) | `test/quick-package-seal.test.mjs` | the seal and the readers (bench PR 4a) used as the command's entry point |
+| 30 to 33 and finding 1 (real box): a toy pair end to end, the memory bound, a race witness, the read-back limit, a grandchild that hangs | `test/quick-package-real.test.mjs` | the package through the certified box |
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under

@@ -171,3 +171,15 @@ test('Each_pass_of_a_witness_prints_a_start_line_a_heartbeat_and_an_end_line_wit
   assert.equal(/h\d{3}|trap|MXX|alpha|\/tmp|testsToDelete/.test(text), false, 'never a case id, a trap, a witness name or a path');
   assert.equal(r.lines.at(-1).includes('ended'), true, 'the end line is the last');
 });
+
+test('A_pass_whose_memory_claim_is_not_certified_is_a_halt_never_a_pass_and_never_a_caught_witness', async () => {
+  const r = await ranWitness({ id: 'MXX-alpha-c', plan: () => ({ failing: { h001: 'wrong answer', h002: 'wrong answer' }, uncertified: true }) });
+  assert.equal(r.answer.halted, true);
+  assert.ok(/not certified/.test(r.answer.sentence), r.answer.sentence);
+  assert.equal(r.answer.caught, undefined);
+});
+
+test('The_record_of_a_failing_pass_keeps_the_verdict_word_of_each_failing_case', async () => {
+  const r = await ranWitness({ id: 'MXX-alpha-c', plan: planFor('MXX-alpha-c', { failing: { h001: 'memory limit', h002: 'memory limit' } }) });
+  assert.deepEqual(r.answer.record.passes[0].verdicts, { h001: 'memory limit', h002: 'memory limit' }, 'the memory bound is told apart from a wrong answer');
+});
