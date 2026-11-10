@@ -1,7 +1,7 @@
 namespace Bench.Ui.Services;
 
 /// <summary>A disposal-safe poll on a <see cref="PeriodicTimer"/> — the durable-status rule's "poll while something is in flight,
-/// self-terminating when idle" (<c>.claude/rules/shared/common/durable-status.md</c> rule 3), written once for the console.
+/// self-terminating when idle" (<c>.agents/conventions/common/durable-status.md</c> rule 3), written once for the console.
 /// <list type="bullet">
 /// <item><b>Started only on demand, at most once.</b> <see cref="Start"/> while running is a no-op, so a page may call it after
 /// every read without stacking a second loop.</item>
