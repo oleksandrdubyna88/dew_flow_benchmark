@@ -214,7 +214,7 @@ English. No mixed-language chrome.
 
 ## Definition of Done
 
-- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` — **0 warnings** (warnings are errors here).
+- [ ] `dotnet build dew_flow_benchmark.slnx -c Release -m:4` — **0 warnings** (warnings are errors here).
 - [ ] The test executable runs green; new behaviour has tests; a fix has a test that was watched failing.
 - [ ] The architecture guard still passes — no layer reached where it must not.
 - [ ] Any plan the work finished was promoted with its deviations recorded.

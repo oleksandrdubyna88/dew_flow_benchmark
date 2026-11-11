@@ -1498,11 +1498,37 @@ Stated because a description that quietly implies more than is built is the same
   investigates its own disposable worktree copy of that tree (*A CLI as a measured subject*, above). The
   retrieval lane still reads the engine's index, which is its design rather than a gap.
 
+## Agent instructions and the Claude adapter (2026-11-11)
+
+The family's shared rules are the `dew_flow_conventions` submodule at `.agents/conventions`, pinned at its `release`,
+and read through its resolver (`.agents/conventions/tools/rules.mjs`) as `AGENTS.md` and `.agents/conventions/ENTRY.md`
+say. This repository's own instructions are `.agents/PROJECT.md`; the root `CLAUDE.md` only imports `AGENTS.md`.
+
+Claude Code gets its rules through the **adapter** in `.claude/` (story 3.B of the conventions plan, 2026-11-11): five
+hook files byte-identical to the release's `settings/hooks`, registered in `.claude/settings.json`, which is the
+family template; its permissions are the ones this repository had before.
+- `load-instructions.mjs` (SessionStart) puts the resolver's every-task rules into the session, or says INCOMPLETE,
+  with the restore commands, when the mount is missing.
+- `ensure-user-guard.mjs` (SessionStart) installs the user-level subagent-model guard into `~/.claude`.
+- `build-flags.mjs` (PreToolUse on Bash/PowerShell) refuses `dotnet build`, `msbuild`, `publish`, `pack` or `restore`
+  without the worker-pool limit (`-m:4`). It reads only the command text an agent runs: a script the command calls is
+  not inspected, and CI runs no hooks. Every documented build line carries the limit.
+- `subagent-model.mjs` (PreToolUse on Agent/Task) refuses a subagent launch without a model alias.
+
+**With the session traces.** `bench sessions install` writes its measurement hooks into `.claude/settings.local.json`
+(`hosts/Cli/SessionHooks.cs`). Claude Code merges the hooks of both files and runs all of them, so nothing is
+duplicated. One effect is visible in a trace: a call that `build-flags.mjs` refuses gets its `PreToolUse` event and no
+`PostToolUse`, because the tool never runs, so it shows as a call without an end.
+
+The hooks are the conventions repository's code, tested there. CI's plans job runs `adapter-check`, which fails when a
+copy drifts or a registration is missing, and `pin-check`, which fails when the pin lags `release`. A pin bump recopies
+the hooks.
+
 ## Local test runs are capped and lowered (2026-10-11)
 
 The shared rule `common.local-cpu-budget` applies here. `tests/Bench.Tests/xunit.runner.json` sets
 `maxParallelThreads: 8` and is copied to the output. Measured on xunit.v3 4.0.1: an uncopied file is never read, and
-the runner then takes one thread per CPU. Builds and test runs go through `.claude/rules/shared/tools/low-priority.mjs`
+the runner then takes one thread per CPU. Builds and test runs go through `.agents/conventions/tools/low-priority.mjs`
 (BelowNormal on Windows, nice 19 elsewhere). CI is exempt and unchanged. `LocalCpuBudgetTests` checks four things:
 
 - the config and its Content item;
