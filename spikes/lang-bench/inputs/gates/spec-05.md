@@ -1,7 +1,8 @@
 # The gate of task 05's spec (F2.S1 P1 and P6)
 
-The record of the gate of `todo/tasks/05-key-value-server.md`, for the bench. The spec is on the task repository's branch
-`spec/05-key-value-server`, text `42481b4`, sha256 `9b88858ae1ada50b4ffff3973a3db64bba7cf2ae588e61078a479ba6d5b7c4cc`. Append only.
+The record of the gate of `todo/tasks/05-key-value-server.md`, for the bench. The spec is on the task repository's `main` at
+`de42de9` (PR #5, the squash of branch `spec/05-key-value-server` at `42481b4`, the same text), sha256
+`9b88858ae1ada50b4ffff3973a3db64bba7cf2ae588e61078a479ba6d5b7c4cc`; `explore.json` pins `de42de9`. Append only.
 D25's leak rule: no case text, case id or trap name; the verdict, the reviewer count and the findings in words that name no case.
 
 **Checker line** (`node spikes/lang-bench/conformance.mjs`, FORMAT at `c204726`, on `42481b4`, exit 0):
