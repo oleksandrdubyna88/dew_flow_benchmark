@@ -103,7 +103,7 @@
       "title": "Key-value server with expiry",
       "kind": "daemon",
       "quick": true,
-      "spec": { "sha": "efc45b1", "path": "todo/tasks/05-key-value-server.md", "sha256": "29f423088a30eaf5f3dd0cc9233d73497c7e4a1400e05f5ee94595f2dc3fe54b" },
+      "spec": { "sha": "de42de9", "path": "todo/tasks/05-key-value-server.md", "sha256": "9b88858ae1ada50b4ffff3973a3db64bba7cf2ae588e61078a479ba6d5b7c4cc" },
       "format": { "sha": "c204726", "path": "todo/tasks/FORMAT.md", "sha256": "6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47", "label": "v2, second amendment" },
       "privateNotes": { "relativePath": "rsd/lang-v2/test-design/05.md", "sha256": "b15d7fc97f2ff1a53db2f965159c6cafcc5c3b329d4f78c85b7cbc7561edd18b" },
       "heldoutDirParts": ["rsd", "lang-v2", "explore", "heldout-05"],
@@ -171,7 +171,7 @@
     }
   },
   "quick": {
-    "reason": "The pins of the quick run (owner's order, 2026-11-05; research/lang-v2 plan 8.1): tasks 04 05 06 07 08 10 (daemon and web), bare C# and Node, exploratory, not evidence. The specs are the DRAFTS on the task repository's branches, pinned by commit and sha256. Toolchains and caches are the language comparison v2's (SDK 10.0.403, Node 26.13.0, TypeScript 6.0.3, the registered snapshots), because the workspace templates pin them. No oracle, mutants or calibration: the limits below are fixed. 2026-11-07 (F1.S1 (e)): the six FORMAT pins moved from the drafts' v2.1 to the first amendment of FORMAT v2 on the task repository's main (4ddb8f8, sha256 06c36608), the text the bench pins; the specs stay at their drafts. 2026-11-07 (D72, FORMAT's second amendment): the six FORMAT pins moved again, to the second amendment on the task repository's main (c204726, sha256 6c3546bb), where F-LIMITS-D says the memory bound is the one the statement states; the specs stay at their drafts and the olympiad pins stay.",
+    "reason": "The pins of the quick run (owner's order, 2026-11-05; research/lang-v2 plan 8.1): tasks 04 05 06 07 08 10 (daemon and web), bare C# and Node, exploratory, not evidence. The specs are the DRAFTS on the task repository's branches, pinned by commit and sha256. Toolchains and caches are the language comparison v2's (SDK 10.0.403, Node 26.13.0, TypeScript 6.0.3, the registered snapshots), because the workspace templates pin them. No oracle, mutants or calibration: the limits below are fixed. 2026-11-07 (F1.S1 (e)): the six FORMAT pins moved from the drafts' v2.1 to the first amendment of FORMAT v2 on the task repository's main (4ddb8f8, sha256 06c36608), the text the bench pins; the specs stay at their drafts. 2026-11-07 (D72, FORMAT's second amendment): the six FORMAT pins moved again, to the second amendment on the task repository's main (c204726, sha256 6c3546bb), where F-LIMITS-D says the memory bound is the one the statement states; the specs stay at their drafts and the olympiad pins stay. 2026-11-11 (F2.S1 P1): task 05's spec pin moved to its gated text on the task repository's main (de42de9, PR #5, sha256 9b88858a; gate record lang-bench inputs/gates/spec-05.md); its draft flag stays true until F2.S2's freeze, and the other five specs stay at their drafts.",
     "decidedOn": "2026-11-05",
     "planTasks": ["04", "05", "06", "07", "08", "10"],
     "pausePoint": { "usd": 150, "projectedFloorUsd": 5, "projectedFactor": 3, "pairSessions": 2 },
