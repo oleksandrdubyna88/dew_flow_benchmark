@@ -99,4 +99,5 @@ The founding plan and its build order are [todo/PLAN_rag_bench_repo.md](todo/PLA
 exists in detail, including its own list of what does not, is
 [research/architecture.md](research/architecture.md).
 
-Conventions for contributors — including *never `dotnet test`* — are in [CLAUDE.md](CLAUDE.md).
+Conventions for contributors — including *never `dotnet test`* — are in [.agents/PROJECT.md](.agents/PROJECT.md) (the
+root `CLAUDE.md` only imports `AGENTS.md`, the family's entry).
