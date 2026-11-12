@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "05": {
+      "archive": "heldout-05/suite.enc",
+      "archiveSha256": "02c460ce6c359f2a316bbfa497724bb98781053996219c7273866cbf996dd5fe",
+      "caseCount": 19,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "d342a312e98593c991e3c9e06cf37cec7621fcabf57057dbd771b3cced9e6159",
+      "sealedOn": "2026-11-12",
+      "trapCount": 19,
+      "treeSha256": "b7a892ee4fe5c36867598f2b47f4991d86960066457bf45a528756ae7008f82e"
+    }
+  }
+}
