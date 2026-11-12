@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, rmSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { packDir } from '../lib/heldout-archive.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { main } from '../heldout-tool.mjs';
-import { homeDir, pythonGate, tmpDir } from './helpers.mjs';
+import { homeDir, hostLacks, pythonGate, tmpDir } from './helpers.mjs';
 import { writeToySuite } from './toy-suite.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -149,16 +150,47 @@ test('Leakcheck_decrypts_the_suite_and_scans_the_repository_naming_files_not_tok
   assert.match(shingled.out, /paraphrase\.md/);
 });
 
-test('Sweep_removes_old_clear_leftovers_and_usage_errors_exit_4', async () => {
+test('Sweep_prints_age_unknown_for_an_entry_it_cannot_lstat_still_lists_it_and_exits_0', async t => {
+  if (process.getuid() === 0) return hostLacks(t, 'root can lstat through a folder without the search permission');
   const w = world();
-  const old = path.join(w.workRoot, 'score-tmp', 'old-run');
-  mkdirSync(old, { recursive: true, mode: 0o700 });
+  const base = path.join(w.workRoot, 'score-tmp');
+  mkdirSync(path.join(base, 'hidden-run'), { recursive: true, mode: 0o700 });
+  chmodSync(base, 0o400); // the names can be read, the entries cannot be looked at
+  try {
+    const swept = await tool('sweep', '--work-root', w.workRoot);
+    assert.equal(swept.code, 0, swept.out);
+    assert.match(swept.out, /^sweep: listed 1, removed 0 /);
+    assert.match(swept.out, /listed: .*hidden-run \(age unknown\) — not removed; after checking no scoring run uses it, remove it by hand: rm -rf -- '.*hidden-run'$/m);
+  } finally {
+    chmodSync(base, 0o700);
+  }
+  assert.equal(existsSync(path.join(base, 'hidden-run')), true);
+});
+
+test('Sweep_lists_the_leftovers_with_a_hand_command_and_removes_nothing_and_usage_errors_exit_4', async () => {
+  const w = world();
+  const base = path.join(w.workRoot, 'score-tmp');
   const longAgo = new Date(Date.now() - 30 * 3600 * 1000);
-  utimesSync(old, longAgo, longAgo);
+  const old = path.join(base, 'old-run');
+  const quirky = path.join(base, "it's a run");
+  const owned = path.join(base, 'testsToDelete-u1000-bench-in-score-0a1b');
+  for (const dir of [old, quirky, owned]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+  for (const dir of [old, quirky, owned]) utimesSync(dir, longAgo, longAgo);
   const swept = await tool('sweep', '--work-root', w.workRoot);
   assert.equal(swept.code, 0, swept.out);
-  assert.match(swept.out, /removed 1/);
-  assert.equal(existsSync(old), false);
+  const lines = swept.out.split('\n');
+  assert.equal(lines[0], 'sweep: listed 3, removed 0 — nothing is removed by age or by name (common.test-leftovers § 4)');
+  assert.equal(lines.length, 4, 'the summary and one line per entry');
+  const line = name => lines.find(l => l.startsWith(`listed: ${path.join(base, name)} (`));
+  assert.match(line('old-run'), /\(30\.0 h old\) — not removed; after checking no scoring run uses it, remove it by hand: rm -rf -- '.*old-run'$/);
+  assert.match(line('testsToDelete-u1000-bench-in-score-0a1b'), /— not removed; check with: bash \.agents\/conventions\/tools\/janitor\.sh --dry-run$/);
+  assert.equal(line('testsToDelete-u1000-bench-in-score-0a1b').includes('rm -rf'), false, 'a prefixed entry gets the janitor hint, no hand command');
+  for (const dir of [old, quirky, owned]) assert.equal(existsSync(dir), true, `${dir} is still there`);
+  // the printed word, pasted into a shell, names exactly the folder (shown with printf, never by running the removal)
+  const word = line("it's a run").split('rm -rf -- ')[1];
+  const shown = spawnSync('sh', ['-c', `printf '%s' ${word}`], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(shown.stdout, quirky, 'a quote and a space in the name stay one exact word');
+  assert.equal((await tool('sweep', '--work-root', w.workRoot, '--max-age-hours', '1')).code, 4, 'the age option is gone: an unknown option is a usage error');
   assert.equal((await tool('nonsense')).code, 4);
   assert.equal((await tool()).code, 4);
   assert.equal((await tool('seal')).code, 4);
