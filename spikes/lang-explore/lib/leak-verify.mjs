@@ -67,21 +67,21 @@ function chunksOfSource({ source, wanted, found, keyOf }) {
   for (const name of caseFilesOf(casesDir)) caseChunks({ wanted, found, task: id, name, lines: caseLinesOf(casesDir, name), reviewed, keyOf });
 }
 
-/** One case file's long lines: each aligned chunk whose key is wanted and whose text is the candidate's is a finding. */
+/** One case file's long lines: each aligned chunk whose key is wanted and whose text is the candidate's is a finding. A line a person reviewed gives no chunk here, as it gives no key in the build step. */
 function caseChunks({ wanted, found, task, name, lines, reviewed, keyOf }) {
   lines.forEach((raw, i) => {
     const n = normLine(raw);
-    if (n.length < LONG_LINE_MIN) return;
+    if (n.length < LONG_LINE_MIN || reviewed.hasLine(n)) return;
     const equal = new Set(chunkOffsets(n).flatMap(at => equalChunks({ wanted, n, at, reviewed, keyOf })));
     for (const p of equal) found.push(confirmed(p, { task, name, from: i + 1, to: i + 1 }));
   });
 }
 
-/** The candidates whose key and text are the aligned chunk of `n` at `at`, unless that chunk is a reviewed one. */
+/** The candidates whose key and text are the aligned chunk of `n` at `at`, unless that chunk is a reviewed one (the list is asked only when a candidate equals the chunk, so a scan does not hash every case chunk). */
 function equalChunks({ wanted, n, at, reviewed, keyOf }) {
   const text = n.slice(at, at + CHUNK);
-  if (reviewed.hasChunk(text)) return [];
-  return (wanted.get(keyOf(n, at, at + CHUNK)) ?? []).filter(p => p.text === text);
+  const same = (wanted.get(keyOf(n, at, at + CHUNK)) ?? []).filter(p => p.text === text);
+  return same.length > 0 && reviewed.hasChunk(text) ? [] : same;
 }
 
 /** The candidates of the line and window tiers against the case files: the findings that are real (the chunk tier verifies per file, inside `scanText`, so its candidates never pile up). */

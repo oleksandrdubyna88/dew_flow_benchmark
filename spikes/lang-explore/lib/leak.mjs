@@ -157,7 +157,7 @@ const exemptText = exempt => (Object.keys(exempt ?? {}).length === 0 ? 'none' : 
 
 /** The result line with the count of what a person's reading exempted, when there is any (counts only, never a text): every run with an exemption says so. */
 export const withReviewed = (text, m) => {
-  const { lines, shingles, chunks } = m.reviewed ?? { lines: 0, shingles: 0, chunks: 0 };
+  const { lines = 0, shingles = 0, chunks = 0 } = m.reviewed ?? {};
   return lines + shingles + chunks === 0 ? text : `${text}; ${lines} private line(s), ${chunks} chunk(s) and ${shingles} phrase(s) exempt by a person's reading`;
 };
 

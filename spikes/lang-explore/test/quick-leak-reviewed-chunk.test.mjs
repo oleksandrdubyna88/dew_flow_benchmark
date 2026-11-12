@@ -10,6 +10,7 @@ import { scanBenchHalf } from './bench-half-seam.mjs';
 import { caseLinesOf } from '../lib/leak-case-files.mjs';
 import { CHUNK, chunkOffsets } from '../lib/leak-chunks.mjs';
 import { loadReviewed, parseReviewed, reviewHash } from '../lib/leak-reviewed.mjs';
+import { withReviewed } from '../lib/leak.mjs';
 import { scanText } from '../lib/leak-scan.mjs';
 import { normLine, polyHash } from '../lib/leak-text.mjs';
 import { verifyCandidates, verifyChunks } from '../lib/leak-verify.mjs';
@@ -182,6 +183,33 @@ test('A_candidate_whose_own_text_is_a_reviewed_chunk_is_dropped_before_any_case_
   const unreadable = { ...source, casesDir: path.join(source.casesDir, 'there-is-no-such-folder') };
   assert.deepEqual(verifyChunks([candidate(C1, polyHash(C1, 0, 64))], [unreadable]), []);
   assert.throws(() => verifyChunks([candidate(C2, polyHash(C2, 0, 64))], [unreadable]), /ENOENT/, 'control: any other candidate does read the folder');
+});
+
+test('A_long_line_a_line_entry_reviews_gives_no_chunk_finding_at_verification_even_when_another_chunk_shares_its_key', () => {
+  const lineReviewed = [piece(21, 64), piece(22, 64), piece(23, 64), piece(24, 64)].join('');
+  const cases = [{ id: 'h001', input: 'short\n', output: `${H1}\n${lineReviewed}\n` }];
+  const sources = sourcesOf(homeWith([reviewedEntry('line', lineReviewed)], cases));
+  const everything = () => 7; // a seam: every chunk has the key 7, so the unreviewed chunks of H1 share the key of the line-reviewed line's chunks
+  const x = piece(22, 64);
+  assert.deepEqual(verifyChunks([candidate(x, 7)], sources, everything), [], 'the build step gives this line no chunk, and the verify step finds none either');
+  const bare = sourcesOf(homeWith(null, cases)).map(s => ({ ...s, reviewed: undefined }));
+  assert.equal(verifyChunks([candidate(x, 7)], bare, everything).length, 1, 'control: without the list the same chunk is a finding');
+});
+
+test('The_verify_step_asks_the_list_about_a_chunk_only_when_a_candidate_has_its_key_and_its_text', () => {
+  const [source] = sourcesOf(homeWith([reviewedEntry('chunk', C1)]));
+  const calls = [];
+  const spy = { hasLine: n => source.reviewed.hasLine(n), hasChunk: t => { calls.push(t); return source.reviewed.hasChunk(t); } };
+  const found = verifyChunks([candidate(C2, polyHash(C2, 0, 64))], [{ ...source, reviewed: spy }]);
+  assert.equal(found.length, 1);
+  assert.deepEqual(calls, [C2, C2], 'once for the candidate before the read, once for the one case chunk that equals it; the other chunks of the case lines are not hashed');
+});
+
+test('A_reviewed_count_that_is_missing_prints_as_zero_and_never_as_NaN_or_undefined', () => {
+  const said = withReviewed('leakcheck clean', { reviewed: { lines: 2, shingles: 1 } });
+  assert.equal(said, "leakcheck clean; 2 private line(s), 0 chunk(s) and 1 phrase(s) exempt by a person's reading");
+  assert.equal(withReviewed('leakcheck clean', { reviewed: { chunks: 3 } }), "leakcheck clean; 0 private line(s), 3 chunk(s) and 0 phrase(s) exempt by a person's reading");
+  assert.equal(withReviewed('leakcheck clean', {}), 'leakcheck clean');
 });
 
 test('A_chunk_reviewed_for_one_task_is_still_found_in_a_task_whose_side_has_no_such_review', () => {
