@@ -26,7 +26,9 @@ public sealed class StartOfRunOrderAttribute : BeforeAfterTestAttribute
         var ended = StartOfRunSweep.EndedAt;
         if (ended == 0 || ended > now)
         {
-            StartOfRunSweep.RecordOrderViolation($"{test.TestDisplayName}");
+            StartOfRunSweep.RecordOrderViolation(
+                $"{test.TestDisplayName} started before the start-of-run sweep ended: every test must wait on StartOfRunSweep.Run() first; " +
+                "check that [assembly: Bench.Tests.Leftovers.StartOfRunOrder] is declared and that no fixture builds a test before the gate (E6 S2)");
         }
 
         StartOfRunSweep.RecordTestStart(now);

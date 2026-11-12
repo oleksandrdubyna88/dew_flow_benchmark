@@ -598,6 +598,13 @@ adapted from coai. One Sonnet coder can do it. If the coordinator wants it faste
   (C:`src_mcp/tests_leftovers/TempDir.cs:17-21`). E6-c holds on Linux and macOS only until the template clears the flag
   (without following links). S5's `DatedGitRepo` meets the same limit on Windows.
 
+- **N2–N5 — found by the S2 code gate in COPIED template files (2026-11-12), not changed here (D2: the copy stays the
+  template's bytes; the template's owner fixes it in mcp first, then the copies take it):** N2 `DirectoryLinks.Run` drains
+  only stdout, after the exit, and leaves the read task on the kill path (T:`DirectoryLinks.cs:~59`); N3 its `cmd /c mklink`
+  relies on a character block list, not quoting (T:`:~34`); N4 `LeftoversGuardTests.MountedSelectorPick` asserts
+  `WaitForExit` before it kills the child, so a timeout leaves it running (T:`LeftoversGuardTests.cs:~588`); N5
+  `LeftoversAudit.Discover` reads an existing but unreadable temp root as empty (T:`LeftoversAudit.cs:~50`).
+
 ## 18. Open questions (the coordinator answers; the brief's default is in brackets)
 
 1. **Q1 — `.gitattributes`.** The diff check compares raw bytes. A Windows checkout with `core.autocrlf=true` makes every
