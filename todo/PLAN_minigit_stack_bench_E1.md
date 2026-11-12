@@ -259,6 +259,7 @@ adjudication tool that classes failures blind before it reveals the code.
    under `os.tmpdir()` or outside `os.homedir()` (the session sandbox replaces the home with tmpfs, parent §7.1, so a running
    partner cannot see it; `/tmp` is not promised hidden). Removed in `finally` through `removeUnder` (`safe-rm.mjs:52`) even
    when the runner throws; `heldout-tool.mjs sweep` removes leftovers older than 24 h after a crash.
+   *(2026-11-12, E6.S1: the sweep now only lists the `score-tmp` entries, with their age, and removes none; a person removes a listed entry by hand.)*
 5. **Runner protocol** (the contract the clear runner implements; the toy test suite implements it too):
    `python3 -I <dir>/runner.py --phase v1|v2 --binary <abs> --work <casesDir> --box <json argv prefix> --timeout 10
    --out <result.json>`. Each minigit invocation is `box + [binary, ...args]` with cwd = the case's repo; on timeout the
