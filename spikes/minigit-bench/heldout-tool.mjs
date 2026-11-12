@@ -6,7 +6,7 @@
 //   node spikes/minigit-bench/heldout-tool.mjs calibrate [--src <clear dir>] [--key-file P] [--out-dir D] [--work-root D] [--inputs-repo U]
 //   node spikes/minigit-bench/heldout-tool.mjs leakcheck [--key-file P] [--out-dir D] [--repo D] [--range A..B] [--work-root D]
 //   node spikes/minigit-bench/heldout-tool.mjs counts    [--key-file P] [--out-dir D] [--work-root D]
-//   node spikes/minigit-bench/heldout-tool.mjs sweep     [--work-root D] [--max-age-hours N]
+//   node spikes/minigit-bench/heldout-tool.mjs sweep     [--work-root D]
 //
 // `calibrate --src` is the authoring mode (the clear sources, nothing written); without `--src` it decrypts the sealed archive and, on
 // success, writes calibration.json. `--direct` (tests only) runs the runner without the scoring pipeline. `--key-file` exists for tests
@@ -17,6 +17,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { shellQuote } from '../lang-bench/lib/push-hook.mjs';
 import { removeUnder } from '../policy-ab-quick/lib/safe-rm.mjs';
 import { calibrate, directScorer, readRegistry } from './lib/heldout-calibrate.mjs';
 import { defaultKeyPath, generateKey, readKey, unseal } from './lib/heldout-crypto.mjs';
@@ -32,7 +33,7 @@ import { runBounded } from './lib/run.mjs';
 
 const OPTIONS = {
   'key-file': { type: 'string' }, src: { type: 'string' }, 'out-dir': { type: 'string' }, hashes: { type: 'string' }, 'work-root': { type: 'string' },
-  repo: { type: 'string' }, range: { type: 'string' }, direct: { type: 'boolean' }, 'max-age-hours': { type: 'string' }, 'inputs-repo': { type: 'string' },
+  repo: { type: 'string' }, range: { type: 'string' }, direct: { type: 'boolean' }, 'inputs-repo': { type: 'string' },
 };
 const EXIT = Object.freeze({ ok: 0, check: 1, env: 3, usage: 4, broke: 5 });
 
@@ -102,14 +103,20 @@ async function cmdLeakcheck(o, write) {
   return ran.value.ok ? EXIT.ok : EXIT.check;
 }
 
+/** Lists what a crash may have left and removes nothing: age and name never authorise a removal (common.test-leftovers § 4). Exit 0 always. */
 function cmdSweep(o, write) {
-  const hours = Number(o['max-age-hours'] ?? 24);
-  if (!Number.isFinite(hours) || hours <= 0) { write('usage error: --max-age-hours must be a positive number'); return EXIT.usage; }
   const s = settings(o);
-  const swept = sweepLeftovers({ workRoot: s.workRoot, olderThanMs: hours * 3600 * 1000 });
-  write(`sweep: removed ${swept.removed.length}, kept ${swept.kept.length}, failed ${swept.failed.length}, listed ${swept.listed.length}${swept.failed.map(f => ` [${f.name}: ${f.reason}]`).join('')}`);
-  for (const name of swept.listed) write(`listed: ${path.join(s.workRoot, name)} — not removed (test-leftovers barrier); check with: bash .agents/conventions/tools/janitor.sh --dry-run`);
-  return swept.failed.length === 0 ? EXIT.ok : EXIT.check;
+  const { listed } = sweepLeftovers({ workRoot: s.workRoot });
+  write(`sweep: listed ${listed.length}, removed 0 — nothing is removed by age or by name (common.test-leftovers § 4)`);
+  for (const { entry, ageHours } of listed) {
+    const abs = path.join(s.workRoot, entry);
+    const age = ageHours === null ? 'age unknown' : `${ageHours.toFixed(1)} h old`;
+    const next = /^(score-tmp\/)?testsToDelete[-_]/i.test(entry)
+      ? 'check with: bash .agents/conventions/tools/janitor.sh --dry-run'
+      : `after checking no scoring run uses it, remove it by hand: rm -rf -- ${shellQuote(abs)}`;
+    write(`listed: ${abs} (${age}) — not removed; ${next}`);
+  }
+  return EXIT.ok;
 }
 
 /** Scores the subjects with the real pipeline (build, visible scripts, held-out, upstream) or, for tests, with the bare runner. */

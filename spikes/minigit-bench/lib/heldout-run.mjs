@@ -22,7 +22,6 @@ export const defaultWorkRoot = (home = os.homedir()) => path.join(home, 'rsd', '
 /** Where the clear held-out sources live while they are authored (outside every repository). */
 export const heldoutSrcDir = (home = os.homedir()) => path.join(defaultWorkRoot(home), 'heldout-src');
 const RUNNER_ENV = Object.freeze({ PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' });
-const DAY_MS = 24 * 3600 * 1000;
 
 const inside = (child, root) => {
   const rel = path.relative(root, child);
@@ -83,33 +82,34 @@ export async function withClearSuite({ suiteEnc = SUITE_ENC, keyFile = defaultKe
 }
 
 /**
- * Remove leftover clear directories (a crash skipped the `finally`) older than `olderThanMs`, from score-tmp/<anything> only: that is this spike's
- * own scoring temp. An entry named `testsToDelete-…` or `testsToDelete_…` (straight under the work root, or under score-tmp) is LISTED in `listed`
- * (under score-tmp as `score-tmp/<name>`), never removed, whatever its age, and nothing under it is read: the shared rule's barrier
- * (common.test-leftovers § The barrier) forbids an owner-blind sweeper, by bare prefix or by age, while other repositories start to make owner-form names.
- * A listed folder is removed by hand after `bash .agents/conventions/tools/janitor.sh --dry-run` shows it is the caller's and abandoned.
- * A failure to remove one is reported, not thrown.
+ * LIST what a crash may have left, remove nothing. Returns `{ listed }`: `{ entry, ageHours }` per entry, sorted by `entry`: `<name>` for a
+ * `testsToDelete-…` or `testsToDelete_…` entry straight under the work root, and `score-tmp/<name>` for EVERY entry under `score-tmp` (this
+ * spike's own scoring temp: a crash skipped `withClearSuite`'s `finally`). `ageHours` is the age by `lstat` mtime, rounded down to one decimal
+ * and never below 0; it is `null` when the `lstat` fails (the entry is still listed). Nothing below an entry is read.
+ * Nothing is removed, by age or by name: age only selects, it never authorises a removal (common.test-leftovers § 4), and an owner-blind sweeper,
+ * by bare prefix or by age, is what the shared rule's barrier forbids while other repositories start to make owner-form names.
+ * What a person does with a listed entry: check that no scoring run uses it, then remove it by hand; for a `testsToDelete…` entry first run
+ * `bash .agents/conventions/tools/janitor.sh --dry-run`, which shows whether it is the caller's and abandoned.
  */
-export function sweepLeftovers({ workRoot = defaultWorkRoot(), olderThanMs = DAY_MS, nowMs = Date.now() } = {}) {
-  const out = { removed: [], kept: [], failed: [], listed: [] };
+export function sweepLeftovers({ workRoot = defaultWorkRoot(), nowMs = Date.now(), lstat = lstatSync } = {}) {
   const prefixed = n => /^testsToDelete[-_]/i.test(n); // LISTED only, never removed: the barrier scan flags this line, which deletes nothing
-  const root = path.resolve(workRoot), base = scoreTmpOf(workRoot);
-  if (existsSync(root)) out.listed.push(...readdirSync(root).filter(prefixed));
-  if (existsSync(base)) {
-    for (const name of readdirSync(base).sort()) {
-      if (prefixed(name)) { out.listed.push(`score-tmp/${name}`); continue; }
-      const target = path.join(base, name);
-      if (nowMs - lstatSync(target).mtimeMs <= olderThanMs) { out.kept.push(name); continue; }
-      try {
-        removeUnder(target, base);
-        out.removed.push(name);
-      } catch (e) {
-        out.failed.push({ name: name, reason: e.message });
-      }
-    }
+  const root = path.resolve(workRoot), base = scoreTmpOf(root);
+  const namesIn = dir => (existsSync(dir) ? readdirSync(dir) : []);
+  const found = [
+    ...namesIn(root).filter(prefixed).map(name => ({ entry: name, target: path.join(root, name) })),
+    ...namesIn(base).map(name => ({ entry: `score-tmp/${name}`, target: path.join(base, name) })),
+  ];
+  const listed = found.map(({ entry, target }) => ({ entry, ageHours: ageHoursOf(target, nowMs, lstat) }));
+  return { listed: listed.sort((x, y) => (x.entry < y.entry ? -1 : x.entry > y.entry ? 1 : 0)) };
+}
+
+/** Hours since `target` changed (lstat mtime), rounded down to one decimal, never below 0; null when the lstat fails. */
+function ageHoursOf(target, nowMs, lstat) {
+  try {
+    return Math.floor((Math.max(0, nowMs - lstat(target).mtimeMs) / 3600000) * 10) / 10;
+  } catch {
+    return null;
   }
-  out.listed.sort();
-  return out;
 }
 
 /** Run the clear suite's runner for one phase. ok(parsed result.json) | fail(reason). */

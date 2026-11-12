@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -137,7 +137,7 @@ test('A_wrong_key_or_a_missing_suite_is_a_value_and_leaves_no_directory', async 
   assert.deepEqual(readdirSync(path.join(workRoot, 'score-tmp')), []);
 });
 
-test('Sweep_removes_old_score_tmp_leftovers_only_and_lists_the_testsToDelete_entries_never_removing_them', () => {
+test('Sweep_lists_every_score_tmp_entry_and_the_testsToDelete_root_entries_and_removes_nothing_by_age', () => {
   const workRoot = homeDir('sweep');
   const base = path.join(workRoot, 'score-tmp');
   for (const name of ['old-1', 'young-2']) mkdirSync(path.join(base, name), { recursive: true, mode: 0o700 });
@@ -150,13 +150,47 @@ test('Sweep_removes_old_score_tmp_leftovers_only_and_lists_the_testsToDelete_ent
   utimesSync(path.join(workRoot, 'unrelated-keep'), longAgo, longAgo);
   mkdirSync(path.join(base, 'testsToDelete-in-score'), { mode: 0o700 });
   utimesSync(path.join(base, 'testsToDelete-in-score'), longAgo, longAgo);
-  const swept = sweepLeftovers({ workRoot, olderThanMs: 24 * 3600 * 1000, nowMs: Date.now() });
-  assert.deepEqual(swept, { removed: ['old-1'], kept: ['young-2'], failed: [], listed: ['score-tmp/testsToDelete-in-score', 'testsToDelete-left-over'] });
-  assert.equal(existsSync(path.join(workRoot, 'testsToDelete-left-over')), true, 'a testsToDelete entry is listed, never removed (the test-leftovers barrier)');
-  assert.equal(existsSync(path.join(base, 'testsToDelete-in-score')), true, 'a testsToDelete entry under score-tmp is listed, never removed');
-  assert.equal(existsSync(path.join(workRoot, 'unrelated-keep')), true, 'only the un-prefixed score-tmp entries are touched');
-  assert.deepEqual(readdirSync(base), ['testsToDelete-in-score', 'young-2']);
-  assert.deepEqual(sweepLeftovers({ workRoot: homeDir('nothing'), olderThanMs: 1, nowMs: Date.now() }), { removed: [], kept: [], failed: [], listed: [] });
+  const swept = sweepLeftovers({ workRoot, nowMs: Date.now() });
+  assert.deepEqual(Object.keys(swept), ['listed'], 'it only lists: nothing is removed, kept or failed');
+  assert.deepEqual(swept.listed.map(l => l.entry), ['score-tmp/old-1', 'score-tmp/testsToDelete-in-score', 'score-tmp/young-2', 'testsToDelete-left-over']);
+  const age = Object.fromEntries(swept.listed.map(l => [l.entry, l.ageHours]));
+  assert.ok(age['score-tmp/old-1'] >= 25 && age['score-tmp/testsToDelete-in-score'] >= 25 && age['testsToDelete-left-over'] >= 25, JSON.stringify(age));
+  assert.ok(age['score-tmp/young-2'] >= 0 && age['score-tmp/young-2'] < 1, JSON.stringify(age));
+  for (const p of [path.join(base, 'old-1', 'leftover'), path.join(base, 'young-2'), path.join(base, 'testsToDelete-in-score'),
+    path.join(workRoot, 'testsToDelete-left-over'), path.join(workRoot, 'unrelated-keep')]) assert.equal(existsSync(p), true, `${p} still exists: age authorises no removal`);
+});
+
+test('Sweep_of_an_absent_work_root_or_an_absent_score_tmp_lists_nothing_and_does_not_throw', () => {
+  const absent = path.join(homeDir('absent'), 'no-such-root');
+  assert.deepEqual(sweepLeftovers({ workRoot: absent, nowMs: Date.now() }), { listed: [] });
+  const noScoreTmp = homeDir('no-score-tmp');
+  mkdirSync(path.join(noScoreTmp, 'unrelated-keep'), { mode: 0o700 });
+  assert.deepEqual(sweepLeftovers({ workRoot: noScoreTmp, nowMs: Date.now() }), { listed: [] }, 'the work root exists, score-tmp does not: no entries, and an unrelated root entry is not listed');
+  assert.equal(existsSync(path.join(noScoreTmp, 'score-tmp')), false, 'listing creates nothing');
+});
+
+test('Sweep_lists_an_entry_whose_lstat_fails_with_a_null_age_and_still_lists_the_others', () => {
+  const workRoot = homeDir('sweep-lstat');
+  const base = path.join(workRoot, 'score-tmp');
+  for (const name of ['bad', 'good']) mkdirSync(path.join(base, name), { recursive: true, mode: 0o700 });
+  const lstat = target => {
+    if (path.basename(target) === 'bad') throw new Error('EACCES: lstat refused');
+    return lstatSync(target);
+  };
+  const swept = sweepLeftovers({ workRoot, nowMs: Date.now(), lstat });
+  assert.deepEqual(swept.listed.map(l => l.entry), ['score-tmp/bad', 'score-tmp/good']);
+  assert.equal(swept.listed[0].ageHours, null, 'the failing entry is listed, its age unknown');
+  assert.equal(typeof swept.listed[1].ageHours, 'number', 'the other entry is still listed with its age');
+  assert.equal(existsSync(path.join(base, 'bad')), true);
+});
+
+test('Sweep_ages_are_rounded_down_to_one_decimal_and_a_future_mtime_is_zero', () => {
+  const workRoot = homeDir('sweep-age');
+  mkdirSync(path.join(workRoot, 'score-tmp', 'a'), { recursive: true, mode: 0o700 });
+  const nowMs = Date.now();
+  const ageFor = mtimeMs => sweepLeftovers({ workRoot, nowMs, lstat: () => ({ mtimeMs }) }).listed[0].ageHours;
+  assert.equal(ageFor(nowMs - 2.19 * 3600000), 2.1, 'rounded down, not to the nearest');
+  assert.equal(ageFor(nowMs + 2 * 3600000), 0, 'a future mtime shows 0, never a negative age');
 });
 
 async function runToy(binary, work, { phase = 'v1', box = [], timeoutS = 5, src } = {}) {
