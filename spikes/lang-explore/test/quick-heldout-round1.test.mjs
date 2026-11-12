@@ -142,6 +142,34 @@ test('The_backup_copy_is_written_to_a_temporary_name_and_published_whole_or_not_
   assert.equal(statSync(w.backupFile).mode & 0o777, 0o600);
 });
 
+// A share that has no hard links (WSL's drvfs mount of a Windows or NAS drive answers EPERM, 2026-11-12): the copy is made by an exclusive create of the backup's own name, which
+// never replaces a file that is there. Invented folders; the share's refusal is the seam's `linkSync`.
+const noLink = code => fsWith({ linkSync: () => { throw Object.assign(new Error(`${code}: operation not permitted, link`), { code }); } });
+
+test('On_a_share_without_hard_links_the_copy_is_made_by_an_exclusive_create_and_equals_the_key', async () => {
+  for (const code of ['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']) {
+    const w = world();
+    const made = await makeBackup({ ...backupArgs(w), fs: noLink(code), isAlive: () => true });
+    assert.equal(made.ok, true, `${code}: ${made.reason}`);
+    assert.deepEqual(readFileSync(w.backupFile), readKey(w.keyFile).value, `${code}: the copy is the key`);
+    assert.deepEqual(tempsOf(w), [], `${code}: no temporary file is left`);
+  }
+});
+
+test('On_a_share_without_hard_links_a_copy_that_appears_before_the_create_is_never_replaced', async () => {
+  const w = world();
+  const other = Buffer.alloc(32, 9);
+  const racing = fsWith({ linkSync: () => {
+    writeFileSync(w.backupFile, other); // another writer, between the free-name check and the publication
+    throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' });
+  } });
+  const r = await makeBackup({ ...backupArgs(w), fs: racing, isAlive: () => true });
+  assert.equal(r.ok, false, 'a copy that is not the key is refused, as on a share with hard links');
+  assert.ok(r.reason.includes(w.backupFile) && /sha256/.test(r.reason), r.reason);
+  assert.deepEqual(readFileSync(w.backupFile), other, 'never replaced');
+  assert.deepEqual(tempsOf(w), [], 'no temporary file is left');
+});
+
 test('A_temporary_copy_of_a_live_owner_is_kept_and_an_existing_equal_copy_is_accepted_and_a_different_one_is_refused', async () => {
   const w = world();
   const liveTemp = path.join(path.dirname(w.backupFile), '.heldout.key.bak.4242.123456.deadbeef.tmp');

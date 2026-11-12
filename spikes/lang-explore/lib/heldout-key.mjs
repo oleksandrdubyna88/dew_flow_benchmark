@@ -131,7 +131,27 @@ function removeStaleTemps({ backupFile, isAlive, fs }) {
   }
 }
 
-/** Publish the copy whole or not at all: a temporary name of this process beside it (mode 600, flushed), then a hard link that fails when the name exists (a copy that is there is never replaced), then the temporary name is removed. */
+/** The answers of a file system that has no hard links (WSL's drvfs mount of a Windows or NAS drive answers EPERM). */
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']);
+
+/** Write `key` to `file` by an exclusive create (`wx`: a name that is there is never replaced, it fails with EEXIST), flushed. -> true when written, false when the name was taken. */
+function createExclusive({ key, file, fs }) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'wx', 0o600);
+  } catch (e) {
+    if (e.code === 'EEXIST') return false;
+    throw e;
+  }
+  try { fs.writeSync(fd, key); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  return true;
+}
+
+/**
+ * Publish the copy whole or not at all: a temporary name of this process beside it (mode 600, flushed), then a hard link that fails when the name exists (a copy that is there is never replaced), then the temporary name is removed.
+ * A share with no hard links (`NO_HARD_LINKS`) gets the copy by an exclusive create of its own name instead, which also never replaces a copy that is there; the key is one write of 32 bytes, and a copy cut short by a crash
+ * inside it does not hash to the key, so the caller refuses it naming the path (never used, never overwritten). The mode on such a share is its own access list's, not 600.
+ */
 function publishCopy({ key, backupFile, fs, pid, startTime }) {
   const temp = path.join(path.dirname(backupFile), `.${path.basename(backupFile)}.${pid}.${startTime}.${randomBytes(4).toString('hex')}.tmp`);
   const fd = fs.openSync(temp, 'wx', 0o600);
@@ -139,6 +159,11 @@ function publishCopy({ key, backupFile, fs, pid, startTime }) {
   try {
     fs.linkSync(temp, backupFile);
   } catch (e) {
+    if (NO_HARD_LINKS.has(e.code)) {
+      fs.unlinkSync(temp);
+      createExclusive({ key, file: backupFile, fs });
+      return;
+    }
     if (e.code !== 'EEXIST') throw e;
   }
   fs.unlinkSync(temp);
