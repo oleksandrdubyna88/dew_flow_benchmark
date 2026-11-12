@@ -3,7 +3,9 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { NEEDLE, holdsNeedle, newRepo, runCheck } from './quick-leak-repos-fixture.mjs';
 import { exploreOf } from './quick-leak-fixture.mjs';
 import { sealedClosed } from './quick-heldout-fixture.mjs';
@@ -20,6 +22,16 @@ test('A_line_of_a_sealed_task_in_the_task_repository_is_verified_while_the_task_
   assert.match(r.said, /tasks\/04\/notes\.md/, 'the place is named');
   assert.equal(holdsNeedle(r.said), false, 'never the text');
   assert.equal(existsSync(w.casesDir), false, 'the clear folder is closed after the whole command');
+});
+
+test('A_sealed_task_that_cannot_be_opened_is_exit_4_with_the_reason_and_leaves_no_clear_folder', async () => {
+  const w = await sealedWithNeedle();
+  const keyFile = path.join(tmpDir('q-no-key'), 'heldout.key');
+  const r = await runCheck({ home: w.home, explore: exploreOf(['04']), benchRepo: newRepo(), values: { 'task-repo': newRepo({ 'README.md': 'a readme\n', 'tasks/04/notes.md': `a note\n${NEEDLE}` }) }, io: { frozenFile: w.frozenFile, heldout: { ...w.args, keyFile } } });
+  assert.equal(r.exit, 4, r.said);
+  assert.ok(r.said.includes(keyFile), `the reason names the key that could not be read: ${r.said}`);
+  assert.doesNotMatch(r.said, /clean/, 'never clean');
+  assert.equal(existsSync(w.casesDir), false, 'nothing was opened');
 });
 
 test('A_sealed_task_and_a_clean_task_repository_give_a_clean_check_and_leave_no_clear_folder', async () => {
