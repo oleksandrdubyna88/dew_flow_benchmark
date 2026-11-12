@@ -132,9 +132,12 @@ function removeStaleTemps({ backupFile, isAlive, fs }) {
 }
 
 /** The answers of a file system that has no hard links (WSL's drvfs mount of a Windows or NAS drive answers EPERM). */
-const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']);
+export const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']);
 
-/** Write `key` to `file` by an exclusive create (`wx`: a name that is there is never replaced, it fails with EEXIST), flushed. -> true when written, false when the name was taken. */
+/**
+ * Write `key` to `file` by an exclusive create (`wx`: a name that is there is never replaced, it fails with EEXIST), flushed. -> true when written, false when the name was taken. A write that fails or writes fewer bytes, or a
+ * flush that fails, removes the file this call created (it is this call's own: the exclusive create made it) and throws, so the next run can make the copy.
+ */
 function createExclusive({ key, file, fs }) {
   let fd;
   try {
@@ -143,7 +146,18 @@ function createExclusive({ key, file, fs }) {
     if (e.code === 'EEXIST') return false;
     throw e;
   }
-  try { fs.writeSync(fd, key); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  try {
+    try {
+      const written = fs.writeSync(fd, key);
+      if (written !== key.length) throw new Error(`the key backup ${file} took ${written} of ${key.length} bytes`);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (e) {
+    fs.rmSync(file, { force: true });
+    throw e;
+  }
   return true;
 }
 

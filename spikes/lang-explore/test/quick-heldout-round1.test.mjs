@@ -12,7 +12,7 @@ import { readKey } from '../../minigit-bench/lib/heldout-crypto.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { main } from '../explore.mjs';
 import { backupConfigFile, readBackupConfig } from '../lib/heldout-backup-config.mjs';
-import { makeBackup, makeMountOf } from '../lib/heldout-key.mjs';
+import { NO_HARD_LINKS, makeBackup, makeMountOf } from '../lib/heldout-key.mjs';
 import { readerHeldout } from '../lib/heldout-reader.mjs';
 import { entryOfSeal, writeEntry } from '../lib/heldout-registry.mjs';
 import { closeClearFolder, openClearFolder, sealPackage, sweepClearFolder, withOpenedHeldout } from '../lib/package-seal.mjs';
@@ -147,7 +147,8 @@ test('The_backup_copy_is_written_to_a_temporary_name_and_published_whole_or_not_
 const noLink = code => fsWith({ linkSync: () => { throw Object.assign(new Error(`${code}: operation not permitted, link`), { code }); } });
 
 test('On_a_share_without_hard_links_the_copy_is_made_by_an_exclusive_create_and_equals_the_key', async () => {
-  for (const code of ['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']) {
+  assert.ok(NO_HARD_LINKS.size > 0);
+  for (const code of NO_HARD_LINKS) {
     const w = world();
     const made = await makeBackup({ ...backupArgs(w), fs: noLink(code), isAlive: () => true });
     assert.equal(made.ok, true, `${code}: ${made.reason}`);
@@ -168,6 +169,32 @@ test('On_a_share_without_hard_links_a_copy_that_appears_before_the_create_is_nev
   assert.ok(r.reason.includes(w.backupFile) && /sha256/.test(r.reason), r.reason);
   assert.deepEqual(readFileSync(w.backupFile), other, 'never replaced');
   assert.deepEqual(tempsOf(w), [], 'no temporary file is left');
+});
+
+/** The no-link seam whose writes to the backup's own name fail as `fail(fd, buffer)` says (a throw, or a short count). */
+const noLinkWriting = (w, fail) => {
+  const backupFds = new Set();
+  return fsWith({
+    linkSync: () => { throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' }); },
+    openSync: (file, ...rest) => { const fd = nodeFs.openSync(file, ...rest); if (file === w.backupFile) backupFds.add(fd); return fd; },
+    writeSync: (fd, buffer, ...rest) => (backupFds.has(fd) ? fail(fd, buffer) : nodeFs.writeSync(fd, buffer, ...rest)),
+  });
+};
+
+test('On_a_share_without_hard_links_a_failed_or_short_write_leaves_no_copy_so_the_next_run_can_make_it', async () => {
+  const cases = [
+    ['a failed write', () => { throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' }); }, /ENOSPC/],
+    ['a short write', (fd, buffer) => nodeFs.writeSync(fd, buffer, 0, 5), /5 of 32 bytes/],
+  ];
+  for (const [what, fail, message] of cases) {
+    const w = world();
+    await assert.rejects(makeBackup({ ...backupArgs(w), fs: noLinkWriting(w, fail), isAlive: () => true }), message, what);
+    assert.equal(existsSync(w.backupFile), false, `${what}: the copy this run began is removed`);
+    assert.deepEqual(tempsOf(w), [], `${what}: no temporary file is left`);
+    const next = await makeBackup({ ...backupArgs(w), fs: noLink('EPERM'), isAlive: () => true });
+    assert.equal(next.ok, true, `${what}: the next run makes the copy (${next.reason})`);
+    assert.deepEqual(readFileSync(w.backupFile), readKey(w.keyFile).value);
+  }
 });
 
 test('A_temporary_copy_of_a_live_owner_is_kept_and_an_existing_equal_copy_is_accepted_and_a_different_one_is_refused', async () => {
