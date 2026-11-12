@@ -34,6 +34,9 @@ export const isNoise = n => n === '' || SEPARATOR_ONLY.test(n) || hasOneChar(n);
 /** A normalised line the tier with minimum length `min` takes: long enough and not noise. */
 export const usable = (n, min) => n.length >= min && !isNoise(n);
 
+/** The length of a chunk of the chunk tier (and of a `chunk` entry of the reviewed list): 64 characters of a normalised line. */
+export const CHUNK = 64;
+
 const B1 = 0x01000193;
 const B2 = 0x9e3779b1;
 

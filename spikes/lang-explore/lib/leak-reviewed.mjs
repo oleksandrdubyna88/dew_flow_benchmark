@@ -1,28 +1,42 @@
-// The person-reviewed list of the leak check. `~/rsd/lang-v2/explore/leak-reviewed.json` lives OUTSIDE git, beside the held-out folders (the home is an argument). It holds the sha256 of private lines and of note phrases that a
-// person READ and found to be generic text (FORMAT grammar, language boilerplate, a public URL, a code idiom): `{ "entries": [{ "sha256", "kind": "line" | "shingle", "reason", "reviewedAt", "by" }] }`. A person's reading
+// The person-reviewed list of the leak check. `~/rsd/lang-v2/explore/leak-reviewed.json` lives OUTSIDE git, beside the held-out folders (the home is an argument). It holds the sha256 of private lines, of note phrases and of
+// 64-character chunks of long private lines that a person READ and found to be generic text (FORMAT grammar, language boilerplate, a public URL, a code idiom, a sample transcript of a public task spec):
+// `{ "entries": [{ "sha256", "kind": "line" | "shingle" | "chunk", "reason", "reviewedAt", "by" }] }`. A person's reading
 // is the only way in: there is no pattern, no length, no location and no tool of the check that adds to it. The file holds hashes and the words of a reason, never a text, and a field beyond the five named is refused,
 // so the list cannot become a copy of the private side.
 //
 // The hash is the sha256 (hex) of the UTF-8 bytes of the same normal form the tiers match, as the JS string the tier holds it (the private case files are read as latin1, one character per byte): for a line,
-// `normLine`'s result; for a shingle, the six normalised words (`normalise`). `reviewHash` is that function, for the one tool that writes the list. An absent file exempts nothing (the stricter result, no error); a file that
+// `normLine`'s result; for a shingle, the six normalised words (`normalise`); for a chunk, the exact 64 characters of a long line (see below). `reviewHash` is that function, for the one tool that writes the list.
+//
+// A `line` entry removes the WHOLE private line from every tier. A `chunk` entry is narrower: it exempts one aligned 64-character chunk of the chunk tier (lib/leak-chunks.mjs) and nothing else, so a public sample that quotes a
+// fragment of a long hidden line does not blind the check to the line's other, hidden-only parts. It never exempts the same text as a standalone line, a note phrase or a window, and the line itself is still a line-tier finding.
+// The ONE pipeline that makes a chunk entry (the writer, the build step and the verify step all use it): the case file's bytes are read latin1 (one JS character per byte, `caseLinesOf`) -> `normLine` -> `chunkOffsets` ->
+// `slice(at, at + 64)` (64 JS characters, so 64 bytes) -> the sha256 of the UTF-8 encoding of that JS string, exactly how a `line` is hashed. `normLine` collapses whitespace runs and trims the line, so a slice may start or end
+// with ONE space, and that space is part of the hashed text. The slice is NOT normalised again, and `reviewHash` refuses (throws) a chunk text that is not 64 characters. The check never adds to the list. An absent file exempts nothing (the stricter result, no error); a file that
 // cannot be read or understood is a refusal, never an empty list. Pure but for the one read.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalise } from '../../minigit-bench/lib/heldout-leak.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { normLine } from './leak-text.mjs';
+import { CHUNK, normLine } from './leak-text.mjs';
 import { exploreRoot } from './paths.mjs';
 
 export const REVIEWED_FILE = 'leak-reviewed.json';
-export const REVIEW_KINDS = Object.freeze(['line', 'shingle']);
+export const REVIEW_KINDS = Object.freeze(['line', 'shingle', 'chunk']);
 export const REVIEW_FIELDS = Object.freeze(['sha256', 'kind', 'reason', 'reviewedAt', 'by']);
 
 /** Where the list is under `home`. */
 export const reviewedPath = home => path.join(exploreRoot(home), REVIEWED_FILE);
 
 const sha256 = text => createHash('sha256').update(text, 'utf8').digest('hex');
-const NORMAL_FORM = Object.freeze({ line: normLine, shingle: normalise });
+
+/** A chunk entry's text is the slice itself, unchanged; any other length is a programming error (the message never holds the text). */
+function exactChunk(text) {
+  if (text.length !== CHUNK) throw new Error(`a chunk entry is exactly ${CHUNK} characters of a normalised line, not ${text.length}`);
+  return text;
+}
+
+const NORMAL_FORM = Object.freeze({ line: normLine, shingle: normalise, chunk: exactChunk });
 
 /** The hash of `text` as a `kind` entry holds it: the sha256 of its normal form (see the top of this file). An unknown kind is a programming error and throws, naming the legal ones. */
 export function reviewHash(kind, text) {
@@ -30,15 +44,20 @@ export function reviewHash(kind, text) {
   return sha256(NORMAL_FORM[kind](text));
 }
 
-/** What a list gives the tiers: `hasLine(normalisedLine)`, `hasShingle(sixNormalisedWords)` and the counts of its entries by kind. Nothing here returns a hash or a text. */
+/** The lookup of a set of hashes: does it hold the hash of `text`? An empty set answers without hashing. */
+const holds = set => text => set.size > 0 && set.has(sha256(text));
+
+/** What a list gives the tiers: `hasLine(normalisedLine)`, `hasShingle(sixNormalisedWords)`, `hasChunk(text64)` and the counts of its entries by kind. Nothing here returns a hash or a text. */
 function reviewedOf(entries) {
   const of = kind => new Set(entries.filter(e => e.kind === kind).map(e => e.sha256));
   const lines = of('line');
   const shingles = of('shingle');
+  const chunks = of('chunk');
   return Object.freeze({
-    hasLine: n => lines.size > 0 && lines.has(sha256(n)),
-    hasShingle: t => shingles.size > 0 && shingles.has(sha256(t)),
-    counts: Object.freeze({ lines: lines.size, shingles: shingles.size }),
+    hasLine: holds(lines),
+    hasShingle: holds(shingles),
+    hasChunk: holds(chunks),
+    counts: Object.freeze({ lines: lines.size, shingles: shingles.size, chunks: chunks.size }),
   });
 }
 

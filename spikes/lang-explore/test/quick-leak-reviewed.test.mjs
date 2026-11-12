@@ -137,16 +137,16 @@ test('An_absent_file_exempts_nothing_and_is_not_an_error', () => {
   const home = homeWith();
   const loaded = loadReviewed({ home });
   assert.equal(loaded.ok, true);
-  assert.deepEqual([loaded.value.counts.lines, loaded.value.counts.shingles], [0, 0]);
+  assert.deepEqual([loaded.value.counts.lines, loaded.value.counts.shingles, loaded.value.counts.chunks], [0, 0, 0]);
   assert.equal(loaded.value.hasLine(normLine(LINE_A)), false);
   const m = materialOf(home);
-  assert.deepEqual(m.reviewed, { lines: 0, shingles: 0 });
+  assert.deepEqual(m.reviewed, { lines: 0, shingles: 0, chunks: 0 });
   assert.ok(hitsIn(m.material, sentence(LINE_A)).length >= 1);
 });
 
 test('An_empty_list_is_a_list_and_exempts_nothing', () => {
   const m = materialOf(homeWith({}, []));
-  assert.deepEqual(m.reviewed, { lines: 0, shingles: 0 });
+  assert.deepEqual(m.reviewed, { lines: 0, shingles: 0, chunks: 0 });
 });
 
 const GOOD = reviewedEntry('line', LINE_A);
@@ -210,7 +210,7 @@ test('The_hash_is_the_sha256_of_the_normal_form_the_tier_matches', () => {
   assert.equal(reviewHash('shingle', 'Alpha, bravo! charlie delta echo foxtrot.'), sha('alpha bravo charlie delta echo foxtrot'));
   assert.match(reviewHash('line', 'x'), /^[0-9a-f]{64}$/);
   assert.notEqual(reviewHash('line', 'x'), reviewHash('line', 'y'));
-  assert.throws(() => reviewHash('word', 'x'), /line|shingle/);
+  assert.throws(() => reviewHash('word', 'x'), /line|shingle|chunk/);
   assert.match(reviewedPath('/h'), /\/h\/rsd\/lang-v2\/explore\/leak-reviewed\.json$/);
 });
 
@@ -223,11 +223,11 @@ test('The_result_line_says_how_many_lines_and_phrases_were_exempt_by_a_reading_a
   const said = [];
   const run = (home, repoRoot) => scanBenchHalf({ values: { task: '04' }, io: { home, repoRoot, progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
   assert.equal((await run(homeWith({}, LIST), repoWith())).exit, 0);
-  assert.match(said.join('\n'), /2 private line\(s\) and 1 phrase\(s\) exempt by a person's reading/);
+  assert.match(said.join('\n'), /2 private line\(s\), 0 chunk\(s\) and 1 phrase\(s\) exempt by a person's reading/);
   said.length = 0;
   const failing = repoWith({ 'docs/oops.md': sentence(LINE_B) });
   assert.equal((await run(homeWith({}, LIST), failing)).exit, 5);
-  assert.match(said.join('\n'), /2 private line\(s\) and 1 phrase\(s\) exempt by a person's reading/, 'a failing run says it too');
+  assert.match(said.join('\n'), /2 private line\(s\), 0 chunk\(s\) and 1 phrase\(s\) exempt by a person's reading/, 'a failing run says it too');
   for (const text of TEXTS) assert.equal(said.join('\n').includes(text), false, 'no text');
   said.length = 0;
   await run(homeWith(), repoWith());

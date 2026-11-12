@@ -4,9 +4,9 @@
 // characters or more of a long line always contains an aligned chunk; a shorter one may not.
 import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
 import { NO_REVIEW } from './leak-reviewed.mjs';
-import { KeyIndex, forEachWindowKey, hasOneChar, normLine, polyHash, stripDiffPrefix } from './leak-text.mjs';
+import { CHUNK, KeyIndex, forEachWindowKey, hasOneChar, normLine, polyHash, stripDiffPrefix } from './leak-text.mjs';
 
-export const CHUNK = 64;
+export { CHUNK };
 export const LONG_LINE_MIN = 256;
 
 /** The aligned chunks of a normalised long line as `[offset, ...]`: those of `CHUNK` characters that are not one repeated character. */
@@ -16,7 +16,7 @@ export function chunkOffsets(n) {
   return offsets;
 }
 
-/** The keys of the aligned chunks of every long case line of the folders `[{ casesDir, reviewed? }]`; a long line a person reviewed (see leak-reviewed.mjs) gives none. */
+/** The keys of the aligned chunks of every long case line of the folders `[{ casesDir, reviewed? }]`; a long line a person reviewed (see leak-reviewed.mjs) gives none, and a chunk a person reviewed gives no key (its line's other chunks keep theirs). */
 export function buildChunkKeys(sources) {
   const keys = new KeyIndex();
   for (const { casesDir, reviewed = NO_REVIEW } of sources) for (const name of caseFilesOf(casesDir)) for (const raw of caseLinesOf(casesDir, name)) addChunks(keys, normLine(raw), reviewed);
@@ -25,7 +25,12 @@ export function buildChunkKeys(sources) {
 
 function addChunks(keys, n, reviewed) {
   if (n.length < LONG_LINE_MIN || reviewed.hasLine(n)) return;
-  for (const at of chunkOffsets(n)) keys.add(polyHash(n, at, at + CHUNK));
+  for (const at of chunkOffsets(n)) addChunk(keys, n, at, reviewed);
+}
+
+/** The key of the aligned chunk of `n` at `at`, unless a person reviewed exactly that text. */
+function addChunk(keys, n, at, reviewed) {
+  if (!reviewed.hasChunk(n.slice(at, at + CHUNK))) keys.add(polyHash(n, at, at + CHUNK));
 }
 
 /** The forms of a haystack line the rolling pass reads: its normal form, and for `git log -p` text also the form without its diff prefix. */
