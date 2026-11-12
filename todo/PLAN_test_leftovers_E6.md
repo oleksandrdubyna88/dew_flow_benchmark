@@ -1,6 +1,8 @@
 # PLAN — Test leftovers, E6: benchmark's tests name, own, remove and collect what they make
 
-> Status: **plan only, nothing implemented yet, 2026-11-12.** Written new against the shared rules at `d23a2ea` (this
+> Status: **in progress, 2026-11-12: S1 built (E6-h: the held-out sweep lists `score-tmp` and removes nothing by age; branch
+> `fix/e6-s1-heldout-lists`).** Found by S1, not fixed (outside this document's text): `spikes/minigit-bench/lib/score-steps.mjs:57-73`
+> `stepSweep` removes the scorer's own marked folders by marker age. Written new against the shared rules at `d23a2ea` (this
 > repository's pin) and `dew_flow_mcp`'s merged C# helper; the 2026-10-16 draft of this file (`08a87430`) was read as
 > material only. Stories of epic E6 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E6;
 > § *Epoch 8* item 3, rows E6-a to E6-h). Scope: `tests/` (Bench.Tests, FakeCli, FakeCoai), `spikes/policy-ab-quick/test/`,
