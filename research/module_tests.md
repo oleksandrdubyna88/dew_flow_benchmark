@@ -627,6 +627,37 @@ node .agents/conventions/tools/low-priority.mjs node --test --test-concurrency=4
 | Code rounds 1 and 2: S recorded only from the samples of a checkout whose spec matched the pin (`S_is_not_recorded_without_a_task_repo`, `S_is_not_recorded_from_a_checkout_whose_spec_is_not_the_pinned_one`, `S_is_recorded_with_the_pinned_checkout_and_names_the_samples_hash`); S as the runner reads a body, only for a green suite, a running maximum (R1, C1, C5); the pinned-spec gate (R2); a suite-only run keeps the newest record, a halted run resumes only in a run with its step, the memory value in the material (R6); a halted one-pass step resumes, the twin's trees are removed, a twin must pass, a halt line holds no case id or path (R3, R4, R5, R7); the plan lock through the finish and the guarded `packages.json` write (R8, C4), and the missing task list | `test/quick-package-suite.test.mjs`, `test/quick-package-registry.test.mjs`, `test/quick-package-command.test.mjs` | the fixes of the plan's code round 1, each red first |
 | 30 to 33 and finding 1 (real box): a toy pair end to end, the memory bound, a race witness, the read-back limit, a grandchild that hangs | `test/quick-package-real.test.mjs` | the package through the certified box |
 
+## Test leftovers — the C# helper, the start-of-run sweep, the audit (E6)
+
+Every test that makes a folder outside its own process keeps the four promises of the leftovers rule: a name from one helper, an owner record, removal by its run, and collection by the next run when this one was killed. The tests of this repository get that from a helper in `tests/Bench.Tests/Leftovers/`. This section says what the helper is, what runs at the start and the end of a run, and what it does not cover.
+
+**The helper.** It is an adapted copy of `dew_flow_mcp` `tests/Mcp.Tests/Leftovers/` at `21553ce`, with `DirectoryLinks.cs` and `RepositoryRoot.cs`. `template-manifest.json` lists the exact replaces that make the copy fit this repository (the namespace, the token `bench`, the paths, the F29 lock, the start-of-run call). `TheAdaptedCopyTests` undoes them on the raw bytes of each file and compares the git blob SHA, so a copied file cannot change by accident. Never edit a copied file: change the manifest by a reviewed op, in the same commit. `.gitattributes` marks the copied files and the manifest `-text`, so a Windows checkout does not change their line ends. A later story makes a scratch folder with `TempDir.For(what)`: one owned, claimed folder `testsToDelete-<owner>-bench-<what>-<id>`, removed with its claim by `Dispose`.
+
+**The start-of-run sweep.** It runs once per process. A gate (`StartOfRunSweep`) makes the first caller run the sweep and makes every other thread wait for the same result, and an assembly-level attribute makes every test wait on that gate before its body starts. The sweep reads the machine temp root, and it collects only what this user's `bench` owner form names, whose record says the owner is gone, and which is at least 10 minutes old. It lists the rest with a reason (`live`, `unknown`, `foreign`, `legacy`, `unmarked`, `other clone`) and removes nothing else. It never fails the run: an error is one line on stderr. A killed run's git-repository folder with a linked worktree inside is collected whole (case 15).
+
+**The audit.** After the last test the assembly fixture compares what this process claimed with what is gone. A folder that was never disposed, one that was disposed but not removed, and one that is claimed in the temp root and unknown to the registry fail the run. The first line is `bench tests: this run left <n> folder(s) it claimed — …`, then one line per folder, then a remedy line. The CI job `build-test` has a step that proves this: `LeftoversSelfTest` leaks a folder on purpose when `BENCH_LEFTOVERS_SELFTEST` is set, and the step is green only when the run fails with that first line and names the folder.
+
+**The limits.**
+
+- F29 is closed by copy. On Windows two sweeps of one temp root could both move a folder, so the sweep holds coai's per-root named mutex (`SweepLock.cs`, this repository's own file) over its whole pass. `TwoSweepsAtOnceTests` proves it where the suite runs on Windows. This repository has no Windows CI leg.
+- F31 - on Windows, what a run leaves in a process whose NEW files and folders are owned by BUILTIN\Administrators (measured: pwsh on windows-latest) is not removed by the sweep and not named by the audit; it waits for a person. An elevated Git Bash makes the caller's files (measured), and the limit does not apply there. `WindowsNewFileOwnerLimitTests` pins it by reading the owner of a new folder directly; it skips, with its reason, on every other system and where the caller owns the folder.
+- On Windows git marks its object files read-only, and the copied removal (`Directory.Delete`, recursive) does not clear that flag. By reading, not measured here: a claimed folder that holds a clone is then neither removed by its `Dispose` nor collected by the sweep, and the audit names it. Case 15 skips on Windows for that reason. To observe when the suite runs on Windows.
+- The repository guard test (`LeftoversRepositoryGuardTests`) is copied and stays off (`Explicit`) until story S7 switches it on. Run it by hand with `--explicit only`.
+
+**Commands** (from the repository root; never `dotnet test`):
+
+```bash
+T=./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
+node .agents/conventions/tools/low-priority.mjs $T --filter-class "*TheAdaptedCopyTests"
+node .agents/conventions/tools/low-priority.mjs $T --filter-class "*LeftoversSweepCase15Tests"
+node .agents/conventions/tools/low-priority.mjs $T --filter-class "*TempDirTests"
+node .agents/conventions/tools/low-priority.mjs $T --filter-namespace "Bench.Tests.Leftovers"
+BENCH_LEFTOVERS_SELFTEST=1 node .agents/conventions/tools/low-priority.mjs $T --filter-class "*LeftoversSelfTest"
+node .agents/conventions/tools/low-priority.mjs $T --explicit only --filter-class "*LeftoversRepositoryGuardTests"
+```
+
+The self-test run must exit non-zero and print the audit's first line. The guard run is information until S7.
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under

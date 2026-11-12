@@ -18,6 +18,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # The leftovers tests read the mounted conventions (the owner vectors, the `## Tokens` table, the janitor, the
+      # sweeper classifier), and a missing file FAILS them — an uninitialised submodule is a broken setup, not a clean one.
+      - run: git submodule update --init --depth 1 .agents/conventions
+
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
@@ -41,6 +45,31 @@ jobs:
       # while guarding nothing.
       - name: Test
         run: ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
+
+      # The end-of-run audit has teeth. LeftoversSelfTest leaks a folder on purpose, and ONLY when
+      # BENCH_LEFTOVERS_SELFTEST is set; this step sets it, AFTER the normal Test step, and is green only on a
+      # NON-zero exit that carries the audit's first line (the counts and the case's own group word, no path) and the folder's
+      # name on a per-folder line under that word, and on an empty, listable temp root. A listing error is red, never ignored. If xUnit did not
+      # fail the run on an assembly-fixture cleanup exception this step would be red on its first run:
+      # the audit must never become a warning silently.
+      - name: The audit fails a run that leaves a claimed folder
+        run: |
+          set -o pipefail
+          owner="u$(id -u)"
+          for entry in "1:never disposed:selftest" "failed-dispose:disposed but not removed:selftest-failed"; do
+            IFS=: read -r value words what <<< "$entry"
+            if BENCH_LEFTOVERS_SELFTEST="$value" ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*LeftoversSelfTest" 2>&1 | tee selftest.log; then
+              echo "the end-of-run audit did not fail the run ($value)"; exit 1; fi
+            # (a) the audit's FIRST line: the counts and the group summary, and no path on it ...
+            first=$(grep -E "(^|[[:space:]]:[[:space:]])bench tests: this run left [0-9]+ folder\(s\) it claimed.*[0-9]+ $words" selftest.log | grep -v "testsToDelete-[uw][0-9]" || true)
+            [ -n "$first" ] || { echo "the run failed, but not with the audit's first line (counts and '$words', no path) ($value)"; exit 1; }
+            # (b) ... and the folder named on its own per-folder line, under the case's own group word.
+            grep -Eq "^[[:space:]]+$words: .*/testsToDelete-[uw][0-9]{1,10}-bench-$what-[A-Za-z0-9]{6}" selftest.log \
+              || { echo "the audit's message does not name the folder on a line of its own under '$words' ($value)"; exit 1; }
+            left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -iname "teststodelete-${owner}-bench-$what-*") \
+              || { echo "the temp root could not be listed"; exit 1; }
+            [ -z "$left" ] || { echo "the audit left the folder behind: $left"; exit 1; }
+          done
 
   # Both hosts over the wire, against a real Postgres: routing, the group prefixes, the refusals and
   # the shape of an EMPTY answer — which is the shape a fresh install actually serves and the one
