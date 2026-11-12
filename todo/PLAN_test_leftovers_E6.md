@@ -165,7 +165,7 @@ run by this epic.
 **D9 — The container pass is benchmark's own, by label** (rule §4: a sweep per kind the repository makes; rule § *The
 janitor*: the janitor sweeps no stores and is not re-implemented, and a repository keeps its own pass for what it
 creates). At the start of the run, before the fixture starts: ONE `docker ps -a -q --no-trunc --filter
-label=testsToDelete.owner`, then ONE `docker inspect` for all ids, judged by the two keys of rule §4 (the label's record,
+label=testsToDelete.owner`, then, only when it listed any, `docker inspect` for the ids in batches of at most 100, judged by the two keys of rule §4 (the label's record,
 the name's owner, the caller's token; the record `gone`), age selects (10 minutes), removal by the captured id (`docker
 rm -f -v <id>`). Never `--filter name=`. Each `docker` call is an executable with an argument array, never a
 shell string, with a 30-second timeout; on the timeout the whole process tree is killed (`.agents/PROJECT.md` § 11 and
@@ -220,7 +220,7 @@ shows no `owner-blind` outside § 9's sites); the minigit suite is green.
 `RepositoryRoot.cs`) to `tests/Bench.Tests/Leftovers/` under D2, with the manifest and `TheAdaptedCopyTests`. Add the
 benchmark-own files: `SweepLock` (D3); the start-of-run hook, copied from coai's `StartOfRunOrderAttribute` (an
 assembly-level xUnit v3 `BeforeAfterTestAttribute`) and `StartOfRunSweep`, which runs the folder sweep ONCE per process,
-behind a once-only gate, before the body of the first test on any thread; and a `TempDir`-style entry (`TempDir.For(what).Path`) that the later stories use.
+behind a once-only gate that every thread awaits: no test body on any thread starts before the sweep has finished; and a `TempDir`-style entry (`TempDir.For(what).Path`) that the later stories use.
 Wire the end-of-run audit. Add `git submodule update --init --depth 1 .agents/conventions` to `build-test` (E6-j). The
 repository guard test is copied but NOT switched on (D10): it lands in S7.
 **Scenarios** (each RED first where it pins a defect): the template's own tests, copied, green; case 15 (E6-c): in the temp
@@ -304,13 +304,17 @@ sweep if it has none).
 ### S7 — Both guards on, the CI step, the docs (E6-g)
 
 **What.** Switch on the copied repository guard test (`LeftoversRepositoryGuardTests`: `FilesScanned > 0`, no findings).
+The copied C# guard also reads `.cs` under `tools/` as product code (the `Source` kind, as `src/`), by one manifest
+operation on `LeftoversGuardFiles.cs`, so a temp or prefix spelling added under `tools/model-arms/` is judged like
+product code; that folder's tests live in `tests/Bench.Tests/ModelArms/`, which the guards read as tests.
 Add a CI step to `build-test`: `node .agents/conventions/tools/leftovers-check.mjs --profile node --token bench --identity
 "the measuring harness"`. Settle D8's two lines. Rewrite `http/README.md:32-33` to the owner form with `--rm`. Record the
 machine listing of D11. Close the docs: `research/module_tests.md` (the guards, what they do not read — § 1's E6-g row —
 and the limits of D3); `todo/README.md`.
 **Scenarios.** RED again for each guard: a planted `Path.GetTempPath()` in a `tests/` `.cs`, a planted `mktemp -d` in a
 `tools/` `.sh`, a planted `worktree add` without a marker, a planted `.WithReuse(true)`, an empty scan (a wrong root) —
-each red, then removed. Both guards green on the head.
+and a planted `GetTempPath()` in a `tools/model-arms/` `.cs` (read as product code: red only in the
+forms the `Source` kind judges, the brief records which) — each red, then removed. Both guards green on the head.
 **Done when.** E6's Definition of Done (§ 11) holds.
 
 ## 7. Test plan
@@ -385,6 +389,13 @@ assembly-level attribute, once per process) and pins it with a test; S2 copies c
 Rejected 2: a check that the fixture never points at an external Postgres (it has no such path:
 `PostgresFixture.cs:35` is always the started container's string); a prefix check of the fakes' folder variable inside
 the fakes (the parent sets it; the token stays written once, rule §2).
+
+Code round 1 on `1eaf3799` (the document is this PR's whole diff): **proceed**, 8 of 8 reviewers answered, 10 findings.
+Accepted 4: the C# guard reads `tools/` `.cs` as product code (S7); every thread waits for the start-of-run sweep (S2);
+`docker inspect` only when `docker ps` listed ids, in batches of at most 100 (D9). Rejected 6: the `<repo> · <path>`
+citation form (it is the rule's own example); the status line (line 3, the lifecycle check is clean); the goal after
+the rows (the parent orders the rows first); the root seam (`ScratchWorktree` already has it); the assembly hook
+(rule §4 and coai's reviewed shape); the docker CLI against the Testcontainers client (both read `DOCKER_HOST`).
 
 ## How to repeat the measurements
 
