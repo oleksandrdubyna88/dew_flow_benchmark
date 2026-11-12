@@ -100,11 +100,11 @@ public sealed class StartOfRunSweepTests
     [Fact]
     public void TheRealSweep_RanOnceInThisProcess_AndEndedBeforeTheFirstTestStarted()
     {
+        StartOfRunSweep.OrderViolations.Should().BeEmpty("the order proof never throws; it records each test that began before the sweep ended, by name");
         StartOfRunSweep.Runs.Should().Be(1, "every caller of the real sweep, on any thread, waited for the one sweep");
         StartOfRunSweep.EndedAt.Should().NotBe(0, "the sweep returned (a result or an error) and stamped its end");
         StartOfRunSweep.FirstTestStart.Should().NotBe(0, "the order proof's Before recorded a start");
         StartOfRunSweep.FirstTestStart.Should().BeGreaterThan(StartOfRunSweep.EndedAt, "no test started before the sweep ended");
-        StartOfRunSweep.OrderViolations.Should().BeEmpty("the order proof never throws; it records each test that began before the sweep ended");
         var margin = Stopwatch.GetElapsedTime(StartOfRunSweep.EndedAt, StartOfRunSweep.FirstTestStart);
         TestContext.Current.AddWarning($"E6 S2 order: the start-of-run sweep ended {margin.TotalMilliseconds:F1} ms before the first test started");
     }
