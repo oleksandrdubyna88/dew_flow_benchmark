@@ -53,7 +53,8 @@ in a process whose NEW files and folders are owned by `BUILTIN\Administrators` (
 not removed by the sweep and not named by the audit (F31); it waits for a person. An elevated Git Bash makes the CALLER's
 files (measured), and the exception does not apply there. A pin of this limit in this suite reads who owns a new file, as
 coai #962's test does, and skips with its reason where the caller owns it. Benchmark's CI has no Windows leg **[M]**;
-the owner runs the suite on a Windows machine (`.agents/PROJECT.md` § *Commands*), so the limit is real here.
+`.agents/PROJECT.md` § *Commands* is written for a Windows machine, so the limit can be real here (whether that machine
+still builds or tests this repository is § 12's question 3).
 
 **Done when:** rows E6-a to E6-k are each met by their check; both guards are green over the head in CI; a killed run's
 folders, worktrees and container are collected by the next run; the boundary sites of § 9 are clean by E6's own guard.
@@ -125,8 +126,8 @@ edits a story lists. The ownership, liveness and deletion algorithms are not cha
 targets) are listed in the check's own array, as coai does.
 
 **D3 — The limits copied with the template, stated, and F29 closed by copy.** F29 (two sweeps at once on Windows can
-report a removal they did not do, or restore a folder without its claim): this repository is run on Windows, so the
-sweep takes coai's per-root named mutex, `SweepLock`, as a benchmark-own file (copied from
+report a removal they did not do, or restore a folder without its claim): this repository's commands are written for
+Windows, so the sweep takes coai's per-root named mutex, `SweepLock`, as a benchmark-own file (copied from
 `dew_flow_connect_other_ais · src_mcp/tests_leftovers/SweepLock.cs`, cited in its header; reuse-first, no second design).
 F31: stated in the manifest's `about` and in `research/module_tests.md` by its true condition (§ 2), never as "an elevated
 process".
@@ -350,6 +351,7 @@ and are out of this table.
 | The rule, the Tokens table, the janitor, the Node guard and helper | `dew_flow_conventions` (E1) | E6 reads them through the mount and never edits them here |
 | The C# helper | `dew_flow_mcp` (E3) | E6 copies it at one commit (D2); a finding about the template goes to the parent as a note |
 | `SweepLock` (F29) | coai (E5) | E6 copies it as its own file (D3) |
+| rag_qln's collections: the test corpora, and the `bench` namespace benchmark reads | rag_qln (E7, its S2 for test corpora) | benchmark's tests make and delete no collection in a qln store (**[M]** `git grep -n -i "CollectionPrefix\|DropCollection\|/collections/" -- tests src hosts` → nothing); the product's `bench` namespace is the product's, out of E6. E7's stories carry the same row |
 
 Disjoint otherwise: E6 changes nothing in another repository. The followups plan's row (`:63`) states the same split
 from its side.
@@ -379,7 +381,12 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
    when S1 to S6 are merged, the owner decides: wait, or move its F1/F2 sites to E6 (a boundary change on both sides).
 2. **The open-PR cap.** This repository has one open PR (#103, this document's). S3 to S6 may be built in parallel but
    are opened at most three at a time.
-3. Not prerequisites: F25 to F28, F32; the private sibling's mirror (F26).
+3. **The owner's Windows machine (merge condition (c)).** Its barrier is closed: it was never scanned, and the owner's
+   2026-11-04 statement covers only E2's and E5's repositories (`dew_flow_conventions · research/security/machines.md`,
+   § *The owner's Windows machine*). Before S2, the first producer, merges, the owner either states that the machine does
+   not build or test this repository, or the machine gets the scan and the checklist there. The parent's E6 entry names
+   the same condition ("P1 only if the owner's Windows machine builds or tests benchmark").
+4. Not prerequisites: F25 to F28, F32; the private sibling's mirror (F26).
 
 ## Plan gate (coai, 2026-11-12)
 
