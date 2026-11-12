@@ -82,10 +82,11 @@ export async function withClearSuite({ suiteEnc = SUITE_ENC, keyFile = defaultKe
 }
 
 /**
- * LIST what a crash may have left, remove nothing. Returns `{ listed }`: `{ entry, ageHours }` per entry, sorted by `entry`: `<name>` for a
+ * LIST what a crash may have left, remove nothing. Returns `{ listed }`: `{ entry, ageHours, prefixed }` per entry, sorted by `entry`: `<name>` for a
  * `testsToDelete-…` or `testsToDelete_…` entry straight under the work root, and `score-tmp/<name>` for EVERY entry under `score-tmp` (this
  * spike's own scoring temp: a crash skipped `withClearSuite`'s `finally`). `ageHours` is the age by `lstat` mtime, rounded down to one decimal
- * and never below 0; it is `null` when the `lstat` fails (the entry is still listed). Nothing below an entry is read.
+ * and never below 0; it is `null` when the `lstat` fails (the entry is still listed). `prefixed` is true for a `testsToDelete[-_]…` name (at the
+ * root or under score-tmp), so a caller picks the janitor hint without its own pattern. Nothing below an entry is read.
  * Nothing is removed, by age or by name: age only selects, it never authorises a removal (common.test-leftovers § 4), and an owner-blind sweeper,
  * by bare prefix or by age, is what the shared rule's barrier forbids while other repositories start to make owner-form names.
  * What a person does with a listed entry: check that no scoring run uses it, then remove it by hand; for a `testsToDelete…` entry first run
@@ -96,10 +97,10 @@ export function sweepLeftovers({ workRoot = defaultWorkRoot(), nowMs = Date.now(
   const root = path.resolve(workRoot), base = scoreTmpOf(root);
   const namesIn = dir => (existsSync(dir) ? readdirSync(dir) : []);
   const found = [
-    ...namesIn(root).filter(prefixed).map(name => ({ entry: name, target: path.join(root, name) })),
-    ...namesIn(base).map(name => ({ entry: `score-tmp/${name}`, target: path.join(base, name) })),
+    ...namesIn(root).filter(prefixed).map(name => ({ entry: name, target: path.join(root, name), prefixed: true })),
+    ...namesIn(base).map(name => ({ entry: `score-tmp/${name}`, target: path.join(base, name), prefixed: prefixed(name) })),
   ];
-  const listed = found.map(({ entry, target }) => ({ entry, ageHours: ageHoursOf(target, nowMs, lstat) }));
+  const listed = found.map(({ entry, target, prefixed: isPrefixed }) => ({ entry, ageHours: ageHoursOf(target, nowMs, lstat), prefixed: isPrefixed }));
   return { listed: listed.sort((x, y) => (x.entry < y.entry ? -1 : x.entry > y.entry ? 1 : 0)) };
 }
 

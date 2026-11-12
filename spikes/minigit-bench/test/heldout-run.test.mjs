@@ -153,6 +153,7 @@ test('Sweep_lists_every_score_tmp_entry_and_the_testsToDelete_root_entries_and_r
   const swept = sweepLeftovers({ workRoot, nowMs: Date.now() });
   assert.deepEqual(Object.keys(swept), ['listed'], 'it only lists: nothing is removed, kept or failed');
   assert.deepEqual(swept.listed.map(l => l.entry), ['score-tmp/old-1', 'score-tmp/testsToDelete-in-score', 'score-tmp/young-2', 'testsToDelete-left-over']);
+  assert.deepEqual(swept.listed.map(l => l.prefixed), [false, true, false, true], 'prefixed says which entries are testsToDelete names, at the root or under score-tmp');
   const age = Object.fromEntries(swept.listed.map(l => [l.entry, l.ageHours]));
   assert.ok(age['score-tmp/old-1'] >= 25 && age['score-tmp/testsToDelete-in-score'] >= 25 && age['testsToDelete-left-over'] >= 25, JSON.stringify(age));
   assert.ok(age['score-tmp/young-2'] >= 0 && age['score-tmp/young-2'] < 1, JSON.stringify(age));

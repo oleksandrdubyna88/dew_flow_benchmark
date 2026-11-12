@@ -108,10 +108,10 @@ function cmdSweep(o, write) {
   const s = settings(o);
   const { listed } = sweepLeftovers({ workRoot: s.workRoot });
   write(`sweep: listed ${listed.length}, removed 0 — nothing is removed by age or by name (common.test-leftovers § 4)`);
-  for (const { entry, ageHours } of listed) {
+  for (const { entry, ageHours, prefixed } of listed) {
     const abs = path.join(s.workRoot, entry);
     const age = ageHours === null ? 'age unknown' : `${ageHours.toFixed(1)} h old`;
-    const next = /^(score-tmp\/)?testsToDelete[-_]/i.test(entry)
+    const next = prefixed
       ? 'check with: bash .agents/conventions/tools/janitor.sh --dry-run'
       : `after checking no scoring run uses it, remove it by hand: rm -rf -- ${shellQuote(abs)}`;
     write(`listed: ${abs} (${age}) — not removed; ${next}`);

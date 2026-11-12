@@ -188,7 +188,7 @@ test('Sweep_lists_the_leftovers_with_a_hand_command_and_removes_nothing_and_usag
   for (const dir of [old, quirky, owned]) assert.equal(existsSync(dir), true, `${dir} is still there`);
   // the printed word, pasted into a shell, names exactly the folder (shown with printf, never by running the removal)
   const word = line("it's a run").split('rm -rf -- ')[1];
-  const shown = spawnSync('sh', ['-c', `printf '%s' ${word}`], { encoding: 'utf8' });
+  const shown = spawnSync('sh', ['-c', `printf '%s' ${word}`], { encoding: 'utf8', timeout: 5000 });
   assert.equal(shown.stdout, quirky, 'a quote and a space in the name stay one exact word');
   assert.equal((await tool('sweep', '--work-root', w.workRoot, '--max-age-hours', '1')).code, 4, 'the age option is gone: an unknown option is a usage error');
   assert.equal((await tool('nonsense')).code, 4);
