@@ -131,7 +131,51 @@ function removeStaleTemps({ backupFile, isAlive, fs }) {
   }
 }
 
-/** Publish the copy whole or not at all: a temporary name of this process beside it (mode 600, flushed), then a hard link that fails when the name exists (a copy that is there is never replaced), then the temporary name is removed. */
+/** The answers of a file system that has no hard links (WSL's drvfs mount of a Windows or NAS drive answers EPERM). */
+export const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS']);
+
+/**
+ * Write `key` to `file` by an exclusive create (`wx`: a name that is there is never replaced, it fails with EEXIST), flushed. -> true when written, false when the name was taken. A write that fails or writes fewer bytes, or a
+ * flush that fails, removes the file this call created (it is this call's own: the exclusive create made it) and throws, so the next run can make the copy.
+ */
+function createExclusive({ key, file, fs }) {
+  const fd = openExclusive({ file, fs });
+  if (fd === null) return false;
+  try {
+    writeWhole({ key, file, fd, fs });
+  } catch (e) {
+    fs.rmSync(file, { force: true });
+    throw e;
+  }
+  return true;
+}
+
+/** `fd` of `file` made by an exclusive create, or null when the name is taken (EEXIST); any other error is thrown. */
+function openExclusive({ file, fs }) {
+  try {
+    return fs.openSync(file, 'wx', 0o600);
+  } catch (e) {
+    if (e.code === 'EEXIST') return null;
+    throw e;
+  }
+}
+
+/** All of `key` written to `fd` and flushed, then `fd` closed; a short write throws naming `file` and the count. */
+function writeWhole({ key, file, fd, fs }) {
+  try {
+    const written = fs.writeSync(fd, key);
+    if (written !== key.length) throw new Error(`the key backup ${file} took ${written} of ${key.length} bytes`);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Publish the copy whole or not at all: a temporary name of this process beside it (mode 600, flushed), then a hard link that fails when the name exists (a copy that is there is never replaced), then the temporary name is removed.
+ * A share with no hard links (`NO_HARD_LINKS`) gets the copy by an exclusive create of its own name instead, which also never replaces a copy that is there; the key is one write of 32 bytes, and a copy cut short by a crash
+ * inside it does not hash to the key, so the caller refuses it naming the path (never used, never overwritten). The mode on such a share is its own access list's, not 600.
+ */
 function publishCopy({ key, backupFile, fs, pid, startTime }) {
   const temp = path.join(path.dirname(backupFile), `.${path.basename(backupFile)}.${pid}.${startTime}.${randomBytes(4).toString('hex')}.tmp`);
   const fd = fs.openSync(temp, 'wx', 0o600);
@@ -139,6 +183,11 @@ function publishCopy({ key, backupFile, fs, pid, startTime }) {
   try {
     fs.linkSync(temp, backupFile);
   } catch (e) {
+    if (NO_HARD_LINKS.has(e.code)) {
+      fs.unlinkSync(temp);
+      createExclusive({ key, file: backupFile, fs });
+      return;
+    }
     if (e.code !== 'EEXIST') throw e;
   }
   fs.unlinkSync(temp);
