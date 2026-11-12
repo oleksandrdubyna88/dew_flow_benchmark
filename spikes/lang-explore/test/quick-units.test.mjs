@@ -135,7 +135,7 @@ test('The_held_out_reader_accepts_the_agreed_shape_and_records_a_tree_hash_that_
 
 test('The_held_out_reader_refuses_a_missing_folder_a_missing_manifest_a_stray_file_and_an_unknown_trap', t => {
   const missing = casesFolder(t);
-  assert.match(loadHeldoutQuick(missing.home, { ...missing.task, heldoutDirParts: ['nowhere'] }).reason, /not there/);
+  assert.match(loadHeldoutQuick(missing.home, { ...missing.task, heldoutDirParts: ['nowhere'] }, path.join(tmpDir('q-frozen-none'), 'heldout-frozen.json')).reason, /not there/, 'over no record: the committed one lists the really sealed tasks');
   assert.match(loadHeldoutQuick(...(f => [f.home, f.task])(casesFolder(t, { manifest: false }))).reason, /cases\.txt is missing/);
   assert.match(loadHeldoutQuick(...(f => [f.home, f.task])(casesFolder(t, { manifest: 'h001 bytes R1\n' }))).reason, /does not list h002/);
   const stray = casesFolder(t);

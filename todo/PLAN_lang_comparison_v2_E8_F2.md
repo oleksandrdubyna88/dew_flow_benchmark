@@ -403,6 +403,22 @@ authoring: the spec fixes, the references and the witnesses are written at once 
 serialise on the scoring CPUs under the series lock, one task's run after another's, because scoring never shares the
 CPUs with anything (the plan's *The scoring CPUs*). The memory value is registered once, after the sixth package.
 
+**Task 05's witness cost (2026-11-12; the registering run, run 5 of `package --task 05 --only all --register`; written
+before the other five start).** Counts and durations only, from the private record. Each value is rounded on its own
+from milliseconds, so the rounded rows can differ from the total by 1 s (the witness wall sum is 20 298 551 ms):
+
+| Witnesses | Count | Passes | Wall (sum) | Slowest witness | Build (sum) | Tree bytes (sum) |
+|---|---|---|---|---|---|---|
+| deterministic, C# | 11 | 11 | 3 479 s | 383 s | 35.5 s | 34 712 620 |
+| deterministic, Node | 13 | 13 | 4 149 s | 454 s | 38.6 s | 600 143 555 |
+| race, C# | 3 | 30 | 10 005 s | 3 413 s | 8.9 s | 0 (none recorded) |
+| race, Node | 1 | 10 | 2 665 s | 2 665 s | 2.9 s | 0 (none recorded) |
+| **all** | **28** | **64** | **20 299 s (5 h 38 min)** | | **86.0 s** | |
+
+The whole run took 7 h 32 min (suite, gate, the two references at 10 passes each, the twins, the load rule and the
+witnesses). The witnesses kept 2 081 310 bytes in the run folder. The four race witnesses (10 passes each, the owner's
+choice of 2026-11-11) take 62 % of the witness wall time.
+
 Why 05 and not 04 (the plan now fixes 05; the reasons stand):
 
 1. 05 is the task whose spec makes the memory bound itself a tested behaviour (its R24, on releasing the memory of what

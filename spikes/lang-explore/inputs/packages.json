@@ -4,6 +4,7 @@
     "formatSha256": "6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47",
     "heldoutTreeSha256": "b7a892ee4fe5c36867598f2b47f4991d86960066457bf45a528756ae7008f82e",
     "manifestSha256": "d342a312e98593c991e3c9e06cf37cec7621fcabf57057dbd771b3cced9e6159",
+    "archiveSha256": "02c460ce6c359f2a316bbfa497724bb98781053996219c7273866cbf996dd5fe",
     "refsTreeSha256": {
       "csharp": "7acde8b73fb32490222e8dfeb95e9aced6a11a3c7362655a1d39f1b8277480dd",
       "node": "a3296bcd175b89097f0479bf777d151a9a0e07b83b30b710dce5259502164e92"
@@ -36,7 +37,7 @@
       "date": "2026-11-11",
       "reviewers": 4
     },
-    "identity": "87c2dc36239ff0eb2bd6182e999a810b01fcc2451a7bdde48cbd99c2c486610b",
+    "identity": "32cd9fcea32a3a25f17444624abde56004fbf1f0ed088e05577a812749003ba2",
     "validatedOn": "2026-11-12"
   }
 }
