@@ -10,7 +10,7 @@ import { scanCandidate } from './leak-candidate.mjs';
 import { benchLine, exitOfGroups, refusedLine, scannedLine, taskRead } from './leak-repos-lines.mjs';
 import { DEFAULT_BASE_REF, given, isAlone, optionsProblem, setupOf } from './leak-repos-setup.mjs';
 import { scanTaskRepository } from './leak-task-repo.mjs';
-import { benchHalf, commandMaterial, progressOf } from './leak.mjs';
+import { benchHalf, openedMaterial, progressOf, withSealedOpened } from './leak.mjs';
 import { REPO } from './paths.mjs';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { resolveTask } from './tasks.mjs';
@@ -76,8 +76,17 @@ export async function leakcheckRepos({ values, io, explore, say }) {
   if (early !== null) return early;
   const setup = await setupOf({ values, env, repoRoot: io.repoRoot ?? REPO });
   if (!setup.ok) return refused(setup.reason);
-  const material = await commandMaterial({ values, io, explore });
+  const result = await withSealedOpened({ values, io, explore }, () => scanAll({ setup: setup.value, values, io, explore, say }));
+  return result.exit === undefined ? { exit: 4, message: result.reason } : result;
+}
+
+/**
+ * The material and every part, run while the sealed quick tasks are open (the caller holds them): a candidate's verification reads the case files again after the material is built, so a folder closed after the material
+ * alone would be gone by then (found 2026-11-12 on the first sealed task). -> `{ exit, message }`.
+ */
+async function scanAll({ setup, values, io, explore, say }) {
+  const material = await openedMaterial({ values, io, explore });
   if (!material.ok) return { exit: 4, message: material.reason };
-  const parts = await runParts({ setup: setup.value, values, io, material, say });
+  const parts = await runParts({ setup, values, io, material, say });
   return { exit: Math.max(0, ...parts.map(p => p.exit)), message: parts.map(p => p.refusal).filter(Boolean).join('\n') };
 }

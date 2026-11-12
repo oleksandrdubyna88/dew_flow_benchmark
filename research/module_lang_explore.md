@@ -384,6 +384,8 @@ refused with its path, pid, start time and creation time and "no takeover is in 
 a sealed task for itself: `withOpenedHeldout` holds the task's lock for the whole read, stamps the folder with this process, and closes it in a `finally` (also when the reader throws); `init`, `run`, `rescore` and `replay` refuse a sealed task
 with no clear folder (`sealed: open it first (task NN); run explore.mjs heldout-open --task NN`) and read a held one as it is, after checking its tree hash against the registry (`openedFolderProblem`).
 
+**`leakcheck` holds the sealed tasks open over its whole scan (2026-11-12).** The first run after task 05's seal crashed with ENOENT on `heldout-05/cases`: the command opened the sealed tasks only while it built the material (`commandMaterial`), closed them, and then the verification of a candidate (`verifyChunks`, through `caseFilesOf`) read the case files again. `leakcheckRepos` now runs the material and every part (the bench, the task repository, the candidate) inside one `withSealedOpened` (`scanAll` over `openedMaterial`), so the case files are there for every read and the folders are closed after the command. `commandMaterial` stays for a caller that needs the material alone. Test: `test/quick-leak-sealed-scan.test.mjs`.
+
 ## The submission contract of the quick run (F1.S3 (b); parent D65, D66)
 
 What the agent hands in is scored as it was handed in, after three things the harness does to the copy: it leaves out the stack's build-output folders, puts every frozen file back, and builds with the template's `build.sh`. The pieces:

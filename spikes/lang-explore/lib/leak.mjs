@@ -193,24 +193,30 @@ const heldoutArgsOf = io => ({ ...(io.heldoutArgs ?? {}), ...(io.frozenFile === 
  * `fn` run with every sealed quick task of the scan opened for this reader and closed after it, whether `fn` returns or throws (`withOpenedHeldout`: the task's lock is held for the whole read, the stamp is this process's). A task
  * that is not sealed, or whose folder is held, is read as it is. -> what `fn` returns | `fail(sentence)` when a folder cannot be opened.
  */
-function withSealedOpened({ values, io, explore }, fn) {
+export function withSealedOpened({ values, io, explore }, fn) {
   const ids = values.task === undefined ? taskIds(explore) : [values.task];
   const tasks = ids.map(id => resolveTask(explore, id)).filter(t => t.ok && isQuick(t.value)).map(t => t.value);
   return tasks.reduceRight((inner, task) => () => withOpenedHeldout({ ...heldoutArgsOf(io), home: io.home, task, fn: inner }), fn)();
 }
 
 /**
- * The material of the command, built once for every repository it scans: `ok({ material, ids, scanned, absent, reviewed })` | `fail(sentence)`. The runner's committed lines and the quick tasks' grammar set are read from the
- * bench repository (`io.repoRoot`), as always.
+ * The material of the command, built once for every repository it scans, while the caller holds the sealed quick tasks open (`withSealedOpened`): `ok({ material, ids, scanned, absent, reviewed })` | `fail(sentence)`. The
+ * runner's committed lines and the quick tasks' grammar set are read from the bench repository (`io.repoRoot`), as always.
  */
-export async function commandMaterial({ values, io, explore }) {
+export async function openedMaterial({ values, io, explore }) {
   const repoRoot = io.repoRoot ?? REPO;
   const progress = progressOf(io);
   progress(`building the material of tasks ${values.task ?? taskIds(explore).join(', ')}`);
-  const material = await withSealedOpened({ values, io, explore }, async () => materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) }));
+  const material = await materialOf({ values, io, explore, runnerLines: await committedRunnerLines({ repoRoot }), grammarLines: await publicLines({ repoRoot, io }) });
   if (material.ok) progress(`material: ${materialCounts(material.value.material)}`);
   return material;
 }
+
+/**
+ * The material alone, with the sealed quick tasks opened for it and closed after. The leakcheck command does NOT use it: a candidate's verification reads the case files again after the material is built, so the command holds
+ * the tasks open over its whole scan (`leak-repos.mjs`, 2026-11-12). For a caller that needs the material only.
+ */
+export const commandMaterial = ctx => withSealedOpened(ctx, () => openedMaterial(ctx));
 
 /** The bench half of the command: the bench repository's files and branch range through the tiers, then the id scan; says its lines and gives the exit code (see `exitOf`). `material` is `commandMaterial`'s value. */
 export async function benchHalf({ values, io, material, say }) {
