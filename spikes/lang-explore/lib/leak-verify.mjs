@@ -4,6 +4,7 @@ import { caseFilesOf, caseLinesOf } from './leak-case-files.mjs';
 import { LINE_MIN } from './leak-lines.mjs';
 import { LineRing, takeLine } from './leak-windows.mjs';
 import { CHUNK, LONG_LINE_MIN, chunkOffsets } from './leak-chunks.mjs';
+import { NO_REVIEW } from './leak-reviewed.mjs';
 import { normLine, polyHash } from './leak-text.mjs';
 
 /** The candidates grouped by key: `Map(key -> [candidate])`. */
@@ -39,27 +40,49 @@ function windowsOfFile({ wanted, found, task, name, lines, hash }) {
 /** The candidates (same key) whose three normalised lines equal the case window `w`, as findings. */
 const windowsEqual = (candidates, { task, name, w }) => candidates.filter(p => p.texts.every((t, k) => t === w.texts[k])).map(p => confirmedWindow(p, { task, name, w }));
 
-/** Tier 4's candidates against the aligned chunks of the long case lines: the same key AND the same 64 characters. */
-export function verifyChunks(pending, sources) {
-  const wanted = byKey(pending.filter(p => p.tier === 'chunk'));
+const listOf = source => source.reviewed ?? NO_REVIEW;
+
+/** A candidate chunk whose own text a person reviewed in the list of every source: it is dropped before any case file is read. Only the exact text is exempt, never a key. */
+const reviewedEverywhere = (p, sources) => sources.every(s => listOf(s).hasChunk(p.text));
+
+/** The chunk-tier candidates still to verify, by key: those whose own text is not a reviewed chunk. */
+const liveChunks = (pending, sources) => byKey(pending.filter(p => p.tier === 'chunk' && !reviewedEverywhere(p, sources)));
+
+/**
+ * Tier 4's candidates against the aligned chunks of the long case lines: the same key AND the same 64 characters, and not a chunk the person-reviewed list of that source holds (a reviewed chunk is never a finding, even when
+ * another candidate shares its key). `keyOf` is the key function (a seam for the collision tests).
+ */
+export function verifyChunks(pending, sources, keyOf = polyHash) {
+  const wanted = liveChunks(pending, sources);
   const found = [];
   if (wanted.size === 0) return found;
-  for (const { id, casesDir } of sources) for (const name of caseFilesOf(casesDir)) caseChunks({ wanted, found, task: id, name, lines: caseLinesOf(casesDir, name) });
+  for (const source of sources) chunksOfSource({ source, wanted, found, keyOf });
   return found;
 }
 
+/** One source's case files against the wanted chunk candidates. */
+function chunksOfSource({ source, wanted, found, keyOf }) {
+  const { id, casesDir } = source;
+  const reviewed = listOf(source);
+  for (const name of caseFilesOf(casesDir)) caseChunks({ wanted, found, task: id, name, lines: caseLinesOf(casesDir, name), reviewed, keyOf });
+}
+
 /** One case file's long lines: each aligned chunk whose key is wanted and whose text is the candidate's is a finding. */
-function caseChunks({ wanted, found, task, name, lines }) {
+function caseChunks({ wanted, found, task, name, lines, reviewed, keyOf }) {
   lines.forEach((raw, i) => {
     const n = normLine(raw);
     if (n.length < LONG_LINE_MIN) return;
-    const equal = new Set(chunkOffsets(n).flatMap(at => equalChunks(wanted, n, at)));
+    const equal = new Set(chunkOffsets(n).flatMap(at => equalChunks({ wanted, n, at, reviewed, keyOf })));
     for (const p of equal) found.push(confirmed(p, { task, name, from: i + 1, to: i + 1 }));
   });
 }
 
-/** The candidates whose key and text are the aligned chunk of `n` at `at`. */
-const equalChunks = (wanted, n, at) => (wanted.get(polyHash(n, at, at + CHUNK)) ?? []).filter(p => p.text === n.slice(at, at + CHUNK));
+/** The candidates whose key and text are the aligned chunk of `n` at `at`, unless that chunk is a reviewed one. */
+function equalChunks({ wanted, n, at, reviewed, keyOf }) {
+  const text = n.slice(at, at + CHUNK);
+  if (reviewed.hasChunk(text)) return [];
+  return (wanted.get(keyOf(n, at, at + CHUNK)) ?? []).filter(p => p.text === text);
+}
 
 /** The candidates of the line and window tiers against the case files: the findings that are real (the chunk tier verifies per file, inside `scanText`, so its candidates never pile up). */
 export const verifyCandidates = (pending, material) => [...verifyLines(pending, material.caseSources, material.hash), ...verifyWindows(pending, material.caseSources, material.hash)];
