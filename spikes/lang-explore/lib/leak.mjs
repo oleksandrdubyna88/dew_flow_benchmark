@@ -101,8 +101,8 @@ export function decidedPublicText(repo = REPO) {
 
 const notesOf = (task, home) => { const f = taskPaths(task, home).notesFile; return existsSync(f) ? readFileSync(f, 'utf8') : null; };
 
-/** The tasks of the pins to scan (`only` is one id, or null for every task) as `{ task, held }` with the held-out side loaded. */
-const loadTasks = (home, explore, only) => (only ? [only] : taskIds(explore)).map(id => resolveTask(explore, id).value).map(task => ({ task, held: loadHeldout(home, task) }));
+/** The tasks of the pins to scan (`only` is one id, or null for every task) as `{ task, held }` with the held-out side loaded, read against the held-out record `frozenFile` (undefined: the committed one). */
+const loadTasks = ({ home, explore, only, frozenFile }) => (only ? [only] : taskIds(explore)).map(id => resolveTask(explore, id).value).map(task => ({ task, held: loadHeldout(home, task, frozenFile) }));
 
 /** The sentence refusing the scan because a task whose clear folder is absent is sealed (`sealedAbsentProblem`, the one decision of every reader), or null. */
 const sealedProblemOf = ({ loaded, home, frozenFile }) => loaded.filter(l => !l.held.ok).map(l => sealedAbsentProblem({ home, task: l.task, frozenFile })).find(p => p !== null) ?? null;
@@ -132,7 +132,7 @@ const refusalOf = ({ loaded, home, reviewed, frozenFile }) => (reviewed.ok ? sca
  * needles and keys of every tier; `reviewed` in the result says how many entries it holds, by kind (counts only).
  */
 export function leakMaterial({ home, explore, only = null, publicText = decidedPublicText(), runnerLines = new Set(), grammarLines = new Set(), frozenFile }) {
-  const loaded = loadTasks(home, explore, only);
+  const loaded = loadTasks({ home, explore, only, frozenFile });
   const reviewed = loadReviewed({ home });
   const problem = refusalOf({ loaded, home, reviewed, frozenFile });
   if (problem) return fail(problem);

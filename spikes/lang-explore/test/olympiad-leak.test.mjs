@@ -15,7 +15,7 @@ import { scanRepository } from '../lib/leak-scan.mjs';
 import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskIds, taskPaths } from '../lib/tasks.mjs';
 import { handcheckOf, toyCases, writeHeldout } from './olympiad-fixture.mjs';
-import { presentMaterial } from './quick-leak-fixture.mjs';
+import { noRecord, presentMaterial } from './quick-leak-fixture.mjs';
 import { repoWith } from './leak-scan-fixture.mjs';
 
 const EXPLORE = loadExplore().value;
@@ -84,12 +84,12 @@ test('Leakcheck_reads_every_task_s_material_by_default_and_one_task_s_when_asked
   const all = presentMaterial({ home, publicText: '' });
   assert.equal(all.ok, true, all.reason);
   assert.deepEqual([all.value.scanned, all.value.absent], [['02', '03'], []], 'every task of the pins is read (step 2b: a task whose folder is absent is a refusal, never named and skipped, so the pins here name the two that are there)');
-  const full = leakMaterial({ home, explore: EXPLORE, publicText: '' });
+  const full = leakMaterial({ home, explore: EXPLORE, publicText: '', frozenFile: noRecord() });
   assert.equal(full.ok, false, 'the full pins name ten tasks and the home holds two: a refusal, not a pass over two');
   assert.ok(taskIds(EXPLORE).filter(id => !['02', '03'].includes(id)).every(id => full.reason.includes(id)), 'every absent task is named');
   for (const id of ['02', '03']) assert.ok(substringsOf(all.value, id).includes(`answer-${id}-h001-xyzzy`), `task ${id}'s outputs are needles of the default scan`);
   assert.ok(all.value.material.shingleTexts.includes('the smallest grid whose first row') && all.value.material.shingleTexts.includes('a division of the minimum value'), 'every task\'s private notes are read');
-  const one = leakMaterial({ home, explore: EXPLORE, only: '03', publicText: '' });
+  const one = leakMaterial({ home, explore: EXPLORE, only: '03', publicText: '', frozenFile: noRecord() });
   assert.deepEqual([one.value.scanned, one.value.absent], [['03'], []], 'a named task is the only one loaded');
   assert.ok(!one.value.material.substrings.some(n => n.text.includes('answer-02-')), '--task 03 reads task 03 only');
 });
@@ -121,14 +121,14 @@ test('A_folder_that_does_not_match_its_manifest_or_no_folder_at_all_fails_the_ch
   const broken = presentMaterial({ home, publicText: '' });
   assert.equal(broken.ok, false);
   assert.match(broken.reason, /^task 02: the held-out side does not match its manifest/);
-  const empty = leakMaterial({ home: tmpDir('o-leak-empty'), explore: EXPLORE, publicText: '' });
+  const empty = leakMaterial({ home: tmpDir('o-leak-empty'), explore: EXPLORE, publicText: '', frozenFile: noRecord() });
   assert.equal(empty.ok, false);
   assert.match(empty.reason, /no held-out folder is present/);
 });
 
 test('The_leakcheck_command_refuses_an_unknown_task_and_reports_what_it_could_not_read_with_exit_4', async () => {
   const say = [];
-  const unknown = { home: tmpDir('o-leak-cmd'), say: l => say.push(l) };
+  const unknown = { home: tmpDir('o-leak-cmd'), say: l => say.push(l), frozenFile: noRecord() };
   assert.equal(await cmdLeakcheck({ task: '11' }, unknown), EXIT.config);
   assert.match(say.join('\n'), /--task 11 is not a task of the pilot: the tasks are 01, 02, 03, 04, 05, 06, 07, 08, 09, 10/);
   // step 2b: the command needs a task repository, so the empty home is asked with one (the behaviour pinned here, a refusal on a home with no held-out folder, is unchanged)

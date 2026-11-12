@@ -54,5 +54,12 @@ export function writeFrozen(ids, over = {}, entry = {}) {
 /** The pins restricted to the tasks whose held-out folder is in `home`: what a scan over every task of the pins reads when the home holds only these (an absent task is a refusal since step 2b, never a skip). */
 export const exploreFor = home => ({ ...EXPLORE, tasks: Object.fromEntries(Object.entries(EXPLORE.tasks).filter(([id]) => existsSync(taskPaths(quickTask(id), home).heldoutDir))) });
 
-/** `leakMaterial` over every task whose folder `home` holds (the options are `leakMaterial`'s, `home` required; give `only` and the pins are the full ones). */
-export const presentMaterial = options => leakMaterial({ ...options, explore: options.only ? EXPLORE : exploreFor(options.home) });
+/**
+ * The path of a held-out record that does not exist, in a new temp folder: "no task is sealed". A fixture home holds invented folders, so it must never be read against the
+ * committed `inputs/heldout-frozen.json`, which lists the really sealed tasks (task 05 since 2026-11-12): over it, an invented folder of a sealed task reads as changed after
+ * sealing, and an absent one as `sealed: open it first`.
+ */
+export const noRecord = () => path.join(tmpDir('q-frozen-none'), 'heldout-frozen.json');
+
+/** `leakMaterial` over every task whose folder `home` holds (the options are `leakMaterial`'s, `home` required; give `only` and the pins are the full ones). The record is `noRecord()` unless `frozenFile` is given. */
+export const presentMaterial = options => leakMaterial({ frozenFile: noRecord(), ...options, explore: options.only ? EXPLORE : exploreFor(options.home) });

@@ -13,7 +13,7 @@ import { normLine } from '../lib/leak-text.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
 import { writeHeldout } from './olympiad-fixture.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
-import { EXPLORE, presentMaterial, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
+import { EXPLORE, noRecord, presentMaterial, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
 const QUICK = ['04', '05', '06', '07', '08', '10'];
 const marked = id => [{ id: 'h001', input: `scenario 2\ndefault within 2s\nconnect c tcp\nsend c "invented-${id}-input-QWERTY"\n`, output: `transcript 2\nready\nrecv c "invented-${id}-answer-XYZZY"\nexit 0\n` }, { id: 'h002', input: `scenario 2\n`, output: `transcript 2\n` }];
@@ -194,7 +194,7 @@ test('A_linked_file_under_a_private_folder_is_named_by_the_leak_check_and_never_
   assert.match(r.reason, /refs\/ws\/linked\.py/);
   assert.match(r.reason, /mutants\/M-01\.py/);
   const said = [];
-  const ran = await scanBenchHalf({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {} }, explore: EXPLORE, say: l => said.push(l) });
+  const ran = await scanBenchHalf({ values: { task: '05' }, io: { home, repoRoot: tmpDir('q-leak-link'), progress: () => {}, frozenFile: noRecord() }, explore: EXPLORE, say: l => said.push(l) });
   assert.notEqual(ran.exit, 0, 'the command does not report clean');
   assert.match(ran.message, /refs\/ws\/linked\.py/, 'the path is reported');
 });
