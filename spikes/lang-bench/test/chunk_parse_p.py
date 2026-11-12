@@ -6,6 +6,10 @@ import statistics
 import sys
 import time
 
+USAGE = "usage: python3 -I chunk_parse_p.py <runner dir> <S bytes, a whole number above 0>"
+if len(sys.argv) != 3 or not sys.argv[2].isdigit() or int(sys.argv[2]) < 1:
+    raise SystemExit(USAGE)
+
 sys.path.insert(0, sys.argv[1])
 import rs_conn as rc  # noqa: E402  (the runner under test, by path)
 

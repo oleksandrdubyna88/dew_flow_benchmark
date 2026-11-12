@@ -175,6 +175,15 @@ difference: the one differing observation of an ordered transcript, every observ
 another count. Every string is cut the way the report's lines are (`abbreviate`), at most 64 observations and 16 headers are kept. It is a program's output: the harness writes it into the session's `score.json` under the
 series folder, never into git. No verdict reads it; `test_rs_evidence.py` holds the verdict fields of every kind of mismatch as goldens taken before the evidence existed.
 
+**P of rule F2.S2 (c)** (`test/chunk_parse_p.py`, 2026-11-11). `rs_conn.parse_response` parses a chunked HTTP body again from
+its start after every 64 KiB pull (`CHUNK`), so its cost grows with the body. Rule (c) of the stories document builds an
+incremental parser when a task's largest body S is over 1 MiB or this parse time P is over 100 ms. The script measures P: it
+builds a chunked response of S bytes in 4 KiB chunks, parses it as the runner pulls it, and prints the median of five runs.
+Usage: `python3 -I spikes/lang-bench/test/chunk_parse_p.py spikes/lang-bench/runner <S bytes>` on the scoring CPUs
+(`taskset -c 6,7`); a wrong call prints the usage line and exits 1. It is a measuring tool, not a test the suite runs. Each
+task's result is a dated line of `inputs/checkpoints.md`; only bodies the HTTP path parses count for S (task 05, a TCP
+server: "not needed", P = 14.1 ms).
+
 **Scoring a quick task** (`spikes/lang-explore/lib/score-quick.mjs`, `build-quick.mjs`): the agent's tree is copied cleanly (its build output removed, every frozen file put back), the frozen `build.sh` runs once in the
 stack's build box (the build is the agent's own, so every frozen file is compared with its frozen bytes again right after it: a file the build rewrote is put back and recorded as the agent's deviation `changed during the build`) (all quick scoring runs on CPUs 6 and 7, in both stacks: `run`, `rehearse`, `rescore` and `replay` each re-execute under `taskset -c 6,7`, so a re-score and a diagnostic are measured in the same conditions as the score they are compared with), then the layer runs the runner over the visible samples and the held-out pairs. Anything thrown while scoring, including the making of the scratch folder, is a void (`environment`), and a scratch folder that cannot be removed afterwards never loses the result: a score keeps `explore.cleanupFailed` with the reason, a void says it in its own reason. Everything that is the harness's failure is a void (`environment`): the layer halting or failing, a pair the runner
 refuses, a case missing from the record, a launch that failed, a case whose peak memory was not read, a build box that never started the build, a build killed from outside. The build runs under a marker: the command
