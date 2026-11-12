@@ -167,7 +167,10 @@ janitor*: the janitor sweeps no stores and is not re-implemented, and a reposito
 creates). At the start of the run, before the fixture starts: ONE `docker ps -a -q --no-trunc --filter
 label=testsToDelete.owner`, then ONE `docker inspect` for all ids, judged by the two keys of rule §4 (the label's record,
 the name's owner, the caller's token; the record `gone`), age selects (10 minutes), removal by the captured id (`docker
-rm -f -v <id>`). Never `--filter name=`. No `docker` binary, a stopped daemon, a non-zero exit or a 30-second timeout is
+rm -f -v <id>`). Never `--filter name=`. Each `docker` call is an executable with an argument array, never a
+shell string, with a 30-second timeout; on the timeout the whole process tree is killed (`.agents/PROJECT.md` § 11 and
+`common/security.md` § *External processes*; the brief uses the repository's existing process runner where it already
+does this). No `docker` binary, a stopped daemon, a non-zero exit or a 30-second timeout is
 one reported line and nothing removed; the run goes on. Ryuk is the first collector; this pass collects what Ryuk could
 not (a daemon restart, a reaper killed with the run).
 
@@ -215,16 +218,20 @@ shows no `owner-blind` outside § 9's sites); the minigit suite is green.
 
 **What.** Copy the 51 files of mcp's `tests/Mcp.Tests/Leftovers/` at `21553ce` (plus `DirectoryLinks.cs` and
 `RepositoryRoot.cs`) to `tests/Bench.Tests/Leftovers/` under D2, with the manifest and `TheAdaptedCopyTests`. Add the
-benchmark-own files: `SweepLock` (D3), the start-of-run hook that runs the folder sweep once per process before the first
-test (coai's `StartOfRunSweep` shape), and a `TempDir`-style entry (`TempDir.For(what).Path`) that the later stories use.
+benchmark-own files: `SweepLock` (D3); the start-of-run hook, copied from coai's `StartOfRunOrderAttribute` (an
+assembly-level xUnit v3 `BeforeAfterTestAttribute`) and `StartOfRunSweep`, which runs the folder sweep ONCE per process,
+behind a once-only gate, before the body of the first test on any thread; and a `TempDir`-style entry (`TempDir.For(what).Path`) that the later stories use.
 Wire the end-of-run audit. Add `git submodule update --init --depth 1 .agents/conventions` to `build-test` (E6-j). The
 repository guard test is copied but NOT switched on (D10): it lands in S7.
 **Scenarios** (each RED first where it pins a defect): the template's own tests, copied, green; case 15 (E6-c): in the temp
 root, an old dead-claimed `testsToDelete-<owner>-bench-gitrepo-<id>/` holding `repo/` (a real repository) and
 `scratch/<id>/` (a real linked worktree of it) is removed whole, and it is not kept as `other clone`; a live-claimed one
 with the same content is kept; a folder whose OWN `.git` is a file is kept as `other clone`; the manifest check is red when
-one copied byte changes; the sweep on Windows takes the mutex (the test reads the lock's name; the race itself is F29's
-evidence, not re-run here).
+one copied byte changes; the start-of-run hook runs the sweep exactly once when many test classes start at once on 8 threads (a
+counter the test reads); two sweeps at once on Windows: coai's two-sweeps race test, copied as a benchmark-own file,
+asserts neither F29 outcome (a removal reported that did not happen, a folder restored without its claim). It runs
+where the suite runs on Windows (the owner's machine) and skips elsewhere with its reason; benchmark has no Windows CI
+leg, and this epic adds none.
 **Files.** `tests/Bench.Tests/Leftovers/**`, `tests/Bench.Tests/Bench.Tests.csproj` (if a file needs it), `.github/workflows/ci.yml`,
 `research/module_tests.md` (a *Leftovers* section: the helper, the sweep, the audit, the limits of D3).
 **Done when.** The copy check is green; case 15 is green and was red before the copy's sweep existed; the whole suite is
@@ -369,6 +376,15 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
 2. **The open-PR cap.** This repository has one open PR (#103, this document's). S3 to S6 may be built in parallel but
    are opened at most three at a time.
 3. Not prerequisites: F25 to F28, F32; the private sibling's mirror (F26).
+
+## Plan gate (coai, 2026-11-12)
+
+Round 1 on `6428c931`: **proceed**, 2 of 2 reviewers answered, 5 findings. Accepted 3: D9's `docker` calls are an
+executable with an argument array, a 30-second timeout and a whole-tree kill; S2 names the start-of-run hook (coai's
+assembly-level attribute, once per process) and pins it with a test; S2 copies coai's two-sweeps race test for Windows.
+Rejected 2: a check that the fixture never points at an external Postgres (it has no such path:
+`PostgresFixture.cs:35` is always the started container's string); a prefix check of the fakes' folder variable inside
+the fakes (the parent sets it; the token stays written once, rule §2).
 
 ## How to repeat the measurements
 
