@@ -1,0 +1,42 @@
+{
+  "05": {
+    "specSha256": "9b88858ae1ada50b4ffff3973a3db64bba7cf2ae588e61078a479ba6d5b7c4cc",
+    "formatSha256": "6c3546bb03cdc70df32a6795b68c52d5c03d0c4efbb968824b1c177cc8cb5d47",
+    "heldoutTreeSha256": "b7a892ee4fe5c36867598f2b47f4991d86960066457bf45a528756ae7008f82e",
+    "manifestSha256": "d342a312e98593c991e3c9e06cf37cec7621fcabf57057dbd771b3cced9e6159",
+    "refsTreeSha256": {
+      "csharp": "7acde8b73fb32490222e8dfeb95e9aced6a11a3c7362655a1d39f1b8277480dd",
+      "node": "a3296bcd175b89097f0479bf777d151a9a0e07b83b30b710dce5259502164e92"
+    },
+    "witnessesTreeSha256": "c1024621a35d1d63d46b2ac598f2617d544210ec00664548c263b643374937d6",
+    "twinsTreeSha256": "cdc2119afbbd4cc0d5969de5f59d335255ba50c8a31e043f5ed3b8d8c65ff4d7",
+    "counts": {
+      "cases": 19,
+      "traps": 23,
+      "rows": 28,
+      "witnesses": 28
+    },
+    "memoryBytes": 536870912,
+    "referenceVerdicts": {
+      "csharp": "accepted",
+      "node": "accepted"
+    },
+    "load": {
+      "slowestWallMs": 163386,
+      "twinWallMs": 141,
+      "durationS": 540
+    },
+    "loadDurationS": 540,
+    "pins": {
+      "runnerSha256": "196c91c137c365fcd3c6eebfcb18996f2600855b8cf337193c6aaf878ec61286",
+      "execLayerSha256": "f0c5411f603f3357ff8495ca3628baee0f47f1d0441b21f0d2ada91da19dc6c5"
+    },
+    "gate": {
+      "verdict": "proceed",
+      "date": "2026-11-11",
+      "reviewers": 4
+    },
+    "identity": "87c2dc36239ff0eb2bd6182e999a810b01fcc2451a7bdde48cbd99c2c486610b",
+    "validatedOn": "2026-11-12"
+  }
+}

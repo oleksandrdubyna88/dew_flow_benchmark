@@ -68,3 +68,11 @@ the conformance check exit 0; `explore.mjs leakcheck --task-repo <clone>` exit 0
 two person-reviewed entries on 2026-11-11 (a Node server idiom that public bench test programs also hold, and one phrase of R25's
 public wording that a private note shares; hashes and reasons only, outside git); the private line scan of the branch history
 exit 0; `specs-record.mjs --check` exit 0; `pin-check.mjs` exit 0. The spec's pull request is the task repository's #5.
+
+**After the gate (2026-11-12).** One private held-out case changed after this review: one read-pacing number of its client
+(a short pause between reads, which the spec's slow-reader rule allows), the same for both stacks. Reason: with a full-speed
+reader, a witness that drops queued replies at a half-close escaped in 2 of 4 package runs, because the replies sometimes left
+before the half-close arrived. The spec, its pins and every expected reply stay as they were. This review did not read the
+changed bytes; consultants (2 of 2) judged that the change needs no new bias review, and the assessment is kept with the private
+material. Package run 5 then validated the whole package with the changed case (both references 10 of 10 clean, 28 of 28
+witnesses caught) and registered it.
