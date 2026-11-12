@@ -404,7 +404,8 @@ serialise on the scoring CPUs under the series lock, one task's run after anothe
 CPUs with anything (the plan's *The scoring CPUs*). The memory value is registered once, after the sixth package.
 
 **Task 05's witness cost (2026-11-12; the registering run, run 5 of `package --task 05 --only all --register`; written
-before the other five start).** Counts and durations only, from the private record:
+before the other five start).** Counts and durations only, from the private record. Each value is rounded on its own
+from milliseconds, so the rounded rows can differ from the total by 1 s (the witness wall sum is 20 298 551 ms):
 
 | Witnesses | Count | Passes | Wall (sum) | Slowest witness | Build (sum) | Tree bytes (sum) |
 |---|---|---|---|---|---|---|
