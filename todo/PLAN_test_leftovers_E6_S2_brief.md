@@ -180,6 +180,7 @@ Each file's header names its source by repository, path and commit (`dew_flow_co
 | `LeftoversSweepCase15Tests.cs` | `Bench.Tests.Leftovers` | Case 15, E6-c (§ 8) | new |
 | `TempDir.cs` | `Bench.Tests` | `TempDir.For(what)`: a thin, disposable wrapper over `OwnedDir` (§ 10) | shape of C:`src_mcp/tests_leftovers/TempDir.cs`, built on `OwnedDir` instead of `CreateTempSubdirectory` |
 | `TempDirTests.cs` | `Bench.Tests.Leftovers` | § 10 | new |
+| `WindowsNewFileOwnerLimitTests.cs` | `Bench.Tests.Leftovers` | The F31 pin (§ 19 item 2): makes a folder through the helper (`OwnedDir`), reads its owner SID DIRECTLY (`DirectoryInfo.GetAccessControl().GetOwner(typeof(SecurityIdentifier))` against `WindowsIdentity.GetCurrent().User`, never through `Scope.IsMine`), skips unless Windows and skips with its reason where the caller owns it; otherwise asserts `Scope.IsMine(folder)` and `Scope.IsMine(folder + ".owner")` are false (the limit holds: such a run's folders wait for a person). On Linux CI it skips, saying why | the check of C:`src_mcp/tests/RunTempTests.cs` `:426-468` (`AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, `OwnedByTheCaller`), WITHOUT its child run: no `OrphanClaimChild` here. If `GetAccessControl` needs a package, use what coai's test project references (read its csproj) |
 | `TheAdaptedCopyTests.cs` | `Bench.Tests.Leftovers` | The diff check (§ 5) | C:`src_mcp/tests/Leftovers/TheAdaptedCopyTests.cs` |
 | `template-manifest.json` | — | The manifest (§ 5.1) | coai's format |
 
@@ -228,7 +229,7 @@ Each file's header names its source by repository, path and commit (`dew_flow_co
 Copy C:`src_mcp/tests/Leftovers/TheAdaptedCopyTests.cs` and change only:
 - namespace `Bench.Tests.Leftovers`; `TemplateRepoVariable = "BENCH_TEMPLATE_REPO"` (C:`:23`);
 - `CopiedUnder = ["tests/Bench.Tests/Leftovers/"]` (C:`:25`);
-- the own list (C:`:31`, rename `CoaiOwn` → `BenchOwn`, test `…IsInTheManifestOrIsBenchsOwn`): the eleven `.cs` files of
+- the own list (C:`:31`, rename `CoaiOwn` → `BenchOwn`, test `…IsInTheManifestOrIsBenchsOwn`): the twelve `.cs` files of
   § 4.3 by full path. Write the WHOLE list in the first commit, even for files that come later: the test only refuses a
   file that is on neither list; it does not require an own file to exist;
 - `ManifestPath` → `tests/Bench.Tests/Leftovers/template-manifest.json` (C:`:64`);
@@ -265,8 +266,10 @@ Record M2–M4 on the PR (the command and the first line of each red message). N
   result object.
 - `StartOfRunOrderAttribute.Before` (assembly level, so it runs before EVERY test of the assembly) FIRST calls
   `StartOfRunSweep.Run()` (it waits on the gate), then takes `Stopwatch.GetTimestamp()`, then checks `EndedAt != 0 &&
-  EndedAt <= now` and throws coai's one line otherwise (`bench tests: the start-of-run sweep had not ended when
-  {test.TestDisplayName} started (E6 S2, the order proof)`), then `RecordTestStart(now)`. So no test body on any thread
+  EndedAt <= now`. It NEVER throws (the sweep never fails the run, and a throw in `Before` would fail a test): a
+  violation is recorded (`StartOfRunSweep.OrderViolations`, a thread-safe list of `{test.TestDisplayName}` lines) and G3
+  asserts that list is empty, so the order proof is a test, not an abort. Then `RecordTestStart(now)`. `Gate.Await()` sets
+  `EndedAt` on EVERY path (the sweep's success, its error line, a caught exception) before it returns. So no test body on any thread
   starts before the sweep ended — even if a future xUnit builds the fixture later. `After` does nothing.
 - `[assembly: Bench.Tests.Leftovers.StartOfRunOrder]` at the top of `StartOfRunOrderAttribute.cs`.
 
@@ -555,7 +558,7 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 3. `StartOfRunSweepTests.cs` (G1–G4, REDs by hand).
 4. `SweepPlants.cs`, `SuiteChild.cs`, `TwoSweepsAtOnceTests.cs`.
 5. `LeftoversSweepCase15Tests.cs` (R15-1, R15-2 by hand).
-6. `TempDir.cs`, `TempDirTests.cs`.
+6. `TempDir.cs`, `TempDirTests.cs`, `WindowsNewFileOwnerLimitTests.cs` (add it to the own list written in commit 1).
 7. `ci.yml`, `research/module_tests.md` (and `.gitattributes` if Q1 says yes).
 
 **Size.** About 8,600 copied lines (mechanical, script-made) and about 1,300 lines of benchmark-own code, most of it
@@ -564,7 +567,8 @@ adapted from coai. One Sonnet coder can do it. If the coordinator wants it faste
 - then in parallel on disjoint files, each in its own worktree branched from A's commit 2 (one `dotnet build` at a time on
   the machine: take turns):
   - **Coder B** — commits 3–4 (`StartOfRunSweepTests.cs`, `SweepPlants.cs`, `SuiteChild.cs`, `TwoSweepsAtOnceTests.cs`);
-  - **Coder C** — commits 5–7 (`LeftoversSweepCase15Tests.cs`, `TempDir.cs`, `TempDirTests.cs`, `ci.yml`,
+  - **Coder C** — commits 5–7 (`LeftoversSweepCase15Tests.cs`, `TempDir.cs`, `TempDirTests.cs`,
+    `WindowsNewFileOwnerLimitTests.cs`, `ci.yml`,
     `research/module_tests.md`).
   B and C do not touch `TheAdaptedCopyTests.cs` (A wrote the whole own list) or the manifest.
 - **One integration pass** (A, or the main session): cherry-pick B and C onto `feat/e6-s2-adapted-copy`, build, format,
@@ -579,6 +583,9 @@ adapted from coai. One Sonnet coder can do it. If the coordinator wants it faste
 - The audit's teeth: the CI step green on the PR's head (quote it), and the two local runs (exit codes and first lines).
 - `build-test` checks out the mount and is green; the whole suite green on `ubuntu-latest`.
 - Node guard: 209 and 3 before and after (quote both). The C# guard's by-hand count (information).
+- The F31 pin compiled and skipped on `ubuntu-latest` with its reason (quote the skip line); it names coai's test as its source.
+- G3 also asserts `StartOfRunSweep.OrderViolations` is empty; a by-hand RED records one violation (make `Before` skip the
+  wait once) and G3 fails.
 - `research/module_tests.md` section written; F31 stated by its true condition in the manifest's `about` and there.
 - `dotnet format` clean; build at 0 warnings.
 
@@ -607,15 +614,15 @@ adapted from coai. One Sonnet coder can do it. If the coordinator wants it faste
 5. **Q5 — merge order.** S1 is not merged at `239e078e`, and the Windows-machine statement (plan § 12 item 3) is open.
    Both block S2's merge, not its build.
 
-## 17. The coordinator's decisions on the open questions (Opus main session, 2026-11-12)
+## 19. The coordinator's decisions on the open questions (Opus main session, 2026-11-12)
 
 1. `.gitattributes` `-text` lines for the copied files and the manifest: **yes**. The diff check compares raw bytes, so a
    line-end conversion on a Windows checkout must not change them. Recorded on the PR as a file outside S2's list, with
    this reason.
 2. The F31 pin: **yes, in S2.** The plan's § 2 asks for "a pin of this limit in this suite [that] reads who owns a new file,
    as coai #962's test does, and skips with its reason where the caller owns it". S2 is where the helper is copied, so S2
-   copies coai's #962 test as a benchmark-own file (its source path and commit named in its header); it skips on every OS
-   but Windows, and on Windows where the caller owns a new file.
+   writes `WindowsNewFileOwnerLimitTests.cs` (§ 4.3): the check of coai's #962 test without its child run, its source
+   named in its header; it skips on every OS but Windows, and on Windows where the caller owns a new file.
 3. Case 15's RED is the mutation RED of § 8 (B7): accepted.
 4. No start-of-run switch (B5): accepted.
 5. Precondition 2 (§ 2) is MET: the owner stated on 2026-11-12 that the Windows machine builds and tests neither this
@@ -623,3 +630,10 @@ adapted from coai. One Sonnet coder can do it. If the coordinator wants it faste
    Precondition 1 stands: S1 (#205) merges first.
 6. Note N1 (the template's `Removal` and read-only git objects on Windows) goes to the parent as a note; case 15 skips on
    Windows with that reason.
+
+## 20. Plan gate (coai, 2026-11-12)
+
+Round 1 on `a5531caa`: **proceed**, 2 of 2 reviewers, 4 findings, all accepted: the F31 pin is named in § 4.3, the own
+list (twelve files), the commit series, the coders' split and the done-when; `Before` never throws, a violation is recorded
+and G3 asserts none; `EndedAt` is set on every path of `Gate.Await()`; the coordinator's section is § 19 (it was a second
+§ 17).
