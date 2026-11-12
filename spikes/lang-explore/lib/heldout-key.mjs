@@ -139,26 +139,36 @@ export const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS'
  * flush that fails, removes the file this call created (it is this call's own: the exclusive create made it) and throws, so the next run can make the copy.
  */
 function createExclusive({ key, file, fs }) {
-  let fd;
+  const fd = openExclusive({ file, fs });
+  if (fd === null) return false;
   try {
-    fd = fs.openSync(file, 'wx', 0o600);
-  } catch (e) {
-    if (e.code === 'EEXIST') return false;
-    throw e;
-  }
-  try {
-    try {
-      const written = fs.writeSync(fd, key);
-      if (written !== key.length) throw new Error(`the key backup ${file} took ${written} of ${key.length} bytes`);
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
+    writeWhole({ key, file, fd, fs });
   } catch (e) {
     fs.rmSync(file, { force: true });
     throw e;
   }
   return true;
+}
+
+/** `fd` of `file` made by an exclusive create, or null when the name is taken (EEXIST); any other error is thrown. */
+function openExclusive({ file, fs }) {
+  try {
+    return fs.openSync(file, 'wx', 0o600);
+  } catch (e) {
+    if (e.code === 'EEXIST') return null;
+    throw e;
+  }
+}
+
+/** All of `key` written to `fd` and flushed, then `fd` closed; a short write throws naming `file` and the count. */
+function writeWhole({ key, file, fd, fs }) {
+  try {
+    const written = fs.writeSync(fd, key);
+    if (written !== key.length) throw new Error(`the key backup ${file} took ${written} of ${key.length} bytes`);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /**
