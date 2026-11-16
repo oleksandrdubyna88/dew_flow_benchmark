@@ -30,6 +30,10 @@ it; the one check the parent supersedes, E6-d's proof (3) "no `.WithReuse(`", wh
 exist, is replaced by E6-f2 (3). Measurements added by this revision are marked **[M]** with `46e27108` beside them: benchmark `46e27108`, rules pin
 `4c9a684`, read-only, commands in § *How to repeat the measurements*.
 
+Revised 2026-11-16; plan gate `215fc3a2` proceed (one finding accepted: D9's place; three rejected with reasons, two
+carried to S3's brief: the effective Ryuk check at fixture start, and a run that settles whether Testcontainers 4.16.0
+has any configuration path to reuse); an independent Opus review's eight points applied.
+
 **Each row has ONE state** (the parent's § *Epoch 9* item 8.1). **observed**: the row's own check ran on a candidate that
 must pass AND on a counterexample that must fail, at this repository's pins. **proposed**: the check is written, not yet
 run; it is never approved as measured. **blocked**: the check needs something this document does not have; the row names
@@ -38,9 +42,9 @@ such, never as "observed".
 
 ## 1. The conditions — rows E6-a to E6-k, each with its state (the parent's § *Epoch 8* item 3, as § *Epoch 9* item 3 restates it)
 
-| # | Condition | Implementation (file) | Invocations | Executable check | Prepares / does not prove | Observed at `7d795024` | State (epoch 9) |
+| # | Condition | Implementation (file) | Invocations | Executable check | Prepares / does not prove | Read or measured at `7d795024` (the starting point) | State (epoch 9) |
 |---|---|---|---|---|---|---|---|
-| E6-a | the boundary on both sides | `todo/PLAN_bench_test_leftovers_followups.md:63` and § 9 here | — | the row is on `main` in both | — | **[M]** merged, #177 `562cb4bd`. Met | **observed**: the row's check is a reading (the row on `main` in both, read again at `46e27108`); no counterexample applies to a document boundary |
+| E6-a | the boundary on both sides | `todo/PLAN_bench_test_leftovers_followups.md:63` and § 9 here | — | the row is on `main` in both | — | **[M]** merged, #177 `562cb4bd`. Met | **observed**: the check "the row is on `main` in both" ran on a candidate and a counterexample, **[M]** 2026-11-16. Candidate, `origin/main`: `git show origin/main:todo/PLAN_bench_test_leftovers_followups.md \| grep -c "E6 does not build these fixes a second time"` → 1, and this document's § 9 row "The fixes of F1 and F2 in" on `origin/main` → 1. Counterexample, the commit before #177 (`git log --format=%h -1 562cb4bd^` → `9336a774`): the same count of the phrase → 0 (at `562cb4bd` → 1) |
 | E6-b | a worktree a test makes is owned, and the guard's boundary is stated | the worktree lives INSIDE an owned folder with the repository it belongs to (rule §1, last item): the product seams of D4 take a root; a `worktree add` a TEST writes by hand stays in its owned folder and carries one inline `raw-worktree` exemption naming that folder | `Bench.Tests`; the guards | the C# guard and the Node guard on the head; one planted test-file `worktree add` without the marker is red | The guards read the spelling, never the folder | **[M]** a compliant `git worktree add --detach --lock --reason "$RECORD" testsToDelete-u1001-bench-x HEAD` is `raw-worktree` in a `.sh`, in a `.cs` under `tests/` (Node guard, `--profile node` only) and in a `.test.mjs`; the comment `testsToDelete-exempt: raw-worktree — <reason>` on the line above clears each. **Not read:** the same line in a plain `tools/*.mjs` (not a test file). **[M]** the template's C# guard matches `"worktree", "add"` and the words `worktree add` (mcp `LeftoversGuard.cs:91`), only outside `src/` (`:199-203`) | **proposed**: the Node guard's half (marker and no marker) was run at `d23a2ea`; the row's check, both guards on the head with a planted line red, runs in S4, S5 and S7 |
 | E6-c | a killed child's worktree is collected by a NAMED implementation | the copied C# sweep's folder pass, on the owned folder that holds the clone and its worktree (sweep case 15, § S2) | the next run's start | sweep case 15: a dead-claimed owned folder with `repo/` and a linked `scratch/<id>/` is removed whole | The template has no worktree pass (mcp `LeftoversSweep.cs:3`); a worktree whose clone is OUTSIDE the folder is not seen at all. Windows: N1 (read-only git objects), which does not arise here while benchmark has no Windows leg | **[M] by reading, not run:** `HasGitFile(dir)` (`LeftoversSweep.cs:470-480`) tests only the candidate's OWN `.git` as a regular file, so `:171-175` (`other clone`) does not fire for the owned folder; the folder is quarantined and removed by `Removal.Quietly` → `Directory.Delete(recursive)` (`Removal.cs:40-54`), with the clone's `.git/worktrees/<id>` inside it. **To observe** in S2: case 15 RED first, then green | **observed** by S2 on Linux (#207, `LeftoversSweepCase15Tests.cs`: RED by hand, then green, **[D]** its commit message; not re-run by this revision). Windows: not applicable while benchmark has no Windows leg (`git grep -i windows -- .github/workflows` → nothing, **[M]** `46e27108`); the case 15 tests skip on Windows; N1 is F42's, for the template |
 | E6-d | the fixture's container: three separate proofs (restated by the parent's § *Epoch 9* item 3) | `tests/Bench.Tests/Infrastructure/PostgresFixture.cs` | `Bench.Tests` on `ubuntu-latest` | (1) Ryuk on: a child test process starts the fixture; the container exists by its captured id BEFORE the child is killed, and the Docker query that says so succeeded; after the kill, within the reaper's window, the same query succeeds and finds nothing; (2) the owner label `testsToDelete.owner` on the builder, read by the container pass; (3) = E6-f2 (3): reuse proved off at run time. And no `TESTCONTAINERS_RYUK_DISABLED` in any spelling: a benchmark test over every `.cs` of the repository, red on a planted `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`, because neither guard reads that form (the parent's F43) | Ryuk collects by its session, not by owner; one test cannot stand for the other two | **[M]** the builder (`:27-33`) has `WithDatabase`, `WithUsername`, `WithPassword`, `WithCommand` only: no `WithName`, `WithLabel`, `WithReuse`, `WithCleanUp`; nothing in the tree sets `TESTCONTAINERS_RYUK_DISABLED` or a `testcontainers.properties`; `Testcontainers.PostgreSql` 4.16.0 (`Directory.Packages.props:41`). **To observe** in S3: the three proofs on `ubuntu-latest` (no `docker` CLI on the author's machine). **Corrected 2026-11-16:** proof (3) used to read "no `.WithReuse(`", a guard check that does not exist: **[M]** `46e27108`, the Node guard's `scanText` of `.WithReuse(true)` in a `.cs` is `[]`, and of `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")` is `[]`; the C# copy's `RyukOff` wants `:` or `=` after the name (`tests/Bench.Tests/Leftovers/LeftoversGuard.cs:93`, read, not run) | **proposed**; hosted only: Docker runs in `build-test` on `ubuntu-latest`, and the fixture fails loudly without it (`PostgresFixture.cs:45-47`) |
@@ -50,9 +54,9 @@ such, never as "observed".
 | E6-g | the guards read every directory E6 promises (restated by the parent's § *Epoch 9* item 3) | the copied C# guard (copied in S2; its repository test `Explicit` until S7) and the shipped Node guard as a CI step (`--profile node --token bench --identity "the measuring harness"`; S7, S2 added none) | `Bench.Tests`; CI | both green on the head (S7); a scan of nothing is red (exit 2; the C# `FilesScanned > 0`); one planted raw temp in `tools/` is red; and per directory of § 1's table *E6-g by directory*, a planted raw temp in a file of a kind that directory's guard READS is red. A promised directory whose files no guard reads is named there as a limit, with its file kinds | A spelling check; which plain `.mjs` files make temp paths: no guard reads them | **[M]** no guard today (`git grep -l 'LeftoversGuard\|leftovers-check' -- tests tools .github` → nothing). The Node guard: default profile 3 findings, `--profile node` 209. A planted `mktemp -d` in `tools/x.sh` is `raw-temp` (both profiles). **Not read** by either guard: `.cs` in `tools/model-arms/`, `hosts/`, `spikes/` (C# guard: only `tests/` and `src/`; Node: only `tests/` as text); a plain `tools/*.mjs`; `*.py` in the Node guard. **[M]** `46e27108`: the table below | **proposed**: S2 planted no directory for this row; the plants are S7's |
 | E6-h | the held-out runner's age removal of `score-tmp/*` is retired before any producer | `spikes/minigit-bench/lib/heldout-run.mjs` | the held-out tool's `sweep` command (`heldout-tool.mjs:105-112`), by hand only | its test: an old unclaimed folder under `score-tmp` is listed, not removed by age | — | **[M]** still there: `sweepLeftovers` `:93-113` removes every un-prefixed `score-tmp/<name>` older than 24 h (`:102-105`), no owner check; the test pins it (`heldout-run.test.mjs:154`: `removed: ['old-1']`) | **observed** by S1 (#205: the test changed to `removed: []`, red on the old code, then green, **[D]** its PR) |
 
-Rows added by this document, observed the same way:
+Rows added by this document, read the same way:
 
-| # | Condition | Observed at `7d795024` | State (epoch 9) |
+| # | Condition | Read or measured at `7d795024` (the starting point) | State (epoch 9) |
 |---|---|---|---|
 | E6-i | no test helper makes a LEGACY name (rule §1) | **[M]** 20 `legacy-name` findings outside the other plan's spikes: 15 in `tests/Bench.Tests/ModelArms/` (`TempFolder.cs:10` `Directory.CreateTempSubdirectory("testsToDelete-modelarms-")`, 112 `new TempFolder()` in 26 files; tokens `modelarms`, `briefs`, `m2`, `m3`, `x` are not rows of the Tokens table), 5 in `spikes/policy-ab-quick/test/` | **proposed** (S4, S6) |
 | E6-j | the CI job that runs `Bench.Tests` can read the mount | **[M]** `build-test` (`ci.yml:13-43`) checks out no submodule; the copied C# guard reads the Tokens table and starts the shipped `sweeper-scan.mjs` from the mount. `contract` (`:68`) and `plans` (`:120`) do check it out | **proposed**: S2 added the line (`ci.yml:23` at `46e27108`) and #207's CI ran the copy green with it (**[D]**); the counterexample, the job without the line failing, was not recorded |
@@ -75,9 +79,9 @@ non-binary file under the root folders `tests/`, `test/` and `scripts/`. It does
 | `tools/model-arms/` (S7) | `.cs`, `.ps1`, `.csproj`, `.json`, `.md` | `.ps1`: both. `.cs`: neither today; the C# copy after S7's manifest operation | `mktemp -d` in a `tools/` `.sh`; `GetTempPath()` in a `tools/model-arms/` `.cs` after S7 | `.cs` until S7; `.csproj`, `.json`, `.md` |
 | `spikes/policy-ab-quick/test/` (S6) | 14 `*.test.mjs`, one plain `fixtures/ctrlc-parent.mjs`, data (`.ndjson`, `.xml`) | `*.test.mjs`: the Node guard | `mkdtemp(` in a `*.test.mjs` | `fixtures/ctrlc-parent.mjs` (it makes no temp path today: no `tmpdir`, `mkdtemp`, `TMP`) |
 | `spikes/minigit-bench/lib/heldout-run.mjs` (E6-h, S1) | a plain `.mjs` | neither; its test `test/heldout-run.test.mjs` by the Node guard | — | the file itself: S1's own test is its check |
-| the rest of `spikes/` (D7, S6) | `*.test.mjs`, plain `.mjs`, `.sh`, `.py`, `.cs` | `*.test.*`: the Node guard. `.sh`: both. `.py`: the C# copy | `mktemp -d` in a `spikes/` `.sh` | plain `.mjs` (`lib/`, `capture/`; § 3's list); `.cs` (`spikes/EvalLibrarySpike/Program.cs`) |
-| `research/local-model-coding/harness/` (D8, S7) | `.sh` | both | — (D8 marks its two lines) | — |
-| `.github/workflows/` (the CI step, S2, S7) | `.yml` | both | — (the step's own run is the check) | — |
+| the rest of `spikes/` (D7, S6) | `*.test.mjs`, plain `.mjs`, `.sh`, `.py`, `.cs`, plain `.ts` | `*.test.*`: the Node guard. `.sh`: both. `.py`: the C# copy | `mktemp -d` in a `spikes/` `.sh` | plain `.mjs` (`lib/`, `capture/`; § 3's list); `.cs` (`spikes/EvalLibrarySpike/Program.cs`); the 9 plain `.ts` files (all `main.ts` fixtures under `spikes/lang-bench/test/` and `spikes/lang-explore/rehearsal/`; `git ls-files spikes \| grep -E '\.ts$' \| grep -v -E '\.test\.ts$\|\.spec\.ts$'` → 9; `isScanned` false for them, **[M]** 2026-11-16) |
+| `research/local-model-coding/harness/` (D8, S7) | `.sh` (31), `.ps1` (3), plain `.mjs` (17), one `.js`, `.json`, `.md`, `.env` | `.sh`, `.ps1`: both | `d=$(mktemp -d)` in a `.sh` there: `scanText('research/…/harness/x.sh', 'd=$(mktemp -d)')` → `raw-temp` (**[M]** 2026-11-16); D8 marks its two lines | the 17 `.mjs` and 1 `.js` files there (`git ls-files research/local-model-coding/harness \| grep -cE '\.mjs$'` → 17, `'\.js$'` → 1; `isScanned` false; the C# copy reads `.mjs` and `.js` only under `.github/scripts/` and `http/`) |
+| `.github/workflows/` (the CI step, S2, S7) | `.yml` | the C# copy (it reads workflows, above). The Node guard opens the files but reports no `mktemp -d` in a `run:` | `mktemp -d` in a workflow `run:`: the C# copy's reading is to be run by S7, red or not (the plant says which) | `mktemp -d` in a workflow `run:`: the Node guard gives NO finding (**[M]** 2026-11-16: `scanText('.github/workflows/ci.yml', …)` of a `run: \|` block with `d=$(mktemp -d)` → `[]`; a `worktree add` there is reported). The step's own run is the check of the CI step itself |
 | `http/README.md` (S7 rewrites `:32-33`) | `.md` | neither | — | the file: S7's rewrite is checked by its review, not a guard |
 
 **[M]** `46e27108`, a correction to § 3: the C# copy (copied in S2) reads `.py` as a script, and nine lines of
@@ -104,7 +108,7 @@ coai #962's test does, and skips with its reason where the caller owns it. Bench
 still builds or tests this repository is § 12's question 3).
 
 **Done when:** rows E6-a to E6-k (E6-f as E6-f1 and E6-f2) are each met by their check; both guards are green over the head in CI; a killed run's
-folders, worktrees and container are collected by the next run; the boundary sites of § 9 are clean by E6's own guard.
+folders and worktrees are collected by the next run, and its container by the next run that starts the fixture; the boundary sites of § 9 are clean by E6's own guard.
 
 ## 3. The invocation inventory (§ *Epoch 3* item 4 of the parent)
 
@@ -247,13 +251,13 @@ product's and is never removed by hand while a benchmark may run.
 | S2 | E6-e, E6-c, E6-j: the adapted copy, the start-of-run folder sweep with `SweepLock`, the audit; the mount in `build-test` | Opus · Sonnet · Opus | S1 |
 | — (F42-c) | the copy re-synced to F42 (F42-c): a prerequisite PR of S3, not a story of this document (§ 6, *Before S3*) | Opus · Sonnet · Opus | S2; F42 merged in mcp |
 | S3 | E6-d, E6-f1, E6-f2: the fixture's name, label, Ryuk, no reuse; the container pass (D9); the `container-scoped` marker | Opus · Sonnet · Opus | S2; F41-b (this repository's rules pin at F41's release); F42-c (the re-sync PR above) |
-| S4 | E6-i, E6-b (by hand): `ModelArms/` — `TempFolder` and the legacy literals; the hand-made worktrees | Opus · Sonnet · Opus | S2 |
-| S5 | E6-k, E6-b (seam): the rest of `Bench.Tests`, the fakes, the product seams of D4 | Opus · Sonnet · Opus | S2 |
-| S6 | `spikes/policy-ab-quick` and the spike sites D7 gives E6 (Node, the shipped helper) | Opus · Sonnet · Opus | S1 |
+| S4 | E6-i, E6-b (by hand): `ModelArms/` — `TempFolder` and the legacy literals; the hand-made worktrees | Opus · Sonnet · Opus | S3 (so F41-b and F42-c) |
+| S5 | E6-k, E6-b (seam): the rest of `Bench.Tests`, the fakes, the product seams of D4 | Opus · Sonnet · Opus | S3 |
+| S6 | `spikes/policy-ab-quick` and the spike sites D7 gives E6 (Node, the shipped helper) | Opus · Sonnet · Opus | S1, S3 |
 | S7 | E6-g: both guards on, the CI step, the research lines (D8), the docs, the machine listing | Opus · Sonnet · Opus | S3, S4, S5, S6; the followups plan's S1 and S2 (D7) |
 
 S1 is the last sweeper-stage change of this repository (rule § *The barrier*): S2 and later make the owner form, so S1
-merges first. S3 to S6 touch disjoint files and may be built in parallel, but at most three PRs are open here at once
+merges first. S4 to S6 touch disjoint files and may be built in parallel once S3 has merged, but at most three PRs are open here at once
 (`common/pull-requests.md` rule 7). No cornerstone (the parent's ledger is full at 3 of 3, and E6's entry says no).
 
 **Epoch 9 (2026-11-16), the parent's § *Epoch 9* item 5.** S3 waits for two things outside this document, so that
@@ -261,8 +265,8 @@ E6-f1's marker is accepted by both guards when S3 writes it. **F41-b** is this r
 release that carries F41 (the `container-scoped` kind in the rule and the Node guard); it is one of the nine pin bump
 PRs the parent plans with that release, not a story here. **F42-c** is the re-sync of the C# copy to the mcp commit of
 F42, in this repository, its own PR before S3. It is a prerequisite PR, not a story of this document: it changes no
-condition of E6, it re-runs E6-e's check at a new commit (D2). S4, S5 and S6 do not wait for either. S7 waits for S3, so
-it waits for both too.
+condition of E6, it re-runs E6-e's check at a new commit (D2). As in the parent's build order, S4 to S7 follow S3: all
+the remaining stories come after F42-c and S3, so they wait for both prerequisites too.
 
 ## 6. Stories
 
@@ -322,7 +326,7 @@ The copied guard's own tests, copied with it, green; case 15 still green on Linu
 `.WithLabel("testsToDelete.owner", <record>)`, never sets reuse, and keeps Ryuk. The `container-scoped` exemption comment
 goes on the line above `NewEmptyDatabaseAsync` (`:96`): `testsToDelete-exempt: container-scoped — the per-test databases
 live and die with the PostgresFixture container`. Under F41 the marker is a declaration: it clears nothing on that line,
-since the fixture drops no database (the parent's item 4.2). The container pass of D9 runs at the start of the run.
+since the fixture drops no database (the parent's item 4.2). The container pass of D9 runs in the first process that starts the fixture, before its container (D9).
 **Scenarios.** Every Docker query below is the same kind of call: it must SUCCEED to count, and a failed query or a
 timeout fails the test, never passes it as "absent" (the brief names the query, for example `docker ps -a -q --no-trunc
 --filter id=<id>`, exit 0, empty when nothing is found). (1) Ryuk (E6-d (1)): a child test process starts the fixture;
@@ -468,8 +472,8 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
 ## 11. Definition of Done
 
 - [ ] E6-a to E6-k (E6-f as E6-f1 and E6-f2): each check green, with its observed result recorded on the PR that met it; every row's state is **observed**.
-- [ ] The adapted copy's check is green; the manifest names `21553ce`, and F42's commit after F42-c; F29 is closed by `SweepLock`; F31 is stated by its true condition.
-- [ ] A killed run's owned folder, its worktree (case 15) and the fixture's container are collected by the next run (S2, S3).
+- [ ] The adapted copy's check is green; the manifest names F42's commit (`21553ce` until F42-c); F29 is closed by `SweepLock`; F31 is stated by its true condition.
+- [ ] A killed run's owned folder, its worktree (case 15) and the fixture's container are collected by the next run that starts the fixture (the container) or the next run (folders and worktrees) (S2, S3).
 - [ ] The fixture's container is named in the owner form, labelled, Ryuk on, never reused (proved at run time, E6-f2); the per-test databases carry the `container-scoped` marker, and both guards accept it (E6-f1).
 - [ ] No `raw-temp`, `raw-worktree`, `legacy-name` or `owner-blind` finding in either guard except the inline exemptions the stories list by file and reason.
 - [ ] CI's `build-test` runs both guards; each is red on a scan of nothing.
@@ -481,8 +485,8 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
 
 1. **The followups plan's S1 and S2 before E6's S7 (D7).** That plan is open and has no build date. If it is still open
    when S1 to S6 are merged, the owner decides: wait, or move its F1/F2 sites to E6 (a boundary change on both sides).
-2. **The open-PR cap.** This repository has one open PR (#103, this document's). S3 to S6 may be built in parallel but
-   are opened at most three at a time.
+2. **The open-PR cap.** This repository has one open PR (#103, this document's). S4 to S6 may be built in parallel once S3
+   has merged, and are opened at most three at a time.
 3. **The owner's Windows machine (merge condition (c)).** Its barrier is closed: it was never scanned, and the owner's
    2026-11-04 statement covers only E2's and E5's repositories (`dew_flow_conventions · research/security/machines.md`,
    § *The owner's Windows machine*). Before S2, the first producer, merges, the owner either states that the machine does
