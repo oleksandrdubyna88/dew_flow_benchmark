@@ -64,8 +64,8 @@ T1–T5 stay as names for the touches; they are no longer a count. **A file the 
 needs outside these paths is found BEFORE the PR, by that run; adding it is then a change of the parent's epoch 10 and
 counts there** (the parent's item 4.1; epoch 10 is open with 0 changes, so it would be entry 10.1). If the build, the
 format check, an analyzer, a test or a reviewer asks for any other file (a `.csproj`, an `.editorconfig` section, another
-own file, another workflow line, `.agents/PROJECT.md`), STOP and report; do not add it. One such file is already known
-and waits for a decision (§ 16).
+own file, another workflow line, `.agents/PROJECT.md`), STOP and report; do not add it. The ones found so far are
+decided in § 16 (none enters this PR).
 
 *Was (epoch 9, cut by the parent's re-review record, this brief's cut row; fixed forward here):* "Scope — exactly five
 touches beyond the copy, by the parent's entry 9.1 … this PR touches exactly these five, and nothing else", with T5
@@ -88,6 +88,10 @@ from entry 9.2 (E7), and the next counted change is now 10.1.
 | the build runs right after the copy commit, before anything else; a new warning stops the work (xunit.v3 4.0.3 here vs mcp's 4.0.0, analyzers, `TreatWarningsAsErrors`) | the Opus review | § 11, § 10 W2 |
 | `.agents/PROJECT.md` *Commands* lacks the mount's `npm ci` line the leftovers tests need; row E6-c's N1 sentence becomes untrue once N1's fix is copied | the Opus review | § 16 (the first is outside item 4.1's paths: a decision), § 14 (the second, as progress) |
 | every claim this PR relies on observed in a scratch, with the six things | the parent's item 8.1 | § 10.1 |
+| CC1 and R4 run on the FINAL head (after the promotion commit), their results on the PR, never committed; no pre-merge progress text claims checks (1)–(4b) ran | coai document gate (interim re-review, `proceed`), finding G1, accepted | § 10, § 11, § 14, § 15 |
+| the stories' `research/` path rewrites and both index updates (`todo/README.md` rows removed, `research/README.md` rows added) move into the promotion commit with the two `git mv`s | the same gate, finding G2, accepted | § 11, § 14 |
+| § 13's fresh-checkout commands show the build and D1's RED run BEFORE `npm ci`, then the install and the green rerun | the same gate, finding G3, accepted | § 13 |
+| § 16 decided: PROJECT.md out (`module_tests.md` carries the line), E6-c in its *State* cell only, no 10.1 | the coordinator, 2026-11-16 | § 14, § 16 |
 
 ## 1. Rules you must read first
 
@@ -130,7 +134,7 @@ from entry 9.2 (E7), and the next counted change is now 10.1.
    success **[M]** (`gh run view 43957154320`). `83f166d6`'s run `43932109912` was green with the same code (§ 0, the empty
    code diff), so it reads as a timing-dependent test outside `Leftovers/`, NOT diagnosed here and not this PR's to fix.
    If it fails again on the PR head, the coordinator decides (re-run, or a finding to its owner); the W1 diff of FAILED
-   lists (§ 10) shows whether it is new.
+   lists (§ 10) shows whether it is new. *Decided 2026-11-16:* the coordinator re-ran the failed job; not F42-c's scope.
 
 ## 3. What changed in the template — the file set (point 1)
 
@@ -382,7 +386,7 @@ Every RED is watched for the right reason and quoted on the PR (command and firs
 |---|---|---|---|
 | C1 | `TheAdaptedCopyTests` at commit 1 (§ 11): the manifest re-pinned and the `:79` pin moved, the copied files still `21553ce`'s | **12 red of 58**, counted: **8** theory rows with the blob message ("with the listed replaces undone, the git blob is <old>; the manifest says <new>": `LeftoversAudit.cs`, `LeftoversAuditException.cs`, `LeftoversGuard.cs`, `LeftoversGuardExemptions.cs`, `LeftoversGuardTests.cs`, `Native.cs`, `OwnedTests.cs`, `Removal.cs`) + **1** row failing at an operation's count (`LeftoversAuditTests.cs`: "operation 2 of 3 ('mcp tests:' -> 'bench tests:') expected 7 occurrence(s) of the new text, found 6 at line(s) 220, 229, 230, 247, 268, 273") + **2** rows of the missing targets (`LeftoversGuardDifferentialTests.cs`, `LeftoversGuardScenarios.cs`: `FileNotFoundException`) = **11** theory rows, + `EveryLeftoversFile_IsInTheManifestOrIsBenchsOwn` (two targets missing) = **12**; 46 green, among them `TheManifest_IsWellFormed` and the count fact. **Observed** (§ 10.1, O1) | this IS the red; record the count |
 | C2 | the same at commit 2 (the eleven files written, and the CI step, § 11) | **58 of 58 green** (55 rows + 3 facts). **Observed** (O2), with the mount's `node_modules` absent and again present (K2) | — |
-| CC1 | **Row F42-c (1), from a CLEAN checkout of the PR head**: a fresh clone; `git submodule update --init` (the mount only, `.gitmodules`); `npm ci --ignore-scripts` in `.agents/conventions`; build; then `TheAdaptedCopyTests`, C3 and C4 there | 58 of 58 green with 55 entries; one copied byte → that row red; the count back to 6 → red at op 2. A file this run needs outside § 0.1's paths is found here, BEFORE the PR, and stops it (§ 0.1, § 16) | the reds are C3 and C4, run in that clone. The same sequence ran on a scratch stand-in of the head (O1–O5): no file outside the paths was needed for the build or these tests |
+| CC1 | **Row F42-c (1), from a CLEAN checkout of the FINAL PR head** (after the promotion commit, § 11 commit 4; coai document gate, finding G1): a fresh clone; `git submodule update --init` (the mount only, `.gitmodules`); `npm ci --ignore-scripts` in `.agents/conventions`; build; then `TheAdaptedCopyTests`, C3 and C4 there | 58 of 58 green with 55 entries; one copied byte → that row red; the count back to 6 → red at op 2. A file this run needs outside § 0.1's paths stops the PR (§ 0.1, § 16). **Its results go in the PR body or a PR comment, never in a committed file** (no commit comes after the head it ran on) | the reds are C3 and C4, run in that clone. The same sequence ran on a scratch stand-in of the head (O1–O5): no file outside the paths was needed for the build or these tests |
 | C3 | one copied byte changed (a character in a comment of the NEW `LeftoversGuardScenarios.cs`) | its row red, naming the file and both SHAs; with `BENCH_TEMPLATE_REPO=/home/jinx/git/dew_flow_mcp` the first differing line is named. **Observed** (O3): 1 red of 58, "the git blob is bad862a2…; the manifest says 8da3abb6…", "First differing line 3" | by hand, restored (the stories' and the parent row F42-c's counterexample) |
 | C4 | the `count` of `mcp tests:` set back to 6 | red at op 2 ("expected 6 … found 7"). **Observed** (O4): 1 red of 58, "operation 2 of 3 … expected 6 occurrence(s) of the new text, found 7 at line(s) 249, 451, 460, 461, 478, 499, 504" | by hand, restored |
 | C5 | a stray `tests/Bench.Tests/Leftovers/Stray.cs` | `EveryLeftoversFile_…` red naming it. **Observed** (O5): 1 red of 58, naming `Stray.cs` | by hand, removed |
@@ -399,7 +403,7 @@ Every RED is watched for the right reason and quoted on the PR (command and firs
 | P1 | `node .agents/conventions/tools/plan-lifecycle.mjs` | clean | — |
 | K1 | **Before the PR is opened: re-read S3–S7 for any other file-scope boundary the re-sync crosses** (the consultant's caution) | none crossed beyond § 0.1's paths; the PR body lists what was read. At this brief: see the list below | a boundary found → STOP, a decision (§ 0.1, § 16) |
 | K2 | **The CI `npm ci` is deterministic and dirties nothing** (the consultant's caution) | after the step, locally and in a CI step's log if the coordinator wants it: `git status --porcelain` empty, `git submodule status` without `+`, `git -C .agents/conventions diff --quiet package-lock.json` → 0; `TheAdaptedCopyTests` green with `node_modules` present AND absent (run C2 both ways). **Observed** (O7): all four, and C2 58 of 58 both ways | `npm install` in place of `npm ci` is never tried on the branch |
-| R4 | **Row F42-c (4) and (4b)**: `git diff --name-only <base>..HEAD` and `git diff -U0 <base>..HEAD` per path | every path in § 0.1's table; each path within its bound (the manifest: `commit`, `about`, nine blobs, the count, two entries; `TheAdaptedCopyTests.cs` only `:79`; case 15 only the reason's text; `ci.yml` only `build-test`, one step; `.gitattributes` two lines; the stories only progress lines); quoted on the PR. The base is the PR's merge base with `main` (the brief's own commits are in the diff: this brief and `todo/README.md`, both § 0.1 paths) | a path outside → STOP (§ 16) |
+| R4 | **Row F42-c (4) and (4b)**, on the FINAL PR head (after the promotion commit; finding G1): `git diff --name-only <base>..HEAD` and `git diff -U0 <base>..HEAD` per path | every path in § 0.1's table (the two briefs at their `research/` paths and `research/README.md` included); each path within its bound (the manifest: `commit`, `about`, nine blobs, the count, two entries; `TheAdaptedCopyTests.cs` only `:79`; case 15 only the reason's text; `ci.yml` only `build-test`, one step; `.gitattributes` two lines; the stories only progress lines); quoted in the PR body or a PR comment, never in a committed file. The base is the PR's merge base with `main` (the brief's own commits are in the diff: this brief and `todo/README.md`, both § 0.1 paths) | a path outside → STOP (§ 16) |
 
 **K1, as read for this brief** (the stories at B:`83f166d6`; re-read on the PR's base, it may have moved):
 
@@ -485,12 +489,19 @@ review), so no commit holds the differential test without the step that makes it
    C2, D1 (the RED without the mount's dependencies, as § 10 D1 says: a fresh isolated checkout, or `node_modules` moved
    aside with `test ! -e .agents/conventions/node_modules/yaml` asserted) → `npm ci` → D1 green and D2; C3–C5 by hand;
    L1–L4; K2; G1.
-3. **Case 15 and docs** (T4, T5) — § 7.1; `research/module_tests.md`; the stories (progress lines only, § 14);
-   `todo/README.md` (§ 14). No merge fact in this commit (§ 14). K1 and CC1 (the clean checkout of this head) before the
-   PR is opened; R4 on the PR.
-4. **Promotion, last** (T5) — this brief and the S2 brief to `research/` (§ 14), `git mv` last, after CI is green on
-   commit 3's head. The status says `IMPLEMENTED, <the date of this commit>` and "built in PR #…"; never "merged", a merge
+3. **Case 15 and docs** (T4, T5) — § 7.1; `research/module_tests.md` (its commands carry the mount's `npm ci` line, § 14);
+   the stories' progress lines that cite no `research/` brief path (§ 14); the E6 row of `todo/README.md`. No merge fact
+   and no claim that checks (1)–(4b) ran (§ 14). K1 before the PR is opened.
+4. **Promotion, last** (T5), after CI is green on commit 3's head — ONE commit holding everything that names a brief at
+   its `research/` path (coai document gate, finding G2), so no earlier commit references a file that does not exist yet:
+   both briefs' status and deviations; the stories' path rewrites (the status line's S2 brief name, the § 6 *State*
+   line's citation of this brief); `todo/README.md`'s two brief rows removed; `research/README.md`'s two rows added; this
+   brief's own path to the S2 brief. Inside the commit the order of `common/planning-docs.md` § *The git mv goes LAST*:
+   every edit while the briefs are still in `todo/`, then the two `git mv`s, `git add` of both destinations, one commit.
+   The status says `IMPLEMENTED, <the date of this commit>` and "built on `feat/e6-copy-f42`"; never "merged", a merge
    date or a merge SHA (coai plan gate `0cb22033`, finding (b)).
+   **Then, on this final head:** CI green (D3), CC1 and R4, their results in the PR body or a PR comment, never committed
+   (finding G1).
 5. **After the merge** (not a commit of this PR): the merge facts (merged, the merge SHA, the date) are written where
    § 14 says, in a later commit on `main` through its own PR, never into a commit of this PR before the merge.
 
@@ -536,15 +547,21 @@ git -c protocol.file.allow=always submodule update --init .agents/conventions
 test ! -e .agents/conventions/node_modules/yaml && echo "yaml absent"              # MUST print before D1 runs
 # (in an existing worktree instead: mv .agents/conventions/node_modules <scratch>/nm-aside; the same test; run D1;
 #  mv it back — never rm, never npm uninstall)
-# the mount's locked dependencies (the resolver needs them; so do D2 and the after-count)
-npm ci --ignore-scripts --prefix .agents/conventions
-# build (this machine: lowered, -m:4, no build server; one build at a time) — right after the copy commit (W2)
+# build (this machine: lowered, -m:4, no build server; one build at a time) — right after the copy commit (W2);
+# the build needs no node_modules (O1, O2 built without them)
 nice -n 19 dotnet build dew_flow_benchmark.slnx -c Release -m:4 --disable-build-servers -p:AppHostRuntimeIdentifier=linux-x64
+T=./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
+# D1, the RED, BEFORE npm ci: expected exit non-zero, 2 of 3 red, "node said: … YamlMissingError …" (O6)
+nice -n 19 $T --filter-class "*LeftoversGuardDifferentialTests"; echo "exit $?"
+nice -n 19 $T --filter-class "*TheAdaptedCopyTests"          # K2's "absent" half: 58 of 58
+# the install: the mount's locked dependencies (the resolver needs them; so do D2 and the after-count)
+npm ci --ignore-scripts --prefix .agents/conventions
+test -e .agents/conventions/node_modules/yaml && echo "yaml present"
+# D1 green again after the install: expected 3 of 3 (O7)
+nice -n 19 $T --filter-class "*LeftoversGuardDifferentialTests"; echo "exit $?"
 dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore
 git diff --check
-T=./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
 nice -n 19 $T --filter-class "*TheAdaptedCopyTests"
-nice -n 19 $T --filter-class "*LeftoversGuardDifferentialTests"
 nice -n 19 $T --filter-method "*Marker_lines_read_the_same_in_the_mounted_node_guard_once_it_knows_the_marker"
 nice -n 19 $T --filter-class "*LeftoversGuardTests"
 nice -n 19 $T --filter-class "*LeftoversAuditTests"
@@ -586,40 +603,50 @@ gh run list --repo oleksandrdubyna88/dew_flow_benchmark --branch main --limit 1 
     clears read-only files below a folder before the delete, never entering a link, and keeps a file with a second hard
     link (N1, observed by mcp on `windows-latest`, run `43928795620`; not observed here, no Windows leg); case 15 still
     skips on Windows, with the reason of § 7.1 (T4).
-  - Commands (`:651-659`): add `--filter-class "*LeftoversGuardDifferentialTests"` and the line that it needs
-    `npm ci --ignore-scripts --prefix .agents/conventions` first.
+  - Commands (`:651-659`): add `--filter-class "*LeftoversGuardDifferentialTests"` and, above the test lines, the mount's
+    install, `npm ci --ignore-scripts --prefix .agents/conventions`, with a comment that the leftovers tests
+    (`LeftoversGuardDifferentialTests`) need the mount's `yaml`. This is THE place that carries the line:
+    `.agents/PROJECT.md` stays out of this PR (§ 16 item 1, decided).
   - Pitfall (S2 brief § 12): no table row whose first cell starts with a backticked `bench ` (`ModuleTestsCatalogTests`).
 - **The stories** (`todo/PLAN_test_leftovers_E6.md`, line numbers at `191ef77f`) — **progress lines only** (row F42-c
   (4b)); their § 6 *Before S3* is already amended by #217, so this PR does NOT amend it. **No merge fact before the
   merge** (coai plan gate `0cb22033`, finding (b)): no "merged", no merge SHA, no merge date and no PR number in any commit
-  of this PR; they are written after the merge (the last bullet). Before the merge:
-  - the status line (`:3-15`): "F42-c built on `feat/e6-copy-f42` (the copy re-synced to mcp `53f65130`; checks (1)–(4b)
-    quoted on its PR)", and it stops naming the S2 brief by its `todo/` file name once that brief moves (`:9`, "brief
-    `PLAN_test_leftovers_E6_S2_brief.md`" → `research/PLAN_test_leftovers_E6_S2_brief.md`);
-  - the *State* line of § 6 *Before S3* (`:423`): "built on `feat/e6-copy-f42` (brief
-    `research/PLAN_test_leftovers_E6_F42c_brief.md`); C1 12 red of 58 at commit 1, 58 green at `53f65130`, one copied
-    byte → red, the count back to 6 → red; D1 red without the mount's `yaml`, 3 of 3 green with it" — the observed
-    numbers, as they come out on the head;
-  - row E6-e's state (`:69`): "run again by F42-c (`feat/e6-copy-f42`): 12 red at commit 1, 58 green at `53f65130`, one
-    copied byte → red";
+  of this PR; they are written after the merge (the last bullet). **No claim that checks (1)–(4b) ran** (coai document
+  gate, finding G1): they run on the final head, after the last commit, and their results live on the PR; the stories
+  get them after the merge. Before the merge, in commit 3 (no `research/` path, finding G2):
+  - the status line (`:3-15`): "F42-c built on `feat/e6-copy-f42` (the copy re-synced to mcp `53f65130`)";
+  - the *State* line of § 6 *Before S3* (`:423`): "built on `feat/e6-copy-f42`; checks (1)–(4b) run on its final head,
+    results on its PR";
+  - row E6-e's state (`:69`): "run again by F42-c (`feat/e6-copy-f42`), on its final head; results on its PR";
   - row E6-c's state (`:67`, the Opus review): its *Limits* cell says "Windows: N1 (read-only git objects)", and its
     *State* cell "N1 is F42's, for the template". Once N1's fix is copied the first is untrue. The state cell (a progress
     line) gets: "Since F42-c, the copied `Removal` clears read-only files below a folder before the delete on Windows
     (N1, fixed in mcp F42 and observed there on `windows-latest`, run `43928795620`; not observed here, no Windows leg);
     the *Limits* cell's N1 sentence describes the copy before F42-c." The *Limits* cell itself is NOT edited: it is not a
-    progress line, and rewriting it is outside row F42-c (4b)'s bound for this document (§ 16 item 2);
-  - claim C1's state (`:130`): "checks (1)–(4b) ran on F42-c's head (`feat/e6-copy-f42`), quoted on its PR".
+    progress line, and rewriting it is outside row F42-c (4b)'s bound for this document (§ 16 item 2, decided: the
+    *State* cell only);
+  - claim C1's state (`:130`): unchanged before the merge (it says "proposed, before F42-c's plan gate; completeness
+    proved by row F42-c's checks (1)–(4b)"; that the checks ran is a post-merge line).
+  - **In the promotion commit (commit 4), with the two `git mv`s** (finding G2): the status line stops naming the S2
+    brief by its `todo/` file name (`:9`, "brief `PLAN_test_leftovers_E6_S2_brief.md`" →
+    `research/PLAN_test_leftovers_E6_S2_brief.md`); the § 6 *State* line (`:423`) gets "(brief
+    `research/PLAN_test_leftovers_E6_F42c_brief.md`)".
   - **Not before the merge:** row E6-f1 (`:70`, it already reads "no longer blocked once F42-c merges"), § 5 (`:301`),
     § 12 item 5 (`:629-631`): their "F42-c merged" is a merge fact. § 11 (`:604`) already names `53f65130`; its box
     stays open (it holds F29 and F31 too).
   - **After the merge** (in a later commit on `main`, through its own PR; E6.S3's first commit is one such place, the
     coordinator's choice): "F42-c merged (#<n> `<sha>`, <date>)" in the status line, E6-f1, § 5 and § 12 item 5, and the PR
-    number where the lines above say `feat/e6-copy-f42`; and this brief's promoted status gets "merged as #<n> `<sha>`".
-- **`todo/README.md`**: the E6 row (`:99`) gets the same progress words (no merge fact); the two brief rows (`:100`,
-  `:101`) are removed by the promotion.
+    number where the lines above say `feat/e6-copy-f42`; the results of checks (1)–(4b) as the PR quotes them (C1's
+    state, the § 6 *State* line, row E6-e: C1 12 red of 58 at commit 1, 58 green at `53f65130`, one copied byte → red,
+    the count back to 6 → red, D1 red without the mount's `yaml` and 3 of 3 with it, CC1 and R4 on the final head); and
+    this brief's promoted status gets "merged as #<n> `<sha>`".
+- **`todo/README.md`**: the E6 row (`:99`) gets the same progress words in commit 3 (no merge fact, no checks claim);
+  the two brief rows (`:100`, `:101`) are removed in the promotion commit (finding G2).
 - **The promotion of both briefs (Q5), the PR's last commit**, in the order of `common/planning-docs.md` § *The git mv
-  goes LAST*: every edit while the files are still in `todo/`, then `git mv`, `git add` of the destinations, and ONE
-  commit.
+  goes LAST*: every edit while the files are still in `todo/` (the two statuses, the stories' two path rewrites above,
+  `todo/README.md`'s two rows removed, `research/README.md`'s two rows added, this brief's path to the S2 brief), then
+  the two `git mv`s, `git add` of the destinations, and ONE commit (finding G2: no commit before it names a
+  `research/` brief path, no commit after it exists in the PR).
   - This brief: status `> Status: **IMPLEMENTED, <the date of the promotion commit>** (built on `feat/e6-copy-f42`).`
     with its deviations (what shipped differently from this brief: the RED counts actually seen, anything K1 or CC1 found,
     any analyzer or format finding and how it was settled). No "merged", merge SHA or merge date: those come after the
@@ -637,7 +664,8 @@ gh run list --repo oleksandrdubyna88/dew_flow_benchmark --branch main --limit 1 
   10* item 3; it was § *Epoch 9* item 3) becomes **observed** with this PR's runs (checks (1)–(4b): C1–C4, CC1, D1–D3,
   R4), written by the coordinator in conventions. Entry 9.1 is already recorded there (conventions PR #172); this PR
   cites it and adds nothing to the parent.
-- **Not in item 4.1's paths, so not in this PR unless decided:** `.agents/PROJECT.md` § *Commands* (§ 16 item 1).
+- **Not in this PR (decided, § 16 item 1):** `.agents/PROJECT.md` § *Commands*; `research/module_tests.md` carries the
+  mount's `npm ci` line instead.
 
 ## 15. Done when, and what the PR body quotes
 
@@ -650,21 +678,25 @@ gh run list --repo oleksandrdubyna88/dew_flow_benchmark --branch main --limit 1 
 - The Node guard 209 and 3 before and after (G1); the C# guard's Explicit count before and after, as information.
 - `LeftoversRepositoryGuardTests` still `Explicit`; no copied file edited by hand; the PR's diff lies within § 0.1's
   named paths, each path within its bound (R4: `git diff --name-only <base>..HEAD` and `git diff -U0` per path quoted).
-- CC1: row F42-c (1) from a clean checkout of the head, with what it needed (nothing outside § 0.1's paths, or a stop).
+- CC1: row F42-c (1) from a clean checkout of the FINAL head (after the promotion commit), with what it needed (nothing
+  outside § 0.1's paths, or a stop); CC1 and R4 quoted in the PR body or a PR comment, not committed (finding G1).
 - D3: the CI log's printed Node version (20 or later) quoted with the run.
 - K1 (S3–S7 re-read on the PR's base, what was read listed) and K2 (the `npm ci` leaves the trees clean) recorded.
 - The docs of § 14 written (progress only, no merge fact before the merge); both briefs promoted; `plan-lifecycle.mjs`
   clean; the PR body cites entry 9.1 (conventions PR #172) and the parent's § *Epoch 10* item 4.1.
-- § 16's open items decided by the coordinator before the PR (or left out of it, said so on the PR).
+- § 16's items as decided (PROJECT.md left out; E6-c in its *State* cell only), said so on the PR.
 
 *Was (epoch 9):* "the PR's diff outside the manifest targets and `template-manifest.json` is T1–T5 of § 0.1 and nothing
 else"; "the stories' § 6 amended with entry 9.1 cited".
 
-## 16. Outside item 4.1's paths — found, NOT decided (each would be a counted change)
+## 16. Outside item 4.1's paths — found, and decided by the coordinator (2026-11-16): no change 10.1
 
-Found by the epoch-10 revision; the coordinator decides each before the PR. Adding any of them to this PR is a change of
-the parent's epoch 10 (entry 10.1, the first of the epoch: recorded, not a stop), per item 4.1 ("adding it is then a
-change of epoch 10 and counts"). Leaving one out is also a decision, said on the PR.
+Found by the epoch-10 revision. Adding any of them to this PR would have been a change of the parent's epoch 10 (entry
+10.1), per item 4.1. **The coordinator's decisions (2026-11-16):** (1) `.agents/PROJECT.md` is left OUT;
+`research/module_tests.md`, inside the named docs, carries the mount's `npm ci` line (§ 14); no 10.1. (2) Row E6-c is
+corrected in its *State* cell only, as § 14 writes it; no 10.1. (3) The stop-on-new-warning rule stands. (4) `main`'s
+failed ModelArms test (§ 2 item 7): the coordinator re-ran the failed job; not F42-c's scope. The PR says so. The
+findings below are kept as written before the decisions.
 
 1. **`.agents/PROJECT.md` § *Commands*** (the Opus review). The project's command list (`.agents/PROJECT.md:24-88` at
    `191ef77f` **[M]**, read; the build `:30-31`, the test runner `:33-39`) has the build and the test runner but no line that installs the mount's node dependencies,
