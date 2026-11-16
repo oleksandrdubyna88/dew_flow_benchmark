@@ -31,7 +31,7 @@
     <!-- Adopted after the spike (research/SPIKE_dotnet_eval_library.md): their evaluator/metric model,
          their stored result shape and their report writers. NOT their orchestration — the measurement key
          and the execution stay ours. .NLP is preview-only and stays out under the no-previews rule. -->
-    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.11.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation.Reporting" Version="10.10.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
