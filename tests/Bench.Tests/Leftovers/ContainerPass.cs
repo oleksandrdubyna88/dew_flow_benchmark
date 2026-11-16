@@ -300,7 +300,7 @@ public static class ContainerPass
             {
                 if (await CallAsync("inspect", InspectArgs([id]), "").ConfigureAwait(false) is not { } done) return null;
                 if (done.ExitCode == 0) rows.AddRange(ReadBatch(done.StandardOutput, [id]));
-                else if (done.StandardError.Contains("No such ", StringComparison.Ordinal)) _listed.Add($"notice: container {id[..12]} — it was gone before docker inspect could read it, ignored");
+                else if (done.StandardError.Contains("no such ", StringComparison.OrdinalIgnoreCase)) _listed.Add($"notice: container {id[..12]} — it was gone before docker inspect could read it, ignored");
                 else return Stopped(rows, id, done);
             }
 

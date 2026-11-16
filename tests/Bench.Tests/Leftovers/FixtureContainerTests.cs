@@ -604,7 +604,7 @@ internal static class DockerCli
         return attempt switch
         {
             ProcessAttempt.Completed { Result.ExitCode: 0 } => null,
-            ProcessAttempt.Completed gone when gone.Result.StandardError.Contains("No such ", StringComparison.Ordinal) => null,
+            ProcessAttempt.Completed gone when gone.Result.StandardError.Contains("no such ", StringComparison.OrdinalIgnoreCase) => null,
             ProcessAttempt.Completed failed => $"{resource}: docker {args[0]} exited {failed.Result.ExitCode}: {failed.Result.StandardError.Trim().Split('\n')[0]}",
             _ => $"{resource}: docker {args[0]} {attempt.Describe}",
         };
