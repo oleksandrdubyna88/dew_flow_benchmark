@@ -11,14 +11,14 @@ namespace Bench.Tests.Leftovers;
 /// owned folder that HOLDS a clone and its linked worktree: the folder is quarantined and removed by <c>Removal.Quietly</c> (<c>Directory.Delete</c>, recursive). These tests turn that reading into a run.
 /// <para>Every scenario plants in a PRIVATE root made by the class's <see cref="OwnedScope"/>, never in the machine's temp root, and calls <see cref="LeftoversSweep.Run"/> with the REAL
 /// kernel-owner key (<see cref="Scope.IsMine"/>), not the <c>_ =&gt; true</c> seam. Every <c>git</c> call is an argument array through <see cref="ProcessRunner"/>, never a shell string.</para>
-/// <para><b>Windows.</b> All three skip there: git marks its object files read-only and the copied <c>Removal</c> does not clear that flag on Windows, so neither the sweep nor the scope could
-/// remove the folder (by reading; the template-note N1 of the E6 S2 brief). Benchmark's CI has no Windows leg.</para>
+/// <para><b>Windows.</b> All three skip there because benchmark has no Windows leg: since the re-sync to mcp 53f65130 the copied <c>Removal</c> clears read-only files below a folder before the
+/// delete on Windows (N1, observed by mcp on windows-latest, run 43928795620), so read-only git objects no longer stop the removal; not observed in this repository.</para>
 /// </summary>
 public sealed class LeftoversSweepCase15Tests : IDisposable
 {
     private const string WindowsReason =
-        "git marks its object files read-only, and the copied Removal (Directory.Delete recursive) does not clear that flag on Windows, so neither the sweep nor the scope could remove the folder " +
-        "(by reading; coai's TempDir note measured it); benchmark's CI has no Windows leg";
+        "not run on Windows here: benchmark has no Windows leg. Since the re-sync to mcp 53f65130 the copied Removal clears read-only files below a folder before the delete on Windows " +
+        "(N1, observed by mcp on windows-latest, run 43928795620), so read-only git objects no longer stop the removal; not observed in this repository";
 
     private readonly OwnedScope _owned = DarwinLayout.FreshOwnedScope();
 

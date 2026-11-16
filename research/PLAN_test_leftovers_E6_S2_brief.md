@@ -1,6 +1,6 @@
 # E6.S2 brief — the adapted copy, the start-of-run sweep, the audit (rows E6-e, E6-c, E6-j)
 
-> Status: **plan only, nothing implemented yet, 2026-11-12.** The brief of story S2 of `todo/PLAN_test_leftovers_E6.md`.
+> Status: **IMPLEMENTED, 2026-11-12** (merged as #207 `84d4953e`; what shipped differently is § 21). *Was:* plan only, nothing implemented yet, 2026-11-12. The brief of story S2 of `todo/PLAN_test_leftovers_E6.md`.
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-12. Read-only inputs, all verified for this brief:
 > benchmark worktree `/home/jinx/git/wt/bench-e6-s2`, branch `feat/e6-s2-adapted-copy` at `239e078e`, mount
@@ -644,3 +644,21 @@ Round 1 on `a5531caa`: **proceed**, 2 of 2 reviewers, 4 findings, all accepted: 
 list (twelve files), the commit series, the coders' split and the done-when; `Before` never throws, a violation is recorded
 and G3 asserts none; `EndedAt` is set on every path of `Gate.Await()`; the coordinator's section is § 19 (it was a second
 § 17).
+
+## 21. Deviations at promotion — what shipped differently from this brief
+
+A status repair made by the F42-c promotion (2026-11-16), not a plan change. Checked: #207's PR body and § 19 of this brief; nothing
+else was re-read, so a deviation that only the code or the review threads show is not listed.
+
+- **A file outside S2's list:** `.gitattributes` got one `-text` line per copied file and the manifest (§ 19 item 1), so a
+  Windows checkout cannot change the bytes the diff check compares.
+- **The F31 pin was written in S2** (§ 19 item 2): `WindowsNewFileOwnerLimitTests`, which reads a new folder's owner SID directly and
+  skips off Windows and where the caller owns its new files.
+- **Case 15's RED was a mutation RED** (§ 19 item 3): a nested `.git` read as `other clone` and the `other clone` check removed, each
+  watched red by hand; **no start-of-run switch** was added (§ 19 item 4).
+- **Observed:** the manifest had 53 entries; commit 1 was RED with 53 of 56 red (the targets missing), commit 2 GREEN 56 of 56; the
+  Leftovers namespace 503 total, 479 passed, 24 skipped, 0 failed; the build 0 errors with one warning (`ASPIRE010`, the same on `main`);
+  the Node guard 209 before and after; the same 572 tests failed as on `main` without Docker.
+- **Five findings of code round 1 were in copied template files** and were not changed here (the copy stays the template's bytes, E6 D2): § 17's notes
+  N1–N5. F42-c later re-synced the copy to mcp `53f65130`, which fixed N1, N4 and N5 in the template.
+- **Coding:** one Opus brief writer and three Sonnet coders (A: copy and wiring; B: gate and race tests; C: case 15, `TempDir`, the F31 pin, CI, docs).

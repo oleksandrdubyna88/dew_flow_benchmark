@@ -22,6 +22,16 @@ jobs:
       # sweeper classifier), and a missing file FAILS them — an uninitialised submodule is a broken setup, not a clean one.
       - run: git submodule update --init --depth 1 .agents/conventions
 
+      # The leftovers tests run the mounted Node guard (LeftoversGuardDifferentialTests feeds it workflow rows), which needs
+      # Node 20 or later and reads a workflow only through the mount's `yaml` package: without it, YamlMissingError.
+      # `npm ci` installs the mount's lockfile exactly and never writes it; --ignore-scripts, because the install needs none.
+      - name: Node 20 or later, and the mounted conventions' node dependencies
+        working-directory: .agents/conventions
+        run: |
+          node --version
+          node -e "if (Number(process.versions.node.split('.')[0]) < 20) { console.error('node ' + process.version + ' is below 20'); process.exit(1); }"
+          npm ci --ignore-scripts
+
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
