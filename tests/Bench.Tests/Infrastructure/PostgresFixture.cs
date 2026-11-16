@@ -67,7 +67,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         // The container pass (plan D9): once per process, before this fixture's own container exists. It never fails the run.
-        ContainerPass.Once();
+        await ContainerPass.OnceAsync();
 
         // Again immediately before the build, outside the try: a setting switched off since construction is refused here, never reworded as "needs Docker".
         ContainerPass.RequireReaper(TestcontainersSettings.ResourceReaperEnabled);

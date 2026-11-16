@@ -8,8 +8,8 @@ namespace Bench.Tests.Leftovers;
 /// <summary>
 /// Scenario (7), E6 S3: no <c>.cs</c> file of the repository switches the Testcontainers reaper (Ryuk) off, in any spelling the guards miss. Neither guard reads
 /// <c>Environment.SetEnvironmentVariable(&lt;the name&gt;, "true")</c> (their <c>ryuk-off</c> wants a <c>:</c> or <c>=</c> after the name inside the text), so this test is that
-/// spelling's ONLY reader. Per line, after the string literals joined with <c>+</c> are joined (the text between a literal's closing quote, a <c>+</c> and the next literal's
-/// opening quote, <c>@</c> and <c>$</c> prefixes included, is removed), it is red on two forms: <b>(a)</b> the variable named, in any case, whole or assembled from split
+/// spelling's ONLY reader. Per FILE (not per line, so a join or an assignment that a formatter breaks over lines is read), after the string literals joined with <c>+</c> are joined (the text between a literal's closing quote, a <c>+</c> and the next literal's
+/// opening quote, <c>@</c> and <c>$</c> prefixes included, is removed, across line breaks too), it is red on two forms: <b>(a)</b> the variable named, in any case, whole or assembled from split
 /// literals; <b>(b)</b> an assignment of <c>false</c> to the setting that Testcontainers acts on (an equals sign that is not <c>==</c>, any whitespace around it, the
 /// <c>TestcontainersSettings.</c> qualifier optional).
 /// <para>
@@ -33,12 +33,36 @@ public sealed class ContainerRulesTests
 
     private static readonly Regex VariableNamed = new(Regex.Escape(ContainerPass.RyukVariable), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    /// <summary>The forms one line shows. Pure: the planted lines of the theory go through the same function as the repository's files.</summary>
-    internal static IReadOnlyList<string> FormsOf(string line)
+    /// <summary>The forms a file's text shows, each with the line (1-based, in the ORIGINAL text) where its match starts. Pure: the planted texts of the theory go through the same function as the repository's files.</summary>
+    internal static IReadOnlyList<(int Line, string Form)> ScanText(string text)
     {
-        var joined = JoinedLiterals.Replace(line, string.Empty);
-        return [.. new[] { VariableNamed.IsMatch(joined) ? VariableForm : null, SettingAssigned.IsMatch(joined) ? SettingForm : null }.OfType<string>()];
+        var (joined, removed) = JoinLiterals(text);
+        return [.. Matches(VariableNamed, joined, VariableForm, text, removed), .. Matches(SettingAssigned, joined, SettingForm, text, removed)];
     }
+
+    internal static IReadOnlyList<string> FormsOf(string text) => [.. ScanText(text).Select(finding => finding.Form)];
+
+    /// <summary>The text with every <c>"a" + "b"</c> joined to <c>"ab"</c>, and where the cuts were: (position in the joined text, length removed there).</summary>
+    private static (string Joined, List<(int At, int Length)> Removed) JoinLiterals(string text)
+    {
+        var joined = new System.Text.StringBuilder();
+        var removed = new List<(int At, int Length)>();
+        var from = 0;
+        foreach (Match cut in JoinedLiterals.Matches(text))
+        {
+            joined.Append(text, from, cut.Index - from);
+            removed.Add((joined.Length, cut.Length));
+            from = cut.Index + cut.Length;
+        }
+
+        joined.Append(text, from, text.Length - from);
+        return (joined.ToString(), removed);
+    }
+
+    private static IEnumerable<(int Line, string Form)> Matches(Regex pattern, string joined, string form, string original, List<(int At, int Length)> removed) =>
+        pattern.Matches(joined).Select(match => (LineOf(original, match.Index + removed.Where(cut => cut.At <= match.Index).Sum(cut => cut.Length)), form));
+
+    private static int LineOf(string text, int index) => 1 + text.AsSpan(0, Math.Min(index, text.Length)).Count('\n');
 
     [Fact]
     public void No_cs_file_switches_the_reaper_off()
@@ -74,6 +98,15 @@ public sealed class ContainerRulesTests
         FormsOf(line).Should().Equal(expected);
     }
 
+    [Fact]
+    public void A_finding_names_the_line_where_a_multi_line_match_starts()
+    {
+        var name = ContainerPass.RyukVariable;
+        var text = string.Concat("class C\n{\n    string x =\n        \"", name[..20], "\" +\n        \"", name[20..], "\";\n    bool y = true;\n    void M() => TestcontainersSettings.ResourceReaperEnabled\n        = false;\n}\n");
+
+        ScanText(text).Should().Equal([(4, VariableForm), (7, SettingForm)], "the variable's match starts on line 4 and the assignment's on line 7, in the original text");
+    }
+
     private static Dictionary<string, (string Line, string[] Forms)> Plants()
     {
         var name = ContainerPass.RyukVariable;
@@ -91,6 +124,10 @@ public sealed class ContainerRulesTests
             ["the setting assigned false"] = (string.Concat("TestcontainersSettings.", setting, " = false;"), [SettingForm]),
             ["the setting assigned false, no spaces"] = (string.Concat(setting, "=false"), [SettingForm]),
             ["the setting assigned false, unqualified, tabbed"] = (string.Concat("    ", setting, "\t=\tfalse;"), [SettingForm]),
+            ["two literals joined across a line break"] = (string.Concat("var x = \"", head, "\"", plus.TrimEnd(), "\n        \"", tail, "\";"), [VariableForm]),
+            ["a verbatim literal joined across a line break, the plus first"] = (string.Concat("var x = @\"", head, "\"\n            ", plus.TrimStart(), "@\"", tail, "\";"), [VariableForm]),
+            ["the setting assigned false across a line break"] = (string.Concat("TestcontainersSettings.", setting, " =\n    false;"), [SettingForm]),
+            ["the setting with the equals sign on the next line"] = (string.Concat("TestcontainersSettings.", setting, "\n    = false;"), [SettingForm]),
             ["the setting compared"] = (string.Concat("if (", setting, " == false)"), []),
             ["the setting compared with !="] = (string.Concat("if (", setting, " != false)"), []),
             ["the setting assigned true"] = (string.Concat("TestcontainersSettings.", setting, " = true;"), []),
@@ -109,7 +146,7 @@ public sealed class ContainerRulesTests
             .OrderBy(file => file.Relative, StringComparer.Ordinal)];
 
     private static IEnumerable<string> Findings(Source file) =>
-        File.ReadAllLines(file.Absolute).SelectMany((line, index) => FormsOf(line).Select(form => $"{file.Relative}:{index + 1} — {form}"));
+        ScanText(File.ReadAllText(file.Absolute)).Select(finding => $"{file.Relative}:{finding.Line} — {finding.Form}");
 
     private static HashSet<string> ManifestTargets()
     {

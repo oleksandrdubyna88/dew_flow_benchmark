@@ -17,9 +17,10 @@ namespace Bench.Tests.Leftovers;
 //
 // Benchmark's own file: it is not a manifest target (TheAdaptedCopyTests.BenchOwn).
 
-/// <summary>What one pass needs. <paramref name="Consider"/> is a TEST seam (which captured ids may be judged); the real run never sets it.</summary>
+/// <summary>What one pass needs. <paramref name="Consider"/> is a TEST seam (which captured ids may be judged); the real run never sets it.
+/// <paramref name="Progress"/> receives the lines said while the pass is still removing (more than a handful of containers): the real run writes them to stderr.</summary>
 public sealed record ContainerPassOptions(
-    string Docker, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, TimeSpan CallTimeout, Func<string, bool>? Consider = null);
+    string Docker, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, TimeSpan CallTimeout, Func<string, bool>? Consider = null, Action<string>? Progress = null);
 
 /// <summary>One line of <c>docker inspect</c>, read: the full id, the name (null when it cannot be read), the owner label (null when it cannot be
 /// read) and the creation time to whole seconds, UTC (null when it cannot be read).</summary>
@@ -78,18 +79,24 @@ public static class ContainerPass
     /// <summary>Plan D9: ids per <c>docker inspect</c>.</summary>
     public const int MaxBatch = 100;
 
+    /// <summary>Removals in flight at once; each call keeps its own timeout, so a stuck daemon costs one timeout per wave, never one per container.</summary>
+    public const int MaxRemovalsAtOnce = 4;
+
+    /// <summary>More removals than this: the pass says how far it is while it runs.</summary>
+    public const int ProgressAbove = 5;
+
     /// <summary>The Ryuk switch's name, assembled once and with no <c>+</c> between literals: the source test over every <c>.cs</c> (scenario (7)) reads a name joined with <c>+</c> as a switch.</summary>
     public static string RyukVariable { get; } = string.Concat("TESTCONTAINERS", "_RYUK", "_DISABLED");
 
     private static readonly Gate Shared = new(RealPass);
 
-    public static ContainerPassOptions Real(DateTimeOffset now) => new("docker", now, LeftoversSweep.MinAge, Liveness.ProbeProcess, CallTimeout);
+    public static ContainerPassOptions Real(DateTimeOffset now) => new("docker", now, LeftoversSweep.MinAge, Liveness.ProbeProcess, CallTimeout, Progress: SayProgress);
 
     /// <summary>How many times the real pass ran in this process: 1 after any fixture started.</summary>
     public static int Runs => Shared.Runs;
 
-    /// <summary>The once-per-process pass (D9). The first caller runs it and prints its report; every other caller waits for the same result. Never throws.</summary>
-    public static SweepResult Once() => Shared.Await();
+    /// <summary>The once-per-process pass (D9). The first caller starts it and it prints its report; every other caller awaits the same task. Never throws, and blocks no thread while docker answers.</summary>
+    public static Task<SweepResult> OnceAsync() => Shared.AwaitAsync();
 
     internal static IReadOnlyList<string> ListArgs => ["ps", "-a", "-q", "--no-trunc", "--filter", "label=" + LabelKey];
 
@@ -111,12 +118,12 @@ public static class ContainerPass
     }
 
     /// <summary>Run one pass. Never throws: every failure is one line of the result.</summary>
-    public static SweepResult Run(ContainerPassOptions options)
+    public static async Task<SweepResult> RunAsync(ContainerPassOptions options)
     {
         var pass = new Pass(options);
         try
         {
-            pass.Go();
+            await pass.GoAsync().ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -125,6 +132,9 @@ public static class ContainerPass
 
         return pass.Result();
     }
+
+    /// <summary>The same pass for a synchronous caller (the tests): the wait is off the caller's context. The fixture never uses this; it awaits <see cref="OnceAsync"/>.</summary>
+    public static SweepResult Run(ContainerPassOptions options) => Task.Run(() => RunAsync(options)).GetAwaiter().GetResult();
 
     /// <summary>The decision for one container (§5.2 of the brief), in this order: name, form, repository, age, record, liveness.</summary>
     internal static ContainerVerdict Judge(ContainerRow row, ContainerPassOptions options) =>
@@ -138,11 +148,15 @@ public static class ContainerPass
             };
 
     private static ContainerVerdict JudgeOwned(ContainerRow row, string name, string owner, ContainerPassOptions options) =>
-        !Owned.Pattern().IsMatch(name) ? new ContainerVerdict.List($"foreign: container {name} ({row.ShortId}) — another owner's or another repository's")
-        : row.Created is not { } created ? new ContainerVerdict.Keep(row, "unknown age")
+        Owned.Pattern().IsMatch(name) ? JudgeAge(row, owner, options) : new ContainerVerdict.List($"foreign: container {name} ({row.ShortId}) — another owner's or another repository's");
+
+    private static ContainerVerdict JudgeAge(ContainerRow row, string owner, ContainerPassOptions options) =>
+        row.Created is not { } created ? new ContainerVerdict.Keep(row, "unknown age")
         : options.Now - created < options.MinAge ? new ContainerVerdict.Keep(row, "young")
-        : row.Label is null || Owner.Parse(row.Label) is not { } record ? new ContainerVerdict.Keep(row, "unreadable record")
-        : JudgeLiveness(row, record, owner, options);
+        : JudgeRecord(row, owner, options);
+
+    private static ContainerVerdict JudgeRecord(ContainerRow row, string owner, ContainerPassOptions options) =>
+        row.Label is null || Owner.Parse(row.Label) is not { } record ? new ContainerVerdict.Keep(row, "unreadable record") : JudgeLiveness(row, record, owner, options);
 
     // KernelMine stays null: a daemon object has no kernel owner, its label is its only evidence (rule §3).
     private static ContainerVerdict JudgeLiveness(ContainerRow row, Owner record, string nameOwner, ContainerPassOptions options) =>
@@ -158,11 +172,23 @@ public static class ContainerPass
     /// <summary>A text cut to its first line, its control characters turned into <c>?</c>: one line of the report, whatever the daemon printed.</summary>
     private static string FirstLine(string text) => ControlCharacters.Replace(text.Split('\n')[0].TrimEnd('\r'), "?");
 
-    private static SweepResult RealPass()
+    private static async Task<SweepResult> RealPass()
     {
-        var result = Run(Real(DateTimeOffset.UtcNow));
+        var result = await RunAsync(Real(DateTimeOffset.UtcNow)).ConfigureAwait(false);
         Report(result);
         return result;
+    }
+
+    private static void SayProgress(string line)
+    {
+        try
+        {
+            Console.Error.WriteLine(line);
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // A progress line that cannot be written is not a reason to fail the run.
+        }
     }
 
     /// <summary>The folder sweep's shape (<c>LeftoversSweepFixture</c>): a header, the listed lines, the preserved ones with their reason, the errors. Nothing when the result is empty.</summary>
@@ -182,28 +208,28 @@ public static class ContainerPass
         }
     }
 
-    /// <summary>The once-per-process gate as a seam: the real one runs <see cref="Run"/>; a test passes a counting pass. The factory catches everything, as
-    /// <c>StartOfRunSweep.Gate</c> does: a cached exception would fail every later fixture of the process.</summary>
+    /// <summary>The once-per-process gate as a seam: the real one runs <see cref="RunAsync"/>; a test passes a counting pass. The factory catches everything, as
+    /// <c>StartOfRunSweep.Gate</c> does: a cached exception would fail every later fixture of the process. The lazy holds the TASK, so the pass starts once and every caller awaits it.</summary>
     internal sealed class Gate
     {
-        private readonly Lazy<SweepResult> _once;
+        private readonly Lazy<Task<SweepResult>> _once;
         private int _runs;
 
-        internal Gate(Func<SweepResult> pass)
+        internal Gate(Func<Task<SweepResult>> pass)
         {
-            _once = new Lazy<SweepResult>(() => Once(pass), LazyThreadSafetyMode.ExecutionAndPublication);
+            _once = new Lazy<Task<SweepResult>>(() => Once(pass), LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
-        internal SweepResult Await() => _once.Value;
+        internal Task<SweepResult> AwaitAsync() => _once.Value;
 
         internal int Runs => Volatile.Read(ref _runs);
 
-        private SweepResult Once(Func<SweepResult> pass)
+        private async Task<SweepResult> Once(Func<Task<SweepResult>> pass)
         {
             Interlocked.Increment(ref _runs);
             try
             {
-                return pass();
+                return await pass().ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -214,46 +240,77 @@ public static class ContainerPass
 
     private sealed class Pass(ContainerPassOptions options)
     {
+        private readonly object _sync = new();
         private readonly List<string> _removed = [];
         private readonly List<(string Path, string Reason)> _preserved = [];
         private readonly List<string> _listed = [];
         private readonly List<string> _errors = [];
-        private bool _halted;
+        private volatile bool _halted;
 
         internal SweepResult Result() => new(_removed, _preserved, _listed, _errors);
 
-        internal void Error(string line) => _errors.Add(line);
-
-        internal void Go()
+        internal void Error(string line)
         {
-            if (List() is not { Count: > 0 } ids) return;
-            if (Inspect(ids) is not { } rows) return;
+            lock (_sync) _errors.Add(line);
+        }
+
+        internal async Task GoAsync()
+        {
+            if (await ListAsync().ConfigureAwait(false) is not { Count: > 0 } ids) return;
+            if (await InspectAsync(ids).ConfigureAwait(false) is not { } rows) return;
             var removals = new List<ContainerRow>();
             foreach (var row in rows.Where(Considered)) Sort(ContainerPass.Judge(row, options), removals);
-            removals.ForEach(Remove);
+            await RemoveAllAsync(removals).ConfigureAwait(false);
         }
 
         private bool Considered(ContainerRow row) => options.Consider?.Invoke(row.Id) ?? true;
 
-        private List<string>? List()
+        private async Task<List<string>?> ListAsync()
         {
-            if (Call("ps", ListArgs) is not { } done) return null;
-            if (done.ExitCode != 0) return Failed<string>("ps", done, "");
+            if (await CallAsync("ps", ListArgs, "").ConfigureAwait(false) is not { } done) return null;
+            if (done.ExitCode != 0) return Refused<string>("ps", done);
             var lines = done.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             _listed.AddRange(lines.Where(line => !ContainerRow.IsFullId(line)).Select(_ => "notice: docker ps printed a line that is not a container id, ignored"));
             return [.. lines.Where(ContainerRow.IsFullId).Distinct()];
         }
 
-        private List<ContainerRow>? Inspect(List<string> ids)
+        private async Task<List<ContainerRow>?> InspectAsync(List<string> ids)
         {
             var rows = new List<ContainerRow>();
             foreach (var batch in ids.Chunk(MaxBatch))
             {
-                if (Call("inspect", InspectArgs(batch)) is not { } done) return null;
-                if (done.ExitCode != 0) return Failed<ContainerRow>("inspect", done, " — nothing removed");
-                rows.AddRange(ReadBatch(done.StandardOutput, batch));
+                if (await InspectBatchAsync(batch).ConfigureAwait(false) is not { } read) return null;
+                rows.AddRange(read);
             }
 
+            return rows;
+        }
+
+        /// <summary>One batch. A batch that exits non-zero is usually an id that vanished between <c>ps</c> and <c>inspect</c> (the daemon fails the whole call): it is read again one id at a time, so the others are still judged.</summary>
+        private async Task<List<ContainerRow>?> InspectBatchAsync(string[] batch)
+        {
+            if (await CallAsync("inspect", InspectArgs(batch), "").ConfigureAwait(false) is not { } done) return null;
+            return done.ExitCode == 0 ? ReadBatch(done.StandardOutput, batch) : await InspectOneByOneAsync(batch).ConfigureAwait(false);
+        }
+
+        private async Task<List<ContainerRow>?> InspectOneByOneAsync(string[] batch)
+        {
+            var rows = new List<ContainerRow>();
+            foreach (var id in batch)
+            {
+                if (await CallAsync("inspect", InspectArgs([id]), "").ConfigureAwait(false) is not { } done) return null;
+                if (done.ExitCode == 0) rows.AddRange(ReadBatch(done.StandardOutput, [id]));
+                else if (done.StandardError.Contains("No such ", StringComparison.Ordinal)) _listed.Add($"notice: container {id[..12]} — it was gone before docker inspect could read it, ignored");
+                else return Stopped(rows, id, done);
+            }
+
+            return rows;
+        }
+
+        /// <summary>The daemon refused a read that is not a vanished id: the rest of the batch is left alone, what was read stays.</summary>
+        private List<ContainerRow> Stopped(List<ContainerRow> rows, string id, ProcessResult done)
+        {
+            Error($"containers: docker inspect {id[..12]} failed (exit {done.ExitCode}): {FirstLine(done.StandardError)} — the rest of this batch is left alone");
             return rows;
         }
 
@@ -283,40 +340,77 @@ public static class ContainerPass
             }
         }
 
-        private void Remove(ContainerRow row)
+        /// <summary>Removes by captured id, at most <see cref="MaxRemovalsAtOnce"/> at a time, each call under its own timeout. The result lists what was removed in the order the rows were judged.</summary>
+        private async Task RemoveAllAsync(List<ContainerRow> removals)
         {
-            if (Call("rm", RemoveArgs(row.Id)) is not { } done) return;
-            if (done.ExitCode == 0) _removed.Add(Label(row));
-            else _errors.Add($"containers: docker rm {row.ShortId} failed (exit {done.ExitCode}): {FirstLine(done.StandardError)}");
+            if (removals.Count == 0) return;
+            if (removals.Count > ProgressAbove) options.Progress?.Invoke($"{OwnedToken.RepoToken} tests: containers — removing {removals.Count} containers of dead owners, {MaxRemovalsAtOnce} at a time");
+            using var slots = new SemaphoreSlim(MaxRemovalsAtOnce);
+            var outcomes = new RemovalOutcome[removals.Count];
+            var finished = 0;
+            await Task.WhenAll(removals.Select(async (row, index) =>
+            {
+                await slots.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    outcomes[index] = await RemoveOneAsync(row).ConfigureAwait(false);
+                    var count = Interlocked.Increment(ref finished);
+                    if (removals.Count > ProgressAbove && count % 10 == 0) options.Progress?.Invoke($"{OwnedToken.RepoToken} tests: containers — {count} of {removals.Count} removals finished");
+                }
+                finally
+                {
+                    slots.Release();
+                }
+            })).ConfigureAwait(false);
+            Settle(removals, outcomes);
+        }
+
+        private enum RemovalState { NotRun, Removed, Failed }
+
+        private readonly record struct RemovalOutcome(RemovalState State, string Line);
+
+        private async Task<RemovalOutcome> RemoveOneAsync(ContainerRow row)
+        {
+            if (await CallAsync("rm", RemoveArgs(row.Id), row.Id).ConfigureAwait(false) is not { } done) return new RemovalOutcome(RemovalState.NotRun, "");
+            return done.ExitCode == 0
+                ? new RemovalOutcome(RemovalState.Removed, "")
+                : new RemovalOutcome(RemovalState.Failed, $"containers: docker rm {row.ShortId} failed (exit {done.ExitCode}): {FirstLine(done.StandardError)}");
+        }
+
+        private readonly HashSet<string> _unknown = [];
+
+        /// <summary>Records the outcomes in the order the rows were judged. A removal that timed out is NOT known to have failed: the line says its outcome is unknown and how many removals are confirmed.</summary>
+        private void Settle(List<ContainerRow> removals, RemovalOutcome[] outcomes)
+        {
+            _removed.AddRange(removals.Where((_, i) => outcomes[i].State == RemovalState.Removed).Select(Label));
+            _errors.AddRange(outcomes.Where(o => o.State == RemovalState.Failed).Select(o => o.Line));
+            if (_unknown.Count == 0) return;
+            _errors.Add($"containers: docker rm timed out after {options.CallTimeout.TotalSeconds:0.#}s for {string.Join(", ", removals.Where(r => _unknown.Contains(r.Id)).Select(r => r.ShortId))} — outcome unknown; {_removed.Count} removal(s) confirmed");
         }
 
         private static string Label(ContainerRow row) => $"container {row.Name} ({row.ShortId})";
 
         /// <summary>The one error line of a call that exited non-zero; the pass goes no further (null stands for "no result").</summary>
-        private List<T>? Failed<T>(string verb, ProcessResult done, string tail)
+        private List<T>? Refused<T>(string verb, ProcessResult done)
         {
-            _errors.Add($"containers: docker {verb} failed (exit {done.ExitCode}): {FirstLine(done.StandardError)}{tail}");
+            Error($"containers: docker {verb} failed (exit {done.ExitCode}): {FirstLine(done.StandardError)}");
             return null;
         }
 
-        /// <summary>One docker call. Null when the pass must go no further: the notice or the error line is already written.</summary>
-        private ProcessResult? Call(string verb, IReadOnlyList<string> args)
+        /// <summary>One docker call. Null when the call gave no answer: the notice or the error line is written (or, for a removal, the id is noted as unknown) and no further call is started.</summary>
+        private async Task<ProcessResult?> CallAsync(string verb, IReadOnlyList<string> args, string what)
         {
             if (_halted) return null;
-            var attempt = Task.Run(() => ProcessRunner.RunAsync(options.Docker, args, AppContext.BaseDirectory, options.CallTimeout, CancellationToken.None)).GetAwaiter().GetResult();
-            switch (attempt)
+            var attempt = await ProcessRunner.RunAsync(options.Docker, args, AppContext.BaseDirectory, options.CallTimeout, CancellationToken.None).ConfigureAwait(false);
+            if (attempt is ProcessAttempt.Completed completed) return completed.Result;
+            lock (_sync)
             {
-                case ProcessAttempt.Completed completed:
-                    return completed.Result;
-                case ProcessAttempt.NotFound notFound:
-                    _listed.Add($"notice: containers not swept — {notFound.Describe}");
-                    break;
-                default:
-                    _errors.Add($"containers: docker {verb} timed out after {options.CallTimeout.TotalSeconds:0.#}s — nothing removed");
-                    break;
+                _halted = true;
+                if (attempt is ProcessAttempt.NotFound notFound) _listed.Add($"notice: containers not swept — {notFound.Describe}");
+                else if (verb == "rm") _unknown.Add(what);
+                else _errors.Add($"containers: docker {verb} timed out after {options.CallTimeout.TotalSeconds:0.#}s — nothing removed");
             }
 
-            _halted = true;
             return null;
         }
     }

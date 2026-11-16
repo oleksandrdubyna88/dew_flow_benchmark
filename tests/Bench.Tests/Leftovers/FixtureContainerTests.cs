@@ -112,7 +112,7 @@ public sealed class FixtureContainerTests
         }
         finally
         {
-            await DockerCli.CleanUp(id, volumes);
+            await DockerCli.CleanUp(id, volumes, null);
         }
     }
 
@@ -182,18 +182,18 @@ public sealed class FixtureContainerTests
     public async Task TheGate_runs_its_pass_once_for_eight_callers()
     {
         var runs = 0;
-        var gate = new ContainerPass.Gate(() =>
+        var gate = new ContainerPass.Gate(async () =>
         {
             Interlocked.Increment(ref runs);
-            Thread.Sleep(200);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
             return new SweepResult([], [], ["counted"], []);
         });
         using var start = new ManualResetEventSlim();
 
-        var callers = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        var callers = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
         {
             start.Wait();
-            return gate.Await();
+            return await gate.AwaitAsync();
         })).ToArray();
         start.Set();
         var results = await Task.WhenAll(callers).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
@@ -204,12 +204,12 @@ public sealed class FixtureContainerTests
     }
 
     [Fact]
-    public void TheGate_caches_a_pass_that_throws_as_one_error_line_and_never_throws()
+    public async Task TheGate_caches_a_pass_that_throws_as_one_error_line_and_never_throws()
     {
         var gate = new ContainerPass.Gate(() => throw new InvalidOperationException("boom\nsecond line"));
 
-        var first = gate.Await();
-        var second = gate.Await();
+        var first = await gate.AwaitAsync();
+        var second = await gate.AwaitAsync();
 
         first.Errors.Should().Equal("containers: failed: boom");
         second.Should().BeSameAs(first, "a cached exception would fail every later fixture of the process");
@@ -237,6 +237,7 @@ public sealed class FixtureContainerTests
         var drained = Task.WhenAll(child.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken), child.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken));
         string? id = null;
         IReadOnlyList<string> volumes = [];
+        Exception? failed = null;
         try
         {
             id = await WaitForChildContainerAsync(dir.At("child.txt"), child);
@@ -255,6 +256,11 @@ public sealed class FixtureContainerTests
             volumesGone.Should().NotBeNull($"Ryuk must remove the volumes {string.Join(", ", volumes)} of the killed child's container within 120 s");
             TestContext.Current.AddWarning($"the killed child's volumes were gone after {volumesGone!.Value.TotalSeconds:0} s");
         }
+        catch (Exception ex)
+        {
+            failed = ex;
+            throw;
+        }
         finally
         {
             if (!child.HasExited) child.Kill(entireProcessTree: true);
@@ -267,7 +273,7 @@ public sealed class FixtureContainerTests
                 // The killed child's pipes are not read to their end; nothing depends on them.
             }
 
-            if (id is not null) await DockerCli.CleanUp(id, volumes);
+            if (id is not null) await DockerCli.CleanUp(id, volumes, failed);
         }
     }
 
@@ -289,22 +295,31 @@ public sealed class FixtureContainerTests
     {
         DockerGate.Require();
         var fixture = new PostgresFixture();
-        await fixture.InitializeAsync();
-        var id = fixture.ContainerId;
+        string? id = null;
+        Exception? failed = null;
         try
         {
-            var fields = (await DockerCli.Format(id, "{{.Name}}\t{{index .Config.Labels \"" + ContainerPass.LabelKey + "\"}}\t{{index .Config.Labels \"org.testcontainers.reuse-hash\"}}")).Split('\t');
+            await fixture.InitializeAsync();
+            id = fixture.ContainerId;
+            // The last field is a sentinel: the runner trims its output, and an empty reuse-hash value at the very end would lose its tab.
+            var fields = (await DockerCli.Format(id, "{{.Name}}\t{{index .Config.Labels \"" + ContainerPass.LabelKey + "\"}}\t{{index .Config.Labels \"org.testcontainers.reuse-hash\"}}\tend")).Split('\t');
 
-            fields.Should().HaveCount(3);
+            fields.Should().HaveCount(4);
+            fields[3].Should().Be("end");
             fields[0].TrimStart('/').Should().Be(fixture.ContainerName, "the container carries the name the fixture chose before it started");
             Owned.FullName().IsMatch(fields[0].TrimStart('/')).Should().BeTrue("an owner-form name of this user and this repository");
             fields[1].Should().Be(Owner.RunRecord().Format(), "the label is the owner record the container pass reads");
             fields[2].Should().BeEmpty("reuse is never set: Testcontainers writes its reuse-hash label only for a reused container");
         }
+        catch (Exception ex)
+        {
+            failed = ex;
+            throw;
+        }
         finally
         {
             await fixture.DisposeAsync();
-            await DockerCli.CleanUp(id, []);
+            await DockerCli.CleanUp(id ?? fixture.ContainerName, [], failed);
         }
     }
 
@@ -315,6 +330,7 @@ public sealed class FixtureContainerTests
         var pid = UnmatchablePid.Next();
         UnmatchablePid.AssertNoSuchProcess(pid);
         var made = new List<string>();
+        Exception? failed = null;
         try
         {
             var dead = await DockerCli.Create(Owned.NameFor("pass-dead"), (Owner.This with { Pid = pid }).Format());
@@ -335,9 +351,14 @@ public sealed class FixtureContainerTests
             (await DockerCli.ContainerIds(live)).Should().ContainSingle("a live owner's container is kept");
             string.Join('\n', result.Listed.Concat(result.Preserved.Select(kept => kept.Path)).Concat(result.Removed)).Should().NotContain(bare[..12], "a container with no owner label is never listed by the label filter");
         }
+        catch (Exception ex)
+        {
+            failed = ex;
+            throw;
+        }
         finally
         {
-            foreach (var id in made) await DockerCli.CleanUp(id, []);
+            foreach (var id in made) await DockerCli.CleanUp(id, [], failed);
         }
     }
 
@@ -346,20 +367,29 @@ public sealed class FixtureContainerTests
     {
         DockerGate.Require();
         var fixture = new PostgresFixture(builder => builder.WithReuse(true));
-        await fixture.InitializeAsync();
-        var id = fixture.ContainerId;
-        var volumes = await DockerCli.VolumesOf(id);
+        string? id = null;
+        IReadOnlyList<string> volumes = [];
+        Exception? failed = null;
         try
         {
+            await fixture.InitializeAsync();
+            id = fixture.ContainerId;
+            volumes = await DockerCli.VolumesOf(id);
             await fixture.DisposeAsync();
 
             var survivors = await DockerCli.Survivors(id, volumes, TimeSpan.FromSeconds(10));
 
             survivors.Should().NotBeEmpty("a container started with reuse is not removed by disposal (Testcontainers: enabling reuse disables the reaper), so the disposal check of the next test sees it: reuse cannot hide");
         }
+        catch (Exception ex)
+        {
+            failed = ex;
+            throw;
+        }
         finally
         {
-            await DockerCli.CleanUp(id, volumes);
+            // A reused container is not tracked by Ryuk: it is removed here by its id, or by its name when the start failed after the container existed.
+            await DockerCli.CleanUp(id ?? fixture.ContainerName, volumes, failed);
         }
     }
 
@@ -368,11 +398,13 @@ public sealed class FixtureContainerTests
     {
         DockerGate.Require();
         var fixture = new PostgresFixture();
-        await fixture.InitializeAsync();
-        var id = fixture.ContainerId;
+        string? id = null;
         IReadOnlyList<string> volumes = [];
+        Exception? failed = null;
         try
         {
+            await fixture.InitializeAsync();
+            id = fixture.ContainerId;
             await fixture.NewEmptyDatabaseAsync("e6s3_" + Guid.NewGuid().ToString("N")[..12]);
             (await DockerCli.ContainerIds(id)).Should().ContainSingle("the container is there before disposal");
             volumes = await DockerCli.VolumesOf(id);
@@ -383,9 +415,14 @@ public sealed class FixtureContainerTests
 
             (await DockerCli.Survivors(id, volumes, TimeSpan.FromSeconds(30))).Should().BeEmpty("disposal removes the container, its databases and its volumes");
         }
+        catch (Exception ex)
+        {
+            failed = ex;
+            throw;
+        }
         finally
         {
-            await DockerCli.CleanUp(id, volumes);
+            await DockerCli.CleanUp(id ?? fixture.ContainerName, volumes, failed);
         }
     }
 
@@ -497,7 +534,7 @@ internal static class DockerCli
 
     internal static Task<List<string>> ContainerIds(string id) => Lines("ps", "-a", "-q", "--no-trunc", "--filter", "id=" + id);
 
-    internal static Task<List<string>> ListedVolumes() => Lines("volume", "ls", "-q", "--no-trunc");
+    internal static Task<List<string>> ListedVolumes() => Lines("volume", "ls", "-q");
 
     internal static async Task<List<string>> VolumesOf(string id) =>
         await Lines("inspect", "--type", "container", "--format", "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{println}}{{end}}{{end}}", id);
@@ -536,22 +573,40 @@ internal static class DockerCli
         }
     }
 
-    /// <summary>Removes by the captured id and the captured volume names, whatever is still there. Never throws: a proof's own failure must not be replaced by its cleanup's.</summary>
-    internal static async Task CleanUp(string id, IReadOnlyList<string> volumes)
+    /// <summary>Removes by the captured id (or the container's name, when the start failed before an id was known) and the captured volume names. A resource that is already gone is clean; any other
+    /// non-zero exit, a timeout or a missing docker is a cleanup failure naming the resource: a warning, and a thrown error unless the proof itself already failed (<paramref name="failed"/>), whose exception must not be replaced.</summary>
+    internal static async Task CleanUp(string reference, IReadOnlyList<string> volumes, Exception? failed)
     {
-        await Try("rm", "-f", "-v", id);
-        foreach (var volume in volumes) await Try("volume", "rm", volume);
+        var left = new List<string>();
+        if (await Try("container " + reference, "rm", "-f", "-v", reference) is { } container) left.Add(container);
+        foreach (var volume in volumes)
+        {
+            if (await Try("volume " + volume, "volume", "rm", volume) is { } survivor) left.Add(survivor);
+        }
+
+        foreach (var line in left) TestContext.Current.AddWarning("CLEANUP FAILED: " + line);
+        if (left.Count > 0 && failed is null) throw new InvalidOperationException("cleanup failed, the daemon may still hold: " + string.Join("; ", left));
     }
 
-    private static async Task Try(params string[] args)
+    /// <summary>Null when the call removed the resource or it was already gone; otherwise the one line that names the resource and what went wrong.</summary>
+    private static async Task<string?> Try(string resource, params string[] args)
     {
+        ProcessAttempt attempt;
         try
         {
-            await ProcessRunner.RunAsync("docker", args, AppContext.BaseDirectory, Call, CancellationToken.None);
+            attempt = await ProcessRunner.RunAsync("docker", args, AppContext.BaseDirectory, Call, CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            TestContext.Current.AddWarning($"cleanup: docker {args[0]} failed: {ex.Message}");
+            return $"{resource}: docker {args[0]} threw {ex.Message}";
         }
+
+        return attempt switch
+        {
+            ProcessAttempt.Completed { Result.ExitCode: 0 } => null,
+            ProcessAttempt.Completed gone when gone.Result.StandardError.Contains("No such ", StringComparison.Ordinal) => null,
+            ProcessAttempt.Completed failed => $"{resource}: docker {args[0]} exited {failed.Result.ExitCode}: {failed.Result.StandardError.Trim().Split('\n')[0]}",
+            _ => $"{resource}: docker {args[0]} {attempt.Describe}",
+        };
     }
 }

@@ -117,7 +117,7 @@ public sealed class ContainerPassTests
         result.Count.Should().Be(0);
     }
 
-    public static TheoryData<string> SoftFailures() => new() { "ps_exit", "ps_timeout", "inspect_exit", "rm_exit", "an_exception", "a_row_that_cannot_be_read" };
+    public static TheoryData<string> SoftFailures() => new() { "ps_exit", "ps_timeout", "inspect_exit", "an_id_that_vanished", "rm_exit", "rm_timeout", "an_exception", "a_row_that_cannot_be_read" };
 
     [Theory]
     [MemberData(nameof(SoftFailures))]
@@ -128,12 +128,15 @@ public sealed class ContainerPassTests
         var old = now - TimeSpan.FromHours(1);
         var deadRows = new[] { Row(Id(1), Mine("pg-one"), DeadRecord(), old), Row(Id(2), Mine("pg-two"), DeadRecord(), old) };
         var rows = deadRows.ToDictionary(r => r.Id, r => r.Line);
+        var third = Row(Id(3), Mine("pg-three"), DeadRecord(), old);
         using var dir = TempDir.For("fake-docker");
         var (scenario, options) = failure switch
         {
             "ps_exit" => (new Scenario(new PsPlan("", "boom\nsecond line", 3), rows), Options("", now)),
             "ps_timeout" => (new Scenario(new PsPlan("", "", 0, 30_000), rows), Options("", now) with { CallTimeout = TimeSpan.FromSeconds(2) }),
             "inspect_exit" => (new Scenario(new PsPlan(Lines(deadRows)), rows, InspectExit: 1), Options("", now)),
+            "an_id_that_vanished" => (new Scenario(new PsPlan(Lines([deadRows[0], third, deadRows[1]])), rows), Options("", now)),
+            "rm_timeout" => (new Scenario(new PsPlan(Lines(deadRows)), rows, RmSleep: new() { [Id(1)] = 30_000 }), Options("", now) with { CallTimeout = TimeSpan.FromSeconds(2) }),
             "rm_exit" => (new Scenario(new PsPlan(Lines(deadRows)), rows, RmExit: new() { [Id(1)] = 1 }), Options("", now)),
             "an_exception" => (new Scenario(new PsPlan(Lines(deadRows)), rows), Options("", now) with { Consider = _ => throw new InvalidOperationException("planted\nsecond line") }),
             _ => (new Scenario(new PsPlan(Lines(deadRows)), new Dictionary<string, string> { [Id(1)] = "not four fields", [Id(2)] = deadRows[1].Line }), Options("", now)),
@@ -155,8 +158,18 @@ public sealed class ContainerPassTests
                 result.Errors.Should().Equal("containers: docker ps timed out after 2s — nothing removed");
                 break;
             case "inspect_exit":
-                result.Errors.Should().Equal("containers: docker inspect failed (exit 1): Error: inspect refused — nothing removed");
-                calls.Should().Equal("ps", "inspect").And.NotContain("rm");
+                result.Errors.Should().Equal($"containers: docker inspect {Id(1)[..12]} failed (exit 1): Error: inspect refused — the rest of this batch is left alone");
+                calls.Should().Equal("ps", "inspect", "inspect").And.NotContain("rm");
+                break;
+            case "an_id_that_vanished":
+                calls.Should().Equal("ps", "inspect", "inspect", "inspect", "inspect", "rm", "rm");
+                result.Errors.Should().BeEmpty("one id that vanished between ps and inspect does not drop the pass");
+                result.Listed.Should().Equal($"notice: container {Id(3)[..12]} — it was gone before docker inspect could read it, ignored");
+                result.Removed.Should().Equal([$"container {Mine("pg-one")} ({Id(1)[..12]})", $"container {Mine("pg-two")} ({Id(2)[..12]})"], "the others are still judged and removed");
+                break;
+            case "rm_timeout":
+                result.Errors.Should().Equal($"containers: docker rm timed out after 2s for {Id(1)[..12]} — outcome unknown; 1 removal(s) confirmed");
+                result.Removed.Should().Equal([$"container {Mine("pg-two")} ({Id(2)[..12]})"]);
                 break;
             case "rm_exit":
                 result.Errors.Should().Equal($"containers: docker rm {Id(1)[..12]} failed (exit 1): Error: cannot remove {Id(1)}");
@@ -171,6 +184,24 @@ public sealed class ContainerPassTests
                 result.Removed.Should().Equal([$"container {Mine("pg-two")} ({Id(2)[..12]})"]);
                 break;
         }
+    }
+
+    [Fact]
+    public void TheRemovals_run_at_most_four_at_a_time_and_the_pass_says_how_far_it_is()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), ShebangReason);
+        var now = DateTimeOffset.UtcNow;
+        var rows = Enumerable.Range(1, 9).Select(i => Row(Id(i), Mine("pg-d" + i), DeadRecord(), now - TimeSpan.FromHours(1))).ToArray();
+        using var dir = TempDir.For("fake-docker");
+        var docker = FakeDocker.Write(dir, new Scenario(new PsPlan(Lines(rows)), rows.ToDictionary(r => r.Id, r => r.Line), RmSleepMs: 700));
+        var said = new List<string>();
+
+        var result = ContainerPass.Run(Options(docker, now) with { Progress = said.Add });
+
+        result.Removed.Should().HaveCount(9, "every dead owner's container goes");
+        result.Removed.Should().Equal(rows.Select((r, i) => $"container {Mine("pg-d" + (i + 1))} ({r.Id[..12]})"), "in the order the rows were judged, whatever order the calls ended in");
+        FakeDocker.MostAtOnce(dir).Should().BeInRange(2, ContainerPass.MaxRemovalsAtOnce, "bounded concurrency: more than one at a time, never more than four");
+        said.Should().Contain(line => line.Contains("removing 9 containers of dead owners, 4 at a time", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -212,7 +243,7 @@ public sealed class ContainerPassTests
     private static ContainerPassOptions Options(string docker, DateTimeOffset now) =>
         new(docker, now, LeftoversSweep.MinAge, Liveness.ProbeProcess, Generous);
 
-    private static string Id(int n) => n.ToString("x", CultureInfo.InvariantCulture).PadLeft(64, '0');
+    private static string Id(int n) => n.ToString("x8", CultureInfo.InvariantCulture).PadRight(64, '0');
 
     private static string Mine(string what) => Owned.NameBase + what + "-abc123";
 
@@ -273,7 +304,7 @@ public sealed class ContainerPassTests
 
     private sealed record PsPlan(string Stdout, string Stderr = "", int Exit = 0, int SleepMs = 0);
 
-    private sealed record Scenario(PsPlan Ps, Dictionary<string, string> Rows, int InspectExit = 0, Dictionary<string, int>? RmExit = null);
+    private sealed record Scenario(PsPlan Ps, Dictionary<string, string> Rows, int InspectExit = 0, Dictionary<string, int>? RmExit = null, int RmSleepMs = 0, Dictionary<string, int>? RmSleep = null);
 
     /// <summary>The fake <c>docker</c>: a Node script in the test's own folder, with its scenario beside it. It never reads the temp variables and spells no temp path.</summary>
     private static class FakeDocker
@@ -304,7 +335,13 @@ public sealed class ContainerPassTests
             } else if (verb === 'rm') {
               const id = argv[argv.length - 1];
               const code = (plan.rmExit || {})[id] || 0;
-              finish('', code ? 'Error: cannot remove ' + id + '\n' : '', code, 0);
+              const sleep = (plan.rmSleep || {})[id] ?? plan.rmSleepMs ?? 0;
+              const events = path.join(here, 'rm-events.jsonl');
+              fs.appendFileSync(events, JSON.stringify({ id, e: 'start', at: Date.now() }) + '\n');
+              setTimeout(() => {
+                fs.appendFileSync(events, JSON.stringify({ id, e: 'end', at: Date.now() }) + '\n');
+                process.stderr.write(code ? 'Error: cannot remove ' + id + '\n' : '', () => process.exit(code));
+              }, sleep);
             } else {
               finish('', 'fake docker: unexpected ' + verb + '\n', 2, 0);
             }
@@ -319,6 +356,15 @@ public sealed class ContainerPassTests
             File.WriteAllText(docker, Script.ReplaceLineEndings("\n") + "\n");
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(docker, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             return docker;
+        }
+
+        /// <summary>The most removals that were in flight at once, from the start and end stamps the fake wrote.</summary>
+        public static int MostAtOnce(TempDir dir)
+        {
+            var events = File.ReadAllLines(dir.At("rm-events.jsonl")).Select(l => JsonSerializer.Deserialize<JsonElement>(l)).Select(e => (At: e.GetProperty("at").GetInt64(), Start: e.GetProperty("e").GetString() == "start")).OrderBy(e => e.At).ThenBy(e => e.Start).ToList();
+            int now = 0, most = 0;
+            foreach (var e in events) most = Math.Max(most, now += e.Start ? 1 : -1);
+            return most;
         }
 
         public static IReadOnlyList<string[]> Calls(TempDir dir)
