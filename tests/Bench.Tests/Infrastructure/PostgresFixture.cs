@@ -59,7 +59,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         .WithUsername("bench")
         .WithPassword("bench")
         // Appended to the image's own `postgres` command — spelling `postgres` here again made the server refuse its own name.
-        .WithCommand("-c", "max_connections=400"));
+        .WithCommand("-c", "max_connections=400")
+        // Rule §1 and §3: the owner-form name and the owner label the container pass reads (E6 S3, D9). Reuse is never set and the reaper stays on.
+        .WithName(ContainerName)
+        .WithLabel(ContainerPass.LabelKey, Owner.RunRecord().Format()));
 
     public async ValueTask InitializeAsync()
     {
@@ -129,6 +132,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     /// <summary>A database of its own with NO migration applied — for a test that applies them itself, step by step, to prove a
     /// migration lands on a database already holding an earlier one's tables.</summary>
+    // testsToDelete-exempt: container-scoped — the per-test databases live and die with the PostgresFixture container
     public async Task<string> NewEmptyDatabaseAsync(string name)
     {
         // CREATE DATABASE takes no parameters in any provider, so the name has to be interpolated. It is

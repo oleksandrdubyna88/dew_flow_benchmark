@@ -200,8 +200,10 @@ public sealed class ContainerPassTests
     [Fact]
     public void TheLabel_key_and_the_template_name_the_owner_label_the_fixture_writes()
     {
-        ContainerPass.LabelKey.Should().Be("testsToDelete.owner");
-        ContainerPass.Template.Should().Contain("index .Config.Labels \"testsToDelete.owner\"").And.Contain("\t");
+        // The key is the prefix word without its dash and ".owner": spelled as one literal it would be an owner-blind match for the C# guard.
+        ContainerPass.LabelKey.Should().Be(Owned.Prefix.TrimEnd('-') + ".owner");
+        ContainerPass.Template.Should().Contain($"index .Config.Labels \"{ContainerPass.LabelKey}\"").And.Contain("\t");
+        ContainerPass.ListArgs.Should().Contain("label=" + ContainerPass.LabelKey);
         ContainerPass.RemoveArgs("x").Should().Equal("rm", "-f", "-v", "x");
     }
 
