@@ -746,7 +746,6 @@ not here, and no merge fact is written before the merge (§ 14).
 - **L4:** exit 2 with the audit's first line for `=1` ("1 never disposed") and for `=failed-dispose` ("1 disposed but not removed").
 - **W1 (the whole suite, base `83f166d6` built in a scratch worktree, then the head):** base 5678 total, 583 failed; head 5775 total,
   579 failed. 572 failures are in both lists, the Docker/Postgres ones the machine cannot run (#207 recorded 572 as well). The lists
-  are NOT identical: 11 tests failed only on the base and 7 only on the head (ModelArms and `ScoutsTasksCommandTests`, timing-dependent under
-  the machine's load). All 18 passed (195 of 195) when their nine classes were re-run alone, on the head and on the base. Checked: that re-run, both
-  trees; not checked: the cause of the timing sensitivity, which is outside `Leftovers/` (§ 2 item 7).
+  are NOT identical: 11 tests failed only on the base and 7 only on the head (ModelArms and `ScoutsTasksCommandTests`). Most of them are refusals, not timing: "the experiment root /tmp/testsToDelete-modelarms-…/example/root is inside the git checkout /tmp" and "campaign key … lies inside the git checkout at /tmp" — during both whole-suite runs `/tmp` itself was briefly a git work tree (a transient `/tmp/.git`, on both trees; absent at the re-run), from some test or another process on the shared machine (the independent Opus review, reading the logs). All 18 passed (195 of 195) when their nine classes were re-run alone, on the head and on the base. Checked: that re-run, both
+  trees; not checked: what creates `/tmp/.git` — a benchmark todo outside `Leftovers/` (§ 2 item 7; main's `StepRunnerTests` failure there is a different, timing kind).
 - **Not run here, as § 10.1 says:** CI's D3, the clean checkout of the final head (CC1), R4, and actionlint over the new step.
