@@ -226,7 +226,10 @@ shell string, with a 30-second timeout; on the timeout the whole process tree is
 `common/security.md` § *External processes*; the brief uses the repository's existing process runner where it already
 does this). No `docker` binary, a stopped daemon, a non-zero exit or a 30-second timeout is
 one reported line and nothing removed; the run goes on. Ryuk is the first collector; this pass collects what Ryuk could
-not (a daemon restart, a reaper killed with the run).
+not (a daemon restart, a reaper killed with the run). **Where it runs** (the plan gate of this revision, session
+`215fc3a2`): inside `PostgresFixture.InitializeAsync`, before the container starts, behind a once-per-process gate —
+not in `StartOfRunSweep`, because xUnit initializes a collection fixture before any `BeforeAfterTestAttribute.Before`,
+so a pass there would run after the fixture's container already exists.
 
 **D10 — No `raw-temp` baseline.** Every site moves in its story; the repository guard test lands in S7 with the last site
 (the old draft's reason: two merges would leave `main` red between them).
