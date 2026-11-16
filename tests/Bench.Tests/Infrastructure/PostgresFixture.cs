@@ -1,5 +1,7 @@
 using Bench.Domain.Runs;
 using Bench.Infrastructure.Persistence;
+using Bench.Tests.Leftovers;
+using DotNet.Testcontainers.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -18,26 +20,57 @@ namespace Bench.Tests.Infrastructure;
 /// </para></summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
+    public PostgresFixture() : this(static builder => builder)
+    {
+    }
+
+    /// <summary>The test seam of scenario (3) only: <paramref name="extra"/> is applied after the fixture's own lines. Production code never passes one.</summary>
+    internal PostgresFixture(Func<PostgreSqlBuilder, PostgreSqlBuilder> extra)
+    {
+        // Rule §5: the reaper stays on. This reads the setting Testcontainers acts on — the environment variable, ~/.testcontainers.properties
+        // or code — so a fixture whose container nothing would collect after a kill never starts (E6 S3, K3).
+        ContainerPass.RequireReaper(TestcontainersSettings.ResourceReaperEnabled);
+        ContainerName = Owned.NameFor("pg");
+        _extra = extra;
+    }
+
+    private readonly Func<PostgreSqlBuilder, PostgreSqlBuilder> _extra;
+    private PostgreSqlContainer? _container;
+
+    /// <summary>The container's name, <c>testsToDelete-&lt;owner&gt;-bench-pg-&lt;id&gt;</c>, known before it starts (rule §1).</summary>
+    internal string ContainerName { get; }
+
+    /// <summary>The started container's id: every Docker proof checks and removes by it (rule §4).</summary>
+    internal string ContainerId => Started.Id;
+
+    public string ConnectionString => Started.GetConnectionString();
+
+    private PostgreSqlContainer Started => _container ?? throw new InvalidOperationException("the fixture has not started its container");
+
     /// <summary>Postgres's default <c>max_connections</c> is 100, and the whole suite now holds more pooled connections than that at
     /// once: every per-test database (<see cref="NewDatabaseAsync"/>) is its own connection string, so its own Npgsql pool, whose
     /// idle connections stay open for minutes after the test. Measured 2026-10-01 when the probe store tests added six more such
     /// databases: 34 tests across the gate driver, the import and the CLI failed with <c>53300: sorry, too many clients already</c>
     /// — an infrastructure limit, not a test. The container is ours, so the limit is raised here, and the per-test strings below
     /// prune their idle connections quickly so the demand stays bounded as stories add databases.</summary>
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17-alpine")
+    // Internal for scenario (3b): its pin reads the builder's configured reuse by reflection.
+    internal PostgreSqlBuilder Builder() => _extra(new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("bench")
         .WithUsername("bench")
         .WithPassword("bench")
         // Appended to the image's own `postgres` command — spelling `postgres` here again made the server refuse its own name.
-        .WithCommand("-c", "max_connections=400")
-        .Build();
-
-    public string ConnectionString => _container.GetConnectionString();
+        .WithCommand("-c", "max_connections=400"));
 
     public async ValueTask InitializeAsync()
     {
+        // The container pass (plan D9): once per process, before this fixture's own container exists. It never fails the run.
+        ContainerPass.Once();
+
+        // Again immediately before the build, outside the try: a setting switched off since construction is refused here, never reworded as "needs Docker".
+        ContainerPass.RequireReaper(TestcontainersSettings.ResourceReaperEnabled);
         try
         {
+            _container = Builder().Build();
             await _container.StartAsync();
         }
         catch (Exception ex)
@@ -53,7 +86,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         await db.Database.MigrateAsync();
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        if (_container is not null) await _container.DisposeAsync();
+    }
 
     public BenchDbContext NewContext() =>
         new(new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(ConnectionString).Options);
