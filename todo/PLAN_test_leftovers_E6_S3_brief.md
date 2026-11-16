@@ -3,7 +3,17 @@
 > Status: **plan only, nothing implemented yet, 2026-11-16; rewritten to the parent's epoch 10, with the item 8.1
 > observations made before its plan gate (§ 11).** The brief of story S3 of `todo/PLAN_test_leftovers_E6.md` (§ 6 S3;
 > rows E6-d, E6-f1, E6-f2; D9; claims C2, C7, C9). Its scope is S3's Files line, as named paths (§ 0.1): a file outside
-> them is the parent's next counted change, 10.1, and the work STOPS there.
+> them would be the parent's next counted change, which after entry 10.1 is the TENTH FULL STOP, and the work STOPS there.
+>
+> **Plan gate passed and decisions folded in, 2026-11-16 (§ 16).** coai plan gate session `e4eef27b`: `proceed`. The
+> coordinator accepted Q1–Q7 as recommended (Q4: the container's own size in the disposal test, no `ci.yml` step) and the
+> gate's findings G1 (the anonymous database volume ends with the container), G2 (the effective reaper setting checked
+> again immediately before `Build()`; test (7) also reads `ResourceReaperEnabled = false` and the name assembled from split
+> literals) and G3 (the once-per-process gate proved by two fixture starts in a controlled process). The configuration-reuse
+> result (§ 11, O11) is the parent's entry **10.1** (conventions PR #174, `0ca0825d`): row E6-f2's counterexample "reuse
+> enabled through configuration alone" becomes a GREEN PIN; the builder counterexample and the run-time disposal proof stay
+> red-first. 10.1 is epoch 10's first change, so the next accepted change is the tenth full stop: nothing beyond the Files
+> line.
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-16. Read-only inputs, all verified for this brief: benchmark
 > worktree `/home/jinx/git/wt/bench-e6s3`, branch `feat/e6-s3-fixture-e10` from `main` `5070beda` (#217: E6's stories
@@ -56,7 +66,7 @@ The stories' S3 *Files* (`:461-466`): `PostgresFixture.cs`, a benchmark-own `Con
 **Not touched, by name:** `.github/workflows/ci.yml` (the Docker proofs need no variable there, § 3 K9; § 8 of the stories'
 size reading is taken per container, Q4), `StartOfRunSweep.cs` (D9 puts the pass in the fixture), every manifest target
 and `template-manifest.json`, `.gitattributes`, `src/`, `hosts/`. **A file the build, a test or a check needs outside the
-table above is the parent's change 10.1: STOP, write the finding into this brief's § 14, and hand it to the coordinator;
+table above would be the parent's next counted change, the TENTH FULL STOP (entry 10.1 is taken, § 16): STOP, write the finding into this brief, and hand it to the coordinator;
 do not add the file.**
 
 ## 1. Rules you must read first
@@ -101,8 +111,11 @@ do not add the file.**
   on: observed `True` with nothing set, `False` with `TESTCONTAINERS_RYUK_DISABLED=true`, `False` with `ryuk.disabled=true`
   in `~/.testcontainers.properties`, and readable with no Docker at all (§ 11, O10). It is "Gets or sets" (its XML doc
   **[D]**), so code that switches it off is read the same way. When it is `false` the constructor throws
-  `InvalidOperationException` before anything else, with the text of § 4 step 2. Not read by this check: a builder's
-  `.WithCleanUp(false)` (per container, **[R]**); for the fixture's own builder, scenario (1) is the run-time proof.
+  `InvalidOperationException` before anything else, with the text of § 4 step 2. **And again immediately before the
+  container is built** (G2, § 16): in `InitializeAsync`, after `ContainerPass.Once()` and before `Builder().Build()`,
+  outside the `try` (so the refusal is never reworded as "needs Docker"): a setting switched off between construction and
+  start (code, or a static initialiser that ran late) is refused there too. Not read by this check: a builder's
+  `.WithCleanUp(false)` (per container, **[R]**); for the fixture's own builder, scenario (1) is the run-time proof (Q7).
 - **K4 — `Build()` moves into `InitializeAsync`, inside the `try`, after the pass.** Observed: `PostgreSqlBuilder.Build()`
   throws `DockerUnavailableException` when no daemon answers (§ 11, O12). Today the build is a field initializer
   (`:27-33`), so on a machine without Docker the fixture's construction throws Testcontainers' message, the loud text of
@@ -114,8 +127,10 @@ do not add the file.**
   `.WithReuse(true)` makes it `True`. The configuration interface (`ICustomConfiguration`) has no reuse getter, and the only
   members of the assembly that name reuse are `WithReuse`, the configuration's `Reuse`/`ReuseHashProvider`/`GetReuseHash`
   and the reuse-hash label constant (§ 11, O11). So row E6-f2's "RED through configuration alone" has **no instance at
-  4.16.0**: that half is recorded on the PR as this observed result, not as a red, and the parent's progress record notes
-  it (its decision). The builder half is RED by a committed counterexample test (§ 6 (3), Q3). A dependency bump re-runs O11.
+  4.16.0**. By the parent's entry **10.1** (conventions PR #174) that half is a GREEN PIN (§ 6 (3b)): both configuration
+  spellings set, the built container's `Reuse` stays `False` and the container still ends with the fixture. The builder
+  half stays RED-first by a committed counterexample test (§ 6 (3), Q3), and so does the run-time disposal proof (4). A
+  dependency bump re-runs O11, and the pin then says whether a configuration path appeared.
 - **K6 — The pass runs where D9 puts it:** `ContainerPass.Once()` is the FIRST statement of `PostgresFixture.InitializeAsync`,
   a once-per-process gate in `ContainerPass.cs` (a `Lazy<SweepResult>` with `ExecutionAndPublication`, whose factory catches
   everything, as `StartOfRunSweep.Gate` does, `StartOfRunSweep.cs:30-38`: a cached exception would fail every later
@@ -144,11 +159,20 @@ do not add the file.**
 - **K11 — Scenario (7)'s source test reads every `.cs` of the repository** through the copied walk
   (`GuardFiles.Walk(RepositoryRoot.Path)`, `LeftoversGuardFiles.cs:49`, which skips `bin`, `obj`, `node_modules`, `.git`,
   `.claude`, `.agents`, `.http-artifacts`, `logs`) filtered to `.cs`, so `hosts/`, `tools/` and `spikes/` are read too, not
-  only the guard's `tests/` and `src/`. It is red on any line naming the variable, case-insensitively, except in the
-  manifest's targets, which it reads from `template-manifest.json` (never a typed list): five lines of the copied guard's
-  own test data name it today (`LeftoversGuardScenarios.cs:78`, `LeftoversGuardTests.cs:92-93`, `:112-113` **[M]**), and
-  `TheAdaptedCopyTests` holds those files to the template's bytes. Q5 has the alternative. The test file builds the name
-  from two pieces (`"TESTCONTAINERS_RYUK_" + "DISABLED"`): both guards read that file as clean (§ 11, O8).
+  only the guard's `tests/` and `src/`. Per line, after joining string literals that are concatenated with `+` (the text
+  between a literal's closing quote, a `+` and the next literal's opening quote, `@` and `$` prefixes included, is removed
+  before the search), it is red on two forms (G2, § 16): **(a)** the variable named, case-insensitively, whole or so
+  assembled from split literals; **(b)** an assignment `TestcontainersSettings.ResourceReaperEnabled = false` (an `=`
+  that is not `==`, any whitespace around it, the `TestcontainersSettings.` qualifier optional). The manifest's
+  targets are skipped, read from `template-manifest.json` (never a typed list): five lines of the copied guard's own test
+  data name the variable today (`LeftoversGuardScenarios.cs:78`, `LeftoversGuardTests.cs:92-93`, `:112-113` **[M]**), and
+  the copied guard itself assembles it from split literals (`LeftoversGuard.cs:93`, `"TESTCONTAINERS_RYUK_" + @"DISABLED…"`
+  **[M]**); `TheAdaptedCopyTests` holds those files to the template's bytes. So benchmark's own files never assemble the
+  name from `+`-joined literals: the test's own pieces and `ContainerPass`'s message (§ 4 step 2) take it from ONE
+  constant built without a `+` between literals (`string.Concat("TESTCONTAINERS", "_RYUK", "_DISABLED")`), and the
+  planted lines of the theory are built the same way. Its limits, written in the test's summary and in *The limits*: a
+  name assembled from identifiers or through `string.Concat`, and a setter reached by reflection, are not read. Both guards
+  read a file holding the name built from pieces as clean (§ 11, O8).
 - **K12 — The pass's REDs are mutations by hand, not committed** (the S2 brief's B7 shape): before the pass exists its tests
   do not compile, and a compile error is not a RED for the right reason. The RED of each scenario is quoted on the PR.
 
@@ -174,8 +198,9 @@ do not add the file.**
    `ContainerPass.RequireReaper(bool enabled)` throws `InvalidOperationException` when `enabled` is false, with exactly:
    `The Testcontainers reaper (Ryuk) is switched off here (TESTCONTAINERS_RYUK_DISABLED=true in the environment, or
    ryuk.disabled=true in ~/.testcontainers.properties, or code): rule §5 keeps it on, so this fixture refuses to start a
-   container that nothing would collect after a kill. Unset it and re-run.` Spell the variable in that string from two
-   pieces as K11 says, so the guards' `ryuk-off` (which takes no exemption) never reads the message as a setting.
+   container that nothing would collect after a kill. Unset it and re-run.` The variable comes from K11's one constant
+   (`ContainerPass.RyukVariable`, built with `string.Concat`, never `+` between literals), so neither the guards' `ryuk-off`
+   (which takes no exemption) nor test (7) reads the message as a setting.
 3. The builder moves into a method; the fields become the name, the extra and the started container:
 
 ```csharp
@@ -192,7 +217,8 @@ do not add the file.**
 
     private PostgreSqlContainer Started => _container ?? throw new InvalidOperationException("the fixture has not started its container");
 
-    private PostgreSqlBuilder Builder() => _extra(new PostgreSqlBuilder("postgres:17-alpine")
+    /// <summary>Internal for scenario (3b): its pin reads the builder's configured reuse (by reflection, as § 11 O11 did).</summary>
+    internal PostgreSqlBuilder Builder() => _extra(new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("bench")
         .WithUsername("bench")
         .WithPassword("bench")
@@ -204,8 +230,10 @@ do not add the file.**
 ```
 
    Keep the `<summary>` of `:21-26` (it explains `max_connections`) on `Builder()`, and the comment of `:31` word for word.
-4. `InitializeAsync` (`:37`): its first statement `ContainerPass.Once();` (K6), then inside the existing `try`:
-   `_container = Builder().Build(); await _container.StartAsync();` (K4). The catch's text (`:45-47`) does not change.
+4. `InitializeAsync` (`:37`): its first statement `ContainerPass.Once();` (K6); then, outside the `try`,
+   `ContainerPass.RequireReaper(TestcontainersSettings.ResourceReaperEnabled);` again (K3, G2: immediately before the
+   build); then inside the existing `try`: `_container = Builder().Build(); await _container.StartAsync();` (K4). The
+   catch's text (`:45-47`) does not change.
 5. `DisposeAsync` (`:56`): `if (_container is not null) await _container.DisposeAsync();` — a fixture that never started
    disposes nothing.
 6. The marker of K10 above `:96`. Nothing else changes: `NewContext`, the stores, `NewDatabaseAsync`, the
@@ -230,6 +258,8 @@ public static class ContainerPass
     public static int Runs { get; }                    // how many times the real pass ran in this process (1 after any fixture started)
     public static SweepResult Run(ContainerPassOptions options);   // never throws: every failure is one line of the result
     public static void RequireReaper(bool enabled);    // K3
+    public static string RyukVariable { get; } = string.Concat("TESTCONTAINERS", "_RYUK", "_DISABLED");   // K11: the one constant; no `+` between literals
+    internal sealed class Gate(Func<SweepResult> pass) { public SweepResult Await(); public int Runs { get; } }   // K6's gate as a seam: the real one is new Gate(() => Run(Real(now))); G3's unit test passes a counting pass
     internal static IReadOnlyList<string> ListArgs => ["ps", "-a", "-q", "--no-trunc", "--filter", "label=" + LabelKey];
     internal static IReadOnlyList<string> InspectArgs(IEnumerable<string> ids) => ["inspect", "--type", "container", "--format", Template, .. ids];
     internal static IReadOnlyList<string> RemoveArgs(string id) => ["rm", "-f", "-v", id];
@@ -300,20 +330,21 @@ is the defect put back once after GREEN, by hand, and quoted on the PR (the stor
 
 | # | Test (file) | Where | GREEN asserts | RED (first) / RED again |
 |---|---|---|---|---|
-| (1) E6-d (1) | `Ryuk_removes_the_container_of_a_child_test_process_killed_with_SIGKILL` (`FixtureContainerTests`) | CI; skips on Windows first | a child (`SuiteChild.StartInfoFor(Environment.ProcessPath, ["--filter-method", "*RyukChild_starts_a_fixture_and_waits_to_be_killed"], env)` with `BENCH_E6_RYUK_CHILD_OUT=<TempDir>/child.txt`; both streams drained) writes `<id>\n<name>\n` (temp file then `File.Move`); the query finds the id (exit 0, one line); `child.Kill()` (SIGKILL), exit 137; the same query every 2 s up to 120 s succeeds and finds nothing; a warning names the seconds. `finally`: kill the child's tree; `docker rm -f -v <id>` if it still exists | a characterisation: green on the defaults. Its counterexample is the reaper check's child test below, which runs locally: the reaper switched off is refused before any container exists |
-| (1) K3 | `A_fixture_refuses_to_start_when_the_environment_switches_the_reaper_off` (`FixtureContainerTests`) | local and CI | a child of this executable with `TESTCONTAINERS_RYUK_DISABLED=true` (env built from two pieces, K11) and `BENCH_E6_REAPER_CHILD=1` runs `*ReaperChild_constructs_a_fixture` (which returns at once when that variable is unset, so it is green in every normal run): exit non-zero, its output holds `The Testcontainers reaper (Ryuk) is switched off here`; the same child with the Ryuk variable removed (`null`) passes the constructor and stops there (it never calls `InitializeAsync`) | RED first: before `RequireReaper` exists the child gets past the constructor (the assertion on the message is red). RED again: comment out the call → red. Also a pure theory over `RequireReaper(true/false)` |
+| (1) E6-d (1) | `Ryuk_removes_the_container_and_its_volumes_of_a_child_test_process_killed_with_SIGKILL` (`FixtureContainerTests`) | CI; skips on Windows first | a child (`SuiteChild.StartInfoFor(Environment.ProcessPath, ["--filter-method", "*RyukChild_starts_a_fixture_and_waits_to_be_killed"], env)` with `BENCH_E6_RYUK_CHILD_OUT=<TempDir>/child.txt`; both streams drained) writes `<id>\n<name>\n` (temp file then `File.Move`); the query finds the id (exit 0, one line); **the container's volumes captured before the kill** (G1): `docker inspect --type container --format "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{println}}{{end}}{{end}}" <id>`, exit 0, at least one name (the image declares its data directory a volume; zero names fails the test as a fixture that no longer proves this); `child.Kill()` (SIGKILL), exit 137; the container query every 2 s up to 120 s succeeds and finds nothing; then `docker volume ls -q --no-trunc` (exit 0) every 2 s up to 120 s until none of the captured names is listed; a warning names the seconds of each. A volume still listed at the deadline FAILS the test, naming it: no silent retention. `finally`: kill the child's tree; `docker rm -f -v <id>` if it still exists; `docker volume rm <name>` for each captured name still listed | a characterisation: green on the defaults, or red naming the survivor (then a finding for the coordinator: a fix inside `PostgresFixture.cs`, such as the data directory on a tmpfs mount so no volume exists, stays within the Files line). Its counterexample is the reaper check's child tests below, which run locally |
+| (1) K3, G2 | `A_fixture_refuses_to_start_when_the_environment_switches_the_reaper_off` and `A_fixture_refuses_to_build_when_the_reaper_is_switched_off_after_construction` (`FixtureContainerTests`) | local and CI | (i) a child of this executable with the Ryuk variable set to `true` (its name from `ContainerPass.RyukVariable`, K11) and `BENCH_E6_REAPER_CHILD=construct` runs `*ReaperChild` (which returns at once when that variable is unset, so it is green in every normal run): exit non-zero, its output holds `The Testcontainers reaper (Ryuk) is switched off here`; the same child with the Ryuk variable removed (`null`) passes the constructor and stops there. (ii) `BENCH_E6_REAPER_CHILD=initialize`, the Ryuk variable removed: the child constructs a fixture, then switches the setting off through its setter by reflection (`typeof(TestcontainersSettings).GetProperty(nameof(TestcontainersSettings.ResourceReaperEnabled))!.SetValue(null, false)`, never an assignment that (7) would read), then calls `InitializeAsync`: exit non-zero with the same message and NOT the `:45-47` text, so the refusal came before `Build()` (locally `Build()` would throw `DockerUnavailableException`, O12); in a child, so the parent's setting is untouched | RED first: before `RequireReaper` exists the child of (i) gets past the constructor, and the child of (ii) fails with the `:45-47` text instead (each assertion on the message red). RED again: comment out each call in turn → its child red. Also a pure theory over `RequireReaper(true/false)` |
 | (2) E6-d (2) | `ThePass_removes_only_a_dead_owners_old_container_by_its_captured_id` (`ContainerPassTests`, fake `docker`, § 7) | local and CI; skip on Windows (shebang) | the fake lists seven ids: dead+old ours, live, another owner's name, another token's name, young, empty label, legacy. Calls in order: one `ps` whose argv equals `ListArgs`; ONE `inspect` with the seven ids; ONE `rm` whose argv is `["rm","-f","-v",<the dead id>]`; no call holds `name=`. `Removed` = that one; `Preserved` `live`, `young`, `unreadable record`; `Listed` two `foreign:` and one `legacy:` | by hand: remove on name and age alone (rows 8–9 return `Remove`) → the live row red; drop row 6 → the young row red; remove by name → the argv assertion red; drop `-v` → red |
 | (2) | `TheJudge_gives_each_container_its_verdict` (theory, one row per line of § 5.2) and `TheRow_is_read_only_from_a_well_formed_inspect_line` (`ContainerPassTests`) | local and CI, every OS | each verdict and its exact text; dead = `Owner.This with { Pid = UnmatchablePid.Next() }` (premise `UnmatchablePid.AssertNoSuchProcess`); the parser's bad shapes (3 fields, a 63-char or upper-case id, an escaped name, an empty label, a `Created` without `Z`; nine fraction digits parse) | by hand, as the row above; make `Parse` accept upper case → red |
 | (2) | `ThePass_inspects_in_batches_of_at_most_a_hundred`, `ThePass_calls_nothing_but_ps_when_ps_lists_nothing`, `ThePass_fails_softly` (theory over § 5.3) | local and CI; skip on Windows | 101 young ids → two `inspect` calls (100, 1), no `rm`; an empty list → one call; each § 5.3 row its one line, `Run` returns (the timeout row with `CallTimeout` 2 s returns within 15 s) | batch 1000 → red; always inspect → red; remove a catch → the row throws |
 | (2) on a daemon | `TheFixturesContainer_has_the_owner_form_name_and_the_runs_record_as_its_label` and `ThePass_on_a_real_daemon_removes_a_dead_owners_container_by_its_id` (`FixtureContainerTests`) | CI | the started fixture's container: `docker inspect --type container --format <name>TAB<label>TAB<reuse-hash label> <id>`: name (one `/` off) = `ContainerName` and matches `Owned.FullName()`; label = `Owner.RunRecord().Format()`; the `org.testcontainers.reuse-hash` label empty (an ADDED read, never instead of (3)). The pass on three containers `docker create`d with `"--name", name` argv (`Owned.NameFor("pass-dead")` with a dead record, `pass-live` with this record, `pass-bare` with no label), `Real(now) with { MinAge = TimeSpan.Zero, Consider = planted.Contains }`: the dead one removed and the query finds nothing; the live one kept `live`; the bare one never listed. `finally`: `docker rm -f -v` each remaining id | RED first, in CI on a commit with the tests and NOT the fixture's lines (Q3): name and label red. RED again by hand only for the fake (the row above) |
-| (3) E6-f2 (3) | `A_reused_container_outlives_disposal_so_the_disposal_check_catches_reuse` (`FixtureContainerTests`) | CI | the counterexample, committed: `new PostgresFixture(b => b.WithReuse(true))`, started, id captured, disposed; the disposal check of (4) reports the container still there (the test asserts the check's RED). `finally`: `docker rm -f -v <id>`. Expected **[D]/[R]**: "Enabling reuse will disable the resource reaper" (`WithReuse` XML doc) and a reused container is not removed by disposal; red or not, CI says which, and if disposal DOES remove a reused container, (4) cannot see reuse and this is a finding for the coordinator before merge | the configuration half: **no instance at 4.16.0** (K5, O11), recorded on the PR as observed; nothing to plant |
-| (4) E6-f2 (1), (2) | `TheDisposedFixturesContainer_is_gone_by_its_id_and_with_it_its_databases` (`FixtureContainerTests`) | CI | start; `NewEmptyDatabaseAsync("e6s3_" + 12 hex)`; the query finds the id; one warning with the container's size (`docker ps -a -s --no-trunc --filter id=<id> --format {{.Size}}`, Q4); `DisposeAsync`; the query succeeds and finds nothing | RED: the (3) counterexample above is this check red. RED again by hand: skip `DisposeAsync` → red (then `docker rm -f -v` by id in `finally`) |
+| (3) E6-f2 (3), builder | `A_reused_container_outlives_disposal_so_the_disposal_check_catches_reuse` (`FixtureContainerTests`) | CI | the counterexample, committed: `new PostgresFixture(b => b.WithReuse(true))`, started, id and volume names captured, disposed; the disposal check of (4) reports the container still there (the test asserts the check's RED). `finally`: `docker rm -f -v <id>` and `docker volume rm` of each captured volume still listed. Expected **[D]/[R]**: "Enabling reuse will disable the resource reaper" (`WithReuse` XML doc) and a reused container is not removed by disposal; red or not, CI says which, and if disposal DOES remove a reused container, (4) cannot see reuse and this is a finding for the coordinator before merge | RED-first, as entry 10.1 keeps it |
+| (3b) E6-f2 (3), configuration: a GREEN PIN (the parent's entry 10.1) | `Reuse_set_through_configuration_alone_stays_off_and_the_container_still_ends_with_the_fixture` (`FixtureContainerTests`) | local (the configuration read) and CI (the container) | a child of this executable with BOTH spellings set: `TESTCONTAINERS_REUSE_ENABLE=true`, and `HOME=<TempDir>` holding `.testcontainers.properties` with `testcontainers.reuse.enable=true` (the fixture's source unchanged); `BENCH_E6_REUSE_CHILD=1` runs `*ReuseChild`: it reads `new PostgresFixture().Builder()`'s configured `Reuse` by reflection (the non-public `DockerResourceConfiguration`, as O11 did) and prints `reuse=False`; where a daemon answers it then starts the fixture, prints the id, the volume names and the empty `org.testcontainers.reuse-hash` label, disposes it, and the parent's query finds neither the container nor a volume. The parent asserts `reuse=False` (and, in CI, the rest) | none: a pin, green by design (entry 10.1: no configuration path turns reuse on at 4.16.0, O11). If a dependency bump adds one, this pin goes red, which is the point |
+| (4) E6-f2 (1), (2), G1 | `TheDisposedFixturesContainer_is_gone_by_its_id_and_with_it_its_databases_and_its_volumes` (`FixtureContainerTests`) | CI | start; `NewEmptyDatabaseAsync("e6s3_" + 12 hex)`; the query finds the id; the volume names captured as in (1) (exit 0, at least one); one warning with the container's size (`docker ps -a -s --no-trunc --filter id=<id> --format {{.Size}}`, Q4); `DisposeAsync`; the container query succeeds and finds nothing; `docker volume ls -q --no-trunc` (exit 0) lists none of the captured names (polled every 2 s up to 30 s; a survivor at the deadline FAILS the test, naming it) | RED: the (3) counterexample above is this check red. RED again by hand: skip `DisposeAsync` → red (then `docker rm -f -v` by id and `docker volume rm` in `finally`) |
 | (5) E6-f1 | the marker (`PostgresFixture.cs`), read by both guards by hand (§ 9) | local | no finding in `PostgresFixture.cs` from either guard; the Node guard's repository count equals the base's (209 with `--profile node`, 3 without, **[M]** at `5070beda`) | RED: the same file with `live and die with` removed → one `exemption` at the marker's line in each guard (observed before the gate, § 11, O3–O4; again on the head and quoted) |
 | (6) | `ThePass_is_one_notice_line_when_there_is_no_docker` (`ContainerPassTests`) and the whole local suite | local | `Docker` = a path in a fresh `TempDir` that does not exist → exactly one `Listed` line starting `notice: containers not swept — `, no `Errors`, nothing thrown. The whole suite on this machine: stderr holds `bench tests: containers — removed 0, preserved 0, listed 1` and `  notice: containers not swept — 'docker' is not on PATH`, then the `"postgres"` classes fail with the fixture's own `:45-47` text (K4) | make `NotFound` throw → red. The whole suite's FAILED list compared with the base's (S2 brief § 14): no new failure but the message change K4 describes, quoted |
-| (7) E6-d / F43 | `No_cs_file_switches_the_reaper_off` and `The_reaper_check_finds_each_planted_form` (`ContainerRulesTests`) | local and CI | K11's walk: no line outside the manifest targets names the variable (any case); red with `file:line — …` lines; red when it read no `.cs` ("scanned nothing — discovery broke"); the theory finds a planted `Environment.SetEnvironmentVariable("…RYUK_DISABLED", "true")` (built from pieces) and does not find the name split across two literals in a comment | RED by hand: plant that line in `PostgresFixture.cs` → red naming it; revert with `git checkout -- tests/Bench.Tests/Infrastructure/PostgresFixture.cs`. Neither guard reads that plant (C7, § 11, O5), so this test is its ONLY reader |
+| (7) E6-d / F43, G2 | `No_cs_file_switches_the_reaper_off` and `The_reaper_check_finds_each_planted_form` (`ContainerRulesTests`) | local and CI | K11's walk and both forms: no line outside the manifest targets names the variable (any case, whole or assembled from `+`-joined literals) or assigns `ResourceReaperEnabled = false`; red with `file:line — <form>` lines; red when it read no `.cs` ("scanned nothing — discovery broke"). The theory, over in-memory lines built with `string.Concat` (never `+` between literals): finds a `SetEnvironmentVariable(<the name>, "true")` line; finds the name assembled as `"TESTCONTAINERS_RYUK_" + "DISABLED"` and as `@"TESTCONTAINERS_" + "RYUK_DISABLED"`; finds `TestcontainersSettings.ResourceReaperEnabled = false;` and `ResourceReaperEnabled=false`; does NOT find `ResourceReaperEnabled == false`, `ResourceReaperEnabled = true`, or the name built from identifiers | RED by hand, one at a time, each reverted with `git checkout -- tests/Bench.Tests/Infrastructure/PostgresFixture.cs`: the `SetEnvironmentVariable` line; the split-literal assembly; the `= false` assignment → each red naming its line. Neither guard reads the first (C7, § 11, O5), so this test is its ONLY reader |
 | two names | `TwoFixtures_get_two_names` (`FixtureContainerTests`) | local and CI | two `new PostgresFixture()` (never started; construction needs no daemon after K4): two different names, both matching `Owned.FullName()`, each at most 63 characters | — |
 | C2 | `TheAdaptedCopyTests` | local and CI | green with the four new files on `BenchOwn` | RED first, observed before the gate: a `ContainerPass.cs` on neither list → 1 of 58 red naming it (§ 11, O1) |
-| the gate | `ThePass_ran_once_in_this_process` (`FixtureContainerTests`, CI: after any fixture started) | CI | `ContainerPass.Runs == 1` | remove the gate (call `Run` each time) → red |
+| the gate, G3 | `The_container_pass_runs_once_for_two_fixture_starts_in_one_process` and `TheGate_runs_its_pass_once_for_eight_callers` (`FixtureContainerTests`) | local and CI | (i) a CONTROLLED process: a child of this executable with `BENCH_E6_GATE_CHILD=1` runs only `*GateChild`, which constructs TWO fixtures and calls `InitializeAsync` on each (locally each fails after the pass with the `:45-47` text, caught; where a daemon answers each starts, then is disposed), then prints `passes=<ContainerPass.Runs>`; the parent asserts the child printed `passes=1` — no other test shares that process. (ii) the seam: `new ContainerPass.Gate(counting pass)` awaited by 8 threads at once → the pass ran once and every caller got the same result; a pass that throws → one `Errors` line, cached, never thrown | remove the gate (`Once` calls `Run` each time) → (i) prints `passes=2`, red; a factory without `ExecutionAndPublication` → (ii) red |
 
 `[Collection("docker-real")]` with `[CollectionDefinition("docker-real")] public sealed class DockerRealCollection;` in
 `FixtureContainerTests.cs`. `DockerGate`: a `Lazy<string?>` running `docker version --format {{.Server.Version}}` once
@@ -340,13 +371,15 @@ starting with a backticked `bench ` is parsed by `ModuleTestsCatalogTests`):
 
 - The heading gains "the container pass".
 - After **The start-of-run sweep.** (`:638`), a paragraph **The fixture's container and the container pass.**: the
-  reaper check at construction (the setting Testcontainers acts on; the message); the name and label; reuse never set
-  (4.16.0 reads no reuse configuration, observed 2026-11-16); the marker; the pass, once per process, inside the fixture
+  reaper check at construction and again just before the build (the setting Testcontainers acts on; the message); the
+  name and label; reuse never set (4.16.0 reads no reuse configuration, observed 2026-11-16, pinned green by (3b), the
+  parent's entry 10.1); the container's volumes end with it (G1); the marker; the pass, once per process, inside the fixture
   before its container (D9), its two keys, age, removal by id, 30-second calls, one line per failure.
 - In **The limits.** (`:642`): the Docker proofs run only where a daemon answers and fail under GitHub Actions without
   one; the pass sees the daemon the `docker` CLI sees, and Testcontainers may be pointed elsewhere (a context, the
   properties file); a builder's `.WithCleanUp(false)` is not read by the reaper check (scenario (1) covers the fixture's own
-  builder); the source test (7) skips the manifest targets, which the copy check holds to the template's bytes.
+  builder); the source test (7) skips the manifest targets, which the copy check holds to the template's bytes, and reads
+  neither a name assembled from identifiers or through `string.Concat` nor a setter reached by reflection.
 - In its commands: the three new classes, and that on a machine without Docker the Docker proofs skip with their reason.
 
 ## 9. The guards in S3
@@ -419,12 +452,14 @@ holding ONE file at the fixture path named in the row (the marker and plants ins
 | O14 | K11: where the variable is spelled whole today | `git grep -n -c "TESTCONTAINERS_RYUK_DISABLED" -- '*.cs'`, and the same over `*.json`, `*.yml`, `*.properties`, `*.sh`, `*.ps1`, `*.mjs` outside `.agents` | the repository at `5070beda` | — | 5 lines, all in manifest targets: `LeftoversGuardScenarios.cs` 1, `LeftoversGuardTests.cs` 4 (the guard's own test data, `TESTCONTAINERS_RYUK_DISABLED: \"true\"` inside a C# string, which neither guard reports: O13's counts hold none) |
 
 **Written open-ended, not observable here (hosted CI only; red or not, the PR's run says which):** scenario (1) — Ryuk
-removes a SIGKILLed child's container within 120 s, and how long it takes; (2) on a daemon — the real `inspect` template's
+removes a SIGKILLed child's container within 120 s, and how long it takes, and whether its volumes go too (G1: a survivor
+fails the test); (2) on a daemon — the real `inspect` template's
 output, the label on a started container, the pass's removal by id; (3) — whether disposal of a reused container leaves
 it (expected, **[D]** the `WithReuse` XML doc: "Enabling reuse will disable the resource reaper"; **[R]** disposal); (4) —
-that disposal removes the container, and its size; whether the image's anonymous volume outlives `DisposeAsync` (`-v` and
-Ryuk; not read); C9 and C7 again on the head (the same lines, expected as O2–O5); `RequireReaper` in a child on the head
-(K3; expected as O10). Windows: no leg.
+that disposal removes the container and its volumes (G1: a survivor fails the test), and its size; (3b) — the pin's
+container half (reuse-hash label empty, the container and its volumes gone after disposal), its configuration half being
+observed already (O11) and run locally by the pin itself; C9 and C7 again on the head (the same lines, expected as O2–O5); `RequireReaper` in both children on the head
+(K3, G2; expected as O10); the gate's controlled process (G3). Windows: no leg.
 
 ## 12. The commit series, size and split
 
@@ -432,11 +467,12 @@ Ryuk; not read); C9 and C7 again on the head (the same lines, expected as O2–O
 
 1. `ContainerPass.cs` (§ 5), `ContainerPassTests.cs` (§ 6 rows (2), (6)), the four `BenchOwn` lines and the summary count
    (C2: RED first by a build before the lines, as O1). Mutation REDs by hand.
-2. `ContainerRulesTests.cs` (7). RED by hand (the planted line).
+2. `ContainerRulesTests.cs` (7), both forms and the split-literal join (G2). RED by hand (the three planted lines).
 3. `PostgresFixture.cs`, part one: the constructor with `RequireReaper` and the name, `Builder()`, the build in
-   `InitializeAsync` after `ContainerPass.Once()`, `DisposeAsync`, the seam; NOT yet `.WithName`/`.WithLabel`. The reaper
-   child test and `TwoFixtures_get_two_names` (local).
-4. `FixtureContainerTests.cs`'s Docker proofs, `DockerGate`. Pushed alone (Q3): CI shows the name and label proof red for
+   `InitializeAsync` after `ContainerPass.Once()` and the second `RequireReaper`, `DisposeAsync`, the seam, `Builder()`
+   internal; NOT yet `.WithName`/`.WithLabel`. The two reaper children, the reuse pin's configuration half (3b), the gate's
+   two tests (G3) and `TwoFixtures_get_two_names` (local).
+4. `FixtureContainerTests.cs`'s Docker proofs (with G1's volume checks), `DockerGate`. Pushed alone (Q3): CI shows the name and label proof red for
    the right reason (no owner-form name, empty label).
 5. `PostgresFixture.cs`, part two: `.WithName(ContainerName)`, `.WithLabel(…)`, the marker (K10). CI green.
 6. `research/module_tests.md`; this brief's progress line.
@@ -446,31 +482,33 @@ Ryuk; not read); C9 and C7 again on the head (the same lines, expected as O2–O
 
 ## 13. Done when, and what the PR body quotes
 
-- (1) the Ryuk proof green on `ubuntu-latest`, not skipped, with its seconds; the reaper check's child test green, its RED quoted.
+- (1) the Ryuk proof green on `ubuntu-latest`, not skipped, with its seconds and its volumes gone (G1); both reaper
+  children green (G2), their REDs quoted.
 - (2) the name and label proof and the real-daemon pass green in CI, the commit-4 RED quoted; the fake-docker facts green,
   their hand REDs quoted.
-- (3) the reuse counterexample test green (the disposal check red on a reused container), and the configuration half
-  recorded as "no instance at 4.16.0" with O11.
-- (4) the disposal proof green; the size warning quoted.
+- (3) the builder counterexample green (the disposal check red on a reused container); (3b) the configuration pin green
+  locally and in CI (entry 10.1), with O11 cited.
+- (4) the disposal proof green, its volumes gone (G1); the size warning quoted (Q4).
 - (5) both guards clean on `PostgresFixture.cs`, the Node guard at 209 and 3; the malformed marker's `exemption` quoted
   from each guard.
 - (6) the no-docker fact green; the local whole-suite run's first stderr lines and the `"postgres"` failure text quoted.
-- (7) the source test green; its RED on the planted `SetEnvironmentVariable` line quoted.
-- `TheAdaptedCopyTests` green with the four entries; `ContainerPass.Runs == 1` in CI; two names; 0 warnings; `dotnet
+- (7) the source test green; its three hand REDs quoted (the `SetEnvironmentVariable` line, the split-literal name, the
+  `= false` assignment).
+- `TheAdaptedCopyTests` green with the four entries; the gate's controlled process printed `passes=1` (G3); two names; 0 warnings; `dotnet
   format` clean; `research/module_tests.md` updated; `plan-lifecycle.mjs` clean; `git diff --name-only 5070beda..HEAD`
   within § 0.1.
 
-## 14. Open questions (the coordinator answers before the plan gate; the recommendation is in brackets)
+## 14. Open questions — ANSWERED 2026-11-16: each accepted as recommended (§ 16)
 
 1. **Q1 — "Its tests" covers three new test files in `tests/Bench.Tests/Leftovers/`.** The Files line names
    "`ContainerPass.cs` … its tests" and adds "each new test file of the folder" to `BenchOwn`; the fixture's Docker proofs and
    the source test (7) are tests of the fixture, not of the pass. [Recommend: yes, within the line, as "each new test file of
    the folder"; one test file per subject keeps each under 400 lines. If read narrowly, putting them all in
-   `ContainerPassTests.cs` keeps the scope at the cost of a ~800-line file; any other folder is 10.1.]
+   `ContainerPassTests.cs` keeps the scope at the cost of a ~800-line file; any other folder would have been a counted change.]
 2. **Q2 — The plan records.** S3's Files line names no plan document, while F42-c's bound (the parent's item 4.1) named
    them by path. [Recommend: the brief, its `todo/README.md` row, its promotion to `research/` with a `research/README.md`
    row, and the stories' progress lines are within the PR, as `common/planning-docs.md` requires them in the task that
-   finishes a plan, and as S2 did; the coordinator confirms, or says it is 10.1, before the gate.]
+   finishes a plan, and as S2 did; the coordinator confirms, or says it is a counted change, before the gate.]
 3. **Q3 — The builder half of E6-f2 (3) RED is a committed counterexample through an internal test seam**
    (`internal PostgresFixture(Func<PostgreSqlBuilder, PostgreSqlBuilder> extra)`), and the name/label RED is seen by
    pushing commit 4 alone. [Recommend: yes to both. The seam keeps the RED permanent and runnable, where a hand plant in the
@@ -478,7 +516,7 @@ Ryuk; not read); C9 and C7 again on the head (the same lines, expected as O2–O
    commit 4 is one run.]
 4. **Q4 — The size of § 8 of the stories** ("`docker system df -v` before and after one suite run, quoted on the PR") needs
    a `ci.yml` step, outside § 0.1. [Recommend: read the container's own size in the disposal proof (`docker ps -s`, a
-   warning on the run) and quote it; § 8's exact form would be change 10.1, and the per-container size answers its question
+   warning on the run) and quote it; § 8's exact form would be a counted change, and the per-container size answers its question
    (the fixture's growth) without it.]
 5. **Q5 — Scenario (7)'s exclusion of the manifest targets.** The alternative is to read only C# that SETS the variable
    (an assignment, a `SetEnvironmentVariable`, an environment dictionary) and not a bare mention; that needs no exclusion
@@ -493,8 +531,31 @@ Ryuk; not read); C9 and C7 again on the head (the same lines, expected as O2–O
 ## 15. Notes for the parent (`dew_flow_conventions`; a finding about the rule goes there, stories § 9)
 
 - **N1 — Row E6-f2's configuration half has no instance at Testcontainers 4.16.0** (O11): the RED "through configuration
-  alone" cannot be produced; the run is recorded as the observed result. The parent's progress record notes it (the
-  stories' E6-f2 cell and the parent's item 8.2 already expected this); a dependency bump re-runs O11.
+  alone" cannot be produced. Recorded by the parent as entry **10.1** (conventions PR #174, `0ca0825d`): that half is a
+  GREEN PIN, scenario (3b) here; a dependency bump re-runs O11, and the pin says whether a configuration path appeared.
 - **N2 — Neither guard reads `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`** (O5, both
   halves of C7 observed), nor `.WithReuse(true)` (O9), nor the label key as one literal in the Node guard (O7, the C# guard
   reads it as `owner-blind`). The first two are the parent's F43; benchmark covers them with its own tests (7) and (3).
+
+## 16. Decisions and the plan gate (2026-11-16)
+
+**The plan gate.** coai session `e4eef27b`: `proceed`. Its accepted findings, folded in above:
+
+- **G1 — the anonymous database volume ends with the container.** The container's volume names are captured by a
+  successful `inspect` before disposal and before the kill, and `docker volume ls -q --no-trunc` (exit 0) must list none
+  of them after disposal (4), after the killed child (1), in the builder counterexample's cleanup (3) and in the pin (3b).
+  A survivor fails the test: no silent retention. Hosted CI only (Docker).
+- **G2 — the effective reaper setting immediately before the build**, in `InitializeAsync` after the pass and before
+  `Build()` (K3, § 4 step 4, scenario (1) K3 (ii)); and test (7) also reads `ResourceReaperEnabled = false` assignments
+  and the name assembled from split literals (K11, scenario (7)), with planted examples red, still skipping the manifest
+  targets.
+- **G3 — the once-per-process gate proved in a controlled process**: two fixture starts in a child that runs nothing else
+  (`passes=1`), and the gate's seam under 8 callers; never by other tests' order (scenario "the gate").
+
+**The coordinator's decisions.** Q1–Q7 of § 14 accepted as recommended. Q4: the container's own size in the disposal test,
+no `ci.yml` step. The configuration-reuse result is the parent's entry 10.1 (conventions PR #174): row E6-f2's "through
+configuration alone" counterexample is a GREEN PIN (scenario (3b): both spellings set → the built container's `Reuse`
+stays `False` and the container still ends with the fixture); the builder counterexample (3) and the run-time disposal
+proof (4) stay RED-first. 10.1 is epoch 10's first change, so the next accepted change is the tenth full stop: nothing
+beyond § 0.1's paths. Every finding above stays inside them (the fixture, `ContainerPass.cs` and the three new test files
+of the folder); a need for any other file is a STOP and a report, never an added path.
