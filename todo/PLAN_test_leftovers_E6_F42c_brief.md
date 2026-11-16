@@ -1,6 +1,6 @@
 # E6 F42-c brief — the adapted C# copy re-synced to mcp's F42 commit (a prerequisite PR of E6.S3)
 
-> Status: **plan only, nothing implemented yet, 2026-11-16.** The brief of the prerequisite PR F42-c of `todo/PLAN_test_leftovers_E6.md` (§ 6 *Before S3*; § 5 row "— (F42-c)"; D2).
+> Status: **plan only, nothing implemented yet, 2026-11-16; the coordinator's decisions folded in the same day (§ 12).** The brief of the prerequisite PR F42-c of `todo/PLAN_test_leftovers_E6.md` (§ 6 *Before S3*; § 5 row "— (F42-c)"; D2). Its scope is widened by the parent's entry 9.1 (§ 0.1).
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-16. Read-only inputs, all verified for this brief: benchmark
 > worktree `/home/jinx/git/wt/bench-f42c`, branch `feat/e6-copy-f42` from `origin/main` `83f166d6` (#216: the rules pin at
@@ -22,9 +22,33 @@ notes N1, N4 and N5 of S2's brief are fixed (N2 did not reproduce; N3 is bounded
 copy). You rewrite the eleven files from the template under the SAME manifest operations (one count changes), add the two
 new files as manifest entries, re-pin the manifest to `53f65130`, and move the one line of `TheAdaptedCopyTests` that pins
 the manifest's commit. The differential test runs the MOUNTED Node guard, which reads workflows through the mount's `yaml`
-package, so `build-test` gets the step mcp's CI got: `npm ci --ignore-scripts` in `.agents/conventions`. You update the
-docs. ONE pull request, in this repository only. No copied file is edited by hand; no ownership, liveness or deletion
-code is written here.
+package, so `build-test` gets the step mcp's CI got: `npm ci --ignore-scripts` in `.agents/conventions`. You rewrite case
+15's Windows skip reason, update the docs, and promote this brief and the S2 brief. ONE pull request, in this repository
+only. No copied file is edited by hand; no ownership, liveness or deletion code is written here.
+
+## 0.1 Scope — exactly five touches beyond the copy, by the parent's entry 9.1
+
+The stories' § 6 *Before S3* says "No benchmark-own file changes" and "Files. `tests/Bench.Tests/Leftovers/**` (manifest
+targets and `template-manifest.json` only)" (`todo/PLAN_test_leftovers_E6.md:315-319`). That is an explicit scope line,
+and F42-c cannot keep it. The question consultants (consult `57ac1bd6`, both answers) judged the widening a plan change;
+it is recorded as entry **9.1** of the parent's ledger (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`,
+`- 9.1 · 2026-11-16 · agent · scope, approach — F42-c … cannot keep E6's § 6 boundary …`, conventions PR #172). It is the
+first change of epoch 9: recorded, not a stop.
+
+Beyond the manifest targets and `template-manifest.json`, this PR touches exactly these five, and nothing else:
+
+| # | Touch | Where | Why it cannot be avoided |
+|---|---|---|---|
+| T1 | the commit pin | `tests/Bench.Tests/Leftovers/TheAdaptedCopyTests.cs:79` (one line) | it pins the manifest's `commit`; D2 moves that commit to F42's (§ 4) |
+| T2 | the CI step `npm ci --ignore-scripts` in `.agents/conventions` | `.github/workflows/ci.yml`, job `build-test` (§ 6) | the copied differential test runs the mounted Node guard, which needs the mount's `yaml` |
+| T3 | two `-text` lines | `.gitattributes` (§ 4.1 step 3) | S2's standing decision: one line per copied file |
+| T4 | case 15's Windows skip reason (the skip stays) | `tests/Bench.Tests/Leftovers/LeftoversSweepCase15Tests.cs:14-15`, `:19-21` (§ 7) | the copied N1 fix makes today's reason untrue |
+| T5 | the docs | `research/module_tests.md`; the stories (their § 6 sentence amended to name T1–T5 and cite entry 9.1, and the progress of § 14); `todo/README.md`; `research/README.md`; this brief and the S2 brief (status and promotion, § 14) | they must say what exists |
+
+**Anything beyond T1–T5 needs a new decision first, and the next accepted change to the parent is the SECOND of epoch 9:
+the ninth full stop** (`common/plan-change-control.md`). If the build, the format check, an analyzer, a test or a reviewer
+asks for any other file (a `.csproj`, an `.editorconfig` section, another own file, another workflow line), STOP and
+report; do not add it.
 
 ## 1. Rules you must read first
 
@@ -35,7 +59,7 @@ code is written here.
   (`:310-320`); § 9 (`:456`, `:458`); § 11 (`:475`); § 12 item 5 (`:498-500`).
 - The S2 brief, `todo/PLAN_test_leftovers_E6_S2_brief.md`: § 4.1 (the operations), § 5 (the manifest and the check),
   § 14 (commands), § 17 (N1–N5), § 19 item 1 (`.gitattributes`).
-- `common/planning-docs.md` (the docs and the promotion), `common/plan-change-control.md` (§ 12 Q1 of this brief).
+- `common/planning-docs.md` (the docs and the promotion), `common/plan-change-control.md` (§ 0.1 and § 12 Q1: entry 9.1 and the ninth full stop).
 - No Python anywhere (scripts in Node or bash). No `git stash`. Commit only; the coordinator pushes and opens the PR.
 
 ## 2. Preconditions and merge conditions
@@ -45,9 +69,10 @@ code is written here.
 2. **F41-b is merged here** — met: B:`83f166d6` is #216, the mount at `b1746499`; its module exports `DECLARATION_KINDS`
    (B:`.agents/conventions/tools/leftovers-check.mjs:139`), which is what the differential test reads to decide whether
    the marker rows run (T:`LeftoversGuardDifferentialTests.cs:24`, `:65-69`).
-3. **The open-PR cap** (`common/pull-requests.md` rule 7, at most three). At the time of writing five Dependabot PRs are
-   open (#210–#214) **[M]**; § 12 Q4.
-4. CI checks of the head SHA exist and are green (`build-test`, `contract`, `plans`); the coai code gate and the Opus
+3. **The open-PR cap** (`common/pull-requests.md` rule 7, at most three): settled. Five Dependabot PRs are open (#210–#214)
+   **[M]**, and the owner allowed every E6 PR over the cap (2026-11-16; § 12 Q4).
+4. **Entry 9.1 is recorded in the parent** (conventions PR #172) before this PR merges: the PR body cites it (§ 0.1).
+5. CI checks of the head SHA exist and are green (`build-test`, `contract`, `plans`); the coai code gate and the Opus
    review are done. F42-c merges BEFORE E6.S3's code (stories § 5).
 
 ## 3. What changed in the template — the file set (point 1)
@@ -122,7 +147,7 @@ changed*): the `{Lower}_u1000_mcp_x_abc123` and `{P}-u1000-mcp-t-abc123` names i
 `:133` of the copy) are owner-form fixture names; the C# guard's owner-form test does not read the token
 (T:`LeftoversGuard.cs:111`, `OwnerForm` = prefix + owner segment only, and `:277`), so they mean the same in benchmark.
 The differential test's skip `Reason` (T:`:16`) says "mcp's rules pin"; it is shown only while the mount predates F41,
-and benchmark's mount does not (§ 2 item 2): no op (§ 12 Q3).
+and benchmark's mount does not (§ 2 item 2): no op (decided, § 12 Q3).
 
 **The manifest's other fields:** `commit` → `"53f651309a271e7388c703e1ec73799ff6f1c76e"` (B:`:4`); the nine changed
 entries' `blob` → the full SHAs of § 3; `about` (B:`:2`) rewritten to name the commit, keeping every word
@@ -139,8 +164,7 @@ entries' `blob` → the full SHAs of § 3; `about` (B:`:2`) rewritten to name th
 (`manifest.Commit.Should().Be("21553ce5c5729e57557504c4a59e0311e69bc489", "the copy is of this one template commit (plan
 D2)")`). Change the SHA to `53f651309a271e7388c703e1ec73799ff6f1c76e` and the because-text to "the copy is of this one
 template commit (plan D2; re-synced by F42-c)". Nothing else in that file changes: `BenchOwn` (`:32-46`) stays the twelve
-files, because the two new files are manifest entries, never own files (`:130`). This is outside the stories' Files list
-(§ 12 Q1).
+files, because the two new files are manifest entries, never own files (`:130`). This is touch T1 of § 0.1 (entry 9.1).
 
 ### 4.1 How to build the copy (the S2 procedure, § 5.1 there)
 
@@ -152,7 +176,7 @@ files, because the two new files are manifest entries, never own files (`:130`).
    the eleven), which is a second check of the script.
 2. Never let an editor or formatter touch a copied file afterwards. `dotnet format --verify-no-changes` must pass on the
    new bytes; if it wants to change a COPIED file, stop and report (the answer is project-level, never an edit).
-3. `.gitattributes`: add one `-text` line for each new copied file, in the block of S2 (B:`.gitattributes:7-62`, its
+3. `.gitattributes` (touch T3): add one `-text` line for each new copied file, in the block of S2 (B:`.gitattributes:7-62`, its
    comment at `:7-8`; S2 brief § 19 item 1: one line per copied file, never a glob), in ordinal order:
    `tests/Bench.Tests/Leftovers/LeftoversGuardDifferentialTests.cs -text` after `:20`, and
    `tests/Bench.Tests/Leftovers/LeftoversGuardScenarios.cs -text` after `:24`.
@@ -193,7 +217,19 @@ get nothing. `node` is the runner's own (the `contract` job already relies on it
         run: npm ci --ignore-scripts
         working-directory: .agents/conventions
 ```
-The Node guard reads workflows: the step must add no finding (§ 9, the after-count).
+The Node guard reads workflows: the step must add no finding (§ 9, the after-count). This is touch T2 of § 0.1.
+
+**Deterministic, and it dirties nothing** (the consultant's caution; check K2 in § 10). `npm ci` installs exactly the
+mount's `package-lock.json` and never writes it; `--ignore-scripts` runs no install script. Measured in this worktree
+after `npm ci --ignore-scripts --prefix .agents/conventions` **[M]**: the mount's `.gitignore:2` ignores `node_modules`
+(`git -C .agents/conventions status --porcelain --ignored` → only `!! node_modules/`), its `package-lock.json` is
+unchanged (`git diff --quiet` → 0), `git status --porcelain` of benchmark is empty, and `git submodule status` shows the
+pin `b1746499` with no `+` or dirty mark. `TheAdaptedCopyTests` reads only `tests/Bench.Tests/Leftovers/` and the
+manifest (B:`TheAdaptedCopyTests.cs:25`, `:56`, `:121-124`), so nothing under `.agents/conventions` can turn it red.
+Do not use `npm install`, `npm update` or a version range anywhere: they may write the lockfile.
+
+**It also serves S7.** S7 adds the Node guard as a CLI step to `build-test` (stories `:407-408`); that guard reads
+benchmark's workflows and needs the same `yaml`, so S7 keeps this step and adds none.
 
 ## 7. Benchmark's own files against F42 (point 3)
 
@@ -206,7 +242,7 @@ interaction, read (not run):
 | `StartOfRunSweep.cs`, `StartOfRunOrderAttribute.cs`, `StartOfRunSweepTests.cs` | `LeftoversSweep.cs` and `LeftoversSweepFixture.cs` are unchanged (blobs equal); their ops (F29 F1–F3; `typeof`; `StartOfRunSweep.Run()`) apply as they are | none; G3 (`Runs == 1`) holds | none |
 | the end-of-run audit (the copied fixture's `DisposeAsync` → `LeftoversAudit.Run`) | `Discover` now checks the run record BEFORE touching the root, reads the root with `RootExists`, lists lazily, and an unreachable root throws `LeftoversAuditException` that keeps the registry's groups (`DiscoverKeeping`, T:`LeftoversAudit.cs:169`) | a run whose temp root cannot be reached is now RED with "bench tests: the end-of-run audit could not read the temp root …" instead of passing as clean. The CI audit step (B:`ci.yml:55-72`) greps the normal first line, which is unchanged | none; it is the fix N5 asked for |
 | `TempDir.cs`, `TempDirTests.cs` | `OwnedDir.Dispose` → `Removal.Quietly` → `RemoveFolder` now calls `ClearReadOnlyBelow` on Windows only (T:`Removal.cs:54`); Linux unchanged | none on Linux; on Windows a folder of read-only files is now removed | none |
-| `LeftoversSweepCase15Tests.cs` | the sweep removes a quarantined folder through `Removal.Quietly` (B:`LeftoversSweep.cs:331`), which now clears read-only files on Windows (N1, observed RED then GREEN on mcp's `windows-latest`, run `43928795620`) | Linux: unchanged, case 15 still runs. Windows: the skip REASON (`:14-15`, `:19-21`: "the copied Removal … does not clear that flag on Windows") becomes untrue | § 12 Q2 |
+| `LeftoversSweepCase15Tests.cs` | the sweep removes a quarantined folder through `Removal.Quietly` (B:`LeftoversSweep.cs:331`), which now clears read-only files on Windows (N1, observed RED then GREEN on mcp's `windows-latest`, run `43928795620`) | Linux: unchanged, case 15 still runs. Windows: the skip REASON (`:14-15`, `:19-21`: "the copied Removal … does not clear that flag on Windows") becomes untrue | touch T4 (decided, § 12 Q2): rewrite the reason, keep the skip; the text is in § 7.1 |
 | `WindowsNewFileOwnerLimitTests.cs` | reads the owner SID directly; `Scope.cs` and `OwnedDir.cs` are unchanged | none | none |
 | `TwoSweepsAtOnceTests.cs`, `SweepPlants.cs`, `SuiteChild.cs` | none of the changed files; the child's audit returns early on a foreign run record exactly as before (the order of the two tests changed, both give `[]`) | none | none |
 | `TheAdaptedCopyTests.cs` | the manifest's commit | `:79` pins it | changed (§ 4) |
@@ -216,6 +252,17 @@ interaction, read (not run):
 (`git grep -w -E 'GuardScenario|GuardScenarios|LinkCountOf|ClearReadOnlyBelow|RootExists|UnreadableRoot|NodeAnswer|NodeFinding'`
 → nothing outside the copy **[M]**; `LiveProcess` is a private class inside the copied `LeftoversAuditTests.cs`). No code
 outside `tests/Bench.Tests/Leftovers/` calls `LeftoversAudit`, `Removal` or `Native` **[M]**.
+
+### 7.1 Case 15's Windows reason (touch T4)
+
+Keep all three `Assert.SkipWhen(OperatingSystem.IsWindows(), WindowsReason)` lines; change only the text. Benchmark has no
+Windows leg, so removing the skip would claim a Windows result nobody here runs. The constant (`:19-21`) becomes:
+
+> not run on Windows here: benchmark has no Windows leg. Since the re-sync to mcp 53f65130 the copied Removal clears
+> read-only files below a folder before the delete on Windows (N1, observed by mcp on windows-latest, run 43928795620),
+> so read-only git objects no longer stop the removal; not observed in this repository
+
+and the doc comment's *Windows* paragraph (`:14-15`) says the same in one sentence. Nothing else in the file changes.
 
 ## 8. The repository guard test stays `Explicit` (point 4)
 
@@ -261,6 +308,27 @@ Every RED is watched for the right reason and quoted on the PR (command and firs
 | W2 | `dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore`; `git diff --check`; the build | clean; 0 errors, and no warning that `main` does not have (#207 recorded one, `ASPIRE010` from AppHost, the same on `main`) | — |
 | G1 | the Node guard, § 9 | 209 and 3 before and after | — |
 | P1 | `node .agents/conventions/tools/plan-lifecycle.mjs` | clean | — |
+| K1 | **Before the PR is opened: re-read S3–S7 for any other file-scope boundary the re-sync crosses** (the consultant's caution) | none crossed beyond T1–T5; the PR body lists what was read. At this brief: see the list below | a boundary found → STOP, a new decision (§ 0.1) |
+| K2 | **The CI `npm ci` is deterministic and dirties nothing** (the consultant's caution) | after the step, locally and in a CI step's log if the coordinator wants it: `git status --porcelain` empty, `git submodule status` without `+`, `git -C .agents/conventions diff --quiet package-lock.json` → 0; `TheAdaptedCopyTests` green with `node_modules` present AND absent (run C2 both ways) | `npm install` in place of `npm ci` is never tried on the branch |
+
+**K1, as read for this brief** (the stories at B:`83f166d6`; re-read on the PR's base, it may have moved):
+
+- **S3** (`:322-355`): Files `PostgresFixture.cs`, a benchmark-own `ContainerPass.cs` "on the copy check's own list"
+  (`:352-353`), its tests, `research/module_tests.md`. Crossing: none. S3 will edit `BenchOwn` in `TheAdaptedCopyTests.cs`
+  (`:32-46`), F42-c only `:79`: the same file, other lines; F42-c merges first (§ 5). S3's marker (E6-f1) is accepted by
+  the copied C# guard only after F42-c: that is F42-c's purpose, not a crossing.
+- **S4** (`:357-370`): `tests/Bench.Tests/ModelArms/**`. Disjoint.
+- **S5** (`:372-388`): `tests/Bench.Tests/**` outside `ModelArms/` and `Leftovers/`, the fakes, three `src/` files,
+  `research/module_tests.md`. Disjoint (F42-c is inside `Leftovers/`); `module_tests.md` is shared docs, other sections.
+- **S6** (`:390-399`): `spikes/`. Disjoint.
+- **S7** (`:401-418`): deletes the `Explicit` op on `LeftoversRepositoryGuardTests.cs` and adds one op on
+  `LeftoversGuardFiles.cs` (`:403-406`); both files are UNCHANGED between `21553ce` and `53f65130` (blobs `956f18ff`,
+  `952cf1d6` **[M]**), so S7's ops still apply after the re-pin. S7's CI step in `build-test` sits beside T2 and relies on
+  it (§ 6). Crossing: none.
+- **D2** (`:169-182`, the permitted operations): the count 6 → 7 is a correction the stories' § 6 already allows ("any
+  operation whose count changed corrected", `:315`); the two new entries carry the namespace op only. **D5** (`:200-203`):
+  every new copied test makes its folders inside an `OwnedScope`/`OwnedDir` (the template's practice). **§ 9** (`:456`,
+  `:458`): "never edits the copied files by hand" holds.
 
 ## 11. The commit series
 
@@ -270,41 +338,37 @@ One PR. Each commit builds; commit 1's RED is intended.
    the two `.gitattributes` lines. Run C1.
 2. **GREEN** — the eleven copied files, written by the § 4.1 script (and the 44 unchanged ones byte-identical). Run C2,
    then C3–C5 by hand, L1–L3, D2 (with the mount's dependencies installed).
-3. **CI** — the step of § 6. Run D1 (the RED without the dependencies) and record it.
-4. **Docs** — § 12 Q2's answer if yes; `research/module_tests.md`; the stories; `todo/README.md` (§ 14).
-5. **Promotion** — only if § 12 Q5 says yes (§ 14).
+3. **CI** (T2) — the step of § 6. Run D1 (the RED without the dependencies) and record it; K2.
+4. **Case 15 and docs** (T4, T5) — § 7.1; `research/module_tests.md`; the stories (the § 6 amendment citing entry 9.1, and
+   the progress); `todo/README.md` (§ 14). K1 before the PR is opened.
+5. **Promotion, last** (T5) — this brief and the S2 brief to `research/` (§ 14), `git mv` last, after CI is green on
+   commit 4's head.
 
-Size: about 1,100 copied lines changed (script-made) and about 40 hand-written lines (the manifest's new entries and
-about, one test line, CI, docs). One Sonnet coder; no split.
+Size: about 1,100 copied lines changed (script-made) and about 60 hand-written lines (the manifest's new entries and
+about, one test line, CI, case 15's reason, docs). One Sonnet coder; no split.
 
-## 12. Open questions (the coordinator answers; the recommended answer in brackets)
+## 12. The coordinator's decisions (2026-11-16)
 
-1. **Q1 — The Files list.** The stories' § 6 *Before S3* says "No benchmark-own file changes" and lists "manifest targets
-   and `template-manifest.json` only" (`:315-319`). This PR also needs `TheAdaptedCopyTests.cs:79` (the pinned commit), the
-   `build-test` step (§ 6), two `.gitattributes` lines, the docs, and perhaps Q2. [Recommended: not a plan change. Each
-   addition only satisfies the plan as written: D2 says the manifest names F42's commit from then on (the test line is
-   that same pin); the stories' check says the copied tests are green (impossible in CI without the step); the
-   `.gitattributes` lines are S2's standing decision for every copied file; the docs record what exists. None changes
-   scope, goals, the Definition of Done, the merge conditions, a story, the build order, a contract or the approach. The
-   PR body lists them as "files outside § 6's list, with the reason". Because `common/plan-change-control.md` says "in
-   doubt, it is a change", ask the question consultant this ONE question first; if it counts, it is entry 9.1 of the
-   PARENT's ledger (the first change of epoch 9: recorded, not a stop), written in conventions in the commit that accepts it.]
-2. **Q2 — Case 15's Windows reason.** After the re-sync the reason is untrue (§ 7). [Recommended: in this PR, rewrite
-   the reason text only and keep the skip: "not run on Windows here: benchmark has no Windows leg. The copied Removal
-   clears read-only files below a folder before the delete on Windows since the re-sync to mcp 53f65130 (N1, observed by
-   mcp on windows-latest, run 43928795620), so read-only git objects no longer stop it; not observed in this
-   repository"; the doc comment (`:14-15`) says the same. Removing the skip would claim a Windows result nobody here runs.
-   If the coordinator keeps the file untouched (Q1's strict reading), the docs of § 14 still correct the statement and the
-   reason is fixed in S7.]
-3. **Q3 — The differential test's skip text** names "mcp's rules pin" (T:`:16`). [Recommended: no op. It is shown only
-   while the mount predates F41, and benchmark's does not; an op would be a reviewed difference for text no run shows.]
-4. **Q4 — The PR cap.** Five Dependabot PRs (#210–#214) are open. [Recommended: the coordinator counts them under rule 7;
-   if they count, land or close them first, or ask the owner in one sentence before opening F42-c.]
-5. **Q5 — Promote this brief in the PR.** [Recommended: yes, as the last commit: status `IMPLEMENTED, <date>` with its
-   deviations, `git mv` to `research/` last (`common/planning-docs.md` § *The git mv goes LAST*), its `todo/README.md` row
-   removed and a `research/README.md` row added; this brief cites paths in backticks, not links, so no link moves. Note:
-   `todo/PLAN_test_leftovers_E6_S2_brief.md` still says "plan only, nothing implemented yet" though #207 merged it; whether
-   it is promoted in the same PR is the coordinator's call (a status line made true is not a plan change).]
+The brief's first version asked five questions; the coordinator answered each. The questions are kept in one line each,
+with the decision.
+
+1. **Q1 — Is widening F42-c's Files list a plan change? — YES.** The brief had recommended "not a change". The question
+   consultants (consult `57ac1bd6`) both said it is: § 6's "No benchmark-own file changes"
+   (`todo/PLAN_test_leftovers_E6.md:315`) is an explicit scope line. Recorded as entry **9.1** of the parent's ledger
+   (conventions PR #172; kinds `scope, approach`). Consequences, all in this brief: § 0.1 names the five touches T1–T5 and
+   nothing else; F42-c's PR amends the stories' § 6 sentence to name T1–T5 and cite entry 9.1 (§ 14); any further file needs
+   a new decision, and the next accepted change is the ninth full stop.
+2. **Q2 — Case 15's Windows reason. — Rewrite the reason, keep the skip** (benchmark has no Windows leg). Touch T4; the
+   text is § 7.1.
+3. **Q3 — An op for the differential test's skip text ("mcp's rules pin", T:`:16`)? — No op.** The text shows only while
+   the mount predates F41, and benchmark's does not.
+4. **Q4 — The open-PR cap (five Dependabot PRs open). — Settled:** the owner allowed every E6 PR over the cap (2026-11-16).
+5. **Q5 — Promotion. — Promote this brief to `research/` in the PR's last commit; and in the same PR repair the S2 brief's
+   stale status line** (it still says "plan only, nothing implemented yet"; S2 merged as #207 `84d4953e` on 2026-11-12) **and
+   promote it the same way.** Why the S2 brief moves too: no brief of this repository has been promoted yet (`ls research |
+   grep -i brief` → nothing; no rename into `research/` in `git log`) **[M]**, so there is no brief-specific convention, and
+   `common/planning-docs.md` decides: a plan whose status is `IMPLEMENTED` is never left in `todo/` (the lifecycle check is
+   red on it), so a repaired status line means a move. Both are T5; how, in § 14.
 
 ## 13. Commands (from the worktree root; WSL, no Docker, no `.exe`)
 
@@ -357,24 +421,48 @@ gh run list --repo oleksandrdubyna88/dew_flow_benchmark --branch main --limit 1 
   - The audit paragraph (`:640`): an audit that cannot reach the temp root fails the run and says so (N5).
   - The limits (`:646`): the read-only git objects line is no longer true. Replace it with: on Windows the copied removal
     clears read-only files below a folder before the delete, never entering a link, and keeps a file with a second hard
-    link (N1, observed by mcp on `windows-latest`, run `43928795620`; not observed here, no Windows leg); case 15 skips on
-    Windows with that reason (Q2).
+    link (N1, observed by mcp on `windows-latest`, run `43928795620`; not observed here, no Windows leg); case 15 still
+    skips on Windows, with the reason of § 7.1 (T4).
   - Commands (`:651-659`): add `--filter-class "*LeftoversGuardDifferentialTests"` and the line that it needs
     `npm ci --ignore-scripts --prefix .agents/conventions` first.
   - Pitfall (S2 brief § 12): no table row whose first cell starts with a backticked `bench ` (`ModuleTestsCatalogTests`).
-- **The stories** (`todo/PLAN_test_leftovers_E6.md`), in the PR, after its CI is green (progress, not changes):
-  - the status line (`:3-11`): "F42-c merged (#…): the copy re-synced to mcp `53f65130`";
+- **The stories** (`todo/PLAN_test_leftovers_E6.md`) — first the amendment that entry 9.1 makes, then the progress:
+  - **§ 6 *Before S3*, the amended scope (entry 9.1).** Replace "No benchmark-own file changes, and no copied file is
+    edited by hand." (`:315-316`) with: "No copied file is edited by hand. Beyond the manifest targets and
+    `template-manifest.json`, five touches and no others (the parent's entry 9.1, 2026-11-16): the commit pin in
+    `TheAdaptedCopyTests.cs:79`; the `build-test` step `npm ci --ignore-scripts` in `.agents/conventions`; two
+    `.gitattributes` `-text` lines; case 15's Windows skip reason; the docs." and widen the **Files.** line (`:319`) to
+    the same five. Cite entry 9.1 by its ledger line. The stories keep no ledger of their own
+    (`common/plan-change-control.md`), so nothing else records it here;
+  - one line under § 6 *Before S3* naming this brief (by its `research/` path after the promotion);
+  - the status line (`:3-11`): "F42-c merged (#…): the copy re-synced to mcp `53f65130`; its scope widened by the parent's
+    entry 9.1";
   - row E6-e's state (`:51`): "re-run by F42-c (#…): 12 red at commit 1, green at `53f65130`, one copied byte → red";
   - row E6-f1's state (`:52`): F41-b (#216) and F42-c (#…) are met, so it is **proposed** (S3 writes and runs it), no
     longer blocked;
   - § 5 (`:252`) and § 12 item 5 (`:498-500`): F42-c merged;
-  - § 6 *Before S3* (`:310-320`): one line naming this brief and the files outside its list (Q1's answer);
   - § 11 (`:475`): "(`21553ce` until F42-c)" → "(`53f65130` since F42-c, #…)"; the box stays open (it holds F29 and F31 too).
-- **`todo/README.md`**: the E6 row (`:99`) gets the same progress words; this brief's row (written with this brief) is
-  updated or moved by Q5.
+  - The status line also stops naming the S2 brief by its `todo/` file name once that brief moves (`:6`, "brief
+    `PLAN_test_leftovers_E6_S2_brief.md`" → its `research/` path).
+- **`todo/README.md`**: the E6 row (`:99`) gets the same progress words; the two brief rows (`:100`, `:101`) are removed by
+  the promotion.
+- **The promotion of both briefs (Q5), the PR's last commit**, in the order of `common/planning-docs.md` § *The git mv
+  goes LAST*: every edit while the files are still in `todo/`, then `git mv`, `git add` of the destinations, and ONE
+  commit.
+  - This brief: status `> Status: **IMPLEMENTED, <merge date>.**` with its deviations (what shipped differently from this
+    brief: the RED counts actually seen, anything K1 found, any analyzer or format finding and how it was settled).
+  - The S2 brief: status `> Status: **IMPLEMENTED, 2026-11-12** (merged as #207 \`84d4953e\`).` — a status repair, not a
+    plan change — with its deviations read from #207's body and its § 19 (the coordinator's decisions: `.gitattributes`
+    lines, the F31 pin in S2, case 15's RED by mutation, no start-of-run switch); "checked: #207's PR body and the brief's
+    § 19" names the edges of that search.
+  - `research/README.md`: one row each, in the shape of the other design records there (`:39-45`: "Design record,
+    IMPLEMENTED <date> — …"), naming the stories they serve.
+  - Links: neither brief holds a markdown link (`grep -c '](' ` → 0 for both **[M]**); the inbound references are the
+    stories' status line (`:6`, a backticked name, fixed above) and this brief's own backticked paths to the S2 brief
+    (§ 1, the S2 brief bullet), rewritten to `research/` before the move. Run `plan-lifecycle.mjs` after the commit.
 - **Not in this repository**: the parent's row F42-c (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` § *Epoch
-  9* item 3) becomes **observed** with this PR's runs (C1–C3), written by the coordinator in conventions (a progress record
-  like item 9.1, not a change unless Q1 says so).
+  9* item 3) becomes **observed** with this PR's runs (C1–C3), written by the coordinator in conventions. Entry 9.1 is
+  already recorded there (conventions PR #172); this PR cites it and adds nothing to the parent.
 
 ## 15. Done when, and what the PR body quotes
 
@@ -385,7 +473,8 @@ gh run list --repo oleksandrdubyna88/dew_flow_benchmark --branch main --limit 1 
   teeth as on `main` (L4).
 - The whole suite: no new failure against the base, both FAILED lists diffed (W1); format clean, no new warning (W2).
 - The Node guard 209 and 3 before and after (G1); the C# guard's Explicit count before and after, as information.
-- `LeftoversRepositoryGuardTests` still `Explicit`; no copied file edited by hand; no benchmark-own file changed beyond
-  § 4's line and Q2's answer.
-- The docs of § 14 written; `plan-lifecycle.mjs` clean; Q1 answered and recorded (in the PR body, and in the parent if it
-  counts).
+- `LeftoversRepositoryGuardTests` still `Explicit`; no copied file edited by hand; the PR's diff outside the manifest
+  targets and `template-manifest.json` is T1–T5 of § 0.1 and nothing else (`git diff --name-only <base>..HEAD` quoted).
+- K1 (S3–S7 re-read on the PR's base, what was read listed) and K2 (the `npm ci` leaves the trees clean) recorded.
+- The docs of § 14 written, the stories' § 6 amended with entry 9.1 cited; both briefs promoted; `plan-lifecycle.mjs`
+  clean; the PR body cites entry 9.1 (conventions PR #172).
