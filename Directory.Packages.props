@@ -11,7 +11,7 @@
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     <!-- The CLI is a host and reads its Serilog levels from configuration rather than from a call site. -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="11.0.0" />
     <!-- Aspire SDK and Hosting packages must move as a matched pair — a straddled version spawns a
          second stray dashboard on a random port. The SDK version lives in hosts/AppHost/AppHost.csproj. -->
     <!-- 13.6.5 (2026-11-11): the fix of GHSA-f7vh-h5g3-7jrh (CVE-2026-120006, Aspire elevation of privilege; Aspire.Hosting
