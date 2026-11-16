@@ -1,6 +1,8 @@
 # E6.S3 brief — the fixture's container, the container pass and the marker (rows E6-d, E6-f1, E6-f2; D9)
 
-> Status: **plan only, nothing implemented yet, 2026-11-16; rewritten to the parent's epoch 10, with the item 8.1
+> Status: **built on `feat/e6-s3-fixture-e10` 2026-11-16 (progress line: the six commits of § 12 are on the branch, the local facts and hand REDs are
+> done and quoted by the coder; the Docker proofs, the commit-4 CI RED and the PR's CI evidence are still to be observed on hosted CI; not promoted).**
+> Earlier the same day: **plan only, nothing implemented yet; rewritten to the parent's epoch 10, with the item 8.1
 > observations made before its plan gate (§ 11).** The brief of story S3 of `todo/PLAN_test_leftovers_E6.md` (§ 6 S3;
 > rows E6-d, E6-f1, E6-f2; D9; claims C2, C7, C9). Its scope is S3's Files line, as named paths (§ 0.1): a file outside
 > them would be the parent's next counted change, which after entry 10.1 is the TENTH FULL STOP, and the work STOPS there.
