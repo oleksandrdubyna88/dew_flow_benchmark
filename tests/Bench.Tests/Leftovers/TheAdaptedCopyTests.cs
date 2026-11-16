@@ -76,7 +76,7 @@ public sealed class TheAdaptedCopyTests
         var manifest = ReadManifest();
 
         manifest.Repository.Should().Be("dew_flow_mcp", "the template is dew_flow_mcp");
-        manifest.Commit.Should().Be("21553ce5c5729e57557504c4a59e0311e69bc489", "the copy is of this one template commit (plan D2)");
+        manifest.Commit.Should().Be("53f651309a271e7388c703e1ec73799ff6f1c76e", "the copy is of this one template commit (plan D2; re-synced by F42-c)");
         manifest.Commit.Should().MatchRegex("^[0-9a-f]{40}$", "the template commit is a full SHA");
         manifest.About.Should().Contain("F29").And.Contain("F31").And.Contain("BUILTIN\\Administrators").And.Contain("Git Bash", "the limits are stated by their true condition (plan D3)");
         manifest.Entries.Should().NotBeEmpty();

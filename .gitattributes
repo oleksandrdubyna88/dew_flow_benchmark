@@ -18,10 +18,12 @@ tests/Bench.Tests/Leftovers/LeftoversAudit.cs -text
 tests/Bench.Tests/Leftovers/LeftoversAuditException.cs -text
 tests/Bench.Tests/Leftovers/LeftoversAuditTests.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuard.cs -text
+tests/Bench.Tests/Leftovers/LeftoversGuardDifferentialTests.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardDocker.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardExemptions.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardFiles.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardLiterals.cs -text
+tests/Bench.Tests/Leftovers/LeftoversGuardScenarios.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardScripts.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardScriptsTests.cs -text
 tests/Bench.Tests/Leftovers/LeftoversGuardTests.cs -text

@@ -1,7 +1,7 @@
 {
-  "about": "E6 S2: the adapted copy of dew_flow_mcp tests/Mcp.Tests/Leftovers at 21553ce (plan D2), plus DirectoryLinks.cs and RepositoryRoot.cs. Per file: upstream path, target path, upstream git blob SHA, ordered exact-replace operations with their match counts and, beyond the namespace line, a reason. TheAdaptedCopyTests undoes them in reverse on the raw bytes, compares the git blob SHA, and applies them forward again. Limits (plan D3): F29 is closed by copy - on Windows the sweep holds coai's per-root named mutex (SweepLock.cs, benchmark's own file) over its whole pass, so two sweeps of one temp root never interleave. F31 - on Windows, what a run leaves in a process whose NEW files and folders are owned by BUILTIN\\Administrators (measured: pwsh on windows-latest) is not removed by the sweep and not named by the audit; it waits for a person. An elevated Git Bash makes the caller's files (measured), and the limit does not apply there.",
+  "about": "E6 S2 copied, F42-c re-synced: the adapted copy of dew_flow_mcp tests/Mcp.Tests/Leftovers at 53f65130 (F42, mcp #81; plan D2; S2 copied it at 21553ce), plus DirectoryLinks.cs and RepositoryRoot.cs. Per file: upstream path, target path, upstream git blob SHA, ordered exact-replace operations with their match counts and, beyond the namespace line, a reason. TheAdaptedCopyTests undoes them in reverse on the raw bytes, compares the git blob SHA, and applies them forward again. Limits (plan D3): F29 is closed by copy - on Windows the sweep holds coai's per-root named mutex (SweepLock.cs, benchmark's own file) over its whole pass, so two sweeps of one temp root never interleave. F31 - on Windows, what a run leaves in a process whose NEW files and folders are owned by BUILTIN\\Administrators (measured: pwsh on windows-latest) is not removed by the sweep and not named by the audit; it waits for a person. An elevated Git Bash makes the caller's files (measured), and the limit does not apply there.",
   "repository": "dew_flow_mcp",
-  "commit": "21553ce5c5729e57557504c4a59e0311e69bc489",
+  "commit": "53f651309a271e7388c703e1ec73799ff6f1c76e",
   "entries": [
     { "upstream": "tests/Mcp.Tests/Leftovers/DarwinFifoChild.cs", "target": "tests/Bench.Tests/Leftovers/DarwinFifoChild.cs", "blob": "126a03cf095176dceb026a753c30c33c7c9c57d3", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
@@ -24,25 +24,28 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/LayoutGateTests.cs", "target": "tests/Bench.Tests/Leftovers/LayoutGateTests.cs", "blob": "b4815f784f95c648e6191d258b70642a4109fd79", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAudit.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAudit.cs", "blob": "f1a93747b118936746aca9cffc6c8a981a297d79", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAudit.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAudit.cs", "blob": "3f32fc52d9c0109d6600ed7a7a3fed553091b238", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAuditException.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAuditException.cs", "blob": "6d703ecfa2c10b8941cc716fc51de3c519cdb1e0", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAuditException.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAuditException.cs", "blob": "dd5860bb1e5eadc3eb0bf3fc64bdfe8bd9620fc1", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAuditTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAuditTests.cs", "blob": "fcc8484b60f9d857e0f7bd390ead2bcb75071a5c", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAuditTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversAuditTests.cs", "blob": "2e258e84b57fabfe2c0b8d78db859f115cba0ad1", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1},
-        {"old":"mcp tests:","new":"bench tests:","count":6,"reason":"the audit message starts with the repository token (rule §1)"},
+        {"old":"mcp tests:","new":"bench tests:","count":7,"reason":"the audit message starts with the repository token (rule §1)"},
         {"old":"--token mcp --dry-run","new":"--token bench --dry-run","count":1,"reason":"the remedy line names the janitor call with the repository token"}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuard.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuard.cs", "blob": "8a92a79b032c5d1849d30048c49115f5bcfc0612", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuard.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuard.cs", "blob": "529646e32d820b8f576338c023de66a3f407e3cb", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1},
         {"old":"tests/Mcp.Tests/","new":"tests/Bench.Tests/","count":5,"reason":"the helper's own folder: HelperFile, HelperFolder and the three FoldingAllowances name this repository's test project"}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardDifferentialTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardDifferentialTests.cs", "blob": "2d308cd35b31b8973243e428341d3410fe61bf68", "replace": [
+        {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardDocker.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardDocker.cs", "blob": "4c686d18a1a1f0f6410a8083549a4d82f3ce6483", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardExemptions.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardExemptions.cs", "blob": "156fe549cf1012b626e7e8a78149671b18df0f5b", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardExemptions.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardExemptions.cs", "blob": "a240a05af9cd39c4a0311d7d0d55f72d226f47a6", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardFiles.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardFiles.cs", "blob": "952cf1d6469997c08f51fccbd495028ba891d32f", "replace": [
@@ -51,13 +54,16 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardLiterals.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardLiterals.cs", "blob": "f1df96b7d192b676cb945f2a1e77c558176a7069", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardScenarios.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardScenarios.cs", "blob": "8da3abb6c114b96ae997cbfb4665010d7f8800f8", "replace": [
+        {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
+    ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardScripts.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardScripts.cs", "blob": "7f073f94893bba9a0be893bb9e675b6f319750ff", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardScriptsTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardScriptsTests.cs", "blob": "9726f4fe8eef95bc865fa220a69024b70ac26f77", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardTests.cs", "blob": "f6a8e035c9a19a360b7fd087616fa50807eb7531", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardTests.cs", "target": "tests/Bench.Tests/Leftovers/LeftoversGuardTests.cs", "blob": "951b43af34c791a87162c71e350858321d1b0808", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1},
         {"old":"tests/Mcp.Tests/","new":"tests/Bench.Tests/","count":11,"reason":"the guard's fixtures name the helper's folder in this repository's test project"},
         {"old":"RepositoryIdentity.Row","new":"OwnedToken.RepoRow","count":1,"reason":"RepositoryIdentity is an mcp type outside the folder; the identity row is OwnedToken.RepoRow here"}
@@ -103,7 +109,7 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/LivenessTests.cs", "target": "tests/Bench.Tests/Leftovers/LivenessTests.cs", "blob": "746e0ac3f20527537449448bc933c4248ba2bfe6", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/Native.cs", "target": "tests/Bench.Tests/Leftovers/Native.cs", "blob": "dd6c86803b5a40d210b836a50ca029f96af8c5b4", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/Native.cs", "target": "tests/Bench.Tests/Leftovers/Native.cs", "blob": "f9a277f6c16727b10651221ee7f37e88685a0b91", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/NativeDarwin.cs", "target": "tests/Bench.Tests/Leftovers/NativeDarwin.cs", "blob": "f4ca33c778c89a807aa1dbffa67bb2113fb2cb36", "replace": [
@@ -124,7 +130,7 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/OwnedScope.cs", "target": "tests/Bench.Tests/Leftovers/OwnedScope.cs", "blob": "aafadabde2cd9618e8dc262b5da3588bc3c0457c", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/OwnedTests.cs", "target": "tests/Bench.Tests/Leftovers/OwnedTests.cs", "blob": "20a0a2130720da0ea45faa1b4289ec859ace8fd8", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/OwnedTests.cs", "target": "tests/Bench.Tests/Leftovers/OwnedTests.cs", "blob": "b97e3eff1241a3ac84450dd21f62b1698d7ef4f9", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1},
         {"old":"-mcp-pg-","new":"-bench-pg-","count":1,"reason":"the Postgres folder-name example carries the repository token"}
     ] },
@@ -151,7 +157,7 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/PosixFifo.cs", "target": "tests/Bench.Tests/Leftovers/PosixFifo.cs", "blob": "c63b7c6115f26f96b3983b0e03e3ac2e0d6503e2", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
-    { "upstream": "tests/Mcp.Tests/Leftovers/Removal.cs", "target": "tests/Bench.Tests/Leftovers/Removal.cs", "blob": "05e58fb5f9f5e6ca327e1bcebd901e38d551cb5e", "replace": [
+    { "upstream": "tests/Mcp.Tests/Leftovers/Removal.cs", "target": "tests/Bench.Tests/Leftovers/Removal.cs", "blob": "d6ec896f57179e85cff457c2ae3f53fa27fd16d3", "replace": [
         {"old":"namespace Mcp.Tests.Leftovers;","new":"namespace Bench.Tests.Leftovers;","count":1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/RunnerFactsTests.cs", "target": "tests/Bench.Tests/Leftovers/RunnerFactsTests.cs", "blob": "6ea7e39efa4815a17e715f821fa13eddebfbf366", "replace": [
