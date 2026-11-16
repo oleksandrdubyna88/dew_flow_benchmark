@@ -1,13 +1,17 @@
 # PLAN — Test leftovers, E6: benchmark's tests name, own, remove and collect what they make
 
-> Status: **in progress, 2026-11-16: revised for the parent's epoch 9** (§ *Epoch 9* item 8.3: rows E6-d and E6-g
+> Status: **in progress, 2026-11-16: amended for the parent's epoch 10** (§ *Epoch 10* item 8.3: § 6 *Before S3*
+> restated by row F42-c and item 4.1's named paths; S3's Files name `TheAdaptedCopyTests.cs`; claims C1–C10 each with a
+> state and the gate it is observed before (§ 1, *The claims*); C4's `GetTempPath()` plants replaced by plants the
+> `Source` kind reads, that spelling in `src/` and `tools/` `.cs` written as a limit of both guards; E6-f1's Node half
+> observed). **Earlier, 2026-11-16: revised for the parent's epoch 9** (§ *Epoch 9* item 8.3: rows E6-d and E6-g
 > restated, E6-f split into E6-f1 and E6-f2, a state on every row; S3 after F41-b and F42-c; S7's reuse plant replaced
 > by E6-f2's fixture test). **Earlier, 2026-11-12: S1 merged (#205; E6-h: the held-out sweep lists `score-tmp` and removes nothing by
 > age); S2 built (#207: the adapted copy, the start-of-run sweep, case 15, the audit; brief `PLAN_test_leftovers_E6_S2_brief.md`), merged as `84d4953e`.** Found by S1, not fixed (outside this document's text): `spikes/minigit-bench/lib/score-steps.mjs:57-73`
 > `stepSweep` removes the scorer's own marked folders by marker age. Written new against the shared rules at `d23a2ea` (this
 > repository's pin) and `dew_flow_mcp`'s merged C# helper; the 2026-10-16 draft of this file (`08a87430`) was read as
 > material only. Stories of epic E6 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E6;
-> § *Epoch 8* item 3, rows E6-a to E6-h; § *Epoch 9* item 3, the rows it restates). Scope: `tests/` (Bench.Tests, FakeCli, FakeCoai), `spikes/policy-ab-quick/test/`,
+> § *Epoch 8* item 3, rows E6-a to E6-h; § *Epoch 9* item 3 and § *Epoch 10* item 3, the rows they restate). Scope: `tests/` (Bench.Tests, FakeCli, FakeCoai), `spikes/policy-ab-quick/test/`,
 > `spikes/minigit-bench/lib/heldout-run.mjs`, two product seams (`HarvestGates`, `SolutionSignals`), one CI job, the docs.
 
 **Cited as paths, never links** (the shared `common/planning-docs.md` § *Across repositories*): the parent
@@ -22,7 +26,8 @@ statement with neither mark is a decision of this document. Facts were collected
 by the Opus author where a decision rests on them.
 
 **The epoch-9 revision (2026-11-16).** The parent stopped at its entry 8.2: the rule's own `container-scoped` marker is
-refused by both guards, and no guard reads `.WithReuse(`. Its re-review (§ *Epoch 9*) is the baseline epoch 9 is approved
+refused by both guards, and no guard reads `.WithReuse(` (the Node half **[M]** below; the C# half read from code, no
+reuse spelling in the template's guard files at mcp `53f65130`, **[R]**). Its re-review (§ *Epoch 9*) is the baseline epoch 9 is approved
 on, and this revision follows it (item 8.3; the judge's cut row lists the lines of #103 it replaces). It is not a change
 of the parent and not an entry anywhere: this document keeps no ledger (`common/plan-change-control.md`). Rows the parent
 does not restate keep their checks and their evidence. A restated row keeps every check its earlier text had and adds to
@@ -33,6 +38,19 @@ exist, is replaced by E6-f2 (3). Measurements added by this revision are marked 
 Revised 2026-11-16; plan gate `215fc3a2` proceed (one finding accepted: D9's place; three rejected with reasons, two
 carried to S3's brief: the effective Ryuk check at fixture start, and a run that settles whether Testcontainers 4.16.0
 has any configuration path to reuse); an independent Opus review's eight points applied.
+
+**The epoch-10 amendment (2026-11-16).** The parent stopped again at its entry 9.2; its entry 9.1 had found that F42-c
+cannot keep this document's § 6 boundary "No benchmark-own file changes". Its re-review (§ *Epoch 10*) is the baseline
+epoch 10 is approved on, and this amendment does what its item 8.3 asks for this document; the re-review record's cut
+row for #215 lists the lines it corrects (C1, C2, C4, and C3, C5–C10 written without a state). It is not a change of the
+parent and not an entry anywhere: this document keeps no ledger. Every check written here before stays; a restated row or
+story keeps every check its earlier text had and adds to it. New mark, as the parent's § *Epoch 10*: **[R]** is a
+statement read from code and NOT run; a claim resting on **[R]** is never **observed**, and it is written open-ended
+("red or not, the plant says which"), so its observation fills in the result and never contradicts the text (the
+parent's item 8.1). Measurements added by this amendment are marked **[M]** with `83f166d6` beside them: benchmark
+`83f166d6` (rules pin `b1746499`), mcp `21553ce` and `53f65130`, read-only, commands in § *How to repeat the
+measurements*. No .NET build and no Docker ran for it, so every statement about the C# copy's verdict is **[R]** or
+**[D]**.
 
 **Each row has ONE state** (the parent's § *Epoch 9* item 8.1). **observed**: the row's own check ran on a candidate that
 must pass AND on a counterexample that must fail, at this repository's pins. **proposed**: the check is written, not yet
@@ -45,13 +63,13 @@ such, never as "observed".
 | # | Condition | Implementation (file) | Invocations | Executable check | Prepares / does not prove | Read or measured at `7d795024` (the starting point) | State (epoch 9) |
 |---|---|---|---|---|---|---|---|
 | E6-a | the boundary on both sides | `todo/PLAN_bench_test_leftovers_followups.md:63` and § 9 here | — | the row is on `main` in both | — | **[M]** merged, #177 `562cb4bd`. Met | **observed**: the check "the row is on `main` in both" ran on a candidate and a counterexample, **[M]** 2026-11-16. Candidate, `origin/main`: `git show origin/main:todo/PLAN_bench_test_leftovers_followups.md \| grep -c "E6 does not build these fixes a second time"` → 1, and this document's § 9 row "The fixes of F1 and F2 in" on `origin/main` → 1. Counterexample, the commit before #177 (`git log --format=%h -1 562cb4bd^` → `9336a774`): the same count of the phrase → 0 (at `562cb4bd` → 1) |
-| E6-b | a worktree a test makes is owned, and the guard's boundary is stated | the worktree lives INSIDE an owned folder with the repository it belongs to (rule §1, last item): the product seams of D4 take a root; a `worktree add` a TEST writes by hand stays in its owned folder and carries one inline `raw-worktree` exemption naming that folder | `Bench.Tests`; the guards | the C# guard and the Node guard on the head; one planted test-file `worktree add` without the marker is red | The guards read the spelling, never the folder | **[M]** a compliant `git worktree add --detach --lock --reason "$RECORD" testsToDelete-u1001-bench-x HEAD` is `raw-worktree` in a `.sh`, in a `.cs` under `tests/` (Node guard, `--profile node` only) and in a `.test.mjs`; the comment `testsToDelete-exempt: raw-worktree — <reason>` on the line above clears each. **Not read:** the same line in a plain `tools/*.mjs` (not a test file). **[M]** the template's C# guard matches `"worktree", "add"` and the words `worktree add` (mcp `LeftoversGuard.cs:91`), only outside `src/` (`:199-203`) | **proposed**: the Node guard's half (marker and no marker) was run at `d23a2ea`; the row's check, both guards on the head with a planted line red, runs in S4, S5 and S7 |
+| E6-b | a worktree a test makes is owned, and the guard's boundary is stated | the worktree lives INSIDE an owned folder with the repository it belongs to (rule §1, last item): the product seams of D4 take a root; a `worktree add` a TEST writes by hand stays in its owned folder and carries one inline `raw-worktree` exemption naming that folder | `Bench.Tests`; the guards | the C# guard and the Node guard on the head; one planted test-file `worktree add` without the marker is red | The guards read the spelling, never the folder | **[M]** a compliant `git worktree add --detach --lock --reason "$RECORD" testsToDelete-u1001-bench-x HEAD` is `raw-worktree` in a `.sh`, in a `.cs` under `tests/` (Node guard, `--profile node` only) and in a `.test.mjs`; the comment `testsToDelete-exempt: raw-worktree — <reason>` on the line above clears each. **Not read:** the same line in a plain `tools/*.mjs` (not a test file). **[R]** (read from code, not run; this cell said **[M]** before the epoch-10 amendment) the template's C# guard matches `"worktree", "add"` and the words `worktree add` (mcp `LeftoversGuard.cs:91` at `21553ce` and at `53f65130`), only outside `src/` (`:199-203` at `21553ce`, `:204-209` at `53f65130`): claim C8 | **proposed**: the Node guard's half (marker and no marker) was run at `d23a2ea`; the row's check, both guards on the head with a planted line red, runs in S4, S5 and S7. Claim C8 (the C# half, "only outside `src/`"), **proposed**: observed by S4's and S5's plants through the copy at `53f65130` (after F42-c), before S4's plan gate; red or not, each plant says which |
 | E6-c | a killed child's worktree is collected by a NAMED implementation | the copied C# sweep's folder pass, on the owned folder that holds the clone and its worktree (sweep case 15, § S2) | the next run's start | sweep case 15: a dead-claimed owned folder with `repo/` and a linked `scratch/<id>/` is removed whole | The template has no worktree pass (mcp `LeftoversSweep.cs:3`); a worktree whose clone is OUTSIDE the folder is not seen at all. Windows: N1 (read-only git objects), which does not arise here while benchmark has no Windows leg | **[M] by reading, not run:** `HasGitFile(dir)` (`LeftoversSweep.cs:470-480`) tests only the candidate's OWN `.git` as a regular file, so `:171-175` (`other clone`) does not fire for the owned folder; the folder is quarantined and removed by `Removal.Quietly` → `Directory.Delete(recursive)` (`Removal.cs:40-54`), with the clone's `.git/worktrees/<id>` inside it. **To observe** in S2: case 15 RED first, then green | **observed** by S2 on Linux (#207, `LeftoversSweepCase15Tests.cs`: RED by hand, then green, **[D]** its commit message; not re-run by this revision). Windows: not applicable while benchmark has no Windows leg (`git grep -i windows -- .github/workflows` → nothing, **[M]** `46e27108`); the case 15 tests skip on Windows; N1 is F42's, for the template |
-| E6-d | the fixture's container: three separate proofs (restated by the parent's § *Epoch 9* item 3) | `tests/Bench.Tests/Infrastructure/PostgresFixture.cs` | `Bench.Tests` on `ubuntu-latest` | (1) Ryuk on: a child test process starts the fixture; the container exists by its captured id BEFORE the child is killed, and the Docker query that says so succeeded; after the kill, within the reaper's window, the same query succeeds and finds nothing; (2) the owner label `testsToDelete.owner` on the builder, read by the container pass; (3) = E6-f2 (3): reuse proved off at run time. And no `TESTCONTAINERS_RYUK_DISABLED` in any spelling: a benchmark test over every `.cs` of the repository, red on a planted `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`, because neither guard reads that form (the parent's F43) | Ryuk collects by its session, not by owner; one test cannot stand for the other two | **[M]** the builder (`:27-33`) has `WithDatabase`, `WithUsername`, `WithPassword`, `WithCommand` only: no `WithName`, `WithLabel`, `WithReuse`, `WithCleanUp`; nothing in the tree sets `TESTCONTAINERS_RYUK_DISABLED` or a `testcontainers.properties`; `Testcontainers.PostgreSql` 4.16.0 (`Directory.Packages.props:41`). **To observe** in S3: the three proofs on `ubuntu-latest` (no `docker` CLI on the author's machine). **Corrected 2026-11-16:** proof (3) used to read "no `.WithReuse(`", a guard check that does not exist: **[M]** `46e27108`, the Node guard's `scanText` of `.WithReuse(true)` in a `.cs` is `[]`, and of `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")` is `[]`; the C# copy's `RyukOff` wants `:` or `=` after the name (`tests/Bench.Tests/Leftovers/LeftoversGuard.cs:93`, read, not run) | **proposed**; hosted only: Docker runs in `build-test` on `ubuntu-latest`, and the fixture fails loudly without it (`PostgresFixture.cs:45-47`) |
+| E6-d | the fixture's container: three separate proofs (restated by the parent's § *Epoch 9* item 3) | `tests/Bench.Tests/Infrastructure/PostgresFixture.cs` | `Bench.Tests` on `ubuntu-latest` | (1) Ryuk on: a child test process starts the fixture; the container exists by its captured id BEFORE the child is killed, and the Docker query that says so succeeded; after the kill, within the reaper's window, the same query succeeds and finds nothing; (2) the owner label `testsToDelete.owner` on the builder, read by the container pass; (3) = E6-f2 (3): reuse proved off at run time. And no `TESTCONTAINERS_RYUK_DISABLED` in any spelling: a benchmark test over every `.cs` of the repository, red on a planted `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`, because the Node guard does not read that form (`[]`, **[M]** `46e27108`) and the C# copy is expected not to (**[R]**; claim C7), the parent's F43 | Ryuk collects by its session, not by owner; one test cannot stand for the other two | **[M]** the builder (`:27-33`) has `WithDatabase`, `WithUsername`, `WithPassword`, `WithCommand` only: no `WithName`, `WithLabel`, `WithReuse`, `WithCleanUp`; nothing in the tree sets `TESTCONTAINERS_RYUK_DISABLED` or a `testcontainers.properties`; `Testcontainers.PostgreSql` 4.16.0 (`Directory.Packages.props:41`). **To observe** in S3: the three proofs on `ubuntu-latest` (no `docker` CLI on the author's machine). **Corrected 2026-11-16:** proof (3) used to read "no `.WithReuse(`", a guard check that does not exist: **[M]** `46e27108`, the Node guard's `scanText` of `.WithReuse(true)` in a `.cs` is `[]`, and of `Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")` is `[]`; the C# copy's `RyukOff` wants `:` or `=` after the name (`tests/Bench.Tests/Leftovers/LeftoversGuard.cs:93`, read, not run; the same line at mcp `53f65130`, **[R]**) | **proposed**; hosted only: Docker runs in `build-test` on `ubuntu-latest`, and the fixture fails loudly without it (`PostgresFixture.cs:45-47`). Claim C7 (the C# half of "neither guard reads" the `SetEnvironmentVariable` form), **proposed**: expected not read, read or not to be observed through the copy at `53f65130` before S3's plan gate, so S3's own test (7) is known to be the only reader, or the second |
 | E6-e | the copy and its limits | the adapted copy with a manifest (D2), F29 read and fixed by copy (D3), F31 stated by its true condition (D3) | — | the copy's diff check (`TheAdaptedCopyTests`, coai's shape) | — | **[M]** mcp's folder at `21553ce`: 51 files, 8566 lines; since `197cc76` (the commit both earlier copies pin) only 8 files changed, all the mount path. The template has no `SweepLock` (F29 open there); coai carries one as its own file | **observed** by S2 (#207: the check was committed red, 52 targets missing, then green with the copy, **[D]** its commit messages). It is run again by F42-c's re-sync (§ 5) |
-| E6-f1 | the per-test databases carry the rule §6 (b) marker, and both guards accept it at benchmark's pins (E6-f, split by the parent's § *Epoch 9* item 3) | `PostgresFixture.cs`: `NewEmptyDatabaseAsync` (`:96`, `CREATE DATABASE` `:108`) makes them in the fixture's container; the `container-scoped` marker beside it, in the form of the parent's item 4.2 (`lives and dies with` or `live and die with`, then the owner) | `Bench.Tests` (the copied C# guard's scan of that file); the Node guard (`scanText` of that file; the repository count) | FILE-scoped, because benchmark's tree is not clean before S7 (the Node guard: 209 findings at `46e27108`; the copied C# repository test is `Explicit` until S7): no finding in `PostgresFixture.cs` from either guard, and the Node guard's count over the repository unchanged against the base. Counterexample: the same file with the reason's `live and die with` removed gives one `exemption` finding in each guard. "Both guards clean on the head" stays S7's | the lifetime: E6-f2 | **[M]** no `DROP DATABASE` in the tree; 29 call sites in 16 test files; no marker, no name, no label. **Corrected 2026-11-16:** this cell used to say "**[M]** the Node guard knows the `container-scoped` class (`leftovers-check.mjs`, 8 lines)". Those lines are in the guard's fixtures and its rule test (`tools/fixtures/…`, `tools/test-leftovers-rule.test.mjs`), not in the guard. **[M]** `46e27108`: the marker in either spelling, and with the phrase missing, is one `exemption` finding ("an exemption names an unknown class `container-scoped`"); the C# copy's `Exemptible` lacks the class (`LeftoversGuardExemptions.cs:11`, read, not run) | **blocked** on F41-b (the rules pin at F41's release) and F42-c (the copy re-synced to F42's commit). Until both, no story writes the marker |
+| E6-f1 | the per-test databases carry the rule §6 (b) marker, and both guards accept it at benchmark's pins (E6-f, split by the parent's § *Epoch 9* item 3) | `PostgresFixture.cs`: `NewEmptyDatabaseAsync` (`:96`, `CREATE DATABASE` `:108`) makes them in the fixture's container; the `container-scoped` marker beside it, in the form of the parent's item 4.2 (`lives and dies with` or `live and die with`, then the owner) | `Bench.Tests` (the copied C# guard's scan of that file); the Node guard (`scanText` of that file; the repository count) | FILE-scoped, because benchmark's tree is not clean before S7 (the Node guard: 209 findings at `46e27108`; the copied C# repository test is `Explicit` until S7): no finding in `PostgresFixture.cs` from either guard, and the Node guard's count over the repository unchanged against the base. Counterexample: the same file with the reason's `live and die with` removed gives one `exemption` finding in each guard (the C# half expected, **[R]**, F42's case-for-case port of F41; claim C9). "Both guards clean on the head" stays S7's | the lifetime: E6-f2 | **[M]** no `DROP DATABASE` in the tree; 29 call sites in 16 test files; no marker, no name, no label. **Corrected 2026-11-16:** this cell used to say "**[M]** the Node guard knows the `container-scoped` class (`leftovers-check.mjs`, 8 lines)". Those lines are in the guard's fixtures and its rule test (`tools/fixtures/…`, `tools/test-leftovers-rule.test.mjs`), not in the guard. **[M]** `46e27108`: the marker in either spelling, and with the phrase missing, is one `exemption` finding ("an exemption names an unknown class `container-scoped`"); the C# copy's `Exemptible` lacks the class (`LeftoversGuardExemptions.cs:11`, read, not run) | **proposed** (S3), by the parent's § *Epoch 10* item 3: no longer blocked once F42-c merges, since F41-b is done (#216 `83f166d6`, the rules pin `b1746499`). The Node half is **observed** **[M]** `83f166d6`: `scanText('tests/Bench.Tests/Infrastructure/PostgresFixture.cs', …)` of the marker over `NewEmptyDatabaseAsync` → `[]` (candidate); the same marker without `live and die with` → one `exemption` (counterexample). The C# half (claim C9) waits for F42-c's copy and is observed through it before S3's plan gate. Until F42-c, no story writes the marker. *Was (epoch 9):* **blocked** on F41-b (the rules pin at F41's release) and F42-c (the copy re-synced to F42's commit) |
 | E6-f2 | the fixture's container ends with the fixture, and reuse is never set (E6-f, split by the parent's § *Epoch 9* item 3) | benchmark's fixture tests (S3) | `Bench.Tests` on `ubuntu-latest` | (1) the container exists, by its captured id, BEFORE disposal, and the Docker query that says so succeeded; (2) after disposal the same query succeeds and finds nothing: a failed query is never "absent"; so every per-test database is gone with it; (3) reuse, proved at RUN time by (2): a reused container is not stopped by disposal, so (2) is red whenever reuse is in effect, whatever turned it on. RED, each: reuse enabled through the builder the fixture uses, and through configuration alone (`TESTCONTAINERS_REUSE_ENABLE=true`, or `testcontainers.reuse.enable=true` in the properties file the pinned version reads), with the fixture's source unchanged. A read of the built container's reuse setting (if the pinned API exposes it) or a source test may be ADDED, never instead of (2) | the databases are never dropped one by one, the proof is the container's end; other consumers' fixtures; a shared `testcontainers-reuse` class is a follow-up only when a second consumer needs one (the parent's item 4.2) | **[M] `46e27108`, by reading the package, not run:** the UTF-16 strings of `Testcontainers.dll` 4.16.0 (every target framework, from the local NuGet cache) hold `TESTCONTAINERS_RYUK_DISABLED` and `ryuk.disabled` but no reuse key (no `REUSE_ENABLE`, no `reuse.enable`); reuse appears only as the builder's `WithReuse` (its metadata) and in its error messages. So the pinned version may read no reuse configuration at all. S3's brief settles it by a run; if configuration cannot turn reuse on, that half's run is recorded as such and the parent is told (its decision, not this document's) | **proposed**; hosted only, as E6-d |
-| E6-g | the guards read every directory E6 promises (restated by the parent's § *Epoch 9* item 3) | the copied C# guard (copied in S2; its repository test `Explicit` until S7) and the shipped Node guard as a CI step (`--profile node --token bench --identity "the measuring harness"`; S7, S2 added none) | `Bench.Tests`; CI | both green on the head (S7); a scan of nothing is red (exit 2; the C# `FilesScanned > 0`); one planted raw temp in `tools/` is red; and per directory of § 1's table *E6-g by directory*, a planted raw temp in a file of a kind that directory's guard READS is red. A promised directory whose files no guard reads is named there as a limit, with its file kinds | A spelling check; which plain `.mjs` files make temp paths: no guard reads them | **[M]** no guard today (`git grep -l 'LeftoversGuard\|leftovers-check' -- tests tools .github` → nothing). The Node guard: default profile 3 findings, `--profile node` 209. A planted `mktemp -d` in `tools/x.sh` is `raw-temp` (both profiles). **Not read** by either guard: `.cs` in `tools/model-arms/`, `hosts/`, `spikes/` (C# guard: only `tests/` and `src/`; Node: only `tests/` as text); a plain `tools/*.mjs`; `*.py` in the Node guard. **[M]** `46e27108`: the table below | **proposed**: S2 planted no directory for this row; the plants are S7's |
+| E6-g | the guards read every directory E6 promises (restated by the parent's § *Epoch 9* item 3) | the copied C# guard (copied in S2; its repository test `Explicit` until S7) and the shipped Node guard as a CI step (`--profile node --token bench --identity "the measuring harness"`; S7, S2 added none) | `Bench.Tests`; CI | both green on the head (S7); a scan of nothing is red (exit 2; the C# `FilesScanned > 0`); one planted raw temp in `tools/` is red; and per directory of § 1's table *E6-g by directory*, a planted raw temp in a file of a kind that directory's guard READS is red. A promised directory whose files no guard reads is named there as a limit, with its file kinds | A spelling check; which plain `.mjs` files make temp paths: no guard reads them | **[M]** no guard today (`git grep -l 'LeftoversGuard\|leftovers-check' -- tests tools .github` → nothing). The Node guard: default profile 3 findings, `--profile node` 209. A planted `mktemp -d` in `tools/x.sh` is `raw-temp` (both profiles). **Not read** by either guard: `.cs` in `tools/model-arms/`, `hosts/`, `spikes/` (C# guard: only `tests/` and `src/`, **[R]** by reading `GuardFiles`, claim C3; Node: only `tests/` as text); a plain `tools/*.mjs`; `*.py` in the Node guard. **[M]** `46e27108`: the table below | **proposed**: S2 planted no directory for this row; the plants are S7's. Each C# cell of the table below is claim C3, observed before S7's plan gate |
 | E6-h | the held-out runner's age removal of `score-tmp/*` is retired before any producer | `spikes/minigit-bench/lib/heldout-run.mjs` | the held-out tool's `sweep` command (`heldout-tool.mjs:105-112`), by hand only | its test: an old unclaimed folder under `score-tmp` is listed, not removed by age | — | **[M]** still there: `sweepLeftovers` `:93-113` removes every un-prefixed `score-tmp/<name>` older than 24 h (`:102-105`), no owner check; the test pins it (`heldout-run.test.mjs:154`: `removed: ['old-1']`) | **observed** by S1 (#205: the test changed to `removed: []`, red on the old code, then green, **[D]** its PR) |
 
 Rows added by this document, read the same way:
@@ -59,12 +77,15 @@ Rows added by this document, read the same way:
 | # | Condition | Read or measured at `7d795024` (the starting point) | State (epoch 9) |
 |---|---|---|---|
 | E6-i | no test helper makes a LEGACY name (rule §1) | **[M]** 20 `legacy-name` findings outside the other plan's spikes: 15 in `tests/Bench.Tests/ModelArms/` (`TempFolder.cs:10` `Directory.CreateTempSubdirectory("testsToDelete-modelarms-")`, 112 `new TempFolder()` in 26 files; tokens `modelarms`, `briefs`, `m2`, `m3`, `x` are not rows of the Tokens table), 5 in `spikes/policy-ab-quick/test/` | **proposed** (S4, S6) |
-| E6-j | the CI job that runs `Bench.Tests` can read the mount | **[M]** `build-test` (`ci.yml:13-43`) checks out no submodule; the copied C# guard reads the Tokens table and starts the shipped `sweeper-scan.mjs` from the mount. `contract` (`:68`) and `plans` (`:120`) do check it out | **proposed**: S2 added the line (`ci.yml:23` at `46e27108`) and #207's CI ran the copy green with it (**[D]**); the counterexample, the job without the line failing, was not recorded |
+| E6-j | the CI job that runs `Bench.Tests` can read the mount | **[M]** `build-test` (`ci.yml:13-43`) checks out no submodule; the copied C# guard reads the Tokens table and starts the shipped `sweeper-scan.mjs` from the mount (read from the template, **[R]**; #207's CI ran the copy green with the mount, **[D]**, below). `contract` (`:68`) and `plans` (`:120`) do check it out | **proposed**: S2 added the line (`ci.yml:23` at `46e27108`) and #207's CI ran the copy green with it (**[D]**); the counterexample, the job without the line failing, was not recorded |
 | E6-k | a test that makes a temp path removes it | **[M] by reading:** 8 creation lines are never removed — `Diagnostics/DailyRunFileSinkTests.cs:92`, `Engines/FilesystemEngineTests.cs:304`, `Engines/QlnEngineTests.cs:287`, `Authoring/VettingPassTests.cs:326`, `:339`, `Trace/TracePortTests.cs:166`, `:183`, `:268` | **proposed** (S5) |
 
 **E6-g by directory** — which guard READS each directory E6 promises, by file kind. **[M]** `46e27108`: the Node guard by
 `isScanned(path, 'node')` of the shipped guard at the pin `4c9a684`; the C# copy by reading `GuardFiles`
-(`tests/Bench.Tests/Leftovers/LeftoversGuardFiles.cs:27-70`), not run. The Node guard under `--profile node` reads
+(`tests/Bench.Tests/Leftovers/LeftoversGuardFiles.cs:27-70`), not run: every C# cell below is **[R]**, claim C3,
+**proposed**, each observed by a plant through the copy at `53f65130` (after F42-c) before S7's plan gate; red or not,
+the plant says which, and a plant red in no guard becomes a limit of this table, never a break-it (the parent's item
+8.1). The Node guard under `--profile node` reads
 `*.test.*` and `*.spec.*` JavaScript and TypeScript files anywhere, every `.sh` and `.ps1`, the workflows, and every
 non-binary file under the root folders `tests/`, `test/` and `scripts/`. It does NOT read a plain `.mjs` elsewhere
 (`spikes/minigit-bench/lib/heldout-run.mjs`, `tools/x.mjs`, `spikes/policy-ab-quick/test/x.mjs`: false). The C# copy reads
@@ -75,19 +96,47 @@ non-binary file under the root folders `tests/`, `test/` and `scripts/`. It does
 | Directory (why E6 promises it) | File kinds there | Read by | Plant (S7), red in each guard that reads it | Limit: read by no guard |
 |---|---|---|---|---|
 | `tests/Bench.Tests`, `tests/FakeCli`, `tests/FakeCoai` (S2–S5) | `.cs` | both: the C# copy as tests; the Node guard as text | `Path.GetTempPath()` in a `.cs` | — |
-| `src/` (the seams of D4, S5) | `.cs` | the C# copy, as product code | a `GetTempPath()` in the forms the product kind judges (the brief records which) | not read by the Node guard |
-| `tools/model-arms/` (S7) | `.cs`, `.ps1`, `.csproj`, `.json`, `.md` | `.ps1`: both. `.cs`: neither today; the C# copy after S7's manifest operation | `mktemp -d` in a `tools/` `.sh`; `GetTempPath()` in a `tools/model-arms/` `.cs` after S7 | `.cs` until S7; `.csproj`, `.json`, `.md` |
+| `src/` (the seams of D4, S5) | `.cs` | the C# copy, as product code (the `Source` kind) | a plant the `Source` kind reads (claim C4): a reference to `Owned.TempRoot` outside the helper's folder, expected one `raw-temp` ("… outside the helper's folder"), and the bare prefix word with no owner segment, expected one `owner-blind` (**[R]**, mcp `53f65130` `LeftoversGuard.cs:216-219`, `:297-301`); red or not, the plant says which. *Was:* "a `GetTempPath()` in the forms the product kind judges (the brief records which)", expected never red (the next column) | not read by the Node guard (`isScanned('src/X.cs', 'node')` → false, **[M]** `83f166d6`). `GetTempPath()` and the other raw temp spellings in a `src/` `.cs`: a limit of BOTH guards (C4): the `Source` kind reports no raw temp spelling (`HitsOutsideSource` returns nothing for it, mcp `53f65130` `LeftoversGuard.cs:204-207`, **[R]**; expected never red, observed with C4's plants before S7's plan gate) |
+| `tools/model-arms/` (S7) | `.cs`, `.ps1`, `.csproj`, `.json`, `.md` | `.ps1`: both. `.cs`: neither today; the C# copy after S7's manifest operation, as the `Source` kind (claim C10) | `mktemp -d` in a `tools/` `.sh`; after S7, in a `tools/model-arms/` `.cs`, the plant the `Source` kind reads, as in `src/` (C4, C10). *Was:* "`GetTempPath()` in a `tools/model-arms/` `.cs` after S7", expected never red | `.cs` until S7 (`isScanned('tools/model-arms/X.cs', 'node')` → false, **[M]** `83f166d6`); after S7, `GetTempPath()` and the other raw temp spellings in a `tools/` `.cs`: a limit of both guards, as in `src/` (C4); `.csproj`, `.json`, `.md` |
 | `spikes/policy-ab-quick/test/` (S6) | 14 `*.test.mjs`, one plain `fixtures/ctrlc-parent.mjs`, data (`.ndjson`, `.xml`) | `*.test.mjs`: the Node guard | `mkdtemp(` in a `*.test.mjs` | `fixtures/ctrlc-parent.mjs` (it makes no temp path today: no `tmpdir`, `mkdtemp`, `TMP`) |
 | `spikes/minigit-bench/lib/heldout-run.mjs` (E6-h, S1) | a plain `.mjs` | neither; its test `test/heldout-run.test.mjs` by the Node guard | — | the file itself: S1's own test is its check |
 | the rest of `spikes/` (D7, S6) | `*.test.mjs`, plain `.mjs`, `.sh`, `.py`, `.cs`, plain `.ts` | `*.test.*`: the Node guard. `.sh`: both. `.py`: the C# copy | `mktemp -d` in a `spikes/` `.sh` | plain `.mjs` (`lib/`, `capture/`; § 3's list); `.cs` (`spikes/EvalLibrarySpike/Program.cs`); the 9 plain `.ts` files (all `main.ts` fixtures under `spikes/lang-bench/test/` and `spikes/lang-explore/rehearsal/`; `git ls-files spikes \| grep -E '\.ts$' \| grep -v -E '\.test\.ts$\|\.spec\.ts$'` → 9; `isScanned` false for them, **[M]** 2026-11-16) |
 | `research/local-model-coding/harness/` (D8, S7) | `.sh` (31), `.ps1` (3), plain `.mjs` (17), one `.js`, `.json`, `.md`, `.env` | `.sh`, `.ps1`: both | `d=$(mktemp -d)` in a `.sh` there: `scanText('research/…/harness/x.sh', 'd=$(mktemp -d)')` → `raw-temp` (**[M]** 2026-11-16); D8 marks its two lines | the 17 `.mjs` and 1 `.js` files there (`git ls-files research/local-model-coding/harness \| grep -cE '\.mjs$'` → 17, `'\.js$'` → 1; `isScanned` false; the C# copy reads `.mjs` and `.js` only under `.github/scripts/` and `http/`) |
-| `.github/workflows/` (the CI step, S2, S7) | `.yml` | the C# copy (it reads workflows, above). The Node guard opens the files but reports no `mktemp -d` in a `run:` | `mktemp -d` in a workflow `run:`: the C# copy's reading is to be run by S7, red or not (the plant says which) | `mktemp -d` in a workflow `run:`: the Node guard gives NO finding (**[M]** 2026-11-16: `scanText('.github/workflows/ci.yml', …)` of a `run: \|` block with `d=$(mktemp -d)` → `[]`; a `worktree add` there is reported). The step's own run is the check of the CI step itself |
+| `.github/workflows/` (the CI step, S2, S7) | `.yml` | the C# copy (it reads workflows, above). The Node guard opens the files but reports no `mktemp -d` in a `run:` | `mktemp -d` in a workflow `run:`: the C# copy's reading is to be run by S7, red or not (the plant says which). Expected red, **[R]**: `.yml` is in `RawTempByExtension` (`LeftoversGuard.cs:84`, `:89`); claim C5, **proposed**, observed before S7's plan gate | `mktemp -d` in a workflow `run:`: the Node guard gives NO finding (**[M]** 2026-11-16: `scanText('.github/workflows/ci.yml', …)` of a `run: \|` block with `d=$(mktemp -d)` → `[]`; a `worktree add` there is reported). The step's own run is the check of the CI step itself |
 | `http/README.md` (S7 rewrites `:32-33`) | `.md` | neither | — | the file: S7's rewrite is checked by its review, not a guard |
 
-**[M]** `46e27108`, a correction to § 3: the C# copy (copied in S2) reads `.py` as a script, and nine lines of
-`spikes/lang-bench/test/py/*.py` call `tempfile.mkdtemp(` (for example `test_rs_kill.py:152`). Whether the copy's
-`mkdtemp(` pattern reports them there was not run. S7 switches the repository test on and meets them, under D7's
-boundary.
+**[M]** `46e27108`, a correction to § 3: the C# copy (copied in S2) reads `.py` as a script (**[R]**, `GuardFiles`,
+claim C3), and nine lines of `spikes/lang-bench/test/py/*.py` call `tempfile.mkdtemp(` (for example
+`test_rs_kill.py:152`). Whether the copy's `mkdtemp(` pattern reports them there was not run: expected reported,
+**[R]** (`\bmkdtemp(?:Sync)?\s*\(`, mcp `53f65130` `LeftoversGuard.cs:78`); red or not, the observation says which
+(claim C6, **proposed**, observed before S7's plan gate; D7 says whose they are). S7 switches the repository test on and
+meets them, under D7's boundary.
+
+**The claims — every place this document states a copied tool's reach, a discovery boundary or a plant** (the parent's
+§ *Epoch 10* item 3.2, C1–C10; added by the epoch-10 amendment). Each is observed before the plan gate named, which is
+the gate of the story or brief that RELIES on it, and again when one of its inputs changes (a pin bump included). An
+observation names six things (the parent's item 8.1): the consumer SHA (benchmark at that PR's base), the upstream pin
+(mcp `53f65130`, the commit F42-c copies), the exact invocation, the fixture path, the expected diagnostic and the
+OBSERVED result. The "without" half (the copy as copied, before the story's operation or site) runs in a scratch test
+against the copy at `53f65130`, built as this repository builds it, `nice -n 19`, `-m:4`,
+`-p:AppHostRuntimeIdentifier=linux-x64`; the "with" half is the story's own RED → GREEN. For the C# copy the invocation
+is `LeftoversGuard.Scan(<private tree>)` over a throw-away tree holding the plant at the fixture path (never this
+worktree); for the Node guard, `scanText(<path>, <text>)` of the mounted `leftovers-check.mjs`. A plant must be able to
+fail: each names the configuration it is red in, and one red in no configuration is a NOT-read statement, never a
+break-it.
+
+| # | The claim, where in this document | Expected, open-ended | Evidence | State, and before which gate it is observed |
+|---|---|---|---|---|
+| C1 | § 6 *Before S3*, its old "No benchmark-own file changes" and Files "manifest targets and `template-manifest.json` only" | — | false, the parent's entry 9.1: `TheAdaptedCopyTests.cs:79` pins `21553ce`; `build-test` installs nothing in the mount; case 15's reason names the old removal (`LeftoversSweepCase15Tests.cs:19-21`) **[M]** `83f166d6` | replaced by row F42-c and item 4.1's named paths (§ 6 *Before S3*, restated): **proposed**, before F42-c's plan gate; completeness proved by row F42-c's checks (1)–(4b) |
+| C2 | S3's Files: `ContainerPass.cs` "on the copy check's own list" | the own list is `BenchOwn` in `TheAdaptedCopyTests.cs` (`:32-46` **[M]** `83f166d6`), which S3 edits; the check refuses a `.cs` of the folder on neither list | read, the check's own comment (`:28-30`) | S3's Files name `TheAdaptedCopyTests.cs`: **proposed**, observed by S3's copy check red without the `BenchOwn` entry, before S3's plan gate |
+| C3 | § 1 row E6-g's "not read" cell, *E6-g by directory*'s C# cells (the C# copy reads `.cs` under `tests/` and `src/`, `.sh`, `.ps1`, `.py`, the workflows, `.mjs`/`.js`/`.cjs` only under `.github/scripts/` and `http/`), § 3's *Not read by any guard*, D7's "by file kind" | each C# cell as written; a cell the plant contradicts is rewritten as the observation says | **[R]** (`GuardFiles`, mcp `53f65130` `LeftoversGuardFiles.cs:28-31`, `:63-69`); the Node cells **[M]** `46e27108` | **proposed**: each C# cell observed by a plant through the copy at `53f65130` (after F42-c), before S7's plan gate |
+| C4 | *E6-g by directory*, rows `src/` and `tools/model-arms/`; S7's scenarios | `GetTempPath()` in a `Source`-kind `.cs` expected never red in either guard: a stated limit of both guards. S7 plants instead what the `Source` kind reads: an `Owned.TempRoot` reference outside the helper's folder (expected `raw-temp`) and the bare prefix word (expected `owner-blind`); red or not, the plant says which | **[R]**: `HitsOutsideSource` returns nothing for `SourceKind.Source` (mcp `53f65130` `LeftoversGuard.cs:204-207`); the `Source` kind reads only `owner-blind` and, as `raw-temp`, an `Owned.TempRoot` reference outside the helper's folder (`:216-219`, `:297-301`). The Node guard reads neither path: `isScanned('src/X.cs', 'node')`, `isScanned('tools/model-arms/X.cs', 'node')` → false **[M]** `83f166d6` | **proposed**: the limit and the replacement plants observed before S7's plan gate (the parent's items 4.3 and 8.3: S7 keeps a plant the `Source` kind does read, so its check count stays) |
+| C5 | *E6-g by directory*, row `.github/workflows/`: `mktemp -d` in a workflow `run:` in the C# copy | expected red; red or not, to be observed | **[R]**: `.yml` is in `RawTempByExtension` (`LeftoversGuard.cs:84`, `:89`). Node `[]` **[M]** `46e27108` | **proposed**, before S7's plan gate |
+| C6 | § 1's correction to § 3: nine `.py` `tempfile.mkdtemp(` lines in the C# copy | expected reported; red or not, to be observed | **[R]**: `\bmkdtemp(?:Sync)?\s*\(` (`LeftoversGuard.cs:78`) | **proposed**, before S7's plan gate (D7 says whose they are) |
+| C7 | row E6-d and S3 (7): the C# half of "neither guard reads" `SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")` | expected not read; read or not, to be observed | Node `[]` **[M]** `46e27108`; C# **[R]**: `RyukOff` wants `[:=]` after the name (`LeftoversGuard.cs:93`) | **proposed**: the C# half through the copy at `53f65130`, before S3's plan gate, so S3's own test is known to be the only reader, or the second |
+| C8 | row E6-b: the C# copy reads `worktree add` "only outside `src/`" | expected so; red or not, each plant says which | **[R]** (`LeftoversGuard.cs:91`, `:204-209` at `53f65130`) | **proposed**, observed by S4's and S5's plants through the copy, before S4's plan gate |
+| C9 | row E6-f1 and S3 (5): the marker clean and, without `live and die with`, one `exemption` "in each" guard | the C# half expected as the Node half; to be observed | Node **observed** **[M]** `83f166d6` (row E6-f1); C# after F42-c | **proposed** (the C# half), before S3's plan gate |
+| C10 | S7's *What*: one manifest operation on `LeftoversGuardFiles.cs` makes `.cs` under `tools/` a `Source` file | a discovery boundary changed by an operation: without it, a plant in `tools/model-arms/X.cs` is not read; with it, read as `Source` | not run | **proposed**: S7's brief names the operation and observes it, without and with, with C4's replacement plants, before S7's plan gate |
 
 ## 2. Goal
 
@@ -153,10 +202,10 @@ The default profile finds 3 of these (the two `t-lib.sh` lines and `spikes/lang-
   `scripts/telemetry-ingest.ps1:39-40` (`docker start` of that existing container), and `http/README.md:32-33` (a person's
   recipe, `docker run -d --name bench-suite-pg …` without `--rm`; S7 rewrites it).
 - **Databases.** 29 per-test `CREATE DATABASE` call sites in 16 files, never dropped, inside the fixture's container (E6-f1, E6-f2).
-- **Not read by any guard** **[M]**: `spikes/lang-bench/lib/conformance.mjs:152`, `lib/toolchain-install.mjs:152`,
+- **Not read by any guard** **[M]** (the Node half; the C# half **[R]**, by reading `GuardFiles`, claim C3): `spikes/lang-bench/lib/conformance.mjs:152`, `lib/toolchain-install.mjs:152`,
   `spikes/minigit-bench/capture/capture-files.mjs:71`, `smoke-session.mjs:61`, `lib/preflight.mjs:33` (plain `.mjs`);
-  `spikes/lang-bench/test/py/*.py` (`tempfile.mkdtemp`, with `finally`; since S2 the C# copy reads `.py`, see § 1's
-  *E6-g by directory*); `spikes/EvalLibrarySpike/Program.cs:12` (a console
+  `spikes/lang-bench/test/py/*.py` (`tempfile.mkdtemp`, with `finally`; since S2 the C# copy reads `.py`, **[R]**, see § 1's
+  *E6-g by directory* and claims C3 and C6); `spikes/EvalLibrarySpike/Program.cs:12` (a console
   spike). Product temp sites in `src/` and `hosts/` (`SolutionSignals.cs:179`, `ScoutTrees.cs:178`,
   `FileSystemGateAssessmentFiles.cs:33`, `GateToolsCommand.cs:136`) remove in `finally`/`Dispose`; they are the product's.
 
@@ -210,7 +259,7 @@ to `<temp>/bench-fake-cli` or `<temp>/fake-coai-data`.
 (`todo/PLAN_bench_test_leftovers_followups.md` § *F-items*); E6 does not build them again. Every other finding of E6's
 guards in `spikes/` is E6's (S6). E6's guards read `spikes/` (the boundary row says so) by file kind, not all of it:
 its test files and its `.sh`, `.ps1` and `.py` scripts, never a plain `.mjs` or a `.cs` there (§ 1's *E6-g by directory*, corrected
-2026-11-16; this sentence used to say "all of `spikes/`"). So **S7 merges only after
+2026-11-16; this sentence used to say "all of `spikes/`"; the C# half is **[R]**, claim C3, observed before S7's plan gate). So **S7 merges only after
 the followups plan's S1 and S2 are merged**, or after the owner moves those sites to E6. This is the boundary as both
 documents already write it; it is not a change.
 
@@ -268,6 +317,11 @@ F42, in this repository, its own PR before S3. It is a prerequisite PR, not a st
 condition of E6, it re-runs E6-e's check at a new commit (D2). As in the parent's build order, S4 to S7 follow S3: all
 the remaining stories come after F42-c and S3, so they wait for both prerequisites too.
 
+**Epoch 10 (2026-11-16), the parent's § *Epoch 10* item 5.** F41-b is done (#216, `83f166d6`). This amendment merges
+before F42-c's plan gate. Then F42-c, its brief revised by new commits on `feat/e6-copy-f42` (never a rewrite) to item
+4.1's named paths and row F42-c's checks (1)–(4b) → E6.S3, its local brief rewritten to rows E6-f1, E6-f2, E6-d and claim
+C7 → S4 … S7 as above. Each claim of § 1 (*The claims*) is observed before the plan gate it names.
+
 ## 6. Stories
 
 ### S1 — The held-out runner lists, never removes by age (E6-h)
@@ -312,12 +366,57 @@ green on `ubuntu-latest`.
 **What.** When mcp has merged F42 (the `container-scoped` kind in the C# template, case for case with F41, and the
 notes N1–N5 reproduced, each one that applies fixed), the adapted copy is brought to that commit: the manifest's
 `commit` and each entry's upstream blob SHA re-pinned, the copied files rewritten from the template under the same
-operations (D2), and any operation whose count changed corrected. No benchmark-own file changes, and no copied file is
-edited by hand.
+operations (D2), and any operation whose count changed corrected. No copied file is edited by hand.
+
+*Restated 2026-11-16 by the parent's § Epoch 10 (row F42-c, item 4.1), from its entry 9.1.* This section used to say
+"No benchmark-own file changes" and list as Files "manifest targets and `template-manifest.json` only" (claim C1). F42-c's
+brief found that the re-sync needs benchmark-own touches (the parent's entry 9.1: `TheAdaptedCopyTests.cs:79` pins
+`21553ce`; `build-test` installs nothing in the mount, which the differential test needs; case 15's Windows reason names
+the old removal, **[M]** `83f166d6`). The scope is now a list of NAMED PATHS, each with the dependency that needs it,
+proved complete by a run; never a count and never a bare "no other file":
+
+- **The manifest and its targets** under `tests/Bench.Tests/Leftovers/`: `commit` → `53f651309a271e7388c703e1ec73799ff6f1c76e`;
+  55 entries (53 today, **[M]** `83f166d6`); nine changed blobs (`LeftoversAudit.cs` `f1a93747` → `3f32fc52`,
+  `LeftoversAuditException.cs` `6d703ecf` → `dd5860bb`, `LeftoversAuditTests.cs` `fcc8484b` → `2e258e84`,
+  `LeftoversGuard.cs` `8a92a79b` → `529646e3`, `LeftoversGuardExemptions.cs` `156fe549` → `a240a05a`,
+  `LeftoversGuardTests.cs` `f6a8e035` → `951b43af`, `Native.cs` `dd6c8680` → `f9a277f6`, `OwnedTests.cs` `20a0a213` →
+  `b97e3eff`, `Removal.cs` `05e58fb5` → `d6ec896f`); two new entries (`LeftoversGuardScenarios.cs` `8da3abb6`,
+  `LeftoversGuardDifferentialTests.cs` `2d308cd3`); the other 44 entries unchanged (**[M]** `83f166d6`: `git rev-parse`
+  of each path at mcp `21553ce` and `53f65130`, and the manifest's blobs today).
+- **The permitted transformations:** D2's operations as the manifest holds them today, applied unchanged; ONE count
+  corrected (`mcp tests:` 6 → 7 in `LeftoversAuditTests.cs`, **[M]** 6 lines at `21553ce`, 7 at `53f65130`); the
+  namespace operation only on the two new entries; no new kind of operation.
+- **`TheAdaptedCopyTests.cs:79`** (it pins the manifest's commit) and nothing else of that file (S3 edits its `BenchOwn`,
+  `:32-46`; claim C2).
+- **`.gitattributes`:** one `-text` line per new copied file (S2's decision: one line per copied file).
+- **`.github/workflows/ci.yml`, job `build-test` only:** Node 20 or later on `PATH` with its version printed, then
+  `npm ci --ignore-scripts` in `.agents/conventions`, both before the *Test* step (the differential test runs the mounted
+  Node guard, which reads workflow rows through the mount's `yaml`). `build-test` is the only job that runs `Bench.Tests`
+  (**[M]** `83f166d6`, `ci.yml` read).
+- **`LeftoversSweepCase15Tests.cs`:** the Windows reason's text only (`:19-21`); the skip stays.
+- **The docs:** `research/module_tests.md`, `research/README.md`, `todo/README.md`, this document (progress lines only:
+  its § 6 boundary is amended by the stories amendment, not by F42-c), F42-c's brief and S2's brief (their promotion:
+  `todo/PLAN_test_leftovers_E6_F42c_brief.md` → `research/…`, `todo/PLAN_test_leftovers_E6_S2_brief.md` → `research/…`).
+
+A file the clean-checkout run needs outside these paths is found BEFORE the PR, by that run; adding it is then a change
+of the parent's epoch 10 and counts there.
+
 **Check.** `TheAdaptedCopyTests` green at F42's commit; one byte changed in a copied file → red (the parent's row F42-c).
-The copied guard's own tests, copied with it, green; case 15 still green on Linux.
-**Files.** `tests/Bench.Tests/Leftovers/**` (manifest targets and `template-manifest.json` only).
-**Done when.** The check is green on `ubuntu-latest`, and its red run is quoted on the PR.
+The copied guard's own tests, copied with it, green; case 15 still green on Linux. And row F42-c's checks, as the parent's
+§ *Epoch 10* item 3 writes them: (1) from a CLEAN checkout of the PR head (a fresh clone; `git submodule update --init`,
+which is the mount only; then `npm ci --ignore-scripts` in `.agents/conventions`): `TheAdaptedCopyTests` green with 55
+entries; one copied byte changed → its row red; the `mcp tests:` count set back to 6 → red at that operation.
+(2) `LeftoversGuardDifferentialTests` 3 of 3 green, its marker rows RUN, not skipped; and red with the mount's
+`node_modules` absent (`YamlMissingError`). (3) CI `build-test` green on the head, where Node 20 or later (its version
+printed) and the mount's `npm ci` come before the *Test* step. (4) `git diff --name-only <base>..HEAD` lies within the
+named paths above. (4b) `git diff -U0 <base>..HEAD` per path stays within that path's bound: the manifest changes only its
+`commit`, the nine blob SHAs, the `mcp tests:` count 6 → 7 and the two new entries; `TheAdaptedCopyTests.cs` only `:79`;
+case 15 only the reason's text; `ci.yml` only `build-test`, one step; no new kind of operation; this document only its
+progress lines. Does not prove: Windows (benchmark has no Windows leg).
+**Files.** The named paths above. *Was:* `tests/Bench.Tests/Leftovers/**` (manifest targets and `template-manifest.json`
+only).
+**Done when.** The check is green on `ubuntu-latest`, and its red run is quoted on the PR; checks (1)–(4b) ran and their
+results are quoted on the PR. State: **proposed** (row F42-c), before F42-c's plan gate.
 
 ### S3 — The fixture's container (E6-d, E6-f1, E6-f2) and the container pass (D9)
 
@@ -335,7 +434,8 @@ query succeeds and finds nothing. This replaces "`docker inspect` by the capture
 absent. (2) The label (E6-d (2)): the started container's `testsToDelete.owner` label equals the run's record, and the
 container pass, given a fake `docker` that lists a dead-owner container of this token older than 10 minutes, removes it
 by id; a live-owner one, another owner's, another token's and a young one are kept, each with its reason. (3) No reuse
-(E6-f2 (3), which is E6-d (3)): no guard reads reuse, so it is proved at run time by (4)'s disposal check. RED, each:
+(E6-f2 (3), which is E6-d (3)): no guard reads reuse (the Node guard: `.WithReuse(true)` → `[]`, **[M]** `46e27108`; the C#
+copy: no reuse spelling in its guard files, **[R]**), so it is proved at run time by (4)'s disposal check. RED, each:
 reuse enabled through the builder the fixture uses, and through configuration alone (`TESTCONTAINERS_REUSE_ENABLE=true`,
 or `testcontainers.reuse.enable=true` in the properties file the pinned version reads), with the fixture's source
 unchanged; the brief first reads which configuration the pinned 4.16.0 reads (§ 1, E6-f2: none was found in its
@@ -344,13 +444,22 @@ binaries), and records the configuration half's result either way. A source test
 (4) E6-f2 (1) and (2): the container exists by the captured id before `DisposeAsync`, the query having succeeded; after
 it, the same query succeeds and finds nothing, so its databases are gone. (5) E6-f1: no finding in `PostgresFixture.cs`
 from the copied C# guard or the Node guard, and the Node guard's count over the repository equals the base's; a
-malformed marker (the same file with the reason's `live and die with` removed) is one `exemption` finding in each. (6) No
+malformed marker (the same file with the reason's `live and die with` removed) is one `exemption` finding in each (the
+Node half observed, **[M]** `83f166d6`; the C# half expected, **[R]**, claim C9, observed through F42-c's copy before
+S3's plan gate). (6) No
 `docker` on `PATH`: the pass reports one line and the suite goes on to the fixture's own loud failure
 (`PostgresFixture.cs:45-47`). (7) Ryuk is never turned off in code (E6-d, the parent's F43): a benchmark test over every
 `.cs` of the repository finds no `TESTCONTAINERS_RYUK_DISABLED` in any spelling, and is red on a planted
-`Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`, which neither guard reads.
+`Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true")`, which the Node guard does not read (`[]`,
+**[M]** `46e27108`) and the C# copy is expected not to read (**[R]**, `RyukOff` wants `:` or `=` after the name,
+`LeftoversGuard.cs:93`); read or not, claim C7 observes it through the copy at `53f65130` before S3's plan gate, so this
+test is known to be the only reader, or the second.
 **Files.** `tests/Bench.Tests/Infrastructure/PostgresFixture.cs`, a benchmark-own `ContainerPass.cs` in
-`tests/Bench.Tests/Leftovers/` (on the copy check's own list), its tests, `research/module_tests.md`.
+`tests/Bench.Tests/Leftovers/` (on the copy check's own list), its tests, `research/module_tests.md`; and
+`tests/Bench.Tests/Leftovers/TheAdaptedCopyTests.cs`, whose `BenchOwn` (`:32-46`) is that own list: `ContainerPass.cs`
+and each new test file of the folder are added there, since the check refuses a `.cs` of the folder that is on neither
+list (claim C2, **proposed**: observed by S3's copy check red without the entry, before S3's plan gate). F42-c touches
+only `:79` of the same file and merges first.
 **Done when.** (1) to (7) green on `ubuntu-latest`, and each counterexample of (3), (5) and (7) seen red once, quoted on
 the PR; the name stays unique per process on one daemon (two suites at once: two names).
 
@@ -403,17 +512,28 @@ sweep if it has none).
 **What.** Switch on the copied repository guard test (`LeftoversRepositoryGuardTests`: `FilesScanned > 0`, no findings).
 The copied C# guard also reads `.cs` under `tools/` as product code (the `Source` kind, as `src/`), by one manifest
 operation on `LeftoversGuardFiles.cs`, so a temp or prefix spelling added under `tools/model-arms/` is judged like
-product code; that folder's tests live in `tests/Bench.Tests/ModelArms/`, which the guards read as tests.
+product code; that folder's tests live in `tests/Bench.Tests/ModelArms/`, which the guards read as tests. That operation
+changes a discovery boundary (claim C10, **proposed**): S7's brief names it and observes it, without (a plant in
+`tools/model-arms/X.cs` not read) and with (read as `Source`), with C4's replacement plants, before S7's plan gate. Judged
+like product code means the `Source` kind's classes only: a raw temp spelling such as `GetTempPath()` there is expected
+never red (**[R]**, claim C4), a limit of both guards that `research/module_tests.md` states.
 Add a CI step to `build-test`: `node .agents/conventions/tools/leftovers-check.mjs --profile node --token bench --identity
 "the measuring harness"`. Settle D8's two lines. Rewrite `http/README.md:32-33` to the owner form with `--rm`. Record the
 machine listing of D11. Close the docs: `research/module_tests.md` (the guards, what they do not read — § 1's E6-g row
 and its table *E6-g by directory*, with the limits by file kind — and the limits of D3); `todo/README.md`.
 **Scenarios.** RED again for each guard: a planted `Path.GetTempPath()` in a `tests/` `.cs`, a planted `mktemp -d` in a
 `tools/` `.sh`, a planted `worktree add` without a marker, an empty scan (a wrong root) —
-and a planted `GetTempPath()` in a `tools/model-arms/` `.cs` (read as product code: red only in the
-forms the `Source` kind judges, the brief records which) — each red, then removed; and the plant of each row of
-*E6-g by directory*, red in each guard that reads that kind. Reuse is not a guard plant: no guard reads it (`.WithReuse(true)`
-in a `.cs` is `[]`, § 1 E6-d). In its place, E6-f2's fixture test runs RED again with reuse enabled through the builder,
+and, in a `tools/model-arms/` `.cs` after the operation, a plant the `Source` kind reads (claim C4: an `Owned.TempRoot`
+reference outside the helper's folder, expected `raw-temp` in the C# copy; the bare prefix word, expected `owner-blind`;
+**[R]**, red or not, the brief records which, and a plant red in no configuration becomes a NOT-read statement, never a
+break-it) — each red, then removed; and the plant of each row of
+*E6-g by directory*, red in each guard that reads that kind (the C# cells observed before S7's plan gate, claim C3). A
+`GetTempPath()` in a `src/` or `tools/` `.cs` is not a break-it: it is expected never red in either guard (claim C4), and
+the brief records that observation as the limit. *Was:* "a planted `GetTempPath()` in a `tools/model-arms/` `.cs` (read
+as product code: red only in the forms the `Source` kind judges, the brief records which)", a plant expected never red;
+the plant count stays (the parent's § *Epoch 10* item 4.3). Reuse is not a guard plant: no guard reads it
+(`.WithReuse(true)` in a `.cs` is `[]` in the Node guard, **[M]** `46e27108`, § 1 E6-d; the C# copy has no reuse
+spelling, **[R]**). In its place, E6-f2's fixture test runs RED again with reuse enabled through the builder,
 and is green with the fixture as it is. Both guards green on the head.
 **Done when.** E6's Definition of Done (§ 11) holds.
 
@@ -429,6 +549,11 @@ and is green with the fixture as it is. Both guards green on the head.
 - A row is **observed** only when its own check ran on a candidate that passes AND a counterexample that fails, at this
   repository's pins (§ 1). A marker or an example spelling this document writes is run through BOTH guards, the shipped
   Node guard and the C# copy (the parent's § *Epoch 9* item 8.1).
+- Every claim of § 1 (*The claims*, C1–C10) is observed before the plan gate it names, with the six things the parent's
+  § *Epoch 10* item 8.1 asks for, and again when one of its inputs changes; until then it is **proposed**, a reading of
+  code says **[R]**, and the text stays open-ended. A plant names the configuration it is red in; an exclusion or a
+  boundary is proved from both sides (without and with); a file-scope line is a list of named paths, proved complete by
+  the PR's own checks from a clean checkout (§ 6 *Before S3*).
 - A Docker query that fails or times out fails its test; it is never read as "absent" (E6-d, E6-f2).
 - The spike suites (S1, S6) run by hand, as today: `node spikes/minigit-bench/run-tests.mjs`, and the `policy-ab-quick`
   tests through that runner with their paths (`research/module_tests.md:185`).
@@ -473,6 +598,8 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
 
 - [ ] E6-a to E6-k (E6-f as E6-f1 and E6-f2): each check green, with its observed result recorded on the PR that met it; every row's state is **observed**.
 - [ ] The adapted copy's check is green; the manifest names F42's commit (`21553ce` until F42-c); F29 is closed by `SweepLock`; F31 is stated by its true condition.
+- [ ] F42-c stayed within § 6 *Before S3*'s named paths, by row F42-c's checks (1)–(4b) from a clean checkout.
+- [ ] Every claim C1–C10 of § 1 was observed before the gate it names, and its result is written where the claim stands; the limits it found (C4's `GetTempPath()` in a `Source`-kind `.cs` among them) are in `research/module_tests.md`.
 - [ ] A killed run's owned folder, its worktree (case 15) and the fixture's container are collected by the next run that starts the fixture (the container) or the next run (folders and worktrees) (S2, S3).
 - [ ] The fixture's container is named in the owner form, labelled, Ryuk on, never reused (proved at run time, E6-f2); the per-test databases carry the `container-scoped` marker, and both guards accept it (E6-f1).
 - [ ] No `raw-temp`, `raw-worktree`, `legacy-name` or `owner-blind` finding in either guard except the inline exemptions the stories list by file and reason.
@@ -549,4 +676,23 @@ strings -el ~/.nuget/packages/testcontainers/4.16.0/lib/net10.0/Testcontainers.d
 git grep -n -i windows -- .github/workflows                                                                            # nothing
 git grep -n "mkdtemp" -- '*.py'                                                                                        # 9 lines
 git grep -n "container-scoped" 4c9a684 -- tools/   # in dew_flow_conventions: fixtures and the rule test only, not the guard
+```
+
+The epoch-10 amendment's measurements (2026-11-16), at `83f166d6` with the mount at its pin `b1746499`
+(`npm ci --ignore-scripts` in `.agents/conventions` first), read-only:
+
+```bash
+node --input-type=module -e "const g = await import('./.agents/conventions/tools/leftovers-check.mjs');
+  const f = 'tests/Bench.Tests/Infrastructure/PostgresFixture.cs';
+  for (const t of ['// testsToDelete-exempt: container-scoped — the per-test databases live and die with the PostgresFixture container',
+                   '// testsToDelete-exempt: container-scoped — the per-test databases are kept by the PostgresFixture container'])
+    console.log(JSON.stringify(g.scanText(f, t + '\n    public async Task<string> NewEmptyDatabaseAsync(string name)')));  // [], one exemption
+  for (const p of ['src/X.cs', 'tools/model-arms/X.cs']) console.log(p, g.isScanned(p, 'node'));"                       # false, false
+node -e "const m = require('./tests/Bench.Tests/Leftovers/template-manifest.json'); console.log(m.commit, m.entries.length)"  # 21553ce5…, 53
+sed -n '32,46p;79p' tests/Bench.Tests/Leftovers/TheAdaptedCopyTests.cs                                                  # BenchOwn; the pinned commit
+grep -n -E '^  [a-z-]+:|Bench.Tests|npm ci' .github/workflows/ci.yml                                                     # only build-test runs Bench.Tests; no npm ci there
+# in dew_flow_mcp, per path P of the nine changed and two new files:
+git rev-parse 21553ce:tests/Mcp.Tests/Leftovers/P 53f65130:tests/Mcp.Tests/Leftovers/P
+git show 21553ce:tests/Mcp.Tests/Leftovers/LeftoversAuditTests.cs | grep -c 'mcp tests:'                                 # 6 (7 at 53f65130)
+git show 53f65130:tests/Mcp.Tests/Leftovers/LeftoversGuard.cs | sed -n '78p;84p;89p;91p;93p;204,219p;297,301p'           # C4–C8, read
 ```
