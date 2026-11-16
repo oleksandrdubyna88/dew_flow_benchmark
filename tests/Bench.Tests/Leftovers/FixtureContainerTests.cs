@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Reflection;
+using Bench.Infrastructure.Process;
 using Bench.Tests.Infrastructure;
 using DotNet.Testcontainers.Configurations;
 using FluentAssertions;
@@ -25,6 +27,7 @@ public sealed class FixtureContainerTests
     private const string ReuseOut = "BENCH_E6_REUSE_OUT";
     private const string GateStep = "BENCH_E6_GATE_CHILD";
     private const string GateOut = "BENCH_E6_GATE_OUT";
+    private const string RyukOut = "BENCH_E6_RYUK_CHILD_OUT";
     private const string SwitchedOff = "The Testcontainers reaper (Ryuk) is switched off here";
     private static readonly TimeSpan ChildBudget = TimeSpan.FromMinutes(3);
 
@@ -75,7 +78,7 @@ public sealed class FixtureContainerTests
     }
 
     [Fact]
-    public void Reuse_set_through_configuration_alone_stays_off_and_the_container_still_ends_with_the_fixture()
+    public async Task Reuse_set_through_configuration_alone_stays_off_and_the_container_still_ends_with_the_fixture()
     {
         using var dir = TempDir.For("e6-reuse");
         File.WriteAllText(dir.At(".testcontainers.properties"), "testcontainers.reuse.enable=true\n");
@@ -85,16 +88,53 @@ public sealed class FixtureContainerTests
 
         child.TimedOut.Should().BeFalse();
         child.ExitCode.Should().Be(0, child.StdOut + child.StdErr);
-        File.ReadAllLines(dir.At("out.txt")).Should().Contain("reuse=False", "Testcontainers 4.16.0 has no configuration path that turns reuse on; a dependency bump that adds one turns this pin red");
+        var lines = File.ReadAllLines(dir.At("out.txt"));
+        lines.Should().Contain("reuse=False", "Testcontainers 4.16.0 has no configuration path that turns reuse on; a dependency bump that adds one turns this pin red");
+        await ContainerHalfAsync(lines);
+    }
+
+    /// <summary>Where a daemon answered, the child also started the fixture and disposed it: neither its container nor its volumes may be there, and its reuse-hash label was empty.</summary>
+    private static async Task ContainerHalfAsync(string[] lines)
+    {
+        if (DockerGate.Decide(DockerGate.NoDaemonReason, DockerGate.OnGitHubActions) is { Kind: DockerGate.Kind.Skip } skipped)
+        {
+            TestContext.Current.AddWarning("the container half of the reuse pin did not run: " + skipped.Reason);
+            return;
+        }
+
+        DockerGate.Require();
+        var id = lines.Single(line => line.StartsWith("id=", StringComparison.Ordinal))[3..];
+        var volumes = lines.Where(line => line.StartsWith("volume=", StringComparison.Ordinal)).Select(line => line[7..]).ToList();
+        lines.Should().Contain("reusehash=", "the fixture's container carries no reuse-hash label");
+        try
+        {
+            (await DockerCli.Survivors(id, volumes, TimeSpan.FromSeconds(30))).Should().BeEmpty("with reuse set through configuration alone the container still ends with the fixture, and so do its volumes");
+        }
+        finally
+        {
+            await DockerCli.CleanUp(id, volumes);
+        }
     }
 
     /// <summary>The child of the reuse pin: the builder's configured reuse, read by reflection from the non-public resource configuration.</summary>
     [Fact]
-    public void ReuseChild_reads_the_builders_configured_reuse()
+    public async Task ReuseChild_reads_the_builders_configured_reuse()
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(ReuseStep))) return;
         var lines = new List<string> { "reuse=" + ConfiguredReuse(new PostgresFixture().Builder()) };
+        if (DockerGate.NoDaemonReason is null) lines.AddRange(await StartAndDisposeAsync());
         File.WriteAllLines(Environment.GetEnvironmentVariable(ReuseOut)!, lines);
+    }
+
+    private static async Task<IEnumerable<string>> StartAndDisposeAsync()
+    {
+        var fixture = new PostgresFixture();
+        await fixture.InitializeAsync();
+        var id = fixture.ContainerId;
+        var volumes = await DockerCli.VolumesOf(id);
+        var hash = await DockerCli.Format(id, "{{index .Config.Labels \"org.testcontainers.reuse-hash\"}}");
+        await fixture.DisposeAsync();
+        return [$"id={id}", .. volumes.Select(volume => "volume=" + volume), "reusehash=" + hash];
     }
 
     [Fact]
@@ -186,6 +226,195 @@ public sealed class FixtureContainerTests
         new[] { first, second }.Should().OnlyContain(name => Owned.FullName().IsMatch(name) && name.Length <= Owned.MaxName, "an owner-form name of at most 63 characters, valid for Docker");
     }
 
+[Fact(Timeout = 900_000)]
+    public async Task Ryuk_removes_the_container_and_its_volumes_of_a_child_test_process_killed_with_SIGKILL()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the proof kills the child with SIGKILL: there is no such signal on Windows");
+        DockerGate.Require();
+        using var dir = TempDir.For("e6-ryuk");
+        var env = new Dictionary<string, string?> { [RyukOut] = dir.At("child.txt") };
+        using var child = Process.Start(SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--no-ansi", "--filter-method", "*RyukChild_starts_a_fixture_and_waits_to_be_killed"], env))!;
+        var drained = Task.WhenAll(child.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken), child.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken));
+        string? id = null;
+        IReadOnlyList<string> volumes = [];
+        try
+        {
+            id = await WaitForChildContainerAsync(dir.At("child.txt"), child);
+            (await DockerCli.ContainerIds(id)).Should().ContainSingle("the child's container is running before the kill");
+            volumes = await DockerCli.VolumesOf(id);
+            volumes.Should().NotBeEmpty("the image declares its data directory a volume; none means this fixture no longer proves that Ryuk removes volumes");
+
+            child.Kill();
+            await child.WaitForExitAsync(TestContext.Current.CancellationToken);
+            child.ExitCode.Should().Be(137, "SIGKILL: the child had no chance to dispose anything");
+
+            var gone = await DockerCli.Poll(async () => (await DockerCli.ContainerIds(id)).Count == 0, TimeSpan.FromSeconds(120));
+            gone.Should().NotBeNull($"Ryuk must remove container {id} within 120 s of the kill");
+            TestContext.Current.AddWarning($"Ryuk removed the killed child's container after {gone!.Value.TotalSeconds:0} s");
+            var volumesGone = await DockerCli.Poll(async () => !(await DockerCli.ListedVolumes()).Intersect(volumes).Any(), TimeSpan.FromSeconds(120));
+            volumesGone.Should().NotBeNull($"Ryuk must remove the volumes {string.Join(", ", volumes)} of the killed child's container within 120 s");
+            TestContext.Current.AddWarning($"the killed child's volumes were gone after {volumesGone!.Value.TotalSeconds:0} s");
+        }
+        finally
+        {
+            if (!child.HasExited) child.Kill(entireProcessTree: true);
+            try
+            {
+                await drained.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                // The killed child's pipes are not read to their end; nothing depends on them.
+            }
+
+            if (id is not null) await DockerCli.CleanUp(id, volumes);
+        }
+    }
+
+    /// <summary>The child of the Ryuk proof: starts the fixture, reports its container (a temp file, then a move) and waits to be killed.</summary>
+    [Fact(Timeout = 900_000)]
+    public async Task RyukChild_starts_a_fixture_and_waits_to_be_killed()
+    {
+        var report = Environment.GetEnvironmentVariable(RyukOut);
+        if (string.IsNullOrEmpty(report)) return;
+        var fixture = new PostgresFixture();
+        await fixture.InitializeAsync();
+        File.WriteAllText(report + ".part", fixture.ContainerId + "\n" + fixture.ContainerName + "\n");
+        File.Move(report + ".part", report);
+        await Task.Delay(TimeSpan.FromMinutes(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task TheFixturesContainer_has_the_owner_form_name_and_the_runs_record_as_its_label()
+    {
+        DockerGate.Require();
+        var fixture = new PostgresFixture();
+        await fixture.InitializeAsync();
+        var id = fixture.ContainerId;
+        try
+        {
+            var fields = (await DockerCli.Format(id, "{{.Name}}\t{{index .Config.Labels \"" + ContainerPass.LabelKey + "\"}}\t{{index .Config.Labels \"org.testcontainers.reuse-hash\"}}")).Split('\t');
+
+            fields.Should().HaveCount(3);
+            fields[0].TrimStart('/').Should().Be(fixture.ContainerName, "the container carries the name the fixture chose before it started");
+            Owned.FullName().IsMatch(fields[0].TrimStart('/')).Should().BeTrue("an owner-form name of this user and this repository");
+            fields[1].Should().Be(Owner.RunRecord().Format(), "the label is the owner record the container pass reads");
+            fields[2].Should().BeEmpty("reuse is never set: Testcontainers writes its reuse-hash label only for a reused container");
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            await DockerCli.CleanUp(id, []);
+        }
+    }
+
+    [Fact]
+    public async Task ThePass_on_a_real_daemon_removes_a_dead_owners_container_by_its_id()
+    {
+        DockerGate.Require();
+        var pid = UnmatchablePid.Next();
+        UnmatchablePid.AssertNoSuchProcess(pid);
+        var made = new List<string>();
+        try
+        {
+            var dead = await DockerCli.Create(Owned.NameFor("pass-dead"), (Owner.This with { Pid = pid }).Format());
+            made.Add(dead);
+            var live = await DockerCli.Create(Owned.NameFor("pass-live"), Owner.This.Format());
+            made.Add(live);
+            var bare = await DockerCli.Create(Owned.NameFor("pass-bare"), null);
+            made.Add(bare);
+
+            var result = ContainerPass.Run(ContainerPass.Real(DateTimeOffset.UtcNow) with { MinAge = TimeSpan.Zero, Consider = made.Contains });
+
+            result.Errors.Should().BeEmpty();
+            result.Removed.Should().ContainSingle().Which.Should().EndWith($"({dead[..12]})");
+            (await DockerCli.ContainerIds(dead)).Should().BeEmpty("the dead owner's container is removed by its captured id");
+            var kept = result.Preserved.Should().ContainSingle().Subject;
+            kept.Path.Should().EndWith($"({live[..12]})");
+            kept.Reason.Should().Be("live");
+            (await DockerCli.ContainerIds(live)).Should().ContainSingle("a live owner's container is kept");
+            string.Join('\n', result.Listed.Concat(result.Preserved.Select(kept => kept.Path)).Concat(result.Removed)).Should().NotContain(bare[..12], "a container with no owner label is never listed by the label filter");
+        }
+        finally
+        {
+            foreach (var id in made) await DockerCli.CleanUp(id, []);
+        }
+    }
+
+    [Fact]
+    public async Task A_reused_container_outlives_disposal_so_the_disposal_check_catches_reuse()
+    {
+        DockerGate.Require();
+        var fixture = new PostgresFixture(builder => builder.WithReuse(true));
+        await fixture.InitializeAsync();
+        var id = fixture.ContainerId;
+        var volumes = await DockerCli.VolumesOf(id);
+        try
+        {
+            await fixture.DisposeAsync();
+
+            var survivors = await DockerCli.Survivors(id, volumes, TimeSpan.FromSeconds(10));
+
+            survivors.Should().NotBeEmpty("a container started with reuse is not removed by disposal (Testcontainers: enabling reuse disables the reaper), so the disposal check of the next test sees it: reuse cannot hide");
+        }
+        finally
+        {
+            await DockerCli.CleanUp(id, volumes);
+        }
+    }
+
+    [Fact]
+    public async Task TheDisposedFixturesContainer_is_gone_by_its_id_and_with_it_its_databases_and_its_volumes()
+    {
+        DockerGate.Require();
+        var fixture = new PostgresFixture();
+        await fixture.InitializeAsync();
+        var id = fixture.ContainerId;
+        IReadOnlyList<string> volumes = [];
+        try
+        {
+            await fixture.NewEmptyDatabaseAsync("e6s3_" + Guid.NewGuid().ToString("N")[..12]);
+            (await DockerCli.ContainerIds(id)).Should().ContainSingle("the container is there before disposal");
+            volumes = await DockerCli.VolumesOf(id);
+            volumes.Should().NotBeEmpty("the image declares its data directory a volume; none means this proof no longer proves the volume ends with the container");
+            TestContext.Current.AddWarning($"the fixture's container size after one database: {await DockerCli.SizeOf(id)}");
+
+            await fixture.DisposeAsync();
+
+            (await DockerCli.Survivors(id, volumes, TimeSpan.FromSeconds(30))).Should().BeEmpty("disposal removes the container, its databases and its volumes");
+        }
+        finally
+        {
+            await DockerCli.CleanUp(id, volumes);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, true, DockerGate.Kind.Run)]
+    [InlineData(null, false, DockerGate.Kind.Run)]
+    [InlineData("'docker' is not on PATH", true, DockerGate.Kind.Fail)]
+    [InlineData("'docker' is not on PATH", false, DockerGate.Kind.Skip)]
+    public void TheDockerGate_runs_where_a_daemon_answered_fails_on_GitHub_Actions_without_one_and_skips_elsewhere(string? noDaemonReason, bool githubActions, DockerGate.Kind expected)
+    {
+        var decision = DockerGate.Decide(noDaemonReason, githubActions);
+
+        decision.Kind.Should().Be(expected);
+        if (noDaemonReason is not null) decision.Reason.Should().Contain(noDaemonReason, "a skip or a failure names why no daemon answered");
+    }
+
+    private static async Task<string> WaitForChildContainerAsync(string report, Process child)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!File.Exists(report))
+        {
+            if (child.HasExited) Assert.Fail($"the child exited ({child.ExitCode}) before it started its container");
+            if (clock.Elapsed > TimeSpan.FromMinutes(5)) Assert.Fail("the child did not start its container within 5 minutes");
+            await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        }
+
+        return File.ReadAllLines(report)[0];
+    }
+
     private static SuiteChild.Result RunReaperChild(TempDir dir, string step, string? ryukOff)
     {
         var env = new Dictionary<string, string?> { [ContainerPass.RyukVariable] = ryukOff, [ReaperStep] = step, [ReaperOut] = dir.At("out.txt") };
@@ -208,5 +437,121 @@ public sealed class FixtureContainerTests
         }
 
         return null;
+    }
+}
+
+/// <summary>Whether the Docker proofs run here. A daemon that answered runs them; none, on GitHub Actions, FAILS them (a durability suite that quietly does not run reports green while guarding nothing); none elsewhere skips them with its reason.</summary>
+public static class DockerGate
+{
+    public enum Kind
+    {
+        Run,
+        Fail,
+        Skip,
+    }
+
+    public sealed record Decision(Kind Kind, string Reason);
+
+    private static readonly Lazy<string?> NoDaemon = new(AskTheDaemon);
+
+    /// <summary>Null when a daemon answered <c>docker version</c>; otherwise why none did.</summary>
+    internal static string? NoDaemonReason => NoDaemon.Value;
+
+    internal static bool OnGitHubActions => Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true";
+
+    /// <summary>Pure: <paramref name="noDaemonReason"/> is null when a daemon answered.</summary>
+    public static Decision Decide(string? noDaemonReason, bool githubActions) =>
+        noDaemonReason is null ? new Decision(Kind.Run, "a daemon answered")
+        : githubActions ? new Decision(Kind.Fail, "no Docker daemon answered on GitHub Actions: " + noDaemonReason)
+        : new Decision(Kind.Skip, "no Docker daemon answered here: " + noDaemonReason);
+
+    /// <summary>Runs at the top of a Docker proof: returns when a daemon answered, fails under GitHub Actions without one, skips elsewhere.</summary>
+    internal static void Require()
+    {
+        var decision = Decide(NoDaemonReason, OnGitHubActions);
+        if (decision.Kind == Kind.Fail) Assert.Fail(decision.Reason);
+        if (decision.Kind == Kind.Skip) Assert.Skip(decision.Reason);
+    }
+
+    private static string? AskTheDaemon()
+    {
+        var attempt = Task.Run(() => ProcessRunner.RunAsync("docker", ["version", "--format", "{{.Server.Version}}"], AppContext.BaseDirectory, TimeSpan.FromSeconds(30), CancellationToken.None)).GetAwaiter().GetResult();
+        return attempt is ProcessAttempt.Completed { Result: { ExitCode: 0, StandardOutput: { Length: > 0 } } } ? null : attempt.Describe + (attempt is ProcessAttempt.Completed done ? ": " + done.Result.StandardError.Trim() : string.Empty);
+    }
+}
+
+/// <summary>The Docker questions of the proofs. Every query must SUCCEED to count: a failed one or a timeout fails the test, never passes as "absent".</summary>
+internal static class DockerCli
+{
+    private static readonly TimeSpan Call = TimeSpan.FromSeconds(60);
+
+    internal static async Task<ProcessResult> Run(params string[] args)
+    {
+        var attempt = await ProcessRunner.RunAsync("docker", args, AppContext.BaseDirectory, Call, TestContext.Current.CancellationToken);
+        if (attempt is ProcessAttempt.Completed { Result.ExitCode: 0 } done) return done.Result;
+        throw new InvalidOperationException($"docker {args[0]} did not succeed: {attempt.Describe}" + (attempt is ProcessAttempt.Completed failed ? ": " + failed.Result.StandardError.Trim() : string.Empty));
+    }
+
+    private static async Task<List<string>> Lines(params string[] args) =>
+        [.. (await Run(args)).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    internal static Task<List<string>> ContainerIds(string id) => Lines("ps", "-a", "-q", "--no-trunc", "--filter", "id=" + id);
+
+    internal static Task<List<string>> ListedVolumes() => Lines("volume", "ls", "-q", "--no-trunc");
+
+    internal static async Task<List<string>> VolumesOf(string id) =>
+        await Lines("inspect", "--type", "container", "--format", "{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}{{println}}{{end}}{{end}}", id);
+
+    internal static async Task<string> Format(string id, string template) =>
+        (await Run("inspect", "--type", "container", "--format", template, id)).StandardOutput.TrimEnd('\n');
+
+    internal static async Task<string> SizeOf(string id) =>
+        (await Run("ps", "-a", "-s", "--no-trunc", "--filter", "id=" + id, "--format", "{{.Size}}")).StandardOutput.Trim();
+
+    /// <summary>A stopped container by <c>docker create</c> (never started): the name and the owner label given, or no label at all.</summary>
+    internal static async Task<string> Create(string name, string? record)
+    {
+        var label = record is null ? [] : new[] { "--label", ContainerPass.LabelKey + "=" + record };
+        return (await Run(["create", "--name", name, .. label, "postgres:17-alpine"])).StandardOutput.Trim();
+    }
+
+    /// <summary>The disposal check: what is still there after <paramref name="ceiling"/> — the container by its id, the volumes it had. Empty is clean.</summary>
+    internal static async Task<List<string>> Survivors(string id, IReadOnlyList<string> volumes, TimeSpan ceiling)
+    {
+        var left = new List<string>();
+        if (await Poll(async () => (await ContainerIds(id)).Count == 0, ceiling) is null) left.Add("container " + id);
+        if (await Poll(async () => !(await ListedVolumes()).Intersect(volumes).Any(), ceiling) is null) left.AddRange((await ListedVolumes()).Intersect(volumes).Select(volume => "volume " + volume));
+        return left;
+    }
+
+    /// <summary>Polls every two seconds; the seconds it took, or null when <paramref name="ceiling"/> passed first.</summary>
+    internal static async Task<TimeSpan?> Poll(Func<Task<bool>> done, TimeSpan ceiling)
+    {
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            if (await done()) return clock.Elapsed;
+            if (clock.Elapsed >= ceiling) return null;
+            await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>Removes by the captured id and the captured volume names, whatever is still there. Never throws: a proof's own failure must not be replaced by its cleanup's.</summary>
+    internal static async Task CleanUp(string id, IReadOnlyList<string> volumes)
+    {
+        await Try("rm", "-f", "-v", id);
+        foreach (var volume in volumes) await Try("volume", "rm", volume);
+    }
+
+    private static async Task Try(params string[] args)
+    {
+        try
+        {
+            await ProcessRunner.RunAsync("docker", args, AppContext.BaseDirectory, Call, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            TestContext.Current.AddWarning($"cleanup: docker {args[0]} failed: {ex.Message}");
+        }
     }
 }
