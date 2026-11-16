@@ -7,7 +7,7 @@
 > observed). F42-c built on `feat/e6-copy-f42` (the copy re-synced to mcp `53f65130`). **Earlier, 2026-11-16: revised for the parent's epoch 9** (§ *Epoch 9* item 8.3: rows E6-d and E6-g
 > restated, E6-f split into E6-f1 and E6-f2, a state on every row; S3 after F41-b and F42-c; S7's reuse plant replaced
 > by E6-f2's fixture test). **Earlier, 2026-11-12: S1 merged (#205; E6-h: the held-out sweep lists `score-tmp` and removes nothing by
-> age); S2 built (#207: the adapted copy, the start-of-run sweep, case 15, the audit; brief `PLAN_test_leftovers_E6_S2_brief.md`), merged as `84d4953e`.** Found by S1, not fixed (outside this document's text): `spikes/minigit-bench/lib/score-steps.mjs:57-73`
+> age); S2 built (#207: the adapted copy, the start-of-run sweep, case 15, the audit; brief `research/PLAN_test_leftovers_E6_S2_brief.md`), merged as `84d4953e`.** Found by S1, not fixed (outside this document's text): `spikes/minigit-bench/lib/score-steps.mjs:57-73`
 > `stepSweep` removes the scorer's own marked folders by marker age. Written new against the shared rules at `d23a2ea` (this
 > repository's pin) and `dew_flow_mcp`'s merged C# helper; the 2026-10-16 draft of this file (`08a87430`) was read as
 > material only. Stories of epic E6 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E6;
@@ -420,7 +420,7 @@ progress lines. Does not prove: Windows (benchmark has no Windows leg).
 **Files.** The named paths above. *Was:* `tests/Bench.Tests/Leftovers/**` (manifest targets and `template-manifest.json`
 only).
 **Done when.** The check is green on `ubuntu-latest`, and its red run is quoted on the PR; checks (1)–(4b) ran and their
-results are quoted on the PR. State: **proposed** (row F42-c), before F42-c's plan gate; built on `feat/e6-copy-f42`; checks (1)–(4b) run on its final head, results on its PR.
+results are quoted on the PR. State: **proposed** (row F42-c), before F42-c's plan gate; built on `feat/e6-copy-f42` (brief `research/PLAN_test_leftovers_E6_F42c_brief.md`); checks (1)–(4b) run on its final head, results on its PR.
 
 ### S3 — The fixture's container (E6-d, E6-f1, E6-f2) and the container pass (D9)
 

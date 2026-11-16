@@ -1,8 +1,9 @@
 # E6 F42-c brief — the adapted C# copy re-synced to mcp's F42 commit (a prerequisite PR of E6.S3)
 
-> Status: **plan only, nothing implemented yet, 2026-11-16; revised the same day to the parent's epoch 10 (§ 0.2), with
+> Status: **IMPLEMENTED, 2026-11-16** (built on `feat/e6-copy-f42`; what shipped differently is § 17). *Was, until the
+> build:* plan only, nothing implemented yet, 2026-11-16; revised the same day to the parent's epoch 10 (§ 0.2), with
 > every claim this PR relies on observed in a scratch before its plan gate (§ 10.1); the coordinator's decisions folded
-> in (§ 12).** The brief of the prerequisite PR F42-c of `todo/PLAN_test_leftovers_E6.md` (§ 6 *Before S3*, restated by
+> in (§ 12). The brief of the prerequisite PR F42-c of `todo/PLAN_test_leftovers_E6.md` (§ 6 *Before S3*, restated by
 > the parent's row F42-c and item 4.1; § 5 row "— (F42-c)"; D2). Its scope is item 4.1's named paths (§ 0.1); the
 > parent's entry 9.1 found the need, its § *Epoch 10* settled the bound.
 >
@@ -105,7 +106,7 @@ from entry 9.2 (E7), and the next counted change is now 10.1.
   `:458`, `:475`, `:498-500`.)
 - The parent, `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` § *Epoch 10*: row F42-c (item 3), items 4.1,
   8.1 and 8.3, and the re-review record's two rows for this brief.
-- The S2 brief, `todo/PLAN_test_leftovers_E6_S2_brief.md`: § 4.1 (the operations), § 5 (the manifest and the check),
+- The S2 brief, `research/PLAN_test_leftovers_E6_S2_brief.md`: § 4.1 (the operations), § 5 (the manifest and the check),
   § 14 (commands), § 17 (N1–N5), § 19 item 1 (`.gitattributes`).
 - `common/planning-docs.md` (the docs and the promotion), `common/plan-change-control.md` (§ 0.1 and § 16: a file outside
   item 4.1's paths is a change of epoch 10, entry 10.1).
@@ -717,3 +718,35 @@ findings below are kept as written before the decisions.
 3. **A build or analyzer finding on the new bytes** (W2). None was seen for `Bench.Tests.csproj` (O2: 0 warnings, 0
    errors with `xunit.v3` 4.0.3 and `TreatWarningsAsErrors`); the whole `.slnx` is the PR's build. If one appears, its
    answer is a project file, outside the paths: stop and report (§ 0.1), never edit a copied file.
+
+## 17. Deviations at promotion — what shipped differently from this brief
+
+Written at the promotion commit, 2026-11-16, on branch `feat/e6-copy-f42`. The results of CC1, R4 and CI's D3 are on the PR,
+not here, and no merge fact is written before the merge (§ 14).
+
+- **The commits are the four of § 11:** the re-pinned manifest with `:79` and the two `.gitattributes` lines (RED), the
+  copy with the CI step (GREEN), case 15 and the docs, the promotion.
+- **C1 observed as planned:** 12 red of 58 at commit 1 (8 blob messages, `LeftoversAuditTests.cs` at operation 2 of 3 "expected
+  7 … found 6 at line(s) 220, 229, 230, 247, 268, 273", 2 `FileNotFoundException`, `EveryLeftoversFile_…`), 46 green; C2 58 of 58,
+  with the mount's `node_modules` absent (fresh clone) and present; C3, C4 and C5 each 1 red of 58, as § 10 says.
+- **The copy script wrote all 55 targets and `git status` showed only the eleven files**, so the 44 unchanged ones came out
+  byte-identical. The manifest was edited by a text-substitution script (the file keeps its hand layout), not re-serialised.
+- **The manifest's target order is the one the file already had**, not strictly ordinal (`DirectoryLinks.cs` precedes
+  `Errno.cs` there); only the two new entries were placed as § 4 says.
+- **W2:** the whole `.slnx` built with 0 errors and one warning, `ASPIRE010` from AppHost, the one `main` has; no new warning;
+  `dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore` exit 0; `git diff --check` clean. No file outside § 0.1's
+  paths was needed, so no entry 10.1.
+- **L1:** the Leftovers namespace 600 total, 574 passed, 26 skipped, 0 failed, as O11 observed. One count differs from § 10 O11's
+  text: `LeftoversAuditTests` has 26 tests and 26 passed here (O11 said 27); the namespace total is the same 600.
+- **D1** in a fresh isolated clone, `test ! -e .agents/conventions/node_modules/yaml` asserted first: exit 2, 2 red of 3
+  (`YamlMissingError`); after `npm ci --ignore-scripts --prefix .agents/conventions`: 3 of 3, and D2 succeeded (not skipped). K2: `git status
+  --porcelain` empty, no `+` in `git submodule status`, `package-lock.json` unchanged.
+- **G1:** the Node guard 209 and 3 on the base and on the head (the CI step included). The C# guard's Explicit count 173 on the head
+  (115 `raw-temp`, 22 `raw-worktree`, 18 `legacy-name`, 18 `owner-blind`), as O10.
+- **L4:** exit 2 with the audit's first line for `=1` ("1 never disposed") and for `=failed-dispose` ("1 disposed but not removed").
+- **W1 (the whole suite, base `83f166d6` built in a scratch worktree, then the head):** base 5678 total, 583 failed; head 5775 total,
+  579 failed. 572 failures are in both lists, the Docker/Postgres ones the machine cannot run (#207 recorded 572 as well). The lists
+  are NOT identical: 11 tests failed only on the base and 7 only on the head (ModelArms and `ScoutsTasksCommandTests`, timing-dependent under
+  the machine's load). All 18 passed (195 of 195) when their nine classes were re-run alone, on the head and on the base. Checked: that re-run, both
+  trees; not checked: the cause of the timing sensitivity, which is outside `Leftovers/` (§ 2 item 7).
+- **Not run here, as § 10.1 says:** CI's D3, the clean checkout of the final head (CC1), R4, and actionlint over the new step.
