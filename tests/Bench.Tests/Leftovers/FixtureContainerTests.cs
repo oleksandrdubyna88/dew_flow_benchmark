@@ -226,7 +226,7 @@ public sealed class FixtureContainerTests
         new[] { first, second }.Should().OnlyContain(name => Owned.FullName().IsMatch(name) && name.Length <= Owned.MaxName, "an owner-form name of at most 63 characters, valid for Docker");
     }
 
-[Fact(Timeout = 900_000)]
+    [Fact(Timeout = 900_000)]
     public async Task Ryuk_removes_the_container_and_its_volumes_of_a_child_test_process_killed_with_SIGKILL()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the proof kills the child with SIGKILL: there is no such signal on Windows");
