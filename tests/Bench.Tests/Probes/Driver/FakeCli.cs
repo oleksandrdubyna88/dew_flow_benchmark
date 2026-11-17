@@ -1,23 +1,26 @@
 using System.Text.Json.Nodes;
+using Bench.Tests.Leftovers;
 
 namespace Bench.Tests.Probes.Driver;
 
 /// <summary>The fake CLI (<c>tests/FakeCli</c>) as one probe SUBJECT sees it: a fresh model id per instance, which is the key the
-/// fake finds its script and writes its call log under (<c>%TEMP%/bench-fake-cli/&lt;model&gt;/</c>), so two subjects of one
-/// campaign — and two tests in parallel — never read each other's script. The probe runner launches it under a MINIMAL replaced
-/// environment (S2c — <c>TEMP</c> passes, nothing the harness owns does), as the real CLIs are launched, so nothing here sets a
-/// process-wide variable and the model id in the argv is the one thing every launch carries.</summary>
+/// fake finds its script and writes its call log under, so two subjects of one campaign — and two tests in parallel — never read each
+/// other's script. The id is the NAME of this instance's owned folder (<c>testsToDelete-&lt;owner&gt;-bench-fakecli-&lt;id&gt;</c>, claimed first and removed
+/// with the instance), and the fake reads an id of that form as <c>&lt;TEMP&gt;/&lt;id&gt;</c>: the home is the owned folder itself, made here and never by the
+/// fake. The probe runner launches it under a MINIMAL replaced environment (S2c — <c>TEMP</c> passes, nothing the harness owns does), as the
+/// real CLIs are launched, so nothing here sets a process-wide variable and the model id in the argv is the one thing every launch carries.</summary>
 internal sealed class FakeCli : IDisposable
 {
+    private readonly OwnedDir _owned = OwnedDir.Create("fakecli");
+
     public FakeCli(JsonObject? script = null)
     {
-        Model = $"fake-{Guid.NewGuid():N}";
-        Home = Path.Combine(Path.GetTempPath(), "bench-fake-cli", Model);
-        Directory.CreateDirectory(Home);
+        Model = Path.GetFileName(_owned.Path);
+        Home = _owned.Path;
         Rewrite(script);
     }
 
-    /// <summary>The model id a subject pins the fake to — the fake's script key.</summary>
+    /// <summary>The model id a subject pins the fake to — the fake's script key, and the owned folder's own name.</summary>
     public string Model { get; }
 
     public string Home { get; }
@@ -73,17 +76,7 @@ internal sealed class FakeCli : IDisposable
             o["subagentModelGuard"]?.GetValue<string>() ?? string.Empty);
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(Home, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A child still closing a file; the temp folder is the operating system's to clean.
-        }
-    }
+    public void Dispose() => _owned.Dispose();
 }
 
 /// <param name="EnvironmentNames">The names of the variables the fake saw — what the launcher let through (S2c), never their values.</param>

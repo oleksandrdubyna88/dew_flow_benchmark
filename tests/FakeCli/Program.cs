@@ -27,6 +27,10 @@ public static class Program
 
         var prompt = PromptOf(args, Console.IsInputRedirected ? new StreamReader(Console.OpenStandardInput(), utf8).ReadToEnd() : string.Empty);
         var call = Events.Record(ModelOf(args), args, prompt);
+        if (call == Events.Refused)
+        {
+            return 3;
+        }
 
         return new Behaviour(script, args, prompt, call).Run();
     }
@@ -658,10 +662,20 @@ public static class Transcripts
 /// <summary>Where a model's script and call log live when no environment variable names them: a folder per MODEL ID under the
 /// system temp folder. The probe runner launches the CLI under a MINIMAL replaced environment (S2c) — <c>TEMP</c> passes, nothing the
 /// harness owns does — so a test cannot hand the fake a variable at all; the model id the argv pins is the one thing every launch
-/// carries, and a test mints a fresh one per subject.</summary>
+/// carries, and a test mints a fresh one per subject. An id of the OWNER form (<c>&lt;word&gt;-u1000-bench-…</c>, recognised by its segments)
+/// names the test's owned folder directly under that temp root; any other id keeps <c>bench-fake-cli/&lt;model&gt;</c>. The fake NEVER makes its
+/// home: the test made it first, and <see cref="Events.Record"/> refuses a launch whose home is missing.</summary>
 public static class FakeHome
 {
-    public static string For(string model) => Path.Combine(Path.GetTempPath(), "bench-fake-cli", model.Length > 0 ? model : "nomodel");
+    private static readonly Regex OwnerForm = new("^[A-Za-z]+-[uw][0-9]{1,10}-bench-", RegexOptions.CultureInvariant);
+
+    public static string For(string model)
+    {
+        // testsToDelete-exempt: raw-temp — the fake's TEMP is the one its launcher passed, and the home under it is a folder the test made first
+        var temp = Path.GetTempPath();
+
+        return OwnerForm.IsMatch(model) ? Path.Combine(temp, model) : Path.Combine(temp, "bench-fake-cli", model.Length > 0 ? model : "nomodel");
+    }
 
     /// <summary>The home THIS launch uses: <c>FAKE_CLI_HOME</c> when the launcher let it through — a test-owned home that does not depend
     /// on the model, which every scout cell pins to the same <c>opus</c> (the scouts' runner passes it in TESTS only) — else the model's.</summary>
@@ -671,12 +685,26 @@ public static class FakeHome
 
 /// <summary>The fake's call log: one JSON file per call in <c>FAKE_CLI_EVENTS</c> (or the model's home) — <c>call-&lt;model&gt;-&lt;n&gt;-&lt;pid&gt;.json</c>
 /// with the argv, the working directory, the prompt and the pid — written BEFORE the fake acts, so a test can see a hung call's
-/// pid. The call number is how many calls of this model were logged before, plus one.</summary>
+/// pid. The call number is how many calls of this model were logged before, plus one. With no <c>FAKE_CLI_EVENTS</c> and no home folder
+/// the fake makes nothing: it writes one line on stderr and answers <see cref="Refused"/> before any <c>CreateDirectory</c>.</summary>
 public static class Events
 {
+    /// <summary>What <see cref="Record"/> answers when the model's home is missing: the launch exits 3.</summary>
+    public const int Refused = -1;
+
     public static int Record(string model, string[] args, string prompt)
     {
-        var dir = Environment.GetEnvironmentVariable("FAKE_CLI_EVENTS") is { Length: > 0 } env ? env : Path.Combine(FakeHome.Of(model), "events");
+        var home = FakeHome.Of(model);
+        var named = Environment.GetEnvironmentVariable("FAKE_CLI_EVENTS") is { Length: > 0 };
+        var dir = named ? Environment.GetEnvironmentVariable("FAKE_CLI_EVENTS")! : Path.Combine(home, "events");
+
+        if (!named && !Directory.Exists(home))
+        {
+            Console.Error.WriteLine($"fake-cli: no home {home} for the model id {model}: a test makes it first");
+            Console.Error.Flush();
+
+            return Refused;
+        }
 
         Directory.CreateDirectory(dir);
         var key = model.Length > 0 ? model : "nomodel";

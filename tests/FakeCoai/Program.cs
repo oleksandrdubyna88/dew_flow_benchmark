@@ -414,7 +414,22 @@ public sealed class Server(Script script)
     private string Word(string variable, string fallback) =>
         !script.Ignores(variable) && Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;
 
-    private static string DataDir() => Environment.GetEnvironmentVariable("COAI_DATA_DIR") ?? Path.Combine(Path.GetTempPath(), "fake-coai-data");
+    /// <summary>The product's data folder, as the driver's <c>COAI_DATA_DIR</c> names it. The fake has NO folder of its own to fall back on: with the
+    /// variable unset or empty it writes one line and exits 4 — and only where the folder is first needed (the review's stderr text, the usage ledger, the
+    /// session file), never at start, so <c>--version</c> and <c>--probe-api</c> answer without it.</summary>
+    private static string DataDir()
+    {
+        if (Environment.GetEnvironmentVariable("COAI_DATA_DIR") is { Length: > 0 } folder)
+        {
+            return folder;
+        }
+
+        Console.Error.WriteLine("fake-coai: COAI_DATA_DIR is unset; the fake makes no data folder of its own");
+        Console.Error.Flush();
+        Environment.Exit(4);
+
+        return string.Empty;
+    }
 
     /// <summary>The product refuses a round no vendor row is ticked for (<c>"plan"</c>, <c>"code"</c>, <c>"feature"</c>) — S7.3's
     /// code gate, 2026-09-29, sent rows ticked for code only, and the real product refused every plan round the code
