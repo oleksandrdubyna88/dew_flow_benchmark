@@ -366,7 +366,9 @@ public sealed class PosixFolderIsolationTests
         string? dead = null;
         try
         {
-            dead = await TempFolderTests.WaitForChildFolderAsync(report.Combine("child.txt"), child);
+            var reported = await TempFolderTests.WaitForChildFolderAsync(report.Combine("child.txt"), child);
+            DrvfsScratch.IsDirectChild(scratch, reported).Should().BeTrue($"the child reports a folder directly in {scratch}: {reported} is not, so nothing of it is touched");
+            dead = reported;
             Directory.Exists(dead).Should().BeTrue("the child's folder exists before the kill");
             File.Exists(dead + ".owner").Should().BeTrue("and so does its claim");
             child.Kill(entireProcessTree: true);
@@ -391,14 +393,9 @@ public sealed class PosixFolderIsolationTests
                 child.Kill(entireProcessTree: true);
             }
 
-            if (dead is not null && Directory.Exists(dead))
+            if (dead is not null && (ScaffoldCleanup.Remove(dead).Concat(ScaffoldCleanup.Remove(dead + ".owner")).ToList() is { Count: > 0 } left))
             {
-                Directory.Delete(dead, recursive: true);
-            }
-
-            if (dead is not null && File.Exists(dead + ".owner"))
-            {
-                File.Delete(dead + ".owner");
+                M2PilotScaffold.Say($"9p scratch: could not remove {string.Join(", ", left)} (the next start sweep judges them)");
             }
 
             try
@@ -432,70 +429,6 @@ public sealed class PosixFolderIsolationTests
 
     private static string SweepReport(SweepResult result) =>
         $"9p scratch sweep: removed {result.Removed.Count}, preserved {result.Preserved.Count}" + string.Concat(result.Removed.Select(path => $"\n  removed: {path}")) + string.Concat(result.Preserved.Select(kept => $"\n  kept: {kept.Path} — {kept.Reason}")) + string.Concat(result.Errors.Select(error => $"\n  error: {error}"));
-
-    private static string Real(string path) => RootFacts.RealPathOf(path).Ok();
-
-    private static IEnumerable<string> Mounts(params (string Point, string Type)[] mounts) =>
-        mounts.Select(mount => $"source {mount.Point.Replace("\\", "\\134", StringComparison.Ordinal).Replace(" ", "\\040", StringComparison.Ordinal)} {mount.Type} rw 0 0");
-
-    [Fact]
-    public void The_drvfs_check_accepts_an_empty_folder_below_a_9p_mount_point_and_a_folder_holding_what_a_killed_run_leaves()
-    {
-        using var mount = new TempFolder();
-        var empty = mount.Folder("scratch");
-        var left = mount.Folder("left");
-        using var owned = OwnedDir.Create("drvfs", left);
-        using var spaced = new TempFolder();
-        var below = spaced.Folder("a b", "scratch");
-
-        DrvfsScratch.Check(empty, Mounts(("/", "ext4"), (mount.Path, "9p")), RootFacts.RealPathOf).Ok().Should().Be(Real(empty));
-        DrvfsScratch.Check(left, Mounts(("/", "ext4"), (mount.Path, "9p")), RootFacts.RealPathOf).Ok().Should().Be(Real(left), "an owner-form folder and its claim are what a killed run leaves");
-        DrvfsScratch.Check(below, Mounts(("/", "ext4"), (spaced.Combine("a b"), "9p")), RootFacts.RealPathOf).Ok().Should().Be(Real(below), "a space in a mount point is written \\040 in /proc/mounts");
-    }
-
-    [Fact]
-    public void The_drvfs_check_refuses_a_foreign_entry_a_quarantine_sibling_and_another_owners_or_repositorys_name_naming_each()
-    {
-        var ours = Owned.NameFor("drvfs");
-        foreach (var name in new[] { "notes.txt", "." + ours + ".teststo" + "delete-quarantine-12-ab", ours.Replace(OwnerToken.This, "u4242", StringComparison.Ordinal), ours.Replace("-bench-", "-mcp-", StringComparison.Ordinal) })
-        {
-            using var folder = new TempFolder();
-            var scratch = folder.Folder("scratch");
-            File.WriteAllText(Path.Combine(scratch, name), "x");
-
-            DrvfsScratch.Check(scratch, Mounts(("/", "ext4"), (folder.Path, "9p")), RootFacts.RealPathOf).Reason().Should().Contain(name, $"{name} is not an owner-form entry of this repository");
-        }
-    }
-
-    [Fact]
-    public void The_drvfs_check_refuses_a_mount_that_is_not_9p_the_string_prefix_trap_and_a_relative_or_missing_path()
-    {
-        using var mount = new TempFolder();
-        var trap = mount.Folder("cx", "scratch");
-        var nested = mount.Folder("c", "x", "scratch");
-        mount.Folder("c");
-
-        DrvfsScratch.Check(nested, Mounts(("/", "ext4"), (mount.Path, "9p"), (mount.Combine("c", "x"), "ext4")), RootFacts.RealPathOf).Reason().Should().Contain("ext4", "the LONGEST mount point above decides");
-        DrvfsScratch.Check(trap, Mounts(("/", "ext4"), (mount.Combine("c"), "9p")), RootFacts.RealPathOf).Reason().Should().Contain("ext4", "cx is not below c: the prefix is compared by segment");
-        DrvfsScratch.Check("scratch", Mounts(("/", "9p")), RootFacts.RealPathOf).Reason().Should().Contain(DrvfsScratch.Variable);
-        DrvfsScratch.Check(mount.Combine("not-made"), Mounts(("/", "9p")), RootFacts.RealPathOf).Reason().Should().Contain("not-made");
-    }
-
-    [Fact]
-    public void The_drvfs_check_judges_a_link_below_the_mount_where_it_points_not_by_its_spelling()
-    {
-        using var mount = new TempFolder();
-        using var outside = new TempFolder();
-        mount.RequireLinks();
-        var real = mount.Folder("real");
-        var target = outside.Folder("outside");
-        var link = mount.Combine("link");
-        Directory.CreateSymbolicLink(link, target);
-        var lines = Mounts(("/", "ext4"), (mount.Path, "9p"));
-
-        DrvfsScratch.Check(real, lines, RootFacts.RealPathOf).Ok().Should().Be(Real(real));
-        DrvfsScratch.Check(link, lines, RootFacts.RealPathOf).Reason().Should().Contain(Real(target), "the link points outside the 9p mount: the real path is judged, and named").And.Contain("ext4");
-    }
 
     [Fact]
     public async Task Lock_and_unlock_run_under_an_exclusive_file_lock()
@@ -787,75 +720,4 @@ public sealed class PosixFolderIsolationTests
         File.Exists(kit.Layout.LockedModes).Should().BeFalse("a euid check after the snapshot would leave one");
         kit.Modes().Should().Equal(Original);
     }
-}
-
-/// <summary>The scratch folder the 9p tests may use, named by the operator in <c>MODEL_ARMS_DRVFS_SCRATCH</c> and checked before anything is written: an absolute, existing folder BELOW a mount of type <c>9p</c> (the Windows drive under WSL), judged by its REAL path (links followed), that holds
-/// NOTHING but owner-form entries of this repository and their claim files — what a killed run of these tests leaves, which the test's start sweep then judges. Anything else refuses, naming it: nothing foreign is ever touched. A refusal is a failure, not a skip: the operator named the folder.
-/// <para>
-/// What this does NOT prove: the 9p mount's own behaviour (the real run does, once); a folder that changes between the check and the test.
-/// </para></summary>
-internal static class DrvfsScratch
-{
-    internal const string Variable = "MODEL_ARMS_DRVFS_SCRATCH";
-
-    /// <summary>The REAL path of the folder when it may be used, or why not. <paramref name="mountLines"/> are <c>/proc/mounts</c> lines (the mount point is escaped there: a space is <c>\040</c>, a tab <c>\011</c>, a backslash <c>\134</c>); <paramref name="realPath"/> places a path where it really is.</summary>
-    internal static Outcome<string> Check(string? value, IEnumerable<string> mountLines, Func<string, Outcome<string>> realPath)
-    {
-        if (string.IsNullOrEmpty(value) || !Path.IsPathFullyQualified(value) || !Directory.Exists(value))
-        {
-            return Outcome<string>.Failure($"{Variable} is '{value}': name an absolute path of an existing folder below a 9p mount");
-        }
-
-        return realPath(value).Match(real => Judged(real, mountLines, realPath), reason => Outcome<string>.Failure($"{Variable}: {value} cannot be resolved ({reason})"));
-    }
-
-    /// <summary>The check for a skip or a failure in a test: unset or empty skips with the operator's opt-in sentence; a refusal fails naming why. Returns the real folder.</summary>
-    internal static string Required()
-    {
-        var value = System.Environment.GetEnvironmentVariable(Variable) ?? string.Empty;
-        Assert.SkipWhen(value.Length == 0, $"{Variable} names no writable folder on a 9p mount (the Windows drive under WSL) — no test writes the operator's Windows drive on its own");
-        var answer = Check(value, File.ReadLines("/proc/mounts"), RootFacts.RealPathOf);
-        Assert.False(answer.Failed(), answer.Failed() ? answer.Reason() : string.Empty);
-        return answer.Ok();
-    }
-
-    private static Outcome<string> Judged(string real, IEnumerable<string> mountLines, Func<string, Outcome<string>> realPath)
-    {
-        var mounts = mountLines.Select(line => line.Split(' ')).Where(fields => fields.Length > 2).Select(fields => (Point: Unescaped(fields[1]), Type: fields[2])).ToList();
-        string? type = null;
-        var best = -1;
-        foreach (var (point, kind) in mounts)
-        {
-            var found = realPath(point);
-            if (found is Outcome<string>.Fail fail && AtOrAbove(point, real))
-            {
-                return Outcome<string>.Failure($"{Variable}: the mount point {point} above {real} cannot be resolved ({fail.Reason})");
-            }
-
-            if (found is Outcome<string>.Ok { Value: var top } && AtOrAbove(top, real) && top.TrimEnd('/').Length >= best)
-            {
-                (best, type) = (top.TrimEnd('/').Length, kind);
-            }
-        }
-
-        if (type != "9p")
-        {
-            return Outcome<string>.Failure($"{Variable}: {real} is below a mount of type {type ?? "(none found)"}, not 9p");
-        }
-
-        var foreign = Directory.EnumerateFileSystemEntries(real).Select(Path.GetFileName).FirstOrDefault(name => !OwnerForm(name!));
-        return foreign is null
-            ? Outcome<string>.Success(real)
-            : Outcome<string>.Failure($"{Variable}: {real} holds {foreign}, which is not an owner-form entry of this repository or its claim — name a folder that holds nothing else");
-    }
-
-    private static bool OwnerForm(string name) =>
-        Owned.FullName().IsMatch(name) || (name.EndsWith(".owner", StringComparison.Ordinal) && Owned.FullName().IsMatch(name[..^6]));
-
-    /// <summary>True when <paramref name="ancestor"/> is <paramref name="path"/> or a folder above it, compared segment by segment (<c>/mnt/c</c> is not above <c>/mnt/cx/f</c>).</summary>
-    private static bool AtOrAbove(string ancestor, string path) =>
-        ancestor.TrimEnd('/') is var top && (top.Length == 0 || path == top || path.StartsWith(top + "/", StringComparison.Ordinal));
-
-    private static string Unescaped(string field) =>
-        Regex.Replace(field, @"\\([0-7]{3})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
 }
