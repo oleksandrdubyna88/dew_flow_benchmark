@@ -498,7 +498,9 @@ start-of-run sweep, or run under a run-scoped temp root outside `/tmp`; and find
 - **N5 — A SIGKILLed .NET child leaves `clr-debug-pipe-<pid>-…-in`/`-out` FIFOs in its temp root** (O10). Any test in the family that
   kills a .NET child whose `TMPDIR` is the shared temp root leaves two such entries per kill there, unnamed and unclaimed. S4's kill
   tests give the child an owned `TMPDIR`; for the parent's *Found on the way* (other consumers' kill tests: coai's, creds', E6.S2's
-  `TwoSweepsAtOnceTests` and `StartOfRunSweepTests` children, which run with the shared temp root — not read here).
+  `TwoSweepsAtOnceTests` and `StartOfRunSweepTests` children, which run with the shared temp root — not read here). **[M]**
+  2026-11-17 ~12:10, on this machine: `ls /tmp | grep -c '^clr-debug-pipe-'` → **1282** (641 pairs, the oldest 2026-11-16 22:42, the
+  newest 10:54, before O10's runs, whose pipes went to their private folders); whose they are was not traced, and none was removed.
 
 ## 14. Questions — Q1–Q8 of the first version ANSWERED by the parent's item 4.2 (`:3868-3879`); one new one
 
