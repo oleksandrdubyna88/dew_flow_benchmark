@@ -5,7 +5,10 @@
 > required `BENCH_PILOT_OUT` names, unprefixed, never the temp root (row E6-l, new); row E6-i reads both guards with
 > counts; S4's *Files* name the model-arms docs; D6 for the probe runner's path; S5's shape G bounded; S6 reads both
 > guards, with named *Files* and a start sweep; S7's *Files*; the plan records on every story's line; claims C6, C8 and
-> C10 observed in part; the `/tmp/.git` todo in § 12). S4 not started (its brief is local). **Earlier: progress 2026-11-17: S3 built and green on hosted CI (PR #219; brief `research/PLAN_test_leftovers_E6_S3_brief.md`); F42-c merged (#218). Earlier: in progress, 2026-11-16: amended for the parent's epoch 10** (§ *Epoch 10* item 8.3: § 6 *Before S3*
+> C10 observed in part; the `/tmp/.git` todo in § 12; after the parent's re-review consult, the feasibility claims
+> observed before epoch 11 opens: D6 revised to a three-way home for the fake CLI, row E6-l's C# half, S5's shape-G
+> classification; S6's Python run blocked until its brief names a sandbox; the Definition of Done's documented exemption
+> for the two scaffolds listed in § 11). S4 not started (its brief is local). **Earlier: progress 2026-11-17: S3 built and green on hosted CI (PR #219; brief `research/PLAN_test_leftovers_E6_S3_brief.md`); F42-c merged (#218). Earlier: in progress, 2026-11-16: amended for the parent's epoch 10** (§ *Epoch 10* item 8.3: § 6 *Before S3*
 > restated by row F42-c and item 4.1's named paths; S3's Files name `TheAdaptedCopyTests.cs`; claims C1–C10 each with a
 > state and the gate it is observed before (§ 1, *The claims*); C4's `GetTempPath()` plants replaced by plants the
 > `Source` kind reads, that spelling in `src/` and `tools/` `.cs` written as a limit of both guards; E6-f1's Node half
@@ -100,7 +103,7 @@ Rows added by this document, read the same way:
 | E6-i | no test helper makes a LEGACY name (rule §1) | **[M]** 20 `legacy-name` findings outside the other plan's spikes: 15 in `tests/Bench.Tests/ModelArms/` (`TempFolder.cs:10` `Directory.CreateTempSubdirectory("testsToDelete-modelarms-")`, 112 `new TempFolder()` in 26 files; tokens `modelarms`, `briefs`, `m2`, `m3`, `x` are not rows of the Tokens table), 5 in `spikes/policy-ab-quick/test/`. **Epoch 11, [M] `b348bb33`:** the 112 are sites, not spellings: 108 `new TempFolder()` in 25 files and 4 `TempFolder _temp = new()` fields (S4's brief N2). Read by BOTH guards (the parent's row E6-i, restated): under `ModelArms/` the Node guard (`--profile node`) has 49 findings (15 `legacy-name`, 14 `raw-temp`, 20 `raw-worktree`) of its 209, and the copied C# guard 82 (15 `legacy-name`, 16 `owner-blind` on the same lines and `M2PilotScaffold.cs:78`, 31 `raw-temp` of which 17 are `"/tmp"` literals, 20 `raw-worktree`) of its 173 | **proposed** (S4, S6). S4's check, against the base `b348bb33`: under `ModelArms/` no `legacy-name`, `raw-temp` or `owner-blind` finding and no `raw-worktree` but the 10 marked lines, in each guard: the Node guard 209 → **160** (default profile 3 → 3), the C# guard 173 → **91**; no finding added elsewhere; on a later base, that base's count less these. S6's: row E6-i's spike lines in both guards (S6 *Done when*) |
 | E6-j | the CI job that runs `Bench.Tests` can read the mount | **[M]** `build-test` (`ci.yml:13-43`) checks out no submodule; the copied C# guard reads the Tokens table and starts the shipped `sweeper-scan.mjs` from the mount (read from the template, **[R]**; #207's CI ran the copy green with the mount, **[D]**, below). `contract` (`:68`) and `plans` (`:120`) do check it out | **proposed**: S2 added the line (`ci.yml:23` at `46e27108`) and #207's CI ran the copy green with it (**[D]**); the counterexample, the job without the line failing, was not recorded |
 | E6-k | a test that makes a temp path removes it | **[M] by reading:** 8 creation lines are never removed — `Diagnostics/DailyRunFileSinkTests.cs:92`, `Engines/FilesystemEngineTests.cs:304`, `Engines/QlnEngineTests.cs:287`, `Authoring/VettingPassTests.cs:326`, `:339`, `Trace/TracePortTests.cs:166`, `:183`, `:268` | **proposed** (S5) |
-| E6-l | output a test makes ON PURPOSE to outlive the run goes to an operator-named folder outside the testsToDelete family, never to the temp root (added 2026-11-17 by the parent's § *Epoch 11*, from its entry 10.2) | **[M]** `b348bb33`: two such tests, both `Explicit = true` (the suite never runs them): `M2PilotScaffold.cs:39-40` (`testsToDelete-m2-target-<id>`, `-root-<id>` under `Path.GetTempPath()`, "meant to outlive the test — the owner removes it after the pilot", `:11-12`) and `M3PilotScaffold.cs:34`, `:37`, `:105` (ten `testsToDelete-m3-<what>-<id>` paths and a claimed manifest, removed by the pilot's step 15). M2's validation probe (`:72-78`, also called by M3 at `:54`) is removed in `finally`: test lifetime, not this row's | **proposed** (S4). The check: (1) each scaffold, run once with `--explicit only` and `BENCH_PILOT_OUT` unset, fails before it makes anything with a message naming `BENCH_PILOT_OUT` (RED first: today each writes under the temp root); the same for a value that is empty, relative, not an existing folder or inside a git checkout. (2) Run once each with it set to a scratch folder outside every git checkout: every printed path is under it, named `bench-m2-<what>-<id>`, `bench-m3-<what>-<id>`, `bench-m3-manifest-<id>.json`; the temp root holds no entry of theirs after the run; the outputs then removed by exact path (M3 by its manifest, T4–T5). (3) Both guards on both files: no `raw-temp`, `legacy-name` or `owner-blind`, no exemption marker. The Node half of (3) **observed [M] `b348bb33`**: the planned lines `[]`; controls: a rename alone under `Path.GetTempPath()` → `raw-temp`, today's line → `raw-temp` and `legacy-name`. The C# half **[R]**, expected clean, observed through the copy before S4's plan gate |
+| E6-l | output a test makes ON PURPOSE to outlive the run goes to an operator-named folder outside the testsToDelete family, never to the temp root (added 2026-11-17 by the parent's § *Epoch 11*, from its entry 10.2) | **[M]** `b348bb33`: two such tests, both `Explicit = true` (the suite never runs them): `M2PilotScaffold.cs:39-40` (`testsToDelete-m2-target-<id>`, `-root-<id>` under `Path.GetTempPath()`, "meant to outlive the test — the owner removes it after the pilot", `:11-12`) and `M3PilotScaffold.cs:34`, `:37`, `:105` (ten `testsToDelete-m3-<what>-<id>` paths and a claimed manifest, removed by the pilot's step 15). M2's validation probe (`:72-78`, also called by M3 at `:54`) is removed in `finally`: test lifetime, not this row's | **proposed** (S4). The check: (1) each scaffold, run once with `--explicit only` and `BENCH_PILOT_OUT` unset, fails before it makes anything with a message naming `BENCH_PILOT_OUT` (RED first: today each writes under the temp root); the same for a value that is empty, relative, not an existing folder or inside a git checkout. (2) Run once each with it set to a scratch folder outside every git checkout: every printed path is under it, named `bench-m2-<what>-<id>`, `bench-m3-<what>-<id>`, `bench-m3-manifest-<id>.json`; the temp root holds no entry of theirs after the run; the outputs then removed by exact path (M3 by its manifest, T4–T5). (3) Both guards on both files: no `raw-temp`, `legacy-name` or `owner-blind`, no exemption marker. The Node half of (3) **observed [M] `b348bb33`**: the planned lines `[]`; controls: a rename alone under `Path.GetTempPath()` → `raw-temp`, today's line → `raw-temp` and `legacy-name`. The C# half **observed** 2026-11-17 (the parent's § *Epoch 11* item 3.3, O-b: `LeftoversGuard.Scan` over private trees at `tests/Bench.Tests/ModelArms/M2PilotScaffold.cs`, consumer `b348bb33`, upstream mcp `53f65130`): each planned line `[]`; controls: under `GetTempPath()` → `raw-temp`, today's line → `legacy-name`, `owner-blind`, `raw-temp`, under `TempDir.Root` → `[]` (the blind spot this row forbids). *Was:* **[R]**, expected clean, observed through the copy before S4's plan gate |
 
 **E6-g by directory** — which guard READS each directory E6 promises, by file kind. **[M]** `46e27108`: the Node guard by
 `isScanned(path, 'node')` of the shipped guard at the pin `4c9a684`; the C# copy by reading `GuardFiles`
@@ -286,6 +289,18 @@ that folder, so `FakeHome.For` resolves inside it); an id that names no existing
 `<temp>/bench-fake-cli` is never made. No product file changes for it. S5's brief observes, before its plan gate, that
 the probe path accepts such a model id (red or not, the run says which); if it does not, the brief stops and reports:
 a product file is outside S5's *Files*.
+*Observed and revised during the parent's re-review (its § *Epoch 11* item 3.3, O-a, 2026-11-17):* through the probe
+runner (`CliProbeRunner`, the child's minimal environment) in a scratch clone at `b348bb33`, a model id that is the leaf of
+an owned folder (`testsToDelete-u1000-bench-fakecli-<6>`, 40 characters) parses as a model id and a subject's model, the
+attempt is answered and the fake's call log lands inside that folder; an owner-form id naming no folder settles `Failed`,
+exit 3, and nothing is made: **observed**. A refusal of EVERY id without a folder would break the scouts' out-of-process
+test, which launches the fake through the production services with no variable and a test-given `TEMP`
+(`tests/Bench.Tests/Cli/ScoutsOutOfProcessTests.cs:19-20`, `:31-32`). So the fake's home is three-way: `FAKE_CLI_HOME` when
+passed; an owner-form id → `<TEMP>/<id>`, which must exist, else exit 3; any other id → `<TEMP>/bench-fake-cli/<model>` as
+today. Each test launch puts that home inside an owned folder (the probe driver by the owner-form id; the scouts'
+out-of-process test by its test-given `TEMP`; the model-arms launches by `FAKE_CLI_HOME`). The refusal on an unset
+variable stays for the fake coai (`COAI_DATA_DIR`), which the product's gate driver always sets
+(`src/Bench.Domain/Gate/CellPaths.cs:83-84`, **[R]**).
 
 **D7 — The spikes, by the boundary.** The followups plan's stories S1 and S2 fix the sites its F1 and F2 name
 (`todo/PLAN_bench_test_leftovers_followups.md` § *F-items*); E6 does not build them again. Every other finding of E6's
@@ -580,7 +595,18 @@ copied C# guard's lines here** (**[M]** `b348bb33`): it reads 75 findings under 
 and `Probes/ProbeContractsGuardTests.cs:19` (`owner-blind`: the literal `ProbeCellReportDto.LatestState` holds `testSt`,
 a piece of the prefix word, case-insensitive; the line's literal is rewritten so no literal spells the piece, for example
 through `nameof`, and the product's member names do not change; `owner-blind` takes no exemption). Node-only: the
-`.ndjson` line (the copy does not read `.ndjson`).
+`.ndjson` line (the copy does not read `.ndjson`). (d) **Shape G, classified** (the parent's § *Epoch 11* item 3.3, O-c, by
+reading the callee of each of the copy's 75 lines here, **[R]**): 29 create nothing and may take `TempDir.Root` —
+`Authoring/AuthoringPassTests.cs:280`, `:292`; `Cli/GateAaCommandTests.cs:214`; `Cli/GateAssessCommandTests.cs:48`;
+`Cli/GateDriverCommandTests.cs:32`; `Engines/FilesystemEngineTests.cs:184`; `Engines/QlnEngineTests.cs:301`;
+`Engines/QlnEngineLiveTests.cs:174`; `Gate/Driver/ProductPinReaderTests.cs:72`;
+`Infrastructure/FileSystemGateArtifactStoreTests.cs:237`, `:238`, `:246`; `Infrastructure/GitCheckoutLocalSourceTests.cs:93`;
+`Infrastructure/ProcessRunnerCancellationTests.cs:28`; `Infrastructure/ProcessRunnerStderrSinkTests.cs:22`;
+`Infrastructure/ProcessRunnerTests.cs:15`, `:26`, `:39`, `:56`, `:75`, `:92`, `:107`, `:138`; `Models/AssessorArgvTests.cs:78`;
+`Scouts/ScoutLaunchProcessTests.cs:100`, `:107`; `Suites/AnchorCheckTests.cs:103`, `:110`; `Trace/TracePortTests.cs:257`.
+2 are not provable here and take an owned folder: `Cli/GateDriverCommandTests.cs:33` (`--artifact-root` = the temp root)
+and `Models/CliAgentLiveTests.cs:83` (a real CLI's working directory). The other 41 create a folder or a file and take an
+owned folder; 3 are not paths (above).
 **Scenarios.** RED first for each of the 8 never-removed sites: a test lists the temp root before and after the class's
 tests and finds the folder left; green after. D4: a product call with the old signature still makes
 `<temp>/bench-scratch/<uuid7>` (pinned); a test's worktree is under its owned folder and `git worktree list` in the
@@ -592,7 +618,9 @@ records (§ 6's first paragraph).
 brief lists by file and reason; the suite is green; the product's own worktree names are unchanged (the pin test).
 *Epoch 11:* read in BOTH guards, against the base `b348bb33`: under `tests/` outside `ModelArms/` and `Leftovers/` the
 Node guard 73 → 0 and the C# guard 75 → 0 (every class, `owner-blind` included), except the exemptions the brief lists
-(§ 6's first paragraph); on a later base, that base's count there.
+(§ 6's first paragraph); on a later base, that base's count there. And a whole-suite run leaves no `bench-fake-cli` in the
+system temp root (today `/tmp/bench-fake-cli` exists, empty: the probe driver removes each model's home, never the parent;
+**[M]** 2026-11-17), listed before and after on the PR.
 
 ### S6 — `spikes/policy-ab-quick` and E6's other spike sites (Node, and the scripts the C# copy reads)
 
@@ -615,7 +643,9 @@ owner segment built at run time from `os.getuid()`; `test/py/test_rs_abort.py:98
 the brief lists that names the run-time owner. Each site is classified by lifetime first (the epoch-11 amendment's
 lifetime rule). The `.py` units are started by Node test files under `python3 -I -m unittest`
 (`spikes/lang-bench/run-tests.mjs:7-8`); the brief names how its `.py` changes are run within this machine's rule for
-Python (a sandbox).
+Python (a sandbox). *Blocked until then* (the parent's § *Epoch 11* item 3.3, O-e): the `.py` units were not run during
+the re-review; S6 STOPS before its plan gate unless its brief names the sandbox (a `wslc` image or an owned venv) its
+`.py` RED → GREEN runs in, and the owner is asked if none is available.
 **Scenarios.** RED first: the guard's findings for those files before; zero after. A `policy-ab-quick` test killed
 mid-run leaves a claimed folder that the shipped `sweepLeftovers` collects at the next start (the suite gets a start
 sweep if it has none). *Epoch 11:* `spikes/minigit-bench/run-tests.mjs`, the runner the `policy-ab-quick` tests run
@@ -742,6 +772,13 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
       *Epoch 11:* each story's brief lists its exemptions (file, line, class, reason) before its plan gate, and the PR that
       adds them copies the list here, under this line; `owner-blind` and `ryuk-off` take none (§ 6's first paragraph).
 - [ ] Output that must outlive the run is in the folder `BENCH_PILOT_OUT` names, never in the temp root and never prefixed (E6-l).
+      *The documented exemption of the parent's Definition of Done, item 1, read for its epoch 11* (its § *Epoch 11* item
+      4.3; the owner approves it with epoch 11): exactly two tests, `tests/Bench.Tests/ModelArms/M2PilotScaffold.cs` and
+      `tests/Bench.Tests/ModelArms/M3PilotScaffold.cs`, each `[Fact(Explicit = true)]`; their output, the unprefixed
+      `bench-m2-<what>-<id>`, `bench-m3-<what>-<id>` and `bench-m3-manifest-<id>.json`, made only under `BENCH_PILOT_OUT`,
+      never in the temp root, collected by no sweep, removed only by the pilot's named teardown (M2: the two printed paths;
+      M3: its manifest, T1–T5); verified by this list and by row E6-l's test that each scaffold refuses, naming
+      `BENCH_PILOT_OUT`, before it makes anything when the variable is unset. No other test, script or CI step uses it.
 - [ ] CI's `build-test` runs both guards; each is red on a scan of nothing.
 - [ ] `research/module_tests.md` describes the helper, the sweeps, the guards, what they do not read, and the limits.
 - [ ] The machine listing of D11 is on the S7 PR; nothing was removed by hand without the owner's word.
