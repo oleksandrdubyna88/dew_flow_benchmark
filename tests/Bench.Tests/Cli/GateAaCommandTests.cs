@@ -211,7 +211,7 @@ public sealed class GateAaCommandTests(PostgresFixture postgres)
     {
         using var rig = await AaRig.NewAsync(postgres);
         var run = await rig.RunAsync([PromptCell.Api(Prompt("11111111", "/d"))]);
-        var missingRoot = Path.Combine(Path.GetTempPath(), "bench-aa-missing-" + Guid.NewGuid().ToString("N"));
+        var missingRoot = Path.Combine(TempDir.Root, "bench-aa-missing-" + Guid.NewGuid().ToString("N"));
 
         var noSuite = rig.Aa(run, suites: $"{rig.WideSuiteFile},{rig.AaSuiteFile}.gone");
         var noRoot = Run("gate", "aa", "--run", run.ToString(), "--against", rig.Reference.Cell.ToString(),

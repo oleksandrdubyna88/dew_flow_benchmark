@@ -183,7 +183,7 @@ public sealed class FilesystemEngineTests : IDisposable
     {
         var (engine, _) = Build();
 
-        var missing = await engine.WarmAsync(Path.Combine(Path.GetTempPath(), "absent-" + Guid.NewGuid().ToString("N")), TestContext.Current.CancellationToken);
+        var missing = await engine.WarmAsync(Path.Combine(TempDir.Root, "absent-" + Guid.NewGuid().ToString("N")), TestContext.Current.CancellationToken);
 
         // A baseline that silently measured an empty directory would make every engine beside it look
         // good, and nothing in the numbers would say why.

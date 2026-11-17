@@ -92,7 +92,7 @@ public sealed class GitCheckoutLocalSourceTests : IDisposable
 
     [Fact]
     public void A_plain_local_path_is_a_local_source() =>
-        GitCheckoutProvider.IsLocalSource(Path.GetTempPath()).Should().BeTrue();
+        GitCheckoutProvider.IsLocalSource(TempDir.Root).Should().BeTrue();
 
     public void Dispose()
     {

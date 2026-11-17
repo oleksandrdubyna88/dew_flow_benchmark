@@ -69,7 +69,7 @@ public sealed class ProductPinReaderTests
     [Fact]
     public async Task A_missing_binary_is_refused_by_name()
     {
-        (await new ProductPinReader().ReadAsync(Path.Combine(Path.GetTempPath(), "no-such-coai-mcp.exe"), Ct)).Reason()
+        (await new ProductPinReader().ReadAsync(Path.Combine(TempDir.Root, "no-such-coai-mcp.exe"), Ct)).Reason()
             .Should().Contain("does not exist").And.Contain("--coai-exe");
     }
 

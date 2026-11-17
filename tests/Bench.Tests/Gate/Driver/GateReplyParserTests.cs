@@ -122,14 +122,14 @@ public sealed class GateReplyParserTests
     public void The_served_and_refused_counts_and_the_turn_one_prompt_come_off_the_servers_stderr()
     {
         var stderr = string.Join('\n',
-            "\u001b[32minfo\u001b[0m launching api shim --prompt-file /tmp/coai-answers-1/api-1.prompt.md --schema-file /tmp/s.json --out /tmp/coai-answers-1/api-1.answer.json",
+            "\u001b[32minfo\u001b[0m launching api shim --prompt-file /srv/coai-answers-1/api-1.prompt.md --schema-file /srv/s.json --out /srv/coai-answers-1/api-1.answer.json",
             "reviewer grok answered in 312.4s over 3 turns; source: turn 1: served a.cs (1-80 of 200), b.cs (10-20 of 30); not served c.cs - outside the diff - too big turn 2: served d.cs (1-5 of 5)");
 
         var facts = StderrFacts.Of(stderr);
 
         facts.Served.Should().Be(3);
         facts.Refused.Should().Be(2);
-        facts.PromptFiles.Should().Equal(["/tmp/coai-answers-1/api-1.prompt.md"]);
+        facts.PromptFiles.Should().Equal(["/srv/coai-answers-1/api-1.prompt.md"]);
         StderrFacts.Of("nothing about a reviewer here").PromptFiles.Should().BeEmpty("a CLI reviewer launches no shim — absent, never a crash");
     }
 

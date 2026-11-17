@@ -99,14 +99,14 @@ public sealed class ScoutLaunchProcessTests : IDisposable
 
         var line = JsonNode.Parse(two.Stdout)!;
         line["n"]!.GetValue<int>().Should().Be(2, "the second prompt's own stream, the non-ASCII dash included in the hash");
-        line["cwd"]!.GetValue<string>().Should().Be(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), "__CWD__ becomes the launch's working directory");
+        line["cwd"]!.GetValue<string>().Should().Be(TempDir.Root.TrimEnd(Path.DirectorySeparatorChar), "__CWD__ becomes the launch's working directory");
     }
 
     private static async Task<AgentTranscript> Transcript(ScoutFake fake, string prompt, TimeSpan wall, AgentOutputSink sink)
     {
         var parent = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => e.Value as string ?? string.Empty, StringComparer.Ordinal);
         var child = ProbeChildEnvironment.Of(parent).Variables.Concat(fake.ChildVariables).ToDictionary(v => v.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
-        var ask = new AgentAsk(ModelRuntimeKind.CliClaude, ScoutFake.Executable, prompt, Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), wall, ScoutLaunch.MainModel)
+        var ask = new AgentAsk(ModelRuntimeKind.CliClaude, ScoutFake.Executable, prompt, TempDir.Root.TrimEnd(Path.DirectorySeparatorChar), wall, ScoutLaunch.MainModel)
         {
             Environment = AgentEnvironment.Only(child),
             Output = sink,

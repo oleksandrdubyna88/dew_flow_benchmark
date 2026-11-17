@@ -16,7 +16,7 @@ public sealed class ProbeContractsGuardTests
         "ProbeSubjectDto.Id", "ProbeSubjectDto.Runtime", "ProbeSubjectDto.Model", "ProbeSubjectDto.ExecutableRef", "ProbeSubjectDto.Confinement",
         "ProbeSubjectDto.Vendor", "ProbeSubjectDto.Endpoint", "ProbeSubjectDto.Dialect",
         "ProbeCellReportDto.Probe", "ProbeCellReportDto.Subject", "ProbeCellReportDto.State", "ProbeCellReportDto.Kind",
-        "ProbeCellReportDto.Reason", "ProbeCellReportDto.LatestState", "ProbeCellReportDto.RerunCommand",
+        "ProbeCellReportDto.Reason", nameof(ProbeCellReportDto) + "." + nameof(ProbeCellReportDto.LatestState), "ProbeCellReportDto.RerunCommand",
         "ProbeFactsDto.CanaryRead", "ProbeFactsDto.ReadAttempted", "ProbeFactsDto.AnswerCurrent", "ProbeFactsDto.ToolEvidence",
         "ProbeFactsDto.ShellUsed", "ProbeFactsDto.ReaderOffered", "ProbeFactsDto.Reachable", "ProbeFactsDto.AccountOut",
         "ProbePinDto.Version", "ProbePinDto.BinarySha256",

@@ -277,7 +277,7 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
             Bank(),
             Prompts,
             new AuthoringRequest(
-                group, Target, Commit, Count: 3, Ordinal: 1, TimeSpan.FromMinutes(2), Path.GetTempPath(),
+                group, Target, Commit, Count: 3, Ordinal: 1, TimeSpan.FromMinutes(2), TempDir.Root,
                 History: string.Empty, Commits: commits),
             Author(),
             "claude",
@@ -289,7 +289,7 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
             agent,
             Bank(),
             Prompts,
-            new AuthoringRequest(group, Target, Commit, Count: 3, ordinal, TimeSpan.FromMinutes(2), Path.GetTempPath()),
+            new AuthoringRequest(group, Target, Commit, Count: 3, ordinal, TimeSpan.FromMinutes(2), TempDir.Root),
             Author(),
             "claude",
             Noon,

@@ -12,7 +12,7 @@ public sealed class ProcessRunnerTests
     public async Task A_missing_executable_is_an_answer_not_an_exception()
     {
         var attempt = await ProcessRunner.RunAsync(
-            "definitely-not-a-real-executable-9f3c", ["--version"], Path.GetTempPath(),
+            "definitely-not-a-real-executable-9f3c", ["--version"], TempDir.Root,
             TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         attempt.Should().BeOfType<ProcessAttempt.NotFound>();
@@ -23,7 +23,7 @@ public sealed class ProcessRunnerTests
     public async Task A_non_zero_exit_is_reported_with_its_output_rather_than_thrown()
     {
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["cat-file", "-e", "0000000000000000000000000000000000000000"], Path.GetTempPath(),
+            "git", ["cat-file", "-e", "0000000000000000000000000000000000000000"], TempDir.Root,
             TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         attempt.Should().BeOfType<ProcessAttempt.Completed>()
@@ -36,7 +36,7 @@ public sealed class ProcessRunnerTests
     public async Task Stderr_is_captured_apart_from_stdout_and_both_are_in_the_merged_output()
     {
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["rev-parse", "--verify", "definitely-not-a-revision-7c21"], Path.GetTempPath(),
+            "git", ["rev-parse", "--verify", "definitely-not-a-revision-7c21"], TempDir.Root,
             TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         var result = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
@@ -53,7 +53,7 @@ public sealed class ProcessRunnerTests
         // answer proves both halves: the bytes arrived, and the pipe was CLOSED — without the close it would
         // wait forever and this would be a timeout instead.
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["hash-object", "--stdin"], Path.GetTempPath(),
+            "git", ["hash-object", "--stdin"], TempDir.Root,
             TimeSpan.FromSeconds(30), "hello", TestContext.Current.CancellationToken);
 
         attempt.Should().BeOfType<ProcessAttempt.Completed>()
@@ -72,7 +72,7 @@ public sealed class ProcessRunnerTests
         var prompt = new string('x', 200_000);
 
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["hash-object", "--stdin"], Path.GetTempPath(),
+            "git", ["hash-object", "--stdin"], TempDir.Root,
             TimeSpan.FromSeconds(60), prompt, TestContext.Current.CancellationToken);
 
         var output = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
@@ -89,7 +89,7 @@ public sealed class ProcessRunnerTests
         var received = new MemoryStream();
 
         var attempt = await ProcessRunner.StreamAsync(
-            "git", ["hash-object", "--stdin"], Path.GetTempPath(), TimeSpan.FromSeconds(30), "hello",
+            "git", ["hash-object", "--stdin"], TempDir.Root, TimeSpan.FromSeconds(30), "hello",
             (stdout, ct) => stdout.CopyToAsync(received, ct), TestContext.Current.CancellationToken);
 
         var result = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
@@ -104,7 +104,7 @@ public sealed class ProcessRunnerTests
         // Redirected only when there is something to write: a child that reads stdin and finds an open empty
         // pipe waits forever, and the timeout would then report a hang this launcher caused.
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["--version"], Path.GetTempPath(),
+            "git", ["--version"], TempDir.Root,
             TimeSpan.FromSeconds(30), string.Empty, TestContext.Current.CancellationToken);
 
         attempt.Should().BeOfType<ProcessAttempt.Completed>().Which.Result.Ok.Should().BeTrue();
@@ -135,7 +135,7 @@ public sealed class ProcessRunnerTests
         // If this were built into a shell string, the semicolon and quotes would be syntax. As argv it
         // is one literal argument, and git simply reports that it is not a known revision.
         var attempt = await ProcessRunner.RunAsync(
-            "git", ["rev-parse", "--verify", "\"; echo pwned; #"], Path.GetTempPath(),
+            "git", ["rev-parse", "--verify", "\"; echo pwned; #"], TempDir.Root,
             TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         attempt.Should().BeOfType<ProcessAttempt.Completed>();

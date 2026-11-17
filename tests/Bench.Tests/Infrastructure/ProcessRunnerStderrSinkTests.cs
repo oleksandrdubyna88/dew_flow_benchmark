@@ -19,7 +19,7 @@ public sealed class ProcessRunnerStderrSinkTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static string Cwd => Path.GetTempPath();
+    private static string Cwd => TempDir.Root;
 
     private static string Stream(int lines) =>
         string.Concat(Enumerable.Range(1, lines).Select(i => $"{{\"type\":\"line\",\"n\":{i}}}\n"));

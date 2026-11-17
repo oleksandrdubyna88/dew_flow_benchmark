@@ -256,7 +256,7 @@ public sealed class TracePortTests
     [Fact]
     public async Task A_missing_fixture_file_is_a_failure_that_names_the_path()
     {
-        var missing = Path.Combine(Path.GetTempPath(), "absent-" + Guid.NewGuid().ToString("N") + ".json");
+        var missing = Path.Combine(TempDir.Root, "absent-" + Guid.NewGuid().ToString("N") + ".json");
 
         var captured = await new FixtureTrace(missing).CaptureAsync(Tuple(), TestContext.Current.CancellationToken);
 

@@ -302,7 +302,7 @@ public sealed class QlnEngineTests : IDisposable
     {
         var http = new HttpClient(new ThrowingHandler()) { BaseAddress = new Uri("http://localhost:5311/") };
         return new QlnEngine(
-            http, Project, "main", new FilesystemEngine(Path.GetTempPath()), new NullSink());
+            http, Project, "main", new FilesystemEngine(TempDir.Root), new NullSink());
     }
 
     internal sealed record Recorded(string Path, string Body);

@@ -234,8 +234,8 @@ public sealed class FileSystemGateArtifactStoreTests
     [InlineData("rootx/y", false)]
     public void Containment_is_separator_aware(string candidate, bool within)
     {
-        var root = Path.Combine(Path.GetTempPath(), "bench-containment", "root");
-        var path = Path.Combine(Path.GetTempPath(), "bench-containment", candidate.Replace('/', Path.DirectorySeparatorChar));
+        var root = Path.Combine(TempDir.Root, "bench-containment", "root");
+        var path = Path.Combine(TempDir.Root, "bench-containment", candidate.Replace('/', Path.DirectorySeparatorChar));
 
         ArtifactContainment.IsWithin(path, root).Should().Be(within);
     }
@@ -243,7 +243,7 @@ public sealed class FileSystemGateArtifactStoreTests
     [Fact]
     public void Containment_under_a_drive_or_volume_root_is_not_refused()
     {
-        var volume = Path.GetPathRoot(Path.GetTempPath())!;
+        var volume = Path.GetPathRoot(TempDir.Root)!;
 
         ArtifactContainment.IsWithin(Path.Combine(volume, "artifacts", "runs"), volume).Should().BeTrue(
             "a root at the top of a drive keeps its separator when trimmed, and must not become a doubled one");

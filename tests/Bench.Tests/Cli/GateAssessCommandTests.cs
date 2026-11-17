@@ -45,7 +45,7 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
     public void A_suite_file_that_is_not_there_is_the_environment()
     {
         var (code, _, error) = Run("gate", "assess", "--db", "Host=x", "--artifact-root", "a", "--assessor", "codex-astra", "--run", Guid.NewGuid().ToString(),
-            "--suite-file", Path.Combine(Path.GetTempPath(), $"no-such-suite-{Guid.NewGuid():N}.json"));
+            "--suite-file", Path.Combine(TempDir.Root, $"no-such-suite-{Guid.NewGuid():N}.json"));
 
         code.Should().Be(ExitCodes.Environment);
         error.Should().Contain("is not there");
