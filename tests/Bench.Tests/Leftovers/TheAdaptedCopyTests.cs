@@ -25,7 +25,7 @@ public sealed class TheAdaptedCopyTests
     private static readonly string[] CopiedUnder = ["tests/Bench.Tests/Leftovers/"];
 
     /// <summary>
-    /// The benchmark-owned <c>.cs</c> files of the folder (the twelve of the E6 S2 brief, § 4.3) — every other one must be a manifest target. A new file that is on neither list is red, so a copy
+    /// The benchmark-owned <c>.cs</c> files of the folder (the twelve of the E6 S2 brief, § 4.3, and the four of the E6 S3 brief: the container pass, its tests, the fixture's tests and the reaper source test) — every other one must be a manifest target. A new file that is on neither list is red, so a copy
     /// cannot slip in unchecked. A path is relative to the repository root. The list is written whole in the first commit: this check refuses a file that is on neither list and does
     /// NOT require an own file to exist (it only requires every manifest target to exist), so a file that a later commit adds is listed already.
     /// </summary>
@@ -43,6 +43,10 @@ public sealed class TheAdaptedCopyTests
         "tests/Bench.Tests/Leftovers/TempDir.cs",
         "tests/Bench.Tests/Leftovers/TempDirTests.cs",
         "tests/Bench.Tests/Leftovers/WindowsNewFileOwnerLimitTests.cs",
+        "tests/Bench.Tests/Leftovers/ContainerPass.cs",
+        "tests/Bench.Tests/Leftovers/ContainerPassTests.cs",
+        "tests/Bench.Tests/Leftovers/FixtureContainerTests.cs",
+        "tests/Bench.Tests/Leftovers/ContainerRulesTests.cs",
     ];
 
     internal sealed record Operation(string Old, string New, int Count, string? Reason = null);
