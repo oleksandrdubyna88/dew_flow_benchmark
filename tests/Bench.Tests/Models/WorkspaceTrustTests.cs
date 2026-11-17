@@ -18,7 +18,9 @@ namespace Bench.Tests.Models;
 /// </para></summary>
 public sealed class WorkspaceTrustTests : IDisposable
 {
-    private readonly string _home = Path.Combine(Path.GetTempPath(), $"bench-trust-{Guid.NewGuid():N}");
+    private readonly TempDir _dir = TempDir.For("trust");
+
+    private string _home => _dir.At("home");
 
     private string Config => Path.Combine(_home, ".claude.json");
 
@@ -26,7 +28,7 @@ public sealed class WorkspaceTrustTests : IDisposable
 
     public WorkspaceTrustTests() => Directory.CreateDirectory(Root);
 
-    public void Dispose() => Directory.Delete(_home, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void A_worktree_needs_BOTH_its_own_path_and_the_bare_repository_it_points_at()

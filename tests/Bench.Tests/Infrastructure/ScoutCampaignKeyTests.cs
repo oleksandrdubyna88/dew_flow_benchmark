@@ -11,7 +11,10 @@ namespace Bench.Tests.Infrastructure;
 /// once by <c>key init</c> and refused a second time; read back as the same bytes; a missing key is a refusal that creates nothing.</summary>
 public sealed class ScoutCampaignKeyTests : IDisposable
 {
-    private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("scout-key-");
+    private readonly TempDir _dir = TempDir.For("scout-key");
+    private readonly DirectoryInfo _root;
+
+    public ScoutCampaignKeyTests() => _root = new DirectoryInfo(_dir.Path);
 
     public void Dispose()
     {
@@ -20,7 +23,7 @@ public sealed class ScoutCampaignKeyTests : IDisposable
             link.Delete();
         }
 
-        TempGitRepo.DeleteTree(_root.FullName);
+        _dir.Dispose();
     }
 
     private string Trees => Path.Combine(_root.FullName, "trees");

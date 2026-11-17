@@ -110,9 +110,11 @@ public sealed class SweepRecoveryTests(PostgresFixture postgres)
 
     private sealed class TempSuite : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("sweep-suite");
+
         public TempSuite()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-sweep-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
             File.WriteAllText(Path, """
             {
               "id": "demo",
@@ -126,6 +128,6 @@ public sealed class SweepRecoveryTests(PostgresFixture postgres)
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

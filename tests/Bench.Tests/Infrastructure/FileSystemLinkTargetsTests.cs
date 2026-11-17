@@ -11,7 +11,10 @@ namespace Bench.Tests.Infrastructure;
 /// and the audit then judges the call outside.</summary>
 public sealed class FileSystemLinkTargetsTests : IDisposable
 {
-    private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("scout-links-");
+    private readonly TempDir _dir = TempDir.For("scout-links");
+    private readonly DirectoryInfo _root;
+
+    public FileSystemLinkTargetsTests() => _root = new DirectoryInfo(_dir.Path);
 
     public void Dispose()
     {
@@ -21,7 +24,7 @@ public sealed class FileSystemLinkTargetsTests : IDisposable
             link.Delete();
         }
 
-        _root.Delete(recursive: true);
+        _dir.Dispose();
     }
 
     [Fact]

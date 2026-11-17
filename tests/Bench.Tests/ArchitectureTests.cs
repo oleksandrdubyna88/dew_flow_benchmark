@@ -350,22 +350,16 @@ public sealed class ArchitectureTests
     }
 
     /// <summary>The literal scan's planted negative: a host file that writes the variable by hand is found by
-    /// path. A fixed directory per scenario, removed afterwards, so runs reuse one artefact.</summary>
+    /// path. An owned folder per run, removed with the test.</summary>
     [Fact]
     public void A_planted_host_file_spelling_the_variable_is_found()
     {
-        var root = Path.Combine(Path.GetTempPath(), "bench-arch-planted-vendors-literal");
+        using var work = TempDir.For("arch-planted");
+        var root = work.At("root");
         Directory.CreateDirectory(Path.Combine(root, "hosts", "Planted"));
         File.WriteAllText(Path.Combine(root, "hosts", "Planted", "Launch.cs"), "env[\"COAI_VENDORS\"] = otherJson;");
 
-        try
-        {
-            FilesSpelling(root, "COAI_VENDORS").Should().Equal([Path.Combine("hosts", "Planted", "Launch.cs")]);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        FilesSpelling(root, "COAI_VENDORS").Should().Equal([Path.Combine("hosts", "Planted", "Launch.cs")]);
     }
 
     /// <summary>The one-producer rule as a TYPE fact, over every production assembly that can see the domain: the

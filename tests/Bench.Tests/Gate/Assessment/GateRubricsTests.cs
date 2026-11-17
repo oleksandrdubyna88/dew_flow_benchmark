@@ -66,14 +66,17 @@ public sealed class GateRubricsTests
 
     private sealed class TempRubrics : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("rubrics");
+
         public TempRubrics()
         {
+            Path = _dir.At("rubrics");
             Directory.CreateDirectory(System.IO.Path.Combine(Path, "gate-assess"));
             File.WriteAllText(System.IO.Path.Combine(Path, "gate-assess", "strict.md"), "line one\nline two\n");
         }
 
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "bench-rubrics-" + Guid.NewGuid().ToString("N"));
+        public string Path { get; }
 
-        public void Dispose() => Directory.Delete(Path, recursive: true);
+        public void Dispose() => _dir.Dispose();
     }
 }

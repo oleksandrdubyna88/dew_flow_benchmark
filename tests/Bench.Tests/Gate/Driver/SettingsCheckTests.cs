@@ -9,7 +9,11 @@ namespace Bench.Tests.Gate.Driver;
 /// session. A setting accepted and ignored looks exactly like one that worked; only the disk can tell them apart.</summary>
 public sealed class SettingsCheckTests : IDisposable
 {
-    private readonly string _data = Path.Combine(Path.GetTempPath(), "bench-gate-settings", Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("gate-settings");
+    private readonly string _data;
+
+    /// <summary>The data folder is a child of the owned folder, absent until a test writes a session into it.</summary>
+    public SettingsCheckTests() => _data = _dir.At("data");
 
     [Fact]
     public void An_accepted_and_ignored_knob_is_a_mismatch_and_an_unobservable_one_is_unchecked()
@@ -53,13 +57,7 @@ public sealed class SettingsCheckTests : IDisposable
         SessionConfigReader.Read(_data, "c:/checkouts/gate/run/cs2", "bench/gate/nobody").Should().BeEmpty();
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_data))
-        {
-            Directory.Delete(_data, recursive: true);
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private void Session(string name, string repo, string branch, int rounds)
     {

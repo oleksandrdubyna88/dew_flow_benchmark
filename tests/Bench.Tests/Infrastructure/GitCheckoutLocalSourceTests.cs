@@ -20,7 +20,9 @@ public sealed class GitCheckoutLocalSourceTests : IDisposable
 
     private readonly DatedGitRepo _upstream = new(TestContext.Current.CancellationToken);
     private readonly DatedGitRepo _clone = new(TestContext.Current.CancellationToken);
-    private readonly string _cache = Path.Combine(Path.GetTempPath(), $"bench-cache-{Guid.NewGuid():N}");
+    private readonly TempDir _cacheDir = TempDir.For("local-cache");
+
+    private string _cache => _cacheDir.At("cache");
 
     [Fact]
     public async Task A_commit_only_on_the_local_clones_remote_tracking_branch_is_mirrored()
@@ -96,7 +98,7 @@ public sealed class GitCheckoutLocalSourceTests : IDisposable
     {
         _upstream.Dispose();
         _clone.Dispose();
-        TempGitRepo.DeleteTree(_cache);
+        _cacheDir.Dispose();
     }
 
     /// <summary>A → B (clone), then a new commit X in A and a <c>fetch</c> in B: B's local branch stays at the old head while

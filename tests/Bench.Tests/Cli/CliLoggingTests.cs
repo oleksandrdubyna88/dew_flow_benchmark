@@ -122,9 +122,9 @@ public sealed class CliLoggingTests
 
     private sealed class TempLogRoot : IDisposable
     {
-        public TempLogRoot() =>
-            Path = Directory.CreateDirectory(
-                System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-logs-{Guid.NewGuid():N}")).FullName;
+        private readonly TempDir _dir = TempDir.For("logs");
+
+        public TempLogRoot() => Path = _dir.Path;
 
         public string Path { get; }
 
@@ -139,6 +139,6 @@ public sealed class CliLoggingTests
                 ? Directory.GetFiles(System.IO.Path.Combine(Path, BenchLogging.LogFolder), "*.log", SearchOption.AllDirectories)
                 : [];
 
-        public void Dispose() => Directory.Delete(Path, recursive: true);
+        public void Dispose() => _dir.Dispose();
     }
 }

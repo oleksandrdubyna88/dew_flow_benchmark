@@ -9,11 +9,13 @@ namespace Bench.Tests.Cli;
 /// </summary>
 internal sealed class TempBank : IDisposable
 {
+    private readonly TempDir _dir = TempDir.For("lanebank");
+
     public TempBank(string suffix, string repoUrl, string commit)
     {
         Group = $"reading-{suffix}";
         QuestionId = $"readq-{suffix}";
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-lanebank-{suffix}.json");
+        Path = _dir.At($"lanebank-{suffix}.json");
         File.WriteAllText(Path, $$"""
         {
           "targetRepo": "{{repoUrl.Replace("\\", "\\\\")}}",
@@ -40,5 +42,5 @@ internal sealed class TempBank : IDisposable
 
     public string QuestionId { get; }
 
-    public void Dispose() => File.Delete(Path);
+    public void Dispose() => _dir.Dispose();
 }

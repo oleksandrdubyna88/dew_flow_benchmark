@@ -91,9 +91,11 @@ public sealed class FixRunPlanningTests(PostgresFixture postgres)
     /// <summary>One accepted fix-kind question — the minimum a fix run can freeze a selection from.</summary>
     private sealed class TempFixBank : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("fixbank");
+
         public TempFixBank(string suffix)
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-fixbank-{suffix}.json");
+            Path = _dir.At($"fixbank-{suffix}.json");
             File.WriteAllText(Path, $$"""
             {
               "targetRepo": "https://github.com/App-vNext/Polly.git",
@@ -119,6 +121,6 @@ public sealed class FixRunPlanningTests(PostgresFixture postgres)
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

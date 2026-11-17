@@ -188,15 +188,17 @@ public sealed class HarvestLandingTests(PostgresFixture postgres) : IDisposable
 
     private sealed class TempStatement : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("stmt");
+
         public TempStatement(string text)
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-stmt-{Guid.NewGuid():N}.md");
+            Path = _dir.At("statement.md");
             File.WriteAllText(Path, text);
         }
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 
     public void Dispose() => _repo.Dispose();

@@ -240,10 +240,11 @@ public sealed class RunRetrievalTests(PostgresFixture postgres)
 
     private sealed class TempSuiteFile : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("retrieval-suite");
+
         public TempSuiteFile()
         {
-            Path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(), $"bench-retrieval-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
 
             File.WriteAllText(Path, """
             {
@@ -258,6 +259,6 @@ public sealed class RunRetrievalTests(PostgresFixture postgres)
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }
