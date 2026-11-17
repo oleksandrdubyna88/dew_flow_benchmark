@@ -3,41 +3,41 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>Where a pinned reader's scratch goes when the reader does not end in time: INSIDE the run's owned folder, under a plain name, so the run removes it with the folder and nothing of it lands in the temp root.
+/// <summary>What a pinned reader that does not end in time says: the scratch folder is removed with the run's owned folder, so the failure message QUOTES what the diagnosis needs (what the scratch held, what the reader had written to its pipes) and never names the folder as something kept.
 /// <para>
 /// What this does NOT prove: that a real reader can time out (a timeout is never provoked here; <see cref="PinnedConsumer.RunAsync"/> calls the one function these facts pin).
 /// </para></summary>
 public sealed class PinnedConsumerTests
 {
     [Fact]
-    public void A_timed_out_readers_scratch_is_kept_inside_the_owned_folder()
+    public void A_timed_out_readers_message_quotes_what_its_scratch_held_and_its_pipes_and_names_no_kept_folder()
     {
         using var temp = new TempFolder();
         var scratch = temp.Folder("readers", "x");
-        File.WriteAllText(System.IO.Path.Combine(scratch, "out.txt"), "partial output");
+        File.WriteAllText(System.IO.Path.Combine(scratch, "metrics.json"), "partial output");
+        temp.File("deeper", "readers", "x", "sub", "tables.md");
 
-        var kept = PinnedConsumer.Preserved(PinnedReaders.Metrics, scratch);
+        var message = PinnedConsumer.TimeoutMessage(PinnedReaders.Metrics, "killed after 30 s", "out so far", "err so far", scratch);
 
-        kept.Should().StartWith(temp.Path + System.IO.Path.DirectorySeparatorChar, "the scratch is moved inside the owned folder, not beside it");
-        System.IO.Path.GetFileName(kept).Should().StartWith("kept-reader-metrics-");
-        Directory.Exists(scratch).Should().BeFalse("the scratch moved");
-        File.ReadAllText(System.IO.Path.Combine(kept, "out.txt")).Should().Be("partial output", "its files moved with it");
+        message.Should().Contain("metrics.json (14 bytes)").And.Contain("sub").And.Contain("tables.md (6 bytes)");
+        message.Should().Contain("stdout so far: out so far").And.Contain("stderr so far: err so far").And.Contain("metrics.mjs").And.Contain("30");
+        message.Should().NotContain(scratch, "the folder is removed with the run: its path is no help").And.NotContain("kept at");
+        Directory.Exists(scratch).Should().BeTrue("building the message moves and removes nothing");
     }
 
     [Fact]
-    public void A_scratch_with_no_owned_folder_above_it_stays_where_it_is()
-    {
-        var scratch = System.IO.Path.Combine(System.IO.Path.DirectorySeparatorChar.ToString(), "srv", "no-owned-folder-above", "x");
-
-        PinnedConsumer.Preserved(PinnedReaders.Metrics, scratch).Should().Be(scratch, "no walk reaches the temp root: the scratch is returned as it is, and nothing is moved");
-    }
-
-    [Fact]
-    public void A_scratch_that_is_the_owned_folder_itself_stays_where_it_is()
+    public void A_scratch_that_is_missing_or_empty_is_said_so_and_a_long_listing_is_cut()
     {
         using var temp = new TempFolder();
+        var empty = temp.Folder("empty");
+        var many = temp.Folder("many");
+        foreach (var number in Enumerable.Range(0, 25))
+        {
+            File.WriteAllText(System.IO.Path.Combine(many, $"f{number:00}.txt"), "x");
+        }
 
-        PinnedConsumer.Preserved(PinnedReaders.Metrics, temp.Path).Should().Be(temp.Path);
-        Directory.Exists(temp.Path).Should().BeTrue("a folder is never moved into itself");
+        PinnedConsumer.TimeoutMessage(PinnedReaders.Metrics, "d", string.Empty, string.Empty, temp.Combine("gone")).Should().Contain("(nothing)");
+        PinnedConsumer.TimeoutMessage(PinnedReaders.Metrics, "d", string.Empty, string.Empty, empty).Should().Contain("(no files)");
+        PinnedConsumer.TimeoutMessage(PinnedReaders.Metrics, "d", string.Empty, string.Empty, many).Should().Contain("f19.txt (1 bytes)").And.NotContain("f20.txt").And.Contain("and 5 more");
     }
 }
