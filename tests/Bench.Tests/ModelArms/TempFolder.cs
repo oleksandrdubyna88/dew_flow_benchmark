@@ -1,15 +1,31 @@
+using Bench.Tests.Leftovers;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>A scratch folder a test owns: named <c>testsToDelete-…</c> on its own last path component so a crashed run's leftover is
-/// found by the one sweep (common.test-leftovers), and removed with everything in it by <see cref="Dispose"/>. A file inside may have
-/// had its mode lowered, so deleting first restores the owner's access to every folder.</summary>
+/// <summary>A scratch folder a test owns: the owned folder <c>testsToDelete-&lt;owner&gt;-bench-modelarms-&lt;id&gt;</c>, claimed beside it and made by the copied helper (<see cref="OwnedDir"/>; plan D5), so a crashed run's leftover is found by the one sweep (common.test-leftovers).
+/// <see cref="Dispose"/> opens every folder a test closed (a file inside may have had its mode lowered; the owned removal does not restore modes), then removes folder and claim by the exact path and never throws, not even when the opening walk fails:
+/// that is one warning naming the path, the removal is still tried, and what stays keeps its claim for the end-of-run audit to name.</summary>
 internal sealed class TempFolder : IDisposable
 {
-    private readonly DirectoryInfo _folder = Directory.CreateTempSubdirectory("testsToDelete-modelarms-");
+    private readonly Action<DirectoryInfo> _open;
+    private readonly Action<string> _warn;
+    private readonly OwnedDir _owned;
 
-    public string Path => _folder.FullName;
+    public TempFolder()
+        : this(null, null)
+    {
+    }
+
+    /// <summary>The two seams are for the test of a failing walk only: the step that opens the closed folders, and where a warning goes.</summary>
+    internal TempFolder(Action<DirectoryInfo>? open, Action<string>? warn)
+    {
+        _open = open ?? OpenForDeleting;
+        _warn = warn ?? Owned.DefaultWarn;
+        _owned = OwnedDir.Create("modelarms", warn: _warn);
+    }
+
+    public string Path => _owned.Path;
 
     public string Combine(params string[] parts) => System.IO.Path.Combine([Path, .. parts]);
 
@@ -49,28 +65,34 @@ internal sealed class TempFolder : IDisposable
         }
     }
 
-    /// <summary>Removes the folder with everything in it. The delete is in <c>finally</c>: a run removes what it created whatever happened on the way
-    /// (common.test-leftovers). A directory link is unlinked by the delete without being entered, so a loop cannot reach it.</summary>
+    /// <summary>Removes the folder and its claim, by the exact path. The removal is in <c>finally</c>: a run removes what it created whatever happened on the way (common.test-leftovers). A directory link is unlinked by the removal without being entered, so a loop cannot reach it.
+    /// Never throws (<see cref="OwnedDir.Dispose"/> never does).</summary>
     public void Dispose()
     {
         try
         {
-            OpenForDeleting();
+            if (Directory.Exists(Path))
+            {
+                _open(new DirectoryInfo(Path));
+            }
+        }
+        catch (Exception ex)
+        {
+            _warn($"modelarms: could not reopen {Path} before its removal ({ex.GetType().Name}: {ex.Message}) — the removal is still tried; what stays keeps its claim for the end-of-run audit");
         }
         finally
         {
-            _folder.Delete(recursive: true);
+            _owned.Dispose();
         }
     }
 
-    /// <summary>Gives the owner back full access to every folder a test closed, folder first so its children can be listed. A directory link is a
-    /// reparse point and is skipped: following one is what made a link to the folder's own parent throw halfway through the walk. An unreadable folder
-    /// is not ignored: its owner opened it a line earlier, so one that still cannot be read is a real failure.</summary>
-    private void OpenForDeleting()
+    /// <summary>Gives the owner back full access to every folder a test closed, folder first so its children can be listed. A directory link is a reparse point and is skipped: following one is what made a link to the folder's own parent throw halfway through the walk.
+    /// An unreadable folder is not ignored: its owner opened it a line earlier, so one that still cannot be read is a real failure (here a warning, then the removal is tried anyway).</summary>
+    private static void OpenForDeleting(DirectoryInfo folder)
     {
         if (!OperatingSystem.IsWindows())
         {
-            Open(_folder);
+            Open(folder);
         }
     }
 
