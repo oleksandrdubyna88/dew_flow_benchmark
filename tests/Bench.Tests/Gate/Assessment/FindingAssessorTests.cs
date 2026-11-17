@@ -41,7 +41,7 @@ public sealed class FindingAssessorTests
     private static async Task<BatchReading> AskAsync(string answer)
     {
         using var root = GateStoreFixtures.NewRoot();
-        var files = new FileSystemGateAssessmentFiles(root.Path);
+        using var files = new FileSystemGateAssessmentFiles(root.Path);
         var rubric = GateRubrics.Load(Path.Combine(Repository.Root, "prompts")).Ok()[0];
         var launch = new AssessorLaunch(AssessRig.Assessor(), ModelRuntimeKind.CliClaude, "claude", TimeSpan.FromMinutes(1), rubric);
         var assessor = new FindingAssessor(new ScriptedAssessor((_, _) => answer), files);

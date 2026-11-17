@@ -163,7 +163,8 @@ public sealed class TracePortTests
     [Fact]
     public async Task A_fixture_that_does_not_say_who_authored_it_is_refused()
     {
-        var path = Path.Combine(Directory.CreateTempSubdirectory("bench-fixture").FullName, "unlabelled.json");
+        using var fixture = TempDir.For("trace-fixture");
+        var path = fixture.At("unlabelled.json");
         await File.WriteAllTextAsync(
             path,
             """{"contractVersion":"trace/v0","stages":[{"name":"fuse","in":10,"out":5}]}""",
@@ -180,7 +181,8 @@ public sealed class TracePortTests
     [Fact]
     public async Task A_fixture_naming_a_stage_the_contract_does_not_define_is_refused()
     {
-        var path = Path.Combine(Directory.CreateTempSubdirectory("bench-fixture").FullName, "invented.json");
+        using var fixture = TempDir.For("trace-fixture");
+        var path = fixture.At("invented.json");
         await File.WriteAllTextAsync(
             path,
             """{"contractVersion":"trace/v0","authored":"a test","stages":[{"name":"vibes","in":10,"out":5}]}""",
@@ -265,7 +267,8 @@ public sealed class TracePortTests
     [Fact]
     public async Task A_malformed_fixture_is_refused_rather_than_thrown()
     {
-        var path = Path.Combine(Directory.CreateTempSubdirectory("bench-fixture").FullName, "broken.json");
+        using var fixture = TempDir.For("trace-fixture");
+        var path = fixture.At("broken.json");
         await File.WriteAllTextAsync(path, "{not json", TestContext.Current.CancellationToken);
 
         var captured = await new FixtureTrace(path).CaptureAsync(Tuple(), TestContext.Current.CancellationToken);

@@ -29,8 +29,10 @@ namespace Bench.Tests.Authoring;
 /// never reads as approval, and a question moves only under the strict rule.
 /// </para></summary>
 [Collection("postgres")]
-public sealed class VettingPassTests(PostgresFixture postgres)
+public sealed class VettingPassTests(PostgresFixture postgres) : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("vetting");
+
     private static readonly DateTimeOffset Noon = new(2026, 8, 18, 12, 0, 0, TimeSpan.Zero);
     private static readonly RepoUrl Target = RepoUrl.Parse("https://github.com/dotnet/aspnetcore.git").Ok();
     private static readonly CommitSha Commit = CommitSha.Parse(new string('b', 40)).Ok();
@@ -323,7 +325,9 @@ public sealed class VettingPassTests(PostgresFixture postgres)
     }
 
     /// <summary>A tree with nothing in it — every anchor points at nothing.</summary>
-    private string Empty() => Directory.CreateTempSubdirectory("bench-empty-tree").FullName;
+    private string Empty() => Directory.CreateDirectory(_work.At("empty-" + Guid.NewGuid().ToString("N"))).FullName;
+
+    public void Dispose() => _work.Dispose();
 
     private string _anchored = string.Empty;
 
@@ -336,7 +340,7 @@ public sealed class VettingPassTests(PostgresFixture postgres)
             return _anchored;
         }
 
-        var tree = Directory.CreateTempSubdirectory("bench-anchored-tree").FullName;
+        var tree = Directory.CreateDirectory(_work.At("anchored-" + Guid.NewGuid().ToString("N"))).FullName;
         var file = Path.Combine(tree, "src", "A.cs");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllLines(file, [.. Enumerable.Range(1, 44).Select(n => $"// line {n}"), "    public static StoreKind KindOf() => default;", .. Enumerable.Range(46, 10).Select(n => $"// line {n}")]);

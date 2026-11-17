@@ -11,8 +11,10 @@ namespace Bench.Tests.Diagnostics;
 /// what the 24/7 deployment premise says. Together they produce one file growing for months.
 /// <para>The reconciliation is a segment at UTC midnight: the run stays identifiable by its pid, and no
 /// single file holds more than a day.</para></summary>
-public sealed class DailyRunFileSinkTests
+public sealed class DailyRunFileSinkTests : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("daily-log");
+
     private const string Template = "[{Utc:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}";
 
     [Fact]
@@ -89,7 +91,10 @@ public sealed class DailyRunFileSinkTests
         sink.CurrentPath.Should().Be(afterRoll);
     }
 
-    private static string TempRoot() => Directory.CreateTempSubdirectory("bench-daily-log").FullName;
+    /// <summary>A fresh root, a child of this test's owned folder.</summary>
+    private string TempRoot() => Directory.CreateDirectory(_work.At(Guid.NewGuid().ToString("N"))).FullName;
+
+    public void Dispose() => _work.Dispose();
 
     private static string Relative(string root, string path) =>
         Path.GetRelativePath(Path.Combine(root, BenchLogging.LogFolder), path).Replace('\\', '/');
