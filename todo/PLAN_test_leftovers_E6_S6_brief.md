@@ -1,6 +1,6 @@
 # E6.S6 brief — `spikes/`: both guards, the shipped helper in four spikes, the minigit runner's start sweep (E11-6 to E11-8; claim C6; row E6-i's spike half)
 
-> Status: **plan only, nothing implemented yet, 2026-11-17; STOPPED before its plan gate: § 13's two findings (S-1: `runner/run_samples.py` cannot change without files outside S6's *Files*; S-2: an open plan's line on the old names) and § 14's Q1 and Q2 (Q2: the whole `spikes/lang-bench` suite runs the system interpreter through the layer, so no sandbox holds it; O-e stays **blocked**) wait for the coordinator and the owner.** The item 8.1 observations are made at `a8106448` (§ 11): the `.py` units run in a `wslc` container (814 of 829, the other 15 host-bound) and those 15 in an owned throwaway venv (61 of 61 in their three files). The brief of story S6 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S6 `:664-709`; D7 `:337-343`; claim C6 `:164`; § 11 `:806-844`). Its scope is S6's *Files* line (`:697-705`) as named paths (§ 0.1). The parent is at epoch 11 with ONE change (entry 11.1): **the next accepted change is the parent's ELEVENTH FULL STOP.**
+> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 12 (opened by the owner, `Narrowed: yes`, 0 changes, so the next accepted change counts as 12.1): § 13 and § 14's Q1–Q3 are answered by the parent's items 4.1–4.3 and 7; *Files* and *Done when* in item 8.1's form (§ 0.1, § 9); the three base whole-suite runs made at `a8106448` (§ 15); next: the owner confirms § 15's base lists in one line each, then the plan gate.** *Was (`d836de52`):* **plan only, nothing implemented yet, 2026-11-17; STOPPED before its plan gate: § 13's two findings (S-1: `runner/run_samples.py` cannot change without files outside S6's *Files*; S-2: an open plan's line on the old names) and § 14's Q1 and Q2 (Q2: the whole `spikes/lang-bench` suite runs the system interpreter through the layer, so no sandbox holds it; O-e stays **blocked**) wait for the coordinator and the owner.** The item 8.1 observations are made at `a8106448` (§ 11): the `.py` units run in a `wslc` container (814 of 829, the other 15 host-bound) and those 15 in an owned throwaway venv (61 of 61 in their three files). The brief of story S6 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S6 `:664-709`; D7 `:337-343`; claim C6 `:164`; § 11 `:806-844`). Its scope is S6's *Files* line (`:697-705`) as named paths (§ 0.1). The parent was then at epoch 11 with ONE change (entry 11.1); this brief's S-1 became entry 11.2, the eleventh full stop. **Now the parent is at epoch 12 with 0 changes: the next accepted change counts as 12.1, and item 8.1 lists what still counts.**
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-17. Read-only inputs, all verified: benchmark worktree `/home/jinx/git/wt/bench-e6s6`, branch
 > `feat/e6-s6-spikes` from `main` `a8106448` (#223: E6.S5; #222: lang-bench gate specs; #221: E6.S4; #220: the stories amended to epoch 11),
@@ -11,6 +11,16 @@
 > (F1 `:17-30`, F2 `:32-44`, its stories S1 and S2). Every code `file:line` is at `a8106448` (between `b348bb33` and `a8106448` only `spikes/`'s
 > `inputs/` files changed, no test or script, so the parent's and the stories' line numbers hold, § 11 O1). **[M]** measured for this brief, read-only; **[O]** a claim OBSERVED in a scratch clone with item 8.1's six things
 > (§ 11); **[P]** observed by the parent (its row named); **[R]** read from code and NOT run (written open-ended, "the run says which").
+>
+> *Epoch 12 (2026-11-17), read first:* **the parent** is `todo/PLAN_test_leftovers_rollout.md` § *Epoch 12* on conventions PR #180 (`docs/rollout-epoch-12`
+> `a38c11c`): the ledger's `> Epoch 12 · approved 2026-11-17 · by owner · state: open` `:1093` and entry 11.2 `:911`; item 1 (the *Goal*'s bounded
+> exception for S6's claimed folders outside the temp root); item 3.1 (rows E6-i, **E6-m**, E6-g); items 4.1 (the two runner lines, a standing list of
+> exactly two; S7 waits for the language-comparison plan), 4.2 (S6's *Files* and *Done when*), 4.3 (Q3; S-2's dated note; Python), 4.6 (what got
+> smaller), 7 (the owner's answers: question 1 and (a) yes), 8.1 (the new form, "zero unexplained findings", what still counts), 8.3 (the notes this
+> brief's PR writes); the re-review record's cut row for this brief (`:973`). **"Stories"** for epoch 12 is benchmark PR #224
+> (`docs/e6-stories-epoch-12`, head `b3b02a5b`, open): S6 `:701-780`, its *Epoch 12* paragraph `:744-780`, row E6-m `:111`. When #224 merges, `main`
+> is merged into `feat/e6-s6-spikes` (a normal merge) and these citations move to it. Every **[M]** of the base runs (§ 15) is at `a8106448` (still
+> benchmark `main`, `git fetch` and `git rev-parse FETCH_HEAD`, 2026-11-17).
 
 ## 0. What you build, in one paragraph
 
@@ -28,7 +38,28 @@ repository only, as a commit series by spike folder.
 
 ## 0.1 Scope — S6's *Files* as named paths, each with the dependency that needs it
 
-The stories' S6 *Files* (`:697-705`): `spikes/policy-ab-quick/test/**`; the files of both guards' findings (the 39 below); `spikes/minigit-bench/run-tests.mjs`;
+**Epoch 12: *Files* in item 8.1's form (the parent's item 4.2; the stories at #224 `:744-761`) — this paragraph is the scope; the table and lists
+below are OBSERVATIONS at `a8106448`.** Bounded folders: `spikes/policy-ab-quick/test/**`; `spikes/minigit-bench/test/**` and
+`spikes/minigit-bench/run-tests.mjs`; `spikes/lang-bench/test/**`; `spikes/lang-explore/test/**` — never the files F1 and F2 name
+(`spikes/lang-bench/lib/exec-probe/lines.mjs`, `probe.mjs`, `test/exec-layer-isolation.test.mjs`; `spikes/minigit-bench/test/helpers.mjs`,
+`test/fake-home.mjs`, `lib/cache-snapshot.mjs`; `spikes/lang-explore/test/commands.test.mjs`), and never any spike's `lib/`, `runner/`, `inputs/`,
+`hooks/` or product file. Plus **the docs a `git grep` at the base finds that describe what S6 changes** — the old spellings S6 removes (§ 11 O11's
+pattern) AND the names of the files and commands it changes (§ 11 O13), each with what it says now:
+`research/module_tests.md` (§ *The minigit stack bench scenarios*, § *The language-comparison runner scenarios*, § *Test leftovers*: a living
+document, edited); `research/module_minigit_bench.md:785` (the row of `node spikes/minigit-bench/run-tests.mjs [glob…]`, "the one way to run the
+spike's tests: lowered priority, `node --test` …", which S6's start sweep makes incomplete: a living document, ONE sentence added: "At its start it
+runs the conventions' `sweepLeftovers` over the caller's `bench` folders in the temp root (E6.S6)"); `todo/PLAN_minigit_stack_bench_E2.md:89` (an
+open plan this one does not own: ONE dated line beside it, the old text kept, the parent's item 4.3 point 2 word for word); and
+`todo/PLAN_bench_test_leftovers_followups.md`, ONE dated note beside its S1 (`:81-99`), the old text kept, the parent's item 8.3: "*2026-11-xx
+(E6.S6, the test-leftovers rollout):* E6.S6 claims fake homes under `~` and decoys under `/var/tmp`, which no sweep reads after a kill (the
+rollout's goal exception, epoch 12); S1's home sweep, and a `/var/tmp` root if its safety check allows one, would collect them." Plus the plan
+records (this brief, its `todo/README.md` row and promotion, the stories' progress line and § 11 copies). The other grep hits are read and stay
+true (§ 11 O11, O13). **What still counts as a change** is the parent's item 8.1 list (a file outside these folders that is not a grep-found doc;
+a finding left standing without a marker beyond the standing list; a new disposition; a contract change; an inline exemption not in § 3a; a suite
+failure not on the confirmed list; a whole-run interpreter or host action outside the owner's allowances; in doubt, a change): STOP, write the
+finding here, hand it to the coordinator. A missed line inside the folders, a moved line number or a count is the brief's to read, not a change.
+
+*Was (epoch 11, the observations it gave):* The stories' S6 *Files* (`:697-705`): `spikes/policy-ab-quick/test/**`; the files of both guards' findings (the 39 below); `spikes/minigit-bench/run-tests.mjs`;
 `research/module_tests.md`; the plan records; and, for a test helper a listed test imports, `spikes/lang-bench/test/**`,
 `spikes/lang-explore/test/**`, `spikes/minigit-bench/test/**`, never the files F1 and F2 name. Every path below is inside it.
 
@@ -41,7 +72,7 @@ The stories' S6 *Files* (`:697-705`): `spikes/policy-ab-quick/test/**`; the file
 | `spikes/lang-explore/test/quick-heldout-{key,lock,round2,seal}.test.mjs` (4 files) | 6 `owner-blind` (Node) | § 4 rows 23–26 |
 | `spikes/lang-bench/test/{exec-layer-cleanup-stop,exec-layer-parent,exec-probe-stop,preflight-lang,sweep}.test.mjs` (5 files), `test/hello/prove.sh` | 5 `legacy-name`, 3 `raw-temp` (Node; `prove.sh:7` in both guards) | § 4 rows 27–32 |
 | `spikes/lang-bench/test/py/{box_support,test_burner,test_rs_abort,test_rs_kill,test_rs_launch,test_run_samples}.py` (6 files) | 7 `raw-temp`, 3 `legacy-name`, 1 `owner-blind` (C#) | § 4 rows 33–38; `scratch_dir` added to `box_support.py`, `Box.tmp` to `test_run_samples.py` (K10) |
-| `spikes/lang-bench/runner/run_samples.py` | 2 `raw-temp` (C#) | **not touched** — § 13 S-1 |
+| `spikes/lang-bench/runner/run_samples.py` | 2 `raw-temp` (C#) | **not touched** — never `runner/` (item 4.2); its two lines are on the approved standing list of exactly two (entry 11.2; the parent's item 4.1) |
 | `research/module_tests.md` | the start sweep, the sandbox commands, the limits (K14) | § *The minigit stack bench scenarios* `:169-252` (its *How it is run* `:180-190` and the flow rows), § *The language-comparison runner scenarios* `:253-300` (the units' sandbox), § *Test leftovers* `:632-680` (a paragraph on `spikes/` and *The limits*) |
 | the plan records: this brief, its `todo/README.md` row, its promotion (`research/PLAN_test_leftovers_E6_S6_brief.md`, `research/README.md`), the stories' progress line, the copy of § 3a's list into the stories' § 11 (item 4.3) | `common/planning-docs.md`; item 4.3 | those records |
 
@@ -50,9 +81,10 @@ The stories' S6 *Files* (`:697-705`): `spikes/policy-ab-quick/test/**`; the file
 `spikes/lang-explore/test/commands.test.mjs`: the followups plan's S1 and S2, D7); every `lib/` and product file of every spike (the exec-layer
 identity covers 22 files, among them `spikes/policy-ab-quick/lib/proc.mjs` and four of `spikes/minigit-bench/lib/`, § 11 O4; the runner's pin
 covers `spikes/lang-bench/runner/`); `spikes/lang-bench/inputs/**`; `tests/`, `src/`, `hosts/`, `tools/` (S4, S5); `.github/` (S7); every
-`research/` and `todo/` document but those in the table (§ 13 S-2). **A file the build, a test or a check needs outside the table above, or a
-decision outside the parent's § *Epoch 11*, is a change of the parent's epoch 11, and after entry 11.1 the next one is the ELEVENTH FULL STOP:
-STOP, write the finding into this brief, and hand it to the coordinator; do not add the file.**
+`research/` and `todo/` document but the grep-found docs of the epoch-12 paragraph above. *Was (epoch 11):* "every `research/` and `todo/` document
+but those in the table (§ 13 S-2). A file the build, a test or a check needs outside the table above, or a decision outside the parent's § *Epoch
+11*, is a change of the parent's epoch 11, and after entry 11.1 the next one is the ELEVENTH FULL STOP" — replaced by the epoch-12 paragraph's
+"what still counts".
 
 ## 1. Rules you must read first
 
@@ -73,8 +105,12 @@ STOP, write the finding into this brief, and hand it to the coordinator; do not 
 ## 2. Preconditions and merge conditions
 
 1. S5 merged (#223, `a8106448`): met **[M]**. The stories amendment (#220) merged: met.
-2. **§ 13's findings answered and § 14's Q1 and Q2 answered before the plan gate.** Q2 is the parent's O-e: S6 stops before its gate unless the
-   owner says how the whole `spikes/lang-bench` suite runs under this machine's rule for Python (§ 14).
+2. **§ 13's findings and § 14's Q1–Q3: answered** (the parent's items 4.1–4.3; the owner, 2026-11-17: question 1 and question (a) yes).
+   **Before the plan gate:** E6's stories amendment for epoch 12 (#224) merged and merged into this branch; **the owner confirms § 15's three base
+   lists in one line each** (row E6-m (2)). *Was:* "§ 13's findings answered and § 14's Q1 and Q2 answered before the plan gate. Q2 is the
+   parent's O-e: S6 stops before its gate unless the owner says how the whole `spikes/lang-bench` suite runs under this machine's rule for Python".
+2b. **The owner's question (b), at S6's merge** (the parent's item 7): if the language-comparison plan has not recorded the hand-off of the two
+   runner lines by then, the owner decides: wait, or a coordinated re-pin of `runner/` carrying a rule §7 marker. S6's PR body names the hand-off.
 3. At most three open PRs here, or the owner's allowance for E6 PRs over the cap (2026-11-16).
 4. CI checks of the head SHA exist and are green (`build-test`, `contract`, `plans`, `workflows`; no CI job runs a spike suite **[M]**:
    `grep -n spikes .github/workflows/*.yml` finds only a comment); the coai code gate and the Opus review are done; every RED of § 5 quoted on the PR.
@@ -116,8 +152,11 @@ STOP, write the finding into this brief, and hand it to the coordinator; do not 
   / `('home', …)`; the `finally` that removed it goes. The socket under `/run/user/<uid>` (`agent-box.test.mjs:200`, `bwrap.test.mjs:159`) →
   `path.join(runDir, \`${owned.ownedName('agentsock')}.sock\`)` / `('testsock')`, closed and unlinked by the test as today. The other `os.tmpdir()`
   reads of those tests (`agent-box.test.mjs:233`, `:238`, `:239`; `bwrap.test.mjs:188`, `:190`) → `owned.tempRoot()` (read only: the box's
-  `--tmpfs` pair is found by that string). Limit: a killed run's fake home under `~` is not collected (the start sweep reads the temp root only;
-  F1/S1 of the followups plan is the home sweep) — § 12 N3, Q6.
+  `--tmpfs` pair is found by that string). *Epoch 12:* this is the parent's goal exception (item 1, item 4.6 (3)): a killed run's claimed fake homes under `~` and decoys under `/var/tmp`
+  (and the two `/run/user/<uid>` sockets, names only) are LISTED, not collected, until F1/S1's home sweep — row E6-m (7) lists
+  `~/testsToDelete-*-bench-*`, `/var/tmp/testsToDelete-*-bench-*` and `/run/user/<uid>/testsToDelete-*` by name before and after each whole run,
+  `research/module_tests.md`'s limits name them, and the followups plan's S1 gets the dated note of § 0.1. *Was:* "Limit: a killed run's fake home
+  under `~` is not collected (the start sweep reads the temp root only; F1/S1 of the followups plan is the home sweep) — § 12 N3, Q6."
 - **K7 — The held-out listing test** (`heldout-run.test.mjs:140-161`, minigit's OWN `sweepLeftovers` of `lib/heldout-run.mjs:95`, which lists,
   never removes): the two fixtures inside the test's work root take helper names, `const leftOver = owned.ownedName('leftover');`,
   `const inScore = owned.ownedName('inscore');`, and every literal use of `testsToDelete-left-over` / `testsToDelete-in-score` reads them; the
@@ -151,7 +190,10 @@ STOP, write the finding into this brief, and hand it to the coordinator; do not 
 - **K11 — `prove.sh:7`** (a by-hand proof, no test runs it; `research/module_tests.md:564`): its `mktemp -d` stays under § 3a's listed `raw-temp`
   exemption on a new line directly above it; the `EXIT` trap on the same line removes the folder. Observed clean in both Node profiles and in the
   C# copy (§ 11 O9).
-- **K12 — `runner/run_samples.py:35`, `:306` are not changed** (§ 13 S-1, Q1). Their lifetime: inside an owned folder (the runner's `TMPDIR` is
+- **K12 — `runner/run_samples.py:35`, `:306` are not changed; they stand on the approved standing list of exactly two** (entry 11.2; the parent's
+  item 4.1, the owner approving with epoch 12's `Narrowed: yes`). They are the language-comparison plan's: S7 waits for that plan's disposition,
+  with the repository guard clean on them (row E6-g); S6's PR body names the hand-off (item 8.3); question (b) is the owner's at S6's merge (§ 2
+  point 2b). *Was:* "(§ 13 S-1, Q1)". Their lifetime: inside an owned folder (the runner's `TMPDIR` is
   given by whoever launches it: a test's owned folder, `test_run_samples.py`'s `TemporaryFolderTests` `:430-452` proving nothing is left, or the
   layer's box `tmp`).
 - **K13 — The Python sandbox (the parent's O-e).** (a) **The units, in `wslc`:** `python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f`
@@ -160,15 +202,28 @@ STOP, write the finding into this brief, and hand it to the coordinator; do not 
   label from the helper, `--rm`; nothing installed anywhere. It runs 814 of the 829 units; the other 15 need the host's user systemd manager and
   `bwrap` and skip there. (b) **The 15 host-bound units** (`test_rs_scope.py`, `test_rs_owner.py`, `test_rs_interrupt.py`, the users of
   `box_support.Scope`, whose line `:192` S6 changes): an owned throwaway venv (`python3 -I -m venv --without-pip <owned folder>/v`, the machine
-  rule's fallback), `BENCH_REQUIRE_SANDBOX=1`, `TMPDIR` an owned folder, removed by exact path after. (c) **The whole `spikes/lang-bench` suite
-  with `BENCH_REQUIRE_SANDBOX=1` and `LANG_V2_TASK_REPO`: blocked.** The layer resolves `python3` on a FIXED system path
-  (`lib/exec-layer/run.mjs:79`, `:84-91`: `/usr/sbin:/usr/bin:/bin:/sbin`), so its tests run `/usr/bin/python3` whatever is on `PATH`; changing
-  that is a change of the pinned layer identity. Q2 is the owner's.
+  rule's fallback), `BENCH_REQUIRE_SANDBOX=1`, `TMPDIR` an owned folder, removed by exact path after. (c) **The whole suites with the system interpreter — allowed by the owner, 2026-11-17, two runs each (base, head):** `spikes/lang-bench`
+  (`BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=/home/jinx/git/dew_flow_ai_language_comparison node spikes/lang-bench/run-tests.mjs`; its layer
+  finds `python3` with `findOnPath` on the fixed `SBIN_PATH`, `lib/exec-layer/run.mjs:79`, `:84-91`), and, by the answer to the parent's item 7
+  question (a), `spikes/minigit-bench` (`BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs`; `lib/heldout-run.mjs:19`, `:121` name
+  `/usr/bin/python3`) and `spikes/lang-explore` (`node --test spikes/lang-explore/test/`; `lib/score.mjs:71`, `lib/heldout-quick.mjs:173`, and
+  three judge tests through `PATH`), each on lang-bench's terms: the suite's own interpreter as it calls it, standard library, nothing installed,
+  `nice -n 19`, one at a time, each under its OWN claimed, empty `TMPDIR` under `/tmp` made by the shipped helper (row E6-m: not `$HOME`, which
+  the boxes hide), the outside roots listed before and after (row E6-m (7)). **No other whole run:** per commit of § 8 only the changed test
+  files that start no interpreter run (K15). *Was:* "(c) The whole `spikes/lang-bench` suite with `BENCH_REQUIRE_SANDBOX=1` and
+  `LANG_V2_TASK_REPO`: blocked. … Q2 is the owner's."
+- **K15 — Per commit, only the files that start no interpreter** (row E6-m; the parent's S-3). A changed test file runs alone at its commit
+  only when neither it nor what it imports starts `python3` or `/usr/bin/python3` and it starts no layer run (the layer starts the runner): the
+  coder lists, per commit, the changed files run and those left to the head's whole run, from `git grep -n -E "python3|/usr/bin/python|openRun|runProbe"`
+  over the file and its relative imports. Known to start one (the parent's E12-5, read **[R]**): `minigit-bench/test/heldout-run.test.mjs`
+  (S6 changes it), `heldout-hostile.test.mjs`; `lang-explore/test/judge.test.mjs`, `olympiad-calibrate.test.mjs`; every lang-bench file that
+  calls `pythonUnits` (32) and the exec-layer and probe tests that open a run. policy-ab-quick starts none.
 - **K14 — The docs.** `research/module_tests.md`: in the minigit section's *How it is run*, that `run-tests.mjs` sweeps at its start (and that the
   conventions' `low-priority.mjs node --test` path named by `PLAN_minigit_stack_bench_E2.md:86-87` does not); the flow row of
   `start-sweep.test.mjs`; in the lang-bench section, the units' sandbox commands (K13 (a), (b)) and what they do not cover (K13 (c)); in
   § *Test leftovers*, a paragraph *The spikes* (the shipped helper per test file, the units inside their owned `TMPDIR`, the two listed
-  exemptions) and, in *The limits*, § 10's lines and § 12's N1–N3. No other `research/` file (§ 13).
+  exemptions) and, in *The limits*, § 10's lines and § 12's N1–N3. Plus `research/module_minigit_bench.md:785`'s ONE sentence and the two dated notes of § 0.1 (the grep's docs, item 8.1). *Was:* "No other
+  `research/` file (§ 13)."
 
 ## 3a. The inline exemptions S6 adds (listed here before the plan gate; the PR copies this list into the stories' § 11, item 4.3)
 
@@ -248,7 +303,7 @@ the guards that read their file (§ 11 O9). No other exemption: none for `owner-
 |---|---|---|---|---|
 | Node (`--profile node --token bench --identity "the measuring harness"`) | **87** (2 `research/`, 85 `spikes/`) **[M]** | **85**: 46 `raw-temp`, 31 `legacy-name`, 8 `owner-blind` — policy-ab-quick 30 (25, 5, 0), minigit-bench 41 (18, 21, 2), lang-bench 8 (3, 5, 0), lang-explore 6 (0, 0, 6) | **2** | **0** (§ 3a's `prove.sh` marker clears its line) |
 | Node, default profile | **3** (2 `research/`, `prove.sh:7`) | 1 `raw-temp` | **2** | 0 |
-| copied C# (`--explicit only --filter-class "*LeftoversRepositoryGuardTests"`, information; S7 turns it on) | **16** (2 `research/` `raw-worktree`, 14 `spikes/`) **[M]** | **14**, all in `lang-bench`: 10 `raw-temp` (9 `.py` `mkdtemp(`, `prove.sh:7`), 3 `legacy-name`, 1 `owner-blind` | **4** | **2**: `runner/run_samples.py:35`, `:306` (`raw-temp`), unless Q1 (a), then 0 |
+| copied C# (`--explicit only --filter-class "*LeftoversRepositoryGuardTests"`, information; S7 turns it on) | **16** (2 `research/` `raw-worktree`, 14 `spikes/`) **[M]** | **14**, all in `lang-bench`: 10 `raw-temp` (9 `.py` `mkdtemp(`, `prove.sh:7`), 3 `legacy-name`, 1 `owner-blind` | **4** | **2**: `runner/run_samples.py:35`, `:306` (`raw-temp`), the approved standing list of exactly two (entry 11.2) *Was:* "unless Q1 (a), then 0" |
 
 **The read matrix** (§ 11 O3, `isScanned` and the C# finding lists): the Node guard reads `*.test.mjs` and `.sh` under `spikes/`, never a plain
 `.mjs` or a `.py`; the C# copy reads `.py` and `.sh` there, never a `.mjs`. So `run-tests.mjs`, `test/support/*.mjs`, `test/helpers.mjs` and
@@ -266,11 +321,17 @@ node .agents/conventions/tools/leftovers-check.mjs --repo . --token bench --iden
 nice -n 19 dotnet build tests/Bench.Tests/Bench.Tests.csproj -c Release -m:4 -p:AppHostRuntimeIdentifier=linux-x64 --disable-build-servers
 nice -n 19 ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --no-ansi --explicit only --filter-class "*LeftoversRepositoryGuardTests"   # 16 → 4
 cat /proc/loadavg
-P=$HOME/.cache/e6s6-$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n'); mkdir -m 700 "$P"         # new, empty, outside /tmp; removed by exact path after
-TMPDIR="$P" node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/*.test.mjs'; ls -A "$P"   # base: 156 tests, 152 pass, 3 fail, 1 skip; nothing left
-node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/start-sweep.test.mjs'                 # (1), (1b)
-BENCH_REQUIRE_SANDBOX=1 TMPDIR="$P" node spikes/minigit-bench/run-tests.mjs; ls -A "$P"                # ~30 min (research/module_tests.md:180)
-TMPDIR="$P" node .agents/conventions/tools/low-priority.mjs node --test spikes/lang-explore/test/; ls -A "$P"
+# THE WHOLE RUNS (K13 (c), row E6-m): base and head only, one at a time, each through the wrapper of § 15 (s6run.mjs, a scratch file OUTSIDE the
+# repository, never committed): it claims ONE empty TMPDIR under /tmp with the shipped helper (owner = the wrapper's own live pid), lists
+# ~/testsToDelete-*-bench-*, /var/tmp/testsToDelete-*-bench-* and /run/user/<uid>/testsToDelete-* before and after, runs the suite under
+# nice -n 19 with TMPDIR/TEMP/TMP set to the folder, lists what is left in it, then removes the folder and its claim by exact path.
+# Then s6parse.mjs (§ 15) gives the totals, the FAILED list (file, test, assertion) and the skipped list; --names gives the by-name list.
+node s6run.mjs s6headpab  pab.log  "$PWD" '{}' -- node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/*.test.mjs'
+node s6run.mjs s6headmgb  mgb.log  "$PWD" '{"BENCH_REQUIRE_SANDBOX":"1"}' -- node spikes/minigit-bench/run-tests.mjs
+node s6run.mjs s6headlex  lex.log  "$PWD" '{"BENCH_REQUIRE_SANDBOX":"1"}' -- node --test --test-concurrency=8 spikes/lang-explore/test/
+node s6run.mjs s6headlb   lb.log   "$PWD" '{"BENCH_REQUIRE_SANDBOX":"1","LANG_V2_TASK_REPO":"/home/jinx/git/dew_flow_ai_language_comparison"}' -- node spikes/lang-bench/run-tests.mjs
+node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/start-sweep.test.mjs'                 # (1), (1b); starts no interpreter
+# PER COMMIT (K15): only the changed files that start no interpreter, e.g. node spikes/minigit-bench/run-tests.mjs test/ledger.test.mjs …
 # K13 (a): the .py units in wslc. NAME and LABEL from the helper, never typed:
 NAME=$(node -e "import('./.agents/conventions/tools/lib/owned.mjs').then(m=>console.log(m.ownedFor({token:'bench'}).ownedName('pyunits')))")
 # the label names THIS shell ($), which outlives the container; no start, so a reader judges it unknown and keeps it (--rm removes it)
@@ -283,8 +344,7 @@ wslc.exe run --rm --name "$NAME" --label "testsToDelete.owner=$LABEL" --cpus 2 -
 V="$P/venv"; /usr/bin/python3 -I -m venv --without-pip "$V"; mkdir -m 700 "$P/t"
 for f in test_rs_scope.py test_rs_owner.py test_rs_interrupt.py; do (cd spikes/lang-bench && BENCH_REQUIRE_SANDBOX=1 TMPDIR="$P/t" nice -n 19 "$V/bin/python3" -I -B -m unittest discover -v -s test/py -p "$f"); done   # 31 + 27 + 3
 rm -rf "$P/venv" "$P/t"; systemctl --user list-units --all 'testsToDelete-*' --no-legend | wc -l    # 0
-# K13 (c): the whole lang-bench suite — ONLY after the owner's answer to Q2:
-#   BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=/home/jinx/git/dew_flow_ai_language_comparison node spikes/lang-bench/run-tests.mjs
+# K13 (c): the whole lang-bench suite is one of THE WHOLE RUNS above (allowed by the owner, 2026-11-17; was: "ONLY after the owner's answer to Q2")
 node spikes/lang-bench/pin-runner.mjs --check; node spikes/lang-bench/pin-exec-layer.mjs --check           # both exit 0, base and head
 node .agents/conventions/tools/plan-lifecycle.mjs
 git diff --name-only a8106448..HEAD                                                                      # within § 0.1
@@ -298,18 +358,41 @@ exactly its folder's findings, and its folder's suite passes as at the base.
 1. **The minigit runner's start sweep (K9):** `start-sweep.test.mjs` and its two fixtures, (1) and (1b) RED first (quoted), then
    `spikes/minigit-bench/run-tests.mjs`; GREEN; both RED again; (1c) by hand.
 2. **policy-ab-quick (K1–K3, § 4 rows 1–10):** Node 85 → 55; the policy-ab-quick run (§ 7) before and after.
-3. **minigit-bench (K1–K3, K6–K8, § 4 rows 11–22):** Node 55 → 14; the whole minigit suite with `BENCH_REQUIRE_SANDBOX=1`.
-4. **lang-explore (K4, § 4 rows 23–26):** Node 14 → 8; the lang-explore suite.
+3. **minigit-bench (K1–K3, K6–K8, § 4 rows 11–22):** Node 55 → 14; the commit's changed files that start no interpreter (K15).
+4. **lang-explore (K4, § 4 rows 23–26):** Node 14 → 8; the changed files that start no interpreter (K15).
+   *Was (`d836de52`):* "the whole minigit suite with `BENCH_REQUIRE_SANDBOX=1`", "the lang-explore suite" — the whole suites run at the base
+   and the head only (K13 (c)).
 5. **lang-bench Node and the shell script (K5, K11, § 4 rows 27–32):** Node 8 → 0, default profile 3 → 2, C# 16 → 15.
-6. **lang-bench Python (K10, § 4 rows 33–38):** C# 15 → 4; K13 (a) and (b) at the head; (3) RED, GREEN, RED again; `pin-runner.mjs --check`
+6. **lang-bench Python (K10, § 4 rows 33–38):** C# 15 → 4; K13 (a) and (b) at the head (the units in the sandbox; no whole run per commit); (3) RED, GREEN, RED again; `pin-runner.mjs --check`
    and `pin-exec-layer.mjs --check` exit 0 (nothing pinned changed).
-7. **The docs commit:** K14 (`research/module_tests.md`); § 3a's list copied into the stories' § 11; the stories' progress line; this brief's
-   progress line.
+7. **The docs commit:** K14 (`research/module_tests.md`, `research/module_minigit_bench.md:785`); the two dated notes (§ 0.1); § 3a's list and
+   § 15's confirmed base lists copied into the stories' § 11; the stories' progress line; this brief's progress line.
+8. **The head's whole runs** (K13 (c), § 7), one suite at a time, each under its own claimed `TMPDIR`, reconciled with § 15 by name (row E6-m);
+   the policy-ab-quick run (it starts no interpreter) at the head too.
 
 **Size.** About 40 changed files, most a few lines each; three new test files of about 120 lines in all. One Sonnet coder.
 
 ## 9. Done when, and what the PR body quotes (the stories' S6 *Done when* `:706-709`, E11-6, E11-7)
 
+**Epoch 12 (the parent's item 4.2 and row E6-m; the stories at #224 `:762-780`), which this section now reads:**
+- **Zero unexplained findings of both guards in `spikes/`:** each finding is gone, cleared by a rule §7 marker § 3a listed (`box_support.py`'s unit
+  name, `legacy-name`; `prove.sh`'s `mktemp`, `raw-temp`; copied into the stories' § 11 by the PR), or on the approved standing list, which is
+  exactly `runner/run_samples.py:35` and `:306` (C# `raw-temp`, entry 11.2); none for `owner-blind`; no finding added outside `spikes/`.
+  *Observations at `a8106448`, not scope:* Node 85 → 0 in `spikes/`, C# 14 → 2; totals 87 → 2, default 3 → 2, C# 16 → 4.
+- **Row E6-m, the suites:** (1) policy-ab-quick fails exactly its three named tests (§ 11 O10), each at the same assertion; (2) minigit-bench,
+  lang-explore and lang-bench fail exactly § 15's base lists AS THE OWNER CONFIRMED THEM (caps: lang-explore ≤ 10, lang-bench ≤ 1, minigit-bench 0),
+  each the same way; (3) both runs of each suite complete and print their totals; (4) executed and skipped tests reconciled BY NAME against § 15's
+  lists: a test missing at the head without a reason S6's diff gives (a test S6 renames, named on the PR: K7's and K8's titles), or a test newly
+  skipped at the head, stops S6; (5) a head failure not on the confirmed list is RED and S6's to fix — a timing test of the followups plan's S5 list
+  included: it is recorded on that list by a dated line with `/proc/loadavg` (`todo/PLAN_bench_test_leftovers_followups.md:126`), S6 re-runs
+  nothing, the owner decides on ONE repeat run; (6) each run's `TMPDIR` is empty after the run except entries F2's makers write
+  (`test/helpers.mjs:42`, `test/fake-home.mjs:15`), listed by name at base and head, equal in kind, removed by exact path; (7) the outside roots
+  listed by name before and after each run, equal at base and head, any entry a run adds named on the PR and removed by exact path. For an
+  approved failure in a file S6 changes, the PR says whether its failing assertion runs before or after S6's changed line (§ 15).
+- `pin-runner.mjs --check` and `pin-exec-layer.mjs --check` exit 0; `git diff --name-only <base>..HEAD` within § 0.1's folders and grep-found
+  docs; `plan-lifecycle.mjs` clean; § 3a and § 15's confirmed lists copied into the stories' § 11; the two dated notes written.
+
+*Was (`d836de52`, epoch 11), kept for the record:*
 - Both guards against the base `a8106448`, in `spikes/`: the Node guard 85 → 0 and the C# guard 14 → 2 (`run_samples.py:35`, `:306`, per Q1 (b);
   0 if Q1 (a)), every class, except § 3a's two listed exemptions; totals 87 → 2 (Node), 3 → 2 (default profile), 16 → 4 (C#); none added elsewhere.
 - (1), (1b), (3): GREEN, each RED first and RED again quoted; (1c) quoted; (2)'s RED again from each guard.
@@ -324,7 +407,7 @@ exactly its folder's findings, and its folder's suite passes as at the base.
 Windows (no spike suite runs there). That a path read by `owned.tempRoot()` or a neutral literal is never created (a guard reads spellings,
 not data flow; the base runs' empty `TMPDIR`, § 11 O10, are the evidence for policy-ab-quick). That a killed run's folders outside the temp
 root are collected: the fake homes under `~` (K6) and the `/run/user` sockets are not swept (N3). That the units S6 changes behave the same
-under the whole lang-bench suite with the layer's interpreter (K13 (c), Q2). The two runner lines (S-1). What the plain helper modules no guard
+under the whole lang-bench suite with the layer's interpreter (K13 (c), Q2). The two runner lines (the standing list; the language-comparison plan's, entry 11.2). What the plain helper modules no guard
 reads still make (`test/helpers.mjs:42`, `test/fake-home.mjs:15`: legacy names, F2's, N1).
 
 ## 11. Observations — made before this brief's plan gate (the parent's item 8.1)
@@ -374,7 +457,13 @@ lang-explore suites at the base and the head (not run for this brief: about 30 m
 - **N6 — The units are slow in `wslc`.** 464 s for 829 units on 2 CPUs through the 9p mount of `\\wsl.localhost` (O5); the host time of the
   same units was not measured (no system interpreter).
 
-## 13. STOP findings — before the plan gate
+## 13. STOP findings — before the plan gate — ANSWERED (the parent's epoch 12)
+
+**Answered 2026-11-17.** S-1 became the parent's entry 11.2 (the eleventh full stop); the owner decided it with epoch 12: option (b) with an
+explicit prerequisite — the two lines stand on an approved standing list of exactly two, S7 waits for the language-comparison plan's disposition
+with the repository guard clean on them (the parent's items 4.1, 4.6; K12). S-2 is decided the other way from this brief's recommendation:
+by item 8.1's *Files* form the line is on S6's docs scope, and S6's PR adds ONE dated line beside it, the old text kept (the parent's item 4.3
+point 2; § 0.1). The text below is the finding as written at `d836de52`.
 
 **S-1 — `runner/run_samples.py:35`, `:306` cannot change without files outside S6's *Files*.** Both are on the *Files* line, and both are C#
 `raw-temp` findings S6's *Done when* takes to zero. But `runner/` is pinned (O4): ANY byte, an inline exemption comment included, makes
@@ -403,9 +492,9 @@ the coordinator carries it to that plan as a note. If the coordinator reads it a
 
 | Q | Question | Recommendation |
 |---|---|---|
-| Q1 | § 13 S-1: the two runner lines — (a) re-pin, (b) the runner's own product sites, carried to S7, or (c) S7's alone? | **(b)**, as § 13 argues; the coordinator says whether it counts as a change before the plan gate |
-| Q2 | O-e, K13 (c): the whole `spikes/lang-bench` suite with `BENCH_REQUIRE_SANDBOX=1` and `LANG_V2_TASK_REPO` runs `/usr/bin/python3` through the layer's fixed path; no `wslc` image or venv holds it (O8). (A) the owner allows that interpreter for S6's two whole-suite runs (base, head) only — standard library, `-I -B`, nothing installed, lowered priority, the layer's own choice, pinned by its identity; or (B) S6's lang-bench evidence is K13 (a) and (b) only, and the *Done when*'s "lang-bench green as `module_tests.md` runs it" is not met (a narrowing: 11.2, the eleventh full stop) | **(A)**: S6 changes no layer file and no runner file, the units S6 changes are proved in the sandbox (O5–O7), and the whole run only shows nothing else moved. It is the owner's rule; the consultants cannot settle it |
-| Q3 | The stories' "the suites … green": policy-ab-quick has three failures at the base (O10, Windows-path cases named as pre-existing in its own plan); read as "the FAILED list equal to the base's", as S5 read its Docker-bound 572? | yes; S6 changes none of those assertions (`review2.test.mjs:354` is a folder maker in a test that fails at `:359`) |
+| Q1 | § 13 S-1: the two runner lines — (a) re-pin, (b) the runner's own product sites, carried to S7, or (c) S7's alone? | **(b)**, as § 13 argues; the coordinator says whether it counts as a change before the plan gate. **Answered** (the owner, epoch 12): (b), counted as entry 11.2, with S7's prerequisite (the parent's item 4.1) |
+| Q2 | O-e, K13 (c): the whole `spikes/lang-bench` suite with `BENCH_REQUIRE_SANDBOX=1` and `LANG_V2_TASK_REPO` runs `/usr/bin/python3` through the layer's fixed path; no `wslc` image or venv holds it (O8). (A) the owner allows that interpreter for S6's two whole-suite runs (base, head) only — standard library, `-I -B`, nothing installed, lowered priority, the layer's own choice, pinned by its identity; or (B) S6's lang-bench evidence is K13 (a) and (b) only, and the *Done when*'s "lang-bench green as `module_tests.md` runs it" is not met (a narrowing: 11.2, the eleventh full stop) | **(A)**: S6 changes no layer file and no runner file, the units S6 changes are proved in the sandbox (O5–O7), and the whole run only shows nothing else moved. It is the owner's rule; the consultants cannot settle it. **Answered** (the owner, 2026-11-17): (A), and by the parent's item 7 question (a) the same for the minigit-bench and lang-explore whole suites, two runs each, each with an owned `TMPDIR` under `/tmp` (K13 (c)) |
+| Q3 | The stories' "the suites … green": policy-ab-quick has three failures at the base (O10, Windows-path cases named as pre-existing in its own plan); read as "the FAILED list equal to the base's", as S5 read its Docker-bound 572? | yes; S6 changes none of those assertions (`review2.test.mjs:354` is a folder maker in a test that fails at `:359`). **Answered** (the parent's item 4.3 point 1, row E6-m (1)): exactly the three named, each at the same assertion; the other suites' standing failures are § 15's base lists as the owner confirms them, within #222's caps; Q4–Q6 stay brief-level (the parent's item 4.2) |
 | Q4 | K6: the `/var/tmp` decoys of the same two statements (`agent-box.test.mjs:229`, `bwrap.test.mjs:184`), which no guard reads, become owned folders too? | yes: same statement, same lifetime, same helper (like S5's ninth site, a fix that only satisfies the plan as written); brief-level |
 | Q5 | K8: `reuse-scan.test.mjs`'s structural test is rewritten to "no raw creator in a `*.test.mjs`" with its companion on `test/helpers.mjs:42` (F2's file, kept)? | yes; when the followups plan's S2 changes `helpers.mjs:42`, its PR moves the companion |
 | Q6 | K6, N3: the fake homes under `~` are owned and claimed but not collected after a kill until F1/S1's home sweep — accepted as a listed limit? | yes, listed in `research/module_tests.md`'s limits (K14); the home sweep stays F1/S1's (D7) |
