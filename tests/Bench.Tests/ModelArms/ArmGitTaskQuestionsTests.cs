@@ -225,12 +225,14 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
         Assert.SkipWhen(OperatingSystem.IsWindows(), "plants are shell scripts");
         var (clone, _, _) = await WithSubmoduleAsync();
         var plain = Worktree(clone, "wt-plain");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", plain, "-b", "tmp/plain", "HEAD");
 
         (await In(plain).ArmSubmoduleUpdateAsync("sub", Ct)).Ok();
 
         File.Exists(Path.Combine(plain, "sub", "s.txt")).Should().BeTrue("the file transport is allowed for the arm's own checkout, with no -c protocol.file.allow=always");
         var hostile = Worktree(clone, "wt-hostile");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", hostile, "-b", "tmp/hostile", "HEAD");
         var program = PlantProgram("ext-transport", "exit 1");
         await TargetBench.GitAsync(clone, "config", "submodule.sub.url", $"ext::{program} %S");
@@ -239,6 +241,7 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
         Ran.Should().BeTrue("the plant is live: the host's git, told to allow ext, ran the program the submodule's url names (an insteadOf did not rewrite a submodule's clone url on 2.53: the url itself is the model-writable lever)");
         File.Delete(SentinelFile);
         await TargetBench.GitAsync(clone, "worktree", "remove", "--force", "--force", hostile);
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", hostile, "-b", "tmp/hostile2", "HEAD");
 
         var refused = await In(hostile).ArmSubmoduleUpdateAsync("sub", Ct);
@@ -301,9 +304,12 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
         var live = Worktree(clone, "wt-live");
         var detached = Worktree(clone, "wt-detached");
         var gone = Worktree(clone, "wt-gone");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", live, "-b", "tmp/live", "HEAD");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", detached, "-b", "tmp/detached", "HEAD");
         await TargetBench.GitAsync(detached, "checkout", "-q", "--detach");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", gone, "-b", "tmp/gone", "HEAD");
         Directory.Delete(gone, recursive: true);
 
@@ -418,6 +424,7 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
     {
         var clone = await ClonedAsync();
         var wt = Worktree(clone, "wt-index");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", wt, "-b", "tmp/i", "HEAD");
 
         var inWorktree = (await In(wt).IndexPathAsync(Ct)).Ok();
@@ -435,6 +442,7 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the recording shim is a shell script");
         var (clone, _, _) = await WithSubmoduleAsync();
         var wt = Worktree(clone, "wt-global");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder _temp (the ArmGitTestBase TempFolder) that holds the clone
         await TargetBench.GitAsync(clone, "worktree", "add", "-q", wt, "-b", "tmp/g", "HEAD");
         var marker = _temp.Combine("calls.log");
         var git = new ArmGit(Sentinel.RecordingShim(_temp, marker), wt, Environment);

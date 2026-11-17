@@ -76,7 +76,7 @@ public sealed partial class TaskWorktreesTests
             [.. calls.Where(call => !WorktreeKit.IsEnumeration(call))],
             "worktree list --porcelain",
             "rev-parse --verify -q refs/heads/tmp/t1",
-            $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD",
+            $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD",
             "reset -q --hard",
             "submodule update --init --checkout -q -- .agents/conventions",
             "rev-parse HEAD",
