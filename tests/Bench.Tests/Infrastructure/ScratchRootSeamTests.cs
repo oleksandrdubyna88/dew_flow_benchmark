@@ -18,8 +18,8 @@ public sealed class ScratchRootSeamTests : IDisposable
 
     private static readonly GateCommand GrepFixed = new("git", ["grep", "-q", "FIXED", "--", "src/Policy.cs"]);
 
-    /// <summary>Prints the worktree's top level on its way to exit 128 (<c>HEAD~999</c> names no commit): a gate command whose merged output holds the path it ran in.</summary>
-    private static readonly GateCommand PrintsItsTree = new("git", ["rev-parse", "--show-toplevel", "HEAD~999"]);
+    /// <summary>Prints the worktree's top level on its way to exit 128 (<c>HEAD~999</c> names no commit): a gate command whose merged output holds the path it ran in. The error text is SHORT on purpose: a gate keeps only the last 300 characters of its output, and a long error would push the front of a long temp path out of them.</summary>
+    private static readonly GateCommand PrintsItsTree = new("git", ["rev-parse", "--show-toplevel", "--verify", "HEAD~999"]);
 
     private const string ChildOut = "BENCH_E6S5_SCRATCH_CHILD_OUT";
 
