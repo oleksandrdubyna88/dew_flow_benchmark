@@ -225,7 +225,7 @@ public sealed class InitVerbTests
     [Fact]
     public async Task Init_refuses_a_root_holding_a_NUL_character()
     {
-        var (code, _, error) = await InitAsync("/tmp/a\0b");
+        var (code, _, error) = await InitAsync("/srv/a\0b");
 
         code.Should().Be(4);
         error.Should().Contain("NUL");

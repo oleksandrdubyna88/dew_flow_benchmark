@@ -121,13 +121,13 @@ public sealed class ExecutableResolutionTests
 
         Resolve("/usr/bin/git\0/x", ["/a"], _ => true).Reason().Should().Contain("NUL").And.Contain("D17");
         Resolve("git\0", ["/a"], _ => true).Reason().Should().Contain("NUL").And.Contain("D17");
-        Resolve("git", ["/a"], _ => true, forbidden: ["/tmp\0x"]).Reason().Should().Contain("NUL").And.Contain("D17");
-        Resolve("/usr/bin/git", ["/a"], _ => true, forbidden: ["/t", "/tmp\0x"]).Reason().Should().Contain("NUL");
+        Resolve("git", ["/a"], _ => true, forbidden: ["/srv\0x"]).Reason().Should().Contain("NUL").And.Contain("D17");
+        Resolve("/usr/bin/git", ["/a"], _ => true, forbidden: ["/t", "/srv\0x"]).Reason().Should().Contain("NUL");
         ExecutableRule.Refusal("/usr/bin/dotnet\0x", ["/t"]).Should().Contain("NUL").And.Contain("D17");
-        var refused = ExecutableRule.Refusal("/usr/bin/git", ["/tmp\0x"]);
+        var refused = ExecutableRule.Refusal("/usr/bin/git", ["/srv\0x"]);
         refused.Should().NotBeEmpty("a root holding a NUL fails closed: the executable counts as under it");
-        refused.Should().NotContain("\0").And.Contain("holds a NUL character").And.Contain("tmp\\0x");
-        var real = ExecutableRule.RealRefusal("/a/git", "/b/git", ["/tmp\0x"]);
+        refused.Should().NotContain("\0").And.Contain("holds a NUL character").And.Contain("srv\\0x");
+        var real = ExecutableRule.RealRefusal("/a/git", "/b/git", ["/srv\0x"]);
         real.Should().NotBeEmpty().And.NotContain("\0").And.Contain("holds a NUL character");
         ExecutableRule.Refusal("/usr/bin/git\0/x", ["/t"]).Should().NotContain("\0", "the executable is echoed escaped").And.Contain("git\\0/x");
     }

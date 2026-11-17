@@ -24,7 +24,7 @@ public sealed partial class TaskWorktreesTests
                 ["GIT_DIR"] = "/nonexistent",
                 ["GITHUB_TOKEN"] = "ghp_secret",
                 ["PGPASSWORD"] = "hunter2",
-                ["SSH_AUTH_SOCK"] = "/tmp/agent.sock",
+                ["SSH_AUTH_SOCK"] = "/run/agent.sock",
             };
             var sut = kit.Sut(kit.Recording(environment));
             await kit.ReadyAsync(sut, "t1", "t2");

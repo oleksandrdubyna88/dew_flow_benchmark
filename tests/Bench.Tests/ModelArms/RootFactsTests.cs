@@ -240,7 +240,7 @@ public sealed class RootFactsTests
             return;
         }
 
-        var outcome = RootFacts.FileFacts("/tmp/experiment\0.json");
+        var outcome = RootFacts.FileFacts("/srv/experiment\0.json");
 
         outcome.Reason().Should().Contain("NUL");
     }

@@ -84,7 +84,7 @@ public sealed class ArmGitTaskQuestionsTests : ArmGitTestBase
 
         (await git.RevListAsync(start, Ct)).Ok().Should().Equal(one, two, three);
         (await git.RevListAsync(start, "tmp/t1", Ct)).Ok().Should().Equal(one, two);
-        (await git.RevListAsync("--output=/tmp/x", Ct)).Failed().Should().BeTrue();
+        (await git.RevListAsync("--output=" + _temp.Combine("x"), Ct)).Failed().Should().BeTrue();
         (await git.RevListAsync("HEAD", Ct)).Failed().Should().BeTrue();
         (await git.RevListAsync(start, "-x", Ct)).Failed().Should().BeTrue();
         three.Should().NotBeEmpty();

@@ -47,7 +47,7 @@ public sealed class ArmGitWideningTests : ArmGitTestBase
     }
 
     [Theory]
-    [InlineData("--output=/tmp/x")]
+    [InlineData("--output=x")]
     [InlineData("HEAD")]
     [InlineData("zz")]
     public async Task A_base_that_is_not_a_hex_id_is_refused_by_every_question_that_takes_one(string text)

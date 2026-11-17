@@ -74,7 +74,7 @@ public sealed class PathEntryRefusalTests
         PosixPaths();
 
         Refusal("/usr/bin").Should().BeEmpty();
-        Refusal("/tmp/bin", roots: ["/t/"]).Should().BeEmpty();
+        Refusal("/tea/bin", roots: ["/t/"]).Should().BeEmpty();
         Refusal("/tx/bin").Should().BeEmpty("/tx is not under /t");
     }
 
