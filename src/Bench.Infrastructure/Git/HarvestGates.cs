@@ -47,6 +47,18 @@ public sealed record GateReport(bool RedAtBase, string RedDetail, bool GreenWith
 /// </para></summary>
 public static class HarvestGates
 {
+    public static Task<Outcome<GateReport>> RunAsync(
+        string repositoryDir,
+        CommitSha baseCommit,
+        CommitSha fixCommit,
+        IReadOnlyList<string> testPaths,
+        GateCommand build,
+        GateCommand test,
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        RunAsync(repositoryDir, baseCommit, fixCommit, testPaths, build, test, timeout, cancellationToken, ScratchWorktree.DefaultRoot);
+
+    /// <summary>The same, with the worktree made under <paramref name="scratchRoot"/> — a test passes the folder it owns, so the worktree goes with it.</summary>
     public static async Task<Outcome<GateReport>> RunAsync(
         string repositoryDir,
         CommitSha baseCommit,
@@ -55,7 +67,8 @@ public static class HarvestGates
         GateCommand build,
         GateCommand test,
         TimeSpan timeout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string scratchRoot)
     {
         if (testPaths.Count == 0)
         {
@@ -64,7 +77,7 @@ public static class HarvestGates
         }
 
         var deadline = new GateDeadline(timeout);
-        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, deadline.Remaining(), cancellationToken);
+        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, deadline.Remaining(), cancellationToken, scratchRoot);
 
         if (scratch is Outcome<string>.Fail cannotAdd)
         {

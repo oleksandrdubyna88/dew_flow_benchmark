@@ -32,7 +32,7 @@ public sealed class SolutionSignalsTests : IDisposable
 
         var report = (await SolutionSignals.RunAsync(
             _repo.Root, Sha(baseSha), Sha(fixSha), solverDiff,
-            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct)).Ok();
+            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.Passed.Should().BeTrue(report.Describe);
         report.Metrics().Should().OnlyContain(m => m.Value == "true");
@@ -49,7 +49,7 @@ public sealed class SolutionSignalsTests : IDisposable
 
         var report = (await SolutionSignals.RunAsync(
             _repo.Root, Sha(baseSha), Sha(fixSha), wrongDiff,
-            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct)).Ok();
+            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.Applies.Should().BeTrue("the diff is well-formed — it is merely aimed wrong");
         report.RightFiles.Should().BeFalse();
@@ -64,7 +64,7 @@ public sealed class SolutionSignalsTests : IDisposable
 
         var report = (await SolutionSignals.RunAsync(
             _repo.Root, Sha(baseSha), Sha(fixSha), "this is not a diff at all",
-            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct)).Ok();
+            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.Applies.Should().BeFalse();
         report.Passed.Should().BeFalse();
@@ -78,7 +78,7 @@ public sealed class SolutionSignalsTests : IDisposable
 
         await SolutionSignals.RunAsync(
             _repo.Root, Sha(baseSha), Sha(fixSha), "garbage",
-            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct);
+            ["src/Policy.cs"], ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot);
 
         (await _repo.GitAsync("worktree", "list")).Trim().Split('\n').Should().HaveCount(1);
     }
