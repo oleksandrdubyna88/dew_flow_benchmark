@@ -1,6 +1,6 @@
 # PLAN — Test leftovers, E6: benchmark's tests name, own, remove and collect what they make
 
-> Status: **amended 2026-11-17 for the parent's epoch 11** (its § *Epoch 11*, the re-review after entry 10.2: S4's sites
+> Status: **amended 2026-11-17 for the parent's epoch 11, which the owner opened the same day (`Narrowed: yes`, row E6-l; conventions #176)** (its § *Epoch 11*, the re-review after entry 10.2: S4's sites
 > take a disposition by lifetime, and the M2 and M3 pilot scaffolds write what must outlive the run into the folder the
 > required `BENCH_PILOT_OUT` names, unprefixed, never the temp root (row E6-l, new); row E6-i reads both guards with
 > counts; S4's *Files* name the model-arms docs; D6 for the probe runner's path; S5's shape G bounded; S6 reads both
