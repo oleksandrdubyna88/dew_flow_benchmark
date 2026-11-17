@@ -319,7 +319,7 @@ public sealed class PosixFolderIsolationTests
     public async Task Verification_refuses_a_listable_folder_on_the_windows_drive_when_one_is_named()
     {
         var scratch = DrvfsScratch.Required();
-        TestContext.Current.TestOutputHelper?.WriteLine(SweepReport(LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess))));
+        M2PilotScaffold.Say(SweepReport(LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess))));
         using var kit = Kit();
         using var owned = OwnedDir.Create("drvfs", scratch);
         kit.Root.Edit(top =>
@@ -328,10 +328,30 @@ public sealed class PosixFolderIsolationTests
             top["isolation"]!["unlisted"] = new JsonArray(owned.Path);
         });
 
-        var run = await kit.LockAsync();
+        try
+        {
+            var run = await kit.LockAsync();
 
-        run.Code.Should().Be(3, Ctx(run));
-        run.Error.Should().Contain(owned.Path).And.Contain("is still listable");
+            run.Code.Should().Be(3, Ctx(run));
+            run.Error.Should().Contain(owned.Path).And.Contain("is still listable");
+        }
+        finally
+        {
+            Reopen(owned.Path);
+        }
+    }
+
+    /// <summary>Gives the owner back full access to a folder the lock may have closed (a drive that keeps modes closes it for real), so the owned removal can list it; a drive that refuses the change keeps the folder claimed, and the next start sweep judges it.</summary>
+    private static void Reopen(string folder)
+    {
+        try
+        {
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            M2PilotScaffold.Say($"9p scratch: could not reopen {folder} before its removal ({ex.GetType().Name}: {ex.Message})");
+        }
     }
 
     [Fact]
@@ -357,7 +377,7 @@ public sealed class PosixFolderIsolationTests
             using var live = OwnedDir.Create("drvfs-live", scratch);
             var result = LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, TimeSpan.Zero, Liveness.ProbeProcess));
 
-            TestContext.Current.TestOutputHelper?.WriteLine(SweepReport(result));
+            M2PilotScaffold.Say(SweepReport(result));
             result.Removed.Should().Contain(dead, "the dead child's folder was collected");
             Directory.Exists(dead).Should().BeFalse();
             File.Exists(dead + ".owner").Should().BeFalse("and its claim with it");
