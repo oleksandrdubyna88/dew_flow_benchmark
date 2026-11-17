@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Bench.Infrastructure.Process;
+using Bench.Tests.Leftovers;
 using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
@@ -106,7 +107,7 @@ internal static class PinnedConsumer
     }
 
     /// <summary>Runs <paramref name="copy"/>, the copy of a reader that <see cref="CopyAsync"/> made in the <paramref name="scratch"/> folder (or below it), with <c>node</c> by its resolved path under EXACTLY <paramref name="environment"/> (the caller names <c>PATH</c> and <c>HOME</c>) in <paramref name="workingDirectory"/>, within the reader's own <see cref="PinnedReader.Timeout"/>. A reader that does not end in time fails the test
-    /// naming the reader, its timeout and the scratch, which is PRESERVED: moved out of the fixture's folder to a sibling <c>testsToDelete-modelarms-reader-&lt;name&gt;-&lt;id&gt;</c> the fixture does not own (a legacy name, removed by hand), its own outputs kept.</summary>
+    /// naming the reader, its timeout and the scratch, which is KEPT: moved to <c>kept-reader-&lt;name&gt;-&lt;id&gt;</c> INSIDE the run's owned folder (a plain name; what lives inside an owned folder needs no name of its own), its own outputs kept, and removed with that folder by the run. The failure message, with the reader's stderr so far, is the record. No owned folder above the scratch: the scratch stays where it is.</summary>
     public static async Task<ReaderRun> RunAsync(PinnedReader reader, string scratch, string copy, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string> environment, string workingDirectory, CancellationToken cancellationToken)
     {
         var attempt = await ProcessRunner.RunAsync(Node.Value, [copy, .. arguments], workingDirectory, reader.Timeout, string.Empty, environment, cancellationToken);
@@ -115,7 +116,7 @@ internal static class PinnedConsumer
             case ProcessAttempt.Completed completed:
                 return new ReaderRun(completed.Result.ExitCode, completed.Result.StandardOutput, completed.Result.StandardError, scratch);
             case ProcessAttempt.TimedOut timedOut:
-                Assert.Fail($"{reader.Name} did not end within its timeout of {reader.Timeout.TotalSeconds:0.###} s ({attempt.Describe}); its scratch is kept at {Preserved(reader, scratch)} (a leftover to remove by hand); stderr so far: {timedOut.StandardError}");
+                Assert.Fail($"{reader.Name} did not end within its timeout of {reader.Timeout.TotalSeconds:0.###} s ({attempt.Describe}); its scratch is kept at {Preserved(reader, scratch)} (inside the run's owned folder, removed with it); stderr so far: {timedOut.StandardError}");
                 return new ReaderRun(-1, string.Empty, string.Empty, scratch);
             default:
                 Assert.Fail($"{reader.Name} could not be started: {attempt.Describe}");
@@ -123,16 +124,21 @@ internal static class PinnedConsumer
         }
     }
 
-    private static string Preserved(PinnedReader reader, string scratch)
+    /// <summary>Moves <paramref name="scratch"/> to <c>kept-reader-&lt;name&gt;-&lt;id&gt;</c> inside the nearest folder above it that is an owned folder of this repository (<see cref="Owned.FullName"/>) and returns the new path; with none above (or the scratch itself the owned folder) it stays and is returned as it is, never moved to the temp root.</summary>
+    internal static string Preserved(PinnedReader reader, string scratch)
     {
         var owner = new DirectoryInfo(scratch);
-        while (owner.Parent is not null && !owner.Name.StartsWith("testsToDelete-modelarms-", StringComparison.Ordinal))
+        while (owner.Parent is not null && !Owned.FullName().IsMatch(owner.Name))
         {
             owner = owner.Parent;
         }
 
-        var parent = owner.Parent?.FullName ?? Path.GetTempPath();
-        var kept = Path.Combine(parent, $"testsToDelete-modelarms-reader-{Path.GetFileNameWithoutExtension(reader.Name)}-{Guid.NewGuid().ToString("N")[..8]}");
+        if (owner.Parent is null || owner.FullName == new DirectoryInfo(scratch).FullName)
+        {
+            return scratch;
+        }
+
+        var kept = Path.Combine(owner.FullName, $"kept-reader-{Path.GetFileNameWithoutExtension(reader.Name)}-{Guid.NewGuid().ToString("N")[..8]}");
         Directory.Move(scratch, kept);
         return kept;
     }

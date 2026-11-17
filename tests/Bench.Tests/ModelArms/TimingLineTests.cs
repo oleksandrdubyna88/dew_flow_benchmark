@@ -308,8 +308,8 @@ public sealed class TimingLineTests
 
         SessionTranscripts.PathOf("/h/.claude", "/home/jinx/git/dew_flow_conventions", id).Should().Be(
             Path.Combine("/h/.claude", "projects", "-home-jinx-git-dew-flow-conventions", "d62b4ad4-8535-46c6-8289-1ccf2c45322d.jsonl"));
-        SessionTranscripts.PathOf("/h/.claude", "/tmp/testsToDelete-x_1/arm.d ~y", id).Should().Be(
-            Path.Combine("/h/.claude", "projects", "-tmp-testsToDelete-x-1-arm-d--y", "d62b4ad4-8535-46c6-8289-1ccf2c45322d.jsonl"),
+        SessionTranscripts.PathOf("/h/.claude", "/srv/x_1/arm.d ~y", id).Should().Be(
+            Path.Combine("/h/.claude", "projects", "-srv-x-1-arm-d--y", "d62b4ad4-8535-46c6-8289-1ccf2c45322d.jsonl"),
             "a dot, an underscore, a space and a tilde are each one dash; letters, digits and an existing dash are kept");
     }
 }

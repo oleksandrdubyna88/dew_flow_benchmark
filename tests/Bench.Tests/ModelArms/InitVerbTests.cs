@@ -1,3 +1,4 @@
+using Bench.Tests.Leftovers;
 using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
@@ -135,7 +136,7 @@ public sealed class InitVerbTests
     [Fact]
     public async Task Init_refuses_a_root_inside_this_repository()
     {
-        var root = Path.Combine(Cli.Repository.Root, "testsToDelete-modelarms-init-refused");
+        var root = Path.Combine(Cli.Repository.Root, Owned.NameFor("init-refused"));
         try
         {
             var (code, _, error) = await InitAsync(root);
