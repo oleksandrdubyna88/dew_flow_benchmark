@@ -1,19 +1,21 @@
 # E6.S4 brief — `ModelArms/`: the owned folder, no legacy name, the pilots' output outside the family (rows E6-i, E6-l, E6-b by hand; claim C8)
 
-> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 11 (opened by the owner, `Narrowed: yes`), with the item 8.1 observations (§ 11) — ONE open STOP finding for the coordinator before the plan gate (§ 15: doc lines that describe what S4 changes and lie outside item 4.2's *Files*; it may be entry 11.1).** The brief of story S4 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S4 `:561-610`; rows E6-b `:94`, E6-i `:107`, E6-l `:110`; claim C8 `:166`; § 11 `:806-834`). Its scope is S4's *Files* line, the parent's § *Epoch 11* item 4.2, as named paths (§ 0.1). The questions of the first version (Q1–Q8) are answered by item 4.2's table (§ 14).
+> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 11 (opened by the owner, `Narrowed: yes`), with the item 8.1 observations (§ 11); its § 15 finding counted by the owner as the parent's entry 11.1 (four doc lines added to S4's *Files*, § 0.1), so the next accepted change is the parent's eleventh full stop. Ready for its plan gate.** The brief of story S4 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S4 `:561-610`; rows E6-b `:94`, E6-i `:107`, E6-l `:110`; claim C8 `:166`; § 11 `:806-834`). Its scope is S4's *Files* line, the parent's § *Epoch 11* item 4.2, as named paths (§ 0.1). The questions of the first version (Q1–Q8) are answered by item 4.2's table (§ 14).
+>
+> Was (the rework `36b505fe`, `43d6cacd`): … with the item 8.1 observations (§ 11) — ONE open STOP finding for the coordinator before the plan gate (§ 15: doc lines that describe what S4 changes and lie outside item 4.2's *Files*; it may be entry 11.1).
 >
 > Was (the first version, `4dc04820`): Status: **plan only, nothing implemented yet, 2026-11-17; the item 8.1 observations made before its plan gate (§ 11).** … a file outside them would be the parent's next counted change, which after entry 10.1 is the TENTH FULL STOP … Three dispositions this brief needs are put to the coordinator before the gate (§ 14, Q1–Q3). (That version found entry 10.2; epoch 10 stopped, and epoch 11 starts at 0 changes.)
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-17, reworked the same day by NEW commits (the parent's item 8.3 and its
 > judge's cut row for this brief). Read-only inputs, all verified: benchmark worktree `/home/jinx/git/wt/bench-e6s4`, branch
-> `feat/e6-s4-modelarms` from `main` `b348bb33` (#219: E6.S3; #218: F42-c, the copy at mcp `53f65130`), mount `.agents/conventions`
+> `feat/e6-s4-modelarms` from `main` `b348bb33` (#219: E6.S3; #218: F42-c, the copy at mcp `53f65130`), `main` `c17903c1` (#220, the stories amended to epoch 11) merged in, mount `.agents/conventions`
 > at `b1746499`. **The parent** is `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` § *Epoch 11*, on the branch
-> `docs/rollout-epoch-11` (PR #176) at `43527cf` (epoch 11 opened by the owner 2026-11-17, `Narrowed: yes`, 0 changes; its
-> items 3.1 (rows E6-i `:3726`, E6-l `:3727`), 3.3 (O-b `:3770`, O-i `:3777`, O-j `:3778`, O-l `:3780`), 4.2 (`:3823`, *Files*
-> `:3841`, *Done when* `:3863`, the answered questions `:3868-3879`), 4.3 (`:3881`), 4.5 (`:4008`), 7 (`:4061`, the owner's 9p answer
-> `:4071`), 8.1 (`:4081`), 8.2 (`:4103`); the judge's rows for this brief `:809-810`). **"Stories"** is
-> `todo/PLAN_test_leftovers_E6.md` as amended on `docs/e6-stories-epoch-11` (PR #220) at `47cab130`; when #220 merges, the
-> coordinator brings this branch up to date. Every code `file:line` is at `b348bb33`. **[M]** is measured for this brief, read-only;
+> `docs/rollout-entry-11-1` (PR #177) at `bbc72c0` (on `main` `eccf2d2`, #176: epoch 11 opened by the owner 2026-11-17, `Narrowed: yes`; ledger entry 11.1 `:900`, the four doc lines of § 0.1, counted by the owner; state open, the next accepted change the eleventh full stop; its
+> items 3.1 (rows E6-i `:3733`, E6-l `:3734`), 3.3 (O-b `:3777`, O-i `:3784`, O-j `:3785`, O-l `:3787`), 4.2 (`:3830`, *Files*
+> `:3848`, *Done when* `:3870`, the answered questions `:3875-3886`), 4.3 (`:3888`), 4.5 (`:4015`), 7 (`:4068`, the owner's 9p answer
+> `:4078`), 8.1 (`:4088`), 8.2 (`:4110`); the judge's rows for this brief `:811-812`). **"Stories"** is
+> `todo/PLAN_test_leftovers_E6.md` as amended by #220, on `main` `c17903c1` (its text equal to `47cab130`, where the line numbers below
+> were read), merged into this branch. Every code `file:line` is at `b348bb33`. **[M]** is measured for this brief, read-only;
 > **[O]** a claim OBSERVED in a scratch clone with the six things of item 8.1 (§ 11); **[P]** observed by the parent's item 3.3 (its
 > O-row named); **[R]** read from code and NOT run (written open-ended, "red or not, the run says which"); **[D]** taken from a named
 > document.
@@ -36,7 +38,7 @@ document and dated notes in two IMPLEMENTED plans). ONE pull request, in this re
 
 ## 0.1 Scope — item 4.2's *Files* as named paths, each with the dependency that needs it
 
-The parent's item 4.2 *Files* (`:3841-3861`; the stories' S4 *Files* `:588-600`): `tests/Bench.Tests/ModelArms/**`; three research
+The parent's item 4.2 *Files* (`:3848-3868`; the stories' S4 *Files* `:588-600`): `tests/Bench.Tests/ModelArms/**`; three research
 documents at the named lines; the plan records. Every path below is inside it.
 
 | Path | Needed for | Bound |
@@ -58,21 +60,22 @@ documents at the named lines; the plan records. Every path below is inside it.
 | `ModelArms/{ArmGitTaskQuestionsTests,TaskWorktreesPlantTests,TaskWorktreesReviewTests}.cs` | the 10 real `worktree add` lines (K8, § 3a) | one marker per line |
 | `ModelArms/{TaskWorktreesReviewTests,TaskWorktreesRoadTests,TaskWorktreesTests}.cs` | the 10 assertion strings (K8) | one `static readonly` per file and the 10 lines |
 | `ModelArms/ExperimentRoot.cs` | `:22` the doc comment that names the old folder form | that comment only |
-| `research/module_model_arms.md` | `:1462` (`TempFolder`'s folder form), `:2114` (a timed-out reader's scratch, now kept inside the owned folder), `:2250-2256` (M2's procedure: step 1's printed paths and `BENCH_PILOT_OUT`, the log's removal sentence) (K10) | those lines; the run logs `:2262`, `:2322`, `:2370` keep their observed paths as history |
-| `research/PLAN_model_arms_E6.md` (IMPLEMENTED) | one dated note each beside `:338-341` (the names), `:381` (T4's name check), `:746`, `:819`, `:821` (the kept reader's name; the growth rows) (K10) | notes only; the old text kept |
-| `research/PLAN_model_arms_E3.md` (IMPLEMENTED) | one dated note each beside `:810-811`, `:876`, `:885`, `:1146` (K10) | notes only; the old text kept |
+| `research/module_model_arms.md` | `:1462` (`TempFolder`'s folder form), `:2114` (a timed-out reader's scratch, now kept inside the owned folder), `:2250-2256` (M2's procedure: step 1's printed paths and `BENCH_PILOT_OUT`, the log's removal sentence); and, by the parent's entry 11.1, `:2314` (M3's *What it is*: its manifest and its names, a real edit) (K10) | those lines; the run logs `:2262`, `:2322`, `:2370` keep their observed paths as history |
+| `research/PLAN_model_arms_E6.md` (IMPLEMENTED) | one dated note each beside `:338-341` (the names), `:381` (T4's name check), `:746`, `:819`, `:821` (the kept reader's name; the growth rows); and, by entry 11.1, `:344`, `:346` (M3's manifest and target names) and `:818` (the `ConsumerArms` growth row: "a killed test run leaves one temp folder", which S4 makes false) (K10) | notes only; the old text kept |
+| `research/PLAN_model_arms_E3.md` (IMPLEMENTED) | one dated note each beside `:810-811`, `:876`, `:885`, `:1146`; and, by entry 11.1, `:1127` (item 47: M2's output and probe names) (K10) | notes only; the old text kept |
 | the plan records (the stories' § 6 first paragraph, E11-10): this brief, its `todo/README.md` row, its promotion (`research/PLAN_test_leftovers_E6_S4_brief.md`, `research/README.md`), the stories' progress line, and the copy of § 3a's exemption list into the stories' § 11 (item 4.3) | `common/planning-docs.md`; item 4.3 | those records |
 
-**Read and NOT on the line** (item 4.2, `:3858-3861`): `research/module_tests.md` and `research/PLAN_model_arms.md` (they print no pilot
+**Read and NOT on the line** (item 4.2, `:3865-3868`): `research/module_tests.md` and `research/PLAN_model_arms.md` (they print no pilot
 path, no kept reader's name and no `TempFolder` form); `research/module_model_arms.md:1308` and the IMPLEMENTED model-arms plans that
-name `testsToDelete-modelarms-…` (E1 `:1166`, `:1187`; E3 `:80`, `:152`; E4 `:1139`) record what was built then and stay. **Found
-outside the line by this rework: § 15 (a STOP finding).**
+name `testsToDelete-modelarms-…` (E1 `:1166`, `:1187`; E3 `:80`, `:152`; E4 `:1139`) record what was built then and stay. The four lines § 15 found outside item 4.2's list are on it since the parent's entry 11.1
+(#177, `:900`), marked "by entry 11.1" in the three rows above.
 
 **Not touched, by name:** `tests/Bench.Tests/Leftovers/**` (every manifest target, `template-manifest.json`, `TheAdaptedCopyTests.cs`,
 `TempDir.cs`, `SuiteChild.cs`, `LeftoversSweep.cs`: used, never edited), `.github/workflows/ci.yml`, `src/`, `hosts/`, `tools/`
 (`tools/model-arms/` is the product under test; `RootFacts`, `ExecutableResolution` are used, not changed), every other `tests/` folder
-(S5's). **A file the build, a test or a check needs outside the table above is a change of the parent's epoch 11 (it would be entry
-11.1): STOP, write the finding into this brief (§ 15), and hand it to the coordinator; do not add the file.**
+(S5's). **A file the build, a test or a check needs outside the table above is a change of the parent's epoch 11, and after
+entry 11.1 the next one is the ELEVENTH FULL STOP: STOP, write the finding into this brief, and hand it to the coordinator; do not add
+the file.**
 
 ## 1. Rules you must read first
 
@@ -92,9 +95,10 @@ outside the line by this rework: § 15 (a STOP finding).**
 
 1. S3 merged (#219, `b348bb33`), so F41-b (mount `b1746499`) and F42-c (the copy at mcp `53f65130`, `TheAdaptedCopyTests.cs:83`) are
    in: met **[M]**.
-2. The stories amendment (#220) merged before this brief's plan gate (the parent's item 2 point 2); the coordinator brings this branch
-   up to date then.
-3. § 15's STOP finding answered by the coordinator before the plan gate (entry 11.1, or read as history).
+2. The stories amendment (#220) merged before this brief's plan gate (the parent's item 2 point 2): met, `main` `c17903c1`, merged into
+   this branch **[M]**.
+3. § 15's STOP finding answered before the plan gate: met, counted by the owner as the parent's entry 11.1 (#177); the four lines are
+   on § 0.1.
 4. At most three open PRs here, or the owner's allowance for E6 PRs over the cap (2026-11-16).
 5. **The 9p merge condition** (the parent's O-l and item 7, the owner's answer 2026-11-17: "(1), once"): K9's killed-run → next-sweep
    check PASSED on the real drvfs mount, run ONCE with `MODEL_ARMS_DRVFS_SCRATCH` = a new empty folder under
@@ -115,7 +119,7 @@ outside the line by this rework: § 15 (a STOP finding).**
   24 (`Owned.Room`, `Owned.cs:82`). **The one behaviour change:** a removal that fails no longer throws out of `Dispose`
   (`OwnedDir.Dispose` never throws, rule §2): it warns once, keeps the folder claimed, and the end-of-run audit
   (`LeftoversAudit`, run from `LeftoversSweepFixture.cs:63-75`) fails the run naming it (Q6, decided).
-- **K2 — Every other site S4 disposes of, by LIFETIME** (the parent's item 4.2 table, `:3826-3833`; no site is "a test about the old
+- **K2 — Every other site S4 disposes of, by LIFETIME** (the parent's item 4.2 table, `:3833-3840`; no site is "a test about the old
   name itself", so none takes `~` for the prefix):
 
 | Site | Lifetime (item 4.2) | Today | S4 |
@@ -224,7 +228,7 @@ outside the line by this rework: § 15 (a STOP finding).**
   reads the path, checks folder and claim exist, `Kill()`s the child (SIGKILL), waits for its exit, then runs ONE sweep restricted to
   that folder and claim through the kernel-owner seam:
   `LeftoversSweep.Run(new SweepOptions(childTemp, DateTimeOffset.UtcNow, TimeSpan.Zero, Liveness.ProbeProcess, Mine: p => (p == folder || p == folder + ".owner") && Scope.IsMine(p)))`
-  (`LeftoversSweep.cs:51-52`, `:84`; `Liveness.cs:36`). It asserts `Removed` holds exactly those two (the parent's Q8, `:3879`) and both
+  (`LeftoversSweep.cs:51-52`, `:84`; `Liveness.cs:36`). It asserts `Removed` holds exactly those two (the parent's Q8, `:3886`) and both
   entries are gone. `finally`: kill the child's tree; dispose both owned folders. Skips on Windows (SIGKILL; F31). *Was:* the sweep over
   the real temp root (`TempDir.Root`) with the same `Mine` filter; moved to the child's own temp root so nothing of a killed child ever
   lands in `/tmp`.
@@ -304,10 +308,16 @@ kept) and the 9p test's check (K9).
   (its scratch PRESERVED as a sibling) → kept INSIDE the owned folder as `kept-reader-<name>-<id>`, removed with it, the failure message
   the record; `:2250-2256`, M2's procedure: `BENCH_PILOT_OUT` set to a folder outside every checkout and outside `/tmp`, step 1 printing
   `<out>/bench-m2-target-<id>`, `<out>/bench-m2-root-<id>` and the manifest, the log's removal sentence → the manifest's paths, the
-  manifest last; the run logs (`:2262`, `:2322`, `:2370`) unchanged. `research/PLAN_model_arms_E6.md` and `research/PLAN_model_arms_E3.md`
+  manifest last; `:2314` (entry 11.1), M3's *What it is*: the manifest `bench-m3-manifest-<id>.json` and the names `bench-m3-<what>-<id>`,
+  both under `BENCH_PILOT_OUT` (outside every checkout and the temp root), unprefixed, the parent's documented exemption, in place of
+  "`testsToDelete-m3-manifest-<id>.json`" and "Names are `/tmp/testsToDelete-m3-<what>-<id>`, M2's form — the legacy form …"; the
+  run logs (`:2262`, `:2322`, `:2370`) unchanged. `research/PLAN_model_arms_E6.md` and `research/PLAN_model_arms_E3.md`
   (both IMPLEMENTED): ONE dated note each, `*Note 2026-11-<dd> (test-leftovers E6.S4):* …`, on its own line directly after each named
   line or block, saying what the code does since S4 (the names under `BENCH_PILOT_OUT`, M2's manifest, the kept reader inside the owned
-  folder, the growth rows' places), never a rewrite of the old text.
+  folder, the growth rows' places), never a rewrite of the old text. By entry 11.1 the notes also stand after
+  `research/PLAN_model_arms_E3.md:1127` (M2's output under `BENCH_PILOT_OUT`, its manifest, its probe a `TempFolder`),
+  `research/PLAN_model_arms_E6.md:344` and `:346` (one note after `:346`: M3's manifest and names under `BENCH_PILOT_OUT`), and `:818`
+  (a killed test run's `TempFolder` is now claimed and collected by the next run's start sweep).
 
 ## 5. The scenarios — RED, GREEN, RED again
 
@@ -381,12 +391,14 @@ node .agents/conventions/tools/plan-lifecycle.mjs
    `PilotScaffoldKillTests` (8); the RED of (8) and (9) quoted, then the runs of K5 (f).
 5. K9: `DrvfsScratch` and its facts (RED first), the widened 9p test, its start sweep and the kill check; then the ONE real run, quoted.
 6. K8: the 10 markers (§ 3a) and the 10 `~` strings; § 6's counts on the head.
-7. **The docs commit:** K10 (`research/module_model_arms.md`, the dated notes in `research/PLAN_model_arms_E6.md` and `_E3.md`);
+7. **The docs commit:** K10 (`research/module_model_arms.md` `:1462`, `:2114`, `:2250-2256` and `:2314`; the dated notes in
+   `research/PLAN_model_arms_E6.md` (`:338-341`, `:344`/`:346`, `:381`, `:746`, `:818`, `:819`, `:821`) and `_E3.md` (`:810-811`,
+   `:876`, `:885`, `:1127`, `:1146`); the four lines of entry 11.1 among them);
    `ExperimentRoot.cs:22`; § 3a's list copied into the stories' § 11; this brief's progress line.
 
 **Size.** About 700 changed lines in about 35 files, most of them one-line edits; the new tests ~450 lines. One Sonnet coder.
 
-## 9. Done when, and what the PR body quotes (the parent's item 4.2 *Done when*, `:3863-3866`, and the stories' S4 *Done when* `:601-610`)
+## 9. Done when, and what the PR body quotes (the parent's item 4.2 *Done when*, `:3870-3873`, and the stories' S4 *Done when* `:601-610`)
 
 - Rows E6-i (S4's half) and E6-l met by their checks: § 6's table on the head, per guard and per class; row E6-l (1)–(3): the
   refusals and one run of each scaffold (K5 (f)), both guards clean on both scaffold files with no marker.
@@ -439,12 +451,12 @@ same consumer, pin and mount, a SECOND scratch clone made the same way, nothing 
 | O11 | K9 and item 2 point 5: the drvfs mount and the owner's folder (read-only) | `grep " /mnt/c " /proc/mounts`; `awk '$2 ~ "^/mnt/c"' /proc/mounts`; `ls -ld /mnt/c/Users/strug/AppData/Local/Temp` | the machine | `/mnt/c` of type `9p`, no deeper mount; the folder present | `C:\134 /mnt/c 9p rw,noatime,aname=drvfs;path=C:\;uid=1000;gid=1000;symlinkroot=/mnt/,…` — ONE mount at or under `/mnt/c`, type `9p`, every file uid 1000; the folder exists, `drwxrwxrwx jinx jinx` (drvfs shows mode 777: a mode set there is not kept — `OwnedDir`'s `mkdir 0700` and the copied removal on drvfs are **[R]**, observed only by the one run). Nothing was written to the mount |
 | O12 | K5 (e), K9: the planned kill-test and 9p lines are clean in the Node guard (the C# half **[R]**: they spell no `RawTemp` pattern, no `"/tmp"`, no piece of the prefix word; checked again by § 6 on the head) | `scanText('tests/Bench.Tests/ModelArms/PilotScaffoldKillTests.cs', …)` of the mounted guard | (a) `new Dictionary<string, string?> { ["TMPDIR"] = childTemp.Path, ["BENCH_PILOT_OUT"] = pilotOut.Path, ["TESTSTODELETE_RUN"] = null }` (b) `env["TMPDIR"] = childTemp.Path;` (c) `File.ReadLines("/proc/mounts")` (d) `name.EndsWith(".owner", …) && Owned.FullName().IsMatch(name[..^6])` (e) `LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess))` | `[]` each | `[]` each |
 
-**Observed by the parent, relied on here [P]** (§ *Epoch 11* item 3.3, consumer `b348bb33`, upstream mcp `53f65130`): **O-b** (`:3770`)
+**Observed by the parent, relied on here [P]** (§ *Epoch 11* item 3.3, consumer `b348bb33`, upstream mcp `53f65130`): **O-b** (`:3777`)
 row E6-l (3)'s C# half: each planned scaffold line `[]` in the copy; a rename under `Path.GetTempPath()` `raw-temp`; today's line
-`legacy-name`, `owner-blind`, `raw-temp`; under `TempDir.Root` `[]` (the blind spot). **O-i** (`:3777`) `PilotOut` and its seven facts,
-7 of 7 green, both files clean in both guards. **O-j** (`:3778`) both scaffolds run end to end with the resolver: unset and `/tmp`
+`legacy-name`, `owner-blind`, `raw-temp`; under `TempDir.Root` `[]` (the blind spot). **O-i** (`:3784`) `PilotOut` and its seven facts,
+7 of 7 green, both files clean in both guards. **O-j** (`:3785`) both scaffolds run end to end with the resolver: unset and `/tmp`
 refused before anything is made; with `/home/jinx/.cache/e11-pilot-out-<8 hex>` M2 and M3 passed, every printed path under it, M3's
-manifest 11 paths, nothing in the temp root; removed by exact path. **O-l** (`:3780`) the 9p site: **blocked** on the operator's
+manifest 11 paths, nothing in the temp root; removed by exact path. **O-l** (`:3787`) the 9p site: **blocked** on the operator's
 variable — now answered by the owner (item 7, "(1), once"), so K9's run is S4's merge condition.
 
 **Written open-ended, not observed here (red or not, the PR's run says which):** (1), (2), (4), (7), (8), (10) on today's code (their
@@ -502,25 +514,32 @@ start-of-run sweep, or run under a run-scoped temp root outside `/tmp`; and find
   2026-11-17 ~12:10, on this machine: `ls /tmp | grep -c '^clr-debug-pipe-'` → **1282** (641 pairs, the oldest 2026-11-16 22:42, the
   newest 10:54, before O10's runs, whose pipes went to their private folders); whose they are was not traced, and none was removed.
 
-## 14. Questions — Q1–Q8 of the first version ANSWERED by the parent's item 4.2 (`:3868-3879`); one new one
+## 14. Questions — Q1–Q8 of the first version ANSWERED by the parent's item 4.2 (`:3875-3886`); one new one
 
 | Q | Answer (item 4.2's table) | Where in this brief |
 |---|---|---|
-| Q1 | disposition B: the operator-named folder `BENCH_PILOT_OUT`, row E6-l; M2's probe a `TempFolder` (`:3872`) | K5 |
-| Q2 | the C# guard's 33 extra findings are S4's; the literals rewritten, never exempted; `owner-blind` takes no exemption (`:3873`) | K3, § 6 |
-| Q3 | `TimingLineTests.cs:311-312` a neutral sample, brief-level (`:3874`) | K2 |
-| Q4 | the kept scratch INSIDE the owned folder under a plain name; the failure message the record; the docs on S4's *Files* (`:3875`) | K6, K10 |
-| Q5 | the plan records within every story's PR (E11-10); `research/module_tests.md` not on S4's line; the model-arms docs are (`:3876`) | § 0.1 |
-| Q6 | `TempFolder.Dispose` no longer throws; the audit names the folder (`:3877`) | K1 |
-| Q7 | the 9p site in a validated folder BELOW the mount, swept at start, the merge condition on the real mount or the owner's exception (`:3878`, amended by CodeRabbit on #176: the folder may hold this repository's owner-form entries and their claims, anything else refuses); the owner answered "(1), once" (item 7, `:4071`) | K9, § 2 point 5 |
-| Q8 | the killed-child test's sweep restricted through `Mine` to its own folder and claim, `Removed` holding exactly those two (`:3879`) | K7 (its folder moved to the child's private `TMPDIR`, O10: the same seam, a different root) |
+| Q1 | disposition B: the operator-named folder `BENCH_PILOT_OUT`, row E6-l; M2's probe a `TempFolder` (`:3879`) | K5 |
+| Q2 | the C# guard's 33 extra findings are S4's; the literals rewritten, never exempted; `owner-blind` takes no exemption (`:3880`) | K3, § 6 |
+| Q3 | `TimingLineTests.cs:311-312` a neutral sample, brief-level (`:3881`) | K2 |
+| Q4 | the kept scratch INSIDE the owned folder under a plain name; the failure message the record; the docs on S4's *Files* (`:3882`) | K6, K10 |
+| Q5 | the plan records within every story's PR (E11-10); `research/module_tests.md` not on S4's line; the model-arms docs are (`:3883`) | § 0.1 |
+| Q6 | `TempFolder.Dispose` no longer throws; the audit names the folder (`:3884`) | K1 |
+| Q7 | the 9p site in a validated folder BELOW the mount, swept at start, the merge condition on the real mount or the owner's exception (`:3885`, amended by CodeRabbit on #176: the folder may hold this repository's owner-form entries and their claims, anything else refuses); the owner answered "(1), once" (item 7, `:4078`) | K9, § 2 point 5 |
+| Q8 | the killed-child test's sweep restricted through `Mine` to its own folder and claim, `Removed` holding exactly those two (`:3886`) | K7 (its folder moved to the child's private `TMPDIR`, O10: the same seam, a different root) |
 
-**Q9 (new, brief-level, for the coordinator):** K7's sweep root moves from the real temp root to the child's private `TMPDIR` (O10's
-finding), which item 4.2's Q8 wrote as "the real temp root". [Recommend: brief-level, not a change: the same seam and assertion, the
-sweep over a folder the parent owns, so a killed child leaves nothing in `/tmp`; if the coordinator reads it as a change of Q8's text,
-keep the real temp root and accept the two `clr-debug-pipe-*` FIFOs per run there, named in § 10.]
+**Q9 — ANSWERED by the coordinator, 2026-11-17: brief-level, as recommended.** K7's sweep root moves from the real temp root to the
+child's private `TMPDIR` (O10's finding), which item 4.2's Q8 wrote as "the real temp root": the same seam and assertion, the sweep
+over a folder the parent owns, so a killed child leaves nothing in `/tmp`. Item 4.2 itself classifies Q8 as brief-level (`:3886`), so
+this is not a change. *Was:* an open question, with the fallback "keep the real temp root and accept the two `clr-debug-pipe-*` FIFOs
+per run there".
 
-## 15. STOP finding — doc lines that describe what S4 changes, outside item 4.2's *Files* (for the coordinator; possibly entry 11.1)
+## 15. STOP finding — doc lines that describe what S4 changes, outside item 4.2's *Files* — CLOSED: counted, 11.1
+
+**Closed 2026-11-17: counted by the owner as the parent's entry 11.1** (conventions #177, `docs/rollout-entry-11-1` `bbc72c0`, ledger
+`:900`: "E6.S4's *Files* (§ *Epoch 11* item 4.2) gains four lines of files already on it"). The four lines are on § 0.1, in K10 and in
+§ 8's docs commit: `research/module_model_arms.md:2314` a real edit; `research/PLAN_model_arms_E3.md:1127` and
+`research/PLAN_model_arms_E6.md:344`, `:346`, `:818` dated notes. It is epoch 11's first change: the next accepted change is the
+eleventh full stop. The finding as written:
 
 The parent's item 8.1 asks every *Files* line to name "the docs that describe what it changes, found by a `git grep` of the old
 spellings over `*.md`", each with what it says now. Read at `b348bb33` with item 4.2's own pattern
@@ -535,7 +554,7 @@ nor on its "read and NOT on the line" list:
 | `research/PLAN_model_arms_E6.md:344`, `:346` (IMPLEMENTED, M3's *The scaffold* paragraph) | "the manifest `testsToDelete-m3-manifest-<id>.json` …", "`<target>` (`testsToDelete-m3-target-<id>` …" | the paragraph after `:338-341` (*The names*, which gets a note); not named |
 | `research/PLAN_model_arms_E6.md:818` (IMPLEMENTED, the growth table's `ConsumerArms` row) | "the fixture's `DisposeAsync` (the `TempFolder`, …) \| a killed test run leaves one temp folder …" | after S4 a killed run's `TempFolder` is collected by the next run's sweep; `:819`, `:821` (the next rows) get notes, `:818` is not named |
 
-**What this brief does:** NOT add them (the instruction: a file or line S4 needs outside item 4.2's *Files* is the parent's next change,
+*(Was, before the owner counted it:)* **What this brief does:** NOT add them (the instruction: a file or line S4 needs outside item 4.2's *Files* is the parent's next change,
 entry 11.1). S4 does not go to its plan gate until the coordinator decides, per line: (a) on the *Files* line (a counted change, 11.1,
 with its consult), or (b) read as history and stays (as item 4.2 reads `:1308` and the E1/E3/E4 lines), written into item 4.2's "read and
 NOT on the line" list. [Recommend: `module_model_arms.md:2314` is NOT history (present tense, the living document, and item 7 promises
