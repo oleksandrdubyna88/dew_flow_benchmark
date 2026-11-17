@@ -24,7 +24,7 @@ public sealed class KernelFactsTests
 
     private static async Task<string[]> StatToolAsync(string path)
     {
-        var attempt = await ProcessRunner.RunAsync("stat", ["-c", "%u %f %Hd %Ld %i %.9Z", path], Path.GetTempPath(), TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        var attempt = await ProcessRunner.RunAsync("stat", ["-c", "%u %f %Hd %Ld %i %.9Z", path], TempDir.Root, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         var done = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
         done.ExitCode.Should().Be(0, "the witness answers: " + done.Output);
         return done.StandardOutput.Trim().Split(' ');
@@ -132,28 +132,21 @@ public sealed class KernelFactsTests
     public void A_folder_made_again_under_a_name_has_the_birth_time_of_the_new_one_whatever_inode_number_it_got()
     {
         Linux();
-        var parent = Directory.CreateTempSubdirectory("birth-").FullName;
-        try
+        using var parent = new TempFolder();
+        var folder = parent.Combine("f");
+        Directory.CreateDirectory(folder);
+        var first = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
+        if (first.Birth is null)
         {
-            var folder = Path.Combine(parent, "f");
-            Directory.CreateDirectory(folder);
-            var first = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
-            if (first.Birth is null)
-            {
-                return; // this file system reports no birth time: nothing to compare
-            }
-
-            Thread.Sleep(50);
-            Directory.Delete(folder);
-            Directory.CreateDirectory(folder);
-            var second = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
-
-            second.Birth.Should().BeGreaterThan(first.Birth.Value, "the inode number may come back (ext4 reuses it), the birth time cannot");
+            return; // this file system reports no birth time: nothing to compare
         }
-        finally
-        {
-            Directory.Delete(parent, recursive: true);
-        }
+
+        Thread.Sleep(50);
+        Directory.Delete(folder);
+        Directory.CreateDirectory(folder);
+        var second = KernelFacts.Read(folder).Should().BeOfType<FactsRead.Read>().Subject.Facts.Identity;
+
+        second.Birth.Should().BeGreaterThan(first.Birth.Value, "the inode number may come back (ext4 reuses it), the birth time cannot");
     }
 
     [Fact]

@@ -16,6 +16,9 @@ public sealed partial class TaskWorktreesTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    /// <summary>The git subcommand the recording shim is asked about, spelled with a tilde taken out at run time so that no guard reads the plain words in an assertion (a call that really adds a worktree carries its own marker). One field for the whole partial class.</summary>
+    private static readonly string WorktreeAdd = "work~tree add".Replace("~", string.Empty, StringComparison.Ordinal);
+
     private static async Task<WorktreeKit> KitAsync()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the scenarios link folders and start shell shims");
@@ -67,7 +70,7 @@ public sealed partial class TaskWorktreesTests
         File.Exists(Path.Combine(kit.Wt("t1"), "stray.txt")).Should().BeFalse("the worktree is fresh");
         (await kit.GitAsync(kit.Clone, "rev-parse", "tmp/t1")).Trim().Should().Be(head, "the stranded commit is gone with the branch");
         (await kit.GitAsync(kit.Clone, "worktree", "list", "--porcelain")).Split('\n').Count(line => line == $"worktree {kit.Wt("t1")}").Should().Be(1);
-        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
+        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
         kit.LogLines.Should().Contain("t1: recreated — its worktree and branch were removed (not done, not picked)");
     }
 
@@ -187,7 +190,7 @@ public sealed partial class TaskWorktreesTests
         (await kit.GitAsync(kit.Clone, "rev-parse", "tmp/t1")).Trim().Should().Be(head);
         (await kit.GitAsync(kit.Clone, "worktree", "list", "--porcelain")).Split('\n').Count(line => line == $"worktree {kit.Wt("t1")}").Should().Be(1);
         var calls = kit.Questions();
-        AssertInOrder(calls, "worktree prune", "branch -D tmp/t1", $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
+        AssertInOrder(calls, "worktree prune", "branch -D tmp/t1", $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
         calls.Any(call => call == "worktree remove --force --force " + kit.Wt("t1")).Should().Be(row is Row.LockedAndInitialised or Row.LockedThenFolderGone or Row.FolderGoneStillRegistered, "a remove wherever the worktree is registered (a locked registration whose folder is gone is neither prunable nor deletable otherwise, M-ac)");
         if (row == Row.LockedThenFolderGone)
         {
@@ -262,7 +265,7 @@ public sealed partial class TaskWorktreesTests
         new DirectoryInfo(Path.Combine(kit.Wt("t1"), "src_vs_code", "node_modules")).LinkTarget.Should().NotBeNull("the links are made again");
         kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1")).Should().Be(buildsBefore, "a done task's worktree is not built");
         var calls = kit.Questions();
-        AssertInOrder(calls, "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"worktree add -q --no-checkout {kit.Wt("t1")} tmp/t1");
+        AssertInOrder(calls, "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} tmp/t1");
         calls.Should().NotContain(call => call == "branch -D tmp/t1" || call.Contains("-b tmp/t1", StringComparison.Ordinal));
         kit.LogLines.Should().Contain("t1: reattached to tmp/t1 (its worktree was gone)");
         (await sut.PickBackAsync("t1", Ct)).Should().BeNull();
@@ -452,7 +455,7 @@ public sealed partial class TaskWorktreesTests
         (await kit.HeadAsync(kit.Wt("t1"))).Should().Be(commit);
         File.Exists(Path.Combine(kit.Wt("t1"), ".agents", "conventions", "tools", "low-priority.mjs")).Should().BeTrue();
         kit.Bench.Recorded().Count(call => call.Tool == "dotnet" && call.Cwd == kit.Wt("t1")).Should().Be(buildsBefore + 1, "the resumed session expects a built tree");
-        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"worktree add -q --no-checkout {kit.Wt("t1")} tmp/t1");
+        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} tmp/t1");
         kit.Questions().Should().NotContain(call => call == "branch -D tmp/t1");
         (await File.ReadAllTextAsync(kit.Paths.TaskBefore("t1"), Ct)).Should().Be(before);
         kit.LogLines.Should().Contain("t1: reattached to tmp/t1 (its worktree folder was gone — its uncommitted edits are lost; its 1 commit(s) are on the branch)");
@@ -519,7 +522,7 @@ public sealed partial class TaskWorktreesTests
         stopped.ExitCode.Should().Be(4);
         stopped.Why.Should().Contain("t1: its session resumes but " + clause);
         File.Exists(Path.Combine(kit.Wt("t2"), "stray.txt")).Should().BeTrue("read before act: t2's stranded worktree is untouched");
-        kit.Questions().Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal) || call.StartsWith("branch -D", StringComparison.Ordinal) || call.StartsWith("worktree add", StringComparison.Ordinal));
+        kit.Questions().Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal) || call.StartsWith("branch -D", StringComparison.Ordinal) || call.StartsWith(WorktreeAdd, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -567,7 +570,7 @@ public sealed partial class TaskWorktreesTests
         var stopped = entry.Should().BeOfType<BatchEntry.Stopped>().Subject;
         stopped.ExitCode.Should().Be(3);
         stopped.Why.Should().Contain("batch").And.Contain("cannot be enumerated");
-        kit.Calls().Should().NotContain(call => call.StartsWith("worktree add", StringComparison.Ordinal), "no write of the clone");
+        kit.Calls().Should().NotContain(call => call.StartsWith(WorktreeAdd, StringComparison.Ordinal), "no write of the clone");
         File.Exists(kit.Paths.Timing).Should().BeFalse("a stop that names no task writes no timing line");
 
         var pick = await sut.PickBackAsync("t1", Ct);

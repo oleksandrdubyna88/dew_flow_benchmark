@@ -106,7 +106,7 @@ internal static class PinnedConsumer
     }
 
     /// <summary>Runs <paramref name="copy"/>, the copy of a reader that <see cref="CopyAsync"/> made in the <paramref name="scratch"/> folder (or below it), with <c>node</c> by its resolved path under EXACTLY <paramref name="environment"/> (the caller names <c>PATH</c> and <c>HOME</c>) in <paramref name="workingDirectory"/>, within the reader's own <see cref="PinnedReader.Timeout"/>. A reader that does not end in time fails the test
-    /// naming the reader, its timeout and the scratch, which is PRESERVED: moved out of the fixture's folder to a sibling <c>testsToDelete-modelarms-reader-&lt;name&gt;-&lt;id&gt;</c> the fixture does not own (a legacy name, removed by hand), its own outputs kept.</summary>
+    /// naming the reader and its timeout and QUOTING what the diagnosis needs (<see cref="TimeoutMessage"/>): the scratch is removed with the run's owned folder, so its path is not offered as something kept.</summary>
     public static async Task<ReaderRun> RunAsync(PinnedReader reader, string scratch, string copy, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string> environment, string workingDirectory, CancellationToken cancellationToken)
     {
         var attempt = await ProcessRunner.RunAsync(Node.Value, [copy, .. arguments], workingDirectory, reader.Timeout, string.Empty, environment, cancellationToken);
@@ -115,7 +115,7 @@ internal static class PinnedConsumer
             case ProcessAttempt.Completed completed:
                 return new ReaderRun(completed.Result.ExitCode, completed.Result.StandardOutput, completed.Result.StandardError, scratch);
             case ProcessAttempt.TimedOut timedOut:
-                Assert.Fail($"{reader.Name} did not end within its timeout of {reader.Timeout.TotalSeconds:0.###} s ({attempt.Describe}); its scratch is kept at {Preserved(reader, scratch)} (a leftover to remove by hand); stderr so far: {timedOut.StandardError}");
+                Assert.Fail(TimeoutMessage(reader, attempt.Describe, timedOut.StandardOutput, timedOut.StandardError, scratch));
                 return new ReaderRun(-1, string.Empty, string.Empty, scratch);
             default:
                 Assert.Fail($"{reader.Name} could not be started: {attempt.Describe}");
@@ -123,17 +123,21 @@ internal static class PinnedConsumer
         }
     }
 
-    private static string Preserved(PinnedReader reader, string scratch)
+    /// <summary>The failure message of a reader that did not end in time. The scratch folder is removed with the run's owned folder, so the message QUOTES what the diagnosis needs instead of naming a path that will be gone: what the scratch held (relative names and sizes, at most <see cref="ListedFiles"/>), and what the reader had written to its two pipes.</summary>
+    internal static string TimeoutMessage(PinnedReader reader, string describe, string standardOutput, string standardError, string scratch) =>
+        $"{reader.Name} did not end within its timeout of {reader.Timeout.TotalSeconds:0.###} s ({describe}); its scratch folder is removed with the run's owned folder, so what it held is quoted here: {Held(scratch)}; stdout so far: {standardOutput}; stderr so far: {standardError}";
+
+    private const int ListedFiles = 20;
+
+    private static string Held(string scratch)
     {
-        var owner = new DirectoryInfo(scratch);
-        while (owner.Parent is not null && !owner.Name.StartsWith("testsToDelete-modelarms-", StringComparison.Ordinal))
+        if (!Directory.Exists(scratch))
         {
-            owner = owner.Parent;
+            return "(nothing)";
         }
 
-        var parent = owner.Parent?.FullName ?? Path.GetTempPath();
-        var kept = Path.Combine(parent, $"testsToDelete-modelarms-reader-{Path.GetFileNameWithoutExtension(reader.Name)}-{Guid.NewGuid().ToString("N")[..8]}");
-        Directory.Move(scratch, kept);
-        return kept;
+        var files = Directory.EnumerateFiles(scratch, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToList();
+        var shown = files.Take(ListedFiles).Select(file => $"{Path.GetRelativePath(scratch, file)} ({new FileInfo(file).Length} bytes)");
+        return files.Count == 0 ? "(no files)" : string.Join(", ", shown) + (files.Count > ListedFiles ? $" and {files.Count - ListedFiles} more" : string.Empty);
     }
 }

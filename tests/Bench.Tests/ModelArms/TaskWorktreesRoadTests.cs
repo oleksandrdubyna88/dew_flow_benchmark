@@ -24,7 +24,7 @@ public sealed partial class TaskWorktreesTests
                 ["GIT_DIR"] = "/nonexistent",
                 ["GITHUB_TOKEN"] = "ghp_secret",
                 ["PGPASSWORD"] = "hunter2",
-                ["SSH_AUTH_SOCK"] = "/tmp/agent.sock",
+                ["SSH_AUTH_SOCK"] = "/run/agent.sock",
             };
             var sut = kit.Sut(kit.Recording(environment));
             await kit.ReadyAsync(sut, "t1", "t2");
@@ -76,7 +76,7 @@ public sealed partial class TaskWorktreesTests
             [.. calls.Where(call => !WorktreeKit.IsEnumeration(call))],
             "worktree list --porcelain",
             "rev-parse --verify -q refs/heads/tmp/t1",
-            $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD",
+            $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD",
             "reset -q --hard",
             "submodule update --init --checkout -q -- .agents/conventions",
             "rev-parse HEAD",

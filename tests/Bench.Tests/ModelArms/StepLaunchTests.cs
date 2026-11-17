@@ -128,7 +128,7 @@ public sealed class StepLaunchTests
     [Fact]
     public void The_child_environment_is_ArmChildEnvironment_plus_its_working_directory_passed_as_a_replaced_set()
     {
-        var parent = new Dictionary<string, string> { ["HOME"] = "/home/op", ["BENCH_DB"] = "Host=db", ["TMPDIR"] = "/tmp/claude-1000", ["CLAUDE_CODE_OAUTH_TOKEN"] = "t" };
+        var parent = new Dictionary<string, string> { ["HOME"] = "/home/op", ["BENCH_DB"] = "Host=db", ["TMPDIR"] = "/scratch/claude-1000", ["CLAUDE_CODE_OAUTH_TOKEN"] = "t" };
 
         var ask = StepLaunch.Ask(Request(new StepSession.Fresh(Session), parent));
 

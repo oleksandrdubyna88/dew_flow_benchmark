@@ -8,7 +8,7 @@ namespace Bench.Tests.ModelArms;
 
 /// <summary>The scaffold of M3, the attended pilot of the whole module (plan <c>research/PLAN_model_arms_E6.md</c> §5 E6.S3): everything the hand-run pilot needs, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what it makes is meant to outlive the test — the pilot's last step removes it.
 /// <para>
-/// <b>Names and the manifest.</b> Every path is <c>/tmp/testsToDelete-m3-&lt;what&gt;-&lt;id&gt;</c>, M2's form — the LEGACY form of <c>common.test-leftovers</c> §1 (no owner segment: this repository has not reached the producer stage of that rollout), so no sweep collects it by age and the pilot's own teardown is the only thing that removes it. The scaffold draws an <c>&lt;id&gt;</c>, creates FIRST and exclusively (<see cref="FileMode.CreateNew"/>; one already there draws a new id) the manifest <c>testsToDelete-m3-manifest-&lt;id&gt;.json</c> — the id, the caller's uid and the EXACT path of everything it creates or
+/// <b>Where, names and the manifest.</b> Only under the folder the operator names in <c>BENCH_PILOT_OUT</c> (<see cref="PilotOut"/>: outside every checkout and outside the temp root, which a WSL restart empties). Every path is <c>bench-m3-&lt;what&gt;-&lt;id&gt;</c> there, UNPREFIXED: no sweep collects it, and the pilot's own teardown (its manifest, T1–T5, T4 reading <c>bench-m3-*-&lt;id&gt;</c>) is the only thing that removes it — the ONE documented exemption of row E6-l (the stories' § 11). The scaffold draws an <c>&lt;id&gt;</c>, creates FIRST and exclusively (<see cref="FileMode.CreateNew"/>; one already there draws a new id) the manifest <c>bench-m3-manifest-&lt;id&gt;.json</c> — the id, the caller's uid and the EXACT path of everything it creates or
 /// names, each written before it exists — and only then creates anything. The teardown removes exactly the manifest's paths, one by one, never a glob.
 /// </para>
 /// <para>
@@ -26,23 +26,38 @@ public sealed class M3PilotScaffold
     private const string Fake = "m3-fake";
     private const string FakeGate = "m3-fake-gate";
 
+    /// <summary>What the scaffold names, in order: every path is <c>bench-m3-&lt;name&gt;-&lt;id&gt;</c> under <c>BENCH_PILOT_OUT</c>. The root is only NAMED (<c>init</c> makes it); the target has its own builder; the rest are plain folders. The manifest, the creation loop, the teardown and the kill test all read THIS list.</summary>
+    internal static readonly IReadOnlyList<PilotEntry> Catalogue =
+    [
+        new("target", Created: true),
+        new("root", Created: false),
+        new("home", Created: true, PlainFolder: true),
+        new("old", Created: true, PlainFolder: true),
+        new("bin", Created: true, PlainFolder: true),
+        new("fake", Created: true, PlainFolder: true),
+        new("d28", Created: true, PlainFolder: true),
+        new("deleg", Created: true, PlainFolder: true),
+        new("home14", Created: true, PlainFolder: true),
+        new("keep", Created: true, PlainFolder: true),
+    ];
+
     [Fact(Explicit = true)]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public async Task Writes_the_scratch_target_root_home_and_claude_for_the_pilot()
     {
         Assert.SkipWhen(!OperatingSystem.IsLinux(), "the pilot's scratch is made with POSIX paths, a real git, a shell wrapper and /proc/self/status");
-        var temp = Path.GetTempPath().TrimEnd('/');
-        var (id, manifest) = ClaimManifest(temp);
-        var names = new[] { "target", "root", "home", "old", "bin", "fake", "d28", "deleg", "home14", "keep" };
-        var paths = names.ToDictionary(name => name, name => Path.Combine(temp, $"testsToDelete-m3-{name}-{id}"), StringComparer.Ordinal);
-        var files = Path.Combine(paths["target"], ".git", "m3-pilot");
-        var uid = Uid();
+        await WriteAsync(PilotOut.Required());
+    }
 
-        // Every path is in the manifest BEFORE it exists (the manifest itself is already there, claimed exclusively).
-        var entries = new JsonArray([.. paths.Select(each => (JsonNode?)new JsonObject { ["name"] = each.Key, ["path"] = each.Value }), (JsonNode?)new JsonObject { ["name"] = "manifest", ["path"] = manifest }]);
+    /// <summary>The scaffold's work under <paramref name="output"/>; <paramref name="nextId"/> is the seam for the id. A path of the run that already exists refuses it before anything is made; a failure removes only what this run created.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    internal static async Task WriteAsync(string output, Func<string>? nextId = null)
+    {
+        var run = await PilotManifest.StartAsync(output, "m3", Catalogue, nextId);
+        var paths = run.Paths.ToDictionary(each => each.Entry.Name, each => each.Path, StringComparer.Ordinal);
+        var files = Path.Combine(paths["target"], ".git", "m3-pilot");
         try
         {
-            await File.WriteAllTextAsync(manifest, new JsonObject { ["id"] = id, ["uid"] = uid, ["paths"] = entries }.ToJsonString(M2PilotScaffold.Pretty) + "\n", TestContext.Current.CancellationToken);
             var baseSha = await M2PilotScaffold.MakeTargetAsync(paths["target"]);
             Directory.CreateDirectory(files);
             var settings = await M2PilotScaffold.CoaiSettingsAsync(files);
@@ -51,12 +66,12 @@ public sealed class M3PilotScaffold
             await File.WriteAllTextAsync(Path.Combine(files, "experiment.json"), experiment, TestContext.Current.CancellationToken);
             await File.WriteAllTextAsync(Path.Combine(files, "scenarios.json"), scenarios, TestContext.Current.CancellationToken);
 
-            await M2PilotScaffold.ValidatesOnAProbeRootAsync(ForTheProbe(experiment), scenarios, id, "m3");
+            await M2PilotScaffold.ValidatesOnAProbeRootAsync(ForTheProbe(experiment), scenarios);
             Directory.Exists(paths["root"]).Should().BeFalse("the root is a name only: init creates it, exclusively");
 
-            foreach (var name in new[] { "home", "old", "bin", "fake", "d28", "deleg", "home14", "keep" })
+            foreach (var folder in run.PlainFolders)
             {
-                Directory.CreateDirectory(paths[name]);
+                Directory.CreateDirectory(folder);
             }
 
             foreach (var folder in new[] { "projects", "file-history", "session-env", "shell-snapshots" })
@@ -68,10 +83,10 @@ public sealed class M3PilotScaffold
             WriteFakeScript(paths["fake"]);
             WriteBin(paths["bin"], paths["fake"]);
 
-            Say($"M3 scaffold — manifest: {manifest} (uid {uid}, id {id})");
-            foreach (var name in names)
+            Say($"M3 scaffold — manifest: {run.Manifest} (uid {run.Uid}, id {run.Id})");
+            foreach (var (entry, path) in run.Paths)
             {
-                Say($"M3 scaffold — {name}{(name == "root" ? " (NOT created; init makes it)" : string.Empty)}: {paths[name]}");
+                Say($"M3 scaffold — {entry.Name}{(entry.Created ? string.Empty : " (NOT created; init makes it)")}: {path}");
             }
 
             Say($"M3 scaffold — target.base: {baseSha}");
@@ -82,12 +97,10 @@ public sealed class M3PilotScaffold
         }
         catch (Exception failure)
         {
-            // Nothing is half-made and left: what this run created is removed by the manifest's own names, best effort per path, the manifest last.
+            // Nothing this run made is left: its created paths are removed, the manifest last and only when every one is gone.
             // The ORIGINAL exception is rethrown as it was; what the cleanup could not remove is said on the output and carried in its Data.
-            List<string> left = [.. names.SelectMany(name => ScaffoldCleanup.Remove(paths[name])), .. ScaffoldCleanup.Remove(manifest)];
-            if (left.Count > 0)
+            if (PilotManifest.CleanUp(run) is { } text)
             {
-                var text = "cleanup left (remove by hand): " + string.Join(", ", left);
                 failure.Data["cleanup"] = text;
                 Say("M3 scaffold — " + text);
             }
@@ -95,28 +108,6 @@ public sealed class M3PilotScaffold
             throw;
         }
     }
-
-    /// <summary>The manifest, claimed exclusively: one already there draws a new id.</summary>
-    private static (string Id, string Path) ClaimManifest(string temp)
-    {
-        while (true)
-        {
-            var id = Guid.NewGuid().ToString("N")[..8];
-            var path = Path.Combine(temp, $"testsToDelete-m3-manifest-{id}.json");
-            try
-            {
-                using var created = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                return (id, path);
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-            }
-        }
-    }
-
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private static string Uid() =>
-        File.ReadLines("/proc/self/status").First(line => line.StartsWith("Uid:", StringComparison.Ordinal)).Split('\t', StringSplitOptions.RemoveEmptyEntries)[1];
 
     private static void Say(string text) => M2PilotScaffold.Say(text);
 

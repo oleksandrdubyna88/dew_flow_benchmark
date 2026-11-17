@@ -20,7 +20,7 @@ public sealed class TargetEnvironmentTests
     {
         (string Name, string Value)[] parent =
         [
-            ("HOME", "/home/op"), ("PATH", "/usr/bin:/bin"), ("TMPDIR", "/tmp/op"), ("KEEP_ME", "yes"), ("DOTNET_ROOT", "/dotnet"), ("NUGET_PACKAGES", "/nuget"),
+            ("HOME", "/home/op"), ("PATH", "/usr/bin:/bin"), ("TMPDIR", "/scratch/op"), ("KEEP_ME", "yes"), ("DOTNET_ROOT", "/dotnet"), ("NUGET_PACKAGES", "/nuget"),
             ("BENCH_DB", "Host=db;Password=x"), ("bench_artifact_root", "/a"), ("ConnectionStrings__bench", "Host=db"), ("COAI_PROVIDERS", "all"),
             ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-value"), ("ANTHROPIC_API_KEY", "key-value"), ("GITHUB_TOKEN", "ghp_value"), ("DB_PASSWORD", "pw"), ("NPM_SECRET", "s"),
             ("SSH_AUTH_SOCK", "/run/user/1000/keyring/ssh"), ("GIT_DIR", "/elsewhere/.git"), ("git_work_tree", "/elsewhere"), ("GIT_CONFIG_COUNT", "1"),
@@ -30,7 +30,7 @@ public sealed class TargetEnvironmentTests
         var child = Of(parent);
 
         child.Keys.Should().BeEquivalentTo(["HOME", "PATH", "TMPDIR", "KEEP_ME", "DOTNET_ROOT", "NUGET_PACKAGES"], "only what a build and a suite need survives, and nothing is added");
-        child["TMPDIR"].Should().Be("/tmp/op", "the target's tools keep the parent's TMPDIR: it is not an arm's to choose");
+        child["TMPDIR"].Should().Be("/scratch/op", "the target's tools keep the parent's TMPDIR: it is not an arm's to choose");
         child.Should().NotContainKey("BENCH_DB").And.NotContainKey("GIT_DIR").And.NotContainKey("GITHUB_TOKEN");
     }
 
