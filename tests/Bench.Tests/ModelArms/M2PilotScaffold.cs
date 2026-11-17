@@ -9,11 +9,14 @@ using ModelArmsApp = ModelArms;
 namespace Bench.Tests.ModelArms;
 
 /// <summary>The scaffold of M2, the attended pilot (plan <c>research/PLAN_model_arms_E3.md</c> §5 E3.S5, M2): the scratch target and the filled experiment the OWNER runs the verbs over by hand, written by this test so the pilot's inputs are under git and not in a shell history. <b>Explicit: the suite never runs it</b> (<c>Explicit = true</c>), because what
-/// it makes is meant to outlive the test — the owner removes it after the pilot (<c>rm -rf</c> of the two printed <c>testsToDelete-m2-…</c> folders).
+/// it makes is meant to outlive the test — the pilot's own teardown removes it after the pilot (the manifest's paths, one by one, the manifest last).
 /// <para>
-/// It writes, under the temp folder and outside every checkout: <c>testsToDelete-m2-target-&lt;id&gt;</c> — a git repository on a plan branch holding a tiny .NET solution with an xunit v3 test project (a real <c>dotnet build</c> and a real CTRF), an <c>src_vs_code</c> folder whose <c>npm test</c> is <c>node --test</c>, the target's own lowering wrapper <c>tools/low-priority.mjs</c> inside the rules
+/// <b>Where.</b> Only under the folder the operator names in <c>BENCH_PILOT_OUT</c> (<see cref="PilotOut"/>: outside every checkout and outside the temp root, which a WSL restart empties), UNPREFIXED, named by a manifest written first, collected by no sweep, and removed only by the pilot's own teardown (the manifest's paths, the manifest last): the ONE documented exemption of row E6-l (the stories' § 11). The scaffold draws an <c>&lt;id&gt;</c>, claims <c>bench-m2-manifest-&lt;id&gt;.json</c> there FIRST and exclusively (<see cref="FileMode.CreateNew"/>; a taken name draws a new id) and writes into it the id, the caller's uid and the EXACT paths of the two names below BEFORE either exists.
+/// </para>
+/// <para>
+/// It writes <c>bench-m2-target-&lt;id&gt;</c> — a git repository on a plan branch holding a tiny .NET solution with an xunit v3 test project (a real <c>dotnet build</c> and a real CTRF), an <c>src_vs_code</c> folder whose <c>npm test</c> is <c>node --test</c>, the target's own lowering wrapper <c>tools/low-priority.mjs</c> inside the rules
 /// repository it holds as the submodule <c>.agents/conventions</c>, all committed (the plan branch's head is <c>target.base</c>); and, beside the target's <c>.git</c>, the files to copy into the root once <c>init</c> has made it: <c>experiment.json</c> (the worked example with this target's paths, one run holding <c>C1</c>, a <c>coai</c> block naming a stand-in binary and a key-free <c>{}</c> settings file, no isolation, <c>awake: none</c>) and
-/// <c>scenarios.json</c> (two <c>cs</c> scenarios the scratch suite names and one <c>node</c>). <c>testsToDelete-m2-root-&lt;id&gt;</c> is a NAME only: the root is NOT created — <c>init</c> creates it exclusively. Both files are read through the module's own readers before they are printed, so what the owner copies is known to parse.
+/// <c>scenarios.json</c> (two <c>cs</c> scenarios the scratch suite names and one <c>node</c>). <c>bench-m2-root-&lt;id&gt;</c> is a NAME only: the root is NOT created — <c>init</c> creates it exclusively. Both files are read through the module's own readers before they are printed, so what the owner copies is known to parse.
 /// </para>
 /// <para>
 /// Before it prints anything the scaffold runs the host checks it can: <c>validate</c> over a throwaway root (<see cref="ValidatesOnAProbeRootAsync"/>). What this does NOT prove: that the scratch solution builds on the owner's host or that the suite and the node runner print what the readers expect — that is the pilot's own first observation (E3 §5 M2); nor does it run any verb.
@@ -35,11 +38,15 @@ public sealed class M2PilotScaffold
     public async Task Writes_the_scratch_target_and_root_for_the_pilot()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the pilot's scratch target is made with POSIX paths and a real git");
-        var id = Guid.NewGuid().ToString("N")[..8];
-        var target = Path.Combine(Path.GetTempPath(), $"testsToDelete-m2-target-{id}");
-        var root = Path.Combine(Path.GetTempPath(), $"testsToDelete-m2-root-{id}");
+        var output = PilotOut.Required();
+        var (id, manifest) = ClaimManifest(output, "m2");
+        var target = Path.Combine(output, $"bench-m2-target-{id}");
+        var root = Path.Combine(output, $"bench-m2-root-{id}");
+        var uid = ModelArmsApp.Adapters.RootFacts.CurrentUid().ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
+            // Every path is in the manifest BEFORE it exists (the manifest itself is already there, claimed exclusively).
+            await WriteManifestAsync(manifest, id, uid, [("target", target), ("root", root)]);
             var baseSha = await MakeTargetAsync(target);
             var files = Path.Combine(target, ".git", "m2-pilot");
             Directory.CreateDirectory(files);
@@ -49,8 +56,9 @@ public sealed class M2PilotScaffold
             await File.WriteAllTextAsync(Path.Combine(files, "experiment.json"), experiment, TestContext.Current.CancellationToken);
             await File.WriteAllTextAsync(Path.Combine(files, "scenarios.json"), scenarios, TestContext.Current.CancellationToken);
 
-            await ValidatesOnAProbeRootAsync(experiment, scenarios, id);
+            await ValidatesOnAProbeRootAsync(experiment, scenarios);
             Directory.Exists(root).Should().BeFalse("the root is a name only: init creates it, exclusively");
+            Say($"M2 scaffold — manifest: {manifest} (uid {uid}, id {id})");
             Say($"M2 scaffold — the target: {target}");
             Say($"M2 scaffold — the root (NOT created; init makes it): {root}");
             Say($"M2 scaffold — target.base: {baseSha}");
@@ -59,69 +67,89 @@ public sealed class M2PilotScaffold
             Say("M2 scaffold — experiment.json:\n" + experiment);
             Say("M2 scaffold — scenarios.json:\n" + scenarios);
         }
-        catch
+        catch (Exception failure)
         {
-            if (Directory.Exists(target))
+            // Nothing is half-made and left: what this run created is removed by the manifest's own paths, best effort per path, the manifest last.
+            // The ORIGINAL exception is rethrown as it was; what the cleanup could not remove is said on the output and carried in its Data.
+            List<string> left = [.. ScaffoldCleanup.Remove(target), .. ScaffoldCleanup.Remove(root), .. ScaffoldCleanup.Remove(manifest)];
+            if (left.Count > 0)
             {
-                Directory.Delete(target, recursive: true);
+                var text = "cleanup left (remove by hand): " + string.Join(", ", left);
+                failure.Data["cleanup"] = text;
+                Say("M2 scaffold — " + text);
             }
 
             throw;
         }
     }
 
-    /// <summary>The host checks the scaffold CAN run, run: <c>validate</c> through the gate over a throwaway root (<c>testsToDelete-m2-probe-&lt;id&gt;</c>, removed in <c>finally</c>) holding the two files, with a PATH of its own — an empty <c>claude</c> and links to the host's <c>git</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c>. It starts none of the target's tools and no claude or coai
+    /// <summary>The manifest of a scaffold, claimed exclusively in <paramref name="output"/> as <c>bench-&lt;pilot&gt;-manifest-&lt;id&gt;.json</c>: a name already there draws a new id. Returns the id and the path.</summary>
+    internal static (string Id, string Path) ClaimManifest(string output, string pilot)
+    {
+        while (true)
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            var path = System.IO.Path.Combine(output, $"bench-{pilot}-manifest-{id}.json");
+            try
+            {
+                using var created = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                return (id, path);
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+            }
+        }
+    }
+
+    /// <summary>The manifest's text: the id, the caller's uid and the EXACT path of everything the scaffold creates or names, the manifest itself last. Written before any of them exists, so a scaffold killed at any moment still names every path its teardown must remove.</summary>
+    internal static async Task WriteManifestAsync(string manifest, string id, string uid, IEnumerable<(string Name, string Path)> paths)
+    {
+        var entries = new JsonArray([.. paths.Select(each => (JsonNode?)new JsonObject { ["name"] = each.Name, ["path"] = each.Path }), (JsonNode?)new JsonObject { ["name"] = "manifest", ["path"] = manifest }]);
+        await File.WriteAllTextAsync(manifest, new JsonObject { ["id"] = id, ["uid"] = uid, ["paths"] = entries }.ToJsonString(Pretty) + "\n", TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>The host checks the scaffold CAN run, run: <c>validate</c> through the gate over a throwaway root (a <see cref="TempFolder"/>, removed with its claim by its own disposal) holding the two files, with a PATH of its own — an empty <c>claude</c> and links to the host's <c>git</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c>. It starts none of the target's tools and no claude or coai
     /// (the executables it resolves are empty files or the host's own, asked only the questions validate asks of git). A file that parses but that <c>validate</c> refuses — a gate step with no coai, a binary under the target, a settings file that is not there — is red HERE, not at the pilot's step 2.</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    internal static async Task ValidatesOnAProbeRootAsync(string experiment, string scenarios, string id, string pilot = "m2")
+    internal static async Task ValidatesOnAProbeRootAsync(string experiment, string scenarios)
     {
-        var probe = Path.Combine(Path.GetTempPath(), $"testsToDelete-{pilot}-probe-{id}");
-        try
+        using var probe = new TempFolder();
+        var root = probe.Folder("root");
+        var bin = probe.Folder("bin");
+        var home = probe.Folder("home");
+        File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        foreach (var (name, text) in new[] { ("experiment.json", experiment), ("scenarios.json", scenarios) })
         {
-            var root = Directory.CreateDirectory(Path.Combine(probe, "root")).FullName;
-            var bin = Directory.CreateDirectory(Path.Combine(probe, "bin")).FullName;
-            var home = Directory.CreateDirectory(Path.Combine(probe, "home")).FullName;
-            File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            foreach (var (name, text) in new[] { ("experiment.json", experiment), ("scenarios.json", scenarios) })
-            {
-                var path = Path.Combine(root, name);
-                await File.WriteAllTextAsync(path, text, TestContext.Current.CancellationToken);
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
-
-            await File.WriteAllTextAsync(Path.Combine(bin, "claude"), string.Empty, TestContext.Current.CancellationToken);
-            File.SetUnixFileMode(Path.Combine(bin, "claude"), (UnixFileMode)Convert.ToInt32("755", 8));
-            foreach (var tool in new[] { "git", "dotnet", "node", "npm" })
-            {
-                File.CreateSymbolicLink(Path.Combine(bin, tool), HostTool(tool));
-            }
-
-            var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
-            {
-                environment[(string)entry.Key] = (string?)entry.Value ?? string.Empty;
-            }
-
-            environment.Remove("MODEL_ARMS_EXPERIMENT");
-            environment["HOME"] = home;
-            environment["PATH"] = bin;
-            var line = ModelArmsCommandLine.Split(["validate", "--experiment", root]).Ok();
-            var output = new StringWriter();
-            var error = new StringWriter();
-            var input = new ModelArmsApp.VerbInput(
-                line.Verb, line.Positionals, Bench.Cli.CommandLine.Parse(line.Rest), output, error, environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
-
-            var code = await ModelArmsApp.ExperimentGate.RunAsync(input, ModelArmsApp.Verbs.ValidateVerb.RunAsync, ModelArmsApp.GateSeams.Real);
-
-            code.Should().Be(0, $"the files the owner copies must pass validate on this host (the pilot's step 2): {error}{output}");
+            var path = Path.Combine(root, name);
+            await File.WriteAllTextAsync(path, text, TestContext.Current.CancellationToken);
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
-        finally
+
+        await File.WriteAllTextAsync(Path.Combine(bin, "claude"), string.Empty, TestContext.Current.CancellationToken);
+        File.SetUnixFileMode(Path.Combine(bin, "claude"), (UnixFileMode)Convert.ToInt32("755", 8));
+        foreach (var tool in new[] { "git", "dotnet", "node", "npm" })
         {
-            if (Directory.Exists(probe))
-            {
-                Directory.Delete(probe, recursive: true);
-            }
+            File.CreateSymbolicLink(Path.Combine(bin, tool), HostTool(tool));
         }
+
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        {
+            environment[(string)entry.Key] = (string?)entry.Value ?? string.Empty;
+        }
+
+        environment.Remove("MODEL_ARMS_EXPERIMENT");
+        environment["HOME"] = home;
+        environment["PATH"] = bin;
+        var line = ModelArmsCommandLine.Split(["validate", "--experiment", root]).Ok();
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var input = new ModelArmsApp.VerbInput(
+            line.Verb, line.Positionals, Bench.Cli.CommandLine.Parse(line.Rest), output, error, environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
+
+        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, ModelArmsApp.Verbs.ValidateVerb.RunAsync, ModelArmsApp.GateSeams.Real);
+
+        code.Should().Be(0, $"the files the owner copies must pass validate on this host (the pilot's step 2): {error}{output}");
     }
 
     /// <summary>The host's own <paramref name="name"/> by its real path, found on the test process's PATH the way the module finds an executable.</summary>
