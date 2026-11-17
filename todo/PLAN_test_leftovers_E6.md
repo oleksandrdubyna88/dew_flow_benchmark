@@ -815,10 +815,10 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
       *Epoch 11:* each story's brief lists its exemptions (file, line, class, reason) before its plan gate, and the PR that
       adds them copies the list here, under this line; `owner-blind` and `ryuk-off` take none (§ 6's first paragraph).
       *S4's list (2026-11-17, class `raw-worktree`, each a comment on the line above its line, reason after `testsToDelete-exempt: raw-worktree — `):*
-      `tests/Bench.Tests/ModelArms/ArmGitTaskQuestionsTests.cs`, the eight real `worktree add` lines `:228`, `:234`, `:242`, `:304`,
-      `:305`, `:307`, `:421`, `:438` (head lines, each marker one line above): *inside the owned folder _temp (the ArmGitTestBase
-      TempFolder) that holds the clone*; `TaskWorktreesPlantTests.cs:47` (one marker clears both `"worktree", "add"` of that ternary
-      line): *inside the owned folder kit.Temp (the WorktreeKit TempFolder) that holds the clone*; `TaskWorktreesReviewTests.cs:27`:
+      `tests/Bench.Tests/ModelArms/ArmGitTaskQuestionsTests.cs`, the eight real `worktree add` lines `:229`, `:236`, `:245`, `:308`,
+      `:310`, `:313`, `:428`, `:446` (lines of the head; each marker is the line above): *inside the owned folder _temp (the ArmGitTestBase
+      TempFolder) that holds the clone*; `TaskWorktreesPlantTests.cs:48` (one marker clears both `"worktree", "add"` of that ternary
+      line): *inside the owned folder kit.Temp (the WorktreeKit TempFolder) that holds this worktree; its clone lies in the kit root's own owned folder*; `TaskWorktreesReviewTests.cs:28`:
       *inside the owned folder of kit.Root (the ExperimentRoot TempFolder) that holds the clone*. No other exemption: none for
       `raw-temp`, `legacy-name` or `owner-blind`, and none in the scaffolds. The ten assertion strings of `TaskWorktrees*Tests.cs`
       read the one `WorktreeAdd` field (`"work~tree add"` with the tilde removed at run time) instead of a marker.

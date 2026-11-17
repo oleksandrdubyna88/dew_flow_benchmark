@@ -340,7 +340,7 @@ from the worktree's root (M2's log ran it so, `research/module_model_arms.md:145
 epic E6 there), so no owner-form helper exists here yet, and a legacy name is listed by a sweep, never collected by age — M3's own
 teardown (step 15) is the only thing that removes it.
 
-*Note 2026-11-17 (test-leftovers E6.S4):* M3's paths are no longer under `/tmp`: they are `<out>/bench-m3-<what>-<id>`, UNPREFIXED, under the folder the operator names in `BENCH_PILOT_OUT`. The output must outlive the run, so no sweep may collect it: the one documented exemption of `common.test-leftovers` row E6-l. M3's own teardown (step 15) is still the only thing that removes it.
+*Note 2026-11-17 (test-leftovers E6.S4):* M3's paths are no longer under `/tmp`: they are `<out>/bench-m3-<what>-<id>`, UNPREFIXED, under the folder the operator names in `BENCH_PILOT_OUT`. The output must outlive the run, so no sweep may collect it: the one documented exemption of row E6-l of the E6 stories (`todo/PLAN_test_leftovers_E6.md` § 11; item 4.3 of the rollout). M3's own teardown (step 15) is still the only thing that removes it.
 
 *The scaffold* (`M3PilotScaffold`, M2's shape, `M2PilotScaffold.cs:33-75`) draws a fresh `<id>`, creates **first, exclusively**
 (`FileMode.CreateNew`; one already there → a new `<id>`) the manifest `testsToDelete-m3-manifest-<id>.json` — the `<id>`, the caller's
@@ -752,7 +752,7 @@ Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its
     scratch `<s>` is PRESERVED: renamed (same file system) out of the fixture's root to a sibling `testsToDelete-modelarms-reader-<name>-<id>`
     that the fixture's dispose does not own, its path in the failure message — its own outputs kept (links into the root dangle once the
     root is gone); a legacy name, removed by hand.
-    *Note 2026-11-17 (test-leftovers E6.S4):* a reader that times out keeps its scratch inside the run's owned folder as `kept-reader-<name>-<id>` (a plain name, removed with the folder; no sibling in the temp root, no legacy name), the failure message the record.
+    *Note 2026-11-17 (test-leftovers E6.S4):* a reader that times out leaves its scratch inside the run's owned folder, which removes it; no sibling in the temp root, no legacy name. The failure message is the record: it quotes what the scratch held (relative names and sizes) and the reader's stdout and stderr so far.
 13. **The fixtures (three, each replayed or read).** `result-success.jsonl` has no `total_cost_usd` and no `modelUsage` (E2 §8 item 62:
     every cost `None`, the arm total NaN), so the costs come from two result lines with `total_cost_usd` and `modelUsage`
     (`claude-sonnet-5-5`: `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, `costUSD` — the names
@@ -830,7 +830,7 @@ Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its
 
 *Note 2026-11-17 (test-leftovers E6.S4):* row `ConsumerArms`' root: a killed test run's `TempFolder` is now the owned folder `testsToDelete-<owner>-bench-modelarms-<id>` with its claim beside it, so the next run's start sweep collects it (it no longer leaves a folder nobody collects).
 
-*Note 2026-11-17 (test-leftovers E6.S4):* row "the readers' scratch folders": a reader that times out has its scratch KEPT inside the run's owned folder as `kept-reader-<name>-<id>` (a plain name), removed with that folder; the failure message, with the reader's stderr so far, is the record. Nothing is left in the temp root.
+*Note 2026-11-17 (test-leftovers E6.S4):* row "the readers' scratch folders": a reader that times out leaves its scratch inside the run's owned folder, removed with that folder; the failure message quotes what it held and the reader's stdout and stderr so far, and nothing is left in the temp root.
 
 *Note 2026-11-17 (test-leftovers E6.S4):* row M3's paths: they are `bench-m3-<what>-<id>` under the folder the operator names in `BENCH_PILOT_OUT` (existing, outside every checkout and outside the temp root), unprefixed, named by a manifest written first; step 15's teardown (T5) is still the only thing that removes them, and no sweep collects them.
 
