@@ -74,7 +74,9 @@ shortening, same question, same document name, a new review. This round read the
    different byte form, so the reply is a conflict by R9's byte rule.
 
 **Team lead's decision, kept.** Some cases use fixed, implausible ids as unknown accounts inside request bodies. No realistic id
-generator (random identifiers, a counter from zero or one) issues them. This is a decision of the team lead, not an exclusion
+generator issues them: a counter from zero or one cannot reach them within the stated bounds, and a random generator
+hits one with a chance of about 2^-122 per id. The bench pull request's code round questioned this; it was declined for that
+reason. This is a decision of the team lead, not an exclusion
 from the hidden suite.
 
 **Consultants** (coai `ask_consultants` `d8443410`; 2 of 2 answered). Both: agree with every decision.
