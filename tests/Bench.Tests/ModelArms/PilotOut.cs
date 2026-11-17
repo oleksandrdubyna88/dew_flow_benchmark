@@ -19,42 +19,42 @@ internal static class PilotOut
 
     private const string Advice = "name an existing folder outside every git checkout and outside the temp root";
 
-    /// <summary>The folder the scaffold writes under, or why it may not: <paramref name="value"/> is the variable's value (null when unset), <paramref name="tempRoot"/> the temp root it must not be at or under, <paramref name="gitTopOf"/> the nearest checkout above a path (empty for none).</summary>
-    internal static Outcome<string> Resolve(string? value, string tempRoot, Func<string, string> gitTopOf)
-    {
-        if (value is null)
-        {
-            return Refused($"{Variable} is not set — {Advice}");
-        }
-
-        if (value.Length == 0)
-        {
-            return Refused($"{Variable} is empty — {Advice}");
-        }
-
-        if (!Path.IsPathFullyQualified(value))
-        {
-            return Refused($"{Variable} is '{value}', not an absolute path — {Advice}");
-        }
-
-        if (!Directory.Exists(value))
-        {
-            return Refused($"{Variable} is '{value}', which is not an existing folder — make it first: {Advice}");
-        }
-
-        var folder = Path.GetFullPath(value);
-        return RealOf(folder).Match(
-            real => RealOf(tempRoot).Match(
-                root => Under(real, root) ? Refused($"{Variable} is '{value}', at or under the temp root {root}, which a restart empties and a sweep may collect — {Advice}") : NotInCheckout(value, folder, gitTopOf),
-                reason => Refused($"{Variable}: the temp root {tempRoot} cannot be resolved ({reason})")),
-            reason => Refused($"{Variable} is '{value}', which cannot be resolved ({reason})"));
-    }
+    /// <summary>The folder the scaffold writes under, or why it may not: <paramref name="value"/> is the variable's value (null when unset), <paramref name="tempRoot"/> the temp root it must not be at or under, <paramref name="gitTopOf"/> the nearest checkout above a path (empty for none). Each step is its own method.</summary>
+    internal static Outcome<string> Resolve(string? value, string tempRoot, Func<string, string> gitTopOf) =>
+        (Unset(value) ?? NotAFolder(value!)) is { } problem ? Refused(problem) : Placed(value!, tempRoot, gitTopOf);
 
     /// <summary>The folder from the variable, or <see cref="InvalidOperationException"/> carrying <see cref="Resolve"/>'s reason: what a scaffold calls before anything is made. Reads the variable, the effective temp root (<see cref="TempDir.Root"/>, a path only read for the comparison) and <see cref="RootFacts.GitTopOf"/>.</summary>
     internal static string Required() =>
         Resolve(System.Environment.GetEnvironmentVariable(Variable), TempDir.Root, RootFacts.GitTopOf).Match(
             folder => folder,
             reason => throw new InvalidOperationException(reason));
+
+    private static string? Unset(string? value) =>
+        value switch
+        {
+            null => $"{Variable} is not set — {Advice}",
+            "" => $"{Variable} is empty — {Advice}",
+            _ => null,
+        };
+
+    private static string? NotAFolder(string value) =>
+        !Path.IsPathFullyQualified(value) ? $"{Variable} is '{value}', not an absolute path — {Advice}"
+        : !Directory.Exists(value) ? $"{Variable} is '{value}', which is not an existing folder — make it first: {Advice}"
+        : null;
+
+    /// <summary>The folder placed where it really is, then judged against the temp root and the checkouts.</summary>
+    private static Outcome<string> Placed(string value, string tempRoot, Func<string, string> gitTopOf)
+    {
+        var folder = Path.GetFullPath(value);
+        return RealOf(folder).Match(
+            real => Below(value, folder, real, tempRoot, gitTopOf),
+            reason => Refused($"{Variable} is '{value}', which cannot be resolved ({reason})"));
+    }
+
+    private static Outcome<string> Below(string value, string folder, string real, string tempRoot, Func<string, string> gitTopOf) =>
+        RealOf(tempRoot).Match(
+            root => Under(real, root) ? Refused($"{Variable} is '{value}', at or under the temp root {root}, which a restart empties and a sweep may collect — {Advice}") : NotInCheckout(value, folder, gitTopOf),
+            reason => Refused($"{Variable}: the temp root {tempRoot} cannot be resolved ({reason})"));
 
     private static Outcome<string> NotInCheckout(string value, string folder, Func<string, string> gitTopOf) =>
         gitTopOf(folder) is { Length: > 0 } checkout

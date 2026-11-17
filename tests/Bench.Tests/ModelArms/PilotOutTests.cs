@@ -48,12 +48,13 @@ public sealed class PilotOutTests
         using var root = new TempFolder();
         var under = root.Folder("below", "again");
         using var elsewhere = new TempFolder();
+        elsewhere.RequireLinks();
         var link = elsewhere.Combine("link-to-the-root");
         Directory.CreateSymbolicLink(link, root.Folder("target"));
 
         PilotOut.Resolve(root.Path, root.Path, NoCheckout).Reason().Should().Contain(Variable).And.Contain("temp");
         PilotOut.Resolve(under, root.Path, NoCheckout).Reason().Should().Contain(Variable).And.Contain("temp");
-        PilotOut.Resolve(link, root.Path, NoCheckout).Reason().Should().Contain(Variable, "the link is judged where it points, not by its spelling");
+        PilotOut.Resolve(link, root.Path, NoCheckout).Reason().Should().Contain(Variable).And.Contain("temp root", "the link is judged where it points, not by its spelling");
     }
 
     [Fact]
