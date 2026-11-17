@@ -1,5 +1,8 @@
 # E6.S3 brief — the fixture's container, the container pass and the marker (rows E6-d, E6-f1, E6-f2; D9)
 
+> Status: **IMPLEMENTED, 2026-11-17 (built on `feat/e6-s3-fixture-e10`, PR #219; merge facts recorded after the merge).** The third hosted CI run on `336e1284` (`build-test`) passed: 5846 tests, 0 failed; on a real daemon the container pass ran, Ryuk removed a SIGKILLed child's container in 12 s and its volumes at once, the disposal proof and the reuse counterexample held, and entry 10.1's configuration pin stayed False. The second run (`2a218dc9`) had failed only in cleanup: `docker volume rm` says "no such volume" in lower case, now matched case-insensitively.
+>
+> Was: Status: **built on `feat/e6-s3-fixture-e10` 2026-11-16, fixes of 2026-11-17 (progress line: seven commits of § 12 (the six of the series and a
 > Status: **built on `feat/e6-s3-fixture-e10` 2026-11-16, fixes of 2026-11-17 (progress line: seven commits of § 12 (the six of the series and a
 > `dotnet format` indent fix) were pushed as draft PR #219; the first hosted CI run, `43977483603` (`build-test`), failed 5 of 5838, all in
 > `FixtureContainerTests`, while the pass on a real daemon, the reaper children and the gate child passed and Ryuk removed the killed child's
