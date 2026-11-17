@@ -2,8 +2,8 @@
 
 The record of the gate of `todo/tasks/04-rule-api.md`, for the bench. The spec is on the branch `spec/04-rule-api` of the task
 repository at `dc21a4c` (step A ended at `01999d5`; the gate commit is `79008ff`, narrowed by `dc21a4c`), sha256
-`42d0f6c9d449e7110eb59d2f3a322be30e7330a8ef1a61fda5fec40e95360956`. It is not on `main` yet; the spec's pull request and the
-`explore.json` pin are still to come. Append only.
+`42d0f6c9d449e7110eb59d2f3a322be30e7330a8ef1a61fda5fec40e95360956`. It merged as the task repository's PR #7 (`375568a`, the squash of `dc21a4c`, the same text);
+`explore.json` pins `375568a`. Append only.
 D25's leak rule: no case text, case id or trap name; the verdict, the reviewer count and the findings in words that name no case.
 
 **Checker line** (`node spikes/lang-bench/conformance.mjs --needles`, FORMAT at `c204726`, on `dc21a4c`, exit 0):
@@ -14,7 +14,7 @@ D25's leak rule: no case text, case id or trap name; the verdict, the reviewer c
 gate: both references clean in 10 of 10 passes, all 36 witnesses caught, the slowest load scenario 744 ms (the F-LOAD bound is
 570 s; the load duration 540 s), the chunk-parse time 0.0 ms. Fresh-clone checks on 2026-11-16 (conformance, both leak checks, the line scan, the record
 and pin checks) all exited 0. Some held-out cases changed after this gate's review (below), so the package runs again on the
-pinned text and the changed cases before it is registered. TODO: that run.
+pinned text and the changed cases before it is registered. That run is recorded here when it is made.
 
 ## The bias question (D25), 2026-11-17
 
@@ -76,6 +76,9 @@ spec's text did not cover what the cases test.
 any JSON value" also made a valid array a failure. Accepted and fixed in `dc21a4c`. **Code round over `dc21a4c`**: `proceed`,
 0 findings, 6 of 6 reviewers.
 
-**Checks on `dc21a4c`.** TODO: not run yet. The spec's pull request, the fresh single-branch clone checks (conformance, leak
-check over both repositories, the private line scan of the branch history, the record check, the pin check) and the package run
-on the pinned text come after this record.
+**Checks on `dc21a4c`** (2026-11-17; a fresh single-branch clone with `origin/main` at `de42de9`; the bench at `b348bb33` with
+these records): the conformance check exit 0 (all eleven checks, with the private needles); `explore.mjs leakcheck
+--task-repo <clone>` exit 0 over both repositories (the bench's 4614 files and its history since `de2d964c`, the task
+repository's 26 files and its branch history); the private line scan of the branch history exit 0 (687 added lines, 0
+other hits); `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` and `pin-check.mjs` exit 0;
+the push check of the task repository passed. The spec's pull request is the task repository's #7.

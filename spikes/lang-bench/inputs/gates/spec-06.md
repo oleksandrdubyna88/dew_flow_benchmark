@@ -2,7 +2,8 @@
 
 The record of the gate of `todo/tasks/06-blog-api.md`, for the bench. The spec is on the branch `spec/06-blog-api` of the task
 repository at `2527399` (step A ended at `d17d92c`), sha256 `4ce55d325e85f65706190f317735d0c711567763f9ec553c08ec99053fe6b0bd`.
-It is not on `main` yet; the spec's pull request and the `explore.json` pin are still to come. Append only.
+It merged as the task repository's PR #8 (`7f82632`, the squash of `2527399`, the same text);
+`explore.json` pins `7f82632`. Append only.
 D25's leak rule: no case text, case id or trap name; the verdict, the reviewer count and the findings in words that name no case.
 
 **Checker line** (`node spikes/lang-bench/conformance.mjs --needles`, FORMAT at `c204726`, on `2527399`, exit 0):
@@ -13,7 +14,7 @@ D25's leak rule: no case text, case id or trap name; the verdict, the reviewer c
 gate: both references clean in 10 of 10 passes, all 49 witnesses caught, the slowest load scenario 941 ms (the F-LOAD bound is
 570 s; the load duration 540 s), the chunk-parse time 0.0 ms. Fresh-clone checks on 2026-11-16 (conformance, both leak checks, the line scan, the record
 and pin checks) all exited 0. Some held-out cases changed after this gate's review (below), so the package runs again on the
-pinned text and the changed cases before it is registered. TODO: that run.
+pinned text and the changed cases before it is registered. That run is recorded here when it is made.
 
 ## The bias question (D25), 2026-11-17
 
@@ -64,6 +65,9 @@ and limits; the findings are cases outside the stated input bounds and one wrong
 
 **Code round over `2527399`** (coai `review_code`, 2026-11-17): `proceed`, 0 findings, 6 of 6 reviewers.
 
-**Checks on `2527399`.** TODO: not run yet. The spec's pull request, the fresh single-branch clone checks (conformance, leak
-check over both repositories, the private line scan of the branch history, the record check, the pin check) and the package run
-on the pinned text come after this record.
+**Checks on `2527399`** (2026-11-17; a fresh single-branch clone with `origin/main` at `de42de9`; the bench at `b348bb33` with
+these records): the conformance check exit 0 (all eleven checks, with the private needles); `explore.mjs leakcheck
+--task-repo <clone>` exit 0 over both repositories (the bench's 4614 files and its history since `de2d964c`, the task
+repository's 26 files and its branch history); the private line scan of the branch history exit 0 (991 added lines, 0
+other hits); `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` and `pin-check.mjs` exit 0;
+the push check of the task repository passed. The spec's pull request is the task repository's #8.
