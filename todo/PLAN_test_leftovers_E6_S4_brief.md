@@ -1,6 +1,8 @@
 # E6.S4 brief — `ModelArms/`: the owned folder, no legacy name, the pilots' output outside the family (rows E6-i, E6-l, E6-b by hand; claim C8)
 
-> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 11 (opened by the owner, `Narrowed: yes`), with the item 8.1 observations (§ 11); its § 15 finding counted by the owner as the parent's entry 11.1 (four doc lines added to S4's *Files*, § 0.1), so the next accepted change is the parent's eleventh full stop. Ready for its plan gate.** The brief of story S4 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S4 `:561-610`; rows E6-b `:94`, E6-i `:107`, E6-l `:110`; claim C8 `:166`; § 11 `:806-834`). Its scope is S4's *Files* line, the parent's § *Epoch 11* item 4.2, as named paths (§ 0.1). The questions of the first version (Q1–Q8) are answered by item 4.2's table (§ 14).
+> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 11 (opened by the owner, `Narrowed: yes`), with the item 8.1 observations (§ 11); its § 15 finding counted by the owner as the parent's entry 11.1 (four doc lines added to S4's *Files*, § 0.1), so the next accepted change is the parent's eleventh full stop. Plan gate passed 2026-11-17 (coai session `c26a7122`, `proceed`): G1 and G2 accepted and folded in (K1, K9), G3 and G4 rejected with reasons (§ 16). Ready for the coder.** The brief of story S4 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S4 `:561-610`; rows E6-b `:94`, E6-i `:107`, E6-l `:110`; claim C8 `:166`; § 11 `:806-834`). Its scope is S4's *Files* line, the parent's § *Epoch 11* item 4.2, as named paths (§ 0.1). The questions of the first version (Q1–Q8) are answered by item 4.2's table (§ 14).
+>
+> Was (before the plan gate, `c7ffc92a`): … Ready for its plan gate.
 >
 > Was (the rework `36b505fe`, `43d6cacd`): … with the item 8.1 observations (§ 11) — ONE open STOP finding for the coordinator before the plan gate (§ 15: doc lines that describe what S4 changes and lie outside item 4.2's *Files*; it may be entry 11.1).
 >
@@ -110,15 +112,21 @@ the file.**
 ## 3. Decisions of this brief (each with its reason)
 
 - **K1 — `TempFolder` wraps `OwnedDir.Create("modelarms")`.** Field `private readonly OwnedDir _owned = OwnedDir.Create("modelarms");`
-  (`OwnedDir.cs:35`, public; `using Bench.Tests.Leftovers;`), `Path => _owned.Path`. `Dispose`: `try { OpenForDeleting(); } finally
-  { _owned.Dispose(); }`; `Open` walks `new DirectoryInfo(Path)`. Why `OwnedDir` and not `TempDir.For`: `TempDir` hides the
+  (`OwnedDir.cs:35`, public; `using Bench.Tests.Leftovers;`), `Path => _owned.Path`. **`Dispose` never throws, the mode walk included** (the plan gate's G1, § 16):
+  `try { _open(new DirectoryInfo(Path)); } catch (Exception ex) { _warn($"modelarms: could not reopen {Path} before its removal ({ex.GetType().Name}: {ex.Message}) — the removal is still tried; what stays keeps its claim for the end-of-run audit"); } finally { _owned.Dispose(); }`.
+  The two seams are constructor parameters, for the G1 test only: `public TempFolder() : this(null, null) { }` and
+  `internal TempFolder(Action<DirectoryInfo>? open, Action<string>? warn)`, which sets `_open = open ?? Open` (today's walk, `:77-85`),
+  `_warn = warn ?? Owned.DefaultWarn` (`Owned.cs:153`) and then `_owned = OwnedDir.Create("modelarms", warn: _warn)`, so the owned
+  removal's own warnings go to the same place. The 112 construction sites use the parameterless constructor and do not change. Why `OwnedDir` and not `TempDir.For`: `TempDir` hides the
   `OwnedDir` it holds, and the mode walk must run first; both make the same folder. Why the walk stays: the owned removal
   (`Removal.Quietly`, `Removal.cs:18-39`) clears read-only ATTRIBUTES on Windows only and never restores POSIX modes, so a folder a test
   closed (`TempFolderTests.cs:29`, mode 0500) would be left claimed with a warning. The folder's mode is unchanged: `mkdir(…, 0700)`
   (`Native.cs:129`), as `CreateTempSubdirectory` makes it **[R]**. `"modelarms"` is 9 characters; the room under the longest owner is
   24 (`Owned.Room`, `Owned.cs:82`). **The one behaviour change:** a removal that fails no longer throws out of `Dispose`
   (`OwnedDir.Dispose` never throws, rule §2): it warns once, keeps the folder claimed, and the end-of-run audit
-  (`LeftoversAudit`, run from `LeftoversSweepFixture.cs:63-75`) fails the run naming it (Q6, decided).
+  (`LeftoversAudit`, run from `LeftoversSweepFixture.cs:63-75`) fails the run naming it (Q6, decided). With G1 the same holds when the WALK fails: one warning naming the path, the removal still
+  tried, and whatever it cannot remove (a folder still closed to its owner) stays claimed for the audit **[R]** (`Removal.Quietly`
+  leaves the claim when the folder is not gone, `Removal.cs:29-35`; observed by scenario (1b)).
 - **K2 — Every other site S4 disposes of, by LIFETIME** (the parent's item 4.2 table, `:3833-3840`; no site is "a test about the old
   name itself", so none takes `~` for the prefix):
 
@@ -244,8 +252,13 @@ the file.**
   - **The check, widened** (`:317-319` today: the variable must BE the mount point). A small helper in the same file,
     `DrvfsScratch.Check(string? value, IEnumerable<string> mountLines)` → `Outcome<string>`, PURE apart from reading the folder's
     entries: the variable unset or empty → the test SKIPS with today's sentence (the operator's opt-in, unchanged); otherwise it must be
-    absolute and an existing folder; the LONGEST mount point in `mountLines` (`/proc/mounts`, its second field, compared path segment by
-    segment, never by string prefix) at or above the folder must be of type `9p`; and the folder must hold NOTHING but owner-form
+    absolute and an existing folder; then (the plan gate's G2, § 16) the folder AND every mount point are resolved to their REAL paths,
+    links followed, through `RootFacts.RealPathOf` (`tools/model-arms/ModelArms/Adapters/RootFacts.cs:40`, a third parameter
+    `Func<string, Outcome<string>> realPath` of `Check`, so the facts can pass the real one over a `TempFolder`); a path that cannot be
+    resolved refuses, naming it; the mount points' second field is decoded first (`/proc/mounts` writes a space as `\040`, a tab as
+    `\011`, a backslash as `\134`); and every check below reads the REAL folder: the LONGEST real mount point (compared path segment by
+    segment, never by string prefix) at or above the real folder must be of type `9p`, so a link below the mount that points outside it
+    is judged where it points; and the folder must hold NOTHING but owner-form
     entries of this repository and their claim files — a name `Owned.FullName()` matches, or `<such a name>.owner` — what a killed run
     of this test leaves, which the start sweep then judges. Anything else (a foreign file or folder, a quarantine sibling a killed sweep
     left, another owner's or another repository's name) REFUSES: the test FAILS naming that entry and writes nothing, so nothing
@@ -270,7 +283,10 @@ the file.**
     folder holding an owner-form folder and its claim; refuses a folder holding a foreign file (naming it), a quarantine sibling, another
     owner's name; refuses when the longest mount point above is not `9p` (a `9p` mount at `/mnt/c` and an `ext4` mount at `/mnt/c/x`,
     the folder below `/mnt/c/x`); refuses the mount point string-prefix trap (`/mnt/cx/…` is not under `/mnt/c`); refuses a relative or
-    missing path.
+    missing path; and (G2) refuses a SYMLINK below the mount that points outside it: with hand-written mount lines that make a
+    `TempFolder` `M` a `9p` mount point and `/` an `ext4` one, `M/link` → a folder in a second `TempFolder` outside `M` is refused,
+    naming the real path, while a real folder `M/real` is accepted (both with the real `RootFacts.RealPathOf`; skipped where a link
+    cannot be made, `TempFolder.RequireLinks`).
   - **The one real run** (item 2 point 5): `mkdir /mnt/c/Users/strug/AppData/Local/Temp/bench-e6s4-9p-<8 hex>` (new, empty; the name is
     not of the prefix family); `MODEL_ARMS_DRVFS_SCRATCH=<it> nice -n 19 $T --filter-class "*PosixFolderIsolationTests" --no-ansi`; the
     output quoted on the PR (the kill check's lines: removed, kept `live`); then `ls -A <it>` (expected empty) and `rmdir <it>` by exact
@@ -291,9 +307,10 @@ No other exemption: none for `raw-temp`, `legacy-name` or `owner-blind` (the las
 ## 4. The changes, file by file
 
 1. `TempFolder.cs` — K1. The summary (`:5-7`) says: the owned folder `testsToDelete-<owner>-bench-modelarms-<id>`, claimed beside it, made
-   by the copied helper (plan D5); `Dispose` opens every closed folder, then removes folder and claim by the exact path and never throws
-   (a removal that gives up is named by the end-of-run audit).
-2. `TempFolderTests.cs` — scenarios (1) and (2) of § 5 beside the existing test.
+   by the copied helper (plan D5); `Dispose` opens every closed folder, then removes folder and claim by the exact path and never throws,
+   not even when the opening walk fails (G1: one warning naming the path; what stays keeps its claim and is named by the end-of-run
+   audit).
+2. `TempFolderTests.cs` — scenarios (1), (1b) and (2) of § 5 beside the existing test.
 3. `PilotOut.cs`, `PilotOutTests.cs` (new), `M2PilotScaffold.cs`, `M3PilotScaffold.cs`, `PilotScaffoldKillTests.cs` (new) — K5.
 4. `PosixFolderIsolationTests.cs` — K9.
 5. The K2, K3, K4, K6 and K8 sites, each exactly as its table says.
@@ -326,6 +343,7 @@ kept) and the 9p test's check (K9).
 | # | Test (file) | GREEN asserts | RED (first) / RED again |
 |---|---|---|---|
 | (1) E6-i | `A_TempFolder_is_an_owned_folder_claimed_beside_it_and_removed_with_its_claim` (`TempFolderTests`) | the leaf matches `Owned.FullName()` and holds `-modelarms-`; `<path>.owner` exists and `Owner.Parse` of its text equals `Owner.RunRecord()`; the folder's mode is 0700 (Linux); after `Dispose` neither folder nor claim exists | RED first: on today's `TempFolder` (legacy name, no claim) the name and claim assertions fail. RED again: put `:10` back → red |
+| (1b) G1 | `Dispose_never_throws_when_the_walk_fails_and_what_stays_keeps_its_claim` (`TempFolderTests`; Linux, as the existing mode test) | a `TempFolder` made with `open: _ => throw new IOException("planted walk failure")` and a recording `warn`; a file in a subfolder closed to its owner (`0500`, as `TempFolderTests.cs:28-29`); `Dispose` does NOT throw; exactly one recorded warning holds `planted walk failure` and the folder's path (the owned removal adds its own warnings, `owned: could not remove …`, to the same recorder: asserted present, not counted); the folder and `<path>.owner` still exist (the removal could not enter the closed subfolder, so the claim stays). Cleanup in `finally`: restore the subfolder's mode, call `Dispose` again (the owned removal retries, `OwnedDir.cs:65-72`), then folder and claim are gone | RED first: K1 as written before G1 (`try { walk } finally { owned.Dispose() }`) lets the walk's exception out of `Dispose` → red ("Dispose threw IOException"). RED again: remove the `catch` → red |
 | (2) rule §4 | `A_TempFolder_of_a_killed_test_process_is_collected_by_the_next_sweep` and its child (`TempFolderTests`) | K7: before the kill the folder and its claim exist; after SIGKILL the sweep's `Removed` holds exactly the folder and its claim, both gone; nothing of the child in `/tmp`; skipped on Windows | RED first: on today's `TempFolder` the child's folder is `testsToDelete-modelarms-…`, which the sweep LISTS as legacy and never removes (rule §1) → red naming it. RED again: put `:10` back → red |
 | (3) | `Dispose_removes_a_folder_holding_a_link_to_its_own_parent_and_a_folder_closed_to_its_owner` (existing, ten rounds) | still green: the mode walk runs before the owned removal | RED again: drop `OpenForDeleting()` from `Dispose` → the closed folder stays, the round fails |
 | (4) K6 | `A_timed_out_readers_scratch_is_kept_inside_the_owned_folder` (a new `PinnedConsumerTests` in `ModelArms/`) | `Preserved` over `<TempFolder>/readers/x` returns a path under `TempFolder.Path` named `kept-reader-…`, the scratch's files moved with it; with no owned folder above, the scratch stays put | RED first: today's `Preserved` returns a sibling of the `TempFolder` in the temp root → red |
@@ -334,6 +352,7 @@ kept) and the 9p test's check (K9).
 | (7) E6-l | `PilotOutTests` (seven ordinary facts: unset, empty, relative, missing, at and under an injected temp root and at the real `TempDir.Root`, inside a checkout naming it, accepted) | each refusal names `BENCH_PILOT_OUT` or its reason; an existing folder outside both is accepted ([P] O-i: 7 of 7) | RED first: before `PilotOut` exists the class does not compile, so the RED is each fact against a `Resolve` that accepts everything (a stub), quoted; RED again: drop the at-or-under clause → the two temp-root facts red |
 | (8) E6-l | `PilotScaffoldKillTests`: `The_M2_scaffold_killed_after_its_first_child_leaves_a_manifest_naming_every_child`, the same for M3 | K5 (e) | RED first: today's scaffolds write under the child's temp root → the poll's ceiling fails naming `pilotOut`; M2 with its names moved but no manifest yet → "no manifest" red. RED again: M2 writes its manifest AFTER the target → red (the manifest is missing or names fewer paths at the kill) |
 | (9) E6-l (1)–(2) | the scaffolds run by hand (K5 (f)) | refusals before anything is made; with the folder, every printed path under it; the temp root holds none of theirs; the output removed by exact path | RED first: today's scaffolds with the variable unset write `testsToDelete-m2-…`/`-m3-…` under the temp root (O10, under a private `TMPDIR`) |
+| (10b) G2 | the `DrvfsScratch` fact on a symlink below the mount (K9, *The ordinary facts*, its last item) | the link pointing outside the mount is refused, naming the real path; the real folder below it is accepted | RED first: a check that compares the TEXT of the path (no `realPath`) accepts `M/link` → red. RED again: drop the folder's resolution → red |
 | (10) K9 | `DrvfsScratch` facts (ordinary) and, ONCE on the real mount, the 9p test and the killed-run → next-sweep check | K9 | RED first: the facts against today's check (equality with the mount point): the folder below the mount is not accepted → red. RED again, on the ordinary facts only: a check that requires the folder to be EMPTY refuses the folder holding an owner-form folder and its claim → that fact red. The one run on the mount is GREEN only; it is never repeated for a RED |
 
 ## 6. The guards in S4 — both guards, a count per class, at the base `b348bb33` (row E6-i; the parent's item 8.1)
@@ -383,18 +402,20 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 
 **One PR, one story.** Each commit builds and its tests pass.
 
-1. `TempFolderTests` (1) and (2) with their RED observed by hand on today's `TempFolder` (quoted), then `TempFolder.cs` (K1) in the
-   same commit; (3) re-run.
+1. `TempFolderTests` (1), (1b) and (2) with their RED observed by hand (quoted: (1) and (2) on today's `TempFolder`, (1b) on K1 without
+   its `catch`), then `TempFolder.cs` (K1 with G1's seams and `catch`) in the same commit; (3) re-run; each RED again quoted.
 2. The run-lifetime and never-made sites of K2 (not the scaffolds, not the 9p site) and K6 with (4).
 3. K4 and the 17 literals of K3.
 4. K5: `PilotOut.cs` and `PilotOutTests.cs` (7); the scaffolds' folder, names, M2's manifest, the probe's `TempFolder`, the summaries;
    `PilotScaffoldKillTests` (8); the RED of (8) and (9) quoted, then the runs of K5 (f).
-5. K9: `DrvfsScratch` and its facts (RED first), the widened 9p test, its start sweep and the kill check; then the ONE real run, quoted.
+5. K9: `DrvfsScratch` with G2's real-path resolution and its facts, (10b) among them (RED first), the widened 9p test, its start sweep
+   and the kill check; then the ONE real run, quoted.
 6. K8: the 10 markers (§ 3a) and the 10 `~` strings; § 6's counts on the head.
 7. **The docs commit:** K10 (`research/module_model_arms.md` `:1462`, `:2114`, `:2250-2256` and `:2314`; the dated notes in
    `research/PLAN_model_arms_E6.md` (`:338-341`, `:344`/`:346`, `:381`, `:746`, `:818`, `:819`, `:821`) and `_E3.md` (`:810-811`,
    `:876`, `:885`, `:1127`, `:1146`); the four lines of entry 11.1 among them);
-   `ExperimentRoot.cs:22`; § 3a's list copied into the stories' § 11; this brief's progress line.
+   `ExperimentRoot.cs:22`; § 3a's list copied into the stories' § 11; this brief's progress line; § 16's *Inputs for S7* quoted in the
+   PR body (G4: `research/module_tests.md` is S7's, not touched here).
 
 **Size.** About 700 changed lines in about 35 files, most of them one-line edits; the new tests ~450 lines. One Sonnet coder.
 
@@ -406,11 +427,12 @@ node .agents/conventions/tools/plan-lifecycle.mjs
   today's M2 (K5 (e)).
 - **The 9p merge condition:** K9's killed-run → next-sweep check PASSED on the real mount in its one run (the dead child's folder and
   claim removed, the live one kept `live`), the folder then empty and removed by exact path, all quoted; the `DrvfsScratch` facts green.
-- (1), (2), (4): GREEN, each RED first and RED again quoted; (3) green and its RED again quoted; the marker RED of (5) from each guard.
+- (1), (1b), (2), (4): GREEN, each RED first and RED again quoted; (3) green and its RED again quoted; the marker RED of (5) from each
+  guard; (10b) green with its RED first and RED again quoted.
 - The ModelArms namespace green with its time beside O8's; the whole suite's FAILED list equal to the base's; no growth of
   `/tmp/testsToDelete-*modelarms*`, `/tmp/bench-m*` or `/tmp/clr-debug-pipe-*` across a namespace run (O9, O10).
 - 0 warnings; `dotnet format` clean; `TheAdaptedCopyTests` green (no manifest target touched); `plan-lifecycle.mjs` clean;
-  `git diff --name-only <base>..HEAD` within § 0.1; § 3a copied into the stories' § 11.
+  `git diff --name-only <base>..HEAD` within § 0.1; § 3a copied into the stories' § 11; § 16's *Inputs for S7* in the PR body.
 
 ## 10. What this story does NOT prove
 
@@ -418,7 +440,10 @@ Windows (no leg; every kill test skips there). The 9p collection beyond its ONE 
 mount itself once, by the owner's word). That the owner's pilot itself runs (row E6-l: the pilot is the owner's, by hand); the
 scaffolds themselves ARE run here (K5 (f)) and killed in the suite (K5 (e)). That a `worktree add` marker's named folder really holds
 the clone (a guard reads the spelling, never the folder: the code review does). That no other test, script or CI step uses row E6-l's
-exemption (a review item of each PR, item 4.3).
+exemption (a review item of each PR, item 4.3). **G3's limit (rejected, § 16):** `PilotOut` compares with the EFFECTIVE temp root
+(`TempDir.Root`, which follows `TMPDIR`); a run whose `TMPDIR` points elsewhere accepts a `BENCH_PILOT_OUT` under `/tmp` itself, which a
+WSL restart empties. Not checked, by decision: the operator's pilot procedure (`research/module_model_arms.md:2250-2256`, `:2314`) names a
+folder outside `/tmp`.
 
 ## 11. Observations — made before this brief's plan gate (the parent's item 8.1)
 
@@ -560,3 +585,35 @@ with its consult), or (b) read as history and stays (as item 4.2 reads `:1308` a
 NOT on the line" list. [Recommend: `module_model_arms.md:2314` is NOT history (present tense, the living document, and item 7 promises
 the module document says so after S4): (a). The three IMPLEMENTED-plan lines: a dated note each, as their neighbours get, so (a) too —
 one cause (item 4.2's *Files* missed four lines of the same grep), one entry.]
+
+## 16. The plan gate (coai, 2026-11-17)
+
+**Round 1: coai session `c26a7122`, verdict `proceed`.** Decided by the coordinator; folded in by this commit.
+
+Accepted (both inside § 0.1's paths):
+
+- **G1 (K1) — `TempFolder.Dispose` must not throw when the mode walk fails.** The walk (`OpenForDeleting`) is caught as well as the
+  owned removal's failures: one warning naming the path, the removal still tried, what stays keeps its claim for the end-of-run audit.
+  K1, § 4 row 1, scenario (1b) RED → GREEN → RED, § 8 commit 1, § 9.
+- **G2 (K9) — real paths before containment.** The scratch folder and every mount point are resolved to their real paths (links
+  followed, `RootFacts.RealPathOf`) before the containment and file-system-type checks, so a symlink below the mount that points outside
+  it is refused. K9 *The check* and *The ordinary facts*, scenario (10b), § 8 commit 5, § 9.
+
+Rejected, each with its reason:
+
+- **G3 (K5) — a `/tmp` check when `TMPDIR` is overridden.** The temp root S4 compares with is the EFFECTIVE one: rule §2's helper
+  makes its folders there (`Owned.TempRoot` = `Path.GetTempPath()`, which follows `TMPDIR`), and the parent's item 4.3 reads the
+  DoD exemption with "at or under the temp root", the same root. A literal `/tmp` check would need a `"/tmp"` literal in a test `.cs`,
+  which this plan rewrites and never exempts (K3, Q2 as decided), or a helper change in `tests/Bench.Tests/Leftovers/`, outside § 0.1
+  (and a counted change: the eleventh full stop). Recorded as a limit (§ 10).
+- **G4 — `research/module_tests.md`.** That file is S7's under item 4.2 (`:3865-3868`; Q5 as decided). S4 does not touch it; the flows S4
+  adds and what their tests do not prove are listed below as inputs S7 must add, and S4's PR body quotes the list (§ 8 commit 7).
+
+**Inputs for S7 (`research/module_tests.md`; G4).**
+
+| Flow S4 adds | Its tests | What they do NOT prove |
+|---|---|---|
+| The pilots' output outside the family (row E6-l): `BENCH_PILOT_OUT` resolved by `PilotOut`, each scaffold's manifest first, removed only by the pilot's teardown | `PilotOutTests` (seven ordinary facts); the scaffolds run once each by hand (K5 (f)) | that the owner's pilot itself runs; that no other test, script or CI step uses the exemption (a review item); a `BENCH_PILOT_OUT` under `/tmp` when `TMPDIR` points elsewhere (G3's limit) |
+| Interrupted runs: a killed `TempFolder` user's folder collected by the next sweep; each scaffold killed after its first child leaves a manifest naming every child | `TempFolderTests` (2) (K7); `PilotScaffoldKillTests` (K5 (e)), each child with an owned `TMPDIR` | Windows (skipped); a kill at any other moment than right after the first child; that the pilot's teardown removes a killed scaffold's output (the operator's step) |
+| `TempFolder.Dispose` never throws (G1): the walk's and the removal's failures are warnings, what stays is claimed and named by the end-of-run audit | `TempFolderTests` (1b), (3) | a failure the audit itself cannot see (the audit's own limits, `LeftoversAudit`) |
+| The 9p sweep: a validated scratch folder below the drvfs mount (real paths, G2; only this repository's owner-form entries and claims), swept at the test's start | the `DrvfsScratch` facts (ordinary, off the mount); ONE real run of the 9p test and its killed-run → next-sweep check (K9) | the mount beyond that one run; drvfs keeps no mode (O11), so `mkdir 0700` there is not proved; the kernel-owner key is always true there (uid 1000), so the record alone decides; a quarantine sibling left by a killed sweep is refused, never restored |
