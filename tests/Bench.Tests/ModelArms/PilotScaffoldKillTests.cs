@@ -17,19 +17,19 @@ public sealed class PilotScaffoldKillTests
 {
     private static readonly TimeSpan Ceiling = TimeSpan.FromSeconds(120);
 
-    [Fact]
+    [Fact(Timeout = 300_000)]
     public async Task The_M2_scaffold_killed_after_its_first_child_leaves_a_manifest_naming_every_child()
     {
-        await KilledAfterItsFirstChildAsync("m2", "Writes_the_scratch_target_and_root_for_the_pilot", ["target", "root"]);
+        await KilledAfterItsFirstChildAsync("m2", "Writes_the_scratch_target_and_root_for_the_pilot", M2PilotScaffold.Catalogue.Select(entry => entry.Name).ToList(), TestContext.Current.CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 300_000)]
     public async Task The_M3_scaffold_killed_after_its_first_child_leaves_a_manifest_naming_every_child()
     {
-        await KilledAfterItsFirstChildAsync("m3", "Writes_the_scratch_target_root_home_and_claude_for_the_pilot", M3PilotScaffold.Catalogue.Select(entry => entry.Name).ToList());
+        await KilledAfterItsFirstChildAsync("m3", "Writes_the_scratch_target_root_home_and_claude_for_the_pilot", M3PilotScaffold.Catalogue.Select(entry => entry.Name).ToList(), TestContext.Current.CancellationToken);
     }
 
-    private static async Task KilledAfterItsFirstChildAsync(string pilot, string method, IReadOnlyList<string> names)
+    private static async Task KilledAfterItsFirstChildAsync(string pilot, string method, IReadOnlyList<string> names, CancellationToken cancellationToken)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -41,18 +41,18 @@ public sealed class PilotScaffoldKillTests
         using var pilotOut = new TempFolder();
         var env = new Dictionary<string, string?> { ["TMPDIR"] = childTemp.Path, [PilotOut.Variable] = pilotOut.Path, ["TESTSTODELETE_RUN"] = null };
         using var child = Process.Start(SuiteChild.StartInfoFor(System.Environment.ProcessPath!, ["--no-ansi", "--explicit", "only", "--filter-method", "*" + method], env))!;
-        var drained = Task.WhenAll(child.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken), child.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken));
+        var drained = Task.WhenAll(child.StandardOutput.ReadToEndAsync(cancellationToken), child.StandardError.ReadToEndAsync(cancellationToken));
         try
         {
             await WaitForFirstChildAsync(pilotOut.Path, $"bench-{pilot}-target-*", child, drained);
 
             child.HasExited.Should().BeFalse("the child must still be running when its first child appears: a scaffold that ended on its own was not interrupted, and a green on it proves nothing");
             child.Kill(entireProcessTree: true);
-            await child.WaitForExitAsync(TestContext.Current.CancellationToken);
+            await child.WaitForExitAsync(cancellationToken);
             child.ExitCode.Should().Be(137, "SIGKILL: the scaffold had no chance to clean anything");
 
             var manifest = Directory.GetFiles(pilotOut.Path, $"bench-{pilot}-manifest-*.json").Should().ContainSingle("exactly one manifest, claimed before anything else was made").Subject;
-            var tree = JsonNode.Parse(await File.ReadAllTextAsync(manifest, TestContext.Current.CancellationToken))!;
+            var tree = JsonNode.Parse(await File.ReadAllTextAsync(manifest, cancellationToken))!;
             var id = tree["id"]!.GetValue<string>();
             manifest.Should().Be(Path.Combine(pilotOut.Path, $"bench-{pilot}-manifest-{id}.json"));
             tree["uid"]!.GetValue<string>().Should().Be(RootFacts.CurrentUid().ToString(CultureInfo.InvariantCulture), "the manifest names the user who made it");
@@ -71,7 +71,7 @@ public sealed class PilotScaffoldKillTests
 
             try
             {
-                await drained.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+                await drained.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
             }
             catch (TimeoutException)
             {
