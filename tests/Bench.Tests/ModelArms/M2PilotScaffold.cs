@@ -33,20 +33,25 @@ public sealed class M2PilotScaffold
     internal static readonly string[] CsScenarios = ["A_scratch_scenario_passes", "Another_scratch_scenario_passes"];
     internal const string NodeScenario = "a scratch node scenario passes";
 
+    /// <summary>What the scaffold names: the target is made, the root is a NAME only (<c>init</c> makes it).</summary>
+    internal static readonly IReadOnlyList<PilotEntry> Catalogue = [new("target", Created: true), new("root", Created: false)];
+
     [Fact(Explicit = true)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task Writes_the_scratch_target_and_root_for_the_pilot()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the pilot's scratch target is made with POSIX paths and a real git");
-        var output = PilotOut.Required();
-        var (id, manifest) = ClaimManifest(output, "m2");
-        var target = Path.Combine(output, $"bench-m2-target-{id}");
-        var root = Path.Combine(output, $"bench-m2-root-{id}");
-        var uid = ModelArmsApp.Adapters.RootFacts.CurrentUid().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await WriteAsync(PilotOut.Required());
+    }
+
+    /// <summary>The scaffold's work under <paramref name="output"/>; <paramref name="nextId"/> is the seam for the id. A path of the run that already exists refuses it before anything is made; a failure removes only what this run created.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    internal static async Task WriteAsync(string output, Func<string>? nextId = null)
+    {
+        var run = await PilotManifest.StartAsync(output, "m2", Catalogue, nextId);
+        var (target, root) = (run.PathOf("target"), run.PathOf("root"));
         try
         {
-            // Every path is in the manifest BEFORE it exists (the manifest itself is already there, claimed exclusively).
-            await WriteManifestAsync(manifest, id, uid, [("target", target), ("root", root)]);
             var baseSha = await MakeTargetAsync(target);
             var files = Path.Combine(target, ".git", "m2-pilot");
             Directory.CreateDirectory(files);
@@ -58,7 +63,7 @@ public sealed class M2PilotScaffold
 
             await ValidatesOnAProbeRootAsync(experiment, scenarios);
             Directory.Exists(root).Should().BeFalse("the root is a name only: init creates it, exclusively");
-            Say($"M2 scaffold — manifest: {manifest} (uid {uid}, id {id})");
+            Say($"M2 scaffold — manifest: {run.Manifest} (uid {run.Uid}, id {run.Id})");
             Say($"M2 scaffold — the target: {target}");
             Say($"M2 scaffold — the root (NOT created; init makes it): {root}");
             Say($"M2 scaffold — target.base: {baseSha}");
@@ -69,43 +74,16 @@ public sealed class M2PilotScaffold
         }
         catch (Exception failure)
         {
-            // Nothing is half-made and left: what this run created is removed by the manifest's own paths, best effort per path, the manifest last.
+            // Nothing this run made is left: its created paths are removed, the manifest last and only when every one is gone.
             // The ORIGINAL exception is rethrown as it was; what the cleanup could not remove is said on the output and carried in its Data.
-            List<string> left = [.. ScaffoldCleanup.Remove(target), .. ScaffoldCleanup.Remove(root), .. ScaffoldCleanup.Remove(manifest)];
-            if (left.Count > 0)
+            if (PilotManifest.CleanUp(run) is { } text)
             {
-                var text = "cleanup left (remove by hand): " + string.Join(", ", left);
                 failure.Data["cleanup"] = text;
                 Say("M2 scaffold — " + text);
             }
 
             throw;
         }
-    }
-
-    /// <summary>The manifest of a scaffold, claimed exclusively in <paramref name="output"/> as <c>bench-&lt;pilot&gt;-manifest-&lt;id&gt;.json</c>: a name already there draws a new id. Returns the id and the path.</summary>
-    internal static (string Id, string Path) ClaimManifest(string output, string pilot)
-    {
-        while (true)
-        {
-            var id = Guid.NewGuid().ToString("N")[..8];
-            var path = System.IO.Path.Combine(output, $"bench-{pilot}-manifest-{id}.json");
-            try
-            {
-                using var created = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                return (id, path);
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-            }
-        }
-    }
-
-    /// <summary>The manifest's text: the id, the caller's uid and the EXACT path of everything the scaffold creates or names, the manifest itself last. Written before any of them exists, so a scaffold killed at any moment still names every path its teardown must remove.</summary>
-    internal static async Task WriteManifestAsync(string manifest, string id, string uid, IEnumerable<(string Name, string Path)> paths)
-    {
-        var entries = new JsonArray([.. paths.Select(each => (JsonNode?)new JsonObject { ["name"] = each.Name, ["path"] = each.Path }), (JsonNode?)new JsonObject { ["name"] = "manifest", ["path"] = manifest }]);
-        await File.WriteAllTextAsync(manifest, new JsonObject { ["id"] = id, ["uid"] = uid, ["paths"] = entries }.ToJsonString(Pretty) + "\n", TestContext.Current.CancellationToken);
     }
 
     /// <summary>The host checks the scaffold CAN run, run: <c>validate</c> through the gate over a throwaway root (a <see cref="TempFolder"/>, removed with its claim by its own disposal) holding the two files, with a PATH of its own — an empty <c>claude</c> and links to the host's <c>git</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c>. It starts none of the target's tools and no claude or coai

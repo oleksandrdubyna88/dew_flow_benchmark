@@ -26,7 +26,7 @@ public sealed class PilotScaffoldKillTests
     [Fact]
     public async Task The_M3_scaffold_killed_after_its_first_child_leaves_a_manifest_naming_every_child()
     {
-        await KilledAfterItsFirstChildAsync("m3", "Writes_the_scratch_target_root_home_and_claude_for_the_pilot", M3PilotScaffold.Names);
+        await KilledAfterItsFirstChildAsync("m3", "Writes_the_scratch_target_root_home_and_claude_for_the_pilot", M3PilotScaffold.Catalogue.Select(entry => entry.Name).ToList());
     }
 
     private static async Task KilledAfterItsFirstChildAsync(string pilot, string method, IReadOnlyList<string> names)
