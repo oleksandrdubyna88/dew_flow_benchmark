@@ -25,7 +25,7 @@ public sealed class ProcessRunnerCancellationTests
         // host and iputils exits at once (CI red from the 2026-10-28 runner image on).
         string[] count = OperatingSystem.IsWindows() ? ["-n", "60"] : ["-c", "60"];
         var launch = ProcessRunner.RunAsync(
-            "ping", [.. count, "127.0.0.1"], Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
+            "ping", [.. count, "127.0.0.1"], TempDir.Root, TimeSpan.FromMinutes(5), cancel.Token);
 
         // Polled, not one fixed sleep: a loaded runner can take longer than 500 ms to start the child.
         // A launch that has already ended (a missing binary, a refused flag) stops the wait at once.

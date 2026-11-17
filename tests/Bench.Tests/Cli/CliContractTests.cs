@@ -102,9 +102,11 @@ public sealed class CliContractTests
 
     private sealed class TempSuite : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("suite");
+
         public TempSuite()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
             File.WriteAllText(Path, """
             {
               "id": "demo",
@@ -120,6 +122,6 @@ public sealed class CliContractTests
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

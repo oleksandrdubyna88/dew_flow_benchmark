@@ -75,7 +75,7 @@ public sealed class AssessorArgvTests
         const string toml = "model = \"gpt\"\n[mcp_servers.coai]\ncommand = \"coai-mcp\"\n[mcp_servers.creds]\n[mcp_servers.coai.env]\nX = \"1\"\n";
 
         CodexMcpServers.Parse(toml).Should().Equal(["coai", "creds"]);
-        CodexMcpServers.Read(Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}.toml")).Ok().Should().BeEmpty();
+        CodexMcpServers.Read(Path.Combine(TempDir.Root, $"absent-{Guid.NewGuid():N}.toml")).Ok().Should().BeEmpty();
     }
 
     [Fact]

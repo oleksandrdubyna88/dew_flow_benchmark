@@ -110,9 +110,11 @@ public sealed class RunCommandTests
 
     private sealed class TempRunSuite : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("run-suite");
+
         public TempRunSuite()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-run-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
             File.WriteAllText(Path, """
             {
               "id": "demo",
@@ -126,6 +128,6 @@ public sealed class RunCommandTests
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

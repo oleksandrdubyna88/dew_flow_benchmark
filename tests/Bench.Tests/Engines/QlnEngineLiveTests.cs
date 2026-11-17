@@ -171,7 +171,7 @@ public sealed class QlnEngineLiveTests
             http,
             Guid.Parse(project),
             branch: string.Empty,
-            files: new FilesystemEngine(Path.GetTempPath()),
+            files: new FilesystemEngine(TempDir.Root),
             funnels: recorder);
 
         return (engine, recorder);

@@ -33,7 +33,7 @@ public sealed class HarvestGatesTests : IDisposable
         var (baseSha, fixSha) = await FixturePairAsync();
 
         var report = (await HarvestGates.RunAsync(
-            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct)).Ok();
+            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.RedAtBase.Should().BeTrue("the marker is absent at base, so the test command fails there — the bug is live");
         report.GreenWithFix.Should().BeTrue();
@@ -50,7 +50,7 @@ public sealed class HarvestGatesTests : IDisposable
         var passesAtBase = new GateCommand("git", ["grep", "-q", "OLD", "--", "src/Policy.cs"]);
 
         var report = (await HarvestGates.RunAsync(
-            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, passesAtBase, Timeout, Ct)).Ok();
+            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, passesAtBase, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.RedAtBase.Should().BeFalse();
         report.Passed.Should().BeFalse();
@@ -62,7 +62,7 @@ public sealed class HarvestGatesTests : IDisposable
     {
         var (baseSha, fixSha) = await FixturePairAsync();
 
-        (await HarvestGates.RunAsync(_repo.Root, Sha(baseSha), Sha(fixSha), [], Build, GrepFixed, Timeout, Ct))
+        (await HarvestGates.RunAsync(_repo.Root, Sha(baseSha), Sha(fixSha), [], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot))
             .Reason().Should().Contain("no test file");
     }
 
@@ -72,7 +72,7 @@ public sealed class HarvestGatesTests : IDisposable
         var (baseSha, fixSha) = await FixturePairAsync();
 
         await HarvestGates.RunAsync(
-            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct);
+            _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], Build, GrepFixed, Timeout, Ct, _repo.ScratchRoot);
 
         (await _repo.GitAsync("worktree", "list")).Trim().Split('\n')
             .Should().HaveCount(1, "only the repository's own tree may remain — a leaked worktree is disk litter with a registry entry");

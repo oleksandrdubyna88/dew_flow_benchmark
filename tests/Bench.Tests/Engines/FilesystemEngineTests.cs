@@ -12,8 +12,10 @@ namespace Bench.Tests.Engines;
 /// tools a real agent has, every retrieval engine measured beside it looks better than it is, and the
 /// central comparison of the whole programme quietly tilts.
 /// </para></summary>
-public sealed class FilesystemEngineTests
+public sealed class FilesystemEngineTests : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("fs-engine");
+
     [Fact]
     public void It_declares_itself_as_the_no_retrieval_engine_with_no_funnel_to_offer()
     {
@@ -181,7 +183,7 @@ public sealed class FilesystemEngineTests
     {
         var (engine, _) = Build();
 
-        var missing = await engine.WarmAsync(Path.Combine(Path.GetTempPath(), "absent-" + Guid.NewGuid().ToString("N")), TestContext.Current.CancellationToken);
+        var missing = await engine.WarmAsync(Path.Combine(TempDir.Root, "absent-" + Guid.NewGuid().ToString("N")), TestContext.Current.CancellationToken);
 
         // A baseline that silently measured an empty directory would make every engine beside it look
         // good, and nothing in the numbers would say why.
@@ -299,10 +301,13 @@ public sealed class FilesystemEngineTests
     private static Task<ToolAnswer> Invoke(FilesystemEngine engine, string tool, string arguments) =>
         engine.InvokeAsync(tool, arguments, TestContext.Current.CancellationToken);
 
-    private static (FilesystemEngine Engine, string Root) Build()
+    /// <summary>An engine over a fresh CHILD of this test's owned folder — never the folder itself: the escape test writes a file beside its root, and that file lands inside the owned folder.</summary>
+    private (FilesystemEngine Engine, string Root) Build()
     {
-        var root = Directory.CreateTempSubdirectory("bench-fs-engine").FullName;
+        var root = Directory.CreateDirectory(_work.At(Guid.NewGuid().ToString("N"))).FullName;
         Directory.CreateDirectory(Path.Combine(root, "sub"));
         return (new FilesystemEngine(root), root);
     }
+
+    public void Dispose() => _work.Dispose();
 }

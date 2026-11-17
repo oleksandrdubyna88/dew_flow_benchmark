@@ -11,7 +11,7 @@ namespace Bench.Tests.Infrastructure;
 /// Deliberately beside <see cref="TempGitRepo"/> rather than merged into it: that fixture is the
 /// checkout cache's — a fixed two-commit shape whose value is being boringly identical across its
 /// tests — while harvest tests need to compose histories. The shared half, deleting a tree whose
-/// object files git marked read-only, is one method and it is reused, not copied.
+/// object files git marked read-only, is the owned folder's own removal (E6 S5: the repository and its scratch worktrees live in ONE owned folder).
 /// </para></summary>
 public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposable
 {
@@ -19,7 +19,13 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
 
     private readonly string _id = Guid.CreateVersion7().ToString("N");
 
-    public string Root => Path.Combine(Path.GetTempPath(), "bench-dated-git", _id);
+    private readonly TempDir _dir = TempDir.For("dated-git");
+
+    /// <summary>The repository, inside the owned folder (<see cref="InitAsync"/> makes it).</summary>
+    public string Root => _dir.At("repo");
+
+    /// <summary>Where a gate's scratch worktrees go (git makes it): inside the same owned folder, so a killed run is collected with the repository.</summary>
+    public string ScratchRoot => _dir.At("scratch");
 
     /// <summary>The repository as a clonable url — what a checkout provider takes.</summary>
     public string Url => new Uri(Root).AbsoluteUri;
@@ -88,15 +94,6 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
             : throw new InvalidOperationException(((Outcome<string>.Fail)run).Reason);
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            TempGitRepo.DeleteTree(Root);
-        }
-        catch (IOException)
-        {
-            // A leaked temp directory is a nuisance; a failed test run over it would be a mystery.
-        }
-    }
+    /// <summary>Removes the owned folder — the repository and its scratch worktrees with it. The helper clears the read-only object files git writes, and never throws.</summary>
+    public void Dispose() => _dir.Dispose();
 }

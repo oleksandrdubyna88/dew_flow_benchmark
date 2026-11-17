@@ -287,9 +287,11 @@ public sealed class TelemetryCommandTests
 
     private sealed class TempSpool : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("spool");
+
         public TempSpool(string? contents = null)
         {
-            Path = Directory.CreateTempSubdirectory("bench-spool").FullName;
+            Path = _dir.Path;
             if (contents is not null)
             {
                 var day = Directory.CreateDirectory(System.IO.Path.Combine(Path, "2026-08-15"));
@@ -299,7 +301,7 @@ public sealed class TelemetryCommandTests
 
         public string Path { get; }
 
-        public void Dispose() => Directory.Delete(Path, recursive: true);
+        public void Dispose() => _dir.Dispose();
     }
 
     private sealed class FakeStore : ITelemetryStore

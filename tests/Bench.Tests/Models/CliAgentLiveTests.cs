@@ -24,8 +24,10 @@ namespace Bench.Tests.Models;
 /// </code>
 /// </para></summary>
 [Trait("Category", "Live")]
-public sealed class CliAgentLiveTests
+public sealed class CliAgentLiveTests : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("cli-live");
+
     private const string ExecutableVariable = "BENCH_CLAUDE_EXE";
 
     /// <summary>Generous, and not a guess: an agent's first call pays for process start, authentication and a
@@ -79,8 +81,9 @@ public sealed class CliAgentLiveTests
         refused.Reason().Should().Contain("did not answer within");
     }
 
-    private static AgentAsk Ask(string prompt) =>
-        new(ModelRuntimeKind.CliClaude, Executable(), prompt, Path.GetTempPath(), Wall);
+    /// <summary>The agent works in this test's owned folder: a real CLI may write there, and it goes with the test.</summary>
+    private AgentAsk Ask(string prompt) =>
+        new(ModelRuntimeKind.CliClaude, Executable(), prompt, _work.Path, Wall);
 
     /// <summary>The executable, or a skip that says exactly what is missing.</summary>
     private static string Executable()
@@ -95,4 +98,6 @@ public sealed class CliAgentLiveTests
     }
 
     private static CliAgentRuntime Runtime() => new(NullLogger<CliAgentRuntime>.Instance);
+
+    public void Dispose() => _work.Dispose();
 }

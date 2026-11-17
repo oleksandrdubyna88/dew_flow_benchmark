@@ -58,11 +58,14 @@ internal static class GateStoreFixtures
     public static WorkerIdentity Here(string label = "lane") => WorkerIdentity.Here(label);
 }
 
+/// <summary>A store root inside ONE owned folder: the root itself, and every sibling a test makes beside it (<c>root-&lt;name&gt;</c>), go with the folder.</summary>
 internal sealed class TempRoot : IDisposable
 {
+    private readonly TempDir _dir = TempDir.For("gate-tests");
+
     public TempRoot()
     {
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "bench-gate-tests", Guid.NewGuid().ToString("N"));
+        Path = _dir.At("root");
         Directory.CreateDirectory(Path);
     }
 
@@ -72,19 +75,25 @@ internal sealed class TempRoot : IDisposable
 
     public void Dispose()
     {
-        foreach (var directory in new[] { Path, Sibling("outside") }.Where(Directory.Exists))
+        foreach (var directory in Directory.EnumerateDirectories(_dir.Path).ToList())
         {
             try
             {
+                if (new DirectoryInfo(directory).LinkTarget is not null)
+                {
+                    Directory.Delete(directory); // a link at the top is removed as ITSELF, never walked
+                    continue;
+                }
+
                 RemoveLinks(directory);
-                Directory.Delete(directory, recursive: true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // A test that failed half-way can leave a link Windows will not delete in one pass; the temp folder
-                // is the operating system's to clean, and failing a green test over it would hide the real result.
+                // A link Windows will not delete in one pass: the owned removal below says so once and leaves the folder claimed.
             }
         }
+
+        _dir.Dispose();
     }
 
     /// <summary>Links first, each removed as ITSELF — a recursive delete must never walk through one into its target.</summary>

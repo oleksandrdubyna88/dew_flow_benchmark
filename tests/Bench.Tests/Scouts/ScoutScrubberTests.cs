@@ -53,22 +53,16 @@ public sealed class ScoutScrubberTests
     [Fact]
     public void A_committed_record_carrying_a_planted_leftover_fails_the_hygiene_scan()
     {
-        var folder = Directory.CreateTempSubdirectory("scout-hygiene-");
+        using var work = TempDir.For("scout-hygiene");
+        var folder = new DirectoryInfo(work.Path);
 
-        try
-        {
-            File.WriteAllText(Path.Combine(folder.FullName, "clean.ndjson"), "{\"cwd\":\"C:\\\\work\\\\tree\"}\n");
-            File.WriteAllText(Path.Combine(folder.FullName, "leaky.ndjson"), "{\"cwd\":\"/home/someone/tree\",\"by\":\"ops@contoso.example\",\"repo\":\"contoso-internal\"}\n");
+        File.WriteAllText(Path.Combine(folder.FullName, "clean.ndjson"), "{\"cwd\":\"C:\\\\work\\\\tree\"}\n");
+        File.WriteAllText(Path.Combine(folder.FullName, "leaky.ndjson"), "{\"cwd\":\"/home/someone/tree\",\"by\":\"ops@contoso.example\",\"repo\":\"contoso-internal\"}\n");
 
-            Scan(folder.FullName, ScrubDenyList.Parse("contoso-internal")).Should().Equal(
-                $"leaky.ndjson: {ScoutScrubber.HomeRule}",
-                $"leaky.ndjson: {ScoutScrubber.EmailRule}",
-                "leaky.ndjson: carries deny-list entry #1");
-        }
-        finally
-        {
-            folder.Delete(recursive: true);
-        }
+        Scan(folder.FullName, ScrubDenyList.Parse("contoso-internal")).Should().Equal(
+            $"leaky.ndjson: {ScoutScrubber.HomeRule}",
+            $"leaky.ndjson: {ScoutScrubber.EmailRule}",
+            "leaky.ndjson: carries deny-list entry #1");
     }
 
     [Fact]

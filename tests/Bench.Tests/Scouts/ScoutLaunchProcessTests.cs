@@ -14,8 +14,10 @@ namespace Bench.Tests.Scouts;
 
 /// <summary>S2 — the launcher widened with a line-by-line OUTPUT SINK (plan §3.10, "money survives a crash"), and the fake CLI's test-owned
 /// home with its per-prompt replay. Every launch here goes to <c>tests/FakeCli</c>; nothing paid is called.</summary>
-public sealed class ScoutLaunchProcessTests
+public sealed class ScoutLaunchProcessTests : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("scout-fake");
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static string Stream(int lines) =>
@@ -97,14 +99,14 @@ public sealed class ScoutLaunchProcessTests
 
         var line = JsonNode.Parse(two.Stdout)!;
         line["n"]!.GetValue<int>().Should().Be(2, "the second prompt's own stream, the non-ASCII dash included in the hash");
-        line["cwd"]!.GetValue<string>().Should().Be(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), "__CWD__ becomes the launch's working directory");
+        line["cwd"]!.GetValue<string>().Should().Be(TempDir.Root.TrimEnd(Path.DirectorySeparatorChar), "__CWD__ becomes the launch's working directory");
     }
 
     private static async Task<AgentTranscript> Transcript(ScoutFake fake, string prompt, TimeSpan wall, AgentOutputSink sink)
     {
         var parent = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => e.Value as string ?? string.Empty, StringComparer.Ordinal);
         var child = ProbeChildEnvironment.Of(parent).Variables.Concat(fake.ChildVariables).ToDictionary(v => v.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
-        var ask = new AgentAsk(ModelRuntimeKind.CliClaude, ScoutFake.Executable, prompt, Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), wall, ScoutLaunch.MainModel)
+        var ask = new AgentAsk(ModelRuntimeKind.CliClaude, ScoutFake.Executable, prompt, TempDir.Root.TrimEnd(Path.DirectorySeparatorChar), wall, ScoutLaunch.MainModel)
         {
             Environment = AgentEnvironment.Only(child),
             Output = sink,
@@ -126,5 +128,8 @@ public sealed class ScoutLaunchProcessTests
         WorkerLiveness.ProcessIsAlive(pid).Should().BeFalse($"pid {pid} must not outlive the launch — a hung CLI must not keep spending");
     }
 
-    private static string Home() => Path.Combine(Path.GetTempPath(), "bench-scout-fake", Guid.NewGuid().ToString("N"));
+    /// <summary>A fresh home for one fake, a child of this test's owned folder (the fake makes it; the folder goes with the test).</summary>
+    private string Home() => _work.At(Guid.NewGuid().ToString("N"));
+
+    public void Dispose() => _work.Dispose();
 }

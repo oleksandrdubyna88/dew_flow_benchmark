@@ -100,14 +100,14 @@ public sealed class AnchorCheckTests
     {
         // Resolve-then-compare, because `a/../../b` and a symlink both spell fine. An anchor's path is written by
         // an agent, so it is data, and data that walks out of the tree must not be read.
-        RootedPath.Under(Path.Combine(Path.GetTempPath(), "tree"), "../../windows/system32/config")
+        RootedPath.Under(Path.Combine(TempDir.Root, "tree"), "../../windows/system32/config")
             .Reason().Should().Contain("outside the tree");
     }
 
     [Fact]
     public void A_path_INSIDE_the_root_resolves_to_a_full_path()
     {
-        var root = Path.Combine(Path.GetTempPath(), "tree");
+        var root = Path.Combine(TempDir.Root, "tree");
 
         RootedPath.Under(root, "src/A.cs").Ok().Should().Be(Path.Combine(root, "src", "A.cs"));
     }

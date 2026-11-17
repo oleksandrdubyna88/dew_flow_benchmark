@@ -3,18 +3,21 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Bench.Application.Gate;
 using Bench.Infrastructure.Gate;
+using Bench.Tests.Leftovers;
 
 namespace Bench.Tests.Gate.Driver;
 
 /// <summary>The fake coai-mcp (<c>tests/FakeCoai</c>), located in its OWN build output and driven through the real
 /// <see cref="McpStdioClient"/>. A test writes a script, points <c>FAKE_COAI_SCRIPT</c> at it, and reads back the
-/// event log the fake writes into <c>FAKE_COAI_EVENTS</c>.</summary>
+/// event log the fake writes into <c>FAKE_COAI_EVENTS</c>. Everything lies inside ONE owned folder (<see cref="Root"/>), the fake's data folder
+/// (<c>COAI_DATA_DIR</c>, <c>&lt;Root&gt;/data</c>) included: the fake has no data folder of its own, so a launch that is not given one refuses where it first needs it.</summary>
 internal sealed class FakeCoai : IDisposable
 {
+    private readonly OwnedDir _owned = OwnedDir.Create("gate-fake");
+
     public FakeCoai(JsonObject? script = null)
     {
-        Root = Path.Combine(Path.GetTempPath(), "bench-gate-fake", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Root);
+        Root = _owned.Path;
         EventsDir = Path.Combine(Root, "events");
         Directory.CreateDirectory(EventsDir);
         ScriptPath = Path.Combine(Root, "script.json");
@@ -43,7 +46,7 @@ internal sealed class FakeCoai : IDisposable
         }
     }
 
-    /// <summary>The parent's environment without any <c>COAI_*</c>, plus the fake's two variables and whatever the
+    /// <summary>The parent's environment without any <c>COAI_*</c>, plus the fake's two variables, its data folder inside the root (<c>COAI_DATA_DIR</c>) and whatever the
     /// test adds — the shape <c>CoaiEnvironment</c> produces for the real product.</summary>
     public IReadOnlyDictionary<string, string> Environment(IReadOnlyDictionary<string, string>? extra = null)
     {
@@ -54,6 +57,7 @@ internal sealed class FakeCoai : IDisposable
             .ToDictionary(e => e.Name, e => e.Value, StringComparer.Ordinal);
         env["FAKE_COAI_SCRIPT"] = ScriptPath;
         env["FAKE_COAI_EVENTS"] = EventsDir;
+        env["COAI_DATA_DIR"] = Path.Combine(Root, "data"); // before the test's own values, so one of them still wins
 
         foreach (var (name, value) in extra ?? new Dictionary<string, string>())
         {
@@ -104,17 +108,7 @@ internal sealed class FakeCoai : IDisposable
         return max;
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(Root, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A child still closing a file; the temp folder is the operating system's to clean.
-        }
-    }
+    public void Dispose() => _owned.Dispose();
 
     private static (string Verb, string Key) Split(string text, bool byKey)
     {

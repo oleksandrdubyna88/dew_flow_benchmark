@@ -18,8 +18,10 @@ namespace Bench.Tests.Engines;
 /// stamp, one of these goes red HERE rather than producing a column of zeros in a run three weeks from
 /// now.
 /// </para></summary>
-public sealed class QlnEngineTests
+public sealed class QlnEngineTests : IDisposable
 {
+    private readonly TempDir _work = TempDir.For("qln-engine");
+
     private const string GoodFunnel =
         """
         "funnel": {
@@ -281,10 +283,10 @@ public sealed class QlnEngineTests
             $$"""{"query":"{{query}}"}""",
             TestContext.Current.CancellationToken);
 
-    private static (QlnEngine Engine, string Root, List<Recorded> Calls) Build(
+    private (QlnEngine Engine, string Root, List<Recorded> Calls) Build(
         string body, HttpStatusCode status = HttpStatusCode.OK, IFunnelSink? sink = null)
     {
-        var root = Directory.CreateTempSubdirectory("bench-qln").FullName;
+        var root = Directory.CreateDirectory(_work.At(Guid.NewGuid().ToString("N"))).FullName;
         var calls = new List<Recorded>();
         var http = new HttpClient(new StubHandler(body, status, calls))
         {
@@ -294,11 +296,13 @@ public sealed class QlnEngineTests
         return (new QlnEngine(http, Project, "main", new FilesystemEngine(root), sink ?? new NullSink()), root, calls);
     }
 
+    public void Dispose() => _work.Dispose();
+
     private static QlnEngine Unreachable()
     {
         var http = new HttpClient(new ThrowingHandler()) { BaseAddress = new Uri("http://localhost:5311/") };
         return new QlnEngine(
-            http, Project, "main", new FilesystemEngine(Path.GetTempPath()), new NullSink());
+            http, Project, "main", new FilesystemEngine(TempDir.Root), new NullSink());
     }
 
     internal sealed record Recorded(string Path, string Body);

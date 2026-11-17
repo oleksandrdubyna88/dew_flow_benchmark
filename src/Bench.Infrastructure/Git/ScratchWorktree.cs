@@ -10,10 +10,13 @@ namespace Bench.Infrastructure.Git;
 /// its own tree and gives it back, registry entry included.</summary>
 public static class ScratchWorktree
 {
+    /// <summary>Where a gate's scratch worktrees live when the caller names no root: <c>&lt;temp&gt;/bench-scratch</c>. A benchmark run
+    /// uses it as it always has; a test passes a folder it owns instead (the gates take a root).</summary>
+    public static string DefaultRoot { get; } = Path.Combine(Path.GetTempPath(), "bench-scratch");
+
     public static Task<Outcome<string>> AddAsync(
         string repositoryDir, CommitSha at, TimeSpan timeout, CancellationToken cancellationToken) =>
-        AddAsync(repositoryDir, at, timeout, cancellationToken,
-            Path.Combine(Path.GetTempPath(), "bench-scratch"));
+        AddAsync(repositoryDir, at, timeout, cancellationToken, DefaultRoot);
 
     /// <summary>Under an explicit root — the CLI-subject worktrees live under the CHECKOUT root, because
     /// <see cref="Models.WorkspaceTrust"/> may only trust paths under it, and a worktree it cannot trust

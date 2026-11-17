@@ -151,9 +151,11 @@ public sealed class QuestionsCommandTests(PostgresFixture postgres)
     /// pass actually produces, in miniature.</summary>
     private sealed class TempBank : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("bank");
+
         public TempBank(string suffix)
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-bank-{suffix}.json");
+            Path = _dir.At($"bank-{suffix}.json");
             File.WriteAllText(Path, $$"""
             {
               "targetRepo": "https://github.com/App-vNext/Polly.git",
@@ -194,6 +196,6 @@ public sealed class QuestionsCommandTests(PostgresFixture postgres)
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

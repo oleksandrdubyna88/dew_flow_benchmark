@@ -62,7 +62,8 @@ public sealed class CliSubjectRuntimeTests
     public async Task The_real_subject_launch_reaches_the_cli_with_the_model_guard_off()
     {
         var ct = TestContext.Current.CancellationToken;
-        var root = Path.Combine(Path.GetTempPath(), $"bench-subject-guard-{Guid.NewGuid():N}");
+        using var work = TempDir.For("subject-guard");
+        var root = work.At("root");
         var repo = new DatedGitRepo(ct);
         using var fake = new Bench.Tests.Probes.Driver.FakeCli();
 
@@ -99,10 +100,6 @@ public sealed class CliSubjectRuntimeTests
         finally
         {
             repo.Dispose();
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
         }
     }
 

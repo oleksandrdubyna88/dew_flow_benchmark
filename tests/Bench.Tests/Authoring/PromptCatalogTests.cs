@@ -127,15 +127,17 @@ public sealed class PromptCatalogTests
     /// changes the repository's own files.</summary>
     private sealed class TempCatalog : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("prompts");
+
         public TempCatalog(string source)
         {
-            Root = Path.Combine(Path.GetTempPath(), $"bench-prompts-{Guid.NewGuid():N}");
+            Root = _dir.At("catalog");
             Copy(new DirectoryInfo(source), new DirectoryInfo(Root));
         }
 
         public TempCatalog(string role, string group, string template)
         {
-            Root = Path.Combine(Path.GetTempPath(), $"bench-prompts-{Guid.NewGuid():N}");
+            Root = _dir.At("catalog");
             Directory.CreateDirectory(Path.Combine(Root, role));
             File.WriteAllText(Path.Combine(Root, role, "_shared.md"), template);
             File.WriteAllText(Path.Combine(Root, role, $"{group}.md"), "# brief\n");
@@ -146,7 +148,7 @@ public sealed class PromptCatalogTests
         public void Append(string relative, string text) =>
             File.AppendAllText(Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar)), text);
 
-        public void Dispose() => Directory.Delete(Root, recursive: true);
+        public void Dispose() => _dir.Dispose();
 
         private static void Copy(DirectoryInfo from, DirectoryInfo to)
         {

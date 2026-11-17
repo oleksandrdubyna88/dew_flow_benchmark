@@ -17,7 +17,9 @@ namespace Bench.Tests.Infrastructure;
 [Collection("git")]
 public sealed class GitCheckoutTests : IAsyncLifetime
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), $"bench-cache-{Guid.NewGuid():N}");
+    private readonly TempDir _rootDir = TempDir.For("checkout-cache");
+
+    private string _root => _rootDir.At("cache");
     private TempGitRepo _source = null!;
 
     public async ValueTask InitializeAsync() => _source = await TempGitRepo.CreateAsync();
@@ -25,7 +27,7 @@ public sealed class GitCheckoutTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         _source.Dispose();
-        TempGitRepo.DeleteTree(_root);
+        _rootDir.Dispose();
         return ValueTask.CompletedTask;
     }
 
@@ -146,8 +148,11 @@ public sealed class GitCheckoutTests : IAsyncLifetime
 /// against a fake that agrees with whatever we assumed git does.</summary>
 internal sealed class TempGitRepo : IDisposable
 {
-    private TempGitRepo(string path, string url, string first, string second)
+    private readonly TempDir _dir;
+
+    private TempGitRepo(TempDir dir, string path, string url, string first, string second)
     {
+        _dir = dir;
         Path = path;
         Url = url;
         FirstCommit = first;
@@ -162,23 +167,33 @@ internal sealed class TempGitRepo : IDisposable
 
     public string SecondCommit { get; }
 
+    /// <summary>The repository lies in an owned folder, made here; the folder is removed again when git or a commit throws.</summary>
     public static async Task<TempGitRepo> CreateAsync()
     {
-        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-src-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
+        var dir = TempDir.For("git-src");
+        try
+        {
+            var path = dir.At("repo");
+            Directory.CreateDirectory(path);
 
-        await GitAsync(path, "init", "--quiet", "-b", "main");
-        var first = await CommitAsync(path, "one");
-        var second = await CommitAsync(path, "two");
+            await GitAsync(path, "init", "--quiet", "-b", "main");
+            var first = await CommitAsync(path, "one");
+            var second = await CommitAsync(path, "two");
 
-        return new TempGitRepo(path, new Uri(path).AbsoluteUri, first, second);
+            return new TempGitRepo(dir, path, new Uri(path).AbsoluteUri, first, second);
+        }
+        catch
+        {
+            dir.Dispose();
+            throw;
+        }
     }
 
     public async Task<string> HeadAsync() => await GitAsync(Path, "rev-parse", "HEAD");
 
     public async Task<string> StatusAsync() => await GitAsync(Path, "status", "--porcelain");
 
-    public void Dispose() => DeleteTree(Path);
+    public void Dispose() => _dir.Dispose();
 
     /// <summary>Git marks objects read-only, so a plain recursive delete fails on Windows.</summary>
     public static void DeleteTree(string path)

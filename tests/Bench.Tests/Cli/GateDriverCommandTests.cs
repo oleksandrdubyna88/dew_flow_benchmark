@@ -29,8 +29,10 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
     [Fact]
     public void A_suite_file_that_is_not_there_is_the_environment()
     {
-        var (code, _, error) = Run("gate", "run", "--gate", "plan", "--reviewers", "rev-a", "--db", "Host=x", "--suite-file", Path.Combine(Path.GetTempPath(), "no-such-suite.json"),
-            "--coai-exe", FakeCoai.Executable, "--artifact-root", Path.GetTempPath());
+        using var artifacts = TempDir.For("gate-artifacts");
+
+        var (code, _, error) = Run("gate", "run", "--gate", "plan", "--reviewers", "rev-a", "--db", "Host=x", "--suite-file", artifacts.At("no-such-suite.json"),
+            "--coai-exe", FakeCoai.Executable, "--artifact-root", artifacts.Path);
 
         code.Should().Be(ExitCodes.Environment);
         error.Should().Contain("suite file").And.Contain("is not there");

@@ -12,7 +12,7 @@
 > `PilotOut` with ordinary facts (S5), the 9p folder swept at the test's start (S4 (b)), S6's `lang-bench` suite run blocked
 > until a sandbox is named, D5 corrected (N4); after the parent's second gate round: M2's manifest written first and a killed-scaffold test (G3), S4's
 > 9p merge condition (G2), D6's earlier versions marked *Was*; after the third gate round: the 9p test takes a validated
-> scratch folder below the mount, and the kill check covers each scaffold). S4 built 2026-11-17 on `feat/e6-s4-modelarms` (brief `todo/PLAN_test_leftovers_E6_S4_brief.md`, plan gate `c26a7122`; the PR follows). **Earlier: progress 2026-11-17: S3 built and green on hosted CI (PR #219; brief `research/PLAN_test_leftovers_E6_S3_brief.md`); F42-c merged (#218). Earlier: in progress, 2026-11-16: amended for the parent's epoch 10** (§ *Epoch 10* item 8.3: § 6 *Before S3*
+> scratch folder below the mount, and the kill check covers each scaffold). S4 built 2026-11-17 on `feat/e6-s4-modelarms` (brief `todo/PLAN_test_leftovers_E6_S4_brief.md`, plan gate `c26a7122`; the PR follows). S5 built 2026-11-17 on `feat/e6-s5-rest` (brief `todo/PLAN_test_leftovers_E6_S5_brief.md`, plan gate `322b0b8d`; the PR follows): both guards are clean in S5's area (Node 160 to 87, C# 91 to 16, default profile 3 to 3); one listed exemption (§ 11). **Earlier: progress 2026-11-17: S3 built and green on hosted CI (PR #219; brief `research/PLAN_test_leftovers_E6_S3_brief.md`); F42-c merged (#218). Earlier: in progress, 2026-11-16: amended for the parent's epoch 10** (§ *Epoch 10* item 8.3: § 6 *Before S3*
 > restated by row F42-c and item 4.1's named paths; S3's Files name `TheAdaptedCopyTests.cs`; claims C1–C10 each with a
 > state and the gate it is observed before (§ 1, *The claims*); C4's `GetTempPath()` plants replaced by plants the
 > `Source` kind reads, that spelling in `src/` and `tools/` `.cs` written as a limit of both guards; E6-f1's Node half
@@ -822,6 +822,8 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
       *inside the owned folder of kit.Root (the ExperimentRoot TempFolder) that holds the clone*. No other exemption: none for
       `raw-temp`, `legacy-name` or `owner-blind`, and none in the scaffolds. The ten assertion strings of `TaskWorktrees*Tests.cs`
       read the one `WorktreeAdd` field (`"work~tree add"` with the tilde removed at run time) instead of a marker.
+      *S5's list (2026-11-17, class `raw-temp`, a comment on the line above its line, reason after `testsToDelete-exempt: raw-temp — `):*
+      `tests/FakeCli/Program.cs:675` (the one `Path.GetTempPath()` line inside `FakeHome.For`; line of the head; the marker is the line above): *the fake's TEMP is the one its launcher passed, and the home under it is a folder the test made first*. No other exemption: none for `raw-worktree` (the `.ndjson` sample is rewritten), `legacy-name` or `owner-blind`.
 - [ ] Output that must outlive the run is in the folder `BENCH_PILOT_OUT` names, never in the temp root and never prefixed (E6-l).
       *The documented exemption of the parent's Definition of Done, item 1, read for its epoch 11* (its § *Epoch 11* item
       4.3; the owner approves it with epoch 11): exactly two tests, `tests/Bench.Tests/ModelArms/M2PilotScaffold.cs` and

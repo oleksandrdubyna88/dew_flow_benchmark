@@ -232,9 +232,11 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
 
     private sealed class TempSuite : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("models-suite");
+
         public TempSuite()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-models-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
             File.WriteAllText(Path, """
             {
               "id": "demo",
@@ -248,6 +250,6 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }

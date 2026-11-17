@@ -22,15 +22,18 @@ public sealed class RunCheckoutTests(PostgresFixture postgres) : IAsyncLifetime
     /// <summary>Port 1 answers nothing anywhere, so every leg fails on transport in milliseconds.</summary>
     private const string DeadEndpoint = "http://127.0.0.1:1/v1";
 
-    private readonly string _cacheRoot = Path.Combine(Path.GetTempPath(), $"bench-run-cache-{Guid.NewGuid():N}");
+    private readonly TempDir _cache = TempDir.For("run-cache");
     private TempGitRepo _source = null!;
+
+    /// <summary>The checkout root: a child of the owned folder, made by the product, as before.</summary>
+    private string _cacheRoot => _cache.At("cache");
 
     public async ValueTask InitializeAsync() => _source = await TempGitRepo.CreateAsync();
 
     public ValueTask DisposeAsync()
     {
         _source.Dispose();
-        TempGitRepo.DeleteTree(_cacheRoot);
+        _cache.Dispose();
         return ValueTask.CompletedTask;
     }
 
@@ -111,9 +114,11 @@ public sealed class RunCheckoutTests(PostgresFixture postgres) : IAsyncLifetime
 
     private sealed class TempSuite : IDisposable
     {
+        private readonly TempDir _dir = TempDir.For("checkout-suite");
+
         public TempSuite()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-checkout-suite-{Guid.NewGuid():N}.json");
+            Path = _dir.At("suite.json");
             File.WriteAllText(Path, """
             {
               "id": "demo",
@@ -127,6 +132,6 @@ public sealed class RunCheckoutTests(PostgresFixture postgres) : IAsyncLifetime
 
         public string Path { get; }
 
-        public void Dispose() => File.Delete(Path);
+        public void Dispose() => _dir.Dispose();
     }
 }
