@@ -77,7 +77,7 @@ public sealed class ScratchRootSeamTests : IDisposable
             _repo.Root, Sha(baseSha), Sha(fixSha), ["tests/PolicyTests.cs"], PrintsItsTree, GrepFixed, Timeout, Ct, _repo.ScratchRoot)).Ok();
 
         report.RedDetail.Should().Contain(_repo.ScratchRoot + Path.DirectorySeparatorChar, "the build command printed the worktree it ran in");
-        (await _repo.GitAsync("worktree", "list", "--porcelain")).Should().NotContain(_repo.ScratchRoot, "the gate removed its worktree on the way out");
+        await AssertWorktreeRemovedAsync("the gate");
     }
 
     [Fact]
@@ -92,7 +92,15 @@ public sealed class ScratchRootSeamTests : IDisposable
         report.Applies.Should().BeTrue();
         report.Builds.Should().BeTrue();
         report.TestsDetail.Should().Contain(_repo.ScratchRoot + Path.DirectorySeparatorChar, "the test command printed the worktree it ran in");
-        (await _repo.GitAsync("worktree", "list", "--porcelain")).Should().NotContain(_repo.ScratchRoot, "the signals removed their worktree on the way out");
+        await AssertWorktreeRemovedAsync("the signals");
+    }
+
+    /// <summary>The worktree is gone from git's registry (only the repository's own tree remains, as in `HarvestGatesTests`), and nothing is left on disk under the scratch root.</summary>
+    private async Task AssertWorktreeRemovedAsync(string who)
+    {
+        (await _repo.GitAsync("worktree", "list", "--porcelain")).Should().NotContain(_repo.ScratchRoot, $"{who} removed its worktree on the way out");
+        (await _repo.GitAsync("worktree", "list")).Trim().Split('\n').Should().HaveCount(1, "only the repository's own tree may remain");
+        (!Directory.Exists(_repo.ScratchRoot) || !Directory.EnumerateFileSystemEntries(_repo.ScratchRoot).Any()).Should().BeTrue($"{who} left nothing under the scratch root");
     }
 
     private async Task<(string BaseSha, string FixSha)> FixturePairAsync()

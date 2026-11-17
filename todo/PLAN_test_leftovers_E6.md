@@ -823,7 +823,7 @@ three lines, the product overloads of D4, the wrappers of D5 and D6.
       `raw-temp`, `legacy-name` or `owner-blind`, and none in the scaffolds. The ten assertion strings of `TaskWorktrees*Tests.cs`
       read the one `WorktreeAdd` field (`"work~tree add"` with the tilde removed at run time) instead of a marker.
       *S5's list (2026-11-17, class `raw-temp`, a comment on the line above its line, reason after `testsToDelete-exempt: raw-temp — `):*
-      `tests/FakeCli/Program.cs:674` (the one `Path.GetTempPath()` line inside `FakeHome.For`; line of the head; the marker is the line above): *the fake's TEMP is the one its launcher passed, and the home under it is a folder the test made first*. No other exemption: none for `raw-worktree` (the `.ndjson` sample is rewritten), `legacy-name` or `owner-blind`.
+      `tests/FakeCli/Program.cs:675` (the one `Path.GetTempPath()` line inside `FakeHome.For`; line of the head; the marker is the line above): *the fake's TEMP is the one its launcher passed, and the home under it is a folder the test made first*. No other exemption: none for `raw-worktree` (the `.ndjson` sample is rewritten), `legacy-name` or `owner-blind`.
 - [ ] Output that must outlive the run is in the folder `BENCH_PILOT_OUT` names, never in the temp root and never prefixed (E6-l).
       *The documented exemption of the parent's Definition of Done, item 1, read for its epoch 11* (its § *Epoch 11* item
       4.3; the owner approves it with epoch 11): exactly two tests, `tests/Bench.Tests/ModelArms/M2PilotScaffold.cs` and
