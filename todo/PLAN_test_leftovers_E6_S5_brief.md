@@ -1,6 +1,6 @@
 # E6.S5 brief — the rest of `Bench.Tests`, the fakes and the product seams (rows E6-k, E6-b seam; D4, D5, D6; claim C8's S5 half)
 
-> Status: **plan only, nothing implemented yet, 2026-11-17; the item 8.1 observations made before its plan gate (§ 11); ONE open STOP finding for the coordinator before the plan gate (§ 13: six doc lines in five files that describe what S5 changes and lie outside S5's *Files*); not yet at its plan gate.** The brief of story S5 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S5 `:612-662`; rows E6-b `:94`, E6-k `:109`; claim C8 `:166`; D4 `:268-276`, D5 `:278-284`, D6 `:286-335`; § 6's first paragraph `:412-416`; § 11 `:806-842`). Its scope is S5's *Files* line (`:653-655`) as named paths (§ 0.1). The parent is at epoch 11 with ONE change (entry 11.1): **the next accepted change is the parent's ELEVENTH FULL STOP.**
+> Status: **plan only, nothing implemented yet, 2026-11-17; the item 8.1 observations made before its plan gate (§ 11); its § 13 finding (six doc lines in five files outside S5's *Files*) CLOSED by the owner 2026-11-17: history, (b), not a change and not entry 11.2, their update filed as follow-up F45 in the conventions follow-ups plan; Q1–Q5 answered (§ 14); ready for its plan gate.** The brief of story S5 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S5 `:612-662`; rows E6-b `:94`, E6-k `:109`; claim C8 `:166`; D4 `:268-276`, D5 `:278-284`, D6 `:286-335`; § 6's first paragraph `:412-416`; § 11 `:806-842`). Its scope is S5's *Files* line (`:653-655`) as named paths (§ 0.1). The parent is at epoch 11 with ONE change (entry 11.1): **the next accepted change is the parent's ELEVENTH FULL STOP.**
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-17. Read-only inputs, all verified: benchmark worktree `/home/jinx/git/wt/bench-e6s5`, branch
 > `feat/e6-s5-rest` from `main` `e967df53` (#221: E6.S4; #220: the stories amended to epoch 11; #219: E6.S3; #218: F42-c, the copy at mcp
@@ -71,7 +71,7 @@ one is the ELEVENTH FULL STOP: STOP, write the finding into this brief, and hand
 
 1. S3 merged (#219), so F41-b (mount `b1746499`) and F42-c (the copy at mcp `53f65130`) are in; S4 merged (#221, `e967df53`): met **[M]**.
 2. The stories amendment (#220) merged before this brief's plan gate (the parent's item 2 point 2): met **[M]**.
-3. § 13's STOP finding answered by the coordinator before the plan gate.
+3. § 13's STOP finding answered before the plan gate: met, the owner 2026-11-17, (b) history, follow-up F45 (§ 13).
 4. At most three open PRs here, or the owner's allowance for E6 PRs over the cap (2026-11-16).
 5. **The Docker-bound classes run on S5's CI** (`build-test`, Docker on `ubuntu-latest`): `GateProtocolTests`, `GateCampaignTests`,
    `GateDriverCommandTests` (the fake coai's launches, [P] O-g), `ScoutsOutOfProcessTests` (the fake CLI's launch with a test-given `TEMP`,
@@ -336,6 +336,7 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 - A whole-suite run under an owned `TMPDIR` leaves no `bench-fake-cli`, `bench-gate-fake`, `bench-dated-git`, `bench-gate-tests`,
   `bench-fs-engine*`, `bench-qln*`, `bench-daily-log*`, `bench-fixture*`, `bench-assess-*`, `fake-coai-data` or `outside.txt` there
   (today: O8's list), listed before and after on the PR, with the count of other stories' `clr-debug-pipe-*` FIFOs beside it (§ 12 N4).
+- The PR body lists the six doc lines § 13 reads as history (`research/PLAN_question_consultant_probes.md:317`, `research/PLAN_model_arms_E1.md:517`, `:649`, `research/PLAN_model_arms.md:344`, `research/PLAN_model_arms_E5.md:83`, `research/module_model_arms.md:922-923`) and names follow-up F45, which updates them; none is touched by S5.
 - 0 warnings; `dotnet format` clean; `TheAdaptedCopyTests` green (no manifest target touched); `plan-lifecycle.mjs` clean;
   `git diff --name-only <base>..HEAD` within § 0.1; § 3a copied into the stories' § 11.
 
@@ -393,7 +394,8 @@ them; the namespace and whole-suite times on the head.
 
 - **N1 — `tests/Bench.Tests/ModelArms/StepBench.cs:64` is outside S5's *Files*.** Its doc comment still says "a scratch root named
   `testsToDelete-modelarms-…`", the form S4 retired. `ModelArms/**` is S4's *Files* (merged as #221) and S5's line excludes it; S5 does not
-  touch it. A one-line fix forward is S4's plan as written (`ModelArms/**`, a comment that only satisfies the plan): Q4.
+  touch it. A one-line fix forward is S4's plan as written (`ModelArms/**`, a comment that only satisfies the plan): Q4, answered: the
+  coordinator handles it at S4's promotion or as a follow-up.
 - **N2 — E11-5's example spelling is red in the C# copy** (O7): `$"{nameof(…)}.{nameof(…)}"` is `owner-blind`; the concatenation is clean.
   The stories say "for example", so K4's choice is brief-level; for the follow-ups plan's next record, beside the parent's *Found on the way*
   (`PrefixPieces` reads an interpolated string's holes as literal text).
@@ -410,7 +412,9 @@ them; the namespace and whole-suite times on the head.
 - **N5 — `FilesystemEngineTests.cs:63` wrote into the temp root itself** (O8: `outside.txt`), a site no guard reads (`Directory.GetParent`
   of a temp folder). K2 fixes it by making the engine's root a child of the owned folder.
 
-## 13. STOP finding — doc lines that describe what S5 changes, outside S5's *Files* (OPEN, for the coordinator)
+## 13. STOP finding — doc lines that describe what S5 changes, outside S5's *Files* — CLOSED: history, (b); follow-up F45
+
+**Closed 2026-11-17 by the owner, in the coordinator's session: answer (b).** The six lines are history: `research/PLAN_question_consultant_probes.md:317`, `research/PLAN_model_arms_E1.md:517`, `:649`, `research/PLAN_model_arms.md:344`, `research/PLAN_model_arms_E5.md:83`, `research/module_model_arms.md:922-923`. None goes on S5's *Files* line; that is not a change of the parent and not entry 11.2 (epoch 11 stays at ONE change, 11.1). Their update is filed by the coordinator as follow-up **F45** in the conventions follow-ups plan, outside the rollout plan. S5 does not touch them; **S5's PR body lists all six lines and names F45** (§ 9). The finding as written:
 
 The parent's item 8.1 (`:4098-4100`) asks every *Files* line to name "the docs that describe what it changes, found by a `git grep` of the
 old spellings over `*.md` at the brief's base, each doc line with what it says now; an IMPLEMENTED plan gets a dated note beside the old
@@ -432,7 +436,7 @@ Read and NOT on the list: `research/module_probes.md:318-319` and `research/modu
 `research/PLAN_coai_gate_model_benchmark.md` describes the product's `COAI_DATA_DIR` (not the fake's); `research/PLAN_test_leftovers_E6_S2_brief.md:316`
 lists legacy names for D11 (history); `http/README.md:32` is S7's.
 
-**What this brief does:** NOT add them (the instruction: a file S5 needs outside its *Files* is the parent's next change, which after entry
+*(Was, before the owner's answer:)* **What this brief does:** NOT add them (the instruction: a file S5 needs outside its *Files* is the parent's next change, which after entry
 11.1 is the eleventh full stop). S5 does not go to its plan gate until the coordinator decides, per line: (a) on the *Files* line (a counted
 change, 11.2, the eleventh full stop), or (b) read as history and left as they are, recorded in this brief's "read and NOT on the line"
 list. [Recommend **(b)** for all of them, with this reasoning for the coordinator to check: every line is in an IMPLEMENTED plan or in a
@@ -443,12 +447,12 @@ documents that describe the fake today (`module_probes.md:318-319`, `module_test
 a description a reader would follow, (a) applies to that line, and it is ONE cause (S5's *Files* missed the docs item 8.1's grep finds),
 one entry.]
 
-## 14. Open questions, each with a recommendation
+## 14. Questions — ALL ANSWERED by the owner, 2026-11-17 (each as recommended)
 
-| Q | Question | Recommendation |
-|---|---|---|
-| Q1 | § 13: the six doc lines (five files) outside S5's *Files* — history (b), or on the line (a: entry 11.2, the eleventh full stop)? | (b), for the reasons in § 13; the coordinator decides before the plan gate |
-| Q2 | K2's ninth site, `FindingAssessorTests.cs:44` (`using` on the product's workspace): brief-level, as "a fix that only satisfies the plan as written" (row E6-k's condition, a file on S5's line)? | yes, brief-level: no file and no decision outside § 0.1 and row E6-k; the PR lists it beside the stories' eight |
-| Q3 | K11 as a lasting child-run theory (five Docker-free rows and a Docker-gated sixth, ~5 child runs per suite run) rather than a by-hand RED only | the theory: the stories ask for "a test", and a by-hand RED would not catch the next never-removed site in those classes; its cost is a few seconds per row (O8's per-class runs). If the coordinator prefers no child runs in the suite, the RED and GREEN are quoted by hand on the PR and the theory is dropped (brief-level either way) |
-| Q4 | N1, `StepBench.cs:64`'s stale doc comment (S4's file, outside S5's line) | not in S5; a one-line fix forward under S4's *Files* (`ModelArms/**`, a comment that only satisfies S4's plan), or carried to S4's promotion record as a deviation; the coordinator picks |
-| Q5 | (4) (b): pin the old signature by a child run with an owned `TMPDIR` (so the pinned `bench-scratch` is made inside an owned folder, never in `/tmp`), rather than calling it in-process (which makes `/tmp/bench-scratch/<uuid7>`, the product's shared folder, from a test) | the child run; an in-process call would make a test write the product's shared folder, which D11 says is the product's |
+| Q | Question | Recommendation | Answer (the owner, 2026-11-17) |
+|---|---|---|---|
+| Q1 | § 13: the six doc lines (five files) outside S5's *Files* — history (b), or on the line (a: entry 11.2, the eleventh full stop)? | (b), for the reasons in § 13; the coordinator decides before the plan gate | **(b)**: the six lines are history; not a change, not 11.2; their update is follow-up F45; S5's PR body lists them and names F45 (§ 13, § 9) |
+| Q2 | K2's ninth site, `FindingAssessorTests.cs:44` (`using` on the product's workspace): brief-level, as "a fix that only satisfies the plan as written" (row E6-k's condition, a file on S5's line)? | yes, brief-level: no file and no decision outside § 0.1 and row E6-k; the PR lists it beside the stories' eight | **accepted**: `FindingAssessorTests.cs:44` takes a `using`, at brief level (K2) |
+| Q3 | K11 as a lasting child-run theory (five Docker-free rows and a Docker-gated sixth, ~5 child runs per suite run) rather than a by-hand RED only | the theory: the stories ask for "a test", and a by-hand RED would not catch the next never-removed site in those classes; its cost is a few seconds per row (O8's per-class runs). If the coordinator prefers no child runs in the suite, the RED and GREEN are quoted by hand on the PR and the theory is dropped (brief-level either way) | **accepted**: E6-k's RED test is the lasting child-run theory (K11) |
+| Q4 | N1, `StepBench.cs:64`'s stale doc comment (S4's file, outside S5's line) | not in S5; a one-line fix forward under S4's *Files* (`ModelArms/**`, a comment that only satisfies S4's plan), or carried to S4's promotion record as a deviation; the coordinator picks | **accepted**: not S5's; the coordinator handles it at S4's promotion or as a follow-up (N1) |
+| Q5 | (4) (b): pin the old signature by a child run with an owned `TMPDIR` (so the pinned `bench-scratch` is made inside an owned folder, never in `/tmp`), rather than calling it in-process (which makes `/tmp/bench-scratch/<uuid7>`, the product's shared folder, from a test) | the child run; an in-process call would make a test write the product's shared folder, which D11 says is the product's | **accepted**: the child run with an owned `TMPDIR` (§ 5 (4) (b)) |
