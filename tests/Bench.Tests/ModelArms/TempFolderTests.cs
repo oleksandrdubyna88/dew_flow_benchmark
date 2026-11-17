@@ -176,7 +176,7 @@ public sealed class TempFolderTests
 
     private const string KillChildOut = "BENCH_E6S4_KILL_CHILD_OUT";
 
-    private static async Task<string> WaitForChildFolderAsync(string report, Process child)
+    internal static async Task<string> WaitForChildFolderAsync(string report, Process child)
     {
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(120);
         while (DateTime.UtcNow < until)
