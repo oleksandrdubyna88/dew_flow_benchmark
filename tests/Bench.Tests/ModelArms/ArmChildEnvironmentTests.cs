@@ -182,10 +182,10 @@ public sealed class ArmChildEnvironmentTests
     [Fact]
     public void Tmpdir_is_the_arms_own_whatever_the_parent_holds()
     {
-        Of(("TMPDIR", "/tmp/claude-1000"))[ArmChildEnvironment.TmpDir].Should().Be(Arm.Tmp);
-        Of(("tmpdir", "/tmp/other")).Should().ContainKey(ArmChildEnvironment.TmpDir).WhoseValue.Should().Be(Arm.Tmp);
+        Of(("TMPDIR", "/scratch/claude-1000"))[ArmChildEnvironment.TmpDir].Should().Be(Arm.Tmp);
+        Of(("tmpdir", "/scratch/other")).Should().ContainKey(ArmChildEnvironment.TmpDir).WhoseValue.Should().Be(Arm.Tmp);
         Of(("HOME", "/home/op"))[ArmChildEnvironment.TmpDir].Should().Be(Arm.Tmp, "a parent without one gets the arm's too");
-        Of(("tmpdir", "/tmp/other")).Keys.Should().NotContain("tmpdir", "any spelling of the parent's is replaced, not kept beside");
+        Of(("tmpdir", "/scratch/other")).Keys.Should().NotContain("tmpdir", "any spelling of the parent's is replaced, not kept beside");
     }
 
     [Fact]

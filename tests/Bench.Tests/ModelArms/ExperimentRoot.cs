@@ -19,8 +19,8 @@ internal sealed record GatePass(int ExitCode, string Output, string Error, IRead
 
 /// <summary>A real experiment root in a scratch folder: <c>&lt;temp&gt;/example/root</c> (mode 0700) holding the worked example's
 /// <c>experiment.json</c> with its <c>/example/</c> moved under the scratch folder, and a one-row <c>scenarios.json</c> (both mode 0600), so the root
-/// is the operator's own and closed to group and others. The scratch folder is a <see cref="TempFolder"/>: named <c>testsToDelete-modelarms-…</c>
-/// on its own last component (common.test-leftovers) and removed on dispose.</summary>
+/// is the operator's own and closed to group and others. The scratch folder is a <see cref="TempFolder"/>: the owned folder <c>testsToDelete-&lt;owner&gt;-bench-modelarms-&lt;id&gt;</c>,
+/// claimed beside it (common.test-leftovers), removed with its claim on dispose.</summary>
 internal sealed class ExperimentRoot : IDisposable
 {
     private const string ScenariosText = """[{"id":"S1","kind":"cs","name":"A_scenario"}]""";

@@ -153,23 +153,16 @@ public sealed class BriefFillerTests
     [Fact]
     public void An_override_that_exists_but_cannot_be_read_is_a_refusal_naming_it_never_the_shipped_file()
     {
-        var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
-        try
-        {
-            var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "shipped")).FullName;
-            var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "overrides")).FullName;
-            File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
-            var broken = System.IO.Path.Combine(overrides, "1-code.template.md");
-            File.WriteAllBytes(broken, [0x41, 0xFF, 0xFE, 0x42]);
+        using var folder = new TempFolder();
+        var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "shipped")).FullName;
+        var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "overrides")).FullName;
+        File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
+        var broken = System.IO.Path.Combine(overrides, "1-code.template.md");
+        File.WriteAllBytes(broken, [0x41, 0xFF, 0xFE, 0x42]);
 
-            var reason = ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code"));
+        var reason = ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code"));
 
-            reason.Should().Contain(broken).And.Contain("UTF-8");
-        }
-        finally
-        {
-            folder.Delete(recursive: true);
-        }
+        reason.Should().Contain(broken).And.Contain("UTF-8");
     }
 
     [Fact]
@@ -181,26 +174,19 @@ public sealed class BriefFillerTests
             return;
         }
 
-        var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
-        try
+        using var folder = new TempFolder();
+        var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "shipped")).FullName;
+        var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "overrides")).FullName;
+        File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
+        var locked = System.IO.Path.Combine(overrides, "1-code.template.md");
+        File.WriteAllText(locked, "operator text");
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+        if (CanRead(locked))
         {
-            var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "shipped")).FullName;
-            var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "overrides")).FullName;
-            File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
-            var locked = System.IO.Path.Combine(overrides, "1-code.template.md");
-            File.WriteAllText(locked, "operator text");
-            File.SetUnixFileMode(locked, UnixFileMode.None);
-            if (CanRead(locked))
-            {
-                Assert.Skip("this account reads files whatever their mode (root), so the permission failure cannot be provoked");
-            }
+            Assert.Skip("this account reads files whatever their mode (root), so the permission failure cannot be provoked");
+        }
 
-            ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code")).Should().Contain(locked);
-        }
-        finally
-        {
-            folder.Delete(recursive: true);
-        }
+        ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code")).Should().Contain(locked);
     }
 
     [Fact]
@@ -228,30 +214,23 @@ public sealed class BriefFillerTests
     [Fact]
     public void An_experiment_root_overrides_a_template_by_name()
     {
-        var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
-        try
-        {
-            var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "shipped")).FullName;
-            var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "overrides")).FullName;
-            File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "A");
-            File.WriteAllText(System.IO.Path.Combine(overrides, "1-code.template.md"), "B");
-            File.WriteAllText(System.IO.Path.Combine(shipped, "2-review.template.md"), "only shipped — é");
-            var files = new BriefTemplateFiles(shipped, overrides);
+        using var folder = new TempFolder();
+        var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "shipped")).FullName;
+        var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.Path, "overrides")).FullName;
+        File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "A");
+        File.WriteAllText(System.IO.Path.Combine(overrides, "1-code.template.md"), "B");
+        File.WriteAllText(System.IO.Path.Combine(shipped, "2-review.template.md"), "only shipped — é");
+        var files = new BriefTemplateFiles(shipped, overrides);
 
-            TextOf(files.Read("1-code")).Should().Be("B");
-            TextOf(files.Read("2-review")).Should().Be("only shipped — é");
-            ReasonOf(files.Read("gate")).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
-            File.WriteAllText(System.IO.Path.Combine(overrides, "hC-extra.template.md"), "an addition");
-            TextOf(files.Read("hC-extra")).Should().Be("an addition", "an experiment root's briefs folder may ADD a template a step names");
-            BriefTemplates.NameOf("../x").Failed().Should().BeTrue();
-            BriefTemplates.NameOf("a/b").Failed().Should().BeTrue();
-            BriefTemplates.NameOf("hA-trace").Ok().Should().Be("hA-trace.template.md");
-            BriefTemplates.NameOf("../x").Reason().Should().Be("'../x' is not a template stem — letters, digits and dashes, no separator and no '..' (hA-trace names hA-trace.template.md)");
-        }
-        finally
-        {
-            folder.Delete(recursive: true);
-        }
+        TextOf(files.Read("1-code")).Should().Be("B");
+        TextOf(files.Read("2-review")).Should().Be("only shipped — é");
+        ReasonOf(files.Read("gate")).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
+        File.WriteAllText(System.IO.Path.Combine(overrides, "hC-extra.template.md"), "an addition");
+        TextOf(files.Read("hC-extra")).Should().Be("an addition", "an experiment root's briefs folder may ADD a template a step names");
+        BriefTemplates.NameOf("../x").Failed().Should().BeTrue();
+        BriefTemplates.NameOf("a/b").Failed().Should().BeTrue();
+        BriefTemplates.NameOf("hA-trace").Ok().Should().Be("hA-trace.template.md");
+        BriefTemplates.NameOf("../x").Reason().Should().Be("'../x' is not a template stem — letters, digits and dashes, no separator and no '..' (hA-trace names hA-trace.template.md)");
     }
 
     [Fact]

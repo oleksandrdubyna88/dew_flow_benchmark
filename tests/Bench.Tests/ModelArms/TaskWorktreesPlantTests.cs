@@ -44,6 +44,7 @@ public sealed partial class TaskWorktreesTests
     private static async Task LiveWorktreeAsync(WorktreeKit kit, string branch = "live", string? attachBranch = null, params string[] then)
     {
         var live = kit.Temp.Combine("live-wt");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder kit.Temp (the WorktreeKit TempFolder) that holds this worktree; its clone lies in the kit root's own owned folder
         string[] add = attachBranch is null ? ["worktree", "add", "-q", live, "-b", branch, "HEAD"] : ["worktree", "add", "-q", live, attachBranch];
         if (then.Length == 0)
         {

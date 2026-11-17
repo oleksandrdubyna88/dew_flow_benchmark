@@ -24,6 +24,7 @@ public sealed partial class TaskWorktreesTests
         kit.Set("t1", resumes ? new StepEntry.Resume(Guid.NewGuid(), 2, 60) : new StepEntry.Skip());
         Directory.Delete(kit.Wt("t1"), recursive: true);
         await kit.GitAsync(kit.Clone, "worktree", "prune");
+        // testsToDelete-exempt: raw-worktree — inside the owned folder of kit.Root (the ExperimentRoot TempFolder) that holds the clone
         await kit.GitAsync(kit.Clone, "worktree", "add", "-q", "--no-checkout", kit.Wt("t1"), "tmp/t1");
         Directory.GetFileSystemEntries(kit.Wt("t1")).Should().ContainSingle("a crash between the add and the populate: the folder holds .git alone");
         kit.ForgetCalls();
@@ -37,7 +38,7 @@ public sealed partial class TaskWorktreesTests
         var blocks = Sentinel.Blocks(kit.Marker);
         blocks.Should().Contain(block => block.Call.EndsWith("rev-parse --git-path index", StringComparison.Ordinal) && block.Cwd == kit.Wt("t1"));
         blocks.Should().Contain(block => block.Call.EndsWith("reset -q --hard", StringComparison.Ordinal) && block.Cwd == kit.Wt("t1"));
-        kit.Questions().Should().NotContain(call => (call.StartsWith("worktree add", StringComparison.Ordinal) || call.StartsWith("worktree remove", StringComparison.Ordinal)) && call.Contains("/wt/t1", StringComparison.Ordinal));
+        kit.Questions().Should().NotContain(call => (call.StartsWith(WorktreeAdd, StringComparison.Ordinal) || call.StartsWith("worktree remove", StringComparison.Ordinal)) && call.Contains("/wt/t1", StringComparison.Ordinal));
         kit.Questions().Should().NotContain("branch -D tmp/t1");
         kit.LogLines.Should().Contain("t1: its worktree was registered but never populated (a crash before its checkout) — populated from tmp/t1");
         if (!resumes)
@@ -70,7 +71,7 @@ public sealed partial class TaskWorktreesTests
         Directory.Exists(kit.Wt("t1")).Should().BeTrue();
         (await File.ReadAllTextAsync(kit.Paths.TaskBefore("t1"), Ct)).Should().Be(before);
         File.Exists(Path.Combine(kit.Wt("t2"), "stray.txt")).Should().BeTrue("read before act");
-        kit.Questions().Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal) || call.StartsWith("branch -D", StringComparison.Ordinal) || call.StartsWith("worktree add", StringComparison.Ordinal));
+        kit.Questions().Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal) || call.StartsWith("branch -D", StringComparison.Ordinal) || call.StartsWith(WorktreeAdd, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -88,7 +89,7 @@ public sealed partial class TaskWorktreesTests
         await kit.ReadyAsync(sut, "t1", "t2");
 
         File.Exists(Path.Combine(kit.Wt("t1"), "untracked.txt")).Should().BeFalse();
-        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"worktree add -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
+        AssertInOrder(kit.Questions(), "worktree remove --force --force " + kit.Wt("t1"), "worktree prune", "branch -D tmp/t1", $"{WorktreeAdd} -q --no-checkout {kit.Wt("t1")} -b tmp/t1 HEAD");
         kit.LogLines.Should().Contain("t1: recreated — attempt 1 left no commit on tmp/t1 (1 uncommitted change(s) in its worktree discarded)");
     }
 

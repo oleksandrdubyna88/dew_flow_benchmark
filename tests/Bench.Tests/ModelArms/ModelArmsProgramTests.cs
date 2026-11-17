@@ -80,7 +80,8 @@ public sealed partial class ModelArmsProgramTests
         none.Error.Should().Contain("MODEL_ARMS_EXPERIMENT").And.Contain("--experiment");
         none.Calls.Should().BeEmpty();
 
-        var missing = await ExperimentRoot.ThroughAsync(["status", "--experiment", Path.Combine(Path.GetTempPath(), "testsToDelete-modelarms-absent-root")], NoEnvironment);
+        using var absent = new TempFolder();
+        var missing = await ExperimentRoot.ThroughAsync(["status", "--experiment", absent.Combine("absent-root")], NoEnvironment);
         missing.ExitCode.Should().Be(4);
         missing.Error.Should().Contain("init").And.Contain("does not exist");
         missing.Calls.Should().BeEmpty();

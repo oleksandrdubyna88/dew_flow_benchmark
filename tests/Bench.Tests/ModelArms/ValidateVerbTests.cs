@@ -749,10 +749,10 @@ public sealed class ValidateVerbTests
     private static Experiment Example(Action<JsonNode> change)
     {
         var path = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "examples", "part6.experiment.json");
-        var moved = File.ReadAllText(path).Replace("/example/", Path.GetTempPath().Replace('\\', '/').TrimEnd('/') + "/example/", StringComparison.Ordinal);
+        var moved = File.ReadAllText(path).Replace("/example/", TempDir.Root.Replace('\\', '/').TrimEnd('/') + "/example/", StringComparison.Ordinal);
         var tree = JsonNode.Parse(moved, documentOptions: new() { CommentHandling = System.Text.Json.JsonCommentHandling.Skip })!;
         change(tree);
-        var location = new ExperimentLocation(Path.Combine(Path.GetTempPath(), "example", "root"), Path.Combine(Path.GetTempPath(), "example", "home"), string.Empty, string.Empty);
+        var location = new ExperimentLocation(Path.Combine(TempDir.Root, "example", "root"), Path.Combine(TempDir.Root, "example", "home"), string.Empty, string.Empty);
         return ExperimentFile.Read(tree.ToJsonString(), location).Ok();
     }
 

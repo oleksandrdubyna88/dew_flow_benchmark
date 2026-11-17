@@ -1,5 +1,9 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
+using Bench.Domain;
+using Bench.Tests.Leftovers;
 using Bench.Tests.Probes.Driver;
 using FluentAssertions;
 using ModelArms.Adapters;
@@ -314,30 +318,117 @@ public sealed class PosixFolderIsolationTests
     [Fact]
     public async Task Verification_refuses_a_listable_folder_on_the_windows_drive_when_one_is_named()
     {
-        var scratch = System.Environment.GetEnvironmentVariable("MODEL_ARMS_DRVFS_SCRATCH") ?? string.Empty;
-        Assert.SkipWhen(scratch.Length == 0, "MODEL_ARMS_DRVFS_SCRATCH names no writable folder on a 9p mount (the Windows drive under WSL) — no test writes the operator's Windows drive on its own");
-        Assert.SkipUnless(File.ReadLines("/proc/mounts").Any(line => line.Split(' ')[1] == scratch.TrimEnd('/') && line.Split(' ')[2] == "9p"), $"{scratch} is not a 9p mount");
+        var scratch = DrvfsScratch.Required();
+        M2PilotScaffold.Say(SweepReport(LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess))));
         using var kit = Kit();
-        var folder = Path.Combine(scratch, "testsToDelete-modelarms-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(folder);
+        using var owned = OwnedDir.Create("drvfs", scratch);
+        kit.Root.Edit(top =>
+        {
+            top["isolation"]!["closed"] = new JsonArray();
+            top["isolation"]!["unlisted"] = new JsonArray(owned.Path);
+        });
+
         try
         {
-            kit.Root.Edit(top =>
-            {
-                top["isolation"]!["closed"] = new JsonArray();
-                top["isolation"]!["unlisted"] = new JsonArray(folder);
-            });
-
             var run = await kit.LockAsync();
 
             run.Code.Should().Be(3, Ctx(run));
-            run.Error.Should().Contain(folder).And.Contain("is still listable");
+            run.Error.Should().Contain(owned.Path).And.Contain("is still listable");
         }
         finally
         {
-            Directory.Delete(folder, recursive: true);
+            Reopen(owned.Path);
         }
     }
+
+    /// <summary>Gives the owner back full access to a folder the lock may have closed (a drive that keeps modes closes it for real), so the owned removal can list it; a drive that refuses the change keeps the folder claimed, and the next start sweep judges it.</summary>
+    private static void Reopen(string folder)
+    {
+        try
+        {
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            M2PilotScaffold.Say($"9p scratch: could not reopen {folder} before its removal ({ex.GetType().Name}: {ex.Message})");
+        }
+    }
+
+    [Fact]
+    public async Task A_folder_a_killed_test_left_on_the_windows_drive_is_collected_by_the_next_sweep_and_a_live_one_is_kept()
+    {
+        var scratch = DrvfsScratch.Required();
+        using var childTemp = new TempFolder();
+        using var report = new TempFolder();
+        var env = new Dictionary<string, string?> { [DrvfsChildOut] = report.Combine("child.txt"), ["TMPDIR"] = childTemp.Path, ["TESTSTODELETE_RUN"] = null };
+        using var child = Process.Start(SuiteChild.StartInfoFor(System.Environment.ProcessPath!, ["--no-ansi", "--filter-method", "*DrvfsChild_makes_an_owned_folder_and_waits_to_be_killed"], env))!;
+        var drained = Task.WhenAll(child.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken), child.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken));
+        string? dead = null;
+        try
+        {
+            var reported = await TempFolderTests.WaitForChildFolderAsync(report.Combine("child.txt"), child);
+            DrvfsScratch.IsDirectChild(scratch, reported).Should().BeTrue($"the child reports a folder directly in {scratch}: {reported} is not, so nothing of it is touched");
+            dead = reported;
+            Directory.Exists(dead).Should().BeTrue("the child's folder exists before the kill");
+            File.Exists(dead + ".owner").Should().BeTrue("and so does its claim");
+            child.Kill(entireProcessTree: true);
+            await child.WaitForExitAsync(TestContext.Current.CancellationToken);
+            child.ExitCode.Should().Be(137, "SIGKILL: the child had no chance to dispose anything");
+
+            DrvfsScratch.Check(scratch, File.ReadLines("/proc/mounts"), RootFacts.RealPathOf).Failed().Should().BeFalse("the folder now holds the dead child's folder and claim, which the check accepts: they are what a killed run leaves");
+            using var live = OwnedDir.Create("drvfs-live", scratch);
+            var result = LeftoversSweep.Run(new SweepOptions(scratch, DateTimeOffset.UtcNow, TimeSpan.Zero, Liveness.ProbeProcess));
+
+            M2PilotScaffold.Say(SweepReport(result));
+            result.Removed.Should().Contain(dead, "the dead child's folder was collected");
+            Directory.Exists(dead).Should().BeFalse();
+            File.Exists(dead + ".owner").Should().BeFalse("and its claim with it");
+            result.Preserved.Should().Contain(kept => kept.Path == live.Path && kept.Reason == "live", "this process's own folder is live: the record decided, not the uid (every file on the drive is the caller's)");
+            Directory.Exists(live.Path).Should().BeTrue();
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill(entireProcessTree: true);
+            }
+
+            if (dead is not null && (ScaffoldCleanup.Remove(dead).Concat(ScaffoldCleanup.Remove(dead + ".owner")).ToList() is { Count: > 0 } left))
+            {
+                M2PilotScaffold.Say($"9p scratch: could not remove {string.Join(", ", left)} (the next start sweep judges them)");
+            }
+
+            try
+            {
+                await drained.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                // The killed child's pipes are not read to their end; nothing depends on them.
+            }
+        }
+    }
+
+    /// <summary>The child of the kill check: passes the check, makes an owned folder in the named scratch, reports its path (a temp file, then a move) and waits to be killed. Returns at once when the variable is unset, so every normal run is green.</summary>
+    [Fact(Timeout = 180_000)]
+    public async Task DrvfsChild_makes_an_owned_folder_and_waits_to_be_killed()
+    {
+        var report = System.Environment.GetEnvironmentVariable(DrvfsChildOut);
+        if (string.IsNullOrEmpty(report))
+        {
+            return;
+        }
+
+        using var owned = OwnedDir.Create("drvfs", DrvfsScratch.Required());
+        File.WriteAllText(report + ".part", owned.Path + "\n");
+        File.Move(report + ".part", report);
+        await Task.Delay(TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
+    }
+
+    private const string DrvfsChildOut = "BENCH_E6S4_DRVFS_CHILD_OUT";
+
+    private static string SweepReport(SweepResult result) =>
+        $"9p scratch sweep: removed {result.Removed.Count}, preserved {result.Preserved.Count}" + string.Concat(result.Removed.Select(path => $"\n  removed: {path}")) + string.Concat(result.Preserved.Select(kept => $"\n  kept: {kept.Path} — {kept.Reason}")) + string.Concat(result.Errors.Select(error => $"\n  error: {error}"));
 
     [Fact]
     public async Task Lock_and_unlock_run_under_an_exclusive_file_lock()

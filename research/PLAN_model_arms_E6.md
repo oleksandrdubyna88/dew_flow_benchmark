@@ -340,6 +340,8 @@ from the worktree's root (M2's log ran it so, `research/module_model_arms.md:145
 epic E6 there), so no owner-form helper exists here yet, and a legacy name is listed by a sweep, never collected by age — M3's own
 teardown (step 15) is the only thing that removes it.
 
+*Note 2026-11-17 (test-leftovers E6.S4):* M3's paths are no longer under `/tmp`: they are `<out>/bench-m3-<what>-<id>`, UNPREFIXED, under the folder the operator names in `BENCH_PILOT_OUT`. The output must outlive the run, so no sweep may collect it: the one documented exemption of row E6-l of the E6 stories (`todo/PLAN_test_leftovers_E6.md` § 11; item 4.3 of the rollout). M3's own teardown (step 15) is still the only thing that removes it.
+
 *The scaffold* (`M3PilotScaffold`, M2's shape, `M2PilotScaffold.cs:33-75`) draws a fresh `<id>`, creates **first, exclusively**
 (`FileMode.CreateNew`; one already there → a new `<id>`) the manifest `testsToDelete-m3-manifest-<id>.json` — the `<id>`, the caller's
 uid, and the EXACT path of everything it creates or names, written before each is created — then prints and creates: `<target>`
@@ -357,6 +359,8 @@ far as `validate` accepts); every step's model `m3-fake` and `minutes` 2, but th
 `FAKE_CLI_HOME`, `:668-669`) — every gate call lasts ≥ 10 s, the window step 9 reads the lock in; `coai` as M2's (the fake as the stand-in
 binary, a key-free settings file). Before step 9 the lock queue's ceiling (E5.S3) is checked against four gates of ≥ 10 s and one gate-wait
 of 30 s; if it would refuse, the delay goes and step 9's *held* reading with it, and the log says so.
+
+*Note 2026-11-17 (test-leftovers E6.S4):* the manifest is `bench-m3-manifest-<id>.json` and every name `bench-m3-<what>-<id>` (`bench-m3-target-<id>`, `bench-m3-root-<id>`, ...), all under the folder `BENCH_PILOT_OUT` names (existing, outside every checkout and outside the temp root; the scaffold refuses anything else before it makes anything), unprefixed; M2's scaffold writes the same kind of manifest, `bench-m2-manifest-<id>.json`, first.
 
 *What the wrapper plays* (the model's file writes, which the fake cannot do): the split's fresh call writes `work/tasks.json` (`t1`–`t4`,
 `t5` owning the plan) and `work/t<n>.md`; a task coder's fresh call writes and commits `<id>.txt`; the FIRST gate call of the pilot
@@ -380,6 +384,8 @@ nothing is removed while a snapshot stands; (T3) the restore verified: `status` 
 `stat -c %a <old>` is its original mode; (T4) the manifest verified: it parses, its uid is the caller's, every path in it is named
 `testsToDelete-m3-*-<id>` and is owned by the caller's uid (`stat -c %u`) or absent; (T5) only then `rm -rf` of exactly the manifest's
 paths, one by one — never a glob — and the manifest last; the log names what was removed and what was kept.
+
+*Note 2026-11-17 (test-leftovers E6.S4):* T4 reads the names `bench-m3-*-<id>` under `BENCH_PILOT_OUT`, not `testsToDelete-m3-*-<id>`.
 
 1. The scaffold (`--explicit only --filter-method "*Writes_the_scratch_target_root_home_and_claude_for_the_pilot"`) → passed; the paths and
    the manifest.
@@ -746,6 +752,7 @@ Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its
     scratch `<s>` is PRESERVED: renamed (same file system) out of the fixture's root to a sibling `testsToDelete-modelarms-reader-<name>-<id>`
     that the fixture's dispose does not own, its path in the failure message — its own outputs kept (links into the root dangle once the
     root is gone); a legacy name, removed by hand.
+    *Note 2026-11-17 (test-leftovers E6.S4):* a reader that times out leaves its scratch inside the run's owned folder, which removes it; no sibling in the temp root, no legacy name. The failure message is the record: it quotes what the scratch held (relative names and sizes) and the reader's stdout and stderr so far.
 13. **The fixtures (three, each replayed or read).** `result-success.jsonl` has no `total_cost_usd` and no `modelUsage` (E2 §8 item 62:
     every cost `None`, the arm total NaN), so the costs come from two result lines with `total_cost_usd` and `modelUsage`
     (`claude-sonnet-5-5`: `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, `costUSD` — the names
@@ -820,6 +827,12 @@ Items 6, 11, 19 and 21 change what the parent claims or decides and wait for its
 | three fixture files | < 10 KB | in git | — |
 | M3's `/tmp/testsToDelete-m3-<what>-<id>` paths (target, root with four arms, home, old folder, bin, fake home, `<d28>`, `<deleg>`, `<home14>`, `<keep>`) and the manifest | < 300 MB | step 15's teardown removes exactly the manifest's paths (T5), the log says so; a legacy name, so no sweep collects it by age | the recovery sequence T1–T5 for any step that stops: runners ended, `unlock` (retried, a failure reported and nothing removed), the restore and the manifest verified, then the removal |
 | `todo/PLAN_model_arms_analysis.md` | one plan | promoted by its own completion | — |
+
+*Note 2026-11-17 (test-leftovers E6.S4):* row `ConsumerArms`' root: a killed test run's `TempFolder` is now the owned folder `testsToDelete-<owner>-bench-modelarms-<id>` with its claim beside it, so the next run's start sweep collects it (it no longer leaves a folder nobody collects).
+
+*Note 2026-11-17 (test-leftovers E6.S4):* row "the readers' scratch folders": a reader that times out leaves its scratch inside the run's owned folder, removed with that folder; the failure message quotes what it held and the reader's stdout and stderr so far, and nothing is left in the temp root.
+
+*Note 2026-11-17 (test-leftovers E6.S4):* row M3's paths: they are `bench-m3-<what>-<id>` under the folder the operator names in `BENCH_PILOT_OUT` (existing, outside every checkout and outside the temp root), unprefixed, named by a manifest written first; step 15's teardown (T5) is still the only thing that removes them, and no sweep collects them.
 
 No table, no database, no process that outlives a verb beyond E5's detached runners during M3 (which end with their arms).
 
