@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { cliInvocation, descendantsOf, killTree, npmInvocation, run } from '../lib/proc.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const posix = process.platform !== 'win32';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -24,8 +26,8 @@ function pidsCarrying(mark) {
 /** Resolves with the settled value, or with the sentinel after `ms`: a hang becomes an assertion message, not a CI timeout. */
 const raceDeadline = (promise, ms) => Promise.race([promise, sleep(ms).then(() => 'deadline')]);
 
-test('A_timeout_ends_a_grandchild_and_run_resolves', { skip: !posix && 'POSIX process groups' }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-pab-proc-'));
+test('A_timeout_ends_a_grandchild_and_run_resolves', { skip: !posix && 'POSIX process groups' }, async t => {
+  const dir = owned.ownedDir(t, 'pabproc');
   const mark = `BENCH_MARK_${randomBytes(6).toString('hex')}`;
   const gcFile = path.join(dir, 'gc');
   try {
@@ -42,7 +44,6 @@ test('A_timeout_ends_a_grandchild_and_run_resolves', { skip: !posix && 'POSIX pr
     assert.deepEqual(survivors, [], 'no process still carries the mark');
   } finally {
     for (const pid of pidsCarrying(mark)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
-    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -91,7 +92,7 @@ const setsid = ['/usr/bin/setsid', '/bin/setsid'].find(p => fs.existsSync(p));
 
 test('A_timeout_ends_a_grandchild_in_its_own_session_too', { skip: !posix && 'POSIX sessions' }, async t => {
   if (!setsid) return t.skip('setsid is not installed');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-pab-proc-'));
+  const dir = owned.ownedDir(t, 'pabproc');
   const mark = `BENCH_MARK_${randomBytes(6).toString('hex')}`;
   try {
     // the CLI's Bash-tool shell runs in its own session (pid = pgid = sid): a group kill of the launch cannot reach it
@@ -105,7 +106,6 @@ test('A_timeout_ends_a_grandchild_in_its_own_session_too', { skip: !posix && 'PO
     assert.deepEqual(survivors, [], 'no process still carries the mark');
   } finally {
     for (const pid of pidsCarrying(mark)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
-    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -145,23 +145,19 @@ test('Ctrl_C_on_the_parent_leaves_no_detached_child_behind', { skip: !posix && '
   }
 });
 
-test('A_cmd_shim_is_run_through_its_js_entry_by_the_running_node_and_anything_else_by_its_own_path', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-pab-cli-'));
-  try {
-    const entry = '@openai/codex/bin/codex.js';
-    fs.mkdirSync(path.join(dir, 'win', 'node_modules', '@openai', 'codex', 'bin'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'win', 'codex.cmd'), '@echo off\r\n');
-    fs.writeFileSync(path.join(dir, 'win', 'node_modules', entry), '');
-    fs.mkdirSync(path.join(dir, 'posix'));
-    fs.writeFileSync(path.join(dir, 'posix', 'codex'), '');
-    const exts = ['', '.exe', '.cmd'];
-    assert.deepEqual(cliInvocation('codex', ['exec', '-'], { pathValue: path.join(dir, 'win'), entry, exts }),
-      { exe: process.execPath, args: [path.join(dir, 'win', 'node_modules', entry), 'exec', '-'] });
-    assert.deepEqual(cliInvocation('codex', ['exec'], { pathValue: path.join(dir, 'posix'), entry, exts }), { exe: path.join(dir, 'posix', 'codex'), args: ['exec'] });
-    assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'none'), entry, exts }), /codex not found on PATH/);
-    fs.rmSync(path.join(dir, 'win', 'node_modules'), { recursive: true });
-    assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'win'), entry, exts }), /codex\.js/);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+test('A_cmd_shim_is_run_through_its_js_entry_by_the_running_node_and_anything_else_by_its_own_path', t => {
+  const dir = owned.ownedDir(t, 'pabcli');
+  const entry = '@openai/codex/bin/codex.js';
+  fs.mkdirSync(path.join(dir, 'win', 'node_modules', '@openai', 'codex', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'win', 'codex.cmd'), '@echo off\r\n');
+  fs.writeFileSync(path.join(dir, 'win', 'node_modules', entry), '');
+  fs.mkdirSync(path.join(dir, 'posix'));
+  fs.writeFileSync(path.join(dir, 'posix', 'codex'), '');
+  const exts = ['', '.exe', '.cmd'];
+  assert.deepEqual(cliInvocation('codex', ['exec', '-'], { pathValue: path.join(dir, 'win'), entry, exts }),
+    { exe: process.execPath, args: [path.join(dir, 'win', 'node_modules', entry), 'exec', '-'] });
+  assert.deepEqual(cliInvocation('codex', ['exec'], { pathValue: path.join(dir, 'posix'), entry, exts }), { exe: path.join(dir, 'posix', 'codex'), args: ['exec'] });
+  assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'none'), entry, exts }), /codex not found on PATH/);
+  fs.rmSync(path.join(dir, 'win', 'node_modules'), { recursive: true });
+  assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'win'), entry, exts }), /codex\.js/);
 });

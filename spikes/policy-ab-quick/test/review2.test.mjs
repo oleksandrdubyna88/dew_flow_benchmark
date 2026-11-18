@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { gitDirFor } from '../hooks/audit.mjs';
@@ -24,6 +23,9 @@ import { CostMeter, OVER_CAP_FACTOR, outcomeOf, splitLines } from '../lib/watchd
 import { buildArmMount } from '../lib/tree.mjs';
 import { assembleReport } from '../report.mjs';
 import { runAll } from '../pilot.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const POLICY = ['common/subagent-models.md', 'settings/hooks/subagent-model.mjs', 'settings/settings.json'];
 
@@ -55,42 +57,38 @@ test('the guard entries are lifted from the release settings; the user-guard ins
   assert.deepEqual(withGuardEntries(base, { hooks: {} }), base);
 });
 
-test('REAL conventions: both arms are built from the pin, differ in exactly the declared files, in ONE identical-looking commit', { skip: !fs.existsSync(path.join(CONV_CLONE, '.git')) }, async () => {
+test('REAL conventions: both arms are built from the pin, differ in exactly the declared files, in ONE identical-looking commit', { skip: !fs.existsSync(path.join(CONV_CLONE, '.git')) }, async t => {
   const story = loadStory('coai-751');
   assert.deepEqual([...story.policyFiles].sort(), POLICY);
   const pin = await gitlinkAt(story.repoClone, story.P, story.mount);
   const dirs = {};
   const built = {};
-  try {
-    for (const arm of ['A', 'B']) {
-      dirs[arm] = fs.mkdtempSync(path.join(os.tmpdir(), `pab-mount-${arm}-`));
-      await extractConventionsInto(dirs[arm], story.mount, pin);
-      built[arm] = await buildArmMount(dirs[arm], story, arm, pin, ARM_SHAS);
-    }
-    assert.deepEqual(built.A.delta, []);
-    assert.deepEqual([...built.B.delta].sort(), POLICY);
-    const mount = arm => path.join(dirs[arm], ...story.mount.split('/'));
-    const git = (arm, ...args) => execFileSync('git', args, { cwd: mount(arm), encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } }).trim();
-    for (const arm of ['A', 'B']) {
-      assert.equal(git(arm, 'rev-list', '--count', 'HEAD'), '1', 'one commit, no history');
-      assert.equal(git(arm, 'tag', '-l'), '');
-      assert.equal(git(arm, 'log', '-1', '--format=%an|%ae|%aI|%s'), 'bench|bench@invalid|2000-01-01T00:00:00Z|conventions');
-      assert.equal(git(arm, 'status', '--porcelain'), '');
-    }
-    assert.deepEqual(assertArmsDifferOnlyInPolicy(await mountFileMap(mount('A')), await mountFileMap(mount('B')), story.policyFiles).sort(), POLICY);
-    const read = (arm, f) => fs.readFileSync(path.join(mount(arm), f), 'utf8');
-    assert.equal(read('A', 'common/planning-docs.md'), read('B', 'common/planning-docs.md'), 'the second loaded rule is the same in both arms');
-    for (const arm of ['A', 'B']) {
-      assert.ok(!fs.existsSync(path.join(mount(arm), 'settings/hooks/ensure-user-guard.mjs')));
-      assert.ok(!fs.existsSync(path.join(mount(arm), 'settings/hooks/lib/user-guard-install.mjs')));
-      assert.equal(read(arm, 'settings/settings.json').includes('ensure-user-guard'), false);
-    }
-    assert.ok(read('B', 'settings/settings.json').includes('subagent-model.mjs'));
-    assert.ok(!read('A', 'settings/settings.json').includes('subagent-model.mjs'));
-    assert.ok(fs.existsSync(path.join(mount('B'), 'settings/hooks/subagent-model.mjs')) && !fs.existsSync(path.join(mount('A'), 'settings/hooks/subagent-model.mjs')));
-  } finally {
-    for (const d of Object.values(dirs)) fs.rmSync(d, { recursive: true, force: true });
+  for (const arm of ['A', 'B']) {
+    dirs[arm] = owned.ownedDir(t, `pabmount${arm}`);
+    await extractConventionsInto(dirs[arm], story.mount, pin);
+    built[arm] = await buildArmMount(dirs[arm], story, arm, pin, ARM_SHAS);
   }
+  assert.deepEqual(built.A.delta, []);
+  assert.deepEqual([...built.B.delta].sort(), POLICY);
+  const mount = arm => path.join(dirs[arm], ...story.mount.split('/'));
+  const git = (arm, ...args) => execFileSync('git', args, { cwd: mount(arm), encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } }).trim();
+  for (const arm of ['A', 'B']) {
+    assert.equal(git(arm, 'rev-list', '--count', 'HEAD'), '1', 'one commit, no history');
+    assert.equal(git(arm, 'tag', '-l'), '');
+    assert.equal(git(arm, 'log', '-1', '--format=%an|%ae|%aI|%s'), 'bench|bench@invalid|2000-01-01T00:00:00Z|conventions');
+    assert.equal(git(arm, 'status', '--porcelain'), '');
+  }
+  assert.deepEqual(assertArmsDifferOnlyInPolicy(await mountFileMap(mount('A')), await mountFileMap(mount('B')), story.policyFiles).sort(), POLICY);
+  const read = (arm, f) => fs.readFileSync(path.join(mount(arm), f), 'utf8');
+  assert.equal(read('A', 'common/planning-docs.md'), read('B', 'common/planning-docs.md'), 'the second loaded rule is the same in both arms');
+  for (const arm of ['A', 'B']) {
+    assert.ok(!fs.existsSync(path.join(mount(arm), 'settings/hooks/ensure-user-guard.mjs')));
+    assert.ok(!fs.existsSync(path.join(mount(arm), 'settings/hooks/lib/user-guard-install.mjs')));
+    assert.equal(read(arm, 'settings/settings.json').includes('ensure-user-guard'), false);
+  }
+  assert.ok(read('B', 'settings/settings.json').includes('subagent-model.mjs'));
+  assert.ok(!read('A', 'settings/settings.json').includes('subagent-model.mjs'));
+  assert.ok(fs.existsSync(path.join(mount('B'), 'settings/hooks/subagent-model.mjs')) && !fs.existsSync(path.join(mount('A'), 'settings/hooks/subagent-model.mjs')));
 });
 
 test('a resolver story must declare its policy files', () => {
@@ -316,53 +314,37 @@ function link(target, at) {
 }
 
 test('shedding refuses a junction at the target and leaves what it points to untouched', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-junc-'));
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-outside-'));
-  try {
-    fs.writeFileSync(path.join(outside, 'precious.txt'), 'keep');
-    fs.mkdirSync(path.join(root, 'c1'), { recursive: true });
-    if (!link(outside, path.join(root, 'c1', 'score'))) return t.skip('cannot create a junction here');
-    assert.throws(() => assertRemovable(path.join(root, 'c1', 'score'), root), /link or junction/);
-    const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
-    assert.deepEqual(removed, []);
-    assert.equal(refused.length, 1);
-    assert.match(refused[0].reason, /link or junction/);
-    assert.equal(fs.readFileSync(path.join(outside, 'precious.txt'), 'utf8'), 'keep');
-  } finally {
-    fs.rmSync(path.join(root, 'c1', 'score'), { force: true });
-    fs.rmSync(root, { recursive: true, force: true });
-    fs.rmSync(outside, { recursive: true, force: true });
-  }
+  const root = owned.ownedDir(t, 'pabjunc');
+  const outside = owned.ownedDir(t, 'paboutside');
+  fs.writeFileSync(path.join(outside, 'precious.txt'), 'keep');
+  fs.mkdirSync(path.join(root, 'c1'), { recursive: true });
+  if (!link(outside, path.join(root, 'c1', 'score'))) return t.skip('cannot create a junction here');
+  assert.throws(() => assertRemovable(path.join(root, 'c1', 'score'), root), /link or junction/);
+  const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
+  assert.deepEqual(removed, []);
+  assert.equal(refused.length, 1);
+  assert.match(refused[0].reason, /link or junction/);
+  assert.equal(fs.readFileSync(path.join(outside, 'precious.txt'), 'utf8'), 'keep');
 });
 
 test('shedding refuses a target whose PARENT is a junction that leaves the runs root', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-junc2-'));
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-outside2-'));
-  try {
-    fs.mkdirSync(path.join(outside, 'src_vs_code', 'node_modules', 'pkg'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'c1'), { recursive: true });
-    if (!link(outside, path.join(root, 'c1', 'tree'))) return t.skip('cannot create a junction here');
-    const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
-    assert.deepEqual(removed, []);
-    assert.ok(refused.some(r => /outside/.test(r.reason)), JSON.stringify(refused));
-    assert.ok(fs.existsSync(path.join(outside, 'src_vs_code', 'node_modules', 'pkg')));
-  } finally {
-    fs.rmSync(path.join(root, 'c1', 'tree'), { force: true });
-    fs.rmSync(root, { recursive: true, force: true });
-    fs.rmSync(outside, { recursive: true, force: true });
-  }
+  const root = owned.ownedDir(t, 'pabjunc2');
+  const outside = owned.ownedDir(t, 'paboutside2');
+  fs.mkdirSync(path.join(outside, 'src_vs_code', 'node_modules', 'pkg'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'c1'), { recursive: true });
+  if (!link(outside, path.join(root, 'c1', 'tree'))) return t.skip('cannot create a junction here');
+  const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
+  assert.deepEqual(removed, []);
+  assert.ok(refused.some(r => /outside/.test(r.reason)), JSON.stringify(refused));
+  assert.ok(fs.existsSync(path.join(outside, 'src_vs_code', 'node_modules', 'pkg')));
 });
 
-test('shedding a real directory still works, and refuses a shallow root outright', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-real-'));
-  try {
-    fs.mkdirSync(path.join(root, 'c1', 'score', '_own'), { recursive: true });
-    assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), true);
-    assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), false);
-    assert.throws(() => shedCell(ROOT, 'c1', {}), /two folders deep/);
-    fs.writeFileSync(path.join(root, 'c1', 'file'), 'x');
-    assert.throws(() => assertRemovable(path.join(root, 'c1', 'file'), root), /not a directory/);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+test('shedding a real directory still works, and refuses a shallow root outright', t => {
+  const root = owned.ownedDir(t, 'pabreal');
+  fs.mkdirSync(path.join(root, 'c1', 'score', '_own'), { recursive: true });
+  assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), true);
+  assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), false);
+  assert.throws(() => shedCell(ROOT, 'c1', {}), /two folders deep/);
+  fs.writeFileSync(path.join(root, 'c1', 'file'), 'x');
+  assert.throws(() => assertRemovable(path.join(root, 'c1', 'file'), root), /not a directory/);
 });

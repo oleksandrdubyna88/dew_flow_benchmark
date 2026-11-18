@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +11,9 @@ import { shedCell } from '../lib/shed.mjs';
 import { overlayEntries } from '../lib/settings.mjs';
 import { parseNdjson, summarize } from '../lib/summary.mjs';
 import { CostMeter, OVER_CAP_FACTOR } from '../lib/watchdog.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..');
@@ -97,27 +99,21 @@ function link(target, at) {
 }
 
 test('a junction INSIDE a tree stops the delete, and what it points to survives', t => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-inner-'));
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-inner-out-'));
+  const base = owned.ownedDir(t, 'pabinner');
+  const outside = owned.ownedDir(t, 'pabinnerout');
   const jct = path.join(base, 'c1', 'score', 'a', 'b', 'jct');
-  try {
-    fs.writeFileSync(path.join(outside, 'precious.txt'), 'keep');
-    fs.mkdirSync(path.join(base, 'c1', 'score', 'a', 'b'), { recursive: true });
-    fs.writeFileSync(path.join(base, 'c1', 'score', 'a', 'file.txt'), 'x');
-    assert.equal(findLinkInside(path.join(base, 'c1', 'score')), '', 'a plain tree has none');
-    if (!link(outside, jct)) return t.skip('cannot create a junction here');
-    assert.equal(findLinkInside(path.join(base, 'c1', 'score')), jct);
-    assert.throws(() => removeUnder(path.join(base, 'c1', 'score'), base), /contains a link or junction/);
-    const shed = shedCell(base, 'c1', {});
-    assert.deepEqual(shed.removed, []);
-    assert.match(shed.refused[0].reason, /contains a link or junction/);
-    assert.equal(fs.readFileSync(path.join(outside, 'precious.txt'), 'utf8'), 'keep');
-    assert.ok(fs.existsSync(path.join(base, 'c1', 'score', 'a', 'file.txt')), 'nothing of the tree was deleted either');
-  } finally {
-    fs.rmSync(jct, { force: true });
-    fs.rmSync(base, { recursive: true, force: true });
-    fs.rmSync(outside, { recursive: true, force: true });
-  }
+  fs.writeFileSync(path.join(outside, 'precious.txt'), 'keep');
+  fs.mkdirSync(path.join(base, 'c1', 'score', 'a', 'b'), { recursive: true });
+  fs.writeFileSync(path.join(base, 'c1', 'score', 'a', 'file.txt'), 'x');
+  assert.equal(findLinkInside(path.join(base, 'c1', 'score')), '', 'a plain tree has none');
+  if (!link(outside, jct)) return t.skip('cannot create a junction here');
+  assert.equal(findLinkInside(path.join(base, 'c1', 'score')), jct);
+  assert.throws(() => removeUnder(path.join(base, 'c1', 'score'), base), /contains a link or junction/);
+  const shed = shedCell(base, 'c1', {});
+  assert.deepEqual(shed.removed, []);
+  assert.match(shed.refused[0].reason, /contains a link or junction/);
+  assert.equal(fs.readFileSync(path.join(outside, 'precious.txt'), 'utf8'), 'keep');
+  assert.ok(fs.existsSync(path.join(base, 'c1', 'score', 'a', 'file.txt')), 'nothing of the tree was deleted either');
 });
 
 test('no script or library deletes recursively on its own: only safe-rm does', () => {
