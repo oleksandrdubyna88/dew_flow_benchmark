@@ -2,7 +2,6 @@
 the empty program, and the program's environment."""
 import fcntl
 import os
-import tempfile
 import signal
 import subprocess
 import unittest
@@ -15,6 +14,7 @@ import rs_layer as layer
 import rs_olympiad as ro
 import rs_pump
 import rs_report as rp
+import box_support as bs
 from box_support import (ANSWER, BASH_OWN_KEYS, STATUS_FD, Workspace, box_prefix, case, failing_prefix, fake_box, fake_cgroup, reporting_prefix,
                          sleepers, wait_until)
 
@@ -475,7 +475,7 @@ class CommandLineTests(unittest.TestCase):
 
     def test_An_oom_kill_in_the_cgroup_is_memory_limit_and_exit_1_on_the_command_line(self):
         import test_run_samples as cli
-        cg = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "cg")
+        cg = os.path.join(bs.scratch_dir(self), "cg")
         os.makedirs(os.path.join(cg, "s03"))
         os.makedirs(os.path.join(cg, "empty-program"))  # the control's {case}: the layer provides one by that name
         box = cli.Box(self, run_sh=f"printf 'oom_kill 1\\n' > {cg}/s03/memory.events\nprintf 9 > {cg}/s03/memory.peak\ncat answer.bin\n")

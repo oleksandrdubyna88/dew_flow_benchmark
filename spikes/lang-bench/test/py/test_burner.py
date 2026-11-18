@@ -36,7 +36,7 @@ def argv0_of(pid):
     """argv[0] of a live process, read again until the exec has happened (a process that is still starting shows an empty or the parent's command line for a moment)."""
     end = time.monotonic() + 10
     name = ""
-    while time.monotonic() < end and not name.startswith("testsToDelete-"):
+    while time.monotonic() < end and not re.match(r"^testsToDelete-[uw][0-9]+-bench-burner-", name):
         time.sleep(0.02)
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
