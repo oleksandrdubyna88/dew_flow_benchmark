@@ -39,12 +39,15 @@ export function headerRows(spec) {
   return { rows: rest.map(rowOf), problems: [...emptyHeadProblems(head), ...separatorProblems(head, separator)] };
 }
 
+/** The Freeze tag row's later form (FORMAT 1.2): the freeze tag's name in a code span, `spec-frozen-<group letter>-<yyyymmdd>`. The freeze tools build their one tag name against this same pattern. */
+export const FREEZE_TAG_VALUE = /^`spec-frozen-[AB]-\d{8}`$/;
+
 /** The header rows' later forms: the value patterns FORMAT 1.2 gives for each row once the gate and the freeze have happened. */
-function laterForm(label, facts) {
+export function laterForm(label, facts) {
   const verdict = new RegExp(`^\`(?:${facts.header.verdicts.join('|')})\` · \\d{4}-\\d{2}-\\d{2}$`);
   return {
     'Gate verdict': value => verdict.test(value) && DATE.test(value.slice(-10)),
-    'Freeze tag': value => /^`spec-frozen-[AB]-\d{8}`$/.test(value),
+    'Freeze tag': value => FREEZE_TAG_VALUE.test(value),
     Amendments: value => /^A1 \(section 8\)$/.test(value) || /^A1–A(?:[2-9]|[1-9]\d+) \(section 8\)$/.test(value),
   }[label];
 }
