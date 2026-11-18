@@ -323,6 +323,26 @@ test('check_local_tag_refuses_a_name_that_is_not_the_checkers_form_and_a_date_th
   assert.match(unpushed.stderr, /main/);
 });
 
+test('A_lightweight_tag_or_a_tag_whose_date_differs_from_the_spec_rows_is_refused', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(f);
+  const message = annotate(f, { at: c });
+  git(f.repo, 'tag', '-d', TAG);
+  git(f.repo, 'tag', TAG, c);
+  const lightweight = await localTag(f, c, message);
+  assert.equal(lightweight.exit, 1, said(lightweight));
+  assert.match(lightweight.stderr, /lightweight/);
+  git(f.repo, 'tag', '-d', TAG);
+  const otherDay = annotate(f, { tag: LATER_TAG, at: c });
+  const dated = await f.run('check-local-tag', ['--tag', LATER_TAG, '--commit', c, '--message-file', otherDay]);
+  assert.equal(dated.exit, 1, said(dated));
+  assert.match(dated.stderr, /at C say spec-frozen-B-20261201 \(date 20261201\), not spec-frozen-B-20261202/);
+  pushTag(f, LATER_TAG);
+  assert.equal((await f.run('check-tag', ['--tag', LATER_TAG, '--commit', c])).exit, 1, 'and after the push too');
+  annotate(f, { at: c });
+  assert.equal((await localTag(f, c, message)).exit, 0, 'the control: the intended annotated tag of the rows\' own date');
+});
+
 test('A_tag_that_never_reached_the_remote_may_be_deleted_and_made_again_under_the_same_name', async t => {
   const f = makeFreezeRepo(t);
   const { c } = freezeAndMerge(f);

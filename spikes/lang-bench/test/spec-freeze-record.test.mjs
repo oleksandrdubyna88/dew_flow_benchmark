@@ -97,7 +97,7 @@ test('The_class_check_reads_the_frozen_FORMAT_from_the_record_this_tool_wrote', 
 
 // ---- what it verifies before it writes ---------------------------------------------------------------------------------------------------------------
 
-test('record_refuses_while_either_post_merge_leakcheck_result_is_missing_or_not_clean', async t => {
+test('record_refuses_while_either_post_merge_leakcheck_result_is_missing', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
   const clean = key => ({ commit: key === 'scratchWorkspace' ? 'f'.repeat(40) : (key === 'freezeCommit' ? c : w), exit: 0, date: '2026-12-02' });
