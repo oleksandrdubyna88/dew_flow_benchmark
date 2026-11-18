@@ -1,6 +1,7 @@
 // Fixtures of the freeze tools' tests (F2.S2 (d)): a synthetic task repository with the six quick tasks, a bare repository standing for the GitHub remote, and a stand-in for the bench's inputs folder. Everything is
 // invented (the specs are the conformance fixture's olympiad spec under six numbers), lives in owned folders and touches no network. A squash merge is `git merge --squash` and a commit on `main`; the push is a push into
 // the bare repository. The freeze commit and the workspace commits are made here by plain string edits, never by the tool under test, so the tool is judged against an independent construction.
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { sha256Of } from '../../../minigit-bench/lib/inputs.mjs';
@@ -109,11 +110,20 @@ export function freezeAndMerge(fixture, options = {}) {
   return { head, c: squashMerge(fixture, `freeze/${options.tag ?? TAG}`, 'T1') };
 }
 
-/** The intended annotation written to a file in the fixture's root and the annotated tag made locally on `at`; returns the message file. */
-export function annotate(fixture, { tag = TAG, at, message = MESSAGE } = {}) {
+/**
+ * The intended annotation written to a file in the fixture's root and the annotated tag made locally on `at`; returns the message file. `date` fixes the tagger's date, so two tags with the same message can still be two
+ * different tag objects (the object's id covers the date).
+ */
+export function annotate(fixture, { tag = TAG, at, message = MESSAGE, date } = {}) {
   const file = path.join(fixture.root, `${tag}.${sha256(message).slice(0, 8)}.message`);
   writeFileSync(file, message);
-  git(fixture.repo, 'tag', '-a', tag, at, '-F', file);
+  if (date === undefined) {
+    git(fixture.repo, 'tag', '-a', tag, at, '-F', file);
+    return file;
+  }
+  const env = { ...process.env, GIT_COMMITTER_DATE: date, GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
+  const made = spawnSync('git', ['-C', fixture.repo, '-c', 'tag.gpgsign=false', 'tag', '-a', tag, at, '-F', file], { env, encoding: 'utf8' });
+  if (made.status !== 0) throw new Error(`git tag failed: ${made.stderr}`);
   return file;
 }
 

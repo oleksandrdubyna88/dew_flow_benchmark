@@ -345,6 +345,11 @@ test('check_tag_passes_after_the_push_and_refuses_a_remote_lightweight_tag_and_a
   const passed = await f.run('check-tag', ['--tag', TAG, '--commit', c]);
   assert.equal(passed.exit, 0, said(passed));
   git(f.repo, 'tag', '-d', TAG);
+  annotate(f, { at: c, date: '2020-01-01T00:00:00Z' });
+  const sameWordsOtherObject = await f.run('check-tag', ['--tag', TAG, '--commit', c]);
+  assert.equal(sameWordsOtherObject.exit, 1, 'the same message under another tagger date is another annotated tag object than the one on the remote');
+  assert.match(sameWordsOtherObject.stderr, /tag object .* differs from the local tag object/);
+  git(f.repo, 'tag', '-d', TAG);
   annotate(f, { at: c, message: 'Tasks 04, 05, 06, 07, 08 and 10, another annotation.\n' });
   const different = await f.run('check-tag', ['--tag', TAG, '--commit', c]);
   assert.equal(different.exit, 1, 'the remote holds another annotated tag object than the local one');
