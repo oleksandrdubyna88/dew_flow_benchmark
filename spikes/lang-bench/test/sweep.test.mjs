@@ -95,6 +95,33 @@ test('No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one_in
   assert.deepEqual(found, [], 'sweep.test.mjs alone binds other tokens, to show that another token\'s folders are kept');
 });
 
+// An environment variable is not an owned-name token: `process.env.GH_TOKEN = …` (a test that sets the variable `gh` would read) must not be read as a token binding, and the real forms beside it must still be found.
+test('An_assignment_to_an_environment_variable_is_no_token_binding_and_every_real_binding_beside_it_is_still_found', () => {
+  const env = 'process.env.GH_TOKEN = SECRET;\nprocess.env.GITHUB_TOKEN = SECRET;\nprocess.env[\'GH_TOKEN\'] = SECRET;\nprocess.env["X_TOKEN"] = SECRET;\nprocess.env[name] = SECRET;\nprocess.env.OWNED_TOKEN = \'benchsig\';';
+  assert.deepEqual(foreignTokens(env), [], 'every spelling of an environment assignment is clean');
+  assert.deepEqual(foreignTokens(readFileSync(path.join(fileURLToPath(new URL('.', import.meta.url)), 'github-lang.test.mjs'), 'utf8')), [], 'the real test file that sets GH_TOKEN and GITHUB_TOKEN');
+  const beside = {
+    'a TOKEN constant': ["const TOKEN = 'x';", ['TOKEN = \'x\'']],
+    'an OWNED_TOKEN constant': ['OWNED_TOKEN = x;', ['OWNED_TOKEN = x']],
+    'a token: value': ['ownedFor({ token: other });', ['token: other']],
+    'the shorthand': ['ownedFor({ token });', ['a shorthand { token }']],
+    'the --owned-token option': ["spawn(node, ['p.mjs', '--owned-token', 'benchsig']);", ['--owned-token benchsig']],
+    'a constant on the same line after an env assignment': ["process.env.GH_TOKEN = SECRET; const TOKEN = 'x';", ['TOKEN = \'x\'']],
+  };
+  for (const [name, [line, expected]] of Object.entries(beside)) assert.deepEqual(foreignTokens(`${env}\n${line}`), expected, `${name} is still found beside the environment assignments`);
+});
+
+test('The_environment_exemption_is_anchored_and_a_TOKEN_constant_name_may_hold_digits', () => {
+  assert.deepEqual(foreignTokens('notprocess.env.OWNED_TOKEN = other;'), ['OWNED_TOKEN = other'], 'a name that merely ends in process.env. is not the environment');
+  assert.deepEqual(foreignTokens('myprocess.env.GH_TOKEN = x;'), ['GH_TOKEN = x']);
+  assert.deepEqual(foreignTokens('process.env.OWNED_TOKEN = other;'), [], 'the real environment assignment stays clean');
+  assert.deepEqual(foreignTokens('  process.env.GH_TOKEN = x;'), [], 'indented, still clean');
+  assert.deepEqual(foreignTokens('const V2_TOKEN = x;'), ['V2_TOKEN = x']);
+  assert.deepEqual(foreignTokens('TOKEN2 = y;'), ['TOKEN2 = y']);
+  assert.deepEqual(foreignTokens("const V2_TOKEN = 'bench';"), [], 'the registered token with a digit name is clean');
+  assert.deepEqual(foreignTokens('process.env.V2_TOKEN = x;'), [], 'a digit name in the environment is clean');
+});
+
 /** What a killed probe test REALLY leaves now: its `private-<id>` root (a claimed owned folder) with the probe's runs parent and temp root inside, runs and builds in them. */
 function killedProbeTestLeftovers(root) {
   const left = leftBehind(root, 'private');
