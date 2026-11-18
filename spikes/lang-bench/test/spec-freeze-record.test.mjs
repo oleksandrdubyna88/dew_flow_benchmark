@@ -2,7 +2,7 @@
 // (test/support/freeze-fixtures.mjs): a local bare repository stands for the GitHub remote, a squash merge is `git merge --squash`.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -354,4 +354,40 @@ test('A_record_already_in_the_file_for_the_tag_is_rewritten_only_with_identical_
   assert.match(differentW.stderr, /workspaceCommit|differs from/);
   assert.deepEqual(readFileSync(statesFile(f)), first);
   assert.equal(leftovers(f).length, 0, 'no temporary file is left by a refusal');
+});
+
+// ---- a short write is never published ----------------------------------------------------------------------------------------------------------------
+
+/** A `writeSync` that writes at most `chunk` bytes per call and says so honestly (a legal short write). `lie` makes it report the whole length while writing only the chunk (a full disk that does not say so). */
+const shortWrite = ({ chunk, lie = false }) => (fd, data, offset = 0, length = undefined) => {
+  const bytes = typeof data === 'string' ? Buffer.from(data) : data;
+  const wanted = length ?? bytes.length - offset;
+  const written = writeSync(fd, bytes, offset, Math.min(wanted, chunk));
+  return lie ? wanted : written;
+};
+
+test('A_writer_that_is_given_short_chunks_loops_until_every_byte_is_written_and_publishes_the_whole_list', async t => {
+  const f = makeFreezeRepo(t);
+  const { w } = fullFreeze(f);
+  const whole = (await f.run('hashes', ['--commit', w])).stdout;
+  const result = await f.run('hashes', ['--commit', w, '--write'], { io: { writeSync: shortWrite({ chunk: 7 }) } });
+  assert.equal(result.exit, 0, said(result));
+  assert.equal(readFileSync(path.join(f.inputs, 'hashes-lang.txt'), 'utf8'), whole, 'all bytes, though each call wrote seven');
+  assert.deepEqual(leftovers(f), []);
+});
+
+test('A_short_write_that_is_not_reported_is_caught_by_reading_the_temporary_file_back_and_nothing_is_published', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  const old = `${'0'.repeat(64)}  csharp/.gitkeep\n`;
+  writeFileSync(path.join(f.inputs, 'hashes-lang.txt'), old);
+  const lied = await f.run('hashes', ['--commit', w, '--write'], { io: { writeSync: shortWrite({ chunk: 7, lie: true }) } });
+  assert.notEqual(lied.exit, 0, 'the command fails');
+  assert.match(said(lied), /read back|holds \d+ bytes/);
+  assert.equal(readFileSync(path.join(f.inputs, 'hashes-lang.txt'), 'utf8'), old, 'the old list is whole, no truncated file was published');
+  assert.deepEqual(leftovers(f), [], 'and no temporary file is left');
+  const flags = ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)];
+  const recorded = await f.run('record', flags, { io: { writeSync: shortWrite({ chunk: 7, lie: true }) } });
+  assert.notEqual(recorded.exit, 0);
+  assert.equal(existsSync(statesFile(f)), false, 'no truncated record');
 });
