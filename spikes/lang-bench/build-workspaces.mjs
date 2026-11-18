@@ -27,7 +27,7 @@ import { storeDirs } from './lib/preflight-box.mjs';
 import { fetchTaskRepo } from './lib/task-repo.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { defaultCaches, inBuildBox } from './lib/workspace-box.mjs';
-import { KINDS as KIND_NAMES, STACKS as STACK_NAMES, buildWorkspace, engineTaskProblem, loadInputs, lockProblems, preCheck, stackFilePatterns } from './lib/workspace-build.mjs';
+import { KINDS as KIND_NAMES, STACKS as STACK_NAMES, buildWorkspace, loadInputs, lockProblems, preCheck, stackFilePatterns } from './lib/workspace-build.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
@@ -191,9 +191,7 @@ function inputUsage(build) {
 /** The checks before anything is fetched: the inputs the flags name, then names, group and destination. */
 function earlyChecks(args) {
   const usage = inputUsage(args);
-  if (usage !== null) return fail(usage, { usage: true });
-  const engine = engineTaskProblem(args.task);
-  return engine === null ? preCheck(args) : fail(engine, { refusal: true });
+  return usage === null ? preCheck(args) : fail(usage, { usage: true });
 }
 
 function finishBuild(args, formatBytes) {

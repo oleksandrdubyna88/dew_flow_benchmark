@@ -147,9 +147,9 @@ function listFiles(dir, base = dir) {
 
 // ---- the plan: everything checked before the first write -----------------------------------------------------------------------------------------
 
-/** The checks that need no file at all but the destination: names, group, destination. -> `ok(resolved out)` | `fail`. The command runs it before it fetches anything. */
+/** The checks that need no file at all but the destination: the six quick tasks (the engine's), names, group, destination. -> `ok(resolved out)` | `fail`. The command runs it before it fetches anything. */
 export function preCheck({ stack, kind, task, group, out, inputs, worktreeOf = gitWorktreeOf, helloFixture = false }) {
-  const problem = legalProblem(stack, kind) ?? groupProblem({ format: inputs.format, group, task, helloFixture });
+  const problem = engineTaskProblem(task) ?? legalProblem(stack, kind) ?? groupProblem({ format: inputs.format, group, task, helloFixture });
   return problem === null ? checkDestination(out, worktreeOf) : refuse(problem);
 }
 
