@@ -517,7 +517,7 @@ test('The_hash_list_refuses_a_link_under_a_root_and_a_commit_that_does_not_exist
 // ---- the command ---------------------------------------------------------------------------------------------------------------------------------------
 
 const FREEZE = fileURLToPath(new URL('../freeze.mjs', import.meta.url));
-const command = args => spawnSync(process.execPath, [FREEZE, ...args], { encoding: 'utf8', timeout: 120_000 });
+const command = args => spawnSync(process.execPath, [FREEZE, ...args], { encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL' });
 
 test('The_command_prints_the_hash_list_and_a_plan_and_exits_2_for_usage_and_3_for_a_refusal', async t => {
   const f = makeFreezeRepo(t);

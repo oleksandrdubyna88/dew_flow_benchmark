@@ -258,7 +258,7 @@ test('record_refuses_a_superseded_tag_that_is_not_older_than_the_new_one', async
 
 /** A freeze verb in a child that kills itself before its rename. `flags` are the verb's flags after the verb. */
 function killedBeforeRename(f, verb, flags) {
-  return spawnSync(process.execPath, [KILL_CHILD, 'before-rename', verb, '--repo', f.repo, '--inputs', f.inputs, ...flags], { encoding: 'utf8', timeout: 120_000 });
+  return spawnSync(process.execPath, [KILL_CHILD, 'before-rename', verb, '--repo', f.repo, '--inputs', f.inputs, ...flags], { encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL' });
 }
 
 test('A_record_killed_before_its_rename_leaves_only_an_owned_temporary_file_that_the_restart_removes_and_never_reads', async t => {

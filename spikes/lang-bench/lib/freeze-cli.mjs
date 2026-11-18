@@ -38,22 +38,37 @@ const usage = reason => done(EXIT.usage, '', `freeze: ${reason}\n${USAGE}\n`);
 const lines = (verb, sentences) => `${sentences.map(sentence => `freeze: ${verb}: ${sentence}`).join('\n')}\n`;
 const noted = notes => (notes.length > 0 ? `${notes.map(note => `freeze: ${note}`).join('\n')}\n` : '');
 
-/** `{ verb, values }` for a legal command line, or `{ error }`: a verb, only its flags, none missing. */
-function parse(argv) {
-  let parsed;
+/** `{ parsed }` of the arguments under the option table, or `{ error }` with the parser's own sentence. */
+function readArgs(argv) {
   try {
-    parsed = parseArgs({ args: argv, options: OPTIONS, strict: true, allowPositionals: true });
+    return { parsed: parseArgs({ args: argv, options: OPTIONS, strict: true, allowPositionals: true }) };
   } catch (error) {
     return { error: error.message };
   }
-  const [verb, ...extra] = parsed.positionals;
-  const spec = VERBS[verb];
-  if (spec === undefined || extra.length > 0) return { error: verb === undefined ? 'give a verb' : `${verb}${spec === undefined ? ' is not a verb' : ': no positional arguments'}` };
-  const present = Object.keys(parsed.values);
-  const stray = present.filter(name => !spec.needs.includes(name) && !spec.takes.includes(name) && !COMMON.includes(name));
-  const missing = spec.needs.filter(name => parsed.values[name] === undefined);
-  if (stray.length > 0 || missing.length > 0) return { error: `${verb}: ${stray.length > 0 ? `--${stray.join(', --')} is not a flag of it` : `missing --${missing.join(', --')}`}` };
-  return { verb, spec, values: parsed.values };
+}
+
+/** The sentence when the positional arguments are not exactly one known verb, else null. */
+function verbProblem({ verb, extra }) {
+  if (verb === undefined) return 'give a verb';
+  if (VERBS[verb] === undefined) return `${verb} is not a verb`;
+  return extra.length > 0 ? `${verb}: no positional arguments` : null;
+}
+
+/** The sentence about the flags given: one that is not the verb's, or one it needs and lacks, else null. */
+function flagProblem({ verb, spec, values }) {
+  const stray = Object.keys(values).filter(name => ![...spec.needs, ...spec.takes, ...COMMON].includes(name));
+  const missing = spec.needs.filter(name => values[name] === undefined);
+  if (stray.length > 0) return `${verb}: --${stray.join(', --')} is not a flag of it`;
+  return missing.length > 0 ? `${verb}: missing --${missing.join(', --')}` : null;
+}
+
+/** `{ verb, spec, values }` for a legal command line, or `{ error }`: a verb, only its flags, none missing. */
+function parse(argv) {
+  const read = readArgs(argv);
+  if (read.error !== undefined) return read;
+  const [verb, ...extra] = read.parsed.positionals;
+  const error = verbProblem({ verb, extra }) ?? flagProblem({ verb, spec: VERBS[verb], values: read.parsed.values });
+  return error === null ? { verb, spec: VERBS[verb], values: read.parsed.values } : { error };
 }
 
 /** The outcome of a failed result as a CLI answer: an environment failure is exit 4, a rule the verb's own exit (or the one the result carries). */
@@ -124,14 +139,18 @@ async function recordVerb({ values, seams }) {
 
 const HANDLERS = Object.freeze({ plan: planVerb, 'check-commit': commitVerb, 'check-local-tag': localTagVerb, 'check-tag': tagVerb, 'check-workspace': workspaceVerb, hashes: hashesVerb, record: recordVerb });
 
+/** The CLI answer for a verb's result: its output, a usage line, or the failure's exit and sentences. */
+function answerOf(result, parsed) {
+  if (result.ok) return done(EXIT.done, result.value.stdout, result.value.stderr ?? '');
+  return result.usage === true ? usage(result.reason) : failed(parsed.verb, parsed.spec, result);
+}
+
 /** `{ exit, stdout, stderr }` for the command's arguments. A thrown error is the environment's (exit 4), one line, never a stack. */
 export async function runFreeze(argv, seams = {}) {
   const parsed = parse(argv);
   if (parsed.error !== undefined) return usage(parsed.error);
   try {
-    const result = await HANDLERS[parsed.verb]({ values: parsed.values, seams });
-    if (result.ok) return done(EXIT.done, result.value.stdout, result.value.stderr ?? '');
-    return result.usage === true ? usage(result.reason) : failed(parsed.verb, parsed.spec, result);
+    return answerOf(await HANDLERS[parsed.verb]({ values: parsed.values, seams }), parsed);
   } catch (error) {
     return done(EXIT.env, '', `freeze: ${parsed.verb}: ${error?.message ?? error}\n`);
   }

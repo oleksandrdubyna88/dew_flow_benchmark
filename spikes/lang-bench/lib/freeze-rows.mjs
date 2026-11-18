@@ -47,9 +47,8 @@ export function withTag(bytes, tag) {
   const line = read.value.lines[read.value.no - 1];
   const matched = ROW.exec(line);
   if (matched === null) return fail(`line ${read.value.no} is not a Freeze tag row of the form | Freeze tag | <value> |`);
-  const lines = [...read.value.lines];
-  lines[read.value.no - 1] = `${matched[1]}\`${tag}\`${matched[3]}`;
-  return ok(Buffer.from(lines.join('\n'), 'utf8'));
+  const edited = read.value.lines.map((text, index) => (index === read.value.no - 1 ? `${matched[1]}\`${tag}\`${matched[3]}` : text));
+  return ok(Buffer.from(edited.join('\n'), 'utf8'));
 }
 
 /** The 1-based numbers of the lines that differ between two texts, or null when they have a different number of lines (the whole file then differs). */
