@@ -57,7 +57,7 @@ test('The_trap_ids_of_a_quick_task_are_ids_to_keep_out_of_the_public_notes', () 
 
 // Changed by step 2b (the plan: a task whose folder is absent is never skipped while another task's folder is present). The title is the one the test always had; what it pins now is the refusal.
 test('A_quick_task_whose_folders_are_absent_is_named_and_skipped_like_an_olympiad_task', () => {
-  const r = leakMaterial({ home: homeWith(['04', '05']), explore: EXPLORE, publicText: '' });
+  const r = leakMaterial({ home: homeWith(['04', '05']), explore: EXPLORE, publicText: '', frozenFile: noRecord() });
   assert.equal(r.ok, false, 'the absent tasks are named and the scan is refused, never run over the two that are there');
   assert.match(r.reason, /task 06, 07, 08, 10 .*not present|tasks? .*06.*not present/);
   const named = presentMaterial({ home: homeWith(['04', '05']), publicText: '' }).value;

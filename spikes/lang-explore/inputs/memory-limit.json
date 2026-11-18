@@ -3,5 +3,70 @@
   "mib": 512,
   "decidedOn": "2026-11-07",
   "by": "D72, the team lead, from consult 0a205591",
-  "note": "one chosen value for all six quick tasks; the statement, samples/load.json and the scorer read it here; it is registered by the registration field, which `explore.mjs register-memory` writes once all twelve references pass under it"
+  "note": "one registered value for all six quick tasks; the statement, samples/load.json and the scorer read it here; the registration field lists the twelve references that passed under it",
+  "registration": {
+    "date": "2026-11-18",
+    "references": [
+      {
+        "task": "04",
+        "stack": "csharp",
+        "treeSha256": "861610db6060e85516ecff6abd2952c7e1a998e34d118a9300b42681f8b2f904"
+      },
+      {
+        "task": "04",
+        "stack": "node",
+        "treeSha256": "747d2393e41cc9030e14151645de677fa0f0ea82833f02e353abc6111aada2d5"
+      },
+      {
+        "task": "05",
+        "stack": "csharp",
+        "treeSha256": "7acde8b73fb32490222e8dfeb95e9aced6a11a3c7362655a1d39f1b8277480dd"
+      },
+      {
+        "task": "05",
+        "stack": "node",
+        "treeSha256": "a3296bcd175b89097f0479bf777d151a9a0e07b83b30b710dce5259502164e92"
+      },
+      {
+        "task": "06",
+        "stack": "csharp",
+        "treeSha256": "d3c0244e6d1dd6214ab027c6dc11c43578daa2e7d24e404cb28832a813cf5270"
+      },
+      {
+        "task": "06",
+        "stack": "node",
+        "treeSha256": "91211db63531fd5c33b7e814dd8206027b1d91e1bc8d9d020846ed72a7e73bec"
+      },
+      {
+        "task": "07",
+        "stack": "csharp",
+        "treeSha256": "148be966b54ecd94de87366d7945370587d8f143bb2fee32c8dd9932bbd7ef5c"
+      },
+      {
+        "task": "07",
+        "stack": "node",
+        "treeSha256": "51cc90760661de7a1a86cfce026da52f43a89fb9cad6b1cec5cbea2501601614"
+      },
+      {
+        "task": "08",
+        "stack": "csharp",
+        "treeSha256": "2a2dfa299287033a678265c706e7e35d580f8fd818ae2ac870d1ff53224575a4"
+      },
+      {
+        "task": "08",
+        "stack": "node",
+        "treeSha256": "2886545a8879f4e7ce08ac43feab7ccd5ee322ebc6cba8eb11c86f504ea57aa7"
+      },
+      {
+        "task": "10",
+        "stack": "csharp",
+        "treeSha256": "be5d86b6c807ce132908c5464a3cd0f4db6b860cda14919b6b3964e93bb17650"
+      },
+      {
+        "task": "10",
+        "stack": "node",
+        "treeSha256": "5e75f4c2a1f8ef18454bd00bbe51f0d301cd5118b8662f2ec7f33b8326c295dc"
+      }
+    ]
+  }
 }

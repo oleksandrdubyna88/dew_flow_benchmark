@@ -1,5 +1,25 @@
 {
   "tasks": {
+    "10": {
+      "archive": "heldout-10/suite.enc",
+      "archiveSha256": "b4e41919c4a30c321042ebeccc6f2fde5f01c9bc78c988e8d8f397d44a3227d7",
+      "caseCount": 21,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "ab9a835080fb2b8beac2c968215bc07960517c67f239f11202fe959f266ce238",
+      "sealedOn": "2026-11-18",
+      "trapCount": 21,
+      "treeSha256": "d093266bb2ad486e3809b6600da64eeb9e0727ff71ae872dbfa4eb69a2f9780e"
+    },
+    "04": {
+      "archive": "heldout-04/suite.enc",
+      "archiveSha256": "47afd52ed5a3d3c1f1faa46c67b08609120e10818d08445803d23732af5e2439",
+      "caseCount": 21,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "748b3b5275c7ea873bab5e28dc4d5d937b5b5ac0e31b2e38b9864fe3998bdbf4",
+      "sealedOn": "2026-11-18",
+      "trapCount": 21,
+      "treeSha256": "214b474ffbcb3d4177b70dd6837d11ae337dd65d39946c629dfe8a3593d81008"
+    },
     "05": {
       "archive": "heldout-05/suite.enc",
       "archiveSha256": "02c460ce6c359f2a316bbfa497724bb98781053996219c7273866cbf996dd5fe",
@@ -9,6 +29,36 @@
       "sealedOn": "2026-11-12",
       "trapCount": 19,
       "treeSha256": "b7a892ee4fe5c36867598f2b47f4991d86960066457bf45a528756ae7008f82e"
+    },
+    "06": {
+      "archive": "heldout-06/suite.enc",
+      "archiveSha256": "aad8ba5e6d446b9710bf528dc0ed34b9076561c5f2e88d7155e61a03726fc50e",
+      "caseCount": 32,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "618dc84545048b1223ec95af566cc79d9f131ff5e4729e35ca5e5560c573c799",
+      "sealedOn": "2026-11-18",
+      "trapCount": 32,
+      "treeSha256": "17cba129c0bb6e22923a450da72f30f46e8eec6ac822ba8ce0975bc7a5e2284d"
+    },
+    "07": {
+      "archive": "heldout-07/suite.enc",
+      "archiveSha256": "f55583b16873dc5f84ba12fbd90544be7c1d2de52332aa832fa5ef331580eaad",
+      "caseCount": 25,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "599c584431dd41d9cf2f3acd49cbc946cfd8c94c50f91437d94e94700c1d994f",
+      "sealedOn": "2026-11-18",
+      "trapCount": 25,
+      "treeSha256": "c06ad40ca621a4d62fcfe61a916d03fcf71740e28fb6b463daa59cf65232aad8"
+    },
+    "08": {
+      "archive": "heldout-08/suite.enc",
+      "archiveSha256": "88cb19416d91d13d4912f268dcba787a7eb7ae729f37c01d2f1a17b97cc16740",
+      "caseCount": 20,
+      "keySha256": "2376f5d2793781d74c0802170adeec12279e5bccbd9c9e2d45070999afdcc0c6",
+      "manifestSha256": "2838d31c44e31d3377d6268a061e8568c9c49af56b540d2b33b1dee685ee0f6f",
+      "sealedOn": "2026-11-18",
+      "trapCount": 20,
+      "treeSha256": "2860d9df9a13e643816b96e609a089d725192bd1d940da5c67a38749f5c154c8"
     }
   }
 }

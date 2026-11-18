@@ -45,11 +45,12 @@ export function world({ taskId = '04', cases = CASES, traps = TRAPS, over = {} }
   put(manifestFile, '{"coverage":"invented"}\n');
   const spies = { unseal: 0, unpackTo: 0, mounts: 0 };
   const frozenFile = path.join(tmpDir('q-frozen'), 'heldout-frozen.json');
+  const packagesFile = path.join(tmpDir('q-packages'), 'packages.json');
   const args = {
-    home, task, frozenFile, keyFile, backupFile: path.join(backupDir, 'heldout.key.bak'), shareMount, manifestFile, now: () => new Date('2026-11-09T09:00:00.000Z'),
+    home, task, frozenFile, packagesFile, keyFile, backupFile: path.join(backupDir, 'heldout.key.bak'), shareMount, manifestFile, now: () => new Date('2026-11-09T09:00:00.000Z'),
     mountOf: async dir => { spies.mounts += 1; return mountFor(shareMount)(dir); }, unseal: spied(unseal, spies, 'unseal'), unpackTo: spied(unpackTo, spies, 'unpackTo'), retry: { tries: 3, sleepMs: 1 }, hooks: {}, ...over,
   };
-  return { home, task, taskId, heldoutDir: taskPaths(task, home).heldoutDir, casesDir: paths.casesDir, keyFile, backupFile: args.backupFile, shareMount, frozenFile, manifestFile, spies, args };
+  return { home, task, taskId, heldoutDir: taskPaths(task, home).heldoutDir, casesDir: paths.casesDir, keyFile, backupFile: args.backupFile, shareMount, frozenFile, packagesFile, manifestFile, spies, args };
 }
 
 /** A world whose task is sealed and whose clear folder is removed by hand (the state after `heldout-close`): the archive, the entry and the key backup are there. */
