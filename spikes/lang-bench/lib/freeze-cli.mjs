@@ -105,13 +105,21 @@ async function localTagVerb({ values }) {
   return checked.ok ? ok({ stdout: `check-local-tag ok: ${values.tag} is annotated, local only, on C ${checked.value.commit}, with the intended message\n` }) : checked;
 }
 
-async function tagVerb({ values }) {
-  const where = paths(values);
+/** ok({ pin, pins, message }): FORMAT's pin, the engine's spec pins and the intended message when `--message-file` is given. */
+function tagInputs({ values, where }) {
   const pin = loadPin(recordFileOf(where, values));
   const pins = pinsOf(values);
-  if (!pin.ok || !pins.ok) return failWith([pin.ok ? pins.reason : pin.reason]);
-  const message = values['message-file'] === undefined ? undefined : readFileSync(path.resolve(values['message-file']), 'utf8');
-  const checked = await checkRemoteTag({ repo: where.repo, tag: values.tag, commit: values.commit, message, pin: pin.value, pins: pins.value });
+  const bad = [pin, pins].find(entry => !entry.ok);
+  if (bad !== undefined) return failWith([bad.reason]);
+  const file = values['message-file'];
+  return ok({ pin: pin.value, pins: pins.value, message: file === undefined ? undefined : readFileSync(path.resolve(file), 'utf8') });
+}
+
+async function tagVerb({ values }) {
+  const where = paths(values);
+  const inputs = tagInputs({ values, where });
+  if (!inputs.ok) return inputs;
+  const checked = await checkRemoteTag({ repo: where.repo, tag: values.tag, commit: values.commit, ...inputs.value });
   return checked.ok ? ok({ stdout: `check-tag ok: the remote's ${values.tag} is annotated, peels to C ${checked.value.commit} (tag object ${checked.value.tagObject}); the six specs are the gated ones with only their row set; FORMAT is the pinned ${checked.value.formatSha256}\n` }) : checked;
 }
 

@@ -16,6 +16,9 @@ export const failWith = problems => fail(problems[0], { problems });
 /** True for a failed result that is the environment's (git, the network, a file system), not a rule broken: `env: true` of this module's own, or `kind: 'env'` of the push check's git launcher. */
 export const isEnv = result => !result.ok && (result.env === true || result.kind === 'env');
 
+/** `[]` when `holds`, else the one sentence: a rule written as data, not as a branch. */
+export const unless = (holds, sentence) => (holds ? [] : [sentence]);
+
 /** The sentences of a failed result: its `problems`, or its one `reason`. */
 export const problemsOf = result => result.problems ?? [result.reason];
 

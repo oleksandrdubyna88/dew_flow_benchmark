@@ -90,23 +90,52 @@ async function sides({ repo, before, after }) {
   return broken ?? ok({ tree: { before: bt.value, after: at.value }, changed: changed.value });
 }
 
-/** `check-commit`: the rule above, for the commits `before` and `after` of the repository. `facts` are FORMAT's, read at `before`. */
-export async function checkFreezeCommit({ repo, before, after, pins }) {
+/** ok({ tree, changed, specs }): both sides' trees, the changed paths and the six specs of the commit after. */
+async function readSides({ repo, before, after }) {
   const read = await sides({ repo, before, after });
   if (!read.ok) return read;
-  const { tree, changed } = read.value;
-  const specs = specSet(tree.after);
-  if (!specs.ok) return specs;
-  const paths = specs.value.map(spec => spec.path);
+  const specs = specSet(read.value.tree.after);
+  return specs.ok ? ok({ ...read.value, specs: specs.value }) : specs;
+}
+
+/** ok({ old, now, facts }): the blobs of FORMAT and the six specs before, the specs after, and FORMAT's facts read from the FORMAT before. */
+async function readBlobs({ repo, tree, specs }) {
+  const paths = specs.map(spec => spec.path);
   const [old, now] = [await blobsOf(repo, tree.before, [FORMAT_PATH, ...paths]), await blobsOf(repo, tree.after, paths)];
-  if (!old.ok || !now.ok) return failWith([(old.ok ? now : old).reason]);
+  const unread = [old, now].find(entry => !entry.ok);
+  if (unread !== undefined) return failWith([unread.reason]);
   const facts = factsOf(old.value.get(FORMAT_PATH));
-  if (!facts.ok) return failWith([`FORMAT before the freeze commit: ${facts.reason}`]);
-  const results = specs.value.map(spec => ({ spec, ...(changed.includes(spec.path) ? specProblems({ file: spec.path, bytes: { before: old.value.get(spec.path), after: now.value.get(spec.path) }, facts: facts.value }) : { problems: [`${spec.path}: unchanged, so its Freeze tag row was not set`], tag: null }) }));
-  const modes = specs.value.filter(spec => tree.before.get(spec.path)?.mode !== tree.after.get(spec.path)?.mode).map(spec => `${spec.path}: its mode changed from ${tree.before.get(spec.path)?.mode} to ${tree.after.get(spec.path)?.mode}: the freeze commit changes only the Freeze tag row`);
-  const gated = specs.value.flatMap(spec => gatedProblems({ spec, bytes: old.value.get(spec.path), facts: facts.value, pins }));
-  const problems = [...pathProblems(changed, specs.value), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag)), ...modes, ...gated];
-  if (problems.length > 0) return failWith(problems);
-  const tag = results[0].tag;
-  return ok({ tag, date: tagDate(tag), specs: specs.value.map(spec => ({ ...spec, sha256: sha256Of(now.value.get(spec.path)) })) });
+  return facts.ok ? ok({ old: old.value, now: now.value, facts: facts.value }) : failWith([`FORMAT before the freeze commit: ${facts.reason}`]);
+}
+
+/** The result of each spec's own rule: changed, so its row is judged; unchanged, so its row was not set. */
+function specResults({ specs, changed, blobs }) {
+  return specs.map(spec => (changed.includes(spec.path)
+    ? specProblems({ file: spec.path, bytes: { before: blobs.old.get(spec.path), after: blobs.now.get(spec.path) }, facts: blobs.facts })
+    : verdict([`${spec.path}: unchanged, so its Freeze tag row was not set`])));
+}
+
+/** The sentences for a spec whose file mode changed (the bytes may be the same). */
+function modeProblems({ specs, tree }) {
+  return specs.filter(spec => tree.before.get(spec.path)?.mode !== tree.after.get(spec.path)?.mode)
+    .map(spec => `${spec.path}: its mode changed from ${tree.before.get(spec.path)?.mode} to ${tree.after.get(spec.path)?.mode}: the freeze commit changes only the Freeze tag row`);
+}
+
+/** Every sentence of the freeze commit's rule, and the per-spec results they came from. */
+function freezeFindings({ read, blobs, pins }) {
+  const { specs, changed, tree } = read;
+  const results = specResults({ specs, changed, blobs });
+  const gated = specs.flatMap(spec => gatedProblems({ spec, bytes: blobs.old.get(spec.path), facts: blobs.facts, pins }));
+  const problems = [...pathProblems(changed, specs), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag)), ...modeProblems({ specs, tree }), ...gated];
+  return { problems, tag: results[0].tag };
+}
+
+/** `check-commit`: the rule above, for the commits `before` and `after` of the repository. `facts` are FORMAT's, read at `before`; `pins` are the engine's gated hashes. */
+export async function checkFreezeCommit({ repo, before, after, pins }) {
+  const read = await readSides({ repo, before, after });
+  if (!read.ok) return read;
+  const blobs = await readBlobs({ repo, tree: read.value.tree, specs: read.value.specs });
+  if (!blobs.ok) return blobs;
+  const { problems, tag } = freezeFindings({ read: read.value, blobs: blobs.value, pins });
+  return problems.length > 0 ? failWith(problems) : ok({ tag, date: tagDate(tag), specs: read.value.specs.map(spec => ({ ...spec, sha256: sha256Of(blobs.value.now.get(spec.path)) })) });
 }
