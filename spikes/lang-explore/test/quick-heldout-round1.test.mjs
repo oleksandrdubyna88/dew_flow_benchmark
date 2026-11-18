@@ -288,7 +288,7 @@ test('Heldout_check_rejects_an_empty_entry_of_tasks_before_it_resolves_any', asy
   assert.equal(await main(['heldout-check', '--tasks', ' '], { home: w.home, say: l => none.push(l) }), 4);
   assert.match(none.join('\n'), /needs --tasks NN,NN/);
   const said = [];
-  assert.equal(await main(['heldout-check', '--tasks', '04, 05', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: l => said.push(l), heldout: { mountOf: w.args.mountOf } }), 4, 'control: a well-formed list is read (05 has no entry here)');
+  assert.equal(await main(['heldout-check', '--tasks', '04, 05', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: l => said.push(l), heldout: { packagesFile: w.packagesFile, mountOf: w.args.mountOf } }), 4, 'control: a well-formed list is read (05 has no entry here)');
   assert.match(said.join('\n'), /task 04: ok/);
 });
 

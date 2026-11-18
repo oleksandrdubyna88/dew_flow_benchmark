@@ -3,7 +3,7 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -132,7 +132,13 @@ test('A_packages_entry_whose_archive_hash_differs_from_the_registry_is_refused_n
 
 const TASKS = ['04', '05', '06', '07', '08', '10'];
 const packagesOf = ids => Object.fromEntries(ids.map(id => [id, { memoryBytes: MEMORY, referenceVerdicts: { csharp: 'accepted', node: 'accepted' }, refsTreeSha256: { csharp: sha(`c${id}`), node: sha(`n${id}`) } }]));
-const memoryCopy = () => { const file = path.join(tmpDir('pkg-memory'), 'memory-limit.json'); copyFileSync(MEMORY_LIMIT_FILE, file); return file; };
+/** A copy of the memory value in the state BEFORE its registration (the real file holds the registration field since 2026-11-18): the value as chosen, the note as it read, no field. */
+const memoryCopy = () => {
+  const file = path.join(tmpDir('pkg-memory'), 'memory-limit.json');
+  const { registration: _registered, ...chosen } = JSON.parse(readFileSync(MEMORY_LIMIT_FILE, 'utf8'));
+  writeFileSync(file, `${JSON.stringify({ ...chosen, note: 'one chosen value for all six quick tasks; it is registered by the registration field, which `explore.mjs register-memory` writes once all twelve references pass under it' }, null, 2)}\n`);
+  return file;
+};
 
 test('The_registration_field_is_written_only_when_all_twelve_references_pass_and_nothing_else_writes_it', () => {
   const file = memoryCopy();

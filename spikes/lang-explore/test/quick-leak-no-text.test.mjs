@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { main } from '../explore.mjs';
 import { NEEDLE, captureStreams, commit, git, holdsNeedle, newRepo, privateSide } from './quick-leak-repos-fixture.mjs';
+import { noRecord } from './quick-leak-fixture.mjs';
 
 /** `explore.mjs leakcheck ...` in this process with both output streams captured: `{ exit, stdout, stderr }`. */
 async function captured(args, seams) {
@@ -15,7 +16,7 @@ async function captured(args, seams) {
   return { exit: r.value, stdout: r.stdout, stderr: r.stderr };
 }
 
-const seamsOf = (side, benchRepo) => ({ home: side.home, repoRoot: benchRepo, exploreFn: () => ok(side.explore), env: {} });
+const seamsOf = (side, benchRepo) => ({ home: side.home, repoRoot: benchRepo, exploreFn: () => ok(side.explore), env: {}, frozenFile: noRecord() });
 
 function assertNoText(r, what) {
   assert.notEqual(r.stdout.length + r.stderr.length, 0, `${what}: the run printed something (a capture of nothing proves nothing)`);

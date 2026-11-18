@@ -12,7 +12,7 @@ import { backupConfigFile } from '../lib/heldout-backup-config.mjs';
 import { captureStreams } from './quick-leak-repos-fixture.mjs';
 import { IDS, TOKEN, TRAPS, sealedClosed } from './quick-heldout-fixture.mjs';
 
-const seamsOf = (w, over = {}) => ({ home: w.home, frozenFile: w.frozenFile, heldout: { mountOf: w.args.mountOf, retry: w.args.retry, ...over } });
+const seamsOf = (w, over = {}) => ({ home: w.home, frozenFile: w.frozenFile, heldout: { packagesFile: w.packagesFile, mountOf: w.args.mountOf, retry: w.args.retry, ...over } });
 const keyFlags = w => ['--key-file', w.keyFile];
 const backupFlags = w => ['--key-backup', w.backupFile, '--share-mount', w.shareMount];
 
