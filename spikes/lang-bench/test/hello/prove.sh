@@ -4,6 +4,7 @@
 #   bash spikes/lang-bench/test/hello/prove.sh [node|csharp] [daemon|web]     (default: all four)
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; lb="$(cd "$here/../.." && pwd)"; R="$HOME/rsd/lang-v2"
+# testsToDelete-exempt: raw-temp — a by-hand proof the operator runs, never a test; the EXIT trap on the next line removes the folder
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 cp -r "$R"/caches/node-*/npm "$work/npm"; cp -r "$R"/caches/csharp-*/nuget "$work/nuget"
 mkdir -p "$work/clihome"; cp -r "$R"/caches/csharp-*/dotnet "$work/clihome/.dotnet"; chmod -R u+w "$work"
