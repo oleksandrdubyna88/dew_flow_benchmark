@@ -297,14 +297,17 @@ test('the report carries the stop record, each cell\'s outcome, a crashed cell w
 
 // ---- hygiene ----------------------------------------------------------------------------------------------------------------
 
+// The platform's own root (`/` here, the drive on Windows): a literal `D:/` is a relative path on Linux, `<cwd>/D:`, which is deep.
+const ROOT = path.parse(process.cwd()).root;
+
 test('a runs root must be at least two folders deep', () => {
-  assert.equal(depthOf('D:/'), 0);
-  assert.equal(depthOf('D:/rsd'), 1);
-  assert.equal(depthOf('D:/rsd/_s2'), 2);
-  assert.throws(() => assertRunsRoot('D:/'), /two folders deep/);
-  assert.throws(() => assertRunsRoot('D:/rsd'), /two folders deep/);
+  assert.equal(depthOf(ROOT), 0);
+  assert.equal(depthOf(path.join(ROOT, 'rsd')), 1);
+  assert.equal(depthOf(path.join(ROOT, 'rsd', '_s2')), 2);
+  assert.throws(() => assertRunsRoot(ROOT), /two folders deep/);
+  assert.throws(() => assertRunsRoot(path.join(ROOT, 'rsd')), /two folders deep/);
   assert.throws(() => assertRunsRoot('/'), /two folders deep/);
-  assert.doesNotThrow(() => assertRunsRoot('D:/rsd/_s2'));
+  assert.doesNotThrow(() => assertRunsRoot(path.join(ROOT, 'rsd', '_s2')));
 });
 
 /** A junction (or directory symlink where junctions do not exist) - null when this machine will not make one. */
@@ -356,7 +359,7 @@ test('shedding a real directory still works, and refuses a shallow root outright
     fs.mkdirSync(path.join(root, 'c1', 'score', '_own'), { recursive: true });
     assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), true);
     assert.equal(removeUnder(path.join(root, 'c1', 'score'), root), false);
-    assert.throws(() => shedCell('D:/', 'c1', {}), /two folders deep/);
+    assert.throws(() => shedCell(ROOT, 'c1', {}), /two folders deep/);
     fs.writeFileSync(path.join(root, 'c1', 'file'), 'x');
     assert.throws(() => assertRemovable(path.join(root, 'c1', 'file'), root), /not a directory/);
   } finally {

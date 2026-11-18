@@ -15,6 +15,9 @@ import { assembleReport, reportTarget } from '../report.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = name => parseNdjson(fs.readFileSync(path.join(here, 'fixtures', name), 'utf8'));
+// The platform's own root (`/` here, the drive on Windows): a literal `D:/x` is a relative path on Linux, `<cwd>/D:/x`.
+const ROOT = path.parse(process.cwd()).root;
+const slash = p => p.replace(/\\/g, '/');
 
 // ---- detection ------------------------------------------------------------------------------------------------------
 
@@ -150,10 +153,12 @@ test('a report whose every cell is void never overwrites the results file; it go
   const story = loadStory('coai-751');
   const allVoidReport = { cells: [{ cell: 'c1', outcome: VOID_OUTCOME }, { cell: 'c2', outcome: VOID_OUTCOME }, { cell: 'reference', outcome: null }] };
   assert.equal(allVoid(allVoidReport.cells), true);
-  assert.equal(reportTarget({ story, report: allVoidReport, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), 'D:/rsd/_s2c/report-void.json');
+  const runsRoot = path.join(ROOT, 'rsd', '_s2c');
+  assert.equal(slash(reportTarget({ story, report: allVoidReport, root: runsRoot })), slash(path.join(runsRoot, 'report-void.json')));
   const mixed = { cells: [{ cell: 'c1', outcome: 'completed' }, { cell: 'c2', outcome: VOID_OUTCOME }] };
   assert.equal(allVoid(mixed.cells), false);
-  assert.match(reportTarget({ story, report: mixed, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), /research\/bench\/policy-ab-coai-751-data\.json$/);
+  assert.match(slash(reportTarget({ story, report: mixed, root: runsRoot })), /research\/bench\/policy-ab-coai-751-data\.json$/);
   assert.equal(allVoid([]), false, 'no cells is not "all void"');
-  assert.equal(reportTarget({ out: 'D:/x/y.json', story, report: allVoidReport, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), 'D:/x/y.json', 'an explicit --out is the operator\'s call');
+  const out = path.join(ROOT, 'x', 'y.json');
+  assert.equal(slash(reportTarget({ out, story, report: allVoidReport, root: runsRoot })), slash(out), 'an explicit --out is the operator\'s call');
 });
