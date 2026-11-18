@@ -220,6 +220,16 @@ test('An_apply_without_the_dry_run_record_flag_is_a_usage_error_and_check_takes_
   }
 });
 
+test('An_apply_whose_packages_are_arrays_makes_no_gh_call', async t => {
+  const github = fakeGitHub();
+  const files = gateFiles(t);
+  writeFileSync(files.packagesFile, JSON.stringify(Object.fromEntries(SIX.map(id => [id, []]))));
+  const got = await runApply(t, github, files);
+  assert.equal(got.exit, 1);
+  assert.deepEqual(github.calls, []);
+  assert.ok(got.err.join('\n').includes('04, 05, 06, 07, 08, 10'), got.err.join('|'));
+});
+
 test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () => {
   const got = await runMain(['--bogus'], fakeGitHub());
   const text = got.err.join('\n');

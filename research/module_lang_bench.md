@@ -1088,7 +1088,7 @@ the real secret files or the network.
 Built: `lib/github-lang.mjs` (the data, the pure compares, the reads, the apply) and `github-rulesets.mjs` (the command). **The apply is not run by a coder or by this module's tests: it is the team lead's, at freeze step (e) 3**
 (`node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>`, then `--check`), under the owner's go of 2026-11-05 (what) and 2026-11-08 (when). Nothing in the module's tests or in its build touched GitHub.
 
-**The data.** The owner approved two things on `oleksandrdubyna88/dew_flow_ai_language_comparison` (`TASK_REPO`, fixed in the data; no flag names another repository): `main`'s protection and the tag ruleset. GitHub holds them as three rulesets,
+**The data** (frozen by `deepFrozenCopy`, which returns a deep-frozen copy and never freezes or changes its argument). The owner approved two things on `oleksandrdubyna88/dew_flow_ai_language_comparison` (`TASK_REPO`, fixed in the data; no flag names another repository): `main`'s protection and the tag ruleset. GitHub holds them as three rulesets,
 all `active`, with no `required_status_checks` (the checks join with CI in Stage 2): `template-frozen` (branch `refs/heads/main` exactly, never `~DEFAULT_BRANCH`; a pull request with 0 required approvals and resolved threads, linear history, no force
 push, no deletion; **no `update` rule**, which would block every spec PR before the freeze and every dated amendment after it; no bypass actor), `spec-frozen-tags` (tag `refs/tags/spec-frozen-*`: update, deletion, force push; no bypass actor) and
 `spec-frozen-tags-create` (the same refs: creation only; the one bypass actor is the repository admin role, `ADMIN_ROLE_ACTOR_ID` 5, `always`). The split is GitHub's: a bypass applies to every rule of its ruleset, so one ruleset cannot restrict
@@ -1100,7 +1100,7 @@ other refs is reported by the data's ref it lacks (`missing include ref`); one w
 **stranger**: named on a `note:` line, never touched, never stopping anything.
 
 **The reads** (`readRulesets`, `readMergeSettings`, `rulesetsReadBack`): `gh api` through `runBounded` (exe and argv, `shell: false`, a 60 s timeout), the list (`per_page=100`; a list of 100 or more is refused as possibly paged) and then each ruleset
-by id. The child's environment is a short allowed list (`PATH`, `HOME`, the XDG folders, `GH_CONFIG_DIR`, proxies) plus `GH_PROMPT_DISABLED=1`: **never a token variable, and no token file is read**; the owner's own `gh` login does the admin write
+by id. The child's environment is a short allowed list (`PATH`, `HOME`, the XDG folders, `GH_CONFIG_DIR`, proxies; **not `GH_HOST`**, which a parent could point at a GitHub Enterprise server) plus `GH_PROMPT_DISABLED=1`, and every call names `--hostname github.com` itself, so `repos/<owner>/<name>` can only reach github.com: **never a token variable, and no token file is read**; the owner's own `gh` login does the admin write
 (the PAT has no admin right). A launch failure, a timeout, a truncated or non-JSON answer, a non-zero exit and a runner that throws are all a failure to read (`kind: 'env'`), never an empty list and never `equal`. `scrub` takes a token
 (`ghp_`, `gho_`, `github_pat_`, `Bearer ...`, the value of `GH_TOKEN` or `GITHUB_TOKEN` this process holds) out of every reason before it is returned or printed.
 
@@ -1110,7 +1110,7 @@ by id. The child's environment is a short allowed list (`PATH`, `HOME`, the XDG 
 (never changes the exit).
 
 **The apply's prerequisites** (the owner's go of 2026-11-08: apply only once all six packages pass and a dry run is clean) are checked **before any `gh` call, not even a read**, and are refused with exit 1 and `refused: ...` on stderr when not met:
-(1) `spikes/lang-explore/inputs/packages.json` is an object that lists a package object for each of the tasks 04, 05, 06, 07, 08 and 10; (2) the file named by `--dry-run-record` can be read and its **first line is exactly `dry run clean <yyyy-mm-dd>`**
+(1) `spikes/lang-explore/inputs/packages.json` is an object that lists a package object for each of the tasks 04, 05, 06, 07, 08 and 10 (a `null`, an array or any other non-object entry is not a package); (2) the file named by `--dry-run-record` can be read and its **first line is exactly `dry run clean <yyyy-mm-dd>`**
 with a real calendar date (for example `dry run clean 2026-11-20`; a trailing carriage return is tolerated, anything else on the line is not; the lines after it are free text and are not read). The logic is the pure `applyGateProblems`; the files are
 read in the command. Task 05 alone is registered today, so an early `--apply` stops here.
 

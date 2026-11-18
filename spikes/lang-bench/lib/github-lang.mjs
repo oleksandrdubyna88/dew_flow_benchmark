@@ -10,14 +10,19 @@ export const TASK_REPO = 'oleksandrdubyna88/dew_flow_ai_language_comparison';
 /** The repository admin role, per the integrations provider docs: GitHub's own REST text gives no mapping. */
 export const ADMIN_ROLE_ACTOR_ID = 5;
 
-/** `value` and everything inside it, frozen. */
-function freeze(value) {
-  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
-    for (const inner of Object.values(value)) freeze(inner);
-    Object.freeze(value);
-  }
-  return value;
+/** A deep copy of `value` with every object and array in it frozen. The argument is never touched. */
+export function deepFrozenCopy(value) {
+  const copy = structuredClone(value);
+  const seal = inner => {
+    if (inner !== null && typeof inner === 'object') {
+      for (const part of Object.values(inner)) seal(part);
+      Object.freeze(inner);
+    }
+  };
+  seal(copy);
+  return copy;
 }
+const freeze = deepFrozenCopy;
 const TAG_CONDITIONS = { ref_name: { include: ['refs/tags/spec-frozen-*'], exclude: [] } };
 
 /** The rulesets exactly as they are created: the body of each POST is one of these, nothing else. */
@@ -153,7 +158,7 @@ const isCalendarDate = ([, year, month, day]) => {
 
 function packagesProblems(packages) {
   if (packages === null || typeof packages !== 'object' || Array.isArray(packages)) return ['packages.json cannot be read as an object, so it is not known that the six packages are registered'];
-  const lacking = PACKAGE_TASKS.filter(id => packages[id] === null || typeof packages[id] !== 'object');
+  const lacking = PACKAGE_TASKS.filter(id => packages[id] === null || typeof packages[id] !== 'object' || Array.isArray(packages[id]));
   return lacking.length === 0 ? [] : [`packages.json lists no package for task ${lacking.join(', ')}: all six of ${PACKAGE_TASKS.join(', ')} must be registered`];
 }
 
@@ -172,8 +177,8 @@ const ACCEPT = 'Accept: application/vnd.github+json';
 const TIMEOUT_MS = 60_000;
 const PAGE = 100;
 const REPO_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/(?!\.{1,2}$)[A-Za-z0-9_.-]+$/;
-/** The variables the child may inherit: where to find `gh`'s own login and its settings. Never a token, a key or a password. */
-const KEPT_ENV = ['PATH', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot', 'TMPDIR', 'TEMP', 'TMP', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'GH_CONFIG_DIR', 'GH_HOST', 'LANG', 'LC_ALL', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'];
+/** The variables the child may inherit: where to find `gh`'s own login and its settings. Never a token, a key or a password, and never `GH_HOST`: a host from the parent could send `repos/<owner>/<name>` to another server (every call names github.com itself). */
+const KEPT_ENV = ['PATH', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot', 'TMPDIR', 'TEMP', 'TMP', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'GH_CONFIG_DIR', 'LANG', 'LC_ALL', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'];
 
 const ghEnv = () => ({ ...Object.fromEntries(KEPT_ENV.filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]])), GH_PROMPT_DISABLED: '1' });
 const envFail = reason => fail(scrub(reason), { kind: 'env' });
@@ -199,8 +204,9 @@ async function ghApi(run, args, input) {
   }
 }
 
-const getJson = (run, path) => ghApi(run, ['-H', ACCEPT, path]);
-const postJson = (run, path, body) => ghApi(run, ['--method', 'POST', '-H', ACCEPT, path, '--input', '-'], JSON.stringify(body));
+const HOST = ['--hostname', 'github.com'];
+const getJson = (run, path) => ghApi(run, ['-H', ACCEPT, ...HOST, path]);
+const postJson = (run, path, body) => ghApi(run, ['--method', 'POST', '-H', ACCEPT, ...HOST, path, '--input', '-'], JSON.stringify(body));
 const badRepo = repo => (REPO_NAME.test(String(repo)) ? null : fail(`repository ${JSON.stringify(String(repo))} is not owner/name`, { kind: 'config' }));
 
 /** Every ruleset of the repository as GitHub returns it: the list, then each by id. -> `ok(rulesets)` | `fail(reason, { kind })`. A list as long as one page may have another page, and is refused. */

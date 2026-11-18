@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_ROLE_ACTOR_ID, MERGE_SETTINGS, PACKAGE_TASKS, RULESETS, TASK_REPO, applyGateProblems, applyRulesets, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
+import { ADMIN_ROLE_ACTOR_ID, MERGE_SETTINGS, PACKAGE_TASKS, RULESETS, TASK_REPO, applyGateProblems, applyRulesets, deepFrozenCopy, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
 import { ALL_CALLS, asGitHub, brokenRunner, collector, fakeGitHub } from './support/github-fixtures.mjs';
 
 const byName = name => RULESETS.find(ruleset => ruleset.name === name);
@@ -375,6 +375,47 @@ test('A_present_different_ruleset_stops_the_apply_before_the_first_write_even_wh
     assert.deepEqual(github.writes(), [], name);
     assert.ok(github.calls.every(call => call.method === 'GET'), 'no update, no delete either');
   }
+});
+
+// ---- code round: no mutation of an argument, no inherited host, no array as a package -----------------------------------------------------
+
+test('The_deep_freeze_returns_a_frozen_copy_and_leaves_its_argument_alone', () => {
+  const given = { name: 'x', rules: [{ type: 'a', parameters: { n: 1 } }], list: ['p'] };
+  const copy = deepFrozenCopy(given);
+  assert.deepEqual(copy, given);
+  assert.notEqual(copy, given);
+  assert.ok(!Object.isFrozen(given) && !Object.isFrozen(given.rules) && !Object.isFrozen(given.rules[0]) && !Object.isFrozen(given.rules[0].parameters) && !Object.isFrozen(given.list), 'the argument is not frozen, at any depth');
+  assert.ok(Object.isFrozen(copy) && Object.isFrozen(copy.rules) && Object.isFrozen(copy.rules[0]) && Object.isFrozen(copy.rules[0].parameters) && Object.isFrozen(copy.list), 'the result is frozen at every depth');
+  given.name = 'y';
+  assert.equal(copy.name, 'x', 'the copy shares nothing with the argument');
+});
+
+test('GH_HOST_is_not_inherited_and_every_gh_call_names_github_com', async () => {
+  const saved = process.env.GH_HOST;
+  process.env.GH_HOST = 'evil.example';
+  try {
+    const github = fakeGitHub();
+    assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok);
+    assert.ok((await readMergeSettings('o/r', github.run)).ok);
+    assert.ok(github.calls.length > 10 && github.writes().length === 3);
+    for (const call of github.calls) {
+      assert.ok(!('GH_HOST' in call.env), 'the child does not inherit GH_HOST');
+      const at = call.args.indexOf('--hostname');
+      assert.ok(at > 0 && call.args[at + 1] === 'github.com', `the call names github.com: ${call.args.join(' ')}`);
+      assert.ok(call.args.indexOf('--hostname') < call.args.findIndex(arg => arg.startsWith('repos/')), 'a flag before the path');
+    }
+  } finally {
+    if (saved === undefined) delete process.env.GH_HOST; else process.env.GH_HOST = saved;
+  }
+});
+
+test('A_package_entry_that_is_an_array_is_not_a_package', () => {
+  for (const id of PACKAGE_TASKS) {
+    const problems = applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), [id]: [] }, recordFirstLine: 'dry run clean 2026-11-20' });
+    assert.equal(problems.length, 1, id);
+    assert.ok(problems[0].includes(id), problems[0]);
+  }
+  assert.equal(applyGateProblems({ packages: Object.fromEntries(PACKAGE_TASKS.map(id => [id, []])), recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'all six arrays: one sentence naming the six');
 });
 
 // ---- no secret, no network ------------------------------------------------------------------------------------------------------------
