@@ -333,3 +333,25 @@ test('A_rerun_after_an_interruption_writes_the_same_bytes', async t => {
   assert.deepEqual(readFileSync(list), listAfterInterruption);
   assert.deepEqual(leftovers(f), []);
 });
+
+// ---- a record already in the file ------------------------------------------------------------------------------------------------------------------
+
+test('A_record_already_in_the_file_for_the_tag_is_rewritten_only_with_identical_bytes_and_any_difference_is_refused', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  assert.equal((await record(f, { c, w })).exit, 0);
+  const first = readFileSync(statesFile(f));
+  assert.equal((await record(f, { c, w })).exit, 0, 'identical inputs: the same bytes are written again');
+  assert.deepEqual(readFileSync(statesFile(f)), first);
+  const differentEvidence = await record(f, { c, w, over: { provisionalFrom: '2026-11-30' } });
+  assert.equal(differentEvidence.exit, 3, said(differentEvidence));
+  assert.match(differentEvidence.stderr, /already holds.*different|differs from/);
+  assert.deepEqual(readFileSync(statesFile(f)), first, 'a refusal leaves the record as it was');
+  const w2 = commit(f.repo, 'a later workspace file', { 'node/04-rule-api/more.txt': 'later\n' });
+  git(f.repo, 'push', '-q', 'origin', 'main');
+  const differentW = await record(f, { c, w: w2 });
+  assert.equal(differentW.exit, 3, `a different W under the same tag: ${said(differentW)}`);
+  assert.match(differentW.stderr, /workspaceCommit|differs from/);
+  assert.deepEqual(readFileSync(statesFile(f)), first);
+  assert.equal(leftovers(f).length, 0, 'no temporary file is left by a refusal');
+});
