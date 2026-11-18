@@ -138,6 +138,34 @@ export function mergeSettingsProblems(read) {
   return Object.entries(MERGE_SETTINGS).filter(([key, value]) => read?.[key] !== value).map(([key, value]) => `merge setting ${key} is ${show(read?.[key])}, not ${show(value)}`);
 }
 
+// ---- the prerequisites of the apply -------------------------------------------------------------------------------------------------------
+
+/** The six tasks whose packages must all be registered (`spikes/lang-explore/inputs/packages.json`, `{ "NN": entry }`) before the apply: the owner's go of 2026-11-08 applies the rulesets only once all six packages pass. */
+export const PACKAGE_TASKS = freeze(['04', '05', '06', '07', '08', '10']);
+/** What the first line of the dry-run record says, as the usage text shows it: the dry run (the freeze's dress rehearsal) was clean on that day. The lines after it are free text. */
+export const DRY_RUN_LINE = 'dry run clean <yyyy-mm-dd>';
+const DRY_RUN_FORMAT = /^dry run clean (\d{4})-(\d{2})-(\d{2})$/;
+
+const isCalendarDate = ([, year, month, day]) => {
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return date.getUTCFullYear() === Number(year) && date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day);
+};
+
+function packagesProblems(packages) {
+  if (packages === null || typeof packages !== 'object' || Array.isArray(packages)) return ['packages.json cannot be read as an object, so it is not known that the six packages are registered'];
+  const lacking = PACKAGE_TASKS.filter(id => packages[id] === null || typeof packages[id] !== 'object');
+  return lacking.length === 0 ? [] : [`packages.json lists no package for task ${lacking.join(', ')}: all six of ${PACKAGE_TASKS.join(', ')} must be registered`];
+}
+
+function dryRunProblems(firstLine) {
+  if (typeof firstLine !== 'string') return [`the dry-run record cannot be read: its first line must say "${DRY_RUN_LINE}"`];
+  const found = DRY_RUN_FORMAT.exec(firstLine);
+  return found !== null && isCalendarDate(found) ? [] : [`the dry-run record's first line is not "${DRY_RUN_LINE}"`];
+}
+
+/** Why the apply may not start, in sentences (`[]` it may): `packages` is `packages.json` parsed (`null` when it could not be read) and `recordFirstLine` the dry-run record's first line (`null` when it could not be read). Pure. */
+export const applyGateProblems = ({ packages, recordFirstLine }) => [...packagesProblems(packages), ...dryRunProblems(recordFirstLine)];
+
 // ---- the calls through gh ---------------------------------------------------------------------------------------------------------------
 
 const ACCEPT = 'Accept: application/vnd.github+json';

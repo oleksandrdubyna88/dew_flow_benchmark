@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_ROLE_ACTOR_ID, MERGE_SETTINGS, RULESETS, TASK_REPO, applyRulesets, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
+import { ADMIN_ROLE_ACTOR_ID, MERGE_SETTINGS, PACKAGE_TASKS, RULESETS, TASK_REPO, applyGateProblems, applyRulesets, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
 import { ALL_CALLS, asGitHub, brokenRunner, collector, fakeGitHub } from './support/github-fixtures.mjs';
 
 const byName = name => RULESETS.find(ruleset => ruleset.name === name);
@@ -266,6 +266,34 @@ test('The_merge_settings_are_compared_and_only_reported', async () => {
   assert.deepEqual(read.value, ['merge setting allow_merge_commit is true, not false']);
   assert.deepEqual(github.writes(), []);
   assert.equal((await readMergeSettings('o/r', brokenRunner('exit').run)).ok, false);
+});
+
+// ---- the prerequisites of the apply (the owner's go of 2026-11-08) -----------------------------------------------------------------
+
+const packagesOf = tasks => Object.fromEntries(tasks.map(id => [id, { archiveSha256: 'a'.repeat(64) }]));
+
+test('The_gate_wants_all_six_tasks_and_a_first_line_that_says_the_dry_run_is_clean', () => {
+  assert.deepEqual(PACKAGE_TASKS, ['04', '05', '06', '07', '08', '10']);
+  assert.deepEqual(applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: 'dry run clean 2026-11-20' }), []);
+  assert.deepEqual(applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), '99': {} }, recordFirstLine: 'dry run clean 2026-02-28' }), [], 'a seventh entry is not a problem');
+  const missing = applyGateProblems({ packages: packagesOf(['05', '08']), recordFirstLine: 'dry run clean 2026-11-20' });
+  assert.equal(missing.length, 1);
+  assert.match(missing[0], /04, 06, 07, 10/);
+  assert.deepEqual(applyGateProblems({ packages: { 4: {} }, recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'a key that is not the two-digit id is not the task');
+  assert.deepEqual(applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), 10: 'x' }, recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'an entry that is not an object is not a package');
+});
+
+test('The_gate_names_each_unmet_prerequisite_and_an_unreadable_one_is_not_met', () => {
+  const both = applyGateProblems({ packages: null, recordFirstLine: null });
+  assert.equal(both.length, 2);
+  assert.match(both[0], /packages\.json cannot be read/);
+  assert.match(both[1], /dry-run record cannot be read/);
+  for (const line of ['dry run clean', 'dry run clean 2026-13-01', 'dry run clean 2026-02-30', 'dry run clean 2026-1-1', 'dry run clean 2026-11-20 ', 'DRY RUN CLEAN 2026-11-20', 'dry run clean 2026-11-20\r\n', '']) {
+    const problems = applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: line });
+    assert.equal(problems.length, 1, JSON.stringify(line));
+    assert.match(problems[0], /dry run clean <yyyy-mm-dd>/);
+  }
+  assert.deepEqual(applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: 'dry run clean 2024-02-29' }), [], 'a leap day is a date');
 });
 
 // ---- no secret, no network ------------------------------------------------------------------------------------------------------------

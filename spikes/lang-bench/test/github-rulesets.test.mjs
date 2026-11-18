@@ -14,13 +14,29 @@ import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 const COMMAND = fileURLToPath(new URL('../github-rulesets.mjs', import.meta.url));
 const SECRET = 'gho_' + 'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2';
 const present = () => RULESETS.map((ruleset, index) => asGitHub(ruleset, 100 + index));
+const SIX = ['04', '05', '06', '07', '08', '10'];
 
-/** The command in this process: `{ exit, out, err, github }`. */
-async function runMain(argv, github) {
+/** The two prerequisites of the owner's go of 2026-11-08, as files of the test's own: a `packages.json` listing `tasks` and a dry-run record whose first line is `line`. -> `{ packagesFile, record }`. */
+function gateFiles(t, { tasks = SIX, line = 'dry run clean 2026-11-20', rest = 'the lines after the first are free text\n' } = {}) {
+  const dir = ownedFolder(t, 'applygate');
+  const packagesFile = path.join(dir, 'packages.json');
+  const record = path.join(dir, 'dry-run.txt');
+  writeFileSync(packagesFile, JSON.stringify(Object.fromEntries(tasks.map(id => [id, { archiveSha256: 'a'.repeat(64) }]))));
+  writeFileSync(record, `${line}\n${rest}`);
+  return { packagesFile, record };
+}
+
+/** The command in this process: `{ exit, out, err, github }`. `extra` is more options of `main` (the `packagesFile` seam). */
+async function runMain(argv, github, extra = {}) {
   const out = [];
   const err = [];
-  const exit = await main({ argv, run: github.run, say: line => out.push(line), complain: line => err.push(line) });
+  const exit = await main({ argv, run: github.run, say: line => out.push(line), complain: line => err.push(line), ...extra });
   return { exit, out, err, github };
+}
+
+/** An apply whose two prerequisites hold. */
+async function runApply(t, github, files = gateFiles(t)) {
+  return runMain(['--apply', '--dry-run-record', files.record], github, { packagesFile: files.packagesFile });
 }
 
 // ---- usage ---------------------------------------------------------------------------------------------------------------------------
@@ -71,12 +87,13 @@ test('A_check_with_a_different_ruleset_is_exit_1_and_names_the_difference', asyn
 });
 
 for (const kind of ['launch', 'timeout', 'exit', 'truncated', 'garbage']) {
-  test(`A_gh_that_fails_or_times_out_is_exit_3_in_both_modes_never_a_pass_${kind}`, async () => {
-    for (const argv of [['--check'], ['--apply']]) {
+  test(`A_gh_that_fails_or_times_out_is_exit_3_in_both_modes_never_a_pass_${kind}`, async t => {
+    const files = gateFiles(t);
+    for (const argv of [['--check'], ['--apply', '--dry-run-record', files.record]]) {
       const broken = brokenRunner(kind);
       const out = [];
       const err = [];
-      const exit = await main({ argv, run: broken.run, say: line => out.push(line), complain: line => err.push(line) });
+      const exit = await main({ argv, run: broken.run, say: line => out.push(line), complain: line => err.push(line), packagesFile: files.packagesFile });
       assert.equal(exit, 3, `${argv} ${kind}`);
       assert.ok(!out.some(line => line.endsWith(': equal')), 'nothing was read, so nothing is called equal');
       assert.ok(err.length > 0);
@@ -98,35 +115,111 @@ test('Merge_settings_are_reported_but_never_change_the_exit', async () => {
 
 // ---- --apply -------------------------------------------------------------------------------------------------------------------------
 
-test('An_apply_on_an_empty_repository_creates_the_three_and_is_exit_0', async () => {
-  const got = await runMain(['--apply'], fakeGitHub());
+test('An_apply_on_an_empty_repository_creates_the_three_and_is_exit_0', async t => {
+  const got = await runApply(t, fakeGitHub());
   assert.equal(got.exit, 0, got.err.join('|'));
   assert.equal(got.github.writes().length, 3);
   for (const ruleset of RULESETS) assert.ok(got.out.includes(`created ${ruleset.name}`), got.out.join('|'));
   assert.ok(got.out.includes('read back after the writes: equal'), got.out.join('|'));
 });
 
-test('An_apply_on_equal_rulesets_is_exit_0_with_no_write', async () => {
-  const got = await runMain(['--apply'], fakeGitHub({ rulesets: present() }));
+test('An_apply_on_equal_rulesets_is_exit_0_with_no_write', async t => {
+  const got = await runApply(t, fakeGitHub({ rulesets: present() }));
   assert.equal(got.exit, 0);
   assert.deepEqual(got.github.writes(), []);
   for (const ruleset of RULESETS) assert.ok(got.out.includes(`unchanged ${ruleset.name}`), got.out.join('|'));
 });
 
-test('An_apply_that_meets_a_different_ruleset_is_exit_1_and_writes_nothing', async () => {
+test('An_apply_that_meets_a_different_ruleset_is_exit_1_and_writes_nothing', async t => {
   const rulesets = present();
   rulesets[0].enforcement = 'evaluate';
-  const got = await runMain(['--apply'], fakeGitHub({ rulesets }));
+  const got = await runApply(t, fakeGitHub({ rulesets }));
   assert.equal(got.exit, 1);
   assert.deepEqual(got.github.writes(), []);
   assert.ok(got.err.join('\n').includes('refused'), got.err.join('|'));
   assert.ok(got.err.join('\n').includes('enforcement is "evaluate", not "active"'));
 });
 
-test('An_apply_whose_read_back_differs_is_exit_1', async () => {
-  const got = await runMain(['--apply'], fakeGitHub({}, { onCreate: body => ({ ...body, rules: body.rules.slice(1) }) }));
+test('An_apply_whose_read_back_differs_is_exit_1', async t => {
+  const got = await runApply(t, fakeGitHub({}, { onCreate: body => ({ ...body, rules: body.rules.slice(1) }) }));
   assert.equal(got.exit, 1);
   assert.ok(got.err.join('\n').includes('differs after the write'), got.err.join('|'));
+});
+
+// ---- --apply refuses until the owner's go of 2026-11-08 holds ---------------------------------------------------------------------------------
+
+test('An_early_apply_makes_no_gh_call_at_all_while_a_package_is_missing', async t => {
+  for (const missing of SIX) {
+    const github = fakeGitHub();
+    const files = gateFiles(t, { tasks: SIX.filter(id => id !== missing) });
+    const got = await runApply(t, github, files);
+    assert.equal(got.exit, 1, `without ${missing}`);
+    assert.deepEqual(github.calls, [], `without ${missing}: not even a read`);
+    assert.deepEqual(github.writes(), []);
+    assert.ok(got.err.join('\n').includes('refused') && got.err.join('\n').includes(missing), got.err.join('|'));
+  }
+  const early = fakeGitHub();
+  const real = await runApply(t, early, gateFiles(t, { tasks: ['05'] }));
+  assert.equal(real.exit, 1);
+  assert.ok(real.err.join('\n').includes('04, 06, 07, 08, 10'), 'every missing task is named, as today\'s registry (only 05) would show');
+  assert.deepEqual(early.calls, []);
+});
+
+test('An_apply_whose_packages_file_cannot_be_read_or_is_not_an_object_makes_no_gh_call', async t => {
+  for (const content of [null, 'not json', '[]', 'null', '"x"']) {
+    const github = fakeGitHub();
+    const files = gateFiles(t);
+    if (content === null) files.packagesFile += '.missing'; else writeFileSync(files.packagesFile, content);
+    const got = await runApply(t, github, files);
+    assert.equal(got.exit, 1, String(content));
+    assert.deepEqual(github.calls, [], String(content));
+    assert.ok(got.err.join('\n').includes('packages.json'), got.err.join('|'));
+  }
+});
+
+test('An_apply_whose_dry_run_record_is_missing_or_not_clean_makes_no_gh_call', async t => {
+  const lines = ['', 'dry run dirty 2026-11-20', 'dry run clean', 'dry run clean 2026-11-20 and more', 'dry run clean 2026-13-40', 'dry run clean 20261120', 'Dry run clean 2026-11-20', ' dry run clean 2026-11-20', 'dry run clean 2026-02-30'];
+  for (const line of lines) {
+    const github = fakeGitHub();
+    const got = await runApply(t, github, gateFiles(t, { line }));
+    assert.equal(got.exit, 1, JSON.stringify(line));
+    assert.deepEqual(github.calls, [], JSON.stringify(line));
+    assert.ok(got.err.join('\n').includes('dry run clean <yyyy-mm-dd>'), got.err.join('|'));
+  }
+  const later = gateFiles(t, { line: 'the dry run was run', rest: 'dry run clean 2026-11-20\n' });
+  assert.equal((await runApply(t, fakeGitHub(), later)).exit, 1, 'only the first line counts');
+  const absent = fakeGitHub();
+  const files = gateFiles(t);
+  const got = await runMain(['--apply', '--dry-run-record', `${files.record}.missing`], absent, { packagesFile: files.packagesFile });
+  assert.equal(got.exit, 1);
+  assert.deepEqual(absent.calls, []);
+  const dirGithub = fakeGitHub();
+  assert.equal((await runMain(['--apply', '--dry-run-record', path.dirname(files.record)], dirGithub, { packagesFile: files.packagesFile })).exit, 1, 'a folder is not a record');
+  assert.deepEqual(dirGithub.calls, []);
+});
+
+test('An_apply_without_the_dry_run_record_flag_is_a_usage_error_and_check_takes_none', async t => {
+  const files = gateFiles(t);
+  for (const argv of [['--apply'], ['--apply', '--dry-run-record'], ['--check', '--dry-run-record', files.record], ['--dry-run-record', files.record]]) {
+    const github = fakeGitHub();
+    const got = await runMain(argv, github, { packagesFile: files.packagesFile });
+    assert.equal(got.exit, 2, argv.join(' '));
+    assert.deepEqual(github.calls, [], argv.join(' '));
+    assert.ok(got.err.join('\n').includes('usage'));
+  }
+});
+
+test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () => {
+  const got = await runMain(['--bogus'], fakeGitHub());
+  const text = got.err.join('\n');
+  for (const word of ['--check', '--apply', '--dry-run-record <file>', 'dry run clean <yyyy-mm-dd>']) assert.ok(text.includes(word), `${word} in: ${text}`);
+});
+
+test('An_apply_with_both_prerequisites_met_creates_the_rulesets', async t => {
+  const github = fakeGitHub();
+  const got = await runApply(t, github, gateFiles(t, { rest: '' }));
+  assert.equal(got.exit, 0, got.err.join('|'));
+  assert.equal(github.writes().length, 3);
 });
 
 // ---- the real process ----------------------------------------------------------------------------------------------------------------
@@ -166,6 +259,13 @@ test('The_real_command_reads_through_a_gh_on_its_path_and_is_exit_0_when_equal_a
   const different = spawned(shimFolder(t, { ...files, 'r-101.json': JSON.stringify(lax) }), ownedFolder(t, 'home'), ['--check']);
   assert.equal(different.status, 1, different.stdout + different.stderr);
   assert.ok(different.stdout.includes('  - extra bypass actor: RepositoryRole 5 always'));
+});
+
+test('The_real_command_refuses_an_early_apply_before_it_starts_gh', t => {
+  const dir = shimFolder(t, {}, { failing: true });
+  const got = spawned(dir, ownedFolder(t, 'home'), ['--apply', '--dry-run-record', path.join(dir, 'no-such-record.txt')]);
+  assert.equal(got.status, 1, `exit 1 (refused), not 3 (gh failed): ${got.stdout}${got.stderr}`);
+  assert.ok(got.stderr.includes('refused') && !got.stderr.includes('HTTP 500'), got.stderr);
 });
 
 test('The_real_command_is_exit_3_when_gh_fails_and_prints_no_token', t => {
