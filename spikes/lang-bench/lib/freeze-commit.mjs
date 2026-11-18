@@ -3,7 +3,7 @@
 // (d): a new freeze commit whose only change against the previous one is the six rows).
 // `checkFreezeCommit` -> ok({ tag, date, specs: [{ task, slug, path, sha256 }] }) | failWith(sentences) | an environment fail (`env: true`).
 import { createHash } from 'node:crypto';
-import { ok } from '../../minigit-bench/lib/result.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { blobsOf, changedPaths, commitOf, FORMAT_PATH, treeAt } from './freeze-git.mjs';
 import { failWith, specSet } from './freeze-inputs.mjs';
 import { gatedProblems } from './freeze-pins.mjs';
@@ -11,27 +11,61 @@ import { differingLines, factsOf, freezePlaceholder, readRows, tagDate, tagOfVal
 
 const sha256Of = bytes => createHash('sha256').update(bytes).digest('hex');
 
-/** The sentence about the row's earlier value: the placeholder, or an earlier freeze tag, else a problem. */
+/** The date of an earlier freeze tag a row's value names, or null when the value is not a freeze tag. */
+const earlierDate = value => {
+  const name = tagOfValue(value);
+  return name === null ? null : tagDate(name);
+};
+
+/** The sentences about the row's earlier value: the placeholder, or an earlier freeze tag, else a problem. */
 function beforeProblem({ file, value, after, facts }) {
   if (freezePlaceholder(value, facts)) return [];
-  const old = tagOfValue(value);
-  const oldDate = old === null ? null : tagDate(old);
+  const oldDate = earlierDate(value);
   if (oldDate === null) return [`${file}: the row before the freeze commit says ${value}, which is neither the placeholder nor a freeze tag`];
-  return tagDate(after) > oldDate ? [] : [`${file}: the new tag ${after} is not later than the tag ${old} it replaces: a superseding tag has a later date`];
+  return tagDate(after) > oldDate ? [] : [`${file}: the new tag ${after} is not later than the tag ${tagOfValue(value)} it replaces: a superseding tag has a later date`];
+}
+
+/** ok({ before, after }) the rows of both sides of one spec, or a fail naming the file and what cannot be read. */
+function bothRows({ file, bytes }) {
+  const [before, after] = [readRows(bytes.before), readRows(bytes.after)];
+  return before.ok && after.ok ? ok({ before: before.value, after: after.value }) : fail(`${file}: ${(before.ok ? after : before).reason}`);
+}
+
+/** The sentence when a line other than the Freeze tag row differs (or the line count does), else null. */
+function lineProblem({ file, bytes, row }) {
+  const lines = differingLines(bytes.before, bytes.after);
+  if (lines === null) return `${file} line count changed: only the Freeze tag row (line ${row.no}) may change, every other byte stays`;
+  const outside = lines.filter(no => no !== row.no);
+  return outside.length === 0 ? null : `${file} line ${outside[0]} changed: only the Freeze tag row (line ${row.no}) may change, every other byte stays`;
+}
+
+/** The sentence when the row's new value is not `spec-frozen-B-<yyyymmdd>` of a real day, else null. */
+function newTagProblem({ file, row, tag }) {
+  return tag !== null && tagDate(tag) !== null ? null : `${file} line ${row.no}: the Freeze tag row says ${row.value}, not \`spec-frozen-B-<yyyymmdd>\` of a real day`;
+}
+
+/** The sentence when the new row is not the old row with only its value replaced (the cell's padding included), else null. */
+function shapeProblem({ file, bytes, row, tag }) {
+  const written = withTag(bytes.before, tag);
+  return written.ok && written.value.equals(bytes.after) ? null : `${file} line ${row.no}: the row is not the old row with only its value replaced`;
+}
+
+const verdict = (problems, tag = null) => ({ problems, tag });
+
+/** The first sentence about the new row of a spec: a line outside the row, or a value that is not a freeze tag, else null. */
+function rowProblem({ file, bytes, row, tag }) {
+  return lineProblem({ file, bytes, row }) ?? newTagProblem({ file, row, tag });
 }
 
 /** The sentences for one spec between its bytes before and after; `tag` is what its row now says (null when the row is not a tag). */
 function specProblems({ file, bytes, facts }) {
-  const [before, after] = [readRows(bytes.before), readRows(bytes.after)];
-  if (!before.ok || !after.ok) return { problems: [`${file}: ${(before.ok ? after : before).reason}`], tag: null };
-  const lines = differingLines(bytes.before, bytes.after);
-  const outside = lines?.filter(no => no !== after.value.no) ?? [];
-  if (lines === null || outside.length > 0) return { problems: [`${file} line ${lines === null ? 'count' : outside[0]} changed: only the Freeze tag row (line ${after.value.no}) may change, every other byte stays`], tag: null };
-  const tag = tagOfValue(after.value.value);
-  if (tag === null || tagDate(tag) === null) return { problems: [`${file} line ${after.value.no}: the Freeze tag row says ${after.value.value}, not \`spec-frozen-B-<yyyymmdd>\` of a real day`], tag: null };
-  const written = withTag(bytes.before, tag);
-  const shape = written.ok && written.value.equals(bytes.after) ? [] : [`${file} line ${after.value.no}: the row is not the old row with only its value replaced`];
-  return { problems: [...shape, ...beforeProblem({ file, value: before.value.value, after: tag, facts })], tag };
+  const rows = bothRows({ file, bytes });
+  if (!rows.ok) return verdict([rows.reason]);
+  const tag = tagOfValue(rows.value.after.value);
+  const early = rowProblem({ file, bytes, row: rows.value.after, tag });
+  if (early !== null) return verdict([early]);
+  const shape = shapeProblem({ file, bytes, row: rows.value.after, tag });
+  return verdict([...(shape === null ? [] : [shape]), ...beforeProblem({ file, value: rows.value.before.value, after: tag, facts })], tag);
 }
 
 /** The sentences for paths that changed but are not the six specs: FORMAT is named first, as its own rule. */

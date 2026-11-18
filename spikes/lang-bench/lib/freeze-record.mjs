@@ -96,22 +96,39 @@ async function dayOf(repo, commit) {
   return shown.ok ? ok(new Date(Number(shown.value.stdout.trim()) * 1000).toISOString().slice(0, 10)) : shown;
 }
 
-/** The six spec rows: the blob's sha256 at C, its requirement ids and its gate record (which must exist in the bench's inputs). */
-async function specRows({ repo, specs, c, tagObject, inputs }) {
+/** The requirement ids of a spec (`R1`, `R2`, ...), `[]` for a spec the reader refuses. */
+const rIdsOf = bytes => {
+  const parsed = parseSpec(bytes);
+  return parsed.ok ? parsed.value.requirements.map(requirement => `R${requirement.n}`) : [];
+};
+
+/** One spec's row (the blob's sha256 at C, its requirement ids, its gate record) and the sentence when its gate record is not in the bench's inputs (else null). */
+function rowOf({ spec, bytes, c, tagObject, inputs }) {
+  const gate = `${GATE_FOLDER}/spec-${spec.task}.md`;
+  const present = existsSync(path.join(inputs, 'gates', `spec-${spec.task}.md`));
+  return {
+    task: spec.task,
+    problem: present ? null : `${spec.path}: its gate record ${gate} is not in the bench's inputs`,
+    row: { path: spec.path, sha256: createHash('sha256').update(bytes).digest('hex'), state: 'frozen', gate, rIds: rIdsOf(bytes), commitSha: c, tagObjectSha: tagObject },
+  };
+}
+
+/** ok(Map(path -> bytes)) of the six specs at C. */
+async function specBlobs({ repo, specs, c }) {
   const tree = await treeAt(repo, c);
-  const blobs = tree.ok ? await blobsOf(repo, tree.value, specs.map(spec => spec.path)) : tree;
-  if (!blobs.ok) return blobs;
-  const rows = {};
-  const problems = [];
-  for (const spec of specs) {
-    const bytes = blobs.value.get(spec.path);
-    const gate = `${GATE_FOLDER}/spec-${spec.task}.md`;
-    if (!existsSync(path.join(inputs, 'gates', `spec-${spec.task}.md`))) problems.push(`${spec.path}: its gate record ${gate} is not in the bench's inputs`);
-    const parsed = parseSpec(bytes);
-    const rIds = parsed.ok ? parsed.value.requirements.map(requirement => `R${requirement.n}`) : [];
-    rows[spec.task] = { path: spec.path, sha256: createHash('sha256').update(bytes).digest('hex'), state: 'frozen', gate, rIds, commitSha: c, tagObjectSha: tagObject };
-  }
-  return problems.length > 0 ? refusal(problems, 3) : ok(rows);
+  return tree.ok ? blobsOf(repo, tree.value, specs.map(spec => spec.path)) : tree;
+}
+
+/** The six rows keyed by task, or the refusal naming each gate record the inputs lack: both derived from the per-spec results. */
+function rowsOrRefusal(results) {
+  const problems = results.flatMap(result => (result.problem === null ? [] : [result.problem]));
+  return problems.length > 0 ? refusal(problems, 3) : ok(Object.fromEntries(results.map(result => [result.task, result.row])));
+}
+
+/** The six spec rows, keyed by task. */
+async function specRows({ repo, specs, c, tagObject, inputs }) {
+  const blobs = await specBlobs({ repo, specs, c });
+  return blobs.ok ? rowsOrRefusal(specs.map(spec => rowOf({ spec, bytes: blobs.value.get(spec.path), c, tagObject, inputs }))) : blobs;
 }
 
 /** ok(text): the record of the freeze as canonical JSON (sorted keys, two-space indent, LF), the same bytes for the same inputs. */

@@ -391,3 +391,14 @@ test('A_short_write_that_is_not_reported_is_caught_by_reading_the_temporary_file
   assert.notEqual(recorded.exit, 0);
   assert.equal(existsSync(statesFile(f)), false, 'no truncated record');
 });
+
+test('record_refuses_a_gate_record_missing_from_the_inputs_naming_each_spec', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  rmSync(path.join(f.inputs, 'gates', 'spec-05.md'));
+  rmSync(path.join(f.inputs, 'gates', 'spec-10.md'));
+  const refused = await record(f, { c, w });
+  assert.equal(refused.exit, 3, said(refused));
+  assert.ok(refused.stderr.includes('05-key-value-server') && refused.stderr.includes('10-dag-scheduler'), refused.stderr);
+  assert.equal(existsSync(statesFile(f)), false);
+});
