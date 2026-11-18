@@ -68,8 +68,13 @@ test('Every_directory_a_test_module_creates_outside_its_own_process_comes_from_t
   const raw = [];
   const unprefixed = [];
   const seen = {};
-  for (const f of mjs('test').filter(x => !x.endsWith('reuse-scan.test.mjs'))) {
-    const name = path.basename(f);
+  const testRoot = path.join(spikeDir, 'test');
+  // Every .mjs under test/, subfolders included (a helper module in a subfolder is a creator too); node_modules is not ours.
+  const modules = readdirSync(testRoot, { recursive: true, withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith('.mjs') && !path.relative(testRoot, path.join(e.parentPath, e.name)).split(path.sep).includes('node_modules'))
+    .map(e => path.join(e.parentPath, e.name));
+  for (const f of modules.filter(x => !x.endsWith('reuse-scan.test.mjs'))) {
+    const name = path.relative(testRoot, f).split(path.sep).join('/'); // the path under test/: the two F2 helpers are named by it
     for (const m of code(f).matchAll(creators)) {
       if (!F2_HELPERS.includes(name)) raw.push(`${name}: ${m[0]}`);
       else {
