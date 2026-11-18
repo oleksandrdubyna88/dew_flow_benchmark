@@ -45,8 +45,7 @@ test('Each_of_the_six_tasks_resolves_to_B_and_each_olympiad_task_to_A', t => {
   for (const task of SIX) {
     assert.equal(labelOf(real, sha, task).value.label, 'B', `${task} by its number`);
     assert.equal(labelOf(real, sha, `${task}-a-slug`).value.label, 'B', `${task} by its folder name`);
-    assert.equal(route(task, 'B').ok, true, `${task} is built under B`);
-    assert.match(route(task, 'A').reason, /refuses to write into B's tasks/, `${task} is refused under A`);
+    for (const group of ['A', 'B']) assert.match(route(task, group).reason, /explore\.mjs workspaces/, `${task} is the engine's, under ${group} too (F2.S2 (d)): this builder no longer builds the six`);
   }
   for (const task of OLYMPIAD) {
     assert.equal(labelOf(real, sha, `${task}-a-slug`).value.label, 'A', `${task} by its folder name`);
