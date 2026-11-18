@@ -1,4 +1,4 @@
-// E1.S7 group A slice: the `github-rulesets.mjs` command. `--check` (read-only, the default) and `--apply`, their exit codes, their lines, and the real process with a `gh` shim of the test's own on
+// F2.S2 (b): the task repository's rulesets command, `github-rulesets.mjs`. `--check` (read-only, the default) and `--apply`, their exit codes, their lines, and the real process with a `gh` shim of the test's own on
 // its PATH. No test makes a write to GitHub or touches the network: the in-process cases use the fake runner of test/support/github-fixtures.mjs, the spawned ones a shell shim that answers from files.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

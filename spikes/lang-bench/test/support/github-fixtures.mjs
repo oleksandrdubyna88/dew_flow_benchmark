@@ -1,4 +1,4 @@
-// A fake GitHub for E1.S7's tests: the `runBounded` seam of lib/github-lang.mjs answered from memory. It speaks only the four calls the library makes (list, read by id, create, read the
+// A fake GitHub for F2.S2 (b)'s tests: the `runBounded` seam of lib/github-lang.mjs answered from memory. It speaks only the four calls the library makes (list, read by id, create, read the
 // repository) and records every call, so a test can say what was asked, in what order, and that nothing but a fake ever answered. No test of this story touches the network.
 import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 

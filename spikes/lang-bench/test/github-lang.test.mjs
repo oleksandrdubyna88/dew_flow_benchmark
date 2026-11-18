@@ -1,5 +1,5 @@
-// E1.S7 group A slice (parent E1 § E1.S7, "The rulesets, as data"): the tag ruleset and `main`'s protection as data, the pure compare of a read-back against it, the reads, and the apply that
-// never overwrites. Every test uses the fake GitHub of test/support/github-fixtures.mjs (the `runBounded` seam); no test makes a write to GitHub and none touches the network.
+// F2.S2 (b): the task repository's two rulesets as data (`main`'s protection and the tag ruleset, which is two GitHub rulesets), the pure compare of a read-back against them, the reads, and the
+// apply that never overwrites. Every test uses the fake GitHub of test/support/github-fixtures.mjs (the `runBounded` seam); no test makes a write to GitHub and none touches the network.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -31,8 +31,8 @@ test('Main_restricts_no_update_and_requires_linear_history', () => {
   assert.ok(!('allowed_merge_methods' in main.rules[0].parameters), 'the API takes the parameter as optional, so it is left out and the repository merge settings decide');
 });
 
-test('Main_has_no_required_status_checks_until_group_C', () => {
-  for (const ruleset of RULESETS) assert.ok(!typesOf(ruleset).includes('required_status_checks'), `${ruleset.name}: the checks join with CI in group C (OP-L)`);
+test('Main_has_no_required_status_checks_in_stage_1', () => {
+  for (const ruleset of RULESETS) assert.ok(!typesOf(ruleset).includes('required_status_checks'), `${ruleset.name}: the checks join with CI in Stage 2`);
 });
 
 test('The_tag_ruleset_has_no_bypass_actor_and_restricts_update_deletion_and_force_push', () => {
@@ -56,6 +56,8 @@ test('Only_the_creation_ruleset_has_a_bypass_and_it_is_the_admin_role', () => {
   assert.deepEqual(RULESETS.filter(ruleset => ruleset.bypass_actors.length > 0).map(ruleset => ruleset.name), [CREATE]);
 });
 
+// Three GitHub rulesets, but only two approvals: the owner approved `main`'s protection (`template-frozen`) and the tag ruleset. GitHub cannot restrict updates for everyone and let the
+// admin create in one ruleset (a bypass applies to every rule of its ruleset), so the tag ruleset is expressed as two GitHub rulesets: `spec-frozen-tags` and `spec-frozen-tags-create`.
 test('The_data_is_three_frozen_rulesets_with_distinct_names_and_the_task_repository_is_the_default', () => {
   assert.deepEqual(RULESETS.map(ruleset => ruleset.name), [MAIN, TAGS, CREATE]);
   assert.ok(Object.isFrozen(RULESETS) && Object.isFrozen(RULESETS[0]) && Object.isFrozen(RULESETS[0].rules[0].parameters) && Object.isFrozen(RULESETS[2].bypass_actors[0]));
