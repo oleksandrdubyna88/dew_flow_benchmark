@@ -2,7 +2,7 @@
 // to it read the same list. A field the table names that the record lacks, or holds in another shape, is a sentence; a field with no source fails.
 //   specStates   `spikes/lang-bench/inputs/specs.d/spec-states.json`  { specs: { NN: row }, freeze: { … } }   written by `freeze.mjs record`
 //   heldoutFrozen `spikes/lang-explore/inputs/heldout-frozen.json`   { tasks: { NN: entry } }                    written by the seal
-//   memoryLimit  `spikes/lang-explore/inputs/memory-limit.json`      { …, registration: { date, references } }    written by `register-memory`
+//   memoryLimit  `spikes/lang-explore/inputs/memory-limit.json`      { …, "registration": the date and the twelve references }  written by `register-memory`
 // The spec rows and the `freeze` entry are the plan's text (F2.S2 (d) `spec-states.json`); `freeze.workspacesCheck` is amendment 3's: the clean result of `explore.mjs workspaces --check --root` at W.
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
