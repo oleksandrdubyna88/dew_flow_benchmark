@@ -33,17 +33,20 @@ export function supersedesProblems(supersedes) {
   return bad.length > 0 ? ['every --supersedes <old tag> needs its --why <sentence>, and every --why a --supersedes'] : [];
 }
 
+/** The sentence when an old tag cannot be superseded by `tag` (itself, absent from the remote, not older), else null. `remote` is what the remote answered for the old tag: `{ object, peeled }` or null. */
+function supersedeProblem({ old, tag, remote }) {
+  if (old === tag) return `${old} cannot supersede itself`;
+  if (remote === null) return `the old tag ${old} does not exist on the remote (git ls-remote --tags origin): only a pushed tag is superseded; a tag that never reached the remote is deleted and made again instead`;
+  return tagDate(old) !== null && tagDate(old) < tagDate(tag) ? null : `the old tag ${old} is not older than ${tag}: a superseding tag has a later date (an earlier or equal one cannot replace it)`;
+}
+
 /** ok([{ tag, tagObjectSha, why }]): each old tag exists on the remote (the remote is asked, never the local refs) and is older than `tag`; the tag object's id is the remote's. */
 async function supersededEntries({ repo, tag, supersedes }) {
   const entries = [];
   for (const { tag: old, why } of supersedes) {
     const remote = await remoteTag(repo, old);
     if (!remote.ok) return remote;
-    const problem = (() => {
-      if (old === tag) return `${old} cannot supersede itself`;
-      if (remote.value === null) return `the old tag ${old} does not exist on the remote (git ls-remote --tags origin): only a pushed tag is superseded; a tag that never reached the remote is deleted and made again instead`;
-      return tagDate(old) !== null && tagDate(old) < tagDate(tag) ? null : `the old tag ${old} is not older than ${tag}: a superseding tag has a later date (an earlier or equal one cannot replace it)`;
-    })();
+    const problem = supersedeProblem({ old, tag, remote: remote.value });
     if (problem !== null) return refusal([problem], 3);
     entries.push({ tag: old, tagObjectSha: remote.value.object, why });
   }
@@ -61,17 +64,23 @@ function existingProblem({ file, tag }) {
   }
 }
 
+/** The workspace folders (`<stack>/<NN-slug>`) a tree holds a file in. */
+const workspaceFolders = tree => new Set([...tree.keys()].flatMap(file => {
+  const parts = file.split('/');
+  return STACKS.includes(parts[0]) && parts.length > 2 ? [`${parts[0]}/${parts[1]}`] : [];
+}));
+
 /** The sentences about W's workspace folders: exactly `csharp/<NN-slug>/` and `node/<NN-slug>/` of the six, each holding a file. */
 function folderProblems({ tree, specs }) {
   const wanted = new Set(specs.flatMap(spec => STACKS.map(stack => `${stack}/${spec.slug}`)));
-  const present = new Set([...tree.keys()].flatMap(file => { const parts = file.split('/'); return STACKS.includes(parts[0]) && parts.length > 2 ? [`${parts[0]}/${parts[1]}`] : []; }));
+  const present = workspaceFolders(tree);
   const missing = [...wanted].filter(folder => !present.has(folder));
   const extra = [...present].filter(folder => !wanted.has(folder));
-  const found = [...(missing.length > 0 ? [`W holds ${wanted.size - missing.length} of the twelve workspace folders; missing or empty: ${missing.map(folder => `${folder}/`).join(', ')}`] : []), ...extra.map(folder => `${folder}/ is a workspace folder of none of the six tasks`)];
-  return found;
+  const absent = missing.length > 0 ? [`W holds ${wanted.size - missing.length} of the twelve workspace folders; missing or empty: ${missing.map(folder => `${folder}/`).join(', ')}`] : [];
+  return [...absent, ...extra.map(folder => `${folder}/ is a workspace folder of none of the six tasks`)];
 }
 
-/** The first line of the date a commit was made, UTC, `yyyy-mm-dd`. */
+/** ok(the day a commit was made, UTC, `yyyy-mm-dd`). */
 async function dayOf(repo, commit) {
   const shown = await runGit(repo, ['show', '-s', '--format=%ct', commit]);
   return shown.ok ? ok(new Date(Number(shown.value.stdout.trim()) * 1000).toISOString().slice(0, 10)) : shown;
