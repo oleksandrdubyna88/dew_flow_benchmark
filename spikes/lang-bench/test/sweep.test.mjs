@@ -111,6 +111,17 @@ test('An_assignment_to_an_environment_variable_is_no_token_binding_and_every_rea
   for (const [name, [line, expected]] of Object.entries(beside)) assert.deepEqual(foreignTokens(`${env}\n${line}`), expected, `${name} is still found beside the environment assignments`);
 });
 
+test('The_environment_exemption_is_anchored_and_a_TOKEN_constant_name_may_hold_digits', () => {
+  assert.deepEqual(foreignTokens('notprocess.env.OWNED_TOKEN = other;'), ['OWNED_TOKEN = other'], 'a name that merely ends in process.env. is not the environment');
+  assert.deepEqual(foreignTokens('myprocess.env.GH_TOKEN = x;'), ['GH_TOKEN = x']);
+  assert.deepEqual(foreignTokens('process.env.OWNED_TOKEN = other;'), [], 'the real environment assignment stays clean');
+  assert.deepEqual(foreignTokens('  process.env.GH_TOKEN = x;'), [], 'indented, still clean');
+  assert.deepEqual(foreignTokens('const V2_TOKEN = x;'), ['V2_TOKEN = x']);
+  assert.deepEqual(foreignTokens('TOKEN2 = y;'), ['TOKEN2 = y']);
+  assert.deepEqual(foreignTokens("const V2_TOKEN = 'bench';"), [], 'the registered token with a digit name is clean');
+  assert.deepEqual(foreignTokens('process.env.V2_TOKEN = x;'), [], 'a digit name in the environment is clean');
+});
+
 /** What a killed probe test REALLY leaves now: its `private-<id>` root (a claimed owned folder) with the probe's runs parent and temp root inside, runs and builds in them. */
 function killedProbeTestLeftovers(root) {
   const left = leftBehind(root, 'private');

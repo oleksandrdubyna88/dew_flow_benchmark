@@ -2,7 +2,7 @@
 // that neither the suite-start `sweepLeftovers` nor `sweepStale` can collect after a killed run. `foreignTokens` finds every way a source text binds a token that is not the literal `'bench'`:
 //   - a `token:` value that is not the literal 'bench' / "bench" (a variable, a template and an expression included);
 //   - a shorthand `{ token }` (its value is a variable);
-//   - a `TOKEN`-style constant (`const TOKEN = …`, `OWNED_TOKEN = …`) other than 'bench' (not an assignment to an environment variable: `process.env.GH_TOKEN = …` sets a variable a child
+//   - a `TOKEN`-style constant (`const TOKEN = …`, `OWNED_TOKEN = …`, `V2_TOKEN = …`: the name may hold digits) other than 'bench' (not an assignment to an environment variable: `process.env.GH_TOKEN = …`, with `process` standing on a word boundary so `notprocess.env.X_TOKEN = …` is still found, sets a variable a child
 //     reads and binds no owned-name token; the bracket form `process.env['GH_TOKEN'] = …` never matched, as the quote and the bracket stand between the name and the `=`);
 //   - every value after `--owned-token`, whatever it is (the option no longer exists).
 const BENCH = /^(['"`])bench\1$/;
@@ -10,7 +10,7 @@ const VALUE = String.raw`([^,}\n;]+?)\s*(?=[,}\n;]|$)`;
 const FORMS = [
   [new RegExp(String.raw`\btoken\s*:\s*` + VALUE, 'g'), match => (BENCH.test(match[1].trim()) ? null : `token: ${match[1].trim()}`)],
   [/\{\s*token\s*[,}]/g, () => 'a shorthand { token }'],
-  [new RegExp(String.raw`(?<!process\.env\.)\b[A-Za-z_]*TOKEN[A-Za-z_]*\s*=\s*` + VALUE, 'g'), match => (BENCH.test(match[1].trim()) ? null : `${match[0].split('=')[0].trim()} = ${match[1].trim()}`)],
+  [new RegExp(String.raw`(?<!\bprocess\.env\.)\b[A-Za-z0-9_]*TOKEN[A-Za-z0-9_]*\s*=\s*` + VALUE, 'g'), match => (BENCH.test(match[1].trim()) ? null : `${match[0].split('=')[0].trim()} = ${match[1].trim()}`)],
   [/--owned-token['"\s,]+([^'"\s,\]]+)/g, match => `--owned-token ${match[1]}`],
 ];
 
