@@ -185,3 +185,12 @@ test('A_byte_changed_in_the_memory_sentence_is_still_a_finding', t => {
   assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['STATEMENT.md', 'differs outside a marked sentence, line 16']]);
   assert.equal(MARKERS.includes('<!-- memory-sentence -->'), false, 'the memory sentence is the same in both stacks, so it has no marker of its own');
 });
+
+test('A_load_json_that_is_not_a_JSON_object_is_a_finding_even_when_both_sides_are_alike_in_shape', t => {
+  const { cs, nd } = limitedPair(t);
+  for (const [one, other] of [['5', '6'], ['[1]', '[2]'], ['null', 'null']]) {
+    write(cs, 'samples/load.json', one);
+    write(nd, 'samples/load.json', other);
+    assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], `${one} against ${other}`);
+  }
+});
