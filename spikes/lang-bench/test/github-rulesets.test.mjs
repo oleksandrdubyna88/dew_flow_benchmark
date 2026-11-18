@@ -51,13 +51,24 @@ test('Usage_errors_are_exit_2_and_make_no_call', async () => {
   }
 });
 
-test('The_default_is_check_and_the_default_repository_is_the_task_repository', async () => {
+test('The_default_is_check_and_every_call_goes_to_the_task_repository', async () => {
   const got = await runMain([], fakeGitHub({ rulesets: present() }));
   assert.equal(got.exit, 0, got.out.join('|'));
   assert.ok(got.github.calls.length > 0 && got.github.calls.every(call => call.args.some(arg => arg.startsWith(`repos/${TASK_REPO}`))));
   assert.deepEqual(got.github.writes(), []);
-  const other = await runMain(['--check', '--repo', 'o/r'], fakeGitHub({ rulesets: present() }));
-  assert.ok(other.github.calls.every(call => call.args.some(arg => arg.startsWith('repos/o/r'))));
+});
+
+test('The_repository_is_fixed_in_the_data_and_no_flag_names_another', async t => {
+  const files = gateFiles(t);
+  for (const argv of [['--repo', 'o/r'], ['--repo', TASK_REPO], [`--repo=${TASK_REPO}`], ['--check', '--repo', 'o/r'], ['--apply', '--dry-run-record', files.record, '--repo', 'o/r'], ['--repository', 'o/r'], ['-r', 'o/r']]) {
+    const github = fakeGitHub({ rulesets: present() });
+    const got = await runMain(argv, github, { packagesFile: files.packagesFile });
+    assert.equal(got.exit, 2, argv.join(' '));
+    assert.deepEqual(github.calls, [], argv.join(' '));
+    assert.ok(got.err.join('\n').includes('usage'), argv.join(' '));
+  }
+  const applied = await runApply(t, fakeGitHub());
+  assert.ok(applied.github.calls.length > 0 && applied.github.calls.every(call => call.args.some(arg => arg.startsWith(`repos/${TASK_REPO}`))), 'an apply writes to the task repository and to no other');
 });
 
 // ---- --check -------------------------------------------------------------------------------------------------------------------------
@@ -212,7 +223,8 @@ test('An_apply_without_the_dry_run_record_flag_is_a_usage_error_and_check_takes_
 test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () => {
   const got = await runMain(['--bogus'], fakeGitHub());
   const text = got.err.join('\n');
-  for (const word of ['--check', '--apply', '--dry-run-record <file>', 'dry run clean <yyyy-mm-dd>']) assert.ok(text.includes(word), `${word} in: ${text}`);
+  for (const word of ['--check', '--apply', '--dry-run-record <file>', 'dry run clean <yyyy-mm-dd>', TASK_REPO]) assert.ok(text.includes(word), `${word} in: ${text}`);
+  assert.ok(!text.includes('--repo'), 'the repository is data, not a flag');
 });
 
 test('An_apply_with_both_prerequisites_met_creates_the_rulesets', async t => {

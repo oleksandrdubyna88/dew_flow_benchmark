@@ -15,29 +15,28 @@ import { runBounded } from '../minigit-bench/lib/run.mjs';
 
 const DEFAULT_PACKAGES_FILE = fileURLToPath(new URL('../lang-explore/inputs/packages.json', import.meta.url));
 const USAGE = [
-  'usage: node spikes/lang-bench/github-rulesets.mjs [--check] [--repo <owner/name>]',
-  '       node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file> [--repo <owner/name>]',
+  'usage: node spikes/lang-bench/github-rulesets.mjs [--check]',
+  '       node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>',
+  'accepted flags: --check (the default: read, change nothing), --apply (create the absent rulesets), --dry-run-record <file> (required with --apply, refused with --check); any other flag is a usage error (exit 2).',
+  `The repository is fixed in the data (${TASK_REPO}); no flag names another.`,
   `--apply starts only when spikes/lang-explore/inputs/packages.json lists all six tasks (${PACKAGE_TASKS.join(', ')}) and the file named by --dry-run-record has "${DRY_RUN_LINE}" as its first line.`,
 ].join('\n');
 const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
-/** The flags: `{ mode, repo, record }` or `{ usage }` (a sentence). */
+/** The flags: `{ mode, record }` or `{ usage }` (a sentence). The repository is not a flag: it is `TASK_REPO`, in the data. */
 function parseArgs(argv) {
   const modes = [];
-  let repo = TASK_REPO;
   let record;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--check' || arg === '--apply') modes.push(arg.slice(2));
-    else if (arg === '--repo') repo = argv[++index] ?? '';
     else if (arg === '--dry-run-record') record = argv[++index] ?? '';
     else return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
   }
   if (new Set(modes).size > 1) return { usage: '--check and --apply are exclusive' };
   if (modes[0] === 'apply' && !record) return { usage: '--apply needs --dry-run-record <file>' };
   if (modes[0] !== 'apply' && record !== undefined) return { usage: '--dry-run-record belongs to --apply' };
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]+$/.test(repo) || repo.split('/').some(part => /^\.+$/.test(part))) return { usage: `--repo wants owner/name, got ${JSON.stringify(repo)}` };
-  return { mode: modes[0] ?? 'check', repo, record };
+  return { mode: modes[0] ?? 'check', record };
 }
 
 /** `packages.json` parsed, or `null` when it cannot be read or parsed. */
@@ -116,7 +115,7 @@ export async function main({ argv, run = runBounded, say = line => process.stdou
     complain(`github-rulesets: ${parsed.usage}\n${USAGE}`);
     return EXIT.usage;
   }
-  const context = { repo: parsed.repo, run, say, complain, record: parsed.record, packagesFile };
+  const context = { repo: TASK_REPO, run, say, complain, record: parsed.record, packagesFile };
   return parsed.mode === 'apply' ? apply(context) : check(context);
 }
 
