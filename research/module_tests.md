@@ -652,6 +652,11 @@ node spikes/lang-bench/run-tests.mjs test/github-lang.test.mjs test/github-rules
 | `A_token_in_gits_words_is_removed_from_every_reason`, `The_environment_of_gh_carries_no_token_and_the_PAT_file_is_never_read`, `The_real_command_is_exit_3_when_gh_fails_and_prints_no_token` | `scrub` removes a token everywhere; the child's environment carries no token variable; the library has no file read |
 | `A_check_...`, `Merge_settings_are_reported_but_never_change_the_exit`, the exit-code scenarios, `The_real_command_reads_through_a_gh_on_its_path_...` | exit 0 equal, 1 different or absent, 2 usage, 3 gh failed, in process and in a real process |
 
+**The token scan these tests sit under** (`test/support/token-scan.mjs`, run over every spike file by `No_test_binds_a_token_other_than_bench_and_the_scan_finds_a_planted_one_in_every_form` in `test/sweep.test.mjs`). The repository has one registered owned-name token, `bench`; `foreignTokens` finds every
+binding of another: a `token:` value that is not the literal `'bench'`, the shorthand `{ token }`, a `TOKEN`-style constant (`const TOKEN = ...`, `OWNED_TOKEN = ...`) other than `'bench'`, and any value after `--owned-token`. **An assignment to an environment variable is not a
+binding:** `process.env.GH_TOKEN = ...` (and the bracket form `process.env['GH_TOKEN'] = ...`, which never matched) sets a variable that a child process reads, so it is skipped; the token-named variable of `github-lang.test.mjs` is the case. The test
+`An_assignment_to_an_environment_variable_is_no_token_binding_and_every_real_binding_beside_it_is_still_found` holds both halves: every spelling of an environment assignment is clean, and each real form beside them is still found.
+
 **Not covered, and why.** The real GitHub: the rulesets' effect (a blocked push, an admin's tag creation) is checked by the team lead's hand `--check` after the apply and by the freeze's own steps, never by a test, because a test must not write to GitHub.
 The admin role's id (5) is the integrations provider's documented value; whether GitHub accepts it is known only at the apply, whose read-back would show a refusal as exit 3.
 
