@@ -82,6 +82,24 @@ function claimTemp({ dir, what }) {
   throw new Error(`no free temporary name for ${what} in ${dir}`);
 }
 
+/** ok(true) once the open temporary file holds `bytes` (written whole, read back, validated), has been renamed onto `target` and its folder synced; a fail says why nothing was published. */
+async function publish({ fd, tmp, bytes, ops, validate, target, dir }) {
+  writeAndSync(fd, bytes, ops);
+  const held = readBack({ tmp, bytes, ops });
+  const valid = held.ok ? await validate(held.value) : held;
+  if (!valid.ok) return fail(`the new ${path.basename(target)} was not published: ${valid.reason}`);
+  ops.renameSync(tmp, target);
+  syncFolder(dir, ops);
+  owned.removeClaim(tmp);
+  return ok(true);
+}
+
+/** What a run leaves behind: a file this run did not create (a squatter's) is never removed, only the claim this run wrote; a file it made is removed with its claim. */
+function cleanup({ made, tmp }) {
+  if (!made) return owned.removeClaim(tmp);
+  return existsSync(tmp) ? removeOwned(tmp) : undefined;
+}
+
 /**
  * Publishes `text` as `target` through an owned temporary file in `dir` (the same file system as the target). `validate(text)` -> ok | fail(reason) runs on the text READ BACK from the finished temporary file before the rename; a refusal
  * removes the file. `io` replaces `openSync`, `writeSync`, `fsyncSync`, `closeSync`, `readFileSync`, `renameSync`, `rmSync` (tests plant a kill at the rename, or a short write). -> ok({ notes }) | fail(reason).
@@ -91,24 +109,15 @@ export async function writeOutput({ dir, target, text, what, validate = () => ok
   const bytes = Buffer.from(text, 'utf8');
   const notes = sweepStale(dir);
   const tmp = claimTemp({ dir, what });
-  let made = false;
+  const state = { made: false };
   try {
     const fd = ops.openSync(tmp, 'wx', 0o644);
-    made = true;
-    writeAndSync(fd, bytes, ops);
-    const held = readBack({ tmp, bytes, ops });
-    if (!held.ok) return fail(`the new ${path.basename(target)} was not published: ${held.reason}`, { notes });
-    const valid = await validate(held.value);
-    if (!valid.ok) return fail(`the new ${path.basename(target)} was not published: ${valid.reason}`, { notes });
-    ops.renameSync(tmp, target);
-    syncFolder(dir, ops);
-    owned.removeClaim(tmp);
-    return ok({ notes });
+    state.made = true;
+    const published = await publish({ fd, tmp, bytes, ops, validate, target, dir });
+    return published.ok ? ok({ notes }) : fail(published.reason, { notes });
   } catch (error) {
     return fail(`${target} could not be written (${error.code ?? error.message})`, { notes, env: true });
   } finally {
-    // a file this run did not create (a squatter's) is never removed; only the claim this run wrote goes
-    if (made && existsSync(tmp)) removeOwned(tmp);
-    else if (!made) owned.removeClaim(tmp);
+    cleanup({ made: state.made, tmp });
   }
 }

@@ -11,17 +11,21 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { blobsOf, commitOf, changedPaths, FORMAT_PATH, isAncestor, readTag, treeAt } from './freeze-git.mjs';
-import { INPUTS_DIR, problemsOf, specSet } from './freeze-inputs.mjs';
+import { INPUTS_DIR, problemsOf, specSet, unless } from './freeze-inputs.mjs';
 
 const LISTED_PATHS = 12;
 const STACKS = Object.freeze(['csharp', 'node']);
 
+const noRecord = states => states === undefined || states === null;
+const nameOf = freeze => freeze?.tag ?? 'none';
+const supersededBy = (freeze, tag) => (freeze?.superseded ?? []).some(entry => entry.tag === tag);
+
 /** The sentence when `tag` is not the one freeze the record names (a superseded tag, or any other); null when it is, or when there is no record to ask. */
 export function recordProblem(tag, states) {
-  if (states === undefined || states === null) return null;
+  if (noRecord(states)) return null;
   const { freeze } = states;
-  if ((freeze?.superseded ?? []).some(entry => entry.tag === tag)) return `the tag ${tag} is superseded by ${freeze.tag}: only the record's freeze.tag is the freeze, and a superseded tag is never read as one`;
-  return freeze?.tag === tag ? null : `the tag ${tag} is not the record's freeze tag (${freeze?.tag ?? 'none'})`;
+  if (supersededBy(freeze, tag)) return `the tag ${tag} is superseded by ${freeze.tag}: only the record's freeze.tag is the freeze, and a superseded tag is never read as one`;
+  return nameOf(freeze) === tag ? null : `the tag ${tag} is not the record's freeze tag (${nameOf(freeze)})`;
 }
 
 const short = sha => sha.slice(0, 10);
@@ -54,17 +58,27 @@ export async function recordProblems({ repo, tag, states }) {
   return named === null ? localTagProblems({ repo, tag, freeze: states.freeze }) : [named];
 }
 
-/** ok(true) when the blob of `file` at `tag` has `sha256`; a fail naming the file, the tag and both hashes otherwise (a path or a tag the repository lacks is a fail too). */
-export async function specBlobMatches({ repo, tag, path: file, sha256, states, inputs }) {
+/** The sentences when `tag` is not the accepted freeze of the record (given, or read from the inputs): none, or the record's own refusals. */
+async function recordRefusals({ repo, tag, states, inputs }) {
   const record = recordOf({ states, inputs });
-  if (!record.ok) return fail(record.reason);
-  const [refused] = await recordProblems({ repo, tag, states: record.value });
-  if (refused !== undefined) return fail(refused);
+  return record.ok ? recordProblems({ repo, tag, states: record.value }) : [record.reason];
+}
+
+/** ok(the bytes of `file` at `tag`) | a fail naming the file and the tag. */
+async function blobAtTag({ repo, tag, file }) {
   const commit = await commitOf(repo, `refs/tags/${tag}`);
   const tree = commit.ok ? await treeAt(repo, commit.value) : commit;
   const blobs = tree.ok ? await blobsOf(repo, tree.value, [file]) : tree;
-  if (!blobs.ok) return fail(`${file} at the tag ${tag}: ${blobs.reason}`);
-  const actual = createHash('sha256').update(blobs.value.get(file)).digest('hex');
+  return blobs.ok ? ok(blobs.value.get(file)) : fail(`${file} at the tag ${tag}: ${blobs.reason}`);
+}
+
+/** ok(true) when the blob of `file` at `tag` has `sha256`; a fail naming the file, the tag and both hashes otherwise (a path or a tag the repository lacks is a fail too). */
+export async function specBlobMatches({ repo, tag, path: file, sha256, states, inputs }) {
+  const [refused] = await recordRefusals({ repo, tag, states, inputs });
+  if (refused !== undefined) return fail(refused);
+  const blob = await blobAtTag({ repo, tag, file });
+  if (!blob.ok) return blob;
+  const actual = createHash('sha256').update(blob.value).digest('hex');
   return actual === sha256 ? ok(true) : fail(`${file} at the tag ${tag} has sha256 ${actual}, not the pinned ${sha256}`);
 }
 
@@ -87,25 +101,28 @@ function pathProblems({ changed, specs }) {
   return outside.length === 0 ? [] : [`${outside.length} path(s) changed between C and W outside the twelve workspace folders (csharp/<NN-slug>/ and node/<NN-slug>/ of the six tasks): ${listed(outside)}`];
 }
 
-/** ok([sentence]) for W against C: the T-L67 rule as sentences, `[]` when W passes; a git failure is a fail. `base` is C, a commit of the repository. */
-export async function workspaceProblems({ repo, base, commit }) {
+/** ok({ c, w, ancestor, trees, changed }): the two commits, whether C is an ancestor of W, both trees and the changed paths; the first failure otherwise. */
+async function readHistory({ repo, base, commit }) {
   const [c, w] = [await commitOf(repo, base), await commitOf(repo, commit)];
-  const found = [c, w].find(entry => !entry.ok);
-  if (found !== undefined) return found;
-  const [ancestor, trees, changed] = [await isAncestor(repo, c.value, w.value), { c: await treeAt(repo, c.value), w: await treeAt(repo, w.value) }, await changedPaths(repo, c.value, w.value)];
-  const broken = [ancestor, trees.c, trees.w, changed].find(entry => !entry.ok);
-  if (broken !== undefined) return broken;
-  const specs = specSet(trees.c.value);
-  if (!specs.ok) return ok(problemsOf(specs).map(problem => `at C: ${problem}`));
-  const walk = ancestor.value ? [] : [`C ${short(c.value)} is not an ancestor of W ${short(w.value)}: W is not a descendant of C (a tag on the freeze branch's head instead of the squash commit C is on no path of main)`];
-  return ok([...walk, ...blobProblems({ tree: { c: trees.c.value, w: trees.w.value }, specs: specs.value }), ...pathProblems({ changed: changed.value, specs: specs.value })]);
+  const bad = [c, w].find(entry => !entry.ok);
+  if (bad !== undefined) return bad;
+  const [ancestor, tc, tw, changed] = [await isAncestor(repo, c.value, w.value), await treeAt(repo, c.value), await treeAt(repo, w.value), await changedPaths(repo, c.value, w.value)];
+  return [ancestor, tc, tw, changed].find(entry => !entry.ok) ?? ok({ c: c.value, w: w.value, ancestor: ancestor.value, trees: { c: tc.value, w: tw.value }, changed: changed.value });
 }
 
-/** The sentences for W (`commit`) against the tag's commit; `[]` when W passes. A repository that cannot be read is one sentence, never a pass. */
+/** ok([sentence]) for W against C: the T-L67 rule as sentences, `[]` when W passes; a git failure is a fail. `base` is C, a commit of the repository. */
+export async function workspaceProblems({ repo, base, commit }) {
+  const read = await readHistory({ repo, base, commit });
+  if (!read.ok) return read;
+  const { c, w, ancestor, trees, changed } = read.value;
+  const specs = specSet(trees.c);
+  if (!specs.ok) return ok(problemsOf(specs).map(problem => `at C: ${problem}`));
+  const walk = unless(ancestor, `C ${short(c)} is not an ancestor of W ${short(w)}: W is not a descendant of C (a tag on the freeze branch's head instead of the squash commit C is on no path of main)`);
+  return ok([...walk, ...blobProblems({ tree: trees, specs: specs.value }), ...pathProblems({ changed, specs: specs.value })]);
+}
+
 export async function workspaceCommitProblems({ repo, tag, commit, states, inputs }) {
-  const record = recordOf({ states, inputs });
-  if (!record.ok) return [record.reason];
-  const refused = await recordProblems({ repo, tag, states: record.value });
+  const refused = await recordRefusals({ repo, tag, states, inputs });
   if (refused.length > 0) return refused;
   const base = await commitOf(repo, `refs/tags/${tag}`);
   if (!base.ok) return [`the tag ${tag}: ${base.reason}`];
