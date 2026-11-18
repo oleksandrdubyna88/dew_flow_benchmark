@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { DRY_RUN_LINE, PACKAGE_TASKS, TASK_REPO, applyGateProblems, applyRulesets, readMergeSettings, rulesetsReadBack, strangerLine } from './lib/github-lang.mjs';
 import { runBounded } from '../minigit-bench/lib/run.mjs';
 
-const DEFAULT_PACKAGES_FILE = fileURLToPath(new URL('../lang-explore/inputs/packages.json', import.meta.url));
+/** The registry of the packages the apply's go reads: `spikes/lang-explore/inputs/packages.json`. */
+export const DEFAULT_PACKAGES_FILE = fileURLToPath(new URL('../lang-explore/inputs/packages.json', import.meta.url));
 const USAGE = [
   'usage: node spikes/lang-bench/github-rulesets.mjs [--check]',
   '       node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>',
@@ -25,11 +26,11 @@ const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
 /** The flags: `{ mode, record }` or `{ usage }` (a sentence). The repository is not a flag: it is `TASK_REPO`, in the data. */
 function parseArgs(argv) {
-  const modes = [];
+  let modes = [];
   let record;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--check' || arg === '--apply') modes.push(arg.slice(2));
+    if (arg === '--check' || arg === '--apply') modes = [...modes, arg.slice(2)];
     else if (arg === '--dry-run-record') record = argv[++index] ?? '';
     else return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
   }
@@ -78,7 +79,10 @@ async function sayMergeSettings(repo, run, say) {
   else say(merge.value.length === 0 ? 'merge settings: ok' : `merge settings (report only): ${merge.value.join('; ')}`);
 }
 
-async function check({ repo, run, say, complain }) {
+const READING = 'reading the task repository\'s rulesets…';
+
+async function check({ repo, run, say, complain, progress }) {
+  progress(READING);
   const back = await rulesetsReadBack({ repo, run });
   if (!back.ok) {
     complain(`github-rulesets: ${back.reason}`);
@@ -90,14 +94,17 @@ async function check({ repo, run, say, complain }) {
   return back.value.equal ? EXIT.done : EXIT.different;
 }
 
-async function apply({ repo, run, say, complain, record, packagesFile }) {
-  const unmet = applyGateProblems({ packages: readPackages(packagesFile), recordFirstLine: readFirstLine(record) });
+async function apply({ repo, run, say, complain, progress, record, packagesFile }) {
+  const packages = readPackages(packagesFile);
+  const recordFirstLine = readFirstLine(record);
+  const unmet = applyGateProblems({ packages, recordFirstLine });
   if (unmet.length > 0) {
     for (const problem of unmet) complain(`github-rulesets: refused: ${problem}`);
     complain('github-rulesets: refused: the apply needs the owner\'s go of 2026-11-08 (all six packages pass and a dry run is clean); nothing was read or written.');
     return EXIT.different;
   }
-  const applied = await applyRulesets({ repo, run, say });
+  progress(READING);
+  const applied = await applyRulesets({ repo, run, say, packages, recordFirstLine });
   if (!applied.ok) {
     complain(`github-rulesets: ${applied.reason}`);
     return { env: EXIT.gh, config: EXIT.usage }[applied.kind] ?? EXIT.different;
@@ -108,14 +115,14 @@ async function apply({ repo, run, say, complain, record, packagesFile }) {
   return EXIT.done;
 }
 
-/** The command: -> the exit code. `run`, `say`, `complain` and `packagesFile` are the seams of the tests (the real `runBounded`, stdout, stderr and `lang-explore/inputs/packages.json`). */
-export async function main({ argv, run = runBounded, say = line => process.stdout.write(`${line}\n`), complain = line => process.stderr.write(`${line}\n`), packagesFile = DEFAULT_PACKAGES_FILE }) {
+/** The command: -> the exit code. `run`, `say`, `complain`, `progress` and `packagesFile` are the seams of the tests (the real `runBounded`, stdout, stderr, stderr again for the one progress line before the first read, and `lang-explore/inputs/packages.json`). */
+export async function main({ argv, run = runBounded, say = line => process.stdout.write(`${line}\n`), complain = line => process.stderr.write(`${line}\n`), progress = line => process.stderr.write(`${line}\n`), packagesFile = DEFAULT_PACKAGES_FILE }) {
   const parsed = parseArgs(argv);
   if (parsed.usage !== undefined) {
     complain(`github-rulesets: ${parsed.usage}\n${USAGE}`);
     return EXIT.usage;
   }
-  const context = { repo: TASK_REPO, run, say, complain, record: parsed.record, packagesFile };
+  const context = { repo: TASK_REPO, run, say, complain, progress, record: parsed.record, packagesFile };
   return parsed.mode === 'apply' ? apply(context) : check(context);
 }
 

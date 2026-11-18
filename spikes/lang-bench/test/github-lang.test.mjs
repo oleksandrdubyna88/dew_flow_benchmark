@@ -15,6 +15,7 @@ const typesOf = ruleset => ruleset.rules.map(rule => rule.type);
 /** The data with one change, as a read-back would show it. */
 const changed = (name, change) => { const copy = asGitHub(byName(name), 7); change(copy); return copy; };
 const readBackOf = () => RULESETS.map((ruleset, index) => asGitHub(ruleset, 100 + index));
+const GO = { packages: Object.fromEntries(['04', '05', '06', '07', '08', '10'].map(id => [id, { archiveSha256: 'a'.repeat(64) }])), recordFirstLine: 'dry run clean 2026-11-20' }; // the owner's go of 2026-11-08, as applyRulesets takes it
 const SECRET = 'ghp_' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
 
 // ---- the data ------------------------------------------------------------------------------------------------------------------------
@@ -58,7 +59,7 @@ test('Only_the_creation_ruleset_has_a_bypass_and_it_is_the_admin_role', () => {
 
 // Three GitHub rulesets, but only two approvals: the owner approved `main`'s protection (`template-frozen`) and the tag ruleset. GitHub cannot restrict updates for everyone and let the
 // admin create in one ruleset (a bypass applies to every rule of its ruleset), so the tag ruleset is expressed as two GitHub rulesets: `spec-frozen-tags` and `spec-frozen-tags-create`.
-test('The_data_is_three_frozen_rulesets_with_distinct_names_and_the_task_repository_is_the_default', () => {
+test('The_data_is_three_frozen_rulesets_with_distinct_names_and_the_task_repository_is_fixed', () => {
   assert.deepEqual(RULESETS.map(ruleset => ruleset.name), [MAIN, TAGS, CREATE]);
   assert.ok(Object.isFrozen(RULESETS) && Object.isFrozen(RULESETS[0]) && Object.isFrozen(RULESETS[0].rules[0].parameters) && Object.isFrozen(RULESETS[2].bypass_actors[0]));
   assert.equal(TASK_REPO, 'oleksandrdubyna88/dew_flow_ai_language_comparison');
@@ -87,6 +88,8 @@ const KINDS = [
   ['A_changed_target_is_named', TAGS, copy => { copy.target = 'branch'; }, 'target is "branch", not "tag"'],
   ['A_changed_parameter_is_named', MAIN, copy => { copy.rules[0].parameters.required_review_thread_resolution = false; }, 'rule pull_request parameter required_review_thread_resolution is false, not true'],
   ['An_absent_parameter_is_named', MAIN, copy => { delete copy.rules[0].parameters.require_last_push_approval; }, 'rule pull_request parameter require_last_push_approval is absent, not false'],
+  ['A_read_back_without_its_bypass_actors_is_a_problem_never_no_bypass_actors', MAIN, copy => { delete copy.bypass_actors; }, 'bypass actors were not returned: the reader may lack write access to the ruleset'],
+  ['A_read_back_whose_bypass_actors_are_not_a_list_is_the_same_problem', CREATE, copy => { copy.bypass_actors = null; }, 'bypass actors were not returned: the reader may lack write access to the ruleset'],
   ['A_doubled_rule_is_named_once_as_extra', TAGS, copy => { copy.rules.push({ type: 'deletion' }); }, 'extra rule: deletion'],
 ];
 for (const [name, ruleset, change, expected] of KINDS) {
@@ -139,7 +142,7 @@ test('A_repository_name_that_is_not_owner_slash_name_is_refused_before_any_call'
 test('An_absent_ruleset_is_created_and_read_back', async () => {
   const github = fakeGitHub();
   const out = collector();
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say, ...GO });
   assert.ok(applied.ok, applied.reason);
   assert.deepEqual(applied.value.outcomes, [{ name: MAIN, outcome: 'created' }, { name: TAGS, outcome: 'created' }, { name: CREATE, outcome: 'created' }]);
   const posts = github.writes();
@@ -155,7 +158,7 @@ test('An_absent_ruleset_is_created_and_read_back', async () => {
 
 test('A_present_equal_ruleset_is_left_alone_with_no_write', async () => {
   const github = fakeGitHub({ rulesets: readBackOf() });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.ok(applied.ok, applied.reason);
   assert.deepEqual(applied.value.outcomes.map(entry => entry.outcome), ['unchanged', 'unchanged', 'unchanged']);
   assert.deepEqual(github.writes(), []);
@@ -163,7 +166,7 @@ test('A_present_equal_ruleset_is_left_alone_with_no_write', async () => {
 
 test('Only_the_absent_one_is_created_when_the_others_are_present_and_equal', async () => {
   const github = fakeGitHub({ rulesets: [asGitHub(byName(MAIN), 11), asGitHub(byName(TAGS), 12)] });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.ok(applied.ok, applied.reason);
   assert.deepEqual(applied.value.outcomes.map(entry => entry.outcome), ['unchanged', 'unchanged', 'created']);
   assert.deepEqual(github.writes().map(call => JSON.parse(call.input).name), [CREATE]);
@@ -173,7 +176,7 @@ test('A_present_different_ruleset_is_refused_and_never_written', async () => {
   const different = changed(TAGS, copy => { copy.bypass_actors.push({ actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' }); });
   const github = fakeGitHub({ rulesets: [different] });
   const out = collector();
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say, ...GO });
   assert.equal(applied.ok, false);
   assert.equal(applied.kind, 'refused');
   assert.match(applied.reason, /spec-frozen-tags/);
@@ -184,27 +187,27 @@ test('A_present_different_ruleset_is_refused_and_never_written', async () => {
 
 test('Two_rulesets_of_one_name_are_refused_not_chosen_between', async () => {
   const github = fakeGitHub({ rulesets: [asGitHub(byName(MAIN), 1), asGitHub(byName(MAIN), 2)] });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(applied.kind, 'refused');
   assert.deepEqual(github.writes(), []);
 });
 
 test('A_read_back_that_differs_after_the_write_is_a_failure', async () => {
   const github = fakeGitHub({}, { onCreate: (body, id) => (body.name === CREATE ? { ...body, enforcement: 'evaluate' } : body) });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(applied.ok, false);
   assert.equal(applied.kind, 'differs');
   assert.match(applied.reason, /spec-frozen-tags-create/);
   assert.match(applied.reason, /enforcement is "evaluate", not "active"/);
   const dropped = fakeGitHub({}, { onCreate: (body, id) => (body.name === TAGS ? { ...body, rules: [] } : body) });
-  const droppedApply = await applyRulesets({ repo: 'o/r', run: dropped.run, say: collector().say });
+  const droppedApply = await applyRulesets({ repo: 'o/r', run: dropped.run, say: collector().say, ...GO });
   assert.equal(droppedApply.kind, 'differs');
   assert.match(droppedApply.reason, /missing rule: update/);
 });
 
 test('A_ruleset_that_is_absent_after_the_write_is_a_failure', async () => {
   const github = fakeGitHub({}, { reply: call => (call.method === 'POST' ? { ok: true, value: { code: 0, stdout: '{"id":5,"name":"x"}', stderr: '', timedOut: false, truncated: false } } : undefined) });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(applied.kind, 'differs');
   assert.match(applied.reason, /absent/);
 });
@@ -212,7 +215,7 @@ test('A_ruleset_that_is_absent_after_the_write_is_a_failure', async () => {
 test('A_failed_write_stops_the_apply_and_says_what_was_already_made', async () => {
   let posts = 0;
   const github = fakeGitHub({}, { reply: call => (call.method === 'POST' && ++posts === 2 ? { ok: true, value: { code: 1, stdout: '', stderr: 'gh: Validation Failed (HTTP 422)', timedOut: false, truncated: false } } : undefined) });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(applied.ok, false);
   assert.equal(applied.kind, 'env');
   assert.match(applied.reason, /template-frozen/, 'the one already created is named');
@@ -223,7 +226,7 @@ test('A_failed_write_stops_the_apply_and_says_what_was_already_made', async () =
 for (const kind of ['launch', 'timeout', 'exit', 'garbage']) {
   test(`An_apply_that_cannot_read_before_writes_nothing_${kind}`, async () => {
     const broken = brokenRunner(kind);
-    const applied = await applyRulesets({ repo: 'o/r', run: broken.run, say: collector().say });
+    const applied = await applyRulesets({ repo: 'o/r', run: broken.run, say: collector().say, ...GO });
     assert.equal(applied.ok, false);
     assert.equal(applied.kind, 'env');
     assert.deepEqual(broken.calls.filter(call => call.method !== 'GET'), []);
@@ -236,7 +239,7 @@ test('A_ruleset_not_in_the_data_that_targets_the_same_refs_is_named_and_left_alo
   const out = collector();
   const back = await rulesetsReadBack({ repo: 'o/r', run: github.run });
   assert.deepEqual(back.value.strangers.map(entry => entry.name), ['all-tags', 'default']);
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: out.say, ...GO });
   assert.ok(applied.ok, applied.reason);
   assert.ok(out.lines.some(line => line.includes('"all-tags"') && line.includes('not in the data')), out.lines.join('|'));
   assert.ok(!out.lines.some(line => line.includes('"elsewhere"') || line.includes('"other-tags"')));
@@ -313,23 +316,23 @@ function failingOnce(which, { storedFirst = false } = {}) {
 }
 
 test('A_failed_create_says_which_are_confirmed_created_which_uncertain_and_which_not_attempted', async () => {
-  const second = await applyRulesets({ repo: 'o/r', run: failingOnce(2).run, say: collector().say });
+  const second = await applyRulesets({ repo: 'o/r', run: failingOnce(2).run, say: collector().say, ...GO });
   assert.equal(second.kind, 'env');
   assert.match(second.reason, /Confirmed created: template-frozen\./);
   assert.match(second.reason, /Uncertain: spec-frozen-tags\./);
   assert.match(second.reason, /Not attempted: spec-frozen-tags-create\./);
-  const first = await applyRulesets({ repo: 'o/r', run: failingOnce(1).run, say: collector().say });
+  const first = await applyRulesets({ repo: 'o/r', run: failingOnce(1).run, say: collector().say, ...GO });
   assert.match(first.reason, /Confirmed created: none\. Uncertain: template-frozen\. Not attempted: spec-frozen-tags, spec-frozen-tags-create\./);
-  const last = await applyRulesets({ repo: 'o/r', run: failingOnce(3).run, say: collector().say });
+  const last = await applyRulesets({ repo: 'o/r', run: failingOnce(3).run, say: collector().say, ...GO });
   assert.match(last.reason, /Confirmed created: template-frozen, spec-frozen-tags\. Uncertain: spec-frozen-tags-create\. Not attempted: none\./);
 });
 
 test('A_second_apply_after_a_transient_failure_creates_only_the_rulesets_still_absent', async () => {
   const github = failingOnce(2);
-  assert.equal((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok, false);
+  assert.equal((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO })).ok, false);
   assert.deepEqual(github.state.rulesets.map(ruleset => ruleset.name), [MAIN], 'only the first was stored');
   const before = github.writes().length;
-  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.ok(rerun.ok, rerun.reason);
   assert.deepEqual(rerun.value.outcomes, [{ name: MAIN, outcome: 'unchanged' }, { name: TAGS, outcome: 'created' }, { name: CREATE, outcome: 'created' }]);
   assert.deepEqual(github.writes().slice(before).map(call => JSON.parse(call.input).name), [TAGS, CREATE]);
@@ -338,11 +341,11 @@ test('A_second_apply_after_a_transient_failure_creates_only_the_rulesets_still_a
 
 test('A_create_whose_answer_was_lost_but_which_was_stored_is_not_created_twice_by_the_rerun', async () => {
   const github = failingOnce(2, { storedFirst: true });
-  const first = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const first = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(first.ok, false);
   assert.match(first.reason, /Uncertain: spec-frozen-tags\./);
   const before = github.writes().length;
-  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.ok(rerun.ok, rerun.reason);
   assert.deepEqual(rerun.value.outcomes.map(entry => entry.outcome), ['unchanged', 'unchanged', 'created']);
   assert.deepEqual(github.writes().slice(before).map(call => JSON.parse(call.input).name), [CREATE]);
@@ -350,7 +353,7 @@ test('A_create_whose_answer_was_lost_but_which_was_stored_is_not_created_twice_b
 
 test('Each_create_is_read_back_before_the_next_one_is_made', async () => {
   const github = fakeGitHub();
-  assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok);
+  assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO })).ok);
   const posts = github.calls.flatMap((call, index) => (call.method === 'POST' ? [index] : []));
   assert.equal(posts.length, 3);
   for (const [position, index] of posts.slice(0, 2).entries()) {
@@ -361,7 +364,7 @@ test('Each_create_is_read_back_before_the_next_one_is_made', async () => {
 
 test('A_create_that_reads_back_wrong_stops_the_apply_before_the_next_create_and_says_so', async () => {
   const github = fakeGitHub({}, { onCreate: body => (body.name === TAGS ? { ...body, rules: [] } : body) });
-  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
   assert.equal(applied.kind, 'differs');
   assert.equal(github.writes().length, 2, 'the third create is not made on top of a wrong second');
   assert.match(applied.reason, /Confirmed created: template-frozen\. Uncertain: spec-frozen-tags\. Not attempted: spec-frozen-tags-create\./);
@@ -370,7 +373,7 @@ test('A_create_that_reads_back_wrong_stops_the_apply_before_the_next_create_and_
 test('A_present_different_ruleset_stops_the_apply_before_the_first_write_even_when_the_others_are_absent', async () => {
   for (const [name, change] of [[MAIN, copy => { copy.enforcement = 'disabled'; }], [CREATE, copy => { copy.bypass_actors = []; }]]) {
     const github = fakeGitHub({ rulesets: [changed(name, change)] });
-    const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+    const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO });
     assert.equal(applied.kind, 'refused', name);
     assert.deepEqual(github.writes(), [], name);
     assert.ok(github.calls.every(call => call.method === 'GET'), 'no update, no delete either');
@@ -395,7 +398,7 @@ test('GH_HOST_is_not_inherited_and_every_gh_call_names_github_com', async () => 
   process.env.GH_HOST = 'evil.example';
   try {
     const github = fakeGitHub();
-    assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok);
+    assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...GO })).ok);
     assert.ok((await readMergeSettings('o/r', github.run)).ok);
     assert.ok(github.calls.length > 10 && github.writes().length === 3);
     for (const call of github.calls) {
@@ -418,13 +421,81 @@ test('A_package_entry_that_is_an_array_is_not_a_package', () => {
   assert.equal(applyGateProblems({ packages: Object.fromEntries(PACKAGE_TASKS.map(id => [id, []])), recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'all six arrays: one sentence naming the six');
 });
 
+// ---- code round 2 -------------------------------------------------------------------------------------------------------------------
+
+test('The_instants_of_the_fake_GitHub_are_UTC', () => {
+  const read = asGitHub(byName(MAIN), 1);
+  assert.match(read.created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  assert.match(read.updated_at, /Z$/);
+  assert.equal(new Date(read.created_at).toISOString(), read.created_at, 'the same instant, written in UTC');
+});
+
+test('An_apply_without_the_go_refuses_before_its_first_read', async () => {
+  const early = [{ ...GO, packages: { '05': {} } }, { ...GO, packages: null }, { ...GO, recordFirstLine: 'dry run dirty' }, { ...GO, recordFirstLine: null }, { packages: undefined, recordFirstLine: undefined }];
+  for (const go of early) {
+    const github = fakeGitHub();
+    const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say, ...go });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.kind, 'refused');
+    assert.match(applied.reason, /refused/);
+    assert.deepEqual(github.calls, [], 'not even a read');
+  }
+  const met = fakeGitHub();
+  assert.ok((await applyRulesets({ repo: 'o/r', run: met.run, say: collector().say, ...GO })).ok);
+});
+
+test('A_stderr_longer_than_the_slice_is_scrubbed_before_it_is_cut', async () => {
+  for (const pad of [281, 285, 290, 296, 297, 299]) {
+    const read = await readRulesets('o/r', brokenRunner('exit', { stderr: `${'x'.repeat(pad)}${SECRET}` }).run);
+    assert.equal(read.ok, false);
+    assert.ok(!read.reason.includes('ghp_') && !read.reason.includes('A1b2'), `a token that crosses the cut leaves no prefix (pad ${pad}): ${read.reason.slice(-40)}`);
+  }
+});
+
+test('The_read_back_after_a_create_refuses_a_list_the_first_read_would_refuse', async () => {
+  const listAfterPost = entries => {
+    let posted = false;
+    return fakeGitHub({}, {
+      reply: call => {
+        if (call.method === 'POST') { posted = true; return undefined; }
+        return posted && call.args.some(arg => arg.includes('per_page')) ? { ok: true, value: { code: 0, stdout: JSON.stringify(entries), stderr: '', timedOut: false, truncated: false } } : undefined;
+      },
+    });
+  };
+  const full = Array.from({ length: 100 }, (_, id) => ({ id: id + 1, name: id === 0 ? MAIN : `other-${id}` }));
+  const paged = await applyRulesets({ repo: 'o/r', run: listAfterPost(full).run, say: collector().say, ...GO });
+  assert.equal(paged.kind, 'env', 'one page of 100 may have another page: the same refusal as the first read');
+  assert.match(paged.reason, /one page/);
+  const noId = await applyRulesets({ repo: 'o/r', run: listAfterPost([{ id: 'x', name: MAIN }]).run, say: collector().say, ...GO });
+  assert.equal(noId.kind, 'env', 'an entry without a numeric id is the same refusal as the first read');
+  assert.match(noId.reason, /without an id/);
+});
+
+test('A_name_is_never_both_confirmed_and_uncertain_and_an_untouched_ruleset_that_changed_is_said_so', async () => {
+  // A created ruleset that is not equal in the final read-back is uncertain, not confirmed.
+  let posts = 0;
+  const made = fakeGitHub({}, { reply: call => { if (call.method === 'POST' && ++posts === 2) made.state.rulesets.find(entry => entry.name === MAIN).enforcement = 'evaluate'; return undefined; } });
+  const first = await applyRulesets({ repo: 'o/r', run: made.run, say: collector().say, ...GO });
+  assert.equal(first.kind, 'differs');
+  assert.match(first.reason, /Confirmed created: spec-frozen-tags, spec-frozen-tags-create\. Uncertain: template-frozen\. Not attempted: none\./);
+  const named = [...first.reason.matchAll(/(?:Confirmed created|Uncertain): ([^.]*)\./g)].map(match => match[1].split(', '));
+  assert.deepEqual(named[0].filter(name => named[1].includes(name)), [], 'no name in both lists');
+  // A ruleset this apply did not touch that differs afterwards is "changed since the read before".
+  let posted = 0;
+  const untouched = fakeGitHub({ rulesets: [asGitHub(byName(MAIN), 11)] }, { reply: call => { if (call.method === 'POST' && ++posted === 1) untouched.state.rulesets.find(entry => entry.name === MAIN).enforcement = 'disabled'; return undefined; } });
+  const second = await applyRulesets({ repo: 'o/r', run: untouched.run, say: collector().say, ...GO });
+  assert.equal(second.kind, 'differs');
+  assert.match(second.reason, /Confirmed created: spec-frozen-tags, spec-frozen-tags-create\. Uncertain: none\. Not attempted: none\. Changed since the read before: template-frozen\./);
+  assert.doesNotMatch(second.reason, /Uncertain: template-frozen/);
+});
+
 // ---- no secret, no network ------------------------------------------------------------------------------------------------------------
 
 test('A_token_in_gits_words_is_removed_from_every_reason', async () => {
   assert.equal(scrub(`HTTP 401 for ${SECRET} and github_pat_${'x'.repeat(30)} and Bearer abcdefghijklmnopqrstuv0123`), 'HTTP 401 for <token removed> and <token removed> and <token removed>');
   const read = await readRulesets('o/r', brokenRunner('exit', { stderr: `bad credentials ${SECRET}` }).run);
   assert.ok(!read.reason.includes(SECRET) && read.reason.includes('bad credentials'), read.reason);
-  const applied = await applyRulesets({ repo: 'o/r', run: brokenRunner('exit', { stderr: SECRET }).run, say: collector().say });
+  const applied = await applyRulesets({ repo: 'o/r', run: brokenRunner('exit', { stderr: SECRET }).run, say: collector().say, ...GO });
   assert.ok(!JSON.stringify(applied).includes(SECRET));
 });
 

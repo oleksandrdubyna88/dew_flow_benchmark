@@ -104,7 +104,7 @@ function excludeProblems(read, expected) {
   return [...want.filter(ref => !have.includes(ref)).map(ref => `missing exclude ref: ${ref}`), ...have.filter(ref => !want.includes(ref)).map(ref => `extra exclude ref: ${ref}`)];
 }
 
-const countTypes = rules => rules.reduce((counts, rule) => counts.set(rule.type, (counts.get(rule.type) ?? 0) + 1), new Map());
+const countTypes = rules => new Map([...new Set(rules.map(rule => rule.type))].map(type => [type, rules.filter(rule => rule.type === type).length]));
 
 /** A rule the data does not state is `extra`, one it states and the read-back lacks is `missing`; a parameter is compared only where the data states it. */
 function ruleProblems(read, expected) {
@@ -122,9 +122,10 @@ function ruleProblems(read, expected) {
 const actorKey = actor => `${actor.actor_type} ${actor.actor_id}`;
 const actorText = actor => `${actorKey(actor)} ${actor.bypass_mode}`;
 
-/** An actor whose type and id the data does not name is `missing` when the data names it and `extra` when only the read-back does; one with the right type and id and another mode is reported by what GitHub holds (`extra`). */
+/** GitHub leaves `bypass_actors` out of a read by someone without write access to the ruleset: that is not "no bypass actors", it is a problem, so a check never says `equal` on it. An actor whose type and id the data does not name is `missing` when the data names it and `extra` when only the read-back does; one with the right type and id and another mode is reported by what GitHub holds (`extra`). */
 function bypassProblems(read, expected) {
-  const have = read.bypass_actors ?? [];
+  if (!Array.isArray(read.bypass_actors)) return ['bypass actors were not returned: the reader may lack write access to the ruleset'];
+  const have = read.bypass_actors;
   const want = expected.bypass_actors;
   const missing = want.filter(actor => !have.some(found => actorKey(found) === actorKey(actor))).map(actor => `missing bypass actor: ${actorText(actor)}`);
   const extra = have.filter(found => !want.some(actor => actorText(actor) === actorText(found))).map(found => `extra bypass actor: ${actorText(found)}`);
@@ -195,7 +196,7 @@ async function ghApi(run, args, input) {
   if (!result.ok) return envFail(result.reason);
   const { code, stdout, stderr, timedOut, truncated } = result.value;
   if (timedOut) return envFail(`gh did not answer within ${TIMEOUT_MS / 1000} seconds`);
-  if (code !== 0) return envFail(`gh exited with code ${code}: ${String(stderr).trim().slice(0, 300)}`);
+  if (code !== 0) return envFail(`gh exited with code ${code}: ${scrub(String(stderr).trim()).slice(0, 300)}`);
   if (truncated) return envFail('gh printed more than the reader keeps');
   try {
     return ok(JSON.parse(stdout));
@@ -209,21 +210,27 @@ const getJson = (run, path) => ghApi(run, ['-H', ACCEPT, ...HOST, path]);
 const postJson = (run, path, body) => ghApi(run, ['--method', 'POST', '-H', ACCEPT, ...HOST, path, '--input', '-'], JSON.stringify(body));
 const badRepo = repo => (REPO_NAME.test(String(repo)) ? null : fail(`repository ${JSON.stringify(String(repo))} is not owner/name`, { kind: 'config' }));
 
-/** Every ruleset of the repository as GitHub returns it: the list, then each by id. -> `ok(rulesets)` | `fail(reason, { kind })`. A list as long as one page may have another page, and is refused. */
-export async function readRulesets(repo, run = runBounded) {
-  const refused = badRepo(repo);
-  if (refused !== null) return refused;
+/** The list of the repository's rulesets, validated: -> `ok(entries)` | `fail`. A list as long as one page may have another page and is refused; an entry without a numeric id is refused. The one place both the full read and the read-back after a create get their list. */
+async function listEntries(repo, run) {
   const list = await getJson(run, `repos/${repo}/rulesets?per_page=${PAGE}&includes_parents=false`);
   if (!list.ok) return list;
   if (!Array.isArray(list.value)) return envFail('the list of rulesets is not a list');
   if (list.value.length >= PAGE) return envFail(`the list holds ${list.value.length} rulesets, one page: there may be more, so it is not trusted`);
-  if (!list.value.every(entry => Number.isSafeInteger(entry?.id))) return envFail('the list holds an entry without an id');
-  const rulesets = [];
+  return list.value.every(entry => Number.isSafeInteger(entry?.id)) ? ok(list.value) : envFail('the list holds an entry without an id');
+}
+
+/** Every ruleset of the repository as GitHub returns it: the list, then each by id. -> `ok(rulesets)` | `fail(reason, { kind })`. */
+export async function readRulesets(repo, run = runBounded) {
+  const refused = badRepo(repo);
+  if (refused !== null) return refused;
+  const list = await listEntries(repo, run);
+  if (!list.ok) return list;
+  let rulesets = [];
   for (const entry of list.value) {
     const one = await getJson(run, `repos/${repo}/rulesets/${entry.id}`);
     if (!one.ok) return one;
     if (one.value === null || typeof one.value !== 'object') return envFail(`ruleset ${entry.id} is not an object`);
-    rulesets.push(one.value);
+    rulesets = [...rulesets, one.value];
   }
   return ok(rulesets);
 }
@@ -265,9 +272,9 @@ export async function rulesetsReadBack({ repo, run = runBounded }) {
 
 /** The ruleset named `name`, read back after its creation: -> `ok()` | `fail(reason, { kind })`. It reads the list and then the one entry, so what GitHub stored is what is compared. */
 async function readBackOne(repo, run, expected) {
-  const list = await getJson(run, `repos/${repo}/rulesets?per_page=${PAGE}&includes_parents=false`);
+  const list = await listEntries(repo, run);
   if (!list.ok) return list;
-  const named = Array.isArray(list.value) ? list.value.filter(entry => entry?.name === expected.name) : [];
+  const named = list.value.filter(entry => entry?.name === expected.name);
   if (named.length === 0) return fail(`${expected.name} is absent after the write`, { kind: 'differs' });
   if (named.length > 1) return fail(`${expected.name} differs after the write: ${named.length} rulesets are named so`, { kind: 'differs' });
   const one = await getJson(run, `repos/${repo}/rulesets/${named[0].id}`);
@@ -283,15 +290,22 @@ async function createOne(repo, run, expected) {
   return readBackOne(repo, run, expected);
 }
 
-/** The words after a stop: what is confirmed created, what is uncertain, what was not attempted, and how to go on. */
-const stopped = (failure, { made, uncertain, rest }) => fail(scrub(`${failure.reason}. Confirmed created: ${sentence(made)}. Uncertain: ${sentence(uncertain)}. Not attempted: ${sentence(rest)}. Run --check to see what exists, then --apply again: it creates only the rulesets still absent.`), { kind: failure.kind });
+/** The words after a stop: what is confirmed created, what is uncertain, what was not attempted (and, when a ruleset this apply never touched differs afterwards, that it changed since the read before), and how to go on. A name is in one list only. */
+const stopped = (failure, { made, uncertain, rest, changed = [] }) => {
+  const confirmed = made.filter(name => !uncertain.includes(name));
+  const moved = changed.length === 0 ? '' : ` Changed since the read before: ${sentence(changed)}.`;
+  return fail(scrub(`${failure.reason}. Confirmed created: ${sentence(confirmed)}. Uncertain: ${sentence(uncertain)}. Not attempted: ${sentence(rest)}.${moved} Run --check to see what exists, then --apply again: it creates only the rulesets still absent.`), { kind: failure.kind });
+};
 
 /**
- * Creates the data's rulesets that are absent and nothing else. It reads every ruleset first and writes only when every present one equals the data (a present different one, or two of one name, is refused before any write: an update
- * needs the owner's own go). It then creates the absent ones one by one, reading each back, and ends with a read-back of all three. It never updates or deletes. `say` gets one line per ruleset and one per stranger.
+ * Creates the data's rulesets that are absent and nothing else. It first checks the owner's go of 2026-11-08 itself (`packages`: `packages.json` parsed; `recordFirstLine`: the dry-run record's first line) and refuses before its first read when
+ * it does not hold. It then reads every ruleset and writes only when every present one equals the data (a present different one, or two of one name, is refused before any write: an update needs the owner's own go). It creates the absent
+ * ones one by one, reading each back, and ends with a read-back of all three. It never updates or deletes. `say` gets one line per ruleset and one per stranger.
  * -> `ok({ outcomes, strangers, readBack })` | `fail(reason, { kind: 'refused' | 'differs' | 'env' | 'config' })`.
  */
-export async function applyRulesets({ repo, run = runBounded, say = () => {} }) {
+export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, recordFirstLine }) {
+  const unmet = applyGateProblems({ packages, recordFirstLine });
+  if (unmet.length > 0) return fail(scrub(`refused: ${unmet.join('; ')}. The apply needs the owner's go of 2026-11-08; nothing was read or written.`), { kind: 'refused' });
   const before = await rulesetsReadBack({ repo, run });
   if (!before.ok) return before;
   const { states, strangers } = before.value;
@@ -300,17 +314,21 @@ export async function applyRulesets({ repo, run = runBounded, say = () => {} }) 
   for (const stranger of strangers) say(strangerLine(stranger));
   for (const state of states.filter(entry => entry.status === 'equal')) say(`unchanged ${state.name}`);
   const absent = RULESETS.filter(ruleset => states.find(state => state.name === ruleset.name).status === 'absent');
-  const made = [];
+  let made = [];
   for (const [index, ruleset] of absent.entries()) {
     const created = await createOne(repo, run, ruleset);
     if (!created.ok) return stopped(created, { made, uncertain: [ruleset.name], rest: absent.slice(index + 1).map(entry => entry.name) });
-    made.push(ruleset.name);
+    made = [...made, ruleset.name];
     say(`created ${ruleset.name}`);
   }
   const after = await rulesetsReadBack({ repo, run });
   if (!after.ok) return stopped(after, { made, uncertain: [], rest: [] });
   const problems = after.value.states.filter(state => state.status !== 'equal');
-  if (problems.length > 0) return stopped(fail(`read back after the writes, ${problems.map(state => `${state.name} is ${state.status}`).join('; ')}`, { kind: 'differs' }), { made, uncertain: problems.map(state => state.name), rest: [] });
+  if (problems.length > 0) {
+    const failure = fail(`read back after the writes, ${problems.map(state => `${state.name} is ${state.status}`).join('; ')}`, { kind: 'differs' });
+    const names = problems.map(state => state.name);
+    return stopped(failure, { made, uncertain: names.filter(name => made.includes(name)), rest: [], changed: names.filter(name => !made.includes(name)) });
+  }
   const outcomes = RULESETS.map(({ name }) => ({ name, outcome: made.includes(name) ? 'created' : 'unchanged' }));
   return ok({ outcomes, strangers, readBack: after.value });
 }

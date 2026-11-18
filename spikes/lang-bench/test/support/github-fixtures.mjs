@@ -5,7 +5,7 @@ import { fail, ok } from '../../../minigit-bench/lib/result.mjs';
 /** Every call any fake of this process received, for the one test that proves the whole file reached nothing real. */
 export const ALL_CALLS = [];
 
-const ADDED = Object.freeze({ source_type: 'Repository', source: 'o/r', current_user_can_bypass: 'always', created_at: '2026-11-05T10:00:00.000+01:00', updated_at: '2026-11-05T10:00:00.000+01:00' });
+const ADDED = Object.freeze({ source_type: 'Repository', source: 'o/r', current_user_can_bypass: 'always', created_at: '2026-11-05T09:00:00.000Z', updated_at: '2026-11-05T09:00:00.000Z' });
 
 /** A ruleset as GitHub returns it: the stated data plus the fields GitHub adds. */
 export const asGitHub = (ruleset, id) => ({ id, ...structuredClone(ruleset), ...ADDED, node_id: `RRS_${id}`, _links: { self: { href: `https://api.github.com/repos/o/r/rulesets/${id}` } } });

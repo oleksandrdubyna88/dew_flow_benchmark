@@ -2,12 +2,12 @@
 // its PATH. No test makes a write to GitHub or touches the network: the in-process cases use the fake runner of test/support/github-fixtures.mjs, the spawned ones a shell shim that answers from files.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { RULESETS, TASK_REPO } from '../lib/github-lang.mjs';
-import { main } from '../github-rulesets.mjs';
+import { DEFAULT_PACKAGES_FILE, main } from '../github-rulesets.mjs';
 import { ALL_CALLS, asGitHub, brokenRunner, fakeGitHub } from './support/github-fixtures.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
@@ -30,8 +30,9 @@ function gateFiles(t, { tasks = SIX, line = 'dry run clean 2026-11-20', rest = '
 async function runMain(argv, github, extra = {}) {
   const out = [];
   const err = [];
-  const exit = await main({ argv, run: github.run, say: line => out.push(line), complain: line => err.push(line), ...extra });
-  return { exit, out, err, github };
+  const progress = [];
+  const exit = await main({ argv, run: github.run, say: line => out.push(line), complain: line => err.push(line), progress: line => progress.push({ line, callsSoFar: github.calls.length }), ...extra });
+  return { exit, out, err, progress, github };
 }
 
 /** An apply whose two prerequisites hold. */
@@ -119,9 +120,9 @@ test('Merge_settings_are_reported_but_never_change_the_exit', async () => {
   assert.ok(wrong.out.includes('merge settings (report only): merge setting allow_merge_commit is true, not false'), wrong.out.join('|'));
   const right = await runMain(['--check'], fakeGitHub({ rulesets: present() }));
   assert.ok(right.out.includes('merge settings: ok'), right.out.join('|'));
-  const unreadable = await runMain(['--check'], fakeGitHub({ rulesets: present() }, { reply: call => (call.args.at(-1) === `repos/${TASK_REPO}` ? brokenRunner('exit').run().then(value => value) : undefined) }));
+  const unreadable = await runMain(['--check'], fakeGitHub({ rulesets: present() }, { reply: call => (call.args.at(-1) === `repos/${TASK_REPO}` ? brokenRunner('exit').run('gh', call.args) : undefined) }));
   assert.equal(unreadable.exit, 0);
-  assert.ok(unreadable.out.some(line => line.startsWith('merge settings (report only): could not be read')), unreadable.out.join('|'));
+  assert.ok(unreadable.out.some(line => line.startsWith('merge settings (report only): could not be read') && line.includes('gh exited with code 1')), unreadable.out.join('|'));
 });
 
 // ---- --apply -------------------------------------------------------------------------------------------------------------------------
@@ -237,6 +238,26 @@ test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () =
   assert.ok(!text.includes('--repo'), 'the repository is data, not a flag');
 });
 
+test('One_progress_line_goes_to_stderr_before_the_first_read_and_stdout_stays_the_result', async t => {
+  const line = 'reading the task repository\'s rulesets…';
+  const check = await runMain(['--check'], fakeGitHub({ rulesets: present() }));
+  assert.deepEqual(check.progress, [{ line, callsSoFar: 0 }], 'one line, before any call');
+  assert.ok(!check.out.some(entry => entry.includes('reading')) && !check.err.some(entry => entry.includes('reading')), 'not in the result, not among the complaints');
+  const applied = await runApply(t, fakeGitHub());
+  assert.deepEqual(applied.progress, [{ line, callsSoFar: 0 }]);
+  const usage = await runMain(['--bogus'], fakeGitHub());
+  assert.deepEqual(usage.progress, [], 'a usage error reads nothing and says nothing of reading');
+  const early = await runApply(t, fakeGitHub(), gateFiles(t, { tasks: ['05'] }));
+  assert.deepEqual(early.progress, [], 'a refused apply reads nothing');
+});
+
+test('The_default_packages_file_is_the_registry_of_the_packages', () => {
+  assert.ok(existsSync(DEFAULT_PACKAGES_FILE), DEFAULT_PACKAGES_FILE);
+  assert.ok(DEFAULT_PACKAGES_FILE.endsWith(path.join('lang-explore', 'inputs', 'packages.json')));
+  const packages = JSON.parse(readFileSync(DEFAULT_PACKAGES_FILE, 'utf8'));
+  assert.ok(packages !== null && typeof packages === 'object' && '05' in packages, 'task 05 is registered, so the path is the registry and not an empty file');
+});
+
 test('An_apply_with_both_prerequisites_met_creates_the_rulesets', async t => {
   const github = fakeGitHub();
   const got = await runApply(t, github, gateFiles(t, { rest: '' }));
@@ -259,16 +280,18 @@ test('An_apply_that_fails_half_way_exits_3_with_the_three_lists_and_a_second_app
 
 // ---- the real process ----------------------------------------------------------------------------------------------------------------
 
-/** A `gh` of the test's own: answers the four calls from files, ends with 7 on anything else, records nothing real. */
+/** A `gh` of the test's own: answers the four calls from files (or fails, when `failing`) and appends a line to `<dir>/ran` each time it starts, so a test can prove the shim ran (or did not). */
 function shimFolder(t, files, { failing = false } = {}) {
   const dir = writeTree(ownedFolder(t, 'ghshim'), files);
   const script = failing
-    ? '#!/bin/sh\necho "gh: HTTP 500 for gho_ShouldNeverBePrinted" >&2\nexit 1\n'
-    : `#!/bin/sh\nfor a in "$@"; do case "$a" in repos/*) p="$a";; esac; done\ncase "$p" in\n  *rulesets\\?*) cat "${dir}/list.json";;\n  */rulesets/*) cat "${dir}/r-\${p##*/}.json";;\n  *) cat "${dir}/repo.json";;\nesac\n`;
+    ? `#!/bin/sh\necho ran >> "${dir}/ran"\necho "gh: HTTP 500 for gho_ShouldNeverBePrinted" >&2\nexit 1\n`
+    : `#!/bin/sh\necho ran >> "${dir}/ran"\nfor a in "$@"; do case "$a" in repos/*) p="$a";; esac; done\ncase "$p" in\n  *rulesets\\?*) cat "${dir}/list.json";;\n  */rulesets/*) cat "${dir}/r-\${p##*/}.json";;\n  *) cat "${dir}/repo.json";;\nesac\n`;
   writeFileSync(path.join(dir, 'gh'), script);
   chmodSync(path.join(dir, 'gh'), 0o755);
   return dir;
 }
+
+const shimRan = dir => existsSync(path.join(dir, 'ran'));
 
 function spawned(dir, home, argv) {
   return spawnSync(process.execPath, [COMMAND, ...argv], { encoding: 'utf8', timeout: 60_000, env: { PATH: `${dir}:${process.env.PATH}`, HOME: home, GH_TOKEN: SECRET } });
@@ -278,6 +301,7 @@ test('The_real_command_is_exit_2_on_a_usage_error_with_no_stack_trace', t => {
   const dir = shimFolder(t, {}, { failing: true });
   const got = spawned(dir, ownedFolder(t, 'home'), ['--check', '--apply']);
   assert.equal(got.status, 2);
+  assert.equal(shimRan(dir), false, 'a usage error starts no gh');
   assert.ok(!/\bat .*\.mjs:\d+/.test(got.stderr), got.stderr);
   assert.ok(got.stderr.includes('usage'));
 });
@@ -286,13 +310,18 @@ test('The_real_command_reads_through_a_gh_on_its_path_and_is_exit_0_when_equal_a
   const rulesets = present();
   const files = { 'list.json': JSON.stringify(rulesets.map(({ id, name }) => ({ id, name }))), 'repo.json': JSON.stringify({ allow_merge_commit: false, allow_squash_merge: true }) };
   for (const ruleset of rulesets) files[`r-${ruleset.id}.json`] = JSON.stringify(ruleset);
-  const equal = spawned(shimFolder(t, files), ownedFolder(t, 'home'), ['--check']);
+  const equalDir = shimFolder(t, files);
+  const equal = spawned(equalDir, ownedFolder(t, 'home'), ['--check']);
   assert.equal(equal.status, 0, equal.stdout + equal.stderr);
+  assert.ok(shimRan(equalDir), 'the answers came from the shim, so the shim ran');
+  assert.ok(equal.stderr.includes('reading the task repository\'s rulesets…') && !equal.stdout.includes('reading'), 'the progress line is on stderr, never in the result');
   assert.ok(equal.stdout.includes('template-frozen: equal'));
   const lax = JSON.parse(files['r-101.json']);
   lax.bypass_actors.push({ actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' });
-  const different = spawned(shimFolder(t, { ...files, 'r-101.json': JSON.stringify(lax) }), ownedFolder(t, 'home'), ['--check']);
+  const differentDir = shimFolder(t, { ...files, 'r-101.json': JSON.stringify(lax) });
+  const different = spawned(differentDir, ownedFolder(t, 'home'), ['--check']);
   assert.equal(different.status, 1, different.stdout + different.stderr);
+  assert.ok(shimRan(differentDir));
   assert.ok(different.stdout.includes('  - extra bypass actor: RepositoryRole 5 always'));
 });
 
@@ -301,11 +330,14 @@ test('The_real_command_refuses_an_early_apply_before_it_starts_gh', t => {
   const got = spawned(dir, ownedFolder(t, 'home'), ['--apply', '--dry-run-record', path.join(dir, 'no-such-record.txt')]);
   assert.equal(got.status, 1, `exit 1 (refused), not 3 (gh failed): ${got.stdout}${got.stderr}`);
   assert.ok(got.stderr.includes('refused') && !got.stderr.includes('HTTP 500'), got.stderr);
+  assert.equal(shimRan(dir), false, 'the shim was never started: the gate stopped the command first');
 });
 
 test('The_real_command_is_exit_3_when_gh_fails_and_prints_no_token', t => {
-  const got = spawned(shimFolder(t, {}, { failing: true }), ownedFolder(t, 'home'), ['--check']);
+  const dir = shimFolder(t, {}, { failing: true });
+  const got = spawned(dir, ownedFolder(t, 'home'), ['--check']);
   assert.equal(got.status, 3, got.stdout + got.stderr);
+  assert.ok(shimRan(dir), 'the failure came from the shim, so the shim ran');
   assert.ok(!(got.stdout + got.stderr).includes('gho_ShouldNeverBePrinted') && !(got.stdout + got.stderr).includes(SECRET), got.stderr);
 });
 
