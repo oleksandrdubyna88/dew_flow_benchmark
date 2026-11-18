@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { siblingCheckout, spikeDir, tmpDir } from './helpers.mjs';
+import { classifyName } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { stripComments } from './scan.mjs';
 
 const mjs = dir => readdirSync(path.join(spikeDir, dir), { withFileTypes: true }).filter(e => e.isFile() && e.name.endsWith('.mjs')).map(e => path.join(spikeDir, dir, e.name));
@@ -62,6 +63,8 @@ test('Every_directory_a_test_module_creates_outside_its_own_process_comes_from_t
   const creators = /\b(?:mkdtempSync|writeFileSync|mkdirSync)\(\s*path\.join\(\s*(?:os\.homedir\(\)|os\.tmpdir\(\))[^)]*\)/g;
   // The two shared helper modules of the followups plan's S2 still make `testsToDelete-mgb-…` folders (F2); each creator in them must keep the prefix. Every other module of test/, test files and helper modules alike, uses the owned helper.
   const F2_HELPERS = ['helpers.mjs', 'fake-home.mjs'];
+  // The name a creator gives its folder is its last string argument; the shipped classifier says whether it is the legacy form of the `mgb` token (it reads names, it makes none).
+  const legacyMgb = creator => { const name = /,\s*([`'"])(.*)\1\s*\)$/s.exec(creator)?.[2] ?? ''; const parsed = classifyName(name); return parsed.form === 'legacy' && parsed.token === 'mgb'; };
   const raw = [];
   const unprefixed = [];
   const seen = {};
@@ -71,12 +74,12 @@ test('Every_directory_a_test_module_creates_outside_its_own_process_comes_from_t
       if (!F2_HELPERS.includes(name)) raw.push(`${name}: ${m[0]}`);
       else {
         seen[name] = (seen[name] ?? 0) + 1;
-        if (!/testsToDelete-/.test(m[0])) unprefixed.push(`${name}: ${m[0]}`);
+        if (!legacyMgb(m[0])) unprefixed.push(`${name}: ${m[0]}`);
       }
     }
   }
   assert.deepEqual(raw, [], 'a module of test/ makes its folders with ownedDir(t, what), never with a temp API');
-  assert.deepEqual(unprefixed, [], 'the two F2 helpers keep the testsToDelete- prefix on what they make');
+  assert.deepEqual(unprefixed, [], 'the two F2 helpers keep their prefix on what they make');
   assert.deepEqual(Object.keys(seen).sort(), [...F2_HELPERS].sort(), 'the scan still finds the creator of each F2 helper (tmpDir, the fake home)');
   assert.deepEqual(where([path.join(spikeDir, 'test', 'bwrap.test.mjs')], /\.mgb-|['"`]mgb-(?:test|decoy)/), [], 'no socket or decoy keeps the unprefixed mgb- name');
 });
