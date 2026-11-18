@@ -58,14 +58,19 @@ function readBack({ tmp, bytes, ops }) {
   return held.equals(bytes) ? ok(held.toString('utf8')) : fail(`the temporary file read back holds ${held.length} bytes, not the ${bytes.length} written: nothing is published`);
 }
 
-/** The folder fsynced after a rename in it, so the new name (not only the file's bytes) survives a power loss. */
-function syncFolder(dir, ops) {
+/** One folder fsynced. */
+function syncOne(dir, ops) {
   const fd = ops.openSync(dir, 'r');
   try {
     ops.fsyncSync(fd);
   } finally {
     ops.closeSync(fd);
   }
+}
+
+/** The folders fsynced after a rename: the target's own folder (where the new name now lives) and the staging folder (where the old one was), so neither change is lost to a power cut. */
+function syncFolders({ dir, target }, ops) {
+  for (const folder of new Set([path.dirname(target), dir])) syncOne(folder, ops);
 }
 
 /** The claim and the name of a new temporary file in `dir`: the claim first (an exclusive create), a taken one draws a new id. */
@@ -89,7 +94,7 @@ async function publish({ fd, tmp, bytes, ops, validate, target, dir }) {
   const valid = held.ok ? await validate(held.value) : held;
   if (!valid.ok) return fail(`the new ${path.basename(target)} was not published: ${valid.reason}`);
   ops.renameSync(tmp, target);
-  syncFolder(dir, ops);
+  syncFolders({ dir, target }, ops);
   owned.removeClaim(tmp);
   return ok(true);
 }

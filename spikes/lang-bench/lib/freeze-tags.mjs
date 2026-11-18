@@ -3,12 +3,11 @@
 //   checkRemoteTag AFTER the push: the remote's peeled tag is C; the tag object, fetched from the remote into a folder of its own, is annotated, names the tag and C and has the message; its id is the local tag object's.
 // A freeze tag that never reached the remote may be deleted and made again under the same name; once pushed it is superseded by a later-date tag, never moved (the tag ruleset).
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { cleanupScope, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkFreezeCommit } from './freeze-commit.mjs';
 import { blobsOf, commitOf, FORMAT_PATH, isAncestor, originUrl, parentOf, readTag, remoteMain, remoteTag, treeAt } from './freeze-git.mjs';
-import { failWith, isEnv, problemsOf, unless } from './freeze-inputs.mjs';
+import { failWith, isEnv, problemsOf, readMessageFile, unless } from './freeze-inputs.mjs';
 import { tagDate } from './freeze-rows.mjs';
 import { runGit } from './push-git.mjs';
 import { FETCH_CONFIG } from './push-remote.mjs';
@@ -67,22 +66,22 @@ function localProblems({ read, tag, commit, message }) {
 }
 
 /** ok({ remote, read, sha }): what `check-local-tag` asks first, or the environment's failure, or the sentence for a commit that is none. */
-async function localReads({ repo, tag, commit }) {
-  const [remote, read, sha] = [await remoteTag(repo, tag), await readTag(repo, tag), await commitOf(repo, commit)];
-  const bad = [remote, read, sha].find(isEnv);
+async function localReads({ repo, tag, commit, messageFile }) {
+  const [remote, read, sha, message] = [await remoteTag(repo, tag), await readTag(repo, tag), await commitOf(repo, commit), readMessageFile(messageFile)];
+  const bad = [remote, read, sha, message].find(isEnv);
   if (bad !== undefined) return bad;
-  return sha.ok ? ok({ remote: remote.value, read, sha: sha.value }) : failWith([sha.reason]);
+  return sha.ok ? ok({ remote: remote.value, read, sha: sha.value, message: message.value }) : failWith([sha.reason]);
 }
 
 /** `check-local-tag`: ok({ tag, commit }) | failWith(sentences) | an environment fail. */
 export async function checkLocalTag({ repo, tag, commit, messageFile, pins }) {
-  const reads = await localReads({ repo, tag, commit });
+  const reads = await localReads({ repo, tag, commit, messageFile });
   if (!reads.ok) return reads;
-  const { remote, read, sha } = reads.value;
+  const { remote, read, sha, message } = reads.value;
   const onRemote = unless(remote === null, `the tag ${tag} is already on the remote (git ls-remote --tags origin): a pushed tag is never moved or deleted; make a tag with a later date instead`);
   const about = await commitProblems({ repo, commit: sha, tag, pins });
   if (isEnv(about)) return about;
-  const problems = [...onRemote, ...localProblems({ read, tag, commit: sha, message: readFileSync(messageFile, 'utf8') }), ...about.value.problems];
+  const problems = [...onRemote, ...localProblems({ read, tag, commit: sha, message }), ...about.value.problems];
   return problems.length > 0 ? failWith(problems) : ok({ tag, commit: sha });
 }
 

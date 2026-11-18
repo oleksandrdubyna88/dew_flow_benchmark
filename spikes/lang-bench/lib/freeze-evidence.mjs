@@ -5,10 +5,13 @@
 import { readFileSync } from 'node:fs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { SIX, unless } from './freeze-inputs.mjs';
+import { isRealDate } from './conformance-check-structure.mjs';
 import { tagDate } from './freeze-rows.mjs';
 
 const KEYS = Object.freeze(['freezeCommit', 'scratchWorkspace', 'workspaceCommit']);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** True for a `yyyy-mm-dd` text that is a real calendar day (2024-02-29 is, 2026-02-30 and 2026-12-99 are not). */
+const isDay = text => typeof text === 'string' && DAY.test(text) && isRealDate(text);
 const HEX40 = /^[0-9a-f]{40}$/;
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -25,7 +28,7 @@ function readText(file, what) {
 const RESULT_RULES = Object.freeze([
   [entry => typeof entry.commit === 'string' && HEX40.test(entry.commit), name => `${name}.commit is not a 40-hex commit`],
   [entry => entry.exit === 0, (name, entry) => `${name}.exit is ${JSON.stringify(entry.exit)}, not 0: only a clean result is recorded`],
-  [entry => typeof entry.date === 'string' && DAY.test(entry.date), name => `${name}.date is not a yyyy-mm-dd day`],
+  [entry => isDay(entry.date), name => `${name}.date is not a yyyy-mm-dd day`],
 ]);
 
 /** The sentences for one `{ commit, exit, date }` result named `name`: a 40-hex commit, exit 0, a day. */
@@ -64,7 +67,7 @@ function namedProblems({ evidence, commit, freeze }) {
 
 /** The sentences about the push's day and the state field. */
 function fieldProblems(evidence) {
-  const day = unless(typeof evidence.provisionalFrom === 'string' && DAY.test(evidence.provisionalFrom), 'provisionalFrom is not the push\'s yyyy-mm-dd day');
+  const day = unless(isDay(evidence.provisionalFrom), 'provisionalFrom is not the push\'s yyyy-mm-dd day');
   const state = unless(evidence.state === undefined || evidence.state === 'accepted', `state is ${JSON.stringify(evidence.state)}: the record holds one state only, "accepted"`);
   return [...day, ...state];
 }

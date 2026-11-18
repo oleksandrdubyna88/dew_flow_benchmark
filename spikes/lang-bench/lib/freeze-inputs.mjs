@@ -1,5 +1,6 @@
 // What the freeze tools take as given (F2.S2 (d)): the six quick tasks, the step-2a pin of FORMAT (the B entry of `inputs/specs.d/format.json`, never a hash taken from a freeze commit), and the six spec files a
 // tree holds. A problem list is carried on a failed result as `problems`; `problemsOf` reads it back.
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
@@ -15,6 +16,15 @@ export const failWith = problems => fail(problems[0], { problems });
 
 /** True for a failed result that is the environment's (git, the network, a file system), not a rule broken: `env: true` of this module's own, or `kind: 'env'` of the push check's git launcher. */
 export const isEnv = result => !result.ok && (result.env === true || result.kind === 'env');
+
+/** ok(the text of `file`) or the environment's fail with the one documented sentence: `the --message-file <file> cannot be read (<code>)`. */
+export function readMessageFile(file) {
+  try {
+    return ok(readFileSync(file, 'utf8'));
+  } catch (error) {
+    return fail(`the --message-file ${file} cannot be read (${error.code ?? error.message})`, { env: true });
+  }
+}
 
 /** `[]` when `holds`, else the one sentence: a rule written as data, not as a branch. */
 export const unless = (holds, sentence) => (holds ? [] : [sentence]);

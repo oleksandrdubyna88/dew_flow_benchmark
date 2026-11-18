@@ -545,7 +545,7 @@ test('An_unreadable_message_file_is_one_sentence_and_exit_4_for_both_tag_checks'
   const locked = path.join(f.root, 'locked.message');
   writeFileSync(locked, 'x\n');
   chmodSync(locked, 0o000);
-  t.after(() => chmodSync(locked, 0o600));
+  t.after(() => { try { chmodSync(locked, 0o600); } catch { /* the folder is already gone */ } });
   for (const [what, file] of [['missing', path.join(f.root, 'absent.message')], ['a directory', folder], ['no permission', locked]]) {
     for (const verb of ['check-tag', 'check-local-tag']) {
       const flags = verb === 'check-tag' ? ['--tag', TAG, '--commit', c, '--message-file', file] : ['--tag', TAG, '--commit', c, '--message-file', file];

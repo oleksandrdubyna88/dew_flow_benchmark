@@ -1,13 +1,12 @@
 // The command line of `freeze.mjs` as a function a test can call: `runFreeze(argv, seams)` -> `{ exit, stdout, stderr }` (F2.S2 (d)). One verb per call; each reads, prints and exits, and only `hashes --write` and `record`
 // write, one file each, through an owned temporary file and one rename. Exit codes: 0 done; 1 a check is red (`check-*`, and `record`'s verifications); 2 usage; 3 a refusal (`plan`, `hashes`, and `record`'s inputs); 4 the
 // environment (git, the network, a file system). `seams` (tests only): `now` (a clock), `conformance` (the checker's `run`), `io` (the writer's file operations), `needles` (the private needle file `plan` passes on).
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkFreezeCommit } from './freeze-commit.mjs';
 import { hashList, writeHashList } from './freeze-hashes.mjs';
-import { failWith, inputsDirOf, isEnv, loadPin, problemsOf } from './freeze-inputs.mjs';
+import { failWith, inputsDirOf, isEnv, loadPin, problemsOf, readMessageFile } from './freeze-inputs.mjs';
 import { loadSpecPins } from './freeze-pins.mjs';
 import { planFreeze } from './freeze-plan.mjs';
 import { recordFreeze } from './freeze-record.mjs';
@@ -111,8 +110,8 @@ function tagInputs({ values, where }) {
   const pins = pinsOf(values);
   const bad = [pin, pins].find(entry => !entry.ok);
   if (bad !== undefined) return failWith([bad.reason]);
-  const file = values['message-file'];
-  return ok({ pin: pin.value, pins: pins.value, message: file === undefined ? undefined : readFileSync(path.resolve(file), 'utf8') });
+  const message = values['message-file'] === undefined ? ok(undefined) : readMessageFile(path.resolve(values['message-file']));
+  return message.ok ? ok({ pin: pin.value, pins: pins.value, message: message.value }) : message;
 }
 
 async function tagVerb({ values }) {
