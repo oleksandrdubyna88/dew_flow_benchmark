@@ -73,14 +73,18 @@ const selfWithOthers = values => values.frozen !== undefined || values.candidate
 const compareMissing = values => values.frozen === undefined || values.candidate === undefined;
 const badCombination = (values, self) => (self ? selfWithOthers(values) : compareMissing(values));
 
+/** `{ exit, lines }` for FORMAT's bytes: the class table of the document itself, then its restricted grammar (the whole of `--self`, for a caller that holds the bytes). */
+export function selfRunBytes(bytes) {
+  const own = checkSelf(bytes);
+  if (own.exit !== 0) return own;
+  const grammar = selfGrammar(bytes);
+  return grammar.exit === 0 ? own : grammar;
+}
+
 /** `--self <FORMAT>`: the class table of the document itself, then its restricted grammar. */
 function selfRun(file) {
   const bytes = readBytes(file);
-  if (bytes.error !== undefined) return usage(bytes.error);
-  const own = checkSelf(bytes.bytes);
-  if (own.exit !== 0) return own;
-  const grammar = selfGrammar(bytes.bytes);
-  return grammar.exit === 0 ? own : grammar;
+  return bytes.error === undefined ? selfRunBytes(bytes.bytes) : usage(bytes.error);
 }
 
 /** `--frozen <A> --candidate <B>`: the candidate against the frozen file the record names. */

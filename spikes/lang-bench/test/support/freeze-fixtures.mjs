@@ -111,7 +111,7 @@ export function freezeAndMerge(fixture, options = {}) {
 
 /** The intended annotation written to a file in the fixture's root and the annotated tag made locally on `at`; returns the message file. */
 export function annotate(fixture, { tag = TAG, at, message = MESSAGE } = {}) {
-  const file = path.join(fixture.root, `${tag}.message`);
+  const file = path.join(fixture.root, `${tag}.${sha256(message).slice(0, 8)}.message`);
   writeFileSync(file, message);
   git(fixture.repo, 'tag', '-a', tag, at, '-F', file);
   return file;

@@ -39,7 +39,7 @@ test('record_writes_the_accepted_freeze_entry_and_the_six_spec_rows_to_one_file_
   const states = readStates(f);
   const listed = (await f.run('hashes', ['--commit', w])).stdout;
   assert.deepEqual(Object.keys(states).sort(), ['freeze', 'specs']);
-  assert.deepEqual(Object.keys(states.specs), ['04', '05', '06', '07', '08', '10']);
+  assert.deepEqual(Object.keys(states.specs).sort(), ['04', '05', '06', '07', '08', '10']);
   const tagObject = git(f.repo, 'rev-parse', `refs/tags/${TAG}`);
   assert.equal(states.freeze.tag, TAG);
   assert.equal(states.freeze.tagObjectSha, tagObject);
@@ -120,7 +120,7 @@ test('record_refuses_while_either_post_merge_leakcheck_result_is_missing_or_not_
   assert.equal((await record(f, { c, w })).exit, 0, 'the control, all three clean, writes');
 });
 
-test('record_refuses_an_empty_W_and_a_W_missing_one_workspace_and_one_holding_an_extra_folder', async t => {
+test('record_refuses_an_empty_W_and_a_W_missing_one_workspace', async t => {
   const f = makeFreezeRepo(t);
   const { c } = freezeAndMerge(f);
   annotate(f, { at: c });
@@ -131,13 +131,17 @@ test('record_refuses_an_empty_W_and_a_W_missing_one_workspace_and_one_holding_an
   assert.equal(refusedEmpty.exit, 1, said(refusedEmpty));
   assert.match(refusedEmpty.stderr, /twelve/);
   assert.equal(existsSync(statesFile(f)), false);
+  const g = makeFreezeRepo(t);
+  const merged = freezeAndMerge(g);
+  annotate(g, { at: merged.c });
+  pushTag(g);
   const files = workspaceFiles();
   for (const key of Object.keys(files).filter(name => name.startsWith('node/10-dag-scheduler/'))) delete files[key];
-  git(f.repo, 'reset', '-q', '--hard', c);
-  const missing = squashMerge(f, workspacesBranch(f, { from: c, files }), 'T2 without one workspace');
-  const refusedMissing = await record(f, { c, w: missing });
+  const missing = squashMerge(g, workspacesBranch(g, { from: merged.c, files }), 'T2 without one workspace');
+  const refusedMissing = await record(g, { c: merged.c, w: missing });
   assert.equal(refusedMissing.exit, 1, said(refusedMissing));
   assert.match(refusedMissing.stderr, /node\/10-dag-scheduler/);
+  assert.equal(existsSync(statesFile(g)), false);
 });
 
 test('record_refuses_a_workspaces_check_that_is_missing_names_another_commit_or_ends_in_another_line', async t => {

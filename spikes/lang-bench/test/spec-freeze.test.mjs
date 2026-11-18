@@ -2,9 +2,11 @@
 // Synthetic task repositories made with `git init` in owned folders (test/support/freeze-fixtures.mjs); the GitHub remote is a local bare repository, a squash merge is `git merge --squash`. The record, the superseding
 // tag and the interruptions are in spec-freeze-record.test.mjs; the order of the procedure in spec-freeze-order.test.mjs.
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { fetchTaskRepo } from '../lib/task-repo.mjs';
 import { laterForm } from '../lib/conformance-check-structure.mjs';
 import { readFacts } from '../lib/conformance-facts.mjs';
@@ -70,7 +72,7 @@ test('A_freeze_commit_with_another_path_a_missing_row_or_two_different_tags_is_r
   const fiveRows = await f.run('check-commit', ['--before', f.base, '--after', freezeBranch(f, { from: f.base, rows: SLUGS.slice(1) })]);
   assert.equal(fiveRows.exit, 1);
   assert.ok(fiveRows.stderr.includes(specPath(SLUGS[0])), 'names the spec whose row was not set');
-  const mixed = freezeBranch(f, { from: f.base, more: { [specPath(SLUGS[2])]: at(f.repo, f.base, specPath(SLUGS[2])).replace('| Freeze tag | none yet |', `| Freeze tag | \`${LATER_TAG}\` |`) } });
+  const mixed = freezeBranch(f, { from: f.base, more: { [specPath(SLUGS[2])]: `${at(f.repo, f.base, specPath(SLUGS[2])).replace('| Freeze tag | none yet |', `| Freeze tag | \`${LATER_TAG}\` |`)}\n` } });
   const two = await f.run('check-commit', ['--before', f.base, '--after', mixed]);
   assert.equal(two.exit, 1);
   assert.match(two.stderr, /one tag|different tag/);
@@ -124,7 +126,8 @@ test('The_plan_refuses_a_foreign_FORMAT_a_wrong_day_a_dirty_tree_a_task_list_tha
   assert.equal((await plan(['--date', '20261201'])).exit, 0, 'control');
   writeFileSync(path.join(f.repo, 'dirty.txt'), 'x\n');
   assert.match((await plan(['--date', '20261201'])).stderr, /not clean|untracked|dirty/i);
-  commit(f.repo, 'a commit', { 'dirty.txt': null });
+  rmSync(path.join(f.repo, 'dirty.txt'));
+  commit(f.repo, 'a commit', {});
   assert.match((await f.run('plan', ['--ref', f.base, '--date', '20261201'])).stderr, /HEAD .* is not .*--ref|--ref .* is not HEAD/i, 'the tree is at another commit than the ref');
   const pinned = makeFreezeRepo(t, { record: { ...{}, A: { version: 2, sha256: '1'.repeat(64), tasks: ['01'] }, B: { version: 2, sha256: '1'.repeat(64), tasks: ['04', '05', '06', '07', '08', '10'] } } });
   const foreign = await plan(['--date', '20261201'], pinned);
@@ -484,4 +487,26 @@ test('The_hash_list_refuses_a_link_under_a_root_and_a_commit_that_does_not_exist
   assert.equal(refused.exit, 3, said(refused));
   assert.match(refused.stderr, /csharp\/04-rule-api\/link.*link|link.*csharp\/04-rule-api\/link/s);
   assert.equal((await f.run('hashes', ['--commit', '0'.repeat(40)])).exit, 3);
+});
+
+// ---- the command ---------------------------------------------------------------------------------------------------------------------------------------
+
+const FREEZE = fileURLToPath(new URL('../freeze.mjs', import.meta.url));
+const command = args => spawnSync(process.execPath, [FREEZE, ...args], { encoding: 'utf8', timeout: 120_000 });
+
+test('The_command_prints_the_hash_list_and_a_plan_and_exits_2_for_usage_and_3_for_a_refusal', async t => {
+  const f = makeFreezeRepo(t);
+  const { w } = fullFreeze(f);
+  const listed = command(['hashes', '--repo', f.repo, '--commit', w]);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.equal(listed.stdout, (await f.run('hashes', ['--commit', w])).stdout, 'the process prints what the function returns');
+  assert.equal(command([]).status, 2, 'no verb');
+  assert.equal(command(['no-such-verb']).status, 2);
+  assert.equal(command(['hashes', '--repo', f.repo]).status, 2, 'a missing flag');
+  assert.equal(command(['check-commit', '--repo', f.repo, '--before', 'a', '--after', 'b', '--write']).status, 2, 'a flag of another verb');
+  assert.match(command(['hashes', '--repo', f.repo]).stderr, /missing --commit/);
+  const refused = command(['hashes', '--repo', f.repo, '--commit', '0'.repeat(40)]);
+  assert.equal(refused.status, 3);
+  assert.doesNotMatch(refused.stderr, /\n\s+at /, 'a sentence, not a stack trace');
+  assert.equal(command(['hashes', '--repo', path.join(f.root, 'no-such-repo'), '--commit', w]).status, 4, 'a repository git cannot read is the environment\'s');
 });
