@@ -15,12 +15,12 @@ import { workspaceProblems } from './spec-freeze.mjs';
 
 const EXIT = Object.freeze({ done: 0, red: 1, usage: 2, refused: 3, env: 4 });
 const OPTIONS = {
-  repo: { type: 'string' }, inputs: { type: 'string' }, record: { type: 'string' }, ref: { type: 'string' }, date: { type: 'string' }, needles: { type: 'string' }, before: { type: 'string' }, after: { type: 'string' },
+  repo: { type: 'string' }, inputs: { type: 'string' }, record: { type: 'string' }, pins: { type: 'string' }, ref: { type: 'string' }, date: { type: 'string' }, needles: { type: 'string' }, before: { type: 'string' }, after: { type: 'string' },
   tag: { type: 'string' }, commit: { type: 'string' }, base: { type: 'string' }, 'message-file': { type: 'string' }, write: { type: 'boolean' }, evidence: { type: 'string' }, 'workspaces-check': { type: 'string' },
   supersedes: { type: 'string', multiple: true }, why: { type: 'string', multiple: true },
 };
 /** The flags every verb takes: where the bench's inputs are and which FORMAT record the pin is read from. */
-const COMMON = Object.freeze(['inputs', 'record']);
+const COMMON = Object.freeze(['inputs', 'record', 'pins']);
 /** Each verb: the flags it needs, the flags it may take, and the exit of a failed rule (`record` carries its own). */
 const VERBS = Object.freeze({
   plan: { needs: ['repo', 'ref', 'date'], takes: ['inputs', 'record', 'needles'], exit: EXIT.refused },

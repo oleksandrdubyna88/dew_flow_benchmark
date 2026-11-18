@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { runFreeze } from '../lib/freeze-cli.mjs';
 import { fetchTaskRepo } from '../lib/task-repo.mjs';
 import { laterForm } from '../lib/conformance-check-structure.mjs';
 import { readFacts } from '../lib/conformance-facts.mjs';
@@ -534,4 +535,45 @@ test('The_command_prints_the_hash_list_and_a_plan_and_exits_2_for_usage_and_3_fo
   assert.equal(refused.status, 3);
   assert.doesNotMatch(refused.stderr, /\n\s+at /, 'a sentence, not a stack trace');
   assert.equal(command(['hashes', '--repo', path.join(f.root, 'no-such-repo'), '--commit', w]).status, 4, 'a repository git cannot read is the environment\'s');
+});
+
+// ---- a spec edited after its gate cannot be frozen ---------------------------------------------------------------------------------------------------
+
+/** A repository whose spec of task 06 holds a changed line while the engine's pin names the gated text's sha256. */
+const editedAfterGate = t => {
+  const gated = baseFiles();
+  const edited = baseFiles({ specs: { '06': specText('06').replace('**R2.** For n = 1', '**R2.** For n = 2') } });
+  return makeFreezeRepo(t, { files: edited, pinned: gated });
+};
+
+test('A_spec_edited_after_its_gate_is_refused_by_plan_check_commit_and_check_tag_and_the_pinned_bytes_pass', async t => {
+  const f = editedAfterGate(t);
+  const planned = await f.run('plan', ['--ref', 'HEAD', '--date', '20261201']);
+  assert.equal(planned.exit, 3, said(planned));
+  assert.ok(planned.stderr.includes(specPath('06-blog-api')) && /pins|pinned/.test(planned.stderr) && /gate/.test(planned.stderr), planned.stderr);
+  assert.equal(planned.stdout, '');
+  const { c } = freezeAndMerge(f);
+  const commitCheck = await f.run('check-commit', ['--before', f.base, '--after', c]);
+  assert.equal(commitCheck.exit, 1, said(commitCheck));
+  assert.ok(commitCheck.stderr.includes(specPath('06-blog-api')) && /explore\.json/.test(commitCheck.stderr), commitCheck.stderr);
+  assert.equal(commitCheck.stderr.includes(specPath('05-key-value-server')), false, 'only the edited spec is named');
+  annotate(f, { at: c });
+  pushTag(f);
+  const tagCheck = await f.run('check-tag', ['--tag', TAG, '--commit', c]);
+  assert.equal(tagCheck.exit, 1, said(tagCheck));
+  assert.ok(tagCheck.stderr.includes(specPath('06-blog-api')));
+  const g = makeFreezeRepo(t);
+  assert.equal((await g.run('plan', ['--ref', 'HEAD', '--date', '20261201'])).exit, 0, 'the control: the pinned bytes plan');
+});
+
+test('The_pins_are_read_from_the_data_file_and_a_missing_or_unreadable_file_or_task_is_a_refusal', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(f);
+  const run = pins => runFreeze(['check-commit', '--repo', f.repo, '--inputs', f.inputs, '--pins', pins, '--before', f.base, '--after', c], { now: () => TODAY });
+  assert.equal((await run(f.pins)).exit, 0);
+  assert.equal((await run(path.join(f.root, 'absent.json'))).exit, 1);
+  writeFileSync(path.join(f.root, 'no-tasks.json'), '{"tasks": {"04": {}}}');
+  const missing = await run(path.join(f.root, 'no-tasks.json'));
+  assert.equal(missing.exit, 1);
+  assert.match(missing.stderr, /explore\.json|pins|no-tasks/);
 });

@@ -47,6 +47,9 @@ export function baseFiles({ format = formatText(), specs = {} } = {}) {
   return files;
 }
 
+/** The data file of the engine's pins (`spikes/lang-explore/inputs/explore.json`, only the part the freeze reads): the sha256 of each of the six gated specs of `files`. */
+export const pinsOf = files => ({ tasks: Object.fromEntries(SIX.filter(([nn, slug]) => files[specPath(`${nn}-${slug}`)] !== undefined).map(([nn, slug]) => [nn, { spec: { path: specPath(`${nn}-${slug}`), sha256: sha256(files[specPath(`${nn}-${slug}`)]) } }])) });
+
 /** The record of the FORMATs, in the shape of `inputs/specs.d/format.json`; `over` replaces entries. */
 export function formatRecord(format, over = {}) {
   const entry = tasks => ({ version: 2, sha256: sha256(format), gate: 'inputs/gates/FORMAT-v2.md', grammarSha256: '8'.repeat(64), tasks });
@@ -57,7 +60,7 @@ export function formatRecord(format, over = {}) {
  * A task repository fixture: `repo` (a working clone on `main` with `origin` set), `origin` (the bare repository standing for the remote), `inputs` (a stand-in for the bench's `inputs/`: the FORMAT record, the six
  * gate records and an empty `specs.d/`), `base` (the commit of the six gated specs, pushed). `files` replaces the starting files; `record` replaces the FORMAT record.
  */
-export function makeFreezeRepo(t, { files, format = formatText(), record } = {}) {
+export function makeFreezeRepo(t, { files, format = formatText(), record, pinned } = {}) {
   const root = ownedFolder(t, 'freeze');
   const origin = path.join(root, 'origin.git');
   const repo = path.join(root, 'repo');
@@ -74,12 +77,14 @@ export function makeFreezeRepo(t, { files, format = formatText(), record } = {})
   const recordFile = path.join(inputs, 'specs.d', 'format.json');
   writeFileSync(recordFile, `${JSON.stringify(record ?? formatRecord(format), null, 2)}\n`);
   for (const [nn] of SIX) writeFileSync(path.join(inputs, 'gates', `spec-${nn}.md`), `# The gate of task ${nn}'s spec\n`);
-  const fixture = { root, repo, origin, inputs, recordFile, base, formatSha256: sha256(format) };
+  const pins = path.join(root, 'explore.json');
+  writeFileSync(pins, `${JSON.stringify(pinsOf(pinned ?? files ?? baseFiles({ format })), null, 2)}\n`);
+  const fixture = { root, repo, origin, inputs, recordFile, pins, base, formatSha256: sha256(format) };
   return { ...fixture, run: (verb, flags = [], seams = {}) => runVerb(fixture, verb, flags, seams) };
 }
 
 /** One verb through `runFreeze` in this process, on the fixture's repository and inputs, with `now` fixed at `TODAY`. */
-const runVerb = (fixture, verb, flags, seams) => runFreeze([verb, '--repo', fixture.repo, '--inputs', fixture.inputs, ...flags], { now: () => TODAY, ...seams });
+const runVerb = (fixture, verb, flags, seams) => runFreeze([verb, '--repo', fixture.repo, '--inputs', fixture.inputs, '--pins', fixture.pins, ...flags], { now: () => TODAY, ...seams });
 
 /** The freeze commit on a branch cut from `from`: each spec's `Freeze tag` row set to `tag` by a plain string edit, plus `more` (path -> text, null removes) in the same commit. Returns the branch's head. */
 export function freezeBranch(fixture, { tag = TAG, from = 'main', more = {}, rows = SLUGS } = {}) {
