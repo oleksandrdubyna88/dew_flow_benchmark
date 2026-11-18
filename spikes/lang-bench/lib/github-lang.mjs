@@ -151,29 +151,37 @@ export function mergeSettingsProblems(read) {
 
 /** The six tasks whose packages must all be registered (`spikes/lang-explore/inputs/packages.json`, `{ "NN": entry }`) before the apply: the owner's go of 2026-11-08 applies the rulesets only once all six packages pass. */
 export const PACKAGE_TASKS = freeze(['04', '05', '06', '07', '08', '10']);
-/** What the first line of the dry-run record says, as the usage text shows it: the dry run (the freeze's dress rehearsal) was clean on that day. The lines after it are free text. */
-export const DRY_RUN_LINE = 'dry run clean <yyyy-mm-dd>';
-const DRY_RUN_FORMAT = /^dry run clean (\d{4})-(\d{2})-(\d{2})$/;
+/** What the first line of the dry-run record says, as the usage text shows it: the dry run (the freeze's dress rehearsal) was clean on that day, **against this registry**: the sha256 of `packages.json`'s bytes when the dry run was made. A registry that
+ * changed since then no longer matches, so an old record cannot start the apply. The lines after the first are free text. */
+export const DRY_RUN_LINE = 'dry run clean <yyyy-mm-dd> packages <sha256 of packages.json>';
+const DRY_RUN_FORMAT = /^dry run clean (\d{4})-(\d{2})-(\d{2}) packages ([0-9a-f]{64})$/;
+const HEX64 = /^[0-9a-f]{64}$/;
 
 const isCalendarDate = ([, year, month, day]) => {
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   return date.getUTCFullYear() === Number(year) && date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day);
 };
 
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** A registered, sealed, validated package, as `packages.json` records one: an `identity` and an `archiveSha256` of 64 lower-case hex each, and both reference verdicts `accepted`. What else the entry holds is not compared. */
+const isPassedPackage = entry => isObject(entry) && HEX64.test(entry.identity) && HEX64.test(entry.archiveSha256) && isObject(entry.referenceVerdicts) && entry.referenceVerdicts.csharp === 'accepted' && entry.referenceVerdicts.node === 'accepted';
+
 function packagesProblems(packages) {
-  if (packages === null || typeof packages !== 'object' || Array.isArray(packages)) return ['packages.json cannot be read as an object, so it is not known that the six packages are registered'];
-  const lacking = PACKAGE_TASKS.filter(id => packages[id] === null || typeof packages[id] !== 'object' || Array.isArray(packages[id]));
-  return lacking.length === 0 ? [] : [`packages.json lists no package for task ${lacking.join(', ')}: all six of ${PACKAGE_TASKS.join(', ')} must be registered`];
+  if (!isObject(packages)) return ['packages.json cannot be read as an object, so it is not known that the six packages are registered'];
+  const lacking = PACKAGE_TASKS.filter(id => !isPassedPackage(packages[id]));
+  return lacking.length === 0 ? [] : [`packages.json shows no passed package for task ${lacking.join(', ')}: all six of ${PACKAGE_TASKS.join(', ')} must be registered, sealed (identity and archiveSha256 of 64 hex) and have both references accepted`];
 }
 
-function dryRunProblems(firstLine) {
+function dryRunProblems(firstLine, packagesSha256) {
   if (typeof firstLine !== 'string') return [`the dry-run record cannot be read: its first line must say "${DRY_RUN_LINE}"`];
   const found = DRY_RUN_FORMAT.exec(firstLine);
-  return found !== null && isCalendarDate(found) ? [] : [`the dry-run record's first line is not "${DRY_RUN_LINE}"`];
+  if (found === null || !isCalendarDate(found)) return [`the dry-run record's first line is not "${DRY_RUN_LINE}"`];
+  return found[4] === packagesSha256 ? [] : [`the dry-run record names packages.json sha256 ${found[4]} but packages.json is ${packagesSha256}: the registry changed since the dry run, so the dry run must be made again`];
 }
 
-/** Why the apply may not start, in sentences (`[]` it may): `packages` is `packages.json` parsed (`null` when it could not be read) and `recordFirstLine` the dry-run record's first line (`null` when it could not be read). Pure. */
-export const applyGateProblems = ({ packages, recordFirstLine }) => [...packagesProblems(packages), ...dryRunProblems(recordFirstLine)];
+/** Why the apply may not start, in sentences (`[]` it may): `packages` is `packages.json` parsed (`null` when it could not be read), `packagesSha256` the sha256 of its bytes, and `recordFirstLine` the dry-run record's first line (`null` when it could not be read). Pure. */
+export const applyGateProblems = ({ packages, packagesSha256, recordFirstLine }) => [...packagesProblems(packages), ...dryRunProblems(recordFirstLine, packagesSha256)];
 
 // ---- the calls through gh ---------------------------------------------------------------------------------------------------------------
 
@@ -305,15 +313,15 @@ const stopped = (failure, { made, uncertain, rest, changed = [] }) => {
 };
 
 /**
- * Creates the data's rulesets that are absent and nothing else. It first checks the owner's go of 2026-11-08 itself (`packages`: `packages.json` parsed; `recordFirstLine`: the dry-run record's first line) and refuses before its first read when
+ * Creates the data's rulesets that are absent and nothing else. It first checks the owner's go of 2026-11-08 itself (`packages`: `packages.json` parsed; `packagesSha256`: the sha256 of its bytes; `recordFirstLine`: the dry-run record's first line) and refuses before its first read when
  * it does not hold. It then reads every ruleset and writes only when every present one equals the data (a present different one, or two of one name, is refused before any write: an update needs the owner's own go). It creates the absent
  * ones one by one, reading each back, and ends with a read-back of all three. It never updates or deletes. `say` gets one line per ruleset and one per stranger.
  * -> `ok({ outcomes, strangers, readBack })` | `fail(reason, { kind: 'refused' | 'differs' | 'env' | 'config' })`.
  */
-export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, recordFirstLine }) {
+export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, packagesSha256, recordFirstLine }) {
   const wrong = badRepo(repo);
   if (wrong !== null) return wrong;
-  const unmet = applyGateProblems({ packages, recordFirstLine });
+  const unmet = applyGateProblems({ packages, packagesSha256, recordFirstLine });
   if (unmet.length > 0) return fail(scrub(`refused: ${unmet.join('; ')}. The apply needs the owner's go of 2026-11-08; nothing was read or written.`), { kind: 'refused' });
   const before = await rulesetsReadBack({ repo, run });
   if (!before.ok) return before;

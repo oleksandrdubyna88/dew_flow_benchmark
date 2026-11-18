@@ -2,6 +2,7 @@
 // its PATH. No test makes a write to GitHub or touches the network: the in-process cases use the fake runner of test/support/github-fixtures.mjs, the spawned ones a shell shim that answers from files.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -16,14 +17,21 @@ const SECRET = 'gho_' + 'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2';
 const present = () => RULESETS.map((ruleset, index) => asGitHub(ruleset, 100 + index));
 const SIX = ['04', '05', '06', '07', '08', '10'];
 
-/** The two prerequisites of the owner's go of 2026-11-08, as files of the test's own: a `packages.json` listing `tasks` and a dry-run record whose first line is `line`. -> `{ packagesFile, record }`. */
-function gateFiles(t, { tasks = SIX, line = 'dry run clean 2026-11-20', rest = 'the lines after the first are free text\n' } = {}) {
+const PASSED = { identity: 'b'.repeat(64), archiveSha256: 'a'.repeat(64), referenceVerdicts: { csharp: 'accepted', node: 'accepted' } }; // a registered, sealed, validated package, as packages.json holds one
+const registryOf = (tasks, entry = PASSED) => JSON.stringify(Object.fromEntries(tasks.map(id => [id, entry])));
+const sha256Of = text => createHash('sha256').update(text).digest('hex');
+
+/**
+ * The two prerequisites of the owner's go of 2026-11-08, as files of the test's own: a `packages.json` (the passed packages of `tasks`, or `entry`s, or the raw `packagesText`) and a dry-run record whose first line is `line`, by default
+ * `dry run clean 2026-11-20 packages <sha256 of that packages.json>`. -> `{ packagesFile, record, packagesText }`.
+ */
+function gateFiles(t, { tasks = SIX, entry = PASSED, packagesText = registryOf(tasks, entry), line, rest = 'the lines after the first are free text\n' } = {}) {
   const dir = ownedFolder(t, 'applygate');
   const packagesFile = path.join(dir, 'packages.json');
   const record = path.join(dir, 'dry-run.txt');
-  writeFileSync(packagesFile, JSON.stringify(Object.fromEntries(tasks.map(id => [id, { archiveSha256: 'a'.repeat(64) }]))));
-  writeFileSync(record, `${line}\n${rest}`);
-  return { packagesFile, record };
+  writeFileSync(packagesFile, packagesText);
+  writeFileSync(record, `${line ?? `dry run clean 2026-11-20 packages ${sha256Of(packagesText)}`}\n${rest}`);
+  return { packagesFile, record, packagesText };
 }
 
 /** The command in this process: `{ exit, out, err, github }`. `extra` is more options of `main` (the `packagesFile` seam). */
@@ -178,9 +186,8 @@ test('An_early_apply_makes_no_gh_call_at_all_while_a_package_is_missing', async 
 test('An_apply_whose_packages_file_cannot_be_read_or_is_not_an_object_makes_no_gh_call', async t => {
   for (const content of [null, 'not json', '[]', 'null', '"x"']) {
     const github = fakeGitHub();
-    const made = gateFiles(t);
+    const made = gateFiles(t, content === null ? {} : { packagesText: content });
     const files = content === null ? { ...made, packagesFile: `${made.packagesFile}.missing` } : made;
-    if (content !== null) writeFileSync(files.packagesFile, content);
     const got = await runApply(t, github, files);
     assert.equal(got.exit, 1, String(content));
     assert.deepEqual(github.calls, [], String(content));
@@ -209,6 +216,58 @@ test('An_apply_whose_dry_run_record_is_missing_or_not_clean_makes_no_gh_call', a
   assert.deepEqual(dirGithub.calls, []);
 });
 
+test('An_apply_whose_task_entries_do_not_show_a_passed_package_makes_no_gh_call', async t => {
+  const bad = {
+    'an empty entry': {},
+    'a missing archive': { identity: PASSED.identity, referenceVerdicts: PASSED.referenceVerdicts },
+    'an archive that is not a sha256': { ...PASSED, archiveSha256: 'sealed' },
+    'a missing identity': { archiveSha256: PASSED.archiveSha256, referenceVerdicts: PASSED.referenceVerdicts },
+    'a csharp reference not accepted': { ...PASSED, referenceVerdicts: { csharp: 'rejected', node: 'accepted' } },
+    'a node reference not accepted': { ...PASSED, referenceVerdicts: { csharp: 'accepted', node: 'pending' } },
+  };
+  for (const [what, entry] of Object.entries(bad)) {
+    for (const id of SIX) {
+      const registry = { ...JSON.parse(registryOf(SIX)), [id]: entry };
+      const github = fakeGitHub();
+      const got = await runApply(t, github, gateFiles(t, { packagesText: JSON.stringify(registry) }));
+      assert.equal(got.exit, 1, `${what}, task ${id}`);
+      assert.deepEqual(github.calls, [], `${what}, task ${id}: not even a read`);
+      assert.ok(got.err.join('\n').includes(`task ${id}`) && got.err.join('\n').includes('passed package'), got.err.join('|'));
+    }
+  }
+  const all = fakeGitHub();
+  assert.equal((await runApply(t, all, gateFiles(t, { entry: {} }))).exit, 1);
+  assert.deepEqual(all.calls, [], 'six empty objects');
+});
+
+test('A_dry_run_record_made_against_another_registry_makes_no_gh_call_and_the_matching_one_applies', async t => {
+  const files = gateFiles(t);
+  const matching = fakeGitHub();
+  assert.equal((await runApply(t, matching, files)).exit, 0, 'the sha256 of the bytes read now');
+  assert.equal(matching.writes().length, 3);
+  const others = {
+    'a record of an older registry': `dry run clean 2026-11-20 packages ${sha256Of('an older registry')}`,
+    'a sha256 of zeros': `dry run clean 2026-11-20 packages ${'0'.repeat(64)}`,
+    'no sha256': 'dry run clean 2026-11-20',
+    'an upper-case sha256': `dry run clean 2026-11-20 packages ${sha256Of(files.packagesText).toUpperCase()}`,
+  };
+  for (const [what, line] of Object.entries(others)) {
+    const github = fakeGitHub();
+    const got = await runApply(t, github, gateFiles(t, { line }));
+    assert.equal(got.exit, 1, what);
+    assert.deepEqual(github.calls, [], `${what}: not even a read`);
+    assert.ok(got.err.join('\n').includes('refused'), what);
+  }
+  // The registry changes after the dry run: the same record no longer matches the file it read.
+  const stale = gateFiles(t);
+  writeFileSync(stale.packagesFile, `${stale.packagesText}\n`);
+  const github = fakeGitHub();
+  const got = await runApply(t, github, stale);
+  assert.equal(got.exit, 1);
+  assert.deepEqual(github.calls, []);
+  assert.ok(got.err.join('\n').includes('registry changed'), got.err.join('|'));
+});
+
 test('An_apply_without_the_dry_run_record_flag_is_a_usage_error_and_check_takes_none', async t => {
   const files = gateFiles(t);
   for (const argv of [['--apply'], ['--apply', '--dry-run-record'], ['--check', '--dry-run-record', files.record], ['--dry-run-record', files.record]]) {
@@ -222,8 +281,7 @@ test('An_apply_without_the_dry_run_record_flag_is_a_usage_error_and_check_takes_
 
 test('An_apply_whose_packages_are_arrays_makes_no_gh_call', async t => {
   const github = fakeGitHub();
-  const files = gateFiles(t);
-  writeFileSync(files.packagesFile, JSON.stringify(Object.fromEntries(SIX.map(id => [id, []]))));
+  const files = gateFiles(t, { packagesText: registryOf(SIX, []) });
   const got = await runApply(t, github, files);
   assert.equal(got.exit, 1);
   assert.deepEqual(github.calls, []);
@@ -233,7 +291,7 @@ test('An_apply_whose_packages_are_arrays_makes_no_gh_call', async t => {
 test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () => {
   const got = await runMain(['--bogus'], fakeGitHub());
   const text = got.err.join('\n');
-  for (const word of ['--check', '--apply', '--dry-run-record <file>', 'dry run clean <yyyy-mm-dd>', TASK_REPO]) assert.ok(text.includes(word), `${word} in: ${text}`);
+  for (const word of ['--check', '--apply', '--dry-run-record <file>', 'dry run clean <yyyy-mm-dd> packages <sha256 of packages.json>', TASK_REPO]) assert.ok(text.includes(word), `${word} in: ${text}`);
   assert.ok(!text.includes('--repo'), 'the repository is data, not a flag');
 });
 

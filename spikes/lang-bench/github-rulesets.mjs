@@ -4,10 +4,12 @@
 //   node spikes/lang-bench/github-rulesets.mjs [--check]      read the rulesets and say `equal`, `absent` or `different` for each of the three; change nothing (the default)
 //   node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>     create the absent ones, never update or delete one; read every one back
 //
-// `--apply` starts only when the owner's go of 2026-11-08 holds, and checks it before any `gh` call: `spikes/lang-explore/inputs/packages.json` lists all six tasks (04, 05, 06, 07, 08, 10), and the
-// dry-run record named by `--dry-run-record` is a file whose FIRST line is exactly `dry run clean <yyyy-mm-dd>` (a real date; the lines after it are free text).
+// `--apply` starts only when the owner's go of 2026-11-08 holds, and checks it before any `gh` call: `spikes/lang-explore/inputs/packages.json` shows a passed package for each of the six tasks (04, 05, 06, 07, 08, 10: an `identity`
+// and an `archiveSha256` of 64 hex, `referenceVerdicts` csharp and node both `accepted`), and the dry-run record named by `--dry-run-record` is a file whose FIRST line is exactly
+// `dry run clean <yyyy-mm-dd> packages <sha256 of packages.json>` (a real date; the sha256 of the bytes of packages.json as they are now, so a record made before the registry changed is refused; the lines after the first are free text).
 // Exit 0 equal (or applied and read back equal); 1 a ruleset is different or absent, or the apply refused (a prerequisite not met, a ruleset present and different); 2 a usage error; 3 `gh` could not be run or read.
 // The write is the owner's own `gh` login, run by the team lead at freeze step (e) 3: no token file is read and no token is in the child's environment. The merge settings are reported and never change the exit.
+import { createHash } from 'node:crypto';
 import { closeSync, openSync, readFileSync, readSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DRY_RUN_LINE, PACKAGE_TASKS, TASK_REPO, applyGateProblems, applyRulesets, readMergeSettings, rulesetsReadBack, strangerLine } from './lib/github-lang.mjs';
@@ -20,7 +22,7 @@ const USAGE = [
   '       node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>',
   'accepted flags: --check (the default: read, change nothing), --apply (create the absent rulesets), --dry-run-record <file> (required with --apply, refused with --check); any other flag is a usage error (exit 2).',
   `The repository is fixed in the data (${TASK_REPO}); no flag names another.`,
-  `--apply starts only when spikes/lang-explore/inputs/packages.json lists all six tasks (${PACKAGE_TASKS.join(', ')}) and the file named by --dry-run-record has "${DRY_RUN_LINE}" as its first line.`,
+  `--apply starts only when spikes/lang-explore/inputs/packages.json shows a passed package (an identity and a sealed archive, both references accepted) for each of the six tasks (${PACKAGE_TASKS.join(', ')}) and the file named by --dry-run-record has "${DRY_RUN_LINE}" as its first line, the sha256 being that of packages.json's bytes now.`,
 ].join('\n');
 const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
@@ -63,12 +65,13 @@ function parseArgs(argv) {
   return problem === null ? { mode: flags.modes[0] ?? 'check', record: flags.record } : { usage: problem };
 }
 
-/** `packages.json` parsed, or `null` when it cannot be read or parsed. */
+/** `packages.json`: `{ packages, packagesSha256 }`, the parsed object and the sha256 of the very bytes that were parsed; both `null` when it cannot be read or parsed. */
 function readPackages(file) {
   try {
-    return JSON.parse(readFileSync(file, 'utf8'));
+    const bytes = readFileSync(file);
+    return { packages: JSON.parse(bytes.toString('utf8')), packagesSha256: createHash('sha256').update(bytes).digest('hex') };
   } catch {
-    return null;
+    return { packages: null, packagesSha256: null };
   }
 }
 
@@ -118,16 +121,16 @@ async function check({ repo, run, say, complain, progress }) {
 }
 
 async function apply({ repo, run, say, complain, progress, record, packagesFile }) {
-  const packages = readPackages(packagesFile);
+  const { packages, packagesSha256 } = readPackages(packagesFile);
   const recordFirstLine = readFirstLine(record);
-  const unmet = applyGateProblems({ packages, recordFirstLine });
+  const unmet = applyGateProblems({ packages, packagesSha256, recordFirstLine });
   if (unmet.length > 0) {
     for (const problem of unmet) complain(`github-rulesets: refused: ${problem}`);
-    complain('github-rulesets: refused: the apply needs the owner\'s go of 2026-11-08 (all six packages pass and a dry run is clean); nothing was read or written.');
+    complain('github-rulesets: refused: the apply needs the owner\'s go of 2026-11-08 (all six packages registered, sealed and accepted, and a dry run clean against this registry); nothing was read or written.');
     return EXIT.different;
   }
   progress(READING);
-  const applied = await applyRulesets({ repo, run, say, packages, recordFirstLine });
+  const applied = await applyRulesets({ repo, run, say, packages, packagesSha256, recordFirstLine });
   if (!applied.ok) {
     complain(`github-rulesets: ${applied.reason}`);
     return { env: EXIT.gh, config: EXIT.usage }[applied.kind] ?? EXIT.different;

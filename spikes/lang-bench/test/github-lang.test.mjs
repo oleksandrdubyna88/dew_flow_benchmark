@@ -13,11 +13,20 @@ const TAGS = 'spec-frozen-tags';
 const CREATE = 'spec-frozen-tags-create';
 const typesOf = ruleset => ruleset.rules.map(rule => rule.type);
 /** The data with one change, as a read-back would show it. */
-const changed = (name, change) => { const copy = asGitHub(byName(name), 7); change(copy); return copy; };
+const changed = (name, build) => build(asGitHub(byName(name), 7));
+/** `object` without `key`, as a new object. */
+const omit = (object, key) => Object.fromEntries(Object.entries(object).filter(([name]) => name !== key));
+/** `base` with its ref_name `which` list replaced: a new object. */
+const refsOf = (base, which, list) => ({ ...base, conditions: { ...base.conditions, ref_name: { ...base.conditions.ref_name, [which]: list } } });
+/** `base` with the parameters of its pull_request rule changed by `change(parameters)`: a new object. */
+const withPullRequest = (base, change) => ({ ...base, rules: base.rules.map(rule => (rule.type === 'pull_request' ? { ...rule, parameters: change(rule.parameters) } : rule)) });
 /** A read-back of `name` with `patch(base)` laid over it: a NEW object, nothing mutated. */
 const derived = (name, patch) => { const base = asGitHub(byName(name), 7); return { ...base, ...patch(base) }; };
 const readBackOf = () => RULESETS.map((ruleset, index) => asGitHub(ruleset, 100 + index));
-const GO = { packages: Object.fromEntries(['04', '05', '06', '07', '08', '10'].map(id => [id, { archiveSha256: 'a'.repeat(64) }])), recordFirstLine: 'dry run clean 2026-11-20' }; // the owner's go of 2026-11-08, as applyRulesets takes it
+const PASSED = { identity: 'b'.repeat(64), archiveSha256: 'a'.repeat(64), referenceVerdicts: { csharp: 'accepted', node: 'accepted' } }; // the shape of a registered, sealed, validated package in packages.json
+const SHA = 'c'.repeat(64); // the sha256 of packages.json's bytes, as the command computes it
+const LINE = `dry run clean 2026-11-20 packages ${SHA}`;
+const GO = { packages: Object.fromEntries(['04', '05', '06', '07', '08', '10'].map(id => [id, PASSED])), packagesSha256: SHA, recordFirstLine: LINE }; // the owner's go of 2026-11-08, as applyRulesets takes it
 const SECRET = 'ghp_' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
 
 // ---- the data ------------------------------------------------------------------------------------------------------------------------
@@ -72,34 +81,34 @@ test('The_data_is_three_frozen_rulesets_with_distinct_names_and_the_task_reposit
 
 test('A_read_back_equal_to_the_data_passes_and_what_GitHub_adds_is_ignored', () => {
   for (const ruleset of RULESETS) assert.deepEqual(rulesetProblems(asGitHub(ruleset, 5), ruleset), [], ruleset.name);
-  const extra = changed(MAIN, copy => { copy.rules[0].parameters.allowed_merge_methods = ['squash', 'rebase']; copy.rules[1].parameters = { anything: 1 }; copy.conditions.repository_name = undefined; });
+  const extra = changed(MAIN, base => ({ ...withPullRequest({ ...base, rules: base.rules.map(rule => (rule.type === 'required_linear_history' ? { ...rule, parameters: { anything: 1 } } : rule)) }, parameters => ({ ...parameters, allowed_merge_methods: ['squash', 'rebase'] })), conditions: { ...base.conditions, repository_name: undefined } }));
   assert.deepEqual(rulesetProblems(extra, byName(MAIN)), [], 'a parameter or a field the data does not state is not compared');
 });
 
 const KINDS = [
-  ['A_missing_rule_is_named', MAIN, copy => { copy.rules = copy.rules.filter(rule => rule.type !== 'deletion'); }, 'missing rule: deletion'],
-  ['An_extra_rule_is_named', MAIN, copy => { copy.rules.push({ type: 'update' }); }, 'extra rule: update'],
-  ['An_extra_bypass_actor_is_named', TAGS, copy => { copy.bypass_actors.push({ actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' }); }, 'extra bypass actor: RepositoryRole 5 always'],
-  ['A_missing_bypass_actor_is_named', CREATE, copy => { copy.bypass_actors = []; }, 'missing bypass actor: RepositoryRole 5 always'],
-  ['A_changed_bypass_mode_is_named', CREATE, copy => { copy.bypass_actors[0].bypass_mode = 'pull_request'; }, 'extra bypass actor: RepositoryRole 5 pull_request'],
-  ['A_changed_ref_is_named', MAIN, copy => { copy.conditions.ref_name.include = ['~DEFAULT_BRANCH']; }, 'extra include ref: ~DEFAULT_BRANCH'],
-  ['A_missing_ref_is_named_beside_the_changed_one', MAIN, copy => { copy.conditions.ref_name.include = ['refs/heads/other']; }, 'missing include ref: refs/heads/main'],
-  ['An_excluded_ref_is_named', TAGS, copy => { copy.conditions.ref_name.exclude = ['refs/tags/spec-frozen-x']; }, 'extra exclude ref: refs/tags/spec-frozen-x'],
-  ['Enforcement_that_is_not_active_is_named', MAIN, copy => { copy.enforcement = 'evaluate'; }, 'enforcement is "evaluate", not "active"'],
-  ['A_disabled_ruleset_is_named', TAGS, copy => { copy.enforcement = 'disabled'; }, 'enforcement is "disabled", not "active"'],
-  ['A_changed_target_is_named', TAGS, copy => { copy.target = 'branch'; }, 'target is "branch", not "tag"'],
-  ['A_changed_parameter_is_named', MAIN, copy => { copy.rules[0].parameters.required_review_thread_resolution = false; }, 'rule pull_request parameter required_review_thread_resolution is false, not true'],
-  ['An_absent_parameter_is_named', MAIN, copy => { delete copy.rules[0].parameters.require_last_push_approval; }, 'rule pull_request parameter require_last_push_approval is absent, not false'],
-  ['A_read_back_without_its_bypass_actors_is_a_problem_never_no_bypass_actors', MAIN, copy => { delete copy.bypass_actors; }, 'bypass actors were not returned: the reader may lack write access to the ruleset'],
-  ['A_read_back_whose_bypass_actors_are_not_a_list_is_the_same_problem', CREATE, copy => { copy.bypass_actors = null; }, 'bypass actors were not returned: the reader may lack write access to the ruleset'],
-  ['A_doubled_rule_is_named_once_as_extra', TAGS, copy => { copy.rules.push({ type: 'deletion' }); }, 'extra rule: deletion'],
+  ['A_missing_rule_is_named', MAIN, base => ({ ...base, rules: base.rules.filter(rule => rule.type !== 'deletion') }), 'missing rule: deletion'],
+  ['An_extra_rule_is_named', MAIN, base => ({ ...base, rules: [...base.rules, { type: 'update' }] }), 'extra rule: update'],
+  ['An_extra_bypass_actor_is_named', TAGS, base => ({ ...base, bypass_actors: [...base.bypass_actors, { actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' }] }), 'extra bypass actor: RepositoryRole 5 always'],
+  ['A_missing_bypass_actor_is_named', CREATE, base => ({ ...base, bypass_actors: [] }), 'missing bypass actor: RepositoryRole 5 always'],
+  ['A_changed_bypass_mode_is_named', CREATE, base => ({ ...base, bypass_actors: base.bypass_actors.map(actor => ({ ...actor, bypass_mode: 'pull_request' })) }), 'extra bypass actor: RepositoryRole 5 pull_request'],
+  ['A_changed_ref_is_named', MAIN, base => refsOf(base, 'include', ['~DEFAULT_BRANCH']), 'extra include ref: ~DEFAULT_BRANCH'],
+  ['A_missing_ref_is_named_beside_the_changed_one', MAIN, base => refsOf(base, 'include', ['refs/heads/other']), 'missing include ref: refs/heads/main'],
+  ['An_excluded_ref_is_named', TAGS, base => refsOf(base, 'exclude', ['refs/tags/spec-frozen-x']), 'extra exclude ref: refs/tags/spec-frozen-x'],
+  ['Enforcement_that_is_not_active_is_named', MAIN, base => ({ ...base, enforcement: 'evaluate' }), 'enforcement is "evaluate", not "active"'],
+  ['A_disabled_ruleset_is_named', TAGS, base => ({ ...base, enforcement: 'disabled' }), 'enforcement is "disabled", not "active"'],
+  ['A_changed_target_is_named', TAGS, base => ({ ...base, target: 'branch' }), 'target is "branch", not "tag"'],
+  ['A_changed_parameter_is_named', MAIN, base => withPullRequest(base, parameters => ({ ...parameters, required_review_thread_resolution: false })), 'rule pull_request parameter required_review_thread_resolution is false, not true'],
+  ['An_absent_parameter_is_named', MAIN, base => withPullRequest(base, parameters => omit(parameters, 'require_last_push_approval')), 'rule pull_request parameter require_last_push_approval is absent, not false'],
+  ['A_read_back_without_its_bypass_actors_is_a_problem_never_no_bypass_actors', MAIN, base => omit(base, 'bypass_actors'), 'bypass actors were not returned: the reader may lack write access to the ruleset'],
+  ['A_read_back_whose_bypass_actors_are_not_a_list_is_the_same_problem', CREATE, base => ({ ...base, bypass_actors: null }), 'bypass actors were not returned: the reader may lack write access to the ruleset'],
+  ['A_doubled_rule_is_named_once_as_extra', TAGS, base => ({ ...base, rules: [...base.rules, { type: 'deletion' }] }), 'extra rule: deletion'],
 ];
 for (const [name, ruleset, change, expected] of KINDS) {
   test(name, () => assert.deepEqual(rulesetProblems(changed(ruleset, change), byName(ruleset)), [expected]));
 }
 
 test('The_check_still_finds_a_known_difference', () => {
-  const read = changed(MAIN, copy => { copy.rules = copy.rules.filter(rule => rule.type !== 'required_linear_history'); copy.enforcement = 'disabled'; copy.bypass_actors = [{ actor_id: 1, actor_type: 'OrganizationAdmin', bypass_mode: 'always' }]; });
+  const read = changed(MAIN, base => ({ ...base, rules: base.rules.filter(rule => rule.type !== 'required_linear_history'), enforcement: 'disabled', bypass_actors: [{ actor_id: 1, actor_type: 'OrganizationAdmin', bypass_mode: 'always' }] }));
   assert.deepEqual(rulesetProblems(read, byName(MAIN)), ['enforcement is "disabled", not "active"', 'missing rule: required_linear_history', 'extra bypass actor: OrganizationAdmin 1 always']);
   assert.deepEqual(rulesetProblems(null, byName(TAGS)).length > 0, true, 'nothing read is not equal');
 });
@@ -275,30 +284,67 @@ test('The_merge_settings_are_compared_and_only_reported', async () => {
 
 // ---- the prerequisites of the apply (the owner's go of 2026-11-08) -----------------------------------------------------------------
 
-const packagesOf = tasks => Object.fromEntries(tasks.map(id => [id, { archiveSha256: 'a'.repeat(64) }]));
+const packagesOf = tasks => Object.fromEntries(tasks.map(id => [id, PASSED]));
+const gateOf = (extra = {}) => ({ packages: packagesOf(PACKAGE_TASKS), packagesSha256: SHA, recordFirstLine: LINE, ...extra });
 
 test('The_gate_wants_all_six_tasks_and_a_first_line_that_says_the_dry_run_is_clean', () => {
   assert.deepEqual(PACKAGE_TASKS, ['04', '05', '06', '07', '08', '10']);
-  assert.deepEqual(applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: 'dry run clean 2026-11-20' }), []);
-  assert.deepEqual(applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), '99': {} }, recordFirstLine: 'dry run clean 2026-02-28' }), [], 'a seventh entry is not a problem');
-  const missing = applyGateProblems({ packages: packagesOf(['05', '08']), recordFirstLine: 'dry run clean 2026-11-20' });
+  assert.deepEqual(applyGateProblems(gateOf()), []);
+  assert.deepEqual(applyGateProblems(gateOf({ packages: { ...packagesOf(PACKAGE_TASKS), '99': {} }, recordFirstLine: `dry run clean 2026-02-28 packages ${SHA}` })), [], 'a seventh entry is not a problem');
+  const missing = applyGateProblems(gateOf({ packages: packagesOf(['05', '08']) }));
   assert.equal(missing.length, 1);
   assert.match(missing[0], /04, 06, 07, 10/);
-  assert.deepEqual(applyGateProblems({ packages: { 4: {} }, recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'a key that is not the two-digit id is not the task');
-  assert.deepEqual(applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), 10: 'x' }, recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'an entry that is not an object is not a package');
+  assert.deepEqual(applyGateProblems(gateOf({ packages: { 4: PASSED } })).length, 1, 'a key that is not the two-digit id is not the task');
+  assert.deepEqual(applyGateProblems(gateOf({ packages: { ...packagesOf(PACKAGE_TASKS), 10: 'x' } })).length, 1, 'an entry that is not an object is not a package');
 });
 
 test('The_gate_names_each_unmet_prerequisite_and_an_unreadable_one_is_not_met', () => {
-  const both = applyGateProblems({ packages: null, recordFirstLine: null });
+  const both = applyGateProblems({ packages: null, packagesSha256: null, recordFirstLine: null });
   assert.equal(both.length, 2);
   assert.match(both[0], /packages\.json cannot be read/);
   assert.match(both[1], /dry-run record cannot be read/);
-  for (const line of ['dry run clean', 'dry run clean 2026-13-01', 'dry run clean 2026-02-30', 'dry run clean 2026-1-1', 'dry run clean 2026-11-20 ', 'DRY RUN CLEAN 2026-11-20', 'dry run clean 2026-11-20\r\n', '']) {
-    const problems = applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: line });
+  for (const line of ['dry run clean', 'dry run clean 2026-11-20', `dry run clean 2026-13-01 packages ${SHA}`, `dry run clean 2026-02-30 packages ${SHA}`, `dry run clean 2026-1-1 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA} `, `DRY RUN CLEAN 2026-11-20 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA}\r\n`, 'dry run clean 2026-11-20 packages', `dry run clean 2026-11-20 packages ${SHA.slice(1)}`, `dry run clean 2026-11-20 packages ${SHA.toUpperCase().replace(/C/g, 'C')}`, `dry run clean 2026-11-20 sha ${SHA}`, '']) {
+    const problems = applyGateProblems(gateOf({ recordFirstLine: line }));
     assert.equal(problems.length, 1, JSON.stringify(line));
-    assert.match(problems[0], /dry run clean <yyyy-mm-dd>/);
+    assert.match(problems[0], /dry run clean <yyyy-mm-dd> packages <sha256 of packages\.json>/);
   }
-  assert.deepEqual(applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: 'dry run clean 2024-02-29' }), [], 'a leap day is a date');
+  assert.deepEqual(applyGateProblems(gateOf({ recordFirstLine: `dry run clean 2024-02-29 packages ${SHA}` })), [], 'a leap day is a date');
+});
+
+test('A_task_entry_must_show_a_passed_package_not_just_be_an_object', () => {
+  const lacking = (id, entry) => applyGateProblems(gateOf({ packages: { ...packagesOf(PACKAGE_TASKS), [id]: entry } }));
+  const bad = {
+    'an empty object': {},
+    'no identity': omit(PASSED, 'identity'),
+    'an identity that is not 64 hex': { ...PASSED, identity: 'b'.repeat(63) },
+    'an upper-case identity': { ...PASSED, identity: 'B'.repeat(64) },
+    'an identity that is not a string': { ...PASSED, identity: 12 },
+    'no archive (not sealed)': omit(PASSED, 'archiveSha256'),
+    'an archive that is not 64 hex': { ...PASSED, archiveSha256: 'xyz' },
+    'no reference verdicts': omit(PASSED, 'referenceVerdicts'),
+    'no csharp verdict': { ...PASSED, referenceVerdicts: { node: 'accepted' } },
+    'no node verdict': { ...PASSED, referenceVerdicts: { csharp: 'accepted' } },
+    'a csharp reference not accepted': { ...PASSED, referenceVerdicts: { csharp: 'rejected', node: 'accepted' } },
+    'a node reference pending': { ...PASSED, referenceVerdicts: { csharp: 'accepted', node: 'pending' } },
+    'verdicts that are not an object': { ...PASSED, referenceVerdicts: 'accepted' },
+  };
+  for (const [what, entry] of Object.entries(bad)) {
+    for (const id of PACKAGE_TASKS) {
+      const problems = lacking(id, entry);
+      assert.equal(problems.length, 1, `${what}, task ${id}`);
+      assert.ok(problems[0].includes(`task ${id}`) && /passed package/.test(problems[0]), problems[0]);
+    }
+  }
+  assert.deepEqual(lacking('05', { ...PASSED, extra: 'fields are fine', counts: {} }), [], 'what a real entry also holds is not compared');
+});
+
+test('The_dry_run_record_is_bound_to_the_registry_by_the_sha256_of_its_bytes', () => {
+  assert.deepEqual(applyGateProblems(gateOf()), []);
+  const other = applyGateProblems(gateOf({ packagesSha256: 'd'.repeat(64) }));
+  assert.equal(other.length, 1);
+  assert.match(other[0], /names packages\.json sha256 c{64} but packages\.json is d{64}/);
+  assert.match(other[0], /registry changed/);
+  assert.equal(applyGateProblems(gateOf({ packagesSha256: null })).length, 1, 'a registry whose hash is not known does not match');
 });
 
 // ---- a partial apply: what is confirmed, what is uncertain, what was not attempted, and a rerun ----------------------------------------------
@@ -416,11 +462,11 @@ test('GH_HOST_is_not_inherited_and_every_gh_call_names_github_com', async () => 
 
 test('A_package_entry_that_is_an_array_is_not_a_package', () => {
   for (const id of PACKAGE_TASKS) {
-    const problems = applyGateProblems({ packages: { ...packagesOf(PACKAGE_TASKS), [id]: [] }, recordFirstLine: 'dry run clean 2026-11-20' });
+    const problems = applyGateProblems(gateOf({ packages: { ...packagesOf(PACKAGE_TASKS), [id]: [] } }));
     assert.equal(problems.length, 1, id);
     assert.ok(problems[0].includes(id), problems[0]);
   }
-  assert.equal(applyGateProblems({ packages: Object.fromEntries(PACKAGE_TASKS.map(id => [id, []])), recordFirstLine: 'dry run clean 2026-11-20' }).length, 1, 'all six arrays: one sentence naming the six');
+  assert.equal(applyGateProblems(gateOf({ packages: Object.fromEntries(PACKAGE_TASKS.map(id => [id, []])) })).length, 1, 'all six arrays: one sentence naming the six');
 });
 
 // ---- code round 2 -------------------------------------------------------------------------------------------------------------------
@@ -433,7 +479,7 @@ test('The_instants_of_the_fake_GitHub_are_UTC', () => {
 });
 
 test('An_apply_without_the_go_refuses_before_its_first_read', async () => {
-  const early = [{ ...GO, packages: { '05': {} } }, { ...GO, packages: null }, { ...GO, recordFirstLine: 'dry run dirty' }, { ...GO, recordFirstLine: null }, { packages: undefined, recordFirstLine: undefined }];
+  const early = [{ ...GO, packages: { '05': PASSED } }, { ...GO, packages: { ...GO.packages, '04': {} } }, { ...GO, packages: null }, { ...GO, recordFirstLine: 'dry run dirty' }, { ...GO, recordFirstLine: null }, { ...GO, packagesSha256: 'd'.repeat(64) }, { packages: undefined, recordFirstLine: undefined }];
   for (const go of early) {
     const github = fakeGitHub();
     const applied = await applyRulesets({ repo: TASK_REPO, run: github.run, say: collector().say, ...go });

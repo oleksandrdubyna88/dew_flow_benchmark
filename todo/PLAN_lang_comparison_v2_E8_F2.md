@@ -716,7 +716,7 @@ exit 0 equal, 1 different or absent, 2 usage, 3 `gh` failed. The owner's `gh` lo
 token is in the child's environment (the tests hold both). Docs: `research/module_lang_bench.md`, `research/module_tests.md`.
 
 **The apply (the team lead, not a coder), in (e) step 3:** after all six packages pass and the dry run is clean, and before the
-freeze commit's pull request opens: `node spikes/lang-bench/github-rulesets.mjs --apply`, then `--check`. Both exit 0, and
+freeze commit's pull request opens: `node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>` (the file's first line is `dry run clean <yyyy-mm-dd> packages <sha256 of inputs/packages.json>`, made at the dry run; the command refuses before any call unless `spikes/lang-explore/inputs/packages.json` shows a passed package for each of the six tasks and that sha256 is the registry's now), then `--check`. Both exit 0, and
 `--check` says `equal` for each of the three. The lines go into a dated line of `spikes/lang-bench/inputs/checkpoints.md` in bench
 PR 5, with the three ruleset ids. A `--check` that is not `equal` stops the freeze. The merge settings are reported and never
 change the exit.
