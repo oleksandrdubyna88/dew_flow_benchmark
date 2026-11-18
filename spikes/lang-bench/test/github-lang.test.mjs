@@ -296,6 +296,87 @@ test('The_gate_names_each_unmet_prerequisite_and_an_unreadable_one_is_not_met', 
   assert.deepEqual(applyGateProblems({ packages: packagesOf(PACKAGE_TASKS), recordFirstLine: 'dry run clean 2024-02-29' }), [], 'a leap day is a date');
 });
 
+// ---- a partial apply: what is confirmed, what is uncertain, what was not attempted, and a rerun ----------------------------------------------
+
+const failedPost = { ok: true, value: { code: 1, stdout: '', stderr: 'gh: Validation Failed (HTTP 422)', timedOut: false, truncated: false } };
+/** A fake whose `which`-th POST (1-based) fails once; `storedFirst` stores the ruleset before failing, as when the answer is lost on the way back. */
+function failingOnce(which, { storedFirst = false } = {}) {
+  let posts = 0;
+  const github = fakeGitHub({}, {
+    reply: call => {
+      if (call.method !== 'POST' || ++posts !== which) return undefined;
+      if (storedFirst) github.state.rulesets.push(asGitHub(JSON.parse(call.input), 900 + posts));
+      return failedPost;
+    },
+  });
+  return github;
+}
+
+test('A_failed_create_says_which_are_confirmed_created_which_uncertain_and_which_not_attempted', async () => {
+  const second = await applyRulesets({ repo: 'o/r', run: failingOnce(2).run, say: collector().say });
+  assert.equal(second.kind, 'env');
+  assert.match(second.reason, /Confirmed created: template-frozen\./);
+  assert.match(second.reason, /Uncertain: spec-frozen-tags\./);
+  assert.match(second.reason, /Not attempted: spec-frozen-tags-create\./);
+  const first = await applyRulesets({ repo: 'o/r', run: failingOnce(1).run, say: collector().say });
+  assert.match(first.reason, /Confirmed created: none\. Uncertain: template-frozen\. Not attempted: spec-frozen-tags, spec-frozen-tags-create\./);
+  const last = await applyRulesets({ repo: 'o/r', run: failingOnce(3).run, say: collector().say });
+  assert.match(last.reason, /Confirmed created: template-frozen, spec-frozen-tags\. Uncertain: spec-frozen-tags-create\. Not attempted: none\./);
+});
+
+test('A_second_apply_after_a_transient_failure_creates_only_the_rulesets_still_absent', async () => {
+  const github = failingOnce(2);
+  assert.equal((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok, false);
+  assert.deepEqual(github.state.rulesets.map(ruleset => ruleset.name), [MAIN], 'only the first was stored');
+  const before = github.writes().length;
+  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  assert.ok(rerun.ok, rerun.reason);
+  assert.deepEqual(rerun.value.outcomes, [{ name: MAIN, outcome: 'unchanged' }, { name: TAGS, outcome: 'created' }, { name: CREATE, outcome: 'created' }]);
+  assert.deepEqual(github.writes().slice(before).map(call => JSON.parse(call.input).name), [TAGS, CREATE]);
+  assert.deepEqual(github.state.rulesets.map(ruleset => ruleset.name), [MAIN, TAGS, CREATE], 'three rulesets, none twice');
+});
+
+test('A_create_whose_answer_was_lost_but_which_was_stored_is_not_created_twice_by_the_rerun', async () => {
+  const github = failingOnce(2, { storedFirst: true });
+  const first = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  assert.equal(first.ok, false);
+  assert.match(first.reason, /Uncertain: spec-frozen-tags\./);
+  const before = github.writes().length;
+  const rerun = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  assert.ok(rerun.ok, rerun.reason);
+  assert.deepEqual(rerun.value.outcomes.map(entry => entry.outcome), ['unchanged', 'unchanged', 'created']);
+  assert.deepEqual(github.writes().slice(before).map(call => JSON.parse(call.input).name), [CREATE]);
+});
+
+test('Each_create_is_read_back_before_the_next_one_is_made', async () => {
+  const github = fakeGitHub();
+  assert.ok((await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say })).ok);
+  const posts = github.calls.flatMap((call, index) => (call.method === 'POST' ? [index] : []));
+  assert.equal(posts.length, 3);
+  for (const [position, index] of posts.slice(0, 2).entries()) {
+    const between = github.calls.slice(index + 1, posts[position + 1]).map(call => call.args.find(arg => arg.startsWith('repos/')));
+    assert.ok(between.some(pathName => /^repos\/o\/r\/rulesets\/\d+$/.test(pathName)), `after create ${position + 1} its stored ruleset is read: ${between.join(' ')}`);
+  }
+});
+
+test('A_create_that_reads_back_wrong_stops_the_apply_before_the_next_create_and_says_so', async () => {
+  const github = fakeGitHub({}, { onCreate: body => (body.name === TAGS ? { ...body, rules: [] } : body) });
+  const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+  assert.equal(applied.kind, 'differs');
+  assert.equal(github.writes().length, 2, 'the third create is not made on top of a wrong second');
+  assert.match(applied.reason, /Confirmed created: template-frozen\. Uncertain: spec-frozen-tags\. Not attempted: spec-frozen-tags-create\./);
+});
+
+test('A_present_different_ruleset_stops_the_apply_before_the_first_write_even_when_the_others_are_absent', async () => {
+  for (const [name, change] of [[MAIN, copy => { copy.enforcement = 'disabled'; }], [CREATE, copy => { copy.bypass_actors = []; }]]) {
+    const github = fakeGitHub({ rulesets: [changed(name, change)] });
+    const applied = await applyRulesets({ repo: 'o/r', run: github.run, say: collector().say });
+    assert.equal(applied.kind, 'refused', name);
+    assert.deepEqual(github.writes(), [], name);
+    assert.ok(github.calls.every(call => call.method === 'GET'), 'no update, no delete either');
+  }
+});
+
 // ---- no secret, no network ------------------------------------------------------------------------------------------------------------
 
 test('A_token_in_gits_words_is_removed_from_every_reason', async () => {

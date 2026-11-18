@@ -222,6 +222,19 @@ test('An_apply_with_both_prerequisites_met_creates_the_rulesets', async t => {
   assert.equal(github.writes().length, 3);
 });
 
+test('An_apply_that_fails_half_way_exits_3_with_the_three_lists_and_a_second_apply_finishes_it', async t => {
+  let posts = 0;
+  const github = fakeGitHub({}, { reply: call => (call.method === 'POST' && ++posts === 2 ? { ok: true, value: { code: 1, stdout: '', stderr: 'gh: HTTP 502', timedOut: false, truncated: false } } : undefined) });
+  const first = await runApply(t, github);
+  assert.equal(first.exit, 3);
+  assert.ok(first.err.join('\n').includes('Confirmed created: template-frozen. Uncertain: spec-frozen-tags. Not attempted: spec-frozen-tags-create.'), first.err.join('|'));
+  assert.ok(first.out.includes('created template-frozen'));
+  const second = await runApply(t, github);
+  assert.equal(second.exit, 0, second.err.join('|'));
+  assert.ok(second.out.includes('unchanged template-frozen') && second.out.includes('created spec-frozen-tags') && second.out.includes('created spec-frozen-tags-create'), second.out.join('|'));
+  assert.equal(github.state.rulesets.length, 3);
+});
+
 // ---- the real process ----------------------------------------------------------------------------------------------------------------
 
 /** A `gh` of the test's own: answers the four calls from files, ends with 7 on anything else, records nothing real. */
