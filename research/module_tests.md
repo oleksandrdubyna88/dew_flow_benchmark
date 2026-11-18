@@ -629,6 +629,32 @@ node .agents/conventions/tools/low-priority.mjs node --test --test-concurrency=4
 | Code rounds 1 and 2: S recorded only from the samples of a checkout whose spec matched the pin (`S_is_not_recorded_without_a_task_repo`, `S_is_not_recorded_from_a_checkout_whose_spec_is_not_the_pinned_one`, `S_is_recorded_with_the_pinned_checkout_and_names_the_samples_hash`); S as the runner reads a body, only for a green suite, a running maximum (R1, C1, C5); the pinned-spec gate (R2); a suite-only run keeps the newest record, a halted run resumes only in a run with its step, the memory value in the material (R6); a halted one-pass step resumes, the twin's trees are removed, a twin must pass, a halt line holds no case id or path (R3, R4, R5, R7); the plan lock through the finish and the guarded `packages.json` write (R8, C4), and the missing task list | `test/quick-package-suite.test.mjs`, `test/quick-package-registry.test.mjs`, `test/quick-package-command.test.mjs` | the fixes of the plan's code round 1, each red first |
 | 30 to 33 and finding 1 (real box): a toy pair end to end, the memory bound, a race witness, the read-back limit, a grandchild that hangs | `test/quick-package-real.test.mjs` | the package through the certified box |
 
+## F2.S2 (b): the task repository's rulesets (`spikes/lang-bench/`)
+
+The two files `test/github-lang.test.mjs` (the library: the data, the pure compare, the reads, the apply, `scrub`, the prerequisites) and `test/github-rulesets.test.mjs` (the command: usage, `--check`, `--apply`, the real process) run over a **fake GitHub**
+(`test/support/github-fixtures.mjs`: the `runBounded` seam answered from memory, recording every call) and, for the real-process cases, over a `gh` shell shim that the test writes into an owned folder and puts first on the child's `PATH`. No test
+writes to GitHub and none touches the network; the last test of each file proves it from the recorded calls (every call named `gh api`, and the only write any test made was a POST to a fake). The real apply is **not** a test: it is the team lead's, at freeze
+step (e) 3, once all six packages pass and a dry run is clean.
+
+```bash
+node spikes/lang-bench/run-tests.mjs test/github-lang.test.mjs test/github-rulesets.test.mjs
+```
+
+| Scenarios | What they prove |
+|---|---|
+| The data: `Main_restricts_no_update_and_requires_linear_history`, `Main_has_no_required_status_checks_in_stage_1`, the two tag rulesets and their one bypass, `The_data_is_three_frozen_rulesets_...` (three GitHub rulesets are the owner's two approvals) | the rulesets are exactly what the owner approved, frozen, with no `update` rule on `main`, no bypass but the admin role on creation |
+| The compare: a read-back equal passes and what GitHub adds is ignored; one scenario per kind of difference (a missing or extra rule, bypass actor, ref, exclusion, enforcement, target, parameter) | a difference is named in a fixed sentence, and a nothing-read is not equal |
+| The reads: list then each by id as argv with no shell and a timeout; a gh that fails, times out, is truncated or prints garbage is a failure to read; a paged or non-list answer and a bad repository name are refused | no failure to read is ever an empty list or an `equal` |
+| The apply: an absent ruleset is created and read back; a present equal one is left alone; only the absent one is created; a present different one (or two of one name) is refused before any write; a read-back that differs or is absent is a failure; a stranger is named and left alone | it only creates, never updates or deletes, and reads back |
+| **The prerequisites** (`An_early_apply_makes_no_gh_call_at_all_while_a_package_is_missing` and the other gate tests, the pure `The_gate_...` tests, `The_real_command_refuses_an_early_apply_before_it_starts_gh`) | `--apply` makes no `gh` call, not even a read, while `packages.json` lacks any of the six tasks 04, 05, 06, 07, 08, 10 or the `--dry-run-record` file's first line is not exactly `dry run clean <yyyy-mm-dd>` |
+| **The partial apply** (`A_failed_create_says_which_are_confirmed_created_which_uncertain_and_which_not_attempted`, `A_second_apply_after_a_transient_failure_creates_only_the_rulesets_still_absent`, a lost-answer rerun, `Each_create_is_read_back_before_the_next_one_is_made`, a wrong read-back stops the next create, the command's exit 3 and its rerun) | a stop reports the three lists, and a rerun creates only what is still absent and never twice |
+| **The repository is data** (`The_repository_is_fixed_in_the_data_and_no_flag_names_another`, `The_usage_text_lists_every_accepted_flag_and_the_dry_run_line`) | no `--repo` in any spelling; exit 2 with no call; every call goes to `TASK_REPO` |
+| `A_token_in_gits_words_is_removed_from_every_reason`, `The_environment_of_gh_carries_no_token_and_the_PAT_file_is_never_read`, `The_real_command_is_exit_3_when_gh_fails_and_prints_no_token` | `scrub` removes a token everywhere; the child's environment carries no token variable; the library has no file read |
+| `A_check_...`, `Merge_settings_are_reported_but_never_change_the_exit`, the exit-code scenarios, `The_real_command_reads_through_a_gh_on_its_path_...` | exit 0 equal, 1 different or absent, 2 usage, 3 gh failed, in process and in a real process |
+
+**Not covered, and why.** The real GitHub: the rulesets' effect (a blocked push, an admin's tag creation) is checked by the team lead's hand `--check` after the apply and by the freeze's own steps, never by a test, because a test must not write to GitHub.
+The admin role's id (5) is the integrations provider's documented value; whether GitHub accepts it is known only at the apply, whose read-back would show a refusal as exit 3.
+
 ## Test leftovers — the C# helper, the start-of-run sweep, the audit, the container pass (E6)
 
 Every test that makes a folder outside its own process keeps the four promises of the leftovers rule: a name from one helper, an owner record, removal by its run, and collection by the next run when this one was killed. The tests of this repository get that from a helper in `tests/Bench.Tests/Leftovers/`. This section says what the helper is, what runs at the start and the end of a run, and what it does not cover.

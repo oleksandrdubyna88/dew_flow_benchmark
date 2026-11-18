@@ -1082,3 +1082,43 @@ a file name count) refuses the cut, removes the folder and names `path:line need
 **Tests.** `node spikes/lang-bench/run-tests.mjs 'test/push-*.test.mjs' test/run-base-tree.test.mjs test/workspace-diff.test.mjs`. Every test builds
 throw-away repositories with a bare `origin` in owned folders (`test/support/push-fixtures.mjs`) and a synthetic aid; no test reads the real aids,
 the real secret files or the network.
+
+## The task repository's rulesets (F2.S2 (b))
+
+Built: `lib/github-lang.mjs` (the data, the pure compares, the reads, the apply) and `github-rulesets.mjs` (the command). **The apply is not run by a coder or by this module's tests: it is the team lead's, at freeze step (e) 3**
+(`node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>`, then `--check`), under the owner's go of 2026-11-05 (what) and 2026-11-08 (when). Nothing in the module's tests or in its build touched GitHub.
+
+**The data.** The owner approved two things on `oleksandrdubyna88/dew_flow_ai_language_comparison` (`TASK_REPO`, fixed in the data; no flag names another repository): `main`'s protection and the tag ruleset. GitHub holds them as three rulesets,
+all `active`, with no `required_status_checks` (the checks join with CI in Stage 2): `template-frozen` (branch `refs/heads/main` exactly, never `~DEFAULT_BRANCH`; a pull request with 0 required approvals and resolved threads, linear history, no force
+push, no deletion; **no `update` rule**, which would block every spec PR before the freeze and every dated amendment after it; no bypass actor), `spec-frozen-tags` (tag `refs/tags/spec-frozen-*`: update, deletion, force push; no bypass actor) and
+`spec-frozen-tags-create` (the same refs: creation only; the one bypass actor is the repository admin role, `ADMIN_ROLE_ACTOR_ID` 5, `always`). The split is GitHub's: a bypass applies to every rule of its ruleset, so one ruleset cannot restrict
+updates for everyone and let the admin create. `MERGE_SETTINGS` (`allow_merge_commit` false, `allow_squash_merge` true) is data too but only reported.
+
+**The compare** (`rulesetProblems`, `mergeSettingsProblems`, pure): sentences, `[]` is equal. Compared: `target`, `enforcement`, the include and exclude refs, the rule types (a doubled type is named once as `extra rule`), the parameters the data states
+(`rule pull_request parameter x is false, not true`; an absent one reads `absent`) and the bypass actors (type, id, mode). What GitHub adds (ids, dates, links, a parameter the data does not state) is not compared. A ruleset pointed wholly at
+other refs is reported by the data's ref it lacks (`missing include ref`); one widened, by what it adds (`extra include ref`; `~DEFAULT_BRANCH` counts as taking in `refs/heads/main`). A ruleset not in the data that targets the same refs is a
+**stranger**: named on a `note:` line, never touched, never stopping anything.
+
+**The reads** (`readRulesets`, `readMergeSettings`, `rulesetsReadBack`): `gh api` through `runBounded` (exe and argv, `shell: false`, a 60 s timeout), the list (`per_page=100`; a list of 100 or more is refused as possibly paged) and then each ruleset
+by id. The child's environment is a short allowed list (`PATH`, `HOME`, the XDG folders, `GH_CONFIG_DIR`, proxies) plus `GH_PROMPT_DISABLED=1`: **never a token variable, and no token file is read**; the owner's own `gh` login does the admin write
+(the PAT has no admin right). A launch failure, a timeout, a truncated or non-JSON answer, a non-zero exit and a runner that throws are all a failure to read (`kind: 'env'`), never an empty list and never `equal`. `scrub` takes a token
+(`ghp_`, `gho_`, `github_pat_`, `Bearer ...`, the value of `GH_TOKEN` or `GITHUB_TOKEN` this process holds) out of every reason before it is returned or printed.
+
+**The command.** Accepted flags: `--check` (the default; read-only), `--apply` and `--dry-run-record <file>` (required with `--apply`, refused with `--check`). Any other flag, any other argument or a missing value is exit 2 with the usage text and no
+`gh` call. Exit **0** all three equal (and, for `--apply`, created or unchanged and read back equal); **1** a ruleset is different or absent (`--check`), or the apply refused (below); **2** usage; **3** `gh` could not be run or read. `--check` prints
+`<name>: equal|absent|different` with one `  - <problem>` line per difference, an `ids:` line with the three ruleset ids (for the dated line of `inputs/checkpoints.md`), the strangers, and `merge settings: ok` or `merge settings (report only): ...`
+(never changes the exit).
+
+**The apply's prerequisites** (the owner's go of 2026-11-08: apply only once all six packages pass and a dry run is clean) are checked **before any `gh` call, not even a read**, and are refused with exit 1 and `refused: ...` on stderr when not met:
+(1) `spikes/lang-explore/inputs/packages.json` is an object that lists a package object for each of the tasks 04, 05, 06, 07, 08 and 10; (2) the file named by `--dry-run-record` can be read and its **first line is exactly `dry run clean <yyyy-mm-dd>`**
+with a real calendar date (for example `dry run clean 2026-11-20`; a trailing carriage return is tolerated, anything else on the line is not; the lines after it are free text and are not read). The logic is the pure `applyGateProblems`; the files are
+read in the command. Task 05 alone is registered today, so an early `--apply` stops here.
+
+**The apply's behaviour** (`applyRulesets`): it **reads every ruleset first**; a present ruleset that differs, or two of one name, is **refused before any write** (exit 1, `refused: ...`; changing one needs its own go of the owner), even when the others
+are absent. It then creates **only the absent ones, one by one**, each by a POST of exactly the data, and **reads each back** (the list, then that one ruleset by id) before it makes the next; it ends with a read-back of all three. It never updates and
+never deletes. A stop in the middle (a failed POST, a lost answer, a read-back that is absent or different) ends the apply with `Confirmed created: <names>. Uncertain: <names>. Not attempted: <names>.` and the advice to run `--check` and apply again; a
+ruleset whose create failed or did not read back equal is *uncertain* (it may exist), the later ones are *not attempted*. **A second `--apply` after a transient failure creates only the rulesets that are still absent** (a ruleset that was stored although
+its answer was lost reads `unchanged`). Exit 3 for a `gh` failure, 1 for a different read-back.
+
+**Tests.** `node spikes/lang-bench/run-tests.mjs test/github-lang.test.mjs test/github-rulesets.test.mjs`. Every call goes to the fake GitHub of `test/support/github-fixtures.mjs` (the `runBounded` seam) or, in four tests, to a `gh` shell shim of the test's
+own on the child's `PATH`; no test writes to GitHub or touches the network (a test proves it from the recorded calls).
