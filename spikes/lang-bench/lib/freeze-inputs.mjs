@@ -24,25 +24,35 @@ export const problemsOf = result => result.problems ?? [result.reason];
 
 const sameList = (left, right) => left.length === right.length && left.every((item, index) => item === right[index]);
 
+const hasSha = entry => typeof entry?.sha256 === 'string' && SHA256.test(entry.sha256);
+const tasksOf = entry => (Array.isArray(entry.tasks) ? entry.tasks : []);
+
 /** ok({ sha256, tasks }): the B entry of the record file with its sha256 (`tasks` as the record holds them); a failure says what the record lacks. */
 export function loadPin(recordFile) {
   const record = readEntries(recordFile);
   if (!record.ok) return fail(record.reason);
   const entry = record.value.B;
-  if (typeof entry?.sha256 !== 'string' || !SHA256.test(entry.sha256)) return fail(`${recordFile} has no entry B with a sha256 of 64 hexadecimal digits: the step-2a pin of FORMAT is missing`);
-  return ok({ sha256: entry.sha256, tasks: Array.isArray(entry.tasks) ? entry.tasks : [], file: recordFile });
+  return hasSha(entry) ? ok({ sha256: entry.sha256, tasks: tasksOf(entry), file: recordFile }) : fail(`${recordFile} has no entry B with a sha256 of 64 hexadecimal digits: the step-2a pin of FORMAT is missing`);
 }
 
 /** The sentence when the pin's task list is not exactly the six, else null. */
 export const pinTaskProblem = pin => (sameList(pin.tasks, SIX) ? null : `the task list of entry B in ${pin.file} is [${pin.tasks.join(', ')}], not exactly the six (${SIX.join(', ')})`);
 
+/** The spec files of a tree: `{ path, slug }` for each blob that is `todo/tasks/NN-slug.md`. */
+const specNames = tree => [...tree.keys()].filter(file => SPEC_FILE.test(file) && tree.get(file).type === 'blob').map(file => ({ path: file, slug: SPEC_FILE.exec(file)[1] }));
+
+/** The sentence when a task has no spec file or more than one, else null. */
+function countProblem({ task, hits }) {
+  if (hits.length === 0) return `task ${task} has no spec file under todo/tasks/`;
+  return hits.length === 1 ? null : `task ${task} has ${hits.length} spec files (${hits.map(hit => hit.path).join(', ')}) under todo/tasks/`;
+}
+
 /** ok([{ task, slug, path }]): the one spec file of each of the six tasks in `tree` (a Map from `treeAt`), in the six's order; a task with no spec, or with two, is a problem naming it. */
 export function specSet(tree) {
-  const names = [...tree.keys()].flatMap(file => (SPEC_FILE.test(file) && tree.get(file).type === 'blob' ? [{ path: file, slug: SPEC_FILE.exec(file)[1] }] : []));
+  const names = specNames(tree);
   const found = SIX.map(task => ({ task, hits: names.filter(entry => entry.slug.startsWith(`${task}-`)) }));
-  const problems = found.filter(entry => entry.hits.length !== 1).map(entry => `task ${entry.task} has ${entry.hits.length === 0 ? 'no spec file' : `${entry.hits.length} spec files (${entry.hits.map(hit => hit.path).join(', ')})`} under todo/tasks/`);
-  if (problems.length > 0) return failWith(problems);
-  return ok(found.map(entry => ({ task: entry.task, slug: entry.hits[0].slug, path: entry.hits[0].path })));
+  const problems = found.map(countProblem).filter(problem => problem !== null);
+  return problems.length > 0 ? failWith(problems) : ok(found.map(entry => ({ task: entry.task, slug: entry.hits[0].slug, path: entry.hits[0].path })));
 }
 
 /** The folder of a bench's inputs: `--inputs`, else the spike's own. */

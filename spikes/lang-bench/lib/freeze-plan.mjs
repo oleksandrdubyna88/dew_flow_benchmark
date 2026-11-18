@@ -8,7 +8,7 @@ import { ok } from '../../minigit-bench/lib/result.mjs';
 import { run as conformanceRun } from './conformance.mjs';
 import { selfRunBytes } from '../tools/format-classes.mjs';
 import { blobsOf, commitOf, dirtyLines, FORMAT_PATH, treeAt } from './freeze-git.mjs';
-import { failWith, loadPin, pinTaskProblem, specSet } from './freeze-inputs.mjs';
+import { failWith, loadPin, pinTaskProblem, specSet, unless } from './freeze-inputs.mjs';
 import { gatedProblems } from './freeze-pins.mjs';
 import { factsOf, freezePlaceholder, gateFilled, readRows, tagDate, tagOfValue, withTag } from './freeze-rows.mjs';
 
@@ -49,16 +49,26 @@ function conformanceProblems({ spec, result }) {
   return lines.length > 0 || result.exit !== 0 ? [`${spec.path}: the conformance check is not all ok (exit ${result.exit}): ${lines.join(' | ') || 'no line'}`] : [];
 }
 
+/** The sentence when the Gate verdict row is absent or still its placeholder, else an empty list. */
+function gateProblem({ spec, rows, facts }) {
+  const gate = rows.find(row => row.label === 'Gate verdict');
+  return unless(gate !== undefined && gateFilled(gate.value, facts), `${spec.path}: the Gate verdict row is still its placeholder (${gate?.value ?? 'absent'}): the spec was not gated`);
+}
+
+/** True when a Freeze tag row's value may be frozen over: the placeholder, or an earlier freeze tag than `date`. */
+function freezable({ row, facts, date }) {
+  if (freezePlaceholder(row, facts)) return true;
+  const old = tagOfValue(row);
+  const oldDate = old === null ? null : tagDate(old);
+  return oldDate !== null && oldDate < date;
+}
+
 /** The sentences about one spec's header: the Gate verdict filled, the Freeze tag row the placeholder or an earlier tag. */
 function headerProblems({ spec, bytes, facts, date }) {
   const read = readRows(bytes);
   if (!read.ok) return [`${spec.path}: ${read.reason}`];
-  const gate = read.value.rows.find(row => row.label === 'Gate verdict');
-  const open = gate === undefined || !gateFilled(gate.value, facts) ? [`${spec.path}: the Gate verdict row is still its placeholder (${gate?.value ?? 'absent'}): the spec was not gated`] : [];
   const row = read.value.value;
-  const old = tagOfValue(row);
-  const frozen = freezePlaceholder(row, facts) || (old !== null && tagDate(old) !== null && tagDate(old) < date);
-  return [...open, ...(frozen ? [] : [`${spec.path}: the Freeze tag row says ${row}: not the placeholder, and not an earlier freeze tag than spec-frozen-B-${date}`])];
+  return [...gateProblem({ spec, rows: read.value.rows, facts }), ...unless(freezable({ row, facts, date }), `${spec.path}: the Freeze tag row says ${row}: not the placeholder, and not an earlier freeze tag than spec-frozen-B-${date}`)];
 }
 
 /** One unified diff hunk (3 lines of context) for line `no` of `before`, replaced by its text in `after`; the path is the repository's. */
@@ -95,14 +105,18 @@ const classProblems = bytes => {
   return checked.exit === 0 ? [] : [`FORMAT's class check (tools/format-classes.mjs --self) is not clean: ${checked.lines.slice(0, 2).join(' | ')}`];
 };
 
+/** The sentence when FORMAT at the ref is not the step-2a pin (or the pin cannot be read), else an empty list. */
+function pinProblem({ pin, actual }) {
+  if (!pin.ok) return [pin.reason];
+  return unless(actual === pin.value.sha256, `FORMAT at the ref has sha256 ${actual}, which is not the FORMAT build step 2a records (${pin.value.sha256} in the record's entry B)`);
+}
+
 /** The sentences about FORMAT itself at the ref: the pin, the class check, and the facts the header rows are judged by. */
 async function formatProblems({ pin, blobs }) {
   if (!blobs.ok) return { problems: [blobs.reason], facts: null };
   const bytes = blobs.value.get(FORMAT_PATH);
-  const actual = sha256Of(bytes);
-  const pinned = !pin.ok ? [pin.reason] : (actual === pin.value.sha256 ? [] : [`FORMAT at the ref has sha256 ${actual}, which is not the FORMAT build step 2a records (${pin.value.sha256} in the record's entry B)`]);
   const facts = factsOf(bytes);
-  return { problems: [...pinned, ...classProblems(bytes), ...(facts.ok ? [] : [`FORMAT's facts cannot be read: ${facts.reason}`])], facts: facts.ok ? facts.value : null };
+  return { problems: [...pinProblem({ pin, actual: sha256Of(bytes) }), ...classProblems(bytes), ...unless(facts.ok, `FORMAT's facts cannot be read: ${facts.reason}`)], facts: facts.ok ? facts.value : null };
 }
 
 /** The checker's own `run` on one spec of the checkout, in the checker's own arguments. */
@@ -127,24 +141,47 @@ async function specsProblems({ context, facts, seams }) {
   return lists.flat();
 }
 
-/**
- * The plan: ok({ patch, tag }) when nothing is refused (`patch` is one unified diff over the six specs), else failWith(sentences) before any edit is made. `seams`: `now` (a clock), `conformance` (the checker's `run`), `needles`.
- */
-export async function planFreeze({ repo, ref, date, record, pins, seams = {} }) {
-  const options = { now: seams.now ?? (() => new Date()), conformance: seams.conformance ?? conformanceRun, needles: seams.needles };
+/** The plan's seams with their defaults: a clock, the checker's own `run`, the needle file. */
+const optionsOf = seams => ({ now: seams.now ?? (() => new Date()), conformance: seams.conformance ?? conformanceRun, needles: seams.needles });
+
+/** The sentences about the task list: the pin's tasks and the spec files the tree holds. */
+function taskListProblems({ pin, specs }) {
+  const pinned = pin.ok ? pinTaskProblem(pin.value) : null;
+  return [...(pinned === null ? [] : [pinned]), ...(specs.ok ? [] : specs.problems)];
+}
+
+/** The sentences about each of the six specs, when they could be read at all. */
+async function eachProblems({ specs, blobs, pin, pins, repo, record, date, facts, options }) {
+  return specs.ok && blobs.ok ? specsProblems({ context: { specs: specs.value, blobs, pin, pins, repo, record, date }, facts, seams: options }) : [];
+}
+
+/** ok({ specs, blobs, problems }): every check of the plan made, nothing printed. */
+async function planFindings({ repo, ref, date, record, pins, options }) {
   const where = await checkoutProblems({ repo, ref });
   if (!where.ok) return where;
   const loaded = await loadInputs({ repo, commit: where.value.commit, record });
   if (!loaded.ok) return loaded;
   const { pin, specs, blobs } = loaded.value;
   const format = await formatProblems({ pin, blobs });
-  const list = [...(pin.ok && pinTaskProblem(pin.value) !== null ? [pinTaskProblem(pin.value)] : []), ...(specs.ok ? [] : specs.problems)];
-  const each = specs.ok && blobs.ok ? await specsProblems({ context: { specs: specs.value, blobs, pin, pins, repo, record, date }, facts: format.facts, seams: options }) : [];
-  const problems = [...dateProblems({ date, now: options.now }), ...where.value.problems, ...list, ...format.problems, ...each];
-  if (problems.length > 0) return failWith(problems);
-  const edits = specs.value.map(spec => ({ spec, after: withTag(blobs.value.get(spec.path), `spec-frozen-B-${date}`) }));
+  const each = await eachProblems({ specs, blobs, pin, pins, repo, record, date, facts: format.facts, options });
+  return ok({ specs, blobs, problems: [...dateProblems({ date, now: options.now }), ...where.value.problems, ...taskListProblems({ pin, specs }), ...format.problems, ...each] });
+}
+
+/** ok({ patch, tag }): the one patch over the six specs, each edited by `withTag`. */
+function patchOf({ specs, blobs, date }) {
+  const edits = specs.map(spec => ({ spec, after: withTag(blobs.get(spec.path), `spec-frozen-B-${date}`) }));
   const broken = edits.find(edit => !edit.after.ok);
   if (broken !== undefined) return failWith([`${broken.spec.path}: ${broken.after.reason}`]);
-  const patch = edits.map(({ spec, after }) => unifiedDiff({ file: spec.path, before: blobs.value.get(spec.path), after: after.value, no: readRows(blobs.value.get(spec.path)).value.no })).join('');
+  const patch = edits.map(({ spec, after }) => unifiedDiff({ file: spec.path, before: blobs.get(spec.path), after: after.value, no: readRows(blobs.get(spec.path)).value.no })).join('');
   return ok({ patch, tag: `spec-frozen-B-${date}` });
+}
+
+/**
+ * The plan: ok({ patch, tag }) when nothing is refused (`patch` is one unified diff over the six specs), else failWith(sentences) before any edit is made. `seams`: `now` (a clock), `conformance` (the checker's `run`), `needles`.
+ */
+export async function planFreeze({ repo, ref, date, record, pins, seams = {} }) {
+  const found = await planFindings({ repo, ref, date, record, pins, options: optionsOf(seams) });
+  if (!found.ok) return found;
+  const { specs, blobs, problems } = found.value;
+  return problems.length > 0 ? failWith(problems) : patchOf({ specs: specs.value, blobs: blobs.value, date });
 }

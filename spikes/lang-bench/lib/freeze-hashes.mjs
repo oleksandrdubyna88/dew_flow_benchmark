@@ -6,7 +6,7 @@ import path from 'node:path';
 import { cleanupScope, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { blobsOf, commitOf, FORMAT_PATH, treeAt } from './freeze-git.mjs';
-import { failWith, specSet } from './freeze-inputs.mjs';
+import { failWith, specSet, unless } from './freeze-inputs.mjs';
 import { writeOutput } from './freeze-write.mjs';
 import { fetchTaskRepo } from './task-repo.mjs';
 
@@ -25,26 +25,41 @@ function oddProblem(file, entry) {
   return `${file} is ${entry.mode === '120000' ? 'a symbolic link' : `a ${entry.type} entry of mode ${entry.mode}`}: a listed tree holds regular files only`;
 }
 
+/** The sentences for every file under a root that is not a regular file (a link, a submodule). */
+const oddProblems = tree => [...tree.entries()].filter(([file]) => underRoot(file)).flatMap(([file, entry]) => oddProblem(file, entry) ?? []);
+
+const byPath = (a, b) => (a < b ? -1 : 1);
+
 /** The paths the list names, or the problems (links, a missing spec). */
 function listedPaths(tree) {
   const specs = specSet(tree);
   if (!specs.ok) return specs;
-  if (tree.get(FORMAT_PATH)?.type !== 'blob') return failWith([`${FORMAT_PATH} is not a file of that commit`]);
-  const under = [...tree.entries()].filter(([file]) => underRoot(file));
-  const odd = under.flatMap(([file, entry]) => oddProblem(file, entry) ?? []);
-  if (odd.length > 0) return failWith(odd);
-  return ok([...under.map(([file]) => file), FORMAT_PATH, ...specs.value.map(spec => spec.path)].sort((a, b) => (a < b ? -1 : 1)));
+  const problems = [...unless(tree.get(FORMAT_PATH)?.type === 'blob', `${FORMAT_PATH} is not a file of that commit`), ...oddProblems(tree)];
+  if (problems.length > 0) return failWith(problems);
+  return ok([...[...tree.keys()].filter(underRoot), FORMAT_PATH, ...specs.value.map(spec => spec.path)].sort(byPath));
+}
+
+/** ok(the tree of `commit`), or the fail that says why there is none. */
+async function treeOfCommit({ repo, commit }) {
+  const sha = await commitOf(repo, commit);
+  return sha.ok ? treeAt(repo, sha.value) : sha;
+}
+
+/** ok({ paths, blobs }): the paths the list names and their blobs. */
+async function pathsAndBlobs({ repo, tree }) {
+  const paths = listedPaths(tree);
+  if (!paths.ok) return paths;
+  const blobs = await blobsOf(repo, tree, paths.value);
+  return blobs.ok ? ok({ paths: paths.value, blobs: blobs.value }) : blobs;
 }
 
 /** ok({ text, entries }) for `commit`: the list's text (a final line feed) and its `{ sha256, path }` entries; a failure names the files the list cannot hold. */
 export async function hashList({ repo, commit }) {
-  const sha = await commitOf(repo, commit);
-  const tree = sha.ok ? await treeAt(repo, sha.value) : sha;
+  const tree = await treeOfCommit({ repo, commit });
   if (!tree.ok) return tree;
-  const paths = listedPaths(tree.value);
-  const blobs = paths.ok ? await blobsOf(repo, tree.value, paths.value) : paths;
-  if (!blobs.ok) return blobs;
-  const entries = paths.value.map(file => ({ sha256: createHash('sha256').update(blobs.value.get(file)).digest('hex'), path: file }));
+  const read = await pathsAndBlobs({ repo, tree: tree.value });
+  if (!read.ok) return read;
+  const entries = read.value.paths.map(file => ({ sha256: createHash('sha256').update(read.value.blobs.get(file)).digest('hex'), path: file }));
   return ok({ text: entries.map(entry => `${entry.sha256}  ${entry.path}\n`).join(''), entries });
 }
 
