@@ -42,7 +42,9 @@ export function fakeGitHub({ rulesets = [], repository = { allow_merge_commit: f
     ALL_CALLS.push(call);
     return options.reply?.(call) ?? answer(call);
   };
-  return { run, calls, state, writes: () => calls.filter(call => call.method !== 'GET') };
+  /** The server storing a ruleset without the caller being told: the answer to a create is lost on the way back. */
+  const store = (body, id) => { state.rulesets = [...state.rulesets, asGitHub(body, id)]; };
+  return { run, calls, state, store, writes: () => calls.filter(call => call.method !== 'GET') };
 }
 
 /** A runner whose every call ends the same way, for the failure cases. */

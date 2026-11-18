@@ -24,20 +24,43 @@ const USAGE = [
 ].join('\n');
 const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
-/** The flags: `{ mode, record }` or `{ usage }` (a sentence). The repository is not a flag: it is `TASK_REPO`, in the data. */
-function parseArgs(argv) {
-  let modes = [];
-  let record;
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === '--check' || arg === '--apply') modes = [...modes, arg.slice(2)];
-    else if (arg === '--dry-run-record') record = argv[++index] ?? '';
-    else return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
+const MODE_FLAGS = new Set(['--check', '--apply']);
+
+/** The flag at `index` applied to `flags`: `{ flags, next }` (`next` is the index after it and its value) or `{ usage }` for an argument that is not accepted. */
+function readFlag(flags, argv, index) {
+  const arg = argv[index];
+  if (MODE_FLAGS.has(arg)) return { flags: { ...flags, modes: [...flags.modes, arg.slice(2)] }, next: index + 1 };
+  if (arg === '--dry-run-record') return { flags: { ...flags, record: argv[index + 1] ?? '' }, next: index + 2 };
+  return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
+}
+
+/** The flags as written, in order: `{ modes, record }` (`record` undefined when the flag is absent) or `{ usage }` for the first argument that is not accepted. The repository is not a flag: it is `TASK_REPO`, in the data. */
+function collectFlags(argv) {
+  let flags = { modes: [], record: undefined };
+  let index = 0;
+  while (index < argv.length) {
+    const read = readFlag(flags, argv, index);
+    if (read.usage !== undefined) return read;
+    ({ flags, next: index } = read);
   }
-  if (new Set(modes).size > 1) return { usage: '--check and --apply are exclusive' };
-  if (modes[0] === 'apply' && !record) return { usage: '--apply needs --dry-run-record <file>' };
-  if (modes[0] !== 'apply' && record !== undefined) return { usage: '--dry-run-record belongs to --apply' };
-  return { mode: modes[0] ?? 'check', record };
+  return flags;
+}
+
+const applyProblem = record => (record ? null : '--apply needs --dry-run-record <file>');
+const checkProblem = record => (record === undefined ? null : '--dry-run-record belongs to --apply');
+
+/** The sentence a combination of flags breaks, or `null`. */
+function modeProblem({ modes, record }) {
+  if (new Set(modes).size > 1) return '--check and --apply are exclusive';
+  return modes[0] === 'apply' ? applyProblem(record) : checkProblem(record);
+}
+
+/** The flags: `{ mode, record }` or `{ usage }` (a sentence). */
+function parseArgs(argv) {
+  const flags = collectFlags(argv);
+  if (flags.usage !== undefined) return flags;
+  const problem = modeProblem(flags);
+  return problem === null ? { mode: flags.modes[0] ?? 'check', record: flags.record } : { usage: problem };
 }
 
 /** `packages.json` parsed, or `null` when it cannot be read or parsed. */

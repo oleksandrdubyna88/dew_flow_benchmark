@@ -89,8 +89,7 @@ test('A_check_with_an_absent_ruleset_is_exit_1', async () => {
 });
 
 test('A_check_with_a_different_ruleset_is_exit_1_and_names_the_difference', async () => {
-  const rulesets = present();
-  rulesets[1].rules.pop();
+  const rulesets = present().map((ruleset, index) => (index === 1 ? { ...ruleset, rules: ruleset.rules.slice(0, -1) } : ruleset));
   const got = await runMain(['--check'], fakeGitHub({ rulesets }));
   assert.equal(got.exit, 1);
   assert.ok(got.out.includes('spec-frozen-tags: different'));
@@ -143,8 +142,7 @@ test('An_apply_on_equal_rulesets_is_exit_0_with_no_write', async t => {
 });
 
 test('An_apply_that_meets_a_different_ruleset_is_exit_1_and_writes_nothing', async t => {
-  const rulesets = present();
-  rulesets[0].enforcement = 'evaluate';
+  const rulesets = present().map((ruleset, index) => (index === 0 ? { ...ruleset, enforcement: 'evaluate' } : ruleset));
   const got = await runApply(t, fakeGitHub({ rulesets }));
   assert.equal(got.exit, 1);
   assert.deepEqual(got.github.writes(), []);
@@ -180,8 +178,9 @@ test('An_early_apply_makes_no_gh_call_at_all_while_a_package_is_missing', async 
 test('An_apply_whose_packages_file_cannot_be_read_or_is_not_an_object_makes_no_gh_call', async t => {
   for (const content of [null, 'not json', '[]', 'null', '"x"']) {
     const github = fakeGitHub();
-    const files = gateFiles(t);
-    if (content === null) files.packagesFile += '.missing'; else writeFileSync(files.packagesFile, content);
+    const made = gateFiles(t);
+    const files = content === null ? { ...made, packagesFile: `${made.packagesFile}.missing` } : made;
+    if (content !== null) writeFileSync(files.packagesFile, content);
     const got = await runApply(t, github, files);
     assert.equal(got.exit, 1, String(content));
     assert.deepEqual(github.calls, [], String(content));
@@ -308,16 +307,15 @@ test('The_real_command_is_exit_2_on_a_usage_error_with_no_stack_trace', t => {
 
 test('The_real_command_reads_through_a_gh_on_its_path_and_is_exit_0_when_equal_and_1_when_not', t => {
   const rulesets = present();
-  const files = { 'list.json': JSON.stringify(rulesets.map(({ id, name }) => ({ id, name }))), 'repo.json': JSON.stringify({ allow_merge_commit: false, allow_squash_merge: true }) };
-  for (const ruleset of rulesets) files[`r-${ruleset.id}.json`] = JSON.stringify(ruleset);
+  const files = { 'list.json': JSON.stringify(rulesets.map(({ id, name }) => ({ id, name }))), 'repo.json': JSON.stringify({ allow_merge_commit: false, allow_squash_merge: true }), ...Object.fromEntries(rulesets.map(ruleset => [`r-${ruleset.id}.json`, JSON.stringify(ruleset)])) };
   const equalDir = shimFolder(t, files);
   const equal = spawned(equalDir, ownedFolder(t, 'home'), ['--check']);
   assert.equal(equal.status, 0, equal.stdout + equal.stderr);
   assert.ok(shimRan(equalDir), 'the answers came from the shim, so the shim ran');
   assert.ok(equal.stderr.includes('reading the task repository\'s rulesets…') && !equal.stdout.includes('reading'), 'the progress line is on stderr, never in the result');
   assert.ok(equal.stdout.includes('template-frozen: equal'));
-  const lax = JSON.parse(files['r-101.json']);
-  lax.bypass_actors.push({ actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' });
+  const stored = JSON.parse(files['r-101.json']);
+  const lax = { ...stored, bypass_actors: [...stored.bypass_actors, { actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' }] };
   const differentDir = shimFolder(t, { ...files, 'r-101.json': JSON.stringify(lax) });
   const different = spawned(differentDir, ownedFolder(t, 'home'), ['--check']);
   assert.equal(different.status, 1, different.stdout + different.stderr);

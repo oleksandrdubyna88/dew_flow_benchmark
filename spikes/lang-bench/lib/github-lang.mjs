@@ -74,7 +74,7 @@ export function scrub(text) {
 const DEFAULT_BRANCH_REF = 'refs/heads/main';
 const literalPrefix = ref => ref.split('*')[0];
 
-/** Whether the ref pattern `pattern` takes in `ref` (itself a ref or a pattern). A prefix reading of GitHub's globs: it errs toward "takes in", which only changes a report's wording and which rulesets are named as strangers. */
+/** Whether the ref pattern `pattern` takes in `ref` (itself a ref or a pattern). A prefix reading of GitHub's globs: it errs toward "takes in", which only changes a report's wording and which rulesets are named as strangers; it never decides whether a ruleset is equal. */
 function covers(pattern, ref) {
   if (pattern === ref || pattern === '~ALL') return true;
   if (pattern === '~DEFAULT_BRANCH') return covers(DEFAULT_BRANCH_REF, ref) || covers(ref, DEFAULT_BRANCH_REF);
@@ -86,23 +86,26 @@ const show = value => (value === undefined ? 'absent' : JSON.stringify(value));
 const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const refs = (ruleset, which) => ruleset?.conditions?.ref_name?.[which] ?? [];
 
-/** The include refs of a read-back against the data. A read ref is `extra` when it is not one of the data's and it takes in a data ref or sits beside a data ref that is covered; a data ref no read ref takes in is `missing`. A ruleset pointed
- * wholly elsewhere is therefore reported by what it lacks, and one that was widened by what it adds. */
+const sameRefs = (a, b) => a.every(ref => b.includes(ref)) && b.every(ref => a.includes(ref));
+const refDiff = (which, have, want) => [...want.filter(ref => !have.includes(ref)).map(ref => `missing ${which} ref: ${ref}`), ...have.filter(ref => !want.includes(ref)).map(ref => `extra ${which} ref: ${ref}`)];
+
+/**
+ * The include refs of a read-back against the data. **The verdict is exact:** the read refs are the data's refs or the ruleset differs (a narrowed pattern, a widened one and an extra ref are each a problem, whatever they take in). The sentences are worded
+ * by what the pattern takes in, which is only a way of saying it: a read ref is `extra` when it is not one of the data's and it takes in a data ref or sits beside a data ref that is covered, and a data ref no read ref takes in is `missing`, so a
+ * ruleset pointed wholly elsewhere is reported by what it lacks and one that was widened by what it adds. When that wording finds nothing the exact difference is named.
+ */
 function includeProblems(read, expected) {
   const want = refs(expected, 'include');
   const have = refs(read, 'include');
+  if (sameRefs(have, want)) return [];
   const covered = ref => have.some(candidate => covers(candidate, ref));
   const anyCovered = want.some(covered);
   const missing = want.filter(ref => !covered(ref)).map(ref => `missing include ref: ${ref}`);
   const extra = have.filter(ref => !want.includes(ref) && (anyCovered || want.some(wanted => covers(ref, wanted)))).map(ref => `extra include ref: ${ref}`);
-  return [...missing, ...extra];
+  return missing.length + extra.length > 0 ? [...missing, ...extra] : refDiff('include', have, want);
 }
 
-function excludeProblems(read, expected) {
-  const want = refs(expected, 'exclude');
-  const have = refs(read, 'exclude');
-  return [...want.filter(ref => !have.includes(ref)).map(ref => `missing exclude ref: ${ref}`), ...have.filter(ref => !want.includes(ref)).map(ref => `extra exclude ref: ${ref}`)];
-}
+const excludeProblems = (read, expected) => refDiff('exclude', refs(read, 'exclude'), refs(expected, 'exclude'));
 
 const countTypes = rules => new Map([...new Set(rules.map(rule => rule.type))].map(type => [type, rules.filter(rule => rule.type === type).length]));
 
@@ -208,7 +211,11 @@ async function ghApi(run, args, input) {
 const HOST = ['--hostname', 'github.com'];
 const getJson = (run, path) => ghApi(run, ['-H', ACCEPT, ...HOST, path]);
 const postJson = (run, path, body) => ghApi(run, ['--method', 'POST', '-H', ACCEPT, ...HOST, path, '--input', '-'], JSON.stringify(body));
-const badRepo = repo => (REPO_NAME.test(String(repo)) ? null : fail(`repository ${JSON.stringify(String(repo))} is not owner/name`, { kind: 'config' }));
+/** Every read and the apply are for the task repository only: a name that is not owner/name, or any other repository, is refused before the first call. */
+const badRepo = repo => {
+  if (!REPO_NAME.test(String(repo))) return fail(`repository ${JSON.stringify(String(repo))} is not owner/name`, { kind: 'config' });
+  return repo === TASK_REPO ? null : fail(`repository ${JSON.stringify(repo)} is not the task repository ${TASK_REPO}: this module reads and writes that repository only`, { kind: 'config' });
+};
 
 /** The list of the repository's rulesets, validated: -> `ok(entries)` | `fail`. A list as long as one page may have another page and is refused; an entry without a numeric id is refused. The one place both the full read and the read-back after a create get their list. */
 async function listEntries(repo, run) {
@@ -304,6 +311,8 @@ const stopped = (failure, { made, uncertain, rest, changed = [] }) => {
  * -> `ok({ outcomes, strangers, readBack })` | `fail(reason, { kind: 'refused' | 'differs' | 'env' | 'config' })`.
  */
 export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, recordFirstLine }) {
+  const wrong = badRepo(repo);
+  if (wrong !== null) return wrong;
   const unmet = applyGateProblems({ packages, recordFirstLine });
   if (unmet.length > 0) return fail(scrub(`refused: ${unmet.join('; ')}. The apply needs the owner's go of 2026-11-08; nothing was read or written.`), { kind: 'refused' });
   const before = await rulesetsReadBack({ repo, run });
