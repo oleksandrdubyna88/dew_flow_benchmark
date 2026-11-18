@@ -2,7 +2,7 @@
 // into a worktree of the task repository, and `workspaces --check --root` builds them again and compares. Every fixture is invented: specs and FORMAT in `git init` repositories in owned folders; nothing real is read.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -79,6 +79,7 @@ test('The_check_finds_one_changed_byte_in_a_committed_workspace_and_passes_an_eq
 test('The_check_names_a_missing_file_an_added_file_and_a_lost_execute_bit_and_refuses_a_dirty_checkout', async t => {
   const checkout = await committedCheckout(t);
   git(checkout.dir, 'rm', '-q', 'csharp/05-key-value-server/PACKAGES.md');
+  chmodSync(path.join(checkout.dir, 'node/07-stream-processor/run.sh'), 0o644);
   writeFileSync(path.join(checkout.dir, 'node/10-dag-scheduler/extra.txt'), 'added');
   git(checkout.dir, 'add', '-A');
   git(checkout.dir, 'commit', '-q', '-m', 'a missing and an added file');
@@ -86,6 +87,7 @@ test('The_check_names_a_missing_file_an_added_file_and_a_lost_execute_bit_and_re
   assert.equal(checked.code, 1);
   assert.match(checked.lines.join('\n'), /csharp\/05-key-value-server\/PACKAGES\.md: is missing/);
   assert.match(checked.lines.join('\n'), /node\/10-dag-scheduler\/extra\.txt: is not part of the workspace/);
+  assert.match(checked.lines.join('\n'), /node\/07-stream-processor\/run\.sh: the execute bit differs \(expected mode 755, found 644\)/);
   writeFileSync(path.join(checkout.dir, 'stray.txt'), 'x');
   const dirty = await run(['workspaces', '--check', '--root', checkout.dir]);
   assert.equal(dirty.code, 4, 'a checkout with an untracked file is refused, not judged');
