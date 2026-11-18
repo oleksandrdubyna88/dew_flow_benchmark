@@ -321,6 +321,8 @@ node .agents/conventions/tools/leftovers-check.mjs --repo . --token bench --iden
 nice -n 19 dotnet build tests/Bench.Tests/Bench.Tests.csproj -c Release -m:4 -p:AppHostRuntimeIdentifier=linux-x64 --disable-build-servers
 nice -n 19 ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --no-ansi --explicit only --filter-class "*LeftoversRepositoryGuardTests"   # 16 → 4
 cat /proc/loadavg
+# ENTRY 12.1 (§ 17) REPLACES THIS FOR THE HEAD RUNS: the wrapper claims NO TMPDIR; TMPDIR, TEMP and TMP are unset (/tmp), and it lists this user's
+# /tmp entries before and after (§ 17 *The runs*). The lines below are the base runs' form (§ 15), kept as the record.
 # THE WHOLE RUNS (K13 (c), row E6-m): base and head only, one at a time, each through the wrapper of § 15 (s6run.mjs, a scratch file OUTSIDE the
 # repository, never committed): it claims ONE empty TMPDIR under /tmp with the shipped helper (owner = the wrapper's own live pid), lists
 # ~/testsToDelete-*-bench-*, /var/tmp/testsToDelete-*-bench-* and /run/user/<uid>/testsToDelete-* before and after, runs the suite under
@@ -335,7 +337,7 @@ node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/start-sweep.tes
 # K13 (a): the .py units in wslc. NAME and LABEL from the helper, never typed:
 NAME=$(node -e "import('./.agents/conventions/tools/lib/owned.mjs').then(m=>console.log(m.ownedFor({token:'bench'}).ownedName('pyunits')))")
 # the label names THIS shell ($), which outlives the container; no start, so a reader judges it unknown and keeps it (--rm removes it)
-LABEL="$(node -e "import('./.agents/conventions/tools/lib/owned.mjs').then(m=>console.log(m.thisOwnerToken()+':'+m.hostId(require('node:os').hostname(), process.env.WSL_DISTRO_NAME ?? '')))")@linux:$"
+LABEL="$(node -e "import('./.agents/conventions/tools/lib/owned.mjs').then(m=>console.log(m.thisOwnerToken()+':'+m.hostId(require('node:os').hostname(), process.env.WSL_DISTRO_NAME ?? '')))")@linux:$"   # 12.1 gate fix (fc1cf87a): $, the shell's pid, not a literal $; the coder completes the owner form (pid:start:pidns, as § 15's claim shows) with the shipped helper's own function for a pid if it has one, else /proc/$/stat field 22 and the inode of /proc/$/ns/pid, and checks the label parses as that live owner
 W='\\wsl.localhost\Ubuntu'$(pwd | tr / '\\')'\spikes\lang-bench'
 wslc.exe run --rm --name "$NAME" --label "testsToDelete.owner=$LABEL" --cpus 2 -m 2G -u "$(id -u):$(id -g)" -e TMPDIR=/tmp \
   -v "$W:/w:ro" -w /w python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f \
@@ -592,9 +594,12 @@ First change of epoch 12; the next accepted change is the twelfth full stop.
 
 **The runs (row E6-m as 12.1 reads it).** Each whole suite at base and head as § 7, `nice -n 19`, one at a time, but WITHOUT a `TMPDIR` of its
 own: `TMPDIR`, `TEMP`, `TMP` unset, so `/tmp`. Before and after each run, this user's entries directly under `/tmp` are listed by name
-(`find /tmp -maxdepth 1 -user $(id -u) -printf '%f\n' | sort`); an entry the run added is named in the PR body and removed by exact path
-(`rmdir` for an empty folder; `rm -r` only after `ls -la` shows the run's files and no link followed); entries of other processes are not
-touched. Row E6-m (4), (5) and (7) stand unchanged. The base runs of § 15 stay the base evidence; the nine failures they show only with the
+(`find /tmp -maxdepth 1 -user $(id -u) -printf '%f\n' | sort`). An entry that appeared during the run is removed by exact path ONLY when
+it is verifiably the run's (gate `fc1cf87a`, finding 0: other sessions of this user write `/tmp` meanwhile): its claim (the shipped helper's
+`.owner` record) names a pid that was in the run's process tree (the wrapper records the tree's pids every second into its log) and is now
+dead, or its name carries a token only the suite makes (the `testsToDelete-mgb-…`, `testsToDelete-u<uid>-bench-…` and `pab-…` makers § 15
+named) AND `fuser`/`/proc/*/fd` show no live process holding it. `rmdir` for an empty folder; `rm -r` only after `ls -la` shows the run's
+files and no link followed. Anything ambiguous is left untouched and named in the PR body as "not attributed, not removed". Row E6-m (4), (5) and (7) stand unchanged. The base runs of § 15 stay the base evidence; the nine failures they show only with the
 claimed folder are re-checked by the head runs (they must be green there; red = S6's to fix).
 
 **Fix 1 — policy-ab-quick's three (`test/review2.test.mjs:300`, `:353`; `test/review4.test.mjs:149`).** Cause **[M]**: the tests hand
@@ -622,7 +627,8 @@ cannot skew them again; moving them is the language-comparison plan's pin decisi
 RED again: the scratch template build with `NetCoreTargetingPackRoot` pointed at a copy holding only the 10.0.15 packs → NU1101. If a test of
 the eight is still red after the downgrade, its own cause is measured and fixed before the merge (not approved).
 
-**Fix 3 — `minigit-bench` `test/preflight.test.mjs:17`.** Cause **[M]**: the test takes `findOnPath('claude')` (2.1.326 today) while the
+**Fix 3 — `minigit-bench` `test/preflight.test.mjs:17`.** The pinned copy exists on this host **[M]** 2026-11-18: `ls -la ~/rsd/minigit/toolchains/` →
+`-r-xr-xr-x … 291638640 Oct 30 15:25 claude-2.1.310` (gate `fc1cf87a`, finding 3), so the fix makes no new skip here. Cause **[M]**: the test takes `findOnPath('claude')` (2.1.326 today) while the
 pilot runs the pinned copy `~/rsd/minigit/toolchains/claude-<pin>` (`lib/bare-init.mjs:182` makes it; `lib/bare-config.mjs:143` uses it); the
 preflight rightly says "claude is 2.1.326, the pin is 2.1.310". Fix, test only: `claudeBinary` = `path.join(os.homedir(), 'rsd', 'minigit',
 'toolchains', `claude-${stacks.pins.claude}`)`, and `hostLacks` naming that path when it is absent (as the test already does for the
