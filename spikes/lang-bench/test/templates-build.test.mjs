@@ -530,3 +530,27 @@ test('A_git_failure_in_the_fetch_exits_1_and_a_missing_statement_or_samples_exit
   assert.equal(existsSync(out), false);
   assert.deepEqual(readdirSync(path.join(home, '.cache', 'lang-v2')).filter(n => n.startsWith('.fetch')), [], 'no scratch folder');
 });
+
+// ---- the six tasks of the freeze are the engine's to write (F2.S2 (d)) --------------------------------------------------------------------------------
+
+test('The_lang_bench_builder_refuses_the_six_tasks_and_names_the_engine_verb', async t => {
+  const home = ownedFolder(t, 'home');
+  const out = path.join(ownedFolder(t, 'out'), 'w');
+  const build = (task, group, extra = []) => ['--stack', 'csharp', '--kind', 'daemon', '--task', task, '--group', group, '--out', out, '--statement', helloStatement('daemon'), '--samples', helloSamples('daemon'), '--task-repo', SPIKE, ...extra];
+  for (const task of ['04', '04-rule-api', '05-key-value-server', '06-blog-api', '07-stream-processor', '08-ledger-api', '10-dag-scheduler']) {
+    for (const group of ['A', 'B']) {
+      const refused = await command(home, build(task, group));
+      assert.equal(refused.code, 3, `${task} under group ${group}: ${refused.stderr}`);
+      assert.match(refused.stderr, /node spikes\/lang-explore\/explore\.mjs workspaces/, `${task}: the sentence names the engine's verb`);
+      assert.ok(refused.stderr.includes(task), `${task}: the sentence names the task`);
+    }
+  }
+  assert.equal(existsSync(out), false, 'a refusal writes nothing');
+  const control = await command(home, build('hello', 'A', ['--hello']));
+  assert.equal(control.code, 3, 'a task outside the six is judged by the older rules (this one is in no row of FORMAT\'s record)');
+  assert.match(control.stderr, /in no group's row/);
+  assert.doesNotMatch(control.stderr, /explore\.mjs/);
+  const olympiad = await command(home, build('01-count-down', 'A'));
+  assert.doesNotMatch(olympiad.stderr, /explore\.mjs/, 'an olympiad task is still this builder\'s');
+  assert.equal((await command(home, build('040-other', 'A'))).stderr.includes('explore.mjs'), false, '04 never names 040');
+});
