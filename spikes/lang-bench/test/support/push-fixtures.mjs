@@ -23,12 +23,15 @@ const GIT_ENV = Object.freeze({
   GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid',
 });
 
-/** `git -C dir args...` -> trimmed stdout; a non-zero exit throws with git's stderr (a fixture that cannot be built is a broken test). */
-export function git(dir, ...args) {
-  const r = spawnSync('git', ['-C', dir, '-c', 'commit.gpgsign=false', '-c', 'protocol.file.allow=always', ...args], { encoding: 'utf8', env: GIT_ENV, timeout: 60_000 });
-  if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed in ${dir}: ${r.stderr}`);
+/** `git -C dir args...` with `extraEnv` added to the fixture's environment -> trimmed stdout; a non-zero exit, or a run past 60 s (killed with SIGKILL), throws with git's stderr (a fixture that cannot be built is a broken test). */
+export function gitWithEnv(dir, extraEnv, ...args) {
+  const r = spawnSync('git', ['-C', dir, '-c', 'commit.gpgsign=false', '-c', 'protocol.file.allow=always', ...args], { encoding: 'utf8', env: { ...GIT_ENV, ...extraEnv }, timeout: 60_000, killSignal: 'SIGKILL' });
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed in ${dir}: ${r.stderr || r.error?.message}`);
   return r.stdout.trim();
 }
+
+/** `git -C dir args...` -> trimmed stdout (see `gitWithEnv`). */
+export const git = (dir, ...args) => gitWithEnv(dir, {}, ...args);
 
 export function writeFiles(dir, files) {
   for (const [rel, content] of Object.entries(files)) {

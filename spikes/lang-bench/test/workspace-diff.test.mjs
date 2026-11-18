@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { diffAllTasks, diffTaskPair, NODE_PINS, CSHARP_PINS } from '../lib/workspace-diff.mjs';
+import { diffAllTasks, diffTaskPair, MARKERS, NODE_PINS, CSHARP_PINS } from '../lib/workspace-diff.mjs';
 import { ownedFolder } from './support/push-fixtures.mjs';
 
 const STATEMENT = (stack, framework) => ['# Task', '', 'The program reads a number.', '', '<!-- stack-sentence -->', stack, '', 'More shared text.', '', '<!-- framework-sentence -->', framework, '', 'Closing shared text.', ''].join('\n');
@@ -137,4 +137,76 @@ test('An_unreadable_task_root_or_file_is_a_finding_and_not_a_throw_or_a_pass', t
   const all = withMode(path.join(root, 'node'), 0o000, 0o755, () => diffAllTasks({ root }));
   assert.equal(all.ok, false);
   assert.ok(all.findings.some(f => f.path === 'node' && /EACCES/.test(f.what)), JSON.stringify(all.findings));
+});
+
+// ---- F1.S2's lines: the memory and heap sentences and `samples/load.json` (F2.S2 (d)) ----------------------------------------------------------------
+
+/** The statement the engine writes with a limit: the shared memory sentence, then the heap sentence that is each stack's own. */
+const LIMITED = (stack, framework, memory, heap) => `${STATEMENT(stack, framework)}\n<!-- memory-sentence -->\n${memory}\n\n<!-- heap-sentence -->\n${heap}\n`;
+const MEMORY = 'The program and its descendants run under a 512 MiB cgroup memory limit.';
+const loadJson = (heap, over = {}) => `${JSON.stringify({ memoryLimitBytes: 536870912, memoryLimitMiB: 512, heap, note: 'the enforced memory limit', ...over }, null, 2)}\n`;
+
+/** A pair whose statements carry both sentences and whose load files carry each stack's own heap setting. */
+function limitedPair(t) {
+  const made = pair(t);
+  write(made.cs, 'STATEMENT.md', LIMITED('Write it in C# on .NET 10.', 'Use the ASP.NET minimal API.', MEMORY, 'The .NET heap is capped by DOTNET_GCHeapHardLimit=0x1AB00000.'));
+  write(made.nd, 'STATEMENT.md', LIMITED('Write it in TypeScript on Node 26.', 'Use Fastify.', MEMORY, 'Node runs with --max-old-space-size=460.'));
+  write(made.cs, 'samples/load.json', loadJson({ DOTNET_GCHeapHardLimit: '0x1AB00000' }));
+  write(made.nd, 'samples/load.json', loadJson({ NODE_OPTIONS: '--max-old-space-size=460' }));
+  return made;
+}
+
+test('The_heap_sentence_is_a_marked_sentence_and_may_differ_by_stack', t => {
+  const { cs, nd } = limitedPair(t);
+  assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'the heap sentence and the heap key of load.json are each stack\'s own');
+  assert.ok(MARKERS.includes('<!-- heap-sentence -->'));
+  write(nd, 'STATEMENT.md', LIMITED('Write it in TypeScript on Node 26.', 'Use Fastify.', MEMORY, 'Node runs with --max-old-space-size=460.').replace('Closing shared text.', 'Closing shared text, changed.'));
+  assert.equal(diffTaskPair({ csharp: cs, node: nd }).findings.length, 1, 'a changed shared line is still a finding next to the heap marker');
+});
+
+test('A_load_json_that_differs_in_anything_but_heap_is_a_finding', t => {
+  const { cs, nd } = limitedPair(t);
+  write(nd, 'samples/load.json', loadJson({ NODE_OPTIONS: '--max-old-space-size=460' }, { memoryLimitMiB: 513 }));
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']]);
+  write(nd, 'samples/load.json', loadJson({ NODE_OPTIONS: '--max-old-space-size=460' }, { extra: true }));
+  assert.equal(diffTaskPair({ csharp: cs, node: nd }).findings.length, 1, 'a key one side has and the other lacks');
+  write(nd, 'samples/load.json', 'not json\n');
+  assert.equal(diffTaskPair({ csharp: cs, node: nd }).findings.length, 1, 'a load file that is not JSON');
+  write(nd, 'samples/load.json', loadJson({ NODE_OPTIONS: '--max-old-space-size=460' }).replace('{\n', '{ \n'));
+  assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'the files are compared as JSON, so white space is not a difference');
+  write(cs, 'other/load.json', '{"heap":1}');
+  write(nd, 'other/load.json', '{"heap":2}');
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['other/load.json', 'bytes differ']], 'only samples/load.json is read as JSON');
+});
+
+test('A_byte_changed_in_the_memory_sentence_is_still_a_finding', t => {
+  const { cs, nd } = limitedPair(t);
+  write(nd, 'STATEMENT.md', LIMITED('Write it in TypeScript on Node 26.', 'Use Fastify.', MEMORY.replace('512', '513'), 'Node runs with --max-old-space-size=460.'));
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['STATEMENT.md', 'differs outside a marked sentence, line 16']]);
+  assert.equal(MARKERS.includes('<!-- memory-sentence -->'), false, 'the memory sentence is the same in both stacks, so it has no marker of its own');
+});
+
+test('A_load_json_that_is_not_a_JSON_object_is_a_finding_even_when_both_sides_are_alike_in_shape', t => {
+  const { cs, nd } = limitedPair(t);
+  for (const [one, other] of [['5', '6'], ['[1]', '[2]'], ['null', 'null']]) {
+    write(cs, 'samples/load.json', one);
+    write(nd, 'samples/load.json', other);
+    assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], `${one} against ${other}`);
+  }
+});
+
+test('A_load_json_whose_heap_key_is_in_one_stack_only_is_a_finding', t => {
+  const { cs, nd } = limitedPair(t);
+  write(cs, 'samples/load.json', JSON.stringify({ heap: { A: '1' }, duration: 60 }));
+  write(nd, 'samples/load.json', JSON.stringify({ duration: 60 }));
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], '{heap, duration} against {duration}');
+  write(cs, 'samples/load.json', JSON.stringify({ duration: 60 }));
+  write(nd, 'samples/load.json', JSON.stringify({ heap: { B: '2' }, duration: 60 }));
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], 'and the other way round');
+  write(cs, 'samples/load.json', JSON.stringify({ heap: { A: '1' }, duration: 60 }));
+  write(nd, 'samples/load.json', JSON.stringify({ duration: 60, heap: { B: '2' } }));
+  assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'heap on both sides, with other values, is still each stack\'s own');
+  write(cs, 'samples/load.json', JSON.stringify({ duration: 60 }));
+  write(nd, 'samples/load.json', JSON.stringify({ duration: 60 }));
+  assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'heap on neither side');
 });

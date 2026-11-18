@@ -352,7 +352,7 @@ test('The_packages_list_is_the_renderers_output', t => {
 
 const SECOND_FORMAT = edit(FORMAT_TEXT, 'Strings and escapes.', 'Strings and escapes, as the second format states them.');
 const TWO_GROUPS = () => {
-  const [a, b] = [formatRow(FORMAT_TEXT, ['01']), formatRow(SECOND_FORMAT, ['04'])];
+  const [a, b] = [formatRow(FORMAT_TEXT, ['01']), formatRow(SECOND_FORMAT, ['11'])];
   return { a, b, inputs: inputsWith({ A: a.row, B: b.row }) };
 };
 
@@ -371,7 +371,7 @@ test('The_build_of_B_refuses_to_write_into_A_tasks', t => {
 test('A_task_of_B_is_refused_under_A_and_a_task_in_no_row_is_refused', t => {
   const { a, inputs } = TWO_GROUPS();
   const over = { inputs, formatBytes: a.bytes, helloFixture: false };
-  assert.match(buildWorkspace(args(t, { ...over, group: 'A', task: '04' })).reason, /refuses to write into B's tasks/);
+  assert.match(buildWorkspace(args(t, { ...over, group: 'A', task: '11' })).reason, /refuses to write into B's tasks/);
   assert.match(buildWorkspace(args(t, { ...over, group: 'A', task: 'zz' })).reason, /in no group's row/);
   assert.match(buildWorkspace(args(t, { ...over, group: 'C', task: '01' })).reason, /group "C" is not one of A, B/);
   assert.equal(buildWorkspace(args(t, { ...over, group: 'A', task: '01' })).ok, true, 'the same call with the right group is built');
@@ -381,7 +381,7 @@ test('A_task_takes_the_grammar_of_the_group_its_row_names', t => {
   const { a, b, inputs } = TWO_GROUPS();
   const grammarOf = out => sha256(readFileSync(path.join(out, 'runner', 'GRAMMAR.md')));
   const forA = built(t, { inputs, formatBytes: a.bytes, group: 'A', task: '01', helloFixture: false });
-  const forB = built(t, { inputs, formatBytes: b.bytes, group: 'B', task: '04', helloFixture: false });
+  const forB = built(t, { inputs, formatBytes: b.bytes, group: 'B', task: '11', helloFixture: false });
   assert.equal(grammarOf(forA), a.row.grammarSha256);
   assert.equal(grammarOf(forB), b.row.grammarSha256);
   assert.notEqual(grammarOf(forA), grammarOf(forB));
@@ -529,4 +529,42 @@ test('A_git_failure_in_the_fetch_exits_1_and_a_missing_statement_or_samples_exit
   assert.equal(notARepo.code, 1, 'git cannot clone a folder that is not a repository: a failure, not a refusal');
   assert.equal(existsSync(out), false);
   assert.deepEqual(readdirSync(path.join(home, '.cache', 'lang-v2')).filter(n => n.startsWith('.fetch')), [], 'no scratch folder');
+});
+
+// ---- the six tasks of the freeze are the engine's to write (F2.S2 (d)) --------------------------------------------------------------------------------
+
+test('The_lang_bench_builder_refuses_the_six_tasks_and_names_the_engine_verb', async t => {
+  const home = ownedFolder(t, 'home');
+  const out = path.join(ownedFolder(t, 'out'), 'w');
+  const build = (task, group, extra = []) => ['--stack', 'csharp', '--kind', 'daemon', '--task', task, '--group', group, '--out', out, '--statement', helloStatement('daemon'), '--samples', helloSamples('daemon'), '--task-repo', SPIKE, ...extra];
+  for (const task of ['04', '04-rule-api', '05-key-value-server', '06-blog-api', '07-stream-processor', '08-ledger-api', '10-dag-scheduler']) {
+    for (const group of ['A', 'B']) {
+      const refused = await command(home, build(task, group));
+      assert.equal(refused.code, 3, `${task} under group ${group}: ${refused.stderr}`);
+      assert.match(refused.stderr, /node spikes\/lang-explore\/explore\.mjs workspaces/, `${task}: the sentence names the engine's verb`);
+      assert.ok(refused.stderr.includes(task), `${task}: the sentence names the task`);
+    }
+  }
+  assert.equal(existsSync(out), false, 'a refusal writes nothing');
+  const control = await command(home, build('hello', 'A'));
+  assert.equal(control.code, 3, 'a task outside the six is judged by the older rules (this one is in no row of FORMAT\'s record)');
+  assert.match(control.stderr, /in no group's row/);
+  assert.doesNotMatch(control.stderr, /explore\.mjs/);
+  const olympiad = await command(home, build('01-count-down', 'A'));
+  assert.doesNotMatch(olympiad.stderr, /explore\.mjs/, 'an olympiad task is still this builder\'s');
+  assert.equal((await command(home, build('040-other', 'A'))).stderr.includes('explore.mjs'), false, '04 never names 040');
+});
+
+test('A_direct_call_of_buildWorkspace_for_one_of_the_six_tasks_refuses_and_names_the_engine_verb', t => {
+  for (const task of ['04', '05-key-value-server', '10']) {
+    for (const group of ['A', 'B']) {
+      const out = path.join(ownedFolder(t, 'out'), 'never');
+      const refused = buildWorkspace(args(t, { task, group, out, helloFixture: true }));
+      assert.equal(refused.ok, false, `${task} under ${group}`);
+      assert.equal(refused.refusal, true);
+      assert.match(refused.reason, /node spikes\/lang-explore\/explore\.mjs workspaces/);
+      assert.equal(existsSync(out), false, 'nothing was written');
+    }
+  }
+  assert.equal(buildWorkspace(args(t, { task: 'hello', group: 'A' })).ok, true, 'the control: a task outside the six builds as before');
 });

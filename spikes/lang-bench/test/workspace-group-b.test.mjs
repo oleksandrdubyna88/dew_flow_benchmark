@@ -33,27 +33,31 @@ async function pinnedFormat(repo) {
 
 const args = (t, over) => ({ stack: 'node', kind: 'olympiad', out: path.join(ownedFolder(t, 'out'), 'w'), statement: readFileSync(helloStatement('olympiad')), samplesDir: helloSamples('olympiad'), helloFixture: false, ...over });
 
-test('The_workspace_builder_finds_the_six_in_B_and_builds_with_Bs_grammar', async t => {
+test('The_workspace_builder_builds_each_olympiad_task_with_As_grammar_and_leaves_the_six_to_the_engine', async t => {
   const repo = realRepo(t);
   if (repo === null) return;
   const formatBytes = await pinnedFormat(repo);
   const loaded = loadInputs();
   assert.equal(loaded.ok, true, loaded.reason);
   const inputs = loaded.value;
-  for (const [group, tasks] of Object.entries(GROUPS)) {
-    for (const task of tasks) {
-      const built = buildWorkspace(args(t, { task, group, formatBytes, inputs }));
-      assert.equal(built.ok, true, `${task} is built under ${group}: ${built.reason}`);
-      const grammar = readFileSync(path.join(built.value.out, 'runner', 'GRAMMAR.md'));
-      assert.equal(sha256(grammar), inputs.format[group].grammarSha256, `${task} takes the grammar of ${group}'s row`);
-      const other = buildWorkspace(args(t, { task, group: OTHER[group], formatBytes, inputs }));
-      assert.equal(other.ok, false, `${task} is refused under ${OTHER[group]}`);
-      assert.match(other.reason, new RegExp(`the task ${task} belongs to group ${group}, not to group ${OTHER[group]}`));
+  for (const task of GROUPS.A) {
+    const built = buildWorkspace(args(t, { task, group: 'A', formatBytes, inputs }));
+    assert.equal(built.ok, true, `${task} is built under A: ${built.reason}`);
+    assert.equal(sha256(readFileSync(path.join(built.value.out, 'runner', 'GRAMMAR.md'))), inputs.format.A.grammarSha256, `${task} takes the grammar of A's row`);
+    const other = buildWorkspace(args(t, { task, group: 'B', formatBytes, inputs }));
+    assert.equal(other.ok, false, `${task} is refused under B`);
+    assert.match(other.reason, new RegExp(`the task ${task} belongs to group A, not to group B`));
+  }
+  for (const task of GROUPS.B) {
+    for (const group of ['A', 'B']) {
+      const refused = buildWorkspace(args(t, { task, group, formatBytes, inputs }));
+      assert.equal(refused.ok, false, `${task} under ${group} is the engine's, not this builder's`);
+      assert.match(refused.reason, /explore\.mjs workspaces/);
     }
   }
 });
 
-test('The_command_builds_a_task_of_the_six_under_B_and_an_olympiad_task_under_A_and_refuses_the_other_way', async t => {
+test('The_command_builds_an_olympiad_task_under_A_and_refuses_the_six_and_the_other_way', async t => {
   const repo = realRepo(t);
   if (repo === null) return;
   const home = ownedFolder(t, 'home');
@@ -65,14 +69,15 @@ test('The_command_builds_a_task_of_the_six_under_B_and_an_olympiad_task_under_A_
     return { ...ran.value, out };
   };
   const six = await run('04', 'B');
-  assert.equal(six.code, 0, six.stderr);
-  assert.equal(existsSync(six.out), true);
+  assert.equal(six.code, 3, six.stderr);
+  assert.match(six.stderr, /explore\.mjs workspaces/);
+  assert.equal(existsSync(six.out), false);
   const olympiad = await run('01', 'A');
   assert.equal(olympiad.code, 0, olympiad.stderr);
-  for (const [task, group] of [['04', 'A'], ['01', 'B']]) {
+  for (const [task, group, words] of [['04', 'A', /explore\.mjs workspaces/], ['01', 'B', /refuses to write into/]]) {
     const refused = await run(task, group);
     assert.equal(refused.code, 3, `${task} under ${group} is a refusal`);
-    assert.match(refused.stderr, /refuses to write into/);
+    assert.match(refused.stderr, words);
     assert.equal(existsSync(refused.out), false, 'a refusal wrote nothing');
   }
 });

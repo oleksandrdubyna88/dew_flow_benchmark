@@ -22,8 +22,11 @@
 //       the backup file and the mount may also come from the private file ~/.config/lang-v2/heldout-backup.json (mode 600); the flags win. An entry point that must remove a stale clear folder needs them too.
 //   node spikes/lang-explore/explore.mjs package --task NN [--only refs|witnesses|suite|load|all] [--register] [--seal] [--accept-noisy <why>] [--task-repo <task repository>]   FREE: a task's validation package (F2.S1): the suite and the gate, S, both references through the ten-pass driver, F-LOAD's measured duration, the defect witnesses; `--register` writes inputs/packages.json after every item is green, `--seal` then seals the archive (the seal is last)
 //   node spikes/lang-explore/explore.mjs register-memory   FREE: writes the memory value's registration field once all six packages have both references accepted at it
+//   node spikes/lang-explore/explore.mjs workspaces --tag <ref> --task-repo <task repository> --out <dir>   FREE: the twelve freeze workspaces (tasks 04 05 06 07 08 10, both stacks), exactly what a session is given, the spec and FORMAT read at <ref>, into <dir>/csharp/<NN-slug>/ and <dir>/node/<NN-slug>/ (F2.S2 (d)); <dir> is refused inside any git worktree
+//   node spikes/lang-explore/explore.mjs workspaces-copy --from <dir> --into <worktree of the task repository>   FREE: the separate, reviewed copy of those folders into a clean worktree at the commit they were made from; resumable (an equal folder is skipped, a different one refused)
+//   node spikes/lang-explore/explore.mjs workspaces --check --root <checkout>   FREE and read only: the twelve built again from the checkout's HEAD and compared with the committed folders; the last line of a pass is `workspaces-check ok commit <HEAD> tasks … stacks …`, exit 1 on a finding
 //
-// Exit codes: 0 done | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
+// Exit codes: 0 done | 1 a finding of `workspaces --check` | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
 // `run` and `rehearse` re-execute themselves under `taskset -c 6,7` (an env marker stops a loop), so the broker, the receiver, the proxy and the sampler sit on the harness core, as v1's runner does.
 import { spawn } from 'node:child_process';
 import os from 'node:os';
@@ -35,11 +38,12 @@ import { cmdHeldoutCheck, cmdHeldoutClose, cmdHeldoutOpen } from './lib/heldout-
 import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRepartition, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { cmdPackage, cmdRegisterMemory } from './lib/package-command.mjs';
 import { prepare } from './lib/prepare.mjs';
+import { cmdWorkspaces, cmdWorkspacesCopy } from './lib/workspaces-command.mjs';
 import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' }, tag: { type: 'string' }, from: { type: 'string' }, into: { type: 'string' }, check: { type: 'boolean' }, root: { type: 'string' } };
 /** The commands that run or score under the two scoring CPUs: every scoring of the quick run, the diagnostic, the re-score and a package validation included, so the numbers they compare are measured in the same conditions. */
 export const REEXEC = new Set(['run', 'rehearse', 'rescore', 'replay', 'package']);
 
@@ -60,7 +64,7 @@ async function cmdCalibrate(values, io) {
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory, workspaces: cmdWorkspaces, 'workspaces-copy': cmdWorkspacesCopy });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {
