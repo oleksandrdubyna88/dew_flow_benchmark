@@ -319,6 +319,9 @@ test('A_task_entry_must_show_a_passed_package_not_just_be_an_object', () => {
     'an identity that is not 64 hex': { ...PASSED, identity: 'b'.repeat(63) },
     'an upper-case identity': { ...PASSED, identity: 'B'.repeat(64) },
     'an identity that is not a string': { ...PASSED, identity: 12 },
+    'an identity that is a one-element array of 64 hex': { ...PASSED, identity: [PASSED.identity] },
+    'an archive that is a one-element array of 64 hex': { ...PASSED, archiveSha256: [PASSED.archiveSha256] },
+    'an archive that is an object with a 64 hex string form': { ...PASSED, archiveSha256: { toString: () => PASSED.archiveSha256 } },
     'no archive (not sealed)': omit(PASSED, 'archiveSha256'),
     'an archive that is not 64 hex': { ...PASSED, archiveSha256: 'xyz' },
     'no reference verdicts': omit(PASSED, 'referenceVerdicts'),
@@ -437,8 +440,7 @@ test('The_deep_freeze_returns_a_frozen_copy_and_leaves_its_argument_alone', () =
   assert.notEqual(copy, given);
   assert.ok(!Object.isFrozen(given) && !Object.isFrozen(given.rules) && !Object.isFrozen(given.rules[0]) && !Object.isFrozen(given.rules[0].parameters) && !Object.isFrozen(given.list), 'the argument is not frozen, at any depth');
   assert.ok(Object.isFrozen(copy) && Object.isFrozen(copy.rules) && Object.isFrozen(copy.rules[0]) && Object.isFrozen(copy.rules[0].parameters) && Object.isFrozen(copy.list), 'the result is frozen at every depth');
-  given.name = 'y';
-  assert.equal(copy.name, 'x', 'the copy shares nothing with the argument');
+  assert.ok(copy.rules !== given.rules && copy.rules[0] !== given.rules[0] && copy.rules[0].parameters !== given.rules[0].parameters && copy.list !== given.list, 'the copy shares no object with the argument, at any depth');
 });
 
 test('GH_HOST_is_not_inherited_and_every_gh_call_names_github_com', async () => {

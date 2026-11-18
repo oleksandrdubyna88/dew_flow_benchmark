@@ -221,6 +221,8 @@ test('An_apply_whose_task_entries_do_not_show_a_passed_package_makes_no_gh_call'
     'an empty entry': {},
     'a missing archive': { identity: PASSED.identity, referenceVerdicts: PASSED.referenceVerdicts },
     'an archive that is not a sha256': { ...PASSED, archiveSha256: 'sealed' },
+    'an identity that is an array of one 64-hex string': { ...PASSED, identity: [PASSED.identity] },
+    'an archive that is an array of one 64-hex string': { ...PASSED, archiveSha256: [PASSED.archiveSha256] },
     'a missing identity': { archiveSha256: PASSED.archiveSha256, referenceVerdicts: PASSED.referenceVerdicts },
     'a csharp reference not accepted': { ...PASSED, referenceVerdicts: { csharp: 'rejected', node: 'accepted' } },
     'a node reference not accepted': { ...PASSED, referenceVerdicts: { csharp: 'accepted', node: 'pending' } },

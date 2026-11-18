@@ -156,6 +156,8 @@ export const PACKAGE_TASKS = freeze(['04', '05', '06', '07', '08', '10']);
 export const DRY_RUN_LINE = 'dry run clean <yyyy-mm-dd> packages <sha256 of packages.json>';
 const DRY_RUN_FORMAT = /^dry run clean (\d{4})-(\d{2})-(\d{2}) packages ([0-9a-f]{64})$/;
 const HEX64 = /^[0-9a-f]{64}$/;
+/** A string of 64 lower-case hex: a string first, because `RegExp.test` turns a one-element array (or an object with a `toString`) into its text. */
+const isHex64 = value => typeof value === 'string' && HEX64.test(value);
 
 const isCalendarDate = ([, year, month, day]) => {
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
@@ -165,7 +167,7 @@ const isCalendarDate = ([, year, month, day]) => {
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** A registered, sealed, validated package, as `packages.json` records one: an `identity` and an `archiveSha256` of 64 lower-case hex each, and both reference verdicts `accepted`. What else the entry holds is not compared. */
-const isPassedPackage = entry => isObject(entry) && HEX64.test(entry.identity) && HEX64.test(entry.archiveSha256) && isObject(entry.referenceVerdicts) && entry.referenceVerdicts.csharp === 'accepted' && entry.referenceVerdicts.node === 'accepted';
+const isPassedPackage = entry => isObject(entry) && isHex64(entry.identity) && isHex64(entry.archiveSha256) && isObject(entry.referenceVerdicts) && entry.referenceVerdicts.csharp === 'accepted' && entry.referenceVerdicts.node === 'accepted';
 
 function packagesProblems(packages) {
   if (!isObject(packages)) return ['packages.json cannot be read as an object, so it is not known that the six packages are registered'];
