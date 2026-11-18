@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { blobsOf, changedPaths, commitOf, FORMAT_PATH, treeAt } from './freeze-git.mjs';
 import { failWith, specSet } from './freeze-inputs.mjs';
+import { gatedProblems } from './freeze-pins.mjs';
 import { differingLines, factsOf, freezePlaceholder, readRows, tagDate, tagOfValue, withTag } from './freeze-rows.mjs';
 
 const sha256Of = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -56,7 +57,7 @@ async function sides({ repo, before, after }) {
 }
 
 /** `check-commit`: the rule above, for the commits `before` and `after` of the repository. `facts` are FORMAT's, read at `before`. */
-export async function checkFreezeCommit({ repo, before, after }) {
+export async function checkFreezeCommit({ repo, before, after, pins }) {
   const read = await sides({ repo, before, after });
   if (!read.ok) return read;
   const { tree, changed } = read.value;
@@ -68,7 +69,8 @@ export async function checkFreezeCommit({ repo, before, after }) {
   const facts = factsOf(old.value.get(FORMAT_PATH));
   if (!facts.ok) return failWith([`FORMAT before the freeze commit: ${facts.reason}`]);
   const results = specs.value.map(spec => ({ spec, ...(changed.includes(spec.path) ? specProblems({ file: spec.path, bytes: { before: old.value.get(spec.path), after: now.value.get(spec.path) }, facts: facts.value }) : { problems: [`${spec.path}: unchanged, so its Freeze tag row was not set`], tag: null }) }));
-  const problems = [...pathProblems(changed, specs.value), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag))];
+  const gated = specs.value.flatMap(spec => gatedProblems({ spec, bytes: old.value.get(spec.path), facts: facts.value, pins }));
+  const problems = [...pathProblems(changed, specs.value), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag)), ...gated];
   if (problems.length > 0) return failWith(problems);
   const tag = results[0].tag;
   return ok({ tag, date: tagDate(tag), specs: specs.value.map(spec => ({ ...spec, sha256: sha256Of(now.value.get(spec.path)) })) });

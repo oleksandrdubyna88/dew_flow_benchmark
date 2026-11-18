@@ -40,16 +40,18 @@ export function readRows(bytes) {
 /** The row's value as a tag name when it is a code span `` `spec-frozen-B-<date>` ``, else null. */
 export const tagOfValue = value => /^`([^`]+)`$/.exec(value)?.[1] ?? null;
 
-/** ok(Buffer): the spec with its `Freeze tag` row's value replaced by `` `<tag>` `` and every other byte kept (the cell's padding included). */
-export function withTag(bytes, tag) {
+/** ok(Buffer): the spec with its `Freeze tag` row's value replaced by `value` as written (the cell's padding and every other byte kept). */
+export function withRowValue(bytes, value) {
   const read = readRows(bytes);
   if (!read.ok) return read;
-  const line = read.value.lines[read.value.no - 1];
-  const matched = ROW.exec(line);
+  const matched = ROW.exec(read.value.lines[read.value.no - 1]);
   if (matched === null) return fail(`line ${read.value.no} is not a Freeze tag row of the form | Freeze tag | <value> |`);
-  const edited = read.value.lines.map((text, index) => (index === read.value.no - 1 ? `${matched[1]}\`${tag}\`${matched[3]}` : text));
+  const edited = read.value.lines.map((text, index) => (index === read.value.no - 1 ? `${matched[1]}${value}${matched[3]}` : text));
   return ok(Buffer.from(edited.join('\n'), 'utf8'));
 }
+
+/** ok(Buffer): the spec with its `Freeze tag` row's value replaced by `` `<tag>` ``. */
+export const withTag = (bytes, tag) => withRowValue(bytes, `\`${tag}\``);
 
 /** The 1-based numbers of the lines that differ between two texts, or null when they have a different number of lines (the whole file then differs). */
 export function differingLines(before, after) {

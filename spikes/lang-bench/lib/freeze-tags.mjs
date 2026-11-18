@@ -33,13 +33,13 @@ async function mainProblems({ repo, commit }) {
 const rowsProblems = ({ freeze, tag }) => (freeze.value.tag === tag ? [] : [`the Freeze tag rows of the specs at C say ${freeze.value.tag} (date ${freeze.value.date}), not ${tag}: the tag's name and date must be the rows'`]);
 
 /** ok({ problems, freeze }): the sentences of the name, the squash commit, the rows and the main rule for tag `tag` on `commit`; `freeze` is the result of `check-commit` between C's parent and C. */
-async function commitProblems({ repo, commit, tag }) {
+async function commitProblems({ repo, commit, tag, pins }) {
   const [parent, main] = [await parentOf(repo, commit), await mainProblems({ repo, commit })];
   const bad = [parent, main].find(isEnv);
   if (bad !== undefined) return bad;
   const base = [...nameProblems(tag), ...main.value];
   if (!parent.ok) return ok({ problems: [...base, `${commit} is not the freeze pull request's squash commit: ${parent.reason}`], freeze: parent });
-  const freeze = await checkFreezeCommit({ repo, before: parent.value, after: commit });
+  const freeze = await checkFreezeCommit({ repo, before: parent.value, after: commit, pins });
   if (isEnv(freeze)) return freeze;
   const asCommit = freeze.ok ? rowsProblems({ freeze, tag }) : problemsOf(freeze).map(problem => `${commit} is not the freeze commit: ${problem}`);
   return ok({ problems: [...base, ...asCommit], freeze });
@@ -56,14 +56,14 @@ function localProblems({ read, tag, commit, message }) {
 }
 
 /** `check-local-tag`: ok({ tag, commit }) | failWith(sentences) | an environment fail. */
-export async function checkLocalTag({ repo, tag, commit, messageFile }) {
+export async function checkLocalTag({ repo, tag, commit, messageFile, pins }) {
   const [remote, read, sha] = [await remoteTag(repo, tag), await readTag(repo, tag), await commitOf(repo, commit)];
   const bad = [remote, read, sha].find(isEnv);
   if (bad !== undefined) return bad;
   if (!sha.ok) return failWith([sha.reason]);
   const message = readFileSync(messageFile, 'utf8');
   const onRemote = remote.value === null ? [] : [`the tag ${tag} is already on the remote (git ls-remote --tags origin): a pushed tag is never moved or deleted; make a tag with a later date instead`];
-  const about = await commitProblems({ repo, commit: sha.value, tag });
+  const about = await commitProblems({ repo, commit: sha.value, tag, pins });
   if (isEnv(about)) return about;
   const problems = [...onRemote, ...localProblems({ read, tag, commit: sha.value, message }), ...about.value.problems];
   return problems.length > 0 ? failWith(problems) : ok({ tag, commit: sha.value });
@@ -119,10 +119,10 @@ async function formatProblems({ repo, commit, pin }) {
 }
 
 /** `check-tag`: ok({ tag, commit, tagObject, freeze, formatSha256 }) | failWith(sentences) | an environment fail. `message` is the intended annotation when the local tag is not at hand; `pin` is the step-2a pin of FORMAT (`loadPin`). */
-export async function checkRemoteTag({ repo, tag, commit, message, pin }) {
+export async function checkRemoteTag({ repo, tag, commit, message, pin, pins }) {
   const sha = await commitOf(repo, commit);
   if (!sha.ok) return isEnv(sha) ? sha : failWith([sha.reason]);
-  const [remote, about, format] = [await remoteProblems({ repo, tag, commit: sha.value, message }), await commitProblems({ repo, commit: sha.value, tag }), await formatProblems({ repo, commit: sha.value, pin })];
+  const [remote, about, format] = [await remoteProblems({ repo, tag, commit: sha.value, message }), await commitProblems({ repo, commit: sha.value, tag, pins }), await formatProblems({ repo, commit: sha.value, pin })];
   const bad = [remote, about, format].find(isEnv);
   if (bad !== undefined) return bad;
   const problems = [...remote.value, ...about.value.problems, ...format.value.problems];

@@ -8,6 +8,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { checkFreezeCommit } from './freeze-commit.mjs';
 import { hashList, writeHashList } from './freeze-hashes.mjs';
 import { failWith, inputsDirOf, isEnv, loadPin, problemsOf } from './freeze-inputs.mjs';
+import { loadSpecPins } from './freeze-pins.mjs';
 import { planFreeze } from './freeze-plan.mjs';
 import { recordFreeze } from './freeze-record.mjs';
 import { checkLocalTag, checkRemoteTag } from './freeze-tags.mjs';
@@ -78,30 +79,39 @@ function failed(verb, spec, result) {
 }
 
 const paths = values => ({ repo: path.resolve(values.repo), inputs: inputsDirOf(values.inputs) });
+/** ok(the engine's spec pins) from `--pins` or lang-explore's `inputs/explore.json`; a fail is the verb's refusal. */
+const pinsOf = values => loadSpecPins(values.pins === undefined ? undefined : path.resolve(values.pins));
 const recordFileOf = ({ inputs }, values) => path.resolve(values.record ?? path.join(inputs, 'specs.d', 'format.json'));
 
 async function planVerb({ values, seams }) {
   const where = paths(values);
-  const planned = await planFreeze({ repo: where.repo, ref: values.ref, date: values.date, record: recordFileOf(where, values), seams: { now: seams.now, conformance: seams.conformance, needles: values.needles ?? seams.needles } });
+  const pins = pinsOf(values);
+  if (!pins.ok) return pins;
+  const planned = await planFreeze({ repo: where.repo, ref: values.ref, date: values.date, record: recordFileOf(where, values), pins: pins.value, seams: { now: seams.now, conformance: seams.conformance, needles: values.needles ?? seams.needles } });
   return planned.ok ? ok({ stdout: planned.value.patch, stderr: `freeze: plan: ${planned.value.tag} in the Freeze tag row of the six specs, nothing else\n` }) : planned;
 }
 
 async function commitVerb({ values }) {
-  const checked = await checkFreezeCommit({ repo: path.resolve(values.repo), before: values.before, after: values.after });
+  const pins = pinsOf(values);
+  if (!pins.ok) return pins;
+  const checked = await checkFreezeCommit({ repo: path.resolve(values.repo), before: values.before, after: values.after, pins: pins.value });
   return checked.ok ? ok({ stdout: `check-commit ok: the six Freeze tag rows say ${checked.value.tag}; no other byte of the six specs, no other path, and not FORMAT changed\n` }) : checked;
 }
 
 async function localTagVerb({ values }) {
-  const checked = await checkLocalTag({ repo: path.resolve(values.repo), tag: values.tag, commit: values.commit, messageFile: path.resolve(values['message-file']) });
+  const pins = pinsOf(values);
+  if (!pins.ok) return pins;
+  const checked = await checkLocalTag({ repo: path.resolve(values.repo), tag: values.tag, commit: values.commit, messageFile: path.resolve(values['message-file']), pins: pins.value });
   return checked.ok ? ok({ stdout: `check-local-tag ok: ${values.tag} is annotated, local only, on C ${checked.value.commit}, with the intended message\n` }) : checked;
 }
 
 async function tagVerb({ values }) {
   const where = paths(values);
   const pin = loadPin(recordFileOf(where, values));
-  if (!pin.ok) return failWith([pin.reason]);
+  const pins = pinsOf(values);
+  if (!pin.ok || !pins.ok) return failWith([pin.ok ? pins.reason : pin.reason]);
   const message = values['message-file'] === undefined ? undefined : readFileSync(path.resolve(values['message-file']), 'utf8');
-  const checked = await checkRemoteTag({ repo: where.repo, tag: values.tag, commit: values.commit, message, pin: pin.value });
+  const checked = await checkRemoteTag({ repo: where.repo, tag: values.tag, commit: values.commit, message, pin: pin.value, pins: pins.value });
   return checked.ok ? ok({ stdout: `check-tag ok: the remote's ${values.tag} is annotated, peels to C ${checked.value.commit} (tag object ${checked.value.tagObject}); the six specs are the gated ones with only their row set; FORMAT is the pinned ${checked.value.formatSha256}\n` }) : checked;
 }
 
@@ -132,8 +142,10 @@ function pairs(values) {
 
 async function recordVerb({ values, seams }) {
   const where = paths(values);
+  const pins = pinsOf(values);
+  if (!pins.ok) return fail(pins.reason, { problems: [pins.reason], exit: 3 });
   const flags = { evidence: path.resolve(values.evidence), check: path.resolve(values['workspaces-check']), supersedes: pairs(values) };
-  const recorded = await recordFreeze({ repo: where.repo, tag: values.tag, commit: values.commit, flags, inputs: where.inputs, record: recordFileOf(where, values), io: seams.io });
+  const recorded = await recordFreeze({ repo: where.repo, tag: values.tag, commit: values.commit, flags, inputs: where.inputs, record: recordFileOf(where, values), pins: pins.value, io: seams.io });
   return recorded.ok ? ok({ stdout: `${noted(recorded.value.notes)}record: wrote ${recorded.value.file}\n` }) : recorded;
 }
 

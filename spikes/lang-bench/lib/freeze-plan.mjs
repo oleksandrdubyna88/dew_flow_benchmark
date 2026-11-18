@@ -9,6 +9,7 @@ import { run as conformanceRun } from './conformance.mjs';
 import { selfRunBytes } from '../tools/format-classes.mjs';
 import { blobsOf, commitOf, dirtyLines, FORMAT_PATH, treeAt } from './freeze-git.mjs';
 import { failWith, loadPin, pinTaskProblem, specSet } from './freeze-inputs.mjs';
+import { gatedProblems } from './freeze-pins.mjs';
 import { factsOf, freezePlaceholder, gateFilled, readRows, tagDate, tagOfValue, withTag } from './freeze-rows.mjs';
 
 const CONTEXT = 3;
@@ -113,7 +114,7 @@ function conformanceOf({ spec, context, seams }) {
 /** The sentences about one spec: its end, its header, and the checker's result (which also names the FORMAT record it is gated under). */
 async function specProblems({ spec, context, facts, seams }) {
   const bytes = context.blobs.value.get(spec.path);
-  const header = facts === null ? [] : headerProblems({ spec, bytes, facts, date: context.date });
+  const header = facts === null ? [] : [...headerProblems({ spec, bytes, facts, date: context.date }), ...gatedProblems({ spec, bytes, facts, pins: context.pins })];
   if (!context.pin.ok) return [...endProblem(spec, bytes), ...header];
   const result = await conformanceOf({ spec, context, seams });
   return [...endProblem(spec, bytes), ...header, ...recordProblem({ file: spec.path, first: result.lines[0], pin: context.pin.value }), ...conformanceProblems({ spec, result })];
@@ -129,7 +130,7 @@ async function specsProblems({ context, facts, seams }) {
 /**
  * The plan: ok({ patch, tag }) when nothing is refused (`patch` is one unified diff over the six specs), else failWith(sentences) before any edit is made. `seams`: `now` (a clock), `conformance` (the checker's `run`), `needles`.
  */
-export async function planFreeze({ repo, ref, date, record, seams = {} }) {
+export async function planFreeze({ repo, ref, date, record, pins, seams = {} }) {
   const options = { now: seams.now ?? (() => new Date()), conformance: seams.conformance ?? conformanceRun, needles: seams.needles };
   const where = await checkoutProblems({ repo, ref });
   if (!where.ok) return where;
@@ -138,7 +139,7 @@ export async function planFreeze({ repo, ref, date, record, seams = {} }) {
   const { pin, specs, blobs } = loaded.value;
   const format = await formatProblems({ pin, blobs });
   const list = [...(pin.ok && pinTaskProblem(pin.value) !== null ? [pinTaskProblem(pin.value)] : []), ...(specs.ok ? [] : specs.problems)];
-  const each = specs.ok && blobs.ok ? await specsProblems({ context: { specs: specs.value, blobs, pin, repo, record, date }, facts: format.facts, seams: options }) : [];
+  const each = specs.ok && blobs.ok ? await specsProblems({ context: { specs: specs.value, blobs, pin, pins, repo, record, date }, facts: format.facts, seams: options }) : [];
   const problems = [...dateProblems({ date, now: options.now }), ...where.value.problems, ...list, ...format.problems, ...each];
   if (problems.length > 0) return failWith(problems);
   const edits = specs.value.map(spec => ({ spec, after: withTag(blobs.value.get(spec.path), `spec-frozen-B-${date}`) }));

@@ -131,8 +131,8 @@ const validateRecord = inputs => text => {
 };
 
 /** What the verifications give: C, the checked tag, W's specs and the hash list; a red one is a refusal with exit 1 naming the verb. */
-async function verified({ repo, tag, commit, pin, c }) {
-  const checked = await checkRemoteTag({ repo, tag, commit: c, pin });
+async function verified({ repo, tag, commit, pin, pins, c }) {
+  const checked = await checkRemoteTag({ repo, tag, commit: c, pin, pins });
   if (!checked.ok) return redOf(checked, 'check-tag');
   const base = await workspaceProblems({ repo, base: c, commit });
   if (!base.ok) return base;
@@ -191,11 +191,11 @@ async function preflight({ repo, tag, commit, flags, inputs, record }) {
  * `record`: ok({ file, text, notes }) once the record is written; a fail carries `problems` and `exit` (1 a verification is red, 3 an input is refused; an environment failure has `env: true`).
  * `flags`: `{ evidence, check, supersedes: [{ tag, why }] }`. `inputs` is the bench's inputs folder, `record` its FORMAT record; `io` is the writer's seam.
  */
-export async function recordFreeze({ repo, tag, commit, flags, inputs, record, io }) {
+export async function recordFreeze({ repo, tag, commit, flags, inputs, record, pins, io }) {
   const given = await preflight({ repo, tag, commit, flags, inputs, record });
   if (!given.ok) return given;
   const { pin, w, c, evidence, superseded, file } = given.value;
-  const parts = await verified({ repo, tag, commit: w, pin, c });
+  const parts = await verified({ repo, tag, commit: w, pin, pins, c });
   if (!parts.ok) return parts;
   const [day, rows] = [await dayOf(repo, w), await specRows({ repo, specs: parts.value.specs, c, tagObject: parts.value.checked.tagObject, inputs })];
   if (!rows.ok || !day.ok) return rows.ok ? day : rows;
