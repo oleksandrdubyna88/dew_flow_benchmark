@@ -2,10 +2,11 @@
 // (test/support/freeze-fixtures.mjs): a local bare repository stands for the GitHub remote, a squash merge is `git merge --squash`.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, fsyncSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { chmodSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readEvidence } from '../lib/freeze-evidence.mjs';
 import { formatOwner, processProbe, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { run as classes } from '../tools/format-classes.mjs';
 import { assemble } from '../lib/specs-record.mjs';
@@ -493,4 +494,65 @@ test('The_writer_syncs_the_folder_after_the_rename_so_the_new_name_survives_a_po
   const result = await f.run('hashes', ['--commit', w, '--write'], { io });
   assert.equal(result.exit, 0, said(result));
   assert.ok(events.indexOf('fsync-dir') > events.indexOf('rename') && events.indexOf('rename') > events.indexOf('fsync-file'), `the file is fsynced, renamed, then its folder is fsynced: ${events.join(' ')}`);
+});
+
+// ---- coai code round 4 -------------------------------------------------------------------------------------------------------------------------------
+
+test('The_writer_syncs_the_targets_folder_and_the_staging_folder_after_the_rename_for_record_too', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  await f.run('hashes', ['--commit', w, '--write']);
+  const synced = [];
+  const fdToDir = new Map();
+  const io = {
+    openSync: (file, ...rest) => { const fd = openSync(file, ...rest); if (rest[0] === 'r') fdToDir.set(fd, file); return fd; },
+    fsyncSync: fd => { if (fdToDir.has(fd)) synced.push(fdToDir.get(fd)); return fsyncSync(fd); },
+  };
+  const flags = ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)];
+  const result = await f.run('record', flags, { io });
+  assert.equal(result.exit, 0, said(result));
+  assert.ok(synced.includes(path.join(f.inputs, 'specs.d')), `the folder of the target (specs.d) was fsynced: ${synced.join(', ')}`);
+  assert.ok(synced.includes(f.inputs), `and the staging folder (inputs): ${synced.join(', ')}`);
+});
+
+test('Every_date_of_the_evidence_must_be_a_real_calendar_day_and_a_leap_day_passes', t => {
+  const dir = path.join(owned.ownedDir(t, 'dates'));
+  const file = path.join(dir, 'evidence.json');
+  const [c, w] = ['c'.repeat(40), 'd'.repeat(40)];
+  const body = (day, over = {}) => ({ provisionalFrom: day, workspacesCheck: { commit: w, exit: 0, date: day }, leakcheck: { freezeCommit: { commit: c, exit: 0, date: day }, scratchWorkspace: { commit: 'e'.repeat(40), exit: 0, date: day }, workspaceCommit: { commit: w, exit: 0, date: day } }, ...over });
+  const read = (value, tag = TAG) => { writeFileSync(file, JSON.stringify(value)); return readEvidence({ file, commit: w, freeze: c, tag }); };
+  assert.equal(read(body('2024-02-29'), 'spec-frozen-B-20240229').ok, true, 'a leap day is a real day');
+  const later = '2027-01-01';
+  for (const bad of ['2026-12-99', '2026-12-32']) {
+    const pushed = read(body(later, { provisionalFrom: bad }));
+    assert.equal(pushed.ok, false, `provisionalFrom ${bad}`);
+    assert.match(pushed.reason, /provisionalFrom is not/, `${bad} is no calendar day, whatever its order`);
+  }
+  for (const bad of ['2026-02-30', '2025-02-29', '2026-00-10']) {
+    const dated = read(body('2026-12-01', { leakcheck: { freezeCommit: { commit: c, exit: 0, date: bad }, scratchWorkspace: { commit: 'e'.repeat(40), exit: 0, date: '2026-12-01' }, workspaceCommit: { commit: w, exit: 0, date: '2026-12-01' } } }));
+    assert.equal(dated.ok, false, `a result dated ${bad}`);
+    assert.match(dated.reason, /freezeCommit\.date is not/, `${bad} is no calendar day, whatever its order`);
+  }
+});
+
+test('An_unreadable_message_file_is_one_sentence_and_exit_4_for_both_tag_checks', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(f);
+  const intended = annotate(f, { at: c });
+  pushTag(f);
+  const folder = path.join(f.root, 'a-folder');
+  mkdirSync(folder);
+  const locked = path.join(f.root, 'locked.message');
+  writeFileSync(locked, 'x\n');
+  chmodSync(locked, 0o000);
+  t.after(() => chmodSync(locked, 0o600));
+  for (const [what, file] of [['missing', path.join(f.root, 'absent.message')], ['a directory', folder], ['no permission', locked]]) {
+    for (const verb of ['check-tag', 'check-local-tag']) {
+      const flags = verb === 'check-tag' ? ['--tag', TAG, '--commit', c, '--message-file', file] : ['--tag', TAG, '--commit', c, '--message-file', file];
+      const result = await f.run(verb, flags);
+      assert.equal(result.exit, 4, `${verb} with ${what}: ${said(result)}`);
+      assert.match(result.stderr, /^freeze: [a-z-]+: the --message-file .* cannot be read \((ENOENT|EISDIR|EACCES)\)\n$/, `${verb} with ${what}: one sentence`);
+    }
+  }
+  assert.equal((await f.run('check-tag', ['--tag', TAG, '--commit', c, '--message-file', intended])).exit, 0, 'the control: the intended file');
 });
