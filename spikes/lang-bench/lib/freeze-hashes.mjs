@@ -65,6 +65,6 @@ export async function writeHashList({ repo, commit, inputs, io }) {
   if (!list.ok) return list;
   const sha = await commitOf(repo, commit);
   const file = path.join(inputs, HASHES_FILE);
-  const written = await writeOutput({ dir: inputs, target: file, text: list.value.text, what: 'hashes', validate: () => verifyList({ repo, commit: sha.value, text: list.value.text }), io });
+  const written = await writeOutput({ dir: inputs, target: file, text: list.value.text, what: 'hashes', validate: held => verifyList({ repo, commit: sha.value, text: held }), io });
   return written.ok ? ok({ file, entries: list.value.entries.length, text: list.value.text, notes: written.value.notes }) : written;
 }

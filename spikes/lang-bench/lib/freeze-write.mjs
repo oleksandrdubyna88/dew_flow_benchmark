@@ -2,7 +2,7 @@
 // (`ownedFor`: `testsToDelete-<owner>-bench-<what>-<id>.tmp`, its claim `<name>.owner` beside it), fsync it, validate it, and only then publish it with one `rename` onto the name. A reader therefore never sees half
 // a file. A restart first removes every owned temporary file whose owner is gone (the owner rules of `common.test-leftovers`: the name selects, the record and the kernel authorise, `gone` is "no process has that pid"),
 // names one whose owner still runs or cannot be judged and leaves it, and then runs the step again from its inputs; the outputs are deterministic, so a re-run gives the same bytes.
-import { closeSync, existsSync, fsyncSync, openSync, readdirSync, renameSync, rmSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
@@ -37,14 +37,25 @@ export function sweepStale(dir) {
   return [...files, ...orphans];
 }
 
-/** `text` written whole to the open descriptor, fsynced, and the descriptor closed. */
-function writeAndSync(fd, text, ops) {
+/** `bytes` written whole to the open descriptor: `writeSync` may write fewer bytes than asked, so it is called again from where it stopped until all are written (a call that writes nothing is an error, never a loop that does not end); then fsynced and closed. */
+function writeAndSync(fd, bytes, ops) {
   try {
-    ops.writeSync(fd, text);
+    let at = 0;
+    while (at < bytes.length) {
+      const written = ops.writeSync(fd, bytes, at, bytes.length - at);
+      if (!(written > 0)) throw new Error('a write made no progress');
+      at += written;
+    }
     ops.fsyncSync(fd);
   } finally {
     ops.closeSync(fd);
   }
+}
+
+/** ok(the text read back) when the temporary file, READ BACK, holds exactly `bytes` (a write the system cut short without saying so is caught here, before the rename); a fail naming both sizes otherwise. */
+function readBack({ tmp, bytes, ops }) {
+  const held = ops.readFileSync(tmp);
+  return held.equals(bytes) ? ok(held.toString('utf8')) : fail(`the temporary file read back holds ${held.length} bytes, not the ${bytes.length} written: nothing is published`);
 }
 
 /** The claim and the name of a new temporary file in `dir`: the claim first (an exclusive create), a taken one draws a new id. */
@@ -62,19 +73,22 @@ function claimTemp({ dir, what }) {
 }
 
 /**
- * Publishes `text` as `target` through an owned temporary file in `dir` (the same file system as the target). `validate(tmpFile)` -> ok | fail(reason) runs on the finished temporary file before the rename; a refusal
- * removes the file. `io` replaces `openSync`, `writeSync`, `fsyncSync`, `closeSync`, `renameSync`, `rmSync` (tests plant a kill at the rename). -> ok({ notes }) | fail(reason).
+ * Publishes `text` as `target` through an owned temporary file in `dir` (the same file system as the target). `validate(text)` -> ok | fail(reason) runs on the text READ BACK from the finished temporary file before the rename; a refusal
+ * removes the file. `io` replaces `openSync`, `writeSync`, `fsyncSync`, `closeSync`, `readFileSync`, `renameSync`, `rmSync` (tests plant a kill at the rename, or a short write). -> ok({ notes }) | fail(reason).
  */
 export async function writeOutput({ dir, target, text, what, validate = () => ok(true), io = {} }) {
-  const ops = { openSync, writeSync, fsyncSync, closeSync, renameSync, rmSync, ...io };
+  const ops = { openSync, writeSync, fsyncSync, closeSync, readFileSync, renameSync, rmSync, ...io };
+  const bytes = Buffer.from(text, 'utf8');
   const notes = sweepStale(dir);
   const tmp = claimTemp({ dir, what });
   let made = false;
   try {
     const fd = ops.openSync(tmp, 'wx', 0o644);
     made = true;
-    writeAndSync(fd, text, ops);
-    const valid = await validate(tmp);
+    writeAndSync(fd, bytes, ops);
+    const held = readBack({ tmp, bytes, ops });
+    if (!held.ok) return fail(`the new ${path.basename(target)} was not published: ${held.reason}`, { notes });
+    const valid = await validate(held.value);
     if (!valid.ok) return fail(`the new ${path.basename(target)} was not published: ${valid.reason}`, { notes });
     ops.renameSync(tmp, target);
     owned.removeClaim(tmp);

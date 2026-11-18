@@ -119,8 +119,8 @@ function renderRecord({ rows, freeze }) {
   return canonicalJson({ specs: rows, freeze });
 }
 
-/** The validation of the new file before its rename: it parses, and `specs-record`'s assembly of the writers' files takes it. */
-const validateRecord = ({ inputs, text }) => () => {
+/** The validation of the new file's text, read back from the temporary file, before its rename: it parses, and `specs-record`'s assembly of the writers' files takes it. */
+const validateRecord = inputs => text => {
   try {
     JSON.parse(text);
   } catch (error) {
@@ -203,6 +203,6 @@ export async function recordFreeze({ repo, tag, commit, flags, inputs, record, i
   const text = renderRecord({ rows: rows.value, freeze });
   const differs = rewriteProblem({ file, text });
   if (differs !== null) return refusal([differs], 3);
-  const written = await writeOutput({ dir: inputs, target: file, text, what: 'record', validate: validateRecord({ inputs, text }), io });
+  const written = await writeOutput({ dir: inputs, target: file, text, what: 'record', validate: validateRecord(inputs), io });
   return written.ok ? ok({ file, text, notes: written.value.notes }) : fail(written.reason, { ...written, problems: [written.reason], exit: 1 });
 }
