@@ -94,6 +94,29 @@ test('The_check_names_a_missing_file_an_added_file_and_a_lost_execute_bit_and_re
   assert.match(dirty.lines.join('\n'), /not clean/);
 });
 
+test('The_check_reads_HEAD_s_tree_not_the_disk_and_refuses_an_ignored_file_under_a_workspace_folder', async t => {
+  const hidden = 'node/08-ledger-api/PACKAGES.md';
+  const ignored = await committedCheckout(t);
+  git(ignored.dir, 'rm', '-q', '--cached', hidden);
+  writeFileSync(path.join(ignored.dir, '.gitignore'), `${hidden}\n`);
+  git(ignored.dir, 'add', '-A');
+  git(ignored.dir, 'commit', '-q', '-m', 'a .gitignore that matches one engine file, which stays on disk but leaves the commit');
+  assert.deepEqual(statusOf(ignored.dir), [], 'plain git status sees nothing: the file is ignored');
+  const refused = await run(['workspaces', '--check', '--root', ignored.dir]);
+  assert.notEqual(refused.code, 0, `an engine file that is on disk and not in HEAD must not pass: ${refused.lines.join('\n')}`);
+  assert.match(refused.lines.join('\n'), new RegExp(hidden.replace('/', '\\/').replace('.', '\\.')));
+  const planted = await committedCheckout(t);
+  const file = 'node/05-key-value-server/PACKAGES.md';
+  const right = readFileSync(path.join(planted.dir, file));
+  changeAndCommit(planted.dir, file, bytes => Buffer.concat([bytes, Buffer.from('x')]));
+  writeFileSync(path.join(planted.dir, file), right);
+  git(planted.dir, 'update-index', '--assume-unchanged', file);
+  assert.deepEqual(statusOf(planted.dir), [], 'the disk holds the right bytes and git is told not to look');
+  const tree = await run(['workspaces', '--check', '--root', planted.dir]);
+  assert.equal(tree.code, 1, `HEAD holds the wrong byte: ${tree.lines.join('\n')}`);
+  assert.match(tree.lines.join('\n'), /node\/05-key-value-server\/PACKAGES\.md: differs at byte/);
+});
+
 test('The_check_function_is_exported_for_the_launch_half_and_gives_the_commit_and_the_findings', async t => {
   const { checkWorkspaces } = await import('../lib/workspaces-check.mjs');
   const { freezeContext } = await import('../lib/workspaces-build.mjs');
