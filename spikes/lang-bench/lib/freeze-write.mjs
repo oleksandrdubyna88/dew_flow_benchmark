@@ -58,6 +58,16 @@ function readBack({ tmp, bytes, ops }) {
   return held.equals(bytes) ? ok(held.toString('utf8')) : fail(`the temporary file read back holds ${held.length} bytes, not the ${bytes.length} written: nothing is published`);
 }
 
+/** The folder fsynced after a rename in it, so the new name (not only the file's bytes) survives a power loss. */
+function syncFolder(dir, ops) {
+  const fd = ops.openSync(dir, 'r');
+  try {
+    ops.fsyncSync(fd);
+  } finally {
+    ops.closeSync(fd);
+  }
+}
+
 /** The claim and the name of a new temporary file in `dir`: the claim first (an exclusive create), a taken one draws a new id. */
 function claimTemp({ dir, what }) {
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
@@ -91,6 +101,7 @@ export async function writeOutput({ dir, target, text, what, validate = () => ok
     const valid = await validate(held.value);
     if (!valid.ok) return fail(`the new ${path.basename(target)} was not published: ${valid.reason}`, { notes });
     ops.renameSync(tmp, target);
+    syncFolder(dir, ops);
     owned.removeClaim(tmp);
     return ok({ notes });
   } catch (error) {

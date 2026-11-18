@@ -20,7 +20,7 @@ const FETCH_TIMEOUT_MS = 120_000;
 const nameProblems = tag => (tagDate(tag) === null ? [`the tag name ${tag} is not spec-frozen-B-<yyyymmdd> of a real day: the checker accepts only \`spec-frozen-[AB]-\\d{8}\`, so a suffix such as -r2 is never used`] : []);
 
 /** ok([sentence]): C must be an ancestor of the remote's `main`, asked of the remote now. */
-async function mainProblems({ repo, commit }) {
+export async function mainProblems({ repo, commit }) {
   const main = await remoteMain(repo);
   if (isEnv(main)) return main;
   if (!main.ok) return ok([`${commit} cannot be placed on the remote's main: ${main.reason}`]);
@@ -86,14 +86,15 @@ async function fetchedTag({ repo, tag }) {
   }
 }
 
-/** The sentences about the tag object the remote holds, against the local tag when there is one and the intended message when it is given. */
+/** The sentences about the tag object the remote holds, against the local tag (required: with none there is nothing to compare, and the record would name an object this checkout never made) and the intended message when it is given. */
 function objectProblems({ fetched, tag, commit, local, message }) {
   const header = fetched.header.split('\n');
   const named = header.includes(`tag ${tag}`) ? [] : [`the remote's tag object does not name the tag ${tag}`];
   const target = header.includes(`object ${commit}`) ? [] : [`the remote's tag object does not point at C ${commit}`];
-  const same = local.ok && local.value.object !== fetched.object ? [`the remote's tag object ${fetched.object} differs from the local tag object ${local.value.object}`] : [];
-  const expected = message ?? (local.ok ? local.value.message : null);
-  const text = expected === null ? ['there is no local tag and no --message-file: the remote tag\'s message cannot be compared'] : (expected === fetched.message ? [] : ['the remote tag\'s message differs from the intended annotation']);
+  if (!local.ok) return [...named, ...target, `there is no local tag ${tag}: check-tag compares the remote's tag object with the local one, so the local tag must exist (git fetch origin refs/tags/${tag}:refs/tags/${tag})`];
+  const same = local.value.object === fetched.object ? [] : [`the remote's tag object ${fetched.object} differs from the local tag object ${local.value.object}`];
+  const wanted = [local.value.message, ...(message === undefined ? [] : [message])];
+  const text = wanted.every(expected => expected === fetched.message) ? [] : ['the remote tag\'s message differs from the intended annotation'];
   return [...named, ...target, ...same, ...text];
 }
 

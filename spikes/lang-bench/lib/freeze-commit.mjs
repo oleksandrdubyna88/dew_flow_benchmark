@@ -103,8 +103,9 @@ export async function checkFreezeCommit({ repo, before, after, pins }) {
   const facts = factsOf(old.value.get(FORMAT_PATH));
   if (!facts.ok) return failWith([`FORMAT before the freeze commit: ${facts.reason}`]);
   const results = specs.value.map(spec => ({ spec, ...(changed.includes(spec.path) ? specProblems({ file: spec.path, bytes: { before: old.value.get(spec.path), after: now.value.get(spec.path) }, facts: facts.value }) : { problems: [`${spec.path}: unchanged, so its Freeze tag row was not set`], tag: null }) }));
+  const modes = specs.value.filter(spec => tree.before.get(spec.path)?.mode !== tree.after.get(spec.path)?.mode).map(spec => `${spec.path}: its mode changed from ${tree.before.get(spec.path)?.mode} to ${tree.after.get(spec.path)?.mode}: the freeze commit changes only the Freeze tag row`);
   const gated = specs.value.flatMap(spec => gatedProblems({ spec, bytes: old.value.get(spec.path), facts: facts.value, pins }));
-  const problems = [...pathProblems(changed, specs.value), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag)), ...gated];
+  const problems = [...pathProblems(changed, specs.value), ...results.flatMap(result => result.problems), ...oneTagProblem(results.map(result => result.tag)), ...modes, ...gated];
   if (problems.length > 0) return failWith(problems);
   const tag = results[0].tag;
   return ok({ tag, date: tagDate(tag), specs: specs.value.map(spec => ({ ...spec, sha256: sha256Of(now.value.get(spec.path)) })) });

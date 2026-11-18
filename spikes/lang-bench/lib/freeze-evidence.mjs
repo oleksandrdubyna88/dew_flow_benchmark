@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { SIX } from './freeze-inputs.mjs';
+import { tagDate } from './freeze-rows.mjs';
 
 const KEYS = Object.freeze(['freezeCommit', 'scratchWorkspace', 'workspaceCommit']);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,19 +31,41 @@ function resultProblems(name, entry) {
   return found;
 }
 
-/** The sentences for the whole evidence against the commits it must name (`commit` is W, `freeze` is C). */
-function evidenceProblems({ evidence, commit, freeze }) {
+const dayOfTag = tag => {
+  const date = tagDate(tag);
+  return date === null ? null : `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`;
+};
+
+/** The sentences for the scratch W″: a commit that is neither C nor W (it is the proof made before the tag, on a commit that is never pushed). */
+function scratchProblems({ leak, commit, freeze }) {
+  const scratch = leak.scratchWorkspace?.commit;
+  if (scratch === freeze) return ['leakcheck.scratchWorkspace.commit is C: the scratch W″ is a different commit, made of C and the workspaces before the tag is pushed'];
+  return scratch === commit ? ['leakcheck.scratchWorkspace.commit is W: the scratch W″ is the proof made before the push, never the merged workspace commit'] : [];
+}
+
+/** The sentences for the order of the dates: the leak check of C, the scratch proof, the push, then the checks of W; and the push is not before the tag's own date. */
+function orderProblems({ evidence, tag }) {
+  const leak = evidence.leakcheck;
+  const steps = [['leakcheck.freezeCommit.date', leak.freezeCommit?.date], ['leakcheck.scratchWorkspace.date', leak.scratchWorkspace?.date], ['provisionalFrom', evidence.provisionalFrom], ['leakcheck.workspaceCommit.date', leak.workspaceCommit?.date]];
+  const early = steps.slice(1).flatMap(([name, date], index) => (date < steps[index][1] ? [`${name} (${date}) is before ${steps[index][0]} (${steps[index][1]}): the steps run in the order the freeze procedure gives (the leak check of C, the scratch proof, the push, the leak check of W)`] : []));
+  const tagDay = dayOfTag(tag);
+  return tagDay !== null && evidence.provisionalFrom < tagDay ? [...early, `provisionalFrom (${evidence.provisionalFrom}) is before the tag's own date (${tagDay})`] : early;
+}
+
+/** The sentences for the whole evidence against the commits it must name (`commit` is W, `freeze` is C) and the tag. */
+function evidenceProblems({ evidence, commit, freeze, tag }) {
   const leak = isObject(evidence.leakcheck) ? evidence.leakcheck : {};
   const results = [...KEYS.flatMap(key => resultProblems(`leakcheck.${key}`, leak[key])), ...resultProblems('workspacesCheck', evidence.workspacesCheck)];
   const named = [[leak.freezeCommit, freeze, 'leakcheck.freezeCommit', 'C'], [leak.workspaceCommit, commit, 'leakcheck.workspaceCommit', 'W'], [evidence.workspacesCheck, commit, 'workspacesCheck', 'W']];
   const wrong = named.filter(([entry, expected]) => isObject(entry) && entry.commit !== expected).map(([, expected, name, what]) => `${name}.commit is not ${what} (${expected})`);
   const day = typeof evidence.provisionalFrom === 'string' && DAY.test(evidence.provisionalFrom) ? [] : ['provisionalFrom is not the push\'s yyyy-mm-dd day'];
   const state = evidence.state === undefined || evidence.state === 'accepted' ? [] : [`state is ${JSON.stringify(evidence.state)}: the record holds one state only, "accepted"`];
-  return [...results, ...wrong, ...day, ...state];
+  const own = [...results, ...wrong, ...day, ...state];
+  return own.length > 0 ? own : [...scratchProblems({ leak, commit, freeze }), ...orderProblems({ evidence, tag })];
 }
 
 /** ok(evidence) read from `file` and judged against W (`commit`) and C (`freeze`); a fail carries every sentence as `problems`. */
-export function readEvidence({ file, commit, freeze }) {
+export function readEvidence({ file, commit, freeze, tag }) {
   const text = readText(file, 'the evidence file');
   if (!text.ok) return fail(text.reason, { problems: [text.reason] });
   let evidence;
@@ -51,7 +74,7 @@ export function readEvidence({ file, commit, freeze }) {
   } catch (error) {
     return fail(`the evidence file ${file} is not JSON (${error.message})`, { problems: [`the evidence file ${file} is not JSON (${error.message})`] });
   }
-  const problems = isObject(evidence) ? evidenceProblems({ evidence, commit, freeze }) : [`the evidence file ${file} is not one JSON object`];
+  const problems = isObject(evidence) ? evidenceProblems({ evidence, commit, freeze, tag }) : [`the evidence file ${file} is not one JSON object`];
   return problems.length === 0 ? ok(evidence) : fail(problems[0], { problems });
 }
 

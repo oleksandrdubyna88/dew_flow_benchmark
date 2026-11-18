@@ -10,13 +10,12 @@ import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { parseSpec } from './conformance-spec.mjs';
 import { readEvidence, readWorkspacesCheck } from './freeze-evidence.mjs';
-import { blobsOf, commitOf, isSha, remoteTag, treeAt } from './freeze-git.mjs';
-import { hashList } from './freeze-hashes.mjs';
+import { blobsOf, commitOf, isSha, parentOf, remoteTag, treeAt } from './freeze-git.mjs';
+import { HASHES_FILE, hashList } from './freeze-hashes.mjs';
 import { isEnv, loadPin, pinTaskProblem, problemsOf, specSet } from './freeze-inputs.mjs';
 import { tagDate } from './freeze-rows.mjs';
-import { checkRemoteTag } from './freeze-tags.mjs';
+import { checkRemoteTag, mainProblems } from './freeze-tags.mjs';
 import { writeOutput } from './freeze-write.mjs';
-import { runGit } from './push-git.mjs';
 import { workspaceProblems } from './spec-freeze.mjs';
 import { assemble, canonicalJson } from './specs-record.mjs';
 
@@ -30,7 +29,9 @@ const redOf = (result, label) => (isEnv(result) ? result : refusal(problemsOf(re
 /** The sentences when `--supersedes` and `--why` do not pair up, or the same tag is named twice: each old tag needs its sentence. */
 export function supersedesProblems(supersedes) {
   const bad = supersedes.filter(entry => entry.tag === undefined || entry.why === undefined || entry.why.trim() === '');
-  return bad.length > 0 ? ['every --supersedes <old tag> needs its --why <sentence>, and every --why a --supersedes'] : [];
+  const names = supersedes.map(entry => entry.tag).filter(name => name !== undefined);
+  const twice = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+  return [...(bad.length > 0 ? ['every --supersedes <old tag> needs its --why <sentence>, and every --why a --supersedes'] : []), ...twice.map(name => `the old tag ${name} is named twice: each superseded tag is named once, with one sentence why`)];
 }
 
 /** The sentence when an old tag cannot be superseded by `tag` (itself, absent from the remote, not older), else null. `remote` is what the remote answered for the old tag: `{ object, peeled }` or null. */
@@ -90,17 +91,17 @@ function folderProblems({ tree, specs }) {
   return [...absent, ...extra.map(folder => `${folder}/ is a workspace folder of none of the six tasks`)];
 }
 
-/** ok(the day a commit was made, UTC, `yyyy-mm-dd`). */
-async function dayOf(repo, commit) {
-  const shown = await runGit(repo, ['show', '-s', '--format=%ct', commit]);
-  return shown.ok ? ok(new Date(Number(shown.value.stdout.trim()) * 1000).toISOString().slice(0, 10)) : shown;
-}
-
 /** The requirement ids of a spec (`R1`, `R2`, ...), `[]` for a spec the reader refuses. */
 const rIdsOf = bytes => {
   const parsed = parseSpec(bytes);
   return parsed.ok ? parsed.value.requirements.map(requirement => `R${requirement.n}`) : [];
 };
+
+/** The sentence when a spec's gate record is not in the bench's inputs or no requirement id could be read from it, else null. */
+function rowProblem({ spec, gate, present, rIds }) {
+  if (!present) return `${spec.path}: its gate record ${gate} is not in the bench's inputs`;
+  return rIds.length > 0 ? null : `${spec.path}: no requirement ids (R1, R2, …) could be read from it: a frozen spec has them`;
+}
 
 /** One spec's row (the blob's sha256 at C, its requirement ids, its gate record) and the sentence when its gate record is not in the bench's inputs (else null). */
 function rowOf({ spec, bytes, c, tagObject, inputs }) {
@@ -108,7 +109,7 @@ function rowOf({ spec, bytes, c, tagObject, inputs }) {
   const present = existsSync(path.join(inputs, 'gates', `spec-${spec.task}.md`));
   return {
     task: spec.task,
-    problem: present ? null : `${spec.path}: its gate record ${gate} is not in the bench's inputs`,
+    problem: rowProblem({ spec, gate, present, rIds: rIdsOf(bytes) }),
     row: { path: spec.path, sha256: createHash('sha256').update(bytes).digest('hex'), state: 'frozen', gate, rIds: rIdsOf(bytes), commitSha: c, tagObjectSha: tagObject },
   };
 }
@@ -147,10 +148,30 @@ const validateRecord = inputs => text => {
   return built.ok ? ok(true) : fail(`specs-record cannot assemble it: ${built.reason}`);
 };
 
+/** ok([sentence]): W is the commit of the squash merge of the workspaces pull request: on the remote's main (asked now) and with C as its one parent. */
+async function placementProblems({ repo, commit, c }) {
+  const main = await mainProblems({ repo, commit });
+  const parent = await parentOf(repo, commit);
+  if (!main.ok) return main;
+  if (isEnv(parent)) return parent;
+  const own = parent.ok && parent.value === c ? [] : [parent.ok ? `its parent is ${parent.value}, not C ${c}: W is the squash of a workspaces branch cut from C, with no other merge between` : `it is not a squash commit: ${parent.reason}`];
+  return ok([...main.value, ...own]);
+}
+
+/** The sentence when the hash list on disk (`<inputs>/hashes-lang.txt`) is absent or is not W's list, else null: `record` only names what is already written. */
+function listOnDiskProblem({ inputs, commit, text }) {
+  const file = path.join(inputs, HASHES_FILE);
+  const held = existsSync(file) ? readFileSync(file, 'utf8') : null;
+  return held === text ? null : `${file} ${held === null ? 'is absent' : 'is not the hash list of W'}: write it first with freeze.mjs hashes --write --repo <task repository> --commit ${commit}, then record`;
+}
+
 /** What the verifications give: C, the checked tag, W's specs and the hash list; a red one is a refusal with exit 1 naming the verb. */
-async function verified({ repo, tag, commit, pin, pins, c }) {
+async function verified({ repo, tag, commit, pin, pins, c, inputs }) {
   const checked = await checkRemoteTag({ repo, tag, commit: c, pin, pins });
   if (!checked.ok) return redOf(checked, 'check-tag');
+  const placed = await placementProblems({ repo, commit, c });
+  if (!placed.ok) return placed;
+  if (placed.value.length > 0) return refusal(placed.value.map(problem => `W: ${problem}`), 1);
   const base = await workspaceProblems({ repo, base: c, commit });
   if (!base.ok) return base;
   if (base.value.length > 0) return refusal(base.value.map(problem => `check-workspace: ${problem}`), 1);
@@ -160,12 +181,14 @@ async function verified({ repo, tag, commit, pin, pins, c }) {
   const folders = folderProblems({ tree: tree.value, specs: specs.value });
   if (folders.length > 0) return refusal(folders.map(problem => `the twelve workspaces: ${problem}`), 1);
   const list = await hashList({ repo, commit });
-  return list.ok ? ok({ c, checked: checked.value, specs: specs.value, list: list.value }) : redOf(list, 'hashes');
+  if (!list.ok) return redOf(list, 'hashes');
+  const onDisk = listOnDiskProblem({ inputs, commit, text: list.value.text });
+  return onDisk === null ? ok({ c, checked: checked.value, specs: specs.value, list: list.value }) : refusal([onDisk], 1);
 }
 
 /** The inputs that need no repository answer: the evidence, the workspaces check and the supersedes pairs. -> ok(evidence) | refusal(…, 3). */
-function givenInputs({ flags, commit, c }) {
-  const evidence = readEvidence({ file: flags.evidence, commit, freeze: c });
+function givenInputs({ flags, commit, c, tag }) {
+  const evidence = readEvidence({ file: flags.evidence, commit, freeze: c, tag });
   const check = readWorkspacesCheck({ file: flags.check, commit });
   const problems = [...(evidence.ok ? [] : problemsOf(evidence)), ...(check.ok ? [] : [check.reason]), ...supersedesProblems(flags.supersedes)];
   return problems.length > 0 ? refusal(problems, 3) : ok(evidence.value);
@@ -196,7 +219,7 @@ async function preflight({ repo, tag, commit, flags, inputs, record }) {
   if (!remote.ok) return remote;
   if (remote.value === null) return refusal([`check-tag: the remote has no tag ${tag}`], 1);
   const c = remote.value.peeled ?? remote.value.object;
-  const evidence = isSha(c) ? givenInputs({ flags, commit: w.value, c }) : refusal(['the remote tag names no commit'], 3);
+  const evidence = isSha(c) ? givenInputs({ flags, commit: w.value, c, tag }) : refusal(['the remote tag names no commit'], 3);
   const superseded = evidence.ok ? await supersededEntries({ repo, tag, supersedes: flags.supersedes }) : evidence;
   const file = path.join(inputs, 'specs.d', STATES_FILE);
   const existing = superseded.ok ? existingProblem({ file, tag }) : null;
@@ -212,11 +235,11 @@ export async function recordFreeze({ repo, tag, commit, flags, inputs, record, p
   const given = await preflight({ repo, tag, commit, flags, inputs, record });
   if (!given.ok) return given;
   const { pin, w, c, evidence, superseded, file } = given.value;
-  const parts = await verified({ repo, tag, commit: w, pin, pins, c });
+  const parts = await verified({ repo, tag, commit: w, pin, pins, c, inputs });
   if (!parts.ok) return parts;
-  const [day, rows] = [await dayOf(repo, w), await specRows({ repo, specs: parts.value.specs, c, tagObject: parts.value.checked.tagObject, inputs })];
-  if (!rows.ok || !day.ok) return rows.ok ? day : rows;
-  const freeze = freezeEntry({ tag, commit: w, parts: parts.value, evidence, superseded, acceptedOn: day.value });
+  const rows = await specRows({ repo, specs: parts.value.specs, c, tagObject: parts.value.checked.tagObject, inputs });
+  if (!rows.ok) return rows;
+  const freeze = freezeEntry({ tag, commit: w, parts: parts.value, evidence, superseded, acceptedOn: evidence.leakcheck.workspaceCommit.date });
   const text = renderRecord({ rows: rows.value, freeze });
   const differs = rewriteProblem({ file, text });
   if (differs !== null) return refusal([differs], 3);
