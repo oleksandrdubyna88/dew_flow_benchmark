@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,9 @@ import { bind, devProc, isolation, roBind, roRoot, scoreBoxArgv, scoreEnv, seten
 import { runBounded } from '../lib/run.mjs';
 import { installShim } from '../lib/visible.mjs';
 import { hostLacks, sandboxGate, stubTrees, tmpDir } from './helpers.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const nodeToolchain = path.dirname(path.dirname(process.execPath));
 const uid = process.getuid();
@@ -113,24 +116,20 @@ test('The_score_env_is_the_allow_list_not_the_parents', () => {
 test('The_scoring_box_has_no_network_and_no_operator_home', async t => {
   if (!sandboxGate(t)) return;
   // a decoy "home" holding a decoy key, outside /tmp (which the box hides on its own): the box must hide a directory it is told is the home
-  const fakeHome = mkdtempSync(path.join(os.homedir(), 'testsToDelete-mgb-home-'));
+  const fakeHome = owned.ownedDir(t, 'home', { parent: os.homedir() });
   mkdirSync(path.join(fakeHome, '.config', 'minigit-bench'), { recursive: true });
   const key = path.join(fakeHome, '.config', 'minigit-bench', 'heldout.key');
   writeFileSync(key, 'secret-key-bytes\n');
-  try {
-    assert.equal(readFileSync(key, 'utf8'), 'secret-key-bytes\n', 'control: the key is readable outside the box');
-    const opts = boxDirs({ operatorHome: fakeHome });
-    const hidden = await probe(opts, `ls -A ${fakeHome}; cat ${key}`);
-    assert.equal(hidden.out, '', 'the home is an empty tmpfs and the key cannot be read');
-    assert.doesNotMatch(hidden.stdout, /secret-key-bytes/);
-    const realHome = await probe(boxDirs(), `ls -A ${os.homedir()}`);
-    assert.equal(realHome.out, '', 'the real operator home is empty too');
-    const net = await probe(opts, "timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>&1; echo net-rc=$?");
-    assert.doesNotMatch(net.out, /net-rc=0/);
-    assert.match(net.out, /net-rc=[1-9]/);
-  } finally {
-    rmSync(fakeHome, { recursive: true, force: true });
-  }
+  assert.equal(readFileSync(key, 'utf8'), 'secret-key-bytes\n', 'control: the key is readable outside the box');
+  const opts = boxDirs({ operatorHome: fakeHome });
+  const hidden = await probe(opts, `ls -A ${fakeHome}; cat ${key}`);
+  assert.equal(hidden.out, '', 'the home is an empty tmpfs and the key cannot be read');
+  assert.doesNotMatch(hidden.stdout, /secret-key-bytes/);
+  const realHome = await probe(boxDirs(), `ls -A ${os.homedir()}`);
+  assert.equal(realHome.out, '', 'the real operator home is empty too');
+  const net = await probe(opts, "timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>&1; echo net-rc=$?");
+  assert.doesNotMatch(net.out, /net-rc=0/);
+  assert.match(net.out, /net-rc=[1-9]/);
 });
 
 test('The_scoring_box_can_build_and_write_where_it_must', async t => {
@@ -156,7 +155,7 @@ test('The_box_cannot_see_the_users_runtime_dir_where_the_session_bus_lives', asy
   if (!sandboxGate(t)) return;
   const runDir = `/run/user/${uid}`;
   if (!existsSync(runDir)) return hostLacks(t, `${runDir} does not exist on this host`);
-  const sock = await listenOn(runDir, `testsToDelete-mgb-test-${process.pid}.sock`);
+  const sock = await listenOn(runDir, `${owned.ownedName('testsock')}.sock`);
   try {
     const command = `test -S ${sock.file} && echo VISIBLE || echo HIDDEN`;
     const opts = boxDirs();
@@ -181,21 +180,16 @@ test('The_box_cannot_start_a_unit_on_the_hosts_user_manager', async t => {
 
 test('The_box_shows_only_its_own_bound_directories_under_tmp_and_var_tmp', async t => {
   if (!sandboxGate(t)) return;
-  const decoys = [path.join(os.tmpdir(), `testsToDelete-mgb-decoy-${process.pid}`), `/var/tmp/mgb-decoy-${process.pid}`];
-  decoys.forEach(d => writeFileSync(d, 'x'));
-  try {
-    const opts = boxDirs();
-    const tmpListing = await probe(opts, `ls -A ${os.tmpdir()}`);
-    assert.deepEqual(tmpListing.out.split('\n').filter(Boolean), [path.basename(opts.base)], 'only the bound directories (control: they ARE listed)');
-    const control = await probeArgv(withoutPair(scoreBoxArgv(opts), '--tmpfs', os.tmpdir()), `ls -A ${os.tmpdir()}`);
-    assert.ok(control.includes(path.basename(decoys[0])), 'control: without the tmpfs the host decoy is listed');
-    const varTmp = await probe(opts, 'ls -A /var/tmp');
-    assert.equal(varTmp.out.includes(path.basename(decoys[1])), false);
-    const varControl = await probeArgv(withoutPair(scoreBoxArgv(opts), '--tmpfs', '/var/tmp'), 'ls -A /var/tmp');
-    assert.ok(varControl.includes(path.basename(decoys[1])), 'control: without the tmpfs /var/tmp shows its host decoy');
-  } finally {
-    decoys.forEach(d => rmSync(d, { force: true }));
-  }
+  const decoys = [owned.ownedDir(t, 'decoy'), owned.ownedDir(t, 'vdecoy', { parent: '/var/tmp' })]; // in the host's temp root and /var/tmp on purpose: the test proves the box hides them
+  const opts = boxDirs();
+  const tmpListing = await probe(opts, `ls -A ${owned.tempRoot()}`);
+  assert.deepEqual(tmpListing.out.split('\n').filter(Boolean), [path.basename(opts.base)], 'only the bound directories (control: they ARE listed)');
+  const control = await probeArgv(withoutPair(scoreBoxArgv(opts), '--tmpfs', owned.tempRoot()), `ls -A ${owned.tempRoot()}`);
+  assert.ok(control.includes(path.basename(decoys[0])), 'control: without the tmpfs the host decoy is listed');
+  const varTmp = await probe(opts, 'ls -A /var/tmp');
+  assert.equal(varTmp.out.includes(path.basename(decoys[1])), false);
+  const varControl = await probeArgv(withoutPair(scoreBoxArgv(opts), '--tmpfs', '/var/tmp'), 'ls -A /var/tmp');
+  assert.ok(varControl.includes(path.basename(decoys[1])), 'control: without the tmpfs /var/tmp shows its host decoy');
 });
 
 /** Pids whose environment carries `mark`. Only "gone" (ENOENT/ESRCH) and "not ours" (EACCES) are expected read errors. */

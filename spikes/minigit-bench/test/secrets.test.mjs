@@ -75,7 +75,7 @@ test('The_capture_reads_its_token_through_the_shared_reader_and_the_pat_has_its_
 // N18: a test run must never reach the operator's real secret files. The guard looks at the HOME it is given and acts before any file is looked at, so these cases name a file
 // that does not exist: an absent file is a plain failure when there is no guard, and a thrown refusal when there is one, and neither reads a secret.
 const realHome = os.userInfo().homedir;
-const NOT_A_SECRET = ['.config', 'minigit-bench', 'testsToDelete-no-such-secret'];
+const NOT_A_SECRET = ['.config', 'minigit-bench', 'no-such-secret-of-a-test'];
 
 test('The_reader_refuses_the_operators_real_home_when_it_is_called_under_the_test_runner', () => {
   assert.throws(() => readSecretFile({ home: realHome, parts: NOT_A_SECRET, label: 'token' }), /test runner.*real home|real home.*test runner/s);

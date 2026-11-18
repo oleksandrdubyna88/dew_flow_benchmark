@@ -10,6 +10,9 @@ import { preflight } from '../lib/preflight.mjs';
 import { TS_DIR, nodeDir } from './box-helpers.mjs';
 import { hostHas } from './box-helpers.mjs';
 import { hostLacks, sandboxGate, spikeDir } from './helpers.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const stacks = loadStacks(JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8'))).value;
 
@@ -31,7 +34,7 @@ test('The_preflight_reads_the_pinned_toolchain_from_inside_a_box_and_says_what_i
 
 test('A_missing_toolchain_is_installed_only_when_asked_and_reported_otherwise', async t => {
   if (!sandboxGate(t)) return;
-  const absent = path.join(os.tmpdir(), `testsToDelete-mgb-no-ts-${process.pid}`);
+  const absent = path.join(owned.tempRoot(), `mgb-no-ts-${process.pid}`);
   const r = await preflight({ home: os.homedir(), nodeDir, tsDir: absent, claudeBinary: process.execPath, stacks, install: false });
   assert.equal(r.ok, false);
   assert.ok(r.problems.some(p => /TypeScript toolchain.*absent|install/.test(p)), r.problems.join('; '));

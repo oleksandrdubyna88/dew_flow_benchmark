@@ -58,13 +58,13 @@ test('A_sibling_checkout_is_resolved_beside_the_repository_not_from_a_written_do
   assert.deepEqual(where([path.join(spikeDir, 'test', 'coai-usage.test.mjs')], /siblingCheckout\(/), ['test/coai-usage.test.mjs']);
 });
 
-test('Every_directory_a_test_creates_outside_its_own_process_carries_the_testsToDelete_prefix', () => {
+test('Every_directory_a_test_file_creates_outside_its_own_process_comes_from_the_owned_helper', () => {
   const creators = /\b(?:mkdtempSync|writeFileSync|mkdirSync)\(\s*path\.join\(\s*(?:os\.homedir\(\)|os\.tmpdir\(\))[^)]*\)/g;
-  const unprefixed = [];
-  for (const f of mjs('test').filter(x => !x.endsWith('reuse-scan.test.mjs'))) {
-    for (const m of code(f).matchAll(creators)) if (!/testsToDelete-/.test(m[0])) unprefixed.push(`${path.basename(f)}: ${m[0]}`);
+  const raw = [];
+  for (const f of mjs('test').filter(x => x.endsWith('.test.mjs') && !x.endsWith('reuse-scan.test.mjs'))) {
+    for (const m of code(f).matchAll(creators)) raw.push(`${path.basename(f)}: ${m[0]}`);
   }
-  assert.deepEqual(unprefixed, []);
-  assert.ok([...code(path.join(spikeDir, 'test', 'bwrap.test.mjs')).matchAll(creators)].length >= 1, 'the scan still finds a creator it judges');
+  assert.deepEqual(raw, [], 'a test file makes its folders with ownedDir(t, what), never with a temp API');
+  assert.ok([...code(path.join(spikeDir, 'test', 'helpers.mjs')).matchAll(creators)].length >= 1, 'the scan still finds the one creator that stays (the shared helper\'s tmpDir)');
   assert.deepEqual(where([path.join(spikeDir, 'test', 'bwrap.test.mjs')], /\.mgb-|['"`]mgb-(?:test|decoy)/), [], 'no socket or decoy keeps the unprefixed mgb- name');
 });

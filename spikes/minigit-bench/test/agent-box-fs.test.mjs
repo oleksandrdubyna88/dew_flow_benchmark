@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -8,31 +8,30 @@ import { agentBoxPrefix } from '../lib/sandbox.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { TS_DIR, boxOptions, envFor, hostHas, newSession, probe, probeArgv } from './box-helpers.mjs';
 import { homeDir, hostLacks, sandboxGate, spikeDir } from './helpers.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 test('The_agent_box_has_no_operator_home_and_no_key', async t => {
   if (!sandboxGate(t)) return;
   // a decoy "home" holding a decoy key and a decoy token, told to the box as the operator home (E1's shape)
-  const fakeHome = mkdtempSync(path.join(os.homedir(), 'testsToDelete-mgb-ahome-'));
+  const fakeHome = owned.ownedDir(t, 'ahome', { parent: os.homedir() }); // outside the temp root on purpose: the box puts a tmpfs there, which would hide the decoy for the wrong reason
   const dir = path.join(fakeHome, '.config', 'minigit-bench');
   mkdirSync(dir, { recursive: true });
   const files = ['heldout.key', 'claude-oauth-token'].map(f => path.join(dir, f));
   files.forEach(f => writeFileSync(f, 'secret-bytes\n'));
-  try {
-    assert.equal(readFileSync(files[0], 'utf8'), 'secret-bytes\n', 'control: the key is readable outside the box');
-    const layout = newSession();
-    const hidden = await probe(layout, `echo "listing=[$(ls -A ${fakeHome})]"; cat ${files.join(' ')} 2>&1`, { over: { operatorHome: fakeHome } });
-    assert.equal(hidden.out.includes('secret-bytes'), false);
-    assert.match(hidden.out, /listing=\[\]/, 'the decoy home is an empty tmpfs');
-    mkdirSync(path.join(fakeHome, 'elsewhere'));
-    const open = await probeArgv(agentBoxPrefix(boxOptions(layout, { operatorHome: path.join(fakeHome, 'elsewhere') })), `cat ${files[0]}`, envFor(layout));
-    assert.match(open.out, /secret-bytes/, 'control: with another directory as the hidden home the same key IS readable');
-    const real = await probe(layout, `ls -A ${os.homedir()}`);
-    for (const entry of ['.config', '.ssh', '.claude', '.claude.json', '.bash_history', '.gitconfig']) assert.equal(real.out.split('\n').includes(entry), false, `the real home shows no ${entry}`);
-    const realToken = path.join(os.homedir(), ...TOKEN_FILE_PARTS);
-    if (existsSync(realToken)) assert.match((await probe(layout, `test -e ${realToken} && echo VISIBLE || echo ABSENT`)).out, /ABSENT/, 'the operator\'s own token file is absent (control: it exists on the host)');
-  } finally {
-    rmSync(fakeHome, { recursive: true, force: true });
-  }
+  assert.equal(readFileSync(files[0], 'utf8'), 'secret-bytes\n', 'control: the key is readable outside the box');
+  const layout = newSession();
+  const hidden = await probe(layout, `echo "listing=[$(ls -A ${fakeHome})]"; cat ${files.join(' ')} 2>&1`, { over: { operatorHome: fakeHome } });
+  assert.equal(hidden.out.includes('secret-bytes'), false);
+  assert.match(hidden.out, /listing=\[\]/, 'the decoy home is an empty tmpfs');
+  mkdirSync(path.join(fakeHome, 'elsewhere'));
+  const open = await probeArgv(agentBoxPrefix(boxOptions(layout, { operatorHome: path.join(fakeHome, 'elsewhere') })), `cat ${files[0]}`, envFor(layout));
+  assert.match(open.out, /secret-bytes/, 'control: with another directory as the hidden home the same key IS readable');
+  const real = await probe(layout, `ls -A ${os.homedir()}`);
+  for (const entry of ['.config', '.ssh', '.claude', '.claude.json', '.bash_history', '.gitconfig']) assert.equal(real.out.split('\n').includes(entry), false, `the real home shows no ${entry}`);
+  const realToken = path.join(os.homedir(), ...TOKEN_FILE_PARTS);
+  if (existsSync(realToken)) assert.match((await probe(layout, `test -e ${realToken} && echo VISIBLE || echo ABSENT`)).out, /ABSENT/, 'the operator\'s own token file is absent (control: it exists on the host)');
 });
 
 test('The_agent_box_has_no_windows_drive_and_no_interop', async t => {

@@ -9,7 +9,7 @@ import { allowRealSecretUnderTest, readSecretFile } from '../lib/secrets.mjs';
 import { sourceFiles, stripComments } from './scan.mjs';
 import { spikeDir } from './helpers.mjs';
 
-const NOT_A_SECRET = ['.config', 'minigit-bench', 'testsToDelete-no-such-secret'];
+const NOT_A_SECRET = ['.config', 'minigit-bench', 'no-such-secret-of-a-test'];
 /** The only test files that may read the operator's real token: tests whose whole subject is that token. */
 const MAY_OPT_IN = Object.freeze(['test/smoke-real.test.mjs']);
 

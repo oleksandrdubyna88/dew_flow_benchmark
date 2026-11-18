@@ -14,6 +14,9 @@ import { sanitiseCapture } from '../capture/capture-files.mjs';
 import { defaultWorkRoot, heldoutSrcDir } from '../lib/heldout-run.mjs';
 import { hostLacks, spikeDir, tmpDir } from './helpers.mjs';
 import { parseLines } from './synth.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const SESSION = path.join(spikeDir, 'capture', 'capture-session.mjs');
 const TOKEN = 'sk-ant-oat01-SENTINELSENTINELSENTINEL0123456789';
@@ -145,7 +148,7 @@ test('A_token_file_that_is_a_link_is_refused', () => {
 
 test('The_out_dir_must_be_absolute_outside_every_git_tree_outside_the_heldout_sources_and_new', () => {
   const home = tmpDir('home-out');
-  assert.deepEqual(outProblems(path.join(os.tmpdir(), 'mgb-out-fresh'), { home }), []);
+  assert.deepEqual(outProblems(path.join(owned.tempRoot(), 'mgb-out-fresh'), { home }), []);
   assert.match(outProblems(path.join(spikeDir, 'out'), { home })[0], /git/);
   assert.match(outProblems('relative', { home })[0], /absolute/);
   assert.match(outProblems(path.join(home, 'rsd', 'minigit', 'heldout-src', 'cap'), { home }).join(), /heldout-src/);
