@@ -303,7 +303,7 @@ test('The_gate_names_each_unmet_prerequisite_and_an_unreadable_one_is_not_met', 
   assert.equal(both.length, 2);
   assert.match(both[0], /packages\.json cannot be read/);
   assert.match(both[1], /dry-run record cannot be read/);
-  for (const line of ['dry run clean', 'dry run clean 2026-11-20', `dry run clean 2026-13-01 packages ${SHA}`, `dry run clean 2026-02-30 packages ${SHA}`, `dry run clean 2026-1-1 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA} `, `DRY RUN CLEAN 2026-11-20 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA}\r\n`, 'dry run clean 2026-11-20 packages', `dry run clean 2026-11-20 packages ${SHA.slice(1)}`, `dry run clean 2026-11-20 packages ${SHA.toUpperCase().replace(/C/g, 'C')}`, `dry run clean 2026-11-20 sha ${SHA}`, '']) {
+  for (const line of ['dry run clean', 'dry run clean 2026-11-20', `dry run clean 2026-13-01 packages ${SHA}`, `dry run clean 2026-02-30 packages ${SHA}`, `dry run clean 2026-1-1 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA} `, `DRY RUN CLEAN 2026-11-20 packages ${SHA}`, `dry run clean 2026-11-20 packages ${SHA}\r\n`, 'dry run clean 2026-11-20 packages', `dry run clean 2026-11-20 packages ${SHA.slice(1)}`, `dry run clean 2026-11-20 packages ${SHA.toUpperCase()}`, `dry run clean 2026-11-20 sha ${SHA}`, '']) {
     const problems = applyGateProblems(gateOf({ recordFirstLine: line }));
     assert.equal(problems.length, 1, JSON.stringify(line));
     assert.match(problems[0], /dry run clean <yyyy-mm-dd> packages <sha256 of packages\.json>/);
