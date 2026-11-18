@@ -49,22 +49,22 @@ function firstStatementDifference(a, b) {
   return left.length !== right.length && at === -1 ? Math.min(left.length, right.length) + 1 : at + 1;
 }
 
-/** The load file read as JSON without its `heap` key: the object, or null when the bytes are not one JSON object. */
-function withoutHeap(bytes) {
+/** The load file read as JSON: `{ hasHeap, rest }` with the `heap` key taken out, or null when the bytes are not one JSON object. */
+function readLoad(bytes) {
   try {
     const parsed = JSON.parse(bytes.toString('utf8'));
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const { heap, ...rest } = parsed;
-    return rest;
+    return { hasHeap: Object.hasOwn(parsed, 'heap'), rest };
   } catch {
     return null;
   }
 }
 
-/** `null` when two load files are equal as JSON but for the `heap` key; the finding text otherwise (a file that is not a JSON object is a difference). */
+/** `null` when two load files are equal as JSON but for the VALUE of the `heap` key, which both hold or neither holds; the finding text otherwise (a file that is not a JSON object is a difference). */
 function loadDifference(x, y) {
-  const [left, right] = [withoutHeap(x), withoutHeap(y)];
-  return left !== null && right !== null && isDeepStrictEqual(left, right) ? null : 'bytes differ';
+  const [left, right] = [readLoad(x), readLoad(y)];
+  return left !== null && right !== null && left.hasHeap === right.hasHeap && isDeepStrictEqual(left.rest, right.rest) ? null : 'bytes differ';
 }
 
 /** `null` when the statements are equal outside the marked sentences. */

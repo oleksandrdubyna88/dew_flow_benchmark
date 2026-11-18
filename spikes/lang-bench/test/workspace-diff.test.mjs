@@ -200,7 +200,10 @@ test('A_load_json_whose_heap_key_is_in_one_stack_only_is_a_finding', t => {
   write(cs, 'samples/load.json', JSON.stringify({ heap: { A: '1' }, duration: 60 }));
   write(nd, 'samples/load.json', JSON.stringify({ duration: 60 }));
   assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], '{heap, duration} against {duration}');
-  assert.deepEqual(paths(diffTaskPair({ csharp: nd, node: cs })).length, 1, 'and the other way round');
+  write(cs, 'samples/load.json', JSON.stringify({ duration: 60 }));
+  write(nd, 'samples/load.json', JSON.stringify({ heap: { B: '2' }, duration: 60 }));
+  assert.deepEqual(paths(diffTaskPair({ csharp: cs, node: nd })), [['samples/load.json', 'bytes differ']], 'and the other way round');
+  write(cs, 'samples/load.json', JSON.stringify({ heap: { A: '1' }, duration: 60 }));
   write(nd, 'samples/load.json', JSON.stringify({ duration: 60, heap: { B: '2' } }));
   assert.deepEqual(diffTaskPair({ csharp: cs, node: nd }).findings, [], 'heap on both sides, with other values, is still each stack\'s own');
   write(cs, 'samples/load.json', JSON.stringify({ duration: 60 }));

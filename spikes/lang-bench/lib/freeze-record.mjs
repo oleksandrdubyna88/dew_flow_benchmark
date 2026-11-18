@@ -53,7 +53,7 @@ async function supersededEntries({ repo, tag, supersedes }) {
   return ok(entries);
 }
 
-/** ok(): a record already in the file must be of this freeze (the same tag, rewritten with the same bytes), never another's. */
+/** The sentence when a record already in the file is of another freeze (another tag) or cannot be read, else null. The same tag is judged by its bytes once they are rendered (`rewriteProblem`). */
 function existingProblem({ file, tag }) {
   if (!existsSync(file)) return null;
   try {
@@ -62,6 +62,16 @@ function existingProblem({ file, tag }) {
   } catch (error) {
     return `${file} exists and is not a readable record (${error.message}): remove it by hand if it is a leftover`;
   }
+}
+
+/** The sentence when a record of this tag is already in the file and the new bytes are not identical to it (a different W, other hashes, other evidence), else null: a recorded freeze is rewritten only with the same bytes. */
+function rewriteProblem({ file, text }) {
+  if (!existsSync(file)) return null;
+  const old = readFileSync(file, 'utf8');
+  if (old === text) return null;
+  const [before, after] = [JSON.parse(old).freeze ?? {}, JSON.parse(text).freeze];
+  const fields = Object.keys({ ...before, ...after }).filter(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+  return `${file} already holds this tag's record and the new one differs from it (${fields.join(', ') || 'the spec rows'}): a recorded freeze is rewritten only with identical bytes, so nothing is written`;
 }
 
 /** The workspace folders (`<stack>/<NN-slug>`) a tree holds a file in. */
@@ -191,6 +201,8 @@ export async function recordFreeze({ repo, tag, commit, flags, inputs, record, i
   if (!rows.ok || !day.ok) return rows.ok ? day : rows;
   const freeze = freezeEntry({ tag, commit: w, parts: parts.value, evidence, superseded, acceptedOn: day.value });
   const text = renderRecord({ rows: rows.value, freeze });
+  const differs = rewriteProblem({ file, text });
+  if (differs !== null) return refusal([differs], 3);
   const written = await writeOutput({ dir: inputs, target: file, text, what: 'record', validate: validateRecord({ inputs, text }), io });
   return written.ok ? ok({ file, text, notes: written.value.notes }) : fail(written.reason, { ...written, problems: [written.reason], exit: 1 });
 }
