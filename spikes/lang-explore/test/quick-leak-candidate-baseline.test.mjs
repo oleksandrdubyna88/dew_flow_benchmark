@@ -11,6 +11,7 @@ import { ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { main } from '../explore.mjs';
 import { NEEDLE, NEEDLE_LINES, captureStreams, commit, git, holdsNeedle, newRepo, privateSide, runCheck } from './quick-leak-repos-fixture.mjs';
+import { noRecord } from './quick-leak-fixture.mjs';
 
 const SHARED = 'docs/shared.md';
 const baselineText = `a shared page\n${NEEDLE_LINES[0]}\nthe end\n`;
@@ -100,7 +101,7 @@ test('A_baseline_that_is_not_an_ancestor_of_the_candidate_gives_no_exemption_and
 test('A_bench_candidate_prints_no_text_on_stdout_or_stderr_with_or_without_an_exemption', async () => {
   const w = benchWithBaseline();
   const sha = commit(w.bench, { [SHARED]: baselineText.replace(NEEDLE_LINES[0], NEEDLE_LINES[0].toUpperCase()) }, 'a candidate that changes the line');
-  const r = await captureStreams(() => main(['leakcheck', '--task', '04', '--candidate-repo', w.bench, '--candidate', sha], { home: w.side.home, repoRoot: w.bench, exploreFn: () => ok(w.side.explore), env: {} }));
+  const r = await captureStreams(() => main(['leakcheck', '--task', '04', '--candidate-repo', w.bench, '--candidate', sha], { home: w.side.home, repoRoot: w.bench, exploreFn: () => ok(w.side.explore), env: {}, frozenFile: noRecord() }));
   const [exit, out, err] = [r.value, [r.stdout], [r.stderr]];
   assert.equal(exit, 5, out.join(''));
   assert.notEqual(out.join('').length + err.join('').length, 0);

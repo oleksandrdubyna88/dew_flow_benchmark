@@ -71,3 +71,10 @@ these records): the conformance check exit 0 (all eleven checks, with the privat
 repository's 26 files and its branch history); the private line scan of the branch history exit 0 (991 added lines, 0
 other hits); `specs-record.mjs --check`, `pin-runner.mjs --check`, `pin-exec-layer.mjs --check` and `pin-check.mjs` exit 0;
 the push check of the task repository passed. The spec's pull request is the task repository's #8.
+
+**The package on the pinned text (2026-11-18).** `explore.mjs package --task 06 --only all --register` on bench `main` with these
+pins, on a machine the owner accepted as noisy: exit 0; the gate green (the spec conforms and is gated); the suite 32 cases,
+0 problems; both references accepted, 10 of 10 clean passes each, at the one memory value; the slowest load scenario 1 163 ms
+(twin 243 ms) against a load duration of 540 s; all 49 witnesses caught. Registered in `inputs/packages.json`, then sealed
+(`package --seal`, exit 0); the archive's hash is in the registry and in `inputs/heldout-frozen.json`.
+
