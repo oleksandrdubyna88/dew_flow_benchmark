@@ -15,6 +15,7 @@ import { loadMatrix } from './package-matrix.mjs';
 import { renderPackagesMd } from './packages-md.mjs';
 import { computePin, verifyPin } from './runner-pin.mjs';
 import { loadStacksLang } from './toolchain-pins.mjs';
+import { ENTRY_TASKS, namesTask } from './conformance-record.mjs';
 import { checkDestination, writeAtomically } from './workspace-destination.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -96,6 +97,12 @@ function groupProblem({ format, group, task, helloFixture }) {
   if (!groups.includes(group)) return `the group ${JSON.stringify(group)} is not one of ${groups.join(', ')}`;
   const owner = groups.find(key => format[key].tasks.includes(task));
   return owner === undefined ? rowlessProblem(task, helloFixture) : foreignProblem({ owner, group, task });
+}
+
+/** The refusal for a task of the six quick tasks (F2.S2 (d), D70): the one engine writes their workspaces, so two builders never write them. `null` for any other task. */
+export function engineTaskProblem(task) {
+  if (!namesTask(ENTRY_TASKS.B, task)) return null;
+  return `the task ${task} is one of the six quick tasks (${ENTRY_TASKS.B.join(', ')}): their workspaces are written by the one engine, never by this builder; run node spikes/lang-explore/explore.mjs workspaces --tag <tag> --task-repo <task repository> --out <dir>`;
 }
 
 const rowlessProblem = (task, helloFixture) => (helloFixture ? null : `the task ${JSON.stringify(task)} is in no group's row of FORMAT's record`);

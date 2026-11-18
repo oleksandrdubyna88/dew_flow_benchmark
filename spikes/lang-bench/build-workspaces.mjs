@@ -11,7 +11,7 @@
 //   node spikes/lang-bench/build-workspaces.mjs --print-stack-files
 //     Prints the list of file patterns the push check accepts in a stack folder (the content of templates/stack-files.json).
 //
-// Exit 0 done · 1 a box command failed, a git failure or timeout in the fetch, or a malformed hash list · 2 usage · 3 refused (the destination or the group, a pin, a hash, a cached tree that differs, a lock that differs or is outside the manifest)
+// Exit 0 done · 1 a box command failed, a git failure or timeout in the fetch, or a malformed hash list · 2 usage · 3 refused (the destination or the group, one of the six quick tasks (the engine's `explore.mjs workspaces` writes those), a pin, a hash, a cached tree that differs, a lock that differs or is outside the manifest)
 // Lowered before anything else runs (common.local-cpu-budget), as run-tests.mjs does.
 await import('./lib/lower-priority.mjs');
 
@@ -27,7 +27,7 @@ import { storeDirs } from './lib/preflight-box.mjs';
 import { fetchTaskRepo } from './lib/task-repo.mjs';
 import { loadStacksLang } from './lib/toolchain-pins.mjs';
 import { defaultCaches, inBuildBox } from './lib/workspace-box.mjs';
-import { KINDS as KIND_NAMES, STACKS as STACK_NAMES, buildWorkspace, loadInputs, lockProblems, preCheck, stackFilePatterns } from './lib/workspace-build.mjs';
+import { KINDS as KIND_NAMES, STACKS as STACK_NAMES, buildWorkspace, engineTaskProblem, loadInputs, lockProblems, preCheck, stackFilePatterns } from './lib/workspace-build.mjs';
 
 const SPIKE = fileURLToPath(new URL('.', import.meta.url));
 const EXIT = Object.freeze({ done: 0, failed: 1, usage: 2, refused: 3 });
@@ -191,7 +191,9 @@ function inputUsage(build) {
 /** The checks before anything is fetched: the inputs the flags name, then names, group and destination. */
 function earlyChecks(args) {
   const usage = inputUsage(args);
-  return usage === null ? preCheck(args) : fail(usage, { usage: true });
+  if (usage !== null) return fail(usage, { usage: true });
+  const engine = engineTaskProblem(args.task);
+  return engine === null ? preCheck(args) : fail(engine, { refusal: true });
 }
 
 function finishBuild(args, formatBytes) {

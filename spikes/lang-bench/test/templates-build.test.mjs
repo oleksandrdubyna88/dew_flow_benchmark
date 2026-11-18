@@ -546,7 +546,7 @@ test('The_lang_bench_builder_refuses_the_six_tasks_and_names_the_engine_verb', a
     }
   }
   assert.equal(existsSync(out), false, 'a refusal writes nothing');
-  const control = await command(home, build('hello', 'A', ['--hello']));
+  const control = await command(home, build('hello', 'A'));
   assert.equal(control.code, 3, 'a task outside the six is judged by the older rules (this one is in no row of FORMAT\'s record)');
   assert.match(control.stderr, /in no group's row/);
   assert.doesNotMatch(control.stderr, /explore\.mjs/);
