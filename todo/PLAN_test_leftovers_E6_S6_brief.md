@@ -1,6 +1,6 @@
 # E6.S6 brief — `spikes/`: both guards, the shipped helper in four spikes, the minigit runner's start sweep (E11-6 to E11-8; claim C6; row E6-i's spike half)
 
-> Status: **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 12 (opened by the owner, `Narrowed: yes`, 0 changes, so the next accepted change counts as 12.1): § 13 and § 14's Q1–Q3 are answered by the parent's items 4.1–4.3 and 7; *Files* and *Done when* in item 8.1's form (§ 0.1, § 9); the three base whole-suite runs made at `a8106448` (§ 15). **STOPPED before its plan gate on § 16 S-3: row E6-m cannot be met as written — its claimed `TMPDIR` under `/tmp` itself breaks nine tests (minigit 4, lang-explore 3, lang-bench 2; green without it), and minigit-bench (7, cap 0) and lang-bench (3, cap 1) are over their caps; approving any of it is the parent's 12.1, the owner's.** Next: the owner's answer to § 16, then § 15's lists confirmed, then the plan gate.** *Was (`d836de52`):* **plan only, nothing implemented yet, 2026-11-17; STOPPED before its plan gate: § 13's two findings (S-1: `runner/run_samples.py` cannot change without files outside S6's *Files*; S-2: an open plan's line on the old names) and § 14's Q1 and Q2 (Q2: the whole `spikes/lang-bench` suite runs the system interpreter through the layer, so no sandbox holds it; O-e stays **blocked**) wait for the coordinator and the owner.** The item 8.1 observations are made at `a8106448` (§ 11): the `.py` units run in a `wslc` container (814 of 829, the other 15 host-bound) and those 15 in an owned throwaway venv (61 of 61 in their three files). The brief of story S6 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S6 `:664-709`; D7 `:337-343`; claim C6 `:164`; § 11 `:806-844`). Its scope is S6's *Files* line (`:697-705`) as named paths (§ 0.1). The parent was then at epoch 11 with ONE change (entry 11.1); this brief's S-1 became entry 11.2, the eleventh full stop. **Now the parent is at epoch 12 with 0 changes: the next accepted change counts as 12.1, and item 8.1 lists what still counts.**
+> Status: **plan only; S-3 ANSWERED 2026-11-18 by the parent's entry 12.1 (the owner: every whole suite green; runs without an own `TMPDIR`; § 17 lists the five fixes). Next: the owner's dotnet pack downgrade (§ 17 fix 2), then this brief's plan gate.** *Was:* **plan only, nothing implemented yet; reworked 2026-11-17 to the parent's epoch 12 (opened by the owner, `Narrowed: yes`, 0 changes, so the next accepted change counts as 12.1): § 13 and § 14's Q1–Q3 are answered by the parent's items 4.1–4.3 and 7; *Files* and *Done when* in item 8.1's form (§ 0.1, § 9); the three base whole-suite runs made at `a8106448` (§ 15). **STOPPED before its plan gate on § 16 S-3: row E6-m cannot be met as written — its claimed `TMPDIR` under `/tmp` itself breaks nine tests (minigit 4, lang-explore 3, lang-bench 2; green without it), and minigit-bench (7, cap 0) and lang-bench (3, cap 1) are over their caps; approving any of it is the parent's 12.1, the owner's.** Next: the owner's answer to § 16, then § 15's lists confirmed, then the plan gate.** *Was (`d836de52`):* **plan only, nothing implemented yet, 2026-11-17; STOPPED before its plan gate: § 13's two findings (S-1: `runner/run_samples.py` cannot change without files outside S6's *Files*; S-2: an open plan's line on the old names) and § 14's Q1 and Q2 (Q2: the whole `spikes/lang-bench` suite runs the system interpreter through the layer, so no sandbox holds it; O-e stays **blocked**) wait for the coordinator and the owner.** The item 8.1 observations are made at `a8106448` (§ 11): the `.py` units run in a `wslc` container (814 of 829, the other 15 host-bound) and those 15 in an owned throwaway venv (61 of 61 in their three files). The brief of story S6 of `todo/PLAN_test_leftovers_E6.md` as the epoch-11 amendment writes it (§ 6 S6 `:664-709`; D7 `:337-343`; claim C6 `:164`; § 11 `:806-844`). Its scope is S6's *Files* line (`:697-705`) as named paths (§ 0.1). The parent was then at epoch 11 with ONE change (entry 11.1); this brief's S-1 became entry 11.2, the eleventh full stop. **Now the parent is at epoch 12 with 0 changes: the next accepted change counts as 12.1, and item 8.1 lists what still counts.**
 >
 > Judge's brief (Opus) for a Sonnet coder. Written 2026-11-17. Read-only inputs, all verified: benchmark worktree `/home/jinx/git/wt/bench-e6s6`, branch
 > `feat/e6-s6-spikes` from `main` `a8106448` (#223: E6.S5; #222: lang-bench gate specs; #221: E6.S4; #220: the stories amended to epoch 11),
@@ -583,3 +583,63 @@ lang-bench's 1; (c) a shorter claimed folder (it would not fix the four box test
 host failures need the owner's approval by name over its cap of 0 (or a fix of the host: the proxy, the CLI pin — not S6's). **Recommended:
 (b) for the evidence, with minigit's 3 and lang-bench's 1 approved by name as the base lists**, because S6's own changes then run where the
 suites were written to run, and the folder adds failures that would mask S6's own at the head. The head's whole runs wait for the answer.
+
+**ANSWERED 2026-11-18 — the parent's entry 12.1** (conventions #181; E6's stories #225). The owner: "чинить как хочешь, но все должно быть
+зеленым". So: option (b) for the runs, and NO standing test failure: every one of § 15's 22 failures is fixed or shown gone at the head (§ 17).
+First change of epoch 12; the next accepted change is the twelfth full stop.
+
+## 17. Entry 12.1 — the fixes, each RED → GREEN → RED again (written 2026-11-18, before the plan gate)
+
+**The runs (row E6-m as 12.1 reads it).** Each whole suite at base and head as § 7, `nice -n 19`, one at a time, but WITHOUT a `TMPDIR` of its
+own: `TMPDIR`, `TEMP`, `TMP` unset, so `/tmp`. Before and after each run, this user's entries directly under `/tmp` are listed by name
+(`find /tmp -maxdepth 1 -user $(id -u) -printf '%f\n' | sort`); an entry the run added is named in the PR body and removed by exact path
+(`rmdir` for an empty folder; `rm -r` only after `ls -la` shows the run's files and no link followed); entries of other processes are not
+touched. Row E6-m (4), (5) and (7) stand unchanged. The base runs of § 15 stay the base evidence; the nine failures they show only with the
+claimed folder are re-checked by the head runs (they must be green there; red = S6's to fix).
+
+**Fix 1 — policy-ab-quick's three (`test/review2.test.mjs:300`, `:353`; `test/review4.test.mjs:149`).** Cause **[M]**: the tests hand
+`D:/…` to `lib/safe-rm.mjs` (`depthOf`, `assertRunsRoot`), `shedCell` and `reportTarget`; on Linux `path.resolve('D:/')` is `<cwd>/D:`, deep and
+relative. Fix, tests only (no `lib/` byte): a platform root `const ROOT = path.parse(process.cwd()).root` (`/` here, the drive on Windows),
+and every literal built from it with `path.join` (`ROOT`, `ROOT/rsd`, `ROOT/rsd/_s2`, `ROOT/rsd/_s2c`, `ROOT/x/y.json`); the expected strings
+compared after the same `replace(/\\/g, '/')`. RED: the three fail at the base (§ 15, `pab.log`). GREEN: the file green on Linux. RED again:
+a scratch copy of `lib/safe-rm.mjs` with `depthOf(p) < 1` in `assertRunsRoot`, imported by a copy of the test, turns test `:300` red; the
+scratch copy is deleted (never committed).
+
+**Fix 2 — the C# builds and restores (8 tests: `lang-explore` `test/boxes.test.mjs:42`, `:55`, `:93`, `test/e2e.test.mjs:45`, `:102`,
+`test/heldout-real.test.mjs:35`; `minigit-bench` `test/egress-box.test.mjs:88`, `:107`).** Cause **[M]**: host version skew. On 2026-11-14
+apt upgraded `dotnet-apphost-pack-10.0`, `dotnet-targeting-pack-10.0`, `aspnetcore-targeting-pack-10.0` to 10.0.15 (`/var/log/apt/history.log`)
+and kept `dotnet-sdk-10.0` 10.0.114, whose `Microsoft.NETCoreSdk.BundledVersions.props:22` says `BundledNETCoreAppPackageVersion` 10.0.14; the
+SDK then asks NuGet for `Microsoft.NETCore.App.Ref`, `Microsoft.AspNetCore.App.Ref` and `Microsoft.NETCore.App.Host.ubuntu.26.04-x64` and gets
+NU1101 (offline: no source; online: the Ubuntu-RID host pack is on no feed). Measured 2026-11-18 in the scratchpad: the template
+`templates/csharp` builds offline with the 10.0.14 packs extracted from Launchpad's debs (`-p:NetCoreTargetingPackRoot=<extracted>`), prints its
+line, and fails with NU1101 on the host's packs as they are; `apt-get -s install --allow-downgrades` of the three debs: exactly 3 downgraded,
+0 removed. Fix, host only (the owner runs it; no repo byte; consult `1aaccdae`, option 1; option 2 — the pin to 10.0.115 — would change the
+frozen comparison material `templates/csharp/global.json`): `sudo apt install --allow-downgrades` of the three debs kept in
+`/home/jinx/rsd/e6s6/dotnet-10.0.14-packs/` (sha256 `2ae1bdc2…` apphost, `af49d999…` targeting, `728f8529…` aspnetcore), then `sudo apt-mark
+hold` of those three and `dotnet-sdk-10.0`, `dotnet-runtime-10.0`, `dotnet-host-10.0`, `dotnet-hostfxr-10.0` (held so the nightly upgrade
+cannot skew them again; moving them is the language-comparison plan's pin decision). RED: § 15. GREEN: the eight tests' files alone
+(`boxes.test.mjs` first; `e2e.test.mjs` and `heldout-real.test.mjs` start the judge, so only inside the head's whole run), then the head runs.
+RED again: the scratch template build with `NetCoreTargetingPackRoot` pointed at a copy holding only the 10.0.15 packs → NU1101. If a test of
+the eight is still red after the downgrade, its own cause is measured and fixed before the merge (not approved).
+
+**Fix 3 — `minigit-bench` `test/preflight.test.mjs:17`.** Cause **[M]**: the test takes `findOnPath('claude')` (2.1.326 today) while the
+pilot runs the pinned copy `~/rsd/minigit/toolchains/claude-<pin>` (`lib/bare-init.mjs:182` makes it; `lib/bare-config.mjs:143` uses it); the
+preflight rightly says "claude is 2.1.326, the pin is 2.1.310". Fix, test only: `claudeBinary` = `path.join(os.homedir(), 'rsd', 'minigit',
+'toolchains', `claude-${stacks.pins.claude}`)`, and `hostLacks` naming that path when it is absent (as the test already does for the
+TypeScript toolchain). RED: § 15. GREEN: the file alone. RED again: the same test with `stacks.pins.claude` set to `9.9.9` in a scratch
+copy → its `hostLacks` skip names the missing path (not a pass); with the PATH binary put back → the base's red.
+
+**Fix 4 — `lang-bench` `test/py/test_rs_session_net.py:179`.** Cause **[R]**, to measure in the coder's RED: `session(default_within_ms=100)`
+starts the group's deadline before the writer threads start (`runner/rs_net.py:262`, `Gate(…, now + within)`); on a loaded host (load 23.80
+at the base run's end) 100 ms can pass before writer `a` sends, so `a` sends nothing. Fix, test only (no `runner/` byte: the pin): the test's
+window 100 → 2000 ms (the other `TogetherTests` use 1000). RED: in the `wslc` container (K13 (a)), the test with a `threading.Thread.start`
+wrapper that sleeps 150 ms before starting reproduces `b'' != b'aaaa'` at 100 ms. GREEN: the same wrapper at 2000 ms passes. RED again: the
+wrapper sleeping 2500 ms → red. Cost: writer `b` spins until the deadline, so the test takes about 2 s.
+
+**Fix 5 — the nine folder-caused failures** (§ 15: `minigit-bench` 4, `lang-explore` 3, `lang-bench` 2). No code: the runs go without an own
+`TMPDIR` (above). Six were shown green without the folder file by file (§ 15); the three socket-path ones by arithmetic (100 and 67 bytes under
+`/tmp`, limit 108). All nine must be green in the head runs; a red one is measured and fixed before the merge.
+
+**Done when (adds to § 9).** Each of the four whole suites at S6's head: 0 failed, both runs complete, executed and skipped tests reconciled
+by name with the base; the `/tmp` entries listed and the run's removed; fixes 1, 3 and 4 each with its three runs in the PR body; fix 2 with
+the owner's install line and `dpkg -l` of the seven held packages.
