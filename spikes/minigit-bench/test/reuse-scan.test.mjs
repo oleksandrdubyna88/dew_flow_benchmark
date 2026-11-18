@@ -58,13 +58,25 @@ test('A_sibling_checkout_is_resolved_beside_the_repository_not_from_a_written_do
   assert.deepEqual(where([path.join(spikeDir, 'test', 'coai-usage.test.mjs')], /siblingCheckout\(/), ['test/coai-usage.test.mjs']);
 });
 
-test('Every_directory_a_test_file_creates_outside_its_own_process_comes_from_the_owned_helper', () => {
+test('Every_directory_a_test_module_creates_outside_its_own_process_comes_from_the_owned_helper', () => {
   const creators = /\b(?:mkdtempSync|writeFileSync|mkdirSync)\(\s*path\.join\(\s*(?:os\.homedir\(\)|os\.tmpdir\(\))[^)]*\)/g;
+  // The two shared helper modules of the followups plan's S2 still make `testsToDelete-mgb-…` folders (F2); each creator in them must keep the prefix. Every other module of test/, test files and helper modules alike, uses the owned helper.
+  const F2_HELPERS = ['helpers.mjs', 'fake-home.mjs'];
   const raw = [];
-  for (const f of mjs('test').filter(x => x.endsWith('.test.mjs') && !x.endsWith('reuse-scan.test.mjs'))) {
-    for (const m of code(f).matchAll(creators)) raw.push(`${path.basename(f)}: ${m[0]}`);
+  const unprefixed = [];
+  const seen = {};
+  for (const f of mjs('test').filter(x => !x.endsWith('reuse-scan.test.mjs'))) {
+    const name = path.basename(f);
+    for (const m of code(f).matchAll(creators)) {
+      if (!F2_HELPERS.includes(name)) raw.push(`${name}: ${m[0]}`);
+      else {
+        seen[name] = (seen[name] ?? 0) + 1;
+        if (!/testsToDelete-/.test(m[0])) unprefixed.push(`${name}: ${m[0]}`);
+      }
+    }
   }
-  assert.deepEqual(raw, [], 'a test file makes its folders with ownedDir(t, what), never with a temp API');
-  assert.ok([...code(path.join(spikeDir, 'test', 'helpers.mjs')).matchAll(creators)].length >= 1, 'the scan still finds the one creator that stays (the shared helper\'s tmpDir)');
+  assert.deepEqual(raw, [], 'a module of test/ makes its folders with ownedDir(t, what), never with a temp API');
+  assert.deepEqual(unprefixed, [], 'the two F2 helpers keep the testsToDelete- prefix on what they make');
+  assert.deepEqual(Object.keys(seen).sort(), [...F2_HELPERS].sort(), 'the scan still finds the creator of each F2 helper (tmpDir, the fake home)');
   assert.deepEqual(where([path.join(spikeDir, 'test', 'bwrap.test.mjs')], /\.mgb-|['"`]mgb-(?:test|decoy)/), [], 'no socket or decoy keeps the unprefixed mgb- name');
 });
