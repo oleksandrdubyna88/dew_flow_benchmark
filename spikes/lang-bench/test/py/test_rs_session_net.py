@@ -166,7 +166,8 @@ class TogetherTests(unittest.TestCase):
         return types.SimpleNamespace(steps=[types.SimpleNamespace(job=job, line=i + 5) for i, job in enumerate(jobs)])
 
     def test_Bytes_still_unsent_at_the_deadline_end_the_group_with_a_timeout_naming_the_connection(self):
-        s = session(default_within_ms=100)
+        # The group's deadline starts BEFORE its writer threads do (`rs_net.together`: `Gate(..., now + within)`), so a window of 100 ms is gone when a loaded host starts writer a late and a sends nothing.
+        s = session(default_within_ms=2000)
         a, b = rc.Conn("a", "tcp", FakeSock(None), None, False), rc.Conn("b", "tcp", FakeSock(BlockingIOError()), None, False)
         real = select.select
         select.select = lambda *args: ([], [], [])
