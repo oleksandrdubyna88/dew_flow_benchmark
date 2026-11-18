@@ -28,11 +28,18 @@ const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
 const MODE_FLAGS = new Set(['--check', '--apply']);
 
+/** `--dry-run-record <file>`: the value must be there and must not be another flag, or it is a usage error naming the missing value. */
+function recordFlag(flags, argv, index) {
+  const value = argv[index + 1];
+  if (value === undefined || value.startsWith('--')) return { usage: '--dry-run-record needs a file name, and none was given' };
+  return { flags: { ...flags, record: value }, next: index + 2 };
+}
+
 /** The flag at `index` applied to `flags`: `{ flags, next }` (`next` is the index after it and its value) or `{ usage }` for an argument that is not accepted. */
 function readFlag(flags, argv, index) {
   const arg = argv[index];
   if (MODE_FLAGS.has(arg)) return { flags: { ...flags, modes: [...flags.modes, arg.slice(2)] }, next: index + 1 };
-  if (arg === '--dry-run-record') return { flags: { ...flags, record: argv[index + 1] ?? '' }, next: index + 2 };
+  if (arg === '--dry-run-record') return recordFlag(flags, argv, index);
   return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
 }
 

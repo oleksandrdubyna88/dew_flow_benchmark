@@ -550,6 +550,41 @@ test('A_name_is_never_both_confirmed_and_uncertain_and_an_untouched_ruleset_that
   assert.doesNotMatch(second.reason, /Uncertain: template-frozen/);
 });
 
+const REVIEW = /A stored ruleset differs from the data: that needs a person's review and the owner's go before any change/;
+const RERUN = /then --apply again: it creates only the rulesets still absent/;
+
+test('A_stop_after_a_ruleset_that_reads_back_different_asks_for_a_review_and_not_for_a_rerun', async () => {
+  // A created ruleset that reads back different (here: one rule dropped): a rerun would refuse it.
+  const wrong = fakeGitHub({}, { onCreate: body => (body.name === TAGS ? { ...body, rules: body.rules.slice(1) } : body) });
+  const applied = await applyRulesets({ repo: TASK_REPO, run: wrong.run, say: collector().say, ...GO });
+  assert.equal(applied.kind, 'differs');
+  assert.match(applied.reason, REVIEW);
+  assert.doesNotMatch(applied.reason, RERUN);
+  assert.match(applied.reason, /Run --check to see the difference/);
+  // The same in the final read-back, for a created one and for one this apply never touched.
+  const created = drifting({ name: MAIN, after: 2, patch: () => ({ enforcement: 'evaluate' }) });
+  const first = await applyRulesets({ repo: TASK_REPO, run: created.run, say: collector().say, ...GO });
+  assert.match(first.reason, REVIEW);
+  assert.doesNotMatch(first.reason, RERUN);
+  const untouched = drifting({ rulesets: [asGitHub(byName(MAIN), 11)], name: MAIN, after: 1, patch: () => ({ enforcement: 'disabled' }) });
+  const second = await applyRulesets({ repo: TASK_REPO, run: untouched.run, say: collector().say, ...GO });
+  assert.match(second.reason, REVIEW);
+  assert.doesNotMatch(second.reason, RERUN);
+});
+
+test('Every_other_stop_keeps_the_rerun_advice', async () => {
+  // A failed create, a lost answer's absent read-back, and a failed read-back each leave the rerun as the way on.
+  const failed = await applyRulesets({ repo: TASK_REPO, run: failingOnce(2).run, say: collector().say, ...GO });
+  assert.match(failed.reason, RERUN);
+  assert.doesNotMatch(failed.reason, REVIEW);
+  const absent = fakeGitHub({}, { reply: call => (call.method === 'POST' ? { ok: true, value: { code: 0, stdout: '{"id":5,"name":"x"}', stderr: '', timedOut: false, truncated: false } } : undefined) });
+  const gone = await applyRulesets({ repo: TASK_REPO, run: absent.run, say: collector().say, ...GO });
+  assert.equal(gone.kind, 'differs');
+  assert.match(gone.reason, /absent after the write/);
+  assert.match(gone.reason, RERUN, 'a ruleset that is absent is created again by the rerun');
+  assert.doesNotMatch(gone.reason, REVIEW);
+});
+
 // ---- code round 3 --------------------------------------------------------------------------------------------------------------------
 
 test('Only_the_task_repository_is_read_or_written_and_any_other_repository_makes_no_call', async () => {

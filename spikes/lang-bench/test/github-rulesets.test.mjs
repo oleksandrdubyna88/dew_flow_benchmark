@@ -290,6 +290,19 @@ test('An_apply_whose_packages_are_arrays_makes_no_gh_call', async t => {
   assert.ok(got.err.join('\n').includes('04, 05, 06, 07, 08, 10'), got.err.join('|'));
 });
 
+test('A_dry_run_record_flag_followed_by_nothing_or_by_another_flag_is_a_usage_error_naming_the_missing_value', async () => {
+  for (const argv of [['--apply', '--dry-run-record', '--check'], ['--apply', '--dry-run-record', '--apply'], ['--apply', '--dry-run-record', '--x'], ['--apply', '--dry-run-record'], ['--dry-run-record'], ['--check', '--dry-run-record', '--check'], ['--apply', '--dry-run-record', '']]) {
+    const github = fakeGitHub();
+    const got = await runMain(argv, github);
+    assert.equal(got.exit, 2, argv.join(' '));
+    assert.deepEqual(github.calls, [], argv.join(' '));
+    assert.deepEqual(got.progress, [], 'nothing was read');
+    assert.ok(got.err.join('\n').includes('--dry-run-record needs a file name') || got.err.join('\n').includes('--apply needs --dry-run-record <file>'), `${argv.join(' ')}: ${got.err.join('|')}`);
+  }
+  const flagValue = await runMain(['--apply', '--dry-run-record', '--check'], fakeGitHub());
+  assert.ok(flagValue.err.join('\n').includes('--dry-run-record needs a file name, and none was given'), 'the other flag is not taken as the file name');
+});
+
 test('The_usage_text_lists_every_accepted_flag_and_the_dry_run_line', async () => {
   const got = await runMain(['--bogus'], fakeGitHub());
   const text = got.err.join('\n');

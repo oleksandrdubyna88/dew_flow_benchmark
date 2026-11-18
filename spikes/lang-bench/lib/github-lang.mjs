@@ -293,11 +293,11 @@ async function readBackOne(repo, run, expected) {
   if (!list.ok) return list;
   const named = list.value.filter(entry => entry?.name === expected.name);
   if (named.length === 0) return fail(`${expected.name} is absent after the write`, { kind: 'differs' });
-  if (named.length > 1) return fail(`${expected.name} differs after the write: ${named.length} rulesets are named so`, { kind: 'differs' });
+  if (named.length > 1) return fail(`${expected.name} differs after the write: ${named.length} rulesets are named so`, { kind: 'differs', stored: 'different' });
   const one = await getJson(run, `repos/${repo}/rulesets/${named[0].id}`);
   if (!one.ok) return one;
   const problems = rulesetProblems(one.value, expected);
-  return problems.length === 0 ? ok() : fail(`${expected.name} differs after the write: ${problems.join('; ')}`, { kind: 'differs' });
+  return problems.length === 0 ? ok() : fail(`${expected.name} differs after the write: ${problems.join('; ')}`, { kind: 'differs', stored: 'different' });
 }
 
 /** One create, then its read-back. A failure of either is `uncertain`: the ruleset may or may not exist, and only `--check` says. */
@@ -307,11 +307,16 @@ async function createOne(repo, run, expected) {
   return readBackOne(repo, run, expected);
 }
 
+const RERUN = 'Run --check to see what exists, then --apply again: it creates only the rulesets still absent.';
+/** A stored ruleset that differs is never mended by a rerun: the next apply refuses it, so the advice is a review and the owner's go. */
+const STORED_DIFFERS = 'A stored ruleset differs from the data: that needs a person\'s review and the owner\'s go before any change, and --apply will refuse it. Run --check to see the difference.';
+
 /** The words after a stop: what is confirmed created, what is uncertain, what was not attempted (and, when a ruleset this apply never touched differs afterwards, that it changed since the read before), and how to go on. A name is in one list only. */
 const stopped = (failure, { made, uncertain, rest, changed = [] }) => {
   const confirmed = made.filter(name => !uncertain.includes(name));
   const moved = changed.length === 0 ? '' : ` Changed since the read before: ${sentence(changed)}.`;
-  return fail(scrub(`${failure.reason}. Confirmed created: ${sentence(confirmed)}. Uncertain: ${sentence(uncertain)}. Not attempted: ${sentence(rest)}.${moved} Run --check to see what exists, then --apply again: it creates only the rulesets still absent.`), { kind: failure.kind });
+  const advice = failure.stored === 'different' ? STORED_DIFFERS : RERUN;
+  return fail(scrub(`${failure.reason}. Confirmed created: ${sentence(confirmed)}. Uncertain: ${sentence(uncertain)}. Not attempted: ${sentence(rest)}.${moved} ${advice}`), { kind: failure.kind });
 };
 
 /**
@@ -344,7 +349,7 @@ export async function applyRulesets({ repo, run = runBounded, say = () => {}, pa
   if (!after.ok) return stopped(after, { made, uncertain: [], rest: [] });
   const problems = after.value.states.filter(state => state.status !== 'equal');
   if (problems.length > 0) {
-    const failure = fail(`read back after the writes, ${problems.map(state => `${state.name} is ${state.status}`).join('; ')}`, { kind: 'differs' });
+    const failure = fail(`read back after the writes, ${problems.map(state => `${state.name} is ${state.status}`).join('; ')}`, { kind: 'differs', ...(problems.some(state => state.status === 'different') ? { stored: 'different' } : {}) });
     const names = problems.map(state => state.name);
     return stopped(failure, { made, uncertain: names.filter(name => made.includes(name)), rest: [], changed: names.filter(name => !made.includes(name)) });
   }
