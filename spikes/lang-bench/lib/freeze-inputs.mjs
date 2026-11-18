@@ -19,6 +19,17 @@ export const isEnv = result => !result.ok && (result.env === true || result.kind
 /** `[]` when `holds`, else the one sentence: a rule written as data, not as a branch. */
 export const unless = (holds, sentence) => (holds ? [] : [sentence]);
 
+/** Runs `steps` in order over a state: each is `async state -> ok(more) | fail`, `more` joins the state, and the first fail ends the run; ok(the whole state) at the end. */
+export async function runSteps(steps, state) {
+  let acc = state;
+  for (const step of steps) {
+    const result = await step(acc);
+    if (!result.ok) return result;
+    acc = { ...acc, ...result.value };
+  }
+  return ok(acc);
+}
+
 /** The sentences of a failed result: its `problems`, or its one `reason`. */
 export const problemsOf = result => result.problems ?? [result.reason];
 

@@ -12,7 +12,7 @@ import { parseSpec } from './conformance-spec.mjs';
 import { readEvidence, readWorkspacesCheck } from './freeze-evidence.mjs';
 import { blobsOf, commitOf, isSha, parentOf, remoteTag, treeAt } from './freeze-git.mjs';
 import { HASHES_FILE, hashList } from './freeze-hashes.mjs';
-import { isEnv, loadPin, pinTaskProblem, problemsOf, specSet } from './freeze-inputs.mjs';
+import { isEnv, loadPin, pinTaskProblem, problemsOf, runSteps, specSet, unless } from './freeze-inputs.mjs';
 import { tagDate } from './freeze-rows.mjs';
 import { checkRemoteTag, mainProblems } from './freeze-tags.mjs';
 import { writeOutput } from './freeze-write.mjs';
@@ -34,11 +34,13 @@ export function supersedesProblems(supersedes) {
   return [...(bad.length > 0 ? ['every --supersedes <old tag> needs its --why <sentence>, and every --why a --supersedes'] : []), ...twice.map(name => `the old tag ${name} is named twice: each superseded tag is named once, with one sentence why`)];
 }
 
+const olderThan = (old, tag) => tagDate(old) !== null && tagDate(old) < tagDate(tag);
+
 /** The sentence when an old tag cannot be superseded by `tag` (itself, absent from the remote, not older), else null. `remote` is what the remote answered for the old tag: `{ object, peeled }` or null. */
 function supersedeProblem({ old, tag, remote }) {
   if (old === tag) return `${old} cannot supersede itself`;
   if (remote === null) return `the old tag ${old} does not exist on the remote (git ls-remote --tags origin): only a pushed tag is superseded; a tag that never reached the remote is deleted and made again instead`;
-  return tagDate(old) !== null && tagDate(old) < tagDate(tag) ? null : `the old tag ${old} is not older than ${tag}: a superseding tag has a later date (an earlier or equal one cannot replace it)`;
+  return olderThan(old, tag) ? null : `the old tag ${old} is not older than ${tag}: a superseding tag has a later date (an earlier or equal one cannot replace it)`;
 }
 
 /** ok([{ tag, tagObjectSha, why }]): each old tag exists on the remote (the remote is asked, never the local refs) and is older than `tag`; the tag object's id is the remote's. */
@@ -148,14 +150,18 @@ const validateRecord = inputs => text => {
   return built.ok ? ok(true) : fail(`specs-record cannot assemble it: ${built.reason}`);
 };
 
+/** The sentences when W's parent is not C (or W has no single parent). */
+function parentProblem({ parent, c }) {
+  if (!parent.ok) return [`it is not a squash commit: ${parent.reason}`];
+  return unless(parent.value === c, `its parent is ${parent.value}, not C ${c}: W is the squash of a workspaces branch cut from C, with no other merge between`);
+}
+
 /** ok([sentence]): W is the commit of the squash merge of the workspaces pull request: on the remote's main (asked now) and with C as its one parent. */
 async function placementProblems({ repo, commit, c }) {
   const main = await mainProblems({ repo, commit });
   const parent = await parentOf(repo, commit);
   if (!main.ok) return main;
-  if (isEnv(parent)) return parent;
-  const own = parent.ok && parent.value === c ? [] : [parent.ok ? `its parent is ${parent.value}, not C ${c}: W is the squash of a workspaces branch cut from C, with no other merge between` : `it is not a squash commit: ${parent.reason}`];
-  return ok([...main.value, ...own]);
+  return isEnv(parent) ? parent : ok([...main.value, ...parentProblem({ parent, c })]);
 }
 
 /** The sentence when the hash list on disk (`<inputs>/hashes-lang.txt`) is absent or is not W's list, else null: `record` only names what is already written. */
@@ -165,26 +171,45 @@ function listOnDiskProblem({ inputs, commit, text }) {
   return held === text ? null : `${file} ${held === null ? 'is absent' : 'is not the hash list of W'}: write it first with freeze.mjs hashes --write --repo <task repository> --commit ${commit}, then record`;
 }
 
-/** What the verifications give: C, the checked tag, W's specs and the hash list; a red one is a refusal with exit 1 naming the verb. */
-async function verified({ repo, tag, commit, pin, pins, c, inputs }) {
+/** ok({ checked }) once `check-tag` is clean for C; a red one is a refusal with exit 1. */
+async function checkTagStep({ repo, tag, pin, pins, c }) {
   const checked = await checkRemoteTag({ repo, tag, commit: c, pin, pins });
-  if (!checked.ok) return redOf(checked, 'check-tag');
+  return checked.ok ? ok({ checked: checked.value }) : redOf(checked, 'check-tag');
+}
+
+/** ok({}) when W's placement is right (on the remote's main, C its parent). */
+async function placementStep({ repo, commit, c }) {
   const placed = await placementProblems({ repo, commit, c });
   if (!placed.ok) return placed;
-  if (placed.value.length > 0) return refusal(placed.value.map(problem => `W: ${problem}`), 1);
+  return placed.value.length > 0 ? refusal(placed.value.map(problem => `W: ${problem}`), 1) : ok({});
+}
+
+/** ok({}) when W changes only the twelve workspace folders and keeps every spec and FORMAT blob and mode. */
+async function workspaceStep({ repo, commit, c }) {
   const base = await workspaceProblems({ repo, base: c, commit });
   if (!base.ok) return base;
-  if (base.value.length > 0) return refusal(base.value.map(problem => `check-workspace: ${problem}`), 1);
+  return base.value.length > 0 ? refusal(base.value.map(problem => `check-workspace: ${problem}`), 1) : ok({});
+}
+
+/** ok({ specs }) when W holds exactly the twelve workspace folders. */
+async function foldersStep({ repo, commit }) {
   const tree = await treeAt(repo, commit);
   const specs = tree.ok ? specSet(tree.value) : tree;
   if (!specs.ok) return redOf(specs, 'the twelve workspaces');
   const folders = folderProblems({ tree: tree.value, specs: specs.value });
-  if (folders.length > 0) return refusal(folders.map(problem => `the twelve workspaces: ${problem}`), 1);
+  return folders.length > 0 ? refusal(folders.map(problem => `the twelve workspaces: ${problem}`), 1) : ok({ specs: specs.value });
+}
+
+/** ok({ list }) when W's hash list can be made and is the one on disk. */
+async function listStep({ repo, commit, inputs }) {
   const list = await hashList({ repo, commit });
   if (!list.ok) return redOf(list, 'hashes');
   const onDisk = listOnDiskProblem({ inputs, commit, text: list.value.text });
-  return onDisk === null ? ok({ c, checked: checked.value, specs: specs.value, list: list.value }) : refusal([onDisk], 1);
+  return onDisk === null ? ok({ list: list.value }) : refusal([onDisk], 1);
 }
+
+/** What the verifications give (C, the checked tag, W's specs and the hash list); a red one is a refusal with exit 1 naming the verb. `commit` is W. */
+const verified = args => runSteps([checkTagStep, placementStep, workspaceStep, foldersStep, listStep], args);
 
 /** The inputs that need no repository answer: the evidence, the workspaces check and the supersedes pairs. -> ok(evidence) | refusal(…, 3). */
 function givenInputs({ flags, commit, c, tag }) {
@@ -208,41 +233,79 @@ function freezeEntry({ tag, commit, parts, evidence, superseded, acceptedOn }) {
   };
 }
 
-/** Everything the record needs that is given or asked of the remote, before any verification: ok({ pin, w, c, evidence, superseded, file }) | a refusal (exit 3 or 1) | an environment fail. */
-async function preflight({ repo, tag, commit, flags, inputs, record }) {
+/** ok({ pin }) when the FORMAT record gives the pin for exactly the six tasks. */
+async function pinStep({ record }) {
   const pin = loadPin(record);
-  const taskProblem = pin.ok ? pinTaskProblem(pin.value) : pin.reason;
-  if (taskProblem !== null) return refusal([taskProblem], 3);
+  const problem = pin.ok ? pinTaskProblem(pin.value) : pin.reason;
+  return problem === null ? ok({ pin: pin.value }) : refusal([problem], 3);
+}
+
+/** ok({ w }): the workspace commit as a 40-hex commit of the repository. */
+async function commitStep({ repo, commit }) {
   const w = await commitOf(repo, commit);
   if (!w.ok) return isEnv(w) ? w : refusal([w.reason], 3);
+  return ok({ w: w.value });
+}
+
+/** ok({ c }): the commit the remote's tag points at (peeled for an annotated tag); the tag must be on the remote. */
+async function remoteStep({ repo, tag }) {
   const remote = await remoteTag(repo, tag);
   if (!remote.ok) return remote;
   if (remote.value === null) return refusal([`check-tag: the remote has no tag ${tag}`], 1);
   const c = remote.value.peeled ?? remote.value.object;
-  const evidence = isSha(c) ? givenInputs({ flags, commit: w.value, c, tag }) : refusal(['the remote tag names no commit'], 3);
-  const superseded = evidence.ok ? await supersededEntries({ repo, tag, supersedes: flags.supersedes }) : evidence;
+  return isSha(c) ? ok({ c }) : refusal(['the remote tag names no commit'], 3);
+}
+
+/** ok({ evidence }) from the evidence file, the workspaces check and the supersedes pairs. */
+async function evidenceStep({ flags, w, c, tag }) {
+  const evidence = givenInputs({ flags, commit: w, c, tag });
+  return evidence.ok ? ok({ evidence: evidence.value }) : evidence;
+}
+
+/** ok({ superseded }): the old tags the remote holds. */
+async function supersededStep({ repo, tag, flags }) {
+  const superseded = await supersededEntries({ repo, tag, supersedes: flags.supersedes });
+  return superseded.ok ? ok({ superseded: superseded.value }) : superseded;
+}
+
+/** ok({ file }): the record's file, which may hold no record of another freeze. */
+async function fileStep({ inputs, tag }) {
   const file = path.join(inputs, 'specs.d', STATES_FILE);
-  const existing = superseded.ok ? existingProblem({ file, tag }) : null;
-  if (!superseded.ok || existing !== null) return superseded.ok ? refusal([existing], 3) : superseded;
-  return ok({ pin: pin.value, w: w.value, c, evidence: evidence.value, superseded: superseded.value, file });
+  const existing = existingProblem({ file, tag });
+  return existing === null ? ok({ file }) : refusal([existing], 3);
+}
+
+/** Everything the record needs that is given or asked of the remote, before any verification: ok({ pin, w, c, evidence, superseded, file }) | a refusal (exit 3 or 1) | an environment fail. */
+const preflight = args => runSteps([pinStep, commitStep, remoteStep, evidenceStep, supersededStep, fileStep], args);
+
+/** ok({ parts }): the verifications of W (see `verified`), with W as the commit asked about. */
+async function verifiedStep(state) {
+  const parts = await verified({ ...state, commit: state.w });
+  return parts.ok ? ok({ parts: parts.value }) : parts;
+}
+
+/** ok({ rows }): the six spec rows. */
+async function rowsStep({ repo, parts, c, inputs }) {
+  const rows = await specRows({ repo, specs: parts.specs, c, tagObject: parts.checked.tagObject, inputs });
+  return rows.ok ? ok({ rows: rows.value }) : rows;
+}
+
+/** ok({ text }): the record's bytes, which a record already in the file for the tag must equal. */
+async function textStep({ tag, w, parts, evidence, superseded, rows, file }) {
+  const freeze = freezeEntry({ tag, commit: w, parts, evidence, superseded, acceptedOn: evidence.leakcheck.workspaceCommit.date });
+  const text = renderRecord({ rows, freeze });
+  const differs = rewriteProblem({ file, text });
+  return differs === null ? ok({ text }) : refusal([differs], 3);
 }
 
 /**
  * `record`: ok({ file, text, notes }) once the record is written; a fail carries `problems` and `exit` (1 a verification is red, 3 an input is refused; an environment failure has `env: true`).
  * `flags`: `{ evidence, check, supersedes: [{ tag, why }] }`. `inputs` is the bench's inputs folder, `record` its FORMAT record; `io` is the writer's seam.
  */
-export async function recordFreeze({ repo, tag, commit, flags, inputs, record, pins, io }) {
-  const given = await preflight({ repo, tag, commit, flags, inputs, record });
-  if (!given.ok) return given;
-  const { pin, w, c, evidence, superseded, file } = given.value;
-  const parts = await verified({ repo, tag, commit: w, pin, pins, c, inputs });
-  if (!parts.ok) return parts;
-  const rows = await specRows({ repo, specs: parts.value.specs, c, tagObject: parts.value.checked.tagObject, inputs });
-  if (!rows.ok) return rows;
-  const freeze = freezeEntry({ tag, commit: w, parts: parts.value, evidence, superseded, acceptedOn: evidence.leakcheck.workspaceCommit.date });
-  const text = renderRecord({ rows: rows.value, freeze });
-  const differs = rewriteProblem({ file, text });
-  if (differs !== null) return refusal([differs], 3);
+export async function recordFreeze(args) {
+  const done = await runSteps([preflight, verifiedStep, rowsStep, textStep], args);
+  if (!done.ok) return done;
+  const { file, text, inputs, io } = done.value;
   const written = await writeOutput({ dir: inputs, target: file, text, what: 'record', validate: validateRecord(inputs), io });
   return written.ok ? ok({ file, text, notes: written.value.notes }) : fail(written.reason, { ...written, problems: [written.reason], exit: 1 });
 }
