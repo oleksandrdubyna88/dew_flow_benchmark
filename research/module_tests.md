@@ -660,6 +660,27 @@ node .agents/conventions/tools/low-priority.mjs node --test --test-concurrency=4
 | Code rounds 1 and 2: S recorded only from the samples of a checkout whose spec matched the pin (`S_is_not_recorded_without_a_task_repo`, `S_is_not_recorded_from_a_checkout_whose_spec_is_not_the_pinned_one`, `S_is_recorded_with_the_pinned_checkout_and_names_the_samples_hash`); S as the runner reads a body, only for a green suite, a running maximum (R1, C1, C5); the pinned-spec gate (R2); a suite-only run keeps the newest record, a halted run resumes only in a run with its step, the memory value in the material (R6); a halted one-pass step resumes, the twin's trees are removed, a twin must pass, a halt line holds no case id or path (R3, R4, R5, R7); the plan lock through the finish and the guarded `packages.json` write (R8, C4), and the missing task list | `test/quick-package-suite.test.mjs`, `test/quick-package-registry.test.mjs`, `test/quick-package-command.test.mjs` | the fixes of the plan's code round 1, each red first |
 | 30 to 33 and finding 1 (real box): a toy pair end to end, the memory bound, a race witness, the read-back limit, a grandchild that hangs | `test/quick-package-real.test.mjs` | the package through the certified box |
 
+## F2.S2 (d): the freeze workspaces and the frozen record's consumers (`spikes/lang-explore/`, the lang-explore half of bench PR 4)
+
+The scenarios run over an INVENTED task repository: six invented specs and the synthetic FORMAT of `lang-bench/test/fixtures/conformance/` in a `git init` repository in an owned folder, tagged like a freeze, with the pins' FORMAT hash set to the
+fixture's (`test/quick-freeze-fixture.mjs`). The verbs run through `main`; the real templates, runner and `PACKAGES.md` inputs are read, nothing private is. The two interruption families kill a real child process with SIGKILL at a planted
+point (`test/quick-freeze-child.mjs`, a seam in `io.workspaces.hooks`), so the owner of what it was making is truly gone, and the restart is the verb run again.
+
+```bash
+node .agents/conventions/tools/low-priority.mjs node --test spikes/lang-explore/test/quick-freeze-*.test.mjs
+```
+
+| Scenarios | Test file | What it proves |
+|---|---|---|
+| the written workspace equals what a session gets byte for byte (twelve folders, the manifest, nothing else in the output); a FORMAT that is not the frozen one is refused and writes nothing, and a committed workspace whose grammar is another FORMAT's is a finding naming `runner/GRAMMAR.md` | `test/quick-freeze-workspaces.test.mjs` | `workspaces` over `quickWorkspaceFiles`; T-L57's freeze half |
+| the check passes an equal tree with the exact last line and finds one changed byte (the tree hash, then the file and the byte); a missing file, an added file, a lost execute bit; a dirty checkout is refused, not judged; the exported function gives the commit and the findings | `test/quick-freeze-workspaces.test.mjs` | `workspaces --check` and `checkWorkspaces` (F3.S1's `init` calls it) |
+| the copy refuses a dirty worktree, a `HEAD` that is not the manifest's commit and a present folder that differs (nothing else copied); a source folder edited after it was made and a manifest that is not the twelve; the writer refuses a destination inside a git worktree, also a linked one | `test/quick-freeze-workspaces.test.mjs` | `workspaces-copy`, `checkDestination` |
+| a writer killed before its rename leaves no output folder and only an owned staging folder and its claim, the restart writes it whole and removes them, the bytes equal a second run's; a staging folder whose owner still runs is named and left | `test/quick-freeze-workspaces.test.mjs` | `writeAtomically` with the owner rules, `sweepAndName` |
+| a copy killed mid-folder leaves whole folders and one staging folder only, the restart removes it; amendment 2: killed after 3 of 12, the rerun skips the 3 (named) and copies the other 9, a third run copies 0; a present folder that differs after the kill is refused with nothing more copied | `test/quick-freeze-workspaces.test.mjs` | the resumable copy |
+| a synthetic frozen record holds every field the pre-registration guard reads (through a stub of F3.S1's guard over `lib/freeze-consumers.mjs`), `freeze.workspacesCheck` included; each field removed is named; a wrong shape, a check that exited 1 or passed at another commit than W is refused; the seal's entry and the memory registration come from the real writers | `test/quick-freeze-consumers.test.mjs` | the table of the consumers' reads (D67 (2)) |
+
+Each scenario was run red first (the verbs unknown to `explore.mjs`, the module absent), green, and red again under a mutation of the code it guards (26 mutations, each red in the test it belongs to).
+
 ## Test leftovers — the C# helper, the start-of-run sweep, the audit, the container pass (E6)
 
 Every test that makes a folder outside its own process keeps the four promises of the leftovers rule: a name from one helper, an owner record, removal by its run, and collection by the next run when this one was killed. The tests of this repository get that from a helper in `tests/Bench.Tests/Leftovers/`. This section says what the helper is, what runs at the start and the end of a run, and what it does not cover.
