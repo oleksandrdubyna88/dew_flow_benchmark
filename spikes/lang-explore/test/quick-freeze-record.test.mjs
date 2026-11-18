@@ -14,6 +14,7 @@ const specStatesProblems = specStates => freezeProblems({ specStates }).filter(p
 test('A_record_written_by_freeze_record_holds_every_field_the_pre_registration_guard_reads_of_it', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
+  await f.run('hashes', ['--commit', w, '--write']);
   const written = await f.run('record', ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)]);
   assert.equal(written.exit, 0, `${written.stdout}${written.stderr}`);
   const specStates = JSON.parse(readFileSync(path.join(f.inputs, 'specs.d', 'spec-states.json'), 'utf8'));

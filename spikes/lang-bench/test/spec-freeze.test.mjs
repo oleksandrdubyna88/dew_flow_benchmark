@@ -2,7 +2,7 @@
 // Synthetic task repositories made with `git init` in owned folders (test/support/freeze-fixtures.mjs); the GitHub remote is a local bare repository, a squash merge is `git merge --squash`. The record, the superseding
 // tag and the interruptions are in spec-freeze-record.test.mjs; the order of the procedure in spec-freeze-order.test.mjs.
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
@@ -152,7 +152,7 @@ test('A_session_spec_whose_blob_differs_from_the_tag_is_refused_and_one_that_dif
   const f = makeFreezeRepo(t);
   const { c } = fullFreeze(f);
   const frozenSha = sha256(`${at(f.repo, c, specPath('05-key-value-server'))}\n`);
-  const pinned = { repo: f.repo, tag: TAG, path: specPath('05-key-value-server'), sha256: frozenSha };
+  const pinned = { repo: f.repo, tag: TAG, path: specPath('05-key-value-server'), sha256: frozenSha, states: null };
   assert.equal((await specBlobMatches(pinned)).ok, true, 'the blob at the tag has the pinned sha256');
   const gatedSha = sha256(`${at(f.repo, f.base, specPath('05-key-value-server'))}\n`);
   const refused = await specBlobMatches({ ...pinned, sha256: gatedSha });
@@ -173,7 +173,7 @@ test('A_guard_given_the_superseded_tag_refuses_it', async t => {
   assert.equal(refused.ok, false);
   assert.match(refused.reason, new RegExp(`${TAG}.*superseded`));
   assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: c, states })).length > 0, 'the workspace guard refuses it too');
-  const current = { freeze: { tag: TAG, superseded: [] } };
+  const current = { freeze: { tag: TAG, tagObjectSha: git(f.repo, 'rev-parse', `refs/tags/${TAG}`), commitSha: c, superseded: [] } };
   assert.equal((await specBlobMatches({ ...pinned, states: current })).ok, true, 'the record\'s own tag passes');
   assert.deepEqual(await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: c, states: current }), [], 'and so does W with the record\'s own tag');
   const other = await specBlobMatches({ ...pinned, tag: LATER_TAG, states: current });
@@ -189,7 +189,7 @@ test('The_tag_on_the_squash_commit_C_and_a_workspaces_branch_cut_from_C_and_squa
   const byTag = await f.run('check-workspace', ['--tag', TAG, '--commit', w]);
   assert.equal(byTag.exit, 0, said(byTag));
   assert.equal((await f.run('check-workspace', ['--base', c, '--commit', w])).exit, 0, 'and by the base');
-  assert.deepEqual(await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: w }), []);
+  assert.deepEqual(await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: w, states: null }), []);
 });
 
 test('A_tag_on_the_freeze_branch_head_instead_of_C_is_refused_because_it_is_not_an_ancestor_of_W', async t => {
@@ -201,7 +201,7 @@ test('A_tag_on_the_freeze_branch_head_instead_of_C_is_refused_because_it_is_not_
   assert.equal(refused.exit, 1, said(refused));
   assert.match(refused.stderr, /not an ancestor/);
   assert.notEqual(head, c, 'the pre-squash commit is not C');
-  assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: w })).some(problem => /not an ancestor/.test(problem)));
+  assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: w, states: null })).some(problem => /not an ancestor/.test(problem)));
 });
 
 test('A_workspace_commit_that_is_not_a_descendant_of_the_tag_is_refused', async t => {
@@ -576,4 +576,77 @@ test('The_pins_are_read_from_the_data_file_and_a_missing_or_unreadable_file_or_t
   const missing = await run(path.join(f.root, 'no-tasks.json'));
   assert.equal(missing.exit, 1);
   assert.match(missing.stderr, /explore\.json|pins|no-tasks/);
+});
+
+// ---- the review's findings of PR 4: the guards read the record, the tag and the modes -------------------------------------------------------------------
+
+test('A_guard_called_without_states_reads_the_record_itself_and_refuses_a_superseded_tag_or_the_absence_of_a_record', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = fullFreeze(f);
+  const pinned = { repo: f.repo, tag: TAG, path: specPath('05-key-value-server'), sha256: sha256(`${at(f.repo, c, specPath('05-key-value-server'))}\n`), inputs: f.inputs };
+  const absent = await specBlobMatches(pinned);
+  assert.equal(absent.ok, false, 'no record, no explicit null: the freeze is not accepted');
+  assert.match(absent.reason, /spec-states\.json/);
+  assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: c, inputs: f.inputs })).length > 0);
+  const states = { freeze: { tag: LATER_TAG, superseded: [{ tag: TAG, tagObjectSha: 'a'.repeat(40), why: 'a cause was fixed' }] } };
+  writeFileSync(path.join(f.inputs, 'specs.d', 'spec-states.json'), JSON.stringify(states));
+  const refused = await specBlobMatches(pinned);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, new RegExp(`${TAG}.*superseded`));
+  assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: c, inputs: f.inputs })).some(problem => /superseded/.test(problem)));
+  assert.equal((await specBlobMatches({ ...pinned, states: null })).ok, true, 'an explicit null is the freeze in progress');
+});
+
+test('A_guard_given_the_record_requires_the_local_tag_to_be_the_recorded_object_and_commit', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = fullFreeze(f);
+  const call = states => specBlobMatches({ repo: f.repo, tag: TAG, path: specPath('05-key-value-server'), sha256: sha256(`${at(f.repo, c, specPath('05-key-value-server'))}\n`), states });
+  const object = git(f.repo, 'rev-parse', `refs/tags/${TAG}`);
+  assert.equal((await call({ freeze: { tag: TAG, tagObjectSha: object, commitSha: c, superseded: [] } })).ok, true);
+  const otherObject = await call({ freeze: { tag: TAG, tagObjectSha: 'b'.repeat(40), commitSha: c, superseded: [] } });
+  assert.equal(otherObject.ok, false);
+  assert.match(otherObject.reason, /tag object/);
+  const otherCommit = await call({ freeze: { tag: TAG, tagObjectSha: object, commitSha: f.base, superseded: [] } });
+  assert.equal(otherCommit.ok, false);
+  assert.match(otherCommit.reason, /commit/);
+  assert.ok((await workspaceCommitProblems({ repo: f.repo, tag: TAG, commit: c, states: { freeze: { tag: TAG, tagObjectSha: 'b'.repeat(40), commitSha: c, superseded: [] } } })).some(problem => /tag object/.test(problem)));
+});
+
+test('check_tag_refuses_when_there_is_no_local_tag_even_with_a_message_file', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(f);
+  const message = annotate(f, { at: c });
+  pushTag(f);
+  assert.equal((await f.run('check-tag', ['--tag', TAG, '--commit', c, '--message-file', message])).exit, 0, 'with the local tag it passes');
+  git(f.repo, 'tag', '-d', TAG);
+  const refused = await f.run('check-tag', ['--tag', TAG, '--commit', c, '--message-file', message]);
+  assert.equal(refused.exit, 1, said(refused));
+  assert.match(refused.stderr, /no local tag/);
+});
+
+test('A_mode_change_of_a_spec_in_the_freeze_commit_or_of_a_spec_or_FORMAT_in_W_is_refused', async t => {
+  const f = makeFreezeRepo(t);
+  const spec = path.join(f.repo, specPath('06-blog-api'));
+  const edited = freezeBranch(f, { more: {} });
+  chmodSync(spec, 0o755);
+  git(f.repo, 'add', '-A');
+  git(f.repo, 'commit', '-q', '-m', 'the same bytes with the execute bit');
+  const executable = git(f.repo, 'rev-parse', 'HEAD');
+  const refused = await f.run('check-commit', ['--before', f.base, '--after', executable]);
+  assert.equal(refused.exit, 1, said(refused));
+  assert.ok(refused.stderr.includes(specPath('06-blog-api')) && /mode/.test(refused.stderr), refused.stderr);
+  assert.equal((await f.run('check-commit', ['--before', f.base, '--after', edited])).exit, 0, 'the control: the six rows alone');
+  const g = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(g);
+  annotate(g, { at: c });
+  for (const file of [specPath('07-stream-processor'), FORMAT_PATH]) {
+    git(g.repo, 'checkout', '-q', '-B', 'modes', c);
+    chmodSync(path.join(g.repo, file), 0o755);
+    writeFileSync(path.join(g.repo, 'csharp/04-rule-api-extra.txt'), 'x\n');
+    git(g.repo, 'add', '-A');
+    git(g.repo, 'commit', '-q', '-m', `a mode change of ${file}`);
+    const mode = await g.run('check-workspace', ['--tag', TAG, '--commit', git(g.repo, 'rev-parse', 'HEAD')]);
+    assert.equal(mode.exit, 1, `${file}: ${said(mode)}`);
+    assert.ok(mode.stderr.includes(file) && /mode/.test(mode.stderr), mode.stderr);
+  }
 });

@@ -155,10 +155,20 @@ export function fullFreeze(fixture, { tag = TAG, files = workspaceFiles() } = {}
   return { c, w: squashMerge(fixture, branch, 'T2'), tag, messageFile };
 }
 
-/** The evidence file `record` reads: the three clean leak-check results, the workspaces check's result and the push date, all in the fixture's root. `over` replaces keys. */
-export function evidence(fixture, { c, w, over = {} }) {
-  const done = commitSha => ({ commit: commitSha, exit: 0, date: '2026-12-02' });
-  const body = { provisionalFrom: '2026-12-01', workspacesCheck: done(w), leakcheck: { freezeCommit: done(c), scratchWorkspace: done('f'.repeat(40)), workspaceCommit: done(w) }, ...over };
+/** `yyyy-mm-dd` of a freeze tag's own date, and of the day after it. */
+export const tagDay = tag => `${tag.slice(-8, -4)}-${tag.slice(-4, -2)}-${tag.slice(-2)}`;
+const nextDay = day => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+export const SCRATCH = 'f'.repeat(40);
+
+/**
+ * The evidence file `record` reads, with dates in the order the procedure makes them: the leak checks of C and of the scratch W″ and the push on the tag's day, the workspaces check and the leak check of W the day after.
+ * `over` replaces keys of the file, `leak` replaces keys of its `leakcheck`.
+ */
+export function evidence(fixture, { c, w, tag = TAG, over = {}, leak = {} }) {
+  const [day, next] = [tagDay(tag), nextDay(tagDay(tag))];
+  const done = (commitSha, date) => ({ commit: commitSha, exit: 0, date });
+  const leakcheck = { freezeCommit: done(c, day), scratchWorkspace: done(SCRATCH, day), workspaceCommit: done(w, next), ...leak };
+  const body = { provisionalFrom: day, workspacesCheck: done(w, next), leakcheck, ...over };
   const file = path.join(fixture.root, 'evidence.json');
   writeFileSync(file, `${JSON.stringify(body, null, 2)}\n`);
   return file;

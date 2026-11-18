@@ -2,14 +2,14 @@
 // (test/support/freeze-fixtures.mjs): a local bare repository stands for the GitHub remote, a squash merge is `git merge --squash`.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { existsSync, fsyncSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { formatOwner, processProbe, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { run as classes } from '../tools/format-classes.mjs';
 import { assemble } from '../lib/specs-record.mjs';
-import { annotate, evidence, freezeAndMerge, freezeBranch, fullFreeze, LATER_TAG, makeFreezeRepo, pushTag, sha256, specPath, squashMerge, TAG, workspaceFiles, workspacesBranch, workspacesCheckFile, FORMAT_PATH } from './support/freeze-fixtures.mjs';
+import { annotate, baseFiles, evidence, freezeAndMerge, freezeBranch, fullFreeze, LATER_TAG, makeFreezeRepo, pushTag, SCRATCH, sha256, specPath, specText, squashMerge, TAG, workspaceFiles, workspacesBranch, workspacesCheckFile, FORMAT_PATH } from './support/freeze-fixtures.mjs';
 import { commit, git } from './support/push-fixtures.mjs';
 import { owned } from './support/owned.mjs';
 
@@ -20,9 +20,10 @@ const leftovers = f => readdirSync(f.inputs).filter(name => /^teststodelete-/i.t
 const KILL_CHILD = fileURLToPath(new URL('./support/freeze-kill-child.mjs', import.meta.url));
 const commitDay = (repo, sha) => new Date(Number(git(repo, 'show', '-s', '--format=%ct', sha)) * 1000).toISOString().slice(0, 10);
 
-/** `record` on the fixture with the evidence and the workspaces check written beside it; `over` replaces the evidence's keys and `extra` adds flags. */
-function record(f, { c, w, tag = TAG, over = {}, extra = [], check } = {}) {
-  const flags = ['--tag', tag, '--commit', w, '--evidence', evidence(f, { c, w, over }), '--workspaces-check', check ?? workspacesCheckFile(f, w), ...extra];
+/** `record` on the fixture with the hash list written first (`hashes --write`, unless `list` is false: `record` compares it with W's), the evidence and the workspaces check written beside it; `over` replaces the evidence's keys and `extra` adds flags. */
+async function record(f, { c, w, tag = TAG, over = {}, leak = {}, extra = [], check, list = true } = {}) {
+  if (list) await f.run('hashes', ['--commit', w, '--write']);
+  const flags = ['--tag', tag, '--commit', w, '--evidence', evidence(f, { c, w, tag, over, leak }), '--workspaces-check', check ?? workspacesCheckFile(f, w), ...extra];
   return f.run('record', flags);
 }
 
@@ -31,8 +32,9 @@ function record(f, { c, w, tag = TAG, over = {}, extra = [], check } = {}) {
 test('record_writes_the_accepted_freeze_entry_and_the_six_spec_rows_to_one_file_and_nothing_else', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
+  await f.run('hashes', ['--commit', w, '--write']);
   const before = readdirSync(f.inputs, { recursive: true }).sort();
-  const result = await record(f, { c, w });
+  const result = await record(f, { c, w, list: false });
   assert.equal(result.exit, 0, said(result));
   const after = readdirSync(f.inputs, { recursive: true }).sort();
   assert.deepEqual(after.filter(name => !before.includes(name)), [path.join('specs.d', 'spec-states.json')], 'one new file, and no other file written or left');
@@ -49,7 +51,8 @@ test('record_writes_the_accepted_freeze_entry_and_the_six_spec_rows_to_one_file_
   assert.equal(states.freeze.hashesLangSha256, sha256(listed.endsWith('\n') ? listed.slice(0, -1) + '\n' : listed), 'the hash of the list `hashes` prints');
   assert.equal(states.freeze.state, 'accepted');
   assert.equal(states.freeze.provisionalFrom, '2026-12-01');
-  assert.equal(states.freeze.acceptedOn, commitDay(f.repo, w));
+  assert.equal(states.freeze.acceptedOn, '2026-12-02', 'acceptedOn is the date of the clean leak check of W (the accepting step), not the commit\'s day');
+  assert.notEqual(states.freeze.acceptedOn, commitDay(f.repo, w));
   assert.deepEqual(states.freeze.superseded, []);
   assert.deepEqual(states.freeze.workspacesCheck, { commit: w, exit: 0, date: '2026-12-02' });
   assert.deepEqual(Object.keys(states.freeze.leakcheck).sort(), ['freezeCommit', 'scratchWorkspace', 'workspaceCommit']);
@@ -100,7 +103,7 @@ test('The_class_check_reads_the_frozen_FORMAT_from_the_record_this_tool_wrote', 
 test('record_refuses_while_either_post_merge_leakcheck_result_is_missing', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
-  const clean = key => ({ commit: key === 'scratchWorkspace' ? 'f'.repeat(40) : (key === 'freezeCommit' ? c : w), exit: 0, date: '2026-12-02' });
+  const clean = key => ({ commit: key === 'scratchWorkspace' ? 'f'.repeat(40) : (key === 'freezeCommit' ? c : w), exit: 0, date: key === 'workspaceCommit' ? '2026-12-02' : '2026-12-01' });
   for (const key of ['freezeCommit', 'scratchWorkspace', 'workspaceCommit']) {
     const leakcheck = Object.fromEntries(['freezeCommit', 'scratchWorkspace', 'workspaceCommit'].filter(name => name !== key).map(name => [name, clean(name)]));
     const refused = await record(f, { c, w, over: { leakcheck } });
@@ -264,6 +267,7 @@ function killedBeforeRename(f, verb, flags) {
 test('A_record_killed_before_its_rename_leaves_only_an_owned_temporary_file_that_the_restart_removes_and_never_reads', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
+  await f.run('hashes', ['--commit', w, '--write']);
   const flags = ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)];
   const killed = killedBeforeRename(f, 'record', flags);
   assert.equal(killed.signal, 'SIGKILL', killed.stderr);
@@ -317,6 +321,7 @@ test('A_restart_leaves_a_temporary_file_whose_owner_still_runs_and_names_it', as
 test('A_rerun_after_an_interruption_writes_the_same_bytes', async t => {
   const f = makeFreezeRepo(t);
   const { c, w } = fullFreeze(f);
+  await f.run('hashes', ['--commit', w, '--write']);
   const flags = ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)];
   assert.equal(killedBeforeRename(f, 'record', flags).signal, 'SIGKILL');
   assert.equal((await record(f, { c, w })).exit, 0);
@@ -343,15 +348,14 @@ test('A_record_already_in_the_file_for_the_tag_is_rewritten_only_with_identical_
   const first = readFileSync(statesFile(f));
   assert.equal((await record(f, { c, w })).exit, 0, 'identical inputs: the same bytes are written again');
   assert.deepEqual(readFileSync(statesFile(f)), first);
-  const differentEvidence = await record(f, { c, w, over: { provisionalFrom: '2026-11-30' } });
+  const differentEvidence = await record(f, { c, w, over: { workspacesCheck: { commit: w, exit: 0, date: '2026-12-09' } } });
   assert.equal(differentEvidence.exit, 3, said(differentEvidence));
   assert.match(differentEvidence.stderr, /already holds.*different|differs from/);
   assert.deepEqual(readFileSync(statesFile(f)), first, 'a refusal leaves the record as it was');
   const w2 = commit(f.repo, 'a later workspace file', { 'node/04-rule-api/more.txt': 'later\n' });
   git(f.repo, 'push', '-q', 'origin', 'main');
   const differentW = await record(f, { c, w: w2 });
-  assert.equal(differentW.exit, 3, `a different W under the same tag: ${said(differentW)}`);
-  assert.match(differentW.stderr, /workspaceCommit|differs from/);
+  assert.notEqual(differentW.exit, 0, `a later commit as W under the same tag: ${said(differentW)}`);
   assert.deepEqual(readFileSync(statesFile(f)), first);
   assert.equal(leftovers(f).length, 0, 'no temporary file is left by a refusal');
 });
@@ -386,6 +390,7 @@ test('A_short_write_that_is_not_reported_is_caught_by_reading_the_temporary_file
   assert.match(said(lied), /read back|holds \d+ bytes/);
   assert.equal(readFileSync(path.join(f.inputs, 'hashes-lang.txt'), 'utf8'), old, 'the old list is whole, no truncated file was published');
   assert.deepEqual(leftovers(f), [], 'and no temporary file is left');
+  await f.run('hashes', ['--commit', w, '--write']);
   const flags = ['--tag', TAG, '--commit', w, '--evidence', evidence(f, { c, w }), '--workspaces-check', workspacesCheckFile(f, w)];
   const recorded = await f.run('record', flags, { io: { writeSync: shortWrite({ chunk: 7, lie: true }) } });
   assert.notEqual(recorded.exit, 0);
@@ -401,4 +406,91 @@ test('record_refuses_a_gate_record_missing_from_the_inputs_naming_each_spec', as
   assert.equal(refused.exit, 3, said(refused));
   assert.ok(refused.stderr.includes('05-key-value-server') && refused.stderr.includes('10-dag-scheduler'), refused.stderr);
   assert.equal(existsSync(statesFile(f)), false);
+});
+
+// ---- the review's findings of PR 4 (B1, the minors) --------------------------------------------------------------------------------------------------
+
+test('record_refuses_a_W_that_is_not_on_the_remotes_main_or_whose_parent_is_not_C_and_passes_the_squash_W', async t => {
+  const f = makeFreezeRepo(t);
+  const { c } = freezeAndMerge(f);
+  annotate(f, { at: c });
+  pushTag(f);
+  const branch = workspacesBranch(f, { from: c });
+  const head = git(f.repo, 'rev-parse', branch);
+  const unmerged = await record(f, { c, w: head });
+  assert.equal(unmerged.exit, 1, `the T2 branch head, on no remote ref: ${said(unmerged)}`);
+  assert.match(unmerged.stderr, /remote's main/);
+  assert.equal(existsSync(statesFile(f)), false);
+  const w = squashMerge(f, branch, 'T2');
+  const later = commit(f.repo, 'another pull request after W', { 'docs/after.md': 'x\n' });
+  git(f.repo, 'push', '-q', 'origin', 'main');
+  const notChild = await record(f, { c, w: later });
+  assert.equal(notChild.exit, 1, `a commit above W: ${said(notChild)}`);
+  assert.match(notChild.stderr, /parent/);
+  assert.equal((await record(f, { c, w })).exit, 0, 'the squash W, on main with C as its parent, passes');
+});
+
+test('record_refuses_a_hash_list_on_disk_that_is_not_the_list_of_W_and_names_hashes_write', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  const absent = await record(f, { c, w, list: false });
+  assert.equal(absent.exit, 1, said(absent));
+  assert.match(absent.stderr, /hashes --write/);
+  writeFileSync(path.join(f.inputs, 'hashes-lang.txt'), `${'0'.repeat(64)}  csharp/.gitkeep\n`);
+  const stale = await record(f, { c, w, list: false });
+  assert.equal(stale.exit, 1, said(stale));
+  assert.match(stale.stderr, /hashes --write/);
+  assert.equal(existsSync(statesFile(f)), false);
+  assert.equal((await record(f, { c, w })).exit, 0, 'the list written for W: the control');
+});
+
+test('record_cross_checks_the_evidence_commits_and_the_order_of_its_dates', async t => {
+  const f = makeFreezeRepo(t);
+  const { c, w } = fullFreeze(f);
+  const done = (commitSha, date) => ({ commit: commitSha, exit: 0, date });
+  const cases = [
+    ['a scratch W″ that is C', { leak: { scratchWorkspace: done(c, '2026-12-01') } }, /scratchWorkspace/],
+    ['a scratch W″ that is W', { leak: { scratchWorkspace: done(w, '2026-12-01') } }, /scratchWorkspace/],
+    ['the scratch check dated before the check of C', { leak: { freezeCommit: done(c, '2026-12-01'), scratchWorkspace: done(SCRATCH, '2026-11-30') } }, /scratchWorkspace.*freezeCommit|freezeCommit.*scratchWorkspace/],
+    ['the push before the scratch check', { leak: { scratchWorkspace: done(SCRATCH, '2026-12-01') }, over: { provisionalFrom: '2026-11-30' } }, /provisionalFrom/],
+    ['the push after the check of W', { over: { provisionalFrom: '2026-12-03' } }, /provisionalFrom/],
+    ['the push before the tag\'s own date', { over: { provisionalFrom: '2026-11-30' }, leak: { freezeCommit: done(c, '2026-11-29'), scratchWorkspace: done(SCRATCH, '2026-11-29') } }, /tag/],
+  ];
+  for (const [what, options, pattern] of cases) {
+    const refused = await record(f, { c, w, ...options });
+    assert.equal(refused.exit, 3, `${what}: ${said(refused)}`);
+    assert.match(refused.stderr, pattern, what);
+  }
+  assert.equal(existsSync(statesFile(f)), false);
+  assert.equal((await record(f, { c, w })).exit, 0, 'the control: the dates in the order of the procedure');
+});
+
+test('record_refuses_a_spec_with_no_requirement_ids_and_a_tag_superseded_twice', async t => {
+  const noIds = baseFiles({ specs: Object.fromEntries(['04', '05', '06', '07', '08', '10'].map(nn => [nn, specText(nn).replaceAll('**R', '**Q')])) });
+  const f = makeFreezeRepo(t, { files: noIds });
+  const { c, w } = fullFreeze(f);
+  const empty = await record(f, { c, w });
+  assert.equal(empty.exit, 3, said(empty));
+  assert.match(empty.stderr, /requirement ids/);
+  assert.equal(existsSync(statesFile(f)), false);
+  const g = makeFreezeRepo(t);
+  const { c2, w2 } = failureAndRecovery(g);
+  const twice = await record(g, { c: c2, w: w2, tag: LATER_TAG, extra: ['--supersedes', TAG, '--why', 'one', '--supersedes', TAG, '--why', 'two'] });
+  assert.equal(twice.exit, 3, said(twice));
+  assert.match(twice.stderr, /twice|more than once/);
+});
+
+test('The_writer_syncs_the_folder_after_the_rename_so_the_new_name_survives_a_power_loss', async t => {
+  const f = makeFreezeRepo(t);
+  const { w } = fullFreeze(f);
+  const events = [];
+  const dirFds = new Set();
+  const io = {
+    renameSync: (from, to) => { events.push('rename'); return renameSync(from, to); },
+    openSync: (file, ...rest) => { const fd = openSync(file, ...rest); if (file === f.inputs) { dirFds.add(fd); events.push('open-dir'); } return fd; },
+    fsyncSync: fd => { events.push(dirFds.has(fd) ? 'fsync-dir' : 'fsync-file'); return fsyncSync(fd); },
+  };
+  const result = await f.run('hashes', ['--commit', w, '--write'], { io });
+  assert.equal(result.exit, 0, said(result));
+  assert.ok(events.indexOf('fsync-dir') > events.indexOf('rename') && events.indexOf('rename') > events.indexOf('fsync-file'), `the file is fsynced, renamed, then its folder is fsynced: ${events.join(' ')}`);
 });
