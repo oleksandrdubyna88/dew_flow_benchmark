@@ -97,6 +97,8 @@ defect; `research/module_tests.md` updated with the run's numbers; the pull requ
   cannot stay outside it, the probe is re-run and a CP2 addendum is recorded in `spikes/lang-bench/inputs/checkpoints.md` before the first
   D40 gate (the v2 plan's E1.S8b text names the same boundary).
 
+*2026-11-18 (E6.S6, the test-leftovers rollout):* E6.S6 claims fake homes under `~` and decoys under `/var/tmp`, which no sweep reads after a kill (the rollout's goal exception, epoch 12); S1's home sweep, and a `/var/tmp` root if its safety check allows one, would collect them.
+
 ### S2 — the exit cleanups remove read-only trees, and say so when they cannot
 
 - **Find the folder first.** List `testsToDelete-mgb-*` in the temp root before and after the v1 and the pilot suites; name the
