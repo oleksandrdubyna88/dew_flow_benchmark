@@ -5,10 +5,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { bareSessionPlan } from '../lib/bare-plan.mjs';
+import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { snapshotBoxArgv, snapshotBoxFields } from '../lib/cache-snapshot.mjs';
 import { DISTRIBUTION_DOTNET, otherDotnetVersions } from '../lib/dotnet-hide.mjs';
 import { probeBoxPrefix } from '../lib/preflight.mjs';
 import { agentBoxPrefix, layoutPaths } from '../lib/sandbox.mjs';
+import { defaultDeps } from '../lib/score-deps.mjs';
+import { boxFor } from '../lib/score-steps.mjs';
 import { sessionBoxArgv } from '../lib/session-launch.mjs';
 import { DOTNET_PIN } from './box-helpers.mjs';
 import { PIN, ROOT, SDK_11, fakeDirs, oneSdkHost, tmpfsOf, twoSdkHost } from './dotnet-fixture.mjs';
@@ -110,4 +113,48 @@ test('A_snapshot_made_with_no_pin_of_its_callers_is_given_v1s_and_one_with_a_pin
   assert.deepEqual(snapshotBoxFields({ dotnetPin: '10.0.403' }, never), { dotnetPin: '10.0.403' }, 'the pilot\'s own pin is kept');
   assert.deepEqual(snapshotBoxFields({ toolchains: ['/dn'], ...pinned }, never), { toolchains: ['/dn'], ...pinned }, 'a pinned SDK directory needs no pin: that box hides the whole distribution');
   assertHidesOtherVersions(snapshotBoxArgv({ layout, nodeDir: '/n', command: ['true'], ...snapshotBoxFields(), seams: { ...twoSdks, operatorHome: HOME } }), 'makeSnapshot, no box options', DOTNET_PIN);
+});
+
+// ---- the scoring box: the same list, from the same function, at the same moment ----------------------------------------------------------
+
+const score = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/home', tmp: '/w/tmp', toolchainDirs: ['/t/node'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: HOME };
+
+test('The_scoring_box_hides_every_other_version_before_any_bind_and_it_is_the_agent_boxs_list', () => {
+  const argv = scoreBoxArgv({ ...score, dotnetPin: PIN, ...twoSdks });
+  assertHidesOtherVersions(argv, 'scoreBoxArgv');
+  const firstBind = argv.findIndex((a, i) => i > 2 && ['--bind', '--ro-bind'].includes(a)); // index 1 is the read-only root
+  assert.ok(argv.lastIndexOf('--tmpfs') < firstBind, 'every tmpfs comes before the binds');
+  const underRoots = a => tmpfsOf(a).filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`)));
+  assert.deepEqual(underRoots(argv), underRoots(agentBoxPrefix({ ...base, dotnetPin: PIN, ...twoSdks })), 'the two boxes hide the same folders: a tree is scored by the SDK it was built with');
+});
+
+test('The_scoring_box_hides_nothing_of_dotnet_on_a_host_with_only_the_pin_and_its_argv_is_then_what_it_was', () => {
+  const now = scoreBoxArgv({ ...score, dotnetPin: PIN, ...oneSdk });
+  assert.deepEqual(tmpfsOf(now), [HOME], 'the fixture has no /mnt, /run, /tmp, /var/tmp: the operator\'s home, and no dotnet folder');
+  assert.deepEqual(now.slice(0, 10), ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', HOME]);
+  assert.deepEqual(now.slice(10, 13), ['--ro-bind', '/t/node', '/t/node'], 'the binds follow the tmpfs directly, as before');
+});
+
+test('A_scoring_box_with_a_pinned_sdk_directory_lists_nothing_and_one_with_neither_is_refused', () => {
+  const pinnedDir = scoreBoxArgv({ ...score, dotnetDir: '/dn', ...neverListed });
+  assert.deepEqual(pinnedDir, scoreBoxArgv({ ...score, dotnetPin: PIN, ...oneSdk }), 'a pinned SDK directory: the argv the scoring box always had');
+  assert.throws(() => scoreBoxArgv({ ...score, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
+  assert.throws(() => scoreBoxArgv({ ...score, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK');
+});
+
+/** The scorer's context as a step sees it: the plan's folders and the dependencies `defaultDeps` builds (the held-out slot is not asked here). */
+const scorerCtx = (given, seams) => {
+  const deps = defaultDeps({ inputs: {}, toolchainDirs: ['/t/node'], heldout: async () => { throw new Error('not asked'); }, ...given });
+  return { plan: { casesDir: '/w/cases', homeDir: '/w/home', tmpDir: '/w/tmp', nugetCopy: '/w/nuget', npmCopy: '/w/npm' }, deps: { ...deps, box: { ...deps.box, operatorHome: HOME, ...seams } } };
+};
+
+test('Every_step_of_the_scorer_builds_its_box_with_the_pin_of_its_dependencies_the_callers_or_v1s_registered_one', () => {
+  assert.deepEqual(defaultDeps({ inputs: {}, heldout: () => {} }).box, { toolchainDirs: [], dotnetPin: DOTNET_PIN }, 'no pin given (the held-out pipeline, a scorer run by hand): v1\'s, of inputs/stacks.json');
+  assert.equal(defaultDeps({ inputs: {}, heldout: () => {}, dotnetPin: '10.0.403' }).box.dotnetPin, '10.0.403', 'a run\'s own pin is kept');
+  for (const options of [{}, { cwd: false, cases: true, roFiles: ['/w/copy'] }]) {
+    assertHidesOtherVersions(boxFor(scorerCtx({ dotnetPin: PIN }, twoSdks), '/w/copy', options), 'score-steps boxFor');
+    assertHidesOtherVersions(boxFor(scorerCtx({}, twoSdks), '/w/copy', options), 'score-steps boxFor, v1\'s pin', DOTNET_PIN);
+  }
+  const noPin = scorerCtx({}, twoSdks);
+  assert.throws(() => boxFor({ ...noPin, deps: { ...noPin.deps, box: { toolchainDirs: [], ...twoSdks } } }, '/w/copy'), /dotnetPin undefined/, 'box options made anywhere else, without the pin, build no box');
 });

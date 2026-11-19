@@ -13,6 +13,7 @@ import { launchPhase } from '../lib/bare-phase.mjs';
 import { scoreBoxArgv, scoreEnv } from '../lib/bwrap.mjs';
 import { agentEnv, dummyToken, layoutPaths } from '../lib/sandbox.mjs';
 import { context, items } from './bare-ctx.mjs';
+import { PIN } from './dotnet-fixture.mjs';
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 
@@ -23,7 +24,9 @@ export const observeAgentEnv = () => {
   return { base: call({}), withExtra: call({ GH_TOKEN: 'x' }) };
 };
 
-const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a', '/t/b'], nugetCache: '/w/nuget', npmCache: '/w/npm', roFiles: ['/w/copy/test.sh'], cwd: '/w/copy', operatorHome: '/opt/operator-home' };
+/** The scoring box is told a pin (it refuses none, E2 amendment 2026-11-19) on a host whose dotnet roots hold no version folder (`listDir`): the argv is then what it was before the pin existed, so the baseline stands. */
+const NO_OTHER_SDK = { dotnetPin: PIN, listDir: () => [] };
+const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a', '/t/b'], nugetCache: '/w/nuget', npmCache: '/w/npm', roFiles: ['/w/copy/test.sh'], cwd: '/w/copy', operatorHome: '/opt/operator-home', ...NO_OTHER_SDK };
 
 /** scoreEnv and scoreBoxArgv for fixed inputs, with the home present and absent from the host. */
 export const observeScoring = () => ({
@@ -31,7 +34,7 @@ export const observeScoring = () => ({
   envFull: scoreEnv(SCORE_OPTS),
   argvAllPresent: [...scoreBoxArgv({ ...SCORE_OPTS, exists: () => true })],
   argvNonePresent: [...scoreBoxArgv({ ...SCORE_OPTS, exists: () => false })],
-  argvMinimal: [...scoreBoxArgv({ copyDir: '/w/copy', home: '/w/hm', tmp: '/w/tmp', operatorHome: '/opt/operator-home', exists: () => true })],
+  argvMinimal: [...scoreBoxArgv({ copyDir: '/w/copy', home: '/w/hm', tmp: '/w/tmp', operatorHome: '/opt/operator-home', exists: () => true, ...NO_OTHER_SDK })],
 });
 
 /** A session record with only the leaves cellOf reads. */

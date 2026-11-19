@@ -1,11 +1,13 @@
 // The EFFECT of the dotnet hide list in the real box on this host (E2 amendment 2026-11-19, D-9; the plan gate's point 3). `box-dotnet-paths.test.mjs` shows every path sends the tmpfs; here bwrap, the
 // muxer and the SDK answer: the box lists one SDK, the pin, and a program built and run in it is built by the pinned SDK and runs on the pin's runtime. Each "cannot" has its control: the same probe
 // in the same box WITHOUT the computed tmpfs sees the other SDK. The hidden paths are read from `otherDotnetVersions`, never typed. Every folder is an owned one (`ownedDir`), removed with its test.
+// The last test is the SCORING box (`scoreBoxArgv`): the same list, so a tree is scored by the SDK it was built with.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { makeSnapshot, makeWritable } from '../lib/cache-snapshot.mjs';
 import { DISTRIBUTION_DOTNET, otherDotnetVersions, subdirsOf } from '../lib/dotnet-hide.mjs';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
@@ -140,4 +142,26 @@ test('A_snapshot_made_with_no_box_options_runs_its_steps_in_a_box_that_lists_onl
   const made = await makeSnapshot({ stack: 'csharp', recipe, root: owned.ownedDir(t, 'snapw'), out });
   assert.equal(made.ok, true, `the snapshot's box lists the pin only: ${made.reason}`);
   assert.equal(made.value.steps[0].stdout, DOTNET_PIN);
+});
+
+test('The_real_scoring_box_lists_exactly_the_pinned_sdk_and_gives_a_folder_with_no_global_json_the_pin_and_without_the_hide_list_the_newest_sdk', async t => {
+  if (!dotnetGate(t)) return;
+  const root = owned.ownedDir(t, 'score');
+  const dirs = { copyDir: path.join(root, 'copy'), home: path.join(root, 'home'), tmp: path.join(root, 'tmp') };
+  for (const d of Object.values(dirs)) mkdirSync(d);
+  assert.equal(existsSync(path.join(dirs.copyDir, 'global.json')), false, 'nothing in the folder pins an SDK: what dotnet --version says is what the box shows');
+  const hidden = otherDotnetVersions({ pin: DOTNET_PIN });
+  const real = scoreBoxArgv({ ...dirs, cwd: dirs.copyDir, dotnetPin: DOTNET_PIN });
+  const script = 'dotnet --list-sdks\necho "version=$(dotnet --version)"';
+  const listed = out => sdkLines(out).filter(l => !l.startsWith('version='));
+  const inside = await probeArgv(real, script); // the scoring box carries its own environment (--clearenv, --setenv), none is given here
+  t.diagnostic(`scoring box: dotnet --list-sdks -> ${JSON.stringify(listed(inside.out))}; dotnet --version -> ${lineOf(inside.out, 'version')}`);
+  assert.equal(listed(inside.out).length, 1, `exactly one SDK: ${inside.out}`);
+  assert.ok(listed(inside.out)[0].startsWith(`${DOTNET_PIN} [`), `the one SDK is the pin ${DOTNET_PIN}: ${inside.out}`);
+  assert.equal(lineOf(inside.out, 'version'), DOTNET_PIN, 'a tree with no global.json is built by the pinned SDK');
+  if (otherSdks(hidden).length === 0) return t.skip(`this host holds one SDK only (${DOTNET_PIN}): nothing is hidden, so the control cannot list a second one`);
+  const open = await probeArgv(hidden.reduce((argv, p) => withoutPair(argv, '--tmpfs', p), real), script);
+  t.diagnostic(`control (no dotnet tmpfs): dotnet --list-sdks -> ${JSON.stringify(listed(open.out))}; dotnet --version -> ${lineOf(open.out, 'version')}`);
+  assert.equal(listed(open.out).length, 1 + otherSdks(hidden).length, `control: without the hide list the scoring box lists every SDK of the host: ${open.out}`);
+  assert.equal(lineOf(open.out, 'version'), newestOf([DOTNET_PIN, ...otherSdks(hidden).map(p => path.basename(p))]), 'control: and gives the same folder the newest of them');
 });

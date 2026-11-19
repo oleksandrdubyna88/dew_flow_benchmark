@@ -19,11 +19,14 @@ const BY_NAME = Object.freeze(['shared', 'packs']);
 const VERSION = /^(\d+)\.\d+\.\d+/;
 const majorOf = name => VERSION.exec(name)?.[1] ?? null;
 
+/** Whether `v` has the shape of an SDK version (x.y.z, a suffix allowed): what a pin must be. */
+export const isSdkVersion = v => typeof v === 'string' && majorOf(v) !== null;
+
 /** The names of the sub-directories of `dir`, read from the disk. A link is not followed: a tmpfs cannot be mounted over one, so it is left, and the preflight's probe still counts what it shows. */
 export const subdirsOf = dir => readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
 
 function majorOfPin(pin) {
-  const major = typeof pin === 'string' ? majorOf(pin) : null;
+  const major = isSdkVersion(pin) ? majorOf(pin) : null;
   // no silent skip: a box built on the distribution's dotnet with no pin would show every SDK of the host, and a measured cell could then be built with another one
   if (major === null) throw new Error(`dotnetPin ${typeof pin === 'string' ? `'${pin.slice(0, 40)}'` : String(pin)} is not an SDK version (x.y.z, for example 10.0.114): a box on the distribution's dotnet hides every other version, so it must be told the pinned one`);
   return major;
@@ -43,3 +46,11 @@ export function otherDotnetVersions({ pin, roots = DISTRIBUTION_DOTNET, exists =
   ];
   return Object.freeze(roots.flatMap(inRoot).map(e => e.dir));
 }
+
+/**
+ * The dotnet version folders ONE box hides, read from the host NOW, when the box is built: the same decision for the agent's box (`agentBoxPrefix`) and the scoring box (`scoreBoxArgv`), so the two
+ * cannot drift and no caller can hold a stale list. A box with a pinned SDK directory (`dotnetDir`) gets nothing here (the agent's hides the whole distribution through its caller's `hide`); every
+ * other box runs the distribution's dotnet and shows only `dotnetPin`'s versions. No pin and no pinned directory is refused (`otherDotnetVersions` throws, naming the shape): skipping would show
+ * every SDK of the host, and a tree could be built, or scored, with another one.
+ */
+export const boxDotnetHide = ({ dotnetDir, dotnetPin, exists, listDir }) => (dotnetDir ? [] : otherDotnetVersions({ pin: dotnetPin, exists, listDir }));

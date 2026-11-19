@@ -28,6 +28,7 @@ function harness(over = {}) {
   const events = [];
   const variants = over.variants ?? {};
   const launched = [];
+  const scoredWith = [];
   const ctx = {
     ...base, kind: 'data', pair: 1, seed: SEED, runMapFile: path.join(base.seriesDir, 'run-map.json'), ledgerFile: path.join(base.seriesDir, 'ledger.ndjson'), ceilingUsd: 500, bareBudgetUsd: 40,
     caps: { capUsd: 6, wallMs: 3_600_000, stallMs: 2_700_000 }, table: parsed.value.table, policy: parsed.value.policy, handVerdictsFor: () => [], snapshotPackages: [], packageRules: [],
@@ -41,7 +42,7 @@ function harness(over = {}) {
     quiet: async arg => { events.push(`quiet ${arg.phase}`); return over.quiet ? over.quiet(arg) : { ok: true, value: { quiet: true, flags: [] } }; },
     startSampler: () => ({ stop: async () => ({ samples: 3, flags: over.samplerFlags ?? [], error: null }) }),
     loadFlag: async () => false, now: Date.now,
-    scoreSession: async arg => { events.push(`score ${path.basename(arg.session)}`); return over.score ? over.score(arg) : { kind: 'scored', score: SCORE }; },
+    scoreSession: async arg => { events.push(`score ${path.basename(arg.session)}`); scoredWith.push(arg.dotnetPin); return over.score ? over.score(arg) : { kind: 'scored', score: SCORE }; },
     phase: {
       maskCheckMs: 1, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => [path.join(ctx.home, '.claude', 'projects', 'p1')], spawn: () => ({}),
       launchSession: async (plan, d, opts) => {
@@ -57,7 +58,7 @@ function harness(over = {}) {
     },
   };
   const map = over.map ?? openSeries({ seriesId: 's-x', seedSha256: 'b'.repeat(64), harnessIdentity: ctx.harnessIdentity, preregTag: ctx.preregTag, preregCommit: 'c'.repeat(40), pins: {}, stacksSha256: 'd', pricesSha256: 'e', snapshots: {}, caps: ctx.caps, bareBudgetUsd: 40, ceilingUsd: 500 });
-  return { ctx, deps, map, events, launched };
+  return { ctx, deps, map, events, launched, scoredWith };
 }
 const rid = (stack, phase, attempt, pair = 1) => ridOf({ seed: SEED, pair, stack, phase, attempt });
 
@@ -67,6 +68,8 @@ test('A_pair_of_data_sessions_runs_both_phases_with_the_barrier_between_and_reco
   assert.equal(r.exit, EXIT.done, r.message);
   const order = t.events.filter(e => e.startsWith('launch') || e.startsWith('score')).map(e => e.split(' ')[0]);
   assert.deepEqual(order, ['launch', 'launch', 'score', 'score', 'launch', 'launch', 'score', 'score'], 'v1 pair, both scored, THEN the v2 pair, both scored');
+  assert.match(t.ctx.dotnetPin, /^\d+\.\d+\.\d+$/);
+  assert.deepEqual(t.scoredWith, Array(4).fill(t.ctx.dotnetPin), 'every scoring is handed the context\'s pinned SDK: the scoring box shows the SDK the session\'s box showed');
   assert.deepEqual(t.events.filter(e => e.startsWith('guard')), ['guard paid=true', 'guard paid=true'], 'the guard runs before every phase');
   const map = readRunMap(t.ctx.runMapFile).value;
   assert.equal(Object.keys(map.sessions).length, 4);

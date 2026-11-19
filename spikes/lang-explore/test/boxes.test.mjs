@@ -59,7 +59,7 @@ test('The_scoring_box_gives_both_stacks_the_locale_too', async t => {
     const dirs = Object.fromEntries(['copy', 'home', 'tmp'].map(n => [n, path.join(base, n)]));
     for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
     workspace(stack, dirs.copy);
-    const argv = scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, locale: EXPLORE.locale });
+    const argv = scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, locale: EXPLORE.locale, dotnetPin: EXPLORE.dotnet.sdk });
     const r = await probeArgv(argv, COMMANDS[stack], undefined, { timeoutMs: 180_000 });
     check(stack, r.out);
   }
@@ -71,7 +71,7 @@ test('Without_the_locale_seam_the_same_programs_see_the_C_locale_so_the_probe_ca
   const dirs = Object.fromEntries(['copy', 'home', 'tmp'].map(n => [n, path.join(base, n)]));
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
   workspace('node', dirs.copy);
-  const r = await probeArgv(scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy }), COMMANDS.node, undefined, { timeoutMs: 60_000 });
+  const r = await probeArgv(scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, dotnetPin: EXPLORE.dotnet.sdk }), COMMANDS.node, undefined, { timeoutMs: 60_000 });
   assert.match(r.out.trim(), /\|C\.UTF-8\|undefined$/);
 });
 

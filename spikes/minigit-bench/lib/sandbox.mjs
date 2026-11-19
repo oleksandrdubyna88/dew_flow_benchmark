@@ -11,7 +11,7 @@ import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
 import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, localeEnv, roBind, roRoot, tmpfs } from './bwrap.mjs';
-import { otherDotnetVersions, subdirsOf } from './dotnet-hide.mjs';
+import { boxDotnetHide, subdirsOf } from './dotnet-hide.mjs';
 import { fail, ok } from './result.mjs';
 
 export const BOX_PROXY_PORT = 3128;
@@ -163,17 +163,11 @@ export const boxReachable = opts => planView(opts).allow;
 export const boxSkeleton = opts => planView(opts).skeleton;
 
 /**
- * The dotnet version folders this box hides (E2 amendment 2026-11-19, D-9), read from the host NOW, when the box is built: an SDK installed between a preflight and a session is hidden too, and no
- * caller can hold a stale list. A box with a pinned `dotnetDir` hides the whole distribution through its caller's `hide` (E1.S4) and gets nothing here; every other box runs the distribution's
- * dotnet and shows only `dotnetPin`'s versions. No pin and no pinned directory is refused (`otherDotnetVersions` throws, naming the shape): skipping would show every SDK of the host.
- */
-const dotnetVersionsToHide = ({ dotnetDir, dotnetPin, exists, listDir }) => (dotnetDir ? [] : otherDotnetVersions({ pin: dotnetPin, exists, listDir }));
-
-/**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
  * host's `/tmp`. Its own network, pid and ipc namespaces. No `--setenv`, no `--clearenv`: the environment is the spawn's `env`.
- * `dotnetPin` is the pinned SDK version (required unless `dotnetDir`, a pinned SDK directory, is given); `listDir` lists a directory's sub-directories, injected as `exists` is.
+ * `dotnetPin` is the pinned SDK version (required unless `dotnetDir`, a pinned SDK directory, is given; E2 amendment 2026-11-19, D-9: `boxDotnetHide`, an SDK installed between a preflight and a
+ * session is hidden too); `listDir` lists a directory's sub-directories, injected as `exists` is.
  */
 export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = subdirsOf }) {
   return Object.freeze([
@@ -181,7 +175,7 @@ export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nod
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
     // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over); the distribution's dotnet, because a pinned-toolchain program must not find it
     ...hide.filter(p => exists(p)).flatMap(tmpfs),
-    ...dotnetVersionsToHide({ dotnetDir, dotnetPin, exists, listDir }).flatMap(tmpfs),
+    ...boxDotnetHide({ dotnetDir, dotnetPin, exists, listDir }).flatMap(tmpfs),
     ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),
     ...roBind(claudeBinary),

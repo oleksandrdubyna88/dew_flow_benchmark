@@ -5,10 +5,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { hundredPercent } from '../../minigit-bench/lib/score-pipeline.mjs';
+import { DISTRIBUTION_DOTNET, otherDotnetVersions } from '../../minigit-bench/lib/dotnet-hide.mjs';
+import { PIN, ROOT, SDK_11, fakeDirs, tmpfsOf, twoSdkHost } from '../../minigit-bench/test/dotnet-fixture.mjs';
 import { PLACE, acceptedOf, boxArgvs, judgeConfig, scoreShape, verdictCounts, withEnv } from '../lib/score.mjs';
 
 const pairs = argv => Object.fromEntries(argv.flatMap((a, i) => (a === '--setenv' ? [[argv[i + 1], argv[i + 2]]] : [])));
-const OPTS = { toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: '/c/nuget', npmCache: '/c/npm', locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, operatorHome: '/home/op', exists: () => true };
+const OPTS = { toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: '/c/nuget', npmCache: '/c/npm', locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, operatorHome: '/home/op', dotnetPin: PIN, exists: () => true, listDir: () => [] };
 
 test('withEnv_replaces_a_key_in_place_adds_a_new_one_after_the_last_and_refuses_an_argv_without_an_environment', () => {
   const argv = ['bwrap', '--clearenv', '--setenv', 'A', '1', '--setenv', 'B', '2', '--chdir', '/x', '--', ];
@@ -70,7 +72,7 @@ test('A_session_is_accepted_only_with_a_clean_build_every_case_passed_and_the_me
 
 test('The_judge_config_carries_the_pilots_locale_and_environment_the_limits_and_both_case_sets', () => {
   const area = tmpDir('cfg');
-  const explore = { locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' } };
+  const explore = { locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, dotnet: { sdk: PIN } };
   const files = { 'samples/s01.in': { bytes: Buffer.from('1\n') }, 'samples/s01.out': { bytes: Buffer.from('1\n') }, 'build.sh': { bytes: Buffer.from('x') } };
   const limits = { timeMs: 2000, memoryBytes: 1, buildTimeoutMs: 3 };
   const config = judgeConfig({ explore, files, sets: [{ name: 'heldout', dir: '/h' }], limits, toolchains: { dirs: ['/n'], tsDir: '/ts' }, caches: {}, area });
@@ -79,5 +81,21 @@ test('The_judge_config_carries_the_pilots_locale_and_environment_the_limits_and_
   assert.equal(config.limits, limits);
   assert.deepEqual(config.placeholders, PLACE);
   for (const box of [config.buildBox, config.runBox]) assert.deepEqual([pairs(box).LANG, pairs(box).LC_ALL, pairs(box).DOTNET_gcServer], ['de_DE.UTF-8', 'de_DE.UTF-8', '0']);
+  // the judge's boxes are told the pilot's pinned SDK (explore.dotnet.sdk): the same argv as boxArgvs with that pin, and no box at all without it
+  const told = boxArgvs({ toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: path.join(area, 'cache-nuget'), npmCache: path.join(area, 'cache-npm'), locale: explore.locale, envExtra: explore.envExtra, dotnetPin: explore.dotnet.sdk });
+  assert.deepEqual([config.buildBox, config.runBox], [told.buildBox, told.runBox]);
   assert.ok(existsSync(path.join(area, 'cache-nuget')) && existsSync(path.join(area, 'cache-npm')), 'an absent cache is an empty one');
+});
+
+test('Both_judge_boxes_hide_every_other_dotnet_version_of_a_host_that_holds_several_and_a_judge_with_no_pin_builds_no_box', () => {
+  const host = fakeDirs(twoSdkHost());
+  const { buildBox, runBox } = boxArgvs({ ...OPTS, ...host });
+  for (const [name, box] of [['buildBox', buildBox], ['runBox', runBox]]) {
+    const hidden = tmpfsOf(box);
+    assert.ok(hidden.includes(`${ROOT}/sdk/${SDK_11.sdk}`), `${name}: --tmpfs ${ROOT}/sdk/${SDK_11.sdk}`);
+    assert.ok(hidden.includes(`${ROOT}/shared/Microsoft.NETCore.App/${SDK_11.runtime}`), `${name}: another major's runtime is hidden`);
+    assert.deepEqual(hidden.filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`))), [...otherDotnetVersions({ pin: PIN, ...host })], `${name}: the one list, whole`);
+  }
+  const { dotnetPin: _dropped, ...noPin } = OPTS;
+  assert.throws(() => boxArgvs({ ...noPin, ...host }), /dotnetPin undefined is not an SDK version/);
 });

@@ -4,7 +4,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runBounded } from '../lib/run.mjs';
-import { parseCli } from '../score-session.mjs';
+import { parseCli, scorerDeps } from '../score-session.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 import { sandboxGate, spikeDir, stubTrees, tmpDir } from './helpers.mjs';
 
 const cli = fileURLToPath(new URL('../score-session.mjs', import.meta.url));
@@ -126,4 +127,16 @@ test('The_scorer_lowers_its_own_priority_like_every_local_run', async () => {
   const r = await runBounded(process.execPath, ['--input-type=module', '-e', code], { env, timeoutMs: 20_000 });
   assert.equal(r.ok, true, r.reason);
   assert.equal(Number(r.value.stdout.trim()), 19, r.value.stderr);
+});
+
+test('The_scorer_takes_the_runs_pinned_sdk_as_dotnet_pin_refuses_a_word_that_is_no_version_and_falls_back_to_the_registered_pin', async () => {
+  const given = parseCli([...good, '--dotnet-pin', '10.0.403']);
+  assert.equal(given.ok, true, given.reason);
+  assert.equal(scorerDeps(given.value, {}).box.dotnetPin, '10.0.403', 'the scoring box is told the pin the run handed over');
+  assert.equal(scorerDeps(parseCli(good).value, {}).box.dotnetPin, DOTNET_PIN, 'run by hand with no pin: the one of inputs/stacks.json');
+  for (const bad of ['undefined', 'latest', '10']) assert.match(parseCli([...good, '--dotnet-pin', bad]).reason, /--dotnet-pin .* is not an SDK version/, bad);
+  // what a run with no pin sends (score-run.mjs puts the text `undefined` on the argv): the real command refuses it as a usage error, and nothing is scored
+  const r = await runCli([...good, '--dotnet-pin', 'undefined']);
+  assert.equal(r.code, 4);
+  assert.match(r.stdout, /usage error: --dotnet-pin undefined is not an SDK version/);
 });

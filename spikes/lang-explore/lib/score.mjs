@@ -36,10 +36,12 @@ function isValueOf(argv, overrides, i) {
 
 /**
  * The two scoring box argvs the judge fills in per case: `buildBox` (the tree, a home and a tmp, and the cache copies, read-write) and `runBox` (the tree, a home and a tmp, no cache). Both carry
- * the locale (W3), the pilot's extra environment keys and `tsc` on PATH; neither binds the cases.
+ * the locale (W3), the pilot's extra environment keys and `tsc` on PATH; neither binds the cases. Both are told the pinned SDK (`dotnetPin`, the pilot's `dotnet.sdk`): v1's scoring box hides every
+ * other dotnet version of the host, as the session's box did (v1 E2 amendment 2026-11-19), and refuses a box with no pin. `exists` and `listDir` are the tests' seams.
  */
-export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, operatorHome, exists }) {
-  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, locale, ...(operatorHome ? { operatorHome } : {}), ...(exists ? { exists } : {}) };
+export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, dotnetPin, operatorHome, exists, listDir }) {
+  const seams = { ...(exists ? { exists } : {}), ...(listDir ? { listDir } : {}) };
+  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, locale, dotnetPin, ...(operatorHome ? { operatorHome } : {}), ...seams };
   const env = { ...envExtra, PATH: `${scoreEnv({ ...common, toolchainDirs }).PATH}:${tsDir}/node_modules/.bin` };
   return {
     buildBox: withEnv(scoreBoxArgv({ ...common, nugetCache, npmCache }), env),
@@ -181,7 +183,7 @@ export function judgeConfig({ explore, files, sets, limits, toolchains, caches, 
   const npmCache = copyCache(caches.npm, path.join(area, 'cache-npm'));
   const visibleDir = path.join(area, 'visible');
   writeSamples({ files, dir: visibleDir });
-  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra, operatorHome });
+  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra, dotnetPin: explore.dotnet.sdk, operatorHome });
   return { work: path.join(area, 'run'), tree: path.join(area, 'tree'), out: path.join(area, 'result.json'), limits, placeholders: PLACE, buildBox: boxes.buildBox, runBox: boxes.runBox, sets: [{ name: 'visible', dir: visibleDir }, ...sets] };
 }
 

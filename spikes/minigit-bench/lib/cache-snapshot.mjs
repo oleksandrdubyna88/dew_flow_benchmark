@@ -14,6 +14,7 @@ import { readNpmPackages, readNugetPackages } from './packages.mjs';
 import { fail, ok } from './result.mjs';
 import { runBounded } from './run.mjs';
 import { agentBoxArgv, agentEnv, dummyToken, sessionLayout } from './sandbox.mjs';
+import { v1SdkPin } from './stacks-pin.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -215,9 +216,6 @@ async function runStep({ step, resolved, box }) {
   const problem = pinProblem(step, command, printed);
   return problem ? fail(problem) : ok(stepRecord({ step, command, ran, printed }));
 }
-
-/** v1's pinned SDK version (`inputs/stacks.json`, the one the preflight checks in the box). */
-const v1SdkPin = () => JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'stacks.json'), 'utf8')).pins.dotnetSdk;
 
 /**
  * `makeSnapshot`'s `box`, completed. A box with no pinned SDK directory runs the distribution's dotnet and shows only the pinned SDK's versions (E2 amendment 2026-11-19), so it must be told the pin:

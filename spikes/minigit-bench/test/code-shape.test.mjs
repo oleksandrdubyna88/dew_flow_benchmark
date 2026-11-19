@@ -18,7 +18,7 @@ const E3B_FILES = [
   'lib/run-map.mjs', 'lib/series-lock.mjs', 'lib/spend-gate.mjs', 'lib/ledger.mjs', 'lib/amendments.mjs', 'lib/alias-store.mjs', 'lib/seed.mjs', 'lib/prereg-guard.mjs', 'lib/prereg-consistency.mjs',
   'lib/contamination-cwd.mjs', 'lib/contamination-heredoc.mjs', 'lib/contamination-links.mjs', 'lib/contamination-pipe.mjs', 'lib/contamination-reach.mjs', 'lib/contamination-session-cwd.mjs',
   'lib/aa-check.mjs', 'lib/aa-facts.mjs', 'lib/aa-rules.mjs', 'lib/aa-rules-twins.mjs', 'lib/aa-smoke.mjs', 'lib/aa-verdicts.mjs',
-  'lib/quiet.mjs', 'lib/cpu-sampler.mjs', 'lib/cache-snapshot.mjs', 'lib/dotnet-hide.mjs', 'lib/packages.mjs', 'lib/workspace.mjs', 'lib/loc.mjs', 'lib/canary-plan.mjs', 'lib/rehearsal.mjs', 'lib/stub-cli.mjs', 'lib/stub-upstream.mjs', 'lib/score-run.mjs', 'lib/stream-calls.mjs',
+  'lib/quiet.mjs', 'lib/cpu-sampler.mjs', 'lib/cache-snapshot.mjs', 'lib/dotnet-hide.mjs', 'lib/stacks-pin.mjs', 'lib/packages.mjs', 'lib/workspace.mjs', 'lib/loc.mjs', 'lib/canary-plan.mjs', 'lib/rehearsal.mjs', 'lib/stub-cli.mjs', 'lib/stub-upstream.mjs', 'lib/score-run.mjs', 'lib/stream-calls.mjs',
   'prereg/blocks.mjs', 'prereg/cli.mjs', 'prereg/extract-contract.mjs', 'prereg/extract-prediction.mjs', 'prereg/extract-prompts.mjs', 'prereg/heldout-prereg.mjs', 'prereg/parent.mjs', 'prereg/spend-prior.mjs',
 ];
 

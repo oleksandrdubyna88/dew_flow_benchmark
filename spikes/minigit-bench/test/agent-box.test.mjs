@@ -9,7 +9,7 @@ import { runBounded } from '../lib/run.mjs';
 import {
   AGENT_ENV_KEYS, BOX_API_PORT, BOX_OTEL_PORT, BOX_PROXY_PORT, SOCKET_PATH_MAX_BYTES, agentBoxArgv, agentBoxPrefix, agentEnv, dummyToken, layoutPaths, sessionLayout,
 } from '../lib/sandbox.mjs';
-import { boxOptions, envFor, newSession, nodeDir, probe, probeArgv, withoutBind, withoutFlag } from './box-helpers.mjs';
+import { DOTNET_PIN, boxOptions, envFor, newSession, nodeDir, probe, probeArgv, withoutBind, withoutFlag } from './box-helpers.mjs';
 import { homeDir, hostLacks, sandboxGate, tmpDir } from './helpers.mjs';
 
 const HOME = '/home/someone';
@@ -25,7 +25,7 @@ test('The_hide_list_is_the_home_and_the_four_host_prefixes_and_a_missing_host_di
 
 test('Both_boxes_hide_the_same_paths_and_isolate_the_same_way', () => {
   const layout = layoutPaths('/r', 'a');
-  const opts = { copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp', operatorHome: HOME, exists: () => true };
+  const opts = { copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp', operatorHome: HOME, dotnetPin: DOTNET_PIN, ...EVERYTHING_EXISTS };
   const hidden = hiddenPaths(opts);
   const boxes = [['scoring', scoreBoxArgv(opts)], ['agent', agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, ...EVERYTHING_EXISTS }))]];
   for (const [name, argv] of boxes) {
