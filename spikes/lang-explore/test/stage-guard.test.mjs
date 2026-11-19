@@ -279,3 +279,20 @@ test('The_live_identities_are_read_from_the_places_that_own_them_and_one_that_ca
   const real = await liveIdentities({ repo: REPO, home, explore, readers: {} });
   for (const name of ['runnerManifest', 'execLayerTree', 'memoryPolicy', 'pidsMax', 'toolchains', 'memoryValue', 'contract', 'templates', 'locale', 'seriesDefaults', 'host']) assert.equal(typeof real[name].value, 'string', `${name} reads from this repository: ${real[name].unknown}`);
 });
+
+test('The_guard_names_an_identity_that_differs_from_the_manifest_and_asks_the_paid_checks_only_for_a_paid_launch', async t => {
+  const w = await world(t);
+  const moved = { ...LIVE, contract: { value: sha256('the contract moved') } };
+  const refused = await stageGuard({ ...w.args, deps: { ...w.args.deps, live: async () => moved } });
+  assert.equal(refused.ok, false, 'a live identity that differs from the manifest refuses the guard');
+  assert.ok(refused.problems.some(p => p.startsWith('contract differs')), refused.problems.join(' | '));
+  const free = await stageGuard({ ...w.args, paid: false });
+  assert.equal(free.ok, true, 'a free launch asks none of the paid checks');
+  const unwired = await stageGuard({ ...w.args, paid: true, deps: { ...w.args.deps, preregGuard: undefined } });
+  assert.equal(unwired.ok, false, 'a paid launch with no pre-registration guard handed in is refused');
+  assert.ok(unwired.problems.some(p => /PR 5/.test(p)));
+  const asked = [];
+  const paid = await stageGuard({ ...w.args, paid: true, requireSeed: true, deps: { ...w.args.deps, preregGuard: async a => { asked.push(a.requireSeed); return ['the tag is not on the remote']; } } });
+  assert.deepEqual(asked, [true], 'PR 5\'s guard is asked with the seed requirement');
+  assert.ok(paid.problems.includes('the tag is not on the remote'), 'and its sentences are the guard\'s');
+});
