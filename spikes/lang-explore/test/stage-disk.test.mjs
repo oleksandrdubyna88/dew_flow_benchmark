@@ -116,6 +116,7 @@ test('A_missing_or_zero_size_is_a_refusal_and_never_a_rule_that_passes', t => {
       assert.equal(verdict.go, false, `${name}: ${gate.name} refuses`);
       assert.equal(verdict.exit, HALT_EXIT, `${name}: resumable`);
       assert.ok(typeof verdict.reason === 'string' && verdict.reason.length > 0, `${name}: it says why`);
+      if (name.startsWith('freeBytes')) assert.match(verdict.reason, /cannot be read/, `${name}: it says the free disk could not be read, not that the space is short`);
     }
   }
 });
