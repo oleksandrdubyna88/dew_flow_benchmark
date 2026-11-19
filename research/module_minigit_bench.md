@@ -120,7 +120,7 @@ recorded in `score/score.json`:
    `score/.owned/`, a directory the box never binds); anything unmarked is only reported;
 2. **copy** — the session tree to `score/copy` (build output and dependency directories left out), plus per-scoring copies
    of the seeded offline NuGet and npm caches and a scratch HOME and TMPDIR;
-3. **preflight** — the box can start;
+3. **preflight** — the box can start (the scoring box hides the home, `/mnt`, `/run`, `/tmp`, `/var/tmp` and, since 2026-11-19, every dotnet version folder but the pinned SDK's: the dated note in the E2 section);
 4. **inputs** — the session's specs against the pinned hashes: a mismatch is recorded as `inputsTampered`, a missing file as
    `inputsAbsent`;
 5. **build** from clean, 600 s;
@@ -330,6 +330,13 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`; the process arm's `extra` may only ADD keys, and a key is a clash when it equals a base key in ANY case, because `https_proxy` is read by curl beside `HTTPS_PROXY`), `PATH` is constructed (no `/mnt`), and the credential in it is a
   **dummy**; the real token is not a parameter of anything in the box's path. `sessionLayout` claims `<runs root>/<rid>/` with a
   non-recursive `mkdir` and refuses a socket path over 108 bytes (UTF-8 bytes; 109 refused with `EINVAL` on this kernel).
+  **Two more hide lists, both empty tmpfs placed before any bind.** `hide` (E1.S4) is the caller's own paths. A box with a pinned SDK
+  directory (`dotnetDir`) hides the whole distribution's dotnet (`DISTRIBUTION_DOTNET`, each root the host has) BY ITSELF, whatever
+  `hide` holds; a root the caller names too is mounted once. Every other box runs the distribution's dotnet,
+  and `agentBoxPrefix` itself hides every dotnet VERSION folder that is not the pinned SDK's (`dotnetPin`, required then; amendment of
+  2026-11-19, the dated note below): the list is `otherDotnetVersions` of `lib/dotnet-hide.mjs`, read from the host when the box is built.
+  The scoring box takes the same decisions from the same functions (`scoringBoxArgv` of `lib/score-box.mjs`, which wraps the unchanged
+  `scoreBoxArgv`), so the two boxes cannot drift. Both builders REFUSE a bind that is, or holds, a dotnet folder they hide.
 - **The supervisor** (`harness/box-init.mjs`, node builtins only, copied into `harness/`). Starts a loopback forwarder per
   `<port>:<unix socket>` (proxy 3128, API door 8787, OTel 4318 on the box's own loopback), then runs the command and exits with its
   code (`128 + n` for a signal; the old probe copy mapped every signal to 137). It ignores SIGTERM aimed at itself, **which is only safe because `endCell` always signals the command itself** (a caller that signalled `box-init` alone would leave the command running): the stop signals each
@@ -434,7 +441,119 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
 - **Preflight** (`lib/preflight.mjs`, `lib/host-checks.mjs`, `inputs/stacks.json`). `bwrap` and user namespaces; the TypeScript toolchain
   installed read-only when asked and absent (`npm install --prefix`, `chmod -R a-w`); then the pins (`claude` 2.1.310, node 26.12.1, dotnet
   SDK 10.0.114 (amended 2026-10-30 from 10.0.113, below) and exactly one, `tsc` 7.0.2) probed INSIDE a box with no proxy and no broker; the token file's status. **E3's runner must reuse `lib/preflight.mjs`** (it is the one place the
-  pins are probed inside a box and the token file is checked; a second copy in the runner would drift from it).
+  pins are probed inside a box and the token file is checked; a second copy in the runner would drift from it). The probe box is built by
+  `probeBoxPrefix` (exported, so its argv can be tested without running it) with `stacks.pins.dotnetSdk` as the box's `dotnetPin`: the rule
+  "exactly one SDK, the pin" and the box that shows only the pin's versions are given the SAME pin.
+
+**Dated note: one SDK in the box on a host that holds several (2026-11-19, amendment D-9 of `todo/PLAN_minigit_stack_bench_E2.md`).**
+*Cause.* SDK 11.0.100 was installed beside the pinned 10.0.114 on 2026-11-18, so `dotnet --list-sdks` in the box printed two lines and the
+preflight refused, rightly ("the box must hold exactly one SDK (2 listed)"). *What stays:* the rule in `lib/host-checks.mjs`, `inputs/stacks.json`,
+the pins, every `global.json`. *What changed:* the box.
+
+- **The list** (`lib/dotnet-hide.mjs`, `otherDotnetVersions({ pin, roots, exists, listDir })`, pure over an injected listing). Per root of
+  `DISTRIBUTION_DOTNET` (`/usr/lib/dotnet`, `/usr/share/dotnet`, `/etc/dotnet`; the one definition, lang-explore's `quick.mjs` re-exports it):
+  `sdk/<v>` for every version `v` that is not the pin; `shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>` and `sdk-manifests/<band>`
+  whose MAJOR is not the pin's. A root or a group the host lacks gives nothing; a folder whose name is not a version is left alone; a pin
+  that is not `x.y.z` is refused (thrown, naming the shape). On this host with pin 10.0.114 it is 13 folders: `sdk/11.0.100`, two
+  `shared/*/11.0.0`, seven `packs/*/11.0.0`, `templates/11.0.0`, `sdk-manifests/11.0.100` and `11.0.100-preview.6`.
+- **Where it is computed: in `agentBoxPrefix` and in `scoringBoxArgv`, when the box is built** (both call `boxDotnetHide` of
+  `lib/dotnet-hide.mjs`, the one place the decision is made). Never in a plan file or a session plan, so an SDK installed between a
+  preflight and a session, or between a session and its scoring, is hidden too. A box with a pinned `dotnetDir` gets nothing from it: `agentBoxPrefix` hides the
+  distribution's roots whole for it, and derives them itself (the code gate's second round: until then the roots came only from the
+  caller's `hide`, so a caller that passed the directory alone would have got every SDK of the distribution beside the pinned one;
+  every caller did pass them, and its argv is unchanged: a test compares it, and asserts the listing is never read). A box with neither `dotnetDir` nor
+  `dotnetPin` is refused: skipping would show every SDK of the host, and a measured cell could be built with another one.
+- **How the pin reaches the box, per path.** The preflight: `probeBoxPrefix`, from `stacks.pins.dotnetSdk`. A session: `sessionBoxArgv` of
+  `lib/session-launch.mjs` (the one function the launcher builds its argv with) reads `plan.dotnetPin`; v1's plan gets it from
+  `bareSessionPlan({ dotnetPin })`, called by `v1Plan` with `ctx.dotnetPin`, which `bare-config.mjs` reads from the inputs folder's
+  `stacks.json`; the smoke's plan from its own `stacks`. A snapshot: `makeSnapshot` completes its `box` with v1's pin when the caller gave
+  none (`snapshotBoxFields`), `inBox` hands it to `snapshotBoxArgv`. The pilot (`spikes/lang-explore`): `run-ctx.mjs` puts
+  `world.explore.dotnet.sdk` into the context, `plan.mjs` hands it to the plan, `readback.mjs` records it in `plan.json`, `prepare.mjs` hands
+  it to the node snapshot's box. A launch whose plan holds no pin and no pinned directory fails before the box is spawned.
+- **Measured on this host, in the real box** (`test/agent-box-dotnet.test.mjs`, 2026-11-19): `dotnet --list-sdks` prints
+  `10.0.114 [/usr/lib/dotnet/sdk]` and nothing else; the same box without the computed tmpfs prints `10.0.114` and `11.0.100`. A `net10.0`
+  console project with no package reference and no package source, built and run there: `dotnet --version` is `10.0.114`, the program prints
+  `.NET 10.0.14`, `dotnet --list-runtimes` lists `Microsoft.NETCore.App 10.0.14` and `Microsoft.AspNetCore.App 10.0.14` only; the same
+  project without the tmpfs is given SDK `11.0.100`.
+- **The one difference from before SDK 11 came, recorded.** `host/fxr` is not hidden, and the muxer (`/usr/lib/dotnet/dotnet`) is the host
+  package's: `dotnet --info` in the box says `Host: Version: 11.0.0, Architecture: x64, Commit: 297acf930f`. The newest resolver answers for
+  every SDK and resolves to the pinned one.
+- **What the box still shows of the other version, not covered by the amendment's list.** The files `library-packs/*.11.0.0.nupkg`
+  (`Microsoft.DotNet.ILCompiler`, `Microsoft.NET.ILLink.Tasks`; a tmpfs mounts over a directory, not over a file) and the folder
+  `metadata/workloads/11.0.100` (it holds one empty file, `userlocal`). So "the box shows what it showed before" holds for the SDK, the
+  runtimes, the packs, the templates and the manifests, and not for these.
+- **A link refuses the box** (the code gate's finding 3). The listing reports sub-directories AND symbolic links (`dirEntriesOf`,
+  `{ name, link }`; a link is never followed). A link where a version folder the list must hide should be (`sdk/<v>`,
+  `shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>`, `sdk-manifests/<band>`), or where a framework or pack folder it must look
+  into should be, throws: `<path> is a symbolic link: … the box is not built`. A tmpfs cannot hide a link, and following it would mount
+  over a folder the list never read. A link the list would not mount over is no refusal: the pin's own version folders, and a name that is
+  no version. There is no link under `/usr/lib/dotnet` on this host.
+- **What a version is** (finding 4). The WHOLE name: `x.y.z` with at most a prerelease suffix (`11.0.100-preview.6`, `11.0.100-rc.1`),
+  for a pin and for a folder alike (`isSdkVersion`). `10.0.114typo` is no pin (refused, also by `score-session.mjs --dotnet-pin` as a
+  usage error, exit 4) and no version folder (left alone). Before, the pattern was anchored at the start only: such a pin was taken for
+  major 10 and the box hid the real SDK 10.0.114.
+- **Known limit: the list is taken once, when the box is built.** Both boxes bind the host's root read-only, so a dotnet version
+  INSTALLED WHILE A BOX RUNS appears in it (the new folder is not under any tmpfs). The series installs no package during a cell, and
+  the operator is asked to hold the `dotnet-*` packages for its length (the standing risk of the note below); the next box, and the
+  next preflight, see the new version and hide or refuse it. A view that cannot change under a running box is the pinned-`dotnetDir`
+  path: the whole distribution is one tmpfs there, and the SDK is a directory of the run's own.
+- **Known limits of the scorer's pin (todo, from the code gate's fourth round, 2026-11-19; not built).** (1) A scorer started BY HAND
+  without `--dotnet-pin` takes v1's pin from `inputs/stacks.json` as it is now, not the pin the session ran with: when the registered
+  pin changes, record the pin with each session and validate the scorer's against it (that change is a plan change of its own). (2) A
+  well-formed but wrong `--dotnet-pin` (for example `10.0.115` where only `10.0.114` is installed) leaves the scoring box with no SDK,
+  so a correct submission would be recorded as a failed build: a probe of the scoring box before scoring (as the preflight probes the
+  session's box) would turn that into an environment refusal. The run path is not affected: it hands the scorer the run's own pin.
+- **The guard that keeps this true** (finding 1): `test/box-builders-scan.test.mjs` reads every production `.mjs` of
+  `spikes/minigit-bench` and `spikes/lang-explore` and fails, naming file and line, when a bwrap argv is composed outside the named
+  builders or a toolchain builder stops taking `boxDotnetHide`. The table it holds: `lib/bwrap.mjs` (the primitives, and `scoreBoxArgv`, the scoring box without the list), `lib/score-box.mjs`
+  (`scoringBoxArgv`; no other production file may name `scoreBoxArgv`),
+  `lib/sandbox.mjs` (`agentBoxPrefix`; `boxView` reads a recorded argv), `lib/preflight.mjs` (`bwrap --version`, no box),
+  lang-explore's `lib/score.mjs` (`withEnv`: the `--setenv` triples of an argv `scoreBoxArgv` built) and lang-explore's
+  `lib/oracle.mjs` (`bruteBoxArgv`: the box of `python3 -I brute.py` over private material; it binds no toolchain, builds and scores
+  nothing, and so takes no pin; it is the one builder without the list, named with that reason). `spikes/lang-bench` builds boxes of
+  its own (a pinned SDK directory, the whole distribution hidden) and is outside this scan.
+- **`lib/bwrap.mjs` is pinned, and is byte for byte what main holds.** It is one of the 22 files of the language comparison's execution-layer
+  identity (`spikes/lang-bench/inputs/specs.d/exec-layer.json`, part of the frozen spec `spec-frozen-B-20261118`; the identity is the
+  layer's files AND every module they import). For a day the scoring box's list lived in `scoreBoxArgv` itself: the file's hash moved, it
+  imported `dotnet-hide.mjs`, and every run through the layer halted with `layer-identity-mismatch` (13 tests of `spikes/lang-explore`
+  red in a whole run; nothing in this spike's own suite said so). Re-pinning is a re-freeze, which is the owner's. So the file was put
+  back, and the scoring box's dotnet decisions live in `lib/score-box.mjs`, which nothing of the layer imports:
+  `scoringBoxArgv` builds `scoreBoxArgv`'s argv for the same options and inserts the tmpfs before its first bind. The place is
+  asserted on the argv it gets (it opens with its program and the read-only root, binds something after that, holds no tmpfs after that
+  bind), and anything else throws. `test/exec-layer-pin.test.mjs` hashes every pinned file against the pin and compares the layer's own
+  computation of its tree with it, so a change to a pinned file, or a new import in one, is red in THIS spike.
+- **A bind over a hidden dotnet folder is refused, by both builders** (the code gate's third round). The binds come after the tmpfs, so
+  that what is bound back shows; a toolchain at `/usr/lib/dotnet`, or at `/usr/lib`, would bring the hidden versions back. The error
+  names both paths (`the bind /usr/lib holds /usr/lib/dotnet/sdk/11.0.100, a dotnet folder this box hides`). Every bind of the argv is
+  checked, not only the toolchains; a bind BELOW a hidden folder shows only itself and is not refused.
+- **The SCORING box takes the same list** (`scoringBoxArgv`, `lib/score-box.mjs`; added the same day, after the measurement that follows).
+  *Before:* `dotnet --list-sdks` there printed `10.0.114` and `11.0.100`, and `dotnet --version` in a folder with no `global.json` was
+  `11.0.100`: a tree built by SDK 10.0.114 in the session's box would have been built again by SDK 11 for its score (v1's workspace
+  carries no `global.json`; the language comparison's do, with `rollForward: disable`, and pin their own build). *Now:* `scoringBoxArgv`
+  takes `dotnetPin` (and `listDir`, injected as `exists` is) and refuses a box with no pin, as the agent's box does. With a pinned SDK
+  directory (`dotnetDir`) it has the agent box's semantics: the directory is bound read-only and put on PATH with the other toolchains,
+  every distribution root the host has is hidden whole, and nothing is listed. (The option's history: a first `dotnetDir` only switched
+  the list off and was removed in the gate's first round; this one came with the third.) *How the pin reaches it.* v1's scorer builds its box options
+  in ONE place, `defaultDeps` (`lib/score-deps.mjs`: `deps.box = { toolchainDirs, dotnetPin }`), and every step's box is `boxFor`
+  (`lib/score-steps.mjs`) over them. A run hands its own pin on: `bare-series.mjs` gives `ctx.dotnetPin` to `scoreSession`
+  (`lib/score-run.mjs`), which ALWAYS puts `--dotnet-pin <pin>` on the scorer's argv; `score-session.mjs` checks its shape (a word
+  that is no version, the text `undefined` of a run with no pin among them, is a usage error, exit 4) and hands it to `defaultDeps`.
+  With no `--dotnet-pin` (the scorer run by hand, the held-out pipeline) `defaultDeps` reads v1's registered pin
+  (`lib/stacks-pin.mjs`, the one reader of `inputs/stacks.json` for a path with no run context; `makeSnapshot` uses it too). The pilot's
+  judge: `judgeConfig` of `spikes/lang-explore/lib/score.mjs` hands `explore.dotnet.sdk`, and the pinned directory of its toolchains
+  when the world has one (`judgeDotnet`), to `boxArgvs`, which gives them to both of its scoring boxes. *The quick profile and this
+  judge.* Checked 2026-11-19: a QUICK session (SDK 10.0.403, which exists only in `~/rsd/lang-v2/toolchains/dotnet-sdk-10.0.403`) is not
+  judged here at all. Its scoring is `scoreQuick` and the ten passes, through lang-bench's execution layer (`boxArgv` of
+  `lang-bench/lib/exec-layer/box.mjs`: the pinned directories bound read-only, the distribution's dotnet under `/usr` hidden whole,
+  `DOTNET_ROOT` and PATH set to the pinned SDK), and `boxArgvs` / `judgeConfig` are reached only by the olympiad world, whose pin
+  10.0.114 is the distribution's. Had a quick profile reached this judge, its box would have hidden every SDK of the host and held none
+  (measured: `dotnet --list-sdks` prints nothing). So `judgeDotnet` refuses a quick profile that brings no pinned directory, and with
+  one the box is right: measured in the real box (`spikes/lang-explore/test/boxes.test.mjs`), `dotnet --list-sdks` prints
+  `10.0.403 [/home/…/rsd/lang-v2/toolchains/dotnet-sdk-10.0.403/sdk]` only, `DOTNET_ROOT` is that directory and `/usr/lib/dotnet` is
+  empty. *Measured in the real scoring box* (`test/agent-box-dotnet.test.mjs`, 2026-11-19): `dotnet --list-sdks` prints
+  `10.0.114 [/usr/lib/dotnet/sdk]` only and `dotnet --version` in a folder with no `global.json` is `10.0.114`; the same box without
+  the computed tmpfs lists `10.0.114` and `11.0.100` and answers `11.0.100`. What the agent's box still shows of the other version
+  (the paragraph above) the scoring box shows too.
 
 **Dated note: the .NET SDK pin is 10.0.114 (2026-10-30).** The pin in `inputs/stacks.json` was 10.0.113. Unattended apt upgraded the .NET packages at
 2026-10-30 06:19:43 (`/var/log/apt/history.log`: `Start-Date: 2026-10-30  06:19:43`, `Commandline: /usr/bin/unattended-upgrade`; the runtime went to
@@ -759,7 +878,7 @@ versions, not the bytes; the registered hash is what every session's seeded copy
 commit, then a new registration (review m7). The directories of the other two runs stay under `~/rsd/minigit/toolchains/` unused.
 
 **Seams of E2's files, after the E2 merge.** Seam 2: `BUILD_SERVERS_OFF` is exported from `sandbox.mjs` and no longer part of `agentEnv`'s base or `AGENT_ENV_KEYS`; the bare box runs with the build servers at their defaults
-(`test/build-servers.test.mjs`, including an effect test that a background process ends with the box). Seam 3: a piped tunnel writes one `closed` line `{ host, port, bytesUp, bytesDown }`, `egressSummary` sums them per host in `bytes`,
+(`test/build-servers.test.mjs`, including an effect test that a background process ends with the box; it counts the processes of a cell id of ITS OWN and waits with a bounded poll, since 2026-11-19: it had counted `cell-${layout.rid}`, which is `cell-s2` in every test file whose second session it is, and in a whole run it saw the 5 processes of another file's box and failed, while alone it passed even with its pause at 0. The shared state was the cell id, not the CPU). Seam 3: a piped tunnel writes one `closed` line `{ host, port, bytesUp, bytesDown }`, `egressSummary` sums them per host in `bytes`,
 and the session record's `egress` leaf carries `bytes`, `bytesCaptured` and `cacheGrowthBytes`. `callsOf` lives in `lib/stream-calls.mjs`; the session loader is `loadSessionDir` in `lib/smoke-load.mjs` (one loader, every read through
 `lib/agent-files.mjs`, nothing required). Row 7 reads the broker's `reason`: only `cap` makes `killed: cap`; `path`, `body`, `busy` and a missing reason do not.
 
@@ -771,7 +890,7 @@ get round it). The test is on the home and runs before any file is looked at, so
 test does not clone it again. `bare-runner.mjs` reads the home at each call (`defaults()`), not when the module loads. Two files keep the real home on purpose, because the real scorer decrypts the held-out suite
 under it: `test/bare-e2e.test.mjs` and `test/rehearse-v2-e2e.test.mjs`; they build their own context with a fake token and import neither `main` nor `buildRun`, and `test/fake-home.test.mjs` checks both.
 
-**Four optional seams for the exploratory pilot (2026-10-31; `spikes/lang-explore`, plan `research/PLAN_lang_explore_task1.md` section 2.2).** Each default is byte-identical to what v1 did before: `test/explore-seams.test.mjs` compares the code with `test/fixtures/explore-seams-baseline.json`, which `test/explore-seams-observe.mjs` wrote from the unchanged code. **W1** `lib/bare-phase.mjs`: `ctx.fill({ ctx, item, layout })` and `ctx.planFor({ ctx, item })`, when the run context has them, fill the workspace and make the `launchSession` plan instead of v1's `fillV1` / `fillV2` and `bareSessionPlan`; with neither, the phase is v1's. **W2** `lib/sandbox.mjs`: `agentEnv({ ..., locale })` sets `LANG` and `LC_ALL` to the locale (`localeEnv` in `lib/bwrap.mjs` checks it is a locale name); `extra` may not replace either, and `AGENT_ENV_KEYS` stays the key set of the DEFAULT environment (`LC_ALL` is the locale's own key). `lib/session-launch.mjs` forwards `plan.locale` to it (a plan with none is v1's). **W3** `lib/bwrap.mjs`: `scoreEnv` / `scoreBoxArgv({ ..., locale })`, the same rule for the scoring box; an effect test runs `env` inside the box. **W4** `lib/bare-record.mjs`: `sessionMeasure` is exported unchanged, so a one-phase cell can feed `ratioOf` and `pairRecord`.
+**Four optional seams for the exploratory pilot (2026-10-31; `spikes/lang-explore`, plan `research/PLAN_lang_explore_task1.md` section 2.2).** Each default is byte-identical to what v1 did before: `test/explore-seams.test.mjs` compares the code with `test/fixtures/explore-seams-baseline.json`, which `test/explore-seams-observe.mjs` wrote from the unchanged code. (The baseline was amended once by a change that is no seam: on 2026-11-19 v1's plan gained the key `dotnetPin`, the D-9 amendment above, so `planKeys` of its two phase entries hold it; the file was rewritten by the observe module and the diff was those two lines.) **W1** `lib/bare-phase.mjs`: `ctx.fill({ ctx, item, layout })` and `ctx.planFor({ ctx, item })`, when the run context has them, fill the workspace and make the `launchSession` plan instead of v1's `fillV1` / `fillV2` and `bareSessionPlan`; with neither, the phase is v1's. **W2** `lib/sandbox.mjs`: `agentEnv({ ..., locale })` sets `LANG` and `LC_ALL` to the locale (`localeEnv` in `lib/bwrap.mjs` checks it is a locale name); `extra` may not replace either, and `AGENT_ENV_KEYS` stays the key set of the DEFAULT environment (`LC_ALL` is the locale's own key). `lib/session-launch.mjs` forwards `plan.locale` to it (a plan with none is v1's). **W3** `lib/bwrap.mjs`: `scoreEnv` / `scoreBoxArgv({ ..., locale })`, the same rule for the scoring box; an effect test runs `env` inside the box. **W4** `lib/bare-record.mjs`: `sessionMeasure` is exported unchanged, so a one-phase cell can feed `ratioOf` and `pairRecord`.
 
 **Not built.** `report` (E3b.S5; the interim record [minigit/RESULTS_bare_2026-10-30.md](minigit/RESULTS_bare_2026-10-30.md), rendered by `research/minigit/tools/`, stands in for it). `aa-verdicts` and `--what rehearse-v2` ARE built (E3b.S4; review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
 
@@ -783,7 +902,7 @@ argv or in the environment.
 | Command | What it does | Exit codes |
 |---|---|---|
 | `node spikes/minigit-bench/run-tests.mjs [glob…]` | the one way to run the spike's tests: lowered priority, `node --test` with at most `min(8, CPUs − 1)` workers; default glob `test/**/*.test.mjs`. `BENCH_REQUIRE_SANDBOX=1` turns every host-conditional skip into a failure | the child's own exit code (0 all passed); `128 + signal` if it was killed; 1 if it could not start |
-| `node spikes/minigit-bench/score-session.mjs --session <dir> --source <dir> --arm process\|bare --stack csharp\|node --phase v1\|v2 --toolchain <dir>… [--nuget-cache <dir>] [--npm-cache <dir>] [--inputs-repo <url\|path>]` | scores one finished session and writes `<session>/score/score.json` | 0 scored (whatever the score) · 3 environment, resumable (no `bwrap`, a toolchain or cache absent, the box cannot start, another scoring in progress, inputs unreachable or not matching `hashes.txt`) · 4 usage or missing `--source` · 5 the scorer itself failed |
+| `node spikes/minigit-bench/score-session.mjs --session <dir> --source <dir> --arm process\|bare --stack csharp\|node --phase v1\|v2 --toolchain <dir>… [--nuget-cache <dir>] [--npm-cache <dir>] [--inputs-repo <url\|path>] [--dotnet-pin <x.y.z>]` (`--dotnet-pin`: the pinned SDK the scoring box is told, the runner hands its own; absent, `inputs/stacks.json`'s) | scores one finished session and writes `<session>/score/score.json` | 0 scored (whatever the score) · 3 environment, resumable (no `bwrap`, a toolchain or cache absent, the box cannot start, another scoring in progress, inputs unreachable or not matching `hashes.txt`) · 4 usage or missing `--source` · 5 the scorer itself failed |
 | `node spikes/minigit-bench/heldout-tool.mjs keygen [--key-file P]` | writes a new 32-byte key at mode 600; refuses to overwrite | 0 · 1 refused · 4 · 5 |
 | `… heldout-tool.mjs seal --src <clear dir> [--key-file P] [--out-dir D] [--hashes F]` | validates the clear suite, seals it, writes `suite.enc`, its hash, `manifest.json` and the `hashes.txt` line | 0 · 1 refused · 3 · 4 · 5 |
 | `… heldout-tool.mjs calibrate [--src <clear dir>] [--key-file P] [--out-dir D] [--work-root D] [--inputs-repo U]` | `--src` is the authoring mode (nothing written); without it, decrypts the sealed archive, scores references and mutants through the pipeline, and on success writes `calibration.json` | 0 calibrated · 1 a mismatch · 3 · 4 · 5 |

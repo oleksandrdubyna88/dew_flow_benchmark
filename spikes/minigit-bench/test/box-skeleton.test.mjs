@@ -8,6 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { contaminationHits } from '../lib/contamination.mjs';
 import { boxReachable, boxSkeleton, layoutPaths } from '../lib/sandbox.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 import { pilotCommands } from './pilot-ts-calls.mjs';
 
 const home = os.homedir();
@@ -18,7 +19,7 @@ const nodeDir = path.join(home, '.nvm', 'versions', 'node', 'v26.12.1');
 const series = path.join(minigit, 's-20261030-92a9');
 const layout = layoutPaths(path.join(series, 's'), '9804fc');
 const partner = layoutPaths(path.join(series, 's'), '433bf6');
-const box = { layout, nodeDir, toolchains: [ts], claudeBinary: path.join(toolchains, 'claude-2.1.310') };
+const box = { layout, nodeDir, toolchains: [ts], claudeBinary: path.join(toolchains, 'claude-2.1.310'), dotnetPin: DOTNET_PIN };
 const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: [partner.dir], arm: 'bare', ownSecrets: [], allow: boxReachable(box), skeleton: boxSkeleton(box), isLink: () => false };
 
 const sev = (tool, input) => contaminationHits({ calls: [{ tool, input }], ctx }).filter(h => h.rule === 'outside-path').map(h => h.severity).join() || '-';

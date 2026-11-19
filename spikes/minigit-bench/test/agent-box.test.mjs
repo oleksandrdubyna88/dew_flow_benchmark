@@ -13,6 +13,8 @@ import { boxOptions, envFor, newSession, nodeDir, probe, probeArgv, withoutBind,
 import { homeDir, hostLacks, sandboxGate, tmpDir } from './helpers.mjs';
 
 const HOME = '/home/someone';
+/** An invented host where every path asked for exists and no dotnet root holds a version folder: with the pin given (`boxOptions`), the box has nothing of another version to hide, on any machine. */
+const EVERYTHING_EXISTS = Object.freeze({ exists: () => true, listDir: () => [] });
 
 test('The_hide_list_is_the_home_and_the_four_host_prefixes_and_a_missing_host_dir_is_left_alone', () => {
   assert.deepEqual(hiddenPaths({ operatorHome: HOME, exists: () => true }), [HOME, '/mnt', '/run', '/tmp', '/var/tmp']);
@@ -25,7 +27,7 @@ test('Both_boxes_hide_the_same_paths_and_isolate_the_same_way', () => {
   const layout = layoutPaths('/r', 'a');
   const opts = { copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp', operatorHome: HOME, exists: () => true };
   const hidden = hiddenPaths(opts);
-  const boxes = [['scoring', scoreBoxArgv(opts)], ['agent', agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: () => true }))]];
+  const boxes = [['scoring', scoreBoxArgv(opts)], ['agent', agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, ...EVERYTHING_EXISTS }))]];
   for (const [name, argv] of boxes) {
     for (const p of hidden) assert.ok(argv.some((a, i) => a === '--tmpfs' && argv[i + 1] === p), `${name} box hides ${p}`);
     for (const flag of isolation()) assert.ok(argv.includes(flag), `${name} box carries ${flag}`);
@@ -40,7 +42,7 @@ test('The_box_argv_binds_an_explicit_list_never_the_session_dir_and_carries_no_s
   const layout = layoutPaths('/r', 'a');
   const dummy = dummyToken('zzz');
   const real = 'sk-ant-fake-REAL-0001';
-  const argv = agentBoxArgv({ ...boxOptions(layout, { toolchains: ['/tc'], extraRo: ['/x/ro'], extraRw: ['/x/rw'], exists: () => true, operatorHome: HOME }), command: ['claude', '-p'] });
+  const argv = agentBoxArgv({ ...boxOptions(layout, { toolchains: ['/tc'], extraRo: ['/x/ro'], extraRw: ['/x/rw'], ...EVERYTHING_EXISTS, operatorHome: HOME }), command: ['claude', '-p'] });
   assert.equal(argv.includes('--setenv') || argv.includes('--clearenv'), false, 'no --setenv, no --clearenv: the env is the spawn\'s');
   assert.equal(argv.join('\0').includes(dummy) || argv.join('\0').includes(real), false);
   const binds = [];
@@ -64,9 +66,9 @@ test('The_box_argv_binds_an_explicit_list_never_the_session_dir_and_carries_no_s
 test('The_bare_arm_blocks_gh_where_the_host_has_it_and_the_process_arm_does_not', () => {
   const layout = layoutPaths('/r', 'a');
   const has = argv => argv.some((a, i) => a === '--ro-bind' && argv[i + 1] === '/dev/null' && argv[i + 2] === '/usr/bin/gh');
-  assert.equal(has(agentBoxPrefix(boxOptions(layout, { exists: () => true }))), true);
+  assert.equal(has(agentBoxPrefix(boxOptions(layout, EVERYTHING_EXISTS))), true);
   assert.equal(has(agentBoxPrefix(boxOptions(layout, { exists: () => false }))), false, 'a path the host lacks is not mounted over');
-  assert.equal(has(agentBoxPrefix(boxOptions(layout, { arm: 'process', exists: () => true }))), false);
+  assert.equal(has(agentBoxPrefix(boxOptions(layout, { arm: 'process', ...EVERYTHING_EXISTS }))), false);
 });
 
 test('The_env_is_the_allow_list_and_its_path_has_no_mnt', () => {
@@ -258,12 +260,12 @@ test('The_toolchain_is_probed_inside_the_box_node_and_a_box_dir_is_writable_wher
 test('The_hidden_paths_are_replaced_by_an_empty_tmpfs', async t => {
   // `hide` (E1.S4): a host path the box must not show (the distribution's dotnet) gets an empty tmpfs, right after the shared hide list and before any bind.
   const layout = layoutPaths('/r', 'a');
-  const argv = agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: p => p !== '/etc/dotnet', hide: ['/usr/lib/dotnet', '/etc/dotnet'] }));
+  const argv = agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: p => p !== '/etc/dotnet', listDir: () => [], hide: ['/usr/lib/dotnet', '/etc/dotnet'] }));
   const tmpfsAt = p => argv.findIndex((a, i) => a === '--tmpfs' && argv[i + 1] === p);
   assert.equal(tmpfsAt('/usr/lib/dotnet'), tmpfsAt('/var/tmp') + 2, 'it follows the shared hide list directly');
   assert.ok(argv.indexOf(layout.harness) > tmpfsAt('/usr/lib/dotnet'), 'the binds come after it, so what is bound back shows');
   assert.equal(tmpfsAt('/etc/dotnet'), -1, 'a path the host lacks is not mounted over');
-  assert.equal(agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, exists: () => true })).filter(a => a === '--tmpfs').length, 5, 'control: with no hide the box has the five of the shared list');
+  assert.equal(agentBoxPrefix(boxOptions(layout, { operatorHome: HOME, ...EVERYTHING_EXISTS })).filter(a => a === '--tmpfs').length, 5, 'control: with no hide the box has the five of the shared list');
   if (!sandboxGate(t)) return;
   const shown = ['/usr/share/doc', '/etc/alternatives'].find(p => existsSync(p) && readdirSync(p).length > 0);
   if (shown === undefined) return hostLacks(t, 'no non-empty system directory to hide');

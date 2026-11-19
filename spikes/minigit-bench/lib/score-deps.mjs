@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFile
 import path from 'node:path';
 import { assertRemovable } from '../../policy-ab-quick/lib/safe-rm.mjs';
 import { makeHeldoutDep } from './heldout-run.mjs';
+import { v1SdkPin } from './stacks-pin.mjs';
 import { readFileOrNull, readRegularFile } from './inputs.mjs';
 import { runBounded } from './run.mjs';
 
@@ -44,7 +45,11 @@ export const nodeFs = Object.freeze({
   removeFile: p => rmSync(p, { force: true }),
 });
 
-/** `inputs` is the result of fetchInputs; `delivered` stays undefined until E3 can say (accepted then reads unknown, never false). */
-export function defaultDeps({ inputs, toolchainDirs = [], heldout = makeHeldoutDep(), delivered } = {}) {
-  return { run: runBounded, fs: nodeFs, now: Date.now, inputs, box: { toolchainDirs }, heldout, delivered };
+/**
+ * `inputs` is the result of fetchInputs; `delivered` stays undefined until E3 can say (accepted then reads unknown, never false). `dotnetPin` is the pinned SDK version the scoring box is told
+ * (E2 amendment 2026-11-19: it hides every other dotnet version of the host, as the agent's box does): the caller's (a run hands its own on, `score-session.mjs --dotnet-pin`), or, with none
+ * given, v1's registered one. `deps.box` is made HERE only, so every step's box (`boxFor`) carries it.
+ */
+export function defaultDeps({ inputs, toolchainDirs = [], dotnetPin = v1SdkPin(), heldout = makeHeldoutDep(), delivered } = {}) {
+  return { run: runBounded, fs: nodeFs, now: Date.now, inputs, box: { toolchainDirs, dotnetPin }, heldout, delivered };
 }

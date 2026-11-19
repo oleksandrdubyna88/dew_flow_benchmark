@@ -134,12 +134,22 @@ function onEvent({ plan, rec, stop }, ev) {
   if (ev.type === 'result') rec.result = ev;
 }
 
+/**
+ * The whole argv of a session's box, from its plan. `plan.dotnetPin` is the pinned SDK version: a box on the distribution's dotnet shows only that SDK's versions (E2 amendment 2026-11-19; the list is
+ * read from the host here, at the launch, never carried in the plan); for a plan with a pinned `dotnetDir` the box hides the distribution's roots whole, by itself (`plan.hide` may name them too, or more). A plan with neither is refused by `agentBoxPrefix`.
+ * `seams` (`exists`, `listDir`) are the tests'.
+ */
+export const sessionBoxArgv = ({ plan, command, seams = {} }) => agentBoxArgv({
+  layout: plan.layout, arm: plan.arm, toolchains: plan.toolchains, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, operatorHome: plan.operatorHome, command,
+  dotnetPin: plan.dotnetPin, dotnetDir: plan.dotnetDir, ...(plan.hide ? { hide: plan.hide } : {}), ...seams,
+});
+
 /** Spawn the box and resolve with its exit once it has closed (or fail when it could not start). Timers and the abort listener are disposers. */
 function supervise({ plan, d, stack, rec, signal }) {
   const { layout } = plan;
   if (!existsSync(plan.claudeBinary)) throw new Error(`the claude binary ${plan.claudeBinary} does not exist`);
   const claude = [plan.claudeBinary, ...claudeArgv({ layout, cap: plan.capUsd, tools: plan.tools })];
-  const argv = agentBoxArgv({ layout, arm: plan.arm, toolchains: plan.toolchains, claudeBinary: plan.claudeBinary, nodeDir: plan.nodeDir, operatorHome: plan.operatorHome, command: claude, ...(plan.hide ? { hide: plan.hide } : {}) });
+  const argv = sessionBoxArgv({ plan, command: claude });
   const env = agentEnv({ layout, dummyToken: plan.dummy, cellId: plan.cellId, nodeDir: plan.nodeDir, tsDir: plan.tsDir, ...(plan.dotnetDir ? { dotnetDir: plan.dotnetDir } : {}), extra: plan.envExtra, locale: plan.locale });
   writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: argv, claude, envKeys: Object.keys(env).sort(), settingsSha256: rec.settingsSha256, mcpSha256: rec.mcpSha256 }, null, 2)}\n`);
   const spawnedAtMs = d.now();

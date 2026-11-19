@@ -1,7 +1,7 @@
 // The setup and build steps of the scoring pipeline, and the cleanup. Each step takes the shared context
 // { plan, deps, runId, startedMs } and returns its record; expected failures are values.
 import path from 'node:path';
-import { scoreBoxArgv } from './bwrap.mjs';
+import { scoringBoxArgv } from './score-box.mjs';
 import { verifyFiles } from './inputs.mjs';
 import { fail, ok } from './result.mjs';
 import { excludedDirs } from './score-deps.mjs';
@@ -22,7 +22,7 @@ const markerPath = (plan, name) => path.join(plan.scoreDir, '.owned', `${name}${
  */
 export function boxFor(ctx, dir, { cwd = true, cases = false, roFiles = [] } = {}) {
   const { plan, deps } = ctx;
-  return scoreBoxArgv({ copyDir: dir, casesDir: cases ? plan.casesDir : undefined, home: plan.homeDir, tmp: plan.tmpDir, ...deps.box,
+  return scoringBoxArgv({ copyDir: dir, casesDir: cases ? plan.casesDir : undefined, home: plan.homeDir, tmp: plan.tmpDir, ...deps.box,
     nugetCache: plan.nugetCopy, npmCache: plan.npmCopy, roFiles, cwd: cwd ? dir : undefined });
 }
 

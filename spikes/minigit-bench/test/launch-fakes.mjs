@@ -5,7 +5,7 @@ import { PassThrough } from 'node:stream';
 import { EGRESS_HOSTS } from '../lib/egress-hosts.mjs';
 import { dummyToken } from '../lib/sandbox.mjs';
 import { fakeToken, prices } from './broker-stub.mjs';
-import { nodeDir } from './box-helpers.mjs';
+import { DOTNET_PIN, nodeDir } from './box-helpers.mjs';
 import { spikeDir } from './helpers.mjs';
 
 const AUDIT = path.join(spikeDir, '..', 'policy-ab-quick', 'hooks', 'audit.mjs');
@@ -17,7 +17,7 @@ export function planFor(layout, over = {}) {
   const real = fakeToken();
   return {
     layout, arm: 'bare', cellId: `cell-${rand()}`, prompt: 'Reply OK', capUsd: 0.2, wallMs: 60_000, stallMs: 30_000, tickMs: 150, sampleMs: 100, settleMs: 200, graceMs: 1500,
-    claudeBinary: process.execPath, cliVersion: '2.1.310', nodeDir, tsDir: null, toolchains: [], token: real, dummy: dummyToken(rand()), prices: prices(),
+    claudeBinary: process.execPath, cliVersion: '2.1.310', nodeDir, tsDir: null, toolchains: [], dotnetPin: DOTNET_PIN, token: real, dummy: dummyToken(rand()), prices: prices(),
     allow: EGRESS_HOSTS.bare, harnessSources: { boxInit: BOX_INIT, audit: AUDIT }, ...over,
   };
 }

@@ -12,11 +12,12 @@ import { stripData } from '../lib/contamination-heredoc.mjs';
 import { boxReachable, boxSkeleton, layoutPaths } from '../lib/sandbox.mjs';
 import { pilotCommands } from './pilot-ts-calls.mjs';
 import { spikeDir } from './helpers.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 
 const home = os.homedir();
 const ts = path.join(home, 'rsd', 'minigit', 'toolchains', 'typescript-7.0.2');
 const layout = layoutPaths(path.join(home, 'rsd', 'minigit', 's-20261030-92a9', 's'), 'd3f571');
-const box = { layout, nodeDir: path.join(home, '.nvm', 'versions', 'node', 'v26.12.1'), toolchains: [ts], claudeBinary: path.join(home, 'rsd', 'minigit', 'toolchains', 'claude-2.1.310') };
+const box = { layout, nodeDir: path.join(home, '.nvm', 'versions', 'node', 'v26.12.1'), toolchains: [ts], claudeBinary: path.join(home, 'rsd', 'minigit', 'toolchains', 'claude-2.1.310'), dotnetPin: DOTNET_PIN };
 const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: [], arm: 'bare', ownSecrets: [], allow: boxReachable(box), skeleton: boxSkeleton(box), isLink: () => false };
 const hitsOf = (command, tool = 'Bash') => contaminationHits({ calls: [{ agent: 'main', tool, input: { command } }], ctx });
 const high = command => hitsOf(command).filter(h => h.severity === 'high').map(h => h.rule);

@@ -16,7 +16,7 @@ import { scoreSession } from '../lib/score-run.mjs';
 import { fillV1 } from '../lib/workspace.mjs';
 import { prices } from './broker-stub.mjs';
 import { context, write } from './bare-ctx.mjs';
-import { TS_DIR } from './box-helpers.mjs';
+import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
 import { homeDir, inputs, keyGate, pythonGate, sandboxGate, spikeDir } from './helpers.mjs';
 
 test('A_v2_rehearsal_runs_end_to_end_without_a_real_token_and_G14_holds', { timeout: 900_000 }, async t => {
@@ -29,7 +29,7 @@ test('A_v2_rehearsal_runs_end_to_end_without_a_real_token_and_G14_holds', { time
   const ctx = {
     ...base, seriesDir, sessionsRoot: path.join(seriesDir, 's'), inputsRoot: fetched.root, hashes: fetched.entries, kind: 'rehearsal', pair: 0, seed: null,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), ceilingUsd: 500, bareBudgetUsd: 40, caps: { capUsd: 6, wallMs: 120_000, stallMs: 60_000 },
-    claudeBinary: '/the/real/pinned/claude', cliVersion: '2.1.310', nodeDir: path.dirname(path.dirname(process.execPath)), tsDir: TS_DIR, token: 'REAL-TOKEN-MUST-NOT-BE-USED', prices: prices(), table: policy.value.table, policy: policy.value.policy,
+    claudeBinary: '/the/real/pinned/claude', cliVersion: '2.1.310', nodeDir: path.dirname(path.dirname(process.execPath)), tsDir: TS_DIR, dotnetPin: DOTNET_PIN, token: 'REAL-TOKEN-MUST-NOT-BE-USED', prices: prices(), table: policy.value.table, policy: policy.value.policy,
     harnessSources: { boxInit: path.join(spikeDir, 'harness', 'box-init.mjs'), audit: path.join(spikeDir, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
     snapshotPackages: [], packageRules: [], handVerdictsFor: () => [], harnessIdentity: 'a'.repeat(64), preregTag: 'prereg/minigit-bare-20261030', abortReason: () => null, abortExit: () => 130, spin: { medianMs: 20 },
     aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),

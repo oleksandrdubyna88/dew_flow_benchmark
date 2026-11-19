@@ -137,9 +137,11 @@ function reuseRegistered({ home, files }) {
   return dir && existsSync(dir) ? acceptRegistered({ have, dir }) : null;
 }
 
-/** Run the recipe in a box and register the result by its tree hash. */
+/** Run the recipe in a box and register the result by its tree hash. The box is the agent's, on the distribution's dotnet: it is told the pilot's pinned SDK, so it shows only that one (v1 E2 amendment 2026-11-19). */
 async function makeAndRegister({ recipe, home, makeFn, files }) {
-  const made = await makeFn({ stack: 'node', recipe, root: snapshotWorkDir(home), out: toolchainsDir(home) });
+  const explore = loadExplore(files.explore);
+  if (!explore.ok) return explore;
+  const made = await makeFn({ stack: 'node', recipe, root: snapshotWorkDir(home), out: toolchainsDir(home), box: { dotnetPin: explore.value.dotnet.sdk } });
   if (!made.ok) return made;
   const record = snapshotRecord(made.value);
   const reg = registerSnapshot({ file: files.snapshots, stack: 'node', record, madeOn: new Date().toISOString().slice(0, 10) });

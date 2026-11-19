@@ -59,11 +59,12 @@ function checkedOver(over) {
 
 /**
  * The plan `launchSession` takes for one bare session (E2.S2's entry point); every value an input of it, none read from the environment. `over` is the test seam (a stub upstream,
- * short ticks): it takes only `PLAN_OVER_KEYS`, an upstream only on a loopback address, and a real run passes none (review G3).
+ * short ticks): it takes only `PLAN_OVER_KEYS`, an upstream only on a loopback address, and a real run passes none (review G3). `dotnetPin` is the pinned SDK version (`stacks.json`): the box
+ * on the distribution's dotnet shows only that one (E2 amendment 2026-11-19); the launch refuses a plan without it.
  */
-export function bareSessionPlan({ layout, stack, phase, claudeBinary, cliVersion, nodeDir, tsDir, token, dummy, prices, operatorHome, harnessSources, caps = BARE_CAPS, envExtra = {}, over = {} }) {
+export function bareSessionPlan({ layout, stack, phase, claudeBinary, cliVersion, nodeDir, tsDir, dotnetPin, token, dummy, prices, operatorHome, harnessSources, caps = BARE_CAPS, envExtra = {}, over = {} }) {
   return {
     layout, arm: 'bare', cellId: `cell-${layout.rid}`, prompt: promptFor({ stack, phase }), ...caps,
-    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra, ...checkedOver(over),
+    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], dotnetPin, token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra, ...checkedOver(over),
   };
 }

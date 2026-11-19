@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { defaultDeps, excludedDirs } from '../lib/score-deps.mjs';
 import { DEFAULT_LIMITS } from '../lib/limits.mjs';
 import { hundredPercent, runScoring, scoringPlan } from '../lib/score-pipeline.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 import { inputs, sandboxGate, spikeDir, stubTrees, tmpDir } from './helpers.mjs';
 
 const MARKER = '.bench-score-owned';
@@ -268,7 +269,7 @@ test('A_box_that_cannot_start_is_an_environment_failure_not_a_score', async () =
 
 test('A_toolchain_the_box_cannot_bind_is_an_environment_failure_on_the_real_box', async t => {
   if (!sandboxGate(t)) return;
-  const { result } = await scoreStub('silent', { deps: { box: { toolchainDirs: ['/no/such/toolchain'] } } });
+  const { result } = await scoreStub('silent', { deps: { box: { toolchainDirs: ['/no/such/toolchain'], dotnetPin: DOTNET_PIN } } });
   assert.equal(result.ok, false);
   assert.equal(result.kind, 'environment');
   assert.match(result.reason, /\/no\/such\/toolchain/);

@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { scoreSession } from '../lib/score-run.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 import { tmpDir } from './helpers.mjs';
 
 /** A stub scorer: a node script that records each call (and its pid) in `calls.txt`, then behaves as `mode` says. */
@@ -12,7 +13,7 @@ function stubScorer(dir, body) {
   writeFileSync(file, `import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';\nimport path from 'node:path';\nconst arg = n => process.argv[process.argv.indexOf('--' + n) + 1];\nappendFileSync(path.join(path.dirname(import.meta.filename), 'calls.txt'), process.pid + ' ' + process.argv.slice(2).join(' ') + '\\n');\n${body}\n`);
   return file;
 }
-const base = dir => ({ session: path.join(dir, 's'), source: path.join(dir, 's', 'box', 'work'), stack: 'csharp', phase: 'v1', toolchains: ['/ts', '/node'], nugetCache: '/n', npmCache: '/p' });
+const base = dir => ({ session: path.join(dir, 's'), source: path.join(dir, 's', 'box', 'work'), stack: 'csharp', phase: 'v1', toolchains: ['/ts', '/node'], dotnetPin: DOTNET_PIN, nugetCache: '/n', npmCache: '/p' });
 const calls = dir => readFileSync(path.join(dir, 'calls.txt'), 'utf8').split('\n').filter(Boolean);
 
 test('A_scorer_that_exits_zero_is_scored_and_its_score_is_read_back', async () => {
@@ -22,7 +23,10 @@ test('A_scorer_that_exits_zero_is_scored_and_its_score_is_read_back', async () =
   assert.equal(r.kind, 'scored');
   assert.equal(r.score.verdict.accepted.value, true);
   const line = calls(dir)[0];
-  for (const needle of ['--arm bare', '--stack csharp', '--phase v1', '--toolchain /ts', '--toolchain /node', '--nuget-cache /n', '--npm-cache /p', '--source']) assert.ok(line.includes(needle), `${needle} in: ${line}`);
+  for (const needle of ['--arm bare', '--stack csharp', '--phase v1', '--toolchain /ts', '--toolchain /node', `--dotnet-pin ${DOTNET_PIN}`, '--nuget-cache /n', '--npm-cache /p', '--source']) assert.ok(line.includes(needle), `${needle} in: ${line}`);
+  // a run that holds no pin still names the option: the scorer then refuses the text `undefined` (score-session.test.mjs), it is never left to pick a pin by itself
+  await scoreSession({ ...base(dir), dotnetPin: undefined, scorer, outerTimeoutMs: 20_000, sleep: async () => { throw new Error('no retry expected'); } });
+  assert.ok(calls(dir)[1].includes('--dotnet-pin undefined'), calls(dir)[1]);
 });
 
 test('A_scorer_that_hangs_is_killed_at_the_outer_limit', async () => {

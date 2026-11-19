@@ -112,8 +112,11 @@ function fakeMake(out) {
 test('The_node_snapshot_is_made_once_registered_by_its_tree_hash_and_accepted_again_only_while_it_still_hashes_the_same', async () => {
   const f = files();
   const home = tmpDir('home');
-  const made = await nodeSnapshot({ home, makeFn: fakeMake(), files: f });
+  const asked = [];
+  const make = fakeMake();
+  const made = await nodeSnapshot({ home, makeFn: a => { asked.push(a); return make(a); }, files: f });
   assert.equal(made.ok, true, made.reason);
+  assert.deepEqual(asked[0].box, { dotnetPin: loadExplore(f.explore).value.dotnet.sdk }, 'the snapshot\'s box runs the distribution\'s dotnet: it is told the pilot\'s pinned SDK, so it shows only that one');
   assert.equal(made.value.made, true);
   const registered = JSON.parse(readFileSync(f.snapshots, 'utf8')).node;
   assert.equal(registered.treeSha256, treeHash(made.value.dir));

@@ -12,7 +12,7 @@ const BENCH = fileURLToPath(new URL('../../lang-bench/', import.meta.url));
 export const BENCH_INPUTS = path.join(BENCH, 'inputs');
 
 /** The distribution's .NET locations: a pinned-SDK box must not find them (the apphost reads them when DOTNET_ROOT is unset). */
-export const DISTRIBUTION_DOTNET = Object.freeze(['/usr/lib/dotnet', '/usr/share/dotnet', '/etc/dotnet']);
+export { DISTRIBUTION_DOTNET } from '../../minigit-bench/lib/dotnet-hide.mjs';
 
 export const isQuick = task => task?.quick === true;
 /** `olympiad` (the pilot's own tasks), `daemon` or `web`. */
