@@ -30,6 +30,7 @@ const needsRun = s => ['planned', 'launching'].includes(s.status) || (s.status =
 
 /** The fake loop: commit the plan, then end every open session of the unit. `log` gets one entry per call; `voids(session)` says which sessions end as voids. */
 export const fakeLoop = (log, { voids = () => false, hold = null } = {}) => async ({ series, pair, planned, unit }) => {
+  unit.onReady?.(); // the real loop calls it after its last refusal check (`run.mjs` loopAndFinalize); this fake has none
   writeRunMap(runMapFileOf(series.dir), planned.map);
   const mine = Object.values(planned.map.sessions).filter(s => s.kind === unit.kind && (unit.kind !== 'data' || s.pair === pair)).filter(needsRun);
   log.push({ pair, kind: unit.kind, task: mine[0]?.task, round: mine[0]?.round, rids: mine.map(s => s.rid), stacks: mine.map(s => s.stack), attempts: mine.map(s => s.attempt), planned: planned.planned.map(p => p.rid), resumed: planned.resumed ?? [], guard: unit.guard, unit });

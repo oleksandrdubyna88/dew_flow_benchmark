@@ -1,13 +1,15 @@
 // `stage-run` (F3.S1 (a), PR 3): the order of the checks, what the schedule offers, the owner's go, the guard, the series lock, the pause point that is not asked, the read-back stop. A FAKE loop (`io.runSeams.loopFn`) commits the plan and ends the
 // sessions, so no box, no CLI and no model is involved; the real loop is driven in `stage-loop.test.mjs`.
 import assert from 'node:assert/strict';
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fail } from '../../minigit-bench/lib/result.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
-import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
+import { REPO } from '../lib/paths.mjs';
+import { ledgerFileOf, runMapFileOf, seriesInputs } from '../lib/series.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
-import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
+import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig, sha256 } from './stage-run-fixture.mjs';
 
 const next = (rig, extra = {}) => stageRun({ values: { series: rig.dir, what: 'next', ...extra }, io: rig.io });
 const snapshot = dir => readFileSync(runMapFileOf(dir), 'utf8');
@@ -56,6 +58,40 @@ test('A_paid_launch_without_its_owner_go_line_is_refused_before_anything_is_plan
   const events = readLedger(ledgerFileOf(rig.dir)).filter(l => l.event === 'owner-go');
   assert.deepEqual(events.map(e => [e.date, e.scope, e.pair, e.what]), [['2026-11-21', { from: 1, to: 5 }, 1, 'next']], 'the line it used is an event of the ledger, never a charge');
   assert.equal(events[0].words, 'the owner, 2026-11-21: all five rounds');
+});
+
+const ledgerBytes = dir => (existsSync(ledgerFileOf(dir)) ? readFileSync(ledgerFileOf(dir), 'utf8') : '');
+const goEvents = dir => readLedger(ledgerFileOf(dir)).filter(l => l.event === 'owner-go');
+
+test('A_run_refused_after_the_go_check_leaves_the_ledger_byte_for_byte_and_a_run_that_launches_has_exactly_one_go_event', async () => {
+  const rig = await runRig();
+  const good = rig.io.runSeams.prerequisitesFn;
+  rig.io.runSeams.prerequisitesFn = async () => fail('a prerequisite is missing: the token');
+  const before = [ledgerBytes(rig.dir), snapshot(rig.dir)];
+  const refused = await next(rig);
+  assert.equal(refused.exit, 4);
+  assert.match(refused.message, /a prerequisite is missing/);
+  assert.deepEqual([ledgerBytes(rig.dir), snapshot(rig.dir)], before, 'a refusal after the go check leaves the ledger and the run-map as they were');
+  assert.equal((await next(rig)).exit, 4, 'the retry is refused the same way');
+  assert.deepEqual(goEvents(rig.dir), [], 'no go event for a unit that did not go ahead');
+  rig.io.runSeams.prerequisitesFn = good;
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(goEvents(rig.dir).length, 1, 'the unit that launched has its one go event');
+});
+
+test('A_run_the_context_refuses_after_the_prerequisites_adds_no_go_event_either', async () => {
+  const rig = await runRig();
+  const inputs = JSON.parse(readFileSync(path.join(rig.dir, 'inputs.json'), 'utf8'));
+  const notAPolicy = inputs.policy.prices;
+  writeFileSync(path.join(rig.dir, 'inputs.json'), `${JSON.stringify({ ...inputs, policy: { ...inputs.policy, policy: notAPolicy, policySha256: sha256(readFileSync(path.join(REPO, notAPolicy), 'utf8')) } }, null, 2)}\n`);
+  assert.equal(seriesInputs(rig.dir).ok, true);
+  delete rig.io.runSeams.loopFn;
+  rig.io.seams = { claudeBinary: '/c', fill: () => {} };
+  const before = ledgerBytes(rig.dir);
+  const refused = await next(rig);
+  assert.equal(refused.exit, 4, refused.message);
+  assert.match(refused.message, /policy file is refused/);
+  assert.equal(ledgerBytes(rig.dir), before, 'the context of the loop refused: no go event');
 });
 
 test('An_owner_go_for_rounds_1_to_2_does_not_cover_round_3_and_one_for_the_pilot_covers_no_round_at_stage_run', async () => {

@@ -232,6 +232,7 @@ async function loopAndFinalize({ series, pair, planned, calibration, heldout, wo
   const seams = io.seams ?? {};
   const ctx = await runContext({ ...contextArgs({ series, pair, calibration, world, token, prompts, io, abort, seams, unit }) });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
+  unit?.onReady?.(); // Stage 1: the last refusal check is behind us, the owner-go event is written before the plan reaches the run-map
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
   const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say, signal: io.signal, sameHarness: true, ...(seams.scoreOver ?? {}) }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true, ...unitDeps(unit) });
   commitPlan({ series, pair, planned, say: io.say });

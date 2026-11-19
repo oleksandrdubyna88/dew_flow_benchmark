@@ -96,9 +96,9 @@ function policyStep({ series }) {
 const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task }); return moved ? fail(moved) : ok({}); };
 const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series.map, unit, ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) }); return made.ok ? ok({ plan: made.value }) : made; };
 
-/** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, the Stage 1 parts of the context and the records' finalizer. */
-const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles }) => ({
-  kind: unit.kind, policyFiles, guard,
+/** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, `onReady` (the owner-go event, written once the shared body has passed its last refusal check), the Stage 1 parts of the context and the records' finalizer. */
+const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles, io }) => ({
+  kind: unit.kind, policyFiles, guard, onReady: () => sayGo({ series, unit, go, io }),
   ctx: { stepOf: stepOfUnit(unit), seed: unit.kind === DATA_KIND ? read.gates.seed : null, preregTag: series.state.preregTag, handVerdictsFor: rid => stageHandVerdictsFor(read.text, rid, series.state.seriesId) },
   finalize: finalizerOf({ unit, go, alias: explore.cli.model }),
 });
@@ -108,9 +108,8 @@ function sayGo({ series, unit, go, io }) {
   if (go) appendLedger(ledgerFileOf(series.dir), { event: 'owner-go', pair: unit.pair, what: unit.what, date: go.date, scope: go.scope, words: go.words, t: (io.now ?? systemClock)().toISOString() });
 }
 
-/** The run: the series with the plan, the io of the unit (a rehearsal's stub rig) and the one body `runUnit`. */
+/** The run: the series with the plan, the io of the unit (a rehearsal's stub rig) and the one body `runUnit`. The go event is `onReady`'s: a refused run adds no ledger line. */
 async function launch(s) {
-  sayGo(s);
   const rig = await (isRehearsal(s.series.dir) ? rehearsalIo(s) : { io: s.io, close: async () => {} });
   try {
     return await runUnit({ series: { ...s.series, map: s.plan.map }, pair: s.unit.pair, planned: s.plan, io: rig.io, task: s.task, unit: unitArgs(s) });
