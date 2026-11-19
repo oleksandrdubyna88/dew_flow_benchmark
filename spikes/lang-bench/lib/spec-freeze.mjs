@@ -65,7 +65,7 @@ async function recordRefusals({ repo, tag, states, inputs }) {
 }
 
 /** ok(the bytes of `file` at `tag`) | a fail naming the file and the tag. */
-async function blobAtTag({ repo, tag, file }) {
+export async function blobAtTag({ repo, tag, file }) {
   const commit = await commitOf(repo, `refs/tags/${tag}`);
   const tree = commit.ok ? await treeAt(repo, commit.value) : commit;
   const blobs = tree.ok ? await blobsOf(repo, tree.value, [file]) : tree;
