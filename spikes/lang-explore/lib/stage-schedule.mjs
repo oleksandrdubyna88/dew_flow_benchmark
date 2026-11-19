@@ -132,7 +132,7 @@ function gateProblem({ map, pilotGo, seedRevealed, slots }) {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A real calendar date `yyyy-mm-dd`: it survives a round trip through a UTC date (so `2026-02-30` and `2026-99-99` are no dates). */
-const isCalendarDate = text => DATE.test(text) && utcDateText(text) === text;
+export const isCalendarDate = text => DATE.test(text) && utcDateText(text) === text;
 
 /** The text a `yyyy-mm-dd` comes back as through a UTC date, or null when the date does not exist at all (`2026-99-99`). */
 function utcDateText(text) {
