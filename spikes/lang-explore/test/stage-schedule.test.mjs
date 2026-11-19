@@ -3,10 +3,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
-import { openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
+import { markStopped, openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { MASKS, VOID_UNSCORED, isOpenSession, maskOf, openSessions, pairComplete, sessionsOf, stackState, stateOfSessions } from '../lib/series.mjs';
-import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, pilotPlan, pilotStep, readbackSlots, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
+import { MASKS, VOID_UNSCORED, isOpenSession, isVoid, maskOf, openSessions, pairComplete, sessionsOf, stackState, stateLine, stateOfSessions } from '../lib/series.mjs';
+import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, pilotPlan, pilotStep, readbackSlots, ridOfSlot, roundRuleProblem, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
 
 const COLLIDING_SEED = 'lv2-collide-2902';
 const TASKS = ['04', '05', '06', '07', '08', '10'];
@@ -15,6 +15,8 @@ const SEED = 'lv2-0123456789abcdef';
 const CSHARP_ON = { '04': 'ABABA', '05': 'BABAB', '06': 'ABABA', '07': 'BABAB', '08': 'ABABA', 10: 'BABAB' };
 const MASK_OF = { A: MASKS.low, B: MASKS.high };
 const other = mask => (mask === MASKS.low ? MASKS.high : MASKS.low);
+/** An independent plain code-point compare (the test's own, not the module's). */
+const codePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const seedsOf = (prefix, n) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
 
 test('Each_round_holds_every_task_once_and_the_order_inside_a_round_comes_from_the_seed', () => {
@@ -24,7 +26,7 @@ test('Each_round_holds_every_task_once_and_the_order_inside_a_round_comes_from_t
   for (let round = 1; round <= STAGE_ROUNDS; round += 1) {
     const inRound = slots.filter(s => s.round === round);
     assert.deepEqual([...inRound.map(s => s.task)].sort(), TASKS, `round ${round} holds every task once`);
-    const byHash = [...TASKS].sort((a, b) => sha256Of(`${SEED}:lang-v2:r${round}:t${a}:order`).localeCompare(sha256Of(`${SEED}:lang-v2:r${round}:t${b}:order`)));
+    const byHash = [...TASKS].sort((a, b) => codePoints(sha256Of(`${SEED}:lang-v2:r${round}:t${a}:order`), sha256Of(`${SEED}:lang-v2:r${round}:t${b}:order`)));
     assert.deepEqual(inRound.map(s => s.task), byHash, `round ${round} is sorted by the sha256 of the seed, round and task`);
   }
   assert.deepEqual(slots.map(s => s.round), Array.from({ length: 30 }, (_, i) => Math.floor(i / 6) + 1), 'the rounds run one after the other');
@@ -40,8 +42,8 @@ test('In_round_r_task_k_runs_C_sharp_on_mask_A_when_r_plus_k_is_odd_and_Node_tak
   for (const task of TASKS) {
     for (let round = 1; round <= STAGE_ROUNDS; round += 1) {
       const csharp = MASK_OF[CSHARP_ON[task][round - 1]];
-      assert.equal(maskOfSlot({ round, task, stack: 'csharp' }), csharp, `task ${task} round ${round}: C#`);
-      assert.equal(maskOfSlot({ round, task, stack: 'node' }), other(csharp), `task ${task} round ${round}: Node takes the other`);
+      assert.equal(maskOfSlot({ round, task, stack: 'csharp' }).value, csharp, `task ${task} round ${round}: C#`);
+      assert.equal(maskOfSlot({ round, task, stack: 'node' }).value, other(csharp), `task ${task} round ${round}: Node takes the other`);
     }
   }
 });
@@ -50,7 +52,7 @@ test('The_mask_of_a_slot_never_depends_on_the_seed', () => {
   const tables = new Set(seedsOf('lv2-mask-', 100).map(seed => JSON.stringify(slotsOf({ seed }).map(s => [s.round, s.task, s.masks]).sort())));
   assert.equal(tables.size, 1, 'a hundred seeds, one mask table');
   assert.equal(slotsOf({ seed: SEED }).length, 30, 'the table is the 30 cells');
-  assert.equal(slotsOf({ seed: SEED }).every(s => s.masks.csharp === maskOfSlot({ round: s.round, task: s.task, stack: 'csharp' })), true);
+  assert.equal(slotsOf({ seed: SEED }).every(s => s.masks.csharp === maskOfSlot({ round: s.round, task: s.task, stack: 'csharp' }).value), true);
 });
 
 test('Over_the_30_pairs_each_stack_holds_each_mask_exactly_15_times', () => {
@@ -111,7 +113,7 @@ const VOID = { class: 'void: harness', data: false, scored: false };
 const RAN = { class: 'completed', data: true, scored: false };
 const GATES = { pilotGo: true, seedRevealed: true };
 const RB = readbackSlots({ seed: SEED });
-const line = (slot, stack, attempt, verdict, extra = {}) => ({ g: 'G-1', verdict, rid: SLOTS[slot - 1].rids[stack][attempt - 1], ...extra });
+const line = (slot, stack, attempt, verdict, extra = {}) => ({ g: 'G-1', verdict, date: '2026-11-20', rid: SLOTS[slot - 1].rids[stack][attempt - 1], ...extra });
 const holds = (slot, stack, attempt = 1) => line(slot, stack, attempt, 'holds');
 const refuted = (slot, stack, attempt = 1) => line(slot, stack, attempt, 'refuted');
 const rid = (slot, stack, attempt = 1) => SLOTS[slot - 1].rids[stack][attempt - 1];
@@ -160,7 +162,7 @@ test('A_slot_is_refused_while_an_earlier_slot_is_not_finished_and_the_sentence_n
 
 test('No_slot_of_the_next_round_is_offered_while_a_pair_of_this_round_is_unscored', () => {
   const script = [...finished(5), [6, 'csharp', 1, GOOD], [6, 'node', 1, RAN]];
-  const refused = slotProblem({ map: mapWith(script), slots: SLOTS, slot: 7, ...GATES });
+  const refused = slotProblem({ map: mapWith(script), slots: SLOTS, slot: 7, ...GATES, readbackLines: READ });
   assert.match(refused, /round 2 never starts while a pair of round 1 is unscored/);
   assert.ok(refused.includes(describeSlot(6)), refused);
   const offered = next(script);
@@ -184,7 +186,9 @@ test('A_void_is_re_run_once_alone_before_the_next_slot_and_a_second_void_ends_th
 });
 
 test('A_session_with_a_functional_failure_in_a_completed_pass_is_never_offered_a_re_run', () => {
-  for (const cls of ['rejected', 'intermittently incorrect', 'killed: cap']) {
+  // The way the real pipeline stores them (bare-outcome.mjs, bare-settle.mjs): the run-map class is the session's END (`completed`, `killed: cap`, `killed: wall`, `crashed: ...`) with data true, and the entry is `scored`. The verdict
+  // (`rejected`, `intermittently incorrect`, `accepted`) lives in the session's score, not in the run-map, so the schedule cannot tell them apart and re-runs none of them.
+  for (const cls of ['completed', 'killed: cap', 'killed: wall', 'crashed: error_during_execution']) {
     const data = { class: cls, data: true, scored: true };
     const offer = next([[1, 'csharp', 1, data], [1, 'node', 1, data]]).value;
     assert.deepEqual([offer.slot, offer.action], [2, 'plan'], `${cls} is a data attempt and the slot is finished`);
@@ -350,6 +354,9 @@ function pilotMap(script) {
   return map;
 }
 
+/** Every key of a value, at any depth (so a label that happens to contain `rid` is no rid). */
+const keysOf = value => (value !== null && typeof value === 'object' ? Object.entries(value).flatMap(([k, v]) => [k, ...keysOf(v)]) : []);
+
 const AA_DONE = [['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, GOOD, 'b']];
 const pairDone = (task, attempt = 1) => [['pilot', task, 'csharp', attempt, GOOD], ['pilot', task, 'node', attempt, GOOD]];
 const stepOfPilot = script => pilotStep({ map: pilotMap(script), pilot: PILOT });
@@ -362,7 +369,7 @@ test('The_pilot_plan_holds_the_A_A_twins_on_the_two_masks_and_one_pair_per_kind_
   assert.deepEqual(pairs.map(p => [p.what, p.kind, p.task]), [['pilot:05', 'daemon', '05'], ['pilot:04', 'web', '04']], 'one pair per kind');
   assert.deepEqual(pairs[0].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.low], ['pilot', 'node', MASKS.high]], 'in the daemon pair C# is on mask A');
   assert.deepEqual(pairs[1].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.high], ['pilot', 'node', MASKS.low]], 'in the web pair C# is on mask B');
-  assert.equal(JSON.stringify(plan.value).includes('rid'), false, 'no rid: the pilot runs before the seed is revealed, its sessions take `pilotRid` at planning and never a data rid');
+  assert.deepEqual(keysOf(plan.value).filter(k => /rid/i.test(k)), [], 'no rid key anywhere: the pilot runs before the seed is revealed, its sessions take `pilotRid` at planning and never a data rid');
 });
 
 test('The_pilot_runs_the_A_A_then_the_daemon_pair_then_the_web_pair_and_each_must_be_finished_first', () => {
@@ -550,11 +557,18 @@ test('The_A_A_decision_table_per_state_of_the_twins', () => {
     const step = stepOfPilot(script);
     assert.deepEqual([step.ok, step.value?.what, step.value?.action, step.ok ? todoShape(step) : null], [true, 'aa', action, shape], name);
   }
+  const STOP = { class: 'stop: T1 breach', data: false, scored: false };
+  const underway = stepOfPilot(aaScript([['a', 1, STOP], ['b', 1, RAN]]));
+  assert.deepEqual([underway.ok, underway.value.what, underway.value.action, todoShape(underway)], [true, 'aa', 'resume', [['b', 1, 'score']]], 'a stop in one twin: the other, if underway, is still scored');
+  assert.match(stepOfPilot(aaScript([['a', 1, STOP], ['b', 1, 'planned']])).reason, /ended with a stop/, 'a twin that never started is not launched after a stop');
+  const pairStop = stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, STOP], ['pilot', '05', 'node', 1, 'launching']]);
+  assert.deepEqual([pairStop.ok, pairStop.value.what, todoShape(pairStop)], [true, 'pilot:05', [['node', 1, 'settle']]], 'a pilot pair follows the slot rule after a stop');
   assert.equal(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, GOOD]])).value.what, 'pilot:05', 'both scored: the A/A is finished');
   assert.equal(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD], ['b', 2, GOOD]])).value.what, 'pilot:05', 'the repeat settles it');
   assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD], ['b', 2, VOID]])).reason, /after its one repeat/, 'a void at attempt 2: the A/A ends and the pilot cannot go on; an instrument fix and a new go come first');
-  assert.match(stepOfPilot(aaScript([['a', 1, GOOD]])).reason, /holds one twin only of its run 1/, 'one twin of a run without the other is a refusal, whatever it is');
-  assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD]])).reason, /holds one twin only of its run 2/);
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD]])).reason, /run 1 holds twins a, not a and b/, 'one twin of a run without the other is a refusal, whatever it is');
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD]])).reason, /run 2 holds twins a, not a and b/);
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['a', 1, GOOD]])).reason, /run 1 holds twins a,a, not a and b/, 'two twins that are both `a` are not the pair');
 });
 
 test('The_pilot_pairs_follow_the_slot_decision_table', () => {
@@ -579,22 +593,122 @@ test('The_pilot_pairs_follow_the_slot_decision_table', () => {
 
 test('slotProblem_refuses_what_nextSlot_would_not_offer_and_accepts_what_it_offers', () => {
   const [rb] = RB;
+  const STOP = { class: 'stop: T1 breach', data: false, scored: false };
   const ask = (script, slot, lines = READ, gates = GATES) => slotProblem({ map: mapWith(script), slots: SLOTS, slot, ...gates, readbackLines: lines });
-  // acceptance: exactly the slot nextSlot offers, in every state the offers were tested in
-  for (const script of [[], [[1, 'csharp', 1, GOOD], [1, 'node', 1, 'planned']], [[1, 'csharp', 1, VOID], [1, 'node', 1, GOOD]], finished(2), finished(rb.slot - 1)]) {
-    const offered = next(script).value.slot;
-    assert.equal(ask(script, offered), null, `slot ${offered} is accepted`);
-    assert.equal(ask(script, offered + 1) === null, false, `slot ${offered + 1} is refused`);
+  // one road in: for every state and every n in 1..30, slotProblem(n) is null exactly when n is the slot nextSlot offers
+  const states = [
+    ['nothing run', []], ['first stack scored, second planned', [[1, 'csharp', 1, GOOD], [1, 'node', 1, 'planned']]], ['a void', [[1, 'csharp', 1, VOID], [1, 'node', 1, GOOD]]],
+    ['two slots finished', finished(2)], ['before the read-back slot', finished(rb.slot - 1)], ['a stop in slot 1', [[1, 'csharp', 1, GOOD], [1, 'node', 1, STOP]]],
+    ['a stop with the partner open', [[1, 'csharp', 1, STOP], [1, 'node', 1, RAN]]], ['one stack only', [[1, 'csharp', 1, GOOD]]], ['half of slot 3', [...finished(2), [3, 'csharp', 1, 'planned']]],
+    ['the read-back slot unread', finished(rb.slot)], ['round 1 finished, the read-back lines missing', finished(6)], ['everything finished', finished(30)],
+  ];
+  for (const [name, script] of states) {
+    const offered = next(script);
+    for (let n = 1; n <= 30; n += 1) {
+      const wanted = offered.ok && offered.value !== null && offered.value.slot === n;
+      assert.equal(ask(script, n) === null, wanted, `${name}: slot ${n} is ${wanted ? 'the offered slot' : 'not the offered slot'}`);
+    }
+    if (!offered.ok) assert.equal(ask(script, 1), offered.reason, `${name}: a refusal of nextSlot is slotProblem's sentence`);
   }
+  assert.match(ask([[1, 'csharp', 1, GOOD], [1, 'node', 1, STOP]], 2), /ended with a stop/, 'a stopped slot is refused by both');
+  assert.match(ask([[1, 'csharp', 1, GOOD]], 1), /holds sessions of one stack only/, 'a half-planned slot is refused by both');
   // the refusals, each its own sentence
   assert.match(ask([], 1, [], { pilotGo: false, seedRevealed: true }), /pilot is GO/);
   assert.match(ask([], 1, [], { pilotGo: true, seedRevealed: false }), /seed is revealed/);
   for (const bad of [0, 31, 1.5, '1', undefined]) assert.match(ask([], bad), /Stage 1 has slots 1 to 30/, `slot ${String(bad)}`);
-  assert.match(ask([[1, 'csharp', 1, GOOD]], 3), /slot 1 .* is not finished/, 'the barrier');
-  assert.match(ask(finished(5).concat([[6, 'csharp', 1, GOOD]]), 7), /round 2 never starts while a pair of round 1 is unscored/, 'the round rule');
+  assert.match(ask([[1, 'csharp', 1, GOOD], [1, 'node', 1, RAN]], 3), /slot 1 .* is not finished/, 'the barrier');
+  assert.match(ask(finished(5).concat([[6, 'csharp', 1, GOOD], [6, 'node', 1, RAN]]), 7), /round 2 never starts while a pair of round 1 is unscored/, 'the round rule');
   assert.match(ask(finished(2), 2), /is finished: a finished slot is never run again/);
+  assert.match(ask(finished(30), 30), /finished/, 'a finished series offers nothing');
   assert.match(ask(finished(rb.slot), rb.slot + 1, []), /is a read-back slot/, 'the read-back gate');
   assert.match(ask(finished(12), 13, []), /round 3 never starts before the read-back lines/, 'the parent\'s round 3 rule');
   assert.match(ask(finished(rb.slot), rb.slot + 1, [...READ, dated(refuted(rb.slot, 'csharp'), '2026-11-25')]), /first dated line is final/, 'a conflicting line');
   assert.equal(slotProblem({ map: mapWith([]), slots: null, slot: 1, ...GATES }) === null, false, 'no slots before the reveal is a refusal and never a throw');
+});
+
+test('The_round_rule_is_its_own_check_and_a_weakened_barrier_cannot_offer_a_slot_of_the_next_round', () => {
+  const target = SLOTS[6];
+  const map = mapWith([...finished(5), [6, 'csharp', 1, GOOD], [6, 'node', 1, RAN]]);
+  assert.match(roundRuleProblem({ map, slots: SLOTS, target }), /round 2 never starts while a pair of round 1 is unscored.*slot 6/, 'hand-built: slot 6 of round 1 is open, so a slot of round 2 is refused');
+  assert.equal(roundRuleProblem({ map, slots: SLOTS, target: SLOTS[5] }), null, 'the open slot itself is in round 1 and is not refused by the round rule');
+  assert.equal(roundRuleProblem({ map: mapWith(finished(6)), slots: SLOTS, target }), null, 'round 1 finished: round 2 may start');
+  assert.equal(roundRuleProblem({ map, slots: SLOTS, target: SLOTS[0] }), null, 'round 1 has no earlier round');
+  // a deliberately weakened barrier: the slots are handed in with slot 7 before the open slot 6, so the first unfinished slot by array order is a slot of round 2
+  const weakened = [SLOTS[6], ...SLOTS.slice(0, 6), ...SLOTS.slice(7)];
+  const offered = nextSlot({ map, slots: weakened, ...GATES, readbackLines: READ });
+  assert.equal(offered.ok, false, 'the offer is refused by the round rule although the barrier named the wrong slot');
+  assert.match(offered.reason, /round 2 never starts while a pair of round 1 is unscored/);
+});
+
+test('A_stop_in_one_stack_does_not_block_finishing_the_partners_open_session_and_never_launches_one', () => {
+  const STOP = { class: 'stop: T1 breach', data: false, scored: false };
+  const [c1, n1] = [rid(1, 'csharp'), rid(1, 'node')];
+  const resumeOf = script => { const r = next(script); return r.ok ? shape(r.value) : r.reason; };
+  assert.deepEqual(resumeOf([[1, 'csharp', 1, STOP], [1, 'node', 1, RAN]]), [1, 'resume', [['node', 1, n1, 'score']]], 'the partner ended with data: it is scored, never abandoned');
+  assert.deepEqual(resumeOf([[1, 'node', 1, STOP], [1, 'csharp', 1, 'launching']]), [1, 'resume', [['csharp', 1, c1, 'settle']]], 'the partner is launching: it is settled');
+  assert.match(resumeOf([[1, 'csharp', 1, STOP], [1, 'node', 1, 'planned']]), /ended with a stop/, 'a planned partner is never launched after a stop');
+  assert.match(resumeOf([[1, 'csharp', 1, STOP], [1, 'node', 1, GOOD]]), /ended with a stop/, 'nothing open: the refusal');
+  assert.match(resumeOf([[1, 'csharp', 1, STOP], [1, 'node', 1, VOID]]), /ended with a stop/, 'a void partner is not re-run after a stop');
+  const step = next([[1, 'csharp', 1, STOP], [1, 'node', 1, RAN]]).value;
+  assert.ok(step.todo.every(x => x.step === 'score' || x.step === 'settle'), 'only settle and score entries');
+});
+
+test('A_function_never_throws_on_bad_input_and_says_what_was_wrong_and_what_is_legal', () => {
+  for (const bad of [{ round: 6, task: '04', stack: 'csharp' }, { round: 0, task: '04', stack: 'csharp' }, { round: 1.5, task: '04', stack: 'csharp' }, { round: 1, task: '99', stack: 'csharp' }, { round: 1, task: '04', stack: 'rust' }, {}, undefined, null]) {
+    const r = maskOfSlot(bad);
+    assert.equal(r.ok, false, JSON.stringify(bad));
+    assert.match(r.reason, /the (rounds|tasks of Stage 1|stacks) (are|is)|round|task|stack/, String(r.reason));
+  }
+  assert.match(maskOfSlot({ round: 6, task: '04', stack: 'csharp' }).reason, /round 6: the rounds are 1 to 5/);
+  assert.match(maskOfSlot({ round: 1, task: '99', stack: 'csharp' }).reason, /task 99: the tasks of Stage 1 are 04, 05, 06, 07, 08, 10/);
+  assert.match(maskOfSlot({ round: 1, task: '04', stack: 'rust' }).reason, /stack rust: the stacks are csharp, node/);
+  const args = { slots: SLOTS, ...GATES };
+  assert.equal(nextSlot({ ...args, map: null }).ok, false, 'no run-map');
+  assert.equal(nextSlot({ ...args, map: {} }).ok, false, 'a run-map without sessions');
+  assert.equal(nextSlot({ ...args, map: mapWith([]), readbackLines: null }).value.slot, 1, 'null lines are no lines');
+  assert.equal(nextSlot({ ...args, map: mapWith([]), readbackLines: [null, undefined, 3, 'x', {}] }).value.slot, 1, 'a line that is no object is nothing');
+  assert.equal(slotProblem({ ...args, map: null, slot: 1 }) === null, false);
+  assert.equal(slotProblem({}) === null, false);
+  assert.equal(nextSlot({}).ok, false);
+  assert.equal(pilotStep({ map: null, pilot: PILOT }).ok, false);
+  assert.equal(pilotStep({}).ok, false);
+});
+
+test('The_series_stopped_flag_of_the_run_map_refuses_every_slot_as_a_backstop', () => {
+  const stopped = markStopped(mapWith([]), { rule: 'second void: contaminated', reason: '{}', at: '2026-11-20T00:00:00Z' });
+  const r = nextSlot({ map: stopped, slots: SLOTS, ...GATES, readbackLines: READ });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /the series is stopped \(second void: contaminated\): a stopped series is never run again/);
+  assert.match(slotProblem({ map: stopped, slots: SLOTS, slot: 1, ...GATES, readbackLines: READ }), /the series is stopped/);
+  assert.equal(pilotStep({ map: stopped, pilot: PILOT }).ok, false, 'the pilot too');
+});
+
+test('A_read_back_line_without_a_date_is_ignored_it_neither_opens_the_gate_nor_voids_nor_conflicts', () => {
+  const [rb] = RB;
+  const undated = l => ({ ...l, date: undefined });
+  const script = finished(rb.slot);
+  assert.equal(asked(script, [undated(holds(rb.slot, 'csharp')), undated(holds(rb.slot, 'node'))]).ok, false, 'undated holds lines do not open the gate');
+  assert.equal(asked(script, [undated(refuted(rb.slot, 'csharp')), holds(rb.slot, 'csharp'), holds(rb.slot, 'node')]).value.slot, rb.slot + 1, 'an undated refuted line voids nothing and conflicts with nothing');
+  assert.equal(asked(script, [holds(rb.slot, 'csharp'), holds(rb.slot, 'node'), { ...refuted(rb.slot, 'csharp'), date: '' }, { ...refuted(rb.slot, 'node'), date: 'soon' }]).value.slot, rb.slot + 1, 'an empty or malformed date is no date');
+});
+
+test('The_conflict_sentence_names_the_earlier_dated_line_first_whatever_the_order_of_the_file', () => {
+  const [rb] = RB;
+  const r = asked(finished(rb.slot), [dated(refuted(rb.slot, 'csharp'), '2026-11-25'), dated(holds(rb.slot, 'csharp'), '2026-11-20'), dated(holds(rb.slot, 'node'), '2026-11-20')]);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /2026-11-20 holds, then 2026-11-25 refuted/, 'the first dated line is the earlier date, not the earlier row of the file');
+});
+
+test('The_A_A_looks_only_at_the_twins_of_its_own_task_and_stack', () => {
+  const stray = [['aa', '10', 'node', 1, GOOD, 'a'], ['aa', '10', 'node', 1, GOOD, 'b']];
+  const step = stepOfPilot(stray);
+  assert.deepEqual([step.ok, step.value.what, step.value.action], [true, 'aa', 'plan'], 'two twins of the same task on the other stack are no twins of this A/A');
+  assert.deepEqual(stepOfPilot([...stray, ...aaScript([['a', 1, GOOD], ['b', 1, GOOD]])]).value.what, 'pilot:05', 'and they do not disturb the real ones');
+});
+
+test('The_hash_helpers_and_the_void_test_are_v1s_and_the_quick_runs_one_each', () => {
+  const map = mapWith([[1, 'csharp', 1, GOOD], [1, 'node', 1, VOID]]);
+  assert.equal(stateLine(map, 1, 'data'), 'csharp: done, node: void-rerunnable');
+  assert.equal(stateLine(map, 1), 'csharp: none, node: none', 'the default kind is the quick run\'s');
+  assert.deepEqual(Object.values(map.sessions).map(isVoid), [false, true]);
 });

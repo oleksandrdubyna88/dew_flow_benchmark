@@ -12,8 +12,10 @@ const PHASES = Object.freeze(['v1', 'v2']);
 const MASKS = Object.freeze(['0-5', '8-13']);
 
 const hash = text => createHash('sha256').update(text).digest();
-const hex6 = text => hash(text).toString('hex').slice(0, 6);
-const bitOf = text => hash(text).readBigUInt64BE(0) % 2n === 1n;
+/** The first six hex digits of the sha256 of a text (also the rid form of Stage 1's data sessions, `lang-explore/lib/stage-schedule.mjs`). */
+export const hex6 = text => hash(text).toString('hex').slice(0, 6);
+/** A seeded bit: the low bit of the first eight bytes of the sha256 of a text. */
+export const bitOf = text => hash(text).readBigUInt64BE(0) % 2n === 1n;
 
 /** The rid of a data session: `sha256('<seed>:bare:p<pair>:<stack>:<phase>:a<attempt>')[0:6]` (registered; unique across the 24 sessions and their re-runs). */
 export const ridOf = ({ seed, pair, stack, phase, attempt }) => hex6(`${seed}:bare:p${pair}:${stack}:${phase}:a${attempt}`);

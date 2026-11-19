@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { bareSessionPlan, firstStack, maskFor, promptFor, pilotRid, ridOf, seriesId, workspaceFiles } from '../lib/bare-plan.mjs';
+import { bareSessionPlan, bitOf, firstStack, hex6, maskFor, promptFor, pilotRid, ridOf, seriesId, workspaceFiles } from '../lib/bare-plan.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
 import { spikeDir } from './helpers.mjs';
 
@@ -123,4 +123,14 @@ test('The_plan_override_takes_only_the_test_seams_and_never_a_security_field', (
   try { bareSessionPlan({ ...given, over: { token: 'LEAKED' } }); } catch (e) { assert.doesNotMatch(e.message, /LEAKED|REAL-TOKEN-VALUE/, 'a refusal names the key, never a value'); }
   const ok = bareSessionPlan({ ...given, over: { upstream: { host: '127.0.0.1', port: 9, tls: false }, tickMs: 5, sampleMs: 5, settleMs: 5, graceMs: 5, drainMs: 5 } });
   assert.deepEqual([ok.tickMs, ok.upstream.port, ok.token, ok.allow], [5, 9, real.token, real.allow], 'the seams pass, everything else is the real plan');
+});
+
+test('The_hash_helpers_hex6_and_bitOf_are_exported_and_are_the_ones_the_rids_and_the_first_stack_use', () => {
+  assert.equal(hex6('abc'), sha256('abc').slice(0, 6), 'the first six hex digits of the sha256');
+  assert.equal(ridOf({ seed: 'mg-0123456789abcdef', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1 }), hex6('mg-0123456789abcdef:bare:p1:csharp:v1:a1'));
+  assert.equal(pilotRid('x'), hex6('pilot:x'));
+  const text = 'mg-0123456789abcdef:bare:p1:v1:first';
+  assert.equal(bitOf(text), BigInt(`0x${sha256(text).slice(0, 16)}`) % 2n === 1n, 'the low bit of the first eight bytes');
+  assert.equal(firstStack({ seed: 'mg-0123456789abcdef', pair: 1, phase: 'v1' }), STACKS[bitOf(text) ? 1 : 0]);
+  assert.deepEqual(new Set(Array.from({ length: 64 }, (_, i) => bitOf(`t${i}`))), new Set([true, false]), 'both values occur');
 });

@@ -286,7 +286,9 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | scored | nothing: a scored attempt is never repeated |
   | void at attempt 1 | that stack alone, attempt 2, its own rid, step `plan` (`rerun`) |
   | void at attempt 2 | nothing: the cell ends `missing` |
-  | a stop | a refusal: the series' launches end for good |
+  | a stop in one stack, the partner `launching` or ended with data and unscored | that partner session only, step `settle` or `score`, never `plan` or `launch` (v1's precedent, `bare-settle.mjs` `recordWaitingStop`: a stop is recorded once no session is unsettled); the result also carries `stop`, the sentence |
+  | a stop, nothing underway (the partner scored, void, planned never started, or absent) | a refusal: the series' launches end for good; a partner that never started is not launched, a void partner is not re-run |
+  | the run-map's own `stopped` flag (`markStopped`) | a refusal for every slot and every pilot step: the backstop |
 
   Anything open (`launch`, `settle`, `score`) is finished before a void is re-run. So after a restart with the first stack
   scored and the second not started only the second is offered, and after a void only that stack's re-run.
@@ -298,24 +300,33 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | The twins | `pilotStep` |
   |---|---|
   | both absent | both twins, attempt 1, step `plan` |
-  | one twin of a run without the other (any attempt) | a refusal (`holds one twin only of its run n`): the twins are planned together |
+  | one twin of a run without the other (any attempt) | a refusal (`the A/A's run n holds twins a, not a and b`): the twins are planned together |
   | a twin planned, launching, or ended with data and unscored | finish that twin only (`launch`, `settle`, `score`), before anything else, a void twin included |
   | both scored | the A/A is finished: the daemon pair is next |
   | one scored and the other void (attempt 1), or both void | **both twins** run again, attempt 2, step `plan` (action `again`), never the void one alone: one twin measures no spread |
   | the repeat run planned, launching or unscored | finish those twins only |
   | the repeat run scored | the A/A is finished, whatever attempt 1 was |
   | a void twin at attempt 2 | a refusal, `the A/A has a void twin after its one repeat`: the pilot cannot go on, an instrument fix and a new go (O2) come first; the A/A is never run a third time |
-  | a stop | a refusal |
+  | a stop in one twin | as for a slot: the other twin, if `launching` or ended with data, is finished (`settle`, `score`); a twin never started is not launched; else a refusal |
+  | twins that are not exactly `a` and `b` in a run (one twin, or two `a`) | a refusal naming the run and the twins it holds |
 
-  So the pilot is at most twelve sessions (A/A four, each pair four).
-- **`slotProblem`** (kept: PR 3's `stage-run` asks it for a slot named by number, and the barrier's sentence is what the operator
-  reads). `slotProblem({ map, slots, slot, pilotGo, seedRevealed, readbackLines = [] })` → a sentence or `null`; `null` means slot
-  number `slot` may run now, and it is `null` for exactly the slot `nextSlot` offers. It checks, in this order: the gates (the
-  pilot is GO, the seed is revealed and slots exist); that `slot` is one of 1 to 30 (a text, `0`, `31` and `1.5` are refused
-  with `Stage 1 has slots 1 to 30`); the read-back lines do not conflict (above); the barrier (an earlier slot not finished, named
-  with its two stack states, inside a round) and the round rule (an earlier slot of an earlier round not finished: `round r + 1
-  never starts while a pair of round r is unscored`, its own sentence); that the slot is not finished (`a finished slot is never
-  run again`); the parent's round 3 rule and the read-back gate. It never throws and reads no file.
+  The A/A looks only at the sessions of its own task AND stack (kind `aa`). So the pilot is at most twelve sessions (A/A four, each pair four).
+- **`slotProblem` has one road in, `nextSlot`** (Opus review M1). `slotProblem({ map, slots, slot, pilotGo, seedRevealed,
+  readbackLines })` → a sentence or `null`, and it is `null` for EXACTLY the slot `nextSlot` offers, whatever the state: it is built
+  from `nextSlot`, so a stopped or half-planned slot, a gate, a conflicting or missing read-back line are refused by both, and
+  a refusal of `nextSlot` is `slotProblem`'s sentence for every number. Otherwise: a number that is no slot of 1 to 30 (a text,
+  `0`, `31`, `1.5`) is `Stage 1 has slots 1 to 30`; a slot before the offered one is `a finished slot is never run again`; a slot
+  after it is the round rule's sentence (`round r + 1 never starts while a pair of round r is unscored`) or, inside a round, the
+  barrier's sentence naming the offered slot with its two stack states. It never throws and reads no file. 14a holds this for every
+  state (a stop, one stack only, a half slot, the read-back gate, round 3, a finished series) and every n in 1 to 30.
+- **The round rule is its own check** (Opus review M2). `roundRuleProblem({ map, slots, target })` finds a slot of any round BELOW
+  the target's that is not finished, without the barrier's "earlier slot" test, and `nextSlot` asks it of the slot it offers (the
+  barrier makes it unreachable, so a test hands `nextSlot` slots in a deliberately weakened order) and `slotProblem` of the slot it
+  is asked about.
+- **Inputs are never a throw.** `maskOfSlot(input)` returns `ok(mask)` or `fail(sentence)` naming the input and the legal values
+  (`round 6: the rounds are 1 to 5`, `task 99: the tasks of Stage 1 are ...`, `stack rust: the stacks are csharp, node`);
+  `nextSlot`, `slotProblem` and `pilotStep` answer `fail` for a missing or stopped run-map and for missing arguments, and take
+  `readbackLines` of `null`, `undefined` or with entries that are no objects as no lines.
 - **What is never re-run.** A session whose scoring is decided (`accepted`, `rejected`, `intermittently incorrect`) is a data
   attempt and is finished. Only a void is offered a re-run: an `unscored: environment` session (`VOID_UNSCORED`) and v1's void
   classes. A killed or crashed session is a data attempt (§9).
@@ -336,8 +347,10 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   pass): a later line for the same rid that says the other word is refused, never applied: `nextSlot` and `slotProblem`
   fail with a sentence naming the rid and both lines' dates (`the first dated line is final`), so a refutation after a
   `holds` can never void an attempt once the gate opened and a `holds` after a `refuted` never cancels the re-run. A repeated
-  identical line is harmless; a conflict about a session of no read-back slot is nothing to the gate. The lines carry their
-  `date` when the caller has it (v1's `parseAmendments` gives it).
+  identical line is harmless; a conflict about a session of no read-back slot is nothing to the gate. **A line counts only if it
+  carries a date** (`YYYY-MM-DD`, which v1's `parseAmendments` gives every line): an undated line (or a malformed date) is
+  ignored, it neither opens the gate, nor voids, nor conflicts. "First" is the earliest date, ties in the order of the file, and
+  the conflict sentence names the lines in that order.
 - **The read-back gate: nothing runs past an unread read-back slot** (plan round 1, finding 2). When a read-back slot is
   scored, no later slot is offered until each of its two sessions that counts has its dated read-back line on `main`
   (`holds` or `refuted`). A `refuted` line makes that session `void: harness`; its one re-run is then the schedule's next
@@ -374,19 +387,25 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
 8. `The_rids_of_a_seed_are_distinct_over_task_stack_round_and_attempt_and_a_colliding_seed_is_refused`
 9. `A_slot_is_refused_while_an_earlier_slot_is_not_finished_and_the_sentence_names_it`
 10. `No_slot_of_the_next_round_is_offered_while_a_pair_of_this_round_is_unscored`
+    - 10a. `The_round_rule_is_its_own_check_and_a_weakened_barrier_cannot_offer_a_slot_of_the_next_round`
 11. `A_void_is_re_run_once_alone_before_the_next_slot_and_a_second_void_ends_the_cell`
 12. `A_session_with_a_functional_failure_in_a_completed_pass_is_never_offered_a_re_run` — `rejected` and
     `intermittently incorrect` entries; the terminal rule of D71 at the schedule's level.
 13. `An_unscored_environment_session_is_a_void_and_is_offered_its_one_re_run`
     - 9a. `Omitting_the_kind_leaves_the_quick_runs_pairs_as_they_were_and_kind_data_is_seen_only_when_asked` — the `series.mjs` kind
       parameter and the two new exports.
+    - 9b. `A_function_never_throws_on_bad_input_and_says_what_was_wrong_and_what_is_legal`
+    - 9c. `The_hash_helpers_and_the_void_test_are_v1s_and_the_quick_runs_one_each`
+    - 13b. `A_stop_in_one_stack_does_not_block_finishing_the_partners_open_session_and_never_launches_one`
     - 13a. `The_offer_names_the_stack_the_attempt_the_rid_and_the_step_still_to_run_and_never_the_slot_alone` — the table of
       the decision per session state: absent, planned, launching, killed with data, scored, void, re-run planned, one stack
       only; a restart after the first stack was scored and before the second started offers only the second, a restart after a
       void only that stack's re-run.
 14. `No_data_slot_is_offered_before_the_pilot_is_GO_and_the_seed_is_revealed`
-    - 14a. `slotProblem_refuses_what_nextSlot_would_not_offer_and_accepts_what_it_offers` — null for the offered slot in five
-      states and a sentence for the next; one refusal per invariant above.
+    - 14a. `slotProblem_refuses_what_nextSlot_would_not_offer_and_accepts_what_it_offers` — for twelve states (a stop, one stack
+      only, a half slot, the read-back gate, round 3, a finished series among them) and every n in 1 to 30, `slotProblem(n)` is null
+      exactly when n is the offered slot; one refusal per sentence above.
+    - 14b. `The_series_stopped_flag_of_the_run_map_refuses_every_slot_as_a_backstop`
 15. `Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist` — kept as the parent's own rule, with a map built
     by hand in which the gate of 15a was skipped.
     - 15a. `No_slot_after_a_read_back_slot_is_offered_until_both_its_sessions_have_their_dated_line` — one line of two is
@@ -401,6 +420,8 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
       with and without the line: the next slot, then only that stack's re-run, attempt 2, under its rid.
     - 15g. `A_line_of_the_original_attempt_never_releases_the_re_run_and_each_attempt_has_its_own_rid`
     - 15h. `A_void_attempt_needs_no_line_and_its_re_run_does`
+    - 15j. `A_read_back_line_without_a_date_is_ignored_it_neither_opens_the_gate_nor_voids_nor_conflicts`
+    - 15k. `The_conflict_sentence_names_the_earlier_dated_line_first_whatever_the_order_of_the_file`
     - 15i. `The_first_read_back_line_of_a_rid_is_final_and_a_later_line_that_conflicts_is_refused_never_applied` — `holds` then
       `refuted` after later slots ran, `refuted` then `holds`, an identical repeat, a conflict about a plain slot, another attempt's rid.
 16. `The_read_back_pairs_are_named_by_the_seed_one_of_each_kind_in_rounds_1_and_2`
@@ -408,25 +429,33 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
     - 17a. `A_void_pilot_session_is_re_run_once_alone_and_a_void_twin_runs_the_A_A_again_once_with_both_twins`
     - 17c. `The_A_A_decision_table_per_state_of_the_twins` — a test row for each line of the A/A table above.
     - 17d. `The_pilot_pairs_follow_the_slot_decision_table`
+    - 17e. `The_A_A_looks_only_at_the_twins_of_its_own_task_and_stack` — and two twins that are both `a` are refused.
     - 17b. `The_pilot_plans_argument_is_validated_field_by_field_and_each_refusal_names_its_field` — the control, 05 and 10 in
       either order, and a refusal for each required field, each stack, each wrong task and the duplicate.
 
-**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-schedule`. One new file and its test; `lib/series.mjs` gains nothing but
-an export of what the module needs (`pairComplete`, `stackState`, `MASKS`, `STACK_ORDER` are exported already). Functions under
+**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-schedule`. One new file and its test; `lib/series.mjs` is widened as listed
+below, and v1's `bare-plan.mjs` exports its two hash helpers (`hex6`, `bitOf`, one word each: reuse, not a second copy; the rid
+and the first stack of a slot are computed with them). **That touches `spikes/minigit-bench/`: the pull request says in its
+description that v1's `harnessIdentity` moved and that no v1 series is open, and runs the v1 suite whole (§8's row for PR 2).** Functions under
 50 lines, complexity at most 4; the mask table is computed, never a literal list. The functions: `slotsOf({ seed })`,
-`maskOfSlot({ round, task, stack })`, `ridOfSlot(...)`, `firstStackOfSlot(...)`, `seedProblem(seed)`,
+`maskOfSlot({ round, task, stack })` → `ok(mask)` | `fail(sentence)`, `ridOfSlot(...)`, `firstStackOfSlot(...)`, `seedProblem(seed)`,
 `nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines })` → `ok(slot + { action, todo })` | `fail(sentence)` | `ok(null)` when the series is
-done, `slotProblem(...)` (the barrier and the round rule as a sentence), `readbackSlots({ seed })`, `pilotPlan({ pilot })`, `pilotStep({ map, pilot })`.
+done, `slotProblem(...)` (one road in with `nextSlot`), `roundRuleProblem(...)`, `readbackSlots({ seed })`, `pilotPlan({ pilot })`, `pilotStep({ map, pilot })`.
 No command changes in this pull request. **`series.mjs` changes, all of them** (widened, never copied): `sessionsOf(map, pair, stack, kind)`,
 `openSessions(map, pair, kind)`, `stackState(map, pair, stack, kind)` and `pairComplete(map, pair, kind)` take an optional last
 argument, the run-map `kind` of the sessions to look at: `pilot` (the default, the quick run's pairs: every existing caller is
 unchanged) or `data` (a Stage 1 slot; the schedule passes `DATA_KIND`); any other value looks at sessions of that kind and finds
 none of a slot. The pilot's `aa` and `pilot` sessions are told apart by `task`, not through these functions. Two exports are
 new: `stateOfSessions(list)` (the state of a stack from its sessions, extracted from `stackState`) and `isOpenSession(s)`
-(extracted from `openSessions`). **Tests:** `Omitting_the_kind_leaves_the_quick_runs_pairs_as_they_were_and_kind_data_is_seen_only_when_asked`
+(extracted from `openSessions`); `isVoid(s)` is exported and `stateLine(map, pair, kind)` made kind-aware and exported (the schedule's
+sentences use them, so there is one void test and one state line). **Tests:** `Omitting_the_kind_leaves_the_quick_runs_pairs_as_they_were_and_kind_data_is_seen_only_when_asked`
 (scenario 9a) and `A_data_session_is_seen_through_the_kind_...`, beside the untouched `test/barrier.test.mjs`.
 
-**Done when:** the seventeen scenarios, 9a, 13a, 14a, 15a to 15i and 17a to 17d went red, green, red; §8's row for PR 2.
+**Note for PR 3:** a data rid (six hex digits of a sha256) and a `pilotRid` (the A/A's and the pilot's, drawn at random) may
+collide, about one in 10^4 over the whole series; `planSession` refuses a rid that is already in the run-map, so a collision
+fails closed (the launch is refused, nothing is planned twice), and PR 3's `stage-run` says so in its sentence.
+
+**Done when:** the seventeen scenarios, 9a to 9c, 10a, 13a and 13b, 14a and 14b, 15a to 15k and 17a to 17e went red, green, red; §8's row for PR 2.
 
 ### (a) the series over six tasks — PR 3
 
@@ -1350,7 +1379,7 @@ for it condition (2) is CI's checks, and the tools' own tests run whole where a 
 | # | Story | Branch | What it is | What it runs before it merges | Conditions |
 |---|---|---|---|---|---|
 | 1 | — | `docs/lang-v2-f3-stories` | this document, its `todo/README.md` row, and one line under the parent's F3 epic that links here | line scan; `plan-lifecycle`; CI; an Opus reading by the team lead | (2) no suite's file is touched: CI's checks; (3) line scan; (4) |
-| 2 | F3.S1 (a) | `feat/lang-v2-f3s1-schedule` | the schedule, with the read-back gate | the gates; lang-explore whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
+| 2 | F3.S1 (a) | `feat/lang-v2-f3s1-schedule` | the schedule, with the read-back gate (and v1's two hash helpers exported) | the gates; lang-explore and minigit-bench whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
 | 3 | F3.S1 (a) | `feat/lang-v2-f3s1-series` | the series over six tasks, the seam in v1, the dated lines, what a session stores | the gates; lang-explore and minigit-bench whole runs, both ways; the free rehearsal of round 1; line scan | (1), (2), (3) line scan, (4) |
 | 4 | F3.S1 (a) | `feat/lang-v2-f3s1-guards` | the guards before a paid pair, the reserve before every launch, the archive, free and restore verbs | the gates; lang-explore and lang-bench whole runs, both ways, `LANG_V2_TASK_REPO` at W; the real probe; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it changes how the held-out side is opened, (4) |
 | 5 | F3.S1 (b) | `feat/lang-v2-f3s1-prereg-tools` | the pre-registration tools, the widened guard, the series' branch and `stage-sync`, the seed, the CLI pin | the gates; lang-explore and minigit-bench whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |

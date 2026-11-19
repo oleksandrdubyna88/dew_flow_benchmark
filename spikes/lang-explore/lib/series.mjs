@@ -33,7 +33,8 @@ export function maskOf({ draw, pair, stack }) {
 /** The sessions of a pair, by stack, in attempt order. `kind` is the run-map kind they carry: `pilot` for the quick run's pairs, `data` for the slots of a Stage 1 series. */
 export const sessionsOf = (map, pair, stack, kind = 'pilot') => Object.values(map.sessions).filter(s => s.pair === pair && s.kind === kind && (stack === undefined || s.stack === stack)).sort((a, b) => a.attempt - b.attempt);
 
-const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
+/** A session that ended without data and as a void (a class starting `void`): the one it may be re-run. */
+export const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
 const isStopped = s => s.status === 'ran' && s.data === false;
 
 /** A session a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. */
@@ -61,7 +62,8 @@ export const stackState = (map, pair, stack, kind = 'pilot') => stateOfSessions(
 export const pairComplete = (map, pair, kind = 'pilot') => STACK_ORDER.every(stack => ['done', 'void-final'].includes(stackState(map, pair, stack, kind)));
 
 const validPair = (pair, pairs) => Number.isInteger(pair) && pair >= 1 && pair <= pairs;
-const stateLine = (map, pair) => STACK_ORDER.map(s => `${s}: ${stackState(map, pair, s)}`).join(', ');
+/** `csharp: done, node: open`: both stacks' states in a pair, of the run-map `kind` asked for (default the quick run's `pilot`). */
+export const stateLine = (map, pair, kind = 'pilot') => STACK_ORDER.map(s => `${s}: ${stackState(map, pair, s, kind)}`).join(', ');
 const rerunHint = (map, pair) => (STACK_ORDER.some(s => stackState(map, pair, s) === 'void-rerunnable') ? `; a void is re-run once, alone: run --pair ${pair} --rerun <stack>` : '');
 
 /** The sentence that refuses pair `pair`, or null: an earlier pair that is not finished, an unknown number. */
