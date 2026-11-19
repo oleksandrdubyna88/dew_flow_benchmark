@@ -16,14 +16,15 @@ import { casesTreeHash, loadHeldoutQuick } from '../lib/heldout-quick.mjs';
 import { closeClearFolder, openClearFolder, registryMismatchProblem, sealPackage } from '../lib/package-seal.mjs';
 import { quickTask } from './quick-leak-fixture.mjs';
 import { filesUnder, sealedClosed, TOKEN, world } from './quick-heldout-fixture.mjs';
-import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+import { classifyName, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 
 const owned = ownedFor({ token: 'bench' });
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const entryOf = w => JSON.parse(readFileSync(w.frozenFile, 'utf8')).tasks[w.taskId];
 const archiveOf = w => path.join(w.heldoutDir, 'suite.enc');
-const leftovers = dir => readdirSync(dir).filter(n => owned.ownedPattern().test(n) || /\.owner$|\.tmp$|^\.clear\.lock/.test(n));
+// A prefixed name of ANY owner (the shipped classifier reads names; the folder is the fixture's own), a claim, a temporary file or the clear lock.
+const leftovers = dir => readdirSync(dir).filter(n => classifyName(n).form !== 'none' || /\.owner$|\.tmp$|^\.clear\.lock/.test(n));
 
 /** A different valid archive at the archive's name: other cases, the same key. */
 function plantOtherArchive(w) {

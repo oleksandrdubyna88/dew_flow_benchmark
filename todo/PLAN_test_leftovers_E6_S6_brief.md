@@ -658,3 +658,14 @@ reader is the shipped `classifyName(name).form !== 'none'`, so the check still s
 `testsToDelete-u99999-bench-plant-AbCdEf.tmp` planted before the restart's assertion → `fail 1`, actual `[ 'testsToDelete-u99999-…' ]`.
 The host after fix 2 (2026-11-19): packs 10.0.14, the seven packages held; SDK 11.0.100 is also installed beside 10.0.114 (the owner's,
 parked; it replaced `dotnet-host-10.0` with `dotnet-host-11.0`); every `global.json` here keeps the runs on 10.0.114.
+
+**Fix 7 — the final code round (2026-11-19, session `fc1cf87a` round 4, over main `e3da9ba3`).** Two accepted findings, test only, and one
+docs finding. (a) `lang-explore`'s three heldout leftover readers — `test/quick-heldout-lock.test.mjs:169`, `test/quick-heldout-seal.test.mjs`
+`leftovers`, `test/quick-heldout-key.test.mjs` `tempsIn` — had been narrowed to THIS owner's `ownedPattern()`; they read the fixture's own
+`heldoutDir` (under its fake home), never a shared root, so the narrowing only made them blind to another owner's leftover. They now use the
+shipped `classifyName(n).form !== 'none'`, as fix 6. (Round 1 rejected the same narrowing's reversal as owner-blind over a shared `/tmp`;
+that reading was wrong for these three: the folder is private.) The readers that LOCATE the tool's own temporary folder
+(`quick-heldout-round2.test.mjs` `removingOf`/`claimsOf`, `quick-heldout-seal.test.mjs:330`) keep `ownedPrefix`. RED: a copy of one test per
+file with `testsToDelete-u99999-bench-plant-AbCdEf` planted in `heldoutDir` before the check → `pass 1` each (unseen). GREEN: the three files
+41/41. RED again: the same plants → `fail 1` each, actual `[ 'testsToDelete-u99999-bench-plant-AbCdEf' ]`. Both guards: 2 and 2.
+(b) `todo/README.md`: the brief's index line says built, not "plan only".
