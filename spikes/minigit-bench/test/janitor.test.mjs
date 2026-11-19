@@ -9,7 +9,7 @@ import { cellProcesses, cpuTicksOf, endCell, endSurvivors, realProcApi } from '.
 import { startReceiver } from '../lib/otel-receiver.mjs';
 import { agentBoxArgv } from '../lib/sandbox.mjs';
 import { claudeArgv, mcpConfigFor, settingsFor } from '../lib/launch.mjs';
-import { TS_DIR, boxOptions, envFor, newSession, nodeDir, sleep } from './box-helpers.mjs';
+import { TS_DIR, boxOptions, envFor, newSession, nodeDir, sleep, waitNone } from './box-helpers.mjs';
 import { hostLacks, sandboxGate, tmpDir } from './helpers.mjs';
 import { findOnPath } from '../lib/find-on-path.mjs';
 
@@ -72,10 +72,6 @@ async function startBox(layout, cell, script) {
   return box;
 }
 const TRAP = 'trap "echo got-TERM >&2; exit 3" TERM; echo ready; sleep 60 & wait $!';
-const waitNone = async (cell, ms = 3000) => {
-  for (const end = Date.now() + ms; Date.now() < end; await sleep(50)) if (cellProcesses(cell, realProcApi).pids.length === 0) return true;
-  return cellProcesses(cell, realProcApi).pids.length === 0;
-};
 
 test('A_group_SIGTERM_never_reaches_inside_the_box', async t => {
   if (!sandboxGate(t)) return;

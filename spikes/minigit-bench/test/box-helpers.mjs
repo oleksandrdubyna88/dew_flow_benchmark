@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { cellProcesses, realProcApi } from '../lib/janitor.mjs';
 import { agentBoxArgv, agentBoxPrefix, agentEnv, dummyToken, sessionLayout } from '../lib/sandbox.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { findOnPath } from '../lib/find-on-path.mjs';
@@ -69,5 +70,14 @@ export async function probeInit(layout, script, { over = {}, env = envFor(layout
 }
 
 export const onHost = (cmd, args, timeoutMs = 20_000) => runBounded(cmd, args, { timeoutMs });
+
+/**
+ * Wait, at most `ms`, until no process of this user carries the cell id; asked every `everyMs`, and it ends at the first empty answer. -> whether none is left. A cell id a test waits on or counts
+ * is ITS OWN (random, as the janitor's tests draw theirs): `cell-${layout.rid}` of `envFor` is a per-file counter, so two test files running side by side hold the same `cell-s2`.
+ */
+export const waitNone = async (cell, ms = 3000, everyMs = 50) => {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(everyMs)) if (cellProcesses(cell, realProcApi).pids.length === 0) return true;
+  return cellProcesses(cell, realProcApi).pids.length === 0;
+};
 export const hostHas = name => findOnPath(name) !== null;
 export const exists = existsSync;
