@@ -330,6 +330,10 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`; the process arm's `extra` may only ADD keys, and a key is a clash when it equals a base key in ANY case, because `https_proxy` is read by curl beside `HTTPS_PROXY`), `PATH` is constructed (no `/mnt`), and the credential in it is a
   **dummy**; the real token is not a parameter of anything in the box's path. `sessionLayout` claims `<runs root>/<rid>/` with a
   non-recursive `mkdir` and refuses a socket path over 108 bytes (UTF-8 bytes; 109 refused with `EINVAL` on this kernel).
+  **Two more hide lists, both empty tmpfs placed before any bind.** `hide` (E1.S4) is the caller's: a box with a pinned SDK directory
+  (`dotnetDir`) hides the whole distribution's dotnet through it (`DISTRIBUTION_DOTNET`). Every other box runs the distribution's dotnet,
+  and `agentBoxPrefix` itself hides every dotnet VERSION folder that is not the pinned SDK's (`dotnetPin`, required then; amendment of
+  2026-11-19, the dated note below): the list is `otherDotnetVersions` of `lib/dotnet-hide.mjs`, read from the host when the box is built.
 - **The supervisor** (`harness/box-init.mjs`, node builtins only, copied into `harness/`). Starts a loopback forwarder per
   `<port>:<unix socket>` (proxy 3128, API door 8787, OTel 4318 on the box's own loopback), then runs the command and exits with its
   code (`128 + n` for a signal; the old probe copy mapped every signal to 137). It ignores SIGTERM aimed at itself, **which is only safe because `endCell` always signals the command itself** (a caller that signalled `box-init` alone would leave the command running): the stop signals each
@@ -434,7 +438,48 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
 - **Preflight** (`lib/preflight.mjs`, `lib/host-checks.mjs`, `inputs/stacks.json`). `bwrap` and user namespaces; the TypeScript toolchain
   installed read-only when asked and absent (`npm install --prefix`, `chmod -R a-w`); then the pins (`claude` 2.1.310, node 26.12.1, dotnet
   SDK 10.0.114 (amended 2026-10-30 from 10.0.113, below) and exactly one, `tsc` 7.0.2) probed INSIDE a box with no proxy and no broker; the token file's status. **E3's runner must reuse `lib/preflight.mjs`** (it is the one place the
-  pins are probed inside a box and the token file is checked; a second copy in the runner would drift from it).
+  pins are probed inside a box and the token file is checked; a second copy in the runner would drift from it). The probe box is built by
+  `probeBoxPrefix` (exported, so its argv can be tested without running it) with `stacks.pins.dotnetSdk` as the box's `dotnetPin`: the rule
+  "exactly one SDK, the pin" and the box that shows only the pin's versions are given the SAME pin.
+
+**Dated note: one SDK in the box on a host that holds several (2026-11-19, amendment D-9 of `todo/PLAN_minigit_stack_bench_E2.md`).**
+*Cause.* SDK 11.0.100 was installed beside the pinned 10.0.114 on 2026-11-18, so `dotnet --list-sdks` in the box printed two lines and the
+preflight refused, rightly ("the box must hold exactly one SDK (2 listed)"). *What stays:* the rule in `lib/host-checks.mjs`, `inputs/stacks.json`,
+the pins, every `global.json`. *What changed:* the box.
+
+- **The list** (`lib/dotnet-hide.mjs`, `otherDotnetVersions({ pin, roots, exists, listDir })`, pure over an injected listing). Per root of
+  `DISTRIBUTION_DOTNET` (`/usr/lib/dotnet`, `/usr/share/dotnet`, `/etc/dotnet`; the one definition, lang-explore's `quick.mjs` re-exports it):
+  `sdk/<v>` for every version `v` that is not the pin; `shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>` and `sdk-manifests/<band>`
+  whose MAJOR is not the pin's. A root or a group the host lacks gives nothing; a folder whose name is not a version is left alone; a pin
+  that is not `x.y.z` is refused (thrown, naming the shape). On this host with pin 10.0.114 it is 13 folders: `sdk/11.0.100`, two
+  `shared/*/11.0.0`, seven `packs/*/11.0.0`, `templates/11.0.0`, `sdk-manifests/11.0.100` and `11.0.100-preview.6`.
+- **Where it is computed: in `agentBoxPrefix`, when the box is built.** Never in a plan file or a session plan, so an SDK installed between a
+  preflight and a session is hidden too. A box with a pinned `dotnetDir` gets nothing from it (its caller's `hide` covers the whole
+  distribution, unchanged; a test asserts that argv is what it was and that the listing is never read). A box with neither `dotnetDir` nor
+  `dotnetPin` is refused: skipping would show every SDK of the host, and a measured cell could be built with another one.
+- **How the pin reaches the box, per path.** The preflight: `probeBoxPrefix`, from `stacks.pins.dotnetSdk`. A session: `sessionBoxArgv` of
+  `lib/session-launch.mjs` (the one function the launcher builds its argv with) reads `plan.dotnetPin`; v1's plan gets it from
+  `bareSessionPlan({ dotnetPin })`, called by `v1Plan` with `ctx.dotnetPin`, which `bare-config.mjs` reads from the inputs folder's
+  `stacks.json`; the smoke's plan from its own `stacks`. A snapshot: `makeSnapshot` completes its `box` with v1's pin when the caller gave
+  none (`snapshotBoxFields`), `inBox` hands it to `snapshotBoxArgv`. The pilot (`spikes/lang-explore`): `run-ctx.mjs` puts
+  `world.explore.dotnet.sdk` into the context, `plan.mjs` hands it to the plan, `readback.mjs` records it in `plan.json`, `prepare.mjs` hands
+  it to the node snapshot's box. A launch whose plan holds no pin and no pinned directory fails before the box is spawned.
+- **Measured on this host, in the real box** (`test/agent-box-dotnet.test.mjs`, 2026-11-19): `dotnet --list-sdks` prints
+  `10.0.114 [/usr/lib/dotnet/sdk]` and nothing else; the same box without the computed tmpfs prints `10.0.114` and `11.0.100`. A `net10.0`
+  console project with no package reference and no package source, built and run there: `dotnet --version` is `10.0.114`, the program prints
+  `.NET 10.0.14`, `dotnet --list-runtimes` lists `Microsoft.NETCore.App 10.0.14` and `Microsoft.AspNetCore.App 10.0.14` only; the same
+  project without the tmpfs is given SDK `11.0.100`.
+- **The one difference from before SDK 11 came, recorded.** `host/fxr` is not hidden, and the muxer (`/usr/lib/dotnet/dotnet`) is the host
+  package's: `dotnet --info` in the box says `Host: Version: 11.0.0, Architecture: x64, Commit: 297acf930f`. The newest resolver answers for
+  every SDK and resolves to the pinned one.
+- **What the box still shows of the other version, not covered by the amendment's list.** The files `library-packs/*.11.0.0.nupkg`
+  (`Microsoft.DotNet.ILCompiler`, `Microsoft.NET.ILLink.Tasks`; a tmpfs mounts over a directory, not over a file) and the folder
+  `metadata/workloads/11.0.100` (it holds one empty file, `userlocal`). A version folder that is a symbolic link is not hidden either (there is none
+  on this host); the preflight's probe would still count what it shows. So "the box shows what it showed before" holds for the SDK, the
+  runtimes, the packs, the templates and the manifests, and not for these.
+- **Not changed, and it still lists both: the SCORING box** (`scoreBoxArgv`, `lib/bwrap.mjs`; the amendment names the agent's boxes).
+  Measured 2026-11-19: `dotnet --list-sdks` there prints `10.0.114` and `11.0.100`, and `dotnet --version` in a folder with no `global.json`
+  is `11.0.100`. A workspace that carries a `global.json` (the language comparison's do) pins its own build; v1's workspace does not.
 
 **Dated note: the .NET SDK pin is 10.0.114 (2026-10-30).** The pin in `inputs/stacks.json` was 10.0.113. Unattended apt upgraded the .NET packages at
 2026-10-30 06:19:43 (`/var/log/apt/history.log`: `Start-Date: 2026-10-30  06:19:43`, `Commandline: /usr/bin/unattended-upgrade`; the runtime went to
@@ -771,7 +816,7 @@ get round it). The test is on the home and runs before any file is looked at, so
 test does not clone it again. `bare-runner.mjs` reads the home at each call (`defaults()`), not when the module loads. Two files keep the real home on purpose, because the real scorer decrypts the held-out suite
 under it: `test/bare-e2e.test.mjs` and `test/rehearse-v2-e2e.test.mjs`; they build their own context with a fake token and import neither `main` nor `buildRun`, and `test/fake-home.test.mjs` checks both.
 
-**Four optional seams for the exploratory pilot (2026-10-31; `spikes/lang-explore`, plan `research/PLAN_lang_explore_task1.md` section 2.2).** Each default is byte-identical to what v1 did before: `test/explore-seams.test.mjs` compares the code with `test/fixtures/explore-seams-baseline.json`, which `test/explore-seams-observe.mjs` wrote from the unchanged code. **W1** `lib/bare-phase.mjs`: `ctx.fill({ ctx, item, layout })` and `ctx.planFor({ ctx, item })`, when the run context has them, fill the workspace and make the `launchSession` plan instead of v1's `fillV1` / `fillV2` and `bareSessionPlan`; with neither, the phase is v1's. **W2** `lib/sandbox.mjs`: `agentEnv({ ..., locale })` sets `LANG` and `LC_ALL` to the locale (`localeEnv` in `lib/bwrap.mjs` checks it is a locale name); `extra` may not replace either, and `AGENT_ENV_KEYS` stays the key set of the DEFAULT environment (`LC_ALL` is the locale's own key). `lib/session-launch.mjs` forwards `plan.locale` to it (a plan with none is v1's). **W3** `lib/bwrap.mjs`: `scoreEnv` / `scoreBoxArgv({ ..., locale })`, the same rule for the scoring box; an effect test runs `env` inside the box. **W4** `lib/bare-record.mjs`: `sessionMeasure` is exported unchanged, so a one-phase cell can feed `ratioOf` and `pairRecord`.
+**Four optional seams for the exploratory pilot (2026-10-31; `spikes/lang-explore`, plan `research/PLAN_lang_explore_task1.md` section 2.2).** Each default is byte-identical to what v1 did before: `test/explore-seams.test.mjs` compares the code with `test/fixtures/explore-seams-baseline.json`, which `test/explore-seams-observe.mjs` wrote from the unchanged code. (The baseline was amended once by a change that is no seam: on 2026-11-19 v1's plan gained the key `dotnetPin`, the D-9 amendment above, so `planKeys` of its two phase entries hold it; the file was rewritten by the observe module and the diff was those two lines.) **W1** `lib/bare-phase.mjs`: `ctx.fill({ ctx, item, layout })` and `ctx.planFor({ ctx, item })`, when the run context has them, fill the workspace and make the `launchSession` plan instead of v1's `fillV1` / `fillV2` and `bareSessionPlan`; with neither, the phase is v1's. **W2** `lib/sandbox.mjs`: `agentEnv({ ..., locale })` sets `LANG` and `LC_ALL` to the locale (`localeEnv` in `lib/bwrap.mjs` checks it is a locale name); `extra` may not replace either, and `AGENT_ENV_KEYS` stays the key set of the DEFAULT environment (`LC_ALL` is the locale's own key). `lib/session-launch.mjs` forwards `plan.locale` to it (a plan with none is v1's). **W3** `lib/bwrap.mjs`: `scoreEnv` / `scoreBoxArgv({ ..., locale })`, the same rule for the scoring box; an effect test runs `env` inside the box. **W4** `lib/bare-record.mjs`: `sessionMeasure` is exported unchanged, so a one-phase cell can feed `ratioOf` and `pairRecord`.
 
 **Not built.** `report` (E3b.S5; the interim record [minigit/RESULTS_bare_2026-10-30.md](minigit/RESULTS_bare_2026-10-30.md), rendered by `research/minigit/tools/`, stands in for it). `aa-verdicts` and `--what rehearse-v2` ARE built (E3b.S4; review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
 
