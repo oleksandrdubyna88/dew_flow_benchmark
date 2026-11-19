@@ -1,16 +1,19 @@
 // workspace-diff (E1.S1 brief item 3): per task, `csharp/<t>/` and `node/<t>/` hold the same files, byte for byte, except each stack's own
 // files (its pin files, its two scripts and its packages list) and the two marked sentences of STATEMENT.md. A finding is `{ path, what }`; the result is
 // `{ ok, findings }`, findings sorted by path. Nothing here changes anything.
+// F1.S2's per-stack lines are covered too: the sentence after `<!-- heap-sentence -->` and the `heap` key of `samples/load.json` are each stack's own; the memory sentence and every other key are the same on both sides.
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { PIN_FILES, SCRIPTS } from './frozen-set.mjs';
 
 // Each stack's own files (the pin files are the frozen list's, `spikes/lang-bench/lib/frozen-set.mjs`): its pin files, and the three files a built workspace derives or writes for its stack (the build script, the run script, the packages list).
 const OWN_FILES = Object.freeze([...SCRIPTS, 'PACKAGES.md']);
 export const CSHARP_PINS = Object.freeze([...PIN_FILES.csharp, '*.csproj', ...OWN_FILES]);
 export const NODE_PINS = Object.freeze(['package.json', 'package-lock.json', ...PIN_FILES.node, ...OWN_FILES]);
-export const MARKERS = Object.freeze(['<!-- stack-sentence -->', '<!-- framework-sentence -->']);
+export const MARKERS = Object.freeze(['<!-- stack-sentence -->', '<!-- framework-sentence -->', '<!-- heap-sentence -->']);
 const STATEMENT = 'STATEMENT.md';
+const LOAD_FILE = 'samples/load.json';
 
 const isPin = (name, pins) => pins.some(pin => (pin.startsWith('*') ? name.endsWith(pin.slice(1)) : name === pin));
 
@@ -46,13 +49,38 @@ function firstStatementDifference(a, b) {
   return left.length !== right.length && at === -1 ? Math.min(left.length, right.length) + 1 : at + 1;
 }
 
+/** The load file read as JSON: `{ hasHeap, rest }` with the `heap` key taken out, or null when the bytes are not one JSON object. */
+function readLoad(bytes) {
+  try {
+    const parsed = JSON.parse(bytes.toString('utf8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const { heap, ...rest } = parsed;
+    return { hasHeap: Object.hasOwn(parsed, 'heap'), rest };
+  } catch {
+    return null;
+  }
+}
+
+/** `null` when two load files are equal as JSON but for the VALUE of the `heap` key, which both hold or neither holds; the finding text otherwise (a file that is not a JSON object is a difference). */
+function loadDifference(x, y) {
+  const [left, right] = [readLoad(x), readLoad(y)];
+  return left !== null && right !== null && left.hasHeap === right.hasHeap && isDeepStrictEqual(left.rest, right.rest) ? null : 'bytes differ';
+}
+
+/** `null` when the statements are equal outside the marked sentences. */
+function statementDifference(x, y) {
+  const line = firstStatementDifference(x.toString('utf8'), y.toString('utf8'));
+  return line === 0 ? null : `differs outside a marked sentence, line ${line}`;
+}
+
+const plainDifference = (x, y) => (x.equals(y) ? null : 'bytes differ');
+const COMPARE = Object.freeze({ [STATEMENT]: statementDifference, [LOAD_FILE]: loadDifference });
+
 function sameBytes(rel, a, b) {
   let x;
   let y;
   try { [x, y] = [readFileSync(a.abs), readFileSync(b.abs)]; } catch (error) { return readProblem(rel, error).what; }
-  if (rel !== STATEMENT) return x.equals(y) ? null : 'bytes differ';
-  const line = firstStatementDifference(x.toString('utf8'), y.toString('utf8'));
-  return line === 0 ? null : `differs outside a marked sentence, line ${line}`;
+  return (COMPARE[rel] ?? plainDifference)(x, y);
 }
 
 const linkFindings = files => [...files].filter(([, f]) => f.link).map(([rel]) => ({ path: rel, what: 'symlink' }));

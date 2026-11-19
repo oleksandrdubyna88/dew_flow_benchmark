@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { cmdLeakcheck } from '../lib/commands.mjs';
-import { exploreOf, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
+import { exploreOf, noRecord, quickHome, quickTask, writeQuickHeldout } from './quick-leak-fixture.mjs';
 
 /** The invented needle: two lines of one case's answer, with a distinctive token each. */
 export const NEEDLE_LINES = Object.freeze(['recv c "invented-answer-one-for-the-repos-XYZZY-5550123"', 'recv c "invented-answer-two-for-the-repos-QWERTY-8870456"']);
@@ -51,7 +51,7 @@ export function privateSide() {
 export async function runCheck({ home, explore, benchRepo, values = {}, env = {}, io: extraIo = {} }) {
   const said = [];
   const progress = [];
-  const io = { home, repoRoot: benchRepo, say: l => said.push(l), progress: l => progress.push(l), exploreFn: () => ok(explore), env, ...extraIo };
+  const io = { home, repoRoot: benchRepo, say: l => said.push(l), progress: l => progress.push(l), exploreFn: () => ok(explore), env, frozenFile: noRecord(), ...extraIo };
   const exit = await cmdLeakcheck(values, io);
   return { exit, said: said.join('\n'), progress: progress.join('\n') };
 }

@@ -11,18 +11,18 @@ import { FETCH_CONFIG } from './push-remote.mjs';
 
 export const UNCHECKED_TARGET = 'the tagged commit is on no remote ref: it was never checked; push its branch through the check first';
 
-/** ok({ type, message, commit }) for `refs/tags/<tag>`; a `config` fail when there is no such tag. */
-async function readTag(repo, tag) {
+/** ok({ type, object, message, commit }) for `refs/tags/<tag>`: `object` is the tag object's own id for an annotated tag (the commit's for a lightweight one); a `config` fail when there is no such tag. */
+export async function readTag(repo, tag) {
   const ref = `refs/tags/${tag}`;
   const type = await runGit(repo, ['cat-file', '-t', ref], { accept: [0, 128] });
   if (!type.ok) return type;
   if (type.value.code !== 0) return fail(`there is no tag ${tag} in ${repo}`, { kind: 'config' });
-  const target = await runGit(repo, ['rev-parse', '--verify', `${ref}^{commit}`]);
-  if (!target.ok) return target;
+  const [object, target] = [await runGit(repo, ['rev-parse', '--verify', ref]), await runGit(repo, ['rev-parse', '--verify', `${ref}^{commit}`])];
+  if (!object.ok || !target.ok) return object.ok ? target : object;
   const kind = type.value.stdout.trim();
   const raw = kind === 'tag' ? await runGit(repo, ['cat-file', 'tag', ref]) : ok({ stdout: '' });
   // the header of a tag object (object, type, tag, tagger) ends at the first blank line; the message is what follows
-  return raw.ok ? ok({ type: kind, message: raw.value.stdout.split('\n\n').slice(1).join('\n\n'), commit: target.value.stdout.trim() }) : raw;
+  return raw.ok ? ok({ type: kind, object: object.value.stdout.trim(), message: raw.value.stdout.split('\n\n').slice(1).join('\n\n'), commit: target.value.stdout.trim() }) : raw;
 }
 
 export const FETCH_FIRST = 'the tagged commit is not on any remote ref this clone can see, and some current remote commits are not present locally (not fetched), so whether one of them holds it cannot be decided: fetch first (the check never fetches for you)';

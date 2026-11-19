@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkFrozenCandidate } from '../lib/format-compare.mjs';
-import { edit, FORMAT_TEXT, realDraft, sha256 } from './support/format-fixtures.mjs';
+import { run } from '../tools/format-classes.mjs';
+import { edit, folder, FORMAT_TEXT, put, realDraft, sha256 } from './support/format-fixtures.mjs';
 
 const compare = (candidate, base = FORMAT_TEXT) => {
   const frozen = Buffer.from(base);
@@ -204,4 +205,53 @@ test('The_real_draft_against_itself_passes_and_the_class_rule_reads_it_as_the_sy
   assertPasses(run(edit(real, '| F-TIMING | daemon, web whose', '| F-TIMING | daemon, web whose T or G is not the default series, whose')));
   assertRefused(run(edit(real, '| F-RUN-O | olympiad |', '| F-RUN-O | olympiad, others |')), '2.1 How they are used', 'common', /F-RUN-O/);
   assertRefused(run(edit(real, '| F-ERRORS | all, instead', '| F-ERRORS | all, rather than')), '2.1 How they are used', 'common', /F-ERRORS/);
+});
+
+// ---- FORMAT's protection binds from B's tag (F2.S2 (d)): the reference is the frozen FORMAT's sha256 in spec-states.json once that exists ----------------------------
+
+/** A's FORMAT is an older text than B's frozen one; the record names A's sha256 and, once B is frozen, spec-states.json names B's. Returns the paths. */
+function frozenRecord(t, { states } = {}) {
+  const dir = folder(t, 'classes-frozen-b');
+  const older = edit(FORMAT_TEXT, 'It is a synthetic stand-in.', 'It is an older synthetic stand-in.');
+  const record = put(dir, 'format.json', JSON.stringify({ A: { version: 2, sha256: sha256(Buffer.from(older)), tasks: ['01'] }, B: { version: 2, sha256: sha256(Buffer.from(FORMAT_TEXT)), tasks: ['04'] } }));
+  if (states !== undefined) put(dir, 'spec-states.json', JSON.stringify(states));
+  return { dir, record, older, frozen: put(dir, 'B.md', FORMAT_TEXT), olderFile: put(dir, 'A.md', older) };
+}
+const FROZEN_B = { freeze: { tag: 'spec-frozen-B-20261201', formatSha256: sha256(Buffer.from(FORMAT_TEXT)), state: 'accepted' } };
+const viaCommand = (r, candidateText, extra = []) => run(['--frozen', r.frozen, '--candidate', put(r.dir, `candidate-${sha256(Buffer.from(candidateText)).slice(0, 8)}.md`, candidateText), '--record', r.record, ...extra]);
+
+test('After_B_is_frozen_a_change_to_a_common_section_is_refused_and_a_change_to_a_daemon_web_section_is_permitted', t => {
+  const r = frozenRecord(t, { states: FROZEN_B });
+  const refused = viaCommand(r, edit(FORMAT_TEXT, 'The file name and the header table.', 'The file name, the header table and a new rule.'));
+  assert.equal(refused.exit, 1, refused.lines.join('\n'));
+  assert.ok(refused.lines.some(line => line.includes('1. The spec file') && line.includes('class common') && /protected bytes differ/.test(line)), refused.lines.join('\n'));
+  const permitted = viaCommand(r, edit(FORMAT_TEXT, 'Strings and escapes.', 'Strings, escapes and more.'));
+  assert.equal(permitted.exit, 0, permitted.lines.join('\n'));
+});
+
+test('Once_B_is_frozen_the_frozen_file_must_be_B_frozen_FORMAT_and_A_is_no_longer_the_reference', t => {
+  const r = frozenRecord(t, { states: FROZEN_B });
+  const old = run(['--frozen', r.olderFile, '--candidate', r.olderFile, '--record', r.record]);
+  assert.equal(old.exit, 1, 'A\'s older text equals A\'s recorded sha256 and is still not the reference');
+  assert.match(old.lines.join('\n'), /the frozen reference is not B's frozen FORMAT/);
+  assert.match(old.lines.join('\n'), new RegExp(FROZEN_B.freeze.formatSha256));
+  assert.equal(run(['--frozen', r.frozen, '--candidate', r.frozen, '--record', r.record]).exit, 0, 'the frozen text itself passes');
+});
+
+test('Before_B_is_frozen_the_reference_is_the_record_A_and_a_state_file_that_is_there_without_a_freeze_sha256_is_a_format_error', t => {
+  const before = frozenRecord(t);
+  assert.equal(run(['--frozen', before.olderFile, '--candidate', before.olderFile, '--record', before.record]).exit, 0, 'no spec-states.json: A\'s sha256 answers');
+  assert.equal(run(['--frozen', before.frozen, '--candidate', before.frozen, '--record', before.record]).exit, 1, 'and B\'s text is not A\'s');
+  for (const states of [{}, { freeze: {} }, { freeze: { formatSha256: 'abc' } }]) {
+    const broken = frozenRecord(t, { states });
+    const result = run(['--frozen', broken.frozen, '--candidate', broken.frozen, '--record', broken.record]);
+    assert.equal(result.exit, 4, JSON.stringify(states));
+    assert.match(result.lines.join('\n'), /spec-states\.json.*freeze\.formatSha256/, 'the sentence names the file and the field');
+  }
+});
+
+test('The_states_file_may_be_named_with_the_states_option_and_the_frozen_reference_is_then_read_from_it', t => {
+  const r = frozenRecord(t);
+  const elsewhere = put(folder(t, 'classes-frozen-states'), 'states.json', JSON.stringify(FROZEN_B));
+  assert.equal(viaCommand(r, edit(FORMAT_TEXT, 'Strings and escapes.', 'Strings, escapes and more.'), ['--states', elsewhere]).exit, 0);
 });

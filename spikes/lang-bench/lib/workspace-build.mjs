@@ -15,6 +15,7 @@ import { loadMatrix } from './package-matrix.mjs';
 import { renderPackagesMd } from './packages-md.mjs';
 import { computePin, verifyPin } from './runner-pin.mjs';
 import { loadStacksLang } from './toolchain-pins.mjs';
+import { ENTRY_TASKS, namesTask } from './conformance-record.mjs';
 import { checkDestination, writeAtomically } from './workspace-destination.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -98,6 +99,12 @@ function groupProblem({ format, group, task, helloFixture }) {
   return owner === undefined ? rowlessProblem(task, helloFixture) : foreignProblem({ owner, group, task });
 }
 
+/** The refusal for a task of the six quick tasks (F2.S2 (d), D70): the one engine writes their workspaces, so two builders never write them. `null` for any other task. */
+export function engineTaskProblem(task) {
+  if (!namesTask(ENTRY_TASKS.B, task)) return null;
+  return `the task ${task} is one of the six quick tasks (${ENTRY_TASKS.B.join(', ')}): their workspaces are written by the one engine, never by this builder; run node spikes/lang-explore/explore.mjs workspaces --tag <tag> --task-repo <task repository> --out <dir>`;
+}
+
 const rowlessProblem = (task, helloFixture) => (helloFixture ? null : `the task ${JSON.stringify(task)} is in no group's row of FORMAT's record`);
 const foreignProblem = ({ owner, group, task }) => (owner === group ? null : `the build of ${group} refuses to write into ${owner}'s tasks: the task ${task} belongs to group ${owner}, not to group ${group}`);
 
@@ -140,9 +147,9 @@ function listFiles(dir, base = dir) {
 
 // ---- the plan: everything checked before the first write -----------------------------------------------------------------------------------------
 
-/** The checks that need no file at all but the destination: names, group, destination. -> `ok(resolved out)` | `fail`. The command runs it before it fetches anything. */
+/** The checks that need no file at all but the destination: the six quick tasks (the engine's), names, group, destination. -> `ok(resolved out)` | `fail`. The command runs it before it fetches anything. */
 export function preCheck({ stack, kind, task, group, out, inputs, worktreeOf = gitWorktreeOf, helloFixture = false }) {
-  const problem = legalProblem(stack, kind) ?? groupProblem({ format: inputs.format, group, task, helloFixture });
+  const problem = engineTaskProblem(task) ?? legalProblem(stack, kind) ?? groupProblem({ format: inputs.format, group, task, helloFixture });
   return problem === null ? checkDestination(out, worktreeOf) : refuse(problem);
 }
 

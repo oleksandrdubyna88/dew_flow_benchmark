@@ -72,7 +72,7 @@ for (const [name, run] of ENTRY_POINTS) {
 
 test('Init_and_leakcheck_read_a_folder_held_by_the_operator_and_remove_nothing', async () => {
   const w = await sealedClosed();
-  const opened = await main(['heldout-open', '--task', '04', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: () => {}, heldout: { mountOf: w.args.mountOf } });
+  const opened = await main(['heldout-open', '--task', '04', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: () => {}, heldout: { packagesFile: w.packagesFile, mountOf: w.args.mountOf } });
   assert.equal(opened, 0);
   const held = await quickInitExtra({ explore: EXPLORE, task: w.task, home: w.home, heldout: w.args, sourcesFn: async () => ok({}) });
   assert.doesNotMatch(String(held.reason), /sealed: open it first|differs/, 'init reached the runner parse over the held folder (which the fixture\'s invented pairs do not satisfy)');
@@ -84,7 +84,7 @@ test('Init_and_leakcheck_read_a_folder_held_by_the_operator_and_remove_nothing',
 
 test('A_clear_folder_whose_opener_is_dead_is_removed_at_an_entry_point_and_a_live_one_is_used', async () => {
   const w = await sealedClosed();
-  assert.equal((await main(['heldout-open', '--task', '04', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: () => {}, heldout: {} })), 0);
+  assert.equal((await main(['heldout-open', '--task', '04', '--key-file', w.keyFile], { home: w.home, frozenFile: w.frozenFile, say: () => {}, heldout: { packagesFile: w.packagesFile } })), 0);
   writeFileSync(path.join(w.heldoutDir, '.open'), `${JSON.stringify({ pid: 4242, startTime: 'gone', at: '2026-11-09T08:00:00.000Z' })}\n`);
   const live = await seriesHeldout({ home: w.home, seriesDir: seriesOf(w), task: w.task, heldout: { ...w.args, isAlive: () => true } });
   assert.doesNotMatch(String(live.reason), /sealed: open it first/, 'control: a live opener keeps its folder, and the entry point reads it');
@@ -96,7 +96,7 @@ test('A_clear_folder_whose_opener_is_dead_is_removed_at_an_entry_point_and_a_liv
 
 test('The_verbs_run_the_same_decision_heldout_open_and_close_remove_a_stale_folder_and_check_reports_it_and_removes_nothing', async () => {
   const say = [];
-  const seams = w => ({ home: w.home, frozenFile: w.frozenFile, say: l => say.push(l), heldout: { mountOf: w.args.mountOf, hooks: { afterLock: () => w.locks.push(1) } } });
+  const seams = w => ({ home: w.home, frozenFile: w.frozenFile, say: l => say.push(l), heldout: { packagesFile: w.packagesFile, mountOf: w.args.mountOf, hooks: { afterLock: () => w.locks.push(1) } } });
   const checked = await stale();
   const check = await main(['heldout-check', '--tasks', '04', '--key-file', checked.keyFile], seams(checked));
   assert.equal(check, 0);

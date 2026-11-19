@@ -353,10 +353,12 @@ const addedRefusals = (frozen, candidate) => candidate.parts.filter(isNewProtect
 
 const readBoth = (frozen, candidate) => ({ a: readClassed(frozen, 'the frozen file'), b: readClassed(candidate, 'the candidate') });
 
+const referenceName = label => (label === 'A' ? "A's recorded" : `${label}'s frozen`);
+
 /** The refusal before any part is compared: the frozen file is not the reference, a file cannot be read, or the frozen file breaks its own class rules. */
-function headRefusal(frozen, reference, { a, b }) {
+function headRefusal(frozen, { reference, label }, { a, b }) {
   const actual = sha256Hex(frozen);
-  if (actual !== reference) return { exit: 1, lines: [`format-classes: the frozen reference is not A's recorded FORMAT (its sha256 is ${actual}, the record names ${reference})`] };
+  if (actual !== reference) return { exit: 1, lines: [`format-classes: the frozen reference is not ${referenceName(label)} FORMAT (its sha256 is ${actual}, the record names ${reference})`] };
   const unread = [a, b].find(read => !read.ok);
   if (unread !== undefined) return { exit: 4, lines: [`format-classes: ${unread.reason}`] };
   const own = checkSelf(frozen);
@@ -384,12 +386,12 @@ function candidateRefusals(left, right) {
 }
 
 /**
- * `{ exit, lines }` for the frozen file's bytes, the candidate's bytes and the reference sha256 (the record's `A.sha256`): 1 when the frozen file is not the reference or the candidate
+ * `{ exit, lines }` for the frozen file's bytes, the candidate's bytes and the reference sha256 (the record's `A.sha256`, or from B's tag the frozen `freeze.formatSha256`; `label` is `A` or `B`): 1 when the frozen file is not the reference or the candidate
  * breaks the class rules or changes a protected part (one line per refusal), 4 for a format error in either file, else 0.
  */
-export function checkFrozenCandidate({ frozen, candidate, reference }) {
+export function checkFrozenCandidate({ frozen, candidate, reference, label = 'A' }) {
   const both = readBoth(frozen, candidate);
-  const early = headRefusal(frozen, reference, both) ?? classRefusal(both.b);
+  const early = headRefusal(frozen, { reference, label }, both) ?? classRefusal(both.b);
   if (early !== null) return early;
   const left = { ...both.a, parts: partsOf(both.a.format, both.a.rows) };
   const broken = frozenGrammarRefusal(left);
