@@ -14,11 +14,10 @@ const lineOf = (map, charge) => (map.sessions[charge.rid]?.attempt === 2 ? 're-r
 
 /** The spend on the five lines and the total the ledger holds: `{ lines: { pilot, 'A/A', data, void, 're-run' }, other, total }` (`other` is what no line holds; zero for a Stage 1 series). */
 export function spendLines({ map, ledger }) {
-  const lines = Object.fromEntries(SPEND_LINES.map(name => [name, 0]));
   const charges = ledger.filter(isOwnCharge);
-  const other = charges.filter(c => lineOf(map, c) === null).reduce((sum, c) => sum + c.usd, 0);
-  for (const charge of charges.filter(c => lineOf(map, c) !== null)) lines[lineOf(map, charge)] += charge.usd;
-  return { lines, other, total: charges.reduce((sum, c) => sum + c.usd, 0) };
+  const lined = charges.map(c => ({ line: lineOf(map, c), usd: c.usd }));
+  const sumOf = pick => lined.filter(pick).reduce((sum, c) => sum + c.usd, 0);
+  return { lines: Object.fromEntries(SPEND_LINES.map(name => [name, sumOf(c => c.line === name)])), other: sumOf(c => c.line === null), total: sumOf(() => true) };
 }
 
 const usd = n => `$${n.toFixed(4)}`;

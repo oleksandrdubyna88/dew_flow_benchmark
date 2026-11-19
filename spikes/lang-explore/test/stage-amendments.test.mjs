@@ -1,11 +1,11 @@
 // The dated lines of Stage 1 (F3.S1 (a), PR 3, item 7): `lib/stage-amendments.mjs` reads the registered `amendments.md`. It parses four kinds of its own (the owner's go for the pilot, the owner's go for rounds, the one `caps` line,
 // the pilot's GO line) and hands every other line to v1's `parseAmendments`. A malformed line of its kinds is reported and never counts. The module is pure over the text; its one edge reads the file (absent is no line).
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { parseAmendments } from '../../minigit-bench/lib/amendments.mjs';
+import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { STAGE_ROUNDS } from '../lib/stage-schedule.mjs';
 import { capsOf, homePathProblems, ownerGoLine, ownerGoProblem, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf, stageHandVerdictsFor } from '../lib/stage-amendments.mjs';
 
@@ -110,15 +110,11 @@ test('An_evidence_path_with_the_home_written_out_is_reported_and_the_tilde_form_
 });
 
 test('The_registered_file_is_read_and_an_absent_file_is_no_line', () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-lex-amend-'));
-  try {
-    const file = path.join(dir, 'amendments.md');
-    assert.equal(readStageAmendments(file).ok, true);
-    assert.equal(readStageAmendments(file).value, '', 'absent: no line');
-    writeFileSync(file, text(GO_PILOT));
-    assert.equal(parseStageAmendments(readStageAmendments(file).value).ownerGo.length, 1);
-    assert.equal(readStageAmendments(dir).ok, false, 'a folder in its place is unreadable, never an empty file');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  const dir = tmpDir('lex-amend');
+  const file = path.join(dir, 'amendments.md');
+  assert.equal(readStageAmendments(file).ok, true);
+  assert.equal(readStageAmendments(file).value, '', 'absent: no line');
+  writeFileSync(file, text(GO_PILOT));
+  assert.equal(parseStageAmendments(readStageAmendments(file).value).ownerGo.length, 1);
+  assert.equal(readStageAmendments(dir).ok, false, 'a folder in its place is unreadable, never an empty file');
 });
