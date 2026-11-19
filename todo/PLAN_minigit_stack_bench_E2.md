@@ -492,6 +492,33 @@ showed that `model_refusal_fallback` puts a second model (`claude-opus-4-8`) int
 the pricing page on 2026-10-30, and the broker prices any unknown model at the dearest known rates, flagged, so it never
 undercounts.
 
+**Amendment 2026-11-19 (D-9: one SDK in the box on a host that holds several).** *Cause, measured.* On 2026-11-18 the owner
+installed .NET SDK 11.0.100 (`ppa:dotnet/backports`) beside the pinned 10.0.114; the move of the repositories to .NET 11 is
+parked. `/usr/lib/dotnet` now holds `sdk/10.0.114` and `sdk/11.0.100`, `shared/*/{10.0.14,11.0.0}`, `host/fxr/{10.0.14,11.0.0}`,
+`templates/{10.0.15,11.0.0}`; the muxer is `dotnet-host-11.0`'s (it replaced `dotnet-host-10.0`). The preflight's probe in the
+box (`dotnet --list-sdks`) reads two lines and refuses, rightly (`lib/host-checks.mjs:31`, "the box must hold exactly one SDK
+(2 listed)"), so every path that runs the preflight on the distribution's dotnet is red: 7 tests at benchmark `dc9c679d`
+(`test/agent-box-fs.test.mjs:103`, `test/preflight.test.mjs:19`; `spikes/lang-explore/test/e2e.test.mjs` 3,
+`test/olympiad-rehearse.test.mjs` 2). *The owner, 2026-11-19*, offered "remove SDK 11" or "keep it and change the instrument":
+"Другой путь — оставить SDK 11 и править правило инструмента". *Decision.* The RULE stays as D-9 wrote it (the box lists
+exactly one SDK, the pin): loosening it to "the pin is among them" would let an agent build with SDK 11 in a measured cell.
+The BOX changes: when it uses the distribution's dotnet (no pinned `dotnetDir`; a pinned one already hides the distribution,
+E1.S4), it hides, through the existing `hide` list (an empty tmpfs per existing path), every directory of a dotnet root in
+`DISTRIBUTION_DOTNET` that belongs to another version than the pin's: `sdk/<v>` for every `v` ≠ the pinned SDK, and
+`shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>` and `sdk-manifests/<band>` whose major differs from the pin's.
+`host/fxr` is not hidden (the muxer resolves through it, and it is the host's own resolver; recorded as the one difference
+from before). So the box shows what it showed before SDK 11 came, and v2's measured cells stay comparable. One pure
+function computes the list from the pin and a directory listing of the roots (injected, as `exists` is); the preflight's
+probe box and every session box (`session-launch.mjs`, lang-explore's `plan.mjs` and `run-ctx.mjs`) take the SAME list, never
+two. *Measured before the change:* `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /usr/lib/dotnet/sdk/11.0.100 --unshare-net
+-- /usr/bin/dotnet --list-sdks` prints `10.0.114` only; without the tmpfs, both. *Tests (RED → GREEN → RED):* the pure
+function over a fixture listing (two SDKs, two runtimes, packs and templates of both majors → exactly the other-major paths
+and the other SDK; a host with only the pin → `[]`; a root that does not exist → nothing from it); an effect test in the
+real box on this host (`sandboxGate`): `dotnet --list-sdks` one line, the pin, with the control (the same probe without the
+hide list lists both, or the test skips with that reason on a host with one SDK); the 7 tests above green at the head.
+*Not changed:* `host-checks.mjs`, `inputs/stacks.json`, the pins, any `global.json`. *Code:* Fable (the E2.S2 sandbox is a
+cornerstone, `model: fable`), gates by coai.
+
 ### Test scenarios
 
 Effect tests run the real `bwrap` (`sandboxGate`, E1 `test/helpers.mjs:48`) with E1's `probe`/`withoutPair` shape: every "cannot"
