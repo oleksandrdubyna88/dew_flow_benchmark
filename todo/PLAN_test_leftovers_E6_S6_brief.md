@@ -649,3 +649,12 @@ wrapper sleeping 2500 ms → red. Cost: writer `b` spins until the deadline, so 
 **Done when (adds to § 9).** Each of the four whole suites at S6's head: 0 failed, both runs complete, executed and skipped tests reconciled
 by name with the base; the `/tmp` entries listed and the run's removed; fixes 1, 3 and 4 each with its three runs in the PR body; fix 2 with
 the owner's install line and `dpkg -l` of the seven held packages.
+
+**Fix 6 — a finding that came in from main (2026-11-19).** Merging main at `e3da9ba3` (before the head runs, so they run on the final head)
+brought F2.S2 (d) (#228) and with it one new Node-guard finding: `spikes/lang-bench/test/spec-freeze-record.test.mjs:20`, `owner-blind`
+(`/^teststodelete-/i` over the fixture's own `inputs` folder; a reader, not a sweep, but the class takes no exemption). Fix, test only: the
+reader is the shipped `classifyName(name).form !== 'none'`, so the check still sees a prefixed name of ANY owner. RED: the guard at the merge,
+`3 finding(s)` with this line. GREEN: the guard `2 finding(s)` (the two § 3a lines); the file 27/27. RED again: a copy of the test with
+`testsToDelete-u99999-bench-plant-AbCdEf.tmp` planted before the restart's assertion → `fail 1`, actual `[ 'testsToDelete-u99999-…' ]`.
+The host after fix 2 (2026-11-19): packs 10.0.14, the seven packages held; SDK 11.0.100 is also installed beside 10.0.114 (the owner's,
+parked; it replaced `dotnet-host-10.0` with `dotnet-host-11.0`); every `global.json` here keeps the runs on 10.0.114.
