@@ -2,11 +2,14 @@
 // case. The workspace is built from the committed templates and runner with an invented spec and the committed FORMAT fixture; nothing starts.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { resolveCommit } from '../lib/leak-git.mjs';
 import { quickExplore } from '../lib/quick.mjs';
 import { packagesInputs, quickWorkspaceFiles } from '../lib/workspace-quick.mjs';
+import { blobAt } from '../lib/workspaces-sources.mjs';
 import { EXPLORE, quickTask } from './quick-leak-fixture.mjs';
 
 const FORMAT = readFileSync(fileURLToPath(new URL('../../lang-bench/test/fixtures/conformance/FORMAT.md', import.meta.url)), 'utf8');
@@ -62,4 +65,53 @@ test('No_file_of_a_quick_workspace_names_the_comparison_a_plan_the_private_side_
 test('The_scan_for_study_words_does_find_one_so_a_clean_result_is_not_an_empty_scan', () => {
   assert.ok(NAMES_THE_STUDY.test('this is the language comparison of the owner'));
   assert.ok(NAMES_THE_STUDY.test('see rsd/lang-v2/explore'));
+});
+
+// ---- the spec pins of the engine and the freeze record (F2.S2 (f) item 2): the pins live in two files, so a test holds them equal ----------------------------------------------------------------------------------------
+
+const FREEZE_TASKS = ['04', '05', '06', '07', '08', '10'];
+const readData = rel => JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8'));
+const pinsOfEngine = () => readData('../inputs/explore.json').tasks;
+const recordOfFreeze = () => readData('../../lang-bench/inputs/specs.d/spec-states.json');
+
+test('The_engine_pins_of_the_six_specs_equal_the_freeze_record', () => {
+  const engine = pinsOfEngine();
+  const { freeze, specs } = recordOfFreeze();
+  assert.equal(freeze.state, 'accepted', 'the record says the freeze is accepted');
+  for (const id of FREEZE_TASKS) {
+    const pin = engine[id].spec;
+    assert.equal(pin.sha256, specs[id].sha256, `task ${id}: the engine's spec sha256 is the record's`);
+    assert.equal(pin.path, specs[id].path, `task ${id}: the engine's spec path is the record's`);
+    assert.ok(specs[id].commitSha.startsWith(pin.sha), `task ${id}: the engine's spec sha ${pin.sha} is a prefix of the record's commit ${specs[id].commitSha}`);
+    assert.equal(pin.sha, specs[id].commitSha.slice(0, 7), `task ${id}: the engine names the commit by its seven-character prefix, as every other pin`);
+    assert.equal(engine[id].draft, false, `task ${id}: a frozen spec is not a draft`);
+  }
+});
+
+/** The task repository checkout of the real-repository cases: `null` (the case skipped) when `LANG_V2_TASK_REPO` is unset, a throw under BENCH_REQUIRE_SANDBOX=1. */
+function realRepo(t) {
+  const repo = process.env.LANG_V2_TASK_REPO;
+  if (repo !== undefined && repo !== '') return repo;
+  const why = 'LANG_V2_TASK_REPO does not name the task repository checkout';
+  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
+  t.skip(why);
+  return null;
+}
+
+test('The_frozen_spec_blobs_at_the_freeze_commit_hash_to_the_record_and_to_the_engine_pins', async t => {
+  const repo = realRepo(t);
+  if (repo === null) return;
+  const engine = pinsOfEngine();
+  const { freeze, specs } = recordOfFreeze();
+  for (const id of FREEZE_TASKS) {
+    const pin = engine[id].spec;
+    const blob = await blobAt({ repo, sha: freeze.commitSha, file: specs[id].path });
+    assert.equal(blob.ok, true, blob.reason);
+    const hash = createHash('sha256').update(blob.value).digest('hex');
+    assert.equal(hash, specs[id].sha256, `task ${id}: the blob at C hashes to the record's sha256`);
+    assert.equal(hash, pin.sha256, `task ${id}: the blob at C hashes to the engine's sha256`);
+    const resolved = await resolveCommit(repo, pin.sha);
+    assert.equal(resolved.ok, true, resolved.reason);
+    assert.equal(resolved.value, freeze.commitSha, `task ${id}: the engine's spec.sha ${pin.sha} resolves to the freeze commit C`);
+  }
 });
