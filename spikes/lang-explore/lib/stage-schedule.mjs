@@ -268,15 +268,15 @@ function halfProblem({ name, order, states }) {
 }
 
 /**
- * A crash between planning the two sessions of a unit leaves ONE stack with ONE session that is only `planned` (never launched) and the other stack with none: the missing stack is planned and the lone session launched, so the two stacks start
- * together. A lone session that got further than `planned` is no such crash and stays a refusal (`halfProblem`). -> `ok({ action: 'resume', todo })` or null.
+ * A crash between planning the two sessions of a unit leaves ONE stack with ONE session that is only `planned` (never launched) and the other stack with none: the missing stack is planned FIRST and the lone session launched after it (a second interruption
+ * leaves one planned or both planned, never one launched without its partner). A lone session that got further than `planned` is no such crash and stays a refusal (`halfProblem`). -> `ok({ action: 'resume', todo })` or null.
  */
 function lonePlanned({ order, of, planned }) {
   const held = order.filter(stack => of(stack).length > 0);
   return held.length === 1 && of(held[0]).length === 1 && of(held[0])[0].status === 'planned' ? loneOffer({ lone: of(held[0])[0], planned }) : null;
 }
 
-const loneOffer = ({ lone, planned }) => ok({ action: 'resume', todo: [resumeEntry(lone), ...planned().filter(entry => entry.stack !== lone.stack).map(planEntry)] });
+const loneOffer = ({ lone, planned }) => ok({ action: 'resume', todo: [...planned().filter(entry => entry.stack !== lone.stack).map(planEntry), resumeEntry(lone)] });
 
 /** Which sessions are still to run, per session state: none planned -> plan both stacks (attempt 1); planned -> launch it; launching -> settle it; ended with data and unscored -> score it; scored -> nothing, never again; void at attempt 1 -> re-run that stack alone (attempt 2, a new rid); void at attempt 2 -> nothing, the cell ends. */
 function stepFor({ order, of, planned, rerunOf, states }) {
@@ -429,13 +429,13 @@ function aaStep({ map, plan }) {
   return loneTwin({ sessions, plan }) ?? (twinsProblem(sessions) ? fail(twinsProblem(sessions)) : aaRun({ sessions, plan }));
 }
 
-/** A crash between planning the two twins of a run: the lone twin is only `planned`, so it is launched and the other twin planned (as for a slot); a lone twin that got further is a refusal (`twinsProblem`). */
+/** A crash between planning the two twins of a run: the lone twin is only `planned`, so the other twin is planned first and then it is launched (as for a slot); a lone twin that got further is a refusal (`twinsProblem`). */
 function loneTwin({ sessions, plan }) {
   const run = badRunOf(sessions);
   const held = sessions.filter(s => s.attempt === run);
   if (run === undefined || held.length !== 1 || held[0].status !== 'planned') return null;
   const missing = aaSessions({ aa: plan, attempt: run }).filter(entry => entry.twin !== held[0].twin);
-  return ok({ what: 'aa', action: 'resume', todo: [resumeEntry(held[0]), ...missing.map(planEntry)] });
+  return ok({ what: 'aa', action: 'resume', todo: [...missing.map(planEntry), resumeEntry(held[0])] });
 }
 
 /** The A/A when no twin stopped and the twins are `a` and `b`: finish what is open, plan both, or judge the runs. */

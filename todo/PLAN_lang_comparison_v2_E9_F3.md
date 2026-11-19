@@ -279,7 +279,7 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | The stack's last session | `todo` |
   |---|---|
   | none (absent) in both stacks | both stacks, attempt 1, step `plan`, the leading stack first |
-  | one stack holds exactly one session, only `planned` (a crash between planning the two), the other none | action `resume`: the lone session, step `launch`, and the missing stack, step `plan`, so the two stacks start together (plan round 2 of the code, finding 1) |
+  | one stack holds exactly one session, only `planned` (a crash between planning the two), the other none | action `resume`: **first** the missing stack, step `plan`, **then** the lone session, step `launch` (`todo[0]` is the plan), so a second interruption leaves one planned or both planned, never one launched without its partner (code rounds 2 and 3) |
   | none in one stack and any other session in the other (launching or later, or two sessions) | a refusal naming the unit (`holds sessions of one stack only`): the two stacks are planned together, so it cannot say what is still to run |
   | `planned`, never started | that session, step `launch` |
   | `launching` (a crash or a halt cut the launch short) | that session, step `settle` (v1's reconcile settles it; it is neither launched again nor charged twice) |
@@ -301,7 +301,7 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | The twins | `pilotStep` |
   |---|---|
   | both absent | both twins, attempt 1, step `plan` |
-  | one twin of a run, only `planned`, the other absent (a crash between the two plannings) | action `resume`: that twin `launch` and the other twin `plan`, at that run's attempt |
+  | one twin of a run, only `planned`, the other absent (a crash between the two plannings) | action `resume`: **first** the other twin `plan`, **then** that twin `launch`, at that run's attempt |
   | one twin of a run without the other and that twin got further than `planned` (any attempt) | a refusal (`the A/A's run n holds twins a, not a and b`): the twins are planned together |
   | a twin planned, launching, or ended with data and unscored | finish that twin only (`launch`, `settle`, `score`), before anything else, a void twin included |
   | both scored | the A/A is finished: the daemon pair is next |
@@ -459,6 +459,8 @@ sentences use them, so there is one void test and one state line). **Tests:** `O
 **Note for PR 3:** a data rid (six hex digits of a sha256) and a `pilotRid` (the A/A's and the pilot's, drawn at random) may
 collide, about one in 10^4 over the whole series; `planSession` refuses a rid that is already in the run-map, so a collision
 fails closed (the launch is refused, nothing is planned twice), and PR 3's `stage-run` says so in its sentence.
+
+**Tests are run through the wrapper** (the project rule, `common.local-cpu-budget`): `node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test spikes/lang-explore/test/stage-schedule.test.mjs spikes/lang-explore/test/code-shape.test.mjs spikes/lang-explore/test/barrier.test.mjs`, and the whole suites as `module_tests.md` says.
 
 **Done when:** the seventeen scenarios, 9a to 9c, 10a, 13a to 13c, 14a and 14b, 15a to 15l and 17a to 17g went red, green, red; §8's row for PR 2.
 

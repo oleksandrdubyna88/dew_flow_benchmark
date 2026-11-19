@@ -721,10 +721,11 @@ test('A_crash_between_planning_the_two_sessions_of_a_slot_offers_the_missing_sta
   const n1 = rid(1, 'node');
   const lone = next([[1, 'csharp', 1, 'planned']]);
   assert.equal(lone.ok, true, lone.reason);
-  assert.deepEqual(shape(lone.value), [1, 'resume', [['csharp', 1, c1, 'launch'], ['node', 1, n1, 'plan']]], 'the planned session is launched and the missing stack is planned: the two stacks start together');
+  assert.deepEqual(shape(lone.value), [1, 'resume', [['node', 1, n1, 'plan'], ['csharp', 1, c1, 'launch']]], 'the missing stack is planned FIRST and the planned session launched after it: a second interruption leaves one planned or both planned, never one launched without its partner');
   const loneNode = next([[1, 'node', 1, 'planned']]);
-  assert.deepEqual(shape(loneNode.value), [1, 'resume', [['node', 1, n1, 'launch'], ['csharp', 1, c1, 'plan']]]);
-  assert.equal(loneNode.value.todo[1].mask, SLOTS[0].masks.csharp, 'the missing session is the slot\'s own, with its mask');
+  assert.deepEqual(shape(loneNode.value), [1, 'resume', [['csharp', 1, c1, 'plan'], ['node', 1, n1, 'launch']]]);
+  assert.equal(loneNode.value.todo[0].step, 'plan', 'todo[0] is the plan of the missing stack');
+  assert.equal(loneNode.value.todo[0].mask, SLOTS[0].masks.csharp, 'the missing session is the slot\'s own, with its mask');
   for (const end of ['launching', RAN, GOOD, VOID]) assert.match(next([[1, 'csharp', 1, end]]).reason, /holds sessions of one stack only/, `a lone session that is ${typeof end === 'string' ? end : end.class} is refused`);
   assert.match(next([[1, 'csharp', 1, 'planned'], [1, 'csharp', 2, 'planned']]).reason, /holds sessions of one stack only/, 'two sessions of one stack are no lone planned session');
   assert.equal(next([[1, 'csharp', 1, VOID], [1, 'csharp', 2, 'planned']]).ok, false, 'a re-run planned beside a void with the other stack absent is not a crash between the plannings');
@@ -733,14 +734,15 @@ test('A_crash_between_planning_the_two_sessions_of_a_slot_offers_the_missing_sta
 
 test('A_crash_between_planning_the_two_sessions_of_a_pilot_pair_or_the_A_A_offers_the_missing_one', () => {
   const pair = stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, 'planned']]);
-  assert.deepEqual([pair.ok, pair.value?.what, pair.value?.action, pair.ok ? todoShape(pair) : null], [true, 'pilot:05', 'resume', [['csharp', 1, 'launch'], ['node', 1, 'plan']]]);
+  assert.deepEqual([pair.ok, pair.value?.what, pair.value?.action, pair.ok ? todoShape(pair) : null], [true, 'pilot:05', 'resume', [['node', 1, 'plan'], ['csharp', 1, 'launch']]]);
+  assert.equal(pair.value.todo[0].step, 'plan', 'todo[0] is the plan of the missing stack');
   assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, 'launching']]).reason, /holds sessions of one stack only/, 'a launched lone pair session is refused');
   for (const [twin, other] of [['a', 'b'], ['b', 'a']]) {
     const aa = stepOfPilot(aaScript([[twin, 1, 'planned']]));
-    assert.deepEqual([aa.ok, aa.value?.what, aa.value?.action, aa.ok ? todoShape(aa) : null], [true, 'aa', 'resume', [[twin, 1, 'launch'], [other, 1, 'plan']]], `a lone planned twin ${twin}: the other twin is planned`);
+    assert.deepEqual([aa.ok, aa.value?.what, aa.value?.action, aa.ok ? todoShape(aa) : null], [true, 'aa', 'resume', [[other, 1, 'plan'], [twin, 1, 'launch']]], `a lone planned twin ${twin}: the other twin is planned first, then the lone one launched`);
   }
   const repeat = stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['b', 2, 'planned']]));
-  assert.deepEqual([repeat.ok, todoShape(repeat)], [true, [['b', 2, 'launch'], ['a', 2, 'plan']]], 'the repeat run too');
+  assert.deepEqual([repeat.ok, todoShape(repeat)], [true, [['a', 2, 'plan'], ['b', 2, 'launch']]], 'the repeat run too');
   assert.match(stepOfPilot(aaScript([['a', 1, 'launching']])).reason, /run 1 holds twins a, not a and b/, 'a launched lone twin is refused');
   assert.match(stepOfPilot(aaScript([['a', 1, GOOD]])).reason, /holds twins a, not a and b/);
 });
