@@ -55,6 +55,11 @@ test('The_clear_folder_of_a_slots_task_is_made_for_the_slot_and_removed_after_it
   await assert.rejects(withSlotHeldout({ task: w.task, tasks, heldout: heldoutOf(w), fn: async () => { throw new Error('the slot broke'); } }), /the slot broke/, 'a slot that throws is not hidden');
   assert.equal(existsSync(casesOf(w)), false, 'and the folder is removed all the same');
   assert.equal(w.spies.unseal, 2, 'the archive was opened once per slot');
+  const warnings = [];
+  const unclosable = await withSlotHeldout({ task: w.task, tasks, heldout: { ...heldoutOf(w), warn: line => warnings.push(line) }, fn: async () => { rmSync(w.backupFile); return 'ran'; } });
+  assert.equal(unclosable.ok, false, 'a slot whose folder could not be removed after it (the backup vanished in the slot) is not a clean end');
+  assert.match(unclosable.reason, /left open after the slot.*heldout-close/s, `it says what to do: ${unclosable.reason}`);
+  assert.equal(warnings.length, 1, 'the lifecycle said so too');
 });
 
 test('A_run_after_an_interruption_removes_the_stale_clear_folder_first', async () => {
@@ -68,6 +73,14 @@ test('A_run_after_an_interruption_removes_the_stale_clear_folder_first', async (
   assert.equal(opened, true, 'the stale folder was removed and a fresh one made for the slot');
   assert.equal(w.spies.unseal, before + 1, 'from the archive, once');
   assert.equal(existsSync(casesOf(w)), false, 'and the slot removed it');
+  const held = await openClearFolder({ ...w.args, owner: 'operator' });
+  assert.equal(held.ok, true, held.reason);
+  let ran = false;
+  const refused = await withSlotHeldout({ task: w.task, tasks: [w.task], heldout: heldoutOf(w), fn: async () => { ran = true; } });
+  assert.equal(refused.ok, false, 'a folder of its own task that the operator holds is not used as it is: the slot could not be sure to remove it');
+  assert.match(refused.reason, /held by the operator.*heldout-close/s);
+  assert.equal(ran, false);
+  assert.equal((await closeClearFolder({ ...w.args })).ok, true);
 });
 
 test('A_slot_is_refused_before_its_launch_when_the_keys_backup_cannot_be_verified', async () => {
