@@ -38,6 +38,9 @@ export function createStageSeries({ home, explore, pre, wide, slices, date, pref
 /** The Stage 1 series directories under the explore root (a rehearsal's included), whatever their names. */
 export const stageSeriesDirs = home => exploreChildren(home).filter(c => c.state.ok && isStageState(c.state.value)).map(c => c.dir);
 
+/** The series directories under the explore root whose state cannot be read: `[{ dir, reason }]`. A directory that holds a state file or a ledger is a series; a directory that holds neither is none. `stageSeriesDirs` leaves these out. */
+export const unreadableSeriesDirs = home => exploreChildren(home).filter(c => (c.hasState || c.hasLedger) && !c.state.ok).map(c => ({ dir: c.dir, reason: c.state.reason }));
+
 /** The paid Stage 1 series directories: `stageSeriesDirs` without a rehearsal's (the series' own `inputs.json` says which it is, `isRehearsal`). */
 export const paidStageSeriesDirs = home => stageSeriesDirs(home).filter(dir => !isRehearsal(dir));
 

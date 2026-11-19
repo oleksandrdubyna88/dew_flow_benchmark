@@ -1,12 +1,13 @@
 // The verbs of Stage 1 on the command line and their neighbours (F3.S1 (a), PR 3): `run`, `init` and `prune` refuse a Stage 1 series and name the new verbs, `stage-run` refuses an exploratory one, `stage-status` prints the rounds and the spend on five
 // lines that add up to the ledger. The explore.mjs entry point lists the three verbs.
 import assert from 'node:assert/strict';
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../explore.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { cmdInit, cmdPrune, cmdRun } from '../lib/commands.mjs';
+import { exploreRoot } from '../lib/paths.mjs';
 import { cmdStageStatus } from '../lib/stage-commands.mjs';
 import { stageInit } from '../lib/stage-init.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
@@ -80,6 +81,19 @@ test('init_is_refused_when_a_stage_series_cannot_be_read_and_the_sentence_says_w
   assert.equal(got.exit, 4);
   assert.match(got.text, STAGE_REFUSAL);
   assert.match(got.text, /cannot be read .*counts as open/);
+});
+
+test('init_refuses_when_a_series_directory_under_the_explore_root_has_a_state_file_that_cannot_be_read_and_names_it', async () => {
+  const { io } = await makeSeries({ stage: { initGuardFn: undefined } }, { rehearsal: true, 'task-repo': '/fake/task-repo' });
+  assert.doesNotMatch((await initWords({ io })).text, /cannot be read/, 'the control: only a rehearsal beside it, nothing refuses');
+  const broken = path.join(exploreRoot(io.home), 'x-20261121-cd34');
+  mkdirSync(broken, { recursive: true });
+  writeFileSync(path.join(broken, 'explore-series.json'), '{ not json');
+  const got = await initWords({ io });
+  assert.equal(got.exit, 4);
+  assert.ok(got.text.includes(broken), 'the sentence names the directory');
+  assert.match(got.text, /a state that cannot be read \(.*is unreadable: .*JSON/, 'and the read error');
+  assert.doesNotMatch(got.text, /a Stage 1 series exists/, 'its own sentence: nobody knows whether it is a Stage 1 series');
 });
 
 test('prune_refuses_a_stage_series', async () => {

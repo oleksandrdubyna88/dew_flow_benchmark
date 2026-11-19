@@ -25,7 +25,7 @@ import { replay } from './replay.mjs';
 import { repartitionSeries } from './repartition.mjs';
 import { rescore } from './rescore.mjs';
 import { createSeries, isStageState, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
-import { paidStageSeriesDirs } from './stage-series.mjs';
+import { paidStageSeriesDirs, unreadableSeriesDirs } from './stage-series.mjs';
 import { openReasonOf } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
@@ -89,6 +89,12 @@ const stageOpenProblem = io => {
   return open === undefined ? null : `a Stage 1 series exists and is open (${open.dir}; ${open.why}): the tasks of Stage 1 run in that one series, made by \`stage-init\` and run by \`stage-run\`; \`init\` makes a one-task series only while no paid Stage 1 series is open (a rehearsal, a stopped or a finished series does not count)`;
 };
 
+/** The sentence refusing `init` while a series directory under the explore root has a state that cannot be read (fail closed: an open paid Stage 1 series may hide behind it), or null. */
+const unreadableProblem = io => {
+  const [broken] = unreadableSeriesDirs(io.home);
+  return broken === undefined ? null : `the series directory ${broken.dir} has a state that cannot be read (${broken.reason}), so \`init\` cannot tell whether a paid Stage 1 series is open there: repair or move that directory first`;
+};
+
 /** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
 async function makeSeriesCommand(values, io) {
   const need = initNeeds(values, io);
@@ -102,7 +108,7 @@ async function makeSeriesCommand(values, io) {
   return EXIT.done;
 }
 
-const initCommand = async (values, io) => { const stage = stageOpenProblem(io); return stage ? refused(io, stage) : makeSeriesCommand(values, io); };
+const initCommand = async (values, io) => { const stage = unreadableProblem(io) ?? stageOpenProblem(io); return stage ? refused(io, stage) : makeSeriesCommand(values, io); };
 
 export const cmdInit = heldoutAware(initCommand);
 
