@@ -35,6 +35,8 @@ const runtimeVersions = out => sdkLines(out).map(l => l.split(' ')[1]);
 const countScript = paths => paths.map(p => `echo "$(ls -A ${p} | wc -l) ${p}"`).join('\n');
 const countsOf = out => sdkLines(out).map(l => ({ count: Number(l.split(' ')[0]), dir: l.split(' ')[1] }));
 const otherSdks = hidden => hidden.filter(p => DISTRIBUTION_DOTNET.some(root => path.dirname(p) === `${root}/sdk`));
+/** What a test says, in its own output, on a host with no second SDK: its control is then the box itself, and shows the pin only. */
+const oneSdkOnly = `this host holds one SDK only (${DOTNET_PIN}): nothing is hidden, so the control is the same box and lists exactly the pin too; it cannot show a second SDK here`;
 
 test('The_real_box_lists_exactly_the_pinned_sdk_and_the_same_box_without_the_hide_list_lists_the_others_too', async t => {
   if (!dotnetGate(t)) return;
@@ -47,8 +49,9 @@ test('The_real_box_lists_exactly_the_pinned_sdk_and_the_same_box_without_the_hid
   const runtimes = await probeArgv(real, 'dotnet --list-runtimes', envFor(layout));
   t.diagnostic(`box: dotnet --list-runtimes -> ${JSON.stringify(sdkLines(runtimes.out))}`);
   assert.ok(runtimeVersions(runtimes.out).length > 0 && runtimeVersions(runtimes.out).every(v => major(v) === major(DOTNET_PIN)), `every runtime the box lists is of the pin's major: ${runtimes.out}`);
-  // a plain skip, not `hostLacks`: a host with one SDK lacks nothing (it is this machine before 2026-11-18), there is only no second SDK for the control to show
-  if (otherSdks(hidden).length === 0) return t.skip(`this host holds one SDK only (${DOTNET_PIN}): nothing is hidden, so the control cannot list a second one`);
+  // no skip on a host with one SDK (this machine before 2026-11-18): it lacks nothing, and everything above holds there. Only what the CONTROL shows depends on the host, and it is computed, not
+  // assumed: with nothing to hide the control is the same box and lists exactly the pin too (the lines below then compare 1 with 1, and the diagnostic says so)
+  if (otherSdks(hidden).length === 0) t.diagnostic(oneSdkOnly);
   const emptied = countsOf((await probeArgv(real, countScript(hidden), envFor(layout))).out);
   assert.deepEqual(emptied, hidden.map(dir => ({ count: 0, dir })), 'every folder of the list is an empty folder in the box');
   const open = await probeArgv(control(), `dotnet --list-sdks\necho RUNTIMES\ndotnet --list-runtimes\necho COUNTS\n${countScript(hidden)}`, envFor(layout));
@@ -122,7 +125,7 @@ test('A_net10_console_project_built_and_run_in_the_real_box_is_built_by_the_pinn
   assert.equal(lineOf(ran.out, 'build'), '0', `the build succeeded with local packs only:\n${ran.out}`);
   assert.equal(lineOf(ran.out, 'framework'), `.NET ${pinRuntime(t)}`, `the program runs on the pin's runtime:\n${ran.out}`);
   assert.equal(major(lineOf(ran.out, 'framework').replace('.NET ', '')), major(DOTNET_PIN), 'the runtime is of the pin\'s major');
-  if (otherSdks(hidden).length === 0) return t.skip(`this host holds one SDK only (${DOTNET_PIN}): the control cannot show another SDK being chosen`);
+  if (otherSdks(hidden).length === 0) t.diagnostic(oneSdkOnly); // no skip: the control below then answers the pin as well, which is what `newestOf` of one SDK is
   const open = await probeArgv(control(), `cd ${app}\necho "version=$(dotnet --version)"`, env);
   t.diagnostic(`control (no dotnet tmpfs): dotnet --version -> ${lineOf(open.out, 'version')}`);
   // with no global.json the muxer gives the newest SDK it sees: on this host that is not the pin, which is what the hide list prevents (were the pin the newest, the two lines would agree and say so)
@@ -159,7 +162,7 @@ test('The_real_scoring_box_lists_exactly_the_pinned_sdk_and_gives_a_folder_with_
   assert.equal(listed(inside.out).length, 1, `exactly one SDK: ${inside.out}`);
   assert.ok(listed(inside.out)[0].startsWith(`${DOTNET_PIN} [`), `the one SDK is the pin ${DOTNET_PIN}: ${inside.out}`);
   assert.equal(lineOf(inside.out, 'version'), DOTNET_PIN, 'a tree with no global.json is built by the pinned SDK');
-  if (otherSdks(hidden).length === 0) return t.skip(`this host holds one SDK only (${DOTNET_PIN}): nothing is hidden, so the control cannot list a second one`);
+  if (otherSdks(hidden).length === 0) t.diagnostic(oneSdkOnly); // no skip: the control below is then the same box, one SDK listed and the pin answered
   const open = await probeArgv(hidden.reduce((argv, p) => withoutPair(argv, '--tmpfs', p), real), script);
   t.diagnostic(`control (no dotnet tmpfs): dotnet --list-sdks -> ${JSON.stringify(listed(open.out))}; dotnet --version -> ${lineOf(open.out, 'version')}`);
   assert.equal(listed(open.out).length, 1 + otherSdks(hidden).length, `control: without the hide list the scoring box lists every SDK of the host: ${open.out}`);
