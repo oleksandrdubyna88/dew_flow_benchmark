@@ -689,3 +689,32 @@ written with: the test assumes umask 0022). Rerun with `UMask=0022`, as the base
 `lang-explore` 5, every one "the box must hold exactly one SDK (2 listed)") come from SDK 11.0.100, which the owner keeps (2026-11-19);
 the fix is the instrument's, on its own branch `fix/box-one-sdk` under `PLAN_minigit_stack_bench_E2.md`'s amendment D-9 (coai
 `10fb6711`), and S6 merges main after it.
+
+**The final head runs (row E6-m as entry 12.1 reads it), 2026-11-19, at `f9163590`.** The head merged `main` `4e30c5b9` (#232: every box
+on the distribution's dotnet shows only the pinned SDK, `PLAN_minigit_stack_bench_E2.md` amendment D-9; the S6 reds of SDK 11 are gone with
+it) and bumped the shared rules to the release `c598a11`. One run each, one at a time, `nice -n 19`, no `TMPDIR` of their own, umask 0022 (as
+the base); `lang-explore` at `--test-concurrency=4` instead of § 7's 8 (two runs at 8 of the box fix's branch were killed by the kernel's OOM
+killer while the host's swap was full and another session's SDK-11 build servers held about 2 GB), and with `LANG_V2_TASK_REPO` (a test
+`main` added needs it). Logs `~/rsd/e6s6/head-f9163590/`.
+
+| Suite | Tests | Failed | Skipped | Base (a8106448) |
+|---|---|---|---|---|
+| policy-ab-quick | 159 | **0** | 1 (as the base) | 156, 3 failed |
+| minigit-bench | 1316 | **0** | 0 | 1259, 7 failed |
+| lang-explore | 1042 | **0** | 1 (the 5-million-line leak check, as the base) | 991, 9 failed |
+| lang-bench | 2604 | **0** | 0 | 2399, 3 failed |
+
+*By name* (unique names, base → head): every base name is at the head except four, each explained — `minigit-bench`'s two renamed by S6
+(`…carries_the_testsToDelete_prefix` → `…comes_from_the_owned_helper`; `Sweep_lists_every_score_tmp_entry_and_the_testsToDelete_root_entries…`
+→ `…_prefixed_root_entries…`) and `lang-bench`'s two removed by `main`'s #228 (`a986d2ed`), not by S6; the new names are S6's three runner-sweep
+tests in policy-ab-quick and `main`'s since `a8106448` (#226–#232). *The `/tmp` entries:* 23 new entries carried a suite-only token
+(`testsToDelete-mgb-home-*`, `-pkg-*`, `-q-leak-*`: the F2 helpers' legacy form), each born inside its suite's window, with no holder
+(`fuser`, no live process's cwd or environment naming it) and no link: listed (`ls -la`, `removed-tmp.txt`) and removed by exact path (the
+fake homes' read-only toolchains made writable inside those paths first). Every other new entry (`studio-*`, `MSBuildTemp*`,
+`dotnet-diagnostic-*`, `clr-debug-pipe-*`, six-character names) is not attributed and not removed. *Row E6-m (7):* the roots outside the temp
+root (`~`, `/var/tmp`, `/run/user/1000`) are identical before and after every run (18 = 18: the nine `~/testsToDelete-u1000-bench-sentinel-*`
+pairs, older than these runs). *Guards at the head:* Node 2, default profile 2 (the two § 3a `research/` lines); the C# copy 4 (those two and
+`run_samples.py:35`, `:306`, the runner's two standing lines). *The host:* `dpkg -l` — held (`hi`) `dotnet-sdk-10.0` 10.0.114,
+`dotnet-runtime-10.0`, `dotnet-hostfxr-10.0`, `aspnetcore-runtime-10.0`, `dotnet-apphost-pack-10.0`, `dotnet-targeting-pack-10.0`,
+`aspnetcore-targeting-pack-10.0` (all 10.0.14); installed beside them `dotnet-sdk-11.0` 11.0.100 and `dotnet-host-11.0` 11.0.0 (the latter
+replaced `dotnet-host-10.0`), the owner's, kept.
