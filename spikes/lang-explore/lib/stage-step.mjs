@@ -36,7 +36,7 @@ export function openStage({ seriesDir, io }) {
 const nameChecked = ({ series, seriesDir, io }) => (isRehearsal(seriesDir) || canonicalName(seriesDir, io) ? series : fail(NAME_SENTENCE(seriesDir)));
 
 /** The exit of a schedule refusal: a stopped series is a stop (2), everything else a refusal (4). */
-const exitOfRefusal = sentence => (sentence.includes('is stopped') ? EXIT.stop : EXIT.config);
+export const exitOfRefusal = sentence => (sentence.includes('is stopped') ? EXIT.stop : EXIT.config);
 
 const unitOrRefusal = ({ series, read, what }) => {
   const chosen = unitOf({ what, state: series.state, map: series.map, gates: read.gates });

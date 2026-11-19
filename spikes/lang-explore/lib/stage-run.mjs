@@ -9,7 +9,7 @@ import { pairComplete, seriesInputs } from './series.mjs';
 import { stageDryRun } from './stage-dryrun.mjs';
 import { readGates } from './stage-gates.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
-import { EXIT, openStage, runStageUnit } from './stage-step.mjs';
+import { EXIT, exitOfRefusal, openStage, runStageUnit } from './stage-step.mjs';
 import { unitOf, whatOf } from './stage-unit.mjs';
 
 const refused = message => ({ exit: EXIT.config, message });
@@ -55,9 +55,13 @@ function nextAfter({ dir, io }) {
 
 const pauseEnd = ({ dir, result }) => (existsSync(path.join(dir, 'pause')) ? { exit: EXIT.done, message: `${result.message}; the pause file ${path.join(dir, 'pause')} exists: stopped between slots`, unit: result.unit } : null);
 
-const roundEnd = args => {
+const sameRound = (next, result) => next.value !== null && next.value.round === result.unit.round;
+
+/** The end of the round, or `null` to go on. The next slot in another round, or none (the series is complete), is "round finished"; a schedule that REFUSES (a stop, a gate or the amendments file that cannot be read) ends the loop with its reason and the exit of that refusal. */
+const roundEnd = ({ result, ...args }) => {
   const next = nextAfter(args);
-  return next.ok && next.value !== null && next.value.round === args.result.unit.round ? null : { ...args.result, message: `${args.result.message}; the round's last slot is finished` };
+  if (!next.ok) return { exit: exitOfRefusal(next.reason), message: next.reason, unit: result.unit };
+  return sameRound(next, result) ? null : { ...result, message: `${result.message}; the round's last slot is finished` };
 };
 
 const readbackEnd = ({ dir, io, result }) => (readbackDone({ dir, unit: result.unit, io }) ? readbackStop({ dir, unit: result.unit }) : null);
