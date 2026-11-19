@@ -30,14 +30,18 @@ export function maskOf({ draw, pair, stack }) {
   return high ? MASKS.high : MASKS.low;
 }
 
-/** The sessions of a pair, by stack, in attempt order. */
-export const sessionsOf = (map, pair, stack) => Object.values(map.sessions).filter(s => s.pair === pair && s.kind === 'pilot' && (stack === undefined || s.stack === stack)).sort((a, b) => a.attempt - b.attempt);
+/** The sessions of a pair, by stack, in attempt order. `kind` is the run-map kind they carry: `pilot` for the quick run's pairs, `data` for the slots of a Stage 1 series. */
+export const sessionsOf = (map, pair, stack, kind = 'pilot') => Object.values(map.sessions).filter(s => s.pair === pair && s.kind === kind && (stack === undefined || s.stack === stack)).sort((a, b) => a.attempt - b.attempt);
 
-const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
+/** A session that ended without data and as a void (a class starting `void`): the one it may be re-run. */
+export const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
 const isStopped = s => s.status === 'ran' && s.data === false;
 
+/** A session a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. */
+export const isOpenSession = s => s.status === 'planned' || s.status === 'launching' || (s.status === 'ran' && s.data === true);
+
 /** The sessions of a pair that a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. A resume launches, settles and scores these; it plans no new session. */
-export const openSessions = (map, pair) => sessionsOf(map, pair).filter(s => s.status === 'planned' || s.status === 'launching' || (s.status === 'ran' && s.data === true));
+export const openSessions = (map, pair, kind = 'pilot') => sessionsOf(map, pair, undefined, kind).filter(isOpenSession);
 
 const voidState = attempts => (attempts >= MAX_ATTEMPTS ? 'void-final' : 'void-rerunnable');
 
@@ -48,17 +52,18 @@ function stateOfLast(last, attempts) {
   return isStopped(last) ? 'stopped' : 'open';
 }
 
-/** A stack's state in a pair: `none` (never planned), `open` (planned or launching), `done` (a data session, scored), `void-rerunnable`, `void-final` (the one re-run was used) or `stopped`. */
-export function stackState(map, pair, stack) {
-  const all = sessionsOf(map, pair, stack);
-  return all.length > 0 ? stateOfLast(all.at(-1), all.length) : 'none';
-}
+/** The state of a stack from its sessions in attempt order: `none` (never planned), `open` (planned or launching), `done` (a data session, scored), `void-rerunnable`, `void-final` (the one re-run was used) or `stopped`. */
+export const stateOfSessions = all => (all.length > 0 ? stateOfLast(all.at(-1), all.length) : 'none');
+
+/** A stack's state in a pair (see `stateOfSessions`). */
+export const stackState = (map, pair, stack, kind = 'pilot') => stateOfSessions(sessionsOf(map, pair, stack, kind));
 
 /** Is a pair finished: every stack scored, or void after its one re-run. */
-export const pairComplete = (map, pair) => STACK_ORDER.every(stack => ['done', 'void-final'].includes(stackState(map, pair, stack)));
+export const pairComplete = (map, pair, kind = 'pilot') => STACK_ORDER.every(stack => ['done', 'void-final'].includes(stackState(map, pair, stack, kind)));
 
 const validPair = (pair, pairs) => Number.isInteger(pair) && pair >= 1 && pair <= pairs;
-const stateLine = (map, pair) => STACK_ORDER.map(s => `${s}: ${stackState(map, pair, s)}`).join(', ');
+/** `csharp: done, node: open`: both stacks' states in a pair, of the run-map `kind` asked for (default the quick run's `pilot`). */
+export const stateLine = (map, pair, kind = 'pilot') => STACK_ORDER.map(s => `${s}: ${stackState(map, pair, s, kind)}`).join(', ');
 const rerunHint = (map, pair) => (STACK_ORDER.some(s => stackState(map, pair, s) === 'void-rerunnable') ? `; a void is re-run once, alone: run --pair ${pair} --rerun <stack>` : '');
 
 /** The sentence that refuses pair `pair`, or null: an earlier pair that is not finished, an unknown number. */
