@@ -153,7 +153,8 @@ test('A_data_session_is_seen_through_the_kind_and_a_quick_run_pair_is_not_a_data
 test('A_slot_is_refused_while_an_earlier_slot_is_not_finished_and_the_sentence_names_it', () => {
   const map = mapWith([...finished(1), [2, 'csharp', 1, GOOD], [2, 'node', 1, RAN]]);
   const ask = slot => slotProblem({ map, slots: SLOTS, slot, ...GATES });
-  assert.match(ask(3), new RegExp(`^${describeSlot(2).replace(/[()]/g, '\\$&')} is not finished \\(csharp: done, node: open\\)`));
+  const prefix = `${describeSlot(2)} is not finished (csharp: done, node: open)`;
+  assert.ok(ask(3).startsWith(prefix), `${ask(3)} starts with ${prefix}`);
   assert.match(ask(3), /both sessions of a slot are scored, or void after the one re-run, before any later slot/);
   assert.match(ask(31), /Stage 1 has slots 1 to 30/);
   assert.match(ask(1), /slot 1 .* is finished/, 'a finished slot is never offered again');
