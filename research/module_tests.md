@@ -752,6 +752,68 @@ node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test spike
 
 **What this does not prove.** The schedule is a pure function over a run-map as the tests build it; that the real run-map carries the fields it reads (`kind`, `pair`, `task`, `twin`) is PR 3's to meet, and no paid launch, scoring or ledger line is involved. `TASK_KINDS` is a copy held equal to the pins by a test, not read from them.
 
+## F3.S1 (a), bench PR 3: the Stage 1 series over six tasks (`spikes/lang-explore/`, one seam in `spikes/minigit-bench/`)
+
+Branch `feat/lang-v2-f3s1-series`, cut from PR 2's branch (merged to `main` as #236). Nothing here launches a paid session or calls a real model: the tests use fakes (the fake loop of `test/stage-run-fixture.mjs` for `io.runSeams.loopFn`, v1's test rig `bare-loop-harness.mjs` for the real loop, fixture held-out cases, a scripted quiet machine) and the rehearsal uses v1's stub CLI and stub upstream with a fake token. Every run goes through the mount's wrapper.
+
+```bash
+node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test spikes/lang-explore/test/stage-*.test.mjs spikes/lang-explore/test/code-shape.test.mjs
+node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test spikes/minigit-bench/test/explore-seams.test.mjs spikes/minigit-bench/test/bare-series.test.mjs
+```
+
+| Scenarios (stories document numbers) | Test | What it proves |
+|---|---|---|
+| 41 (v1) | `explore-seams.test.mjs` `The_loop_asks_the_callers_step_when_one_is_given_and_plans_v1s_own_pairs_as_before` | with `ctx.stepOf` the loop launches the sessions the caller planned (not sessions from v1's seed), scores in the caller's order, asks no earlier-pair barrier and writes no v1 pair record; without it v1 plans its own rids and writes its pair record (the baseline fixture is unchanged) |
+| 31, 32, 33, 41d and the `caps` line | `stage-amendments.test.mjs` (9) | the four dated kinds parsed apart from v1's lines; a malformed line is reported and counts for nothing; a go for the pilot covers no round, one for rounds 1 to 2 not round 3; the earliest covering line is the one named; a GO line naming another verdicts hash is reported; the `caps` line once |
+| 18, 19, 20, 41c | `stage-series.test.mjs` (7) | `stage-init` makes one series (canonical name, state fields, six slices, the workspaces commit); a slice passes the five checks a one-task series passes; a changed pin refuses that task and names it; the default guard makes a rehearsal series only; each refusal writes nothing |
+| 21, 23, 27, 28, 30 to 33, 38 | `stage-run.test.mjs` (14) | `next` runs the schedule's slot and no flag names another pair; a void's re-run alone; the owner's go refuses before anything is planned (malformed lines, round scope); the pilot GO and the seed gate; the guard refuses by default; the dry run claims nothing; a second `stage-run` is refused naming the lock holder (23); the pause point is not asked (28); a stopped series exits 2; a rehearsal's gates |
+| 34, 34a, 35, 37, pilot order | `stage-rounds.test.mjs` (6) | `--until round` stops at the round's last slot, at a halt and at the pause file; ends after a read-back slot with the sentence and goes on once the lines are there; a halted slot is resumed and plans no new session; a rid already in the run-map fails closed; a dated `refuted` line offers the stack's re-run alone and the loop reads it as a hand verdict; the pilot steps run in the pilot's order |
+| 29, 39, 40 | `stage-commands.test.mjs` (5) | `run`, `init` and `prune` refuse a Stage 1 series naming the new verbs, `stage-run` refuses a one-task series; the five spend lines add up to the ledger; `stage-status` |
+| 22, 24, 25, 26, 36 | `stage-loop.test.mjs` (7) | over v1's real loop: both sessions launch together and score after; data/void/pilot/aa ledger kinds and `hasDataSession`; the record's arm, model, task, round and kind known or saying why, the pair record's slot extras; the alias baseline set by the first session and a drift stops; the context and no spend ceiling |
+| 41a, 41b | `stage-facts.test.mjs` (2) | a fixture session made with the real writers holds all 12 `STORED_FIELDS`; each removed field is named; both boxes' culture, the heap keys with their values, the `run.sh` hash and the restore flag |
+
+**Observed red, green, red** (the messages are the observed ones, 2026-11-19 and 2026-11-20; "red first" = the test against missing code, or the failure found while writing the test; "red again" = one mutation of the fix at a time, the file put back from a copy):
+
+```
+## 41 v1 seam (explore-seams.test.mjs)
+RED (before): AssertionError: pair 3 runs with no earlier pair: the caller's barrier already answered (pair 1 is not done (its next step is to launch csharp v1 a1, node v1 a1): run --what pair:1 first, then pair 3. ...) 3 !== 0
+GREEN: 13/13 explore-seams
+RED (bare-series.mjs from git show HEAD): same message as before, 3 !== 0
+## 31-33, 41d amendments (stage-amendments.test.mjs, 9 tests)
+RED (before the module): Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../lib/stage-amendments.mjs'; pass 0 fail 1
+GREEN: 9/9
+RED (fix removed, per mutation): 
+ - rounds upper bound removed: An_owner_go_for_rounds_1_to_2_... AssertionError: The "string" argument must be of type string. Received type object (null) [round 3 was covered]; The_first_covering_go_line... failed too
+ - real-date test removed: A_malformed_go_line_is_reported_and_never_counts: AssertionError: 2026-02-30 | owner-go | pilot | words: counts for nothing
+ - verdicts hash comparison removed: A_GO_line_that_names_another_verdicts_hash...: AssertionError: The "string" argument must be of type string. Received type object (null)
+## 18,19,20,41c (+ identity, refusals) stage-series.test.mjs (7 tests)
+RED found while writing (first run, before two fixes): stage_init_makes_one_series...: AssertionError: Expected values to be strictly deep-equal: actual keys [arm, createdAt, manifestSha256, pilot, ...] (the manifest hash leaked into explore-series.json); A_task_slice_passes...: task 99: not a task... (it holds 10, 04, 05, 06, 07, 08) (JS lists key "10" first) -> state keeps the order as an array, messages sorted
+GREEN: 7/7
+RED (fix removed): default guard allows paid -> stage_init_with_the_default_guard_makes_a_rehearsal_series_only: AssertionError: Expected values to be strictly equal (exit 0 !== 4); inputsOfTask without the series-wide part -> A_task_slice_passes_every_check...: AssertionError: task 04: caps is what a one-task init writes; slice error without the task name -> stage_init_refuses_and_writes_nothing...: AssertionError: a held-out side that is not the registered one (regex ^task 07: not matched)
+## 21,27,28,30,31,32,33(run),34,34a,35,37,38 + pilot order + stop (stage-run.test.mjs 13 tests, stage-rounds.test.mjs 6)
+RED found while writing (first run): TypeError: undefined is not a function (the fake loop read unit.belongs; fixed the fixture); Error: ENOENT .../nowhere/series.lock.takeover (the lock was taken before the series was opened: stage-run now opens the series first); AssertionError: slot 4 actual 4 expected 0 (the read-back gate stopped round 1: the test now writes the lines); rid d9966a already in the run-map (both twins drew the same pilot rid from the series-name seam: renamed seam pilotRand)
+GREEN: 13/13 and 6/6
+RED (fix removed, one mutation each): owner-go check skipped -> A_paid_launch_without_its_owner_go_line..., An_owner_go_for_rounds_1_to_2..., A_malformed_go_line...; paid guard replaced by pass-always -> A_stage_series_never_runs_with_the_guard_that_always_passes + The_guard_a_paid_series_is_given_asks...; read-back stop removed -> until_round_ends_after_a_read_back_slot...: AssertionError: done; the round's last slot is finished; pause file ignored -> until_round_stops_at_the_rounds_last_slot...: AssertionError: input did not match /the pause file .* exists: stopped between slots/; every todo step planned (not only plan) -> A_halted_slot_is_resumed_and_plans_no_new_session: AssertionError: Expected values to be strictly equal; stop exit lost -> A_stopped_series_is_refused...: AssertionError: next (2 expected)
+## 29,39,40 + status (stage-commands.test.mjs, 5 tests)
+RED found while writing: stage_status...: AssertionError: input did not match /spend ($5.0000 in all): ... void $0.0000, re-run $2.0000/ actual '... data $3.0000, void $1.0000, re-run $1.0000' (my expectation was wrong; corrected)
+GREEN: 5/5 (code-shape 146 pass, commands.test updated to list stage-run among the re-executed commands)
+RED (fix removed): init refusal removed -> run_and_init_refuse...: AssertionError: input did not match /a Stage 1 series exists .*made by `stage-init`.../; prune refusal removed -> prune_refuses_a_stage_series: AssertionError: input did not match /^prune refuses a Stage 1 series: nothing of Stage 1 is pruned/; re-run split removed -> The_spend_lines_... and stage_status... fail
+## 22,24,25,26,36 + context (stage-loop.test.mjs, 7 tests; real v1 loop over v1's rig)
+RED found while writing: rid 2fbab2 already in the run-map (the test's rid counter restarted per call); TypeError: Cannot read properties of undefined (reading 'ok') at qualityPart (v1's record wants v1's SCORE shape: the test now uses the rig's scorer); ENOENT .../pairs/p1.json (the rig has no pairs/ folder: created)
+GREEN: 7/7
+RED (fix removed): stage leaves not written -> The_record_of_a_stage_session... + A_pilot_unit_has_no_pair_record...; model alias read stubbed -> The_record...: AssertionError: an alias the record never resolved says why; pair extra removed -> TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string... Received null; context spread removed -> The_context_of_a_stage_pair...: AssertionError: Expected values to be strictly deep-equal; v1 seam bypassed -> 4 tests fail (Both_sessions..., A_data_session_is_charged..., The_record..., The_first_session...). Not caught: the scoring-order sort (plan order already gives the leading stack first).
+## 41a, 41b stored facts (stage-facts.test.mjs, 2 tests; real writers: writeSessionFacts, commitBuild, writeAttempt over passBody)
+RED found while writing: AssertionError .NET's heap key: actual 0x1ccccccc expected '0x1ccccccc.cccccd' (my float; BigInt used); an existing test (quick-pass-run) compared the child's whole answer: it now expects the new `box` key and says why it is unknown there
+GREEN: 2/2
+RED (fix removed): box dropped from the pass body -> both tests fail; runSh dropped from build.json -> both fail; agent culture disabled -> A_session_stores_the_culture...: AssertionError: the agent box; a field removed from STORED_FIELDS -> Every_field_...: AssertionError: the list of the fields is the one a later reader reads; scoring box culture nulled -> A_session_stores...: AssertionError: the scoring box, each completed pass
+```
+
+**Free rehearsal of round 1** (`stage-init --rehearsal` then `stage-run --what next` for slot 1 and `--what next --until round` for slots 2 to 6; series `r-20261119-3b67`, the stub CLI, fixture held-out cases, the task repository checked out at W in a scratch clone): all six slots ran end to end, 12 sessions, every one `scored`, every record complete (`missingPaths(record, scored, stage)` empty, arm `bare`, model `claude-sonnet-5-5`, each task and round 1), ledger lines of kind `data` of $0.0092 each ($0.1108 in all, the stub's own figure). Wall: slot 1 5 min 34 s; slots 2 to 6 25 min 20 s. `stage-status` printed the six slots finished and the five spend lines. The rehearsal's scoring is one pass (no `build.json`), so `storedProblems` lists `scoring.runSh` for those sessions; the ten-pass path writes it (`stage-facts.test.mjs`).
+
+**Whole runs** (at the head that merges, `taskset -c 0-5`, `--test-concurrency=1`): lang-explore plain 1162 tests, 1160 pass, 0 fail, 2 skipped, 12 min 47 s; with `BENCH_REQUIRE_SANDBOX=1 LANG_V2_TASK_REPO=<task repository checkout>` 1162 tests, 1161 pass, 0 fail, 1 skipped, 12 min 57 s (the skip in both is `The_whole_leak_check_over_5_million_case_lines_...`, off unless `LEAK_PERF=1`; the plain run's second skip is a case that needs the task repository, which the sandbox run has); v1 `node spikes/minigit-bench/run-tests.mjs` 1318 tests, 1318 pass, 0 skipped, 7 min 15 s (the first v1 whole run found two defects of this PR, both fixed and re-run whole: `stage-facts.mjs` wrote bwrap flags as literals, which `box-builders-scan.test.mjs` refuses (the binds are now read through v1's `bindPairsOf`), and `planItems` of `bare-series.mjs` went over complexity 4 (`ownsItems`)). PR 2's head was 1096 for lang-explore and 1317 for v1; this PR adds 66 and 1.
+
+**What this does not prove.** The loop-level scenarios run over v1's rig and the fake loop, so a real stage-run of a ten-pass scoring under the real guard is not exercised here (the guards are PR 4's and PR 5's; until they merge a paid series cannot be made or run). The A/A and pilot units run in the loop tests and the fake-loop tests, not in a rehearsal. The scoring order inside a unit follows the plan's order (the mutation that removed the sort was not caught: the leading stack is already first).
+
 ## F2.S2 (b): the task repository's rulesets (`spikes/lang-bench/`)
 
 The two files `test/github-lang.test.mjs` (the library: the data, the pure compare, the reads, the apply, `scrub`, the prerequisites) and `test/github-rulesets.test.mjs` (the command: usage, `--check`, `--apply`, the real process) run over a **fake GitHub**

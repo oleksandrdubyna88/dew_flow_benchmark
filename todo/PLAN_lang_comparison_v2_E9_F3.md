@@ -590,6 +590,24 @@ through the code a quick-run pair runs through today; what is new is which task 
 CLI (recorded with its walls in `research/module_tests.md`); v1's suite is green and its baseline fixture unchanged; §8's row
 for PR 3.
 
+**What the code settled (PR 3 built, 2026-11-20; the brief above is unchanged).** (1) *The contracts PR 4 and PR 5 fill in.*
+`stage-init` takes the pre-registration's answer from `io.stage.initGuardFn({ rehearsal })` → `ok({ preregTag, preregCommit,
+seedSha256, manifestSha256, pilot, harnessIdentity?, policy? })`; `stage-run` takes its guard from `io.stage.guardFn({ paid,
+requireSeed })` → `ok(null)` | `fail(reason)`. Both defaults refuse everything but a rehearsal series, so no paid series can be made
+or run before they exist. The dated lines are read from `spikes/lang-explore/inputs/prereg/amendments.md` and the revealed seed from
+`inputs/prereg/seed.txt` (it must hash to the series' `seedSha256`); both absent is no line and no seed. (2) *The A/A and the
+pilot's sessions carry `pair: 0`* (v1's own number for a fixed list), and tell their units apart by `kind`, `task`, `stack`, `twin`;
+they have no pair record (the schedule never read `pair` for them). A slot's `pair` is its number, as the schedule says. (3) *The
+order of the checks of `stage-run`*: series, lock, dated lines and seed, unit, owner's go, guard, task pins, pinned price file and
+policy, plan; each refusal leaves the run-map as it was. A rehearsal series needs no go line and no GO, has a seed of its own, and
+its read-back lines say `holds`. (4) *"`init` refuses a Stage 1 series"* is read as: `init` refuses while a Stage 1 series exists
+under the explore root, naming `stage-init` and `stage-run`; `run` and `prune` refuse a Stage 1 series by its `stage` field.
+(5) *What a session stores*: the agent box's culture is read from `plan.json` (the locale `agentEnv` is built from) with both keys
+confirmed in `argv.json`'s environment keys, and the scoring box's environment per pass comes from the layer's own `boxEnv` with
+the same inputs; both say their source. `STORED_FIELDS` (12 fields) is the list the later tools read. (6) *`stage-run` on a data
+rid that collides with a pilot rid* is refused for good (the data rid comes from the seed); a pilot rid collision is retried by
+running the command again.
+
 ### (a) the guards before a paid pair — PR 4
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-guards`. Four new modules; each check is a sentence per problem, and a

@@ -742,6 +742,8 @@ Same copy and the same marking. Each stage's prediction was written before its r
 | `… smoke-session.mjs sanitise --from <dir> --to <fixture dir>` | stages the session into the capture-shaped layout and copies it through the sanitiser, fail-closed | 0 · 5 |
 | `… smoke-session.mjs verdicts --fixture <fixture dir>` | computes `SMOKE.md` (the B-* table) from the fixture | 0 · 3 · 5 |
 
+> **A seam for the language comparison's Stage 1 (F3.S1, PR 3).** `lib/bare-series.mjs` gained ONE seam: when the run context carries `stepOf` (a function of the run-map returning a launch, score, done or halt step), the loop asks it for every step instead of v1's two-phase schedule or a fixed list, `planItems` takes the sessions the caller planned in the map, the caller's order is kept for launch and scoring, and neither `earlierPairNotDone` nor v1's own pair record is used. Without `stepOf` the loop behaves byte for byte as before (`test/fixtures/explore-seams-baseline.json` unchanged; `test/explore-seams.test.mjs`). The loop's test rig moved to `test/bare-loop-harness.mjs` so two test files share it. v1's `harnessIdentity` moved with this change; no v1 series is open.
+
 ### 6. The bare runner, the quiet check and the pre-registration code (E3b)
 
 Spec by Opus (`todo/PLAN_minigit_stack_bench_E3_bare.md`, E3b.S1 to S3), coded by Sonnet on `feat/minigit-bench-e3b`. **Built and tested with a stub CLI, then run paid**: four
