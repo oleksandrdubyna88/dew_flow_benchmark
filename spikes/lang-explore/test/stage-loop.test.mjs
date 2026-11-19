@@ -158,3 +158,20 @@ test('No_total_ceiling_stops_a_slot_whatever_the_ledger_holds_and_five_rounds_st
   const unit = unitFor({ what: 'next', map });
   assert.deepEqual([unit.action, unit.todo.map(t => [t.rid, t.step])], ['resume', [[killed.rid, 'score']]], 'a session the cap ended is a data attempt: it is scored, never re-run');
 });
+
+test('A_session_halted_while_launching_gets_no_facts_file_and_once_it_has_ended_its_facts_are_complete', async () => {
+  const rig = harness();
+  const { unit, result } = await runUnitIn({ rig, what: 'next' });
+  assert.equal(result.exit, EXIT.done, result.message);
+  mkdirSync(path.join(rig.ctx.seriesDir, 'pairs'), { recursive: true });
+  const [halted, other] = Object.values(result.map.sessions);
+  const factsOf = s => path.join(rig.ctx.sessionsRoot, s.rid, 'stage-facts.json');
+  const midway = { ...result.map, sessions: { ...result.map.sessions, [halted.rid]: { ...halted, status: 'launching' } } };
+  const finalize = finalizerOf({ unit, go: null, alias: 'opus' });
+  finalize({ seriesDir: rig.ctx.seriesDir, map: midway, pair: unit.pair, pause: null });
+  assert.equal(existsSync(factsOf(halted)), false, 'a launching session may be reset and launched again: its facts wait for its end');
+  assert.equal(existsSync(factsOf(other)), true, 'an ended session of the same unit has its facts');
+  finalize({ seriesDir: rig.ctx.seriesDir, map: result.map, pair: unit.pair, pause: null });
+  assert.equal(existsSync(factsOf(halted)), true, 'once it has ended the one write happens');
+  assert.equal(JSON.parse(readFileSync(factsOf(halted), 'utf8')).launch.affinity.known, true, 'with the final evidence');
+});

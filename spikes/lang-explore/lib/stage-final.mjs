@@ -12,10 +12,13 @@ export function stageOf({ unit, go, alias }) {
   return { of: e => ({ arm: ARM, task: e.task, round: e.round ?? null, kind: e.kind, alias }), pairExtra: slot === null ? null : { stage: slot } };
 }
 
-/** The facts every started session of the unit stores for the readers after the tag (`stage-facts.mjs`), written once, before the records. */
+/** A session that has ENDED: not `planned` and not `launching` (a halt in `launching` is reset to `planned` and launched again on resume, so its facts would keep the unknowns of the halted state). */
+const hasEnded = session => !['planned', 'launching'].includes(session.status);
+
+/** The facts every ended session of the unit stores for the readers after the tag (`stage-facts.mjs`), written once, with the final evidence, before the records. */
 function storeFacts({ args, unit }) {
-  const started = Object.values(args.map.sessions).filter(s => unit.belongs(s) && s.status !== 'planned');
-  for (const entry of started.filter(s => existsSync(path.join(args.seriesDir, 's', s.rid)))) writeSessionFacts({ sessionDir: path.join(args.seriesDir, 's', entry.rid), entry, world: args.world });
+  const ended = Object.values(args.map.sessions).filter(s => unit.belongs(s) && hasEnded(s));
+  for (const entry of ended.filter(s => existsSync(path.join(args.seriesDir, 's', s.rid)))) writeSessionFacts({ sessionDir: path.join(args.seriesDir, 's', entry.rid), entry, world: args.world });
 }
 
 /** The `finalize` of a unit, as `loopAndFinalize` calls it (`{ seriesDir, map, pair, pause, world }`). */
