@@ -74,8 +74,18 @@ export function committedTree(work) {
   return live === read.value.treeSha256 ? read : mismatch({ recorded: read.value.treeSha256, live });
 }
 
-const recordOf = ({ built, prepared, treeSha256, committedAt, runnerPin }) => Object.freeze({
-  treeSha256, runnerPin: runnerPin ? { format: runnerPin.format, version: runnerPin.version } : null, ok: built.ok, exit: built.exit, timedOut: built.timedOut === true, wallMs: built.wallMs, tail: built.tail, frozenChanges: prepared.frozen, harnessDrift: prepared.drift, undecidedDrift: prepared.undecided ?? [], contractIdentity: prepared.identity ?? null, nonRegularLeftOut: prepared.left, committedAt,
+/**
+ * What the record keeps of the tree's `run.sh` (the parent's Definition of Done, T-L31): its sha256 and whether the restore had to put it back (the agent had changed it, or the build rewrote it), so that "the frozen `run.sh`, which ends in
+ * `exec`, started the program" is a stored fact of every scored tree. A tree with no `run.sh` says so.
+ */
+export function runShFact({ tree, frozen }) {
+  const file = path.join(tree, 'run.sh');
+  if (!existsSync(file)) return { known: false, why: 'the committed tree has no run.sh' };
+  return { known: true, sha256: createHash('sha256').update(readFileSync(file)).digest('hex'), restored: frozen.some(c => c.path === 'run.sh') };
+}
+
+const recordOf = ({ built, prepared, treeSha256, committedAt, runnerPin, runSh }) => Object.freeze({
+  treeSha256, runSh, runnerPin: runnerPin ? { format: runnerPin.format, version: runnerPin.version } : null, ok: built.ok, exit: built.exit, timedOut: built.timedOut === true, wallMs: built.wallMs, tail: built.tail, frozenChanges: prepared.frozen, harnessDrift: prepared.drift, undecidedDrift: prepared.undecided ?? [], contractIdentity: prepared.identity ?? null, nonRegularLeftOut: prepared.left, committedAt,
 });
 
 /** Why a build's answer cannot be committed, or null: its exit is not known (and it did not time out), or the tree is not a directory. */
@@ -115,7 +125,7 @@ export async function commitBuild({ work, prepare, build, runnerPin = null, io =
     const done = await buildInFolder({ folder, prepare, build });
     if (!done.ok) throw Object.assign(new Error(done.reason), { answer: done });
     io.rename(folder, treeOf(work));
-    const record = recordOf({ ...done.value, treeSha256: treeHash(treeOf(work)), committedAt: now().toISOString(), runnerPin });
+    const record = recordOf({ ...done.value, treeSha256: treeHash(treeOf(work)), committedAt: now().toISOString(), runnerPin, runSh: runShFact({ tree: treeOf(work), frozen: done.value.prepared.frozen }) });
     io.writeNew(buildFileOf(work), `${JSON.stringify(record, null, 2)}\n`, fs);
     return ok(record);
   } catch (e) {

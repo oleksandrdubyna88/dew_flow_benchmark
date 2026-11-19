@@ -123,7 +123,10 @@ test('The_pass_child_runs_one_pass_when_its_mask_is_the_profile_and_writes_a_com
   const ranFn = async () => ({ ok: true, value: { cases: [], record, ran: { memoryCertified: true } } });
   const code = await childMain({ argv: [argsFile], readStatus: () => status('6,7'), runPassFn: ranFn, write });
   assert.equal(code, 0);
-  assert.deepEqual(JSON.parse(readFileSync(out, 'utf8')), { kind: 'completed', record, runner: '0.x', memoryCertified: true, observedCpus: '6,7' });
+  const { box, ...answer } = JSON.parse(readFileSync(out, 'utf8'));
+  assert.deepEqual(answer, { kind: 'completed', record, runner: '0.x', memoryCertified: true, observedCpus: '6,7' });
+  assert.equal(box.known, false, 'a pass whose spec names no memory limit stores the box\'s environment as not known, and says why (the stored fact of F3.S1, PR 3)');
+  assert.match(box.why, /memoryMaxBytes/);
   const failing = childFiles(specOf({ cpus: '6-7' }));
   const bad = await childMain({ argv: [failing.argsFile], readStatus: () => status('6-7'), runPassFn: async () => ({ ok: false, reason: 'the layer halted: invented', kind: 'environment' }), write });
   assert.equal(bad, 3);

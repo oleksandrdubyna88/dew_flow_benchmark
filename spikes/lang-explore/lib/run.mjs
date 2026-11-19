@@ -238,7 +238,7 @@ async function loopAndFinalize({ series, pair, planned, calibration, heldout, wo
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
   const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });
-  const fin = (unit?.finalize ?? finalizePair)({ seriesDir: series.dir, map: result.map, pair, pause });
+  const fin = (unit?.finalize ?? finalizePair)({ seriesDir: series.dir, map: result.map, pair, pause, world });
   return { exit: result.exit, message: result.message, pairFile: fin.pairFile, problems: fin.problems };
 }
 

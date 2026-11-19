@@ -81,6 +81,7 @@ test('The_record_of_a_stage_session_carries_arm_model_task_round_and_kind_each_k
     assert.match(record.explore.model.value, /^claude-/, 'the id the alias record resolved for the main model');
     assert.deepEqual(missingPaths(record, false, true).filter(p => /^explore\.(arm|model|task|round|kind)$/.test(p)), []);
   }
+  for (const r of records) assert.equal(existsSync(path.join(rig.ctx.sessionsRoot, r.ids.rid, 'stage-facts.json')), true, 'the finalizer stores the session\'s facts for the readers after the tag');
   const pair = JSON.parse(readFileSync(fin.pairFile, 'utf8'));
   assert.deepEqual([pair.stage.slot, pair.stage.task, pair.stage.round, pair.stage.masks, pair.stage.ownerGo.date], [unit.pair, unit.task, unit.round, unit.slot.masks, '2026-11-21'], 'the pair record gains the slot\'s task, round, masks and the go line');
   const unknownModel = finalizerOf({ unit, go: null, alias: 'nonesuch' })({ seriesDir: rig.ctx.seriesDir, map: result.map, pair: unit.pair, pause: null });
