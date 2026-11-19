@@ -86,7 +86,7 @@ function loopAnswerOf(run) {
 
 /** What `run` adds to a quick scoring: the series' drift seams (as a rescore is given) and the check that the harness is the one the series was made with (`harness-moved.mjs`); inputs that cannot be read are a halt too. */
 function sameHarnessExtra({ world, stack, seriesDir }) {
-  const read = seriesInputs(seriesDir);
+  const read = seriesInputs(seriesDir, world.task?.id ?? null);
   if (!read.ok) return { harnessProblem: () => `harness-moved: ${read.reason}` };
   return { ...driftSeamsOf({ inputs: read.value, world }), harnessProblem: () => harnessMovedProblem({ inputs: read.value, stack, files: world.filesFor(stack) }) };
 }

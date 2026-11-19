@@ -9,6 +9,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { openSeries, planSession, readRunMap, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { systemClock } from './clock.mjs';
 import { exploreRoot } from './paths.mjs';
+import { inputsOfTask } from './stage-inputs.mjs';
 import { taskOfSeries } from './tasks.mjs';
 
 export const MASKS = Object.freeze({ low: '0-5', high: '8-13' });
@@ -129,23 +130,43 @@ export const ledgerFileOf = dir => path.join(dir, 'ledger.ndjson');
 
 const taskProblem = (explore, task) => (typeof task === 'string' && Object.hasOwn(explore.tasks ?? {}, task) ? null : `a series is made for a task of the pins (${Object.keys(explore.tasks ?? {}).join(', ')}), not for '${task}'`);
 
-/** Create a series directory (mode 0700) with its state, run-map, empty ledger and the run's inputs. A series is made for ONE task (`task`, an id of the pins) and records it. -> `ok({ dir, state })` | `fail`. */
-export function createSeries({ home, explore, calibration, task, inputsExtra = {}, draw = drawMask(), date = systemClock(), prefix = 'x', rand = () => randomBytes(2).toString('hex') }) {
-  const unknownTask = taskProblem(explore, task);
-  if (unknownTask) return fail(unknownTask);
-  const id = seriesIdOf({ date, rand: rand(), prefix });
-  const dir = path.join(exploreRoot(home), id);
-  if (existsSync(dir)) return fail(`${dir} already exists: a series id is never reused`);
-  mkdirSync(path.join(dir, 's'), { recursive: true, mode: 0o700 });
-  mkdirSync(path.join(dir, 'pairs'), { mode: 0o700 });
-  mkdirSync(path.join(dir, 'canaries'), { mode: 0o700 });
-  mkdirSync(path.join(dir, 'private'), { mode: 0o700 });
-  const state = { seriesId: id, createdAt: date.toISOString(), draw, pairs: explore.pairs, task };
-  writeFileSync(stateFile(dir), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  writeFileSync(path.join(dir, 'inputs.json'), `${JSON.stringify({ seriesId: id, task, limits: calibration.limits, caps: explore.caps, locale: explore.locale, envExtra: explore.envExtra, ...(prefix === 'r' ? { rehearsal: true } : {}), ...inputsExtra }, null, 2)}\n`, { mode: 0o600 });
-  writeFileSync(ledgerFileOf(dir), '', { mode: 0o600 });
-  writeRunMap(runMapFileOf(dir), openSeries({ seriesId: id, caps: explore.caps }));
-  return ok({ dir, state });
+/** The state a series is created with: a one-task series' (the draw, the pairs, its task) or a Stage 1 series' (`stage.state`: its tasks, rounds, arm and registered identities). */
+const stateOf = ({ id, date, explore, task, draw, stage }) => ({ seriesId: id, createdAt: date.toISOString(), ...(stage === null ? { draw, pairs: explore.pairs, task } : stage.state) });
+
+/** The inputs a one-task series is created with: its limits and task, then the extras; a Stage 1 series takes `stage.inputs`, which holds the per-task slices. */
+const ownInputs = ({ task, calibration, inputsExtra, stage }) => (stage === null ? { task, limits: calibration.limits, ...inputsExtra } : stage.inputs);
+
+const inputsOf = a => ({ seriesId: a.id, caps: a.explore.caps, locale: a.explore.locale, envExtra: a.explore.envExtra, ...(a.prefix === 'r' ? { rehearsal: true } : {}), ...ownInputs(a) });
+
+/** Why a series cannot be created here, or null: an unknown task (a Stage 1 series has none of its own) or a directory that exists. */
+function creationProblem({ explore, task, stage, dir }) {
+  const unknownTask = stage === null ? taskProblem(explore, task) : null;
+  return unknownTask ?? (existsSync(dir) ? `${dir} already exists: a series id is never reused` : null);
+}
+
+/** The directory, its files and its run-map. */
+function writeSeries(a) {
+  for (const sub of ['s', 'pairs', 'canaries', 'private']) mkdirSync(path.join(a.dir, sub), { recursive: true, mode: 0o700 });
+  writeFileSync(stateFile(a.dir), `${JSON.stringify(stateOf(a), null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(path.join(a.dir, 'inputs.json'), `${JSON.stringify(inputsOf(a), null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(ledgerFileOf(a.dir), '', { mode: 0o600 });
+  writeRunMap(runMapFileOf(a.dir), openSeries({ seriesId: a.id, caps: a.explore.caps, ...(a.stage === null ? {} : a.stage.map) }));
+}
+
+const SERIES_DEFAULTS = () => ({ inputsExtra: {}, draw: drawMask(), date: systemClock(), prefix: 'x', rand: () => randomBytes(2).toString('hex'), stage: null });
+
+/**
+ * Create a series directory (mode 0700) with its state, run-map, empty ledger and the run's inputs. A series is made for ONE task (`task`, an id of the pins) and records it; a Stage 1 series (`stage`: `{ state, inputs, map }`, see
+ * `stage-series.mjs`) holds the six tasks and takes its state, its inputs and the fixed fields of its run-map from `stage`, never copied. -> `ok({ dir, state })` | `fail`.
+ */
+export function createSeries(given) {
+  const a = { ...SERIES_DEFAULTS(), ...given };
+  const id = seriesIdOf({ date: a.date, rand: a.rand(), prefix: a.prefix });
+  const made = { ...a, id, dir: path.join(exploreRoot(a.home), id) };
+  const refused = creationProblem(made);
+  if (refused) return fail(refused);
+  writeSeries(made);
+  return ok({ dir: made.dir, state: stateOf(made) });
 }
 
 /** The series' state and run-map. -> `ok({ dir, state, map })` | `fail`. */
@@ -233,17 +254,22 @@ export function latestSeries(home, task) {
   return sorted.length > 0 ? sorted.at(-1) : null;
 }
 
-/** The series' `inputs.json` (limits, caps, subject, the registered prompts frozen at `init`). -> `ok(inputs)` | `fail`. */
-export function seriesInputs(dir) {
-  try { return ok(JSON.parse(readFileSync(path.join(dir, 'inputs.json'), 'utf8'))); } catch (e) { return fail(`${dir}/inputs.json is unreadable: ${e.message}`); }
+/** The series' `inputs.json` (limits, caps, subject, the registered prompts frozen at `init`). With `taskId`, a Stage 1 series' inputs come back as the one-task shape of that task (`inputsOfTask`), every other series' as they are. -> `ok(inputs)` | `fail`. */
+export function seriesInputs(dir, taskId = null) {
+  let inputs;
+  try { inputs = JSON.parse(readFileSync(path.join(dir, 'inputs.json'), 'utf8')); } catch (e) { return fail(`${dir}/inputs.json is unreadable: ${e.message}`); }
+  return taskId === null ? ok(inputs) : inputsOfTask(inputs, taskId);
 }
 
 /** The prompts frozen into the series at `init`: what a session of this series is sent and read back against, whatever `inputs/prompts.json` says later. */
-export function seriesPrompts(dir) {
-  const inputs = seriesInputs(dir);
+export function seriesPrompts(dir, taskId = null) {
+  const inputs = seriesInputs(dir, taskId);
   if (!inputs.ok) return inputs;
   return inputs.value.prompts ? ok(inputs.value.prompts) : fail(`${dir}/inputs.json holds no frozen prompts: make the series with \`explore.mjs init\``);
 }
+
+/** Is the state a Stage 1 series' (`stage-init` made it)? */
+export const isStageState = state => state?.stage === 1;
 
 /** Is this series a rehearsal (its inputs say so)? */
 export function isRehearsal(dir) {

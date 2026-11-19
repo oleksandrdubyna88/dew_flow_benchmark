@@ -2,13 +2,13 @@
 // bounds, and COPIED into the series' `inputs.json` at `init`. A pair reads TL and ML from the series, never from the live calibration file, and refuses when that file has changed since: the limits of a
 // series cannot move between pairs. Failures are values.
 import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { loadExplore } from './inputs.mjs';
 import { materialProblem } from './material.mjs';
 import { taskPaths } from './tasks.mjs';
 import { memoryLimit } from './memory-limit.mjs';
 import { isQuick, quickCalibration } from './quick.mjs';
+import { seriesInputs } from './series.mjs';
 
 const MAX_TIME_FACTOR = 10; // an effective TL above ten calibration ceilings is not a limit
 const MAX_MEMORY_BYTES = 64 * 1024 ** 3;
@@ -81,8 +81,9 @@ function chainSync(steps) {
 }
 
 /** The limits recorded in a series' `inputs.json` when it was created. */
-export function seriesLimits(seriesDir) {
-  try { return ok(JSON.parse(readFileSync(path.join(seriesDir, 'inputs.json'), 'utf8')).limits); } catch (e) { return fail(`${seriesDir}/inputs.json is unreadable: ${e.message}`); }
+export function seriesLimits(seriesDir, taskId = null) {
+  const inputs = seriesInputs(seriesDir, taskId);
+  return inputs.ok ? ok(inputs.value.limits) : inputs;
 }
 
 const same = (a, b) => KEYS.every(k => a?.[k] === b?.[k]);
@@ -90,8 +91,8 @@ const same = (a, b) => KEYS.every(k => a?.[k] === b?.[k]);
 const movedSentence = (live, own) => `the calibration file (TL ${live.timeMs} ms, ML ${live.memoryBytes} B) differs from the limits this series was created with (TL ${own.timeMs} ms, ML ${own.memoryBytes} B): the limits of a series do not move between pairs. Calibrate again only before \`init\`, and make a new series`;
 
 /** The series' own limits, valid (they were checked when the series was made, and are checked again) against the registered ones `registered`. -> `ok(limits)` | `fail`. */
-function ownLimits(seriesDir, registered) {
-  const own = seriesLimits(seriesDir);
+function ownLimits(seriesDir, registered, taskId) {
+  const own = seriesLimits(seriesDir, taskId);
   return own.ok ? validLimits(own.value, registered, `the limits in ${seriesDir}/inputs.json are not usable`) : own;
 }
 
@@ -102,7 +103,7 @@ function ownLimits(seriesDir, registered) {
 export function calibrationFor({ home, seriesDir, task, exploreFn = loadExplore }) {
   const explore = exploreFn();
   if (!explore.ok) return explore;
-  const got = chainSync([() => loadCalibration(home, task, () => explore), () => ownLimits(seriesDir, explore.value.limits)]);
+  const got = chainSync([() => loadCalibration(home, task, () => explore), () => ownLimits(seriesDir, explore.value.limits, task.id)]);
   if (!got.ok) return got;
   const [live, own] = got.value;
   return same(own, live.limits) ? ok({ ...live, limits: own }) : fail(movedSentence(live.limits, own));

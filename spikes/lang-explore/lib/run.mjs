@@ -118,7 +118,7 @@ const stoppedRefusal = map => (map.stopped ? { exit: 2, message: `the series is 
 
 /** A quick task's held-out set, checked before a paid pair: it is the set the series was made over, and the real runner reads every pair of it (a pair the runner refuses is a defect to fix, not a verdict). -> a sentence or null. */
 export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
-  const inputs = seriesInputs(seriesDir);
+  const inputs = seriesInputs(seriesDir, task.id);
   const moved = inputs.ok ? heldoutMovedProblem({ inputs: inputs.value, heldout }) : inputs.reason;
   if (moved) return moved;
   const parsed = await parseProblem({ casesDir: heldout.casesDir, kind: task.kind, runner: path.join(BENCH_RUNNER, 'run_samples.py') });
@@ -127,7 +127,7 @@ export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
 
 /** What a pair needs besides its plan: the task's calibration, its held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
 export async function prerequisites({ home, series, task, worldFn, tokenFn, heldout: context }) {
-  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => readerHeldout({ home, task, heldout: context }), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => readerHeldout({ home, task, heldout: context }), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir, task.id)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
   const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
@@ -140,9 +140,9 @@ export async function prerequisites({ home, series, task, worldFn, tokenFn, held
  * A series is run on one harness (`harness-moved.mjs`): a quick pair is refused BEFORE it is planned or launched when the harness of today is not the one the series was made with (or the series recorded none), so no session starts and
  * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). The scoring step keeps its own check as the second line of defence. -> a result, or null.
  */
-function harnessRefusal({ series, pair, world, io }) {
+function harnessRefusal({ series, pair, world, io, task }) {
   if (world.quick !== true) return null;
-  const inputs = seriesInputs(series.dir);
+  const inputs = seriesInputs(series.dir, task.id);
   const problem = inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
   if (problem === null) return null;
   appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
@@ -166,7 +166,7 @@ function planOnPins({ series, pair, rerun, task }) {
 
 /** Why the series cannot start a pair on today's pins of the task (an amendment since `init`), or null. */
 function pinsMoved({ series, task }) {
-  const inputs = seriesInputs(series.dir);
+  const inputs = seriesInputs(series.dir, task.id);
   return inputs.ok ? frozenPinsProblem({ inputs: inputs.value, task, seriesId: series.state.seriesId }) : inputs.reason;
 }
 
@@ -187,7 +187,7 @@ const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 async function readyOrRefused({ series, pair, io, task }) {
   const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
   if (!need.ok) return { answer: { exit: 4, message: need.reason } };
-  const moved = harnessRefusal({ series, pair, world: need.value.world, io });
+  const moved = harnessRefusal({ series, pair, world: need.value.world, io, task });
   return moved ? { answer: moved } : { need: need.value };
 }
 
