@@ -17,9 +17,9 @@ export const ARM = 'bare';
  * per-task slices (`{ '04': {...}, ... }`, one for each task of the freeze).
  */
 export function stageParts({ pre, wide, slices }) {
-  const { preregTag, preregCommit, seedSha256, pilot, ...extraState } = pre;
+  const { preregTag, preregCommit, seedSha256, pilot, rehearsalSeed } = pre;
   return {
-    state: { stage: STAGE, arm: ARM, tasks: [...FREEZE_TASKS], rounds: STAGE_ROUNDS, preregTag, preregCommit, seedSha256, pilot, ...extraState },
+    state: { stage: STAGE, arm: ARM, tasks: [...FREEZE_TASKS], rounds: STAGE_ROUNDS, preregTag, preregCommit, seedSha256, pilot, ...(rehearsalSeed === undefined ? {} : { rehearsalSeed }) },
     inputs: { stage: STAGE, arm: ARM, ...wide, tasks: slices },
     map: { stage: STAGE, preregTag, preregCommit, seedSha256 },
   };

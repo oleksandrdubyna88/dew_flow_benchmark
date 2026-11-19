@@ -17,7 +17,7 @@ const wideOf = ({ tasks: _tasks, stage: _stage, arm: _arm, ...wide }) => wide;
  */
 export function inputsOfTask(inputs, taskId) {
   if (!isStageInputs(inputs)) return ok(inputs);
-  if (!Object.hasOwn(inputs.tasks, taskId ?? '')) return fail(`task ${taskId}: not a task of this Stage 1 series (it holds ${Object.keys(inputs.tasks).join(', ')})`);
+  if (!Object.hasOwn(inputs.tasks, taskId ?? '')) return fail(`task ${taskId}: not a task of this Stage 1 series (it holds ${Object.keys(inputs.tasks).sort().join(', ')})`);
   return ok({ ...wideOf(inputs), task: taskId, ...inputs.tasks[taskId] });
 }
 
